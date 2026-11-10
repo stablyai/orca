@@ -16341,7 +16341,6 @@
             "open": "Open link",
             "portHint": "The port your dev server listens on.",
             "portHintDetected": "Or pick a port that’s listening.",
-            "portInvalid": "Enter a port from 1 to 65535. Ports 2222, 6768 and 6769 are used by Orca.",
             "portLabel": "Port",
             "publicNote": "Anyone with this link can open port {{value0}} without signing in. Turn it off anytime in Ports → Shared links.",
             "revokeFailed": "Couldn’t turn it off. Try again.",
@@ -16360,7 +16359,8 @@
             "wakeHint": "Otherwise the link works only while the workspace is awake. Wake time counts toward your usage.",
             "wakeLabel": "Let visitors wake the workspace",
             "tryAgain": "Try again",
-            "sharePortLabel": "Share port {{port}}…"
+            "sharePortLabel": "Share port {{port}}…",
+            "portInvalidReserved": "Enter a port from 1 to 65535. Ports {{ports}} are used by Orca."
           }
         }
       },
@@ -20849,7 +20849,6 @@
         "copyFailed": "Couldn't copy the link. Try again.",
         "copyLink": "Copy link",
         "copyWorkspaceLink": "Copy workspace link",
-        "daysAgo": "{{value0}}d ago",
         "emptyArchivedBody": "Archived cloud workspaces show up here.",
         "emptyArchivedTitle": "No archived workspaces",
         "emptyFilteredBody": "Try another owner or repository.",
@@ -20881,7 +20880,6 @@
         "goToChat": "Go to {{value0}}'s chat",
         "goToTeammateChat": "Go to a teammate's chat",
         "heading": "Cloud workspaces",
-        "hoursAgo": "{{value0}}h ago",
         "inAnyRepo": "In any repo",
         "inRepo": "In {{value0}}",
         "justNow": "just now",
@@ -20899,7 +20897,6 @@
         "memberTyping": "{{value0}} is typing",
         "memberViewing": "{{value0}} is viewing",
         "memberYou": "{{value0}} (you)",
-        "minutesAgo": "{{value0}}m ago",
         "moreMembers": "{{count}} more",
         "move": "Move",
         "moveToSection": "Move to section",
@@ -26535,7 +26532,7 @@
       "noEnvVars": "None",
       "envVarPlaceholder": "NPM_TOKEN, DATABASE_URL…",
       "envVarInvalid": "Skipped {{names}}: names use A–Z, 0–9 and _, and cannot start with a digit.",
-      "scriptTabHint": "Tab inserts two spaces. Press Escape, then Tab, to leave the editor."
+      "scriptTabHintVisible": "Tab indents · Esc then Tab to leave"
     },
     "import": {
       "failed": "Couldn’t read that project’s setup.",
@@ -26635,7 +26632,6 @@
       "pullRequests": "Pull requests",
       "lastChanges": "Last changes",
       "filesTitle": "Files",
-      "moreFiles": "{{count}} more files not shown",
       "detached": "Detached HEAD",
       "ahead": "{{count}} ahead",
       "behind": "{{count}} behind",
@@ -26645,7 +26641,9 @@
       "noCommits": "No commits on this branch yet.",
       "files_one": "{{count}} file",
       "files_other": "{{count}} files",
-      "loadFailedDetail": "Your files are safe in the archive."
+      "loadFailedDetail": "Your files are safe in the archive.",
+      "moreFiles_one": "{{count}} more file not shown",
+      "moreFiles_other": "{{count}} more files not shown"
     },
     "state": {
       "archived": "Archived",
