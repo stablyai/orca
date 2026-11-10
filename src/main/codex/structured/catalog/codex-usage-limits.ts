@@ -98,9 +98,17 @@ export class CodexUsageLimits {
           : undefined
       return [{ window, resetsAt: raw.resetsAt, usedPercent: raw.usedPercent }]
     })
-    const fullest = Math.max(...reported.map((entry) => entry.usedPercent))
-    const spentAt = rejected && fullest >= NEARLY_SPENT_PERCENT ? Math.min(fullest, 100) : 100
-    const spent = reported.filter((entry) => entry.usedPercent >= spentAt)
+    // A window that already reset cannot be the one that just rejected.
+    const live = reported.filter(
+      (entry) => typeof entry.resetsAt !== 'number' || entry.resetsAt * 1000 > this.now()
+    )
+    const fullest = Math.max(...live.map((entry) => entry.usedPercent))
+    const spent =
+      rejected &&
+      fullest >= NEARLY_SPENT_PERCENT &&
+      !reported.some((entry) => entry.usedPercent >= 100)
+        ? live.filter((entry) => entry.usedPercent >= fullest)
+        : reported.filter((entry) => entry.usedPercent >= 100)
     const reached = this.snapshot.rateLimitReachedType
     const credits = typeof reached === 'string' && reached.endsWith('credits_depleted')
     const window: AgentSessionUsageLimitWindow | undefined = credits

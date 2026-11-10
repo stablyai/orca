@@ -77,6 +77,17 @@ describe('a Codex usage limit', () => {
     expect(rejectedWith(99)).toEqual({ window: 'session', resetsAt: RESETS_AT_S * 1000 })
     expect(rejectedWith(50)).toBeUndefined()
     expect(rejectedWith(99, 'rateLimitExceeded')).toBeUndefined()
+
+    limits.observe('notification:account/rateLimits/updated', {
+      rateLimits: {
+        primary: { usedPercent: 99, windowDurationMins: 300, resetsAt: 1_000_000 },
+        secondary: { usedPercent: 95, windowDurationMins: 10080, resetsAt: RESETS_AT_S }
+      }
+    })
+    expect(
+      limits.failure({ error: { codexErrorInfo: 'usageLimitExceeded', message: CODEX_WORDS } })
+        ?.usageLimit
+    ).toEqual({ window: 'weekly', resetsAt: RESETS_AT_S * 1000 })
   })
   it('merges null account updates and keeps unnamed exhausted windows in reset calculation', () => {
     const limits = new CodexUsageLimits()
