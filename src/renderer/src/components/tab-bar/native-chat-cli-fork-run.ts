@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { readIpcErrorMessage } from '@/lib/ipc-error'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import {
   prepareNativeChatCliFork,
   type NativeChatCliForkSubject
@@ -31,6 +31,9 @@ import {
 import { translate } from '@/i18n/i18n'
 import { openDesktopStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
+import { moveStructuredAgentLaunchDraft } from '@/lib/agent-session/launch/structured-agent-session-launch-draft'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 
 const pending = new Map<string, AbortController>()
 const listeners = new Set<() => void>()
@@ -48,7 +51,12 @@ const forkOrigins = new Map<string, { sessionId: string; workspaceId: string }>(
 const forkOriginKey = (workspaceId: string, providerSessionId: string) =>
   `${workspaceId}\0${providerSessionId}`
 
-/** Binds the chat to the first conversation the fork's terminal tab reports, so a later one there is not mistaken for it. */
+/** The pane a new tab launched in; a split keeps it on the `first` side. */
+function launchedLeafId(node: TerminalPaneLayoutNode | null | undefined): string | undefined {
+  return !node ? undefined : node.type === 'leaf' ? node.leafId : launchedLeafId(node.first)
+}
+
+/** Binds the chat to the first conversation the fork's own pane reports, so a later one is not mistaken for it. */
 function rememberForkOrigin(
   terminalTabId: string,
   origin: { sessionId: string; workspaceId: string }
@@ -57,9 +65,10 @@ function rememberForkOrigin(
     if (!state.unifiedTabsByWorktree[origin.workspaceId]?.some((tab) => tab.id === terminalTabId)) {
       return true
     }
-    const fork = Object.values(state.agentStatusByPaneKey).find(
-      (status) => status.tabId === terminalTabId && status.providerSession?.id
-    )?.providerSession?.id
+    const leafId = launchedLeafId(state.terminalLayoutsByTabId[terminalTabId]?.root)
+    const fork = leafId
+      ? state.agentStatusByPaneKey[`${terminalTabId}:${leafId}`]?.providerSession?.id
+      : undefined
     if (fork) {
       forkOrigins.set(forkOriginKey(origin.workspaceId, fork), origin)
     }
@@ -77,9 +86,16 @@ function rememberForkOrigin(
 
 const quietOpenFeedback = { unavailable: () => {}, gone: () => {}, hostCannotOpen: () => {} }
 
-/** Opens the chat a still-unsaved "Continue with Terminal Agent" fork came from, if this client made it. */
+/** Opens the chat a still-unsaved "Continue with Terminal Agent" fork came from, if this client made
+ *  it, carrying over anything typed into the chat that was standing in for the terminal. */
 export async function reopenNativeChatCliForkOrigin(
-  terminal: { workspaceId: string; providerSessionId: string; agent: string },
+  terminal: {
+    workspaceId: string
+    executionHostId: ExecutionHostId
+    providerSessionId: string
+    agent: string
+  },
+  standInChatSessionId: string | undefined,
   target: RuntimeClientTarget
 ): Promise<boolean> {
   const key = forkOriginKey(terminal.workspaceId, terminal.providerSessionId)
@@ -95,7 +111,20 @@ export async function reopenNativeChatCliForkOrigin(
     undefined,
     quietOpenFeedback
   )
-  return opened.kind === 'opened'
+  if (opened.kind !== 'opened') {
+    return false
+  }
+  if (standInChatSessionId) {
+    moveStructuredAgentLaunchDraft(
+      {
+        sessionId: origin.sessionId,
+        worktreeId: origin.workspaceId,
+        executionHostId: terminal.executionHostId
+      },
+      structuredAgentSessionDraftScopeKey(standInChatSessionId)
+    )
+  }
+  return true
 }
 
 export function useNativeChatCliForkPending(subject: PendingIdentity | null): boolean {

@@ -79,13 +79,13 @@ export async function recoverMissingConversation(
   if (!canRestartMissingConversation(error)) {
     return false
   }
-  if (await reopenNativeChatCliForkOrigin(source, target)) {
-    dropChat()
-    return true
-  }
   const chatSessionId = (
     useAppStore.getState().unifiedTabsByWorktree[source.workspaceId] ?? []
   ).find((tab) => tab.id === chatTabId)?.entityId
+  if (await reopenNativeChatCliForkOrigin(source, chatSessionId, target)) {
+    dropChat()
+    return true
+  }
   return (
     !!chatSessionId &&
     retryStructuredAgentSessionLaunch(source.workspaceId, chatSessionId, { fresh: true })
