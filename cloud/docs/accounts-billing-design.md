@@ -63,10 +63,16 @@ everyone not suspended at renewal and prorates later additions.
   paid, so remove/re-add churn can neither dodge charges nor double-charge honest teams.
 - **Included hours and caps derive from billed seats**, not raw membership. Adding members never
   grants hours or concurrency the org hasn't paid for, and the paid peak keeps its hours until renewal.
-- **Per-member concurrency:** at most 3 running sandboxes per member (`member_concurrency_limit`), on
-  top of the org cap of 3 × billed seats. One seat can't run the whole team's sandboxes.
-- **Attribution:** usage segments carry the `userId` that started the sandbox (`usage_events.user_id`)
-  for per-member caps, reporting and abuse review.
+- **Per-seat concurrency counts the workspace owner's seat:** at most 3 running sandboxes per seat
+  (`member_concurrency_limit`), on top of the org cap of 3 × billed seats. A sandbox always counts
+  against its owner's seat (the row's `user_id`), never the seat of whoever wakes, opens or resumes
+  it. The control plane checks every start with `requireStart(row.user_id)`: create, the owner's
+  wake, a teammate's desktop team wake, grant-resume and the phone's team wake. A teammate can't
+  move a sandbox onto their own seat by waking it, and one seat can't run the whole team's
+  sandboxes. The at-cap error a teammate sees names the owner ("Alex already has 3 sandboxes
+  running. This workspace runs on their seat…").
+- **Attribution:** usage segments carry the sandbox owner's `userId` (`usage_events.user_id`, from
+  the sandbox row), not the waker's, for per-seat caps, reporting and abuse review.
 - **Membership changes are rate-limited** in auth: 10 per actor and 30 per org per minute
   (stablyai/orca-cloud#692). **The last owner is protected:** owners can't remove or demote
   themselves and admins can't act on owners, so an org always keeps an owner (pinned by tests there).

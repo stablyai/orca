@@ -52,7 +52,12 @@ describe('entitlementDeniedMessage', () => {
     expect(
       entitlementDeniedMessage(denied('member_concurrency_limit'), 'member', 'existing', t)
     ).toBe(
-      'You’re at your limit of running sandboxes. Your files are safe. Put one to sleep or delete it, then try again.'
+      'The workspace owner is at their limit of running sandboxes, and this workspace runs on their seat. Your files are safe. Ask them to put one to sleep (or put one to sleep yourself if it’s your workspace), then try again.'
+    )
+    expect(
+      entitlementDeniedMessage(denied('member_concurrency_limit'), 'member', 'create', t)
+    ).toBe(
+      'You’re at your limit of running sandboxes. Nothing was created, and you weren’t charged. Put one to sleep or delete it, then try again.'
     )
   })
 })

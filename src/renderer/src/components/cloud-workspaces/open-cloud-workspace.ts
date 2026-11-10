@@ -142,7 +142,12 @@ async function pairAndReveal(workspace: CloudWorkspace, name: string): Promise<O
   }
   const grant = await api.openGrant(workspace.id)
   if (!grant.ok) {
-    return { ok: false, message: describeError(grant.error, grant.reason) }
+    // Waking counts against the owner's seat, so a teammate is told whose sandboxes to put to sleep.
+    const owner = {
+      self: workspace.access === 'owner',
+      name: workspace.memberNames?.[workspace.ownerUserId] ?? null
+    }
+    return { ok: false, message: describeError(grant.error, grant.reason, translate, owner) }
   }
   const added = await window.api.runtimeEnvironments.verifyAndAddFromPairingCode({
     name: translate('auto.components.cloudWorkspaces.environmentName', '{{value0}} (cloud)', {

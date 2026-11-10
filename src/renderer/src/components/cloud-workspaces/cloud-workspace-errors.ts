@@ -4,7 +4,18 @@ import type { Translate } from '@/i18n/use-translate'
 import { getLastBillingStatus } from '@/components/billing/billing-summary-store'
 import { sandboxLimitFromBilling } from '@/components/worktree-creation/vm-build-failure-copy'
 
-export function describeError(error: string, reason?: string, t: Translate = translate): string {
+/**
+ * Whose seat a start counts against. The per-seat running cap counts the workspace owner's seat,
+ * not the seat of whoever wakes or opens it (control plane `requireStart(row.user_id)`).
+ */
+export type CloudWorkspaceSeatOwner = { self: boolean; name: string | null }
+
+export function describeError(
+  error: string,
+  reason?: string,
+  t: Translate = translate,
+  owner?: CloudWorkspaceSeatOwner
+): string {
   if (error === 'not_found') {
     return t(
       'auto.components.cloudWorkspaces.errorNotFound',
@@ -25,15 +36,13 @@ export function describeError(error: string, reason?: string, t: Translate = tra
             "You're at your team's limit of running sandboxes. Put one to sleep or delete it, then try again."
           )
     }
-    return reason === 'member_concurrency_limit'
-      ? t(
-          'auto.components.cloudWorkspaces.errorMemberConcurrencyLimit',
-          "You're at your limit of running sandboxes. Put one to sleep or delete it, then try again."
-        )
-      : t(
-          'auto.components.cloudWorkspaces.errorEntitlementDenied',
-          "Your team's plan can't start this workspace right now. Your files are safe. Ask an owner or admin to check the plan."
-        )
+    if (reason === 'member_concurrency_limit') {
+      return describeSeatLimit(owner, t)
+    }
+    return t(
+      'auto.components.cloudWorkspaces.errorEntitlementDenied',
+      "Your team's plan can't start this workspace right now. Your files are safe. Ask an owner or admin to check the plan."
+    )
   }
   if (error === 'forbidden') {
     return t(
@@ -109,4 +118,33 @@ export function describeInlineError(
     'auto.components.cloudWorkspaces.errorUnknownInline',
     'Something went wrong. Nothing was changed.'
   )
+}
+
+function describeSeatLimit(owner: CloudWorkspaceSeatOwner | undefined, t: Translate): string {
+  const perSeat = sandboxLimitFromBilling(getLastBillingStatus())?.perSeat
+  if (!owner || owner.self) {
+    return perSeat
+      ? t(
+          'auto.components.cloudWorkspaces.errorSeatLimitSelf',
+          'You already have {{value0}} sandboxes running, the most one seat can run. Put one to sleep or delete it, then try again.',
+          { value0: String(perSeat) }
+        )
+      : t(
+          'auto.components.cloudWorkspaces.errorMemberConcurrencyLimit',
+          "You're at your limit of running sandboxes. Put one to sleep or delete it, then try again."
+        )
+  }
+  const name =
+    owner.name ?? t('auto.components.cloudWorkspaces.seatOwnerFallback', 'The workspace owner')
+  return perSeat
+    ? t(
+        'auto.components.cloudWorkspaces.errorSeatLimitOwner',
+        '{{value0}} already has {{value1}} sandboxes running. This workspace runs on their seat, so ask them to put one to sleep, then try again.',
+        { value0: name, value1: String(perSeat) }
+      )
+    : t(
+        'auto.components.cloudWorkspaces.errorSeatLimitOwnerNoCount',
+        '{{value0}} is at their limit of running sandboxes. This workspace runs on their seat, so ask them to put one to sleep, then try again.',
+        { value0: name }
+      )
 }
