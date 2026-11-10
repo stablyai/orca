@@ -152,7 +152,9 @@
       "dictationModeDescription": "Przełączanie: naciśnij raz, aby zacząć, i drugi raz, aby zakończyć. Przytrzymanie: dyktuj, dopóki trzymasz przycisk.",
       "speechModelHeading": "MODEL MOWY",
       "speechModel": "Model mowy",
-      "loading": "Wczytywanie ustawień głosu…"
+      "loading": "Wczytywanie ustawień głosu…",
+      "dictationModeWithAutoDescription": "Automatyczny: stuknij, aby zacząć i zakończyć; na komputerze przytrzymanie skrótu nagrywa, dopóki go nie puścisz. Przytrzymanie: dyktuj, dopóki trzymasz przycisk. Przełączanie: naciśnij raz, aby zacząć, i drugi raz, aby zakończyć.",
+      "autoMode": "Automatyczny"
     },
     "agents": {
       "permissionOwnAll": "Własne ustawienia agentów"
@@ -533,6 +535,66 @@
       "deleteFailed": "Nie udało się usunąć modelu",
       "updateFailed": "Nie udało się zaktualizować ustawień dyktowania",
       "cloudModelNeedsKey": "Wymaga klucza OpenAI"
+    },
+    "controls": {
+      "start": "Dyktuj",
+      "starting": "Uruchamianie dyktowania",
+      "stop": "Zatrzymaj i wstaw",
+      "finishing": "Kończenie dyktowania",
+      "cancel": "Anuluj dyktowanie",
+      "durationSeconds_one": "{{count}} sekunda",
+      "durationSeconds_other": "{{count}} sekundy",
+      "durationSeconds_few": "{{count}} sekundy",
+      "durationSeconds_many": "{{count}} sekund",
+      "durationMinutes_one": "{{count}} minuta",
+      "durationMinutes_other": "{{count}} minuty",
+      "durationMinutes_few": "{{count}} minuty",
+      "durationMinutes_many": "{{count}} minut",
+      "durationMinutesSeconds": "{{minutes}} {{seconds}}",
+      "meterOnPhone": "Nagrywanie, {{duration}}, na tym telefonie",
+      "meterOn": "Nagrywanie, {{duration}}, na {{computer}}",
+      "meterOnComputer": "Nagrywanie, {{duration}}, na komputerze",
+      "meter": "Nagrywanie, {{duration}}",
+      "discard": "Odrzuć nagranie",
+      "retry": "Ponów dyktowanie",
+      "retryShort": "Ponów"
+    },
+    "status": {
+      "finishingOn": "Kończenie na {{computer}}",
+      "finishingOnComputer": "Kończenie na komputerze",
+      "movedTo": "Przeniesiono na {{computer}}",
+      "movedToComputer": "Przeniesiono na komputer"
+    },
+    "failure": {
+      "recordingKept": "Nagranie zachowane",
+      "connectionLost": "Utracono połączenie",
+      "connectionSlow": "Zbyt wolne połączenie",
+      "phoneStopped": "Zatrzymano na tym telefonie",
+      "stopped": "Dyktowanie zatrzymane"
+    },
+    "announce": {
+      "typedInto": "Wpisano do: {{target}}",
+      "insertedIn": "Wstawiono do: {{target}}",
+      "listeningOnPhone": "Słucham. Transkrypcja na tym telefonie.",
+      "listeningOn": "Słucham. Transkrypcja na {{computer}}.",
+      "listeningOnComputer": "Słucham. Transkrypcja na komputerze.",
+      "finishing": "Kończenie.",
+      "inserted": "Wstawiono.",
+      "cancelled": "Anulowano dyktowanie.",
+      "movedTo": "Ten telefon przestał transkrybować. Kontynuacja na {{computer}}.",
+      "movedToComputer": "Ten telefon przestał transkrybować. Kontynuacja na komputerze.",
+      "stoppedKept": "Dyktowanie zatrzymane. {{reason}}. Nagranie zostało zachowane.",
+      "stoppedKeptGeneric": "Dyktowanie zatrzymane. Nagranie zostało zachowane.",
+      "stillListening": "Nadal słucham."
+    },
+    "pill": {
+      "open": "Otwórz",
+      "listening": "Słucham",
+      "starting": "Uruchamianie",
+      "finishing": "Kończenie",
+      "stopped": "Dyktowanie zatrzymane",
+      "label": "Dyktowanie do: {{target}}, {{duration}}",
+      "hint": "Stuknij dwukrotnie, aby wrócić"
     }
   },
   "home": {
@@ -619,9 +681,9 @@
       "openAccountsHint": "Otwiera konta tego komputera",
       "emptyTitle": "Brak danych o użyciu"
     },
-    "needsYou": {
-      "heading": "Czekają na Ciebie",
-      "seeAll": "Zobacz wszystkich agentów"
+    "activeAgents": {
+      "heading": "Aktywne",
+      "seeAll": "Pokaż wszystkich agentów"
     }
   },
   "hooks": {
@@ -671,7 +733,9 @@
       "removeHost": "Usuń hosta",
       "removeHostMessage": "Usunąć „{{name}}”? Możesz później sparować go ponownie.",
       "deleteFailed": "Nie udało się usunąć „{{name}}”",
-      "deleteAnyway": "Usuń mimo to"
+      "deleteAnyway": "Usuń mimo to",
+      "deleteDestroysEnvironment": "Zostanie też usunięte środowisko „{{environment}}”, które Orca dla niego utworzyła, razem z niezatwierdzoną pracą i uruchomionymi w nim terminalami.",
+      "deleteKeepsEnvironment": "Środowisko „{{environment}}”, które Orca dla niego utworzyła, nadal działa: jego przepis nie ma kroku usuwania."
     },
     "workspaceRenameSheet": {
       "title": "Zmień nazwę przestrzeni roboczej",
@@ -1476,6 +1540,15 @@
     },
     "offlineAsOfTime": {
       "yesterday": "wczoraj, {{time}}"
+    },
+    "newWorkspaceCreateSubmit": {
+      "uncertainFolderCreate": "To worktree mogło już zostać utworzone. Sprawdź folder, zanim utworzysz kolejne.",
+      "uncertainCreate": "Ta przestrzeń robocza mogła już zostać utworzona. Sprawdź przestrzenie robocze, zanim utworzysz kolejną.",
+      "folderCreateBusy": "Worktree w tym repozytorium jest jeszcze tworzone lub sprawdzane. Pojawi się w folderze, gdy będzie gotowe."
+    },
+    "smartRailRow": {
+      "title": "Inteligentny pasek",
+      "subtitle": "Pokazuje klawisze pasujące do tego, co robi agent"
     }
   },
   "pullRequest": {
@@ -2044,8 +2117,6 @@
       "liveInput": "Wpisywanie na żywo",
       "uploadingImageTitle": "Przesyłanie obrazu",
       "releaseMicHint": "Puść mikrofon, aby zakończyć",
-      "stopHint": "Stuknij mikrofon, aby zakończyć",
-      "transcribing": "Transkrypcja na komputerze",
       "preparingMic": "Przygotowywanie mikrofonu",
       "uploadingImage": "Przesyłanie obrazu na host"
     },
@@ -2220,11 +2291,7 @@
     "terminalInputActions": {
       "sendingImage": "Wysyłanie obrazu",
       "attachPhoto": "Załącz zdjęcie",
-      "attachFileHint": "Przytrzymaj, aby zamiast tego załączyć plik",
-      "stopDictation": "Zatrzymaj dyktowanie",
-      "transcribingDictation": "Transkrypcja dyktowania",
-      "startingDictation": "Uruchamianie dyktowania",
-      "startDictation": "Rozpocznij dyktowanie"
+      "attachFileHint": "Przytrzymaj, aby zamiast tego załączyć plik"
     },
     "quickCommandEditorForm": {
       "terminalCommand": "Polecenie terminala",
@@ -2473,7 +2540,8 @@
       "insertFailedCopied": "Nie udało się wstawić dyktowanego tekstu, więc skopiowano go do schowka",
       "insertFailed": "Nie udało się wstawić dyktowanego tekstu",
       "inserted": "Wstawiono dyktowany tekst",
-      "stoppedAfterSilence": "Zatrzymano po minucie ciszy"
+      "stoppedAtCloudLimit": "Dyktowanie zatrzymane po osiągnięciu 10-minutowego limitu w chmurze.",
+      "stoppedAfterSilenceSeconds": "Zatrzymano po {{seconds}} s ciszy"
     },
     "quickCommandLaunch": {
       "editBeforeRunning": "Przed uruchomieniem edytuj to szybkie polecenie",
@@ -2721,7 +2789,7 @@
       "providerExitedRejection": "{{agent}} zatrzymał się, zanim ta wiadomość została wysłana.",
       "providerExitedAnswer": "{{agent}} zatrzymał się, więc Twoja odpowiedź nie została wysłana. Wyślij wiadomość, aby kontynuować.",
       "claudeEffortInvalid": "Nieprawidłowy poziom rozumowania Claude. Wybierz low, medium, high, xhigh lub max i wyślij ponownie.",
-      "modelUnavailable": "{{agent}} nie mógł użyć modelu {{detail}}. Wybierz inny model i wyślij ponownie.",
+      "modelUnavailable": "{{agent}} nie mógł użyć {{detail}}. Wybierz inny model i wyślij ponownie.",
       "modelUnavailableUpdate": "{{agent}} nie mógł użyć {{detail}}. Zaktualizuj {{agent}} do wersji {{minimumVersion}} lub nowszej, aby zachować to po ponownym uruchomieniu, albo wybierz inny model i wyślij ponownie.",
       "modelNotSelected": "{{agent}} nie ma wybranego modelu. Sprawdź wybór modelu i logowanie do {{agent}}, a potem wyślij ponownie.",
       "providerRejected": "{{agent}} nie przyjął tej wiadomości.",
@@ -2802,7 +2870,11 @@
       "chooseClaudeAccount": "Wybierz lub dodaj konto w ustawieniach kont Claude.",
       "chooseClaudeAccountThenRunCommand": "Wybierz lub dodaj konto w ustawieniach kont Claude, a następnie uruchom /{{command}} ponownie.",
       "chooseClaudeAccountThenSend": "Wybierz lub dodaj konto w ustawieniach kont Claude, a następnie wyślij wiadomość ponownie.",
-      "unconfirmed": "Nie udało się potwierdzić wysłania. Nie wysłano ponownie."
+      "unconfirmed": "Nie udało się potwierdzić wysłania. Nie wysłano ponownie.",
+      "providerUnavailable": "{{agent}}: brak odpowiedzi, bo usługa jest przeciążona. Wybierz inny model albo odczekaj chwilę i wyślij ponownie.",
+      "providerSafetyStopped": "{{agent}}: odpowiedź zatrzymana po kontroli bezpieczeństwa. Sprawdź prośbę i wyślij ponownie.",
+      "providerResponseFailed": "{{agent}}: nie udało się dokończyć odpowiedzi. Więcej informacji znajdziesz w „Szczegółach”.",
+      "selectedModel": "wybranego modelu"
     },
     "writeNotice": {
       "notDoneReadHistory": "Nie udało się wczytać historii tego czatu.",
@@ -2969,6 +3041,25 @@
     },
     "usePrTextAction": {
       "updateFailed": "Nie udało się zaktualizować pull requesta."
+    },
+    "smartKeys": {
+      "always": "Zawsze",
+      "answer": "Odpowiedz",
+      "background": "W tle",
+      "cancel": "Anuluj",
+      "confirm": "Potwierdź",
+      "edit": "Edytuj",
+      "history": "Historia",
+      "keyLabel": "{{word}}, wysyła {{combo}}",
+      "mode": "Tryb",
+      "no": "Nie",
+      "queue": "Do kolejki",
+      "reject": "Odrzuć",
+      "rewind": "Cofnij",
+      "sendNow": "Wyślij teraz",
+      "skip": "Pomiń",
+      "stop": "Zatrzymaj",
+      "yes": "Tak"
     }
   },
   "chat": {
@@ -3170,7 +3261,8 @@
       "modelFallback": "Claude zmienił model: {{from}} → {{to}}.",
       "forkedFrom": "Odgałęzienie z",
       "signIn": "Zaloguj się",
-      "signInHint": "Otwiera terminal na komputerze, na którym działa ten czat"
+      "signInHint": "Otwiera terminal na komputerze, na którym działa ten czat",
+      "safetyReviewApproved": "{{agent}} zatwierdził tę akcję. Zobacz szczegóły."
     },
     "ciResultLine": {
       "failingLead": "CI nie przechodzi w",
@@ -3491,7 +3583,8 @@
       "reconnecting": "{{hostName}} łączy się ponownie…",
       "stopped": "{{hostName}} jest zatrzymany. Uruchom go na komputerze.",
       "server": "Serwer",
-      "unavailable": "{{hostName}} nie jest dostępny z telefonu. Otwórz jeden z jego projektów na komputerze."
+      "unavailable": "{{hostName}} nie jest dostępny z telefonu. Otwórz jeden z jego projektów na komputerze.",
+      "offlineAsOf": "{{host}} jest offline · stan z {{time}}"
     },
     "goal": {
       "chip": "Cel",
@@ -3809,7 +3902,17 @@
       "emptyTitle": "Brak dołączonych worktree",
       "emptyCopy": "Worktree utworzone z tej przestrzeni roboczej pojawią się tutaj.",
       "statusUnavailable": "Niedostępne",
-      "backToFolder": "Wróć do folderu"
+      "backToFolder": "Wróć do folderu",
+      "createSection": "Utwórz worktree",
+      "createIn": "Utwórz worktree w {{repo}}",
+      "created": "Utworzono worktree {{name}} w {{repo}}",
+      "createdNamed": "Utworzono worktree {{name}}",
+      "createFailed": "Nie udało się utworzyć worktree w {{repo}}.",
+      "loadReposRetry": "Wczytaj repozytoria",
+      "setupChoiceTitle": "Ponowić bez konfiguracji?",
+      "setupChoiceMessage": "Orca nie może potwierdzić ostatniego tworzenia w {{repo}}. Ponowienie wymaga wyboru konfiguracji: worktree zostanie utworzone bez uruchamiania konfiguracji repozytorium.",
+      "setupChoiceSkip": "Ponów bez konfiguracji",
+      "checking": "Worktree z {{repo}} mogło już zostać utworzone. Sprawdzanie folderu…"
     },
     "hostedReviewCopy": {
       "updatingBranch": "Aktualizowanie gałęzi...",
