@@ -379,7 +379,8 @@ struct Home {
     if (this.tabHostPicker === 'usage') { this.usageDesktopId = hostId; }
     else if (this.tabHostPicker === 'automations') {
       this.automationDesktopId = hostId; this.refreshAutomations(hostId);
-    } else if (this.offeredActionHosts.includes(hostId) && this.online[hostId] === true) {
+    } else if (this.offeredActionHosts.includes(hostId)
+      && (this.tabHostPicker === 'workspace' || this.online[hostId] === true)) {
       let suffix = this.tabHostPicker === 'workspace' ? '/new-workspace' : '/tasks';
       this.pickerAction = { hostId: hostId, pathname: `/h/${encodeURIComponent(hostId)}${suffix}`, params: {} };
     }
@@ -393,7 +394,10 @@ struct Home {
   private finishTabHostPicker(): void {
     let route = this.pickerAction;
     this.tabHostPickerOpen = false; this.tabHostPicker = ''; this.pickerAction = null; this.offeredActionHosts = [];
-    if (route && this.visible && this.online[route.hostId] === true) { this.openPickedDesktop(route); }
+    if (route && this.visible && this.hosts.some((host: HostMeta): boolean => host.id === route?.hostId)
+      && (route.pathname.endsWith('/new-workspace') || this.online[route.hostId] === true)) {
+      this.openPickedDesktop(route);
+    }
   }
 
   private openPickedDesktop(route: ShellRoute): void {
@@ -1489,7 +1493,7 @@ struct Home {
                   }
                 }.width('100%').padding({ left: 16, right: 16 })
               }.width('100%').height(56).backgroundColor(Color.Transparent)
-                .enabled(this.offeredActionHosts.length === 0 || this.online[host.id] === true)
+                .enabled(this.tabHostPicker === 'workspace' || this.offeredActionHosts.length === 0 || this.online[host.id] === true)
                 .onClick(() => this.pickTabDesktop(host.id))
             }.width('100%')
           }
@@ -1924,21 +1928,27 @@ struct Home {
           .borderRadius(999)
           .constraintSize({ maxWidth: 220 })
       }
-      Stack() {
-        Column()
-          .width(FAB_SIZE)
-          .height(FAB_SIZE)
-          .borderRadius(28)
-          .backgroundColor(this.pal().accentBlue)
-          .shadow({ radius: 10, color: 'rgba(0,0,0,0.3)', offsetY: 5 })
-          .opacity(this.fabDisabled() ? 0.4 : 1)
-        Image($r('app.media.lucide_plus')).supportSvg2(true)
-          .width(26).height(26)
-          .colorFilter(lucideColorFilter(this.pal().onAccent))
-          .opacity(this.fabDisabled() ? 0.4 : 1)
+      Button({ type: ButtonType.Normal }) {
+        Stack() {
+          Column()
+            .width(FAB_SIZE)
+            .height(FAB_SIZE)
+            .borderRadius(28)
+            .backgroundColor(this.pal().accentBlue)
+            .shadow({ radius: 10, color: 'rgba(0,0,0,0.3)', offsetY: 5 })
+            .opacity(this.fabDisabled() ? 0.4 : 1)
+          Image($r('app.media.lucide_plus')).supportSvg2(true)
+            .width(26).height(26)
+            .colorFilter(lucideColorFilter(this.pal().onAccent))
+            .opacity(this.fabDisabled() ? 0.4 : 1)
+        }
       }
       .width(FAB_SIZE)
       .height(FAB_SIZE)
+      .padding(0)
+      .borderRadius(28)
+      .backgroundColor(Color.Transparent)
+      .enabled(!this.fabDisabled())
       .accessibilityText(uiText(this.activeTab === 'automations' ? '新建自动化' : '新建工作区', this.uiLocale))
       .onClick(() => {
         if (this.activeTab === 'automations') {
