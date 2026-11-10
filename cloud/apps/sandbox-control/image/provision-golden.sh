@@ -99,6 +99,25 @@ if [ -x "$opencode_pkg/bin/opencode.exe" ]; then
   "$opencode_pkg/bin/opencode.exe" --version >/dev/null
 fi
 
+# Copilot CLI prefers GH_TOKEN/GITHUB_TOKEN over the user's own /login. In Orca Cloud those hold the
+# workspace's GitHub App placeholder, which Copilot can't use ("Resource not accessible by
+# integration"), so a signed-in user could never get past it. The wrapper drops them for Copilot
+# only (COPILOT_GITHUB_TOKEN, a /login and BYOK still work), unless BYOK is set up, which needs no
+# GitHub sign-in and keeps them so `gh` in Copilot's shell still works.
+copilot_loader="$ORCA_HOME/tools/lib/node_modules/@github/copilot/npm-loader.js"
+if [ -f "$copilot_loader" ]; then
+  rm -f "$ORCA_HOME/tools/bin/copilot"
+  cat >"$ORCA_HOME/tools/bin/copilot" <<WRAPPER
+#!/bin/sh
+if [ -z "\${COPILOT_PROVIDER_BASE_URL:-}" ]; then
+  case "\${GH_TOKEN:-}" in orca-ph-*) unset GH_TOKEN ;; esac
+  case "\${GITHUB_TOKEN:-}" in orca-ph-*) unset GITHUB_TOKEN ;; esac
+fi
+exec "$copilot_loader" "\$@"
+WRAPPER
+  chmod 0755 "$ORCA_HOME/tools/bin/copilot"
+fi
+
 # The agents' first run on a VM must not be where a broken pin shows up.
 for bin in gemini copilot; do
   if [ -e "$ORCA_HOME/tools/bin/$bin" ]; then "$ORCA_HOME/tools/bin/$bin" --version >/dev/null; fi
