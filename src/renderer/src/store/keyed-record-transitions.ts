@@ -171,6 +171,8 @@ export type RecordDraft<V> = {
   get: (key: string) => V | undefined
   set: (key: string, value: V) => void
   delete: (key: string) => void
+  /** Transaction-private view; finish before publication, and never retain it across writes. */
+  view: () => Record<string, V>
   /** The built record linked to `previous`, or `previous` itself when no operation changed it. */
   finish: () => Record<string, V>
 }
@@ -184,6 +186,10 @@ function createDraft<V>(
   const removed = new Set<string>()
   let reordered = false
   const current = (): KeyedRecord<V> => next ?? previous
+  const view = (): Record<string, V> => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: private views are read-only until finish; writes go through the draft.
+    return current() as Record<string, V>
+  }
   const writable = (): Record<string, V> => (next ??= { ...previous })
   return {
     has: (key) => Object.hasOwn(current(), key),
@@ -204,10 +210,10 @@ function createDraft<V>(
       removed.add(key)
       keys.add(key)
     },
+    view,
     finish: () => {
       if (!next) {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: unchanged; callers publish the same object they read.
-        return previous as Record<string, V>
+        return view()
       }
       if (reordered) {
         links.set(next, { reason: 'reordered' })

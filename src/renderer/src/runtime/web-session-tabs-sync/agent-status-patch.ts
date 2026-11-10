@@ -216,7 +216,7 @@ export function buildMirroredAgentStatusPatch(
       entry,
       (_entries, key, value) => {
         conversationDraft.set(key, value)
-        return conversationDraft.finish()
+        return conversationDraft.view()
       },
       toRuntimeExecutionHostId(environmentId),
       { ...entry, isReplay: true }
@@ -268,6 +268,7 @@ export function buildMirroredAgentStatusPatch(
     sortRelevantChange = sortRelevantChange || entrySortRelevantChange
   }
 
+  nextConversations = conversationDraft.finish()
   if (!changed && nextConversations === originalConversations) {
     return null
   }

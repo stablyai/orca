@@ -139,10 +139,11 @@ export function createAgentStatusRuntime(
           return replaceRecordEntries(entries, [[key, value]])
         }
         if (!conversationDraft || entries !== conversationBuilt) {
+          conversationDraft?.finish()
           conversationDraft = recordDraft(entries)
         }
         conversationDraft.set(key, value)
-        conversationBuilt = conversationDraft.finish()
+        conversationBuilt = conversationDraft.view()
         return conversationBuilt
       },
       ...sourceArgs
@@ -235,6 +236,7 @@ export function createAgentStatusRuntime(
       const generatedTabTitleUpdates = batchedGeneratedTabTitleUpdates
       const freshnessRequested = batchedAgentStatusFreshnessRequested
       const hasStagedWrites = batchedAgentStatusRevision !== revisionAtStart
+      conversationDraft?.finish()
       conversationDraft = null
       conversationBuilt = null
       batchedPaneKeys = null
