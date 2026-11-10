@@ -26,7 +26,8 @@ type ReferenceCache =
 
 // Keep long-lived readers out of the read closures' store-snapshot scope.
 function cacheEntryReader<K extends ReferenceCache>(cache: K, key: string) {
-  return <S extends Pick<AppState, K>>(state: S): S[K][string] | undefined => state[cache]?.[key]
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both sides index the same cache K; TypeScript loses that correlation at the second index.
+  return (state: AppState) => state[cache]?.[key] as AppState[K][string] | undefined
 }
 
 function lookup<T>(
