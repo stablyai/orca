@@ -27,6 +27,7 @@ function accounts(
     load: { kind: 'ready', status },
     setups: IDLE_ORCA_CLOUD_AGENT_SETUPS,
     keyKinds: { claude: null, codex: null },
+    queue: { agents: [], index: 0 },
     ...patch
   }
 }
@@ -41,8 +42,7 @@ function withClaude(
   }
 }
 
-const row = (a: OrcaCloudAgentAccountsState) =>
-  buildAgentsRow({ accounts: a, desktopKeys: [], queue: [] })
+const row = (a: OrcaCloudAgentAccountsState) => buildAgentsRow({ accounts: a, desktopKeys: [] })
 
 describe('buildAgentsRow', () => {
   it('offers the one-time setup when nothing covers any agent (R2), two lines at mount', () => {
@@ -92,11 +92,10 @@ describe('buildAgentsRow', () => {
 
   it('shows a running or failed setup over everything else, with its place in the queue', () => {
     const running = accounts(NONE, {
-      setups: { claude: { phase: 'idle' }, codex: { phase: 'preparing', startedAt: 1 } }
+      setups: { claude: { phase: 'idle' }, codex: { phase: 'preparing', startedAt: 1 } },
+      queue: { agents: ['claude', 'codex'], index: 1 }
     })
-    expect(
-      buildAgentsRow({ accounts: running, desktopKeys: [], queue: ['claude', 'codex'] })
-    ).toMatchObject({
+    expect(row(running)).toMatchObject({
       kind: 'setup',
       agent: 'codex',
       step: 2,
@@ -110,7 +109,7 @@ describe('buildAgentsRow', () => {
 
   it('offers saving a key only on this computer before the setup (S1-c)', () => {
     const key = { id: 'k1', agent: 'claude', envName: 'ANTHROPIC_API_KEY', hint: 'x4Qa' } as const
-    expect(buildAgentsRow({ accounts: accounts(NONE), desktopKeys: [key], queue: [] })).toEqual({
+    expect(buildAgentsRow({ accounts: accounts(NONE), desktopKeys: [key] })).toEqual({
       kind: 'desktopKey',
       key
     })

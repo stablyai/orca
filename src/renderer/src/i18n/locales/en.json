@@ -26977,8 +26977,7 @@
     "saved": {
       "team": "{{agent}} key saved · shared with your team",
       "personal": "{{agent}} key saved · personal",
-      "detail": "New terminals and agents in running cloud workspaces get it within seconds, no rebuild.",
-      "short": "Hidden from now on"
+      "detail": "New terminals and agents in running cloud workspaces get it within seconds, no rebuild."
     },
     "option": {
       "signIn": "Subscription",
@@ -26997,22 +26996,9 @@
     "gotIt": "Got it",
     "save": "Save",
     "done": "Done",
-    "later": "Later",
-    "skippedTitle": "Agent setup skipped",
-    "signInPending": "Agent sign-in",
-    "signInPendingDetail": "Opens when the sandbox is ready. Keep Orca open until then.",
-    "signInCancelled": "Sign-in cancelled",
-    "skipSignIn": "Don’t sign in",
-    "readyTitle": "Agents ready",
-    "readyOne": "{{agent}} ready",
-    "change": "Change",
-    "signInQueued": "Agent sign-in will open when the sandbox is ready",
-    "subtitleBuild": "Give your agents access in Orca Cloud.",
-    "useKey": "Use a key",
     "discardQuestion": "Discard the key you typed?",
     "discard": "Discard",
     "keepEditing": "Keep editing",
-    "signInHandedOff": "Continues in the Agent sign-in row below.",
     "desktopKeys": {
       "title": "Keys on this computer",
       "detail": "Save it to your Orca account to use it in cloud workspaces. It stays outside the sandbox.",
@@ -27025,8 +27011,7 @@
       "rowSaved": "{{agent}}: your API key ••••{{hint}}",
       "scopeNote": "Not used in Orca Cloud. Save a key to your Orca account to use it in cloud workspaces."
     },
-    "gatewayModelDefaultHint": "Leave empty to use the gateway’s default model.",
-    "skippedDetailCloudGroup": "Set it up any time from Settings → Orca Cloud → Cloud secrets."
+    "gatewayModelDefaultHint": "Leave empty to use the gateway’s default model."
   },
   "cloudSecrets": {
     "editor": {

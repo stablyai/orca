@@ -1,5 +1,6 @@
 // Words for the cloud build sheet's Agents row (spec §5b, redesign §5). Catalog names only.
 import type { Translate } from '@/i18n/use-translate'
+import { getIntlLocale } from '@/i18n/i18n'
 import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
 import type {
   BuildAgentVia,
@@ -17,7 +18,9 @@ import {
 export function agentList(agents: readonly OrcaCloudAccountAgent[], t: Translate): string {
   const names = agents.map((agent) => agentName(agent, t))
   try {
-    return new Intl.ListFormat(undefined, { style: 'long', type: 'conjunction' }).format(names)
+    return new Intl.ListFormat(getIntlLocale(), { style: 'long', type: 'conjunction' }).format(
+      names
+    )
   } catch {
     return names.join(', ')
   }

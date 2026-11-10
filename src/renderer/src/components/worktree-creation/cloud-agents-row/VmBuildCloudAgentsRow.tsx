@@ -1,12 +1,14 @@
 // Live Agents row for an Orca Cloud build. Reads the Orca account once (shared store with S0 and the
 // composer), never the sandbox; runs S0's setup inline when nothing is set up (R2), and writes the
 // per-workspace Source from the ⋯ menu (S1-b).
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   reloadOrcaCloudAgentAccounts,
+  runOrcaCloudAgentSetups,
+  stopOrcaCloudAgentSetups,
   useOrcaCloudAgentAccounts
 } from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
 import {
@@ -29,7 +31,6 @@ import { cloudSecretRepoKey } from '../../settings/cloud-secrets/cloud-secret-re
 import { VmBuildAgentSignInRow } from '../VmBuildAgentSignInRow'
 import { VmBuildCloudAgentsMenu, type WorkspaceSourcesLoad } from './VmBuildCloudAgentsMenu'
 import { VmBuildCloudAgentsRowView, type DesktopKeySave } from './VmBuildCloudAgentsRowView'
-import { useInlineSetupQueue } from './use-inline-setup-queue'
 
 function openSettings(pane: 'agent-accounts' | 'cloud-secrets', sectionId?: string): void {
   const store = useAppStore.getState()
@@ -58,8 +59,7 @@ export function VmBuildCloudAgentsRow({
     runtimeEnvironmentId: environmentId
   })
   const desktopKeys = keysModel.status === 'ready' ? keysModel.desktopKeys : []
-  const { queue, run, cancel, clear } = useInlineSetupQueue(accounts.setups)
-  const model = buildAgentsRow({ accounts, desktopKeys, queue })
+  const model = buildAgentsRow({ accounts, desktopKeys })
   // Decided on the first render and never re-derived (redesign §5, AC-3).
   const [density] = useState<BuildAgentsRowDensity>(() => buildAgentsRowDensity(model))
 
@@ -78,19 +78,27 @@ export function VmBuildCloudAgentsRow({
     })
   }, [model, saveDesktopKey])
 
-  // §5c: a per-workspace sign-in, queued until the sandbox answers (R3).
-  const [queuedAgent, setQueuedAgent] = useState<OrcaCloudAccountAgent | null>(null)
+  // §5c: a per-workspace sign-in. Pressed before the sandbox answers, it waits for it (R3); each
+  // press is its own request, so a cancelled one never starts later.
+  const [signInHere, setSignInHere] = useState<{
+    agent: OrcaCloudAccountAgent
+    request: number
+  } | null>(null)
+  const startedRequest = useRef(0)
+  const nextRequest = useRef(0)
   const hostLabel = useAppStore(
     (s) => s.runtimeEnvironments.find((environment) => environment.id === environmentId)?.name
   )
   useEffect(() => {
-    if (queuedAgent && environmentId) {
-      setQueuedAgent(null)
-      void startVmBuildAgentSignIn(creationId, environmentId, hostLabel ?? environmentId, [
-        queuedAgent
-      ])
+    if (!signInHere || !environmentId || startedRequest.current === signInHere.request) {
+      return
     }
-  }, [queuedAgent, environmentId, creationId, hostLabel])
+    startedRequest.current = signInHere.request
+    void startVmBuildAgentSignIn(creationId, environmentId, hostLabel ?? environmentId, [
+      signInHere.agent
+    ])
+  }, [signInHere, environmentId, creationId, hostLabel])
+  const queued = signInHere !== null && !environmentId
   const signInRun = useVmBuildAgentSignIn(creationId, environmentId ?? '')
 
   const [sources, setSources] = useState<WorkspaceSourcesLoad>({ kind: 'loading' })
@@ -159,16 +167,10 @@ export function VmBuildCloudAgentsRow({
         density={density}
         menu={menu}
         desktopKeySave={desktopKeySave}
-        queued={queuedAgent !== null}
+        queued={queued}
         actions={{
-          // After a failure the queue still starts at the failed agent: Try again resumes it.
-          setUp: () =>
-            run(
-              model.kind === 'failed' && queue[0] === model.agent
-                ? queue
-                : buildAgentsToSetUp(model)
-            ),
-          cancel,
+          setUp: () => runOrcaCloudAgentSetups(buildAgentsToSetUp(model)),
+          cancel: (agent) => stopOrcaCloudAgentSetups(agent),
           reopen: (agent) => void api?.reopen({ agent }),
           copyCodeAndOpen: (agent, code) => {
             void window.api.ui
@@ -178,14 +180,17 @@ export function VmBuildCloudAgentsRow({
             void api?.reopen({ agent })
           },
           dismissFailure: (agent) => {
-            clear()
+            stopOrcaCloudAgentSetups()
             void api?.acknowledge({ agent })
           },
           retryLoad: () => void reloadOrcaCloudAgentAccounts(),
           manage: () => openSettings('agent-accounts', 'orca-cloud'),
           saveDesktopKey: saveKey,
-          signInHere: (agent) => setQueuedAgent(agent),
-          cancelSignInHere: () => setQueuedAgent(null)
+          signInHere: (agent) => {
+            nextRequest.current += 1
+            setSignInHere({ agent, request: nextRequest.current })
+          },
+          cancelSignInHere: () => setSignInHere(null)
         }}
       />
       {/* §5c only: the per-workspace sign-in's browser and code steps, once it has started. */}

@@ -69,26 +69,26 @@ function covered(coverage: OrcaCloudAgentCoverage): BuildAgentVia | null {
 }
 
 export function buildAgentsRow(args: {
-  accounts: Pick<OrcaCloudAgentAccountsState, 'load' | 'setups' | 'keyKinds'>
+  /** `queue` is R2's Set up, in order; it drives "1 of 2". */
+  accounts: Pick<OrcaCloudAgentAccountsState, 'load' | 'setups' | 'keyKinds' | 'queue'>
   /** This computer's keys no Cloud secret covers (A6); empty until read. */
   desktopKeys: readonly CloudOfferableDesktopKey[]
-  /** The agents this row's Set up queued, in order; drives "1 of 2". */
-  queue: readonly OrcaCloudAccountAgent[]
 }): BuildAgentsRowModel {
   const { load, setups, keyKinds } = args.accounts
+  const queue = args.accounts.queue.agents
   for (const agent of ORCA_CLOUD_ACCOUNT_AGENTS) {
     const setup = setups[agent]
     if (setup.phase === 'failed') {
       return { kind: 'failed', agent, error: setup.error }
     }
     if (setup.phase !== 'idle' && setup.phase !== 'saved') {
-      const index = args.queue.indexOf(agent)
+      const index = queue.indexOf(agent)
       return {
         kind: 'setup',
         agent,
         setup,
         step: index === -1 ? 1 : index + 1,
-        of: Math.max(args.queue.length, 1)
+        of: Math.max(queue.length, 1)
       }
     }
   }
