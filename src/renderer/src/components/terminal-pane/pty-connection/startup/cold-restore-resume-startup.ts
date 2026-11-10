@@ -115,6 +115,12 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       providerSession,
       cmdOverrides: state.settings?.agentCmdOverrides ?? {},
       ...resolveResumeLaunchRecipe(launchConfig, agent, providerSession),
+      ...((launchConfig?.claudeAccountId ?? matchingSleepingRecord?.claudeAccountId)
+        ? {
+            claudeAccountId:
+              launchConfig?.claudeAccountId ?? matchingSleepingRecord?.claudeAccountId
+          }
+        : {}),
       platform: resumeTarget.platform,
       agentHostPlatform: resumeTarget.agentHostPlatform,
       shell: resumeTarget.shell,

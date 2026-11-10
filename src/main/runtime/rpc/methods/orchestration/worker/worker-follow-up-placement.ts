@@ -47,10 +47,12 @@ export async function reopenWorkerTerminal(
   runtime: Pick<OrcaRuntimeService, 'resumeAgentSessionInWorkspace'>,
   worktreeId: string,
   session: WorkerResumeSession,
-  dispatchId: string
+  dispatchId: string,
+  claudeAccountId?: string
 ): Promise<ReopenedWorker | null> {
   const resumed = await runtime.resumeAgentSessionInWorkspace(worktreeId, {
     ...session,
+    ...(claudeAccountId ? { claudeAccountId } : {}),
     // Why always a recipe: without its own note the worker resumes unrecorded, never with another pane's.
     launchConfig: resolveResumeLaunchRecipe(
       session.launchConfig,

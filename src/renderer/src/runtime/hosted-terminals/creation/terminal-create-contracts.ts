@@ -30,6 +30,8 @@ export type CreateWebRuntimeSessionTerminalArgs = {
   envToDelete?: string[]
   startupCommandDelivery?: StartupCommandDelivery
   launchConfig?: SleepingAgentLaunchConfig
+  /** The launch's Claude account when the host plans it and no client launch config exists. */
+  claudeAccountId?: string
   launchToken?: string
   agent?: TuiAgent
   launchAgent?: TuiAgent

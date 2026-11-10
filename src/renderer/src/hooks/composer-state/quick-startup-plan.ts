@@ -20,6 +20,7 @@ import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/s
 import '@/diagnostics/telemetry/telemetry'
 import { tuiAgentToAgentKind } from '../../../../shared/agent-kind'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { withClaudeLaunchAccount } from '@/lib/claude-launch-account'
 import { translate } from '@/i18n/i18n'
 import { requireExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'
 import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
@@ -34,6 +35,7 @@ export type QuickComposerStartupInput = {
   shell: AgentStartupShell | null | undefined
   isRemote: boolean
   telemetrySource: WorktreeCreationRequest['telemetrySource']
+  claudeAccountId?: string
   launchInputs?: WorktreeCreationRequest['launchInputs']
   route?: WorktreeCreationRequest['agentLaunchRoute']
 }
@@ -69,12 +71,19 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
         isFollowupPath: TUI_AGENT_CONFIG[inputs.agent].promptInjectionMode === 'stdin-after-start'
       })
     : undefined
-  const startupPlan = promptPlan?.startupPlan ?? null
+  let startupPlan = promptPlan?.startupPlan ?? null
   if (startupPlan && promptPlan?.pasteDraftAfterLaunch) {
     if (promptPlan.submitPastedPrompt) {
       startupPlan.followupPrompt = promptPlan.pasteDraftAfterLaunch
     } else {
       startupPlan.draftPrompt = promptPlan.pasteDraftAfterLaunch
+    }
+  }
+  // Why: stamped before `backendStartup` is derived so the backend and renderer lanes pin alike.
+  if (startupPlan && agent === 'claude') {
+    startupPlan = {
+      ...startupPlan,
+      launchConfig: withClaudeLaunchAccount(startupPlan.launchConfig, input.claudeAccountId)
     }
   }
   if (agent && input.route !== 'structured-native-chat' && !startupPlan) {

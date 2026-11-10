@@ -9,6 +9,7 @@ import { agentLaunchErrorText } from '../launch-outcome/agent-launch-pane-notice
 import { stripClientEnvironmentFooter } from '../../../../../shared/client-environment-info'
 import { localizeTerminalSpawnHints } from './terminal-spawn-error-display'
 import { localizeWslDistroHoldText } from '../../../runtime/hosts/wsl/wsl-distro-hold-copy'
+import { describeClaudePinnedLaunchError } from '../claude-pinned-launch-error-copy'
 import {
   describeSshSignInRequiredTerminalError,
   isSshSignInRequiredTerminalError
@@ -92,6 +93,9 @@ export function shouldOfferDaemonRestart(error: string): boolean {
 }
 
 export function isExplainedTerminalError(error: string): boolean {
+  if (describeClaudePinnedLaunchError(error)) {
+    return true
+  }
   return error
     .split('\n')
     .some(
@@ -153,6 +157,10 @@ export function humanizeTerminalError(
   agentId?: string | null,
   t: Translate = translate
 ): string {
+  const pinnedLaunch = describeClaudePinnedLaunchError(error)
+  if (pinnedLaunch) {
+    return pinnedLaunch.message
+  }
   if (isSshSignInRequiredTerminalError(error)) {
     return describeSshSignInRequiredTerminalError(error, t)
   }

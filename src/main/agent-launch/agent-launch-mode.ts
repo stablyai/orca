@@ -1,10 +1,7 @@
 /** Chat defaults may fall back; explicit chat is refused only conclusively before launch effects. */
 
 import { requestsCwdOutsideWorkspaceRoot } from '../../shared/shell/launch/terminal-startup-cwd'
-import type {
-  AgentLaunchModeReason,
-  AgentLaunchModeReceipt
-} from '../../shared/agent-launch/contracts/agent-launch-intent'
+import type { AgentLaunchModeReceipt } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import { RUNTIME_CAPABILITIES } from '../../shared/protocol-version'
 import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import {
@@ -20,11 +17,15 @@ import type {
 } from '../../shared/agent-session/structured-agent-create-support-reply'
 import type { WorkspaceLaunchKind } from '../../shared/agent-launch/contracts/workspace-launch-kind'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import {
+  PROJECT_CLAUDE_ACCOUNT_DETAIL,
+  projectClaudeAccountForLaunch,
+  type AgentLaunchModeHostRuntime
+} from './agent-launch-project-claude-account'
 import type { AgentLaunchSurface } from '../../shared/agent-launch/contracts/agent-launch-surface'
 import { formatAgentTypeLabel } from '../../shared/agent-status/presentation/agent-type-label'
 import { AgentLaunchSurfaceUnavailableError } from './agent-launch-surface-refusal'
-
-type AgentLaunchDowngradeReason = Exclude<AgentLaunchModeReason, 'user_default' | 'requested'>
+import { DOWNGRADE_DETAIL, type AgentLaunchDowngradeReason } from './agent-launch-downgrade-detail'
 
 /** Caller-specific receipt wording, shared across desktop, mobile and orchestration. */
 export type AgentLaunchModeVocabulary = {
@@ -48,6 +49,8 @@ export type AgentLaunchModePlacement = {
   terminal?: string
   /** Derived by the host; absent means unknown, not a default workspace kind. */
   workspaceKind?: WorkspaceLaunchKind
+  /** `--account`: a structured session cannot run on a non-active account. */
+  claudeAccount?: string
   /** Structured sessions cannot honor a cwd outside their workspace root. */
   cwd?: string
   /** Missing until materialization; a requested cwd cannot be classified without it. */
@@ -59,21 +62,6 @@ export type AgentLaunchModePlacement = {
 const REGISTERED_STRUCTURED_AGENTS: readonly string[] = STRUCTURED_AGENT_RUNTIME_METADATA.map(
   ({ definition }) => definition.agent
 )
-
-const DOWNGRADE_DETAIL: Record<AgentLaunchDowngradeReason, string> = {
-  remote_execution_host: 'this launch runs on a remote execution host',
-  reused_terminal: 'it reuses a running terminal agent',
-  agent_without_structured_session: 'this agent has no structured session',
-  tui_launch_command: 'it asks to start in a folder other than its workspace',
-  structured_sessions_unavailable: 'this runtime does not support structured agent sessions',
-  structured_support_unknown: 'the execution host has not established structured session support',
-  wsl_execution_runtime: 'this workspace runs under WSL',
-  codex_on_windows: 'Codex has no structured session on Windows',
-  chat_unavailable_on_windows: "this agent's chat isn't available on Windows yet",
-  structured_unsupported_on_host: 'the execution host cannot create one here',
-  chat_runtime_not_installed:
-    "its chat runtime isn't installed on this host (install it from a new chat tab in Orca)"
-}
 
 const BLOCKER_REASON: Record<StructuredNativeChatBlocker, AgentLaunchDowngradeReason> = {
   'reused-terminal': 'reused_terminal',
@@ -132,6 +120,9 @@ export function decideAgentLaunchMode(args: {
   if (placement.on) {
     return blocked('remote_execution_host')
   }
+  if (placement.claudeAccount) {
+    return blocked('pinned_claude_account')
+  }
   const cwdRelation = launchCwdRelation(placement)
   const support = resolveStructuredNativeChatSupport({
     agent,
@@ -167,7 +158,7 @@ export function decideAgentLaunchMode(args: {
 
 /** Refuse explicit chat only before effects; a created workspace keeps its terminal fallback. */
 export async function resolveAgentLaunchModeOnHost(
-  runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'>,
+  runtime: AgentLaunchModeHostRuntime,
   receipt: AgentLaunchModeReceipt,
   worktreeId: string | undefined,
   agent: TuiAgent | undefined,
@@ -189,12 +180,21 @@ export async function resolveAgentLaunchModeOnHost(
       launchCwdRelation(context) === 'custom'
     )
   }
-  return downgradeAgentLaunchModeForHost(
+  const settled = downgradeAgentLaunchModeForHost(
     receipt,
     await readStructuredCreateSupport(runtime, worktreeId, agent),
     vocabulary,
     context ? { ...context, agent } : undefined
   )
+  // Why after the host verdict: an SSH or WSL workspace, which never pins, keeps its own reason.
+  if (settled.mode !== 'structured' || !projectClaudeAccountForLaunch(runtime, worktreeId, agent)) {
+    return settled
+  }
+  const requested = settled.reason === 'requested'
+  // Why refused: an explicit chat request must not quietly become a terminal before anything opens.
+  return requested && context?.phase === 'before-effects'
+    ? unavailableLaunchMode('pinned_claude_account', vocabulary, true, { ...context, agent })
+    : downgraded('pinned_claude_account', vocabulary, requested, PROJECT_CLAUDE_ACCOUNT_DETAIL)
 }
 
 /** Unknown host support must fall back to a terminal. */
@@ -290,9 +290,10 @@ function unavailableLaunchMode(
 function downgraded(
   reason: AgentLaunchDowngradeReason,
   vocabulary: AgentLaunchModeVocabulary,
-  requested = false
+  requested = false,
+  detail?: string
 ): AgentLaunchModeReceipt {
-  const why = vocabulary.detailOverrides?.[reason] ?? DOWNGRADE_DETAIL[reason]
+  const why = detail ?? vocabulary.detailOverrides?.[reason] ?? DOWNGRADE_DETAIL[reason]
   return {
     mode: 'terminal',
     preferred: 'structured',

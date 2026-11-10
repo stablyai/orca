@@ -41,6 +41,7 @@ export type WorkerFollowUpPlacement = {
   agent?: string
   model?: string
   effort?: string
+  account?: string
   /** Earlier task and report, for a fresh agent that cannot reopen the conversation. */
   earlierWork?: string
   reopen?: WorkerFollowUp['reopen']
@@ -90,27 +91,51 @@ export async function chooseWorkerFollowUpPlacement(
   const session = readWorkerResumeSession(resource && db.getWorkerTerminalResource(resource.id))
   if (session && isResumableTuiAgent(session.agent)) {
     const userTab = await userTabHoldingSession(runtime, session)
+    if (!userTab) {
+      assertWorkerAccountRemains(runtime, latest.id, options)
+    }
     return userTab
       ? { delivery: 'follow_up', worktreeId, terminal: userTab }
       : {
           delivery: 'reopened',
           worktreeId,
           agent: session.agent,
+          ...(options.account ? { account: options.account } : {}),
           earlierWork: earlierWork(db, latest),
-          reopen: (dispatchId) => reopenWorkerTerminal(runtime, worktreeId, session, dispatchId)
+          reopen: (dispatchId) =>
+            reopenWorkerTerminal(runtime, worktreeId, session, dispatchId, options.account)
         }
   }
   if (!options.agent) {
     throw notRestartable(latest.id)
   }
+  assertWorkerAccountRemains(runtime, latest.id, options)
   return {
     delivery: 'started_fresh',
     worktreeId,
     agent: options.agent,
     ...(options.model ? { model: options.model } : {}),
     ...(options.effort ? { effort: options.effort } : {}),
+    ...(options.account ? { account: options.account } : {}),
     earlierWork: earlierWork(db, latest)
   }
+}
+
+// Why: the start would otherwise fail on an `--account` the sender never passed.
+function assertWorkerAccountRemains(
+  runtime: OrcaRuntimeService,
+  dispatchId: string,
+  options: { account?: string; accountEmail?: string }
+): void {
+  const accountId = options.account
+  if (!accountId || runtime.getAccountsSnapshot().claude.accounts.some((a) => a.id === accountId)) {
+    return
+  }
+  throw new OrchestrationError(
+    'worker_account_gone',
+    `Dispatch ${dispatchId}'s worker ran on Claude account ${options.accountEmail ?? accountId}, which was removed from Orca. Start a new worker with worker-start and choose an account with --account.`,
+    { effectsApplied: false }
+  )
 }
 
 /** The handle a follow-up takes in place, or null once its agent is proven gone; never a guess. */

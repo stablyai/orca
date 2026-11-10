@@ -32,6 +32,7 @@ import {
 import { findAgentPaneWorktreeId, getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
 import { mergeCurrentOrchestrationContext } from './agent-status-orchestration-context'
 import { deriveAgentStatusLiveFacts } from './agent-status-live-facts'
+import { claudeAccountIdField } from './agent-status-claude-account'
 import { liveEntryChildFields } from './agent-status-live-entry-children'
 import {
   canReuseStatusProviderSession,
@@ -49,10 +50,7 @@ export type AgentStatusLiveEntryBuild = {
   providerSession: AgentProviderSessionMetadata | undefined
   providerSessionChanged: boolean
   retainsResumableRecoveryIdentity: boolean
-  migrationUnsupported: {
-    next: Record<string, MigrationUnsupportedPtyEntry>
-    changed: boolean
-  }
+  migrationUnsupported: { next: Record<string, MigrationUnsupportedPtyEntry>; changed: boolean }
   commandCodeNewTurn: boolean
   sortRelevantChange: boolean
   retentionRelevantChange: boolean
@@ -249,6 +247,7 @@ export function buildAgentStatusLiveEntry(
       : {}),
     ...(promptInteractionKey ? { promptInteractionKey } : {}),
     ...(payload.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
+    ...claudeAccountIdField(existing, payload, identity.agentType),
     acceptedStatusSeq: (existing?.acceptedStatusSeq ?? 0) + 1,
     ...(payload.observation ? { observation: payload.observation } : {}),
     ...(programStatus ? { programStatus } : {}),

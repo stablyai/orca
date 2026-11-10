@@ -8,6 +8,7 @@ import { ButtonGroup } from '../../../ui/button-group'
 import { Label } from '../../../ui/label'
 import { ClaudeIcon } from '../../../status-bar/icons'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
+import { ClaudeAskPerProjectSetting } from '../../ClaudeAskPerProjectSetting'
 import { ClaudeRunningSessionSwitchSetting } from './claude-running-session-switch-setting'
 import {
   getProviderAccountRuntime,
@@ -386,6 +387,7 @@ export function renderClaudeAccountsSection(
         {isRemoteAccountScope ? null : (
           <ClaudeRunningSessionSwitchSetting settings={settings} updateSettings={updateSettings} />
         )}
+        <ClaudeAskPerProjectSetting settings={settings} updateSettings={updateSettings} />
       </SettingsGroup>
     </div>
   )

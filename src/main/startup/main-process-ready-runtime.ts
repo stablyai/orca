@@ -1,4 +1,5 @@
 import { app, nativeTheme } from 'electron'
+import { seedClaudePinnedPtyRegistry } from '../claude-accounts/claude-pty-account-registries-startup'
 import { randomUUID } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 import { StarNagService } from '../star-nag/service'
@@ -51,6 +52,8 @@ import { startClaudeCodeThemeSync } from '../claude/theme-sync/claude-code-theme
 const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
 
 export async function initializeReadyRuntimeServices(): Promise<void> {
+  // Why first: daemon reconciliation and pane labels read the restored `--account` pins.
+  await seedClaudePinnedPtyRegistry(app.getPath('userData'))
   const store = state.store
   if (!store) {
     throw new Error('Store must be initialized before ready services')

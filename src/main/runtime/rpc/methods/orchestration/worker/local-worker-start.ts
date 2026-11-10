@@ -33,7 +33,7 @@ import { chatAssigneeOf, chatWorkerMode } from '../chat-assignee-admission'
 import { recordCreatedWorkerTerminalCustody } from './created-worker-terminal-custody'
 import { releaseRetriedWorkerTerminal } from './retried-worker-terminal-release'
 import { requireWorkerAuthority, type WorkerEffect } from './worker-topology'
-import { prepareLocalWorkerStart } from './worker-start-validation'
+import { assertLocalAccountWorktree, prepareLocalWorkerStart } from './worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './worker-start-readiness-settlement'
 import type { WorkerStartMutation } from './worker-start-mutation'
 import { prepareWorkerStartCard } from '../../../../orchestration/workers/launch/worker-start-card'
@@ -98,7 +98,7 @@ export async function startLocalWorker(args: {
     )
   }
 
-  const { agent, launch } = prepareLocalWorkerStart({
+  const { agent, launch, claudeAccount } = prepareLocalWorkerStart({
     params: launchParams,
     createsWorktree,
     runtime,
@@ -126,16 +126,15 @@ export async function startLocalWorker(args: {
       : requestedWorktree === 'current'
         ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorWorktreeId}`)
         : await runtime.showManagedTerminalWorkspace(requestedWorktree)
-  if (terminal) {
-    await assertExplicitWorkerUsable({
-      runtime,
-      db,
-      terminal,
-      from: params.from,
-      coordinator,
-      resolvedWorktreeId: resolvedWorktree?.id
-    })
-  }
+  await assertExplicitWorkerUsable({
+    runtime,
+    db,
+    terminal: terminal || null,
+    from: params.from,
+    coordinator,
+    resolvedWorktreeId: resolvedWorktree?.id
+  })
+  await assertLocalAccountWorktree(runtime, claudeAccount && resolvedWorktree?.id)
   const hostMode = resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
   let mode = chatWorkerMode(await hostMode, chat)
 
@@ -182,6 +181,7 @@ export async function startLocalWorker(args: {
       mode,
       agent,
       launchPreferences: launch.preferences,
+      ...(claudeAccount ? { claudeAccountId: claudeAccount.accountId } : {}),
       effects,
       onStage,
       followUp: args.followUp

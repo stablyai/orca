@@ -4,6 +4,7 @@ import {
   type ParsedAgentStatusPayload
 } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { isPinnableClaudeAccountId } from '../../../../shared/claude/project-claude-account-preference'
 
 export function normalizeAgentStatusEvent(
   data: AgentStatusIpcPayload
@@ -47,4 +48,9 @@ export function normalizeAgentStatusMetadata(
     ...(data.launchConfig !== undefined ? { launchConfig: data.launchConfig } : {}),
     ...(data.paneOwner ? { paneOwner: data.paneOwner } : {})
   }
+}
+
+/** Main stamps every row it publishes, so a row without an id reads as unpinned (null), not unknown. */
+export function normalizeMainClaudeAccountId(data: AgentStatusIpcPayload): string | null {
+  return isPinnableClaudeAccountId(data.claudeAccountId) ? data.claudeAccountId : null
 }

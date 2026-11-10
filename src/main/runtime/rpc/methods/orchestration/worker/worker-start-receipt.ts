@@ -1,4 +1,5 @@
 import { formatTerminalStartFailure } from '../../../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
+import { stripClaudePinnedLaunchMarker } from '../../../../../../shared/claude/claude-pinned-launch-error'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { WorkerDispatchRow } from '../../../../orchestration/db/orchestration-records'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -78,11 +79,14 @@ export async function failWorkerStartWithReceipt(args: WorkerStartFailureArgs): 
 
 function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
   // A launch's printed output can echo its injected capability or other secrets; the receipt must never carry them.
-  const reason = redactString(
-    replaceDispatchCapabilities(
-      formatTerminalStartFailure(args.error) ??
-        (args.error instanceof Error ? args.error.message : String(args.error))
-    ).value
+  // The pinned-launch marker is stripped too: only the renderer's PTY spawn path reads it.
+  const reason = stripClaudePinnedLaunchMarker(
+    redactString(
+      replaceDispatchCapabilities(
+        formatTerminalStartFailure(args.error) ??
+          (args.error instanceof Error ? args.error.message : String(args.error))
+      ).value
+    )
   )
   const unknown = isUnknownWorkerStartOutcome(args.error, args.failedStage)
   const worker = unknown

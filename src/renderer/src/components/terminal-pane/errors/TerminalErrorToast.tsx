@@ -18,6 +18,7 @@ import {
 } from './terminal-spawn-error-display'
 import { isWslDistroHoldText } from '@/runtime/hosts/wsl/wsl-distro-hold-copy'
 import { isSshSignInRequiredTerminalError } from './terminal-ssh-sign-in-error'
+import { StartOnActiveAccountButton } from '../StartOnActiveAccountButton'
 
 export function TerminalErrorToast({
   error,
@@ -27,6 +28,7 @@ export function TerminalErrorToast({
   onDismiss,
   onRestartDaemon,
   onRetry,
+  onStartOnActiveAccount,
   onOpenNewTerminal,
   onClosePane
 }: {
@@ -39,6 +41,7 @@ export function TerminalErrorToast({
   onDismiss: () => void
   onRestartDaemon?: () => void
   onRetry?: () => Promise<boolean>
+  onStartOnActiveAccount?: () => void
   /** Leaves this pane and its saved session untouched. */
   onOpenNewTerminal?: () => void
   /** Dismissing only hides the toast; the dead pane needs a way out from where the user is looking (#21342). */
@@ -206,6 +209,7 @@ export function TerminalErrorToast({
               : t('auto.components.terminal.pane.TerminalErrorToast.retry', 'Retry')}
           </Button>
         ) : null}
+        <StartOnActiveAccountButton error={error} onClick={onStartOnActiveAccount} />
         {/* Why: an owner can stay unverifiable, so Retry alone can loop forever. */}
         {paneOwnerUnverified && onOpenNewTerminal ? (
           <Button variant="outline" size="xs" onClick={onOpenNewTerminal} className="ml-2">

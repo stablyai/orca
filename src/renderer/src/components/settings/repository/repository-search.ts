@@ -17,6 +17,10 @@ import {
 } from './worktrees/repository-git-worktree-search-entries'
 import { getRepositoryFormatterSearchEntry } from './RepositoryFormatterSection'
 import { getRepositoryAgentTrustSearchEntry } from './RepositoryAgentTrustSection'
+import {
+  getRepositoryClaudeAccountSearchEntry,
+  getRepositoryGitHubAccountSearchEntry
+} from './repository-account-search-entries'
 
 type RepositoryPaneSearchOptions = {
   isLocalWindowsProject?: boolean
@@ -98,32 +102,6 @@ function getRepositorySearchParts(
       ...translateSearchKeyword('auto.components.settings.repository.search.27733eb6c1', 'favicon')
     ]
   }
-  const github = !isFolder
-    ? {
-        title: t('auto.components.settings.repository.search.eefc3e51ef', 'GitHub account'),
-        description: t(
-          'auto.components.settings.repository.search.githubAccountDescription',
-          'Bind a keyring gh login for this project’s GitHub API calls.'
-        ),
-        keywords: [
-          repo.displayName,
-          ...translateSearchKeyword(
-            'auto.components.settings.repository.search.9dc60d7f6d',
-            'github'
-          ),
-          ...translateSearchKeyword(
-            'auto.components.settings.repository.search.githubAccountKeyword',
-            'github account'
-          ),
-          ...translateSearchKeyword(
-            'auto.components.settings.repository.search.ghAccount',
-            'gh account'
-          ),
-          ...translateSearchKeyword('auto.components.settings.repository.search.login', 'login'),
-          ...translateSearchKeyword('auto.components.settings.repository.search.token', 'token')
-        ]
-      }
-    : undefined
   const fork =
     repo.upstream && !isFolder
       ? {
@@ -223,7 +201,8 @@ function getRepositorySearchParts(
     jira,
     displayName,
     icon,
-    github,
+    claudeAccount: getRepositoryClaudeAccountSearchEntry(repo, t),
+    github: isFolder ? undefined : getRepositoryGitHubAccountSearchEntry(repo, t),
     fork,
     projectRuntime,
     removeProject,
@@ -244,7 +223,8 @@ export function getRepositoryPaneSearchEntries(
     parts.agentTrust,
     parts.jira,
     parts.displayName,
-    parts.icon
+    parts.icon,
+    parts.claudeAccount
   ]
   if (parts.github) {
     entries.push(parts.github)
@@ -278,7 +258,13 @@ export function getRepositoryPaneSearchMetadata(
 ) {
   const parts = getRepositorySearchParts(repo, options, t)
   const worktrees = isFolderRepo(repo) ? undefined : getRepositoryGitWorktreeSearchMetadata(repo, t)
-  const identity = [parts.agentTrust, parts.jira, parts.displayName, parts.icon]
+  const identity = [
+    parts.agentTrust,
+    parts.jira,
+    parts.displayName,
+    parts.icon,
+    parts.claudeAccount
+  ]
   if (parts.github) {
     identity.push(parts.github)
   }

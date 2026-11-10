@@ -5,6 +5,16 @@ import { getDashboardPopoutWindow } from '../window/dashboard-popout-window'
 import { stopSyntheticTitleSpinnerTimer } from './synthetic-title-runtime'
 import { mainProcessState as state } from './main-process-state'
 import { pickHostTurnEnd } from '../../shared/agent-status/contracts/agent-status-types'
+import { getPtyIdForPaneKey } from '../ipc/pty/pane/key-state'
+import {
+  pinnedClaudeAccountIdForPane,
+  type PinnedClaudePaneLookup
+} from '../claude-accounts/pinned-claude-pane-account'
+
+const pinnedPaneLookup: PinnedClaudePaneLookup = {
+  getLivePtyIdForPaneKey: getPtyIdForPaneKey,
+  getPersistedTerminalLayouts: () => state.store?.getWorkspaceSession().terminalLayoutsByTabId
+}
 
 export type MainWindowAgentStatusOptions = {
   window: BrowserWindow
@@ -68,6 +78,10 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       const runtime = state.runtime
       const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
       const terminalHandle = runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
+      const claudeAccountId = pinnedClaudeAccountIdForPane(
+        { paneKey, connectionId },
+        pinnedPaneLookup
+      )
       const statusEvent = {
         ...(authorityRestartId && isReplay !== true ? { authorityRestartId } : {}),
         ...payload,
@@ -88,6 +102,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
         ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
         ...(observation ? { observation } : {}),
         ...(orchestration ? { orchestration } : {}),
+        ...(claudeAccountId ? { claudeAccountId } : {}),
         ...(programStatus ? { programStatus } : {}),
         ...(programStatusOnly === true ? { programStatusOnly: true } : {}),
         ...(agentPresence?.session && !agentPresence.ended

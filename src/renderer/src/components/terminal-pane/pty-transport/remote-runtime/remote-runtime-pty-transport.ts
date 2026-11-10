@@ -22,7 +22,7 @@ import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-p
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { readTerminalSpawnDeferral } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { remoteRestoreSpawnIntentParams } from '../../../../runtime/hosted-terminals/restoration/remote-restore-spawn-intent'
-import { createAgentSessionKeyboardOptions } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-keyboard-capability'
+import { createAgentSessionLaunchOptions } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-launch-options'
 import {
   agentProviderSessionForHostEnsure,
   restoreSourcePaneOptions
@@ -631,7 +631,7 @@ export function createRemoteRuntimePtyTransport(
   const terminalCreateMutationId = createBrowserUuid()
   // Replay one stable host operation after lost responses so reconnect cannot launch a second agent.
   const agentCreateOperation = createAgentSessionCreateOperation()
-  const agentKeyboardOptions = createAgentSessionKeyboardOptions(terminalKittyKeyboardProtocol)
+  const agentSessionLaunchOptions = createAgentSessionLaunchOptions(terminalKittyKeyboardProtocol)
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
     onBell,
@@ -3747,7 +3747,10 @@ export function createRemoteRuntimePtyTransport(
         return result
       }
       const hostAuthorityCreate = async (epoch = connectLifecycleEpoch) => {
-        const keyboardOptions = await agentKeyboardOptions(createEnvironmentId)
+        const launchOptions = await agentSessionLaunchOptions(
+          createEnvironmentId,
+          launchConfigToSend
+        )
         const freshInputs =
           freshLaunch && launchAgentToSend
             ? await pairedAgentLaunchInputs({
@@ -3790,7 +3793,7 @@ export function createRemoteRuntimePtyTransport(
                   'terminal.ensureAgentSession',
                   {
                     kind: 'explicit',
-                    ...keyboardOptions,
+                    ...launchOptions,
                     ...originOptions,
                     ...sourcePaneOptions,
                     worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
@@ -3814,7 +3817,7 @@ export function createRemoteRuntimePtyTransport(
                   'terminal.createAgentSession',
                   withAgentSessionCreateOperationId(
                     {
-                      ...keyboardOptions,
+                      ...launchOptions,
                       ...sectionTrustOptions,
                       ...(opts.trustWorktreeId && opts.cwd ? { startupCwd: opts.cwd } : {}),
                       worktree: toRuntimeTerminalWorktreeSelector(worktreeId),

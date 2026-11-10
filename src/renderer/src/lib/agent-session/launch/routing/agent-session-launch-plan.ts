@@ -28,6 +28,11 @@ import {
   type AgentLaunchRoute,
   type AgentLaunchRoutingInput
 } from './agent-launch-routing'
+import {
+  launchPinsClaudeAccount,
+  resolvePlannedRoute,
+  type ClaudeAccountRouteArgs
+} from '@/lib/agent-session-launch-claude-account'
 import type { NativeChatLaunchPromptDelivery } from '../prompt/native-chat-launch-prompt-delivery'
 import {
   beginStructuredAgentLaunchSettlement,
@@ -42,7 +47,7 @@ import { awaitLocalRuntimeCapabilities } from '../../../../runtime/hosts/capabil
 
 export type AgentLaunchSurface = 'chat' | 'terminal'
 
-export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
+export type AgentSessionLaunchRequest = ClaudeAccountRouteArgs & {
   requestId: AgentLaunchRequestId
   requestedSurface?: AgentLaunchSurface
   selectedExecutionHostId?: ExecutionHostId
@@ -189,9 +194,9 @@ export function structuredAgentSessionLaunchFeasible(
 
 export function resolveAgentSessionLaunchRoute(
   store: AgentLaunchRouteStore,
-  request: AgentLaunchRouteArgs
+  request: ClaudeAccountRouteArgs & Pick<AgentSessionLaunchRequest, 'requestedSurface'>
 ): AgentLaunchRoute {
-  return resolveAgentLaunchRoute(buildAgentLaunchRouteInput(store, request))
+  return resolvePlannedRoute(store, request, buildAgentLaunchRouteInput(store, request))
 }
 
 /** Log chat-to-terminal fallback and re-ask missing host agent lists for future launches. */
@@ -243,9 +248,13 @@ function structuredRouteAwaits(
 /** Await missing host-agent inventory or local startup capabilities up to waitMs, then let the caller resolve again; null when neither is pending. */
 export function awaitStructuredRouteHostAnswer(
   store: AgentLaunchRouteStore,
-  request: AgentLaunchRouteArgs,
+  request: ClaudeAccountRouteArgs,
   waitMs: number
 ): Promise<void> | null {
+  // Why: a pinned Claude launch is a terminal whatever the host answers, so it never waits.
+  if (launchPinsClaudeAccount(store, request)) {
+    return null
+  }
   const input = buildAgentLaunchRouteInput(store, request)
   if (!structuredRouteAwaits(input)) {
     return null
@@ -290,11 +299,7 @@ export function planAgentSessionLaunch(
   request: AgentSessionLaunchRequest
 ): AgentSessionLaunchPlan {
   const input = buildAgentLaunchRouteInput(store, request)
-  const route = request.requestedSurface
-    ? request.requestedSurface === 'chat'
-      ? 'structured-native-chat'
-      : 'terminal-tui'
-    : resolveAgentLaunchRoute(input)
+  const route = resolvePlannedRoute(store, request, input)
   if (!request.requestedSurface) {
     reportStructuredLaunchDowngrade(store, input, route)
   }
