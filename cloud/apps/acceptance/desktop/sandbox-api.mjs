@@ -7,11 +7,12 @@ export const SANDBOX_URL =
   process.env.ORCA_CLOUD_SANDBOX_URL ?? 'https://orca-sandbox-control-dev.lovecast.workers.dev'
 export const DEV_KEY_FILE = process.env.ORCA_CLOUD_SANDBOX_DEV_KEY_FILE ?? '/tmp/vdrv/secrets/dev-jwk.json'
 
-export async function sandboxToken(sub) {
+export async function sandboxToken(sub, org = null) {
   const file = JSON.parse(readFileSync(DEV_KEY_FILE, 'utf8'))
   const kid = file.private.kid ?? file.kid ?? 'dev1'
   const key = await importJWK(file.private, 'ES256')
-  return new SignJWT({ sub, purpose: 'sandbox' })
+  // `org` mirrors the desktop's dev token for a team (org claim + member role).
+  return new SignJWT({ sub, purpose: 'sandbox', ...(org ? { org, org_role: 'member' } : {}) })
     .setProtectedHeader({ alg: 'ES256', kid })
     .setIssuer('orca-sandbox-dev-test')
     .setAudience('orca-sandbox')
@@ -21,10 +22,14 @@ export async function sandboxToken(sub) {
 }
 
 export async function sandboxApi(sub, method, path, body) {
+  return sandboxApiOrg(sub, null, method, path, body)
+}
+
+export async function sandboxApiOrg(sub, org, method, path, body) {
   const res = await fetch(SANDBOX_URL + path, {
     method,
     headers: {
-      authorization: `Bearer ${await sandboxToken(sub)}`,
+      authorization: `Bearer ${await sandboxToken(sub, org)}`,
       ...(body ? { 'content-type': 'application/json' } : {})
     },
     body: body ? JSON.stringify(body) : undefined

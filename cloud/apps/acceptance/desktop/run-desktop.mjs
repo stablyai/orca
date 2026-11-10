@@ -5,6 +5,9 @@
 //
 //   node cloud/apps/acceptance/desktop/run-desktop.mjs <artifactsDir>
 //
+// Starts signed out on a fresh profile (dev auth) and signs in from the Orca Cloud sign-in card, so
+// the #127 fixes are covered: D-1/D-4 auth.signed-out-create, D-3 proj.cloud-name, D-2
+// life.delete-unconfirmed (+ life.delete-after-oob-destroy, life.destroy for a normal delete).
 // Env: ORCA_CLOUD_SANDBOX_URL / ORCA_CLOUD_SANDBOX_DEV_KEY_FILE / ORCA_BILLING_API_URL override the
 // dev defaults; W9D_USER (default w9-desktop) is the dev account; W9D_WAKE_CYCLES (default 5);
 // W9D_SKIP_BUILD=1 skips the workspace-package/native/CLI prebuild.
@@ -13,7 +16,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import os from 'node:os'
 import path from 'node:path'
 import { chromium } from 'playwright-core'
-import { DEV_KEY_FILE, SANDBOX_URL, deleteAllSandboxes, listSandboxes, sandboxApi } from './sandbox-api.mjs'
+import { DEV_KEY_FILE, SANDBOX_URL, deleteAllSandboxes, listSandboxes, sandboxApi, sandboxApiOrg } from './sandbox-api.mjs'
 
 const repoRoot = path.resolve(import.meta.dirname, '../../../..')
 const artifactsDir = path.resolve(process.argv[2] ?? `/tmp/orca-desktop-acceptance-${Date.now()}`)
@@ -45,7 +48,7 @@ const results = {
   bugs: [],
   cleanup: {}
 }
-const created = { sandboxIds: new Set(), localPaths: [] }
+const created = { sandboxIds: new Set(), localPaths: [], foreign: [] }
 let runner = null
 let browser = null
 let page = null
@@ -147,7 +150,9 @@ async function launchApp(userData, label) {
   const logFile = path.join(artifactsDir, `app-${label}.log`)
   const out = createWriteStream(logFile)
   const t0 = Date.now()
-  const child = spawn(process.execPath, ['config/scripts/development/launch/run-electron-vite-dev.mjs'], {
+  // Mock keychain: a fresh dev app identity otherwise blocks Electron's main thread on a macOS
+  // Keychain prompt (safeStorage) that nobody can answer on an unattended or locked test Mac.
+  const child = spawn(process.execPath, ['config/scripts/development/launch/run-electron-vite-dev.mjs', '--', '--use-mock-keychain', '--password-store=basic'], {
     cwd: repoRoot,
     env: appEnv(userData),
     stdio: ['ignore', 'pipe', 'pipe']
@@ -175,12 +180,16 @@ async function launchApp(userData, label) {
   child.stderr.pipe(out)
   log('instance', instance.cdpUrl, instance.rendererUrl, 'runner pid', child.pid)
   const deadline = Date.now() + 300_000
+  let seen = null
   for (;;) {
     try {
       const targets = await (await fetch(`${instance.cdpUrl}/json`)).json()
+      seen = targets.map((t) => `${t.type} ${t.url.slice(0, 80)}`)
       if (targets.some((t) => t.type === 'page' && t.url.startsWith(instance.rendererUrl))) break
-    } catch {}
-    if (Date.now() > deadline) throw new Error('renderer never appeared on CDP')
+    } catch (e) {
+      seen = `cdp error: ${e.message}`
+    }
+    if (Date.now() > deadline) throw new Error(`renderer never appeared on CDP; targets ${JSON.stringify(seen)}`)
     await sleep(1000)
   }
   browser = await chromium.connectOverCDP(instance.cdpUrl)
@@ -210,7 +219,19 @@ async function stopApp() {
 
 // ---------- UI helpers ----------
 
-const store = (fn, arg) => page.evaluate(fn, arg)
+async function store(fn, arg) {
+  // A first launch can reload the renderer under us; retry once the new document has the store.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await page.evaluate(fn, arg)
+    } catch (e) {
+      if (attempt >= 4 || !/garbage collected|Execution context was destroyed|navigation/i.test(e.message)) throw e
+      log('  store() retry after', e.message.slice(0, 80))
+      await sleep(2000)
+      await page.waitForFunction(() => Boolean(window.__store?.getState?.().repos), null, { timeout: 60_000 }).catch(() => {})
+    }
+  }
+}
 
 async function installToastRecorder() {
   await page.evaluate(() => {
@@ -228,13 +249,43 @@ async function installToastRecorder() {
 const toasts = () => page.evaluate(() => window.__w9dToasts ?? [])
 const clearToasts = () => page.evaluate(() => { window.__w9dToasts = [] })
 
-function rowTitle(name) {
+/**
+ * The row titled `name` that runs on `kind` ('cloud' = Orca Cloud badge, 'local' = Local Mac). Move to
+ * this computer makes a local copy with the same name, so the title alone is ambiguous.
+ */
+async function rowOf(name, kind = 'cloud') {
   const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return page.locator('[data-worktree-title-inline-rename]', { hasText: new RegExp(`^${esc}$`) }).first()
+  const all = page.locator('[data-worktree-title-inline-rename]', { hasText: new RegExp(`^${esc}$`) })
+  const n = await all.count().catch(() => 0)
+  for (let i = 0; i < n; i++) {
+    const k = await all.nth(i).evaluate((el) => {
+      for (let e = el, j = 0; e && j < 8; e = e.parentElement, j++) {
+        const t = e.innerText || ''
+        if (/Orca Cloud/.test(t)) return 'cloud'
+        if (/Local Mac/.test(t)) return 'local'
+      }
+      return null
+    }).catch(() => null)
+    if (k === kind) return all.nth(i)
+  }
+  return null
 }
-async function openRowMenu(name) {
+async function rowShown(name, kind = 'cloud') {
+  const r = await rowOf(name, kind)
+  return r ? r.isVisible().catch(() => false) : false
+}
+async function waitRowGone(name, kind, timeoutMs) {
+  const t0 = Date.now()
+  while (await rowShown(name, kind)) {
+    if (Date.now() - t0 > timeoutMs) throw new Error(`${kind} row "${name}" still shown after ${timeoutMs}ms`)
+    await sleep(250)
+  }
+}
+async function openRowMenu(name, kind = 'cloud') {
   await page.keyboard.press('Escape').catch(() => {})
-  await rowTitle(name).click({ button: 'right' })
+  const r = await rowOf(name, kind)
+  if (!r) throw new Error(`no ${kind} row "${name}"`)
+  await r.click({ button: 'right' })
   await page.getByRole('menuitem').first().waitFor({ timeout: 5000 })
   await sleep(250)
 }
@@ -309,6 +360,187 @@ async function waitSandboxStatus(id, want, timeoutMs) {
   return { ...last, ms: Date.now() - t0, timedOut: true }
 }
 
+const authState = () =>
+  store(() => {
+    const s = window.__store.getState()
+    const active = s.orcaProfiles?.find((p) => p.id === s.activeOrcaProfileId)
+    return { state: s.orcaProfileAuthStatus?.state ?? null, userId: active?.cloud?.userId ?? null, orgId: active?.cloud?.activeOrgId ?? null }
+  })
+
+/** Live (not destroyed) sandbox ids per dev account. */
+async function sandboxIdsFor(users) {
+  const out = {}
+  for (const u of users) {
+    out[u] = (await listSandboxes(u)).items.filter((s) => !/^(destroyed|deleted)$/.test(String(s.status ?? s.state))).map((s) => s.id)
+  }
+  return out
+}
+
+async function openComposer(step, shotName) {
+  await page.keyboard.press('Escape').catch(() => {})
+  await page.getByRole('button', { name: 'New workspace', exact: true }).first().click()
+  const d = page.getByRole('dialog')
+  await d.waitFor()
+  await d.getByRole('combobox', { name: 'Project' }).click()
+  await page.getByRole('option', { name: /orca-sandbox-push-test/ }).first().click()
+  d.shotName = shotName
+  return d
+}
+async function pickOrcaCloud(step, d) {
+  await d.getByRole('combobox', { name: 'Run on' }).click()
+  const targets = page.getByRole('listbox', { name: 'Run targets' })
+  await targets.waitFor()
+  step.runTargets ??= (await targets.getByRole('option').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim())
+  if (d.shotName) {
+    await shot(step, d.shotName)
+    d.shotName = null
+  }
+  const opt = targets.getByRole('option', { name: /Orca Cloud/ }).first()
+  const text = (await opt.innerText()).replace(/\s+/g, ' ').trim()
+  await opt.click()
+  return text
+}
+// The Run on trigger is labelled "Run on"; its visible value sits next to the field label.
+const runOnValue = (d) =>
+  d.getByRole('combobox', { name: 'Run on' }).evaluate((e) => {
+    for (let n = e, j = 0; n && j < 4; n = n.parentElement, j++) {
+      const t = (n.innerText || '').replace(/\s+/g, ' ').trim()
+      const v = t.replace(/^Run on\s*/, '')
+      if (v && v !== t) return v
+    }
+    return (e.innerText || e.textContent || '').replace(/\s+/g, ' ').trim()
+  }).catch(() => null)
+async function fillName(d, name) {
+  // Smart mode offers "Use … as workspace name"; the Name tab takes the text as is.
+  await d.getByPlaceholder(/Type a name|Workspace name/).fill(name)
+  await page.getByRole('option', { name: /as workspace name/ }).click({ timeout: 2000 }).catch(() => {})
+}
+
+/** Click Create already happened at t0: follow the build sheet until a terminal prints. */
+async function waitForWorkspaceReady(step, t0, { onTick } = {}) {
+  let provisioningShot = false
+  const phases = []
+  for (;;) {
+    const s = await page.evaluate(() => {
+      const body = document.body.innerText
+      const rows = [...document.querySelectorAll('.xterm-rows')].filter((r) => r.getBoundingClientRect().width > 0)
+      return {
+        starting: /Starting your cloud workspace/.test(body),
+        failed: /Couldn.t start your cloud workspace/.test(body),
+        text: (body.match(/Starting your cloud workspace[\s\S]{0,400}/)?.[0] ?? '').replace(/\s+/g, ' '),
+        xterm: rows.map((r) => r.innerText.trim().length)
+      }
+    })
+    if (onTick) await onTick()
+    const t = Date.now() - t0
+    const phase = s.text.match(/(Start sandbox|Prepare environment|Open workspace) In progress/)?.[1] ?? null
+    if (phase && phases.at(-1)?.phase !== phase) phases.push({ phase, t })
+    if (s.starting && !provisioningShot && t > 1500) {
+      await shot(step, 'provisioning')
+      provisioningShot = true
+    }
+    if (s.failed) {
+      step.detail = `create failed: ${redact((await page.locator('main').innerText().catch(() => '')).slice(0, 400))}`
+      throw new Error(step.detail)
+    }
+    if (!s.starting && s.xterm.some((n) => n > 0)) return { firstOutput: t, phases }
+    if (t > 300_000) throw new Error('workspace not ready in 300s')
+    await sleep(100)
+  }
+}
+
+/** A plain signed-in Orca Cloud create for checks that consume a workspace. */
+async function createExtraWorkspace(step, name) {
+  const d = await openComposer(step, `${name}-composer`)
+  for (let i = 0; i < 3; i++) {
+    await pickOrcaCloud(step, d)
+    await sleep(1200)
+    if (/Orca Cloud/.test((await runOnValue(d)) ?? '')) break
+  }
+  await fillName(d, name)
+  const t0 = Date.now()
+  await d.getByRole('button', { name: /Create workspace/ }).click()
+  await waitForWorkspaceReady(step, t0)
+  await dismissNoise()
+  const sb = await sandboxForWorkspace(t0)
+  if (!sb.newest) throw new Error(`no sandbox listed for ${name}`)
+  created.sandboxIds.add(sb.newest.id)
+  step.createdForCheck = { name, sandboxId: sb.newest.id, createMs: Date.now() - t0 }
+  return { name, sandboxId: sb.newest.id }
+}
+
+/** Open the cloud workspace and type until an echo comes back (wakes it if asleep). Returns ms. */
+async function wakeWorkspace(name, marker = `echo w9wake${Date.now() % 1000}`) {
+  const t0 = Date.now()
+  await page.keyboard.press('Escape').catch(() => {})
+  await (await rowOf(name)).click()
+  let lastType = 0
+  while (Date.now() - t0 < 180_000) {
+    const terms = await visibleTerminals()
+    if (terms.some((t) => t.includes(marker))) {
+      await page.keyboard.press('Control+U')
+      return Date.now() - t0
+    }
+    if (terms.length && Date.now() - lastType > 1500) {
+      await focusTerminal().catch(() => {})
+      await page.keyboard.press('Control+U')
+      await page.keyboard.type(marker)
+      lastType = Date.now()
+    }
+    await sleep(100)
+  }
+  throw new Error(`workspace ${name} did not answer within 180s`)
+}
+
+/** UI Delete on a workspace row; returns what the app showed. Does not throw on a kept row. */
+async function uiDelete(step, name, label, timeoutMs = 90_000, watchAfterMs = 0) {
+  await clearToasts()
+  await openRowMenu(name)
+  await page.getByRole('menuitem', { name: /^Delete/ }).click()
+  const d = page.getByRole('dialog')
+  const dialog = (await d.innerText()).replace(/\s+/g, ' ')
+  await shot(step, `${label}-confirm`)
+  const t0 = Date.now()
+  await d.getByRole('button', { name: /^Delete( Workspace)?$/ }).click()
+  let outcome = null
+  while (Date.now() - t0 < timeoutMs) {
+    const gone = !(await rowShown(name))
+    const body = await page.evaluate(() => document.body.innerText)
+    const err = [...(await toasts()), body].find((t) => /couldn.t confirm|could not confirm|Couldn.t delete|Failed to delete/i.test(t))
+    if (err) {
+      outcome = { kind: 'error', text: redact(err.match(/[^\n]*(couldn.t confirm|could not confirm|Couldn.t delete|Failed to delete)[\s\S]{0,240}/i)?.[0] ?? err.slice(0, 300)) }
+      break
+    }
+    if (gone) {
+      outcome = { kind: 'removed' }
+      break
+    }
+    await sleep(250)
+  }
+  outcome ??= { kind: 'timeout' }
+  outcome.ms = Date.now() - t0
+  if (outcome.kind === 'removed' && watchAfterMs) {
+    // Teardown can fail after the row is gone; look for the error wherever the app puts it.
+    const t1 = Date.now()
+    while (Date.now() - t1 < watchAfterMs) {
+      const body = await page.evaluate(() => document.body.innerText)
+      const err = [...(await toasts()), body].find((t) => /couldn.t confirm|could not confirm|Cleanup|Couldn.t delete|Failed to delete/i.test(t))
+      if (err) {
+        outcome.laterError = { afterMs: Date.now() - t0, text: redact(err.match(/[^\n]*(couldn.t confirm|could not confirm|Cleanup|Couldn.t delete|Failed to delete)[\s\S]{0,240}/i)?.[0] ?? err.slice(0, 300)) }
+        break
+      }
+      await sleep(500)
+    }
+    await shot(step, `${label}-watch`)
+  }
+  await sleep(4000)
+  outcome.rowVisibleAfter = await rowShown(name)
+  outcome.toasts = (await toasts()).map(redact)
+  outcome.dialog = dialog
+  await shot(step, `${label}-after`)
+  return outcome
+}
+
 // ---------- flow ----------
 
 async function main() {
@@ -323,91 +555,217 @@ async function main() {
   const repoDir = path.join(tmp, 'repos', 'orca-sandbox-push-test')
   mkdirSync(userData, { recursive: true })
   results.app.userData = userData
-  execFileSync('gh', ['repo', 'clone', REPO_SLUG, repoDir, '--', '--quiet'], { stdio: 'ignore' })
+  try {
+    execFileSync('gh', ['repo', 'clone', REPO_SLUG, repoDir, '--', '--quiet'], { stdio: 'ignore' })
+  } catch {
+    // Hosts without access to the private test repo (e.g. a remote test Mac): a local repo with the
+    // same origin URL is enough, because the cloud clone runs through the Orca GitHub App.
+    mkdirSync(repoDir, { recursive: true })
+    const g = (...args) => execFileSync('git', ['-C', repoDir, ...args], { stdio: 'ignore' })
+    g('init', '-q', '-b', 'main')
+    writeFileSync(path.join(repoDir, 'README.md'), '# orca-sandbox-push-test\n')
+    g('add', 'README.md')
+    g('-c', 'user.email=w9@orca.dev', '-c', 'user.name=W9', 'commit', '-qm', 'Initial commit')
+    g('remote', 'add', 'origin', `https://github.com/${REPO_SLUG}.git`)
+    results.notes.push('test repo not clonable here; used a local repo with the same origin URL')
+  }
   created.tmp = tmp
 
-  await runStep('setup', 'Launch dev Orca, sign in (dev auth), add repo', async (step) => {
-    await launchApp(userData, 'first')
-    // Sign in before any cloud call, then relaunch: the sandbox token cache is not keyed on the
-    // signed-in identity (see bugs), so a fresh process guarantees the dev:<user> owner.
-    await store(async () => {
-      const s = window.__store.getState()
-      await s.connectCurrentOrcaProfile?.()
-      await s.fetchOrcaProfiles?.()
-    })
-    const who = await store(() => window.__store.getState().orcaProfiles?.map((p) => p.cloud?.userId ?? null))
-    step.timings.firstLaunchMs = results.app.first.launchMs
-    await stopApp()
+  const setup = await runStep('setup', 'Launch dev Orca on a fresh profile (signed out), add repo', async (step) => {
+    // #127 keys the sandbox token on the signed-in identity, so no sign-in-then-relaunch dance: the
+    // app stays signed out here and signs in from the Orca Cloud sign-in card (auth.signed-out-create).
     await launchApp(userData, 'main')
-    step.timings.relaunchMs = results.app.main.launchMs
+    step.timings.launchMs = results.app.main.launchMs
     await store(() => window.__store.getState().updateSettings({ terminalGpuAcceleration: 'off' }))
     await store(async (p) => {
       await window.api.repos.add({ path: p })
       await window.__store.getState().fetchRepos({})
     }, repoDir)
     const repos = await store(() => window.__store.getState().repos.map((r) => r.displayName))
+    const auth = await authState()
+    step.authAtStart = auth
     await installToastRecorder()
-    step.status = who?.includes(USER) && repos.includes('orca-sandbox-push-test') ? 'pass' : 'partial'
-    step.detail = `signed in as ${JSON.stringify(who)}; repos ${JSON.stringify(repos)}; terminal GPU off so xterm renders to DOM`
+    step.status = auth.state !== 'connected' && repos.includes('orca-sandbox-push-test') ? 'pass' : 'partial'
+    step.detail = `auth at start ${JSON.stringify(auth)}; repos ${JSON.stringify(repos)}; terminal GPU off so xterm renders to DOM`
     await shot(step, 'home')
+  })
+
+  if (setup.status === 'fail' || !page) throw new Error(`setup failed: ${setup.detail}`)
+
+  // ---- D-1 / D-4: Orca Cloud create while signed out -> sign-in card, nothing created; sign in -> proceeds.
+  let signedOutWs = null
+  let signedOutSandboxId = null
+  await runStep('auth.signed-out-create', 'Signed out: Orca Cloud create shows the sign-in card and creates nothing; sign in from the card -> create proceeds as dev:<user> (D-1, D-4)', async (step) => {
+    const name = `${wsName}-so`
+    const watched = [USER, 'desktop-dogfood', 'dev-user']
+    const baseline = await sandboxIdsFor(watched)
+    const d = await openComposer(step, 'signed-out')
+    const pickedAt = Date.now()
+    const runOn = await pickOrcaCloud(step, d)
+    // Dev auth signs in without a browser; give a pick-started sign-in a moment to settle.
+    for (let i = 0; i < 16; i++) {
+      await sleep(500)
+      if (!(await store(() => Boolean(window.__store.getState().orcaProfileSignInProgress)))) break
+    }
+    step.afterPick = { auth: await authState(), runOn: await runOnValue(d), dialogOpen: await d.isVisible().catch(() => false) }
+    await shot(step, 'after-pick')
+    let path_ = 'composer-create'
+    // D-1 for the picker itself: picking Orca Cloud signed out must not create anything.
+    const afterPickLists = await sandboxIdsFor(watched)
+    step.createdByPick = Object.fromEntries(watched.map((u) => [u, afterPickLists[u].filter((id) => !baseline[u].includes(id))]))
+    if (step.afterPick.auth.state === 'connected') {
+      // The signed-out Orca Cloud row ("Sign in to start a sandbox") signs in instead of selecting the
+      // target, and the composer keeps Local Mac. A store sign-out also drops Orca Cloud from Run on, so
+      // the build's sign-in card is only reachable when the session ends behind the composer's back:
+      // select Orca Cloud signed in, then sign out in main only (as an expired/revoked session would).
+      path_ = 'picker row signed in (Run on stayed Local Mac); re-picked Orca Cloud, session ended in main only, then Create'
+      step.pickerSignedIn = true
+      step.pickerSelectedAfterSignIn = /Orca Cloud/.test(step.afterPick.runOn ?? '')
+      if (!step.pickerSelectedAfterSignIn) await pickOrcaCloud(step, d)
+      await sleep(800)
+      step.runOnSignedIn = await runOnValue(d)
+      await page.evaluate(() => window.api.orcaProfiles.signOutCurrent())
+      await sleep(1500)
+      step.afterSignOut = { auth: await authState(), runOn: await runOnValue(d) }
+    }
+    step.path = path_
+    step.runOnBeforeCreate = await runOnValue(d)
+    if (!/Orca Cloud/.test(step.runOnBeforeCreate ?? '')) {
+      await shot(step, 'run-on-not-orca-cloud')
+      await page.keyboard.press('Escape')
+      const noSandbox = Object.values(step.createdByPick).every((ids) => ids.length === 0)
+      step.d1 = { pass: noSandbox, createdByPick: step.createdByPick }
+      step.status = 'partial'
+      step.detail = `signed out the composer cannot start an Orca Cloud build (Run on shows "${step.runOnBeforeCreate}"), so the build's sign-in card is unreachable; picker row "${runOn}" signs in instead; sandboxes created by the pick ${JSON.stringify(step.createdByPick)} (D-1 ${noSandbox ? 'pass' : 'FAIL'}); after pick ${JSON.stringify(step.afterPick)}`
+      await store(async () => {
+        const st = window.__store.getState()
+        await st.signOutCurrentOrcaProfile()
+        await window.__store.getState().connectCurrentOrcaProfile()
+      })
+      return
+    }
+    await fillName(d, name)
+    await shot(step, 'composer')
+    await clearToasts()
+    const t0 = Date.now()
+    await d.getByRole('button', { name: /Create workspace/ }).click()
+    const card = await page
+      .getByText('Sign in to use Orca Cloud', { exact: true })
+      .first()
+      .waitFor({ timeout: 60_000 })
+      .then(() => true, () => false)
+    step.timings.createToSignInCardMs = card ? Date.now() - t0 : null
+    await sleep(3000)
+    await shot(step, 'sign-in-card')
+    step.cardText = redact(await page.locator('main').innerText().then((t) => t.match(/Sign in to use Orca Cloud[\s\S]{0,300}/)?.[0]?.replace(/\s+/g, ' ') ?? null, () => null))
+    const whileCard = await sandboxIdsFor(watched)
+    const createdWhileSignedOut = Object.fromEntries(watched.map((u) => [u, whileCard[u].filter((id) => !baseline[u].includes(id))]))
+    step.createdWhileSignedOut = createdWhileSignedOut
+    const d1NoSandbox = Object.values(createdWhileSignedOut).every((ids) => ids.length === 0)
+    for (const [u, ids] of Object.entries(createdWhileSignedOut)) ids.forEach((id) => created.foreign.push({ user: u, id }))
+    if (!card) {
+      // What the build said instead: failure copy + the provisioning log.
+      await page.getByRole('button', { name: 'View logs' }).first().click({ timeout: 3000 }).catch(() => {})
+      await sleep(800)
+      step.buildFailure = redact(await page.evaluate(() => (document.body.innerText.match(/Couldn.t start your cloud workspace[\s\S]{0,1500}/)?.[0] ?? '').replace(/\s+/g, ' ')))
+      await shot(step, 'build-failure-logs')
+      await page.getByRole('button', { name: 'Dismiss' }).first().click({ timeout: 3000 }).catch(() => {})
+      // Re-sync renderer and main: a full sign-out then sign-in through the store.
+      await store(async () => {
+        const st = window.__store.getState()
+        await st.signOutCurrentOrcaProfile()
+        await window.__store.getState().connectCurrentOrcaProfile()
+      })
+      await sleep(1500)
+      step.authAfterResync = await authState()
+      step.status = 'fail'
+      step.detail = `no "Sign in to use Orca Cloud" card within 60s of Create (signed out); sandboxes created while signed out: ${JSON.stringify(createdWhileSignedOut)}; toasts ${JSON.stringify((await toasts()).map(redact))}`
+      step.detail += `; build showed: ${step.buildFailure?.slice(0, 500)}`
+      bug('auth.signed-out-create', {
+        title: 'Orca Cloud create after the session ended shows the generic "The sandbox didn\u2019t start" instead of the "Sign in to use Orca Cloud" card',
+        expected: '"Sign in to use Orca Cloud" card with Sign in, nothing created',
+        actual: step.detail,
+        repro: `Fresh profile (ORCA_CLOUD_DEV_AUTH=1 + dev key), ${path_}`,
+        screenshot: step.screenshots.at(-1)
+      })
+      return
+    }
+    // Sign in from the card's own button.
+    const signInButtons = page.getByRole('button', { name: /^Sign in$/ }).filter({ visible: true })
+    step.cardSignInButtons = await signInButtons.count()
+    const t1 = Date.now()
+    await signInButtons.last().click()
+    let cardGoneMs = null
+    const ready = await waitForWorkspaceReady(step, t1, {
+      onTick: async () => {
+        if (cardGoneMs === null && !(await page.getByText('Sign in to use Orca Cloud', { exact: true }).first().isVisible().catch(() => false))) {
+          cardGoneMs = Date.now() - t1
+        }
+      }
+    })
+    step.timings.signInToCardGoneMs = cardGoneMs
+    step.timings.signInToFirstTerminalOutputMs = ready.firstOutput
+    step.timings.phases = ready.phases
+    step.authAfter = await authState()
+    await dismissNoise()
+    await shot(step, 'after-sign-in-ready')
+    const cardStill = await page.getByText('Sign in to use Orca Cloud', { exact: true }).first().isVisible().catch(() => false)
+    const sb = await sandboxForWorkspace(t1)
+    signedOutSandboxId = sb.newest?.id ?? null
+    if (signedOutSandboxId) created.sandboxIds.add(signedOutSandboxId)
+    step.sandboxId = signedOutSandboxId
+    const others = await sandboxIdsFor(['desktop-dogfood', 'dev-user'])
+    step.otherAccountsAfter = others
+    const rowShown = await rowShown(name)
+    if (rowShown) signedOutWs = name
+    step.d1 = { pass: d1NoSandbox, createdWhileSignedOut }
+    step.d4 = { pass: Boolean(signedOutSandboxId) && !cardStill && cardGoneMs !== null, ownedBy: signedOutSandboxId ? `dev:${USER}` : null, cardGoneMs, cardStill }
+    step.status = step.d1.pass && step.d4.pass && rowShown ? 'pass' : 'fail'
+    step.detail = `${path_}; card after ${step.timings.createToSignInCardMs}ms; sandboxes while signed out ${JSON.stringify(createdWhileSignedOut)} (D-1 ${step.d1.pass ? 'pass' : 'FAIL'}); sign in from card -> card gone ${cardGoneMs}ms, first terminal output ${ready.firstOutput}ms, sandbox ${signedOutSandboxId ?? 'NOT listed'} for dev:${USER} (D-4 ${step.d4.pass ? 'pass' : 'FAIL'}); row "${name}" shown: ${rowShown}; auth ${JSON.stringify(step.authAfter)}`
+    if (!d1NoSandbox) {
+      bug('auth.signed-out-create', {
+        title: 'Signed-out Orca Cloud create still creates a sandbox',
+        expected: 'no sandbox for any account until sign-in',
+        actual: JSON.stringify(createdWhileSignedOut),
+        repro: `Fresh profile, ${path_}`,
+        screenshot: step.screenshots.find((s) => s.includes('sign-in-card'))
+      })
+    }
+    if (!step.d4.pass) {
+      bug('auth.signed-out-create', {
+        title: 'Signing in from the Orca Cloud sign-in card does not carry the create through',
+        expected: `card disappears, create proceeds, sandbox owned by dev:${USER}`,
+        actual: `cardGone ${cardGoneMs}ms, card still visible ${cardStill}, sandbox ${signedOutSandboxId}`,
+        repro: `Fresh profile, signed-out Orca Cloud create, click Sign in on the card`,
+        screenshot: step.screenshots.at(-1)
+      })
+    }
   })
 
   let sandboxId = null
 
   await runStep('cli.desktop', 'Create an Orca Cloud workspace from the composer', async (step) => {
-    await page.getByRole('button', { name: 'New workspace', exact: true }).first().click()
-    const d = page.getByRole('dialog')
-    await d.waitFor()
-    await d.getByRole('combobox', { name: 'Project' }).click()
-    await page.getByRole('option', { name: /orca-sandbox-push-test/ }).first().click()
-    await d.getByRole('combobox', { name: 'Run on' }).click()
-    const targets = page.getByRole('listbox', { name: 'Run targets' })
-    await targets.waitFor()
-    step.runTargets = (await targets.getByRole('option').allInnerTexts()).map((t) => t.split('\n')[0])
-    await shot(step, 'picker')
-    await targets.getByRole('option', { name: /Orca Cloud/ }).click()
-    await sleep(800)
+    if ((await authState()).state !== 'connected') {
+      // The signed-out step failed before signing in; sign in so the rest of the run has an identity.
+      await store(() => window.__store.getState().connectCurrentOrcaProfile())
+      step.signedInHere = true
+    }
+    const d = await openComposer(step, 'picker')
+    // A pick on the signed-out row signs in but leaves Run on as it was; pick again until it sticks.
+    for (let i = 0; i < 3; i++) {
+      step.pickRow = await pickOrcaCloud(step, d)
+      await sleep(1200)
+      if (/Orca Cloud/.test((await runOnValue(d)) ?? '')) break
+      step.extraPicks = i + 1
+    }
     await d.getByRole('button', { name: 'Later', exact: true }).click({ timeout: 1500 }).catch(() => {})
     step.composerHint = (await d.innerText()).match(/Hosted sandbox[\s\S]*?idle/)?.[0]?.replace(/\s+/g, ' ')
-    // Smart mode offers "Use … as workspace name"; the Name tab takes the text as is.
-    await d.getByPlaceholder(/Type a name|Workspace name/).fill(wsName)
-    await page.getByRole('option', { name: /as workspace name/ }).click({ timeout: 2000 }).catch(() => {})
+    await fillName(d, wsName)
     await shot(step, 'composer-orca-cloud')
     await clearToasts()
     const t0 = Date.now()
     await d.getByRole('button', { name: /Create workspace/ }).click()
-    let provisioningShot = false
-    let firstOutput = null
-    const phases = []
-    for (;;) {
-      const s = await page.evaluate(() => {
-        const body = document.body.innerText
-        const rows = [...document.querySelectorAll('.xterm-rows')].filter((r) => r.getBoundingClientRect().width > 0)
-        return {
-          starting: /Starting your cloud workspace/.test(body),
-          failed: /Couldn.t start your cloud workspace/.test(body),
-          text: (body.match(/Starting your cloud workspace[\s\S]{0,400}/)?.[0] ?? '').replace(/\s+/g, ' '),
-          xterm: rows.map((r) => r.innerText.trim().length)
-        }
-      })
-      const t = Date.now() - t0
-      const phase = s.text.match(/(Start sandbox|Prepare environment|Open workspace) In progress/)?.[1] ?? null
-      if (phase && phases.at(-1)?.phase !== phase) phases.push({ phase, t })
-      if (s.starting && !provisioningShot && t > 1500) {
-        await shot(step, 'provisioning')
-        provisioningShot = true
-      }
-      if (s.failed) {
-        step.detail = `create failed: ${redact((await page.locator('main').innerText().catch(() => '')).slice(0, 400))}`
-        throw new Error(step.detail)
-      }
-      if (!s.starting && s.xterm.some((n) => n > 0)) {
-        firstOutput = t
-        break
-      }
-      if (t > 300_000) throw new Error('workspace not ready in 300s')
-      await sleep(100)
-    }
+    const { firstOutput, phases } = await waitForWorkspaceReady(step, t0)
     step.timings.createToFirstTerminalOutputMs = firstOutput
     step.timings.phases = phases
     await dismissNoise()
@@ -433,17 +791,6 @@ async function main() {
     // The cloud copy of the repo registers as its own project; its name should stay the repo's.
     const repoNames = await store(() => window.__store.getState().repos.map((r) => ({ name: r.displayName, path: r.path })))
     step.repos = repoNames
-    const renamed = repoNames.find((r) => r.path.startsWith('/vercel/') && r.name !== 'orca-sandbox-push-test')
-    if (renamed) {
-      const projectHeader = await page.getByText(renamed.name, { exact: true }).first().isVisible().catch(() => false)
-      bug('cli.desktop', {
-        title: `Cloud repo registers as "${renamed.name}" (basename of ${renamed.path}) and the sidebar project group / composer project list show that name instead of orca-sandbox-push-test`,
-        expected: 'project keeps the repo name orca-sandbox-push-test',
-        actual: `repo ${renamed.path} named "${renamed.name}"; sidebar header shows it: ${projectHeader}`,
-        repro: 'Create an Orca Cloud workspace for a repo whose cloud checkout lands in /vercel/sandbox/project; look at the sidebar project header',
-        screenshot: step.screenshots.at(-1)
-      })
-    }
     const cloudy = /^ubuntu@/.test(prompt) && /orca\/workspaces/.test(prompt)
     step.status = cloudy && sandboxId ? 'pass' : 'partial'
     step.detail = `prompt "${prompt}"; sandbox ${sandboxId ?? 'NOT listed for ' + USER}; create->first terminal output ${firstOutput}ms, create->shell prompt ${step.timings.createToShellPromptMs}ms`
@@ -456,13 +803,150 @@ async function main() {
       })
     }
   })
+  // ---- D-3: the VM checkout (folder "project") registers under the real project's name.
+  await runStep('proj.cloud-name', 'After cloud creates: no project named "project"; the workspaces sit under orca-sandbox-push-test (D-3)', async (step) => {
+    const snap = await store(() => {
+      const s = window.__store.getState()
+      return {
+        repos: s.repos.map((r) => ({ id: r.id, name: r.displayName, path: r.path })),
+        projects: (s.projects ?? []).map((p) => ({ id: p.id, name: p.displayName })),
+        worktrees: Object.entries(s.worktreesByRepo ?? {}).flatMap(([repoId, ws]) => ws.map((w) => ({ repoId, name: w.displayName, path: w.path })))
+      }
+    })
+    step.snapshot = snap
+    const named = (x) => x.name === 'project'
+    const projectNamed = [...snap.repos.filter(named), ...snap.projects.filter(named)]
+    const lines = await page.evaluate(() => document.body.innerText.split('\n').map((l) => l.trim()).filter(Boolean))
+    const headers = new Set([...snap.projects.map((p) => p.name), ...snap.repos.map((r) => r.name)])
+    // Sidebar group: the nearest project header above the workspace row.
+    const groupOf = (n) => {
+      const i = lines.indexOf(n)
+      for (let k = i - 1; k >= 0; k--) if (headers.has(lines[k])) return lines[k]
+      return null
+    }
+    const placement = [wsName, signedOutWs].filter(Boolean).map((n) => {
+      const w = snap.worktrees.find((x) => x.name === n)
+      return { workspace: n, sidebarGroup: groupOf(n), repoName: w ? snap.repos.find((r) => r.id === w.repoId)?.name ?? null : null, path: w?.path ?? null }
+    })
+    step.placement = placement
+    step.projectLabelLeaks = lines.filter((l) => l === 'project').length
+    await shot(step, 'sidebar')
+    const grouped = placement.length > 0 && placement.every((p) => p.sidebarGroup === 'orca-sandbox-push-test')
+    const noProjectProject = !snap.projects.some(named) && !snap.repos.some(named)
+    const ok = grouped && noProjectProject
+    step.status = ok ? 'pass' : grouped ? 'partial' : 'fail'
+    step.detail = `sidebar groups ${JSON.stringify(placement.map((p) => `${p.workspace} -> ${p.sidebarGroup}`))}; projects ${JSON.stringify(snap.projects.map((p) => p.name))}; repos ${JSON.stringify(snap.repos.map((r) => `${r.name}@${r.path}`))}; records named "project": ${projectNamed.length}; "project" labels on screen: ${step.projectLabelLeaks}`
+    if (!ok) {
+      bug('proj.cloud-name', {
+        title: grouped
+          ? 'Cloud checkout repo still registers as "project": the sidebar groups the workspace under orca-sandbox-push-test, but the repo record (setup-script nudge, file explorer header) says "project"'
+          : 'Cloud create files the workspace under a project named "project"',
+        expected: 'no repo or project named "project"; workspaces under orca-sandbox-push-test',
+        actual: step.detail,
+        repro: 'Create an Orca Cloud workspace for orca-sandbox-push-test; look at the sidebar project groups',
+        screenshot: step.screenshots.at(-1)
+      })
+    }
+  })
+
+  /** D-2 proper: a not_found answer. Switching team re-scopes the token, so the control plane can't see a personal sandbox. */
+  const notFoundDeleteStep = async () => {
+    await runStep('life.delete-unconfirmed', 'Delete when the control plane answers not_found (team switched away from the sandbox owner) -> "couldn\'t confirm" error, row kept (D-2)', async (step) => {
+      const { name, sandboxId: id } = await createExtraWorkspace(step, `${wsName}-nf`)
+      const before = await authState()
+      step.authBefore = before
+      const orgs = await store(() => {
+        const s = window.__store.getState()
+        const p = s.orcaProfiles?.find((x) => x.id === s.activeOrcaProfileId)
+        return (s.orcaProfileAuthStatus?.organizations ?? p?.cloud?.organizations ?? []).map((o) => o.orgId)
+      })
+      step.orgs = orgs
+      const other = ['dev-acme', 'dev-personal'].find((o) => o !== before.orgId) ?? 'dev-acme'
+      step.switchTo = other
+      step.selectOrg = await store((o) => window.__store.getState().selectOrcaProfileOrg(o).then((r) => r?.status ?? null), other)
+      await sleep(3000)
+      step.authSwitched = await authState()
+      // What the control plane says to the switched identity, signed exactly like the app's dev token.
+      step.apiAsSwitched = await sandboxApiOrg(USER, step.authSwitched.orgId, 'GET', `/v1/sandboxes/${id}`)
+      const rowVisible = await rowShown(name)
+      step.rowVisibleAfterSwitch = rowVisible
+      await shot(step, 'switched-team')
+      if (!rowVisible) {
+        step.status = 'fail'
+        step.detail = `after switching team to ${other} (${JSON.stringify(step.selectOrg)}) the workspace row "${name}" is not shown, so Delete can't be tried; api as switched identity ${JSON.stringify(step.apiAsSwitched)}`
+      } else {
+        const o = await uiDelete(step, name, 'unconfirmed', 90_000, 45_000)
+        step.outcome = o
+        const owner = await sandboxStatus(id)
+        step.ownerViewAfter = owner
+        const errText = o.kind === 'error' ? o.text : o.laterError?.text
+        const errOk = /couldn.t confirm/i.test(errText ?? '')
+        step.status = errOk && o.rowVisibleAfter && owner.status !== 'destroyed' ? 'pass' : errOk ? 'partial' : 'fail'
+        step.detail = `team ${before.orgId ?? '(personal)'} -> ${step.authSwitched.orgId}; control plane to switched identity: ${JSON.stringify(step.apiAsSwitched)}; UI Delete -> ${o.kind}${o.text ? ` "${o.text}"` : ''} in ${o.ms}ms; later error within 45s: ${o.laterError ? JSON.stringify(o.laterError) : 'none'}; row kept: ${o.rowVisibleAfter}; owner (personal) sees sandbox ${JSON.stringify(owner)} 45s later`
+        if (step.status === 'fail') {
+          bug('life.delete-unconfirmed', {
+            title: 'Delete of an Orca Cloud workspace whose sandbox the control plane answers not_found (team switched) removes the row silently and leaves the sandbox running',
+            expected: '"Orca Cloud couldn\'t confirm this sandbox was deleted…" and the row stays',
+            actual: step.detail,
+            repro: 'Signed in, create an Orca Cloud workspace on the personal team, switch team to Acme Dev, Delete the workspace',
+            screenshot: step.screenshots.at(-1)
+          })
+        }
+      }
+      step.restoreOrg = await store((o) => window.__store.getState().selectOrcaProfileOrg(o).then((r) => r?.status ?? null), before.orgId ?? null)
+      await sleep(2000)
+      step.authRestored = await authState()
+      if (rowVisible) {
+        await sleep(10_000)
+        step.ownerViewAfterRestore = await sandboxStatus(id)
+      }
+    })
+  }
+
+  /** Sandbox destroyed out of band, then UI Delete, on the signed-out-create workspace. */
+  const oobDeleteStep = async () => {
+    await runStep('life.delete-after-oob-destroy', 'Sandbox destroyed out of band (API, same dev user) -> UI Delete', async (step) => {
+      if (!signedOutWs || !signedOutSandboxId || !(await rowShown(signedOutWs))) {
+        // No workspace left from the signed-out create: make one for this check.
+        const extra = await createExtraWorkspace(step, `${wsName}-oob`)
+        signedOutWs = extra.name
+        signedOutSandboxId = extra.sandboxId
+      }
+      const r = await sandboxApi(USER, 'DELETE', `/v1/sandboxes/${signedOutSandboxId}`)
+      step.oobDelete = { http: r.status, status: r.json?.sandbox?.status ?? r.json?.error ?? null }
+      step.apiAfterOob = await sandboxStatus(signedOutSandboxId)
+      const again = await sandboxApi(USER, 'DELETE', `/v1/sandboxes/${signedOutSandboxId}`)
+      step.apiRepeatDelete = { http: again.status, status: again.json?.sandbox?.status ?? again.json?.error ?? null }
+      await sleep(2000)
+      const o = await uiDelete(step, signedOutWs, 'oob')
+      step.outcome = o
+      // The control plane keeps a tombstone: a repeat delete by the owner answers 200 destroyed, never
+      // not_found. The sandbox really is gone, so the app is right to remove the row.
+      const tombstone = step.apiRepeatDelete.http === 200 && step.apiRepeatDelete.status === 'destroyed'
+      step.status = o.kind === 'removed' && !o.rowVisibleAfter ? 'pass' : 'fail'
+      step.detail = `API delete -> ${JSON.stringify(step.oobDelete)}; repeat API delete -> ${JSON.stringify(step.apiRepeatDelete)} (tombstone: ${tombstone}); UI Delete -> ${o.kind}${o.text ? ` "${o.text}"` : ''} in ${o.ms}ms, row visible after: ${o.rowVisibleAfter}. ${tombstone ? 'Same-user out-of-band destroy cannot produce not_found, so this path does not exercise D-2; see life.delete-unconfirmed.' : ''}`
+      if (step.status === 'fail') {
+        bug('life.delete-after-oob-destroy', {
+          title: 'Deleting a workspace whose sandbox was already destroyed does not remove the row',
+          expected: 'control plane answers destroyed (tombstone), row removed',
+          actual: step.detail,
+          repro: 'Create an Orca Cloud workspace, DELETE its sandbox via the API as the same user, then Delete the workspace in the sidebar',
+          screenshot: step.screenshots.at(-1)
+        })
+      }
+      if (o.kind === 'removed') signedOutWs = null
+    })
+  }
+
   if (!sandboxId) results.notes.push('No sandbox id resolved for the workspace; lifecycle checks below rely on the UI only.')
-  const workspaceRow = await rowTitle(wsName).isVisible().catch(() => false)
+  const workspaceRow = await rowShown(wsName)
   if (!workspaceRow) {
     for (const id of ['term.keystroke', 'acc.port-forward', 'acc.ssh', 'life.sleep-wake', 'life.transfer-local', 'life.destroy']) {
       results.steps.push({ id, status: 'skipped', detail: 'no cloud workspace row (create failed)', screenshots: [], timings: {} })
     }
     save()
+    await notFoundDeleteStep()
+    await oobDeleteStep()
     return
   }
 
@@ -604,7 +1088,7 @@ async function main() {
       // Wake: open the workspace from the sidebar, keep typing until an echo makes it back.
       await clearToasts()
       const t0 = Date.now()
-      await rowTitle(wsName).click()
+      await (await rowOf(wsName)).click()
       let wakingShot = c !== 0
       let echo = null
       let attempts = 0
@@ -684,34 +1168,55 @@ async function main() {
     step.status = files.includes('README.md') ? 'pass' : 'partial'
     step.detail = `local worktree "${local.displayName}" at ${local.path} (files: ${files.join(',')}); ${step.timings.transferMs}ms; cloud sandbox after: ${cloudStill} (copy, not move); no confirmation dialog: ${!dlg}`
     // Remove the local copy through the UI so the repo stays clean.
-    await openRowMenu(local.displayName)
+    await openRowMenu(local.displayName, 'local')
     await page.getByRole('menuitem', { name: /^Delete/ }).click()
     await page.getByRole('dialog').getByRole('button', { name: /^Delete( Workspace)?$/ }).click()
-    await rowTitle(local.displayName).waitFor({ state: 'detached', timeout: 60_000 })
+    await waitRowGone(local.displayName, 'local', 60_000)
     step.localCopyDeleted = !existsSync(local.path)
   })
 
   await runStep('life.destroy', 'Delete the cloud workspace through the UI and confirm the VM is gone', async (step) => {
-    await openRowMenu(wsName)
-    await page.getByRole('menuitem', { name: /^Delete/ }).click()
-    const d = page.getByRole('dialog')
-    step.dialog = (await d.innerText()).replace(/\s+/g, ' ')
-    await shot(step, 'confirm')
-    const t0 = Date.now()
-    await d.getByRole('button', { name: /^Delete( Workspace)?$/ }).click()
-    await rowTitle(wsName).waitFor({ state: 'detached', timeout: 60_000 })
-    step.timings.uiRowGoneMs = Date.now() - t0
-    await shot(step, 'after')
+    step.sandboxBefore = sandboxId ? await sandboxStatus(sandboxId) : null
+    let o = await uiDelete(step, wsName, 'delete', 180_000)
+    if (o.kind === 'error' && /asleep/i.test(o.text ?? '')) {
+      step.asleepRefusal = o
+      bug('life.destroy', {
+        title: 'Delete on an asleep Orca Cloud workspace is refused ("This workspace\u2019s VM is asleep. Open the workspace to wake it.")',
+        expected: 'Delete works on an asleep workspace (or wakes it itself); the user asked to throw it away',
+        actual: `"${o.text}"; row kept`,
+        repro: 'Orca Cloud workspace -> Move to this computer (cloud VM goes to sleep) or Sleep -> Delete -> confirm',
+        screenshot: step.screenshots.at(-1)
+      })
+      step.timings.wakeBeforeDeleteMs = await wakeWorkspace(wsName)
+      o = await uiDelete(step, wsName, 'delete-awake', 180_000)
+    }
+    step.outcome = o
+    step.dialog = o.dialog
+    step.timings.uiRowGoneMs = o.kind === 'removed' ? o.ms : null
+    if (o.kind !== 'removed' || o.rowVisibleAfter) {
+      step.status = 'fail'
+      step.finalSandboxStatus = sandboxId ? (await sandboxStatus(sandboxId)).status : null
+      step.detail = `UI Delete -> ${o.kind}${o.text ? ` "${o.text}"` : ''} after ${o.ms}ms; row still shown: ${o.rowVisibleAfter}; sandbox before ${JSON.stringify(step.sandboxBefore)}, after ${step.finalSandboxStatus}; toasts ${JSON.stringify(o.toasts)}`
+      bug('life.destroy', {
+        title: 'Delete on a cloud workspace (asleep after Move to this computer) does not remove the row or the sandbox',
+        expected: 'row removed, sandbox destroyed',
+        actual: step.detail,
+        repro: 'Orca Cloud workspace -> sleep/wake -> Move to this computer -> delete the local copy -> Delete the cloud row and confirm',
+        screenshot: step.screenshots.at(-1)
+      })
+      return
+    }
     if (!sandboxId) {
       step.status = 'partial'
       step.detail = 'row removed; no sandbox id to confirm against the API'
       return
     }
-    const w = await waitSandboxStatus(sandboxId, ['destroyed', 'deleted', 'not_found'], 120_000)
+    // The control plane tombstones deleted sandboxes, so a delete that went through reads destroyed.
+    const w = await waitSandboxStatus(sandboxId, ['destroyed'], 120_000)
     step.timings.deleteToDestroyedMs = w.ms
     step.finalSandboxStatus = w.status
-    const listed = (await listSandboxes(USER)).items.some((s) => s.id === sandboxId)
-    step.status = !w.timedOut ? 'pass' : 'fail'
+    const listed = (await listSandboxes(USER)).items.some((s) => s.id === sandboxId && s.status !== 'destroyed')
+    step.status = !w.timedOut && !listed ? 'pass' : 'fail'
     step.detail = `row gone in ${step.timings.uiRowGoneMs}ms; sandbox ${sandboxId} -> ${w.status} after ${w.ms}ms; still listed: ${listed}`
     if (w.timedOut) {
       bug('life.destroy', {
@@ -722,6 +1227,9 @@ async function main() {
       })
     }
   })
+
+  await notFoundDeleteStep()
+  await oobDeleteStep()
 }
 
 async function cleanup() {
@@ -734,6 +1242,10 @@ async function cleanup() {
         const r = await sandboxApi(USER, 'DELETE', `/v1/sandboxes/${id}`)
         c.sandboxes.deleted.push({ id, forced: true, deleteStatus: r.status })
       }
+    }
+    for (const { user, id } of created.foreign) {
+      const r = await sandboxApi(user, 'DELETE', `/v1/sandboxes/${id}`)
+      c.sandboxes.deleted.push({ id, user, deleteStatus: r.status })
     }
     c.remaining = (await listSandboxes(USER)).items.map((s) => ({ id: s.id, status: s.status ?? s.state }))
   } catch (e) {
