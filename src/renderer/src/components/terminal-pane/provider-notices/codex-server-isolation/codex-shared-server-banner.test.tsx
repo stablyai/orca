@@ -205,6 +205,10 @@ describe('CodexSharedServerBanner', () => {
       useAppStore.setState({
         tabsByWorktree: { 'wt-1': [makeTab({ id: TAB_ID, worktreeId: 'wt-1', ptyId: null })] }
       })
+      useAppStore.getState().setPaneForegroundAgent(PANE_KEY, {
+        agent: 'codex',
+        shellForeground: false
+      })
       transport.attach({
         existingPtyId: ptyId,
         callbacks: {

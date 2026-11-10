@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import { Editor } from '@tiptap/core'
+import { toast } from 'sonner'
 import { useRichMarkdownProgrammaticSync } from './useRichMarkdownProgrammaticSync'
 import { createRichMarkdownExtensions } from '../schema/rich-markdown-extensions'
 import {
@@ -13,10 +14,8 @@ import {
   type RichMarkdownHtmlSuperscriptLinkContext
 } from '../citations/rich-markdown-html-superscript-link-context'
 import { encodeRawMarkdownHtmlForRichEditor } from '../raw-source/raw-markdown-html'
-import { notifyStaleViewEditRejected } from '../../save/flush/editor-stale-view-edit'
-
-vi.mock('../../save/flush/editor-stale-view-edit', () => ({
-  notifyStaleViewEditRejected: vi.fn()
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn() }
 }))
 
 function buildEditor(
@@ -38,7 +37,7 @@ function buildEditor(
 }
 
 describe('useRichMarkdownProgrammaticSync stale pending edit', () => {
-  function renderPane(paneText: string, pendingCommit: (() => void) | null) {
+  function renderPane(paneText: string, pendingCommit: boolean) {
     const codec = createRichMarkdownEditorCodec()
     const editor = buildEditor(
       codec,
@@ -54,9 +53,12 @@ describe('useRichMarkdownProgrammaticSync stale pending edit', () => {
     const originalSourceRef = { current: 'base' }
     const baseCanonicalRef = { current: 'base' }
     const pendingEditGenerationRef = { current: { discarded: false } }
-    const onContentChangeRef = { current: vi.fn<(content: string) => void>() }
+    const published: string[] = []
+    const onContentChangeRef = { current: (content: string) => published.push(content) }
     const serializeTimerRef = {
-      current: pendingCommit ? window.setTimeout(pendingCommit, 300) : null
+      current: pendingCommit
+        ? window.setTimeout(() => onContentChangeRef.current(paneText), 300)
+        : null
     }
     const hook = renderHook(
       ({ content }: { content: string }) =>
@@ -83,27 +85,23 @@ describe('useRichMarkdownProgrammaticSync stale pending edit', () => {
         }),
       { initialProps: { content: 'base' } }
     )
-    return { editor, hook, serializeTimerRef, onContentChangeRef }
+    return { editor, hook, published }
   }
 
   it('rejects a split pane pending edit once the other pane replaced the shared text', () => {
     vi.useFakeTimers()
-    vi.mocked(notifyStaleViewEditRejected).mockClear()
-    const commitPaneB = vi.fn()
-    const { editor, hook, serializeTimerRef, onContentChangeRef } = renderPane(
-      'pane b',
-      commitPaneB
-    )
+    vi.mocked(toast.error).mockClear()
+    const { editor, hook, published } = renderPane('pane b', true)
     try {
       hook.rerender({ content: 'pane a' })
       vi.advanceTimersByTime(300)
 
-      expect(commitPaneB).not.toHaveBeenCalled()
-      expect(serializeTimerRef.current).toBeNull()
-      expect(notifyStaleViewEditRejected).toHaveBeenCalledExactlyOnceWith('f1', 0)
+      expect(toast.error).toHaveBeenCalledWith(expect.any(String), {
+        id: 'editor-stale-view-edit'
+      })
       expect(editor.getMarkdown()).toBe('pane a')
       // Republished so the dirty flag this pane's typing raised is recomputed.
-      expect(onContentChangeRef.current).toHaveBeenCalledWith('pane a')
+      expect(published).toEqual(['pane a'])
     } finally {
       editor.destroy()
       vi.useRealTimers()
