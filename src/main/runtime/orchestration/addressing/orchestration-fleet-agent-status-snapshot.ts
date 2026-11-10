@@ -41,11 +41,15 @@ export function readCapturedOrchestrationFleetAgentStatusSnapshot(
 ): readonly FleetAgentStatusEvidence[] {
   const projection = new RuntimeAgentOrchestrationProjection(dependencies)
   const raw = dependencies.getDb()
-  const db = raw?.db ? orchestrationProjectionFacts(raw).view : raw
+  const sourceFacts = raw?.db ? orchestrationProjectionFacts(raw) : undefined
+  const db = sourceFacts?.view ?? raw
   let scope: ReturnType<typeof createOrchestrationProjectionScope> | undefined
   return readOrchestrationFleetAgentStatusSnapshot({
     ...source,
     getAgentStatusOrchestrationContextForPaneKey: (paneKey) => {
+      if (raw?.db && !sourceFacts) {
+        return undefined
+      }
       const handle = source.getAgentStatusTerminalHandleForPaneKey?.(paneKey)
       if (!handle) {
         return undefined

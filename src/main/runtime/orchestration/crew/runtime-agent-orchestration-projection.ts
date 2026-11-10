@@ -58,6 +58,9 @@ export class RuntimeAgentOrchestrationProjection {
   buildByPaneKey(): Record<string, AgentStatusOrchestrationContext> | undefined {
     const raw = this.deps.getDb()
     const source = raw?.db ? orchestrationProjectionFacts(raw) : undefined
+    if (raw?.db && !source) {
+      return undefined
+    }
     const db = source?.view ?? raw
     if (!db || (source ? source.rows().next().done : db.hasAnyDispatchContexts?.() === false)) {
       return undefined
@@ -162,7 +165,11 @@ export class RuntimeAgentOrchestrationProjection {
     if (!raw) {
       return undefined
     }
-    const db = raw.db ? orchestrationProjectionFacts(raw).view : raw
+    const source = raw.db ? orchestrationProjectionFacts(raw) : undefined
+    if (raw.db && !source) {
+      return undefined
+    }
+    const db = source?.view ?? raw
     const scope = createOrchestrationProjectionScope(db, this.deps)
     const statuses =
       this.deps.getAgentStatusForPaneKey?.(paneKey, (key) =>
@@ -233,6 +240,9 @@ export class RuntimeAgentOrchestrationProjection {
     scope = createOrchestrationProjectionScope(db, this.deps)
   ): AgentStatusOrchestrationContext | undefined {
     const facts = db?.db ? orchestrationProjectionFacts(db, scope.now) : undefined
+    if (db?.db && !facts) {
+      return undefined
+    }
     if (facts && facts.view !== db) {
       db = facts.view
       scope = createOrchestrationProjectionScope(db, this.deps, scope.now)

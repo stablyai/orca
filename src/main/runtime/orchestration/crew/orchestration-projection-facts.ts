@@ -128,7 +128,7 @@ export class OrchestrationProjectionFacts {
     }
     this.candidates.refresh(now, dirty, this.cold)
     this.cold = false
-    if (!this.transient) {
+    if (!this.transient && dirty.length > 0) {
       clearProjectionDirtyKeys(this.db)
     }
   }
@@ -252,13 +252,17 @@ export class OrchestrationProjectionFacts {
 export function orchestrationProjectionFacts(
   db: OrchestrationDb,
   now = Date.now()
-): OrchestrationProjectionFacts {
+): OrchestrationProjectionFacts | undefined {
   const view = views.get(db)
   if (view) {
     return view
   }
   let source = db.db.isTransaction ? undefined : sources.get(db)
   if (!source) {
+    // An uncached probe also sees raw/local and external inserts after an empty read.
+    if (!db.db.prepare('SELECT 1 FROM dispatch_contexts LIMIT 1').get()) {
+      return undefined
+    }
     source = new OrchestrationProjectionFacts(db, db.db.isTransaction)
     if (!db.db.isTransaction) {
       sources.set(db, source)
