@@ -170,3 +170,48 @@ export function routineRunTriggerLabel(
       return t('auto.components.settings.cloudRoutines.runTrigger.manual', 'Manual')
   }
 }
+
+/**
+ * A run's failure in plain words. The control plane sends a code, sometimes with detail after a
+ * colon ("workspace_lost:suspended"); codes and detail never reach the screen.
+ */
+export function routineRunErrorCopy(error: string, t: Translate = translate): string {
+  const code = error.split(':', 1)[0]?.trim() ?? ''
+  if (code === 'start_failed') {
+    return t(
+      'auto.components.settings.cloudRoutines.runError.startFailed',
+      'The workspace couldn’t start. Nothing was charged.'
+    )
+  }
+  if (code === 'workspace_lost') {
+    return t(
+      'auto.components.settings.cloudRoutines.runError.workspaceLost',
+      'The workspace went to sleep or was deleted before the run finished.'
+    )
+  }
+  if (code === 'post_failed') {
+    return t(
+      'auto.components.settings.cloudRoutines.runError.postFailed',
+      'The run finished, but Orca couldn’t post the results.'
+    )
+  }
+  if (code === 'queue_expired') {
+    return t(
+      'auto.components.settings.cloudRoutines.runError.queueExpired',
+      'The run waited too long to start and was skipped.'
+    )
+  }
+  if (code.endsWith('_interrupted')) {
+    return t(
+      'auto.components.settings.cloudRoutines.runError.interrupted',
+      'Orca Cloud restarted during the run.'
+    )
+  }
+  if (code === 'routine_changed') {
+    return t(
+      'auto.components.settings.cloudRoutines.runError.routineChanged',
+      'The routine changed while this run was queued.'
+    )
+  }
+  return t('auto.components.settings.cloudRoutines.runError.generic', 'The run failed.')
+}
