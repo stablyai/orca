@@ -112,6 +112,8 @@ import { egressAccountRoutes, egressSecretHosts, placeholderValues, secretPlaceh
 import { SecretError, handleSecretsRoute, keyringFor, type SecretChange } from './secrets'
 import { refreshAfterSecretChange, refreshSandboxEnv } from './env-refresh'
 import { accountProvider, isSharedWorkspace } from './account-providers'
+import { codexBrokerTick, handleCodexBrokerRoute, type BrokerDeps } from './codex-broker'
+import { refreshCodexLeases } from './codex-credentials'
 import {
   AgentCredentialError,
   PutClaudeSchema,
@@ -220,6 +222,8 @@ export type Deps = {
   github?: GitHubAppMinter
   now?: () => number
   egressFetch?: typeof fetch
+  /** auth.openai.com token calls of the Codex lease refresher (tests). */
+  codexTokenFetch?: typeof fetch
   egressKeysForIssuer?: Parameters<typeof handleEgressProxy>[1]['keysForIssuer']
   /** GitHub OAuth/user API fetch (tests). */
   githubFetch?: typeof fetch
@@ -339,6 +343,7 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
             header: provider.header,
             placeholders: [provider.format(provider.placeholder(row))],
             label: `account:${agent}`,
+            ...(provider.pathAllowed ? { pathAllowed: provider.pathAllowed } : {}),
             credential: async () => {
               const now = (deps.now ?? Date.now)()
               // The session was set up for this owner; a workspace handed to someone else never uses
@@ -463,6 +468,22 @@ async function refreshOwnersSandboxes(env: Env, deps: Deps, userId: string): Pro
   }
 }
 
+/** Codex broker (codex-broker.ts): the lifecycle provider and keyring; null when either is missing. */
+async function codexBrokerDeps(env: Env, deps: Deps): Promise<BrokerDeps | null> {
+  const [life, keyring] = await Promise.all([lifecycleDeps(env, deps), keyringFor(env)])
+  if (!life || !keyring) {
+    return null
+  }
+  return {
+    life,
+    keyring,
+    onStored: async (userId) => {
+      forgetAccountCredential(userId, 'codex')
+      await refreshOwnersSandboxes(env, deps, userId)
+    }
+  }
+}
+
 async function agentCredentialsRoute(request: Request, url: URL, env: Env, deps: Deps, caller: SandboxCaller): Promise<Response> {
   const db = env.SANDBOX_DB
   const now = (deps.now ?? Date.now)()
@@ -484,6 +505,9 @@ async function agentCredentialsRoute(request: Request, url: URL, env: Env, deps:
       forgetAccountCredential(caller.userId, 'claude')
       await refreshOwnersSandboxes(env, deps, caller.userId)
       return noStore(await agentCredentialsView(db, env, caller.userId, now))
+    }
+    if (url.pathname === '/v1/agent-credentials/codex/broker' || url.pathname.startsWith('/v1/agent-credentials/codex/broker/')) {
+      return await handleCodexBrokerRoute(request, url, { enabled: providerEnabled(env).codex, deps: await codexBrokerDeps(env, deps), caller })
     }
     const del = /^\/v1\/agent-credentials\/(claude|codex)$/.exec(url.pathname)
     if (request.method === 'DELETE' && del) {
@@ -2010,7 +2034,11 @@ export default {
         }
       })
     )
-    if (new Date(controller.scheduledTime).getUTCMinutes() % 5 !== 0) {
+    const fifthMinute = new Date(controller.scheduledTime).getUTCMinutes() % 5 === 0
+    if (env.AGENT_ACCOUNTS_CODEX === 'on') {
+      ctx.waitUntil(codexTick(env, fifthMinute))
+    }
+    if (!fifthMinute) {
       return
     }
     ctx.waitUntil(
@@ -2052,6 +2080,33 @@ export default {
     )
   }
 } satisfies ExportedHandler<Env>
+
+/**
+ * Codex (flag S2): every minute, broker logins move on; every fifth, the lease refresher renews due tokens
+ * (kept fresh while the kill switch is on, so turning it off again just works) and leaked brokers go.
+ */
+export async function codexTick(env: Env, fifthMinute: boolean, deps: Deps = {}): Promise<void> {
+  const broker = await codexBrokerDeps(env, deps)
+  if (!broker) {
+    return
+  }
+  const brokers = await codexBrokerTick(broker, { sweepProvider: fifthMinute }).catch((error: unknown) => ({ error: String(error).slice(0, 200) }))
+  if (!('advanced' in brokers) || brokers.advanced > 0 || brokers.leaked > 0) {
+    console.log(JSON.stringify({ event: 'codex_broker_tick', ...brokers }))
+  }
+  if (fifthMinute) {
+    const refresh = await refreshCodexLeases({
+      db: env.SANDBOX_DB,
+      keyring: broker.keyring,
+      now: deps.now ?? Date.now,
+      fetch: deps.codexTokenFetch,
+      onChanged: broker.onStored
+    }).catch((error: unknown) => ({ error: String(error).slice(0, 200) }))
+    if (!('due' in refresh) || refresh.due > 0) {
+      console.log(JSON.stringify({ event: 'codex_refresh', ...refresh }))
+    }
+  }
+}
 
 /** Org environments built on an older golden rebuild on the current one (environment-golden-refresh.ts). */
 export async function refreshEnvironmentsOnGolden(env: Env, life: LifecycleDeps, deps: Deps = {}) {
