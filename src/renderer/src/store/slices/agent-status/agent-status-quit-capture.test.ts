@@ -54,6 +54,37 @@ describe('captureAllSleepingAgentSessions', () => {
       agentArgs: '--model gpt-5',
       agentEnv: { CODEX_PROFILE: 'captured' }
     })
+
+    store.getState().removeAgentStatus('tab-1:leaf-1')
+    store.getState().registerAgentLaunchConfig(
+      'tab-1:leaf-1',
+      { agentArgs: '--model gpt-5', agentEnv: { CODEX_PROFILE: 'replacement' } },
+      {
+        agentType: 'codex',
+        launchToken: 'replacement-token',
+        tabId: 'tab-1',
+        leafId: 'leaf-1'
+      }
+    )
+    store.getState().setAgentStatus(
+      'tab-1:leaf-1',
+      { state: 'working', prompt: 'replacement task', agentType: 'codex' },
+      'Codex',
+      { updatedAt: 20, stateStartedAt: 20 },
+      { tabId: 'tab-1', worktreeId: 'wt-1' },
+      {
+        providerSession: { key: 'session_id', id: 'codex-session-2' },
+        launchToken: 'replacement-token'
+      }
+    )
+    expect(store.getState().agentLaunchConfigByPaneKey['tab-1:leaf-1']).toMatchObject({
+      identity: { providerSession: { id: 'codex-session-2' } },
+      launchConfig: { agentEnv: { CODEX_PROFILE: 'replacement' } }
+    })
+    expect(
+      resumablePaneRecord(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1'])
+        ?.launchConfig
+    ).toEqual({ agentArgs: '--model gpt-5', agentEnv: { CODEX_PROFILE: 'replacement' } })
   })
 
   it('does not let a periodic checkpoint supersede a confirmed quit record', () => {
