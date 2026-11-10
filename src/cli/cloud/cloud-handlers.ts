@@ -33,7 +33,6 @@ import {
 } from './cloud-format'
 import {
   DEFAULT_MESSAGE_WAIT_S,
-  MUTATE_TIMEOUT_MS,
   cloudClient,
   createCloudWorkspace,
   defaultCloudHandlerDeps,
@@ -49,27 +48,14 @@ import {
   type CloudWorkspaceCreateInput
 } from './cloud-operations'
 
+import { cloudLifecycleHandler, type CloudLifecycleAction } from './cloud-lifecycle'
+
 export type { CloudHandlerDeps } from './cloud-operations'
 
 export function createCloudHandlers(
   getDeps: () => CloudHandlerDeps = defaultCloudHandlerDeps
 ): Record<string, CommandHandler> {
-  const mutate =
-    (action: 'sleep' | 'wake' | 'archive' | 'destroy'): CommandHandler =>
-    async ({ flags, json }) => {
-      const deps = getDeps()
-      const api = cloudClient(deps)
-      const id = await resolveCloudWorkspaceId(api, getRequiredStringFlag(flags, 'workspace'))
-      const started = deps.now()
-      const result = await api.request<{ workspace: CloudWorkspace }>(
-        action === 'destroy' ? 'DELETE' : 'POST',
-        action === 'destroy' ? workspacePath(id) : workspacePath(id, `/${action}`),
-        { timeoutMs: MUTATE_TIMEOUT_MS }
-      )
-      printCloudResult({ ...result, elapsedMs: deps.now() - started }, json, (value) =>
-        formatCloudWorkspace(value)
-      )
-    }
+  const mutate = (action: CloudLifecycleAction) => cloudLifecycleHandler(action, getDeps)
 
   return {
     'cloud whoami': async ({ json }) => {
