@@ -5625,7 +5625,6 @@
       "src/renderer/src/components/sidebar/worktree-list/listing/worktree-sort-label-ordering.test.ts": 114,
       "src/renderer/src/components/sidebar/wsl-host-offer-move.test.ts": 227,
 
-      "src/renderer/src/components/skills/installation/SkillInstallManagementDialog.test.tsx": 3300,
       "src/renderer/src/components/skills/sharing/SkillSharedLinkRow.test.tsx": 817,
       "src/renderer/src/components/skills/SkillsPage.test.tsx": 3822,
       "src/renderer/src/components/skills/catalog/skill-agent-filter.test.ts": 274,
@@ -6719,7 +6718,6 @@
       "src/renderer/src/store/github/refresh/github-pr-manual-refresh-broadcast.test.ts": 693,
       "src/renderer/src/store/github/refresh/github-pr-refresh-states-leak.test.ts": 1327,
       "src/renderer/src/store/github/pull-requests/github-pr-request-lifetime.test.ts": 1458,
-      "src/renderer/src/store/github/projects/github-project-view-tables.test.ts": 656,
       "src/renderer/src/store/github/repositories/github-repo-lookup-index.test.ts": 51,
       "src/renderer/src/store/github/review-threads/github-review-thread-rollback.test.ts": 663,
       "src/renderer/src/store/github/task-records/github-task-record-retries.test.ts": 758,
