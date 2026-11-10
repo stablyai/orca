@@ -10,6 +10,7 @@ import {
   type WorktreeRunActions
 } from '@/lib/run-actions/run-action-config'
 import { startRunAction, stopRunAction } from '@/lib/run-actions/run-action-controller'
+import { autoRunProvisionedWorkspaceOnce } from '@/lib/run-actions/run-action-events'
 import { useWorktreeRunActionRuns, type RunActionRun } from '@/lib/run-actions/run-actions-store'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import { RunActionButtonView } from './RunActionButtonView'
@@ -79,6 +80,11 @@ export function RunActionButton({ worktreeId }: { worktreeId: string }): React.J
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [config, worktreeId, runs]
   )
+  useEffect(() => {
+    if (config?.setupProvisioned) {
+      void autoRunProvisionedWorkspaceOnce(worktreeId, config)
+    }
+  }, [config, worktreeId])
   if (!config || !primary) {
     return null
   }
