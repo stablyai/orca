@@ -30,7 +30,10 @@ export const uiStateAndMenuCommandsApi = {
   onOpenSettings: (callback: (target?: OrcaOpenSettingsTarget) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, target?: unknown) =>
       callback(
-        (target as { pane?: unknown } | undefined)?.pane === ORCA_PLAN_BILLING_SETTINGS_TARGET.pane
+        typeof target === 'object' &&
+          target !== null &&
+          'pane' in target &&
+          target.pane === ORCA_PLAN_BILLING_SETTINGS_TARGET.pane
           ? ORCA_PLAN_BILLING_SETTINGS_TARGET
           : undefined
       )

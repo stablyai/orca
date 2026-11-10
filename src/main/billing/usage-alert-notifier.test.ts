@@ -124,39 +124,48 @@ describe('notifyUsageAlertIfDue', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('shows the alert and records it on disk, so a reload or second window does not repeat it', () => {
-    expect(notifyUsageAlertIfDue('u:o', at(75, 92), deps())).toBe(75)
+  it('shows the alert and records it on disk, so a reload or second window does not repeat it', async () => {
+    expect(await notifyUsageAlertIfDue('u:o', at(75, 92), deps())).toBe(75)
     expect(show).toHaveBeenCalledWith({
       title: USAGE_ALERT_TITLE,
       body: 'Your team has used 76% of this month’s sandbox hours.'
     })
     // Every later read (another window, a reload, a restart) reads the same ledger file.
-    expect(notifyUsageAlertIfDue('u:o', at(75, 93), deps())).toBeNull()
-    expect(notifyUsageAlertIfDue('u:o', at(75, 93), deps())).toBeNull()
+    expect(await notifyUsageAlertIfDue('u:o', at(75, 93), deps())).toBeNull()
+    expect(await notifyUsageAlertIfDue('u:o', at(75, 93), deps())).toBeNull()
     expect(show).toHaveBeenCalledTimes(1)
-    expect(readUsageAlertLedger(dir)).toEqual({ 'u:o': { periodStart: NOV, levels: [75] } })
+    expect(await readUsageAlertLedger(dir)).toEqual({ 'u:o': { periodStart: NOV, levels: [75] } })
   })
 
-  it('does not notify members or below 75%', () => {
-    expect(notifyUsageAlertIfDue('u:o', at(90, 110, { canManageBilling: false }), deps())).toBe(
-      null
-    )
-    expect(notifyUsageAlertIfDue('u:o', at(null, 60), deps())).toBeNull()
+  it('does not notify members or below 75%', async () => {
+    expect(
+      await notifyUsageAlertIfDue('u:o', at(90, 110, { canManageBilling: false }), deps())
+    ).toBeNull()
+    expect(await notifyUsageAlertIfDue('u:o', at(null, 60), deps())).toBeNull()
     expect(show).not.toHaveBeenCalled()
   })
 
-  it('counts a level as handled while notifications are off', () => {
-    enabled = false
-    expect(notifyUsageAlertIfDue('u:o', at(75, 92), deps())).toBeNull()
-    enabled = true
-    expect(notifyUsageAlertIfDue('u:o', at(75, 92), deps())).toBeNull()
-    expect(notifyUsageAlertIfDue('u:o', at(90, 110), deps())).toBe(90)
+  it('notifies once when two windows read at the same moment', async () => {
+    const [a, b] = await Promise.all([
+      notifyUsageAlertIfDue('u:o', at(75, 92), deps()),
+      notifyUsageAlertIfDue('u:o', at(75, 92), deps())
+    ])
+    expect([a, b].filter((level) => level !== null)).toEqual([75])
     expect(show).toHaveBeenCalledTimes(1)
   })
 
-  it('treats a corrupt ledger as empty', () => {
+  it('counts a level as handled while notifications are off', async () => {
+    enabled = false
+    expect(await notifyUsageAlertIfDue('u:o', at(75, 92), deps())).toBeNull()
+    enabled = true
+    expect(await notifyUsageAlertIfDue('u:o', at(75, 92), deps())).toBeNull()
+    expect(await notifyUsageAlertIfDue('u:o', at(90, 110), deps())).toBe(90)
+    expect(show).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats a corrupt ledger as empty', async () => {
     writeFileSync(join(dir, 'orca-billing-usage-alerts.json'), '{not json')
-    expect(notifyUsageAlertIfDue('u:o', at(75, 92), deps())).toBe(75)
+    expect(await notifyUsageAlertIfDue('u:o', at(75, 92), deps())).toBe(75)
     expect(JSON.parse(readFileSync(join(dir, 'orca-billing-usage-alerts.json'), 'utf8'))).toEqual({
       'u:o': { periodStart: NOV, levels: [75] }
     })

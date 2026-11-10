@@ -94,16 +94,13 @@ export function registerOrcaProfileBillingHandlers(store: Store): void {
     const result = await getOrcaBillingStatus(userDataPath)
     // An account or team switch mid-read means this answer isn't for the account now active.
     if (result.status === 'ok' && account && account === billingAccountKey(userDataPath)) {
-      try {
-        notifyUsageAlertIfDue(account, result.entitlement, {
-          userDataPath,
-          notificationsEnabled: () => store.getSettings().notifications?.enabled !== false,
-          body: usageAlertBody,
-          show: showUsageAlertNotification
-        })
-      } catch {
-        // An alert must never fail the billing read.
-      }
+      // Fire and forget: an alert must never delay or fail the billing read.
+      void notifyUsageAlertIfDue(account, result.entitlement, {
+        userDataPath,
+        notificationsEnabled: () => store.getSettings().notifications?.enabled !== false,
+        body: usageAlertBody,
+        show: showUsageAlertNotification
+      }).catch(() => {})
     }
     return result
   })
