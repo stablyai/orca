@@ -32,6 +32,21 @@ export type WorkerApprovalPayload = {
   outcome?: WorkerApprovalOutcome
 }
 
+/** The outcome of a chat prompt Orca answered: its reason is told only when it went to the worker as mail. */
+export function chatAnswerOutcome(input: {
+  by: WorkerApprovalAnswerer
+  decision: WorkerApprovalDecision
+  reason: string | null
+  reasonMailed: boolean
+}): WorkerApprovalOutcome {
+  return {
+    by: input.by,
+    decision: input.decision,
+    reason: input.reasonMailed ? input.reason : null,
+    reasonDelivered: false
+  }
+}
+
 const INTENT_OF: Record<WorkerApprovalDecision, AgentJournalPromptOption['intent']> = {
   allow: 'allow_once',
   deny: 'reject_once'

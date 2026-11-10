@@ -70,12 +70,13 @@ export function chatWorkerTurnStopReporter(
   const closeSettledApprovals = async (sessionId: string): Promise<void> => {
     const open = reported.get(sessionId)
     for (const [approvalId, approval] of open ?? []) {
-      const prompt = await readPrompt(sessionId, approvalId)
-      if (prompt?.body.resolution.state === 'pending') {
+      // An unreadable chat proves nothing: keep watching for the next edge.
+      const prompt = await readPrompt(sessionId, approvalId).catch(() => undefined)
+      if (prompt === undefined || prompt?.body.resolution.state === 'pending') {
         continue
       }
       open?.delete(approvalId)
-      // Orca's own answer writes its closing line, with the reason; a vanished prompt has nothing to say.
+      // One closer each: Orca's own answer writes its closing line, with the reason; a vanished prompt has nothing to say.
       if (
         !prompt ||
         prompt.body.resolution.resolvedBy?.startsWith(ORCHESTRATION_APPROVAL_CALLER_PREFIX)
