@@ -18,7 +18,10 @@ async function listRefs(repo: CheckpointRepo, prefix: string): Promise<RefAge[]>
     .filter(Boolean)
     .map((line) => {
       const space = line.indexOf(' ')
-      return { committedAt: Number(line.slice(0, space)) * 1000, ref: line.slice(space + 1) }
+      return {
+        committedAt: Number(line.slice(0, space)) * 1000,
+        ref: line.slice(space + 1)
+      }
     })
 }
 

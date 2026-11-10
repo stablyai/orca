@@ -67,7 +67,12 @@ export function defaultCheckpointGit(cwd: string): CheckpointGit {
     const { stdout } = await gitExecFileAsync(args, {
       cwd,
       // Plumbing only: no optional locks, so a snapshot never contends with the user's own git.
-      env: { ...process.env, GIT_OPTIONAL_LOCKS: '0', ...CHECKPOINT_IDENTITY, ...options.env },
+      env: {
+        ...process.env,
+        GIT_OPTIONAL_LOCKS: '0',
+        ...CHECKPOINT_IDENTITY,
+        ...options.env
+      },
       ...(options.stdin !== undefined ? { stdin: options.stdin } : {}),
       ...(options.signal ? { signal: options.signal } : {}),
       timeout: options.timeoutMs ?? 120_000,

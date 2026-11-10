@@ -84,10 +84,11 @@ describe('rewind with file restore', () => {
     await act(() => view.result.current.request('user', answer('default', shown)))
     expect(checkpoints.preview).toHaveBeenCalledWith('user')
     expect(shown[0]?.option).toMatchObject({
-      label: 'Also restore files (3 changed)',
+      label: 'Also restore 3 changed files',
       defaultChecked: true
     })
-    expect(shown[0]?.option?.detail).toContain('Changes made after it are discarded')
+    expect(shown[0]?.option?.detail).toContain('Later changes are discarded')
+    expect(shown[0]?.option?.uncheckedDetail).toBe('Files on disk stay as they are.')
     expect(shown[0]?.option?.detail).toContain('Commits made since then stay on the branch')
     expect(shown[0]?.description).not.toContain('File changes on disk are kept')
     await vi.waitFor(() => expect(checkpoints.restore).toHaveBeenCalledWith('user'))
@@ -95,11 +96,31 @@ describe('rewind with file restore', () => {
       checkpoints.restore.mock.invocationCallOrder[0]!
     )
     await vi.waitFor(() => expect(toast.success).toHaveBeenCalled())
-    expect(toast.success.mock.calls[0]?.[0]).toBe('Files restored (3 changed)')
+    expect(toast.success.mock.calls[0]?.[0]).toBe('Restored 3 files')
     const undo = toast.success.mock.calls[0]?.[1]?.action
     expect(undo.label).toBe('Undo')
     undo.onClick()
     await vi.waitFor(() => expect(checkpoints.undo).toHaveBeenCalledWith('1-abcdef01'))
+  })
+
+  it('disables restoring while an agent works in the workspace, and never restores then', async () => {
+    const checkpoints = client({
+      available: true,
+      changedFiles: 2,
+      headMoved: false,
+      createdAt: 1,
+      busy: true
+    })
+    const shown: ConfirmationDialogOptions[] = []
+    const view = renderHook(() => useNativeChatRewind(input(checkpoints)))
+    await act(() => view.result.current.request('user', answer(true, shown)))
+    expect(shown[0]?.option).toMatchObject({
+      disabled: true,
+      defaultChecked: false,
+      detail: "Files can't be restored while the agent is working."
+    })
+    await act(async () => {})
+    expect(checkpoints.restore).not.toHaveBeenCalled()
   })
 
   it('keeps files when the box is unticked', async () => {
@@ -150,6 +171,7 @@ describe('rewind with file restore', () => {
     const view = renderHook(() => useNativeChatRewind(input(checkpoints)))
     await act(() => view.result.current.request('user', answer(true, [])))
     await vi.waitFor(() => expect(toast.error).toHaveBeenCalled())
+    expect(toast.error.mock.calls[0]?.[0]).toContain('The chat was rewound, but')
     expect(toast.error.mock.calls[0]?.[0]).toContain('unresolved merge conflicts')
     expect(toast.success).not.toHaveBeenCalled()
   })

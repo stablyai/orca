@@ -20,6 +20,7 @@ import {
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
+import { ConfirmationDialogOption } from '@/components/confirmation-dialog-option'
 
 type ConfirmationDialogRequest = {
   id: number
@@ -185,6 +186,13 @@ export function ConfirmationDialogProvider({
               ) : null}
             </DialogHeader>
           </div>
+          {displayedRequest?.options.option ? (
+            <ConfirmationDialogOption
+              option={displayedRequest.options.option}
+              checked={optionChecked ?? displayedRequest.options.option.defaultChecked}
+              onCheckedChange={setOptionChecked}
+            />
+          ) : null}
           {displayedRequest?.options.fields ? (
             <div className="space-y-3">
               {displayedRequest.options.fields.inputs.map((field) => (
@@ -210,34 +218,6 @@ export function ConfirmationDialogProvider({
                   />
                 </div>
               ))}
-            </div>
-          ) : null}
-          {displayedRequest?.options.option ? (
-            <div className="flex items-start gap-2">
-              <Checkbox
-                id="confirmation-dialog-option"
-                className="mt-0.5"
-                checked={optionChecked ?? displayedRequest.options.option.defaultChecked}
-                onCheckedChange={(checked) => setOptionChecked(checked === true)}
-                aria-describedby={
-                  displayedRequest.options.option.detail
-                    ? 'confirmation-dialog-option-detail'
-                    : undefined
-                }
-              />
-              <div className="space-y-1">
-                <Label htmlFor="confirmation-dialog-option">
-                  {displayedRequest.options.option.label}
-                </Label>
-                {displayedRequest.options.option.detail ? (
-                  <p
-                    id="confirmation-dialog-option-detail"
-                    className="text-xs text-muted-foreground"
-                  >
-                    {displayedRequest.options.option.detail}
-                  </p>
-                ) : null}
-              </div>
             </div>
           ) : null}
           {displayedRequest?.options.dontAskAgain ? (

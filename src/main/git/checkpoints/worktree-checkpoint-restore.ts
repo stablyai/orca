@@ -14,6 +14,7 @@ import {
 } from './worktree-checkpoint-git'
 import {
   assertNoConflicts,
+  assertUndoCovers,
   assertWritable,
   hiddenIndexPaths,
   overwrittenUnsnapshottedPaths,
@@ -78,7 +79,8 @@ async function removeWorktreeFile(rootReal: string, root: string, path: string):
 async function restoreIndexEntries(
   repo: CheckpointRepo,
   fromTree: string,
-  toTree: string
+  toTree: string,
+  hidden: Set<string>
 ): Promise<void> {
   if (fromTree === toTree) {
     return
@@ -93,11 +95,17 @@ async function restoreIndexEntries(
     }
     const [, newMode, , newObject] = header.slice(1).split(' ')
     const path = fields[index + 1]
+    // Rewriting an entry drops its skip-worktree/assume-unchanged bit; those stay as they are.
+    if (path === undefined || hidden.has(path)) {
+      continue
+    }
     // A path the staged tree lacks arrives as mode 000000 with an all-zero id: --index-info removes it.
     records.push(`${newMode === '000000' ? '0' : newMode} ${newObject}\t${path}`)
   }
   if (records.length > 0) {
-    await repo.git(['update-index', '-z', '--index-info'], { stdin: `${records.join('\0')}\0` })
+    await repo.git(['update-index', '-z', '--index-info'], {
+      stdin: `${records.join('\0')}\0`
+    })
   }
 }
 
@@ -139,6 +147,7 @@ export async function restoreWorktreeCheckpoint(
   })
   const changes = await restoreChanges(repo, before.tree, target.tree, hidden)
   await assertWritable(repo, changes)
+  await assertUndoCovers(repo, before.tree, changes)
   const undoCheckpoint = await writeWorktreeCheckpoint(repo, undo.ref, before, {
     kind: 'undo',
     createdAt: undo.now,
@@ -162,7 +171,7 @@ export async function restoreWorktreeCheckpoint(
     // differ are rewritten, so the rest keep their stat data and the next status stays fast. Files
     // are already restored, so a busy index (another git holding index.lock) only loses staging.
     try {
-      await restoreIndexEntries(repo, before.indexTree, target.indexTree)
+      await restoreIndexEntries(repo, before.indexTree, target.indexTree, hidden)
       indexRestored = true
     } catch {
       indexRestored = false

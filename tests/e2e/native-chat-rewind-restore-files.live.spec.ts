@@ -86,7 +86,9 @@ test.describe('rewind with file restore, live agent', () => {
     const call = async <T>(method: string, params: unknown, timeoutMs = 60_000): Promise<T> =>
       (await host.client.call<T>(method, params, { timeoutMs })).result
     try {
-      const added = await call<{ repo: { id: string } }>('repo.add', { path: worktree })
+      const added = await call<{ repo: { id: string } }>('repo.add', {
+        path: worktree
+      })
       let worktreeId = ''
       await expect
         .poll(async () => {
@@ -115,7 +117,9 @@ test.describe('rewind with file restore, live agent', () => {
         })
       let fence = 0
       await expect
-        .poll(async () => (fence = (await tail()).page.fence ?? 0), { timeout: 120_000 })
+        .poll(async () => (fence = (await tail()).page.fence ?? 0), {
+          timeout: 120_000
+        })
         .toBeGreaterThan(0)
       const send = async (prompt: string): Promise<string> => {
         const clientOperationId = createStructuredAgentSessionOperationId(randomUUID)
@@ -153,7 +157,9 @@ test.describe('rewind with file restore, live agent', () => {
         quietPolls = newest === lastSequence ? quietPolls + 1 : 0
         lastSequence = newest
         if (!replied) {
-          const submission = page.submissions.find((entry) => entry.clientMessageId === clientOperationId)
+          const submission = page.submissions.find(
+            (entry) => entry.clientMessageId === clientOperationId
+          )
           console.log(
             `[rewind-files live] waiting: dispatch=${submission?.dispatchState} refs=${git(worktree, 'for-each-ref', '--format=%(refname)', 'refs/orca/').split('\n').length} last=${JSON.stringify(page.items.at(-1)?.body).slice(0, 120)}`
           )
@@ -179,9 +185,9 @@ test.describe('rewind with file restore, live agent', () => {
       expect(git(worktree, 'diff', '--cached', '--name-only')).toBe('staged.txt')
       expect(git(worktree, 'stash', 'list')).toBe('')
       const refs = git(worktree, 'for-each-ref', '--format=%(refname)', 'refs/orca/checkpoints/')
-      expect(refs.split('\n').filter((ref) => ref.includes('/turn/')).length).toBeGreaterThanOrEqual(
-        2
-      )
+      expect(
+        refs.split('\n').filter((ref) => ref.includes('/turn/')).length
+      ).toBeGreaterThanOrEqual(2)
 
       // Rewind the chat to the second message (as the UI does), then restore its files.
       const itemId = agentJournalSubmissionKey(second)

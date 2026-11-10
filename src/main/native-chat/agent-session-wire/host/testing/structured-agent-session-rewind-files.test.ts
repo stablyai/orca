@@ -13,7 +13,9 @@ import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/
 import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import type { AgentSessionDispatchOutcome } from '../../providers/structured-agent-session-adapter'
-import { hostAgentSessionCheckpoints } from '../../checkpoints/agent-session-checkpoints'
+import { createAgentSessionCheckpoints } from '../../checkpoints/agent-session-checkpoints'
+import { hostAgentSessionCheckpoints } from '../../checkpoints/agent-session-checkpoints-host'
+import type { AgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION,
@@ -199,15 +201,47 @@ describe('rewind with file restore', () => {
   it('has no checkpoint for unknown messages and refuses a bad undo id', async () => {
     const attached = await host.attach(caller, hostTestAttachParams(null))
     expect(attached, JSON.stringify(attached)).toMatchObject({ ok: true })
-    expect(await hostAgentSessionCheckpoints(host).preview(HOST_TEST_SESSION, 'orca:nope')).toEqual({
-      available: false,
-      reason: 'none'
+    expect(await hostAgentSessionCheckpoints(host).preview(HOST_TEST_SESSION, 'orca:nope')).toEqual(
+      {
+        available: false,
+        reason: 'none'
+      }
+    )
+    await expect(
+      hostAgentSessionCheckpoints(host).restore(HOST_TEST_SESSION, 'orca:nope')
+    ).rejects.toThrow('agent_session_checkpoint_none')
+    await expect(
+      hostAgentSessionCheckpoints(host).undo(HOST_TEST_SESSION, '../../heads/main')
+    ).rejects.toThrow('agent_session_checkpoint_none')
+  })
+})
+
+describe('restore admission', () => {
+  it('refuses while a turn is between its snapshot and its hand-off, or the workspace is busy', async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the checkpoints read only location and launchDirectory.
+    const record = {
+      sessionId: 's',
+      location: { workspaceId: 'w', wslDistro: null },
+      launchDirectory: worktree
+    } as unknown as AgentSessionRecord
+    const checkpoints = createAgentSessionCheckpoints({
+      record: () => record,
+      isBusy: () => false,
+      logger: createStructuredAgentSessionLogger(),
+      now: () => HOST_TEST_NOW
     })
-    await expect(hostAgentSessionCheckpoints(host).restore(HOST_TEST_SESSION, 'orca:nope')).rejects.toThrow(
-      'agent_session_checkpoint_none'
+    const release = await checkpoints.captureTurn('s', 'orca:one')
+    await put('app.ts', 'agent\n')
+    await expect(checkpoints.restore('s', 'orca:one')).rejects.toThrow(
+      'agent_session_checkpoint_busy'
     )
-    await expect(hostAgentSessionCheckpoints(host).undo(HOST_TEST_SESSION, '../../heads/main')).rejects.toThrow(
-      'agent_session_checkpoint_none'
+    expect(await checkpoints.preview('s', 'orca:one')).toMatchObject({ busy: true })
+    release()
+    await expect(checkpoints.restore('s', 'orca:one', async () => true)).rejects.toThrow(
+      'agent_session_checkpoint_busy'
     )
+    expect(await read('app.ts')).toBe('agent\n')
+    await checkpoints.restore('s', 'orca:one', async () => false)
+    expect(await read('app.ts')).toBe('v0\n')
   })
 })

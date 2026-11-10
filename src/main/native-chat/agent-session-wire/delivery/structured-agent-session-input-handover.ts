@@ -25,7 +25,7 @@ import {
 import { structuredAgentSessionEndedChildFailure } from '../termination/structured-agent-session-ended-child-failure'
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
 import { previousExitUnverifiableRefusal } from '../termination/structured-agent-session-child-close'
-import { structuredAgentSessionTurnCheckpoint } from '../checkpoints/agent-session-checkpoints'
+import { structuredAgentSessionTurnCheckpoint } from '../checkpoints/agent-session-checkpoints-host'
 
 type StartFailure = NonNullable<ReturnType<typeof startThatFailedWhileQueued>>
 

@@ -18,6 +18,8 @@ export type AgentSessionCheckpointPreview =
       /** Commits were made after the snapshot; they stay on the branch. */
       headMoved: boolean
       createdAt: number
+      /** An agent is working in this workspace now, so a restore would refuse. */
+      busy?: boolean
     }
 
 export type AgentSessionCheckpointRestoreResult = {

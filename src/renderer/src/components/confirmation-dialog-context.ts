@@ -34,8 +34,11 @@ export type ConfirmationDialogOptions = {
    *  `onConfirmed` gets the box's state, only on confirm. */
   option?: {
     label: string
+    /** Describes the outcome while checked (or always, without `uncheckedDetail`). */
     detail?: string
+    uncheckedDetail?: string
     defaultChecked: boolean
+    disabled?: boolean
     onConfirmed: (checked: boolean) => void
   }
   /** Runs when the cancel button settles the prompt, unlike Esc, an outside press or an abort. */

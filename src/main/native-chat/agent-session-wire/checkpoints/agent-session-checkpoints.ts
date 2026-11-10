@@ -28,8 +28,7 @@ import {
 } from '../../../git/checkpoints/worktree-checkpoint-restore'
 import { pruneCheckpointRefs } from '../../../git/checkpoints/worktree-checkpoint-retention'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
-import type { StructuredAgentSessionDeliveryLoopDeps } from '../delivery/structured-agent-session-delivery-loop-deps'
-import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
+import { markTurnStarting, serialize, startingTurns } from './agent-session-checkpoint-queue'
 
 export const TURN_CHECKPOINTS_KEPT = 50
 export const UNDO_CHECKPOINTS_KEPT = 10
@@ -68,16 +67,8 @@ function refuse(reason: Parameters<typeof agentSessionCheckpointRefusalMessage>[
   throw new Error(agentSessionCheckpointRefusalMessage(reason))
 }
 
-// One git writer per worktree at a time across every chat in this process: a capture never
-// interleaves with a restore, so a send after a rewind snapshots the restored files.
-const queues = new Map<string, Promise<unknown>>()
-function serialize<T>(root: string, task: () => Promise<T>): Promise<T> {
-  const run = (queues.get(root) ?? Promise.resolve()).then(task, task)
-  const tail = run.catch(() => undefined)
-  queues.set(root, tail)
-  void tail.then(() => queues.get(root) === tail && queues.delete(root))
-  return run
-}
+/** Something else in the workspace that may write files: a terminal agent, say. */
+export type AgentSessionWorkspaceBusy = () => Promise<boolean>
 
 export function createAgentSessionCheckpoints(deps: AgentSessionCheckpointsDeps) {
   const open = deps.openRepo ?? ((directory: string) => openCheckpointRepo(directory))
@@ -96,18 +87,24 @@ export function createAgentSessionCheckpoints(deps: AgentSessionCheckpointsDeps)
     sessionId: string,
     itemId: string,
     signal?: AbortSignal
-  ): Promise<void> => {
+  ): Promise<() => void> => {
     const started = deps.now()
+    let release = () => {}
     try {
       const repo = await repoFor(sessionId)
       if (!repo) {
-        return
+        return release
       }
+      release = markTurnStarting(repo.root)
       await serialize(repo.root, async () => {
         await captureWorktreeCheckpoint(
           repo,
           turnRef(sessionId, itemId),
-          { kind: 'turn', createdAt: deps.now(), labels: { sessionId, itemId } },
+          {
+            kind: 'turn',
+            createdAt: deps.now(),
+            labels: { sessionId, itemId }
+          },
           { signal, timeoutMs: CHECKPOINT_CAPTURE_TIMEOUT_MS }
         )
         await pruneCheckpointRefs(repo, {
@@ -119,22 +116,25 @@ export function createAgentSessionCheckpoints(deps: AgentSessionCheckpointsDeps)
         })
       })
     } catch (error) {
-      if (error instanceof WorktreeCheckpointError && error.reason === 'not-a-repo') {
-        return
+      if (!(error instanceof WorktreeCheckpointError && error.reason === 'not-a-repo')) {
+        deps.logger.warn('[agent-session] turn checkpoint skipped', {
+          scope: 'checkpoint-capture',
+          sessionId,
+          elapsedMs: deps.now() - started,
+          error: error instanceof Error ? error.message : String(error)
+        })
       }
-      deps.logger.warn('[agent-session] turn checkpoint skipped', {
-        scope: 'checkpoint-capture',
-        sessionId,
-        elapsedMs: deps.now() - started,
-        error: error instanceof Error ? error.message : String(error)
-      })
     }
+    return release
   }
 
   const target = async (
     sessionId: string,
     ref: string
-  ): Promise<{ repo: CheckpointRepo; checkpoint: WorktreeCheckpoint } | null> => {
+  ): Promise<{
+    repo: CheckpointRepo
+    checkpoint: WorktreeCheckpoint
+  } | null> => {
     const repo = await repoFor(sessionId)
     const checkpoint = repo ? await readWorktreeCheckpoint(repo, ref) : null
     return repo && checkpoint ? { repo, checkpoint } : null
@@ -142,7 +142,8 @@ export function createAgentSessionCheckpoints(deps: AgentSessionCheckpointsDeps)
 
   const preview = async (
     sessionId: string,
-    itemId: string
+    itemId: string,
+    workspaceBusy?: AgentSessionWorkspaceBusy
   ): Promise<AgentSessionCheckpointPreview> => {
     try {
       const found = await target(sessionId, turnRef(sessionId, itemId))
@@ -156,7 +157,11 @@ export function createAgentSessionCheckpoints(deps: AgentSessionCheckpointsDeps)
         available: true,
         changedFiles: changes.length,
         headMoved,
-        createdAt: found.checkpoint.createdAt
+        createdAt: found.checkpoint.createdAt,
+        busy:
+          deps.isBusy(sessionId) ||
+          (startingTurns.get(found.repo.root) ?? 0) > 0 ||
+          ((await workspaceBusy?.().catch(() => false)) ?? false)
       }
     } catch (error) {
       if (error instanceof WorktreeCheckpointError && error.reason === 'not-a-repo') {
@@ -173,7 +178,8 @@ export function createAgentSessionCheckpoints(deps: AgentSessionCheckpointsDeps)
 
   const restoreRef = async (
     sessionId: string,
-    ref: string
+    ref: string,
+    workspaceBusy?: AgentSessionWorkspaceBusy
   ): Promise<AgentSessionCheckpointRestoreResult> => {
     const repo = await repoFor(sessionId).catch((error: unknown) => {
       if (error instanceof WorktreeCheckpointError && error.reason === 'not-a-repo') {
@@ -191,7 +197,11 @@ export function createAgentSessionCheckpoints(deps: AgentSessionCheckpointsDeps)
       // Look up and check busy inside the queue: a capture queued first runs first, and the turn
       // it starts must make this restore refuse rather than rewrite files under a working agent.
       const result = await serialize(repo.root, async () => {
-        if (deps.isBusy(sessionId)) {
+        if (
+          deps.isBusy(sessionId) ||
+          (startingTurns.get(repo.root) ?? 0) > 0 ||
+          (await workspaceBusy?.())
+        ) {
           refuse('busy')
         }
         const checkpoint = await readWorktreeCheckpoint(repo, ref)
@@ -211,7 +221,11 @@ export function createAgentSessionCheckpoints(deps: AgentSessionCheckpointsDeps)
         now,
         protect: [undoRef]
       }).catch(() => undefined)
-      return { changedFiles: result.changes.length, headMoved: result.headMoved, undoId }
+      return {
+        changedFiles: result.changes.length,
+        headMoved: result.headMoved,
+        undoId
+      }
     } catch (error) {
       if (error instanceof WorktreeCheckpointError && error.reason === 'partial') {
         throw new Error(agentSessionCheckpointPartialMessage(undoId))
@@ -231,65 +245,13 @@ export function createAgentSessionCheckpoints(deps: AgentSessionCheckpointsDeps)
   return {
     captureTurn,
     preview,
-    restore: (sessionId: string, itemId: string) =>
-      restoreRef(sessionId, turnRef(sessionId, itemId)),
-    undo: async (sessionId: string, undoId: string) => {
+    restore: (sessionId: string, itemId: string, workspaceBusy?: AgentSessionWorkspaceBusy) =>
+      restoreRef(sessionId, turnRef(sessionId, itemId), workspaceBusy),
+    undo: async (sessionId: string, undoId: string, workspaceBusy?: AgentSessionWorkspaceBusy) => {
       if (!AGENT_SESSION_CHECKPOINT_UNDO_ID.test(undoId)) {
         refuse('none')
       }
-      return restoreRef(sessionId, `${sessionPrefix(sessionId)}undo/${undoId}`)
+      return restoreRef(sessionId, `${sessionPrefix(sessionId)}undo/${undoId}`, workspaceBusy)
     }
   }
-}
-
-/** The snapshot a send takes before its message opens a turn; never throws. */
-export function structuredAgentSessionTurnCheckpoint(
-  deps: Pick<
-    StructuredAgentSessionDeliveryLoopDeps,
-    'record' | 'resolveWorkspacePath' | 'logger' | 'now'
-  >,
-  sessionId: string
-): (itemId: string, signal?: AbortSignal) => Promise<void> {
-  const { captureTurn } = createAgentSessionCheckpoints({
-    record: deps.record,
-    ...(deps.resolveWorkspacePath ? { resolveWorkspacePath: deps.resolveWorkspacePath } : {}),
-    isBusy: () => false,
-    logger: deps.logger,
-    now: deps.now
-  })
-  return (itemId, signal) => captureTurn(sessionId, itemId, signal)
-}
-
-type CheckpointHost = {
-  deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'resolveWorkspacePath' | 'logger' | 'now'>
-  readStatusSummary: (sessionId: string) => { status: string | null } | undefined
-}
-const hostCheckpoints = new WeakMap<CheckpointHost, AgentSessionCheckpoints>()
-
-/** Preview, restore and undo for a host's chats; a restore waits for a running turn to end. */
-export function hostAgentSessionCheckpoints(host: CheckpointHost): AgentSessionCheckpoints {
-  let checkpoints = hostCheckpoints.get(host)
-  if (!checkpoints) {
-    const { deps } = host
-    checkpoints = createAgentSessionCheckpoints({
-      record: (sessionId) => deps.store.getRecord(sessionId),
-      ...(deps.resolveWorkspacePath ? { resolveWorkspacePath: deps.resolveWorkspacePath } : {}),
-      // Any chat working in the same worktree could be writing the files a restore rewrites.
-      isBusy: (sessionId) => {
-        const location = deps.store.getRecord(sessionId)?.location
-        return deps.store
-          .listConversations()
-          .some(
-            (record) =>
-              record.location.workspaceId === location?.workspaceId &&
-              record.location.executionHostId === location.executionHostId &&
-              host.readStatusSummary(record.sessionId)?.status === 'working'
-          )
-      },
-      logger: deps.logger,
-      now: () => deps.now?.() ?? Date.now()
-    })
-    hostCheckpoints.set(host, checkpoints)
-  }
-  return checkpoints
 }

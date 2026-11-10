@@ -15,6 +15,7 @@ import {
   readWorktreeCheckpoint
 } from './worktree-checkpoint-snapshot'
 import { previewWorktreeRestore, restoreWorktreeCheckpoint } from './worktree-checkpoint-restore'
+import { assertUndoCovers } from './worktree-checkpoint-restore-guards'
 import { listCheckpointRefs, pruneCheckpointRefs } from './worktree-checkpoint-retention'
 
 let dir: string
@@ -138,8 +139,9 @@ describe('worktree checkpoints', () => {
     expect(result.indexRestored).toBe(true)
     expect(await git('diff', '--cached', '--name-status')).toBe('')
     expect(await git('status', '--porcelain=v1')).toBe('?? bin.dat\n?? untracked.txt'.trim())
-    expect((await previewWorktreeRestore(repo, (await readWorktreeCheckpoint(repo, T1))!)).changes)
-      .toEqual([])
+    expect(
+      (await previewWorktreeRestore(repo, (await readWorktreeCheckpoint(repo, T1))!)).changes
+    ).toEqual([])
   })
 
   it('leaves gitignored files alone', async () => {
@@ -225,7 +227,9 @@ describe('worktree checkpoints', () => {
     await git('-c', 'commit.gpgsign=false', 'commit', '-qam', 'main')
     await runProcess({ program: 'git', args: ['merge', 'other'], cwd: dir })
     const conflicted = await read('a.txt')
-    await expect(restore()).rejects.toMatchObject({ reason: 'merge-conflicts' })
+    await expect(restore()).rejects.toMatchObject({
+      reason: 'merge-conflicts'
+    })
     expect(await read('a.txt')).toBe(conflicted)
     expect(await git('for-each-ref', 'refs/orca/checkpoints/s1/undo/')).toBe('')
   })
@@ -287,6 +291,7 @@ describe('worktree checkpoints', () => {
     expect(result.changes.map((c) => c.path)).toEqual(['new.txt'])
     expect(await read('a.txt')).toBe('local only\n')
     expect(await read('keep/b.txt')).toBe('local too\n')
+    expect(await git('ls-files', '-v', 'a.txt')).toBe('S a.txt')
   })
 
   it('names its undo point when a restore fails partway', async () => {
@@ -307,11 +312,36 @@ describe('worktree checkpoints', () => {
       expect(existsSync(join(dir, 'extra.txt'))).toBe(false)
       await chmod(join(dir, 'locked'), 0o755)
       const undo = await readWorktreeCheckpoint(repo, undoRef ?? '')
-      await restoreWorktreeCheckpoint(repo, undo!, { ref: 'refs/orca/checkpoints/s1/undo/u9', now: NOW })
+      await restoreWorktreeCheckpoint(repo, undo!, {
+        ref: 'refs/orca/checkpoints/s1/undo/u9',
+        now: NOW
+      })
       expect(await read('extra.txt')).toBe('agent\n')
     } finally {
       await chmod(join(dir, 'locked'), 0o755)
     }
+  })
+
+  it('never writes into a nested repository the agent created', async () => {
+    await put('sub/a.txt', 'checkpointed\n')
+    await capture()
+    await git('-C', join(dir, 'sub'), 'init', '-q')
+    await put('sub/a.txt', 'uncommitted work in the nested repo\n')
+    await put('a.txt', 'agent\n')
+    await expect(restore()).rejects.toMatchObject({ reason: 'blocked-path' })
+    expect(await read('sub/a.txt')).toBe('uncommitted work in the nested repo\n')
+    expect(await read('a.txt')).toBe('agent\n')
+  })
+
+  it('refuses when a path on disk is missing from the undo tree', async () => {
+    await put('present.txt', 'on disk\n')
+    const empty = (await git('hash-object', '-t', 'tree', '-w', '--stdin')).trim()
+    await expect(
+      assertUndoCovers(repo, empty, [{ status: 'M', path: 'present.txt' }])
+    ).rejects.toMatchObject({ reason: 'blocked-path', paths: ['present.txt'] })
+    await expect(
+      assertUndoCovers(repo, empty, [{ status: 'A', path: 'absent.txt' }])
+    ).resolves.toBeUndefined()
   })
 
   it('works on an unborn branch', async () => {
@@ -363,7 +393,9 @@ describe('worktree checkpoints', () => {
   it('rejects plain folders', async () => {
     const plain = await mkdtemp(join(tmpdir(), 'orca-checkpoint-plain-'))
     try {
-      await expect(openCheckpointRepo(plain)).rejects.toMatchObject({ reason: 'not-a-repo' })
+      await expect(openCheckpointRepo(plain)).rejects.toMatchObject({
+        reason: 'not-a-repo'
+      })
     } finally {
       await rm(plain, { recursive: true, force: true })
     }

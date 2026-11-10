@@ -71,6 +71,19 @@ export function overwrittenUnsnapshottedPaths(repo: CheckpointRepo, target: Work
   }
 }
 
+async function hasGitDir(
+  repo: CheckpointRepo,
+  folder: string,
+  cache: Map<string, boolean>
+): Promise<boolean> {
+  let known = cache.get(folder)
+  if (known === undefined) {
+    known = (await lstat(join(repo.root, folder, '.git')).catch(() => null)) !== null
+    cache.set(folder, known)
+  }
+  return known
+}
+
 /** Refuses before any write when a path to write is a folder or an unreadable file now, when a
  *  leading folder of it is now a file the restore doesn't delete itself (an ignored file would be
  *  replaced with no copy), or when any path is unsafe. */
@@ -94,9 +107,18 @@ export async function assertWritable(repo: CheckpointRepo, changes: TreeChange[]
     }
     return known
   }
+  const gitDirs = new Map<string, boolean>()
   const blocked: string[] = []
   for (const change of changes) {
+    const parts = change.path.split('/')
+    // A nested repository owns its files; the restore never writes or deletes inside one.
     if (change.status === 'D') {
+      for (let depth = 1; depth < parts.length; depth += 1) {
+        if (await hasGitDir(repo, parts.slice(0, depth).join('/'), gitDirs)) {
+          blocked.push(change.path)
+          break
+        }
+      }
       continue
     }
     const absolute = join(repo.root, change.path)
@@ -107,13 +129,17 @@ export async function assertWritable(repo: CheckpointRepo, changes: TreeChange[]
         () => false,
         () => true
       ))
-    const parts = change.path.split('/')
     let leadingFile = false
     for (let depth = 1; depth < parts.length && !leadingFile; depth += 1) {
       const prefix = parts.slice(0, depth).join('/')
       leadingFile = !deleted.has(prefix) && (await isNonFolder(prefix))
     }
-    if (stat?.isDirectory() || unreadable || leadingFile) {
+    let nestedRepo = false
+    for (let depth = 1; depth < parts.length && !nestedRepo; depth += 1) {
+      const prefix = parts.slice(0, depth).join('/')
+      nestedRepo = await hasGitDir(repo, prefix, gitDirs)
+    }
+    if (stat?.isDirectory() || unreadable || leadingFile || nestedRepo) {
       blocked.push(change.path)
     }
   }
@@ -122,6 +148,37 @@ export async function assertWritable(repo: CheckpointRepo, changes: TreeChange[]
       'blocked-path',
       'Something now sits where the checkpoint writes a file.',
       blocked
+    )
+  }
+}
+
+/** Every path the restore writes or deletes that exists on disk must be in the undo tree, or the
+ *  restore could destroy work nothing saved. `git add` can skip a path without failing (a nested
+ *  repo with no commits, a file it couldn't read), so this checks the tree itself. */
+export async function assertUndoCovers(
+  repo: CheckpointRepo,
+  undoTree: string,
+  changes: TreeChange[]
+): Promise<void> {
+  const present: string[] = []
+  for (const change of changes) {
+    if (await lstat(join(repo.root, change.path)).catch(() => null)) {
+      present.push(change.path)
+    }
+  }
+  if (present.length === 0) {
+    return
+  }
+  const out = await repo.git(['cat-file', '--batch-check=%(objecttype)'], {
+    stdin: present.map((path) => `${undoTree}:${path}\n`).join('')
+  })
+  const answers = out.split('\n')
+  const missing = present.filter((_, index) => !answers[index]?.endsWith('blob'))
+  if (missing.length > 0) {
+    throw new WorktreeCheckpointError(
+      'blocked-path',
+      'Some files the restore would change could not be saved first.',
+      missing
     )
   }
 }

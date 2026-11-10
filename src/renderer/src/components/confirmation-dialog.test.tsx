@@ -109,18 +109,21 @@ describe('ConfirmationDialogProvider', () => {
       title: 'Rewind to here?',
       confirmLabel: 'Rewind',
       option: {
-        label: 'Also restore files (3 changed)',
-        detail: 'Changes made after it are discarded.',
+        label: 'Also restore 3 changed files',
+        detail: 'Later changes are discarded.',
+        uncheckedDetail: 'Files on disk stay as they are.',
         defaultChecked: true,
         onConfirmed
       }
     })
 
     await userEvent.click(screen.getByRole('button', { name: 'ask' }))
-    const box = await screen.findByRole('checkbox', { name: 'Also restore files (3 changed)' })
+    const box = await screen.findByRole('checkbox', { name: 'Also restore 3 changed files' })
     expect(box.getAttribute('aria-checked')).toBe('true')
     expect(box.getAttribute('aria-describedby')).toBe('confirmation-dialog-option-detail')
+    expect(screen.getByText('Later changes are discarded.')).toBeTruthy()
     await userEvent.click(box)
+    expect(screen.getByText('Files on disk stay as they are.')).toBeTruthy()
     await userEvent.click(screen.getByRole('button', { name: 'Rewind' }))
 
     expect(onConfirmed).toHaveBeenCalledWith(false)

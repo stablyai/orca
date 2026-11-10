@@ -58,11 +58,15 @@ export const CHECKPOINT_MAX_UNTRACKED_BYTES = 10 * 1024 * 1024
 
 async function largeUntrackedPaths(
   repo: CheckpointRepo,
-  options: CheckpointGitOptions
+  options: CheckpointGitOptions,
+  deadline: number | null
 ): Promise<string[]> {
   const out = await repo.git(['ls-files', '-o', '--exclude-standard', '-z'], options)
   const large: string[] = []
   for (const path of out.split('\0')) {
+    if (deadline !== null && Date.now() > deadline) {
+      throw new WorktreeCheckpointError('snapshot-failed', 'The snapshot ran out of time.')
+    }
     const stat = path ? await lstat(join(repo.root, path)).catch(() => null) : null
     if (stat?.isFile() && stat.size > CHECKPOINT_MAX_UNTRACKED_BYTES) {
       large.push(path)
@@ -99,7 +103,7 @@ export async function captureWorktreeTree(
     ...(env ? { env } : {})
   })
   const head = await resolveCommit(repo, 'HEAD')
-  const large = await largeUntrackedPaths(repo, run())
+  const large = await largeUntrackedPaths(repo, run(), deadline)
   return withTempIndex(repo, true, async (env) => {
     let indexTree: string | null = null
     try {
@@ -156,26 +160,32 @@ export async function writeWorktreeCheckpoint(
   // The staged tree rides as the second parent so gc keeps it as long as the checkpoint.
   const indexCommit = snapshot.indexTree
     ? (
-        await repo.git([
-          'commit-tree',
-          '--no-gpg-sign',
-          snapshot.indexTree,
-          ...headParent,
-          '-m',
-          'Orca checkpoint index'
-        ], { env })
+        await repo.git(
+          [
+            'commit-tree',
+            '--no-gpg-sign',
+            snapshot.indexTree,
+            ...headParent,
+            '-m',
+            'Orca checkpoint index'
+          ],
+          { env }
+        )
       ).trim()
     : null
   const commit = (
-    await repo.git([
-      'commit-tree',
-      '--no-gpg-sign',
-      snapshot.tree,
-      ...headParent,
-      ...(indexCommit ? ['-p', indexCommit] : []),
-      '-m',
-      `Orca checkpoint (${meta.kind})\n\n${META_PREFIX}${JSON.stringify(full)}`
-    ], { env })
+    await repo.git(
+      [
+        'commit-tree',
+        '--no-gpg-sign',
+        snapshot.tree,
+        ...headParent,
+        ...(indexCommit ? ['-p', indexCommit] : []),
+        '-m',
+        `Orca checkpoint (${meta.kind})\n\n${META_PREFIX}${JSON.stringify(full)}`
+      ],
+      { env }
+    )
   ).trim()
   await repo.git(['update-ref', ref, commit])
   return { ...full, ref, commit, tree: snapshot.tree }
