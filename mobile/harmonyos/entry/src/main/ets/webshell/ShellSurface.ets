@@ -433,7 +433,7 @@ export struct ShellSurface {
   private boot(): void {
     if (this.desktop || this.disposed) { return; }
     let context = getContext(this) as common.UIAbilityContext;
-    let desktop = retainDesktopConnection(context, this.hostId);
+    let desktop = retainDesktopConnection(context, this.hostId, 'explicit');
     this.desktop = desktop;
     this.unobserveDesktop = desktop.connection.observe((phase: SessionPhase, detail: string): void => {
       if (this.disposed || this.desktop !== desktop) { return; }
@@ -459,7 +459,6 @@ export struct ShellSurface {
         else { this.failStartup(detail); }
       }
     });
-    desktop.connection.connect(true);
   }
 
   private retryStartup(): void {
@@ -468,7 +467,7 @@ export struct ShellSurface {
     let client = connection.getClient();
     let meta = connection.getPairedMeta();
     if (client && meta) { this.loadConnected(client, meta).catch(() => {}); }
-    else { connection.reconnect(); }
+    else { connection.reconnect(false); }
   }
 
   private async loadConnected(client: SpikeRpcClient, meta: HostMeta): Promise<void> {

@@ -99,12 +99,11 @@ struct ConnectionLog {
     this.refreshLogs(epoch).catch(() => {});
     if (!host) { return; }
     let context = getContext(this) as common.UIAbilityContext;
-    let desktop = retainDesktopConnection(context, host.id);
+    let desktop = retainDesktopConnection(context, host.id, 'explicit');
     this.desktop = desktop;
     this.unsubscribeSession = desktop.connection.observe((phase: SessionPhase): void => {
       if (this.shown && epoch === this.epoch) { this.observe(phase, epoch); }
     });
-    desktop.connection.connect(true);
   }
 
   private observe(phase: SessionPhase, epoch: number): void {

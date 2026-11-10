@@ -8,6 +8,7 @@ import { SpikeRpcClient } from './SpikeRpcClient';
 
 type ProfileChange = 'name' | 'endpoint' | 'paired';
 type RevivalReason = 'app-resume' | 'network-change';
+type LeaseDemand = 'automatic' | 'explicit';
 
 type DesktopListener = (phase: SessionPhase, detail: string) => void;
 export type DesktopCredentialStatus = 'ready' | 'missing' | 'temporarily-unavailable';
@@ -31,7 +32,7 @@ function cancelIdle(hostId: string): void {
 
 function closeIdle(hostId: string, connection: DesktopConnection): void {
   cancelIdle(hostId);
-  if (desktops.get(hostId) === connection) { desktops.delete(hostId); connection.dispose(); }
+  if (desktops.get(hostId) === connection && connection.closeIdle()) { desktops.delete(hostId); }
 }
 
 export function closeIdleDesktopConnections(): void {
@@ -42,19 +43,20 @@ export function closeIdleDesktopConnections(): void {
 }
 
 export function retainDesktopConnection(context: common.UIAbilityContext, hostId: string,
-  connectWhileHeld: boolean = false): DesktopConnectionLease {
+  demand?: LeaseDemand): DesktopConnectionLease {
   cancelIdle(hostId);
   let existing = desktops.get(hostId);
   let connection = existing ?? new DesktopConnection(context, hostId);
   if (!existing) { desktops.set(hostId, connection); }
-  connection.retain(connectWhileHeld);
+  connection.retain(demand);
   let held = true;
   return { connection: connection, release: (keepForNavigation: boolean = false): void => {
     if (!held) { return; }
     held = false;
-    if (!connection.release(connectWhileHeld) || desktops.get(hostId) !== connection) { return; }
+    if (!connection.release(demand) || desktops.get(hostId) !== connection) { return; }
     // A shell can pop before Home finishes reading a newly paired desktop.
     if (keepForNavigation) {
+      cancelIdle(hostId);
       idleTimers.set(hostId, setTimeout((): void => closeIdle(hostId, connection), 2000));
     } else { closeIdle(hostId, connection); }
   } };
@@ -122,23 +124,25 @@ export class DesktopConnection {
     this.notifications = new DesktopNotifications(context);
   }
 
-  retain(connectWhileHeld: boolean): void {
+  retain(demand?: LeaseDemand): void {
     this.holders++;
-    if (connectWhileHeld) {
+    if (demand) {
       this.scopedConnectionHolders++;
-      this.startConnection(false);
+      if (demand === 'explicit') { this.paused = false; }
+      this.startConnection(demand === 'explicit');
     }
   }
 
-  release(connectWhileHeld: boolean): boolean {
+  release(demand?: LeaseDemand): boolean {
     this.holders--;
-    if (connectWhileHeld) {
-      this.scopedConnectionHolders--;
-      if (this.holders > 0) { this.stopIfUnused(); }
-    }
-    return this.holders === 0;
+    if (demand) { this.scopedConnectionHolders--; }
+    return this.holders === 0 || (demand !== undefined && !this.hasDemand());
   }
-  dispose(): void { this.closeTransport(); }
+
+  closeIdle(): boolean {
+    if (this.holders > 0) { this.stopIfUnused(); return false; }
+    this.closeTransport(); return true;
+  }
 
   observe(listener: DesktopListener): () => void {
     this.listeners.add(listener);
@@ -180,10 +184,9 @@ export class DesktopConnection {
 
   setHomeAutoConnect(selected: boolean): void {
     if (this.removed) { return; }
-    let previous = this.homeAutoConnect;
     this.homeAutoConnect = selected;
     if (selected) { this.startConnection(false); }
-    else if (previous) { this.stopIfUnused(); }
+    else { this.stopIfUnused(); }
   }
 
   private hasDemand(): boolean {
@@ -191,7 +194,7 @@ export class DesktopConnection {
   }
 
   private stopIfUnused(): void {
-    if (!this.hasDemand() && !this.paused) {
+    if (!this.hasDemand() && !this.paused && (this.session || this.opening)) {
       this.closeTransport(); this.publish('stopped', '已断开');
     }
   }
@@ -272,12 +275,13 @@ export class DesktopConnection {
     session.start();
   }
 
-  reconnect(): void {
+  reconnect(retainManualDemand: boolean = true): void {
     if (this.removed) { return; }
-    this.paused = false; this.wanted = true;
+    this.paused = false;
+    if (retainManualDemand) { this.wanted = true; }
     // Keep a healthy Relay path while checking that it still answers.
     if (this.phase === 'connected' && this.activePath === 'relay') { this.session?.revive(); return; }
-    this.closeTransport(); this.connect(true);
+    this.closeTransport(); this.startConnection(true);
   }
 
   disconnect(): void {

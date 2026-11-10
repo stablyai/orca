@@ -75,7 +75,7 @@ struct TerminalSettings {
       this.fits = hosts.map((host: HostMeta): HostFit =>
         ({ id: host.id, name: host.name, connected: false, ms: null, loaded: false, saving: false }));
       hosts.forEach((host: HostMeta): void => {
-        let lease = retainDesktopConnection(context, host.id, true);
+        let lease = retainDesktopConnection(context, host.id, 'automatic');
         let connection = lease.connection;
         const session: FitConnection = { lease: lease, unobserve: null, revision: 0 };
         this.sessions.set(host.id, session);

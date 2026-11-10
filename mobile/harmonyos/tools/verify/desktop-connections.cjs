@@ -39,6 +39,7 @@ function loadDesktopConnections(hosts, getDeviceToken = async () => 'test-token'
       'retainDesktopConnection',
       'refreshDesktopConnection',
       'forgetDesktopConnection',
+      'closeIdleDesktopConnections',
       'reconcileHomeDesktopConnections'
     ],
     {
@@ -71,11 +72,10 @@ test('page transitions keep the desktop channel and an address edit replaces onl
     loadDesktopConnections(hosts)
   const home = retainDesktopConnection({}, 'alpha')
   const other = retainDesktopConnection({}, 'beta')
-  const shell = retainDesktopConnection({}, 'alpha')
-  const diagnostics = retainDesktopConnection({}, 'alpha')
+  const shell = retainDesktopConnection({}, 'alpha', 'explicit')
+  const diagnostics = retainDesktopConnection({}, 'alpha', 'explicit')
   home.connection.connect()
   other.connection.connect()
-  shell.connection.connect(true)
   const [alpha, beta] = await Promise.all([
     waitForPhase(home.connection, 'connected'),
     waitForPhase(other.connection, 'connected')
@@ -207,10 +207,10 @@ test('releasing a settings connection leaves only desktops that still have conne
   recent.connection.setHomeAutoConnect(true)
   older.connection.setHomeAutoConnect(true)
   manual.connection.connect(true)
-  const recentSettings = retainDesktopConnection({}, 'recent', true)
-  const manualSettings = retainDesktopConnection({}, 'manual', true)
-  const firstSettings = retainDesktopConnection({}, 'older', true)
-  const secondSettings = retainDesktopConnection({}, 'older', true)
+  const recentSettings = retainDesktopConnection({}, 'recent', 'automatic')
+  const manualSettings = retainDesktopConnection({}, 'manual', 'automatic')
+  const firstSettings = retainDesktopConnection({}, 'older', 'automatic')
+  const secondSettings = retainDesktopConnection({}, 'older', 'automatic')
   try {
     const [recentClient, olderClient, manualClient] = await Promise.all(
       [recent, older, manual].map(({ connection }) => waitForPhase(connection, 'connected'))
@@ -238,5 +238,31 @@ test('releasing a settings connection leaves only desktops that still have conne
     ]) {
       lease.release()
     }
+  }
+})
+
+test('Home closes a displaced desktop when its workspace and diagnostics no longer hold it', async () => {
+  const hosts = [{ id: 'older', endpoint: 'ws://older.invalid:6768' }]
+  const { retainDesktopConnection, closeIdleDesktopConnections } = loadDesktopConnections(hosts)
+  const home = retainDesktopConnection({}, 'older')
+  const workspace = retainDesktopConnection({}, 'older', 'explicit')
+  const diagnostics = retainDesktopConnection({}, 'older', 'explicit')
+  try {
+    const client = await waitForPhase(home.connection, 'connected')
+    home.connection.setHomeAutoConnect(true)
+    home.connection.setHomeAutoConnect(false)
+    assert.equal(home.connection.getClient(), client)
+    workspace.release(true)
+    home.connection.setHomeAutoConnect(false)
+    assert.equal(home.connection.getClient(), client)
+    diagnostics.release(true)
+    assert.equal(home.connection.getClient(), client)
+    closeIdleDesktopConnections()
+    assert.equal(home.connection.getClient(), null)
+    assert.equal(client.closed, true)
+  } finally {
+    workspace.release()
+    diagnostics.release()
+    home.release()
   }
 })
