@@ -144,6 +144,14 @@ export const WorkflowPoliciesSchema = z.object({
     .min(60_000)
     .max(7 * 86_400_000)
     .nullable(),
+  /** Past this, Orca cancels the run and stops every worker. Older presets omit it. */
+  hardStopMs: z
+    .number()
+    .int()
+    .min(60_000)
+    .max(7 * 86_400_000)
+    .nullable()
+    .default(null),
   failurePolicy: z.enum(['fail-fast', 'continue'])
 })
 export type WorkflowPolicies = z.infer<typeof WorkflowPoliciesSchema>

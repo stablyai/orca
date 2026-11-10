@@ -10,6 +10,7 @@ import {
 } from '../../shared/workflow/workflow-task-settlement'
 import { parseWorkflowTaskResult } from '../../shared/workflow/workflow-worker-result'
 import type { WorkflowDispatch, WorkflowTask } from '../../shared/workflow/workflow-run-types'
+import { cancelWorkflowRun } from './workflow-run-lifecycle'
 import type { WorkflowRunSession } from './workflow-run-session'
 
 const ENDED_WORKER_STATES = new Set(['failed', 'stopped', 'abandoned'])
@@ -138,8 +139,33 @@ async function captureAnswers(
   }
 }
 
+// The mail pump and the tick can both reconcile before the cancel marks the run cancelling.
+const hardStopping = new WeakSet<WorkflowRunSession>()
+
+function hardStopExceeded(session: WorkflowRunSession): number | null {
+  const { run } = session
+  // Saved presets from before hardStopMs existed leave it undefined.
+  const limit = run.definition.policies.hardStopMs ?? null
+  if (limit === null || !run.startedAt || run.status === 'cancelling') {
+    return null
+  }
+  return Date.now() - Date.parse(run.startedAt) > limit ? limit : null
+}
+
 export async function reconcileWorkflowRun(session: WorkflowRunSession): Promise<void> {
   if (session.isClosed || session.terminal) {
+    return
+  }
+  const hardStop = hardStopExceeded(session)
+  if (hardStop !== null) {
+    if (hardStopping.has(session)) {
+      return
+    }
+    hardStopping.add(session)
+    await cancelWorkflowRun(
+      session,
+      `Hard stop: the workflow ran longer than ${Math.round(hardStop / 60_000)} minute(s).`
+    )
     return
   }
   const { timedOut, settled } = await session.exclusive(() => {

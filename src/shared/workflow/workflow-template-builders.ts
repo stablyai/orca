@@ -26,6 +26,7 @@ export function defaultWorkflowPolicies(): WorkflowPolicies {
     maxTotalPayloadBytes: 2_000_000,
     estimatedTokenBudget: null,
     maxRunDurationMs: null,
+    hardStopMs: null,
     failurePolicy: 'fail-fast'
   }
 }

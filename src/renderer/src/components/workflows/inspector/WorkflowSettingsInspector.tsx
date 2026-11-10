@@ -167,8 +167,8 @@ export function WorkflowSettingsInspector(): React.JSX.Element | null {
             'None'
           )}
           description={translate(
-            'auto.components.workflows.inspector.WorkflowSettingsInspector.369b8f336a',
-            'Recorded as a warning when exceeded; Orca does not stop workers on this limit.'
+            'auto.components.workflows.inspector.WorkflowSettingsInspector.6d2e81c4f7',
+            'Recorded as a warning when exceeded. Use Hard stop to end the run.'
           )}
           value={
             policies.maxRunDurationMs === null
@@ -178,6 +178,29 @@ export function WorkflowSettingsInspector(): React.JSX.Element | null {
           onChange={(minutes) =>
             setPolicies({
               maxRunDurationMs: minutes === null ? null : Math.max(1, minutes) * 60_000
+            })
+          }
+        />
+        <NumberField
+          label={translate(
+            'auto.components.workflows.inspector.WorkflowSettingsInspector.a83f0d2b61',
+            'Hard stop'
+          )}
+          suffix="minutes"
+          min={1}
+          max={10_080}
+          placeholder={translate(
+            'auto.components.workflows.inspector.WorkflowSettingsInspector.c105709fa8',
+            'None'
+          )}
+          description={translate(
+            'auto.components.workflows.inspector.WorkflowSettingsInspector.4c9b7e15d0',
+            'After this long, Orca cancels the run and stops every agent still working.'
+          )}
+          value={policies.hardStopMs === null ? null : Math.round(policies.hardStopMs / 60_000)}
+          onChange={(minutes) =>
+            setPolicies({
+              hardStopMs: minutes === null ? null : Math.min(10_080, Math.max(1, minutes)) * 60_000
             })
           }
         />
