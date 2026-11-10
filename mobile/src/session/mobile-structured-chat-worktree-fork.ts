@@ -154,7 +154,7 @@ export async function forkMobileStructuredChatIntoWorktree(input: {
   }
   const sourceName = source?.displayName?.trim() || branch || 'chat'
   const baseName = slugifyForWorkspaceName(`${sourceName}-fork`) || 'session-fork'
-  const repoId = source?.repoId ?? getRepoIdFromWorktreeId(input.sourceWorktreeId)
+  const repoId = getRepoIdFromWorktreeId(input.sourceWorktreeId)
   const created = await createWorktreeWithNameRetry({
     client,
     baseName,
