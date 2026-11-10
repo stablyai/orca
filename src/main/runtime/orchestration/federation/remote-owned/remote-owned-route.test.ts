@@ -189,6 +189,8 @@ describe('commands about a worker a paired server owns', () => {
     )
     const refusedTask = String((sent[0].params as { adoptTaskId: string }).adoptTaskId)
     expect(getRemotePlacement(db, refusedTask)).toBeUndefined()
+    // As a refused local start creates no Task, a refused start there leaves none here.
+    expect(db.getTask(refusedTask)).toBeUndefined()
 
     const lost = await call(
       'orchestration.workerStart',
@@ -216,6 +218,31 @@ describe('commands about a worker a paired server owns', () => {
 
     expect(response.ok ? undefined : response.error.code).toBe('run_not_found')
     expect(getRemoteDispatch(db, 'ctx_b1')).toBeUndefined()
+  })
+
+  it('keeps the start fenced for the orphan lookup when the server says its outcome is unknown', async () => {
+    answers['orchestration.workerStart'] = [{ error: 'operation_unknown' }]
+    await call(
+      'orchestration.workerStart',
+      { from: 'term_coord', on: 'devB', spec: 'unknown', worktree: 'new-top-level' },
+      { requestId: REQUEST }
+    )
+
+    const task = String(sent[0].params.adoptTaskId)
+    expect(getRemotePlacement(db, task)).toMatchObject({ state: 'reserved', outcome_unknown: 1 })
+  })
+
+  it('never sends a start that names a remote Dispatch to retry without --on', async () => {
+    const receipt = await startOnB()
+    const retry = await call('orchestration.workerStart', {
+      from: 'term_coord',
+      task: receipt.taskId,
+      retryOf: 'ctx_b1',
+      agent: 'claude'
+    })
+
+    expect(retry.ok).toBe(false)
+    expect(sent.filter((s) => s.method === 'orchestration.workerStart')).toHaveLength(1)
   })
 
   it('scopes the retry key to the caller: two terminals reusing an ID never collide, one retrying gets its own key', async () => {
