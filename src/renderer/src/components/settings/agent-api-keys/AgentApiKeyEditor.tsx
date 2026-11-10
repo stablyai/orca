@@ -218,6 +218,12 @@ export function AgentApiKeyEditor({
             {t('auto.components.settings.agentApiKeys.editor.someHosts', 'Only these hosts')}
           </label>
         </RadioGroup>
+        <p className="text-2xs text-muted-foreground">
+          {t(
+            'cloudAgentSetup.desktopKeys.scopeNote',
+            'Not used in Orca Cloud. Save a key to your Orca account to use it in cloud workspaces.'
+          )}
+        </p>
         {scope === 'hosts' ? (
           <div className="space-y-1.5 pl-6">
             {hostRows.searchable ? (

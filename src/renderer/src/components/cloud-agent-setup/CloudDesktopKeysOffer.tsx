@@ -64,19 +64,30 @@ export function CloudDesktopKeysOffer({
               <div className="flex items-center gap-2 text-xs">
                 <KeyRound aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1">
-                  {t(
-                    'cloudAgentSetup.desktopKeys.row',
-                    '{{agent}}: your API key ••••{{hint}} is only on this computer',
-                    { agent: formatAgentTypeLabel(key.agent), hint: key.hint }
-                  )}{' '}
-                  <code className="font-mono text-muted-foreground">{key.envName}</code>
+                  <span className="block">
+                    {state.kind === 'saved'
+                      ? t(
+                          'cloudAgentSetup.desktopKeys.rowSaved',
+                          '{{agent}}: your API key ••••{{hint}}',
+                          {
+                            agent: formatAgentTypeLabel(key.agent),
+                            hint: key.hint
+                          }
+                        )
+                      : t(
+                          'cloudAgentSetup.desktopKeys.row',
+                          '{{agent}}: your API key ••••{{hint}} is only on this computer',
+                          { agent: formatAgentTypeLabel(key.agent), hint: key.hint }
+                        )}
+                  </span>
+                  <code className="block font-mono text-muted-foreground">{key.envName}</code>
                 </span>
                 {state.kind === 'saved' ? (
                   <span role="status" className="inline-flex shrink-0 items-center gap-1">
                     <Check aria-hidden className="size-3.5" />
                     {t('cloudAgentSetup.desktopKeys.saved', 'Saved to your Orca account')}
                   </span>
-                ) : (
+                ) : state.kind === 'failed' ? null : (
                   <Button
                     type="button"
                     variant="outline"

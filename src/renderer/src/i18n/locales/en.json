@@ -26786,7 +26786,9 @@
       "save": "Save to your Orca account",
       "retry": "Try again",
       "row": "{{agent}}: your API key ••••{{hint}} is only on this computer",
-      "failed": "Couldn’t save {{name}}. Nothing was changed."
+      "failed": "Couldn’t save {{name}}. Nothing was changed.",
+      "rowSaved": "{{agent}}: your API key ••••{{hint}}",
+      "scopeNote": "Not used in Orca Cloud. Save a key to your Orca account to use it in cloud workspaces."
     }
   },
   "cloudSecrets": {
