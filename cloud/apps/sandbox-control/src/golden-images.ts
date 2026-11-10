@@ -56,6 +56,7 @@ const REFRESH_BEFORE_MS = 24 * 60 * 60_000
 const BUILD_DEADLINE_MS = 45 * 60_000
 const RETRY_AFTER_FAILURE_MS = 6 * 60 * 60_000
 const WIPE = '/opt/orca/bin/orca-image-wipe'
+const EXIT_PROBE_MS = 4_000
 
 function randomId(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(8))
@@ -295,10 +296,11 @@ async function stepBuild(deps: GoldenImageDeps, row: GoldenRow): Promise<GoldenT
   if (!row.session_id || !row.command_id) {
     return 'building'
   }
-  let { exitCode } = await deps.provider.getCommand(row.session_id, row.command_id)
+  // The provider reports a detached command's exit code only to a wait=true read (W1/W9): a plain
+  // GET kept finished builds "running" until the deadline. Bounded, so a running build reads null.
+  let { exitCode } = await deps.provider.getCommand(row.session_id, row.command_id, { wait: true, waitMs: EXIT_PROBE_MS })
   if (exitCode === null && row.source.startsWith('git:')) {
-    // Vercel can keep reporting a detached source build as running after it exited (seen live);
-    // source-build.sh also writes its exit code to a file.
+    // Belt and braces: source-build.sh also writes its exit code to a file.
     const marker = await deps.provider
       .runCommand(row.session_id, { command: 'bash', args: ['-c', 'cat /tmp/source-build.exit 2>/dev/null'], timeoutMs: 20_000 })
       .catch(() => null)

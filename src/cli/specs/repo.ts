@@ -11,8 +11,8 @@ export const REPO_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['repo', 'add'],
     summary: 'Add a project to Orca by filesystem path',
-    usage: 'orca repo add --path <path> [--kind git|folder] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'path', 'kind'],
+    usage: 'orca repo add --path <path> [--kind git|folder] [--display-name <name>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'path', 'kind', 'display-name'],
     notes: [
       'Defaults to git. Use --kind folder for an ordinary directory, including a parent of separate Git repositories; worktrees attached to a folder workspace appear in its Source Control panel, one section each.',
       'With --environment, --path must be an absolute path on that Orca server.'
