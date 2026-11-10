@@ -10,7 +10,7 @@ import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import {
   getWorktreeSymlinkPathFilterState,
   type WorktreeSymlinkPathSuggestion
-} from '../../../../lib/directory-path-suggestion-filter'
+} from '../../../../lib/directory-input/directory-path-suggestion-filter'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   getRepoExecutionHostId,

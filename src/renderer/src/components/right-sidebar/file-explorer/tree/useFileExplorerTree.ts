@@ -25,7 +25,10 @@ import {
   markFileExplorerDirsLoading,
   withPendingFileExplorerDirCacheEntries
 } from './file-explorer-dir-load-state'
-import { statUserOpenedPath, type UserOpenedPathStat } from '@/lib/user-opened-local-path'
+import {
+  statUserOpenedPath,
+  type UserOpenedPathStat
+} from '@/lib/files/access/user-opened-local-path'
 
 type UseFileExplorerTreeResult = {
   dirCache: Record<string, DirCache>
