@@ -23,7 +23,7 @@ export type ChatTranscript = {
   /** Older rows exist that this 200-row read did not reach, and they were needed. */
   truncated: boolean
 }
-/** The `chat list` states a chat settles in (as structuredAgentSessionLeadState names them), plus two wait-only outcomes. */
+/** The chat's own turn in `chat list` words (structuredAgentSessionLeadState), plus two wait-only outcomes. */
 export type ChatSettled = 'done' | 'blocked' | 'held' | 'timeout'
 
 export async function readHistory(
@@ -113,7 +113,12 @@ export async function readSettledTurn(
   const turn = settled === 'held' ? [] : entries.slice(lastUser + 1)
   return {
     ...response,
-    result: { ...response.result, entries: turn, truncated: truncated && lastUser === -1, settled }
+    result: {
+      ...response.result,
+      entries: turn,
+      truncated: settled !== 'held' && truncated && lastUser === -1,
+      settled
+    }
   }
 }
 
