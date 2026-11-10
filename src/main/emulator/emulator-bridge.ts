@@ -30,7 +30,7 @@ export class EmulatorBridge {
 
   constructor(options: EmulatorBridgeOptions = {}) {
     this.iosBackend = new IosEmulatorBackend(options)
-    this.androidBackend = new AndroidEmulatorBackend()
+    this.androidBackend = new AndroidEmulatorBackend({ nativeEmulator: options.androidGrpc })
     // Register all backends so explicit targets reach their own host-support errors.
     this.backends = [this.iosBackend, this.androidBackend]
   }

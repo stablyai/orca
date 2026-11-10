@@ -15,6 +15,20 @@ export const SCRCPY_POINTER_ID_GENERIC_FINGER = BigInt.asUintN(64, -2n)
 // The official client caps one inject-text message at this many UTF-8 bytes.
 export const SCRCPY_INJECT_TEXT_MAX_BYTES = 300
 
+/** The paste flag makes clipboard assignment and Android paste one ordered control message. */
+export function encodeSetClipboard(text: string): Buffer {
+  const bytes = Buffer.from(text, 'utf8')
+  if (bytes.length > (1 << 18) - 14) {
+    throw new Error('Clipboard text exceeds the scrcpy protocol limit')
+  }
+  const packet = Buffer.alloc(14 + bytes.length)
+  packet[0] = 9
+  packet[9] = 1
+  packet.writeUInt32BE(bytes.length, 10)
+  bytes.copy(packet, 14)
+  return packet
+}
+
 // AKEY_EVENT_ACTION_* / AMOTION_EVENT_ACTION_* codes the server forwards to Android.
 const KEY_ACTION_CODE: Record<ScrcpyKeyAction, number> = { down: 0, up: 1 }
 const TOUCH_ACTION_CODE: Record<ScrcpyTouchAction, number> = { down: 0, up: 1, move: 2 }
@@ -105,4 +119,24 @@ export function encodeInjectText(text: string): Buffer {
   buf.writeUInt32BE(payload.length, 1)
   payload.copy(buf, 5)
   return buf
+}
+
+/** Each axis uses signed 16-bit fixed point; zero buttons keeps scrolling from becoming a click. */
+export function encodeInjectScrollEvent(p: {
+  x: number
+  y: number
+  screenWidth: number
+  screenHeight: number
+  horizontal: number
+  vertical: number
+}): Buffer {
+  const packet = Buffer.alloc(21)
+  packet[0] = 3
+  packet.writeInt32BE(p.x, 1)
+  packet.writeInt32BE(p.y, 5)
+  packet.writeUInt16BE(p.screenWidth, 9)
+  packet.writeUInt16BE(p.screenHeight, 11)
+  packet.writeInt16BE(Math.max(-32768, Math.min(32767, Math.round(p.horizontal * 32768))), 13)
+  packet.writeInt16BE(Math.max(-32768, Math.min(32767, Math.round(p.vertical * 32768))), 15)
+  return packet
 }

@@ -43,6 +43,7 @@ type UseEmulatorScreenKeyboardArgs = {
   sendKeyboardFrames: (frames: ServeSimKeyboardFrame[]) => boolean
 }
 
+/** Capture requires explicit pane interaction; platform command shortcuts become Android Control keys. */
 export function useEmulatorScreenKeyboard({
   cancelKeyboardFrames,
   canInteract,
@@ -89,6 +90,24 @@ export function useEmulatorScreenKeyboard({
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
+      const commandKey = navigator.userAgent.includes('Mac') ? event.metaKey : event.ctrlKey
+      const shortcutKey = ['KeyA', 'KeyZ', 'KeyY'].includes(event.code)
+        ? event.code.slice(3).toLowerCase()
+        : event.key.toLowerCase()
+      if (
+        canInteract &&
+        captureActiveRef.current &&
+        scrcpyKeyboard &&
+        commandKey &&
+        !event.altKey &&
+        !event.nativeEvent.isComposing &&
+        ['a', 'z', 'y'].includes(shortcutKey)
+      ) {
+        scrcpyKeyboard.sendKey(shortcutKey, event.shiftKey, true)
+        event.preventDefault()
+        event.stopPropagation()
+        return
+      }
       if (
         !canInteract ||
         event.nativeEvent.isComposing ||
@@ -118,20 +137,20 @@ export function useEmulatorScreenKeyboard({
         return
       }
 
-      // The HID table also decides which keys an Android pane accepts.
-      const frames = buildServeSimKeyboardFramesForKey(event.key, { shift: event.shiftKey })
-      if (!frames) {
-        return
-      }
       if (scrcpyKeyboard) {
         const button = ANDROID_KEY_BUTTONS[event.key]
         if (button) {
           scrcpyKeyboard.sendKey(button, event.shiftKey)
-        } else {
+        } else if (Array.from(event.key).length === 1) {
           void scrcpyKeyboard.sendText(event.key)
+        } else {
+          return
         }
-      } else if (!sendKeyboardFrames(frames)) {
-        return
+      } else {
+        const frames = buildServeSimKeyboardFramesForKey(event.key, { shift: event.shiftKey })
+        if (!frames || !sendKeyboardFrames(frames)) {
+          return
+        }
       }
       event.preventDefault()
       event.stopPropagation()

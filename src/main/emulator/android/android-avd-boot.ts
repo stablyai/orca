@@ -1,4 +1,5 @@
-import { spawn } from 'node:child_process'
+import { spawnProcess } from '@orca/process-host'
+import { reserveLoopbackPort } from '../../orcad/loopback-port-reservation'
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
 import { EmulatorError } from '../emulator-errors'
 import { emulatorFailureText } from '../../../shared/emulator-failure-copy'
@@ -15,6 +16,7 @@ import {
 import { emulatorProbeError } from '../emulator-probe'
 
 export type AndroidBootOptions = {
+  nativeEmulator?: boolean
   bootTimeoutMs: number
   pollIntervalMs: number
   sleep: (ms: number) => Promise<void>
@@ -32,6 +34,7 @@ const EXIT_DETAIL_LINES = 3
 // AVD is booting only after this many polls (~4 s).
 const ADB_REGISTRATION_POLLS = 2
 
+/** Reuse a running device; only desktop native mode launches a token-authenticated gRPC endpoint. */
 export async function bootAndroidDevice(
   runner: AndroidCommandRunner,
   sdk: AndroidSdkPaths,
@@ -55,7 +58,8 @@ export async function bootAndroidDevice(
     )
   }
   const known = new Set(running.map((device) => device.serial))
-  const launch = launchAvd(sdk.emulator, deviceOrName)
+  const grpcPort = options.nativeEmulator ? await reserveLoopbackPort() : undefined
+  const launch = launchAvd(sdk.emulator, deviceOrName, grpcPort)
   try {
     return await waitForNewBootedSerial(runner, sdk, deviceOrName, known, launch, options)
   } finally {
@@ -65,10 +69,15 @@ export async function bootAndroidDevice(
 
 // Unrefed hidden spawn: detached Windows emulators open consoles. Output is piped only for the
 // boot wait; the emulator ignores SIGPIPE, so it keeps running after the pipes close.
-function launchAvd(emulatorPath: string, avdName: string): AvdLaunch {
-  const child = spawn(emulatorPath, [...bootAvdArgs(avdName), '-no-window'], {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    windowsHide: true
+function launchAvd(emulatorPath: string, avdName: string, grpcPort?: number): AvdLaunch {
+  const child = spawnProcess({
+    program: emulatorPath,
+    args: [
+      ...bootAvdArgs(avdName),
+      '-no-window',
+      ...(grpcPort ? ['-grpc', String(grpcPort), '-grpc-use-token'] : [])
+    ],
+    stdio: ['ignore', 'pipe', 'pipe']
   })
   const output = createOutputSink(OUTPUT_TAIL_BYTES, 'tail')
   let endReason: string | null = null

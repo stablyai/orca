@@ -3,9 +3,11 @@ import { randomUUID } from 'node:crypto'
 import { scrcpyVideoRegistry } from '../emulator/scrcpy-video-registry'
 import { emulatorProbe } from '../emulator/emulator-probe'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
+import { registerEmulatorNativeVideoHandlers } from './emulator-native-video'
 
 // Relay scrcpy metadata/H.264 units to renderer subscribers, parallel to the MJPEG stream handler.
 export function registerEmulatorVideoStreamHandlers(): void {
+  registerEmulatorNativeVideoHandlers()
   type Subscription = {
     owner: WebContents
     unsubscribe: () => void

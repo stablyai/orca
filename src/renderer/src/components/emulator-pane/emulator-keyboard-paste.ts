@@ -72,9 +72,11 @@ export function buildEmulatorKeyboardPastePlan(
   return { byteLength: validation.byteLength, chunks, status: 'accepted' }
 }
 
+/** Both transports enforce byte limits; only HID input must reject unsupported characters. */
 function validateEmulatorKeyboardPasteText(
   text: string,
-  maxBytes?: number
+  maxBytes?: number,
+  transport: 'hid' | 'clipboard' = 'hid'
 ): EmulatorKeyboardPasteValidation {
   const byteLimit = getPositiveIntegerLimit(maxBytes, EMULATOR_KEYBOARD_PASTE_MAX_BYTES)
   const byteLengthMeasurement = measureUtf8ByteLength(text, { stopAfterBytes: byteLimit })
@@ -82,6 +84,11 @@ function validateEmulatorKeyboardPasteText(
     return { byteLength: byteLengthMeasurement.byteLength, reason: 'too-large', status: 'rejected' }
   }
   const { byteLength } = byteLengthMeasurement
+  if (transport === 'clipboard') {
+    return text.replaceAll('\r', '').length
+      ? { byteLength, status: 'accepted' }
+      : { byteLength, reason: 'empty', status: 'rejected' }
+  }
   let hasFrames = false
 
   for (const char of text) {
@@ -178,7 +185,7 @@ export async function pasteTextIntoEmulatorKeyboard({
   return { byteLength: validation.byteLength, chunkCount, status: 'sent' }
 }
 
-// Android has no HID socket: main injects the whole text over the scrcpy control socket.
+/** Android clipboard input permits Unicode while retaining paste size and target-availability checks. */
 export async function pasteTextIntoAndroidEmulator({
   maxBytes,
   sendText,
@@ -188,7 +195,7 @@ export async function pasteTextIntoAndroidEmulator({
   sendText: (text: string) => Promise<boolean>
   text: string
 }): Promise<EmulatorKeyboardPasteResult> {
-  const validation = validateEmulatorKeyboardPasteText(text, maxBytes)
+  const validation = validateEmulatorKeyboardPasteText(text, maxBytes, 'clipboard')
   if (validation.status === 'rejected') {
     return validation
   }

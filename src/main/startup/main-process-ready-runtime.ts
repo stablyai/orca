@@ -95,7 +95,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
     }
   })
   // Only Orca-managed emulator helpers belong to workspaces; external serve-sim stays independent. macOS capability gates live in CLI/runtime.
-  state.emulatorBridge = new EmulatorBridge()
+  state.emulatorBridge = new EmulatorBridge({ androidGrpc: true })
   runtime.setEmulatorBridge(state.emulatorBridge)
   // Finish recorded deletes and old trash left across crashes; defer disk sweeps so they do not compete with first paint/catalog hydration.
   runAfterFirstWindowShown(() => {

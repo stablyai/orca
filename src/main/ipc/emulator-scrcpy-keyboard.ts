@@ -1,11 +1,13 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { scrcpyVideoRegistry } from '../emulator/scrcpy-video-registry'
-import { sendScrcpyButton, sendScrcpyText } from '../emulator/android/scrcpy-control-input'
+import { nativeAndroidSessions } from '../emulator/android/emulator-grpc-session'
+import { sendScrcpyKeyboard } from '../emulator/android/scrcpy-control-input'
 
 type ScrcpyKeyboardInput =
   | { deviceId: string; text: string }
-  | { deviceId: string; key: string; shift: boolean }
+  | { deviceId: string; key: string; shift: boolean; ctrl?: boolean }
 
+/** Accept text or named keys, treating modifier flags as enabled only when explicitly true. */
 function parseScrcpyKeyboardInput(value: unknown): ScrcpyKeyboardInput | null {
   if (typeof value !== 'object' || value === null || !('deviceId' in value)) {
     return null
@@ -18,31 +20,32 @@ function parseScrcpyKeyboardInput(value: unknown): ScrcpyKeyboardInput | null {
     return { deviceId, text: value.text }
   }
   if ('key' in value && typeof value.key === 'string') {
-    return { deviceId, key: value.key, shift: 'shift' in value && value.shift === true }
+    return {
+      deviceId,
+      key: value.key,
+      shift: 'shift' in value && value.shift === true,
+      ctrl: 'ctrl' in value && value.ctrl === true
+    }
   }
   return null
 }
 
-// Live Android pane typing and paste go to the same scrcpy control socket as the pane's
-// touches (emulator-scrcpy-touch.ts), so keys and taps reach the device in the order sent.
+// scrcpy InputManager injection supports editing chords even when the AVD key layout does not.
 export function registerEmulatorScrcpyKeyboardHandler(): void {
   ipcMain.removeHandler('emulator:scrcpyKeyboard')
-  ipcMain.handle('emulator:scrcpyKeyboard', (event, value: unknown): boolean => {
+  ipcMain.handle('emulator:scrcpyKeyboard', (event, value: unknown): boolean | Promise<boolean> => {
     const input = parseScrcpyKeyboardInput(value)
     if (!BrowserWindow.fromWebContents(event.sender) || !input) {
       return false
+    }
+    const native = nativeAndroidSessions.get(input.deviceId)
+    if (native) {
+      return native.keyboard(input)
     }
     const control = scrcpyVideoRegistry.control(input.deviceId)
     if (!control) {
       return false
     }
-    try {
-      return 'text' in input
-        ? sendScrcpyText(control, input.text)
-        : sendScrcpyButton(control, input.key, { shift: input.shift })
-    } catch {
-      // Unknown key names throw from the keycode table.
-      return false
-    }
+    return sendScrcpyKeyboard(control, input)
   })
 }

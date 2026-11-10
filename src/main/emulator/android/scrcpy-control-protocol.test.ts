@@ -3,10 +3,18 @@ import {
   SCRCPY_CONTROL_MSG_TYPE,
   SCRCPY_INJECT_TEXT_MAX_BYTES,
   encodeInjectKeycode,
+  encodeInjectScrollEvent,
   encodeInjectText,
+  encodeSetClipboard,
   encodeInjectTouchEvent,
   splitScrcpyInjectText
 } from './scrcpy-control-protocol'
+
+it('encodes a Unicode clipboard paste as one ordered control message', () => {
+  expect([...encodeSetClipboard('你好')]).toEqual([
+    9, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 6, 228, 189, 160, 229, 165, 189
+  ])
+})
 
 describe('encodeInjectTouchEvent', () => {
   it('encodes a touch-down event with the full 32-byte field layout', () => {
@@ -105,4 +113,17 @@ describe('splitScrcpyInjectText', () => {
   it('returns no chunks for empty text', () => {
     expect(splitScrcpyInjectText('')).toEqual([])
   })
+})
+
+it('encodes fractional scrolling with no pressed mouse buttons', () => {
+  expect(
+    encodeInjectScrollEvent({
+      x: 100,
+      y: 200,
+      screenWidth: 1080,
+      screenHeight: 1920,
+      horizontal: 0.25,
+      vertical: -0.5
+    }).toString('hex')
+  ).toBe('0300000064000000c8043807802000c00000000000')
 })

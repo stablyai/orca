@@ -61,11 +61,20 @@ export function resolveVisualScreenAspectRatio(
   return resolveVisualStreamGeometry(streamSize, visualOrientation).aspectRatio
 }
 
+/** Already-upright native frames bypass visual rotation; other transports reconcile pixel and device orientation. */
 export function resolveVisualStreamGeometry(
   streamSize: StreamSize | null,
   visualOrientation: EmulatorDeviceVisualOrientation,
-  reportedOrientation?: EmulatorStreamOrientation | null
+  reportedOrientation?: EmulatorStreamOrientation | null,
+  uprightPixels = false
 ): VisualStreamGeometry {
+  if (streamSize && uprightPixels) {
+    return {
+      aspectRatio: streamSize.width / streamSize.height,
+      size: streamSize,
+      streamRotation: 0
+    }
+  }
   if (streamSize && reportedOrientation) {
     const { width, height } = streamSize
     // Landscape-sized frames already carry upright pixels, matching serve-sim's own preview.

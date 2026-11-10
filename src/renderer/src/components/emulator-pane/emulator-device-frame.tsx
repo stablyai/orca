@@ -1,3 +1,5 @@
+import type { EmulatorDeviceFrameProps } from './emulator-device-frame-props'
+import { sendAndroidWheel } from './emulator-android-wheel'
 import {
   useCallback,
   useEffect,
@@ -9,9 +11,7 @@ import {
 } from 'react'
 import {
   fitDeviceFrameToPane,
-  resolveVisualStreamGeometry,
   resolveDeviceFrameKind,
-  type EmulatorDeviceVisualOrientation,
   type StreamSize
 } from './emulator-device-frame-layout'
 import {
@@ -29,25 +29,13 @@ import {
 import { PhoneHardwareButtons } from './emulator-phone-hardware-buttons'
 import { EmulatorScreenSurface } from './emulator-screen-surface'
 import { useEmulatorControlStream } from './use-emulator-control-stream'
-import { scrcpyDeviceIdFromStreamUrl } from './emulator-scrcpy-stream-url'
+import {
+  androidDeviceIdFromStreamUrl,
+  useEmulatorStreamGeometry
+} from './use-emulator-stream-geometry'
 import { useEmulatorPaneSize } from './use-emulator-pane-size'
 import { useEmulatorScreenKeyboard } from './use-emulator-screen-keyboard'
 import { useEmulatorStreamWindowVisible } from './use-emulator-stream-window-visibility'
-
-type EmulatorDeviceFrameProps = {
-  previewUrl?: string
-  wsUrl?: string
-  streamKey?: string
-  deviceName?: string
-  loading: boolean
-  isLive: boolean
-  visualOrientation: EmulatorDeviceVisualOrientation
-  /** False when backgrounded; parks the stream with the pane's visibility. */
-  isActive: boolean
-  onTap: (x: number, y: number) => void
-  onGesture: (points: EmulatorGesturePoint[]) => void
-  onStreamLost?: () => void
-}
 
 const MAX_GESTURE_SAMPLES = 32,
   WHEEL_GESTURE_IDLE_MS = 80
@@ -63,6 +51,7 @@ type ScreenCoordinateEvent = Pick<
   'clientX' | 'clientY' | 'currentTarget'
 >
 
+/** Input coordinates follow the displayed screen; parked panes stop capture without stopping the device. */
 export function EmulatorDeviceFrame({
   previewUrl,
   wsUrl,
@@ -92,12 +81,14 @@ export function EmulatorDeviceFrame({
     setStreamSize(null)
   }
   const canInteract = isLive && !loading && !streamError
-  const scrcpyDeviceId = scrcpyDeviceIdFromStreamUrl(previewUrl)
+  const scrcpyDeviceId = androidDeviceIdFromStreamUrl(previewUrl)
   const controlStream = useEmulatorControlStream(wsUrl, canInteract, scrcpyDeviceId)
   const { reportedOrientation, sendTouch } = controlStream
-  const visualStreamGeometry = useMemo(
-    () => resolveVisualStreamGeometry(streamSize, visualOrientation, reportedOrientation),
-    [reportedOrientation, streamSize, visualOrientation]
+  const visualStreamGeometry = useEmulatorStreamGeometry(
+    streamSize,
+    visualOrientation,
+    reportedOrientation,
+    previewUrl
   )
   // serve-sim takes touches in raw panel coordinates, so input undoes the picture's turn.
   const inputRotation = scrcpyDeviceId ? 0 : visualStreamGeometry.streamRotation
@@ -183,9 +174,10 @@ export function EmulatorDeviceFrame({
       lastTouchPointRef.current = point
       liveTouchEdgeRef.current = resolveEmulatorHomeIndicatorEdge(point, inputRotation)
       // Send touch phases live; iOS gesture recognizers can ignore whole drags replayed only on pointer-up.
-      liveTouchRef.current = sendTouch(
-        buildEmulatorGesturePoint(point, 'begin', liveTouchEdgeRef.current)
-      )
+      liveTouchRef.current = sendTouch({
+        ...buildEmulatorGesturePoint(point, 'begin', liveTouchEdgeRef.current),
+        pointerType: event.pointerType
+      })
       try {
         event.currentTarget.setPointerCapture(event.pointerId)
       } catch {}
@@ -297,14 +289,17 @@ export function EmulatorDeviceFrame({
       if (!canInteract) {
         return
       }
+      if (scrcpyDeviceId) {
+        sendAndroidWheel(
+          event,
+          scrcpyDeviceId,
+          mapEventToScreenPoint(event),
+          activePointerIdRef.current !== null
+        )
+        return
+      }
       const delta = resolveEmulatorWheelDelta(
-        {
-          clientX: event.clientX,
-          clientY: event.clientY,
-          deltaMode: event.deltaMode,
-          deltaX: event.deltaX,
-          deltaY: event.deltaY
-        },
+        event,
         event.currentTarget.getBoundingClientRect(),
         visualStreamGeometry.size,
         undefined,
@@ -335,7 +330,15 @@ export function EmulatorDeviceFrame({
         timerId: window.setTimeout(flushWheelGesture, WHEEL_GESTURE_IDLE_MS)
       }
     },
-    [canInteract, flushWheelGesture, inputRotation, sendTouch, visualStreamGeometry]
+    [
+      canInteract,
+      flushWheelGesture,
+      inputRotation,
+      sendTouch,
+      visualStreamGeometry,
+      scrcpyDeviceId,
+      mapEventToScreenPoint
+    ]
   )
 
   const handleStreamSize = useCallback((size: NonNullable<StreamSize>) => {
@@ -345,24 +348,23 @@ export function EmulatorDeviceFrame({
     )
   }, [])
 
-  const handleStreamError = useCallback(() => {
-    setStreamError(true)
-    onStreamLost?.()
-  }, [onStreamLost])
+  const handleStreamError = useCallback(
+    (retryWithScrcpy?: boolean) => {
+      setStreamError(true)
+      onStreamLost?.(retryWithScrcpy)
+    },
+    [onStreamLost]
+  )
 
   // Park inactive tabs and hidden windows to avoid frame IPC/decode churn, including over SSH, without detaching sessions.
   const windowVisibleForStream = useEmulatorStreamWindowVisible()
   const showStream = isActive && isLive && windowVisibleForStream && Boolean(previewUrl)
   const streamAspectRatio = streamSize ? streamSize.width / streamSize.height : 9 / 19
   // Physical orientation follows successful rotate requests even if portrait-locked apps keep portrait pixels.
-  const screenAspectRatio = visualStreamGeometry.aspectRatio
-  const frameKind = useMemo(
-    () => resolveDeviceFrameKind(deviceName, streamAspectRatio),
-    [deviceName, streamAspectRatio]
-  )
+  const frameKind = resolveDeviceFrameKind(deviceName, streamAspectRatio)
   const frameLayout = useMemo(
-    () => fitDeviceFrameToPane(paneSize, screenAspectRatio, frameKind),
-    [frameKind, screenAspectRatio, paneSize]
+    () => fitDeviceFrameToPane(paneSize, visualStreamGeometry.aspectRatio, frameKind),
+    [frameKind, visualStreamGeometry.aspectRatio, paneSize]
   )
 
   return (
@@ -406,7 +408,7 @@ export function EmulatorDeviceFrame({
             onStreamSize={handleStreamSize}
             onWheel={handleWheel}
             previewUrl={previewUrl}
-            screenAspectRatio={screenAspectRatio}
+            screenAspectRatio={visualStreamGeometry.aspectRatio}
             showStream={Boolean(showStream)}
             streamError={streamError}
             streamKey={streamKey}

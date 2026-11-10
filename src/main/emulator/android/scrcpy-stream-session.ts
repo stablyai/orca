@@ -42,6 +42,7 @@ export type ScrcpyStreamOptions = {
   localJarPath: string
   localPort?: number
   maxSize?: number
+  video?: boolean
 }
 
 export type ScrcpyControlTarget = {
@@ -121,16 +122,16 @@ export class ScrcpyStreamSession implements ScrcpyControlTarget {
   }
 
   private spawnServer(): void {
-    const { sdk, serial, maxSize } = this.options
+    const { sdk, serial, maxSize, video } = this.options
     // The command runner's timeout is unsuitable for the long-running server.
     this.server = spawnProcess({
       program: sdk.adb,
-      args: startScrcpyServerArgs(serial, { scid: this.scid, maxSize }),
+      args: startScrcpyServerArgs(serial, { scid: this.scid, maxSize, video }),
       stdio: ['ignore', 'pipe', 'pipe']
     })
     let serverLog = ''
     const capture = (chunk: Buffer): void => {
-      serverLog += chunk.toString()
+      serverLog = (serverLog + chunk.toString()).slice(-8192)
     }
     this.server.stdout?.on('data', capture)
     this.server.stderr?.on('data', capture)
@@ -149,7 +150,7 @@ export class ScrcpyStreamSession implements ScrcpyControlTarget {
     this.openVideoSocket(0)
   }
 
-  // adb can accept TCP before scrcpy is ready; require its dummy byte before connecting control.
+  /** adb can accept TCP before scrcpy is ready; require its dummy byte before connecting control. */
   private openVideoSocket(attempt: number): void {
     if (this.closed) {
       return
@@ -177,6 +178,18 @@ export class ScrcpyStreamSession implements ScrcpyControlTarget {
       settled = true
       socket.setTimeout(0)
       emulatorProbe('scrcpy.video.connected', { attempt, bytes: chunk.length })
+      if (this.options.video === false) {
+        this.controlSocket = socket
+        this.metaSeen = true
+        socket.setNoDelay(true)
+        socket.on('error', (error) => this.fail(error.message))
+        socket.on('close', () => this.close())
+        socket.resume()
+        this.resolveReady?.()
+        this.resolveReady = null
+        this.rejectReady = null
+        return
+      }
       this.videoSocket = socket
       socket.on('data', (next: Buffer) => this.handleVideoChunk(next))
       socket.on('error', (error) => this.fail(error.message))
@@ -271,10 +284,14 @@ export class ScrcpyStreamSession implements ScrcpyControlTarget {
     return this.currentVideoSize
   }
 
-  // Returns false once the control socket is gone so callers can fall back to adb.
+  /** False requests input fallback when the socket is closed or its bounded backlog is exhausted. */
   sendControl(message: Buffer): boolean {
     const socket = this.controlSocket
     if (this.closed || !socket || socket.destroyed) {
+      return false
+    }
+    if (socket.writableLength >= 256 * 1024) {
+      this.fail('scrcpy control socket stopped accepting input')
       return false
     }
     socket.write(message)

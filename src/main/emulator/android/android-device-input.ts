@@ -13,6 +13,8 @@ import {
   sendScrcpyText
 } from './scrcpy-control-input'
 import type { ScrcpyControlTarget } from './scrcpy-stream-session'
+import { nativeAndroidSessions, type EmulatorGrpcSession } from './emulator-grpc-session'
+import { sendAndroidLiveGesture } from './android-live-gesture'
 
 export type AndroidDeviceInputDeps = {
   runner: AndroidCommandRunner
@@ -36,7 +38,8 @@ export class AndroidDeviceInput {
       deviceId,
       (control) => sendScrcpyTap(control, x, y),
       async (sdk, serial) =>
-        androidTap(this.deps.runner, sdk, serial, x, y, await this.screenSize(sdk, serial))
+        androidTap(this.deps.runner, sdk, serial, x, y, await this.screenSize(sdk, serial)),
+      (session) => session.touch('begin', x, y) && session.touch('end', x, y)
     )
   }
 
@@ -45,7 +48,9 @@ export class AndroidDeviceInput {
       deviceId,
       (control) => sendScrcpyGesture(control, points, this.deps.sleep),
       async (sdk, serial) =>
-        androidSwipe(this.deps.runner, sdk, serial, points, await this.screenSize(sdk, serial))
+        androidSwipe(this.deps.runner, sdk, serial, points, await this.screenSize(sdk, serial)),
+      (session) =>
+        sendAndroidLiveGesture((phase, x, y) => session.touch(phase, x, y), points, this.deps.sleep)
     )
   }
 
@@ -53,7 +58,8 @@ export class AndroidDeviceInput {
     await this.route(
       deviceId,
       (control) => sendScrcpyText(control, text),
-      (sdk, serial) => androidTypeText(this.deps.runner, sdk, serial, text)
+      (sdk, serial) => androidTypeText(this.deps.runner, sdk, serial, text),
+      (session) => session.keyboard({ text })
     )
   }
 
@@ -61,7 +67,8 @@ export class AndroidDeviceInput {
     await this.route(
       deviceId,
       (control) => sendScrcpyButton(control, name),
-      (sdk, serial) => androidButton(this.deps.runner, sdk, serial, name)
+      (sdk, serial) => androidButton(this.deps.runner, sdk, serial, name),
+      (session) => session.keyboard({ key: name, shift: false })
     )
   }
 
@@ -71,11 +78,24 @@ export class AndroidDeviceInput {
 
   // Panel input already names the streaming serial, so a live session skips the adb lookup
   // that resolves AVD names.
-  private async route(deviceId: string, viaControl: ControlSender, viaAdb: AdbSender) {
+  private async route(
+    deviceId: string,
+    viaControl: ControlSender,
+    viaAdb: AdbSender,
+    viaNative: (session: EmulatorGrpcSession) => boolean | Promise<boolean>
+  ) {
     let serial = deviceId
+    const native = nativeAndroidSessions.get(serial)
+    if (native && (await viaNative(native))) {
+      return
+    }
     let control = scrcpyVideoRegistry.control(deviceId)
     if (!control) {
       serial = await this.deps.resolveSerial(deviceId)
+      const native = nativeAndroidSessions.get(serial)
+      if (native && (await viaNative(native))) {
+        return
+      }
       control = scrcpyVideoRegistry.control(serial)
     }
     if (control && (await viaControl(control))) {

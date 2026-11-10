@@ -22,7 +22,6 @@ src/main/computer/sidecar-client.ts
 src/main/daemon/endpoint/identity/daemon-process-identity-query.ts
 src/main/daemon/endpoint/identity/daemon-process-inspection.ts
 src/main/daemon/endpoint/identity/daemon-process-start-time.ts
-src/main/emulator/android/android-avd-boot.ts
 src/main/emulator/serve-sim-helper-processes.ts
 src/main/emulator/serve-sim-runtime-materializer.ts
 src/main/emulator/simctl-simulator-devices.ts

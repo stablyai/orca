@@ -1,7 +1,10 @@
+import { sendAndroidLiveGesture } from './android-live-gesture'
 import { androidButtonKeycode, normalizedToDevicePixels } from './android-input-mapping'
 import {
   encodeInjectKeycode,
+  encodeInjectScrollEvent,
   encodeInjectText,
+  encodeSetClipboard,
   encodeInjectTouchEvent,
   splitScrcpyInjectText,
   type ScrcpyTouchAction
@@ -14,6 +17,27 @@ import type { EmulatorGesturePoint } from '../emulator-gesture-sender'
 
 export type ScrcpyTouchPhase = EmulatorGesturePoint['type']
 
+export type AndroidKeyboardInput =
+  | { text: string }
+  | { key: string; shift: boolean; ctrl?: boolean }
+
+/** Unicode and multi-character input use clipboard paste because scrcpy text injection is limited. */
+export function sendScrcpyKeyboard(
+  control: ScrcpyControlTarget,
+  value: AndroidKeyboardInput
+): boolean {
+  try {
+    if ('text' in value) {
+      return value.text.length > 1 || /[^\x20-\x7e]/.test(value.text)
+        ? control.sendControl(encodeSetClipboard(value.text))
+        : sendScrcpyText(control, value.text)
+    }
+    return sendScrcpyButton(control, value.key, value)
+  } catch {
+    return false
+  }
+}
+
 // KEYCODE_SHIFT_LEFT and AMETA_SHIFT_ON | AMETA_SHIFT_LEFT_ON. Text fields select only while a
 // SHIFT key is held, so Shift+key presses SHIFT_LEFT around the key like a hardware keyboard.
 const KEYCODE_SHIFT_LEFT = 59
@@ -24,10 +48,6 @@ const TOUCH_ACTION: Record<ScrcpyTouchPhase, ScrcpyTouchAction> = {
   move: 'move',
   end: 'up'
 }
-
-// Replayed gestures keep the 300 ms duration of the adb swipe they replace.
-const GESTURE_DURATION_MS = 300
-const GESTURE_STEP_MS = 16
 
 export function sendScrcpyTouch(
   control: ScrcpyControlTarget,
@@ -55,58 +75,30 @@ export function sendScrcpyTap(control: ScrcpyControlTarget, x: number, y: number
   return sendScrcpyTouch(control, 'begin', x, y) && sendScrcpyTouch(control, 'end', x, y)
 }
 
-// Follow the whole path (adb swipe only had its endpoints), subdividing sparse paths so
-// the finger moves at a steady pace instead of jumping between points.
-function gestureSamples(points: EmulatorGesturePoint[]): { x: number; y: number }[] {
-  const segments = points.length - 1
-  const stepsPerSegment = Math.max(1, Math.ceil(GESTURE_DURATION_MS / GESTURE_STEP_MS / segments))
-  const samples = [{ x: points[0].x, y: points[0].y }]
-  for (let index = 1; index < points.length; index += 1) {
-    const from = points[index - 1]
-    const to = points[index]
-    for (let step = 1; step <= stepsPerSegment; step += 1) {
-      const t = step / stepsPerSegment
-      samples.push({ x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t })
-    }
-  }
-  return samples
-}
-
-export async function sendScrcpyGesture(
+export function sendScrcpyGesture(
   control: ScrcpyControlTarget,
   points: EmulatorGesturePoint[],
   sleep: (ms: number) => Promise<void>
 ): Promise<boolean> {
-  if (points.length < 2) {
-    return true
-  }
-  const samples = gestureSamples(points)
-  const first = samples[0]
-  if (!sendScrcpyTouch(control, 'begin', first.x, first.y)) {
-    return false
-  }
-  for (let index = 1; index < samples.length; index += 1) {
-    await sleep(GESTURE_STEP_MS)
-    const sample = samples[index]
-    const phase = index === samples.length - 1 ? 'end' : 'move'
-    if (!sendScrcpyTouch(control, phase, sample.x, sample.y)) {
-      return false
-    }
-  }
-  return true
+  return sendAndroidLiveGesture(
+    (phase, x, y) => sendScrcpyTouch(control, phase, x, y),
+    points,
+    sleep
+  )
 }
 
 export function sendScrcpyText(control: ScrcpyControlTarget, text: string): boolean {
   return splitScrcpyInjectText(text).every((chunk) => control.sendControl(encodeInjectText(chunk)))
 }
 
+/** Shift selection requires a held Shift key as well as modifier bits on the target key. */
 export function sendScrcpyButton(
   control: ScrcpyControlTarget,
   name: string,
-  modifiers: { shift?: boolean } = {}
+  modifiers: { shift?: boolean; ctrl?: boolean } = {}
 ): boolean {
   const keycode = androidButtonKeycode(name)
-  const metaState = modifiers.shift ? META_SHIFT : 0
+  const metaState = (modifiers.shift ? META_SHIFT : 0) | (modifiers.ctrl ? 0x3000 : 0)
   const press = (action: 'down' | 'up', code: number, meta = metaState) =>
     control.sendControl(encodeInjectKeycode({ action, keycode: code, metaState: meta }))
   if (!modifiers.shift) {
@@ -118,4 +110,51 @@ export function sendScrcpyButton(
     press('up', keycode) &&
     press('up', KEYCODE_SHIFT_LEFT, 0)
   )
+}
+
+/** Split large deltas into protocol-sized steps without synthesizing a tap or drag. */
+export function sendScrcpyScroll(
+  control: ScrcpyControlTarget,
+  x: number,
+  y: number,
+  horizontal: number,
+  vertical: number,
+  size = control.videoSize()
+): boolean {
+  if (!size) {
+    return false
+  }
+  const pixel = normalizedToDevicePixels(x, y, size)
+  // v2.4 encodes each axis in [-1, 1]; preserve large wheel deltas across packets.
+  const steps = Math.max(1, Math.ceil(Math.max(Math.abs(horizontal), Math.abs(vertical))))
+  for (let i = 0; i < steps; i++) {
+    if (
+      !control.sendControl(
+        encodeInjectScrollEvent({
+          ...pixel,
+          screenWidth: size.width,
+          screenHeight: size.height,
+          horizontal: horizontal / steps,
+          vertical: vertical / steps
+        })
+      )
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
+/** Control-only scrcpy still validates positions against its rotated, eight-pixel-aligned video size. */
+export function sendScrcpyDisplayScroll(
+  control: ScrcpyControlTarget | null,
+  display: { width: number; height: number },
+  rotation: number,
+  scroll: [number, number, number, number]
+): boolean {
+  // scrcpy 2.4 validates control positions against its 8-pixel-aligned video size.
+  const width = display.width & ~7
+  const height = display.height & ~7
+  const size = rotation % 2 ? { width: height, height: width } : { width, height }
+  return control ? sendScrcpyScroll(control, ...scroll, size) : false
 }

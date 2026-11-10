@@ -234,6 +234,7 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.318",
     "@floating-ui/dom": "1.8.0",
+    "@grpc/grpc-js": "^1.14.7",
     "@linear/sdk": "^97.0.0",
     "@orca/process-host": "workspace:*",
     "@parcel/watcher": "^2.5.6",
@@ -248,6 +249,7 @@
     "node-pty": "^1.1.0",
     "posthog-node": "^5.52.5",
     "proper-lockfile": "4.1.2",
+    "protobufjs": "^7.6.6",
     "qrcode": "^1.5.4",
     "react-i18next": "17.0.19",
     "serve-sim": "0.1.47",

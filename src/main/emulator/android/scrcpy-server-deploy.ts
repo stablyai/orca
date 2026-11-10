@@ -22,6 +22,7 @@ export function scrcpyRemoveForwardArgs(serial: string, localPort: number): stri
 
 export type ScrcpyServerOptions = {
   scid: string
+  video?: boolean
   maxSize?: number
   maxFps?: number
   videoBitRate?: number
@@ -29,6 +30,7 @@ export type ScrcpyServerOptions = {
   version?: string
 }
 
+/** Control-only sessions disable video metadata so the first socket carries control messages. */
 export function startScrcpyServerArgs(serial: string, options: ScrcpyServerOptions): string[] {
   const version = options.version ?? SCRCPY_SERVER_VERSION
   const jar = options.deviceJarPath ?? SCRCPY_DEVICE_JAR_PATH
@@ -42,6 +44,9 @@ export function startScrcpyServerArgs(serial: string, options: ScrcpyServerOptio
     'clipboard_autosync=false',
     'video_codec=h264'
   ]
+  if (options.video === false) {
+    params.push('video=false', 'send_device_meta=false')
+  }
   if (options.maxSize !== undefined) {
     params.push(`max_size=${options.maxSize}`)
   }

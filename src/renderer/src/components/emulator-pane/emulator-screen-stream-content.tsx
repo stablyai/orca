@@ -5,6 +5,7 @@ import { useEmulatorVideoStream } from './use-emulator-video-stream'
 import { scrcpyDeviceIdFromStreamUrl } from './emulator-scrcpy-stream-url'
 import { useTranslate } from '@/i18n/use-translate'
 import type { VisualStreamGeometry } from './emulator-device-frame-layout'
+import { nativeEmulatorDeviceId, useEmulatorNativeVideo } from './use-emulator-native-video'
 
 type StreamSize = {
   height: number
@@ -13,7 +14,7 @@ type StreamSize = {
 
 type EmulatorScreenStreamContentProps = {
   loading: boolean
-  onStreamError: () => void
+  onStreamError: (retryWithScrcpy?: boolean) => void
   onStreamSize: (size: StreamSize) => void
   previewUrl?: string
   screenAspectRatio?: number
@@ -23,6 +24,7 @@ type EmulatorScreenStreamContentProps = {
   streamRotation?: VisualStreamGeometry['streamRotation']
 }
 
+/** Keep native WebGL and scrcpy 2D canvas lifetimes separate when replacing transports. */
 export function EmulatorScreenStreamContent({
   loading,
   onStreamError,
@@ -36,6 +38,13 @@ export function EmulatorScreenStreamContent({
 }: EmulatorScreenStreamContentProps) {
   const t = useTranslate()
   const androidDeviceId = scrcpyDeviceIdFromStreamUrl(previewUrl)
+  const nativeDeviceId = nativeEmulatorDeviceId(previewUrl)
+  const native = useEmulatorNativeVideo(
+    nativeDeviceId,
+    streamKey,
+    showStream && Boolean(nativeDeviceId),
+    onStreamSize
+  )
 
   const video = useEmulatorVideoStream(
     androidDeviceId ?? undefined,
@@ -44,16 +53,16 @@ export function EmulatorScreenStreamContent({
     onStreamSize
   )
   const frameStream = useEmulatorFrameStream(
-    androidDeviceId ? undefined : previewUrl,
+    androidDeviceId || nativeDeviceId ? undefined : previewUrl,
     streamKey,
-    showStream && Boolean(previewUrl) && !androidDeviceId
+    showStream && Boolean(previewUrl) && !androidDeviceId && !nativeDeviceId
   )
 
   useEffect(() => {
-    if (frameStream.error || video.error) {
-      onStreamError()
+    if (frameStream.error || video.error || native.error) {
+      onStreamError(native.retryWithScrcpy)
     }
-  }, [frameStream.error, video.error, onStreamError])
+  }, [frameStream.error, video.error, native.error, native.retryWithScrcpy, onStreamError])
 
   const mediaStyle = resolveStreamMediaStyle(streamRotation, screenAspectRatio)
   const mediaClassName =
@@ -61,10 +70,11 @@ export function EmulatorScreenStreamContent({
       ? 'block h-full w-full bg-black object-contain'
       : 'absolute left-1/2 top-1/2 block max-w-none bg-black object-contain'
 
-  if (androidDeviceId && showStream && !video.error) {
+  if ((androidDeviceId || nativeDeviceId) && showStream && !video.error && !native.error) {
     return (
       <canvas
-        ref={video.canvasRef}
+        key={nativeDeviceId ? JSON.stringify([nativeDeviceId, streamKey]) : 'scrcpy'}
+        ref={nativeDeviceId ? native.canvasRef : video.canvasRef}
         className={mediaClassName}
         style={mediaStyle}
         aria-label={t(
@@ -87,7 +97,7 @@ export function EmulatorScreenStreamContent({
         className={mediaClassName}
         draggable={false}
         style={mediaStyle}
-        onError={onStreamError}
+        onError={() => onStreamError()}
         onLoad={(event) => {
           const { naturalWidth, naturalHeight } = event.currentTarget
           if (naturalWidth <= 0 || naturalHeight <= 0) {
@@ -99,8 +109,9 @@ export function EmulatorScreenStreamContent({
     )
   }
 
-  const waitingForFrame = showStream && !frameStream.error && !video.error
-  const displayError = streamError || Boolean(frameStream.error) || Boolean(video.error)
+  const waitingForFrame = showStream && !frameStream.error && !video.error && !native.error
+  const displayError =
+    streamError || Boolean(frameStream.error) || Boolean(video.error) || Boolean(native.error)
 
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-muted/20 text-muted-foreground">

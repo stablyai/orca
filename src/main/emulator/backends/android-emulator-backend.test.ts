@@ -59,46 +59,6 @@ describe('AndroidEmulatorBackend', () => {
     runner = defaultRunner()
   })
 
-  it('boots a shutdown AVD once for concurrent callers and waits for its serial', async () => {
-    let bootStarted = false
-    vi.mocked(spawn).mockImplementation(() => {
-      bootStarted = true
-      return { on: () => {}, unref: () => {} } as unknown as ReturnType<typeof spawn>
-    })
-    const bootRunner = vi.fn(async (binary: string, args: readonly string[]) => {
-      const a = args.join(' ')
-      if (binary === SDK.adb && a === 'devices -l') {
-        return ok(
-          bootStarted
-            ? 'List of devices attached\nemulator-5556\tdevice'
-            : 'List of devices attached'
-        )
-      }
-      if (binary === SDK.adb && a === '-s emulator-5556 shell getprop sys.boot_completed') {
-        return ok('1')
-      }
-      if (binary === SDK.adb && a === '-s emulator-5556 emu avd name') {
-        return ok('Pixel_Tablet\nOK\n')
-      }
-      if (binary === SDK.emulator && a === '-list-avds') {
-        return ok('Pixel_Tablet')
-      }
-      return ok('')
-    })
-    const android = backend(bootRunner)
-    const serials = await Promise.all([
-      android.ensureBooted('Pixel_Tablet'),
-      android.ensureBooted('Pixel_Tablet')
-    ])
-    expect(serials).toEqual(['emulator-5556', 'emulator-5556'])
-    expect(spawn).toHaveBeenCalledOnce()
-    expect(spawn).toHaveBeenCalledWith(
-      SDK.emulator,
-      ['-avd', 'Pixel_Tablet', '-no-window'],
-      expect.objectContaining({ windowsHide: true })
-    )
-  })
-
   function launchExitsWith(output: string): void {
     vi.mocked(spawn).mockImplementation(() => {
       const child = createFakeSpawnedChild()

@@ -1,7 +1,13 @@
 import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../api-types'
 
+ipcRenderer.on('emulator:nativeVideoPort', (event, data: { streamId: string }) => {
+  window.postMessage({ type: 'orca-native-video-port', streamId: data.streamId }, '*', event.ports)
+})
+
 export const emulatorApi = {
+  startNativeVideoStream: (args) => ipcRenderer.invoke('emulator:nativeVideoStart', args),
+  stopNativeVideoStream: (streamId) => ipcRenderer.invoke('emulator:nativeVideoStop', streamId),
   startFrameStream: (args: {
     streamUrl: string
     streamKey?: string
@@ -21,11 +27,11 @@ export const emulatorApi = {
     return () => ipcRenderer.removeListener('emulator:frameStreamFrame', listener)
   },
   onFrameStreamError: (
-    callback: (data: { streamId: string; message: string }) => void
+    callback: (data: { streamId: string; message: string; retryWithScrcpy?: boolean }) => void
   ): (() => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
-      data: { streamId: string; message: string }
+      data: { streamId: string; message: string; retryWithScrcpy?: boolean }
     ) => callback(data)
     ipcRenderer.on('emulator:frameStreamError', listener)
     return () => ipcRenderer.removeListener('emulator:frameStreamError', listener)
@@ -52,14 +58,24 @@ export const emulatorApi = {
     ipcRenderer.on('emulator:videoStreamMeta', listener)
     return () => ipcRenderer.removeListener('emulator:videoStreamMeta', listener)
   },
+  sendScrcpyScroll: (scroll: {
+    deviceId: string
+    x: number
+    y: number
+    horizontal: number
+    vertical: number
+  }): void => ipcRenderer.send('emulator:scrcpyScroll', scroll),
   sendScrcpyTouch: (touch: {
     deviceId: string
     type: 'begin' | 'move' | 'end'
     x: number
     y: number
+    pointerType?: string
   }): void => ipcRenderer.send('emulator:scrcpyTouch', touch),
   sendScrcpyKeyboard: (
-    input: { deviceId: string; text: string } | { deviceId: string; key: string; shift: boolean }
+    input:
+      | { deviceId: string; text: string }
+      | { deviceId: string; key: string; shift: boolean; ctrl?: boolean }
   ): Promise<boolean> => ipcRenderer.invoke('emulator:scrcpyKeyboard', input),
   onVideoStreamFrame: (
     callback: (data: {
