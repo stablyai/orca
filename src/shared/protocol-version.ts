@@ -26,6 +26,7 @@ import { MOBILE_RUNTIME_CAPABILITIES } from './mobile-runtime-capabilities'
 import { ORCAD_RUNTIME_CAPABILITIES } from './orcad-runtime-capabilities'
 import { ORCHESTRATION_RUNTIME_CAPABILITIES } from './orchestration/orchestration-runtime-capabilities'
 import { PREFLIGHT_RUNTIME_CAPABILITIES } from './preflight-runtime-capabilities'
+import { AGENT_UPDATES_RUNTIME_CAPABILITY } from './agent-updates/agent-updates-runtime-capability'
 import {
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   SESSION_TABS_RUNTIME_CAPABILITIES
@@ -108,6 +109,7 @@ export const RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY,
     PROJECT_GROUP_UPDATE_MANY_RUNTIME_CAPABILITY,
     ...PREFLIGHT_RUNTIME_CAPABILITIES,
+    AGENT_UPDATES_RUNTIME_CAPABILITY,
     ...WORKSPACE_PORTS_RUNTIME_CAPABILITIES,
     ...SESSION_TABS_RUNTIME_CAPABILITIES,
     ...TERMINAL_RUNTIME_CAPABILITIES,
