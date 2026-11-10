@@ -1,6 +1,6 @@
-import { z } from 'zod'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import * as z from 'zod'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 
 // Tabs arrive through the session stream; open callers consume only acceptance, so leave payloads unconstrained.
 const unreadPayload = z.unknown()

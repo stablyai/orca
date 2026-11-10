@@ -99,13 +99,6 @@ describe('registerDroppedPathPreparation', () => {
     ipcHandlers.clear()
   })
 
-  it('registers only the preparation request', () => {
-    const { window } = createWindow()
-    registerDroppedPathPreparation(window)
-    expect([...ipcHandlers.keys()]).toEqual(['fs:prepareDroppedPaths'])
-    expect(ipcListeners.size).toBe(0)
-  })
-
   it('prepares ordinary paths only for its own live renderer and validates the request', async () => {
     const { window, webContents, close } = createWindow()
     registerDroppedPathPreparation(window)

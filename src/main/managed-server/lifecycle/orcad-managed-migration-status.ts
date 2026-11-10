@@ -5,8 +5,8 @@ import {
 import {
   getOrcadSshDeployment,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
-import { listOrcadMigrationSourceCutovers } from '../../ssh/orcad-migration-cutover-journal'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { listOrcadMigrationSourceCutovers } from '../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
 
 type OrcadManagedPendingMigration = {
   migrationId: string

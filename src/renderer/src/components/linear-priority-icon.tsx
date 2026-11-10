@@ -1,7 +1,7 @@
 import React from 'react'
 
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import { getLinearPriorityLabel } from '@/components/task-page/task-page-localized-options'
 
 // Use Linear’s brand priority fills instead of generic Orca state colors.
@@ -34,6 +34,7 @@ export function LinearPriorityIcon({
   className?: string
   label?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   if (priority === 1) {
     return (
       <span
@@ -46,7 +47,7 @@ export function LinearPriorityIcon({
       >
         <span aria-hidden="true">!</span>
         <span className="sr-only">
-          {translate('auto.components.linear.priority.icon.priorityValue', 'Priority: {{label}}', {
+          {t('auto.components.linear.priority.icon.priorityValue', 'Priority: {{label}}', {
             label
           })}
         </span>
@@ -65,7 +66,7 @@ export function LinearPriorityIcon({
           className="size-3 rounded-full border border-muted-foreground/55"
         />
         <span className="sr-only">
-          {translate('auto.components.linear.priority.icon.priorityValue', 'Priority: {{label}}', {
+          {t('auto.components.linear.priority.icon.priorityValue', 'Priority: {{label}}', {
             label
           })}
         </span>
@@ -104,7 +105,7 @@ export function LinearPriorityIcon({
         })}
       </svg>
       <span className="sr-only">
-        {translate('auto.components.linear.priority.icon.priorityValue', 'Priority: {{label}}', {
+        {t('auto.components.linear.priority.icon.priorityValue', 'Priority: {{label}}', {
           label
         })}
       </span>

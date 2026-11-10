@@ -9,7 +9,7 @@ import {
   cancelJiraIssueSummaryRequest,
   generateJiraIssueSummaryRequest
 } from '../../text-generation/jira-issue-summary-requests'
-import { addFanoutListener } from '../../event-listener-fanout'
+import { addFanoutListener } from '../../runtime/events/event-listener-fanout'
 
 export function registerJiraIssueSummaryGenerationHandlers(
   store: Pick<Store, 'getSettings'>,

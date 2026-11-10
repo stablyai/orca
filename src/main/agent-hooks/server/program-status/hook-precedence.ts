@@ -1,5 +1,6 @@
-import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
-import { isAgentStatusHeldOpenByChildWork } from '../../../../shared/agent-lead-status-fold'
+import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { isAgentStatusHeldOpenByChildWork } from '../../../../shared/agent-status/lifecycle/agent-lead-status-fold'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { EnrichedAgentHookEventPayload } from '../server-types'
 
 // Long tool calls can be hook-silent; allow sustained disagreement before yielding to OSC 7501.
@@ -20,6 +21,16 @@ export function programStatusHookYieldEndsAt(
   if (!sameAgent && previous.payload.state === 'done') {
     return undefined
   }
+  // agy reports no end for a backgrounded command that never exits, so its hold lapses after hook silence.
+  if (
+    payload.state === 'done' &&
+    payload.sessionBoundary !== true &&
+    previous.payload.agentType === 'antigravity' &&
+    previous.payload.workingMode === 'monitoring' &&
+    isAgentStatusHeldOpenByChildWork(previous.payload)
+  ) {
+    return previous.receivedAt + AGENT_STATUS_STALE_AFTER_MS
+  }
   // Hook and program child rosters cannot settle or reopen each other's turns.
   if (
     payload.state === previous.payload.state ||
@@ -30,11 +41,19 @@ export function programStatusHookYieldEndsAt(
   ) {
     return Infinity
   }
-  // Settled turns are naturally silent; a later wait must prove intervening program work.
-  if (previous.payload.state === 'done' && payload.state === 'waiting') {
-    return programWorkingSince !== undefined && programWorkingSince > previous.receivedAt
+  // A settled turn yields only to program work begun after it (a replayed done keeps its own time):
+  // Codex re-reports the settled turn's working while a background terminal it started runs.
+  if (
+    previous.payload.state === 'done' &&
+    (payload.state === 'waiting' || payload.state === 'working')
+  ) {
+    const doneAt = previous.evidenceObservedAt ?? previous.receivedAt
+    if (programWorkingSince === undefined || programWorkingSince <= doneAt) {
+      return Infinity
+    }
+    return payload.state === 'waiting'
       ? undefined
-      : Infinity
+      : previous.receivedAt + HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS
   }
   // A question sends no hooks while open, so a `working` that began before it (e.g. re-sent by the
   // lease renewal) proves nothing; a working transition after it keeps the silence fallback.

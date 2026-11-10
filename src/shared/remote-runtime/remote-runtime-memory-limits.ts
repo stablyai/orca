@@ -1,7 +1,7 @@
 import {
   JsonStringifyByteLimitError,
   stringifyJsonWithinByteLimit
-} from '../node-bounded-json-stringify'
+} from '../json-stream/node-bounded-json-stringify'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import type { RuntimeOrchestrationEnvelope } from '../runtime-rpc-envelope'
 
@@ -84,6 +84,7 @@ export function serializeRemoteRuntimeRpcRequest(args: {
     orchestrationCapability: args.envelope?.orchestrationCapability,
     orchestrationContractVersion: args.envelope?.orchestrationContractVersion,
     orchestrationRequestId: args.envelope?.orchestrationRequestId,
+    orchestrationPeerRun: args.envelope?.orchestrationPeerRun,
     compatibilityInvocationId: args.envelope?.compatibilityInvocationId,
     orchestrationCompatibilityEvidence: args.envelope?.orchestrationCompatibilityEvidence
   })

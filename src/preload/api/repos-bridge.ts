@@ -8,6 +8,8 @@ export const reposApi = {
 
   listWslMoved: () => ipcRenderer.invoke('repos:listWslMoved'),
 
+  listHostCatalogSnapshots: () => ipcRenderer.invoke('repos:listHostCatalogSnapshots'),
+
   add: (args) => ipcRenderer.invoke('repos:add', args),
 
   create: (args) => ipcRenderer.invoke('repos:create', args),
@@ -32,6 +34,8 @@ export const reposApi = {
   pickDirectory: () => ipcRenderer.invoke('repos:pickDirectory'),
 
   clone: (args) => ipcRenderer.invoke('repos:clone', args),
+
+  checkCloneTarget: (args) => ipcRenderer.invoke('repos:checkCloneTarget', args),
 
   cloneAbort: () => ipcRenderer.invoke('repos:cloneAbort'),
 

@@ -10,15 +10,15 @@ import type {
   BrowserHistoryEntry,
   BrowserPageDocLocation
 } from '../../../../../shared/browser-workspace-types'
-import type { WorkspaceDocHistoryEntry } from '../../../../../shared/workspace-doc-history'
+import type { WorkspaceDocHistoryEntry } from '../../../../../shared/workspace-session/workspace-doc-history'
 import {
   formatBrowserHistoryUrl,
   historyHost,
   matchBrowserHistory,
   prepareBrowserHistoryEntries
-} from '@/lib/browser-history-match'
-import { displayableFaviconUrl } from '../describe-page/browser-favicon-url'
-import { formatBrowserPaletteUrl } from '@/lib/browser-palette-search'
+} from '@/lib/browser/history/browser-history-match'
+import { displayableFaviconUrl } from '../../../../../shared/browser/browser-favicon-url'
+import { formatBrowserPaletteUrl } from '@/lib/browser/palette/browser-palette-search'
 import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard-text'
 import { translate } from '@/i18n/i18n'
 

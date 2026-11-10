@@ -1,4 +1,6 @@
+import { gitGraphSupport, openGitGraph } from '@/lib/source-control/graph/git-graph-tab'
 import {
+  GitGraph,
   FileText,
   FolderPlus,
   Globe,
@@ -33,6 +35,7 @@ export type CmdJQuickAction = {
   icon: LucideIcon
   verbKeywords: string[]
   /** Query-bound actions must still match the live input when selected. */
+  disabled?: boolean
   sourceQuery?: string
   isAvailable: (ctx: CmdJQuickActionContext) => CmdJQuickActionAvailability
   run: (ctx: CmdJQuickActionContext) => Promise<CmdJQuickActionRunResult>
@@ -78,6 +81,25 @@ export async function runBrowserWorkspaceAction(
 
 // Keep context-heavy imports in Settings, where explanatory UI and failure states fit.
 export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] => [
+  {
+    id: 'git-graph',
+    kind: 'action',
+    title: translate('gitGraph.title', 'Git Graph'),
+    description: '',
+    icon: GitGraph,
+    verbKeywords: ['git graph', 'commit history', 'branches'],
+    isAvailable: (ctx) =>
+      ctx.activeWorktreeId && gitGraphSupport(ctx.activeWorktreeId) === true
+        ? { available: true }
+        : { available: false, reason: 'loading' },
+    run: async (ctx) => {
+      if (!ctx.activeWorktreeId || gitGraphSupport(ctx.activeWorktreeId) !== true) {
+        return { status: 'unavailable', reason: 'loading' }
+      }
+      await openGitGraph(ctx.activeWorktreeId)
+      return { status: 'ok' }
+    }
+  },
   {
     id: 'new-browser-tab',
     kind: 'action',

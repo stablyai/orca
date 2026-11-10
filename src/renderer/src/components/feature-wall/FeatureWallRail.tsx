@@ -8,8 +8,8 @@ import {
 import type { AgentsStep, AgentsStepId } from '../../../../shared/agents-orchestration-steps'
 import type { WorkbenchStep, WorkbenchStepId } from '../../../../shared/workbench-steps'
 import type { ReviewStep, ReviewStepId } from '../../../../shared/review-steps'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getLocalizedFeatureWallStepCopy,
   getLocalizedFeatureWallWorkflowCopy
@@ -37,6 +37,7 @@ export function FeatureWallRail(props: {
   reviewStepDone: Record<ReviewStepId, boolean>
   onSelectReviewStep: (id: ReviewStepId) => void
 }): JSX.Element {
+  const t = useTranslate()
   const {
     selectedId,
     previewPanelId,
@@ -60,7 +61,7 @@ export function FeatureWallRail(props: {
   return (
     <nav
       className="scrollbar-sleek h-full max-h-72 overflow-y-auto border-b border-border bg-card p-2 md:max-h-none md:border-b-0"
-      aria-label={translate('auto.components.feature.wall.FeatureWallRail.7593d15f94', 'Workflows')}
+      aria-label={t('auto.components.feature.wall.FeatureWallRail.7593d15f94', 'Workflows')}
     >
       <div role="tablist" aria-orientation="vertical" className="flex flex-col gap-1.5 pt-1.5">
         {FEATURE_WALL_WORKFLOWS.map((workflow, index) => {
@@ -120,10 +121,7 @@ export function FeatureWallRail(props: {
                   )}
                   aria-label={
                     isDone
-                      ? translate(
-                          'auto.components.feature.wall.FeatureWallRail.69ea857689',
-                          'Completed'
-                        )
+                      ? t('auto.components.feature.wall.FeatureWallRail.69ea857689', 'Completed')
                       : undefined
                   }
                 >
@@ -170,7 +168,7 @@ export function FeatureWallRail(props: {
                               )}
                               aria-label={
                                 isStepDone
-                                  ? translate(
+                                  ? t(
                                       'auto.components.feature.wall.FeatureWallRail.69ea857689',
                                       'Completed'
                                     )

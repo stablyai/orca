@@ -1,5 +1,5 @@
-import type { VerifyAndAddRuntimeEnvironmentResult } from '../../../shared/remote-pairing-verification'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import type { VerifyAndAddRuntimeEnvironmentResult } from '../../../shared/remote-runtime/pairing/remote-pairing-verification'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getRuntimeEnvironmentStatusOwner } from './runtime-environment-request-connections'
 import { clearRuntimeEnvironmentManualDisconnect } from './runtime-environment-manual-disconnect'
 

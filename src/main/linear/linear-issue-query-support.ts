@@ -16,6 +16,7 @@ import {
 } from './linear-issue-query-documents'
 import type { LinearClientForWorkspace } from './client'
 import type { LinearListFilter } from './linear-issue-listing'
+import { linearConnectionHasNextPage } from './issue-context/pagination'
 
 export async function mapIssueForWorkspace(
   entry: LinearClientForWorkspace,
@@ -67,6 +68,14 @@ export function mapRawIssueForWorkspace(
       name: issue.team?.name ?? '',
       key: issue.team?.key ?? ''
     },
+    project: issue.project
+      ? {
+          id: issue.project.id,
+          name: issue.project.name,
+          url: issue.project.url ?? undefined,
+          color: issue.project.color ?? undefined
+        }
+      : undefined,
     labels: labelNodes.map((label) => label.name),
     // Full-replace writes need all label IDs, even when display nodes are paginated.
     labelIds: issue.labelIds ?? labelNodes.map((label) => label.id),
@@ -101,7 +110,7 @@ export async function readIssueConnectionPages(
     const connection = await loadConnection(after ? { first, after } : { first })
     const nodes = connection?.nodes ?? []
     items.push(...nodes.map((issue) => mapRawIssueForWorkspace(entry, issue)))
-    hasMore = Boolean(connection?.pageInfo?.hasNextPage)
+    hasMore = linearConnectionHasNextPage(connection)
 
     const nextCursor = connection?.pageInfo?.endCursor ?? undefined
     if (!hasMore || !nextCursor || nextCursor === after || nodes.length === 0) {

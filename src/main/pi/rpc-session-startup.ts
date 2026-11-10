@@ -1,15 +1,15 @@
 import { randomUUID } from 'node:crypto'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import { providerDiagnostic, withProviderDiagnostic } from '../../shared/agent-session-failure'
-import type {
-  AgentSessionOptionsResult,
-  AgentSessionSlashCommand
-} from '../../shared/agent-session-wire'
 import {
-  AgentSessionAcquisitionRefusal,
-  type StructuredAgentSessionAcquireInput
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+  providerDiagnostic,
+  withProviderDiagnostic
+} from '../../shared/agent-session/failures/agent-session-failure'
+import type { AgentSessionOptionsResult } from '../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionSlashCommand } from '../../shared/agent-session/agent-session-wire'
+import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+import type { StructuredAgentSessionAcquireInput } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import {
   unpickedSessionConfiguredChoice,
   withLiveCatalogListing
@@ -35,6 +35,7 @@ export class PiRpcSessionStartup {
     private readonly resolvesConfig: boolean,
     private readonly setState: (state: PiRpcState) => void,
     private readonly failedCause: () => Error | undefined,
+    private readonly failed: Promise<never>,
     private readonly prepareObservation: () => (options: AgentSessionOptionsResult) => boolean
   ) {}
 
@@ -42,7 +43,10 @@ export class PiRpcSessionStartup {
     launch: PiRpcResolvedLaunch,
     signal: AbortSignal
   ): Promise<StructuredAgentSessionProviderOpenResult> {
-    const answer = await this.wait(this.connection.request('get_state', {}), signal)
+    const answer = await this.wait(
+      this.connection.request('get_state', {}, { timeoutMs: null }),
+      signal
+    )
     this.assertLive(signal)
     const state = piRpcStateSchema.parse(answer)
     if (state.model?.provider === 'unknown') {
@@ -160,7 +164,7 @@ export class PiRpcSessionStartup {
     }
   }
 
-  private assertLive(signal: AbortSignal): void {
+  assertLive(signal: AbortSignal): void {
     const failure = this.failedCause()
     if (failure) {
       throw failure
@@ -171,7 +175,8 @@ export class PiRpcSessionStartup {
   }
 
   private wait<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
-    return waitForPromiseWithSignal(promise, signal)
+    // Race the raw reply so a received refusal precedes a close from the same input frame.
+    return waitForPromiseWithSignal(Promise.race([promise, this.failed]), signal)
   }
 
   private notSignedIn(): AgentSessionAcquisitionRefusal {

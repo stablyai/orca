@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
 import type { editor } from 'monaco-editor'
-import { monaco } from '@/lib/monaco-setup'
+import { monaco } from '@/lib/editor/monaco/monaco-setup'
 import { Button } from '../ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function JsonSchemaProblems({
   editor: instance
 }: {
   editor: editor.IStandaloneCodeEditor | null
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const [markers, setMarkers] = useState<editor.IMarker[]>([])
   useEffect(() => {
     const refresh = (): void => {
@@ -38,7 +39,7 @@ export function JsonSchemaProblems({
       <Popover>
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm">
-            {translate('editor.jsonSchemaProblems', 'JSON problems')} ({markers.length})
+            {t('editor.jsonSchemaProblems', 'JSON problems')} ({markers.length})
           </Button>
         </PopoverTrigger>
         <PopoverContent side="top" align="end" className="w-96">

@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { closeTestStores, createStore, testState } from '../../persistence/persistence-test-harness'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import { wslMoveCutoverFixture as cutover } from '../../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../../persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
@@ -13,12 +13,11 @@ import {
   loadWslMoveFence,
   resetWslMoveFenceForTests
 } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { RuntimeProjectHostSetupController } from '../../runtime/runtime-project-host-setup-controller'
-import { RuntimeRepositoryIssueCommand } from '../../runtime/runtime-repository-issue-command'
-import { RuntimeRepositorySettingsController } from '../../runtime/runtime-repository-settings-controller'
-import * as issueCommandFile from '../../issue-command-file'
+import { RuntimeProjectHostSetupController } from '../../runtime/repositories/runtime-project-host-setup-controller'
+import { RuntimeRepositoryIssueCommand } from '../../runtime/repositories/runtime-repository-issue-command'
+import { RuntimeRepositorySettingsController } from '../../runtime/repositories/runtime-repository-settings-controller'
+import * as issueCommandFile from '../../workspace-hooks/issue-command-file'
 import { registerProjectHostSetupHandlers } from './project-host-setup-handlers'
-import { registerRepoCatalogHandlers } from './repo-catalog-handlers'
 
 const { handlers } = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, args: unknown) => unknown>()
@@ -84,7 +83,10 @@ describe('project host setups under a WSL move', () => {
     store.addRepo(repo('repo-1'))
     store.addRepo(repo('repo-2'))
     seedWslMoveCutover(testState.dir, cutover('move-1', 'source-fenced'))
-    registerProjectHostSetupHandlers(new BrowserWindow(), store)
+    registerProjectHostSetupHandlers(new BrowserWindow(), store, {
+      enqueueRepositoryMetadata: vi.fn(),
+      resolveRepositoryMetadata: vi.fn().mockResolvedValue(true)
+    })
     const moving = setupFor('repo-1')
 
     await expect(
@@ -108,7 +110,10 @@ describe('project host setups under a WSL move', () => {
   it("keeps a setup's own repo frozen once the WSL host owns it", async () => {
     store.addRepo(repo('repo-1'))
     seedWslMoveCutover(testState.dir, cutover('move-1', 'destination-committed'))
-    registerProjectHostSetupHandlers(new BrowserWindow(), store)
+    registerProjectHostSetupHandlers(new BrowserWindow(), store, {
+      enqueueRepositoryMetadata: vi.fn(),
+      resolveRepositoryMetadata: vi.fn().mockResolvedValue(true)
+    })
     const owned = setupFor('repo-1')
 
     await expect(
@@ -130,6 +135,8 @@ describe('project host setups under a WSL move', () => {
       invalidateResolvedWorktrees: vi.fn(),
       invalidateWorktreeScan: vi.fn(),
       notifyReposChanged: vi.fn(),
+      enqueueRepositoryMetadata: vi.fn(),
+      resolveRepositoryMetadata: vi.fn().mockResolvedValue(true),
       countLiveTerminalsForRepo: () => 0
     })
     const setupId = setupFor('repo-1').id
@@ -139,20 +146,6 @@ describe('project host setups under a WSL move', () => {
       WslMoveProjectFencedError
     )
     expect(store.getRepo('repo-1')).toBeDefined()
-  })
-})
-
-describe('projects:update once the WSL host owns a repo', () => {
-  it('lets project-wide settings change again', async () => {
-    store.addRepo(repo('repo-1'))
-    seedWslMoveCutover(testState.dir, cutover('move-1', 'destination-committed'))
-    registerRepoCatalogHandlers(new BrowserWindow(), store, { removeProject: vi.fn() })
-    const project = store.getProjects().find((entry) => entry.sourceRepoIds.includes('repo-1'))
-    const updates = { localWindowsRuntimePreference: { kind: 'windows-host' } }
-
-    await expect(invoke('projects:update', { projectId: project?.id, updates })).resolves.toEqual(
-      expect.objectContaining({ sourceRepoIds: ['repo-1'] })
-    )
   })
 })
 

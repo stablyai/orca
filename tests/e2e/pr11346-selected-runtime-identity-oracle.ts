@@ -4,12 +4,6 @@ import { mkdtemp } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
-import type { AppState } from '../../src/renderer/src/store/types'
-import type {
-  DirectSshWorktreeFetchOptions,
-  WorktreeFetchOptions
-} from '../../src/renderer/src/store/slices/worktree-helpers'
-import type { HostQualifiedDetectedWorktreeResult } from '../../src/shared/detected-worktree-provider-contract'
 import { expect } from './helpers/orca-app'
 
 export function configureIsolatedGitIdentity(homePath: string): void {
@@ -93,168 +87,40 @@ export async function createProjectFixtures(): Promise<{
   }
 }
 
-type ActivationCollision = {
-  localWorktreeId: string
-  runtimeWorktreeId: string
-}
-
-export async function installFinalActivationGate(page: Page, targetPath: string): Promise<void> {
-  await page.evaluate((pathToGate) => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('Renderer store unavailable')
-    }
-    const originalFetchWorktrees = store.getState().fetchWorktrees
-    let release!: () => void
-    const released = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    const gateWindow = window as typeof window & {
-      __pr11346ActivationGate?: {
-        originalFetchWorktrees: typeof originalFetchWorktrees
-        release: () => void
-        waiting: boolean
-      }
-    }
-    gateWindow.__pr11346ActivationGate = {
-      originalFetchWorktrees,
-      release,
-      waiting: false
-    }
-    const getStoreState = store.getState
-    function gatedFetchWorktrees(
-      repoId: string,
-      options: DirectSshWorktreeFetchOptions
-    ): Promise<HostQualifiedDetectedWorktreeResult>
-    function gatedFetchWorktrees(repoId: string, options?: WorktreeFetchOptions): Promise<boolean>
-    async function gatedFetchWorktrees(
-      repoId: string,
-      options?: WorktreeFetchOptions
-    ): Promise<unknown> {
-      const result = await originalFetchWorktrees(repoId, options)
-      const targetRepo = getStoreState().repos.find(
-        (repo) => repo.path === pathToGate && repo.executionHostId?.startsWith('runtime:') === true
-      )
-      if (targetRepo?.id === repoId) {
-        gateWindow.__pr11346ActivationGate!.waiting = true
-        await released
-      }
-      return result
-    }
-    store.setState({ fetchWorktrees: gatedFetchWorktrees })
-  }, targetPath)
-}
-
-export async function injectSameIdLocalActivationCollision(
-  page: Page,
-  targetPath: string,
-  localPath: string
-): Promise<ActivationCollision> {
-  await expect
-    .poll(
-      () =>
-        page.evaluate(
-          () =>
-            (
-              window as typeof window & {
-                __pr11346ActivationGate?: { waiting: boolean }
-              }
-            ).__pr11346ActivationGate?.waiting ?? false
-        ),
-      { timeout: 60_000 }
-    )
-    .toBe(true)
-
-  return page.evaluate(
-    ({ localCollisionPath, runtimePath }) => {
-      const store = window.__store
-      const gateWindow = window as typeof window & {
-        __pr11346ActivationGate?: {
-          originalFetchWorktrees: AppState['fetchWorktrees']
-          release: () => void
-        }
-      }
-      const gate = gateWindow.__pr11346ActivationGate
-      if (!store || !gate) {
-        throw new Error('Activation gate unavailable')
-      }
-      const state = store.getState()
-      const runtimeRepo = state.repos.find(
-        (repo) => repo.path === runtimePath && repo.executionHostId?.startsWith('runtime:') === true
-      )
-      if (!runtimeRepo) {
-        throw new Error(`Runtime repo unavailable for ${runtimePath}`)
-      }
-      const runtimeWorktree = state.worktreesByRepo[runtimeRepo.id]?.find(
-        (worktree) =>
-          worktree.hostId === runtimeRepo.executionHostId &&
-          (worktree.isMainWorktree || worktree.path === runtimePath)
-      )
-      if (!runtimeWorktree) {
-        throw new Error(`Runtime default checkout unavailable for ${runtimePath}`)
-      }
-      const localRepoId = `${runtimeRepo.id}-local-collision`
-      const localWorktree = {
-        ...runtimeWorktree,
-        repoId: localRepoId,
-        path: localCollisionPath,
-        hostId: 'local' as const,
-        runtimeOwnerEnvironmentId: undefined
-      }
-      store.setState({
-        repos: [
-          {
-            ...runtimeRepo,
-            id: localRepoId,
-            path: localCollisionPath,
-            displayName: `Local collision for ${runtimeRepo.displayName}`,
-            executionHostId: 'local',
-            connectionId: null
-          },
-          ...state.repos
-        ],
-        worktreesByRepo: {
-          ...state.worktreesByRepo,
-          [localRepoId]: [localWorktree]
-        },
-        fetchWorktrees: gate.originalFetchWorktrees
-      })
-      gate.release()
-      delete gateWindow.__pr11346ActivationGate
-      return {
-        localWorktreeId: localWorktree.id,
-        runtimeWorktreeId: runtimeWorktree.id
-      }
-    },
-    { localCollisionPath: localPath, runtimePath: targetPath }
-  )
-}
-
 export async function expectRuntimeActivation(
   page: Page,
-  collision: ActivationCollision
-): Promise<void> {
+  targetPath: string,
+  environmentId: string
+): Promise<string> {
+  const hostId = `runtime:${environmentId}` as const
   await expect
     .poll(
       () =>
-        page.evaluate(() => {
+        page.evaluate((hostId) => {
           const state = window.__store?.getState()
+          const active = state?.activeWorktreeId
+            ? state.getKnownWorktreeById(state.activeWorktreeId, hostId)
+            : null
           return {
-            activeWorktreeId: state?.activeWorktreeId ?? null,
-            activeWorktreeHost: state?.activeWorkspaceExecutionHostId ?? null,
-            sameIdHosts: Object.values(state?.worktreesByRepo ?? {})
-              .flat()
-              .filter((worktree) => worktree.id === state?.activeWorktreeId)
-              .map((worktree) => worktree.hostId ?? 'local')
-              .sort()
+            activeHostId: state?.activeWorkspaceExecutionHostId ?? null,
+            activePath: active?.path ?? null
           }
-        }),
+        }, hostId),
       { timeout: 60_000 }
     )
-    .toEqual({
-      activeWorktreeHost: expect.stringMatching(/^runtime:/),
-      activeWorktreeId: collision.runtimeWorktreeId,
-      sameIdHosts: ['local', expect.stringMatching(/^runtime:/)]
-    })
-  expect(collision.runtimeWorktreeId).toBe(collision.localWorktreeId)
+    .toEqual({ activeHostId: hostId, activePath: targetPath })
+  return page.evaluate(
+    ({ hostId, targetPath }) => {
+      const state = window.__store?.getState()
+      if (!state?.activeWorktreeId || state.activeWorkspaceExecutionHostId !== hostId) {
+        throw new Error('Selected runtime workspace is not active')
+      }
+      const active = state.getKnownWorktreeById(state.activeWorktreeId, hostId)
+      if (active?.path !== targetPath) {
+        throw new Error('Selected runtime project is not active')
+      }
+      return state.activeWorktreeId
+    },
+    { hostId, targetPath }
+  )
 }

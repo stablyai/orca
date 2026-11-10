@@ -1,4 +1,4 @@
-import type { ArtifactWriteRequest } from '../../shared/artifacts'
+import type { ArtifactWriteRequest } from '../../shared/artifacts/artifacts'
 import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
 
 export type ArtifactWriteBody = {

@@ -2,7 +2,7 @@
 
 import type { ExecutionHostId } from '../execution-host'
 import type { Tab } from '../tab-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../terminal-tab-types'
+import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
 import { pickStoredFields } from './stored-record-fields'
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
 import type { DesktopLayoutView, LayoutContentFacts } from './workspace-layout-beside'

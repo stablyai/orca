@@ -25,10 +25,10 @@ import {
   MAX_LAG_TRAILS,
   LAG_BACKOFF_MS
 } from '@/components/task-page/github/task-page-github-work-item-quiet-adopt'
-import { stripRepoQualifiers } from '../../../../../shared/task-query'
-import { getTaskPageRepoSourceContext } from '../task-page-source-context'
+import { stripRepoQualifiers } from '../../../../../shared/work-items/task-query'
+import { getTaskPageRepoSourceContext } from '../../../lib/work-items/task-repo-source-context'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import { taskPageToGitHubApiPage } from '../../../../../shared/work-items'
+import { taskPageToGitHubApiPage } from '../../../../../shared/work-items/work-item-pagination'
 import { useAppStore } from '@/store/index'
 export function runTaskPageGitHubQuietRefresh(model: TaskPageGitHubQuietRefreshPreludeModel) {
   const {
@@ -114,7 +114,7 @@ export function runTaskPageGitHubQuietRefresh(model: TaskPageGitHubQuietRefreshP
     sourceContext: getTaskPageRepoSourceContext(r, 'github')
   }))
   const sourceContextByRepoId = new Map(repoArgs.map((r) => [r.repoId, r.sourceContext] as const))
-  const fetchQuietPage = (page: number): Promise<GitHubWorkItem[]> =>
+  const fetchQuietPage = (page: number): Promise<GitHubWorkItem[] | undefined> =>
     page === 0
       ? fetchWorkItemsAcrossRepos(repoArgs, githubPerRepoPageLimit, githubPageSize, q, {
           force: true,
@@ -122,6 +122,9 @@ export function runTaskPageGitHubQuietRefresh(model: TaskPageGitHubQuietRefreshP
           requireComplete: true,
           allowStaleFallback: false
         }).then((result) => {
+          if (!result) {
+            return undefined
+          }
           if (result.failedCount > 0 || result.githubUnavailable) {
             throw new Error('GitHub quiet revalidate did not receive a fresh complete result.')
           }
@@ -138,6 +141,9 @@ export function runTaskPageGitHubQuietRefresh(model: TaskPageGitHubQuietRefreshP
             requireComplete: true
           }
         ).then((result) => {
+          if (!result) {
+            return undefined
+          }
           if (result.failedCount > 0 || result.errorTypes.length > 0) {
             throw new Error('GitHub quiet revalidate did not receive a complete page result.')
           }
@@ -153,6 +159,9 @@ export function runTaskPageGitHubQuietRefresh(model: TaskPageGitHubQuietRefreshP
   let networkRetryDelay: number | null = null
   void quietFetch
     .then(async ({ authorityItems, visibleItems }) => {
+      if (!authorityItems || (visiblePage !== undefined && !visibleItems)) {
+        return
+      }
       // Skip unmounted/stale renderer writes but settle shared quietState so trailing work cannot be stranded.
       if (!quietRevalidateMountedRef.current || !isCurrentScope()) {
         return
@@ -171,6 +180,9 @@ export function runTaskPageGitHubQuietRefresh(model: TaskPageGitHubQuietRefreshP
         )
         fetchedVisiblePageItemKeys = latestVisiblePageItemKeys
         fetchedVisibleItems = await fetchQuietPage(latestVisiblePage)
+        if (!fetchedVisibleItems) {
+          return
+        }
         for (const itemKey of latestVisiblePageItemKeys) {
           revalidatedItemKeys.add(itemKey)
         }

@@ -1,5 +1,4 @@
 import { pickAdjacentLinkOpenGroupId } from '@/lib/adjacent-link-open-group'
-export { findNeighbor } from '@/lib/adjacent-link-open-group'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../../../shared/tab-types'
 import { isEditorTabContentType, type EditorTabContentType } from './editor-tab-content-type'
 
@@ -13,7 +12,7 @@ type AdjacentEditorOpenInput = {
   contentType: EditorTabContentType
 }
 
-/** Rank live-source destinations: neighboring file copy, any file copy, neighboring editor, any neighbor, source. Null for nonlive source leaves. */
+/** Prefer an existing file view, then a neighboring editor or other neighbor, then the source. */
 export function pickAdjacentEditorOpenGroupId(input: AdjacentEditorOpenInput): string | null {
   const groupsWithFile = new Set<string>()
   const tabsById = new Map<string, Tab>()

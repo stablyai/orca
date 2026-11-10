@@ -1,8 +1,9 @@
 import { z } from 'zod'
-import { usageLimitResetsAt } from '../../../shared/agent-session-usage-limit'
-import type { AcpAgentError } from '../acp-errors'
+import { usageLimitResetsAt } from '../../../shared/agent-session/failures/agent-session-usage-limit'
+import type { AcpAgentError } from '../transport/acp-errors'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpDialect } from './acp-dialect'
+import { OPENCODE_CHILD_SESSION_CAPABILITY, openCodeChildUpdate } from './opencode-child-sessions'
 
 // Normalize rawOutput.metadata to the shared stdout/exitCode fields.
 const commandRawOutputSchema = z.looseObject({
@@ -22,6 +23,28 @@ const promptFailureDataSchema = z.object({
   retryAfterMs: z.number().nonnegative().optional().catch(undefined)
 })
 
+// OpenCode names a failed model-provider call with these; its local refusals use other names.
+const providerErrorDataSchema = z.looseObject({
+  service: z.literal('session'),
+  errorName: z.enum([
+    'APIError',
+    'provider.error',
+    'provider.rate-limit',
+    'provider.quota',
+    'provider.chatgpt-limit',
+    'provider.free-limit',
+    'provider.budget-limit',
+    'provider.model-budget-limit',
+    'provider.go-limit',
+    'provider.transport',
+    'provider.internal',
+    'provider.invalid-output',
+    'provider.invalid-request',
+    'provider.unknown',
+    'provider.timeout'
+  ])
+})
+
 // ACP omits HTTP status; documented billing and entitlement instructions survive in the message.
 const NON_RESET_QUOTA_FAILURES = [
   /\b(?:insufficient (?:balance|account funds)|credit limit exceeded|payment required|account invoice is overdue|billing_error)\b/i,
@@ -37,7 +60,10 @@ function promptFailure(error: AcpAgentError, at: number) {
     parsed.data.status === 402 ||
     NON_RESET_QUOTA_FAILURES.some((pattern) => pattern.test(error.message))
   ) {
-    return undefined
+    // Billing refusals and other provider errors have no reset, but stay the provider's.
+    return providerErrorDataSchema.safeParse(error.data).success
+      ? { stopReason: 'error', providerFailure: true }
+      : undefined
   }
   const { resetsAt, retryAfterMs } = parsed.data
   const reset = usageLimitResetsAt(
@@ -77,7 +103,15 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
 }
 
 export const OPENCODE_ACP_DIALECT: AcpDialect = {
+  clientCapabilities: {
+    elicitation: { form: {} },
+    _meta: { [OPENCODE_CHILD_SESSION_CAPABILITY]: true }
+  },
+  childSessionStop: {
+    supported: (initialized) => initialized.agentCapabilities?.sessionCapabilities?.close != null
+  },
   effortChangesModel: true,
   normalizeToolUpdate,
+  notification: openCodeChildUpdate,
   promptFailure
 }

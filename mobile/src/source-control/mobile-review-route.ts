@@ -7,15 +7,20 @@ export type MobileReviewRouteTarget = {
   worktreeId: string
   worktreeName: string
   filePath: string
-  area: MobileReviewRouteArea
-}
+  /** Scrolls to this new-side line, e.g. a review thread's "Open in diff". */
+  line?: number
+} & ({ area: MobileReviewRouteArea } | { area: 'commit'; commitOid: string })
 
 export function buildMobileReviewFileRoute(target: MobileReviewRouteTarget): string {
   const params = new URLSearchParams()
-  // Open the tapped file but keep scope all so next/previous can traverse the full changed-file queue.
-  params.set('scope', 'all')
   params.set('file', target.filePath)
   params.set('area', target.area)
+  if (target.area === 'commit') {
+    params.set('commit', target.commitOid)
+  }
+  if (target.line !== undefined) {
+    params.set('line', String(target.line))
+  }
   if (target.worktreeName) {
     params.set('name', target.worktreeName)
   }

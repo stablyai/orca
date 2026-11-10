@@ -1,5 +1,5 @@
-import type { MobileWebBundleReusableAssets } from '../transport/mobile-web-bundle-fetch'
-import type { MobileWebBundleAssetRead } from '../transport/mobile-web-bundle-reply-schemas'
+import type { MobileWebBundleReusableAssets } from '../transport/web-bundle/mobile-web-bundle-fetch'
+import type { MobileWebBundleAssetRead } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import { requireStorablePath } from './generation-asset-path'
 import { joinUri } from './generation-cache-uri'
 import type { ActiveGeneration } from './generation-store'
@@ -9,50 +9,88 @@ type ReusableGenerationAssets = MobileWebBundleReusableAssets & {
   copyTo(asset: MobileWebBundleAssetRead, target: string): Promise<void>
 }
 
+export async function reusableAssetsOfHosts(
+  fs: GenerationFileSystem,
+  hostKeys: readonly string[],
+  readGeneration: (hostKey: string) => Promise<ActiveGeneration | null>
+): Promise<ReusableGenerationAssets> {
+  const generations: ActiveGeneration[] = []
+  for (const host of hostKeys) {
+    const active = await readGeneration(host).catch(() => null)
+    if (active !== null) {
+      generations.push(active)
+    }
+  }
+  return reusableAssetsOf(fs, generations)
+}
+
 // Copy immutable, previously hash-verified assets without reading them into JS; match content so renamed assets remain reusable.
 export function reusableAssetsOf(
   fs: GenerationFileSystem,
-  active: ActiveGeneration | null
+  generations: readonly ActiveGeneration[]
 ): ReusableGenerationAssets {
-  const byHash = new Map<string, MobileWebBundleAssetRead>()
-  for (const entry of active?.manifest.assets ?? []) {
-    const { sha256 } = entry
-    if (!byHash.has(sha256)) {
-      byHash.set(sha256, entry)
+  const byHash = new Map<string, { directory: string; asset: MobileWebBundleAssetRead }[]>()
+  for (const generation of generations) {
+    // Aliased paths can have overwritten verified bytes under a different manifest hash.
+    const paths = generation.manifest.assets.map((asset) => asset.path.toLowerCase())
+    if (new Set(paths).size !== paths.length) {
+      continue
+    }
+    const seen = new Set<string>()
+    for (const asset of generation.manifest.assets) {
+      const { sha256 } = asset
+      if (seen.has(sha256)) {
+        continue
+      }
+      seen.add(sha256)
+      const sources = byHash.get(sha256) ?? []
+      sources.push({ directory: generation.directory, asset })
+      byHash.set(sha256, sources)
     }
   }
-  const cachedFileOf = (asset: MobileWebBundleAssetRead): string | null => {
-    const cached = byHash.get(asset.sha256)
-    return active === null || cached?.byteLength !== asset.byteLength
-      ? null
-      : joinUri(active.directory, requireStorablePath(cached.path))
+  const cachedFilesOf = (asset: MobileWebBundleAssetRead): string[] => {
+    const sources: string[] = []
+    for (const cached of byHash.get(asset.sha256) ?? []) {
+      if (cached.asset.byteLength === asset.byteLength) {
+        try {
+          sources.push(joinUri(cached.directory, requireStorablePath(cached.asset.path)))
+        } catch {
+          // An unstorable cached path cannot supply a reusable file.
+        }
+      }
+    }
+    return sources
   }
   return {
-    has: (asset) => {
-      try {
-        return cachedFileOf(asset) !== null
-      } catch {
-        return false
-      }
-    },
+    has: (asset) => cachedFilesOf(asset).length > 0,
     check: async (asset) => {
-      try {
-        const source = cachedFileOf(asset)
-        return source !== null && (await fs.fileSize(source)) === asset.byteLength
-      } catch {
-        return false
+      for (const source of cachedFilesOf(asset)) {
+        if ((await fs.fileSize(source).catch(() => null)) === asset.byteLength) {
+          return true
+        }
       }
+      return false
     },
-    // Stage from the current activation: an intervening commit may have replaced the download's source.
+    // Copy from this offer's snapshot while the store queue protects its surviving sources.
     copyTo: async (asset, target) => {
-      const source = cachedFileOf(asset)
-      if (source === null) {
-        throw new Error(`the cached generation no longer holds the reused asset ${asset.path}`)
+      let failure = new Error(
+        `the cached generation no longer holds the reused asset ${asset.path}`
+      )
+      for (const source of cachedFilesOf(asset)) {
+        try {
+          await fs.copyFile(source, target)
+          if ((await fs.fileSize(target)) !== asset.byteLength) {
+            throw new Error(`the reused asset ${asset.path} did not copy whole`)
+          }
+          return
+        } catch (error) {
+          await fs.delete(target)
+          if (error instanceof Error) {
+            failure = error
+          }
+        }
       }
-      await fs.copyFile(source, target)
-      if ((await fs.fileSize(target)) !== asset.byteLength) {
-        throw new Error(`the reused asset ${asset.path} did not copy whole`)
-      }
+      throw failure
     }
   }
 }

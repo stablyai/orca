@@ -4,13 +4,14 @@ import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
 } from '../../../../../shared/browser-url'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
-import { normalizeBrowserGuestSrc } from '../../../../../shared/browser-extension-url'
+import '../../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
+import { normalizeBrowserGuestSrc } from '../../../../../shared/browser/extensions/browser-extension-url'
 import {
   applyBrowserPageViewportLayout,
   syncBrowserPageChromeInset
 } from '../host-guest/browser-page-viewport'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { shouldPollChromiumErrorPage } from './chromium-error-page-polling'
 import { isChromiumErrorPage } from '../describe-page/browser-page-url-display'
 import type { BrowserTabPageState } from '../describe-page/browser-page-types'

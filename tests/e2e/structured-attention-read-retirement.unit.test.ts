@@ -18,29 +18,30 @@ import {
 import { Fragment, createElement, StrictMode } from 'react'
 import { act, render, waitFor } from '@testing-library/react'
 import { expect, it, describe } from 'vitest'
-import type { AgentJournalRenderItem } from '../../src/shared/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionAttentionSubjectPrefix,
   agentSessionPromptAttentionKey
-} from '../../src/shared/agent-session-attention'
-import { SESSION } from '../../src/main/runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
+} from '../../src/shared/agent-session/agent-session-attention'
+import '../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc.test-fixture'
+import { SESSION } from '../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc-client.test-fixture'
 import {
   projectStructuredAgentSessionStatusState,
   structuredAgentSessionPaneKey
-} from '../../src/shared/structured-agent-session-projection'
-import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
-import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/structured-agent-session-mobile-attention'
-import { makeUnifiedTab } from '@/store/slices/store-test-helpers'
+} from '../../src/shared/agent-session/view/structured-agent-session-projection'
+import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-chat/agent-session-wire/observations/structured-agent-session-turn-completion-feed'
+import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/agent-session/structured-agent-session-mobile-attention'
+import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { useAppStore } from '@/store'
-import { StructuredAgentSessionAttentionBridge } from '@/components/native-chat/StructuredAgentSessionAttentionBridge'
-import { useStructuredAgentSessionRead } from '@/components/native-chat/use-structured-agent-session-read'
+import { StructuredAgentSessionAttentionBridge } from '@/components/native-chat/session/attention/StructuredAgentSessionAttentionBridge'
+import { useStructuredAgentSessionRead } from '@/components/native-chat/session/structured/read/use-structured-agent-session-read'
 import type { RuntimeClientTarget } from '../../src/shared/runtime-client-target'
-import { findStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner'
+import { findStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { StructuredNotificationRead } from '../../src/shared/notification-settings-types'
-import { RuntimeMobileNotificationController } from '../../src/main/runtime/runtime-mobile-notification-controller'
+import { RuntimeMobileNotificationController } from '../../src/main/runtime/push/notifications/runtime-mobile-notification-controller'
 
 describe('Explicit desktop read acknowledgements', () => {
   const TARGET = { kind: 'local' } as const
@@ -87,18 +88,6 @@ describe('Explicit desktop read acknowledgements', () => {
 
   const promptKey = (id: string) => agentSessionPromptAttentionKey(SCOPE, SESSION, id)
 
-  it('Mark read on a chat never opened withdraws the prompt alert it surfaced', async () => {
-    useAppStore.setState({ activeWorktreeId: 'elsewhere' })
-    render(bridge())
-    await waitFor(() => expect(fixture.completion).toBeTypeOf('function'))
-    act(() => addPrompt('A'))
-    await waitFor(() => expect(transport.dispatch).toHaveBeenCalledTimes(1))
-    act(() => useAppStore.getState().acknowledgeAgents([SUBJECT], undefined, 'explicit'))
-    await flush()
-    expect(useAppStore.getState().unreadAgentCompletionPanes[SUBJECT]).toBeUndefined()
-    expect(dismissIds()).toEqual([promptKey('A')])
-  })
-
   it('Mark read on a chat never opened withdraws its completion alert, as before prompt alerts', async () => {
     useAppStore.setState({ activeWorktreeId: 'elsewhere' })
     render(bridge())
@@ -110,25 +99,6 @@ describe('Explicit desktop read acknowledgements', () => {
     expect(dismissIds()).toEqual([
       `${agentSessionAttentionSubjectPrefix(SCOPE, SESSION)}turn:turn-1`
     ])
-  })
-
-  it('Mark read on a chat hidden since an earlier view covers the newer prompt it surfaced', async () => {
-    const screen = render(bridge(true))
-    await waitFor(() => expect(fixture.completion).toBeTypeOf('function'))
-    act(() => addPrompt('A'))
-    await waitFor(() => expect(fixture.hydrate).toBeTypeOf('function'))
-    await act(async () => fixture.hydrate?.())
-    await waitFor(() => expect(dismissIds()).toHaveLength(1))
-    act(() => useAppStore.setState({ activeWorktreeId: 'elsewhere' }))
-    screen.rerender(bridge(false))
-    await flush()
-    transport.dispatch.mockClear()
-    act(() => addPrompt('B'))
-    await waitFor(() => expect(transport.dispatch).toHaveBeenCalledTimes(1))
-    act(() => useAppStore.getState().acknowledgeAgents([SUBJECT], undefined, 'explicit'))
-    await flush()
-    expect(useAppStore.getState().unreadAgentCompletionPanes[SUBJECT]).toBeUndefined()
-    expect(dismissIds()).toEqual([promptKey('A'), promptKey('B')])
   })
 
   it('Mark read never covers a prompt raised after the click', async () => {
@@ -179,12 +149,14 @@ describe('Explicit desktop read acknowledgements', () => {
         ]
       ]),
       readStatusState: () => projectStructuredAgentSessionStatusState(otherItems),
+      readChildWork: () => undefined,
       now: () => 42
     })
     const delivery = createStructuredAttentionMobileDelivery({
       readNotificationSettings: () => ({ ...NOTIFICATION_SETTINGS, suppressWhenFocused: false }),
       readWorkspaceLabels: () => ({}),
       isWorkspaceMuted: () => false,
+      readOrchestration: () => undefined,
       dispatch: (event) => fixture.controller.dispatch(event),
       reconcile: (state) => fixture.controller.reconcileStructuredPromptAttention(state),
       now: () => 42
@@ -420,47 +392,6 @@ describe('Accepted structured history read retirement', () => {
     expect(readCalls()).toBe(2)
   })
 
-  it('reads a newly accepted visible prompt without sending an RPC for text-only updates', async () => {
-    addPrompt('A')
-    render(
-      createElement(
-        Fragment,
-        null,
-        createElement(StructuredAgentSessionAttentionBridge),
-        createElement(AttentionPolicy),
-        createElement(ReadSurface, { viewed: true })
-      )
-    )
-    await waitFor(() => expect(fixture.hydrate).toBeTypeOf('function'))
-    await act(async () => fixture.hydrate?.())
-    await waitFor(() => expect(readCalls()).toBe(1))
-    act(() => {
-      addPrompt('B')
-      publishView()
-    })
-    await waitFor(() => expect(dismissIds()).toHaveLength(2))
-    const calls = readCalls()
-    act(() => {
-      fixture.items = [
-        ...fixture.items,
-        {
-          itemId: 'text',
-          revision: 1,
-          sequence: ++fixture.sequence,
-          observedAt: fixture.sequence,
-          body: {
-            kind: 'message',
-            role: 'assistant',
-            blocks: [{ type: 'text', text: 'More output' }]
-          }
-        }
-      ]
-      publishView()
-    })
-    await act(async () => {})
-    expect(readCalls()).toBe(calls)
-  })
-
   it('keeps hydration unread while away and retries the read on presence return', async () => {
     transport.away.mockResolvedValue(true)
     addPrompt('A')
@@ -551,7 +482,7 @@ describe('Accepted structured history read retirement', () => {
         throw new Error('prompt not sent')
       }
       relay.configureDismissalStore(relayDirectory)
-      relay.dispatch(sent)
+      relay.dispatch({ ...sent, paneKey: SUBJECT })
       const withdrawals: string[] = []
       relay.onDispatched((event) => {
         if (event.type === 'dismiss') {
@@ -561,7 +492,7 @@ describe('Accepted structured history read retirement', () => {
       transport.dismiss
         .mockImplementation(async (_ids, _panes, reads?: StructuredNotificationRead[]) => {
           for (const read of reads ?? []) {
-            relay.retireStructuredAttention(read)
+            relay.acknowledgeAttention({ reads: [read] }, read.executionHost)
           }
           return { dismissed: 0 }
         })

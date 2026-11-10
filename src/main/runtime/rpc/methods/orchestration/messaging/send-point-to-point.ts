@@ -1,17 +1,24 @@
-import type { MessagePriority, MessageType, OrchestrationDb } from '../../../../orchestration/db'
+import type {
+  MessagePriority,
+  MessageType
+} from '../../../../orchestration/db/orchestration-records'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { reconcileLifecycleMessage } from '../../../../orchestration/lifecycle-reconciliation'
-import { bindCoordinatorMutationPayload } from '../../../../orchestration/dispatch-message-binding'
-import { isDispatchMutationMessageType, parseMessageTaskId } from '../schemas'
-import type { SendParams } from '../schemas'
+import { reconcileLifecycleMessage } from '../../../../orchestration/workers/lifecycle/lifecycle-reconciliation'
+import { bindCoordinatorMutationPayload } from '../../../../orchestration/workers/reports/dispatch-message-binding'
+import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration-params'
+import { parseMessageTaskId } from './message-payload'
+import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-context/dispatch-lookup'
+import type { SendParams } from './send-params'
 import { legacyWorkerDeliveryContract } from '../routing'
 import { exposeMessage } from './mailbox-message-receipt'
+import { WORKER_DONE_RECORDED_NEXT } from '../receipt-next'
 import { recordReceiptForPostCommitNudge } from './mutation-replay-nudge'
 import type { SendRecipientWarning } from './recipient-routing'
 import {
   workerReportRefusal,
   type WorkerReportRefusal
-} from '../../../../orchestration/worker-report-admission'
+} from '../../../../orchestration/workers/reports/worker-report-admission'
 import type { z } from 'zod'
 
 type SendParamsInput = z.infer<typeof SendParams>
@@ -68,6 +75,8 @@ export function sendPointToPointMessage(args: {
         ? bindCoordinatorMutationPayload(messageType, params.payload, dispatch.id)
         : params.payload,
       senderPaneKey,
+      senderDispatchId:
+        dispatch && isDispatchAssignee(dispatch, from, senderPaneKey) ? dispatch.id : undefined,
       runId: messageRunId,
       deliveryContract: legacyWorkerDeliveryContract(
         runtime,
@@ -126,7 +135,13 @@ export function sendPointToPointMessage(args: {
       }
       const receipt = withSendWarnings(
         msg.type === 'worker_done'
-          ? { message: exposeMessage(msg), lifecycle: reconciled }
+          ? {
+              message: exposeMessage(msg),
+              lifecycle: reconciled,
+              ...(reconciled.action === 'completed' || reconciled.action === 'failed'
+                ? { next: WORKER_DONE_RECORDED_NEXT }
+                : {})
+            }
           : { message: exposeMessage(msg) }
       )
       return recordReceiptForPostCommitNudge(recordMutationReceipt, receipt, () =>

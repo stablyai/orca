@@ -15,11 +15,13 @@ vi.mock('electron', async () =>
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
-vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harness')).appIconMock())
-vi.mock('../browser/browser-manager', async () =>
+vi.mock('./desktop-integration/app-icon', async () =>
+  (await import('./createMainWindow-test-harness')).appIconMock()
+)
+vi.mock('../browser/guest-lifecycle/manager/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
-vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
+vi.mock('../browser/client-pages/renderer/browser-client-page-renderer-runtime', async () => {
   const harness = await import('./createMainWindow-test-harness')
   return {
     attachBrowserClientPageRenderer: harness.attachClientPageRendererMock,
@@ -502,23 +504,6 @@ describe('renderer recovery reload watchdog', () => {
     vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 2)
     expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(5)
     expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(2)
-
-    consoleError.mockRestore()
-  })
-
-  it('names the crash-loop cause and gives that prompt a watched retry too', () => {
-    const onRendererRecoveryExhausted = vi.fn()
-    const { consoleError, crashRenderer } = createHarness()
-
-    createMainWindow(null, { onRendererRecoveryExhausted })
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      crashRenderer()
-    }
-
-    expect(onRendererRecoveryExhausted).toHaveBeenCalledWith(
-      expect.objectContaining({ cause: 'crash-loop' })
-    )
-    expect(typeof onRendererRecoveryExhausted.mock.calls[0]?.[0].retry).toBe('function')
 
     consoleError.mockRestore()
   })

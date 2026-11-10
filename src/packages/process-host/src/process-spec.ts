@@ -5,10 +5,6 @@ import type {
   StdioOptions
 } from 'node:child_process'
 
-export type ChildProcessHandle = ChildProcess
-
-export type SpawnedProcess = ChildProcess
-
 export type ProcessSpec = {
   /** Prefer an absolute Windows path; stripped Electron PATHs may not resolve bare names. */
   program: string
@@ -17,7 +13,7 @@ export type ProcessSpec = {
   env?: NodeJS.ProcessEnv
   timeoutMs?: number | null
   /** Written to stdin then closed. Omit to leave stdin empty and closed. */
-  input?: string
+  input?: string | Uint8Array
   /** Cap on captured stdout/stderr; output past it is discarded. */
   maxOutputBytes?: number
   /** Capture stdout as bytes without decoding; stdout stays empty in this mode. */
@@ -42,13 +38,11 @@ export type ProcessSpec = {
   onStderr?: (chunk: Buffer | string) => void
 }
 
-export type PipedChildProcess = ChildProcessWithoutNullStreams
-
 export type PipedProcessSpec = Omit<ProcessSpec, 'stdio'> & {
   stdio?: 'pipe' | ['pipe', 'pipe', 'pipe', ...Exclude<StdioOptions, string>]
 }
 
-export type PipedProcessSpawner = (spec: PipedProcessSpec) => PipedChildProcess
+export type PipedProcessSpawner = (spec: PipedProcessSpec) => ChildProcessWithoutNullStreams
 
 export type ProcessTerminationBarrier = {
   observeStderr?: (chunk: Buffer | string) => void

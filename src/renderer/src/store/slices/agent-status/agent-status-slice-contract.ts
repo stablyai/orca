@@ -1,3 +1,5 @@
+import type { AgentSenderPublication } from '../../../../../shared/agent-sender-associations'
+import type { AgentSenderPublications } from '@/runtime/native-chat/agent-senders/agent-sender-publication-patch'
 import type {
   AgentLaunchConfigRegistryEntry,
   AgentLaunchConfigRegistrationMetadata,
@@ -21,20 +23,25 @@ import type {
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
-} from '../../../../../shared/agent-status-types'
-import type { MigrationUnsupportedPtyEntry } from '../../../../../shared/agent-status-ipc-payload'
+} from '../../../../../shared/agent-status/contracts/agent-status-types'
+import type { MigrationUnsupportedPtyEntry } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type {
   AgentProviderSessionMetadata,
   ResumableTuiAgent,
   SleepingAgentLaunchConfig,
   SleepingAgentSessionRecord
-} from '../../../../../shared/agent-session-resume'
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentPaneConversationIdentity } from './agent-pane-conversation'
 import type { AgentStatusStateUpdate } from './agent-status-runtime'
 import type { ProgramStatusFacet } from '../../../../../shared/program-status/facet'
 
 export type AgentStatusSlice = {
+  agentSenderPublicationsByHost: AgentSenderPublications
+  setAgentSenderPublication: (host: string, publication: AgentSenderPublication | undefined) => void
   /** Explicit agent status entries keyed by `${tabId}:${leafId}`; real-time only, not persisted. */
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  /** Host-reported conversation identity only; transient and independent of agent occupancy. */
+  agentConversationsByPaneKey: Record<string, AgentPaneConversationIdentity>
   /** Store-local committed row changes, using writer-known keys rather than map discovery. */
   subscribeAgentStatusChanges: (listener: AgentStatusChangeListener) => () => void
   /** Route external atomic status patches through the same commit boundary. */
@@ -158,8 +165,11 @@ export type AgentStatusSlice = {
   /** Capture resumable agent sessions across every worktree for crash recovery or quit; mode sets live/quit precedence. */
   captureAllSleepingAgentSessions: (mode: AllAgentSessionCaptureMode) => void
   clearSleepingAgentSession: (paneKey: string) => void
-  /** Keeps a resume handle for a pane whose restore the host deferred; never replaces a record. */
-  rememberSleepingAgentSession: (record: SleepingAgentSessionRecord) => void
+  /** Keeps a pane resume handle; replaces only the exact captured record, preserving newer work. */
+  rememberSleepingAgentSession: (
+    record: SleepingAgentSessionRecord,
+    replaces?: SleepingAgentSessionRecord
+  ) => void
   clearSleepingAgentSessionsByPaneKey: (paneKeys: readonly string[]) => void
   clearSleepingAgentSessionsByWorktree: (worktreeId: string) => void
   pruneSleepingAgentSessions: (validWorktreeIds: Set<string>) => void

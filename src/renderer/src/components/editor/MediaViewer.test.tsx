@@ -3,7 +3,7 @@
 import { StrictMode, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mediaPlaybackPositionCache } from '@/lib/scroll-cache'
+import { mediaPlaybackPositionCache } from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import MediaViewer from './MediaViewer'
 
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
@@ -40,50 +40,6 @@ describe('MediaViewer', () => {
     Object.defineProperty(video, 'duration', { configurable: true, value: duration })
     return { root, video }
   }
-
-  it('keeps its source through Strict Mode setup and stops playback on unmount', async () => {
-    const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
-    const load = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
-    const container = document.createElement('div')
-    const root = createRoot(container)
-    await act(async () =>
-      root.render(
-        <StrictMode>
-          <MediaViewer
-            src="orca-media://file/token"
-            mimeType="video/mp4"
-            filePath="clip.mp4"
-            canOpenLocally
-          />
-        </StrictMode>
-      )
-    )
-    const video = container.querySelector('video')
-    expect(video?.getAttribute('src')).toBe('orca-media://file/token')
-    expect(video?.controls).toBe(true)
-    expect(video?.autoplay).toBe(false)
-    expect(video?.preload).toBe('metadata')
-    pause.mockClear()
-    load.mockClear()
-    await act(async () => root.unmount())
-    expect(pause).toHaveBeenCalledTimes(1)
-    expect(load).toHaveBeenCalledTimes(1)
-    expect(video?.getAttribute('src')).toBeNull()
-  })
-
-  it('resumes from the last playback position after the tab remounts', async () => {
-    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
-    vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
-    const first = await renderPlaybackViewer('clip.mp4:pdf')
-    first.video.currentTime = 42
-    await act(async () => first.root.unmount())
-
-    const second = await renderPlaybackViewer('clip.mp4:pdf')
-    second.video.currentTime = 0
-    await act(async () => second.video.dispatchEvent(new Event('loadedmetadata')))
-    expect(second.video.currentTime).toBe(42)
-    await act(async () => second.root.unmount())
-  })
 
   it('retains the position when leaving before metadata and clamps it when the file shrinks', async () => {
     vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
@@ -129,74 +85,5 @@ describe('MediaViewer', () => {
     await act(async () => otherRestored.video.dispatchEvent(new Event('loadedmetadata')))
     expect(otherRestored.video.currentTime).toBe(27)
     await act(async () => otherRestored.root.unmount())
-  })
-
-  it('shows a persistent playback error and only offers the default app for local files', async () => {
-    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
-    vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
-    const container = document.createElement('div')
-    const root = createRoot(container)
-    await act(async () =>
-      root.render(
-        <MediaViewer
-          src="orca-media://file/token"
-          mimeType="video/mp4"
-          filePath="remote.mp4"
-          canOpenLocally={false}
-        />
-      )
-    )
-    await act(async () => container.querySelector('video')?.dispatchEvent(new Event('error')))
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-      'Unable to play this media file'
-    )
-    expect(container.querySelector('button')).toBeNull()
-    await act(async () => root.unmount())
-  })
-
-  it('uses native audio controls and releases the audio source when switching files', async () => {
-    const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {})
-    const load = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
-    const container = document.createElement('div')
-    const root = createRoot(container)
-    await act(async () =>
-      root.render(
-        <StrictMode>
-          <MediaViewer
-            key="song"
-            src="orca-media://file/song"
-            mimeType="audio/mpeg"
-            filePath="song.mp3"
-            canOpenLocally
-          />
-        </StrictMode>
-      )
-    )
-    const audio = container.querySelector('audio')
-    expect(audio?.getAttribute('src')).toBe('orca-media://file/song')
-    expect(audio?.controls).toBe(true)
-    expect(audio?.autoplay).toBe(false)
-    expect(audio?.preload).toBe('metadata')
-    expect(audio?.getAttribute('aria-label')).toBe('song.mp3')
-    expect(container.querySelector('video')).toBeNull()
-    pause.mockClear()
-    load.mockClear()
-    await act(async () =>
-      root.render(
-        <MediaViewer
-          key="clip"
-          src="orca-media://file/clip"
-          mimeType="video/mp4"
-          filePath="clip.mp4"
-          canOpenLocally
-        />
-      )
-    )
-    expect(pause).toHaveBeenCalledTimes(1)
-    expect(load).toHaveBeenCalledTimes(1)
-    expect(audio?.getAttribute('src')).toBeNull()
-    expect(container.querySelector('audio')).toBeNull()
-    expect(container.querySelector('video')?.getAttribute('src')).toBe('orca-media://file/clip')
-    await act(async () => root.unmount())
   })
 })

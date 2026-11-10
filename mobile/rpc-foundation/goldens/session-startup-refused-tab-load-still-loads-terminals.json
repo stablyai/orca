@@ -4,31 +4,9 @@
   "family": "session.startup",
   "namedDeltas": [],
   "values": {
-    "2bba58da0410": {
-      "name": "fetch-terminals",
-      "ordinal": 10,
-      "value": {
-        "allowEmptyLoaded": false
-      }
-    },
-    "4f4cd2a4f041": {
-      "name": "clear-pending-live-input-commit",
-      "ordinal": 4,
-      "value": {}
-    },
-    "5c6699f9b431": {
-      "name": "ensure-session-tabs",
-      "ordinal": 7,
-      "value": {}
-    },
-    "6419a011f13b": {
-      "name": "clear-terminal-cache",
-      "ordinal": 1,
-      "value": {}
-    },
-    "7a83179a1016": {
+    "57e0a895cdde": {
       "name": "worktree.activate#1",
-      "ordinal": 6,
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -54,31 +32,12 @@
         "startedAt": 0
       }
     },
-    "98858d185002": {
-      "name": "fetch-terminals",
-      "ordinal": 9,
-      "value": {
-        "allowEmptyLoaded": false
-      }
-    },
-    "99a213805fa0": {
-      "name": "clear-delayed-action-timers",
-      "ordinal": 5,
+    "6419a011f13b": {
+      "name": "clear-terminal-cache",
+      "ordinal": 1,
       "value": {}
     },
-    "a509dd4610b2": {
-      "name": "fetch-terminals",
-      "ordinal": 11,
-      "value": {
-        "allowEmptyLoaded": true
-      }
-    },
-    "aab012c297bd": {
-      "name": "diagnostics-reset-route",
-      "ordinal": 2,
-      "value": {}
-    },
-    "acf0370bfacc": {
+    "854cb236952a": {
       "actionSheetRequestSeq": 1,
       "activeHandle": {
         "$rpc": "null"
@@ -91,11 +50,12 @@
       },
       "closedTabTombstones": 0,
       "initializedHandles": [],
+      "sessionTabs": [],
       "terminalsLoaded": false
     },
-    "b65466e96997": {
+    "8c990409ac55": {
       "name": "worktree.activate#1",
-      "ordinal": 6,
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -127,20 +87,42 @@
         }
       }
     },
-    "d000b4c837b7": {
-      "name": "clear-pending-live-input-commit",
-      "ordinal": 13,
+    "95c8385db422": {
+      "name": "clear-delayed-action-timers",
+      "ordinal": 4,
       "value": {}
     },
-    "e35576a6b449": {
-      "name": "clear-pending-restorations",
-      "ordinal": 12,
+    "968d084a5a35": {
+      "name": "clear-delayed-action-timers",
+      "ordinal": 10,
+      "value": {}
+    },
+    "a193ad4304cb": {
+      "name": "fetch-terminals",
+      "ordinal": 7,
+      "value": {
+        "allowEmptyLoaded": false
+      }
+    },
+    "aab012c297bd": {
+      "name": "diagnostics-reset-route",
+      "ordinal": 2,
+      "value": {}
+    },
+    "bc94d6f00eeb": {
+      "name": "clear-pending-live-input-commit",
+      "ordinal": 9,
       "value": {}
     },
     "e8b978dbecff": {
       "name": "worktree.activate#1",
       "ordinal": 8,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.activate\",\"params\":{\"worktree\":\"id:wt-1\",\"notifyClients\":false,\"navigation\":\"caller\"}}"
+    },
+    "e927128e41fc": {
+      "name": "clear-pending-live-input-commit",
+      "ordinal": 3,
+      "value": {}
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -150,14 +132,9 @@
         "$rpc": "undefined"
       }
     },
-    "f880d7742773": {
-      "name": "reset-drafts",
-      "ordinal": 3,
-      "value": {}
-    },
-    "fde92e0a066b": {
-      "name": "clear-delayed-action-timers",
-      "ordinal": 14,
+    "ed8838ca9a14": {
+      "name": "ensure-session-tabs",
+      "ordinal": 6,
       "value": {}
     }
   },
@@ -167,67 +144,59 @@
       {
         "id": "tab-load-refused",
         "observation": {
-          "sender": ["7a83179a1016"],
+          "sender": ["57e0a895cdde"],
           "payloads": ["e8b978dbecff"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "acf0370bfacc",
+          "state": "854cb236952a",
           "effects": [
             "6419a011f13b",
             "aab012c297bd",
-            "f880d7742773",
-            "4f4cd2a4f041",
-            "99a213805fa0",
-            "5c6699f9b431",
-            "98858d185002"
+            "e927128e41fc",
+            "95c8385db422",
+            "ed8838ca9a14",
+            "a193ad4304cb"
           ]
         }
       },
       {
         "id": "refreshed",
         "observation": {
-          "sender": ["b65466e96997"],
+          "sender": ["8c990409ac55"],
           "payloads": ["e8b978dbecff"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "acf0370bfacc",
+          "state": "854cb236952a",
           "effects": [
             "6419a011f13b",
             "aab012c297bd",
-            "f880d7742773",
-            "4f4cd2a4f041",
-            "99a213805fa0",
-            "5c6699f9b431",
-            "98858d185002",
-            "2bba58da0410",
-            "a509dd4610b2"
+            "e927128e41fc",
+            "95c8385db422",
+            "ed8838ca9a14",
+            "a193ad4304cb"
           ]
         }
       },
       {
         "id": "cleanup",
         "observation": {
-          "sender": ["b65466e96997"],
+          "sender": ["8c990409ac55"],
           "payloads": ["e8b978dbecff"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "acf0370bfacc",
+          "state": "854cb236952a",
           "effects": [
             "6419a011f13b",
             "aab012c297bd",
-            "f880d7742773",
-            "4f4cd2a4f041",
-            "99a213805fa0",
-            "5c6699f9b431",
-            "98858d185002",
-            "2bba58da0410",
-            "a509dd4610b2",
-            "e35576a6b449",
-            "d000b4c837b7",
-            "fde92e0a066b"
+            "e927128e41fc",
+            "95c8385db422",
+            "ed8838ca9a14",
+            "a193ad4304cb",
+            "bc94d6f00eeb",
+            "968d084a5a35"
           ]
         }
       }

@@ -1,27 +1,37 @@
+import {
+  getTerminalNoticeLifetime,
+  retireTerminalNoticeLifetime
+} from '../terminal-pane/provider-notices/terminal-notice-lifetime'
 import { useAppStore } from '@/store'
-import { closeWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
-import { toHostSessionTabId } from '../../../../shared/terminal-surface-id'
+import { closeWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle'
+import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
+import { toHostSessionTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import { getLatestWebSessionTabsPublicationEpoch } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
 import { resolveHostSessionTabIdForWebSessionTab } from '@/runtime/web-session-tabs-sync/tracking-mappings'
-import { resolveTerminalCloseRoute } from '@/lib/terminal-close-route'
+import { resolveTerminalCloseRoute } from '@/lib/workspace/ownership/terminal-close-route'
 import {
   guardPinnedTabClose,
   isUnifiedTabPinned,
   resolvePinnedTabLabel,
   shouldConfirmPinnedTabClose
-} from '@/store/pinned-tab-close-guard'
+} from '@/store/slices/tabs/closing/pinned-tab-close-guard'
 import type {
   TerminalTabCloseReason,
   TerminalTabRetirementPlan
-} from '@/store/slices/terminal-tab-retirement'
+} from '@/store/terminals/terminal-tab-retirement'
 import {
   guardRunningTerminalClose,
   shouldConfirmRunningTerminalClose
 } from './running-terminal-close-guard'
 import { closeLocalTerminalTabState } from './close-local-terminal-tab-state'
-import { runAsAutomaticDeselection } from '@/store/active-worktree-deselection-intent'
+import { runAsAutomaticDeselection } from '@/store/workspaces/selection/active-worktree-deselection-intent'
+import { hasSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 import { getTerminalIncarnationHandle } from './terminal-close-incarnation'
+import {
+  terminalTabCloseStoreReason,
+  terminalTabCloseWireReason,
+  type TerminalTabCloseIntent
+} from './terminal-tab-close-intent'
 import {
   getWorktreeTerminalTabIds,
   resolveTerminalCloseTarget,
@@ -29,28 +39,36 @@ import {
   type PrecomputedTerminalCloseState
 } from './terminal-close-target'
 export type { PrecomputedTerminalCloseState } from './terminal-close-target'
-export { closeOtherTerminalTabs, closeTerminalTabsToRight } from './terminal-tab-bulk-actions'
+export { closeOtherTerminalTabs } from './terminal-tab-bulk-actions'
 
-export function closeTerminalTab(
-  tabId: string,
-  options?: {
-    force?: boolean
-    rejectPinned?: boolean
-    reason?: TerminalTabCloseReason
-    /** Host-only lifecycle reason; local pin guards still use reason, so this must not bypass them. */
-    hostCloseReason?: TerminalTabCloseReason
-    /** PTY whose lifecycle event initiated the host close. */
-    lifecyclePtyId?: string
-    /** Skip modals for unattended/bulk/CLI/RPC paths and confirmed re-entry. */
-    skipRunningProcessConfirm?: boolean
-    captureRecentlyClosed?: boolean
-    localPtyTeardownOwnedExternally?: boolean
-    precomputedRetirementPlan?: TerminalTabRetirementPlan
-    precomputedCloseState?: PrecomputedTerminalCloseState
-    onClosed?: () => void
-    onCancel?: () => void
-  }
-): void {
+type CloseTerminalTabOptions = {
+  force?: boolean
+  rejectPinned?: boolean
+  /** PTY whose lifecycle event initiated the host close. */
+  lifecyclePtyId?: string
+  /** Skip modals for unattended/bulk/CLI/RPC paths and confirmed re-entry. */
+  skipRunningProcessConfirm?: boolean
+  captureRecentlyClosed?: boolean
+  localPtyTeardownOwnedExternally?: boolean
+  precomputedRetirementPlan?: TerminalTabRetirementPlan
+  precomputedCloseState?: PrecomputedTerminalCloseState
+  /** The PTY the caller's own action already agreed to stop; only the tab's other work asks. */
+  consentedPtyId?: string
+  /** Keep the worktree selected when this empties it, for a caller about to open its replacement. */
+  preserveWorktreeSelection?: boolean
+  beforeClose?: () => boolean
+  onClosed?: () => void
+  onCancel?: () => void
+} & (
+  | { reason: TerminalTabCloseIntent; hostCloseReason?: never }
+  /** Host-only lifecycle reason; local pin guards see no reason, so this must not bypass them. */
+  | { reason?: never; hostCloseReason: TerminalTabCloseReason }
+)
+
+/** Every caller declares its intent: an undeclared close must never reach a host as the user's (#37245). */
+export function closeTerminalTab(tabId: string, options: CloseTerminalTabOptions): void {
+  const intent = options.reason ?? options.hostCloseReason
+  const storeReason = terminalTabCloseStoreReason(intent)
   const state = useAppStore.getState()
   const precomputedCloseState = validatePrecomputedTerminalCloseState(
     tabId,
@@ -59,11 +77,10 @@ export function closeTerminalTab(
   )
   const target = resolveTerminalCloseTarget(state, tabId, precomputedCloseState)
   if (!target) {
-    const closeReason = options?.reason ?? options?.hostCloseReason ?? 'user'
-    if (closeReason !== 'pty-exit') {
+    if (storeReason !== 'pty-exit') {
       // Why: late explicit cleanup must still revoke tab-scoped resume authority after PTY exit removed the row.
       state.closeTab(tabId, {
-        reason: closeReason,
+        reason: storeReason,
         ...(options?.localPtyTeardownOwnedExternally
           ? { localPtyTeardownOwnedExternally: true }
           : {}),
@@ -110,10 +127,16 @@ export function closeTerminalTab(
     guardRunningTerminalClose({
       terminalTabId,
       tabLabel: resolvePinnedTabLabel(state, owningWorktreeId, terminalTabId),
+      ...(options?.consentedPtyId ? { consentedPtyId: options.consentedPtyId } : {}),
       // Re-enter after consent to revalidate pinned, route, and precomputed state against the latest store.
       onClose: () => closeTerminalTab(tabId, { ...options, skipRunningProcessConfirm: true }),
       ...(options?.onCancel ? { onCancel: options.onCancel } : {})
     })
+    return
+  }
+
+  if (options?.beforeClose && !options.beforeClose()) {
+    options.onCancel?.()
     return
   }
 
@@ -130,7 +153,7 @@ export function closeTerminalTab(
         worktreeId: owningWorktreeId,
         tabId: terminalTabId
       }) ?? toHostSessionTabId(terminalTabId)
-    const wireReason = options?.reason ?? options?.hostCloseReason ?? 'user'
+    const wireReason = terminalTabCloseWireReason(intent)
     const lifecycleTerminalHandle =
       wireReason === 'user'
         ? null
@@ -141,11 +164,13 @@ export function closeTerminalTab(
         : getLatestWebSessionTabsPublicationEpoch(runtimeEnvironmentId, owningWorktreeId)
     // Prune local mirrors while awaiting the host snapshot so close feels immediate.
     closeLocalTerminalTabState(terminalTabId, {
-      reason: options?.reason,
+      // A host-only lifecycle reason leaves the local close untagged; the host adjudicates the PTY.
+      reason: options.reason === undefined ? undefined : storeReason,
       ...(options?.captureRecentlyClosed !== undefined
         ? { captureRecentlyClosed: options.captureRecentlyClosed }
         : {}),
       remoteCloseOwnedByHost: true,
+      ...(options?.preserveWorktreeSelection ? { preserveWorktreeSelection: true } : {}),
       ...(options?.localPtyTeardownOwnedExternally
         ? { localPtyTeardownOwnedExternally: true }
         : {}),
@@ -198,24 +223,36 @@ export function closeTerminalTab(
     }
   }
 
+  // Proven lifecycle callers retain the old address after pane exit cleared its layout binding.
+  const exitedNotice =
+    storeReason === 'pty-exit' && options.lifecyclePtyId
+      ? getTerminalNoticeLifetime(options.lifecyclePtyId)
+      : undefined
   closeLocalTerminalTabState(terminalTabId, {
-    // A parked tab's process exit carries only the host reason, to keep the pin guard above.
-    reason: options?.reason ?? (options?.hostCloseReason === 'pty-exit' ? 'pty-exit' : undefined),
+    reason: storeReason,
     ...(options?.captureRecentlyClosed !== undefined
       ? { captureRecentlyClosed: options.captureRecentlyClosed }
       : {}),
+    ...(options?.preserveWorktreeSelection ? { preserveWorktreeSelection: true } : {}),
     ...(options?.localPtyTeardownOwnedExternally ? { localPtyTeardownOwnedExternally: true } : {}),
     ...(options?.precomputedRetirementPlan
       ? { precomputedRetirementPlan: options.precomputedRetirementPlan }
       : {})
   })
-  if (terminalCountBeforeClose <= 1 && state.activeWorktreeId === owningWorktreeId) {
+  if (exitedNotice) {
+    retireTerminalNoticeLifetime(exitedNotice)
+  }
+  if (
+    !options?.preserveWorktreeSelection &&
+    terminalCountBeforeClose <= 1 &&
+    state.activeWorktreeId === owningWorktreeId
+  ) {
     // Re-read after closeUnifiedTab repairs/deactivates the surface; stale state must not clobber it.
     const current = useAppStore.getState()
     if (current.activeWorktreeId === owningWorktreeId) {
       // Only unified renderable count includes agent-session/simulator tabs when proving the worktree empty.
       const { renderableTabCount } = current.reconcileWorktreeTabModel(owningWorktreeId)
-      if (renderableTabCount === 0) {
+      if (renderableTabCount === 0 && !hasSplitLandingGroup(current, owningWorktreeId)) {
         const worktreeFile = current.openFiles.find((f) => f.worktreeId === owningWorktreeId)
         if (worktreeFile) {
           current.setActiveFile(worktreeFile.id)

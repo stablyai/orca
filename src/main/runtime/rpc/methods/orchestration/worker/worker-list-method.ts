@@ -1,14 +1,10 @@
-import { ORCHESTRATION_FLEET_PAGE_MAX } from '../../../../../../shared/orchestration-fleet-projection'
-import type { WorkerTerminalListState } from '../../../../orchestration/worker-terminal-ownership'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import { ORCHESTRATION_FLEET_PAGE_MAX } from '../../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
+import type { WorkerTerminalListState } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { WORKER_LIST_CURSOR_EXPIRED_MESSAGE } from '../../../../orchestration/db/worker-terminal/worker-terminal-listing'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { defineMethod } from '../../../core'
-import {
-  applyFederatedFleetObservations,
-  readFederatedFleetSnapshots
-} from '../federation/federated-fleet-snapshot'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import {
   decodeWorkerListCursor,
   encodeWorkerListCursor,
@@ -20,8 +16,7 @@ import {
   pinWorkerListSnapshot,
   readWorkerListSnapshot
 } from './worker-list-snapshot-store'
-import { projectWorkerFleet, type WorkerListPageParams } from './worker-list-projection'
-import { chatAssigneeObserver } from './session-worker-observation'
+import { projectWorkerListFleet, type WorkerListPageParams } from './worker-list-projection'
 import { exposeWorkerTerminalResource } from './worker-terminal-resource-presentation'
 import {
   WORKER_TERMINAL_LIST_STATES,
@@ -34,8 +29,9 @@ const emptyWorkerListPage = (limit: number) => ({
   page: { limit, total: 0, hasMore: false, nextCursor: null }
 })
 
-export const ORCHESTRATION_WORKER_LIST_METHOD = defineMethod({
+export const ORCHESTRATION_WORKER_LIST_METHOD = defineOrchestrationMethod({
   name: 'orchestration.workerList',
+  access: { kind: 'reads', targets: { run: 'run' }, collection: true },
   permission: 'workspace',
   params: WorkerListParams,
   handler: async (params, { runtime }) => {
@@ -194,31 +190,11 @@ async function projectWorkerListPageWithFilteredSnapshot(
   const db = runtime.getOrchestrationDb()
   const hasMore = rows.length > limit
   const pageRows = hasMore ? rows.slice(0, limit) : rows
-  const authorityNow = Date.now()
-  const attentionFacts = db.getWorkerAttentionFactsForDispatches(
-    pageRows.map((row) => row.dispatchId),
-    authorityNow
-  )
-  const statuses = runtime.getOrchestrationFleetAgentStatusSnapshot()
-  const fleet = projectWorkerFleet({
-    rows: pageRows,
-    attentionFacts,
-    statuses,
+  const fleet = await projectWorkerListFleet(runtime, pageRows, {
     limit,
-    now: authorityNow,
     completeProjection: args.completeProjection,
-    observeChat: await chatAssigneeObserver(runtime, db, pageRows)
+    includeRemote: params.includeRemote
   })
-  const federated = params.includeRemote
-    ? await readFederatedFleetSnapshots({
-        runtime,
-        db,
-        dispatchIds: pageRows.map((row) => row.dispatchId)
-      })
-    : null
-  if (federated) {
-    applyFederatedFleetObservations(fleet, federated, fleet.durable)
-  }
   // Derive totals and counts from the same pinned membership; live filter scans can count rows the cursor cannot reach.
   const pinnedCount = filteredSnapshot?.dispatchIds.length
   const inventory =
@@ -275,6 +251,7 @@ async function projectWorkerListPageWithFilteredSnapshot(
       dispatchStatus: row.dispatchStatus,
       agentTerminalHandle: row.agentTerminalHandle,
       terminalState: row.terminalState,
+      coordinatedFrom: row.coordinatedFrom,
       resource: row.resource ? exposeWorkerTerminalResource(row.resource) : null,
       // Emit only derived ownership; resource identity/release fields already live on the row.
       projection: {
@@ -303,6 +280,6 @@ async function projectWorkerListPageWithFilteredSnapshot(
           ]
         }
       : {}),
-    ...(federated?.errors.length ? { partialHostErrors: federated.errors } : {})
+    ...(fleet.hostErrors.length ? { partialHostErrors: fleet.hostErrors } : {})
   }
 }

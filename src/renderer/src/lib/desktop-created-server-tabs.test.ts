@@ -1,15 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
-vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
+vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({}))
+
+vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn()
 }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
@@ -32,15 +34,12 @@ vi.stubGlobal('localStorage', {
   removeItem: (key: string) => storage.delete(key)
 })
 
-import { createTestStore, makeWorktree, seedStore } from '@/store/slices/store-test-helpers'
+import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import {
   DESKTOP_CREATED_SERVER_TAB_HOLDS,
   _reloadDesktopCreatedServerTabsForTests,
   _resetDesktopCreatedServerTabsForTests,
-  forgetDesktopCreatedServerTab,
-  forgetDesktopCreatedServerTabsOf,
-  forgetPublishedServerTabs,
-  isDesktopCreatedServerTab,
   noteDesktopCreatedServerTab
 } from './desktop-created-server-tabs'
 
@@ -56,40 +55,6 @@ beforeEach(() => {
 })
 
 describe('the desktop-created server tab record', () => {
-  it('records an id per workspace: one workspace’s publish or removal leaves the other’s', () => {
-    noteDesktopCreatedServerTab(ENV, WT1, 'tab-x')
-    noteDesktopCreatedServerTab(ENV, WT2, 'tab-x')
-    expect([held(WT1, 'tab-x'), held(WT2, 'tab-x')]).toEqual([true, true])
-
-    forgetPublishedServerTabs(WT1, ['tab-x'])
-    expect([held(WT1, 'tab-x'), held(WT2, 'tab-x')]).toEqual([false, true])
-
-    noteDesktopCreatedServerTab(ENV, WT1, 'tab-x')
-    forgetDesktopCreatedServerTabsOf(WT2)
-    expect([held(WT1, 'tab-x'), held(WT2, 'tab-x')]).toEqual([true, false])
-  })
-
-  it('forgets a workspace’s every id, and a closed id in any workspace', () => {
-    noteDesktopCreatedServerTab(ENV, WT1, 'tab-a')
-    noteDesktopCreatedServerTab(ENV, WT1, 'tab-b')
-    noteDesktopCreatedServerTab(ENV, WT2, 'tab-c')
-    forgetDesktopCreatedServerTabsOf(WT1)
-    expect([held(WT1, 'tab-a'), held(WT1, 'tab-b'), held(WT2, 'tab-c')]).toEqual([
-      false,
-      false,
-      true
-    ])
-    forgetDesktopCreatedServerTab('tab-c')
-    expect(held(WT2, 'tab-c')).toBe(false)
-  })
-
-  it('names a tab recorded by its entity id by its tab-bar id too', () => {
-    noteDesktopCreatedServerTab(ENV, WT1, 'browser-workspace-1')
-    const tabs = [{ id: 'tab-bar-1', entityId: 'browser-workspace-1' }]
-    expect(isDesktopCreatedServerTab(tabs, WT1, 'tab-bar-1')).toBe(true)
-    expect(isDesktopCreatedServerTab(tabs, WT2, 'tab-bar-1')).toBe(false)
-  })
-
   it('drops the removed worktree’s ids when the worktree is removed, and only those', async () => {
     const store = createTestStore()
     seedStore(store, {

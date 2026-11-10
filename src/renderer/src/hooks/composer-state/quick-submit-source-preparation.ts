@@ -18,10 +18,11 @@ type QuickSubmitSourcePreparationInput = Pick<
 >
 
 import { useCallback } from 'react'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import { getLinkedWorkItemWorkspaceName } from '@/lib/new-workspace'
-import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import '@/lib/workspace/creation/new-workspace'
+import { getLinkedWorkItemWorkspaceName } from '../../../../shared/workspace-name'
+import { getJiraIssueKeyCasingSeedOptions } from '@/lib/work-items/jira/jira-issue-key-casing'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 
 export function useQuickSubmitSourcePreparation(input: QuickSubmitSourcePreparationInput) {

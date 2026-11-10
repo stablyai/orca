@@ -1,42 +1,62 @@
-import { ZodError, type ZodType } from 'zod'
-import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
-import type { OrcaRuntimeService, OrchestrationCompatibilityCallerAuthority } from '../orca-runtime'
+import type { RuntimeClientCapabilities } from './runtime-client-capabilities'
+import type { ZodError, ZodType } from 'zod'
+import type { TerminalStreamFrame } from '../../../shared/terminal/stream/terminal-stream-protocol'
+import type { OrcaRuntimeService } from '../orca-runtime'
+import type { OrchestrationCompatibilityCallerAuthority } from '../orchestration/terminal-authority/orchestration-compatibility-authority'
 import type { StructuredAgentCliSourceEvidence } from '../../native-chat/structured-agent-cli-source'
 import type {
   DeviceCredentialInstalled,
   PairingGetEndpointsParams,
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
-} from '../../../shared/mobile-relay-credential-contract'
+} from '../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type {
   MobileRelayHostsListResult,
   MobileRelayHostWorktreesResult
-} from '../../../shared/mobile-relay-hosts-contract'
+} from '../../../shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import type {
   DelegatedPhone,
   DelegatedMobileDeviceSyncResult
 } from '../../../shared/delegated-mobile-device-contract'
-import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
-import type { OrchestrationSessionCaller } from '../orchestration/orchestration-caller-identity'
+import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration/orchestration-compatibility-evidence'
+import type { OrchestrationEntryCaller } from '../orchestration/addressing/orchestration-caller-identity'
 import type { RpcCallerIdentity } from './rpc-caller-identity'
 import type { OrcadPeerDesktopsResult } from '../../../shared/orcad-peer-desktops-contract'
 import type { RpcBinarySender } from './rpc-binary-sender'
 import type { RpcMethodPermission } from './rpc-method-permission'
 import type { OrcadFeatureRequirement } from './orcad-feature-readiness'
+import {
+  runsOrchestrationAccessCheck,
+  type OrchestrationMethodAccessDeclaration
+} from './methods/orchestration/access/orchestration-method-access'
 import type {
   RegisterDeviceKeyParams,
   RegisterDeviceKeyResult
-} from '../../../shared/device-key-registration-contract'
+} from '../../../shared/remote-runtime/pairing/device-key-registration-contract'
+import type {
+  PairingCreateOfferParams,
+  PairingCreateOfferResult
+} from '../../../shared/remote-runtime/pairing/pairing-create-offer-contract'
+import type {
+  ExchangePairingTicketParams,
+  ExchangePairingTicketResult
+} from '../../../shared/remote-runtime/pairing/ticket-exchange-contract'
 
 // Bind key rotation to the authenticated socket so callers can re-key only themselves.
 export type DeviceSelfRpcContext = {
   registerDeviceKey(params: RegisterDeviceKeyParams): RegisterDeviceKeyResult
+  exchangePairingTicket(params: ExchangePairingTicketParams): ExchangePairingTicketResult
 }
 
 export type PairingRpcContext = {
   getEndpoints(params: PairingGetEndpointsParams): Promise<PairingGetEndpointsResult>
   provisionRelay(params: PairingProvisionRelayParams): Promise<DeviceCredentialInstalled>
+}
+
+// Mints new pairing credentials, so only the host owner's local transport provides it.
+export type PairingOffersRpcContext = {
+  create(params: PairingCreateOfferParams): Promise<PairingCreateOfferResult>
 }
 
 export type RpcEnvelopeMeta = {
@@ -71,6 +91,8 @@ export type RpcRequest = {
   params?: unknown
   orchestrationContractVersion?: number
   orchestrationRequestId?: string
+  // Untrusted wire input; only a paired Orca's runtime pairing admits it (orchestration-peer-caller).
+  orchestrationPeerRun?: unknown
   compatibilityInvocationId?: string
   orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
   // Untrusted wire evidence; runtime-source-admission validates it.
@@ -108,6 +130,8 @@ export type RpcContext = {
   caller?: RpcCallerIdentity
   // Only phones receive truncated payloads; undefined in-process callers remain unclipped.
   clientKind?: 'mobile' | 'runtime'
+  // Session-tab streams re-project with .current; other readers use the request-time clientCapabilities.
+  capabilitySource?: RuntimeClientCapabilities
   // Trust socket-negotiated capabilities, never destructive request assertions.
   clientCapabilities?: readonly RuntimeCapability[]
   // Capability upgrades mutate only the authenticated socket after exact-key v2 auth.
@@ -129,8 +153,8 @@ export type RpcContext = {
   replayedMutationReceipt?: unknown
   // Compare declared Run handles against request attestation.
   orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
-  // Resolve the injected Orca session id once at dispatch; session identity wins.
-  orchestrationCaller?: OrchestrationSessionCaller
+  // Resolved once at dispatch from a session's environment or a paired Orca's pairing; it wins.
+  orchestrationCaller?: OrchestrationEntryCaller
   // Only the trusted compatibility router sets this; params cannot bypass Run consumer binding.
   legacyCoordinatorRunId?: string
   legacyCoordinatorAuthority?: LegacyCoordinatorAuthorityProof
@@ -139,6 +163,7 @@ export type RpcContext = {
   // Pin authenticated federation identity without exposing its token to handlers or storage.
   authenticatedCallerFingerprint?: string
   pairing?: PairingRpcContext
+  pairingOffers?: PairingOffersRpcContext
   deviceSelf?: DeviceSelfRpcContext
   // Available only on a desktop relay for its configured servers.
   mobileRelayHosts?: {
@@ -215,6 +240,8 @@ type RpcMethodWithParams<P> = {
   readonly permission: RpcMethodPermission
   readonly params: ZodType | null
   readonly requires?: OrcadFeatureRequirement<P>
+  // Set only by defineOrchestrationMethod, whose checked handler the registry requires.
+  readonly orchestrationAccess?: OrchestrationMethodAccessDeclaration
   readonly handler: (params: P, ctx: RpcContext) => unknown
 }
 
@@ -223,6 +250,7 @@ type RpcStreamingMethodWithParams<P> = {
   readonly permission: RpcMethodPermission
   readonly params: ZodType | null
   readonly requires?: OrcadFeatureRequirement<P>
+  readonly orchestrationAccess?: OrchestrationMethodAccessDeclaration
   readonly stream: true
   readonly handler: (params: P, ctx: RpcContext, emit: (result: unknown) => void) => Promise<void>
 }
@@ -269,6 +297,10 @@ export function buildRegistry(methods: readonly RpcAnyMethodDeclaration[]): RpcR
     if (registry.has(method.name)) {
       throw new Error(`duplicate_rpc_method:${method.name}`)
     }
+    // No orchestration method exists without its access check.
+    if (method.name.startsWith('orchestration.') && !runsOrchestrationAccessCheck(method)) {
+      throw new Error(`orchestration_method_without_access:${method.name}`)
+    }
     registry.set(method.name, method)
   }
   return registry
@@ -286,5 +318,3 @@ export function formatZodError(error: ZodError): string {
   const first = error.issues[0]
   return first?.message ?? 'invalid_argument'
 }
-
-export { ZodError }

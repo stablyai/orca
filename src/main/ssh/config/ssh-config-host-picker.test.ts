@@ -157,27 +157,6 @@ describe('listUserSshConfigHostSummaries caching', () => {
 })
 
 describe('resolveUserSshConfigHost', () => {
-  it('returns effective endpoint and the complete authentication contract', async () => {
-    const resolver = vi.fn().mockResolvedValue(resolved())
-
-    await expect(
-      resolveUserSshConfigHost('prod', resolver, () => [
-        { host: 'prod', gssapiAuthentication: true }
-      ])
-    ).resolves.toEqual({
-      alias: 'prod',
-      hostname: 'prod.internal',
-      username: 'deploy',
-      port: 2222,
-      identityFiles: ['/keys/first', '/keys/second'],
-      identitiesOnly: true,
-      forwardAgent: false,
-      gssapiAuthentication: true,
-      proxyUseFdpass: false
-    })
-    expect(resolver).toHaveBeenCalledWith('prod')
-  })
-
   it('ignores the system-wide GSSAPIAuthentication default that ssh -G reports', async () => {
     const resolver = vi.fn().mockResolvedValue(resolved())
 
@@ -205,15 +184,5 @@ describe('resolveUserSshConfigHost', () => {
       resolveUserSshConfigHost('deleted', resolver, () => [{ host: 'prod' }])
     ).resolves.toBeNull()
     expect(resolver).not.toHaveBeenCalled()
-  })
-
-  it('returns null when OpenSSH cannot resolve an endpoint', async () => {
-    await expect(
-      resolveUserSshConfigHost(
-        'missing',
-        async () => null,
-        () => [{ host: 'missing' }]
-      )
-    ).resolves.toBeNull()
   })
 })

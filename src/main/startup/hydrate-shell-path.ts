@@ -1,11 +1,12 @@
-import type { SpawnedProcess } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import { delimiter, win32 as pathWin32 } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
-import type { ShellHydrationFailureReason } from '../../shared/shell-path-hydration-types'
+import type { ShellHydrationFailureReason } from '../../shared/shell/launch/shell-path-hydration-types'
 import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-shell'
 import { SHELL_PATH_DELIMITER as DELIMITER, shellPathProbe } from './shell-path-probe'
 import { WindowsShellPathOwnership, createWindowsPathKey } from './windows-shell-path-ownership'
+import { bindShellProbeLifetime } from './shell-probe-lifetime'
 
 // GUI launches miss shell-profile PATH entries; probe the login shell instead of hardcoding every tool directory.
 
@@ -153,7 +154,7 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
     let stdout = ''
     let timer: ReturnType<typeof setTimeout> | null = null
 
-    let child: SpawnedProcess
+    let child: ChildProcess
     try {
       child = spawnProcess({
         program: shell,
@@ -161,13 +162,14 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
         // Preserve environment for rc setup while suppressing noisy shell stderr and ignoring stdin.
         env: shellProbeEnv(),
         stdio: ['ignore', 'pipe', 'ignore'],
-        detached: false
+        detached: probe.detached
       })
     } catch {
       // Synchronous spawn failure (for example Store pwsh EPERM) must reach fallback selection.
       resolve({ segments: [], ok: false, failureReason: 'spawn_error' })
       return
     }
+    const lifetime = bindShellProbeLifetime(child)
 
     const cleanup = (): void => {
       if (timer) {
@@ -177,6 +179,7 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
       child.stdout?.off('data', onStdoutData)
       child.off('error', onError)
       child.off('close', onClose)
+      lifetime.release()
     }
     const finish = (result: HydrationResult): void => {
       if (finished) {
@@ -189,11 +192,7 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
 
     timer = setTimeout(() => {
       // Bound slow rc setup so agent discovery can fall back rather than wait forever.
-      try {
-        child.kill('SIGKILL')
-      } catch {
-        // ignore
-      }
+      lifetime.kill()
       finish({ segments: [], ok: false, failureReason: 'timeout' })
     }, SPAWN_TIMEOUT_MS)
 

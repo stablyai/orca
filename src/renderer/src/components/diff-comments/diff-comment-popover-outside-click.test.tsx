@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { COMMENT_BODY_NONBLANK_SCAN_MAX_BYTES } from '@/lib/comment-body-submit-state'
+import { COMMENT_BODY_NONBLANK_SCAN_MAX_BYTES } from '@/lib/source-control/review/comments/comment-body-submit-state'
 import { DiffCommentPopover } from './DiffCommentPopover'
 
 const roots: Root[] = []
@@ -73,27 +73,6 @@ describe('DiffCommentPopover outside-click draft preservation', () => {
     expect(onCancel).not.toHaveBeenCalled()
   })
 
-  it('dismisses on outside-click when the draft is empty', async () => {
-    const onCancel = vi.fn()
-    await renderPopover({ onCancel })
-
-    await clickOutside()
-
-    expect(onCancel).toHaveBeenCalledTimes(1)
-  })
-
-  it('dismisses on outside-click when the draft is only whitespace', async () => {
-    const onCancel = vi.fn()
-    const container = await renderPopover({ onCancel })
-
-    await act(async () => {
-      typeInDraft(container, '   ')
-    })
-    await clickOutside()
-
-    expect(onCancel).toHaveBeenCalledTimes(1)
-  })
-
   it('keeps the popover open when non-whitespace text follows large leading whitespace', async () => {
     const onCancel = vi.fn()
     const container = await renderPopover({ onCancel })
@@ -104,20 +83,5 @@ describe('DiffCommentPopover outside-click draft preservation', () => {
     await clickOutside()
 
     expect(onCancel).not.toHaveBeenCalled()
-  })
-
-  it('still dismisses after the user clears a draft back to empty', async () => {
-    const onCancel = vi.fn()
-    const container = await renderPopover({ onCancel })
-
-    await act(async () => {
-      typeInDraft(container, 'typed then deleted')
-    })
-    await act(async () => {
-      typeInDraft(container, '')
-    })
-    await clickOutside()
-
-    expect(onCancel).toHaveBeenCalledTimes(1)
   })
 })

@@ -1,0 +1,95 @@
+import { afterEach, beforeEach, vi } from 'vitest'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { registerHttpLinkStoreAccessor } from '@/lib/browser/navigation/http-link-routing'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
+import {
+  createCompatibleRuntimeStatusResponseIfNeeded,
+  type RuntimeEnvironmentCallRequest
+} from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
+import type { TerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
+
+export function setPlatform(userAgent: string): void {
+  vi.stubGlobal('navigator', { userAgent })
+}
+
+export function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+  return { promise, resolve }
+}
+
+export async function flushAsyncWork(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+export async function flushDoubleRaf(): Promise<void> {
+  await flushAsyncWork()
+  await flushAsyncWork()
+}
+
+/** Per-spec window/IPC stubs plus mock resets every terminal link suite shares. */
+export function installTerminalLinkTestEnvironment(doubles: TerminalLinkTestDoubles): void {
+  const {
+    openUrlMock,
+    openFileUriMock,
+    openFilePathMock,
+    statMock,
+    fsPathExistsMock,
+    runtimeEnvironmentCallMock,
+    runtimeEnvironmentTransportCallMock,
+    storeState
+  } = doubles
+
+  beforeEach(() => {
+    replaceRuntimeEnvironmentRevisions([])
+    clearRuntimeCompatibilityCacheForTests()
+    vi.clearAllMocks()
+    runtimeEnvironmentTransportCallMock.mockReset()
+    runtimeEnvironmentTransportCallMock.mockImplementation(
+      (args: RuntimeEnvironmentCallRequest) => {
+        return (
+          createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCallMock(args)
+        )
+      }
+    )
+    vi.mocked(getConnectionId).mockReturnValue(null)
+    openFilePathMock.mockResolvedValue(true)
+    storeState.settings = undefined
+    storeState.activeFileIdByWorktree = {}
+    storeState.openFiles = []
+    storeState.unifiedTabsByWorktree = {}
+    storeState.groupsByWorktree = {}
+    storeState.worktreesByRepo = {}
+    registerHttpLinkStoreAccessor(() => storeState)
+    vi.stubGlobal('window', {
+      dispatchEvent: vi.fn(),
+      api: {
+        shell: {
+          openUrl: openUrlMock,
+          openFileUri: openFileUriMock,
+          openFilePath: openFilePathMock,
+          pathExists: vi.fn().mockResolvedValue(true)
+        },
+        fs: {
+          pathExists: fsPathExistsMock,
+          stat: statMock
+        },
+        runtimeEnvironments: { call: runtimeEnvironmentTransportCallMock }
+      }
+    })
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback): number => {
+      return setTimeout(() => callback(0), 0) as unknown as number
+    })
+    vi.stubGlobal('cancelAnimationFrame', (handle: number): void => {
+      clearTimeout(handle)
+    })
+  })
+
+  afterEach(() => {
+    replaceRuntimeEnvironmentRevisions([])
+    vi.unstubAllGlobals()
+  })
+}

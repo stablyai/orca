@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import type { NestedRepoScanResult, ProjectGroup } from '../../../shared/project-group-types'
@@ -12,6 +12,7 @@ import {
   ProjectGroupScanNestedArgs,
   ProjectGroupSelectorArgs,
   ProjectGroupUpdateArgs,
+  ProjectGroupUpdateManyArgs,
   parseProjectGroupIpcArgs
 } from './repo-ipc-arg-schemas'
 import {
@@ -19,7 +20,7 @@ import {
   assertWslMoveRepoWritable
 } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { activeNestedRepoScans, runNestedRepoScanForIpc } from './nested-repo-scan-ipc'
-import { visibleProjectGroups } from '../../ssh/orcad-retained-source'
+import { visibleProjectGroups } from '../../persistence/migrating-orcad-catalog/orcad-source-visibility'
 
 export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: Store): void {
   ipcMain.handle('projectGroups:list', () => visibleProjectGroups(store))
@@ -49,6 +50,19 @@ export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: S
     )
     const updated = store.updateProjectGroup(args.groupId, args.updates)
     if (updated) {
+      notifyReposChanged(mainWindow)
+    }
+    return updated
+  })
+
+  ipcMain.handle('projectGroups:updateMany', (_event, rawArgs: unknown): ProjectGroup[] | null => {
+    const args = parseProjectGroupIpcArgs(
+      ProjectGroupUpdateManyArgs,
+      rawArgs,
+      'invalid_project_group_update_many_args'
+    )
+    const updated = store.updateProjectGroups(args.mutations)
+    if (updated?.length) {
       notifyReposChanged(mainWindow)
     }
     return updated

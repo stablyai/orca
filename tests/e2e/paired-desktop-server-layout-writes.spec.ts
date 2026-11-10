@@ -8,7 +8,7 @@ import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   toHostSessionTabId,
   toWebTerminalSurfaceTabId
-} from '../../src/shared/terminal-surface-id'
+} from '../../src/shared/workspace-layout/terminal-surface-id'
 import { LAYOUT_INTENTS_RUNTIME_CAPABILITY } from '../../src/shared/workspace-layout/layout-intents-capability'
 import { expect, test } from './helpers/orca-app'
 import {

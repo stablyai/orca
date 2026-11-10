@@ -1,7 +1,7 @@
 import type { DiscoveredSkill, SkillSourceKind } from '../../skills'
 import { locatedPickerSkill, getSafeSkillName, isTokenSafe } from '../native-chat-reported-skill'
 import type { NativeChatSessionSkill, SlashCommandSuggestion } from './native-chat-slash-commands'
-import { stripUnsafeDisplayCharacters } from '../../skill-display-text'
+import { stripUnsafeDisplayCharacters } from '../../display-text-safety'
 import { compareBaseSensitivityLocaleText } from '../../locale-text-collators'
 
 export type NativeChatPickerItem =
@@ -16,6 +16,8 @@ export type NativeChatPickerItem =
       argumentHint?: string
       skillCollision: boolean
       orcaOwned?: true
+      /** The provider reported this as its built-in command. */
+      builtin?: true
     }
   | {
       kind: 'skill'
@@ -120,7 +122,8 @@ export function buildNativeChatPickerItems(
           ? sanitizePickerText(command.argumentHint, 80)
           : undefined,
         skillCollision: sharedSigil && !command.orcaOwned && skillNames.has(command.name),
-        ...(command.orcaOwned ? { orcaOwned: true as const } : {})
+        ...(command.orcaOwned ? { orcaOwned: true as const } : {}),
+        ...(command.builtin ? { builtin: true as const } : {})
       },
       stableOrder: index
     })),
@@ -241,6 +244,24 @@ function rankItems<T extends NativeChatPickerItem>(
     .filter((entry) => entry.rank !== null)
     .sort((a, b) => a.rank! - b.rank! || a.stableOrder - b.stableOrder)
     .map((entry) => entry.item)
+}
+
+// Commands render before skills, and Enter uses this index into that same order.
+// An exact name in the later section has to beat a fuzzy name in the earlier one.
+export function preferredNativeChatPickerIndex(
+  items: readonly NativeChatPickerItem[],
+  query: string
+): number {
+  let bestIndex = 0
+  let bestRank = Number.POSITIVE_INFINITY
+  for (let index = 0; index < items.length; index += 1) {
+    const rank = getMatchRank(items[index], query, true)
+    if (rank !== null && rank < bestRank) {
+      bestRank = rank
+      bestIndex = index
+    }
+  }
+  return bestIndex
 }
 
 function getMatchRank(

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 
 // Generate anonymous install identity once during migration; every launch reuses the persisted value.
 

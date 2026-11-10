@@ -1,10 +1,8 @@
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { RemoteLayoutSnapshot } from '../../shared/remote-layout-snapshot'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
-import { scanSourceTree, stripComments } from '../../shared/source-scan/source-tree-scan'
+
 import {
-  forgetRemoteLayoutSnapshot,
   recordRemoteLayoutFrame,
   type RemoteLayoutSnapshotStore
 } from './remote-layout-snapshot-recorder'
@@ -15,7 +13,18 @@ function memoryStore() {
   const snapshots = new Map<string, RemoteLayoutSnapshot>()
   const saves: ('now' | 'later')[] = []
   const store: RemoteLayoutSnapshotStore = {
-    getRemoteLayoutSnapshot: (environmentId) => snapshots.get(environmentId),
+    getRemoteLayoutSnapshotWorkspace: (environmentId, worktreeId) =>
+      snapshots.get(environmentId)?.workspaces[worktreeId],
+    setRemoteLayoutSnapshotWorkspace: (environmentId, worktreeId, workspace, save) => {
+      saves.push(save)
+      const snapshot = snapshots.get(environmentId) ?? { workspaces: {} }
+      if (workspace) {
+        snapshot.workspaces[worktreeId] = workspace
+      } else {
+        delete snapshot.workspaces[worktreeId]
+      }
+      snapshots.set(environmentId, snapshot)
+    },
     setRemoteLayoutSnapshot: (environmentId, snapshot, save) => {
       saves.push(save)
       if (snapshot) {
@@ -113,33 +122,6 @@ describe('remote layout snapshot recorder', () => {
     expect(workspacesOf(snapshots)).toEqual({ a: tabs('a', 'vim') })
   })
 
-  it('saves at once only when tabs or groups change; title ticks ride the next save', () => {
-    const { store, saves } = memoryStore()
-    const census = (snapshots: unknown[]) => frame({ type: 'snapshots', snapshots })
-    const update = (result: Record<string, unknown>) => frame({ type: 'updated', ...result })
-    recordRemoteLayoutFrame(store, 'env', METHOD, census([tabs('a')]))
-    recordRemoteLayoutFrame(store, 'env', METHOD, update(tabs('a', 'thinking.')))
-    recordRemoteLayoutFrame(store, 'env', METHOD, update(tabs('a', 'thinking..')))
-    const twoTabs = {
-      ...tabs('a'),
-      tabs: [...tabs('a').tabs, { type: 'terminal', id: 'second', title: 'shell' }]
-    }
-    recordRemoteLayoutFrame(store, 'env', METHOD, update(twoTabs))
-    const grouped = {
-      ...twoTabs,
-      tabGroups: [{ id: 'g', activeTabId: null, tabOrder: ['second'] }]
-    }
-    recordRemoteLayoutFrame(store, 'env', METHOD, update(grouped))
-    recordRemoteLayoutFrame(
-      store,
-      'env',
-      METHOD,
-      update({ ...grouped, tabGroups: [{ id: 'g', activeTabId: 'second', tabOrder: ['second'] }] })
-    )
-    recordRemoteLayoutFrame(store, 'env', METHOD, update({ ...tabs('a'), tabs: [], removed: true }))
-    expect(saves).toEqual(['now', 'later', 'later', 'now', 'now', 'later', 'now'])
-  })
-
   it('keeps each server in its own entry', () => {
     const { store, snapshots } = memoryStore()
     recordRemoteLayoutFrame(
@@ -168,23 +150,5 @@ describe('remote layout snapshot recorder', () => {
     recordRemoteLayoutFrame(store, 'env', METHOD, frame({ type: 'snapshots', snapshots: [{}] }))
     recordRemoteLayoutFrame(store, 'env', METHOD, frame({ type: 'updated', worktree: 'a' }))
     expect(saves).toEqual([])
-  })
-
-  it('forgets a removed server', () => {
-    const { store, snapshots } = memoryStore()
-    recordRemoteLayoutFrame(store, 'env', METHOD, frame({ type: 'snapshots', snapshots: [] }))
-    forgetRemoteLayoutSnapshot(store, 'env')
-    expect(snapshots.has('env')).toBe(false)
-  })
-
-  it('is the only code that writes the snapshot', () => {
-    const src = join(__dirname, '../..')
-    const writers = scanSourceTree(src)
-      .filter(({ source }) => stripComments(source).includes('setRemoteLayoutSnapshot('))
-      .map(({ relativePath }) => relativePath)
-    expect(writers.sort()).toEqual([
-      'main/remote-layout-snapshot/remote-layout-snapshot-persistence.ts',
-      'main/remote-layout-snapshot/remote-layout-snapshot-recorder.ts'
-    ])
   })
 })

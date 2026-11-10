@@ -1,15 +1,10 @@
+import { gitLabPipelineJobOutcome } from '../../shared/source-control/checks/gitlab/gitlab-pipeline-checks'
 import type { CheckStatus } from '../../shared/github/pull-request-types'
 import type { GitLabIssueInfo, GitLabWorkItem, MRInfo, MRState } from '../../shared/gitlab-types'
-import {
-  mapGitLabPipelineJobStatusToCheckStatus,
-  mapGitLabPipelineJobStatusToConclusion
-} from '../../shared/gitlab-pipeline-checks'
-import { summarizeProviderChecks } from '../../shared/provider-check-summary'
+
+import { summarizeProviderChecks } from '../../shared/source-control/checks/provider-check-summary'
 
 // Split GitLab's combined job lifecycle/outcome into the common check-row shape.
-
-export const mapPipelineJobStatusToCheckStatus = mapGitLabPipelineJobStatusToCheckStatus
-export const mapPipelineJobStatusToConclusion = mapGitLabPipelineJobStatusToConclusion
 
 export function mapMRState(state: string, isDraft?: boolean, title?: string): MRState {
   const s = state?.toLowerCase()
@@ -102,7 +97,10 @@ export function mapMRInfo(data: GitLabMRRaw, pipelineStatus: CheckStatus): MRInf
 }
 
 // A mergeable manual pipeline has no automatic work outstanding, but its manual stage has not passed.
-function settleManualPipelineStatus(data: GitLabMRRaw, pipelineStatus: CheckStatus): CheckStatus {
+export function settleManualPipelineStatus(
+  data: GitLabMRRaw,
+  pipelineStatus: CheckStatus
+): CheckStatus {
   const raw = (data.head_pipeline ?? data.pipeline)?.status?.toLowerCase()
   return raw === 'manual' &&
     data.detailed_merge_status === 'mergeable' &&
@@ -147,7 +145,12 @@ function deriveMergeStateStatus(
 }
 
 export function derivePipelineStatus(
-  rollup: { status?: string }[] | { status?: string } | string | null | undefined
+  rollup:
+    | { status?: string; allowFailure?: boolean }[]
+    | { status?: string }
+    | string
+    | null
+    | undefined
 ): CheckStatus {
   if (!rollup) {
     return 'neutral'
@@ -159,15 +162,7 @@ export function derivePipelineStatus(
     return classifyPipelineString(rollup.status ?? '')
   }
   // Share rollup rules so pipeline cards cannot diverge from Checks rows.
-  const { state } = summarizeProviderChecks(
-    rollup.map((job) => {
-      const s = job.status?.toLowerCase() ?? ''
-      return {
-        status: mapPipelineJobStatusToCheckStatus(s),
-        conclusion: mapPipelineJobStatusToConclusion(s)
-      }
-    })
-  )
+  const { state } = summarizeProviderChecks(rollup.map(gitLabPipelineJobOutcome))
   // The public status type uses neutral for no check results.
   return state === 'none' ? 'neutral' : state
 }
@@ -276,6 +271,7 @@ function classifyPipelineString(status: string): CheckStatus {
     s === 'created' ||
     s === 'pending' ||
     s === 'running' ||
+    s === 'waiting_for_callback' ||
     s === 'waiting_for_resource' ||
     s === 'preparing' ||
     s === 'scheduled'

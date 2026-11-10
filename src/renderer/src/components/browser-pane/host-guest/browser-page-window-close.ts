@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
-import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
-import { resolveBrowserWorkspaceOwner } from '@/lib/browser-workspace-source-resolution'
+import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
+import { resolveBrowserWorkspaceOwner } from '@/lib/browser/workspace/browser-workspace-source-resolution'
 import { BROWSER_GUEST_WINDOW_CLOSE_CHANNEL } from '../../../../../shared/browser-guest-window-close'
 
 // Why not saved: like Chrome, a restored tab no longer counts as opened by its page.
@@ -32,7 +32,8 @@ export function handleGuestWindowCloseMessage(
   const tab = (state.unifiedTabsByWorktree[owner.worktreeId] ?? []).find(
     (candidate) => candidate.contentType === 'browser' && candidate.entityId === owner.workspaceId
   )
-  if (tab?.isPinned) {
+  // A script may not discard what the user pinned or left unsent; the page's notes are all it closes.
+  if (tab?.isPinned || (state.browserAnnotationsByPageId[pageId]?.length ?? 0) > 0) {
     return
   }
   pagesOpenedByPage.delete(pageId)

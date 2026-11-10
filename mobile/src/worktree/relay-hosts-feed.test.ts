@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('react-native', () => ({ AppState: { currentState: 'active' } }))
 
-import { MOBILE_RELAY_HOSTS_LIST_METHOD } from '../../../src/shared/mobile-relay-hosts-contract'
-import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
+import { FakeSession } from '../transport/connection/mobile-endpoint-supervisor-test-fakes'
+import { stubRpcClient } from '../transport/rpc/rpc-client-test-stub'
 import { relayHostsFeed } from './relay-hosts-feed'
 
 function hostsReply(health: string) {
@@ -21,66 +21,12 @@ function desktop(health: () => string): FakeSession {
   return session
 }
 
-function listCalls(session: FakeSession): number {
-  return session.sendRequest.mock.calls.filter(
-    ([method]) => method === MOBILE_RELAY_HOSTS_LIST_METHOD
-  ).length
-}
-
 describe('the desktop’s server list', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
   })
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('is read once per poll however many readers share it', async () => {
-    const session = desktop(() => 'available')
-    const feed = relayHostsFeed(session)
-    await feed.read()
-    await vi.advanceTimersByTimeAsync(1000)
-    const unsubscribe = feed.subscribe(() => {})
-    const unsubscribeAgain = feed.subscribe(() => {})
-    expect(listCalls(session)).toBe(1)
-    await vi.advanceTimersByTimeAsync(1999)
-    expect(listCalls(session)).toBe(1)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(listCalls(session)).toBe(2)
-    await vi.advanceTimersByTimeAsync(3000)
-    expect(listCalls(session)).toBe(3)
-    unsubscribe()
-    unsubscribeAgain()
-    await vi.advanceTimersByTimeAsync(9000)
-    expect(listCalls(session)).toBe(3)
-  })
-
-  it('joins a read already in flight', async () => {
-    const session = desktop(() => 'available')
-    const feed = relayHostsFeed(session)
-    const [first, second] = await Promise.all([feed.read(), feed.read()])
-    expect(second).toBe(first)
-    expect(listCalls(session)).toBe(1)
-    expect(feed.getSnapshot()).toBe(first)
-    await feed.read()
-    expect(feed.getSnapshot()).toBe(first)
-    expect(listCalls(session)).toBe(2)
-  })
-
-  it('keeps polling after a read slower than the poll', async () => {
-    const session = desktop(() => 'available')
-    session.sendRequest.mockImplementation(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 5000))
-      return hostsReply('available')
-    })
-    const unsubscribe = relayHostsFeed(session).subscribe(() => {})
-    await vi.advanceTimersByTimeAsync(5000)
-    expect(listCalls(session)).toBe(1)
-    await vi.advanceTimersByTimeAsync(3000)
-    expect(listCalls(session)).toBe(2)
-    unsubscribe()
-    await vi.advanceTimersByTimeAsync(5000)
-    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('drops a reply that lands after a drop and reconnect', async () => {
@@ -102,21 +48,31 @@ describe('the desktop’s server list', () => {
     expect(feed.getSnapshot()?.[0]?.health).toBe('error')
   })
 
-  it('forgets its answer on a drop, and reads again on reconnect', async () => {
-    let health = 'available'
-    const session = desktop(() => health)
-    const feed = relayHostsFeed(session)
-    const unsubscribe = feed.subscribe(() => {})
+  it('reads again when the desktop says its hosts changed, instead of every few seconds', async () => {
+    let emit: (event: unknown) => void = () => {}
+    let reads = 0
+    const client = stubRpcClient({
+      getLastConnectedAt: () => 1,
+      subscribe: (_method, _params, onData) => {
+        emit = onData
+        return () => {}
+      },
+      sendRequest: async () => {
+        reads += 1
+        return hostsReply('available')
+      }
+    })
+    relayHostsFeed(client).subscribe(() => {}, true)
+    emit({ type: 'ready', subscriptionId: 'events-1' })
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(reads).toBe(2)
+
+    emit({ type: 'relayHostsChanged' })
     await vi.advanceTimersByTimeAsync(0)
-    expect(feed.getSnapshot()?.[0]?.health).toBe('available')
-    session.publishState('reconnecting')
-    expect(feed.getSnapshot()).toBeNull()
-    await vi.advanceTimersByTimeAsync(9000)
-    expect(listCalls(session)).toBe(1)
-    health = 'error'
-    session.publishState('connected')
-    await vi.advanceTimersByTimeAsync(0)
-    expect(feed.getSnapshot()?.[0]?.health).toBe('error')
-    unsubscribe()
+    expect(reads).toBe(3)
+
+    // The backstop still asks the desktop, in case a notice was lost.
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(reads).toBe(4)
   })
 })

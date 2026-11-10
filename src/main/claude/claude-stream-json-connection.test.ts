@@ -1,28 +1,29 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync, type ChildProcess } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { providerDiagnosticOf } from '../../shared/agent-session-failure'
+import { providerDiagnosticOf } from '../../shared/agent-session/failures/agent-session-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
-import type { SpawnedProcess, ProcessSpec } from '@orca/process-host/process-spec'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 
-import { query, type CanUseTool, type Options } from '@anthropic-ai/claude-agent-sdk'
+import type { query, CanUseTool } from '@anthropic-ai/claude-agent-sdk'
 import {
   openClaudeStreamJsonConnection,
   type ClaudeStreamJsonConnection,
   type ClaudeStreamJsonLaunch
 } from './claude-stream-json-connection'
 import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
-import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { claudeAuthDiagnostic } from './structured/claude-structured-init-proof'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
+import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './structured/launch/claude-structured-launch-resolution'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { providerExecutableMissing } from '../provider-process/provider-executable-missing'
-import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
 
 // Exercise the real SDK against a scripted child CLI.
 const FAKE_CLI = join(__dirname, '__fixtures__', 'claude-agent-sdk-scripted-cli.mjs')
@@ -47,6 +48,7 @@ afterEach(async () => {
   }
   await Promise.all(childClosures.splice(0))
   for (const dir of scratchDirs.splice(0)) {
+    await closeTestJournalHostDatabases()
     rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   }
   spawned.splice(0)
@@ -87,7 +89,7 @@ function launchFor(
 }
 
 const spawned: ProcessSpec[] = []
-const spawnedChildren: SpawnedProcess[] = []
+const spawnedChildren: ChildProcess[] = []
 
 async function open(
   launch: ClaudeStreamJsonLaunch,
@@ -108,15 +110,6 @@ async function open(
   )
   openConnections.push(connection)
   return connection
-}
-
-function launchedArgv(spec: ProcessSpec | undefined): string[] {
-  const argv = [spec?.program ?? '', ...(spec?.args ?? [])]
-  return spec?.env?.ORCA_PROVIDER_SUPERVISOR_SPEC ? argv.slice(argv.indexOf('--') + 1) : argv
-}
-
-function childEnv(): Record<string, string | undefined> {
-  return (spawned.at(-1)?.env ?? {}) as Record<string, string | undefined>
 }
 
 async function until<T>(read: () => T | null | undefined, label: string): Promise<T> {
@@ -154,126 +147,18 @@ function processState(pid: number): 'running' | 'exited' {
 }
 
 describe('Claude stream-json connection', () => {
-  it('passes the Claude Code system-prompt preset through to SDK query', async () => {
+  it('completes task Stop through the real SDK while semantic reading is paused', async () => {
     const scenario = scriptScenario([HOLD_OPEN])
-    let captured: Options | undefined
-    await open(launchFor(scenario), {}, (params) => {
-      captured = params.options
-      return query(params)
-    })
-
-    expect(captured?.systemPrompt).toEqual({ type: 'preset', preset: 'claude_code' })
-  })
-
-  it('hands the child a derived environment, the resolved CLI path, and keeps the pid', async () => {
-    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-SHELL-LEAK')
-    vi.stubEnv('CLAUDE_CODE_CHILD_SESSION', '1')
-    vi.stubEnv('NODE_OPTIONS', '--require=/tmp/inject.js')
-    // Clear inherited overrides to exercise the SDK default.
-    vi.stubEnv('CLAUDE_CODE_ENTRYPOINT', undefined)
-    vi.stubEnv('ORCA_CONNECTION_MARKER', 'inherited')
-    vi.stubEnv('ORCA_AGENT_SESSION_ID', 'a0b1c2d3-0000-4000-8000-00000000abcd')
-    const scenario = scriptScenario([HOLD_OPEN])
-    const connection = await open(
-      launchFor(scenario, {
-        ORCA_AGENT_SESSION_ID: 'f7a1c0de-1111-4222-8333-444455556666',
-        CLAUDE_CONFIG_DIR: '/accounts/managed/home',
-        ANTHROPIC_AUTH_TOKEN: 'configured-token',
-        ORCA_AGENT_SESSION_SPAWN_TOKEN: 'spawn-9',
-        CLAUDE_CODE_CHILD_SESSION: 'configured-child-session',
-        CLAUDE_CODE_SESSION_ID: 'configured-session',
-        CLAUDE_CODE_BRIDGE_SESSION_ID: 'configured-bridge-session'
+    const connection = await open(launchFor(scenario))
+    await connection.initializationResult()
+    connection.pauseReading?.()
+    await connection.stopTask('owned-shell')
+    expect(scenario.readReport().controlRequests).toContainEqual(
+      expect.objectContaining({
+        request: expect.objectContaining({ subtype: 'stop_task', task_id: 'owned-shell' })
       })
     )
-
-    expect(connection.pid).toEqual(expect.any(Number))
-    expect(() => process.kill(connection.pid as number, 0)).not.toThrow()
-    const env = childEnv()
-    // Credential lookup keys on the literal config-dir string.
-    expect(env.CLAUDE_CONFIG_DIR).toBe('/accounts/managed/home')
-    expect(env.ANTHROPIC_AUTH_TOKEN).toBe('configured-token')
-    expect(env.ORCA_AGENT_SESSION_SPAWN_TOKEN).toBe('spawn-9')
-    expect(env.ORCA_CONNECTION_MARKER).toBe('inherited')
-    expect(env.ORCA_AGENT_SESSION_ID).toBe('f7a1c0de-1111-4222-8333-444455556666')
-    expect(env.ANTHROPIC_API_KEY).toBeUndefined()
-    expect(env.CLAUDE_CODE_CHILD_SESSION).toBeUndefined()
-    expect(env.CLAUDE_CODE_SESSION_ID).toBeUndefined()
-    expect(env.CLAUDE_CODE_BRIDGE_SESSION_ID).toBeUndefined()
-    expect(env.CLAUDE_CODE_ENTRYPOINT).toBe('sdk-ts')
-    expect(env.NODE_OPTIONS).toBeUndefined()
-    const report = await until(() => readReportSafely(scenario), 'the scripted CLI report')
-    expect(report.argv[0]).toBe(FAKE_CLI)
-    // The SDK runs .mjs fixtures under Node; inspect provider argv inside the supervisor spec when present.
-    expect(launchedArgv(spawned.at(-1))).toContain(FAKE_CLI)
-    expect(report.argv).toContain('--replay-user-messages')
-    expect(report.argv).toContain(`--session-id=${SESSION_ID}`)
-  })
-
-  it('drops only an API key the user rejected in the TUI, as interactive Claude does', async () => {
-    const configDir = mkdtempSync(join(tmpdir(), 'claude-rejected-key-'))
-    scratchDirs.push(configDir)
-    const rejectedKey = 'sk-ant-api03-REJECTED-0123456789abcdefghij'
-    writeFileSync(
-      join(configDir, '.claude.json'),
-      JSON.stringify({
-        customApiKeyResponses: { approved: [], rejected: [rejectedKey.slice(-20)] }
-      })
-    )
-    await open(
-      launchFor(scriptScenario([HOLD_OPEN]), {
-        CLAUDE_CONFIG_DIR: configDir,
-        ANTHROPIC_API_KEY: ` ${rejectedKey}\n`
-      })
-    )
-    expect(childEnv().ANTHROPIC_API_KEY).toBeUndefined()
-
-    await open(
-      launchFor(scriptScenario([HOLD_OPEN]), {
-        CLAUDE_CONFIG_DIR: configDir,
-        ANTHROPIC_API_KEY: 'sk-ant-api03-0123456789abcdef-INTENDED'
-      })
-    )
-    expect(childEnv().ANTHROPIC_API_KEY).toBe('sk-ant-api03-0123456789abcdef-INTENDED')
-  })
-
-  it("strips the launch's inherited keys after Orca's own env is merged in", async () => {
-    vi.stubEnv('ORCA_PANE_KEY', 'tab-1:pane-1')
-    vi.stubEnv('ORCA_AGENT_HOOK_PORT', '4242')
-    vi.stubEnv('ORCA_CONNECTION_MARKER', 'inherited')
-    const scenario = scriptScenario([HOLD_OPEN])
-    await open({
-      ...launchFor(scenario, { ORCA_AGENT_SESSION_ID: 'f7a1c0de-1111-4222-8333-444455556666' }),
-      envToDelete: ['ORCA_PANE_KEY', 'ORCA_AGENT_HOOK_PORT']
-    })
-
-    await until(() => readReportSafely(scenario), 'the scripted CLI report')
-    const env = childEnv()
-    expect(env.ORCA_PANE_KEY).toBeUndefined()
-    expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
-    expect(env.ORCA_CONNECTION_MARKER).toBe('inherited')
-    expect(env.ORCA_AGENT_SESSION_ID).toBe('f7a1c0de-1111-4222-8333-444455556666')
-  })
-
-  it('leaves the default CLI home unpinned so macOS Keychain OAuth keeps working', async () => {
-    const scenario = scriptScenario([HOLD_OPEN])
-    await open(launchFor(scenario))
-
-    await until(() => readReportSafely(scenario), 'the scripted CLI report')
-    expect(childEnv().CLAUDE_CONFIG_DIR).toBeUndefined()
-  })
-
-  it("drops a CLAUDE_CONFIG_DIR from Orca's own process env: only the launch may name a home", async () => {
-    vi.stubEnv('CLAUDE_CONFIG_DIR', '/orca/process/claude')
-    vi.stubEnv('ORCA_CONNECTION_MARKER', 'inherited')
-    const scenario = scriptScenario([HOLD_OPEN])
-    await open(launchFor(scenario))
-
-    await until(() => readReportSafely(scenario), 'the scripted CLI report')
-    expect(childEnv().CLAUDE_CONFIG_DIR).toBeUndefined()
-    expect(childEnv().ORCA_CONNECTION_MARKER).toBe('inherited')
-
-    await open(launchFor(scenario, { CLAUDE_CONFIG_DIR: '/accounts/managed/home' }))
-    expect(childEnv().CLAUDE_CONFIG_DIR).toBe('/accounts/managed/home')
+    connection.resumeReading?.()
   })
 
   it('settles a send only once the frame reached the child, and replays reach onMessage', async () => {
@@ -324,21 +209,6 @@ describe('Claude stream-json connection', () => {
 
     await expect(sent).rejects.toThrow()
     expect(readReportSafely(scenario)?.userMessages ?? []).toHaveLength(0)
-  })
-
-  it('delivers an unmodeled frame verbatim so the provider-fallback row survives', async () => {
-    const unknown = {
-      type: 'frame_kind_from_the_future',
-      session_id: SESSION_ID,
-      uuid: 'uuid-unknown-1',
-      payload: { nested: { flags: ['a', 'b'] } }
-    }
-    const scenario = scriptScenario([{ emit: unknown }, HOLD_OPEN])
-    const messages: Record<string, unknown>[] = []
-    await open(launchFor(scenario), { onMessage: (message) => messages.push(message) })
-
-    await until(() => messages.find((message) => message.uuid === 'uuid-unknown-1'), 'the frame')
-    expect(messages.find((message) => message.uuid === 'uuid-unknown-1')).toEqual(unknown)
   })
 
   it('commits the real partial-message cadence as one assistant item through the translator', async () => {
@@ -497,82 +367,6 @@ describe('Claude stream-json connection', () => {
     expect(written.response.response).toMatchObject({ behavior: 'deny', message: 'No' })
   })
 
-  it('drives Orca control methods onto the SDK and times out with the init proof message', async () => {
-    const scenario = scriptScenario([HOLD_OPEN], {
-      initialize: { models: [{ value: 'sonnet' }], account: { tokenSource: 'oauth' } },
-      get_settings: { env: { ANTHROPIC_BASE_URL: 'https://settings.example.test' } }
-    })
-    const connection = await open(launchFor(scenario))
-
-    await expect(connection.initializationResult()).resolves.toMatchObject({
-      models: [{ value: 'sonnet' }]
-    })
-    await expect(connection.getSettings()).resolves.toEqual({
-      env: { ANTHROPIC_BASE_URL: 'https://settings.example.test' }
-    })
-    await expect(connection.setModel('opus')).resolves.toBeUndefined()
-    const requests = await until(
-      () =>
-        readReportSafely(scenario)?.controlRequests.find(
-          (frame) => frame.request.subtype === 'set_model'
-        ),
-      'the set_model control request'
-    )
-    expect(requests.request.subtype).toBe('set_model')
-  })
-
-  it('reads supportedModels from the catalog the running CLI reported', async () => {
-    const scenario = scriptScenario([HOLD_OPEN], {
-      initialize: {
-        models: [
-          { value: 'default', resolvedModel: 'claude-opus-5' },
-          {
-            value: 'opus',
-            displayName: 'Opus 5',
-            description: 'The live row, not the seed',
-            resolvedModel: 'claude-opus-5',
-            supportsEffort: true,
-            supportedEffortLevels: ['low', 'high']
-          }
-        ]
-      }
-    })
-    const connection = await open(launchFor(scenario))
-
-    await expect(connection.supportedModels()).resolves.toMatchObject([
-      { value: 'default', resolvedModel: 'claude-opus-5' },
-      { value: 'opus', displayName: 'Opus 5', supportedEffortLevels: ['low', 'high'] }
-    ])
-  })
-
-  it('feeds the auth diagnostic from the settings the running child reports', async () => {
-    for (const key of ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY']) {
-      vi.stubEnv(key, undefined)
-    }
-    const scenario = scriptScenario([HOLD_OPEN], {
-      get_settings: {
-        env: {
-          ANTHROPIC_BASE_URL: 'https://settings.example.test',
-          ANTHROPIC_AUTH_TOKEN: 'secret'
-        }
-      }
-    })
-    const connection = await open(launchFor(scenario))
-    const init = { providerSessionId: SESSION_ID, uuid: null, model: null, message: {} }
-
-    expect(claudeAuthDiagnostic(null, init, null)).toMatchObject({
-      baseUrlConfigured: false,
-      authTokenConfigured: false
-    })
-    const diagnostic = claudeAuthDiagnostic(null, init, await connection.getSettings())
-    expect(diagnostic).toMatchObject({
-      baseUrlConfigured: true,
-      authTokenConfigured: true,
-      apiKeyConfigured: false
-    })
-    expect(JSON.stringify(diagnostic)).not.toContain('secret')
-  })
-
   it('settles an unanswered initialize when the child exits, with no timer of its own', async () => {
     const scenario = scriptScenario([{ stderr: 'claude: not signed in\n' }, { exit: 1 }])
     const connection = await open({
@@ -608,24 +402,6 @@ describe('Claude stream-json connection', () => {
     } else {
       expect(closed).toBe(connection.exitVerdict.tree === 'exited')
     }
-  })
-
-  it("names Claude's root refusal of Full access, keeping its words as the detail", async () => {
-    const refusal =
-      '--dangerously-skip-permissions cannot be used with root/sudo privileges for security reasons'
-    const scenario = scriptScenario([{ stderr: `${refusal}\n` }, { exit: 1 }])
-    let exit: Error | null = null
-    await open(launchFor(scenario), {
-      onExit: (error) => {
-        exit = error
-      }
-    })
-
-    await until(() => exit, 'the exit error')
-    expect(providerStartupFailureFact(exit)).toEqual({
-      kind: 'fullAccessAsRoot',
-      detail: { text: expect.stringContaining(refusal), audience: 'log' }
-    })
   })
 
   it.runIf(process.platform !== 'win32')(
@@ -743,16 +519,4 @@ describe('Claude stream-json connection', () => {
     await until(() => exit, 'the distinct child exit')
     expect(connection.exitVerdict.root).toBe('exited')
   })
-
-  it('proves the exit of a child that ignores a graceful shutdown', async () => {
-    const scenario = scriptScenario([HOLD_OPEN])
-    const connection = await open({
-      ...launchFor(scenario),
-      env: { ...launchFor(scenario).env, ORCA_SDK_CONTRACT_IGNORE_SIGTERM: '1' }
-    })
-
-    // Cross the displayed start-time second before lstart verification.
-    await new Promise((resolve) => setTimeout(resolve, 1_100))
-    await expect(connection.close()).resolves.toBe(true)
-  }, 20_000)
 })

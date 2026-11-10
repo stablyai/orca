@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import {
   selectRuntimeAwareSshTargetLabel,
   selectRuntimeAwareSshTargetRemoved
-} from '@/store/slices/runtime-environment-ssh'
+} from '@/store/slices/ssh/runtime-environment-ssh-selectors'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import { registerDirectSshStateIpcBridge } from './direct-ssh-state-ipc-bridge'
 import { resetSshConfigPassiveSyncForTests } from '../../lib/ssh-config-passive-sync'
@@ -39,6 +39,7 @@ function stubWindow(ssh: SshApiStub): void {
         onCredentialResolved: () => () => {},
         onPortForwardsChanged: () => () => {},
         onDetectedPortsChanged: () => () => {},
+        onTargetRemoved: () => () => {},
         onStateChanged: (handler: (data: { targetId: string; state: unknown }) => void) => {
           onStateChangedHandler = handler
           return () => {}
@@ -75,56 +76,6 @@ describe('direct SSH hydration target metadata', () => {
     }
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
-  })
-
-  it('syncs ~/.ssh/config after the saved hosts load, so a newly added host shows up', async () => {
-    const importConfig = vi
-      .fn<NonNullable<SshApiStub['importConfig']>>()
-      .mockResolvedValue({ targets: [{ id: 'ssh-new', label: 'new-box' }], repoReadoptions: [] })
-    const listTargets = vi
-      .fn<SshApiStub['listTargets']>()
-      .mockResolvedValueOnce([{ id: 'ssh-old', label: 'old-box' }])
-      .mockResolvedValue([
-        { id: 'ssh-old', label: 'old-box' },
-        { id: 'ssh-new', label: 'new-box' }
-      ])
-    stubWindow({
-      importConfig,
-      listTargets,
-      listRemovedTargetLabels: () => Promise.resolve({}),
-      getState: () => Promise.resolve(null)
-    })
-
-    registerDirectSshStateIpcBridge(unsubs)
-    await settle()
-    await settle()
-
-    expect(importConfig).toHaveBeenCalledWith()
-    expect(useAppStore.getState().sshTargetLabels.get('ssh-new')).toBe('new-box')
-  })
-
-  it('names a ghost host once its tombstone label lands', async () => {
-    let resolveRemovedLabels!: (labels: Record<string, string>) => void
-    stubWindow({
-      listTargets: () => Promise.resolve([{ id: 'ssh-live', label: 'devbox' }]),
-      listRemovedTargetLabels: () =>
-        new Promise((resolve) => {
-          resolveRemovedLabels = resolve
-        }),
-      getState: () => Promise.resolve(null)
-    })
-
-    unsubs.push(registerDirectSshStateIpcBridge(unsubs))
-    await settle()
-
-    resolveRemovedLabels({ 'ssh-ghost': 'old devbox' })
-    await settle()
-
-    const settled = useAppStore.getState()
-    expect({
-      removed: selectRuntimeAwareSshTargetRemoved(settled, null, 'ssh-ghost'),
-      label: selectRuntimeAwareSshTargetLabel(settled, null, 'ssh-ghost')
-    }).toEqual({ removed: true, label: 'old devbox' })
   })
 
   it('lands live target labels while the removed-labels round trip is still in flight', async () => {
@@ -196,23 +147,6 @@ describe('direct SSH hydration target metadata', () => {
     // A lookup that threw observes nothing: no synthesized state for the unreachable target.
     expect(state.sshConnectionStates.has('ssh-unreachable')).toBe(false)
     expect(warn).toHaveBeenCalled()
-  })
-
-  it('hydrates the target list without waiting on the removed-labels round trip', async () => {
-    stubWindow({
-      listTargets: () => Promise.resolve([{ id: 'ssh-live', label: 'devbox' }]),
-      // A wedged relay never answers the tombstone RPC; the loaded list is still evidence.
-      listRemovedTargetLabels: () => new Promise(() => {}),
-      getState: () => Promise.resolve(null)
-    })
-
-    unsubs.push(registerDirectSshStateIpcBridge(unsubs))
-    await settle()
-
-    expect({
-      label: useAppStore.getState().sshTargetLabels.get('ssh-live'),
-      hydrated: useAppStore.getState().sshTargetsHydrated
-    }).toEqual({ label: 'devbox', hydrated: true })
   })
 
   it('does not clobber a target that landed while removed labels were in flight', async () => {

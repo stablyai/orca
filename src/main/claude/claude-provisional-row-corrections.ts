@@ -1,14 +1,14 @@
 // Publish before task_started using the spawn ID; correct attribution later without replacing content.
 
-import { agentJournalLinkageFields } from '../../shared/agent-session-journal-producer'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { agentJournalLinkageFields } from '../../shared/agent-session/journal/agent-session-journal-producer'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
-  AgentJournalItemIdentity,
-  AgentJournalProducerLinkage,
-  AgentJournalTurnScope
-} from '../../shared/agent-session-journal-types'
-import type { StructuredAgentSessionItemAppendOptions } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+  AgentJournalProducerLinkage
+} from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
+import type { StructuredAgentSessionItemAppendOptions } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { ClaudeSubagentLinkageSource } from './claude-subagent-linkage'
 
 export type ClaudeRowStamp = (

@@ -4,15 +4,15 @@ import type { PRFilterChange } from '@/components/github/PRFilterSections'
 import {
   scopeGitHubTaskSearch,
   getDefaultPresetForGitHubTaskKind
-} from '../../../../shared/task-github-search'
-import { withQualifier } from '../../../../shared/task-query'
+} from '../../../../shared/work-items/task-github-search'
+import { matchGitHubPRPreset, patchGitHubTaskQuery } from './github/task-page-pr-chips'
 import type { TaskViewPresetId } from '../../../../shared/ui-chrome-types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { GitHubTaskKind } from '@/components/task-page/task-page-localized-options'
-import { getTaskPresetQuery } from '../../../../shared/task-preset-query'
-import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { getTaskPresetQuery } from '../../../../shared/work-items/task-preset-query'
+import { shouldSuppressEnterSubmit } from '@/lib/workspace/creation/new-workspace-enter-guard'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel) {
   const {
     setTaskResumeState,
@@ -36,46 +36,20 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
   } = model
   const applyPRFilterChange = useCallback(
     (change: PRFilterChange): void => {
-      let next = scopeGitHubTaskSearch(taskSearchInput, activeGithubTaskKind)
       // Round-trip through parseTaskQuery so dropdown patches preserve other filters and free text.
-      if ('author' in change) {
-        next = withQualifier(next, 'author', change.author ?? null)
-      }
-      if ('assignee' in change) {
-        next = withQualifier(next, 'assignee', change.assignee ?? null)
-      }
-      if ('labels' in change) {
-        next = withQualifier(next, 'labels', change.labels ?? [])
-      }
-      if ('state' in change && change.state) {
-        next = withQualifier(next, 'state', change.state)
-        if (change.state !== 'open') {
-          next = withQualifier(next, 'draft', null)
-        }
-      }
-      if ('draft' in change) {
-        next = withQualifier(next, 'draft', change.draft ? 'true' : 'false')
-      }
-      if ('reviewer' in change) {
-        // Why: the two reviewer qualifiers are mutually exclusive — clear the other whenever one is set so the chip matches the query.
-        const reviewer = change.reviewer ?? null
-        if (reviewer === null) {
-          next = withQualifier(next, 'reviewRequested', null)
-          next = withQualifier(next, 'reviewedBy', null)
-        } else if (reviewer.kind === 'requested') {
-          next = withQualifier(next, 'reviewedBy', null)
-          next = withQualifier(next, 'reviewRequested', reviewer.login)
-        } else {
-          next = withQualifier(next, 'reviewRequested', null)
-          next = withQualifier(next, 'reviewedBy', reviewer.login)
-        }
-      }
-      setTaskSearchInput(next)
-      setAppliedTaskSearch(next)
-      setActiveTaskPreset(null)
+      const next = patchGitHubTaskQuery(
+        scopeGitHubTaskSearch(taskSearchInput, activeGithubTaskKind),
+        change
+      )
+      // Why: a query equal to a saved PR preset is applied as that preset, or restore, prefetch keys and the phone see an unknown string.
+      const preset = activeGithubTaskKind === 'prs' ? matchGitHubPRPreset(next) : null
+      const query = preset ? getTaskPresetQuery(preset) : next
+      setTaskSearchInput(query)
+      setAppliedTaskSearch(query)
+      setActiveTaskPreset(preset)
       setTaskResumeState({
-        githubItemsPreset: null,
-        githubItemsQuery: next
+        githubItemsPreset: preset,
+        githubItemsQuery: query
       })
       // Why: a filter change replaces every row's meaning; show the load skeleton so stale rows don't read as if the filter did nothing.
       setTasksFiltering(true)

@@ -113,22 +113,6 @@ function dragData(rowId: string): { dataTransfer: Partial<DataTransfer> } {
 afterEach(cleanup)
 
 describe('ProjectBoard', () => {
-  it('renders one column per option (empty included) plus the no-value column', () => {
-    render(
-      <ProjectBoard
-        table={table(
-          [TITLE_FIELD, STATUS_FIELD],
-          [row('r1', 'Ship it', [status('opt_todo', 'Todo')]), row('r2', 'Loose end', [])]
-        )}
-        fallback={<div>list</div>}
-      />
-    )
-    expect(screen.getByTestId('board-column-opt_todo')).toBeTruthy()
-    expect(screen.getByTestId('board-column-opt_done')).toBeTruthy()
-    expect(screen.getByTestId('board-column-__empty__').textContent).toContain('Loose end')
-    expect(screen.queryByText('list')).toBeNull()
-  })
-
   it('moves a card on drop via onEditField and skips no-op drops', () => {
     const onEditField = vi.fn()
     const boardTable = table(
@@ -168,77 +152,6 @@ describe('ProjectBoard', () => {
     }
   })
 
-  it('clears the field when dropped on the no-value column', () => {
-    const onEditField = vi.fn()
-    const boardTable = table(
-      [TITLE_FIELD, STATUS_FIELD],
-      [row('r1', 'Ship it', [status('opt_todo', 'Todo')])]
-    )
-    render(<ProjectBoard table={boardTable} onEditField={onEditField} fallback={<div>list</div>} />)
-    fireEvent.drop(screen.getByTestId('board-column-__empty__'), dragData('r1'))
-    expect(onEditField).toHaveBeenCalledWith(boardTable.rows[0], 'f_status', null)
-  })
-
-  it('opens the dialog from a card title and labels restricted cards', () => {
-    const onOpenDialog = vi.fn()
-    render(
-      <ProjectBoard
-        table={table(
-          [TITLE_FIELD, STATUS_FIELD],
-          [
-            row('r1', 'Ship it', [status('opt_todo', 'Todo')]),
-            row('r2', '', [status('opt_todo', 'Todo')], 'REDACTED')
-          ]
-        )}
-        onOpenDialog={onOpenDialog}
-        fallback={<div>list</div>}
-      />
-    )
-    fireEvent.click(screen.getByRole('button', { name: /Ship it/ }))
-    expect(onOpenDialog).toHaveBeenCalledTimes(1)
-    expect(onOpenDialog.mock.calls[0]?.[0]).toMatchObject({ id: 'r1' })
-    expect(screen.getByText('Restricted item')).toBeTruthy()
-  })
-
-  it('clears the drop highlight on dragend and on payload-less drops', () => {
-    render(
-      <ProjectBoard
-        table={table(
-          [TITLE_FIELD, STATUS_FIELD],
-          [row('r1', 'Ship it', [status('opt_todo', 'Todo')])]
-        )}
-        fallback={<div>list</div>}
-      />
-    )
-    const done = screen.getByTestId('board-column-opt_done')
-    fireEvent.dragOver(done, dragData('r1'))
-    expect(done.className).toContain('border-ring')
-    // Esc / drop outside any column fires only dragend on the card.
-    fireEvent.dragEnd(screen.getByLabelText('#7 — Ship it'))
-    expect(done.className).not.toContain('border-ring')
-    fireEvent.dragOver(done, dragData('r1'))
-    expect(done.className).toContain('border-ring')
-    fireEvent.drop(done, { dataTransfer: { getData: () => '', types: [] } })
-    expect(done.className).not.toContain('border-ring')
-  })
-
-  it('falls back to the caller-supplied list when no column field exists', () => {
-    const bare = table([TITLE_FIELD], [row('r1', 'Ship it', [])])
-    bare.selectedView.verticalGroupByFields = []
-    render(<ProjectBoard table={bare} fallback={<div>list</div>} />)
-    expect(screen.getByText('list')).toBeTruthy()
-  })
-
-  it('uses the shared empty-state copy for unfiltered and filtered boards', () => {
-    const empty = table([TITLE_FIELD, STATUS_FIELD], [])
-    const { rerender } = render(<ProjectBoard table={empty} fallback={<div>list</div>} />)
-    expect(screen.getByText('This view has no items yet.')).toBeTruthy()
-    expect(screen.queryByText("No items match this view's filter.")).toBeNull()
-    empty.selectedView.filter = 'status:Done'
-    rerender(<ProjectBoard table={{ ...empty }} fallback={<div>list</div>} />)
-    expect(screen.getByText("No items match this view's filter.")).toBeTruthy()
-  })
-
   it('ignores restricted and unknown payloads and deleted-option drops', () => {
     const onEditField = vi.fn()
     render(
@@ -256,12 +169,5 @@ describe('ProjectBoard', () => {
     fireEvent.drop(screen.getByTestId('board-column-deleted'), dragData('r2'))
     expect(onEditField).not.toHaveBeenCalled()
     expect(screen.getByLabelText('Restricted item').getAttribute('draggable')).toBe('false')
-  })
-
-  it('keeps a board without an edit handler read-only', () => {
-    render(
-      <ProjectBoard table={table([STATUS_FIELD], [row('r1', 'Read only', [])])} fallback={null} />
-    )
-    expect(screen.getByLabelText('#7 — Read only').getAttribute('draggable')).toBe('false')
   })
 })

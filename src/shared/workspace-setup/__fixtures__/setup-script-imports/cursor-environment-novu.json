@@ -1,0 +1,30 @@
+{
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "repositoryDependencies": ["github.com/novuhq/packages-enterprise", "github.com/novuhq/thalamus"],
+  "install": "bash .cursor/scripts/install.sh",
+  "start": "bash .cursor/scripts/start.sh",
+  "terminals": [
+    {
+      "name": "API",
+      "command": "pnpm start:api:dev",
+      "ports": [3000]
+    },
+    {
+      "name": "Worker",
+      "command": "pnpm start:worker"
+    },
+    {
+      "name": "Dashboard",
+      "command": "pnpm start:dashboard",
+      "ports": [4201]
+    },
+    {
+      "name": "WebSocket",
+      "command": "pnpm start:ws",
+      "ports": [3002]
+    }
+  ]
+}
