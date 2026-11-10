@@ -9,6 +9,9 @@ export type SessionSearchFileRow = {
   identity: SessionSearchFileIdentity
   mtimeMs: number
   sizeBytes: number | null
+  /** Stat of the sidecar that supplied this row's messages; null when its last read saw none. */
+  sidecarMtimeMs: number | null
+  sidecarSizeBytes: number | null
   state: SessionSearchFileState
   failCount: number
   failedMtimeMs: number | null

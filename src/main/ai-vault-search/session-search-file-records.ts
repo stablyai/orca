@@ -88,11 +88,14 @@ export class SessionSearchFileRecords {
   ): void {
     const { file } = candidate
     const identity = fileIdentity(file)
+    // An unreadable sidecar proves nothing, so keep the stat the last committed read recorded.
+    const sidecarUnknown = file.sidecar === 'unknown'
+    const sidecar = typeof file.sidecar === 'object' ? file.sidecar : null
     this.db
       .prepare(
         `INSERT INTO files(path, dev, ino, byte_offset, mtime_ms, size_bytes, session_row_id,
-                           prefix_hash)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                           prefix_hash, sidecar_mtime_ms, sidecar_size_bytes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(path) DO UPDATE SET
            -- Partial observations must never create a pair that no stat proved.
            dev = CASE WHEN excluded.dev IS NOT NULL AND excluded.ino IS NOT NULL
@@ -101,7 +104,11 @@ export class SessionSearchFileRecords {
              THEN excluded.ino ELSE files.ino END,
            byte_offset = excluded.byte_offset, mtime_ms = excluded.mtime_ms,
            size_bytes = excluded.size_bytes, session_row_id = excluded.session_row_id,
-           prefix_hash = excluded.prefix_hash`
+           prefix_hash = excluded.prefix_hash,
+           sidecar_mtime_ms = CASE WHEN ? THEN files.sidecar_mtime_ms
+             ELSE excluded.sidecar_mtime_ms END,
+           sidecar_size_bytes = CASE WHEN ? THEN files.sidecar_size_bytes
+             ELSE excluded.sidecar_size_bytes END`
       )
       .run(
         file.path,
@@ -111,7 +118,11 @@ export class SessionSearchFileRecords {
         file.mtimeMs,
         file.sizeBytes ?? null,
         sessionRowId,
-        prefixHash ?? null
+        prefixHash ?? null,
+        sidecar?.mtimeMs ?? null,
+        sidecar?.sizeBytes ?? null,
+        sidecarUnknown ? 1 : 0,
+        sidecarUnknown ? 1 : 0
       )
   }
 }

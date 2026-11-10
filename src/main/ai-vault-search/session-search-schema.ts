@@ -54,7 +54,11 @@ CREATE TABLE IF NOT EXISTS files(
   -- Retry held-out failures only after the source mtime changes.
   failed_mtime_ms REAL,
   -- SHA-256 of bytes [0, byte_offset); lets a reread after restart append instead of replace.
-  prefix_hash TEXT
+  prefix_hash TEXT,
+  -- Stat of the sidecar that supplied messages, so an append there is not missed when the
+  -- metadata file this row was keyed on stays untouched.
+  sidecar_mtime_ms REAL,
+  sidecar_size_bytes INTEGER
 );
 CREATE INDEX IF NOT EXISTS files_mtime ON files(mtime_ms);
 CREATE INDEX IF NOT EXISTS files_session_mtime ON files(session_row_id, mtime_ms);
@@ -98,6 +102,7 @@ export function openSessionSearchDatabase(path: string): SyncDatabase {
             AND files.session_row_id = sessions.id)
       `)
       addSessionSearchPrefixHashColumn(db)
+      addSessionSearchSidecarStatColumns(db)
     }
   })
 }
@@ -109,6 +114,25 @@ export function addSessionSearchPrefixHashColumn(db: SyncDatabase): void {
     const columns = db.prepare('PRAGMA table_info(files)').all()
     if (!columns.some((column) => asRecord(column)?.name === 'prefix_hash')) {
       db.exec('ALTER TABLE files ADD COLUMN prefix_hash TEXT')
+    }
+    db.exec('COMMIT')
+  } catch (error) {
+    db.exec('ROLLBACK')
+    throw error
+  }
+}
+
+/** Version 8 indexes predate the columns; rows read back as null, which misses on the next sidecar. */
+export function addSessionSearchSidecarStatColumns(db: SyncDatabase): void {
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    const columns = db.prepare('PRAGMA table_info(files)').all()
+    const names = new Set(columns.map((column) => asRecord(column)?.name))
+    if (!names.has('sidecar_mtime_ms')) {
+      db.exec('ALTER TABLE files ADD COLUMN sidecar_mtime_ms REAL')
+    }
+    if (!names.has('sidecar_size_bytes')) {
+      db.exec('ALTER TABLE files ADD COLUMN sidecar_size_bytes INTEGER')
     }
     db.exec('COMMIT')
   } catch (error) {

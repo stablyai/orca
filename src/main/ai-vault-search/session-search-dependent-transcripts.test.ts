@@ -1,4 +1,4 @@
-import { mkdir, stat, unlink, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, stat, unlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { parseAgentSessionFileCached } from '../ai-vault/parse-cache/session-scanner-parse-cache'
@@ -7,6 +7,7 @@ import { resetCodexSessionIndexTitleCacheForTests } from '../ai-vault/scanners/c
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
+import { runSessionSearchIndexPass } from './session-search-index-pass'
 import {
   openSessionSearchIndexFile,
   type SessionSearchIndexFile
@@ -16,6 +17,7 @@ import {
   CODEX_ROLLOUT_FILE,
   CODEX_SESSION_ID,
   codexRolloutLines,
+  recordTimestamp,
   sessionCandidate
 } from './session-search-transcript-fixtures'
 
@@ -125,6 +127,60 @@ it.each(['opencode', 'kimi', 'grok'] as const)(
     expect(matches('olddependentmessage')).toEqual({ n: 0 })
   }
 )
+
+it('rereads an Ante session whose transcript outran its unchanged meta.json', async () => {
+  const directory = join(root, 'ante', 'sessions', SESSION_ID)
+  const metadataPath = join(directory, 'meta.json')
+  const transcriptPath = join(directory, 'events.jsonl')
+  await writeSource(
+    metadataPath,
+    JSON.stringify({ id: SESSION_ID, dir: '/repo/app', first_user_message: 'ante' })
+  )
+  await writeSource(transcriptPath, anteEventLine('user', 'oldantemessage', 0))
+  const first = await anteCandidate(metadataPath, transcriptPath)
+  await runIndexPass([first])
+  expect(matches('oldantemessage')).toEqual({ n: 1 })
+
+  // Ante rewrites meta.json at turn end, so the transcript runs ahead of the stat this row keys on.
+  await appendFile(transcriptPath, anteEventLine('assistant', 'newantemessage', 1))
+  const grown = await anteCandidate(metadataPath, transcriptPath)
+  expect(grown.file.mtimeMs).toBe(first.file.mtimeMs)
+  expect(grown.file.sizeBytes).toBe(first.file.sizeBytes)
+  expect(grown.file.sidecar).not.toEqual(first.file.sidecar)
+
+  await runIndexPass([grown])
+  expect(matches('newantemessage')).toEqual({ n: 1 })
+})
+
+/** Run the search pass the indexer runs, so the read decision is exercised as shipped. */
+async function runIndexPass(candidates: SessionFileCandidate[]): Promise<void> {
+  await runSessionSearchIndexPass(store, candidates, {
+    rows: new Map(store.files().map((row) => [row.path, row]))
+  })
+  expect(errors).toEqual([])
+}
+
+async function anteCandidate(
+  metadataPath: string,
+  transcriptPath: string
+): Promise<SessionFileCandidate> {
+  const candidate = await sessionCandidate('ante', metadataPath)
+  const sidecar = await stat(transcriptPath)
+  candidate.file.sidecar = {
+    path: transcriptPath,
+    mtimeMs: sidecar.mtimeMs,
+    sizeBytes: sidecar.size
+  }
+  return candidate
+}
+
+function anteEventLine(role: 'user' | 'assistant', text: string, index: number): string {
+  return `${JSON.stringify({
+    timestamp: recordTimestamp(index),
+    id: `evt_${index}`,
+    event: role === 'user' ? { UserInput: text } : { AgentMessage: text }
+  })}\n`
+}
 
 async function multiFileSource(agent: 'opencode' | 'kimi' | 'grok') {
   if (agent === 'opencode') {

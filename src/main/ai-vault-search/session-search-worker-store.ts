@@ -177,6 +177,10 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
               : null,
           mtimeMs: candidate.file.mtimeMs,
           sizeBytes: candidate.file.sizeBytes ?? null,
+          sidecarMtimeMs:
+            typeof candidate.file.sidecar === 'object' ? candidate.file.sidecar.mtimeMs : null,
+          sidecarSizeBytes:
+            typeof candidate.file.sidecar === 'object' ? candidate.file.sidecar.sizeBytes : null,
           state: 'current',
           failCount: 0,
           failedMtimeMs: null,

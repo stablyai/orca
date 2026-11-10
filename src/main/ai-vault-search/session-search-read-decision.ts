@@ -9,6 +9,11 @@ export const SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT = 3
 /** any forces a read; whole also discards the session-list resume point to recover missing spans. */
 export type SessionSearchReadDecision = 'skip' | SessionParseReadRequirement
 
+/**
+ * Whether an indexed file must be read again. Metadata-keyed agents (kiro/cline/ante style) keep
+ * their messages in a sidecar, so a transcript that grew after the metadata snapshot is a change
+ * even when this file's own stat is untouched.
+ */
 export function sessionSearchReadDecision(args: {
   candidate: SessionFileCandidate
   row: SessionSearchFileRow | undefined
@@ -44,7 +49,31 @@ export function sessionSearchReadDecision(args: {
   if (row.state === 'failed') {
     return 'any'
   }
+  if (!sidecarStatMatches(row, candidate.file.sidecar)) {
+    // The messages live outside this file; rereading is the only way to publish the appended turn.
+    return 'any'
+  }
   return statMatches(row, file) ? 'skip' : 'any'
+}
+
+/**
+ * Compare the sidecar stat recorded by the last committed read with this scan's observation.
+ * Rows written before the stat was persisted read back as null, which misses once so the append
+ * they may already hold is indexed.
+ */
+function sidecarStatMatches(
+  row: SessionSearchFileRow,
+  sidecar: SessionFileCandidate['file']['sidecar']
+): boolean {
+  // Absent or missing declares no sidecar, so only the metadata stat can decide.
+  if (sidecar === undefined || sidecar === 'none') {
+    return row.sidecarMtimeMs === null && row.sidecarSizeBytes === null
+  }
+  // An unreadable sidecar proves nothing about the indexed content.
+  if (sidecar === 'unknown') {
+    return false
+  }
+  return row.sidecarMtimeMs === sidecar.mtimeMs && row.sidecarSizeBytes === sidecar.sizeBytes
 }
 
 /** A held-out file is retried only when its mtime changes. */

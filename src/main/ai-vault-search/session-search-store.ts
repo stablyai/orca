@@ -208,6 +208,7 @@ export class SessionSearchStore {
           // Numeric stat IDs may exceed SQLite's safe INTEGER-to-number read range.
           `SELECT path, CAST(dev AS REAL) AS dev, CAST(ino AS REAL) AS ino,
                   mtime_ms AS mtimeMs, size_bytes AS sizeBytes,
+                  sidecar_mtime_ms AS sidecarMtimeMs, sidecar_size_bytes AS sidecarSizeBytes,
                   state, fail_count AS failCount, failed_mtime_ms AS failedMtimeMs
            FROM files`
         )
@@ -223,6 +224,8 @@ export class SessionSearchStore {
           : null,
       mtimeMs: row.mtimeMs,
       sizeBytes: row.sizeBytes,
+      sidecarMtimeMs: row.sidecarMtimeMs,
+      sidecarSizeBytes: row.sidecarSizeBytes,
       state: row.state,
       failCount: row.failCount,
       failedMtimeMs: row.failedMtimeMs

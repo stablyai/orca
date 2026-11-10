@@ -30,6 +30,8 @@ function row(overrides: Partial<SessionSearchFileRow> = {}): SessionSearchFileRo
     identity: null,
     mtimeMs: MTIME,
     sizeBytes: 100,
+    sidecarMtimeMs: null,
+    sidecarSizeBytes: null,
     state: 'current',
     failCount: 0,
     failedMtimeMs: null,
@@ -90,4 +92,36 @@ it('starts trying again the moment a held-out file changes', () => {
       row: row({ state: 'failed', failCount: 9, failedMtimeMs: MTIME })
     })
   ).toBe('any')
+})
+
+const SIDECAR = { path: '/transcripts/events.jsonl', mtimeMs: MTIME, sizeBytes: 4096 }
+
+it('skips a metadata-keyed session whose transcript sidecar is unchanged', () => {
+  expect(
+    decide({
+      file: { sidecar: SIDECAR },
+      row: row({ sidecarMtimeMs: SIDECAR.mtimeMs, sidecarSizeBytes: SIDECAR.sizeBytes })
+    })
+  ).toBe('skip')
+})
+
+it('rereads a metadata-keyed session when only its transcript sidecar changed', () => {
+  // Ante writes meta.json at turn end, so the transcript runs ahead of the metadata stat.
+  const indexed = row({ sidecarMtimeMs: SIDECAR.mtimeMs, sidecarSizeBytes: SIDECAR.sizeBytes })
+  expect(decide({ file: { sidecar: { ...SIDECAR, mtimeMs: MTIME + 1 } }, row: indexed })).toBe(
+    'any'
+  )
+  expect(decide({ file: { sidecar: { ...SIDECAR, sizeBytes: 9000 } }, row: indexed })).toBe('any')
+})
+
+it('rereads a metadata-keyed session whose sidecar stat was never persisted', () => {
+  // Rows indexed before the stat column read back as null and must miss once.
+  expect(decide({ file: { sidecar: SIDECAR }, row: row() })).toBe('any')
+})
+
+it('rereads when a stored sidecar disappears or cannot be statted', () => {
+  const indexed = row({ sidecarMtimeMs: SIDECAR.mtimeMs, sidecarSizeBytes: SIDECAR.sizeBytes })
+  expect(decide({ file: { sidecar: 'none' }, row: indexed })).toBe('any')
+  expect(decide({ file: { sidecar: 'unknown' }, row: indexed })).toBe('any')
+  expect(decide({ file: { sidecar: undefined }, row: indexed })).toBe('any')
 })
