@@ -4,23 +4,13 @@ import type { NativeChatLaunchDraft } from '@/components/native-chat/drafts/nati
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { NativeChatLaunchSeed } from './native-chat-launch-seed'
-import { PASTED_CONTENT_PLACEHOLDER } from '../../../../../shared/agent-launch/startup/agent-prompt-injection'
-import { IMAGE_PROMPT_MARKER } from '../../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
+import { composerShowsCollapsedInput } from '../../../../../shared/native-chat/input/collapsed-composer-input'
 import { canMirrorLaunchDraftToNativeChat } from '../../../../../shared/native-chat/input/native-chat-launch-draft-mirrorability'
 
 export type NativeChatTerminalDraftPickup =
   | { kind: 'seed'; draft: NativeChatLaunchDraft }
   | { kind: 'resolve'; draft: NativeChatLaunchDraft }
   | { kind: 'none' }
-
-// Claude's `[Pasted text #1 +29 lines]` beside the shared Codex paste and image markers.
-const COLLAPSED_INPUT_LABEL = new RegExp(
-  [
-    /\[Pasted text #\d+[^\]]*\]/.source,
-    PASTED_CONTENT_PLACEHOLDER.source,
-    IMAGE_PROMPT_MARKER.source
-  ].join('|')
-)
 
 export function planNativeChatTerminalDraftPickup(args: {
   tabId: string
@@ -37,7 +27,7 @@ export function planNativeChatTerminalDraftPickup(args: {
     // A collapsed paste or image label stands for content the composer can't hold, which a send would erase.
     if (
       !canMirrorLaunchDraftToNativeChat(args.terminalText) ||
-      COLLAPSED_INPUT_LABEL.test(args.terminalText)
+      composerShowsCollapsedInput(args.terminalText)
     ) {
       // The line no longer holds the earlier seed's text, so that seed must not drive the next send's clear.
       return terminalSeed ? { kind: 'resolve', draft: terminalSeed } : { kind: 'none' }

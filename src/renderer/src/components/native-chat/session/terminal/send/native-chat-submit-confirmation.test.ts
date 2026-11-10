@@ -91,6 +91,22 @@ describe('native chat submit confirmation', () => {
     await expect(handle.outcome).resolves.toBe('submitted')
     expect(verifiedInput).toHaveBeenCalledTimes(2)
   })
+
+  it('retries Enter when the composer shows a collapsed paste label', async () => {
+    let line = '[Pasted text #1 +29 lines]'
+    const { handle } = sendPrompt({
+      readInputLine: () => line,
+      submittedText: 'line one\nline two'
+    })
+    await vi.advanceTimersByTimeAsync(ENTER_DELAY_MS)
+    await vi.advanceTimersByTimeAsync(NATIVE_CHAT_SUBMIT_CONFIRM_MS)
+    // The label may stand for our text, so the dropped Enter is retried rather than settling silently.
+    expect(verifiedInput).toHaveBeenCalledTimes(3)
+
+    line = ''
+    await vi.advanceTimersByTimeAsync(NATIVE_CHAT_SUBMIT_CONFIRM_MS)
+    await expect(handle.outcome).resolves.toBe('submitted')
+  })
 })
 
 describe('composerStillHoldsSubmittedText', () => {
@@ -107,5 +123,12 @@ describe('composerStillHoldsSubmittedText', () => {
     // An image placeholder is not the sent text; matching it would press Enter a second time.
     expect(composerStillHoldsSubmittedText('[image]', '')).toBe(false)
     expect(composerStillHoldsSubmittedText('[image]', '   ')).toBe(false)
+  })
+
+  it('treats a collapsed paste label as possibly holding the sent text', () => {
+    // Claude folds a multiline paste into a label, so absence of the full text proves nothing.
+    expect(
+      composerStillHoldsSubmittedText('[Pasted text #1 +29 lines]', 'line one\nline two\nline three')
+    ).toBe(true)
   })
 })

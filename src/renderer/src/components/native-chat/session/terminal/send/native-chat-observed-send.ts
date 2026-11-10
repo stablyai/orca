@@ -10,6 +10,7 @@ import {
   type NativeChatSendOptions
 } from './native-chat-input-clear'
 import { NATIVE_CHAT_SUBMIT } from '../../../../../../../shared/native-chat/input/native-chat-paste-bytes'
+import { composerShowsCollapsedInput } from '../../../../../../../shared/native-chat/input/collapsed-composer-input'
 
 /** Gap before re-reading the composer to confirm the agent consumed Enter. */
 export const NATIVE_CHAT_SUBMIT_CONFIRM_MS = 500
@@ -27,6 +28,10 @@ export function composerStillHoldsSubmittedText(line: string | null, sent: strin
   if (!expected) {
     // An image-only send leaves no text to identify; a placeholder line proves nothing about Enter.
     return false
+  }
+  // A collapsed paste label stands for text the line cannot spell out, so it may still be ours.
+  if (composerShowsCollapsedInput(current)) {
+    return true
   }
   if (current.includes(expected)) {
     return true
