@@ -99,6 +99,7 @@ docs/**
 !docs/bug-reproductions/
 !docs/bug-reproductions/**
 !docs/STYLEGUIDE.md
+!docs/development.md
 !docs/styleguide/
 !docs/styleguide/**
 !docs/agents-md-refs/
@@ -119,6 +120,9 @@ validation-screenshots/
 
 test-results/
 playwright-report/
+
+# Claude Code settings are machine-local.
+**/.claude/settings.local.json
 
 # Agent skills are installed per machine.
 /.claude/skills/

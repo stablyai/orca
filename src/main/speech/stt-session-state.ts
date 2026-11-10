@@ -23,6 +23,8 @@ export type SttEngine = SttRecognizerConfig & {
   vadModelPath: string | undefined
   /** Called once this process is gone; set when it must not outlive its last dictation. */
   onUnloaded: (() => void)[]
+  /** Set while a canceled stream's last decode finishes; a new dictation waits for it before reusing this process. */
+  draining: Promise<void> | null
 }
 
 export type SttSession = {

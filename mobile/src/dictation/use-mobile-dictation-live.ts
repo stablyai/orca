@@ -17,10 +17,7 @@ export function useMobileDictationLive(
     cancelLatest.current = cancel
   }, [cancel])
   const stableCancel = useCallback(() => cancelLatest.current(), [])
-  const hostProfile = useHostProfile(hostId)
-  const hostTitle = useHostDisplay(hostProfile).title
-  // A workspace routed to another server transcribes there, and the phone lacks that server's name.
-  const computerName = useWorkspaceExecutionHost() === undefined && hostProfile ? hostTitle : null
+  const computerName = useDictationComputerName(hostId)
   const { meter, engine, failure, retry } = dictation
   const failureReason = failure === null ? null : dictationFailureReason(failure)
   return useMemo(
@@ -34,4 +31,11 @@ export function useMobileDictationLive(
     }),
     [meter, engine, computerName, stableCancel, failureReason, retry]
   )
+}
+
+// The computer that transcribes a session's dictation; null when another server runs the workspace and the phone lacks its name.
+export function useDictationComputerName(hostId: string): string | null {
+  const hostProfile = useHostProfile(hostId)
+  const hostTitle = useHostDisplay(hostProfile).title
+  return useWorkspaceExecutionHost() === undefined && hostProfile ? hostTitle : null
 }

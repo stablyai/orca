@@ -1,5 +1,5 @@
-import { isImeOwnedKeyboardEvent } from './ime-composition-keyboard-event'
-import { getShortcutPlatform } from './shortcut-platform'
+import { isImeOwnedKeyboardEvent } from './text-input/ime/ime-composition-keyboard-event'
+import { getShortcutPlatform } from './keyboard/shortcut-platform'
 
 type ScreenSubmitShortcutEvent = {
   key: string

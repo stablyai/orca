@@ -1,6 +1,6 @@
 import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import { getGitHubMutationTarget } from '@/components/github/github-work-item-mutation-target'
-import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
+import { taskSourceRuntimeTarget } from '@/lib/work-items/task-source-runtime-target'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
@@ -10,8 +10,8 @@ import { useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
 import {
   canUseGitHubRepoContext,
   getGitHubRepoRoutingTarget
-} from '@/lib/github-source-runtime-context'
-import { usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
+} from '@/lib/work-items/github/github-source-runtime-context'
+import { usePRBotAuthorOverrides } from '@/lib/source-control/review/pr-bot-author-overrides'
 import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,

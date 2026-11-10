@@ -7,7 +7,8 @@ vi.mock('./locale-catalog-imports', () => ({
   importLocaleCatalog: (locale: string) =>
     failing.has(locale)
       ? Promise.reject(new Error('missing chunk'))
-      : new Promise((resolve) => pending.set(locale, resolve))
+      : new Promise((resolve) => pending.set(locale, resolve)),
+  onLocaleCatalogArrival: () => () => undefined
 }))
 
 const { activateMobileUiLocale, getMobileUiLocale, mobileI18n, translate } =

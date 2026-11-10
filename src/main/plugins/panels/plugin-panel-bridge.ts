@@ -122,7 +122,7 @@ export class PluginPanelBridge {
     }
     this.replays.delete(panelId)
     for (const event of owed) {
-      const payload = await readPluginWorkspaceChange(delegate)
+      const payload = (await readPluginWorkspaceChange(delegate)).change
       if (
         this.channels.get(panelId) === channel &&
         this.subscriptions.get(panelId)?.has(event) &&

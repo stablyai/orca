@@ -2,10 +2,8 @@ import type { QuickSubmitPreparationInput } from './quick-submit-input-contract'
 
 import { useCallback } from 'react'
 import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
-import {
-  getLinkedWorkItemProvider,
-  canUseIssueCommandForLinkedItemProvider
-} from '@/lib/new-workspace'
+import { getWorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
+import { canUseIssueCommandForLinkedItemProvider } from '@/lib/new-workspace'
 import { getSetupConfig } from '../../../../shared/orca-hook-setup-config'
 import {
   deriveWorkspaceSetupState,
@@ -108,7 +106,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
         ? (submitResolvedSetupDecision ?? 'inherit')
         : 'skip'
       const submitLinkedWorkItemProvider = submitLinkedWorkItem
-        ? getLinkedWorkItemProvider(submitLinkedWorkItem)
+        ? getWorkspaceSourceProvider(submitLinkedWorkItem)
         : null
       const hookPreparation: WorktreeCreationRequest['hookPreparation'] = selectedRepoIsGit
         ? {

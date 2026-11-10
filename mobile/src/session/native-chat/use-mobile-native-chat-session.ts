@@ -15,21 +15,23 @@ import { nativeChatSessionPageRead } from './agent-session/mobile-native-chat-pa
 import {
   applyMobileNativeChatStreamFrame,
   type MobileNativeChatStreamFrame
-} from './mobile-native-chat-stream-frame'
+} from './transcript/mobile-native-chat-stream-frame'
 import { randomV4Uuid } from '../../platform/random-v4-uuid'
-import { useMobileOlderPageLoader, type OlderPagePhase } from '../use-mobile-older-page-loader'
+import {
+  useMobileOlderPageLoader,
+  type OlderPagePhase
+} from './transcript/use-mobile-older-page-loader'
 import {
   cacheMobileNativeChatTranscript,
   heldMobileNativeChatTranscript,
   mobileNativeChatResumePoint,
   mobileNativeChatTranscriptCache
-} from './mobile-native-chat-transcript-cache'
-import { terminalChatTranscriptIdentity } from './mobile-native-chat-transcript-store'
-import { noteChatTranscript } from './mobile-native-chat-transcript-writer'
-import { useStoredChatTranscript } from './use-stored-chat-transcript'
+} from './transcript/mobile-native-chat-transcript-cache'
+import { terminalChatTranscriptIdentity } from './transcript/mobile-native-chat-transcript-store'
+import { noteChatTranscript } from './transcript/mobile-native-chat-transcript-writer'
+import { useStoredChatTranscript } from './transcript/use-stored-chat-transcript'
 
 import type { MobileNativeChatStatus } from './mobile-native-chat-session-status'
-export type { MobileNativeChatStatus } from './mobile-native-chat-session-status'
 
 export type MobileNativeChatSession = {
   messages: NativeChatMessage[]

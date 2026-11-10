@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionClientDelivery } from '../publication/subscribers/structured-agent-session-client-delivery'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionMutationEnvelope,
@@ -70,5 +71,21 @@ export function structuredAgentSessionRestartResumeSurfaces(
         budgetMs: MAX_TIMER_DELAY_MS
       }),
     now
+  }
+}
+
+export function restartResumeSurfaces(
+  host: RestartResumeHostBindings,
+  now: () => number,
+  client: Pick<
+    StructuredAgentSessionClientDelivery,
+    'readChildWork' | 'childWorkOpen' | 'publishStatusAndSettlement'
+  >
+): StructuredAgentSessionRestartResumeSurfaces {
+  return {
+    ...structuredAgentSessionRestartResumeSurfaces(host, now),
+    readChildWork: client.readChildWork,
+    childWorkOpen: client.childWorkOpen,
+    publishStatus: client.publishStatusAndSettlement
   }
 }

@@ -67,7 +67,7 @@ export function VoiceDictationLanguageSetting({
   const options = codes
     .map((code) => ({ code, name: languageDisplayName(code, intlLocale) }))
     .sort((a, b) => collator.compare(a.name, b.name))
-  const label = t('components.settings.voice.dictationLanguage.title', 'Dictation Language')
+  const label = t('components.settings.voice.dictationLanguage.a9df191aba', 'Dictation language')
   const autoLabel = t('components.settings.voice.dictationLanguage.auto', 'Auto-detect')
 
   return (

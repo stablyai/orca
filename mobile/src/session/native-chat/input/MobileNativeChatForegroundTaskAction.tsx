@@ -12,7 +12,7 @@ import {
   agentSessionForegroundTaskKey,
   type AgentSessionForegroundTask
 } from '../../../../../src/shared/agent-session/agent-session-foreground-task'
-import type { MobileStructuredBackgroundTasks } from '../../use-mobile-structured-background-tasks'
+import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
 import { colors, spacing, typography, pressedStyle, radii } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
