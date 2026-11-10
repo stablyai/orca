@@ -13,6 +13,7 @@ import {
   Workflow
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { cn } from '@/lib/class-names'
 import type {
   DeveloperPermissionId,
   DeveloperPermissionState
@@ -29,6 +30,7 @@ import {
 import { showDeveloperPermissionRequestNotice } from './developer-permission-request-notice'
 import { TerminalTccAttributionNotice } from './TerminalTccAttributionNotice'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME } from '../section-layout/settings-target-highlight'
 
 type DeveloperPermissionsPaneProps = {
   highlightedSettingId?: string | null
@@ -347,8 +349,11 @@ export function DeveloperPermissionsPane({
             <div key={permission.id} data-settings-row="">
               <div
                 data-settings-section={settingId}
-                data-highlighted={highlightedSettingId === settingId ? 'true' : undefined}
-                className="-mx-5 flex items-center justify-between gap-4 px-5 py-3 transition-[background-color,box-shadow] duration-500 data-[highlighted=true]:bg-accent data-[highlighted=true]:ring-2 data-[highlighted=true]:ring-inset data-[highlighted=true]:ring-ring/50 motion-reduce:transition-none"
+                // Already bleeds to the card edges, so no extra gutter.
+                className={cn(
+                  '-mx-5 flex items-center justify-between gap-4 px-5 py-3 [--settings-card-gutter:0px]',
+                  highlightedSettingId === settingId && SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME
+                )}
               >
                 <div className="flex min-w-0 items-start gap-3">
                   <div className="mt-0.5 text-muted-foreground">{permission.icon}</div>

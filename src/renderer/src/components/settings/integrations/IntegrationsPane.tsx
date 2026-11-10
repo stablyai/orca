@@ -11,13 +11,34 @@ import { JiraIntegrationCard } from '../../integrations/task-trackers/jira-integ
 import { LinearIntegrationCard } from '../../integrations/task-trackers/linear-integration-card'
 import { IntegrationCardPresentationProvider } from '../../integrations/presentation/integration-card-presentation'
 import { useIntegrationProviderStatusRefresh } from '../../../hooks/use-integration-provider-status-refresh'
+import { useContext } from 'react'
+import { cn } from '@/lib/class-names'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import {
+  SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME,
+  SettingsTargetHighlightContext
+} from '../section-layout/settings-target-highlight'
+import { INTEGRATION_SETTING_TARGET_IDS } from './integrations-search'
 import { useTranslate } from '@/i18n/use-translate'
 
 // Flat presentation turns each provider into one row: -mx-4 cancels its inset, and inner rules are dropped so only rows divide.
-function ProviderRow({ children }: { children: React.ReactNode }): React.JSX.Element {
+function ProviderRow({
+  id,
+  children
+}: {
+  id: string
+  children: React.ReactNode
+}): React.JSX.Element {
+  const highlighted = useContext(SettingsTargetHighlightContext) === id
   return (
-    <div data-settings-row="" className="[&_.border-t]:border-t-0 [&>*]:-mx-4">
+    <div
+      id={id}
+      data-settings-row=""
+      className={cn(
+        'scroll-mt-6 [&_.border-t]:border-t-0 [&>*]:-mx-4',
+        highlighted && SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME
+      )}
+    >
       {children}
     </div>
   )
@@ -37,19 +58,19 @@ export function IntegrationsPane(): React.JSX.Element {
             'Connect the source hosts Orca can use for pull requests, merge requests, checks, and review status.'
           )}
         >
-          <ProviderRow>
+          <ProviderRow id={INTEGRATION_SETTING_TARGET_IDS.github}>
             <GitHubIntegrationCard />
           </ProviderRow>
-          <ProviderRow>
+          <ProviderRow id={INTEGRATION_SETTING_TARGET_IDS.gitlab}>
             <GitLabIntegrationCard />
           </ProviderRow>
-          <ProviderRow>
+          <ProviderRow id={INTEGRATION_SETTING_TARGET_IDS.bitbucket}>
             <BitbucketIntegrationCard />
           </ProviderRow>
-          <ProviderRow>
+          <ProviderRow id={INTEGRATION_SETTING_TARGET_IDS.azuredevops}>
             <AzureDevOpsIntegrationCard />
           </ProviderRow>
-          <ProviderRow>
+          <ProviderRow id={INTEGRATION_SETTING_TARGET_IDS.gitea}>
             <GiteaIntegrationCard />
           </ProviderRow>
         </SettingsGroup>
@@ -61,10 +82,10 @@ export function IntegrationsPane(): React.JSX.Element {
             'Connect issue trackers Orca can use to browse tasks and start workspaces with linked context.'
           )}
         >
-          <ProviderRow>
+          <ProviderRow id={INTEGRATION_SETTING_TARGET_IDS.linear}>
             <LinearIntegrationCard />
           </ProviderRow>
-          <ProviderRow>
+          <ProviderRow id={INTEGRATION_SETTING_TARGET_IDS.jira}>
             <JiraIntegrationCard />
           </ProviderRow>
         </SettingsGroup>

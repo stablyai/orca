@@ -1,3 +1,4 @@
+import type { MatchRange } from '../../../../../shared/palette-match/normalized-text'
 import type { SettingsNavSection } from './settings-navigation-types'
 import {
   getSettingsSectionSearchEntries,
@@ -62,21 +63,14 @@ export function rankSettingsSearchResults(
   ).map(({ item }) => item)
 }
 
-/** Splits a title around its first case-insensitive match so the row can mark it. */
-export function splitSettingsSearchTitleMatch(
-  title: string,
-  query: string
-): [before: string, match: string, after: string] | null {
+/** Range of a title's first case-insensitive match so the row can mark it. */
+export function getSettingsSearchTitleMatchRanges(title: string, query: string): MatchRange[] {
   const needle = query.trim().toLowerCase()
   const haystack = title.toLowerCase()
   // Lowercasing can change length (e.g. İ); skip marking rather than mis-slice.
   if (needle === '' || haystack.length !== title.length) {
-    return null
+    return []
   }
   const start = haystack.indexOf(needle)
-  if (start === -1) {
-    return null
-  }
-  const end = start + needle.length
-  return [title.slice(0, start), title.slice(start, end), title.slice(end)]
+  return start === -1 ? [] : [{ start, end: start + needle.length }]
 }

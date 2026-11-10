@@ -2139,6 +2139,62 @@ html.native-shell .app-layout {
   }
 }
 
+/* Search and deep-link target: full-bleed tint to the card edges plus a left bar.
+   Cards set --settings-card-gutter to their side padding. */
+.settings-target-highlight {
+  --settings-target-tint: color-mix(in srgb, var(--foreground) 8%, transparent);
+  position: relative;
+  background: var(--settings-target-tint);
+  box-shadow:
+    calc(-1 * var(--settings-card-gutter, 0px)) 0 0 var(--settings-target-tint),
+    var(--settings-card-gutter, 0px) 0 0 var(--settings-target-tint);
+}
+
+.settings-target-highlight::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  left: calc(-1 * var(--settings-card-gutter, 0px));
+  width: 3px;
+  background: var(--foreground);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .settings-target-highlight {
+    animation: settings-target-highlight-fade 3s ease-out forwards;
+  }
+
+  .settings-target-highlight::before {
+    animation: settings-target-highlight-bar-fade 3s ease-out forwards;
+  }
+}
+
+@keyframes settings-target-highlight-fade {
+  60% {
+    background: var(--settings-target-tint);
+    box-shadow:
+      calc(-1 * var(--settings-card-gutter, 0px)) 0 0 var(--settings-target-tint),
+      var(--settings-card-gutter, 0px) 0 0 var(--settings-target-tint);
+  }
+  100% {
+    background: transparent;
+    box-shadow:
+      calc(-1 * var(--settings-card-gutter, 0px)) 0 0 transparent,
+      var(--settings-card-gutter, 0px) 0 0 transparent;
+  }
+}
+
+@keyframes settings-target-highlight-bar-fade {
+  60% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 @keyframes settings-shell-enter {
   from {
     opacity: 0;

@@ -1,6 +1,7 @@
 import { useContext } from 'react'
 import {
   getSettingsTitleTargetId,
+  SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME,
   SettingsTargetHighlightContext
 } from './settings-target-highlight'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
@@ -39,7 +40,7 @@ export function SearchableSetting({
       data-settings-search-title={title}
       className={cn(
         'scroll-mt-6 w-full',
-        highlighted && 'rounded-md bg-accent ring-2 ring-ring/50',
+        highlighted && SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME,
         className
       )}
       id={id}

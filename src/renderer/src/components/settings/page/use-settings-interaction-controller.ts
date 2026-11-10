@@ -10,8 +10,13 @@ import {
 import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsDeepLinkTargetWatch } from '../navigation/settings-deep-link-target-watcher'
 import {
+  parseSettingsTitleTargetId,
+  SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME
+} from '../section-layout/settings-target-highlight'
+import {
   cancelPendingSettingsDeepLinkTargetWatch,
   cancelPendingSettingsSubsectionScrollFrame,
+  getSettingsScrollTarget,
   readSourceControlAiSettings,
   SETTINGS_TARGET_HIGHLIGHT_MS
 } from '../navigation/settings-navigation-foundations'
@@ -143,6 +148,21 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
     )
     return () => window.clearTimeout(timeout)
   }, [highlightedSettingsTarget, setHighlightedSettingsTarget])
+
+  useEffect(() => {
+    const targetId = highlightedSettingsTarget?.id
+    if (!targetId || parseSettingsTitleTargetId(targetId) === null) {
+      return
+    }
+    const target = getSettingsScrollTarget(targetId, contentScrollRef.current)
+    // Tagged rows highlight themselves through SettingsTargetHighlightContext.
+    if (!target || target.hasAttribute('data-settings-search-title')) {
+      return
+    }
+    const classNames = SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME.split(' ')
+    target.classList.add(...classNames)
+    return () => target.classList.remove(...classNames)
+  }, [highlightedSettingsTarget])
 
   const requestFontSuggestions = useCallback((): void => {
     if (installedFontsLoadedRef.current || installedFontsLoadPromiseRef.current) {

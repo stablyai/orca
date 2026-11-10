@@ -119,14 +119,30 @@ export function getSettingsScrollTarget(
 ): HTMLElement | null {
   const title = parseSettingsTitleTargetId(sectionId)
   if (title !== null) {
-    return (container ?? document).querySelector<HTMLElement>(
-      `[data-settings-search-title="${CSS.escape(title)}"]`
+    return (
+      (container ?? document).querySelector<HTMLElement>(
+        `[data-settings-search-title="${CSS.escape(title)}"]`
+      ) ?? (container ? findSettingsRowByVisibleTitle(title, container) : null)
     )
   }
   return (
     container?.querySelector<HTMLElement>(`[data-settings-section="${CSS.escape(sectionId)}"]`) ??
     document.getElementById(sectionId)
   )
+}
+
+// Rows not wrapped in SearchableSetting are found by the label they render.
+function findSettingsRowByVisibleTitle(title: string, root: HTMLElement): HTMLElement | null {
+  const wanted = title.trim().toLowerCase()
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const element = node.parentElement
+    // The pane's own h2 heading is not a setting row.
+    if (node.textContent?.trim().toLowerCase() === wanted && element && !element.closest('h2')) {
+      return element.closest<HTMLElement>('[data-settings-row]') ?? element
+    }
+  }
+  return null
 }
 
 export function scrollSubsectionIntoView(targetId: string, container?: HTMLElement | null): void {

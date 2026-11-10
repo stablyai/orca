@@ -8,7 +8,11 @@ import { RepoIconGlyph } from '../../repo/repo-icon'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { useTranslate } from '@/i18n/use-translate'
-import { splitSettingsSearchTitleMatch, type SettingsSearchResult } from './settings-search-results'
+import { HighlightedText } from '../../worktree-jump/worktree-jump-palette-primitives'
+import {
+  getSettingsSearchTitleMatchRanges,
+  type SettingsSearchResult
+} from './settings-search-results'
 
 type SettingsSearchFieldProps = {
   searchInputRef?: RefObject<HTMLInputElement | null>
@@ -80,27 +84,6 @@ export function SettingsSearchField({
         )}
       </div>
     </div>
-  )
-}
-
-function SettingsSearchResultTitle({
-  title,
-  query
-}: {
-  title: string
-  query: string
-}): React.JSX.Element {
-  const parts = splitSettingsSearchTitleMatch(title, query)
-  if (!parts) {
-    return <>{title}</>
-  }
-  const [before, match, after] = parts
-  return (
-    <>
-      {before}
-      <mark className="rounded-sm bg-foreground/15 text-foreground">{match}</mark>
-      {after}
-    </>
   )
 }
 
@@ -177,7 +160,13 @@ export function SettingsSearchResultsList({
                 )}
                 <span className="min-w-0 flex-1">
                   <span className="block break-words text-[13px] leading-[18px] text-worktree-sidebar-foreground">
-                    <SettingsSearchResultTitle title={result.entry.title} query={searchQuery} />
+                    <HighlightedText
+                      text={result.entry.title}
+                      matchRanges={getSettingsSearchTitleMatchRanges(
+                        result.entry.title,
+                        searchQuery
+                      )}
+                    />
                   </span>
                   <span className="block break-words text-xs leading-4 text-muted-foreground">
                     {result.isPane
