@@ -20859,10 +20859,7 @@
         "emptyTeamTitle": "No team workspaces yet",
         "environmentName": "{{value0}} (cloud)",
         "errorConcurrencyLimit": "You're at your team's limit of running sandboxes. Put one to sleep or delete it, then try again.",
-        "errorConcurrencyLimitCount2": "Your team can run {{value0}} sandboxes at once ({{value1}} per seat). Put one to sleep or delete it, then try again.",
         "errorMemberConcurrencyLimit": "You're at your limit of running sandboxes. Put one to sleep or delete it, then try again.",
-        "errorSeatLimitSelf": "You already have {{value0}} sandboxes running, the most one seat can run. Put one to sleep or delete it, then try again.",
-        "errorSeatLimitOwner": "{{value0}} already has {{value1}} sandboxes running. This workspace runs on their seat, so ask them to put one to sleep, then try again.",
         "errorSeatLimitOwnerNoCount": "{{value0}} is at their limit of running sandboxes. This workspace runs on their seat, so ask them to put one to sleep, then try again.",
         "seatOwnerFallback": "The workspace owner",
         "errorConflict": "This workspace is still starting or going to sleep. Nothing was changed. Try again in a moment.",
@@ -20964,7 +20961,13 @@
         "sleep": "Sleep",
         "deleteWorkspace": "Delete…",
         "showRunningOnly": "Show running only",
-        "running": "Running"
+        "running": "Running",
+        "errorTeamSandboxLimit_one": "Your team can run {{count}} sandbox at once ({{perSeat}} per seat). Put it to sleep or delete it, then try again.",
+        "errorTeamSandboxLimit_other": "Your team can run {{count}} sandboxes at once ({{perSeat}} per seat). Put one to sleep or delete it, then try again.",
+        "errorSeatSandboxLimitSelf_one": "You already have {{count}} sandbox running, the most one seat can run. Put it to sleep or delete it, then try again.",
+        "errorSeatSandboxLimitSelf_other": "You already have {{count}} sandboxes running, the most one seat can run. Put one to sleep or delete it, then try again.",
+        "errorSeatSandboxLimitOwner_one": "{{name}} already has {{count}} sandbox running. This workspace runs on their seat, so ask them to put it to sleep, then try again.",
+        "errorSeatSandboxLimitOwner_other": "{{name}} already has {{count}} sandboxes running. This workspace runs on their seat, so ask them to put one to sleep, then try again."
       },
       "orcaCloud": {
         "QueuedPrompt": {

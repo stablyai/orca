@@ -261,6 +261,12 @@
         }
       },
       "cloudWorkspaces": {
+        "errorSeatSandboxLimitOwner_one": "{{name}} already has {{count}} sandbox running. This workspace runs on their seat, so ask them to put it to sleep, then try again.",
+        "errorSeatSandboxLimitOwner_other": "{{name}} already has {{count}} sandboxes running. This workspace runs on their seat, so ask them to put one to sleep, then try again.",
+        "errorSeatSandboxLimitSelf_one": "You already have {{count}} sandbox running, the most one seat can run. Put it to sleep or delete it, then try again.",
+        "errorSeatSandboxLimitSelf_other": "You already have {{count}} sandboxes running, the most one seat can run. Put one to sleep or delete it, then try again.",
+        "errorTeamSandboxLimit_one": "Your team can run {{count}} sandbox at once ({{perSeat}} per seat). Put it to sleep or delete it, then try again.",
+        "errorTeamSandboxLimit_other": "Your team can run {{count}} sandboxes at once ({{perSeat}} per seat). Put one to sleep or delete it, then try again.",
         "listMeta2_one": "{{count}} workspace · {{usage}}",
         "listMeta2_other": "{{count}} workspaces · {{usage}}",
         "listSandboxHours_one": "{{hours}} sandbox hour used",
