@@ -1,4 +1,8 @@
 import { normalizeGitGraphFilters } from '../../../shared/git/history/git-graph-filters'
+import {
+  applyDefaultOnStatusBarItems,
+  defaultOnStatusBarFlagPatch
+} from '../../../shared/status-bar-defaults'
 import { resolveStatusBarCompactChangeNoticeDismissed } from '../../../shared/status-bar-compact-change-notice'
 import { migrateExplorerDisplayRoots } from '../../../shared/file-listing/file-explorer-display-root'
 import {
@@ -199,6 +203,12 @@ export function normalizeLoadedUiState(
   ) {
     markNeedsSave()
   }
+  // Headless `orca serve` never runs the renderer, so the one-time status-bar
+  // defaults have to be stored when the profile loads.
+  const statusBarDefaultOn = applyDefaultOnStatusBarItems(parsed.ui)
+  if (statusBarDefaultOn.needsSave) {
+    markNeedsSave()
+  }
   return {
     ...defaults.ui,
     worktreeCardProperties: getWorktreeCardModeProperties(
@@ -237,6 +247,12 @@ export function normalizeLoadedUiState(
     _inlineAgentsDefaultedForAllUsers: true,
     _expandedWorktreeCardPropertiesDefaulted: true,
     _jiraIssueWorktreeCardPropertyDefaulted: true,
-    _hostWorktreeCardPropertyDefaulted: true
+    _hostWorktreeCardPropertyDefaulted: true,
+    ...(statusBarDefaultOn.needsSave
+      ? {
+          statusBarItems: statusBarDefaultOn.items,
+          ...defaultOnStatusBarFlagPatch()
+        }
+      : {})
   }
 }
