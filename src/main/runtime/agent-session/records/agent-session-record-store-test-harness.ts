@@ -1,3 +1,5 @@
+// @orca-isolated-worker -- Suite hooks own the temporary SQL worker bundle.
+import { afterAll } from 'vitest'
 /** Centralize store fixtures in the worker-owned journal DB; closeTestAgentSessionRecordStores owns their cleanup. */
 
 import { resolve } from 'node:path'
@@ -38,6 +40,8 @@ export type PersistedTestAgentSessionStore = {
 }
 
 const databases = new Map<string, Promise<JournalSqlDatabase>>()
+
+afterAll(closeTestAgentSessionRecordStores)
 
 export async function ensureTestStructuredAgentSessionHost(
   deps: Parameters<typeof ensureStructuredAgentSessionHost>[0]
