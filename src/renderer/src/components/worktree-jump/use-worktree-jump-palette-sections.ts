@@ -4,8 +4,7 @@ import { bestCmdJPaletteSectionQualityClass } from '@/components/cmd-j/palette-r
 import {
   bestPaletteQualityRank,
   NO_PALETTE_QUALITY_RANK,
-  shouldIntentSectionLeadPaletteSections,
-  shouldOpenTabsLeadPaletteSections
+  shouldIntentSectionLeadPaletteSections
 } from '@/lib/cmd-j-section-leadership'
 import {
   capPaletteSection,
@@ -58,19 +57,8 @@ export function useWorktreeJumpPaletteSections({
   setExpandedSectionCaps,
   selectedItemId
 }: WorktreeJumpPaletteSectionsInput) {
-  const openTabsLeadSections = useMemo(() => {
-    if (!hasQuery) {
-      return true
-    }
-    return shouldOpenTabsLeadPaletteSections({
-      bestWorktreeQualityRank: bestPaletteQualityRank(
-        worktreeItems.map((item) => item.match.qualityClass)
-      ),
-      bestOpenTabQualityRank: bestPaletteQualityRank(
-        openTabItems.map((item) => item.result.qualityClass)
-      )
-    })
-  }, [hasQuery, openTabItems, worktreeItems])
+  // Why: typed searches mostly return to a workspace, so Workspaces always lead Open Tabs (#40397).
+  const openTabsLeadSections = !hasQuery
 
   const middleLeadsSections = useMemo(() => {
     if (!hasQuery) {

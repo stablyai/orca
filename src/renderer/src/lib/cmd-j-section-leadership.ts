@@ -60,14 +60,6 @@ export function comparePaletteRankedItems(a: PaletteRankedItem, b: PaletteRanked
   return a.identity < b.identity ? -1 : a.identity > b.identity ? 1 : 0
 }
 
-/** Ties prefer Open Tabs, matching the documented section-leadership rule. */
-export function shouldOpenTabsLeadPaletteSections(args: {
-  bestWorktreeQualityRank: number
-  bestOpenTabQualityRank: number
-}): boolean {
-  return args.bestOpenTabQualityRank <= args.bestWorktreeQualityRank
-}
-
 /** Decisive settings/action/project intent may outrank weaker entities, never an exact visible entity name. */
 export function shouldIntentSectionLeadPaletteSections(args: {
   bestEntityQualityRank: number
