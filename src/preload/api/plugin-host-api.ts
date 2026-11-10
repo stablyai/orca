@@ -273,6 +273,14 @@ export type PluginsApi = {
     languageId?: string
     text: string
   }) => Promise<EditorSaveHookDecision>
+  /** Runs plugins' `editor.inlineCompletion` for ghost text at the cursor. Older hosts lack it. */
+  editorInlineCompletion?: (event: {
+    workspaceId: string | null
+    path: string
+    languageId?: string
+    prefix: string
+    suffix: string
+  }) => Promise<{ suggestion: string }>
   onStatusBarChanged?: (callback: (overrides: PluginStatusBarOverrides) => void) => () => void
 }
 

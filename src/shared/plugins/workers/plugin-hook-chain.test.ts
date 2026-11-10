@@ -5,7 +5,10 @@ import {
   type PluginHookChainInput
 } from './plugin-hook-chain'
 import { runPluginWorkerHookHandlers, type PluginHookHandler } from './plugin-worker-hooks'
-import { terminalSendHookPayloadSchema } from '../events/plugin-hook-payloads'
+import {
+  editorInlineCompletionHookPayloadSchema,
+  terminalSendHookPayloadSchema
+} from '../events/plugin-hook-payloads'
 
 const send = { terminalId: 'term_1', text: 'ls', enter: true, inputKind: 'driving' }
 const read = (event: unknown) => terminalSendHookPayloadSchema.parse(event)
@@ -181,5 +184,29 @@ describe('runPluginHookChain', () => {
       }
     )
     await expect(observe.outcome).resolves.toEqual({ kind: 'continue', payload: created })
+  })
+})
+
+describe('editor.inlineCompletion', () => {
+  const asked = {
+    workspaceId: null,
+    path: 'a.ts',
+    prefix: 'const x = ',
+    suffix: ';',
+    suggestion: ''
+  }
+  const read = (event: unknown) => editorInlineCompletionHookPayloadSchema.parse(event)
+
+  it('takes the suggestion a plugin sets and ignores changes to the other fields', async () => {
+    const { outcome } = chain(
+      {
+        'a.ai': [(event, next) => next({ ...read(event), suggestion: '42', prefix: 'hijacked' })]
+      },
+      { event: 'editor.inlineCompletion', payload: asked }
+    )
+    await expect(outcome).resolves.toEqual({
+      kind: 'continue',
+      payload: { ...asked, suggestion: '42' }
+    })
   })
 })

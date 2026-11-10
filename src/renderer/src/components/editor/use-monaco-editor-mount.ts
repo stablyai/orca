@@ -10,6 +10,7 @@ import {
 } from './monaco-programmatic-sync'
 import { createMarkdownDocLinkDecorationController } from './markdown-source-tools/monaco/monaco-markdown-doc-link-decorations'
 import { ensureMarkdownDocCompletionProvider } from './markdown-source-tools/monaco/monaco-markdown-doc-completions'
+import { setupInlineCompletion } from './inline-completion/monaco-inline-completion-provider'
 import { clampMonacoAutoHeight } from './monaco-auto-height'
 import { installMonacoE2EProbe } from './monaco-e2e-probe'
 import { matchesPendingEditorFocusRequest } from './pending-editor-focus-request'
@@ -111,6 +112,14 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       )
       ensureMarkdownDocCompletionProvider(monaco)
       updateMarkdownCompletionDocuments()
+      if (!passiveMirror) {
+        setupInlineCompletion(monaco, editorInstance.getModel(), {
+          workspaceId: worktreeId,
+          path: filePath,
+          languageRef,
+          readOnlyRef
+        })
+      }
 
       // Reconcile retained models before interaction so edits made while unmounted become visible.
       const modelKey = toEditorModelUri(filePath, modelOwnerKey)
