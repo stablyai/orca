@@ -108,7 +108,7 @@ function SourceControl({
           aria-disabled="true"
           aria-label={label}
           aria-describedby={reasonId}
-          className="w-36 justify-start text-muted-foreground"
+          className="w-36 justify-start"
         >
           {source.value === 'key' ? key : source.value === 'sign-in' ? account : '—'}
           <span id={reasonId} className="sr-only">

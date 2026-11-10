@@ -308,7 +308,12 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
             {t('auto.components.sidebar.HostSectionHeaderMenu.2d3e4f5a6b', 'Check connection')}
           </DropdownMenuItem>
         )}
-        {cloudHost ? <AgentHostPanelMenuItem hostId={row.hostId} /> : null}
+        {cloudHost ? (
+          <AgentHostPanelMenuItem
+            hostId={row.hostId}
+            host={{ label: row.label, health: row.health }}
+          />
+        ) : null}
         {runtimeEnvironmentId && !cloudHost && row.health !== 'blocked' && (
           <HostAgentSignOutMenuItems
             environmentId={runtimeEnvironmentId}

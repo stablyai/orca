@@ -2,6 +2,7 @@
 // environments, the Cloud workspace snapshot). Reads only: no connect, wake, start or resume.
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useNow } from '@/hooks/use-now'
 import { useCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import {
@@ -10,7 +11,7 @@ import {
 } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import { getWorktreeExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { cloudSecretRepoKey } from '../settings/cloud-secrets/cloud-secret-repos'
-import { useSidebarHostScopeOptions } from '../sidebar/worktree-list/controls/use-sidebar-host-scope-options'
+import { runtimeEnvironmentDisplayName } from '../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 import { selectStartableStoppedWslDistro } from '../wsl-host-stopped/use-stopped-wsl-host'
 import type { AgentHostAvailability, AgentHostKind } from './agent-host-capabilities'
 import { agentHostAvailability, agentHostKind } from './agent-host-kind'
@@ -41,7 +42,7 @@ function useCloudWorkspaceOnHost(
         return null
       }
       for (const repo of s.repos) {
-        for (const worktree of s.worktreesByRepo[repo.id] ?? []) {
+        for (const worktree of selectWorktreesByRepo(s)[repo.id] ?? []) {
           const matches = request.workspaceId
             ? worktree.id === request.workspaceId
             : getWorktreeExecutionHostId(worktree, repo) === request.hostId
@@ -62,7 +63,6 @@ function useCloudWorkspaceOnHost(
 export function useResolvedAgentHost(
   request: AgentHostPanelRequest | null
 ): ResolvedAgentHost | null {
-  const { hostOptions } = useSidebarHostScopeOptions()
   const parsed = request ? parseExecutionHostId(request.hostId) : null
   const environmentId = parsed?.kind === 'runtime' ? parsed.environmentId : null
   const environment = useAppStore((s) =>
@@ -79,7 +79,7 @@ export function useResolvedAgentHost(
   if (!request || !parsed) {
     return null
   }
-  const option = hostOptions.find((entry) => entry.id === request.hostId)
+  const option = request.host
   const kind = agentHostKind(parsed.kind, environment)
   const dot =
     kind === 'cloud'
@@ -92,7 +92,8 @@ export function useResolvedAgentHost(
       : null
   return {
     hostId: request.hostId,
-    label: option?.label ?? environment?.name ?? request.hostId,
+    label:
+      option?.label ?? (environment ? runtimeEnvironmentDisplayName(environment) : request.hostId),
     kind,
     availability: agentHostAvailability(kind, {
       health: option?.health ?? (parsed.kind === 'local' ? 'local' : 'disconnected'),

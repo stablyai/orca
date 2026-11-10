@@ -8,9 +8,7 @@ import {
 import { agentHostAvailability, agentHostKind } from './agent-host-kind'
 
 const t: Translate = (_key, fallback, values) =>
-  (fallback ?? '').replace(/\{\{(\w+)\}\}/g, (_match, name: string) =>
-    String((values as Record<string, unknown> | undefined)?.[name] ?? '')
-  )
+  (fallback ?? '').replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(values?.[name] ?? ''))
 
 const KINDS: AgentHostKind[] = [
   'local',

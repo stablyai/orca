@@ -58,17 +58,18 @@ export function AgentHostPanelView({
     .filter((part): part is string => Boolean(part))
     .join(' · ')
   return (
-    <SheetContent
-      side="right"
-      className="w-[460px] gap-0 p-0 sm:max-w-[460px] motion-reduce:data-[state=closed]:slide-out-to-right-0 motion-reduce:data-[state=open]:slide-in-from-right-0"
-    >
-      <SheetHeader className="border-b border-border px-5 pt-5 pb-4 pe-12">
-        <SheetTitle>{t('agentHostPanel.title', 'Agent accounts & secrets')}</SheetTitle>
-        <SheetDescription className="flex min-w-0 items-center gap-1.5 text-xs">
-          {dot ? <CloudStateDot state={dot} size="md" /> : null}
-          <span className="truncate">{subline}</span>
-        </SheetDescription>
-      </SheetHeader>
+    <SheetContent side="right" className="w-[460px] sm:max-w-[460px]">
+      <div className="border-b border-border pe-8">
+        <SheetHeader>
+          <SheetTitle>{t('agentHostPanel.title', 'Agent accounts & secrets')}</SheetTitle>
+          <SheetDescription>
+            <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 text-xs">
+              {dot ? <CloudStateDot state={dot} size="md" /> : null}
+              <span className="truncate">{subline}</span>
+            </span>
+          </SheetDescription>
+        </SheetHeader>
+      </div>
       <div className="scrollbar-sleek flex min-h-0 flex-1 flex-col divide-y divide-border overflow-y-auto">
         {capabilities.notice ? (
           <p

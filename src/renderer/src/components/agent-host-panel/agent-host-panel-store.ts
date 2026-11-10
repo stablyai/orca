@@ -2,6 +2,7 @@
 // optionally, what to focus; the mounted panel resolves the rest from the store.
 import { useSyncExternalStore } from 'react'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostHealth } from '../../../../shared/execution-host/execution-host-health'
 
 export type AgentHostPanelFocus = 'claude' | 'codex' | 'keys' | { secret: string }
 
@@ -10,6 +11,8 @@ export type AgentHostPanelRequest = {
   focus?: AgentHostPanelFocus
   /** Orca Cloud: the workspace the caller is showing, when it knows it (the status panel does). */
   workspaceId?: string
+  /** What the caller's host row shows (the sidebar's label and health), read once at open. */
+  host?: { label: string; health: ExecutionHostHealth }
 }
 
 let request: AgentHostPanelRequest | null = null

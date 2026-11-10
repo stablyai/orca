@@ -3,6 +3,7 @@
 import React from 'react'
 import { ChevronRight, KeyRound } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useOrcaCloudAgentAccounts } from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
 import {
@@ -39,7 +40,9 @@ export function CloudAgentsAndSecretsLink({
   const accounts = useOrcaCloudAgentAccounts()
   const hostId = useAppStore((s) => {
     for (const repo of s.repos) {
-      const worktree = (s.worktreesByRepo[repo.id] ?? []).find((entry) => entry.id === workspaceId)
+      const worktree = (selectWorktreesByRepo(s)[repo.id] ?? []).find(
+        (entry) => entry.id === workspaceId
+      )
       if (worktree) {
         return getWorktreeExecutionHostId(worktree, repo)
       }
