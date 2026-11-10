@@ -7,7 +7,7 @@ export type NativeChatAppearanceSettings = {
   fontSize?: number
   /** Code text size in px, 10–18; absent = 12. */
   codeFontSize?: number
-  /** Transcript, composer and usage-page width; absent = comfortable (46rem). */
+  /** Chat content and Settings page width; absent = comfortable (46rem). */
   width?: 'comfortable' | 'wide' | 'full'
   /** Chat contrast, 50–150; absent = 100. */
   contrast?: number

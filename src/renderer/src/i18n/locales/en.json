@@ -710,7 +710,7 @@
         "codeTextSize": "Code text size",
         "codeTextSizeDescription": "Code blocks, inline code, commands and tool output.",
         "width": "Width",
-        "widthDescription": "How wide messages and the message box can grow in a wide pane.",
+        "widthDescription": "How wide chats and Settings pages can grow.",
         "resetAppearance": "Reset chat appearance",
         "resetDescription": "Restore the defaults above.",
         "comfortable": "Comfortable",
