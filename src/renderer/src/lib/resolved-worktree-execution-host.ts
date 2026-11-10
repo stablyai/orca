@@ -10,10 +10,10 @@ import {
   findIndexedFolderWorkspaceOwner,
   findIndexedProjectGroupOwner
 } from './workspace/ownership/worktree-runtime-owner-index'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-import { resolveQualifiedWorktreeExecutionOwner } from './qualified-worktree-execution-owner'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { resolveQualifiedWorktreeExecutionOwner } from './workspace/ownership/qualified-worktree-execution-owner'
 import type { WorktreeRuntimeOwnerState } from './workspace/ownership/worktree-runtime-owner-state'
-import { runtimeRpcTargetForAuthorityKey } from '@/runtime/runtime-client-target'
+import { runtimeRpcTargetForAuthorityKey } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 function getResolvedFolderHost(

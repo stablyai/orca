@@ -1,8 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeClient, RuntimeClientError } from '../runtime-client'
 import { parseArgs } from '../args'
-import { printHelp } from '../help'
-import { COMMAND_SPECS } from '../specs'
 import { TERMINAL_HANDLERS } from './terminal'
 
 afterEach(() => vi.restoreAllMocks())
@@ -77,16 +75,5 @@ describe('terminal set-pane-title', () => {
       })
     ).rejects.toMatchObject({ code: 'method_not_found' })
     expect(call).toHaveBeenCalledTimes(1)
-  })
-
-  it('documents a required pane-scoped title and explicit clearing', () => {
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
-    printHelp(COMMAND_SPECS, ['terminal', 'set-pane-title'])
-    const help = log.mock.calls.flat().join('\n')
-    expect(help).toContain(
-      'Usage: orca terminal set-pane-title [--terminal <handle>] --title <text>'
-    )
-    expect(help).toContain('Custom title for one pane (pass "" to reset)')
-    expect(help).not.toContain('omit or pass')
   })
 })

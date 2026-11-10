@@ -1,14 +1,17 @@
 import { useCallback, useMemo } from 'react'
-import { applyDocumentTheme } from '@/lib/document-theme'
-import { resolvePaintedTheme } from '@/lib/terminal-app-theme'
+import { applyDocumentTheme } from '@/app-shell/appearance/document-theme'
+import { resolvePaintedTheme } from '@/app-shell/appearance/terminal-app-theme'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
-import type { SettingsNavInstallStatus } from '@/lib/settings-navigation-types'
-import { COMPUTER_USE_SKILL_NAME, ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+import type { SettingsNavInstallStatus } from '@/components/settings/navigation/settings-navigation-types'
+import {
+  COMPUTER_USE_SKILL_NAME,
+  ORCHESTRATION_SKILL_NAME
+} from '@/lib/skills/installation/agent-feature-skill-names'
 import {
   getAgentSkillNavInstallStatus,
   getLinearAgentSkillNavInstallStatus
-} from '@/lib/agent-skill-nav-install-status'
-import { getProjectHostSetupProjectionFromState } from '../../../store/project-host-setup-selector'
+} from '@/components/settings/navigation/agent-skill-nav-install-status'
+import { getProjectHostSetupProjectionFromState } from '../../../store/projects/project-host-setup-selector'
 import { getSettingsSectionSearchEntries, rankSettingsSearchItems } from '../search/settings-search'
 import { deriveNeededSectionIds } from '../page/settings-load-performance'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROW_PRESETS as SCROLLBACK_PRESETS_ROWS } from '../../../../../shared/terminal/replay/terminal-scrollback-policy'

@@ -42,7 +42,7 @@ vi.mock('child_process', async () => {
 })
 
 import { main } from './index'
-import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
+import { buildWorktree, okFixture, worktreeListFixture } from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 describe('orca worktree create --account', () => {
@@ -57,22 +57,31 @@ describe('orca worktree create --account', () => {
 
   const createArgs = ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'pinned', '--json']
 
+  function answerHost(capabilities: string[]): void {
+    callMock.mockImplementation(async (method: string) => {
+      if (method === 'worktree.list') {
+        return worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')])
+      }
+      if (method === 'status.get') {
+        return okFixture('req_status', { capabilities })
+      }
+      if (method === 'worktree.create') {
+        return okFixture('req_create', {
+          worktree: buildWorktree('/tmp/repo/pinned', 'pinned', 'abc', 'repo-1')
+        })
+      }
+      return okFixture('req_other', { folderWorkspaces: [], groups: [], repos: [] })
+    })
+  }
+
   it('sends the account selector to a host that advertises support', async () => {
-    queueFixtures(
-      callMock,
-      worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
-      okFixture('req_status', { capabilities: [CLAUDE_LAUNCH_ACCOUNT_RUNTIME_CAPABILITY] }),
-      okFixture('req_create', {
-        worktree: buildWorktree('/tmp/repo/pinned', 'pinned', 'abc', 'repo-1')
-      })
-    )
+    answerHost([CLAUDE_LAUNCH_ACCOUNT_RUNTIME_CAPABILITY])
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main([...createArgs, '--agent', 'claude', '--account', 'pinned@example.com'], '/tmp/repo')
 
-    expect(callMock).toHaveBeenNthCalledWith(2, 'status.get')
-    expect(callMock).toHaveBeenNthCalledWith(
-      3,
+    expect(callMock).toHaveBeenCalledWith('status.get')
+    expect(callMock).toHaveBeenCalledWith(
       'worktree.create',
       expect.objectContaining({
         startupAgent: 'claude',
@@ -83,11 +92,7 @@ describe('orca worktree create --account', () => {
   })
 
   it('refuses an older host instead of launching on its active account', async () => {
-    queueFixtures(
-      callMock,
-      worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
-      okFixture('req_status', { capabilities: [] })
-    )
+    answerHost([])
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
     await main([...createArgs, '--agent', 'claude', '--account', 'acct-b'], '/tmp/repo')
@@ -97,10 +102,7 @@ describe('orca worktree create --account', () => {
   })
 
   it('requires --agent claude', async () => {
-    queueFixtures(
-      callMock,
-      worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')])
-    )
+    answerHost([])
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
 

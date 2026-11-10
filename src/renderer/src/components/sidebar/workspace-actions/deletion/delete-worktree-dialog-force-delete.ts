@@ -5,8 +5,8 @@ import {
   toWorktreeRemovalTarget,
   type WorktreeRemovalTarget
 } from '../../../../../../shared/worktree/removal'
-import type { RemoveWorktreeOptions } from '@/store/slices/worktree-removal-options'
-import type { RendererRemoveWorktreeResult } from '@/store/slices/renderer-remove-worktree-result'
+import type { RemoveWorktreeOptions } from '@/store/slices/worktrees/teardown/worktree-removal-options'
+import type { RendererRemoveWorktreeResult } from '@/store/slices/worktrees/teardown/renderer-remove-worktree-result'
 import { showWorkspaceListChangedToast } from '../../worktree-list/listing/stale-workspace-list-toast'
 import type { ConfirmedUnsavedDiscards } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 

@@ -5,10 +5,11 @@ import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session/li
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import type { AppState } from '@/store/types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import { getIndexedRepoMap, getIndexedWorktreeById } from '@/store/worktree-repo-index'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
+import { getIndexedWorktreeById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { claudeAccountPinningUnsupportedReasonInState } from '@/components/settings/repository-claude-account'
-import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
+import { runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtime-owner'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 /** Where a project's Claude accounts live: its owner host; a repo with no row reads this app's. */

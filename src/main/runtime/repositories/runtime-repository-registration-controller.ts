@@ -18,7 +18,7 @@ import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containmen
 import { findProjectAtSameRealPath } from '../../workspaces/catalog/project-realpath-identity'
 import { detectRepoIconAndUpstream } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { runtimePathsEqual } from '../workspaces/catalog/runtime-worktree-path-identity'
 import { runtimeRepoIsRegistrationCandidate } from '../workspaces/catalog/runtime-worktree-selection'
 import { refuseWslHostWindowsDrivePath } from '../terminal/launch/wsl-host-windows-drive-guard'

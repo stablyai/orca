@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { sendRemoteRuntimeRequest } from '../../../src/shared/remote-runtime/remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../src/shared/remote-runtime/requests/remote-runtime-request-socket'
 import { parsePairingCode } from '../../../src/shared/remote-runtime/pairing/pairing'
 import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/remote-runtime/pairing/paired-runtime-connection'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../src/shared/electron-remote-runtime-client-capabilities'
@@ -42,12 +42,12 @@ import {
   structuredAgentSessionSendSelection
 } from '../../../src/shared/agent-session/options/structured-agent-session-option-view'
 import { runtimeStub } from './structured-agent-session-surface-execution'
-import { enqueueSessionOptionSettingsWrite } from '../../../src/renderer/src/components/native-chat/native-chat-session-option-settings-write'
-import { clearRuntimeCompatibilityCacheForTests } from '../../../src/renderer/src/runtime/runtime-rpc-client'
+import { enqueueSessionOptionSettingsWrite } from '../../../src/renderer/src/components/native-chat/session/options/native-chat-session-option-settings-write'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../../src/renderer/src/runtime/rpc/compatibility/runtime-compatibility-cache'
 import type { NativeChatSessionOptionSettingsMutation } from '../../../src/shared/native-chat/input/native-chat-session-options'
 
 const pairedPort = vi.hoisted(() => ({ call: vi.fn() }))
-vi.mock('../../../src/renderer/src/runtime/runtime-rpc-environment-call', () => ({
+vi.mock('../../../src/renderer/src/runtime/rpc/calls/runtime-rpc-environment-call', () => ({
   callRuntimeEnvironmentWithRevision: pairedPort.call
 }))
 afterEach(() => {
@@ -159,26 +159,32 @@ it('pairs to host-owned options and persists only a genuine pick on that host', 
     const connection = pairedRuntimeConnectionFromOffer(parsed)
     pairedPort.call.mockImplementation(({ environmentId, method, params }) => {
       expect(environmentId).toBe('paired-host-B')
-      return sendRemoteRuntimeRequest(
+      return sendRemoteRuntimeRequestOnSocket(
         connection,
         method,
         params,
         5_000,
         undefined,
         undefined,
-        ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+        undefined,
+        ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+        undefined,
+        undefined
       )
     })
     const client = {
       async call<T>(method: string, params?: unknown) {
-        const response = await sendRemoteRuntimeRequest<T>(
+        const response = await sendRemoteRuntimeRequestOnSocket<T>(
           connection,
           method,
           params,
           5_000,
           undefined,
           undefined,
-          ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+          undefined,
+          ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+          undefined,
+          undefined
         )
         if (!response.ok) {
           throw new Error(JSON.stringify(response.error))

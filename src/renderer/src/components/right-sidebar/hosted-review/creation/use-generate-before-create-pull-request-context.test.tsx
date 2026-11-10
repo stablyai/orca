@@ -3,7 +3,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import { createRunningPullRequestGenerationRecord } from '@/store/slices/pull-request-generation'
+import { createRunningPullRequestGenerationRecord } from '@/store/slices/hosted-review/generation/pull-request-generation'
 import type { HostedReviewCreationEligibility } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
 import { useGenerateBeforeCreatePullRequest } from './use-generate-before-create-pull-request'

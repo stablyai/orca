@@ -11,12 +11,12 @@ import {
   type SmartGitHubPrStartPointSelection
 } from './source-selection-decisions'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 
 import type { JiraIssueKeyCasing } from '../../../../shared/ui-chrome-types'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 
-import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
+import type { WorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
 
 export type ComposerDecisions = {
   canResolveFolderSmartGitHubSubmit: (input: { hasFolderSourceRepos: boolean }) => boolean

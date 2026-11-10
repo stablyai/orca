@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import type {
   OrchestrationCrewRow,
   OrchestrationCrewSnapshot
-} from '../../../../shared/orchestration-crew'
+} from '../../../../shared/orchestration/orchestration-crew'
 import { CrewPanelContent } from './OrchestrationCrewPanel'
 import { NativeChatCrewFrame } from './NativeChatCrewPanel'
 

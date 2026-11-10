@@ -1,3 +1,5 @@
+import '@/lib/source-control/graph/git-graph-tab'
+import { GIT_GRAPH_REFRESH_EVENT } from '@/lib/source-control/graph/git-graph-refresh-event'
 import {
   isSyncPushStageError,
   resolveRemoteOperationErrorMessage
@@ -20,16 +22,19 @@ export function resolveRemoteActionError(kind: RemoteOpKind, error: unknown): st
 }
 
 export function refreshSourceControlAfterRemoteAction({
+  worktreeId,
   refreshGitStatus,
   refreshBranchCompare,
   refreshGitHistory,
   onError = (error) => console.warn('[SourceControl] post-remote refresh failed', error)
 }: {
+  worktreeId: string
   refreshGitStatus: () => Promise<void>
   refreshBranchCompare: () => Promise<void>
   refreshGitHistory: () => Promise<void>
   onError?: (error: unknown) => void
 }): void {
+  window.dispatchEvent(new CustomEvent(GIT_GRAPH_REFRESH_EVENT, { detail: worktreeId }))
   // Fetch/sync can move the remote base without local file changes; refresh every projection.
   void Promise.all([refreshGitStatus(), refreshBranchCompare(), refreshGitHistory()]).catch(onError)
 }

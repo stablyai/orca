@@ -3,8 +3,8 @@ import { keybindingMatchesAction } from '../../../../../../shared/keybindings/ma
 import type { KeybindingPlatform } from '../../../../../../shared/keybindings/types'
 import type { KeyboardHandlersDeps } from './terminal-keyboard-dependencies'
 import type { createTerminalKeyboardRuntime } from './terminal-keyboard-runtime'
-import { normalizeSelectedTextForFileSearch } from '@/lib/file-search-selection'
-import { handleEmptyFloatingWorkspacePanelCloseShortcut } from '@/lib/floating-workspace-terminal-actions'
+import { normalizeSelectedTextForFileSearch } from '@/lib/files/search/file-search-selection'
+import { handleEmptyFloatingWorkspacePanelCloseShortcut } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import { useAppStore } from '@/store/index'
 import { hasPendingTerminalImeComposition } from '../ime/terminal-ime-composition-route'
 import {
@@ -22,7 +22,7 @@ import { dispatchTerminalShortcutAction } from './terminal-keyboard-action-dispa
 import { getLayoutCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
 import { createTerminalKeyboardReleaseHandlers } from './terminal-keyboard-release-handlers'
 import { synchronizeTerminalKeyboardPane } from './terminal-keyboard-pane-resolution'
-import { isInsideNativeChatCover } from '../../native-chat-covered-pane'
+import { isInsideNativeChatCover } from '../../chat/native-chat-covered-pane'
 
 const MAX_OBSERVED_ENTER_KEYDOWNS_PER_CODE = 8
 

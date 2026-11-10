@@ -5,7 +5,7 @@ import type {
   PtyFencedTerminationOutcome
 } from '../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { ResourceViewAdmission } from '../../shared/resource-view-admission'
-import type { SpawnIntent } from '../../shared/host-spawn-admission'
+import type { SpawnIntent } from '../../shared/terminal/pty/admission/spawn-admission-contract'
 import type {
   SavedResumeDecision,
   TerminalLaunchResult,
@@ -18,7 +18,7 @@ import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
 } from '../../shared/workspace-layout/terminal-leaf-move'
-import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'
 import type {
   PtyListedSession,
   PtySessionListScope,
@@ -115,6 +115,8 @@ export type PtyApi = {
     shellReadyArmed?: boolean
   }>
   write: (id: string, data: string, inputKind: TerminalInputKind) => void
+  /** Genuine xterm input admitted by a local or remote transport; carries no terminal bytes. */
+  noteUserInput?: () => void
   /** `requireWriteSettlement` waits for the provider's acknowledgment on any provider. */
   writeAccepted: (
     id: string,
@@ -198,6 +200,8 @@ export type PtyApi = {
   getAuthoritativeBufferSnapshotCapabilities?: (
     ids: string[]
   ) => Promise<{ id: string; authoritative: boolean | null }[]>
+  /** Local sessions the provider answers are absent; omitted where no local main owns sessions. */
+  getGoneSessionIds?: (ids: string[]) => Promise<string[]>
   hasPty: (id: string) => Promise<boolean | null>
   moveLeafToNewTab: (request: TerminalLeafMoveRequest) => Promise<TerminalLeafMoveResult>
   getMainBufferSnapshot: (

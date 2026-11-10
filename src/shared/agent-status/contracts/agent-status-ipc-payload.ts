@@ -2,7 +2,10 @@
 
 import type { StructuredHostStatus } from '../../agent-hook-listener/listener-event'
 import type { ProgramStatusFacet } from '../../program-status/facet'
-import type { AgentProviderSessionMetadata } from '../../agent-session/lifecycle/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../agent-session/lifecycle/agent-session-resume'
 import type { WithAgentStatusObservation } from './agent-status-observation'
 import type {
   AgentStatusExecutionId,
@@ -40,6 +43,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   /** Live host acknowledgement of this renderer’s exact pane retirement. */
   authorityRestartId?: string
   launchToken?: string
+  /** The host's statement on the Orca launch in this pane: its note, or null for none; absent says nothing. */
+  launchConfig?: SleepingAgentLaunchConfig | null
   terminalHandle?: string
   tabId?: string
   worktreeId?: string

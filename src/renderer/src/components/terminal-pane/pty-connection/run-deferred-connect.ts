@@ -4,9 +4,12 @@ import { isWorktreeRemovalFenceError } from '../../../../../shared/worktree/remo
 import { safeFit } from '@/lib/pane-manager/pane-fit'
 // Preserve WebGL hook registration before deferred connection setup.
 import '@/lib/pane-manager/pane-webgl-renderer'
-import { getWindowParkVisible, subscribeWindowParkVisibility } from '@/lib/window-park-visibility'
-import { useAppStore } from '@/store'
-import { createCodexBackfillErrorDetector } from '../codex-backfill-error-detector'
+import {
+  getWindowParkVisible,
+  subscribeWindowParkVisibility
+} from '@/lib/window-activity/window-park-visibility'
+import { useAppStore } from '@/store/index'
+import { createCodexBackfillErrorDetector } from '../provider-notices/codex-backfill/codex-backfill-error-detector'
 import { hasWorktreeSleepIntent, onWorktreeSleepIntentCleared } from '@/lib/worktree-sleep-intent'
 
 import { recordPtyConnectDiagnostic } from './instrumentation/pty-connect-diagnostics'
@@ -15,7 +18,7 @@ import { findTerminalTabForPane } from './terminal-tab-id'
 import { isDeferredSplitInputHold } from './pane-transport-options'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
-import type { PtyPaneStartup } from '../pty-connection-types'
+import type { PtyPaneStartup } from './startup/pty-pane-startup'
 import { readClaudePinnedLaunchErrorCode } from '../../../../../shared/claude/claude-pinned-launch-error'
 import { bindBuildColdRestoreAgentResumeStartup } from './startup/cold-restore-resume-startup'
 

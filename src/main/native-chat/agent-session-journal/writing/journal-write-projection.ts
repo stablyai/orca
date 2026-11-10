@@ -7,6 +7,7 @@ import { encodeJournalState } from '../outcomes/journal-state-codec'
 import { restoreJournal } from '../replay/journal-open'
 import type Database from '../../../sqlite/sync-database'
 import type { JournalOperationReceipt } from './journal-row-writer'
+import type { JournalCommittedRowsCapture } from '../journal-store-contracts'
 import { journalStoppedUsageLimitCut } from '../context-epochs/journal-stopped-usage-limit-cut'
 import type { UsageLimitContinueIdentity } from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 
@@ -24,8 +25,10 @@ export class JournalWriteProjection {
     private readonly deps: {
       database: JournalHostDatabase
       state: () => JournalReducerState
+      convertingLegacyQueue?: () => boolean
       adopt: (state: JournalReducerState) => void
       withdrawStoppedCut?: (cut: UsageLimitContinueIdentity) => JournalOperationReceipt | undefined
+      captureCommittedRows?: JournalCommittedRowsCapture
     }
   ) {}
 
@@ -36,7 +39,22 @@ export class JournalWriteProjection {
     savedAt: number,
     finishFold?: (draft: JournalReducerState) => void
   ): () => void {
-    const transition = prepareJournalOutcomeWrite(db, this.deps.state(), rows, savedAt, finishFold)
+    const before = this.deps.state()
+    const transition = prepareJournalOutcomeWrite(
+      db,
+      before,
+      rows,
+      savedAt,
+      finishFold,
+      this.deps.convertingLegacyQueue?.()
+    )
+    this.deps.captureCommittedRows?.(
+      db,
+      before.sessionId,
+      rows,
+      savedAt,
+      (itemId) => before.items.get(itemId)?.body
+    )
     // A stopped cut and its withdrawal commit together, so no reader sees it schedulable.
     const cut = this.deps.withdrawStoppedCut && journalStoppedUsageLimitCut(transition.state, rows)
     const withdrawal = cut ? this.deps.withdrawStoppedCut?.(cut) : undefined

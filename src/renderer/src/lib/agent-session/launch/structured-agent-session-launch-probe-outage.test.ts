@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 
 const calls = vi.hoisted(() => ({
   log: new Array<string>(),
@@ -16,7 +16,7 @@ function offline(): RuntimeRpcCallError {
   })
 }
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: vi.fn(async (_target: unknown, method: string) => {
     calls.log.push(method)
     if (method === 'agentSession.createSupport') {
@@ -29,10 +29,10 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
     throw offline()
   })
 }))
-vi.mock('@/runtime/structured-chat-host-permission', () => ({
+vi.mock('@/runtime/native-chat/host-capabilities/structured-chat-host-permission', () => ({
   readStructuredChatHostPermissionVerdict: async () => ({ kind: 'allowed' })
 }))
-vi.mock('@/runtime/structured-session-tab-inventory', () => ({
+vi.mock('@/runtime/native-chat/tab-inventory/structured-session-tab-inventory', () => ({
   readStructuredSessionTabInventory: vi.fn(async () => {
     calls.log.push('inventory')
     throw new Error('host offline')

@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { isTaskProvider } from '../task-providers'
-import type { TaskProvider } from '../task-providers'
+import { isTaskProvider } from '../work-items/task-providers'
+import type { TaskProvider } from '../work-items/task-providers'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import { normalizeDisabledTuiAgents } from '../agent-launch/catalog/tui-agent-selection'
 import {

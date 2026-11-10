@@ -3,7 +3,9 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-s
 /** Phone methods the relaying Mac always answers itself, even when the call names a server. */
 export const PAIRED_DESKTOP_METHODS = [
   // Device and pairing concerns of the phone's own pairing.
+  'mobileWeb.bundle.brotliRange',
   'mobileWeb.bundle.chunk',
+  'mobileWeb.bundle.localeCatalog',
   'mobileWeb.bundle.manifest',
   'mobileWeb.bundle.range',
   'notifications.getMissedSince',
@@ -15,6 +17,7 @@ export const PAIRED_DESKTOP_METHODS = [
   'pairing.getEndpoints',
   'pairing.provisionRelay',
   'pairing.registerDeviceKey',
+  'pairing.exchangeTicket',
   // The configured servers the desktop shows, and their workspace lists as it last fetched them.
   'mobileRelay.hosts.list',
   'mobileRelay.hosts.worktrees',

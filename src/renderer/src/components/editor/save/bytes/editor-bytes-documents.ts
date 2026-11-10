@@ -1,9 +1,9 @@
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store/index'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { editorTabFileAccess } from '@/lib/local-file-access'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import { writeRuntimeFileBytes } from '@/runtime/runtime-file-bytes-write'
+import { editorTabFileAccess } from '@/lib/files/access/local-file-access'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
+import { writeRuntimeFileBytes } from '@/runtime/files/mutations/runtime-file-bytes-write'
 import type { CustomEditorBinaryDocument } from '../../plugin-custom-editor-host-types'
 import type { EditorSaveResult, EditorSaveTrigger } from '../queue/editor-save-disk-precondition'
 import {

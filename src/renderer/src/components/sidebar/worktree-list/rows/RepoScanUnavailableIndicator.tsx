@@ -1,9 +1,9 @@
 import React from 'react'
 import { TriangleAlert } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeScanFailureKind } from '../../../../../../shared/worktree-scan-failure'
 import { isLocalToolchainFailure, resolveRepoScanFailure } from '../../repo-scan-failure'
@@ -11,11 +11,12 @@ import {
   handleRepoHeaderActionPointerDown,
   stopRepoHeaderKeyboardToggle
 } from './header-event-guards'
-import { selectDetectedWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectDetectedWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { RepoWslDistroStoppedIndicator } from './RepoWslDistroStoppedIndicator'
 
 /** Retain failed-scan rows with a warning and explicit retry instead of waiting for an incidental refresh. */
 export function RepoScanUnavailableIndicator({ repo }: { repo: Repo }): React.JSX.Element | null {
+  const t = useTranslate()
   const detected = useAppStore((s) => selectDetectedWorktreesByRepo(s)[repo.id])
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const [pending, setPending] = React.useState(false)
@@ -27,26 +28,23 @@ export function RepoScanUnavailableIndicator({ repo }: { repo: Repo }): React.JS
   if (!failure || isLocalToolchainFailure(failure)) {
     return null
   }
-  const title = translate(
+  const title = t(
     'auto.components.sidebar.RepoScanUnavailableIndicator.title',
     'Worktree scan failed for {{value0}}',
     { value0: repo.displayName }
   )
-  const retryLabel = translate(
-    'auto.components.sidebar.RepoScanUnavailableIndicator.retry',
-    'Retry scan'
-  )
+  const retryLabel = t('auto.components.sidebar.RepoScanUnavailableIndicator.retry', 'Retry scan')
   const { executionHostId, isLocalMac, kind: failureKind, reason } = failure
   const failureMessageByKind: Partial<Record<WorktreeScanFailureKind, string>> = {
-    'xcode-license': translate(
+    'xcode-license': t(
       'auto.components.sidebar.RepoScanUnavailableIndicator.xcodeLicense',
       'Apple developer tools require license acceptance before Git can run.'
     ),
-    'developer-tools': translate(
+    'developer-tools': t(
       'auto.components.sidebar.RepoScanUnavailableIndicator.developerTools',
       'Apple command-line developer tools are missing or unavailable.'
     ),
-    'architecture-mismatch': translate(
+    'architecture-mismatch': t(
       'auto.components.sidebar.RepoScanUnavailableIndicator.architectureMismatch',
       'A Git-related executable could not run because its CPU architecture is incompatible with this execution host. Install Git and related tools for the host architecture.'
     )
@@ -61,7 +59,7 @@ export function RepoScanUnavailableIndicator({ repo }: { repo: Repo }): React.JS
   ].join('\n')
   return (
     <TooltipProvider disableHoverableContent={false}>
-      <Tooltip delayDuration={400}>
+      <Tooltip>
         <TooltipTrigger asChild>
           <button
             type="button"
@@ -92,7 +90,7 @@ export function RepoScanUnavailableIndicator({ repo }: { repo: Repo }): React.JS
             <div className="font-medium">{title}</div>
             <div className="break-words text-muted-foreground">{failureMessage}</div>
             <div className="text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.sidebar.RepoScanUnavailableIndicator.retained',
                 'Existing worktrees are kept until a scan succeeds. Click the warning icon to retry.'
               )}
@@ -103,7 +101,7 @@ export function RepoScanUnavailableIndicator({ repo }: { repo: Repo }): React.JS
                 className="text-xs underline"
                 onClick={() => void window.api.ui.writeClipboardText(diagnosticText)}
               >
-                {translate(
+                {t(
                   'auto.components.sidebar.RepoScanUnavailableIndicator.copyDiagnostics',
                   'Copy diagnostics'
                 )}

@@ -4,12 +4,13 @@ import { ChevronDown } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { Textarea } from '../../ui/textarea'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../ui/collapsible'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { SettingsSectionStack } from '../section-layout/SettingsSectionStack'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '../../../store/index'
-import { isMacUserAgent, isWindowsUserAgent } from '@/lib/user-agent-platform'
-import { getManageSessionsSearchEntries } from './terminal-window-setup-search'
+import { isMacUserAgent, isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
+import { getManageSessionsSearchEntries } from './session-management/manage-sessions-search'
+import { getTerminalDefaultShellSearchEntry } from './terminal-default-shell-search'
 import {
   getTerminalAdvancedSearchEntries,
   getTerminalMacOptionSearchEntries,
@@ -30,12 +31,9 @@ import { TerminalRenderingSection } from './appearance/TerminalRenderingSection'
 import { TerminalWindowsShellSection } from './platform/TerminalWindowsShellSection'
 import { TerminalWindowsAdministratorSection } from './platform/TerminalWindowsAdministratorSection'
 import { TerminalCustomShellInput } from './platform/TerminalCustomShellInput'
-import {
-  SettingsSegmentedControl,
-  SettingsSubsectionHeader
-} from '../form-controls/SettingsFormControls'
-import { translate } from '@/i18n/i18n'
-import { translateSearchKeyword } from '../search/settings-search-keywords'
+import { SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
+import { useTranslate } from '@/i18n/use-translate'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 type TerminalPaneProps = {
   hostScope?: SettingsHostScope
@@ -67,6 +65,7 @@ export function TerminalPane({
   gitBashAvailable = false,
   isWindowsTerminalHost
 }: TerminalPaneProps): React.JSX.Element {
+  const t = useTranslate()
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isWindows = isWindowsUserAgent()
   const showWindowsHostSettings = isWindowsTerminalHost ?? isWindows
@@ -98,53 +97,26 @@ export function TerminalPane({
     setShellValidationError(
       exists
         ? null
-        : translate(
-            'auto.components.settings.TerminalPane.5a5eac2f44',
-            'Shell not found: {{value0}}',
-            {
-              value0: shell
-            }
-          )
+        : t('auto.components.settings.TerminalPane.5a5eac2f44', 'Shell not found: {{value0}}', {
+            value0: shell
+          })
     )
   }
 
   const defaultShellSection =
     !showWindowsHostSettings &&
-    matchesSettingsSearch(searchQuery, {
-      title: translate('auto.components.settings.TerminalPane.9589abc009', 'Default shell'),
-      description: translate(
-        'auto.components.settings.TerminalPane.1c29734248',
-        'Shell used for new terminal panes'
-      ),
-      keywords: [
-        ...translateSearchKeyword('auto.components.settings.TerminalPane.a909136b3f', 'shell'),
-        ...translateSearchKeyword('auto.components.settings.TerminalPane.81694f1584', 'terminal'),
-        ...translateSearchKeyword('auto.components.settings.TerminalPane.0cbe5ad727', 'fish'),
-        ...translateSearchKeyword('auto.components.settings.TerminalPane.c9bc93d343', 'zsh'),
-        ...translateSearchKeyword('auto.components.settings.TerminalPane.17ad899ba4', 'bash'),
-        ...translateSearchKeyword('auto.components.settings.TerminalPane.d469840b75', 'nushell'),
-        ...translateSearchKeyword('auto.components.settings.TerminalPane.ddc72a4860', 'default'),
-        ...translateSearchKeyword('auto.components.settings.TerminalPane.af893aa433', 'arguments'),
-        ...translateSearchKeyword('auto.components.settings.TerminalPane.44f8a56f66', 'args'),
-        ...translateSearchKeyword('auto.components.settings.TerminalPane.4faf688f78', 'login'),
-        ...translateSearchKeyword('auto.components.settings.TerminalPane.73c211e979', 'wrapper'),
-        ...translateSearchKeyword('auto.components.settings.TerminalPane.c2ddb189e7', 'rcfile')
-      ]
-    }) ? (
-      <section key="default-shell" className="space-y-3">
-        <SettingsSubsectionHeader
-          title={translate('auto.components.settings.TerminalPane.fd05fb109c', 'Terminal shell')}
-          description={translate(
-            'auto.components.settings.TerminalPane.69724e8f0c',
-            'Choose what Orca opens for new local terminal panes.'
-          )}
-        />
-        <div className="space-y-3">
+    matchesSettingsSearch(searchQuery, getTerminalDefaultShellSearchEntry(t)) ? (
+      <SettingsGroup
+        key="default-shell"
+        title={t('auto.components.settings.TerminalPane.fd05fb109c', 'Terminal shell')}
+        description={t(
+          'auto.components.settings.TerminalPane.69724e8f0c',
+          'Choose what Orca opens for new local terminal panes.'
+        )}
+      >
+        <div className="space-y-3 py-3">
           <SettingsSegmentedControl
-            ariaLabel={translate(
-              'auto.components.settings.TerminalPane.fd05fb109c',
-              'Terminal shell'
-            )}
+            ariaLabel={t('auto.components.settings.TerminalPane.fd05fb109c', 'Terminal shell')}
             value={shellMode}
             onChange={(value) => {
               setShellValidationError(null)
@@ -160,7 +132,7 @@ export function TerminalPane({
             options={[
               {
                 value: 'system',
-                label: translate(
+                label: t(
                   'auto.components.settings.TerminalPane.dd3f4c35da',
                   'System shell ({{value0}})',
                   { value0: systemShell }
@@ -168,7 +140,7 @@ export function TerminalPane({
               },
               {
                 value: 'custom',
-                label: translate('auto.components.settings.TerminalPane.f51cc79784', 'Custom shell')
+                label: t('auto.components.settings.TerminalPane.f51cc79784', 'Custom shell')
               }
             ]}
           />
@@ -176,7 +148,7 @@ export function TerminalPane({
             <div className="space-y-1.5">
               <TerminalCustomShellInput
                 value={settings.terminalDefaultShell ?? ''}
-                placeholder={translate(
+                placeholder={t(
                   'auto.components.settings.TerminalPane.c2bf02ce2f',
                   'fish, nu, or /bin/zsh'
                 )}
@@ -186,7 +158,7 @@ export function TerminalPane({
                 }}
                 onCommit={() => void validateShell()}
                 className="w-full"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.settings.TerminalPane.5e06e87730',
                   'Custom shell executable'
                 )}
@@ -194,7 +166,7 @@ export function TerminalPane({
                 aria-describedby={shellValidationError ? 'default-shell-error' : undefined}
               />
               <p id="default-shell-help" className="text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.TerminalPane.59573d0b33',
                   'Enter a shell name on PATH or an executable path. Orca starts it as a login shell.'
                 )}
@@ -202,7 +174,7 @@ export function TerminalPane({
               {shellValidationError ? (
                 <p id="default-shell-error" role="alert" className="text-xs text-destructive">
                   {shellValidationError}
-                  {translate(
+                  {t(
                     'auto.components.settings.TerminalPane.e3ae5aed18',
                     '. Switch to System shell or choose an executable on this host.'
                   )}
@@ -215,7 +187,7 @@ export function TerminalPane({
                     className="inline-flex h-7 items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                     aria-controls="default-shell-args-content"
                   >
-                    {translate('auto.components.settings.TerminalPane.5e5f06c82c', 'Advanced')}
+                    {t('auto.components.settings.TerminalPane.5e5f06c82c', 'Advanced')}
                     <ChevronDown
                       className={cn('size-3.5 transition-transform', shellArgsOpen && 'rotate-180')}
                     />
@@ -225,25 +197,22 @@ export function TerminalPane({
                   <div className="mt-1.5 space-y-2 rounded-md border border-border/60 bg-muted/20 px-3 py-3">
                     <div className="space-y-1">
                       <label htmlFor="default-shell-args" className="text-xs font-medium">
-                        {translate(
-                          'auto.components.settings.TerminalPane.01c600daff',
-                          'Shell arguments'
-                        )}
+                        {t('auto.components.settings.TerminalPane.01c600daff', 'Shell arguments')}
                       </label>
                       <p className="text-xs text-muted-foreground">
                         {shellArgsMode === 'default'
-                          ? translate(
+                          ? t(
                               'auto.components.settings.TerminalPane.884a006065',
                               'Starts the shell as a login shell with -l.'
                             )
-                          : translate(
+                          : t(
                               'auto.components.settings.TerminalPane.578ec79449',
                               'Enter one argument per line. Leave it empty to pass no arguments.'
                             )}
                       </p>
                     </div>
                     <SettingsSegmentedControl
-                      ariaLabel={translate(
+                      ariaLabel={t(
                         'auto.components.settings.TerminalPane.5ffc4777b6',
                         'Shell argument mode'
                       )}
@@ -258,14 +227,14 @@ export function TerminalPane({
                       options={[
                         {
                           value: 'default',
-                          label: translate(
+                          label: t(
                             'auto.components.settings.TerminalPane.7bd83fc1d0',
                             '-l (default)'
                           )
                         },
                         {
                           value: 'custom',
-                          label: translate(
+                          label: t(
                             'auto.components.settings.TerminalPane.48b91a3ed2',
                             'Custom args'
                           )
@@ -283,13 +252,13 @@ export function TerminalPane({
                           setCustomShellArgs(nextArgs)
                           updateSettings({ terminalDefaultShellArgs: nextArgs })
                         }}
-                        placeholder={translate(
+                        placeholder={t(
                           'auto.components.settings.TerminalPane.f58cb71f53',
                           '--rcfile\n/path/to/rcfile'
                         )}
                         className="min-h-20"
                         spellCheck={false}
-                        aria-label={translate(
+                        aria-label={t(
                           'auto.components.settings.TerminalPane.8dbe0bc942',
                           'Shell arguments, one per line'
                         )}
@@ -301,14 +270,19 @@ export function TerminalPane({
             </div>
           ) : null}
         </div>
-      </section>
+      </SettingsGroup>
     ) : null
 
   const visibleSections = [
     defaultShellSection,
     isWindows &&
     matchesSettingsSearch(searchQuery, getTerminalWindowsAdministratorSearchEntry()) ? (
-      <TerminalWindowsAdministratorSection key="windows-administrator" />
+      <SettingsGroup
+        key="windows-administrator"
+        title={t('auto.components.settings.DefaultWindowsProjectRuntimeSetting.windows', 'Windows')}
+      >
+        <TerminalWindowsAdministratorSection />
+      </SettingsGroup>
     ) : null,
     showWindowsHostSettings &&
     matchesSettingsSearch(searchQuery, getTerminalWindowsShellSearchEntry()) ? (
@@ -364,7 +338,7 @@ export function TerminalPane({
 
   return (
     <div className="space-y-6">
-      <SettingsSectionStack sections={visibleSections} spacing="section" />
+      <SettingsSectionStack sections={visibleSections} />
     </div>
   )
 }

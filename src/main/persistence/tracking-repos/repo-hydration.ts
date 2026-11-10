@@ -8,7 +8,7 @@ import { normalizeRepoAgentAccounts } from '../../../shared/claude/project-claud
 import { normalizeJiraProjectReference } from '../../../shared/jira/jira-project-reference'
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
 import { normalizeOrcadRetainedMarker } from '../../../shared/orcad-retained-marker'
-import { sanitizeAgentWorkspaceTrustDecision } from '../../../shared/agent-workspace-trust-decision'
+import { sanitizeAgentWorkspaceTrustDecision } from '../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import {
   sanitizeForkSyncMode,
   sanitizeGitRemoteIdentity,

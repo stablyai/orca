@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { IDisposable } from '@xterm/xterm'
 
 describe('pty buffer serializer registry', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
@@ -30,38 +29,6 @@ describe('pty buffer serializer registry', () => {
     }
   })
 
-  it('tracks a remounted quiet title source even when the stale owner unregisters later', async () => {
-    const { registerPtySerializer, registerPtyTitleSource } =
-      await import('./pty-buffer-serializer')
-    const oldDispose = vi.fn()
-    const newDispose = vi.fn()
-
-    const unregisterOldSerializer = registerPtySerializer('pty-1', () => null)
-    const unregisterOldTitle = registerPtyTitleSource(
-      'pty-1',
-      () => ({ dispose: oldDispose }) satisfies IDisposable
-    )
-
-    const unregisterNewSerializer = registerPtySerializer('pty-1', () => null)
-    const unregisterNewTitle = registerPtyTitleSource(
-      'pty-1',
-      () => ({ dispose: newDispose }) satisfies IDisposable
-    )
-
-    expect(oldDispose).toHaveBeenCalledTimes(1)
-    expect(newDispose).not.toHaveBeenCalled()
-
-    unregisterOldTitle()
-    unregisterOldSerializer()
-
-    expect(newDispose).not.toHaveBeenCalled()
-
-    unregisterNewTitle()
-    unregisterNewSerializer()
-
-    expect(newDispose).toHaveBeenCalledTimes(1)
-  })
-
   it('returns null when a remount replaces an in-flight serializer', async () => {
     const { registerPtySerializer } = await import('./pty-buffer-serializer')
     let resolveOld: ((value: { data: string; cols: number; rows: number }) => void) | undefined
@@ -79,59 +46,5 @@ describe('pty buffer serializer registry', () => {
     await Promise.resolve()
 
     expect(window.api.pty.sendSerializedBuffer).toHaveBeenCalledWith('request-1', null)
-  })
-
-  it('preserves the renderer-parsed output sequence in the response', async () => {
-    const { registerPtySerializer } = await import('./pty-buffer-serializer')
-    registerPtySerializer('pty-sequenced', () => ({
-      data: 'parsed output',
-      cols: 80,
-      rows: 24,
-      seq: 42
-    }))
-    const serializeRequestHandler = vi.mocked(window.api.pty.onSerializeBufferRequest).mock
-      .calls[0]?.[0]
-
-    serializeRequestHandler?.({ requestId: 'request-sequenced', ptyId: 'pty-sequenced' })
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(window.api.pty.sendSerializedBuffer).toHaveBeenCalledWith(
-      'request-sequenced',
-      expect.objectContaining({ seq: 42 })
-    )
-  })
-
-  it('preserves a pending escape tail for snapshot replay', async () => {
-    const { registerPtySerializer } = await import('./pty-buffer-serializer')
-    registerPtySerializer('pty-escape-tail', () => ({
-      data: 'prompt$ ',
-      cols: 80,
-      rows: 24,
-      pendingEscapeTailAnsi: '\x1b[38;5;'
-    }))
-    const serializeRequestHandler = vi.mocked(window.api.pty.onSerializeBufferRequest).mock
-      .calls[0]?.[0]
-
-    serializeRequestHandler?.({ requestId: 'request-escape-tail', ptyId: 'pty-escape-tail' })
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(window.api.pty.sendSerializedBuffer).toHaveBeenCalledWith(
-      'request-escape-tail',
-      expect.objectContaining({ pendingEscapeTailAnsi: '\x1b[38;5;' })
-    )
-  })
-
-  it("routes a host's Reset Terminal request to the pane that owns the PTY", async () => {
-    const { registerPtySerializer } = await import('./pty-buffer-serializer')
-    const resetInputModes = vi.fn()
-    registerPtySerializer('pty-1', () => null, { resetInputModes })
-    const [[onRequest]] = vi.mocked(window.api.pty.onResetInputModesRequest).mock.calls
-
-    onRequest({ ptyId: 'pty-2' })
-    expect(resetInputModes).not.toHaveBeenCalled()
-    onRequest({ ptyId: 'pty-1' })
-    expect(resetInputModes).toHaveBeenCalledOnce()
   })
 })

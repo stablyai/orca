@@ -2,7 +2,8 @@ import { existsSync, statSync } from 'node:fs'
 import { basename, dirname, resolve } from 'node:path'
 import { normalizeRuntimePathSeparators } from '../../shared/cross-platform-path'
 import { parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
-import { scanGitMarkerSync, resolveRealPathSync } from './repo-git-marker-scan'
+import { scanGitMarkerSync } from './repo-git-marker-scan'
+import { resolveRealPathSync } from '../../shared/real-path-sync'
 import {
   gitRepoOutput,
   runGitRepoCommands,

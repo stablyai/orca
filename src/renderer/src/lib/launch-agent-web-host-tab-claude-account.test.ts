@@ -20,7 +20,7 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
   createWebRuntimeAgentSessionTerminal: vi.fn(),
   createWebRuntimeAgentSessionTerminalWithLaunchDraft: vi.fn()
 }))
@@ -34,7 +34,7 @@ vi.mock('@/runtime/agent-launch-settings/use-host-agent-launch-preferences', () 
   ensureAgentLaunchPreferences: vi.fn(async () => ({}))
 }))
 
-vi.mock('@/runtime/web-runtime-terminal-create-operation', () => ({
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation', () => ({
   createWebRuntimeSessionTerminalResult: mockCreateTerminal
 }))
 

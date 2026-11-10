@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
 import { useRemoteBrowserPageKeyboard } from './use-remote-browser-page-keyboard'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
@@ -7,7 +7,7 @@ import type {
   RemoteBrowserOperationToken,
   RemoteBrowserViewportSize
 } from './remote-browser-stream-tokens'
-import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
+import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
 import {
   getRemoteBrowserMouseButton,
   mapRemoteBrowserClientPoint,

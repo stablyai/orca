@@ -1,11 +1,15 @@
+import {
+  pickApprovedSetupHashes,
+  type ApprovedSetupHashes
+} from '../../../../../shared/worktree/approved-setup-hashes'
 import { useAppStore } from '@/store/index'
 import type { WorktreeCreationRequest } from './pending-worktree-creation'
 import {
   ensureHooksConfirmed,
   readAndConfirmRuntimeIssueCommand
-} from '../../ensure-hooks-confirmed'
-import { confirmWorkspaceSetupDecision } from '../../workspace-setup-trust'
-import { buildTrustedComposerIssueCommand } from '../../composer-issue-command'
+} from '../../../runtime/repo-hooks/ensure-hooks-confirmed'
+import { confirmWorkspaceSetupDecision } from './setup/workspace-setup-trust'
+import { buildTrustedComposerIssueCommand } from './composer-issue-command'
 import { getInitialWorktreeCreationPhase } from './worktree-creation-flow-startup'
 
 export async function prepareWorktreeCreationHooks(
@@ -38,7 +42,7 @@ export async function prepareWorktreeCreationHooks(
     return null
   }
 
-  const { setupDecision, trustDecision, approvedSetupHash } = confirmed
+  const { setupDecision, trustDecision } = confirmed
   let issueCommand = request.issueCommand
   if (preparation.issueCommand && preparation.executionHostId && trustDecision !== 'skip') {
     const confirmed = await readAndConfirmRuntimeIssueCommand(
@@ -74,7 +78,7 @@ export async function prepareWorktreeCreationHooks(
     hookPreparation: undefined,
     executionHostId: request.executionHostId ?? preparation.executionHostId,
     setupDecision,
-    ...(approvedSetupHash !== undefined ? { approvedSetupHash } : {}),
+    ...pickApprovedSetupHashes(confirmed),
     issueCommand
   }
   useAppStore.getState().updatePendingWorktreeCreation(creationId, {
@@ -86,12 +90,7 @@ export async function prepareWorktreeCreationHooks(
 
 /** Setup fields for the create call; the approved hash lets the host check the created branch. */
 export function setupCreateArgs(
-  request: Pick<WorktreeCreationRequest, 'setupOnly' | 'approvedSetupHash'>
-): { setupOnly?: boolean; approvedSetupHash?: string } {
-  return {
-    setupOnly: request.setupOnly,
-    ...(request.approvedSetupHash !== undefined
-      ? { approvedSetupHash: request.approvedSetupHash }
-      : {})
-  }
+  request: Pick<WorktreeCreationRequest, 'setupOnly' | keyof ApprovedSetupHashes>
+): { setupOnly?: boolean } & ApprovedSetupHashes {
+  return { setupOnly: request.setupOnly, ...pickApprovedSetupHashes(request) }
 }

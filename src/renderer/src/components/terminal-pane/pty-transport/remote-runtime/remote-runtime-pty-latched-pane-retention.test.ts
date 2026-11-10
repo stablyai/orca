@@ -19,7 +19,7 @@ import {
 import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/runtime-session-contracts'
 import './recovery/remote-runtime-pty-recovery-state'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './recovery/remote-runtime-pty-recovery-limits'
-import { stubRuntimeEnvironmentBridge } from '../../../../runtime/runtime-environment-bridge-fixture'
+import { stubRuntimeEnvironmentBridge } from '../../../../runtime/rpc/testing/runtime-environment-bridge-fixture'
 
 // Latched panes intentionally retain only retry-registry and accepted-snapshot entries; destroy must release both.
 describe('remote runtime pty latched-pane retention', () => {
@@ -129,7 +129,8 @@ describe('remote runtime pty latched-pane retention', () => {
   }
 
   async function registries() {
-    const handleEvents = await import('../../../../runtime/web-session-terminal-handle-events')
+    const handleEvents =
+      await import('../../../../runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events')
     const recoveryState = await import('./recovery/remote-runtime-pty-recovery-state')
     return {
       subscribers: handleEvents.getWebSessionTerminalHandleSubscriberCountForTests(),
@@ -139,8 +140,10 @@ describe('remote runtime pty latched-pane retention', () => {
 
   beforeEach(() => {
     vi.resetModules()
-    vi.doUnmock('../../../../runtime/remote-runtime-terminal-multiplexer')
-    vi.doMock('@/runtime/web-runtime-session-snapshot', () => ({
+    vi.doUnmock(
+      '../../../../runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry'
+    )
+    vi.doMock('@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot', () => ({
       refreshWebRuntimeSessionTabsSnapshot: refreshSessionTabsSnapshot
     }))
     vi.clearAllMocks()
@@ -330,7 +333,8 @@ describe('remote runtime pty latched-pane retention', () => {
   it('does not stack anything when host snapshots arrive repeatedly at a latched pane', async () => {
     vi.useFakeTimers()
     try {
-      const handleEvents = await import('../../../../runtime/web-session-terminal-handle-events')
+      const handleEvents =
+        await import('../../../../runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events')
       const transport = await attachStalePane(0)
       await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')

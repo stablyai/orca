@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { hasUndoneContextualTourAction } from '../../../../shared/contextual-tour-action-steps'
-import { useAppStore } from '@/store'
-import { runActiveNativeChatSplit } from '@/components/native-chat/native-chat-layout-actions'
+import { useAppStore } from '@/store/index'
+import { runActiveNativeChatSplit } from '@/components/native-chat/pane/routing/native-chat-layout-actions'
 import {
   getContextualTour,
   type ContextualTourId,
@@ -11,7 +11,7 @@ import type { ContextualTourOutcome } from '../../../../shared/feature-education
 import {
   trackContextualTourOutcome,
   trackContextualTourShown
-} from '@/lib/feature-education-telemetry'
+} from '@/diagnostics/telemetry/feature-education-telemetry'
 import { isContextualTourAllowedForModal } from './contextual-tour-gate'
 import {
   areContextualTourRenderStatesEqual,
@@ -25,12 +25,12 @@ import {
   handleContextualTourOverlayKeyDown,
   type ActiveTourRenderState
 } from './ContextualTourOverlaySurface'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/request-active-terminal-pane-split'
 import { performContextualTourStepAction } from './contextual-tour-step-actions'
 import { useContextualTourFocus } from './use-contextual-tour-focus'
 import { openWorkspaceCreationComposerWithTourHandoff } from './workspace-creation-tour-handoff'
-import { BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
+import { BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
 
 export function ContextualTourOverlay(): JSX.Element | null {
   const activeTourId = useAppStore((s) => s.activeContextualTourId)

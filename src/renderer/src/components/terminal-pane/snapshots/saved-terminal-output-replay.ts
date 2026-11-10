@@ -1,13 +1,13 @@
-import { markTerminalShowsReplayedHistory } from '../replayed-history-terminals'
+import { markTerminalShowsReplayedHistory } from './replayed-history-terminals'
 import {
   POST_REPLAY_MODE_RESET,
   RESET_GRAPHIC_RENDITION
 } from '../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { replayIntoTerminal, type ReplayingPanesRef } from '../replay-guard'
+import { replayIntoTerminal, type ReplayingPanesRef } from './replay-guard'
 import type { RestoredViewportBlankingPanesRef } from '../viewport/terminal-restored-viewport'
 import { isXtermInstanceDisposed } from '@/lib/pane-manager/xterm-instance-disposed'
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 
 /** Restore saved output; leave captured alt-screen mode unless its TUI is still live on the host. */
 export function restoreScrollbackBuffers(

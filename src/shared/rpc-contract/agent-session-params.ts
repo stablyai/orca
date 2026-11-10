@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { isValidTerminalTabId } from '../workspace-layout/terminal-tab-id'
 import {
   RESUMABLE_TUI_AGENTS,
@@ -13,7 +13,7 @@ import {
 } from '../agent-session/agent-session-host-authority'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import { launchConfigClaudeAccountIdSchema } from '../workspace-session/workspace-session-sleeping-agents'
-import { RESTORE_SPAWN_INTENTS } from '../host-spawn-admission'
+import { RESTORE_SPAWN_INTENTS } from '../terminal/pty/admission/spawn-admission-contract'
 import { AgentLaunchAccountEnv } from '../agent-launch/startup/agent-launch-account-env'
 
 export const MAX_WORKTREE_SELECTOR_LENGTH = 32_768
@@ -133,6 +133,8 @@ export const ExplicitEnsure = z
   .object({
     kind: z.literal('explicit'),
     resumeOrigin: z.literal('saved').optional(),
+    /** The pane a saved restore resumes; `placement` names the pane it opens in. */
+    restoreSourcePaneKey: z.string().min(1).max(300).optional(),
     worktree: WorktreeSelector,
     agent: z.enum(RESUMABLE_TUI_AGENTS),
     providerSession: ProviderSession,

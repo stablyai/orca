@@ -1,5 +1,6 @@
 import { useRendererPtyVisibilityClaims } from '../../pty-transport/delivery/use-renderer-pty-visibility-claims'
 import { useActiveRendererPty } from '../../pty-transport/delivery/use-active-renderer-pty'
+import { syncPaneOutputCadences } from '../../pty-transport/renderer-active-pty'
 import { useTerminalPaneExpandEvent } from '../../layout/expand/use-terminal-pane-expand-event'
 import { useTerminalPaneFocusEvent } from '../../input/focus/use-terminal-pane-focus-event'
 import { useTerminalProgrammaticPasteEvent } from '../../input/paste/use-terminal-programmatic-paste-event'
@@ -17,7 +18,7 @@ import {
   type TerminalHiddenReason
 } from './terminal-visibility-resume'
 import { useTerminalWindowWakeRecovery } from './use-terminal-window-wake-recovery'
-import { activePaneIsCoveredByNativeChat } from '../../native-chat-covered-pane'
+import { activePaneIsCoveredByNativeChat } from '../../chat/native-chat-covered-pane'
 
 type UseTerminalPaneGlobalEffectsArgs = {
   tabId: string
@@ -184,6 +185,12 @@ export function useTerminalPaneGlobalEffects({
     managerRef,
     withSuppressedScrollTracking
   ])
+
+  useEffect(() => {
+    if (panePtyBindingsRef) {
+      syncPaneOutputCadences(panePtyBindingsRef.current)
+    }
+  }, [isActive, panePtyBindingsRef])
 
   useActiveRendererPty({ isActive, isVisible, isWorktreeActive, activeLeafPtyId })
 

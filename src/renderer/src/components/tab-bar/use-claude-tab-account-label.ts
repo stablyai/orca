@@ -4,7 +4,7 @@ import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-t
 import type { ClaudeManagedAccountSummary } from '../../../../shared/managed-account-types'
 import { claudeTabAccountLabel, pinnedClaudeTabAccountId } from '@/lib/claude-tab-account-label'
 import { claudeAccountsTargetForRepo, findLaunchRepo } from '@/lib/claude-launch-account'
-import { fetchProviderAccountsSnapshot } from '@/runtime/runtime-provider-accounts-client'
+import { fetchProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { claudeAccountPinningUnsupportedReasonInState } from '@/components/settings/repository-claude-account'
 import { useAppStore } from '../../store'
 

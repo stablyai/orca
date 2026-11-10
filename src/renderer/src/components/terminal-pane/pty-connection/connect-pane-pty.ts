@@ -1,5 +1,5 @@
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { isMainTerminalSideEffectAuthorityForPty } from '../terminal-side-effect-facts-handler'
+import { isMainTerminalSideEffectAuthorityForPty } from '../pty-transport/output/terminal-side-effect-facts-handler'
 import { isRendererHiddenPtyDeliveryGateEnabled } from '../pty-transport/delivery/terminal-hidden-delivery-gate'
 import { installPtyKittyFileReader } from './host-ownership/pty-kitty-file-reader'
 import { installSpawnDeferredSleep } from './spawn/spawn-deferred-sleep'
@@ -10,16 +10,16 @@ import { createPaneWindowsPtyModel } from './geometry/pane-windows-pty-model'
 import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
 import { resolvePaneKeyboardProtocolAgent } from '../input/keyboard/terminal-keyboard-protocol-pane-agent'
 import { TerminalKittyKeyboardModeTracker } from '../../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
-import type { PtyConnectionDeps } from '../pty-connection-types'
+import type { PtyConnectionDeps } from './pty-connection-deps'
 import { registerTerminalPaneRecoveryInstance } from '../render-health/recovery/terminal-pane-recovery'
 import { captureTabRecoveryGeneration } from '@/store/terminals/terminal-tab-recovery-ledger'
-import { TerminalIdleCursorReset } from '../terminal-idle-cursor-reset'
-import { TerminalStreamPosition } from '../terminal-stream-position'
+import { TerminalIdleCursorReset } from '../emulation/terminal-idle-cursor-reset'
+import { TerminalStreamPosition } from '../pty-transport/delivery/terminal-stream-position'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { createTerminalStructuralReplayCoordinator } from '@/lib/pane-manager/terminal-structural-replay-coordinator'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
+import { resolveExplicitTerminalTitleAgentType } from '../../../../../shared/agent-status/title/terminal-title-agent-type'
 
 import { shouldWritePtyOutputForeground } from './output/foreground-output-visibility'
 import { exposeE2eTerminalPtyOutputDebug } from './instrumentation/e2e-terminal-pty-harness'
@@ -40,7 +40,7 @@ import { bindPanePtyFit, bindPanePtyFitRelease } from './geometry/pane-pty-fit-b
 import { bindPaneSideEffectFacts } from './output/pane-side-effect-facts'
 
 import { installPaneAgentCompletion } from './agent-identity/pane-agent-completion'
-import { installTerminalLaunchInputAttempt } from '../terminal-launch-input-attempt'
+import { installTerminalLaunchInputAttempt } from './startup/terminal-launch-input-attempt'
 import { bindPaneAgentStatusRouting } from './agent-identity/pane-agent-status-routing'
 import { initializePanePtyExit, bindPanePtyExit } from './lifecycle/pane-pty-exit'
 import { installHibernatedPaneWake } from './lifecycle/hibernated-pane-wake'
@@ -152,7 +152,7 @@ export function connectPanePty(
     title: string | undefined,
     agentType: AgentType | undefined
   ): void => {
-    const titleAgentType = resolveCommittedTitleAgentType(title ?? '')
+    const titleAgentType = resolveExplicitTerminalTitleAgentType(title ?? '')
     session.suppressNativeWindowsIdleCodexFocusReports =
       agentType && agentType !== 'unknown' ? agentType === 'codex' : titleAgentType === 'codex'
   }

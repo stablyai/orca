@@ -8,7 +8,7 @@ import { TerminalTabHoverCard } from './TerminalTabHoverCard'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getDropIndicatorClasses,
@@ -21,7 +21,7 @@ import { useSortableTabRename } from './use-sortable-tab-rename'
 import { useTabRenameReturnFocus } from './use-tab-rename-return-focus'
 import { SortableTabContextMenu } from './SortableTabContextMenu'
 import { useSortableTabContextMenu } from './use-sortable-tab-context-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
@@ -32,9 +32,9 @@ import {
   terminalTabHasUnreadActivity
 } from './terminal-tab-activity-status'
 import { useTerminalTabActivity } from './use-terminal-tab-activity'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import type { NativeChatTabSession } from './tab-session-history-switch'
-import type { StructuredChatTabNamingFailure } from '@/runtime/structured-conversation-name'
+import type { StructuredChatTabNamingFailure } from '@/runtime/native-chat/naming/structured-conversation-name'
 import { useNativeChatNamingFailure } from './use-native-chat-naming-failure'
 import { NativeChatNamingErrorBlock, NativeChatNamingFailedDialog } from './NativeChatNamingFailure'
 
@@ -110,6 +110,7 @@ export default function SortableTab({
   nativeChat,
   namingFailure
 }: SortableTabProps): React.JSX.Element {
+  const t = useTranslate()
   const naming = useNativeChatNamingFailure(namingFailure)
   // Why: agent-completion unread exists even with terminal-attention off; collapse both sources to one primitive so unrelated tabs don't re-render.
   const hasUnreadActivity = useAppStore((s) =>
@@ -195,7 +196,7 @@ export default function SortableTab({
     disabled: isEditing
   })
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
-  const slotProps = useTabStripSlotProps(tab.id, isActive)
+  const slotProps = useTabStripSlotProps(tab.id, isActive, 'terminal')
   const tabTitle = tab.customTitle ?? tab.title
   const tabRoot = (
     <div
@@ -262,11 +263,9 @@ export default function SortableTab({
           density="compact"
           data-tab-rename-input="true"
           value={renameValue}
-          aria-label={translate(
-            'auto.components.tab.bar.SortableTab.ab19f603eb',
-            'Rename tab {{value0}}',
-            { value0: tabTitle }
-          )}
+          aria-label={t('auto.components.tab.bar.SortableTab.ab19f603eb', 'Rename tab {{value0}}', {
+            value0: tabTitle
+          })}
           onChange={(event) => setRenameValue(event.target.value)}
           onBlur={commitRename}
           onKeyDown={onRenameKeyDown}
@@ -275,9 +274,7 @@ export default function SortableTab({
           onMouseDown={(event) => {
             // Why: stopPropagation avoids outer tab activation/drag; preventDefault on middle-click blocks Linux X11 paste.
             event.stopPropagation()
-            if (event.button === 1) {
-              event.preventDefault()
-            }
+            preventMiddleButtonDefault(event)
           }}
           onClick={(event) => event.stopPropagation()}
           onDoubleClick={(event) => event.stopPropagation()}
@@ -306,8 +303,8 @@ export default function SortableTab({
             e.stopPropagation()
             onToggleExpand(tab.id)
           }}
-          title={translate('auto.components.tab.bar.SortableTab.fdb2691425', 'Collapse pane')}
-          aria-label={translate('auto.components.tab.bar.SortableTab.fdb2691425', 'Collapse pane')}
+          title={t('auto.components.tab.bar.SortableTab.fdb2691425', 'Collapse pane')}
+          aria-label={t('auto.components.tab.bar.SortableTab.fdb2691425', 'Collapse pane')}
         >
           <Minimize2 className="w-3 h-3" />
         </button>
@@ -320,11 +317,9 @@ export default function SortableTab({
               : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted focus-visible:!text-foreground focus-visible:!bg-muted'
           }`}
           // Why: stable accessible name lets E2E drive the real close path instead of calling the store.
-          aria-label={translate(
-            'auto.components.tab.bar.SortableTab.6df69d9388',
-            'Close tab {{value0}}',
-            { value0: tabTitle }
-          )}
+          aria-label={t('auto.components.tab.bar.SortableTab.6df69d9388', 'Close tab {{value0}}', {
+            value0: tabTitle
+          })}
           type="button"
           data-tab-close-button="true"
           onPointerDown={(e) => {

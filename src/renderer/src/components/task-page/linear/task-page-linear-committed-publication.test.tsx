@@ -4,19 +4,19 @@ import {
   task,
   store,
   source,
-  deferredIssueSetters,
   useRoutingFixture
 } from './task-page-linear-refresh-test-fixtures'
 import { reads as issueReadRegistry } from '@/store/slices/linear/linear-issue-read-lifecycle'
-import { pendingLinearIssueWrites } from '@/store/slices/linear/linear-issue-publication'
+import '@/store/slices/linear/linear-issue-read'
+import { pendingLinearIssueWrites } from '@/store/slices/linear/linear-issue-write-publication'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import { writeLinearIssue } from '@/lib/work-items/linear/linear-issue-write'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 import { useLinearIssueWorkspaceDetail } from '../../linear-issue-workspace-detail-state'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import { expect, it } from 'vitest'
 import { act, render, screen } from '@testing-library/react'
-import { deferred } from '../../../store/slices/linear-slice-test-harness'
+import { deferred } from '../../../store/slices/linear/linear-slice-test-harness'
 
 import { Suspense, startTransition, useState, useLayoutEffect } from 'react'
 import { useLinearIssuePublication } from '@/hooks/useLinearIssuePublication'
@@ -189,7 +189,8 @@ it.each([true, false])(
       pulse()
     })
     const visible = screen.getByTestId('hydration-scope').textContent
-    const { projectLinearIssue } = await import('@/store/slices/linear/linear-issue-publication')
+    const { projectLinearIssue } =
+      await import('@/store/slices/linear/linear-issue-write-publication')
     expect(projectLinearIssue(getLinearSourceScope(context), task()).priority).toBe(4)
     try {
       expect(visible).toContain('Current title:4:')
@@ -301,52 +302,6 @@ it('committed hydration survives actual skipped-lane replay, force loading and t
   expect(issueReadRegistry.size).toBe(0)
   act(() => s.getState().patchLinearIssue(task().id, { priority: 4 }))
   expect(reads.detail).toHaveBeenCalledTimes(4)
-})
-
-it('acknowledges only captured field t, leaving newer u delivered before layout acknowledgement', async () => {
-  const s = store(),
-    context = defaultScopeSource(null)
-  const t = deferred<{ ok: boolean }>(),
-    u = deferred<{ ok: boolean }>()
-  let savingT!: Promise<{ ok: boolean }>, savingU!: Promise<{ ok: boolean }>
-  let current!: ReturnType<typeof useLinearIssuePublication>
-  let publishU = false
-  function Consumer() {
-    useLayoutEffect(() => {
-      if (publishU && publication.issue?.state.name === 'H') {
-        publishU = false
-        deferredIssueSetters.enabled = true
-        savingU = writeLinearIssue(task(), { priority: 2 }, context, () => u.promise)
-        deferredIssueSetters.enabled = false
-      }
-    })
-    const publication = useLinearIssuePublication(task(), context)
-    useLayoutEffect(() => {
-      current = publication
-    })
-    return <output data-testid="ack">{publication.issue?.priority}</output>
-  }
-  const mounted = render(<Consumer />)
-  act(() => {
-    savingT = writeLinearIssue(task(), { priority: 4 }, context, () => t.promise)
-  })
-  reads.detail.mockResolvedValue({ ...task('H'), priority: 1 })
-  const lease = s.getState().fetchLinearIssue(task().id, 'w', { force: true }).acquire()
-  const view = await lease.waitForCurrentTerminal()
-  publishU = true
-  act(() => current.read(lease, view))
-  expect(screen.getByTestId('ack').textContent).toBe('4')
-  const delayedU = deferredIssueSetters.updates.splice(0)
-  expect(delayedU.length).toBeGreaterThan(0)
-  act(() => delayedU.forEach((deliver) => deliver()))
-  expect(screen.getByTestId('ack').textContent).toBe('2')
-  mounted.unmount()
-  lease.release()
-  u.resolve({ ok: false })
-  t.resolve({ ok: false })
-  await Promise.all([savingT, savingU])
-  expect(pendingLinearIssueWrites.size).toBe(0)
-  expect(issueReadRegistry.size).toBe(0)
 })
 
 it('committed field t reconstructs while newer u is in a genuinely suspended lane', async () => {

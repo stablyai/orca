@@ -1,10 +1,11 @@
 import type { AiVaultResumePlatformState } from './ai-vault-resume-platform'
 import { getDefaultSettings } from '../../../../../../shared/constants'
-import { TEST_REPO, makeWorktree } from '../../../../store/slices/worktrees-slice-test-fixtures'
+import { TEST_REPO } from '../../../../store/repos/repo.test-fixture'
+import { makeWorktree } from '../../../../store/slices/worktrees/worktree.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { buildAiVaultDropRepinStartup } from './ai-vault-resume-command'
 
-vi.mock('@/lib/new-workspace', () => ({
+vi.mock('@/lib/workspace/creation/new-workspace', () => ({
   CLIENT_PLATFORM: 'darwin'
 }))
 

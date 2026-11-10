@@ -5,7 +5,7 @@ import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { QuickCommandsScopeFilter } from './QuickCommandsScopeFilter'
 
 type QuickCommandsToolbarProps = {
@@ -43,7 +43,8 @@ export function QuickCommandsToolbar({
   handleSelectAll,
   toggleScope
 }: QuickCommandsToolbarProps): React.JSX.Element {
-  const searchLabel = translate(
+  const t = useTranslate()
+  const searchLabel = t(
     'auto.components.settings.QuickCommandsToolbar.searchLabel',
     'Search commands'
   )
@@ -79,14 +80,11 @@ export function QuickCommandsToolbar({
           <SelectTrigger
             id="quick-command-storage-host"
             size="sm"
-            aria-label={translate(
-              'auto.components.settings.QuickCommandsPane.89f7e57fcc',
-              'Saved on'
-            )}
+            aria-label={t('auto.components.settings.QuickCommandsPane.89f7e57fcc', 'Saved on')}
             className="text-xs"
           >
             <span className="text-muted-foreground">
-              {translate('auto.components.settings.QuickCommandsPane.89f7e57fcc', 'Saved on')}
+              {t('auto.components.settings.QuickCommandsPane.89f7e57fcc', 'Saved on')}
             </span>
             <SelectValue />
           </SelectTrigger>
@@ -109,7 +107,7 @@ export function QuickCommandsToolbar({
         className="ml-auto"
       >
         <Plus />
-        {translate('auto.components.settings.QuickCommandsPane.5aacc8f7dc', 'Add Command')}
+        {t('auto.components.settings.QuickCommandsPane.f8cf6fc086', 'Add command')}
       </Button>
     </div>
   )

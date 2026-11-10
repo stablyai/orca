@@ -1,4 +1,4 @@
-import { useAppStateValue } from '@/store/app-state-view'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import {
   formatKeybinding,
   formatKeybindingList,
@@ -7,7 +7,7 @@ import {
   type KeybindingActionId,
   type KeybindingOverrides
 } from '../../../shared/keybindings'
-import { getShortcutPlatform } from '../lib/shortcut-platform'
+import { getShortcutPlatform } from '../lib/keyboard/shortcut-platform'
 
 export { getShortcutPlatform }
 

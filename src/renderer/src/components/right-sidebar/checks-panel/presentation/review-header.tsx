@@ -7,14 +7,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   getTerminalUrlOrcaBrowserHint,
   getTerminalUrlSystemBrowserHint
 } from '../../../terminal-pane/links/terminal-link-open-hints'
 import type { ChecksPanelReview } from '../checks-panel-review'
 import type { ChecksPanelHostedReviewModifierDestination } from '../review-actions/checks-panel-hosted-review-click-routing'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { PullRequestIcon, prStateColor } from './check-presentation'
 import { HostedReviewUnlinkMenuItem } from '@/components/HostedReviewUnlinkMenuItem'
 
@@ -39,14 +39,15 @@ export function ChecksPanelReviewHeader({
   onUnlinkReview,
   onLinkAnotherReview
 }: ChecksPanelReviewHeaderProps): React.JSX.Element {
+  const t = useTranslate()
   const reviewNumberLabel = review.provider === 'gitlab' ? `!${review.number}` : `#${review.number}`
   const ReviewIcon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
   const reviewHostLabel = review.provider === 'gitlab' ? 'GitLab' : 'GitHub'
   const moreActionsLabel =
     review.provider === 'gitlab'
-      ? translate('auto.components.right.sidebar.ChecksPanel.gitlabMoreActions', 'More MR actions')
-      : translate('auto.components.right.sidebar.ChecksPanel.653c105ecc', 'More PR actions')
-  const openTitle = translate(
+      ? t('auto.components.right.sidebar.ChecksPanel.gitlabMoreActions', 'More MR actions')
+      : t('auto.components.right.sidebar.ChecksPanel.653c105ecc', 'More PR actions')
+  const openTitle = t(
     'auto.components.right.sidebar.ChecksPanel.5c88c6db07',
     'Open on {{value0}}',
     { value0: reviewHostLabel }
@@ -81,7 +82,7 @@ export function ChecksPanelReviewHeader({
       <div className="flex-1" />
       <button
         className="cursor-pointer rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-50"
-        title={translate('auto.components.right.sidebar.ChecksPanel.7f4489f370', 'Refresh')}
+        title={t('auto.components.right.sidebar.ChecksPanel.7f4489f370', 'Refresh')}
         onClick={onRefresh}
         disabled={isRefreshing}
       >
@@ -111,14 +112,8 @@ export function ChecksPanelReviewHeader({
           <DropdownMenuItem onSelect={onLinkAnotherReview}>
             <Link className="size-3.5" />
             {review.provider === 'gitlab'
-              ? translate(
-                  'auto.components.right.sidebar.ChecksPanel.gitlabLinkAnother',
-                  'Link another MR'
-                )
-              : translate(
-                  'auto.components.right.sidebar.ChecksPanel.07871c0589',
-                  'Link another PR'
-                )}
+              ? t('auto.components.right.sidebar.ChecksPanel.gitlabLinkAnother', 'Link another MR')
+              : t('auto.components.right.sidebar.ChecksPanel.07871c0589', 'Link another PR')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

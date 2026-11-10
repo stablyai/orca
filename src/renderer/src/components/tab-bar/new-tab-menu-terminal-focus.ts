@@ -1,5 +1,5 @@
 import type { MutableRefObject } from 'react'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { useAppStore } from '../../store'
 
 const NEW_TAB_MENU_TERMINAL_FOCUS_RETRY_MS = 50

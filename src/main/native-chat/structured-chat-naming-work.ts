@@ -1,7 +1,44 @@
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { AutomaticChatTitle, StructuredChatNamingDeps } from './structured-chat-naming-types'
+import type { AgentSessionJournal } from './agent-session-journal/journal-store'
 
-export type NamingRequest = { record: AgentSessionRecord; automatic: boolean; firstPrompt?: string }
+export type NamingRequest = {
+  record: AgentSessionRecord
+  automatic: boolean
+  firstPrompt?: string
+  automaticTitle?: AutomaticChatTitle
+  seedingName?: string | null
+}
 type NamingJob = { desired?: NamingRequest; executing?: NamingRequest; preparing: boolean }
+
+export function namingRequestOwnsRecord(request: NamingRequest, current: AgentSessionRecord) {
+  return (
+    !request.automaticTitle?.pending?.ended() &&
+    current.conversationNameSource !== 'user' &&
+    (current.conversationName === request.record.conversationName ||
+      (request.seedingName !== undefined && current.conversationName === request.seedingName)) &&
+    (current.providerContextBoundary?.operationId ?? null) ===
+      (request.record.providerContextBoundary?.operationId ?? null)
+  )
+}
+
+export function automaticChatNamingRequest(
+  deps: StructuredChatNamingDeps,
+  record: AgentSessionRecord,
+  firstInputSubmissionKey: string | undefined,
+  applicable: (request: NamingRequest) => boolean
+): NamingRequest {
+  const request: NamingRequest = { record, automatic: true }
+  if (
+    record.conversationName === undefined &&
+    !(!record.providerContextBoundary && deps.workerTaskTitle(record))
+  ) {
+    request.automaticTitle = deps.captureAutomaticTitle?.(record, firstInputSubmissionKey, () =>
+      applicable(request)
+    )
+  }
+  return request
+}
 
 export function createStructuredChatNamingWork(deps: {
   applicable: (request: NamingRequest) => boolean
@@ -21,6 +58,7 @@ export function createStructuredChatNamingWork(deps: {
         .execute(request, firstPrompt)
         .catch((error: unknown) => deps.warn(sessionId, error))
         .finally(() => {
+          request.automaticTitle?.pending?.dispose()
           job.executing = undefined
           drain(sessionId, job)
           deps.changed(request.record)
@@ -31,7 +69,8 @@ export function createStructuredChatNamingWork(deps: {
     }
   }
   return {
-    run(record: AgentSessionRecord, automatic: boolean) {
+    run(request: NamingRequest) {
+      const { record, automatic } = request
       const { sessionId } = record
       const job: NamingJob = jobs.get(sessionId) ?? { preparing: false }
       const pending = job.desired ?? job.executing
@@ -42,9 +81,12 @@ export function createStructuredChatNamingWork(deps: {
           record.providerContextBoundary?.operationId &&
         !(automatic && !pending.automatic && pending.firstPrompt === undefined)
       ) {
+        request.automaticTitle?.pending?.dispose()
         return
       }
-      job.desired = { record, automatic }
+      job.desired?.automaticTitle?.pending?.dispose()
+      job.executing?.automaticTitle?.pending?.dispose()
+      job.desired = request
       jobs.set(sessionId, job)
       if (!job.preparing) {
         job.preparing = true
@@ -53,10 +95,14 @@ export function createStructuredChatNamingWork(deps: {
             const request = job.desired
             try {
               const prepared = await deps.prepare(request)
+              if (!prepared) {
+                request.automaticTitle?.pending?.dispose()
+              }
               if (job.desired === request) {
                 job.desired = prepared ?? undefined
               }
             } catch (error) {
+              request.automaticTitle?.pending?.dispose()
               if (job.desired === request) {
                 job.desired = undefined
               }
@@ -72,6 +118,23 @@ export function createStructuredChatNamingWork(deps: {
         })
       }
       deps.changed(record)
+    },
+    recheck(sessionId: string) {
+      const job = jobs.get(sessionId)
+      job?.desired?.automaticTitle?.pending?.recheck()
+      job?.executing?.automaticTitle?.pending?.recheck()
+    },
+    captureSourceUnavailable(sessionId: string, journal: AgentSessionJournal) {
+      const job = jobs.get(sessionId)
+      const desired = job?.desired?.automaticTitle?.pending
+      const executing = job?.executing?.automaticTitle?.pending
+      if (!desired && !executing) {
+        return undefined
+      }
+      return () => {
+        desired?.unavailable(journal)
+        executing?.unavailable(journal)
+      }
     },
     activeSessionIds: () =>
       [...jobs]

@@ -1,12 +1,12 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneCwdMap } from '../layout/split/resolve-split-cwd'
+import { copyAgentSessionContextFromPane } from '../clipboard/terminal-agent-session-context-copy'
 import {
-  copyAgentSessionContextFromPane,
   prepareAgentSessionForkFromPane,
   type PreparedAgentSessionFork
-} from '../terminal-agent-session-fork'
-import { prepareAgentSessionContinuationFromPane } from '../terminal-agent-session-continuation'
-import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
+} from '../session-fork/terminal-agent-session-fork'
+import { prepareAgentSessionContinuationFromPane } from '../session-continuation/terminal-agent-session-continuation'
+import type { AgentSessionContinuationRequest } from '@/lib/agent-session/context/agent-session-continuation'
 
 export type TerminalPaneMenuAgentSessionContext = {
   paneCwdRef: React.RefObject<PaneCwdMap>

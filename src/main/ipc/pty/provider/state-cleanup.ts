@@ -4,9 +4,9 @@ import { forgetCodexPaneAccount } from '../../../codex/configuration/homes/codex
 import { markPinnedClaudePtyExited } from '../../../claude-accounts/claude-pinned-pty-registry'
 import { openCodeHookService } from '../../../opencode/hook-service'
 import { piTitlebarExtensionService } from '../../../pi/titlebar-extension-service'
-import { agentHookServer } from '../../../agent-hooks/server'
-import { clearMigrationUnsupportedPty } from '../../../agent-hooks/migration-unsupported-pty-state'
-import { clearNativeWindowsConptyPty } from '../../../runtime/terminal-model-query-authority'
+import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
+import { clearMigrationUnsupportedPty } from '../../../agent-hooks/observations/migration-unsupported-pty-state'
+import { clearNativeWindowsConptyPty } from '../../../runtime/terminal/output/terminal-model-query-authority'
 import {
   clearHiddenRendererPtyDeliveryState,
   isHiddenRendererPty

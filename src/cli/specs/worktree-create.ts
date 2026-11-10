@@ -6,7 +6,7 @@ export const WORKTREE_CREATE_COMMAND_SPEC: CommandSpec = {
   repeatableFlags: ['reference'],
   summary: 'Create a new Orca-managed worktree',
   usage:
-    'orca worktree create --name <name> [--repo <selector>|--project <id-or-name> [--host <host>]|--project-host-setup <id>] [--agent <id>] [--account <id|email>] [--prompt <text>] [--model <id>] [--effort <level>] [--surface chat|terminal] [--setup run|skip|inherit] [--base-branch <ref>] [--branch <name>] [--reference <url-or-jira-key>...] [--reference-site <id>] [--issue <number>] [--pr <number>] [--linear-issue <identifier-or-url>] [--gitlab-issue <number-or-url>] [--gitlab-mr <number-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--retry-launch <operationId>] [--json]',
+    'orca worktree create --name <name> [--repo <selector>|--project <id-or-name> [--host <host>]|--project-host-setup <id>] [--agent <id>] [--account <id|email>] [--prompt <text>] [--model <id>] [--effort <level>] [--surface chat|terminal] [--setup run|skip|inherit] [--base-branch <ref>] [--branch <name>] [--reference <url-or-jira-key>...] [--reference-site <id>] [--issue <number>] [--pr <number>] [--linear-issue <identifier-or-url>] [--gitlab-issue <number-or-url>] [--gitlab-mr <number-or-url>] [--comment <text>] [--parent-worktree <selector> [--parent-environment <environment>]] [--no-parent] [--run-hooks] [--activate] [--retry-launch <operationId>] [--json]',
   allowedFlags: [
     ...GLOBAL_FLAGS,
     'repo',
@@ -33,6 +33,7 @@ export const WORKTREE_CREATE_COMMAND_SPEC: CommandSpec = {
     'comment',
     'setup',
     'parent-worktree',
+    'parent-environment',
     'no-parent',
     'run-hooks',
     'activate'
@@ -46,6 +47,7 @@ export const WORKTREE_CREATE_COMMAND_SPEC: CommandSpec = {
     '--host is only needed when the project is set up on more than one host; with a single setup Orca uses it. When it is ambiguous the error names every host the project is set up on.',
     '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `orca host list` prints for any of them.',
     'For related work, use the inferred parent or pass --parent-worktree active, folder:<id>, or worktree:<worktreeId> to make the relationship explicit. Worktree ids are the full <repo-id>::<path> values returned by `orca worktree list --json`.',
+    "--parent-worktree is looked up in the new worktree's environment. For a parent in another environment, add --parent-environment with local or a saved environment id or name, such as a row's address.environment from `orca worktree ps --json`. No other environment is searched.",
     'Use --no-parent when the new worktree should be independent of the current context.',
     'Pass --branch to name the Git branch without the configured prefix (a taken name gets a numeric suffix); --base-branch selects the starting ref instead.',
     '--no-parent only affects Orca lineage; omit --base-branch to use the repo default base, or pass the default base ref explicitly for independent top-level work.',
@@ -68,6 +70,7 @@ export const WORKTREE_CREATE_COMMAND_SPEC: CommandSpec = {
     'orca worktree create --repo id:<repoId> --name agent-task --agent codex --prompt "hi" --json',
     'orca worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json',
     'orca worktree create --repo id:<repoId> --name related-task --parent-worktree active --json',
+    'orca worktree create --environment <environment-id> --repo id:<repoId> --name child --parent-environment local --parent-worktree folder:<folderId> --json',
     'orca worktree create --repo id:<repoId> --name independent-task --no-parent --json'
   ]
 }

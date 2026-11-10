@@ -1,21 +1,21 @@
 import { getSelectedWorkspaceId } from '@/store/slices/linear/linear-cache'
+import '@/store/slices/linear/linear-issue-read'
 import {
   observeLinearIssueRead,
   mapLinearIssueRead,
   type LinearIssueRead
-} from '@/store/slices/linear/linear-issue-publication'
+} from '@/store/slices/linear/linear-issue-read-lifecycle'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { LinearCollectionResult } from '../../../../shared/linear/workspace-types'
-import { linearIssueViewError } from '@/lib/linear-read-error'
+import { linearIssueViewError } from '@/lib/work-items/linear/linear-read-error'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { useEffect, useMemo, useRef } from 'react'
-import { searchRuntimeRepoBaseRefDetails } from '@/runtime/runtime-repo-client'
+import { searchRuntimeRepoBaseRefDetails } from '@/runtime/source-control/references/runtime-repo-client'
 import { lookupLinearIssueUrl } from '@/lib/work-items/linear/linear-issue-url-lookup'
 import { searchJiraIssuesByKeyOrText } from '@/components/jira-key-or-text-search'
 import { linearWorkspaceScopeSignature } from '../../../../shared/linear/workspace-types'
 import { isIntegrationCredentialDecryptionError } from '../../../../shared/integration-credential-errors'
 import { getSmartWorkspaceLinearSearchQuery } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
-import type { parseBoundedSmartWorkspaceLinearIssueUrlIntent } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
 import { RESULT_LIMIT } from './smart-workspace-name-field-model'
 import { restrictJiraQueryToProject } from '../../../../shared/jira/jira-project-reference'
 import { getBranchSearchRequest } from '../../../../shared/new-workspace/smart-workspace-source-results'
@@ -33,7 +33,7 @@ export function useSmartWorkspaceSecondarySearches({
   foundation: ReturnType<typeof useWorkItemSourceFoundation>
   shouldQueryLinear: boolean
   linearQuery: string
-  linearUrlIntent: ReturnType<typeof parseBoundedSmartWorkspaceLinearIssueUrlIntent>
+  linearUrlIntent: Parameters<typeof lookupLinearIssueUrl>[0]['intent'] | null
   linearUrlIntentOwnsInput: boolean
   shouldQueryJira: boolean
   jiraSearchQuery: string | null

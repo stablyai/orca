@@ -7,8 +7,9 @@ import {
   type BundledSkillLocation
 } from '../../../../../shared/bundled-skill-locations'
 import { bundledSkillInstallAgents } from '../../../../../shared/bundled-skill-summary'
-import { agentNames } from '../skill-plan-op-copy'
+import { agentNames } from '../freshness/skill-plan-op-copy'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export type BundledSkillSetupChanges = {
   agents: string[]
@@ -55,15 +56,18 @@ export function bundledSkillSetupChanges(
   }
 }
 
-export function bundledSkillSetupActionLabel(changes: BundledSkillSetupChanges): string {
+export function bundledSkillSetupActionLabel(
+  changes: BundledSkillSetupChanges,
+  t: Translate = translate
+): string {
   if (changes.updates) {
-    return translate('auto.components.settings.AgentSkillSetupPanel.updateLabel', 'Update')
+    return t('auto.components.settings.AgentSkillSetupPanel.updateLabel', 'Update')
   }
   if (!changes.alreadyInstalled) {
-    return translate('auto.components.settings.AgentSkillSetupPanel.installLabel', 'Install')
+    return t('auto.components.settings.AgentSkillSetupPanel.installLabel', 'Install')
   }
   if (changes.agents.length > 1) {
-    return translate(
+    return t(
       'auto.components.settings.bundledSkillSetupCopy.installForMore',
       'Install for {{value0}} more agents',
       { value0: changes.agents.length }
@@ -71,44 +75,47 @@ export function bundledSkillSetupActionLabel(changes: BundledSkillSetupChanges):
   }
   const name = agentNames(changes.agents)
   return name
-    ? translate(
+    ? t(
         'auto.components.settings.bundledSkillSetupCopy.installForAgent',
         'Install for {{value0}}',
         { value0: name }
       )
-    : translate('auto.components.settings.AgentSkillSetupPanel.installLabel', 'Install')
+    : t('auto.components.settings.AgentSkillSetupPanel.installLabel', 'Install')
 }
 
-export function bundledSkillSetupResultHeadline(changes: BundledSkillSetupChanges): string {
+export function bundledSkillSetupResultHeadline(
+  changes: BundledSkillSetupChanges,
+  t: Translate = translate
+): string {
   const installed =
     changes.agents.length > 1
       ? changes.alreadyInstalled
-        ? translate(
+        ? t(
             'auto.components.settings.bundledSkillSetupCopy.installedForMore',
             'Installed for {{value0}} more agents',
             { value0: changes.agents.length }
           )
-        : translate(
+        : t(
             'auto.components.settings.bundledSkillSetupCopy.installedForAgents',
             'Installed for {{value0}} agents',
             { value0: changes.agents.length }
           )
       : changes.agents.length === 1
-        ? translate(
+        ? t(
             'auto.components.settings.bundledSkillSetupCopy.installedForAgent',
             'Installed for {{value0}}',
             { value0: agentNames(changes.agents) }
           )
         : null
   const updated = changes.replaced
-    ? translate(
+    ? t(
         'auto.components.settings.bundledSkillSetupCopy.replacedWithBackup',
         'Replaced · Your copy was saved as a backup'
       )
-    : translate('auto.components.skills.skillPlanOpCopy.updated', 'Updated')
+    : t('auto.components.skills.skillPlanOpCopy.updated', 'Updated')
   return changes.updates
     ? installed
       ? `${updated} · ${installed}`
       : updated
-    : (installed ?? translate('auto.components.skills.skillPlanOpCopy.installed', 'Installed'))
+    : (installed ?? t('auto.components.skills.skillPlanOpCopy.installed', 'Installed'))
 }

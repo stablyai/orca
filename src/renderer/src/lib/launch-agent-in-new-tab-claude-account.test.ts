@@ -45,9 +45,9 @@ vi.mock('@/store', () => ({
   useAppStore: { getState: () => store }
 }))
 
-vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'darwin' }))
+vi.mock('@/lib/workspace/creation/new-workspace', () => ({ CLIENT_PLATFORM: 'darwin' }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionIdFromState: () => null
 }))
 
@@ -55,7 +55,7 @@ vi.mock('../../../shared/native-chat/transcript/native-chat-transcript-readabili
   isNativeChatTranscriptLocalReadable: () => true
 }))
 
-vi.mock('@/runtime/web-runtime-session-environment', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive
 }))
 
@@ -73,7 +73,7 @@ vi.mock('@/components/tab-bar/reconcile-order', () => ({
   reconcileTabOrder: (_stored: unknown, terminalIds: string[]) => terminalIds
 }))
 
-vi.mock('@/lib/telemetry', () => ({
+vi.mock('@/diagnostics/telemetry/telemetry', () => ({
   track: vi.fn(),
   tuiAgentToAgentKind: (agent: string) => agent
 }))

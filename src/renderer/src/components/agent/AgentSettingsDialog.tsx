@@ -1,7 +1,10 @@
-import { useAppStateValue, useAppStateViewActive } from '@/store/app-state-view'
+import { useAppStateValue, useAppStateViewActive } from '@/store/retained-views/app-state-view'
 import React, { useCallback } from 'react'
-import { useAppStore } from '@/store'
-import { getOverlayFocusOwners, overlayFocusContains } from '@/lib/overlay-focus-ownership'
+import { useAppStore } from '@/store/index'
+import {
+  getOverlayFocusOwners,
+  overlayFocusContains
+} from '@/lib/overlay-interaction/overlay-focus-ownership'
 import {
   Dialog,
   DialogContent,
@@ -10,12 +13,12 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { AgentsPane } from '@/components/settings/agents/AgentsPane'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   isWindowsTerminalCapabilityHost,
   useLocalWindowsTerminalCapabilities
-} from '@/lib/windows-terminal-capabilities'
-import { isWebClientLocation } from '@/lib/web-client-location'
+} from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useWindowsTerminalCapabilityOwnerKey } from '@/hooks/useWindowsTerminalCapabilityOwnerKey'
 import { resolveSettingsHostScope } from '@/components/settings/host-scope/settings-host-scope'
 
@@ -30,6 +33,7 @@ export default function AgentSettingsDialog({
   onOpenChange,
   onCloseAutoFocus
 }: AgentSettingsDialogProps): React.JSX.Element | null {
+  const t = useTranslate()
   const viewActive = useAppStateViewActive()
   const settings = useAppStateValue((s) => s.settings)
   const updateSettings = useCallback(
@@ -77,10 +81,10 @@ export default function AgentSettingsDialog({
       <DialogContent className="sm:max-w-2xl" onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {translate('auto.components.agent.AgentSettingsDialog.fc0268e4ed', 'Agents')}
+            {t('auto.components.agent.AgentSettingsDialog.fc0268e4ed', 'Agents')}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {translate(
+            {t(
               'auto.components.agent.AgentSettingsDialog.50cdb57c03',
               'Manage AI agents, set a default, and customize commands.'
             )}

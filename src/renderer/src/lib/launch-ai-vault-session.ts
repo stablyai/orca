@@ -1,16 +1,17 @@
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
-import { tuiAgentToAgentKind } from '@/lib/telemetry'
+import '@/diagnostics/telemetry/telemetry'
+import { tuiAgentToAgentKind } from '../../../shared/agent-kind'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
+import { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
+import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { TabSplitDirection } from '@/store/slices/tabs'
-import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/web-runtime-session-types'
+import type { TabSplitDirection } from '@/store/slices/tabs/tabs-slice-contract'
+import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/hosted-terminals/creation/terminal-create-contracts'
 
 export type LaunchAiVaultSessionInNewTabResult =
   | { tabId: string }

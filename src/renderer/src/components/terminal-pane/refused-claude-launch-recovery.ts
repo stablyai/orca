@@ -1,7 +1,7 @@
 import { ACTIVE_CLAUDE_ACCOUNT } from '../../../../shared/claude/project-claude-account-preference'
 import { readClaudePinnedLaunchErrorCode } from '../../../../shared/claude/claude-pinned-launch-error'
 import type { RefObject } from 'react'
-import type { PtyPaneStartup } from './pty-connection-types'
+import type { PtyPaneStartup } from './pty-connection/startup/pty-pane-startup'
 import type { PtyTransport } from './pty-transport/pty-transport-types'
 
 type RefusedStartup = NonNullable<PtyPaneStartup>

@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState, type CSSProperties, type JSX, type ReactN
 import { ArrowUp, ChevronDown, ChevronRight, Eye, Hand, Plus, Square, X } from 'lucide-react'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { usePrefersReducedMotion } from '@/components/feature-wall/feature-wall-modal-helpers'
-import { nativeChatPermissionModeLabel } from '@/components/native-chat/native-chat-permission-mode-labels'
-import { nativeChatToolRowVerb } from '@/components/native-chat/native-chat-tool-line-label'
-import { translate } from '@/i18n/i18n'
-import { AgentIcon } from '@/lib/agent-catalog'
-import { cn } from '@/lib/utils'
+import { nativeChatPermissionModeLabel } from '@/components/native-chat/session/options/controls/native-chat-permission-mode-labels'
+import { nativeChatToolRowVerb } from '@/components/native-chat/tools/lines/native-chat-tool-line-label'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { cn } from '@/lib/class-names'
 import {
   CHAT_DEMO_FILE,
   CHAT_DEMO_FINISHED_AT,
@@ -81,6 +81,7 @@ export function FlowDiagram({
 }
 
 function Transcript({ copy, frame }: { copy: ChatDemoCopy; frame: ChatDemoFrame }): JSX.Element {
+  const t = useTranslate()
   return (
     <div
       className="flex min-h-full shrink-0 flex-col transition-opacity duration-700 ease-in-out"
@@ -104,7 +105,7 @@ function Transcript({ copy, frame }: { copy: ChatDemoCopy; frame: ChatDemoFrame 
           <span className="flex size-4 items-center justify-center text-chat-foreground-faint">
             <Eye className="size-3.5" />
           </span>
-          <span className="text-chat-foreground-faint">{nativeChatToolRowVerb('read')}</span>
+          <span className="text-chat-foreground-faint">{nativeChatToolRowVerb('read', t)}</span>
           <span>{CHAT_DEMO_FILE}</span>
           <ChevronRight className="ml-auto size-3.5 text-chat-foreground-faint" />
         </div>
@@ -113,7 +114,7 @@ function Transcript({ copy, frame }: { copy: ChatDemoCopy; frame: ChatDemoFrame 
         <div className="mt-3 flex min-h-6 items-center gap-1.5 text-chat-foreground-faint">
           <LoadingSpinner className="size-4 shrink-0" />
           <span className="text-chat-foreground">
-            {translate('components.native-chat.status.working', 'Working…')}
+            {t('components.native-chat.status.working', 'Working…')}
           </span>
         </div>
       </Row>
@@ -153,6 +154,7 @@ function Transcript({ copy, frame }: { copy: ChatDemoCopy; frame: ChatDemoFrame 
 }
 
 function Composer({ prompt, frame }: { prompt: string; frame: ChatDemoFrame }): JSX.Element {
+  const t = useTranslate()
   const typing = frame.typed > 0
   return (
     <div className="shrink-0 px-3 pt-1.5 pb-3">
@@ -165,7 +167,7 @@ function Composer({ prompt, frame }: { prompt: string; frame: ChatDemoFrame }): 
             </span>
           ) : (
             <span className="text-chat-foreground-faint">
-              {translate(
+              {t(
                 'components.native-chat.composer.placeholder',
                 'Ask anything, @ to mention files, / for commands'
               )}
@@ -179,7 +181,7 @@ function Composer({ prompt, frame }: { prompt: string; frame: ChatDemoFrame }): 
             </span>
             <span className="flex h-5.5 min-w-0 items-center gap-1 px-1.5 text-xs font-medium whitespace-nowrap">
               <Hand className="size-3 shrink-0" />
-              <span className="truncate">{nativeChatPermissionModeLabel('ask')}</span>
+              <span className="truncate">{nativeChatPermissionModeLabel('ask', t)}</span>
               <ChevronDown className="size-3 shrink-0" />
             </span>
           </div>
@@ -224,8 +226,10 @@ export function ChatUiDemoCard({
   loop?: boolean
   className?: string
 }): JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const reducedMotion = usePrefersReducedMotion()
-  const copy = getChatDemoCopy()
+  const copy = getChatDemoCopy(t, intlLocale)
   const promptLength = Array.from(copy.prompt).length
   const timeline = useMemo(
     () => createChatDemoTimeline(promptLength, copy.reply.length),

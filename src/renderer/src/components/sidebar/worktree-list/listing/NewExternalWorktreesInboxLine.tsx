@@ -3,10 +3,10 @@ import { ChevronRight, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import NoticeHostGlyph from '../rows/NoticeHostGlyph'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type NewExternalWorktreesInboxLineProps = {
   repoDisplayName: string
@@ -32,30 +32,31 @@ export default function NewExternalWorktreesInboxLine({
   onSuppress,
   className
 }: NewExternalWorktreesInboxLineProps): React.JSX.Element | null {
-  const suppressLabel = translate(
+  const t = useTranslate()
+  const suppressLabel = t(
     'auto.components.sidebar.NewExternalWorktreesInboxLine.c3e8a1f4b2',
     "Don't show again"
   )
   // Accessible names need host labels to distinguish the same project on multiple hosts.
   const repoScopeLabel = hostContextLabel
-    ? translate(
+    ? t(
         'auto.components.sidebar.NewExternalWorktreesInboxLine.6c07f3a91e',
         '{{value0}} on {{value1}}',
         { value0: repoDisplayName, value1: hostContextLabel }
       )
     : repoDisplayName
-  const suppressAriaLabel = translate(
+  const suppressAriaLabel = t(
     'auto.components.sidebar.NewExternalWorktreesInboxLine.9f2d4c8b17',
     'Hide external worktrees permanently for {{value0}}',
     { value0: repoScopeLabel }
   )
   // The count renders in its own badge; `count` still selects the noun's plural form.
-  const countLabel = translate(
+  const countLabel = t(
     'auto.components.sidebar.NewExternalWorktreesInboxLine.hiddenWorktreesNoun',
     'hidden worktrees',
     { count: inboxCount, defaultValue_one: 'hidden worktree' }
   )
-  const reviewAriaLabel = translate(
+  const reviewAriaLabel = t(
     'auto.components.sidebar.NewExternalWorktreesInboxLine.reviewHiddenWorktrees',
     'Review {{count}} hidden worktrees in {{scope}}',
     {

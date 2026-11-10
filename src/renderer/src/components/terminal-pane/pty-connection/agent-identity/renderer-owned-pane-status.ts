@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
+import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status/evidence/agent-status-terminal-title'
 import {
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
@@ -8,8 +8,8 @@ import {
   markRendererOwnedAgentStatusWrite,
   registerRendererOwnedAgentStatusPane,
   resolveRendererOwnedAgentStatusTiming
-} from '../../renderer-owned-agent-status-registry'
-import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
+} from '../../agent-status/renderer-owned-agent-status-registry'
+import { rendererAgentStatusObservations } from '@/lib/agent-status/evidence/renderer-agent-status-observations'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function installRendererOwnedPaneStatus(session: ConnectPanePtySession): void {

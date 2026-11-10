@@ -1,11 +1,14 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 import type { AppState } from '@/store/types'
-import type { TerminalTabRetirementState } from '@/store/slices/terminal-tab-retirement'
+import type { TerminalTabRetirementState } from '@/store/terminals/terminal-tab-retirement'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyConnectResult, PtyTransport } from '../../pty-transport/pty-transport-types'
 import type { TerminalPaneBindingController } from '../ownership/use-terminal-pane-layout-bindings'
-import { installIpcPtyWindow, restorePtySpecWindow } from '../../pty-transport-test-harness'
+import {
+  installIpcPtyWindow,
+  restorePtySpecWindow
+} from '../../pty-transport/ipc/pty-transport-test-harness'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
@@ -17,16 +20,16 @@ vi.mock('react', () => ({
   useImperativeHandle: () => {},
   useRef: (current: unknown) => ({ current })
 }))
-vi.mock('../../../../runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
+vi.mock('../../../../runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
+  scheduleRuntimeGraphSync: vi.fn()
+}))
 vi.mock('../../../terminal/terminal-close-copy-kind', () => ({ resolveLeafCloseCopyKind: vi.fn() }))
 vi.mock('../../../terminal/running-terminal-close-guard', () => ({
   RUNNING_CLOSE_PROBE_TIMEOUT_MS: 100
 }))
 vi.mock('../../../terminal/pty-running-work-probe', () => ({ probePtyRunningWork: vi.fn() }))
 vi.mock('../detach/terminal-pane-tab-detach', () => ({
-  detachTerminalPaneToTab: vi.fn(),
-  isTerminalTabStripDropTarget: vi.fn(),
-  resolveTerminalTabStripDropTarget: vi.fn()
+  detachTerminalPaneToTab: vi.fn()
 }))
 vi.mock('./terminal-pane-close-identity', () => ({
   resolveTabTitleAfterPaneClose: vi.fn(),
@@ -115,7 +118,7 @@ export async function preparePendingSplitClose(
   }) as unknown as AppState
   // Only main’s layout commands may close panes in this build; the transport refuses uncommanded calls.
   const { layoutApplyTestTransport: main } =
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   const runtimeCall = async ({ params }: { params?: unknown }) => ({
     ok: true,
     result: await main.call(params)

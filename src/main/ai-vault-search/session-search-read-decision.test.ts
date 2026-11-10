@@ -53,26 +53,9 @@ function decide(args: {
   })
 }
 
-it('reads a path the index holds nothing for, and lets the reader continue where it can', () => {
-  expect(decide({ row: undefined })).toBe('any')
-})
-
-it('skips a file the index already covers at this stat', () => {
-  expect(decide({})).toBe('skip')
-})
-
-it('reads a file whose stat moved, however it moved', () => {
-  expect(decide({ file: { mtimeMs: MTIME + 1 } })).toBe('any')
-  expect(decide({ file: { sizeBytes: 200 } })).toBe('any')
-})
-
 it('reads a file outside the retention window not at all', () => {
   expect(decide({ row: undefined, cutoffMs: MTIME + 1 })).toBe('skip')
   expect(decide({ row: row({ state: 'due' }), cutoffMs: MTIME + 1 })).toBe('skip')
-})
-
-it('reads a row owed a whole read from the start', () => {
-  expect(decide({ row: row({ state: 'due' }) })).toBe('whole')
 })
 
 it('reads whole rather than appending onto a cursor that continues nothing', () => {

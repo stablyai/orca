@@ -18,19 +18,17 @@ import {
   getAgentStatusHooksDescription,
   getAgentStatusHooksTitle
 } from './behavior/agent-status-hooks-copy'
-import {
-  getAgentWorkspaceTrustDescription,
-  getAgentWorkspaceTrustTitle
-} from './behavior/agent-workspace-trust-copy'
-import { SettingsSubsectionHeader, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
+import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
-
 import { AgentLaunchSettingsSection } from './launch/AgentLaunchSettingsSection'
 import {
   AgentPermissionsSetting,
   type AgentPermissionsSettingProps
 } from './permissions/AgentPermissionsSetting'
 import type { SettingsHostScope } from '../host-scope/settings-host-scope'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { useTranslate } from '@/i18n/use-translate'
+import { AgentWorkspaceTrustSetting } from './behavior/AgentWorkspaceTrustSetting'
 
 type AgentSettingProps = {
   settings: GlobalSettings
@@ -55,6 +53,7 @@ export function AgentsPane({
   wslDistros,
   wslCapabilitiesLoading
 }: AgentsPaneProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="space-y-8">
       <AgentLaunchSettingsSection
@@ -63,15 +62,14 @@ export function AgentsPane({
         hostScope={hostScope}
         renderPermissions={renderAgentPermissions}
       />
-      <section className="space-y-3">
+      <SettingsGroup>
         <CodexHistorySharingSetting
           settings={settings}
           updateSettings={updateSettings}
           hostScope={hostScope}
         />
-      </section>
-      <section className="space-y-8">
-        <SettingsSubsectionHeader title={getLocalExecutionHostLabel()} />
+      </SettingsGroup>
+      <SettingsGroup title={getLocalExecutionHostLabel()}>
         <AgentRuntimeSetting
           settings={settings}
           updateSettings={updateSettings}
@@ -85,15 +83,15 @@ export function AgentsPane({
         />
         <AgentStatusHooksSetting settings={settings} updateSettings={updateSettings} />
         <SettingsSwitchRow
-          label={getClaudeSubagentNavigationTitle()}
-          description={getClaudeSubagentNavigationDescription()}
+          label={getClaudeSubagentNavigationTitle(t)}
+          description={getClaudeSubagentNavigationDescription(t)}
           checked={settings.claudeSubagentNavigationEnabled !== false}
           onChange={() =>
             updateSettings({
               claudeSubagentNavigationEnabled: settings.claudeSubagentNavigationEnabled === false
             })
           }
-          ariaLabel={getClaudeSubagentNavigationTitle()}
+          ariaLabel={getClaudeSubagentNavigationTitle(t)}
         />
         {!isPairedWebClientWindow() ? (
           <>
@@ -108,8 +106,8 @@ export function AgentsPane({
         {!isPairedWebClientWindow() ? (
           <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
         ) : null}
-        <AgentCacheTimerSection settings={settings} updateSettings={updateSettings} />
-      </section>
+      </SettingsGroup>
+      <AgentCacheTimerSection settings={settings} updateSettings={updateSettings} />
     </div>
   )
 }
@@ -118,47 +116,30 @@ function renderAgentPermissions(props: AgentPermissionsSettingProps): React.Reac
   return <AgentPermissionsSetting {...props} />
 }
 
-export function AgentStatusHooksSetting({ settings, updateSettings }: AgentSettingProps) {
+function AgentStatusHooksSetting({ settings, updateSettings }: AgentSettingProps) {
+  const t = useTranslate()
   const enabled = settings.agentStatusHooksEnabled !== false
   return (
-    <section className="space-y-3">
-      <SettingsSwitchRow
-        label={getAgentStatusHooksTitle()}
-        description={getAgentStatusHooksDescription()}
-        checked={enabled}
-        onChange={() => updateSettings({ agentStatusHooksEnabled: !enabled })}
-        ariaLabel={getAgentStatusHooksTitle()}
-      />
-    </section>
+    <SettingsSwitchRow
+      label={getAgentStatusHooksTitle(t)}
+      description={getAgentStatusHooksDescription(t)}
+      checked={enabled}
+      onChange={() => updateSettings({ agentStatusHooksEnabled: !enabled })}
+      ariaLabel={getAgentStatusHooksTitle(t)}
+    />
   )
 }
 
-export function AgentWorkspaceTrustSetting({ settings, updateSettings }: AgentSettingProps) {
-  const enabled = settings.agentWorkspaceTrustEnabled !== false
-  return (
-    <section className="space-y-3">
-      <SettingsSwitchRow
-        label={getAgentWorkspaceTrustTitle()}
-        description={getAgentWorkspaceTrustDescription()}
-        checked={enabled}
-        onChange={() => updateSettings({ agentWorkspaceTrustEnabled: !enabled })}
-        ariaLabel={getAgentWorkspaceTrustTitle()}
-      />
-    </section>
-  )
-}
-
-export function AgentGeneratedTabTitlesSetting({ settings, updateSettings }: AgentSettingProps) {
+function AgentGeneratedTabTitlesSetting({ settings, updateSettings }: AgentSettingProps) {
+  const t = useTranslate()
   const enabled = settings.tabAutoGenerateTitle === true
   return (
-    <section className="space-y-3">
-      <SettingsSwitchRow
-        label={getAgentGeneratedTabTitlesTitle()}
-        description={getAgentGeneratedTabTitlesDescription()}
-        checked={enabled}
-        onChange={() => updateSettings({ tabAutoGenerateTitle: !enabled })}
-        ariaLabel={getAgentGeneratedTabTitlesTitle()}
-      />
-    </section>
+    <SettingsSwitchRow
+      label={getAgentGeneratedTabTitlesTitle(t)}
+      description={getAgentGeneratedTabTitlesDescription(t)}
+      checked={enabled}
+      onChange={() => updateSettings({ tabAutoGenerateTitle: !enabled })}
+      ariaLabel={getAgentGeneratedTabTitlesTitle(t)}
+    />
   )
 }

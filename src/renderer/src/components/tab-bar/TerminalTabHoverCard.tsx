@@ -1,6 +1,6 @@
 import type { ComponentProps, ReactNode } from 'react'
-import { translate } from '@/i18n/i18n'
-import { getAgentLabel } from '@/lib/agent-catalog'
+import { useTranslate } from '@/i18n/use-translate'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { basename } from '@/lib/path'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
@@ -25,12 +25,13 @@ export function TerminalTabHoverCard({
   alert?: ComponentProps<typeof TabHoverCard>['alert']
   children: ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const { label: accountLabel, pinned, onTooltipOpenChange } = useClaudeTabAccountLabel(tab)
   const programName = agent
     ? [getAgentLabel(agent), accountLabel].filter(Boolean).join(' · ')
     : shell
       ? basename(shell)
-      : translate('tabHoverCard.terminal', 'Terminal')
+      : t('tabHoverCard.terminal', 'Terminal')
   return (
     <TabHoverCard
       title={title}

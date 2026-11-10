@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useNow } from '@/hooks/use-now'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { formatUiNarrowDuration, formatUiNarrowRelativeTime } from '@/i18n/relative-time-format'
 import { formatCheckTimestamp } from '@/components/github/pr-check-presentation'
@@ -30,46 +31,48 @@ function parseTime(value: string | undefined): number | null {
   return Number.isFinite(ms) ? ms : null
 }
 
-function formatAge(ageMs: number): string {
+function formatAge(ageMs: number, t: Translate = translate, intlLocale?: string): string {
   // A provider clock slightly ahead of ours must not read as a future run.
   if (ageMs < MINUTE_MS) {
-    return translate('auto.components.right.sidebar.checks.panel.runTime.justNow', 'just now')
+    return t('auto.components.right.sidebar.checks.panel.runTime.justNow', 'just now')
   }
   if (ageMs < HOUR_MS) {
-    return formatUiNarrowRelativeTime(-Math.floor(ageMs / MINUTE_MS), 'minute')
+    return formatUiNarrowRelativeTime(-Math.floor(ageMs / MINUTE_MS), 'minute', intlLocale)
   }
   if (ageMs < DAY_MS) {
-    return formatUiNarrowRelativeTime(-Math.floor(ageMs / HOUR_MS), 'hour')
+    return formatUiNarrowRelativeTime(-Math.floor(ageMs / HOUR_MS), 'hour', intlLocale)
   }
-  return formatUiNarrowRelativeTime(-Math.floor(ageMs / DAY_MS), 'day')
+  return formatUiNarrowRelativeTime(-Math.floor(ageMs / DAY_MS), 'day', intlLocale)
 }
 
-function formatRunDuration(durationMs: number): string {
+function formatRunDuration(durationMs: number, intlLocale?: string): string {
   const totalSeconds = Math.floor(durationMs / 1000)
   const hours = Math.floor(totalSeconds / 3600)
   const minutes = Math.floor((totalSeconds % 3600) / 60)
   const seconds = totalSeconds % 60
   if (hours > 0) {
     return [
-      formatUiNarrowDuration(hours, 'hour'),
-      minutes ? formatUiNarrowDuration(minutes, 'minute') : ''
+      formatUiNarrowDuration(hours, 'hour', intlLocale),
+      minutes ? formatUiNarrowDuration(minutes, 'minute', intlLocale) : ''
     ]
       .filter(Boolean)
       .join(' ')
   }
   if (minutes > 0) {
     return [
-      formatUiNarrowDuration(minutes, 'minute'),
-      seconds ? formatUiNarrowDuration(seconds, 'second') : ''
+      formatUiNarrowDuration(minutes, 'minute', intlLocale),
+      seconds ? formatUiNarrowDuration(seconds, 'second', intlLocale) : ''
     ]
       .filter(Boolean)
       .join(' ')
   }
-  return formatUiNarrowDuration(seconds, 'second')
+  return formatUiNarrowDuration(seconds, 'second', intlLocale)
 }
 
 export function getCheckRunTimeFacts(
-  check: Pick<PRCheckDetail, 'status' | 'startedAt' | 'completedAt' | 'notLatestCommitSha'>
+  check: Pick<PRCheckDetail, 'status' | 'startedAt' | 'completedAt' | 'notLatestCommitSha'>,
+  t: Translate = translate,
+  intlLocale?: string
 ): CheckRunTimeFacts | null {
   const startedMs = parseTime(check.startedAt)
   const completedMs = parseTime(check.completedAt)
@@ -82,30 +85,26 @@ export function getCheckRunTimeFacts(
   }
   const details: string[] = []
   if (whenMs !== null) {
-    const started = formatCheckTimestamp(check.startedAt)
-    const finished = running ? null : formatCheckTimestamp(check.completedAt)
+    const started = formatCheckTimestamp(check.startedAt, intlLocale)
+    const finished = running ? null : formatCheckTimestamp(check.completedAt, intlLocale)
     if (started) {
       details.push(
-        translate(
-          'auto.components.right.sidebar.checks.panel.runTime.started',
-          'Started {{time}}',
-          { time: started }
-        )
+        t('auto.components.right.sidebar.checks.panel.runTime.started', 'Started {{time}}', {
+          time: started
+        })
       )
     }
     if (finished) {
       details.push(
-        translate(
-          'auto.components.right.sidebar.checks.panel.runTime.finished',
-          'Finished {{time}}',
-          { time: finished }
-        )
+        t('auto.components.right.sidebar.checks.panel.runTime.finished', 'Finished {{time}}', {
+          time: finished
+        })
       )
     }
   }
   if (notLatestCommitSha) {
     details.push(
-      translate(
+      t(
         'auto.components.right.sidebar.checks.panel.runTime.notLatestCommitDetail',
         'Ran on commit {{sha}}, not the latest commit',
         { sha: notLatestCommitSha.slice(0, 8) }
@@ -118,33 +117,37 @@ export function getCheckRunTimeFacts(
       : null
   const fixedText = [
     notLatestCommitSha
-      ? translate(
-          'auto.components.right.sidebar.checks.panel.runTime.notLatestCommit',
-          'Earlier commit'
-        )
+      ? t('auto.components.right.sidebar.checks.panel.runTime.notLatestCommit', 'Earlier commit')
       : null,
     // Under a second (skipped and instant runs report equal times) says nothing useful.
-    durationMs !== null && durationMs >= 1000 ? formatRunDuration(durationMs) : null
+    durationMs !== null && durationMs >= 1000 ? formatRunDuration(durationMs, intlLocale) : null
   ]
     .filter(Boolean)
     .join(' · ')
   return { whenMs, running, fixedText, details }
 }
 
-export function formatCheckRunAge(facts: CheckRunTimeFacts, nowMs: number): string | null {
+export function formatCheckRunAge(
+  facts: CheckRunTimeFacts,
+  nowMs: number,
+  t?: Translate,
+  intlLocale?: string
+): string | null {
   if (facts.whenMs === null) {
     return null
   }
   // Beside a running icon an age would read as when it ran; show how long it has been running instead.
-  return facts.running ? formatElapsed(nowMs - facts.whenMs) : formatAge(nowMs - facts.whenMs)
+  return facts.running
+    ? formatElapsed(nowMs - facts.whenMs, intlLocale)
+    : formatAge(nowMs - facts.whenMs, t, intlLocale)
 }
 
-function formatElapsed(elapsedMs: number): string {
+function formatElapsed(elapsedMs: number, intlLocale?: string): string {
   if (elapsedMs < MINUTE_MS) {
-    return `<${formatUiNarrowDuration(1, 'minute')}`
+    return `<${formatUiNarrowDuration(1, 'minute', intlLocale)}`
   }
   // Whole minutes only: the label moves on the 30 s clock, so seconds would read as stale.
-  return formatRunDuration(Math.floor(elapsedMs / MINUTE_MS) * MINUTE_MS)
+  return formatRunDuration(Math.floor(elapsedMs / MINUTE_MS) * MINUTE_MS, intlLocale)
 }
 
 /** The check's age from the shared 30s clock the panel already ticks on, so rows add no timer. */
@@ -155,20 +158,23 @@ function useCheckRunNow(enabled: boolean): number {
 }
 
 export function CheckRunTime({ check }: { check: PRCheckDetail }): React.JSX.Element | null {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const { status, startedAt, completedAt, notLatestCommitSha } = check
   const languageRevision = useUiLanguageRevision()
   // Clock ticks change only the age, so the exact times, duration and copy are built once per data or language change.
   const facts = useMemo(
-    () => getCheckRunTimeFacts({ status, startedAt, completedAt, notLatestCommitSha }),
+    () =>
+      getCheckRunTimeFacts({ status, startedAt, completedAt, notLatestCommitSha }, t, intlLocale),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() and the date formatter read the UI language and catalogs implicitly.
-    [status, startedAt, completedAt, notLatestCommitSha, languageRevision]
+    [status, startedAt, completedAt, notLatestCommitSha, languageRevision, intlLocale, t]
   )
   // Only the time a row is dated by ages; rows without it don't listen to the clock.
   const nowMs = useCheckRunNow(facts?.whenMs != null)
   if (!facts) {
     return null
   }
-  const age = formatCheckRunAge(facts, nowMs)
+  const age = formatCheckRunAge(facts, nowMs, t, intlLocale)
   return (
     <Tooltip>
       <TooltipTrigger asChild>

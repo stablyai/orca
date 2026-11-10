@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { RpcClient } from '../../../transport/rpc-client'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import {
   GenerationScopedRequestOwner,
   type RequestScope
-} from '../../../transport/generation-scoped-request-owner'
+} from '../../../query/generation-scoped-request-owner'
 import {
   nativeChatFileInventoryRead,
   nativeChatFileSearchRead
-} from '../../mobile-session-read-operations'
+} from '../../../files/native-chat-file-search-operations'
 import {
   getPreparedQuickOpenFiles,
   rankQuickOpenFiles
-} from '../../../../../src/shared/quick-open-path-search'
+} from '../../../../../src/shared/quick-open/quick-open-path-search'
 
 const FILE_SEARCH_DEBOUNCE_MS = 120
 const FILE_SEARCH_RESULT_LIMIT = 16

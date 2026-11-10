@@ -9,7 +9,7 @@ import { resolveSourceControlAiForOperation } from '../../../../../../shared/sou
 import type {
   PullRequestFieldName,
   PullRequestFieldRevisions
-} from '@/store/slices/pull-request-generation'
+} from '@/store/slices/hosted-review/generation/pull-request-generation-state'
 import { resolveCreateReviewDefaultBaseRef } from './create-pull-request-base-ref-normalization'
 import { normalizeHostedReviewBaseRef as stripBaseRef } from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
 import { resolveCreateReviewSeedText } from '../../../../../../shared/source-control/hosted-review/hosted-review-create-seed'
@@ -22,7 +22,7 @@ import {
 import { useCreatePullRequestFieldSeeding } from './use-create-pull-request-field-seeding'
 import { useCreatePullRequestBaseRefDiscovery } from './use-create-pull-request-base-ref-discovery'
 import { useCreatePullRequestFieldGeneration } from './use-create-pull-request-field-generation'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 
 export function useCreatePullRequestDialogFields({
   open,

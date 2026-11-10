@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { RepoAgentAccounts } from '../../../../../shared/claude/project-claude-account-preference'
 import type { ClaudeManagedAccountSummary } from '../../../../../shared/managed-account-types'
-import type { ProviderAccountsSnapshot } from '@/runtime/runtime-provider-accounts-client'
+import type { ProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { RepositoryClaudeAccountSection } from './RepositoryClaudeAccountSection'
 
 const { fetchSnapshotMock, storeState } = vi.hoisted(() => {
@@ -27,15 +27,15 @@ vi.mock('../../../store', () => {
   return { useAppStore }
 })
 
-vi.mock('@/lib/repo-runtime-owner', () => ({
+vi.mock('@/lib/workspace/ownership/repo-runtime-owner', () => ({
   runtimeTargetForRepoOwner: () => ({ kind: 'local' })
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
+vi.mock('@/runtime/provider-accounts/observations/runtime-provider-accounts-client', () => ({
   fetchProviderAccountsSnapshot: fetchSnapshotMock
 }))
 

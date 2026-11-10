@@ -19,6 +19,7 @@ import {
 } from '../../../shared/worktree/visibility-sources'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { commitProvenRepoKindChange } from '../../workspaces/catalog/folder-repo-git-conversion'
+import { normalizeDictationTerms } from '../../../shared/dictation-dictionary'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { notifyReposChanged } from './repos-changed-notification'
 import {
@@ -47,6 +48,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
             | 'worktreeBasePath'
             | 'kind'
             | 'symlinkPaths'
+            | 'dictationTerms'
             | 'issueSourcePreference'
             | 'forkSyncMode'
             | 'agentWorkspaceTrust'
@@ -56,9 +58,9 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
             | 'customWorktreeVisibilitySources'
             | 'worktreeVisibilitySourcePreferences'
             | 'projectGroupId'
-            | 'projectGroupOrder'
           >
         > & {
+          projectGroupOrder?: number | null
           externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
           agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
           sourceControlAi?: Repo['sourceControlAi'] | null
@@ -123,6 +125,14 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
         const v = updates.symlinkPaths as unknown
         if (!Array.isArray(v) || !v.every((e) => typeof e === 'string')) {
           delete updates.symlinkPaths
+        }
+      }
+      if ('dictationTerms' in updates) {
+        const terms = normalizeDictationTerms(updates.dictationTerms)
+        if (terms) {
+          updates.dictationTerms = terms
+        } else {
+          delete updates.dictationTerms
         }
       }
       if ('worktreeBasePath' in updates && updates.worktreeBasePath !== undefined) {

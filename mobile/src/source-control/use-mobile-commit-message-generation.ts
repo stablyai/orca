@@ -6,7 +6,7 @@ import {
   type MutableRefObject,
   type SetStateAction
 } from 'react'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { translate } from '../i18n/mobile-i18n'
 import { cancelMobileCommitMessage, requestMobileCommitMessage } from './mobile-commit-message-ai'

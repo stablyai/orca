@@ -1,12 +1,12 @@
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
-import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
-import { activateTerminalTabOnOwner } from '@/lib/terminal-tab-owner-activation'
+import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
+import { activateTerminalTabOnOwner } from '@/lib/workspace/tabs/terminal-tab-owner-activation'
 import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 import {
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForTab
-} from '@/runtime/structured-agent-session-owner'
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { stablePaneHasLivePty } from '@/lib/agent-session/resume/sleeping-agent-pane-ownership'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { getPtyExecutionHost } from '../../../../../../shared/terminal/pty/lifecycle/terminal-execution-host'

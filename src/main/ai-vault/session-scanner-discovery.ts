@@ -10,7 +10,11 @@ import { wslGatedReaddir, wslGatedStat } from '../native-chat/wsl-transcript-fs-
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { recordSessionScanIssue, scanIssueTextFromError } from './session-scan-issues'
 import { aiVaultScanIssueText } from '../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
-import type { FileWithMtime, SessionFileDiscovery } from './session-scanner-types'
+import type {
+  FileWithMtime,
+  SessionFileDiscovery,
+  SessionFileWalkOptions
+} from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import {
@@ -45,6 +49,8 @@ export async function discoverFiles(args: {
   filePredicate?: (path: string) => boolean
   contentDependencyPath?: (path: string) => string | undefined | Promise<string | undefined>
   directoryPredicate?: (name: string, depth: number) => boolean
+  // Sees each listing the walk already made, so callers can read layout without another readdir.
+  onDirectoryEntries?: (dirPath: string, entries: readonly Dirent[]) => void
   // A scoped scan walks every file this agent has, not only the newest `limit`.
   keepScopeFiles?: boolean
   signal?: AbortSignal
@@ -151,6 +157,7 @@ export async function discoverFiles(args: {
     if (path === args.rootDir) {
       source.close = openAiVaultScanSource(args.signal, args.agent)
     }
+    args.onDirectoryEntries?.(path, entries)
     return entries
   }
 
@@ -239,11 +246,12 @@ async function observeSessionSidecar(
       sizeBytes: fileStat.size
     }
   } catch (error) {
-    return isMissingSidecarError(error) ? 'none' : 'unknown'
+    return isMissingTranscriptPathError(error) ? 'none' : 'unknown'
   }
 }
 
-function isMissingSidecarError(error: unknown): boolean {
+/** A missing file or folder is absence, not a refusal; WSL gate errors are always refusals. */
+export function isMissingTranscriptPathError(error: unknown): boolean {
   if (error instanceof WslTranscriptFsError) {
     return false
   }
@@ -252,16 +260,6 @@ function isMissingSidecarError(error: unknown): boolean {
       ? error.code
       : null
   return code === 'ENOENT' || code === 'ENOTDIR'
-}
-
-export type SessionFileWalkOptions = {
-  extensions: Set<string>
-  filePredicate?: (path: string) => boolean
-  // Return false to prune a subtree; depth 0 denotes a child of rootDir.
-  directoryPredicate?: (name: string, depth: number) => boolean
-  strictErrors?: boolean
-  readDirectory?: (dirPath: string) => Promise<Dirent[]>
-  signal?: AbortSignal
 }
 
 /** Collecting form for callers that want every match; bounded scans stream. */
@@ -298,7 +296,7 @@ export async function forEachSessionFile(
     // Propagate gate refusal so stalled distros are not reported as empty trees.
     if (
       error instanceof WslTranscriptFsError ||
-      (options.strictErrors && !isMissingSidecarError(error))
+      (options.strictErrors && !isMissingTranscriptPathError(error))
     ) {
       throw error
     }

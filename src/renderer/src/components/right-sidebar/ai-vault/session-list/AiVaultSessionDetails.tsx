@@ -13,13 +13,14 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   isAiVaultSessionResumableContent,
   type AiVaultScope,
   type AiVaultSession
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { FirstPromptCard } from './ai-vault-first-prompt-card'
 import { ResumeInNewCliTooltipText } from '../session-actions/ai-vault-session-cli-fork-copy'
 import {
@@ -81,6 +82,7 @@ export function SessionInlineDetails({
   /** Hides the action bar; the details stay. */
   actionsHidden?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   // Zero-turn sessions cannot resume meaningful content; show not-saved status instead.
   const referenceSession = isAntigravityReferenceSession(session)
   const hasResumableContent = isAiVaultSessionResumableContent(session)
@@ -127,8 +129,8 @@ export function SessionInlineDetails({
             >
               <Play className="size-3.5" />
               {referenceSession
-                ? translate('aiVault.continueInCli', 'Continue in CLI')
-                : aiVaultResumeInSessionWorkspaceLabel(resumeActions.worktree.worktreeId)}
+                ? t('aiVault.continueInCli', 'Continue in CLI')
+                : aiVaultResumeInSessionWorkspaceLabel(resumeActions.worktree.worktreeId, t)}
             </Button>
           ) : null}
           {showResumeInNewTab ? (
@@ -146,8 +148,8 @@ export function SessionInlineDetails({
             >
               <Play className="size-3.5" />
               {referenceSession
-                ? translate('aiVault.continueInCliNewTab', 'Continue in CLI in New Tab')
-                : translate(
+                ? t('aiVault.continueInCliNewTab', 'Continue in CLI in New Tab')
+                : t(
                     'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab',
                     'Resume in New Tab'
                   )}
@@ -166,7 +168,7 @@ export function SessionInlineDetails({
               className="h-7 shrink-0 px-2.5 text-[11px]"
             >
               <MessagesSquare className="size-3.5" />
-              {translate(
+              {t(
                 'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
                 'Resume in New Chat'
               )}
@@ -187,7 +189,7 @@ export function SessionInlineDetails({
                   className="h-7 shrink-0 px-2.5 text-[11px]"
                 >
                   <SquareTerminal className="size-3.5" />
-                  {translate(
+                  {t(
                     'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewCli',
                     'Resume in New Terminal'
                   )}
@@ -211,7 +213,7 @@ export function SessionInlineDetails({
               className="h-7 shrink-0 px-2.5 text-[11px]"
             >
               <MessageSquarePlus className="size-3.5" />
-              {translate(
+              {t(
                 'components.agentSessionContinuation.handOffToAnotherAgent',
                 'Hand Off to Another Agent'
               )}
@@ -230,7 +232,7 @@ export function SessionInlineDetails({
               className="h-7 shrink-0 px-2.5 text-[11px] text-muted-foreground"
             >
               <FileJson className="size-3.5" />
-              {translate('auto.components.right.sidebar.AiVaultSessionDetails.viewLog', 'View Log')}
+              {t('auto.components.right.sidebar.AiVaultSessionDetails.viewLog', 'View Log')}
             </Button>
           ) : null}
         </div>
@@ -247,7 +249,7 @@ export function SessionInlineDetails({
             />
             <SessionReceiptSection
               icon={<MessageSquare className="size-3" />}
-              label={translate(
+              label={t(
                 'auto.components.right.sidebar.AiVaultSessionDetails.latestTurns',
                 'Latest turns'
               )}
@@ -264,7 +266,7 @@ export function SessionInlineDetails({
                 </div>
               ) : (
                 <SessionDetailEmptyState
-                  message={translate(
+                  message={t(
                     'auto.components.right.sidebar.AiVaultSessionDetails.noPreviewAvailable',
                     'No conversation preview available'
                   )}
@@ -288,7 +290,7 @@ export function SessionInlineDetails({
                 <FolderGit2 className="size-3" />
               )
             }
-            label={aiVaultSessionWorkspaceHeading(worktreeInfo.worktreeId)}
+            label={aiVaultSessionWorkspaceHeading(worktreeInfo.worktreeId, t)}
           >
             <WorktreeMetadataLines worktreeInfo={worktreeInfo} vaultScope={vaultScope} />
           </SessionReceiptSection>
@@ -306,6 +308,7 @@ function ConversationTurnCard({
   role: AiVaultSession['previewMessages'][number]['role']
   text: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const isUserTurn = role === 'user'
 
   return (
@@ -318,7 +321,7 @@ function ConversationTurnCard({
       )}
     >
       <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-        {conversationRoleLabel(role)}
+        {conversationRoleLabel(role, t)}
       </div>
       <p className="line-clamp-4 select-text text-[12px] leading-[1.35] text-foreground/90 [overflow-wrap:anywhere]">
         {text}
@@ -334,6 +337,7 @@ function WorktreeMetadataLines({
   worktreeInfo: AiVaultSessionWorktreeInfo
   vaultScope: AiVaultScope
 }): React.JSX.Element {
+  const t = useTranslate()
   const compactPath = aiVaultWorktreeCompactPath(worktreeInfo.path)
   const pathLine =
     compactPath && compactPath !== worktreeInfo.label ? compactPath : worktreeInfo.path
@@ -347,7 +351,7 @@ function WorktreeMetadataLines({
         }) ? (
           <>
             <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
-              {aiVaultWorktreeStatusLabel(worktreeInfo.status, worktreeInfo.worktreeId)}
+              {aiVaultWorktreeStatusLabel(worktreeInfo.status, worktreeInfo.worktreeId, t)}
             </span>
             <span className="shrink-0 text-muted-foreground/45">·</span>
           </>
@@ -392,18 +396,21 @@ function SessionDetailEmptyState({ message }: { message: string }): React.JSX.El
   )
 }
 
-function conversationRoleLabel(role: AiVaultSession['previewMessages'][number]['role']): string {
+function conversationRoleLabel(
+  role: AiVaultSession['previewMessages'][number]['role'],
+  t: Translate = translate
+): string {
   if (role === 'user') {
-    return translate('auto.components.right.sidebar.AiVaultSessionDetails.userRole', 'You')
+    return t('auto.components.right.sidebar.AiVaultSessionDetails.userRole', 'You')
   }
   if (role === 'assistant') {
-    return translate('auto.components.right.sidebar.AiVaultSessionDetails.agentRole', 'Agent')
+    return t('auto.components.right.sidebar.AiVaultSessionDetails.agentRole', 'Agent')
   }
   if (role === 'tool') {
-    return translate('auto.components.right.sidebar.AiVaultSessionDetails.toolRole', 'Tool')
+    return t('auto.components.right.sidebar.AiVaultSessionDetails.toolRole', 'Tool')
   }
   if (role === 'system') {
-    return translate('auto.components.right.sidebar.AiVaultSessionDetails.systemRole', 'System')
+    return t('auto.components.right.sidebar.AiVaultSessionDetails.systemRole', 'System')
   }
-  return translate('auto.components.right.sidebar.AiVaultSessionDetails.sessionRole', 'Session')
+  return t('auto.components.right.sidebar.AiVaultSessionDetails.sessionRole', 'Session')
 }

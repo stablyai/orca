@@ -11,9 +11,11 @@ import {
 } from './choose-claude-launch-account'
 import { claudeAccountPinningUnsupportedReasonInState } from '../settings/repository-claude-account'
 
-vi.mock('@/lib/renderer-app-platform', () => ({ getRendererAppPlatform: () => 'win32' }))
+vi.mock('@/app-shell/platform/renderer-app-platform', () => ({
+  getRendererAppPlatform: () => 'win32'
+}))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
-vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
+vi.mock('@/runtime/provider-accounts/observations/runtime-provider-accounts-client', () => ({
   fetchProviderAccountsSnapshot: vi.fn(async () => {
     throw new Error('offline')
   }),

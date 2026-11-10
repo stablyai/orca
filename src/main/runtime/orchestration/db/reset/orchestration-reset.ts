@@ -1,6 +1,6 @@
-import { LEGACY_RUN_ID } from '../contract-constants'
+import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrchestrationDb } from '../orchestration-db'
-import type { ResetRemovedWork } from '../../../../../shared/orchestration-removed-work'
+import type { ResetRemovedWork } from '../../../../../shared/orchestration/orchestration-removed-work'
 import {
   readRemovedWorkWatermark,
   summarizeRemovedWorkSince
@@ -58,7 +58,7 @@ export function resetAll(this: OrchestrationDb): void {
 }
 
 export function resetTasks(this: OrchestrationDb): ResetRemovedWork | undefined {
-  // Messages survive; close threads so orphaned questions cannot masquerade as generic replies.
+  // Messages survive, and so do replies waiting for a paired Orca to pull them; close threads so orphaned questions cannot masquerade as generic replies.
   const watermark = this.runResetTransaction(`
     DELETE FROM coordinator_runs;
     DELETE FROM decision_gates;
@@ -70,7 +70,7 @@ export function resetTasks(this: OrchestrationDb): ResetRemovedWork | undefined 
     DELETE FROM legacy_operation_receipts;
     DELETE FROM legacy_compatibility_principals;
     DELETE FROM legacy_adoptions;
-    DELETE FROM federation_relay_items;
+    DELETE FROM federation_relay_items WHERE kind <> 'peer_mail';
     DELETE FROM remote_dispatch_attachments;
     DELETE FROM federated_dispatches;
     DELETE FROM worker_terminal_archives;

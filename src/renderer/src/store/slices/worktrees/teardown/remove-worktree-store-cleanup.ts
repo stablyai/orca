@@ -3,7 +3,7 @@ import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combine
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
-import { removeWorktreeVisitEntries } from '@/lib/worktree-visit-recency'
+import { removeWorktreeVisitEntries } from '@/lib/workspace/activation/worktree-visit-recency'
 import { forgetAmbiguousOwnerWarnings } from '@/lib/ambiguous-owner-warning'
 import { omitRecordKeys } from './record-key-omission'
 import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
@@ -99,6 +99,7 @@ export function applyRemoveWorktreeSuccessState(
       editorCursorLine: omitByFileId(s.editorCursorLine),
       explorerDisplayRootByWorktree: omitByWorktree(s.explorerDisplayRootByWorktree),
       showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
+      gitGraphFiltersByWorktree: omitByWorktree(s.gitGraphFiltersByWorktree ?? {}),
       expandedDirs: omitByWorktree(s.expandedDirs),
       gitStatusHugeByWorktree: omitByWorktree(s.gitStatusHugeByWorktree),
       gitStatusReadErrorByWorktree: omitByWorktree(s.gitStatusReadErrorByWorktree),

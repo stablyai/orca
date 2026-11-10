@@ -8,7 +8,7 @@ import type {
 import {
   createOrcadMigrationManifest,
   type OrcadMigrationExportStore
-} from '../orcad-migration-manifest-export'
+} from '../../persistence/migrating-orcad-catalog/orcad-migration-manifest-export'
 import {
   collectTargetCatalogBlockers,
   resolveOrcadPreflightTarget
@@ -17,7 +17,7 @@ import { collectUntransferredDependentBlockers } from './ssh-target-orcad-depend
 import {
   preservesOrcadMigrationBridgedPanes,
   type OrcadMigrationPaneLeasePredicate
-} from '../orcad-migration-bridged-panes'
+} from '../migration-source/orcad-migration-bridged-panes'
 
 export type OrcadMigrationPreflightStore = OrcadMigrationExportStore &
   Pick<

@@ -9,7 +9,7 @@ import { normalizeJiraProjectReference } from '../../../shared/jira/jira-project
 import type { GhAccountBinding } from '../../../shared/github/account-binding'
 import { normalizeRepoAgentAccounts } from '../../../shared/claude/project-claude-account-preference'
 import type { RepoAgentAccounts } from '../../../shared/claude/project-claude-account-preference'
-import { sanitizeAgentWorkspaceTrustDecision } from '../../../shared/agent-workspace-trust-decision'
+import { sanitizeAgentWorkspaceTrustDecision } from '../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences

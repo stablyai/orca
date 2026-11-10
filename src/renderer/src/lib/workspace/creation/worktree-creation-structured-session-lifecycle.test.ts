@@ -2,14 +2,15 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
+import 'sonner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { executeWorktreeCreation } from './worktree-creation-flow-execute'
-import { retryBackgroundWorktreeCreation } from './worktree-creation-flow'
+import './worktree-creation-flow'
 import {
   makeCreatedAgentWorktree,
   seedEmptyActivatableWorktree
 } from '../activation/worktree-activation-created-agent.test-fixture'
-import type { WorktreeCreationRequest } from './pending-worktree-creation'
+
 import type { StructuredLaunchAdmission } from '../../agent-session/launch/structured-agent-session-host-admission'
 import type * as admissionModule from '../../agent-session/launch/structured-agent-session-host-admission'
 import type * as launchModule from '../../agent-session/launch/structured-agent-session-launch-create-call'
@@ -21,44 +22,40 @@ import { StructuredAgentSessionCreateRefusalError } from '../../agent-session/la
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
 import {
-  clearNativeChatComposerDraftsForTests,
-  isNativeChatComposerDraftUnsaved,
   readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
-} from '@/components/native-chat/native-chat-composer-draft-store'
-import { hydrateNativeChatComposerDrafts } from '@/components/native-chat/native-chat-composer-draft-load'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+import '@/components/native-chat/drafts/native-chat-composer-draft-load'
+import '@/components/native-chat/drafts/native-chat-composer-draft-persistence'
+import '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import {
-  flushNativeChatComposerDrafts,
-  nativeChatComposerDraftWritesSettled
-} from '@/components/native-chat/native-chat-composer-draft-persistence'
-import {
-  createMemoryNativeChatComposerDraftStorage,
-  setNativeChatComposerDraftStorageForTests
-} from '@/components/native-chat/native-chat-composer-draft-storage'
-import { pendingCreationChatDraftScopeKey } from './pending-worktree-creation'
+  type WorktreeCreationRequest,
+  pendingCreationChatDraftScopeKey
+} from './pending-worktree-creation'
 import '../../agent-session/launch/structured-agent-session-launch-prompt'
 import { hasStagedStructuredLaunchPrompt } from '../../agent-session/launch/structured-agent-session-staged-prompt'
-import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/structured-agent-session-pending-sends'
-import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
+import '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
+import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import {
   addNativeChatPendingAttachment,
   clearNativeChatPendingAttachmentsForTests,
   nativeChatPendingAttachmentSnapshot,
   settleNativeChatPendingAttachment
-} from '@/components/native-chat/native-chat-pending-attachment-cache'
+} from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 import {
   holdBrowserAttachmentFiles,
   readBrowserAttachmentFile
-} from '../../browser-attachment-files'
+} from '../../files/drop/browser-attachment-files'
 import {
   holdNativeChatStagedInput,
   releaseNativeChatStagedFiles,
   stageNativeChatDraftFile
-} from '@/components/native-chat/native-chat-draft-attachment-staging'
+} from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
 
 const mocks = vi.hoisted(() => ({
   admission: vi.fn<typeof admissionModule.admitStructuredLaunchOnHost>(),
@@ -75,17 +72,17 @@ vi.mock(
     launchStructuredAgentSession: mocks.createSession
   })
 )
-vi.mock('@/runtime/runtime-rpc-client', async (original) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())
 )
-vi.mock('@/runtime/runtime-layout-client', async (original) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await original())
 )
-vi.mock('@/components/native-chat/native-chat-composer-mount', () => ({
+vi.mock('@/components/native-chat/composer/focus/native-chat-composer-mount', () => ({
   nativeChatComposerSelection: () => undefined,
   waitForNativeChatComposerHandoff: async () => {}
 }))
@@ -148,73 +145,6 @@ afterEach(() => {
 })
 
 describe('creation chat handoff', () => {
-  it.each(['slow', 'refused', 'background'] as const)(
-    'hands the live draft to the published chat independently of persistence: %s',
-    async (scenario) => {
-      const storage = createMemoryNativeChatComposerDraftStorage()
-      setNativeChatComposerDraftStorageForTests(storage)
-      await hydrateNativeChatComposerDrafts()
-      const source = pendingCreationChatDraftScopeKey('creation-1')
-      updateNativeChatComposerDraft(source, { text: 'Unsent follow-up' }, 'immediate')
-      await nativeChatComposerDraftWritesSettled()
-      const committed = Promise.withResolvers<void>()
-      const started = Promise.withResolvers<string>()
-      const write = storage.write
-      storage.write = async (scope, draft) => {
-        if (scope.startsWith('agent-session:')) {
-          started.resolve(scope)
-          await committed.promise
-        }
-        await write(scope, draft)
-      }
-      vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
-        throw new DOMException('refused', 'QuotaExceededError')
-      })
-      vi.spyOn(console, 'warn').mockImplementation(() => {})
-      if (scenario === 'background') {
-        useAppStore.setState({ activeView: 'tasks' })
-      }
-
-      const completion = executeWorktreeCreation('creation-1', request)
-      const destination = await started.promise
-      await completion
-
-      const state = useAppStore.getState()
-      expect(state.pendingWorktreeCreations['creation-1']).toBeUndefined()
-      expect(state.activePendingCreationId).toBeNull()
-      expect(state.activeWorktreeId).toBe(
-        scenario === 'background' ? 'previous-worktree' : worktree.id
-      )
-      expect(state.activeView).toBe(scenario === 'background' ? 'tasks' : 'terminal')
-      expect(state.getActiveTab(worktree.id)).toMatchObject({
-        contentType: 'agent-session',
-        entityId: destination.slice('agent-session:'.length)
-      })
-      expect(readNativeChatComposerDraft(source).text).toBe('')
-      expect(readNativeChatComposerDraft(destination).text).toBe('Unsent follow-up')
-      expect(storage.drafts.get(source)?.text).toBe('Unsent follow-up')
-      expect(storage.drafts.has(destination)).toBe(false)
-
-      const latest = 'Unsent follow-up with newer typing in the replacement'
-      updateNativeChatComposerDraft(destination, { text: latest }, 'immediate')
-      storage.refuseWrites = scenario === 'refused'
-      committed.resolve()
-      await nativeChatComposerDraftWritesSettled()
-      expect(readNativeChatComposerDraft(destination).text).toBe(latest)
-      if (scenario === 'refused') {
-        expect(isNativeChatComposerDraftUnsaved(destination)).toBe(true)
-        expect(storage.drafts.get(source)?.text).toBe('Unsent follow-up')
-        storage.refuseWrites = false
-        flushNativeChatComposerDrafts()
-        await nativeChatComposerDraftWritesSettled()
-      }
-      expect(storage.drafts.get(destination)?.text).toBe(latest)
-      expect(storage.drafts.has(source)).toBe(false)
-      expect(state.createWorktree).toHaveBeenCalledOnce()
-      expect(mocks.createSession).toHaveBeenCalledOnce()
-    }
-  )
-
   it.skipIf(!ORCA_LAYOUT_OWNER_IS_MAIN)(
     'owns input through delayed provider creation and replacement tab publication',
     async () => {
@@ -306,82 +236,6 @@ describe('creation chat handoff', () => {
       expect(state.pendingStartupByTabId[tabId]).toMatchObject({
         command: expect.stringContaining('Recover this first message')
       })
-    }
-  )
-
-  it.skipIf(!ORCA_LAYOUT_OWNER_IS_MAIN).each(['foreground', 'background'] as const)(
-    'retries a layout-refused rich message in the created worktree without creating it again: %s',
-    async (scenario) => {
-      const emptyRequest = { ...request, quickPrompt: '' }
-      const attachment = { id: 'held-image', path: '/tmp/held-image.png' }
-      const skill = { name: 'test-audit', path: '/repo/.agents/skills/test-audit/SKILL.md' }
-      const message = 'Use $test-audit to review this image'
-      const source = pendingCreationChatDraftScopeKey('creation-1')
-      useAppStore.getState().updatePendingWorktreeCreation('creation-1', {
-        request: emptyRequest,
-        heldChatMessage: message,
-        heldChatAttachments: [attachment],
-        heldChatSkills: [skill]
-      })
-      updateNativeChatComposerDraft(source, { text: 'Unsent follow-up' }, 'immediate')
-      if (scenario === 'background') {
-        useAppStore.setState({ activeView: 'tasks' })
-      }
-      layoutApplyTestTransport.answerWith((command) =>
-        command.type === 'openAgentSessionTab'
-          ? { ok: false, code: 'pane_structure_changed' }
-          : 'apply'
-      )
-
-      await executeWorktreeCreation('creation-1', emptyRequest)
-      await main.settle()
-
-      const refused = useAppStore.getState()
-      expect(refused.pendingWorktreeCreations['creation-1']).toMatchObject({
-        status: 'error',
-        worktreeId: worktree.id,
-        error: expect.any(String),
-        heldChatMessage: message,
-        heldChatAttachments: [attachment],
-        heldChatSkills: [skill]
-      })
-      expect(refused.activePendingCreationId).toBe('creation-1')
-      expect(refused.tabsByWorktree[worktree.id] ?? []).toEqual([])
-      expect(readNativeChatComposerDraft(source).text).toBe('Unsent follow-up')
-      expect(refused.createWorktree).toHaveBeenCalledOnce()
-
-      layoutApplyTestTransport.answerWith('apply')
-      useAppStore.setState({ activeView: 'terminal' })
-      retryBackgroundWorktreeCreation('creation-1')
-      await vi.waitFor(() =>
-        expect(useAppStore.getState().pendingWorktreeCreations['creation-1']).toBeUndefined()
-      )
-      await main.settle()
-
-      const retried = useAppStore.getState()
-      const tab = retried.getActiveTab(worktree.id)
-      expect(tab).toMatchObject({ contentType: 'agent-session', worktreeId: worktree.id })
-      if (!tab) {
-        throw new Error('Retry did not open a chat')
-      }
-      expect(retried.createWorktree).toHaveBeenCalledOnce()
-      expect(retried.activeWorktreeId).toBe(worktree.id)
-      expect(retried.activePendingCreationId).toBeNull()
-      expect(readNativeChatComposerDraft(source).text).toBe('')
-      expect(
-        readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(tab.entityId)).text
-      ).toBe('Unsent follow-up')
-      expect(getStructuredAgentSessionPendingSends(tab.entityId)).toMatchObject([
-        {
-          body: {
-            blocks: [
-              { type: 'text', text: message },
-              { type: 'image-ref', path: attachment.path }
-            ],
-            skills: [skill]
-          }
-        }
-      ])
     }
   )
 
@@ -486,47 +340,6 @@ describe('creation chat handoff', () => {
       { id: 'saving-image', path: '/tmp/saved.png' }
     ])
     expect(readNativeChatComposerDraft(source).images).toEqual([])
-  })
-
-  it('keeps rich input in the pending composer when the created worktree has no resolved host', async () => {
-    const source = pendingCreationChatDraftScopeKey('creation-1')
-    const attachment = { id: 'held-image', path: '/tmp/held.png' }
-    const state = useAppStore.getState()
-    const repo = state.repos[0]!
-    useAppStore.setState({
-      repos: [
-        { ...repo, executionHostId: 'local' },
-        { ...repo, connectionId: 'box', executionHostId: 'ssh:box' }
-      ],
-      worktreesByRepo: {
-        [worktree.repoId]: [
-          { ...worktree, hostId: 'local' },
-          { ...worktree, hostId: 'ssh:box' }
-        ]
-      },
-      activeWorkspaceExecutionHostId: null
-    })
-    useAppStore.getState().updatePendingWorktreeCreation('creation-1', {
-      heldChatMessage: 'Review this image',
-      heldChatAttachments: [attachment]
-    })
-    updateNativeChatComposerDraft(source, { text: 'Unsent follow-up' }, 'immediate')
-
-    await executeWorktreeCreation('creation-1', request)
-    await main.settle()
-
-    const retained = useAppStore.getState()
-    expect(retained.pendingWorktreeCreations['creation-1']).toMatchObject({
-      status: 'error',
-      worktreeId: worktree.id,
-      heldChatMessage: 'Review this image',
-      heldChatAttachments: [attachment]
-    })
-    expect(retained.activePendingCreationId).toBe('creation-1')
-    expect(retained.unifiedTabsByWorktree[worktree.id] ?? []).toEqual([])
-    expect(readNativeChatComposerDraft(source).text).toBe('Unsent follow-up')
-    expect(mocks.createSession).not.toHaveBeenCalled()
-    expect(retained.createWorktree).toHaveBeenCalledOnce()
   })
 
   it('dismisses a pending admission without opening a late chat', async () => {

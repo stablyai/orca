@@ -1,7 +1,7 @@
 import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import { ACTIVE_CLAUDE_ACCOUNT } from '../../../../shared/claude/project-claude-account-preference'
-import type { PtyPaneStartup } from './pty-connection-types'
+import type { PtyPaneStartup } from './pty-connection/startup/pty-pane-startup'
 import {
   refusedClaudeLaunchStartupsFor,
   type RefusedLaunchPaneHost,

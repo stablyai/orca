@@ -9,8 +9,8 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
-import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { useTranslate } from '@/i18n/use-translate'
+import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import type { WorkspaceAttachment } from '../../../../../../shared/worktree/types'
 import type { RowEntry } from '../../../new-workspace/smart-workspace-name-field-model'
 import type { SmartNameMode } from '../../../../../../shared/new-workspace/smart-workspace-source-results'
@@ -48,6 +48,7 @@ export function WorkspaceAttachmentSearch({
   onKindChange: (kind: AttachmentInputKind) => void
   onRetry: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [selection, setSelection] = useState('')
   const inputId = useId()
   const contexts = useMemo(
@@ -157,7 +158,7 @@ export function WorkspaceAttachmentSearch({
           : (actionableRows[0]?.value ?? '')
   return (
     <Command
-      label={translate('workspace.links.searchLabel', 'Search references')}
+      label={t('workspace.links.searchLabel', 'Search references')}
       value={commandValue}
       onValueChange={setSelection}
       shouldFilter={false}
@@ -166,7 +167,7 @@ export function WorkspaceAttachmentSearch({
     >
       <div className="shrink-0 space-y-2">
         <label htmlFor={inputId} className="text-xs font-medium">
-          {translate('workspace.links.addReference', 'Add reference')}
+          {t('workspace.links.addReference', 'Add reference')}
         </label>
         <SmartWorkspaceSourceTabs
           model={controller}
@@ -181,7 +182,7 @@ export function WorkspaceAttachmentSearch({
           ref={props.inputRef}
           id={inputId}
           value={query}
-          placeholder={translate(
+          placeholder={t(
             'workspace.links.searchReferences',
             'Search reviews and tasks, or paste a link'
           )}
@@ -197,7 +198,7 @@ export function WorkspaceAttachmentSearch({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  aria-label={translate('workspace.links.clearSearch', 'Clear search')}
+                  aria-label={t('workspace.links.clearSearch', 'Clear search')}
                   onClick={() => {
                     onQueryChange('')
                     setSelection('')
@@ -266,7 +267,7 @@ export function WorkspaceAttachmentSearch({
             onSelect={selectRow}
             isLinked={linked}
             isRowDisabled={() => props.disabled || controller.isQueryStale}
-            emptyHint={translate(
+            emptyHint={t(
               'workspace.links.noReferences',
               'No matching references. Try a title, number, or URL.'
             )}
@@ -281,13 +282,13 @@ export function WorkspaceAttachmentSearch({
                   >
                     <Plus className="size-3.5" />
                     <span>
-                      {translate('workspace.links.addItem', 'Add {{label}}', {
+                      {t('workspace.links.addItem', 'Add {{label}}', {
                         label: workspaceAttachmentLabel(direct)
                       })}
                     </span>
                     {directLinked ? (
                       <span className="ml-auto text-xs text-muted-foreground">
-                        {translate('workspace.links.linkedResult', 'Linked')}
+                        {t('workspace.links.linkedResult', 'Linked')}
                       </span>
                     ) : null}
                   </CommandItem>
@@ -311,7 +312,7 @@ export function WorkspaceAttachmentSearch({
               <DropdownMenuTrigger asChild>
                 <Button type="button" variant="ghost" size="xs">
                   <ChevronDown className="size-3" />
-                  {translate('workspace.links.referenceType', 'Reference type')}
+                  {t('workspace.links.referenceType', 'Reference type')}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">

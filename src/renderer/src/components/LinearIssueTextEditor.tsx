@@ -1,18 +1,21 @@
 import { writeLinearIssue } from '@/lib/work-items/linear/linear-issue-write'
-import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
-import { ImeTextarea } from '@/lib/ime-text-field'
+import { taskProviderErrorMessage } from '@/lib/work-items/task-provider-error-copy'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import React, { useCallback, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { LinearIssueMarkdownDescriptionEditor } from '@/components/LinearIssueMarkdownDescriptionEditor'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
-import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import { linearUpdateIssue } from '@/runtime/runtime-linear-issue-mutations'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
+import {
+  getScreenSubmitShortcutLabel,
+  isScreenSubmitShortcut
+} from '@/lib/keyboard/screen-submit-shortcut'
+import { linearUpdateIssue } from '@/runtime/linear/runtime-linear-issue-client'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import {
   getLinearIssueTextSavePlan,
   type LinearIssueTextField
@@ -22,7 +25,8 @@ import {
   resolveLinearIssueTextDraftState
 } from './linear-issue-text-draft-state'
 import { translate } from '@/i18n/i18n'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { useTranslate } from '@/i18n/use-translate'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 
 type LinearIssueTextEditorProps = {
   issue: LinearIssue
@@ -37,6 +41,7 @@ export function LinearIssueTextEditor({
   fields = 'all',
   sourceContext
 }: LinearIssueTextEditorProps): React.JSX.Element {
+  const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
   const providerSettings = sourceContext ?? defaultScopeSource(settings)
   const [draftState, setDraftState] = useState(() => createLinearIssueTextDraftState(issue))
@@ -169,10 +174,7 @@ export function LinearIssueTextEditor({
             onKeyDown={handleTitleKeyDown}
             disabled={savingField === 'title'}
             rows={1}
-            aria-label={translate(
-              'auto.components.LinearIssueTextEditor.04d73b72dc',
-              'Issue title'
-            )}
+            aria-label={t('auto.components.LinearIssueTextEditor.04d73b72dc', 'Issue title')}
             // CSS field sizing grows and rewraps titles without JS measurement.
             className={cn(
               'peer scrollbar-sleek block w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent px-1 py-0 text-foreground outline-none transition hover:border-border/50 hover:bg-accent/40 focus-visible:border-border focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-80',
@@ -184,7 +186,7 @@ export function LinearIssueTextEditor({
             <kbd className="inline-flex h-4 min-w-4 select-none items-center justify-center rounded border border-border bg-muted/70 px-1 font-mono text-[9px] font-medium shadow-xs">
               ↵
             </kbd>
-            <span>{translate('auto.components.LinearIssueTextEditor.947ba2d6f4', 'to save')}</span>
+            <span>{t('auto.components.LinearIssueTextEditor.947ba2d6f4', 'to save')}</span>
           </div>
           {savingField === 'title' ? (
             <LoaderCircle className="absolute right-2 top-2 size-4 animate-spin text-muted-foreground" />

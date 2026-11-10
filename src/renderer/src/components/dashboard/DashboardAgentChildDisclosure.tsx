@@ -1,8 +1,8 @@
 import React, { useCallback } from 'react'
 import { ChevronDown } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type Props = {
   childAgentCount?: number
@@ -17,6 +17,7 @@ export function DashboardAgentChildDisclosure({
   onToggleChildAgents,
   timestamp
 }: Props) {
+  const t = useTranslate()
   const hasChildDisclosure =
     typeof childAgentCount === 'number' &&
     childAgentCount > 0 &&
@@ -66,12 +67,12 @@ export function DashboardAgentChildDisclosure({
         className="col-start-1 row-start-1 -mr-1.5"
         aria-label={
           childAgentsExpanded
-            ? translate(
+            ? t(
                 'auto.components.dashboard.DashboardAgentChildDisclosure.hideChildAgents',
                 'Hide {{count}} child agents',
                 { count: childAgentCount, defaultValue_one: 'Hide {{count}} child agent' }
               )
-            : translate(
+            : t(
                 'auto.components.dashboard.DashboardAgentChildDisclosure.showChildAgents',
                 'Show {{count}} child agents',
                 { count: childAgentCount, defaultValue_one: 'Show {{count}} child agent' }

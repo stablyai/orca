@@ -3,12 +3,12 @@ import { ChevronDown, GitBranch, Loader2 } from 'lucide-react'
 import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   CreateProjectLocationField,
   CreateProjectParentBrowser
 } from '../create/CreateProjectLocationField'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   formatCreateProjectParentSummary,
   joinCreateProjectPath,
@@ -56,6 +56,7 @@ export function CreateStep({
   onPickParent,
   onCreate
 }: CreateStepProps): React.JSX.Element {
+  const t = useTranslate()
   const [browsingParent, setBrowsingParent] = useState(false)
   // Remote hosts need typed paths; expose Location so creation does not appear blocked.
   const [advancedOpen, setAdvancedOpen] = useState(manualParentEntry)
@@ -69,11 +70,11 @@ export function CreateStep({
     !parentDefaultPending &&
     !isCreating &&
     !submitDisabled
-  const missingLocationLabel = translate(
+  const missingLocationLabel = t(
     'auto.components.sidebar.AddRepoCreateStep.3a13f6e88b',
     'location not selected'
   )
-  const missingServerLocationLabel = translate(
+  const missingServerLocationLabel = t(
     'auto.components.sidebar.AddRepoCreateStep.6ed14c0281',
     'host folder not selected'
   )
@@ -102,10 +103,7 @@ export function CreateStep({
     const name = createName.trim() || CREATE_PROJECT_NAME_PLACEHOLDER
     return createParent.trim() ? joinCreateProjectPath(createParent, name) : ''
   }, [createName, createParent])
-  const kindLabel = translate(
-    'auto.components.sidebar.AddRepoCreateStep.11fd2a7db8',
-    'Git repository'
-  )
+  const kindLabel = t('auto.components.sidebar.AddRepoCreateStep.11fd2a7db8', 'Git repository')
   const showGitFallback = gitAvailability === 'unavailable'
   const showGitChecking = gitAvailability === 'checking'
   const showRuntimeMissingParent =
@@ -126,13 +124,10 @@ export function CreateStep({
     <>
       <DialogHeader>
         <DialogTitle>
-          {translate(
-            'auto.components.sidebar.AddRepoCreateStep.c7b9f94456',
-            'Create a new project'
-          )}
+          {t('auto.components.sidebar.AddRepoCreateStep.c7b9f94456', 'Create a new project')}
         </DialogTitle>
         <DialogDescription>
-          {translate(
+          {t(
             'auto.components.sidebar.AddRepoCreateStep.b100311784',
             'Name it and Orca will create a real project with sensible defaults.'
           )}
@@ -146,16 +141,13 @@ export function CreateStep({
             htmlFor="create-project-name"
             className="text-[11px] font-medium text-muted-foreground block"
           >
-            {translate('auto.components.sidebar.AddRepoCreateStep.a8149a3a5a', 'Name')}
+            {t('auto.components.sidebar.AddRepoCreateStep.a8149a3a5a', 'Name')}
           </label>
           <Input
             id="create-project-name"
             value={createName}
             onChange={(e) => onNameChange(e.target.value)}
-            placeholder={translate(
-              'auto.components.sidebar.AddRepoCreateStep.0ae45b8238',
-              'my-project'
-            )}
+            placeholder={t('auto.components.sidebar.AddRepoCreateStep.0ae45b8238', 'my-project')}
             className="h-11 text-sm font-mono"
             disabled={isCreating}
             autoFocus
@@ -175,7 +167,7 @@ export function CreateStep({
             </span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">
-                {translate(
+                {t(
                   'auto.components.sidebar.AddRepoCreateStep.685b5eefe1',
                   '{{kind}} in {{parent}}',
                   {
@@ -187,21 +179,21 @@ export function CreateStep({
               {showGitChecking ? (
                 <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
                   <Loader2 className="size-3 animate-spin" />
-                  {translate(
+                  {t(
                     'auto.components.sidebar.AddRepoCreateStep.2a762f3b19',
                     'Checking Git on this host...'
                   )}
                 </p>
               ) : showGitFallback ? (
                 <p className="mt-0.5 text-[11px] text-destructive">
-                  {translate(
+                  {t(
                     'auto.components.sidebar.AddRepoCreateStep.fe1e616c5b',
                     'Git is required to create a project.'
                   )}
                 </p>
               ) : showRuntimeMissingParent ? (
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.sidebar.AddRepoCreateStep.c234df77f7',
                     'Choose or enter a host parent folder before creating.'
                   )}
@@ -254,8 +246,8 @@ export function CreateStep({
 
         <Button onClick={onCreate} disabled={!canSubmit} size="lg" className="w-full">
           {isCreating
-            ? translate('auto.components.sidebar.AddRepoCreateStep.85085d74d2', 'Creating…')
-            : translate('auto.components.sidebar.AddRepoCreateStep.45b7c26034', 'Create project')}
+            ? t('auto.components.sidebar.AddRepoCreateStep.85085d74d2', 'Creating…')
+            : t('auto.components.sidebar.AddRepoCreateStep.45b7c26034', 'Create project')}
         </Button>
       </div>
     </>

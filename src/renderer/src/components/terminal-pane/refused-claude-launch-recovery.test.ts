@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ACTIVE_CLAUDE_ACCOUNT } from '../../../../shared/claude/project-claude-account-preference'
 import { claudePinnedLaunchError } from '../../../../shared/claude/claude-pinned-launch-error'
-import type { PtyPaneStartup } from './pty-connection-types'
+import type { PtyPaneStartup } from './pty-connection/startup/pty-pane-startup'
 import {
   recordRefusedClaudeLaunchStartup,
   redirectsPtylessPaneActivation,

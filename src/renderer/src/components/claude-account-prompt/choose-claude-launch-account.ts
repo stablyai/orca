@@ -12,7 +12,7 @@ import {
   findLaunchRepo,
   resolveLaunchClaudeAccountId
 } from '@/lib/claude-launch-account'
-import { fetchProviderAccountsSnapshot } from '@/runtime/runtime-provider-accounts-client'
+import { fetchProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { providerAccountMatchesView } from '../provider-accounts/provider-account-visibility'
 import { requestClaudeAccountPrompt } from './claude-account-prompt-state'
 import { claudeAccountPinningUnsupportedReasonInState } from '../settings/repository-claude-account'

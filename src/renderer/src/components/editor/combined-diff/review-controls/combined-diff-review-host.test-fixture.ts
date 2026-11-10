@@ -52,7 +52,7 @@ vi.mock('@/store/index', () => ({
     })
 }))
 vi.mock('@/hooks/use-document-dark-theme', () => ({ useDocumentDarkTheme: () => false }))
-vi.mock('@/lib/monaco-setup', async () => ({
+vi.mock('@/lib/editor/monaco/monaco-setup', async () => ({
   monaco: await import('monaco-editor/esm/vs/editor/editor.api.js')
 }))
 vi.mock('../../../diff-comments/useDiffCommentDecorator', () => ({

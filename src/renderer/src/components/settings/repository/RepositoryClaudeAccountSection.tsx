@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { useAppStore } from '../../../store'
 import { claudeAccountsTargetForRepo } from '@/lib/claude-launch-account'
-import { fetchProviderAccountsSnapshot } from '@/runtime/runtime-provider-accounts-client'
+import { fetchProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { providerAccountMatchesView } from '../../provider-accounts/provider-account-visibility'
 import { translate } from '@/i18n/i18n'
 import { searchKeywords } from '../search/settings-search-keywords'

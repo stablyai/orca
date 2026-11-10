@@ -1,5 +1,5 @@
 import process from 'node:process'
-import { setRuntimeTerminalUnavailableCause } from '../runtime/native-terminal-availability'
+import { setRuntimeTerminalUnavailableCause } from '../runtime/terminal/launch/native-terminal-availability'
 import { terminalUnavailableMessage } from '../../shared/runtime-types'
 import {
   checkNodePtyPrecondition,

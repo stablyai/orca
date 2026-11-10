@@ -1,7 +1,7 @@
 import { parseExecutionHostId } from '../../../src/shared/execution-host'
 import type { HostStackRouteTarget } from '../navigation/host-stack-navigation'
 import { mobileSessionRouteTarget } from '../session/mobile-session-route'
-import type { HostCredentialStatus } from '../transport/types'
+import type { HostCredentialStatus } from '../host-catalog/host-profile'
 
 export type NotificationNavigationOptions = {
   knownHostIds?: ReadonlySet<string>

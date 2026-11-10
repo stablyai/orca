@@ -4,7 +4,7 @@ import type { RuntimeClientTarget } from '../../../../../../shared/runtime-clien
 import { toast } from 'sonner'
 import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
 import { basename } from '@/lib/path'
-import { bulkUnstageRuntimeGitPaths } from '@/runtime/runtime-git-working-tree-client'
+import { bulkUnstageRuntimeGitPaths } from '@/runtime/source-control/git/runtime-git-working-tree-client'
 import { translate } from '@/i18n/i18n'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import {
@@ -13,7 +13,7 @@ import {
   type DiscardAllArea
 } from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 import { discardDeletesEntryFile } from './discard-confirmation'
-import { readIpcErrorMessage } from '@/lib/ipc-error'
+import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import {
   dismissSourceControlEntryFailureToast,
   showSourceControlEntryFailureToast

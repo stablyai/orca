@@ -1,7 +1,7 @@
 import type React from 'react'
 import { Check, Monitor, Moon, Sun } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { ChromePreview } from './theme-chrome-preview'
 
@@ -13,6 +13,7 @@ export function ThemeModeTiles({
   value: GlobalSettings['theme']
   onChange: (theme: GlobalSettings['theme']) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const themes: {
     id: GlobalSettings['theme']
     label: string
@@ -21,20 +22,20 @@ export function ThemeModeTiles({
   }[] = [
     {
       id: 'system',
-      label: translate('auto.components.onboarding.ThemeStep.827ea7b4a2', 'System'),
-      hint: translate('components.onboarding.theme.hints.system', 'Match OS'),
+      label: t('auto.components.onboarding.ThemeStep.827ea7b4a2', 'System'),
+      hint: t('components.onboarding.theme.hints.system', 'Match OS'),
       icon: Monitor
     },
     {
       id: 'dark',
-      label: translate('auto.components.onboarding.ThemeStep.fa7b673ea9', 'Dark'),
-      hint: translate('components.onboarding.theme.hints.dark', 'Easy on the eyes'),
+      label: t('auto.components.onboarding.ThemeStep.fa7b673ea9', 'Dark'),
+      hint: t('components.onboarding.theme.hints.dark', 'Easy on the eyes'),
       icon: Moon
     },
     {
       id: 'light',
-      label: translate('auto.components.onboarding.ThemeStep.ad192706e6', 'Light'),
-      hint: translate('components.onboarding.theme.hints.light', 'Bright & crisp'),
+      label: t('auto.components.onboarding.ThemeStep.ad192706e6', 'Light'),
+      hint: t('components.onboarding.theme.hints.light', 'Bright & crisp'),
       icon: Sun
     }
   ]

@@ -1,8 +1,8 @@
 import {
   MANAGED_HOOK_TIMEOUT_SECONDS,
   type HooksConfig
-} from '../../../agent-hooks/installer-utils'
-import { readHooksJson } from '../../../agent-hooks/hooks-json-read'
+} from '../../../agent-hooks/installation/configuration/hook-config-schema'
+import { readHooksJson } from '../../../agent-hooks/installation/configuration/hooks-json-read'
 import {
   readHookTrustEntries,
   type CodexEventLabel,

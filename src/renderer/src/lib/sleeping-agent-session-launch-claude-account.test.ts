@@ -35,9 +35,9 @@ const store = {
 }
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
-vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'darwin' }))
+vi.mock('@/lib/workspace/creation/new-workspace', () => ({ CLIENT_PLATFORM: 'darwin' }))
 vi.mock('sonner', () => ({ toast: { message: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/telemetry', () => ({
+vi.mock('@/diagnostics/telemetry/telemetry', () => ({
   track: vi.fn(),
   tuiAgentToAgentKind: (agent: string) => agent
 }))

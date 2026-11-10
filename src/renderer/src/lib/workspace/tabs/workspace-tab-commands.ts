@@ -1,7 +1,10 @@
 import type { KeybindingContext } from '../../../../../shared/keybindings/types'
 import { toVisibleTabType, type Tab } from '../../../../../shared/tab-types'
 import { useAppStore } from '@/store/index'
-import { guardPinnedTabClose, resolvePinnedTabLabel } from '@/store/pinned-tab-close-guard'
+import {
+  guardPinnedTabClose,
+  resolvePinnedTabLabel
+} from '@/store/slices/tabs/closing/pinned-tab-close-guard'
 import { createWorkspaceTabCloseCommands } from '@/components/tab-group/workspace-tab-close-commands'
 import { captureWorkspaceEmptiedReaction } from '@/components/tab-group/workspace-emptied-reaction'
 import {
@@ -10,13 +13,14 @@ import {
   handleSwitchTabAcrossAllTypes,
   handleSwitchTerminalTab
 } from '@/hooks/ipc-tab-switch'
-import { selectEmptyFloatingWorkspacePanelVisible } from '@/store/floating-workspace-panel-selector'
+import { selectEmptyFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
+import { findFocusedSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 import {
   isFloatingWorkspacePanelFocused,
   switchFloatingWorkspaceRecentTab,
   switchFloatingWorkspaceTab
-} from '../../floating-workspace-terminal-actions'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '../../floating-terminal'
+} from '../../../components/floating-terminal/floating-workspace-terminal-actions'
+import { TOGGLE_FLOATING_TERMINAL_EVENT } from '../../../components/floating-terminal/floating-terminal'
 import { closeWorkspaceBrowserTab } from '../../browser/workspace/workspace-browser-tab-close'
 import { resolveBrowserWorkspaceOwner } from '../../browser/workspace/browser-workspace-source-resolution'
 
@@ -33,8 +37,13 @@ export type WorkspaceTabCommand =
       bulk?: boolean
       floatingPanelGuestOwned?: boolean
     }
-  | { type: 'switch'; direction: number; scope: 'same-type' | 'all-types' | 'terminal' }
-  | { type: 'previous-recent' }
+  | {
+      type: 'switch'
+      direction: number
+      scope: 'same-type' | 'all-types' | 'terminal'
+      floatingPanelOwned?: boolean
+    }
+  | { type: 'previous-recent'; floatingPanelOwned?: boolean }
 
 type TabState = ReturnType<typeof useAppStore.getState>
 
@@ -103,6 +112,21 @@ function resolveCloseTarget(
   return null
 }
 
+// A split landing has no tab to close, so Close collapses the pane.
+function closeFocusedSplitLanding(state: TabState): boolean {
+  const group = findFocusedSplitLandingGroup(state, state.activeWorktreeId)
+  if (group === null) {
+    return false
+  }
+  // Closing a sole chooser empties the workspace, which then lands like a last-tab close.
+  const whenEmptied = captureWorkspaceEmptiedReaction(group.worktreeId)
+  if (!state.closeEmptyGroup(group.worktreeId, group.id)) {
+    return false
+  }
+  whenEmptied()
+  return true
+}
+
 /** Input adapters describe intent; targeting and tab operations live here. */
 export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boolean {
   const state = useAppStore.getState()
@@ -114,6 +138,9 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
       }
       if (isFloatingWorkspacePanelFocused()) {
         return false
+      }
+      if (closeFocusedSplitLanding(state)) {
+        return true
       }
     }
     const target = resolveCloseTarget(state, command.target)
@@ -168,12 +195,12 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
     return true
   }
   if (command.type === 'previous-recent') {
-    if (isFloatingWorkspacePanelFocused()) {
+    if (command.floatingPanelOwned || isFloatingWorkspacePanelFocused()) {
       return switchFloatingWorkspaceRecentTab(state)
     }
     return handleSwitchRecentTab()
   }
-  if (isFloatingWorkspacePanelFocused()) {
+  if (command.floatingPanelOwned || isFloatingWorkspacePanelFocused()) {
     switchFloatingWorkspaceTab(state, command.direction, command.scope)
     return true
   }

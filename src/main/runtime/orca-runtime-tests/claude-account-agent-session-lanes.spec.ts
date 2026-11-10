@@ -5,7 +5,7 @@ import { TEST_WORKTREE_ID, store } from './orca-runtime-test-fixtures.spec'
 import { ACTIVE_CLAUDE_ACCOUNT } from '../../../shared/claude/project-claude-account-preference'
 import { resolveRuntimeSpawnClaudeAccount } from '../../ipc/pty/runtime/spawn-claude-account'
 import type { RuntimePtySpawnState } from '../../ipc/pty/runtime/spawn-state'
-import type { RuntimePtyController } from '../runtime-pty-controller-contract'
+import type { RuntimePtyController } from '../terminal/lifecycle/runtime-pty-controller-contract'
 
 type PtySpawnOptions = Parameters<NonNullable<RuntimePtyController['spawn']>>[0]
 

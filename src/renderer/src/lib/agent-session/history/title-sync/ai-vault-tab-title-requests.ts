@@ -12,10 +12,12 @@ import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-p
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
-import type { AgentPaneConversationIdentity } from '@/store/slices/agent-pane-conversation'
-import { collectLeafIdsInOrder } from '../../../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
-import { getIndexedRepoMap, getIndexedWorktreeMap } from '@/store/worktree-repo-index'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import type { AgentPaneConversationIdentity } from '@/store/slices/agent-status/agent-pane-conversation'
+import '../../../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../../../../shared/workspace-layout/terminal-pane-tree'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
+import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type AgentPaneConversation<Agent extends AgentType> = {
   agent: Agent
@@ -177,7 +179,7 @@ export function collectAgentPaneConversations<Agent extends AgentType>(
       tabsById.set(tab.id, {
         ...tab,
         worktreeId,
-        ...(root ? { leafIds: new Set(collectLeafIdsInOrder(root)) } : {})
+        ...(root ? { leafIds: new Set(collectLayoutLeafIdsInOrder(root)) } : {})
       })
     }
   }

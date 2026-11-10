@@ -13,8 +13,10 @@ import {
   type NativeChatTextRevealFrames
 } from '../../../../../src/shared/native-chat/transcript/native-chat-text-reveal'
 import { MobileNativeChatReplyRevealsContext } from './mobile-native-chat-reply-reveals'
-import { MobileNativeChatGrowthHoldContext } from '../../mobile-native-chat-growth-hold'
+import { MobileNativeChatGrowthHoldContext } from './mobile-native-chat-growth-hold'
 
+/** Phones spread each arrival over less time than desktop, so new words show sooner. */
+const REVEAL_MS = 180
 /** Each reveal step parses and draws the reply again, so phones step at most 30 times a second. */
 const REVEAL_STEP_MS = 1000 / 30
 /** Half a 60 Hz frame, so a step lands on every second frame there and every fourth at 120 Hz. */
@@ -66,14 +68,22 @@ export function useMobileNativeChatPacedText(
       streaming,
       list?.drawn.get(rowKey),
       list?.begun.has(rowKey) === true,
-      FRAMES.now()
+      FRAMES.now(),
+      REVEAL_MS
     )
   )
   const pace = useRef(initial)
   const [shown, setShown] = useState(initial.shown)
 
   useLayoutEffect(() => {
-    pace.current = receiveNativeChatText(pace.current, text, streaming, immediate, FRAMES.now())
+    pace.current = receiveNativeChatText(
+      pace.current,
+      text,
+      streaming,
+      immediate,
+      FRAMES.now(),
+      REVEAL_MS
+    )
     setShown(pace.current.shown)
     list?.drawn.set(rowKey, pace.current)
     list?.begun.delete(rowKey)
@@ -98,7 +108,8 @@ export function useMobileNativeChatPacedText(
         list?.drawn.set(rowKey, next)
         setShown(next.shown)
       },
-      FRAMES
+      FRAMES,
+      REVEAL_MS
     )
   }, [behind, text, list, rowKey, streaming, held])
 

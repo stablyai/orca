@@ -11,6 +11,8 @@ import {
 } from './worker-topology'
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
+import { replaceDispatchCapabilities } from '../../../../orchestration/terminal-authority/views/worker-terminal-redaction'
+import { redactString } from '../../../../../observability/redactor'
 
 type WorkerStartFailureArgs = {
   runtime: OrcaRuntimeService
@@ -76,10 +78,15 @@ export async function failWorkerStartWithReceipt(args: WorkerStartFailureArgs): 
 }
 
 function failedWorkerStartReceipt(args: WorkerStartFailureArgs): unknown {
-  // Why strip: only the renderer's PTY spawn path reads the marker; worker-show and --full print this.
+  // A launch's printed output can echo its injected capability or other secrets; the receipt must never carry them.
+  // The pinned-launch marker is stripped too: only the renderer's PTY spawn path reads it.
   const reason = stripClaudePinnedLaunchMarker(
-    formatTerminalStartFailure(args.error) ??
-      (args.error instanceof Error ? args.error.message : String(args.error))
+    redactString(
+      replaceDispatchCapabilities(
+        formatTerminalStartFailure(args.error) ??
+          (args.error instanceof Error ? args.error.message : String(args.error))
+      ).value
+    )
   )
   const unknown = isUnknownWorkerStartOutcome(args.error, args.failedStage)
   const worker = unknown

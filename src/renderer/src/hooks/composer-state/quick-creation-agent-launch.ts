@@ -1,6 +1,9 @@
 import type { AgentLaunchRouteArgs } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import type { AgentLaunchRoute } from '@/lib/agent-session/launch/routing/agent-launch-routing'
-import { launchChoiceSurface, type AgentLaunchChoice } from '@/lib/agent-menu-selection'
+import {
+  launchChoiceSurface,
+  type AgentLaunchChoice
+} from '@/lib/agent-session/launch/routing/agent-menu-selection'
 import { resolveAgentSessionLaunchRoute } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { findLaunchRepo, resolveLaunchClaudeAccountId } from '@/lib/claude-launch-account'
 import { chooseClaudeLaunchAccountIdForRepo } from '@/components/claude-account-prompt/choose-claude-launch-account'

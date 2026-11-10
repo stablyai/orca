@@ -7,7 +7,7 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { openExternalLink } from '../../platform/external-link'
 import { useKeyboardOcclusion } from '../../platform/keyboard-occlusion'
-import { isResolvableComment } from '../../session/pr-comment-actions'
+import { isResolvableComment } from '../../source-control/review/pr-comment-actions'
 import { MobileStateView } from '../MobileStateView'
 import { PrMarkdown } from './PrMarkdown'
 import { PRCommentComposer } from './PRCommentComposer'
@@ -114,6 +114,7 @@ export function PrThreadScreen({
               placeholder={t('pullRequest.screens.replyPlaceholder', 'Reply…')}
               submitLabel={t('pullRequest.commentCard.reply', 'Reply')}
               submitting={actions.isReplyBusy(root.id)}
+              draftKey={actions.draftKey(root.id)}
               onSubmit={(body) => actions.reply(root, body)}
               autoFocus={focusReply}
               inline

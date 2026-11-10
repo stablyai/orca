@@ -9,7 +9,7 @@ import type { AppState } from '@/store/types'
 import { DEFAULT_AGENT_HIBERNATION_IDLE_MS } from './agent-hibernation-planner'
 import { resetAgentHibernationCoordinatorForTests } from './agent-hibernation-coordinator'
 import { hydrateDrivers } from '../../pane-manager/mobile-driver-state'
-import { resetForegroundTerminalTabIdsForTests } from '../../foreground-terminal-tabs'
+import { resetForegroundTerminalTabIdsForTests } from '../../../components/terminal-pane/parking/retention/foreground-terminal-tabs'
 import { resetAgentHibernationOutputActivityForTests } from './agent-hibernation-output-activity'
 import {
   observeHibernationPtyBindings,
@@ -18,8 +18,8 @@ import {
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
-} from '../../../runtime/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '../../../runtime/runtime-rpc-client'
+} from '../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../../runtime/rpc/compatibility/runtime-compatibility-cache'
 import type { RuntimeTerminalAttention } from '../../../../../shared/runtime-terminal-contracts'
 
 export const NOW = 10_000_000

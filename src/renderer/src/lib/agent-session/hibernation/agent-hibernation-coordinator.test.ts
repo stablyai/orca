@@ -11,9 +11,9 @@ import { setDriverForPty } from '../../pane-manager/mobile-driver-state'
 import {
   registerVisibleTerminalTab,
   setForegroundTerminalTabIds
-} from '../../foreground-terminal-tabs'
+} from '../../../components/terminal-pane/parking/retention/foreground-terminal-tabs'
 import { recordAgentHibernationPaneOutput } from './agent-hibernation-output-activity'
-import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../../runtime/runtime-compatibility-test-fixture'
+import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import {
   deferred,
   entry,

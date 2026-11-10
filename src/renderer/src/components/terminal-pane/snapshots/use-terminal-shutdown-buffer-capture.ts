@@ -3,9 +3,9 @@ import { useAppStore } from '../../../store'
 import {
   shutdownBufferCaptures,
   type ShutdownBufferCaptureOptions
-} from '../shutdown-buffer-captures'
+} from './shutdown-buffer-captures'
 import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
-import { resolveLeafScrollbackBuffers } from '../leaf-scrollback-resolution'
+import { resolveLeafScrollbackBuffers } from './leaf-scrollback-resolution'
 import { shouldPreserveTerminalScrollbackBuffers } from '../../../../../shared/workspace-session/workspace-session-terminal-buffers'
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
 

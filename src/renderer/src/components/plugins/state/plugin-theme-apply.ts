@@ -3,7 +3,7 @@ import type { GlobalSettings } from '../../../../../shared/global-settings-types
 import type { PluginThemeRegistration } from '../../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import type { PluginTerminalThemeRegistration } from '../../../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
 import { translate } from '@/i18n/i18n'
-import { resolveDocumentTheme } from '@/lib/document-theme'
+import { resolveDocumentTheme } from '@/app-shell/appearance/document-theme'
 import { pluginAppThemeSlotUpdate } from '../../../../../shared/plugin-theme-settings'
 import {
   hasTerminalColorOverrides,
@@ -17,8 +17,11 @@ import {
 } from '../presentation/plugin-name-disambiguation'
 import { useAppStore } from '@/store'
 import { PLUGIN_ACTION_TOAST_DURATION_MS } from './plugin-action-toast'
-import { usePluginIconThemeStore } from '@/store/plugin-icon-themes'
-import { usePluginThemeStore, usePluginTerminalThemeStore } from '@/store/plugin-themes'
+import { usePluginIconThemeStore } from '@/store/plugins/appearance/plugin-icon-themes'
+import {
+  usePluginThemeStore,
+  usePluginTerminalThemeStore
+} from '@/store/plugins/appearance/plugin-themes'
 
 export function isPluginAppThemeSelected(
   settings: Pick<GlobalSettings, 'pluginAppThemeDark' | 'pluginAppThemeLight'>,

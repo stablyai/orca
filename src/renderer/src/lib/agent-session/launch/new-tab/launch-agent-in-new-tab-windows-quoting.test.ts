@@ -94,25 +94,24 @@ vi.mock('@/components/tab-bar/reconcile-order', () => ({
   )
 }))
 
-vi.mock('@/lib/agent-paste-draft', () => ({
+vi.mock('@/lib/agent-session/messaging/paste/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: mockPasteDraftWhenAgentReady
 }))
 
-vi.mock('@/lib/telemetry', () => ({
-  track: vi.fn(),
-  tuiAgentToAgentKind: mockLaunchAgentKind
-}))
+vi.mock('@/diagnostics/telemetry/telemetry', () => ({ track: vi.fn() }))
 const mockLaunchAgentKind = vi.hoisted(() => (agent: string) => agent)
 vi.mock('../../../../../../shared/agent-kind', async (importOriginal) => ({
   ...(await importOriginal<typeof LaunchAgentKindModule>()),
   tuiAgentToAgentKind: mockLaunchAgentKind
 }))
 
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
-  createWebRuntimeSessionTerminal: vi.fn(),
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
+  createWebRuntimeSessionTerminal: vi.fn()
+}))
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-created-agent-prompt-delivery', () => ({
   deliverCreatedWebRuntimeAgentSessionPrompt: vi.fn(async () => true)
 }))
-vi.mock('@/runtime/web-runtime-session-environment', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive
 }))
 vi.mock('../../../../../../shared/workspace-layout/terminal-surface-id', () => ({

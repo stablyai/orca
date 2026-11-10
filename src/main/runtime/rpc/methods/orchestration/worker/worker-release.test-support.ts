@@ -8,7 +8,7 @@ import '../../../../orchestration/db/dispatch-row-writer'
 import '../../../../orchestration/db/attempt-outcome-projection'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import type { RuntimeStore } from '../../../../runtime-store-contract'
+import type { RuntimeStore } from '../../../../construction/runtime-store-contract'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import {
   getAppEnvironment,

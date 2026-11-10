@@ -63,6 +63,15 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
   '--split-divider': 'Divider between split tab groups',
   '--split-divider-hover': 'Split divider while hovered or dragged',
   '--chat-user-message': 'Your messages in chat; may be translucent, it paints over the chat',
+  '--chat-bold-foreground': 'Bold text in chat messages',
+  '--chat-muted-foreground':
+    'Secondary chat text: tool rows, status lines, timestamps and hunk headers',
+  '--chat-inline-code': 'Inline code in chat; may be translucent, it paints over the chat',
+  '--chat-inline-code-foreground': 'Inline code text in chat',
+  '--chat-code-block':
+    'Code blocks, tool output and diffs in chat; may be translucent, it paints over the chat',
+  '--chat-selection': 'Selected text in chat; may be translucent, it paints over the chat',
+  '--chat-selection-foreground': 'Text inside a chat selection',
   '--text-link': 'Links in Markdown previews, editors and agent chat',
   '--diff-added': 'Added-line hue: Monaco overview ruler and chat diff text',
   '--diff-added-background': 'Added lines in diffs',
@@ -81,15 +90,27 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
   '--git-decoration-ignored': 'Git-ignored files'
 }
 
-// Why: these mix per mode in main.css, which the derivation rules cannot express.
-const MODE_MIXES: Partial<Record<PluginAppThemeToken, string>> = {
+// Why: these mix per mode in main.css, or from chat-internal colors that authors cannot set.
+const OMITTED_DESCRIPTIONS: Partial<Record<PluginAppThemeToken, string>> = {
   '--worktree-sidebar-active-border': 'a mix of `--worktree-sidebar-border`',
-  '--chat-user-message': '`--foreground` mixed lightly into the chat background'
+  '--chat-user-message': '`--foreground` mixed lightly into the chat background',
+  '--chat-bold-foreground': 'the color of chat headings',
+  '--chat-muted-foreground': '`--muted-foreground` as chat paints it',
+  '--chat-inline-code': '`--foreground` mixed lightly into the chat background',
+  '--chat-inline-code-foreground': '`--foreground` mixed 85% into the chat background',
+  '--chat-code-block': '`--foreground` mixed lightly into the chat background',
+  '--chat-selection':
+    "`--text-link` (else Orca's link blue) mixed into the chat background, up to 30% light and 40% dark, as deep as keeps selected text 4.5:1 (never under 15%)",
+  '--chat-selection-foreground': 'same as `--foreground`'
 }
 
 /** What an omitted token becomes, read back from the real derivation with every other token
  *  standing in as `var(<name>)`, so the table cannot drift from what Orca applies. */
 function omittedValueFor(token: PluginAppThemeToken, base: 'light' | 'dark'): string {
+  const described = OMITTED_DESCRIPTIONS[token]
+  if (described) {
+    return described
+  }
   const others = Object.fromEntries(
     PLUGIN_APP_THEME_TOKENS.filter((other) => other !== token).map((other) => [
       other,
@@ -106,7 +127,7 @@ function omittedValueFor(token: PluginAppThemeToken, base: 'light' | 'dark'): st
       : `var(${cssFallback[0]})`
     : completePluginAppThemeTokens(others)[token]
   if (derived === undefined) {
-    return MODE_MIXES[token] ?? "Orca's built-in color"
+    return "Orca's built-in color"
   }
   const mix = /^color-mix\(in srgb, var\((--[\w-]+)\) (\d+)%, var\((--[\w-]+)\)\)$/.exec(derived)
   if (mix) {

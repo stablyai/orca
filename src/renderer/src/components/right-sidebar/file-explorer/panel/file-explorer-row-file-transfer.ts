@@ -1,9 +1,9 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
-import { downloadRuntimeFile } from '@/runtime/runtime-file-read-client'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
+import { downloadRuntimeFile } from '@/runtime/files/reads/runtime-file-read-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { TreeNode } from '../tree/file-explorer-types'
 import { shouldShowCopyFileAction } from './file-explorer-row-action-visibility'
 

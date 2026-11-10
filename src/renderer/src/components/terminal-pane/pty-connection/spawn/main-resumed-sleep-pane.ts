@@ -1,8 +1,8 @@
 // A slept workspace's pane: main resumes its agent, and this window only attaches to that terminal.
 
 import { useAppStore } from '@/store/index'
-import { hasWorktreeTeardownStarted } from '@/store/slices/worktree-delete-state-types'
-import { readTerminalSpawnDeferral } from '../../../../../../shared/host-spawn-admission'
+import { hasWorktreeTeardownStarted } from '@/store/slices/worktrees/teardown/worktree-delete-state-types'
+import { readTerminalSpawnDeferral } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { releaseDeferredCwdFence } from './fresh-spawn-start'
 import { findTerminalTabForPane } from '../terminal-tab-id'
 import { isHostMirroredSleepingRecord } from '@/lib/agent-session/resume/host-mirrored-pane-liveness'
@@ -11,7 +11,7 @@ import {
   isWorkspaceSleepRecord,
   WORKTREE_TERMINALS_SLEEPING_ERROR
 } from '../../../../../../shared/workspace-sleep'
-import { readIpcErrorDetail } from '@/lib/ipc-error'
+import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 import type { ColdRestoreAgentResumeStartup, FreshSpawnOptions } from '../startup/fresh-spawn-types'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 

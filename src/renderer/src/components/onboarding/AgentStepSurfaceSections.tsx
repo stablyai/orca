@@ -3,20 +3,24 @@ import { Trans } from 'react-i18next'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { cn } from '@/lib/class-names'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { i18n, translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { AgentSurface } from './use-onboarding-flow-types'
 import { TerminalLaunchDemo } from './TerminalLaunchDemo'
 
 const emphasis = { em: <span className="font-medium text-foreground" /> }
 
 /** Terminal mode marks which agents could also open in Chat UI. */
-export function chatAvailableDetail(opensAsChat: boolean): React.ReactNode {
+export function chatAvailableDetail(
+  opensAsChat: boolean,
+  t: Translate = translate
+): React.ReactNode {
   return opensAsChat ? (
     <>
       <MessagesSquare />
-      {translate('components.onboarding.agentStep.chatAvailable', 'Chat available')}
+      {t('components.onboarding.agentStep.chatAvailable', 'Chat available')}
     </>
   ) : undefined
 }
@@ -25,15 +29,16 @@ const surfacePillClass =
   'inline-flex h-6 items-center gap-1.5 rounded-full border px-2.5 font-medium text-foreground'
 
 function AgentSurfaceLabel({ surface }: { surface: AgentSurface }) {
+  const t = useTranslate()
   return surface === 'chat' ? (
     <>
       <MessagesSquare className="size-3.5" />
-      {translate('components.onboarding.agentSurface.chat.label', 'Chat UI')}
+      {t('components.onboarding.agentSurface.chat.label', 'Chat UI')}
     </>
   ) : (
     <>
       <SquareTerminal className="size-3.5" />
-      {translate('components.onboarding.agentStep.terminalUi', 'Terminal UI')}
+      {t('components.onboarding.agentStep.terminalUi', 'Terminal UI')}
     </>
   )
 }
@@ -46,7 +51,8 @@ export function AgentSurfaceModeRow({
   surface: AgentSurface
   onChange?: (surface: AgentSurface) => void
 }) {
-  const label = translate('components.onboarding.agentStep.agentsOpenIn', 'Agents open in')
+  const t = useTranslate()
+  const label = t('components.onboarding.agentStep.agentsOpenIn', 'Agents open in')
   if (!onChange) {
     return (
       <div className="flex shrink-0 items-center gap-2.5 text-xs text-muted-foreground">
@@ -118,12 +124,13 @@ export function NoChatAgentsNotice({
   chatAgentLabels: readonly string[]
   onUseTerminal: () => void
 }) {
+  const t = useTranslate()
   if (!anyDetected) {
     return (
       <AgentStepNotice>
         <Trans
           i18n={i18n}
-          defaults={translate(
+          defaults={t(
             'components.onboarding.agentStep.noAgentsForChat',
             '<em>No agents found on your PATH.</em> Chat UI works with {{agents}}. Install one, or continue and add an agent later.',
             {
@@ -138,10 +145,10 @@ export function NoChatAgentsNotice({
     )
   }
   return (
-    <AgentStepNotice tone="warning" actionLabel={terminalInsteadLabel()} onAction={onUseTerminal}>
+    <AgentStepNotice tone="warning" actionLabel={terminalInsteadLabel(t)} onAction={onUseTerminal}>
       <Trans
         i18n={i18n}
-        defaults={translate(
+        defaults={t(
           'components.onboarding.agentStep.noChatAgentsDetected',
           '<em>None of your agents work in Chat UI.</em> They would all open in a terminal, so Terminal fits better.'
         )}
@@ -158,11 +165,12 @@ export function TerminalFitNotice({
   agentLabel: string
   onUseTerminal: () => void
 }) {
+  const t = useTranslate()
   return (
-    <AgentStepNotice tone="warning" actionLabel={terminalInsteadLabel()} onAction={onUseTerminal}>
+    <AgentStepNotice tone="warning" actionLabel={terminalInsteadLabel(t)} onAction={onUseTerminal}>
       <Trans
         i18n={i18n}
-        defaults={translate(
+        defaults={t(
           'components.onboarding.agentStep.opensInTerminalFit',
           '<em>{{agent}} opens in a terminal</em>, so Terminal fits better.',
           { agent: agentLabel }
@@ -173,13 +181,14 @@ export function TerminalFitNotice({
   )
 }
 
-function terminalInsteadLabel(): string {
-  return translate('components.onboarding.agentStep.useTerminalInstead', 'Use Terminal instead')
+function terminalInsteadLabel(t: Translate = translate): string {
+  return t('components.onboarding.agentStep.useTerminalInstead', 'Use Terminal instead')
 }
 
 /** Chat UI users can still start any agent's CLI from the + menu; the hover card shows how. */
 export function ChatModeTerminalTip() {
-  const howLabel = translate(
+  const t = useTranslate()
+  const howLabel = t(
     'components.onboarding.agentStep.terminalTipHow',
     'Show how to start an agent in a terminal'
   )
@@ -191,11 +200,11 @@ export function ChatModeTerminalTip() {
           defaults={
             // The browser client has no Chat UI launch switch; its default lives in the checklist.
             isWebClientLocation()
-              ? translate(
+              ? t(
                   'components.onboarding.agentStep.terminalTipWeb',
                   'Switch back any time in <em>Settings → Onboarding checklist</em>. You can also start any agent in a terminal from the <em>+</em> menu.'
                 )
-              : translate(
+              : t(
                   'components.onboarding.agentStep.terminalTip',
                   'Switch back any time in <em>Settings → Chat UI</em>. You can also start any agent in a terminal from the <em>+</em> menu.'
                 )
@@ -227,7 +236,7 @@ export function ChatModeTerminalTip() {
             <p className="max-w-[300px] text-xs leading-relaxed text-muted-foreground">
               <Trans
                 i18n={i18n}
-                defaults={translate(
+                defaults={t(
                   'components.onboarding.agentStep.terminalTipCaption',
                   "Click <em>+</em> in the tab bar, then pick an agent marked <em>(CLI)</em>. If a chat agent's CLI is installed, hover its row and click the terminal icon to use the CLI."
                 )}
@@ -242,13 +251,14 @@ export function ChatModeTerminalTip() {
 }
 
 export function TerminalModeChatTip({ onUseChat }: { onUseChat: () => void }) {
+  const t = useTranslate()
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
       <MessagesSquare className="size-3.5" />
       <span>
         <Trans
           i18n={i18n}
-          defaults={translate(
+          defaults={t(
             'components.onboarding.agentStep.chatTip',
             'Want chat too? Turn it on any time in <em>Settings → Chat UI</em>.'
           )}
@@ -260,7 +270,7 @@ export function TerminalModeChatTip({ onUseChat }: { onUseChat: () => void }) {
         className="font-medium text-foreground underline underline-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onClick={onUseChat}
       >
-        {translate('components.onboarding.agentStep.turnOnChat', 'Turn on now')}
+        {t('components.onboarding.agentStep.turnOnChat', 'Turn on now')}
       </button>
     </div>
   )

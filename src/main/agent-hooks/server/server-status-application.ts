@@ -1,4 +1,5 @@
 import { deriveCliWriterTopology } from './cli-writer-observation'
+import { leadReplyOf, withAcceptedReply } from './server-accepted-reply'
 import { createHash } from 'node:crypto'
 
 import { getCohortAtEmit } from '../../telemetry/cohort-classifier'
@@ -13,6 +14,7 @@ import type {
 } from '../../../shared/agent-status/contracts/agent-status-observation'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
 import { mainAgentState } from '../../../shared/agent-status/lifecycle/main-agent-status'
+import { previousCodexTurnContext } from '../../../shared/agent-hook-listener/providers/codex-session-start'
 import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-state'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { agentTypeToPromptSentAgentKind } from './server-status-identity'
@@ -32,7 +34,12 @@ function resolveTurnStartedAt(
     payload.toolAgentId === undefined &&
     payload.isReplay !== true &&
     payload.providerSessionOnly !== true &&
-    isNewTurnEvent(payload.source, payload.hookEventName)
+    isNewTurnEvent(payload.source, payload.hookEventName) &&
+    !(
+      payload.source === 'codex' &&
+      payload.hookEventName === 'SessionStart' &&
+      !payload.hasExplicitPrompt
+    )
   ) {
     return payload.payload.sessionBoundary === true ? undefined : at
   }
@@ -126,9 +133,17 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     now = Date.now(),
     observedAt?: number
   ): EnrichedAgentHookEventPayload {
+    // Only live submissions open a new turn; cached starts restate historical context.
+    if (
+      !payload.isReplay &&
+      (payload.hookEventName === 'UserPromptSubmit' || payload.hasExplicitPrompt === true)
+    ) {
+      this.activeHookTurnCompletedAtByPaneKey.delete(payload.paneKey)
+    }
     const previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
+    const previousTurn = previousCodexTurnContext(previous, payload)
     const commandCodeNewTurn =
       previous !== undefined &&
       isCommandCodeNewTurnWhileWorking({
@@ -142,13 +157,13 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
         incomingPromptInteractionKey: payload.promptInteractionKey
       })
     const stateStartedAt =
-      previous && previous.payload.state === payload.payload.state && !commandCodeNewTurn
-        ? previous.stateStartedAt
+      previousTurn && previousTurn.payload.state === payload.payload.state && !commandCodeNewTurn
+        ? previousTurn.stateStartedAt
         : (observedAt ?? now)
-    const turnStartedAt = resolveTurnStartedAt(previous, payload, observedAt ?? now)
+    const turnStartedAt = resolveTurnStartedAt(previousTurn, payload, observedAt ?? now)
     // Relay rows carry their execution host's turn-end evidence.
     const { hostTurn, ...turnEnd } = reduceHostTurnEnd(
-      previous,
+      previousTurn,
       payload,
       observedAt ?? now,
       payload.connectionId === null
@@ -159,18 +174,24 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
       turnEndedAt: _turnEndedAt,
       turnEndDisposition: _turnEndDisposition,
       hostTurn: _hostTurn,
+      replyCandidate: _replyCandidate,
       ...event
     } = payload
-    return {
-      ...event,
-      receivedAt: now,
-      evidenceObservedAt: observedAt ?? this.resolveEvidenceObservedAt(payload, previous, now),
-      stateStartedAt,
-      // Producers cannot declare a main-agent turn start.
-      turnStartedAt,
-      ...turnEnd,
-      ...(hostTurn ? { hostTurn } : {})
-    }
+    return withAcceptedReply(
+      {
+        ...event,
+        receivedAt: now,
+        evidenceObservedAt: observedAt ?? this.resolveEvidenceObservedAt(payload, previous, now),
+        stateStartedAt,
+        // Producers cannot declare a main-agent turn start.
+        turnStartedAt,
+        ...turnEnd,
+        ...(hostTurn ? { hostTurn } : {})
+      },
+      previousTurn,
+      leadReplyOf(payload),
+      !!previousTurn && this.sameTerminalOwner(previousTurn, payload)
+    )
   }
 
   /** Replay keeps evidence age separate from arrival order; unknown age falls back to now. */
