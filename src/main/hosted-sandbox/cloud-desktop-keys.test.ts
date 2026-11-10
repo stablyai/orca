@@ -5,7 +5,6 @@ const environments = new Map<string, { source?: string; endpoints: { endpoint: s
 let launchEnv: Record<string, string> = {}
 const launchCalls: unknown[][] = []
 
-vi.mock('electron', () => ({ app: { getPath: () => '/u' } }))
 vi.mock('../../shared/ephemeral-vm-runtime-store', () => ({
   listEphemeralVmRuntimes: () => runtimes
 }))
@@ -88,7 +87,9 @@ describe('withHostAgentApiKeyEnv', () => {
     runtimes.push({ runtimeEnvironmentId: 'env-cloud', recipe: { provider: 'orca-cloud' } })
     launchEnv = { GEMINI_API_KEY: 'AIzaSy-real' }
     const params = { agent: 'gemini', kind: 'explicit' }
-    const { withHostAgentApiKeyEnv } = await import('./cloud-desktop-keys')
+    const { setCloudDesktopKeysUserDataPath, withHostAgentApiKeyEnv } =
+      await import('./cloud-desktop-keys')
+    setCloudDesktopKeysUserDataPath('/u')
     const readStatus = vi.fn()
     expect(
       await withHostAgentApiKeyEnv('env-cloud', 'terminal.createAgentSession', params, readStatus)

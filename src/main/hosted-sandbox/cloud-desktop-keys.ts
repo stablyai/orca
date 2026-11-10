@@ -2,7 +2,6 @@
 // host those keys ride each agent launch as plain env. An Orca Cloud VM must never hold a model key,
 // so they are not sent there at all: the user saves a key as a personal Cloud secret instead (one key
 // per click), and the VM then gets a placeholder the egress proxy swaps.
-import { app } from 'electron'
 import {
   resolveAgentApiKeyLaunchEnv,
   withAgentApiKeyLaunchEnv
@@ -14,6 +13,13 @@ import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getConnectionExecutionHostId, toRuntimeExecutionHostId } from '../../shared/execution-host'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
+
+// Set once the desktop starts (registerCloudSecretsHandlers); this module stays free of Electron
+// because launch assembly that the headless runtime also loads imports it.
+let desktopUserDataPath: string | null = null
+export function setCloudDesktopKeysUserDataPath(path: string): void {
+  desktopUserDataPath = path
+}
 
 /** Orca Cloud sandboxes answer on Vercel Sandbox routes. */
 const ORCA_CLOUD_ENDPOINT_HOST = /\.vercel\.run$/i
@@ -78,7 +84,11 @@ export async function withHostAgentApiKeyEnv(
   params: unknown,
   readStatus: Parameters<typeof withAgentApiKeyRuntimeEnv>[3]
 ): Promise<unknown> {
-  if (isOrcaCloudRuntimeEnvironment(app.getPath('userData'), environmentId)) {
+  // Without the desktop's records nothing can be ruled out, so no keys go anywhere.
+  if (
+    desktopUserDataPath === null ||
+    isOrcaCloudRuntimeEnvironment(desktopUserDataPath, environmentId)
+  ) {
     return params
   }
   return withAgentApiKeyRuntimeEnv(environmentId, method, params, readStatus)

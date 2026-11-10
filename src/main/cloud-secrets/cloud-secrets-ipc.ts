@@ -20,7 +20,10 @@ import {
   cloudSecretSwapped,
   cloudSecretValueError
 } from '../../shared/cloud-secrets/cloud-secret-rules'
-import { desktopKeyValueForCloud } from '../hosted-sandbox/cloud-desktop-keys'
+import {
+  desktopKeyValueForCloud,
+  setCloudDesktopKeysUserDataPath
+} from '../hosted-sandbox/cloud-desktop-keys'
 import {
   cloudSecretsFailureCode,
   createCloudSecretsClient,
@@ -97,6 +100,7 @@ function sandboxIdFor(userDataPath: string, runtimeEnvironmentId: string): strin
 }
 
 export function registerCloudSecretsHandlers(userDataPath: string): void {
+  setCloudDesktopKeysUserDataPath(userDataPath)
   // Packaged integration builds read no shell env; their control-plane URL is baked in.
   const config = getHostedSandboxConfig(
     userDataPath,
