@@ -66,8 +66,8 @@ vi.mock('./use-usage-history', () => ({
     enable: noop
   })
 }))
-vi.mock('@/lib/agent-catalog', () => ({
-  AgentIcon: () => <span />,
+vi.mock('@/components/agent/icons/AgentIcon', () => ({ AgentIcon: () => <span /> }))
+vi.mock('@/lib/agent-catalog/agent-catalog', () => ({
   getAgentLabel: (agent: string) =>
     ({ claude: 'Claude', codex: 'Codex', opencode: 'OpenCode', muse: 'Muse' })[agent] ?? agent
 }))
