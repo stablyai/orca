@@ -1,5 +1,5 @@
 import { createServer, request, type Server } from 'node:http'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   openClaudePermissionHookChannel,
   type ClaudePermissionHoldEnd
@@ -76,8 +76,7 @@ describe('Claude permission hook channel', () => {
     const held = await holdOne(60_000)
     held.hang()
     await held.reply
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(held.ends).toEqual(['hook-gone'])
+    await vi.waitFor(() => expect(held.ends).toEqual(['hook-gone']))
     expect(await held.channel.answer({ behavior: 'allow' })).toBe(false)
   })
 })
