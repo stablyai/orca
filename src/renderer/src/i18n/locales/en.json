@@ -1063,6 +1063,13 @@
     },
     "followSymlinkedDirectories": "Follow symlinked directories",
     "followSymlinkedDirectoriesDescription": "Search linked folders in Quick Open and expand local linked folders in File Explorer.",
+    "fileExplorerFontSize": "Font Size",
+    "fileExplorerFontSizeDescription": "Text size of File Explorer rows. Leave empty for the default.",
+    "fileExplorerFontSizeKeywords": {
+      "font": "font",
+      "textSize": "text size",
+      "fileExplorer": "file explorer"
+    },
     "accounts": {
       "claudeRemoveFolder": "Orca deletes this account's Claude folder and its sign-in from this computer. Chat history shared with System default stays. If it is selected, the next Claude you start uses System default."
     },
