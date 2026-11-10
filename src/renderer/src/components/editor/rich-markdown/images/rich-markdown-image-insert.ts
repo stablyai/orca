@@ -1,13 +1,13 @@
 import type { Editor } from '@tiptap/react'
 import { toast } from 'sonner'
 import { dirname, basename } from '@/lib/path'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { useAppStore } from '@/store/index'
 import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
 import {
   acquireEditorFileOperation,
   getEditorFileOperationContext
-} from '@/lib/editor-file-operation-owner'
+} from '@/lib/editor/file-operations/editor-file-operation-owner'
 import { editorTabDocumentFolderAccess } from '@/lib/local-file-access'
 import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'

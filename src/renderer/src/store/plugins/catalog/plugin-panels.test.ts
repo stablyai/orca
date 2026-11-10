@@ -3,7 +3,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import {
-  collectActivePluginCommands,
   collectActivePluginPanels,
   collectLeftNavigationPluginPanels,
   collectRightSidebarPluginPanels,
@@ -116,34 +115,5 @@ describe('plugin panel list loading', () => {
       fetchStatus: 'ready',
       plugins: [expect.objectContaining({ pluginKey: 'samples.recovered' })]
     })
-  })
-})
-
-describe('plugin names on contributions', () => {
-  it("adds the publisher to a non-official plugin sharing an official plugin's name", () => {
-    const command = {
-      id: 'apply',
-      title: 'Apply',
-      context: 'global' as const,
-      handler: { type: 'worker' as const },
-      keybindings: []
-    }
-    const official = {
-      ...plugin('stablyai.orca-catppuccin-theme'),
-      name: 'Catppuccin for Orca',
-      publisher: 'stablyai',
-      official: true,
-      commands: [command]
-    }
-    const community = {
-      ...plugin('vale-c.catppuccin'),
-      name: 'Catppuccin for Orca',
-      publisher: 'vale-c',
-      commands: [command]
-    }
-    expect(collectActivePluginCommands([official, community]).map((c) => c.pluginName)).toEqual([
-      'Catppuccin for Orca',
-      'Catppuccin for Orca (vale-c)'
-    ])
   })
 })

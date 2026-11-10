@@ -3,15 +3,51 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { compactIpcErrorMessage } from '@/lib/ipc-error'
 import { hostDictationErrorMessage } from '../../../../shared/host-dictation-error-messages'
+import { SPEECH_MODEL_NEEDS_UPDATE_ERROR } from '../../../../shared/speech-model-retirement'
+
+export function openVoiceSettings(): void {
+  useAppStore.getState().openSettingsTarget({ pane: 'voice', repoId: null })
+  useAppStore.getState().openSettingsPage()
+}
 
 function openVoiceSettingsAction(): { label: string; onClick: () => void } {
   return {
     label: translate('auto.components.dictation.DictationController.bb7f599ee7', 'Open Settings'),
-    onClick: () => {
-      useAppStore.getState().openSettingsTarget({ pane: 'voice', repoId: null })
-      useAppStore.getState().openSettingsPage()
-    }
+    onClick: openVoiceSettings
   }
+}
+
+type DictationStartError = 'host' | 'microphone' | 'model-not-ready' | 'unknown-model' | 'other'
+
+function classifyDictationStartError(message: string): {
+  kind: DictationStartError
+  detail: string
+} {
+  // A paired web client rejects with the host's bare code, which String(error) prefixes with "Error: ".
+  const detail = compactIpcErrorMessage(message)?.replace(/^Error:\s*/, '') ?? ''
+  const kind: DictationStartError = hostDictationErrorMessage(detail)
+    ? 'host'
+    : message.includes('Permission') || message.includes('NotAllowed')
+      ? 'microphone'
+      : message.includes('not ready') || detail.startsWith('voice_model_not_ready')
+        ? 'model-not-ready'
+        : message.includes('Unknown model')
+          ? 'unknown-model'
+          : 'other'
+  return { kind, detail }
+}
+
+/** `settings` failures offer Open settings beside Retry. */
+export type DictationFailureKind = 'settings' | 'transcribe'
+
+/** A start that failed after recording began is a model that couldn't load; null keeps the toast. */
+export function dictationStartFailureKind(message: string): DictationFailureKind | null {
+  const { kind } = classifyDictationStartError(message)
+  // Main's macOS mic check fails before any audio could be transcribed.
+  if (kind === 'host' || kind === 'microphone' || message.includes('Microphone access')) {
+    return null
+  }
+  return 'settings'
 }
 
 export function showDictationNoModelToast(): void {
@@ -54,6 +90,33 @@ export function showCloudLimitToast(): void {
   )
 }
 
+export function showRetryOverlapUnmatchedToast(): void {
+  toast.message(
+    translate(
+      'auto.components.dictation.DictationController.retryUnmatched',
+      "Retry couldn't tell which words were already typed, so it inserted them all."
+    )
+  )
+}
+
+export function showNoSpeechDetectedToast(): void {
+  toast.message(
+    translate('auto.components.dictation.DictationController.5d2c3e7ae3', 'No speech detected.')
+  )
+}
+
+export function showSpeechErrorToast(error: string): void {
+  toast.error(
+    translate(
+      'auto.components.dictation.DictationController.de136f1199',
+      'Speech error: {{value0}}',
+      {
+        value0: error
+      }
+    )
+  )
+}
+
 export function showMicrophoneDisconnectedToast(): void {
   toast.message(
     translate(
@@ -64,19 +127,26 @@ export function showMicrophoneDisconnectedToast(): void {
 }
 
 export function showDictationStartErrorToast(message: string): void {
-  // A paired web client rejects with the host's bare code, which String(error) prefixes with "Error: ".
-  const detail = compactIpcErrorMessage(message)?.replace(/^Error:\s*/, '') ?? ''
+  const { kind, detail } = classifyDictationStartError(message)
   const hostMessage = hostDictationErrorMessage(detail)
   if (hostMessage) {
     toast.error(hostMessage)
-  } else if (message.includes('Permission') || message.includes('NotAllowed')) {
+  } else if (kind === 'microphone') {
     toast.error(
       translate(
         'auto.components.dictation.DictationController.2d5b9fabf9',
         'Microphone access denied. Grant access in system settings, then restart Orca.'
       )
     )
-  } else if (message.includes('not ready') || detail.startsWith('voice_model_not_ready')) {
+  } else if (message.includes(SPEECH_MODEL_NEEDS_UPDATE_ERROR)) {
+    toast(
+      translate(
+        'auto.components.dictation.DictationController.modelNeedsUpdate',
+        'Your speech model needs an update to keep working. Update it to the faster version in Settings > Voice.'
+      ),
+      { action: openVoiceSettingsAction() }
+    )
+  } else if (kind === 'model-not-ready') {
     toast(
       translate(
         'auto.components.dictation.DictationController.notReady',
@@ -84,7 +154,7 @@ export function showDictationStartErrorToast(message: string): void {
       ),
       { action: openVoiceSettingsAction() }
     )
-  } else if (message.includes('Unknown model')) {
+  } else if (kind === 'unknown-model') {
     toast(
       translate(
         'auto.components.dictation.DictationController.unknownModel',

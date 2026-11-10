@@ -23,6 +23,8 @@ export function buildComposerCardProps(state: ComposerModel) {
       : undefined
   const {
     advancedOpen,
+    setupChoiceRevealRequest,
+    clearSetupChoiceReveal,
     agentPrompt,
     attachmentPaths,
     baseBranch,
@@ -136,8 +138,6 @@ export function buildComposerCardProps(state: ComposerModel) {
     workspaceSeedName,
     creating,
     sourceIntentBlocksCreate,
-    requiresExplicitSetupChoice,
-    hasSetupDecision: Boolean(setupDecision),
     selectedRepoRequiresConnection,
     selectedTargetNeedsVisibleHost,
     sparseError
@@ -239,6 +239,8 @@ export function buildComposerCardProps(state: ComposerModel) {
     agentRows: resolveComposerAgentRows(state),
     onOpenAgentSettings: handleOpenAgentSettings,
     advancedOpen,
+    setupChoiceRevealRequest,
+    onSetupChoiceRevealed: clearSetupChoiceReveal,
     onToggleAdvanced: () => setAdvancedOpen((current) => !current),
     createDisabled,
     projectError: isProjectGroupTarget ? pathStatusProjectError : projectError,

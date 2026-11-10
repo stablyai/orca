@@ -1,5 +1,6 @@
 import type { AgentHookSource } from './transport/agent-hook-relay'
 import { readAgentEffortLevel } from '../agent-launch/choices/agent-effort-level'
+import { readClaudePermissionMode } from '../agent-session/lifecycle/provider-session-live-settings'
 import {
   extractAgentProviderSession,
   readPathFromKeys,
@@ -96,10 +97,12 @@ function readPaneProviderSession(
   )
   const cwd = readAgentCwd(source, hookPayload, continued)
   const effort = readClaudeEffort(source, hookPayload, continued)
+  const permissionMode = readClaudeLivePermissionMode(source, hookPayload, continued)
   return {
     ...providerSession,
     ...(cwd ? { cwd } : {}),
-    ...(effort ? { effort } : {})
+    ...(effort ? { effort } : {}),
+    ...(permissionMode ? { permissionMode } : {})
   }
 }
 
@@ -165,6 +168,26 @@ function readClaudeEffort(
       ? readAgentEffortLevel(effort.level)
       : undefined
   return reported ?? continued?.effort
+}
+
+/** Claude names its permission mode on prompt, tool and Stop hooks, not SessionStart, so later events of one process keep the last one. */
+function readClaudeLivePermissionMode(
+  source: AgentHookSource,
+  hookPayload: Record<string, unknown>,
+  continued: AgentProviderSessionMetadata | undefined
+): string | undefined {
+  if (source !== 'claude') {
+    return undefined
+  }
+  // Why skip subagents: their hooks name the parent session but report the subagent's own mode.
+  const reported = readString(hookPayload, 'agent_id')
+    ? undefined
+    : readClaudePermissionMode(hookPayload.permission_mode)
+  // A fresh process may run with other flags than the last one on this conversation.
+  const freshStart =
+    hookPayload.hook_event_name === 'SessionStart' &&
+    (hookPayload.source === 'startup' || hookPayload.source === 'resume')
+  return reported ?? (freshStart ? undefined : continued?.permissionMode)
 }
 
 /** A status correlation may reuse an established owner without publishing a new restore locator. */

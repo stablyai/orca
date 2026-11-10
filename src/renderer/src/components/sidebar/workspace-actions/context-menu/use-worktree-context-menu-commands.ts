@@ -16,8 +16,8 @@ import { runSleepWorktrees } from '../sleep/sleep-worktree-flow'
 import { collectTwinHostsAlsoSlept } from '../sleep/sleep-twin-confirmation'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
-import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
-import { getWorktreeRowLocalPathOpenOwner } from '@/lib/worktree-row-open-in-owner'
+import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
+import { getWorktreeRowLocalPathOpenOwner } from '@/lib/workspace/ownership/worktree-row-open-in-owner'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import {
   canCreateChildWorktree,
@@ -196,6 +196,14 @@ export function useWorktreeContextMenuCommands(args: {
   const handleSleepSubtree = useCallback(() => {
     sleepWorktreesAfterMenuClose(args.subtreeSleepableWorktrees)
   }, [args.subtreeSleepableWorktrees, sleepWorktreesAfterMenuClose])
+  // Suspend VM with active descendants: this workspace sleeps too, even idle, so its VM suspends
+  // once every child session on it has stopped.
+  const handleSleepSubtreeWithVm = useCallback(() => {
+    sleepWorktreesAfterMenuClose([
+      args.worktree,
+      ...args.subtreeSleepableWorktrees.filter((target) => target.id !== args.worktree.id)
+    ])
+  }, [args.worktree, args.subtreeSleepableWorktrees, sleepWorktreesAfterMenuClose])
   const handleDelete = useCallback(() => {
     const restoreSidebarPosition = preserveDeleteSiblingPosition(args.scopeRef.current)
     args.scopeRef.current
@@ -237,6 +245,7 @@ export function useWorktreeContextMenuCommands(args: {
     handleRemoveProjectFromGroup,
     handleRename,
     handleSleepSubtree,
+    handleSleepSubtreeWithVm,
     handleSubmitNewProjectGroup,
     handleTogglePin,
     handleToggleRead

@@ -1,4 +1,4 @@
-import { nonRefusedAgentLaunch } from '@/lib/agent-tab-launch-outcome.test-fixture'
+import { nonRefusedAgentLaunch } from '@/lib/agent-session/launch/new-tab/agent-tab-launch-outcome.test-fixture'
 import { EVERY_AGENT_CHAT } from '../../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -8,7 +8,7 @@ import {
 import { createLaunchFunnelStore, resetLaunchFunnelStore } from './agent-launch-funnel-test-harness'
 
 import type * as LaunchAdmissionModule from '../structured-agent-session-launch-admission'
-import type * as LaunchConnectionOwnerModule from '../../../connection-owner-resolution'
+import type * as LaunchConnectionOwnerModule from '../../../workspace/ownership/connection-owner-resolution'
 import type * as LaunchAgentKindModule from '../../../../../../shared/agent-kind'
 
 const store = createLaunchFunnelStore()
@@ -22,9 +22,11 @@ const mockExecutionHostId = vi.fn(() => 'local')
 
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => store } }))
 vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'darwin' }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdFromState: mockLaunchConnectionId }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdFromState: mockLaunchConnectionId
+}))
 const mockLaunchConnectionId = vi.hoisted(() => () => null)
-vi.mock('../../../connection-owner-resolution', async (importOriginal) => ({
+vi.mock('../../../workspace/ownership/connection-owner-resolution', async (importOriginal) => ({
   ...(await importOriginal<typeof LaunchConnectionOwnerModule>()),
   getConnectionIdFromState: mockLaunchConnectionId
 }))
@@ -61,8 +63,10 @@ vi.mock('../../../../../../shared/agent-kind', async (importOriginal) => ({
 vi.mock('../../../../../../shared/native-chat/input/native-chat-session-option-cache', () => ({
   seedNativeChatAppliedSessionOptions: vi.fn()
 }))
-vi.mock('@/lib/agent-paste-draft', () => ({ pasteDraftWhenAgentReady: vi.fn(async () => true) }))
-vi.mock('@/lib/agent-ready-wait', () => ({
+vi.mock('@/lib/agent-session/messaging/paste/agent-paste-draft', () => ({
+  pasteDraftWhenAgentReady: vi.fn(async () => true)
+}))
+vi.mock('@/lib/agent-session/messaging/paste/agent-ready-wait', () => ({
   waitForAgentReady: vi.fn(async () => ({ ready: true, reason: 'foreground-match' }))
 }))
 // Mock structured execution while retaining real route selection; callers must still reach the correct surface.

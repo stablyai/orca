@@ -18,8 +18,10 @@ export type DictationSessionEvent =
   | { type: 'final-text' }
   /** The engine failed mid-session: drop the session while capture and the engine tear down. */
   | { type: 'abandon' }
-  /** Starting failed: drop the session and show the error. */
+  /** The session failed: drop it and show the error until it's retried, dismissed or replaced. */
   | { type: 'fail' }
+  /** Transcribe a failed session's kept recording again, as a new session that is already finishing. */
+  | { type: 'retry' }
   /** Drop the live session without finishing it; its words still in flight are never inserted. */
   | { type: 'cancel' }
   /** Teardown finished; back to idle. */
@@ -32,17 +34,18 @@ export const initialDictationSession: DictationSession = {
   heardFinalText: false
 }
 
+/** A new dictation also replaces a failed one, and its kept recording with it. */
 export function canStartDictation(phase: DictationState): boolean {
-  return phase === 'idle'
+  return phase === 'idle' || phase === 'error'
 }
 
 export function isDictationUnderway(phase: DictationState): boolean {
   return phase === 'starting' || phase === 'listening'
 }
 
-/** The pill shows from start until the last words land, including while a dropped session tears down. */
+/** The pill shows from start until the last words land or a failure is dealt with. */
 export function isDictationPillShown(phase: DictationState): boolean {
-  return isDictationUnderway(phase) || phase === 'stopping'
+  return phase !== 'idle'
 }
 
 /** Returns the same object when the event does not apply, so callers can skip its effects. */
@@ -55,9 +58,10 @@ export function transitionDictationSession(
       if (!canStartDictation(session.phase)) {
         return session
       }
-      const run = session.run + 1
-      return { phase: 'starting', run, sessionId: String(run), heardFinalText: false }
+      return newSession(session, 'starting')
     }
+    case 'retry':
+      return session.phase === 'error' ? newSession(session, 'stopping') : session
     case 'stop':
       return isDictationUnderway(session.phase) ? { ...session, phase: 'stopping' } : session
     case 'engine-ready':
@@ -74,6 +78,11 @@ export function transitionDictationSession(
     case 'ended':
       return dropSession(session, 'idle')
   }
+}
+
+function newSession(session: DictationSession, phase: DictationState): DictationSession {
+  const run = session.run + 1
+  return { phase, run, sessionId: String(run), heardFinalText: false }
 }
 
 function dropSession(session: DictationSession, phase: DictationState): DictationSession {

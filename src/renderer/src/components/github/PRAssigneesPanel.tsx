@@ -9,7 +9,7 @@ import { useAppStore } from '@/store'
 import { useImmediateMutation } from '@/hooks/useIssueMetadata'
 import { useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
+import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
 import {
   parseOwnerRepoFromItemUrl,
   resolvePullRequestRepo,

@@ -8,7 +8,7 @@ import {
 import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentSessionChatProgram } from '../../../shared/agent-session/agent-session-agent-availability'
-import { chatProviderAgents } from './chat-provider-agents'
+import { chatProviderAgents } from '../runtime/native-chat/agent-catalogs/chat-provider-agents'
 import {
   resolveAgentLaunchRoute,
   structuredAgentLaunchSupport

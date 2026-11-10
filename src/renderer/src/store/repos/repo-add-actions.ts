@@ -6,7 +6,7 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'
-import { defaultCreationHost } from '@/lib/default-creation-host'
+import { defaultCreationHost } from '@/runtime/hosts/selection/default-creation-host'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
 import {
@@ -28,7 +28,7 @@ import {
 } from './pending-runtime-repo-removals'
 import { RuntimeRpcCallError } from '../../runtime/rpc/calls/runtime-rpc-result'
 import { readWslHostWindowsDriveRefusal } from '../../../../shared/wsl-host-windows-drive-refusal'
-import { showWslHostWindowsDriveRefusal } from '@/lib/wsl-host-windows-drive-refusal-toast'
+import { showWslHostWindowsDriveRefusal } from '@/lib/workspace/creation/wsl-host-windows-drive-refusal-toast'
 
 export function createRepoAddActions(
   set: Parameters<StateCreator<AppState>>[0],

@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import {
   clipboardImageCopyErrorDescription,
   copyImageToClipboard
-} from '@/lib/clipboard-image-copy'
+} from '@/lib/clipboard/images/clipboard-image-copy'
 import { isWebClientLocation } from '@/lib/web-client-location'
 
 /** The chat context menu offers "Copy image" for elements carrying this attribute. */

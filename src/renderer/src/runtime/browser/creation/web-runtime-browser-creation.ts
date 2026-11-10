@@ -1,6 +1,6 @@
 import type { BrowserPageCreationPlacement } from '../../../../../shared/browser/client-hosting/browser-client-host-placement'
 import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
-import type { BrowserTabCreateResult } from '../../../../../shared/runtime-browser-contracts'
+import type { BrowserTabCreateResult } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 import { translate } from '../../../i18n/i18n'
 import { useAppStore } from '../../../store/index'
 import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'

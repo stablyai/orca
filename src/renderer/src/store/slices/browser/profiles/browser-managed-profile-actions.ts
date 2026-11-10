@@ -7,7 +7,7 @@ import {
   managedBrowserProfileOwnerKey,
   unadmittedBrowserPartition,
   type ManagedBrowserProfileOwner
-} from '../../../../../../shared/browser-profile-scope'
+} from '../../../../../../shared/browser/profiles/browser-profile-scope'
 import { withoutKey } from '../../../../../../shared/workspace-layout/stored-record-fields'
 import type { AppState } from '../../../types'
 

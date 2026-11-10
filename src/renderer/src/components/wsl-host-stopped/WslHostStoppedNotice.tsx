@@ -5,7 +5,7 @@ import { LinuxPenguinIcon } from '@/components/icons/LinuxPenguinIcon'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
-import { startWslHostAndReloadProjects } from '@/lib/wsl-host-user-start'
+import { startWslHostAndReloadProjects } from '@/runtime/hosts/wsl/wsl-host-user-start'
 
 /** "<distro> is stopped" with Start, where a surface would otherwise show a read error. Only the click boots (E9). */
 export function WslHostStoppedNotice({

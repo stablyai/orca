@@ -6,7 +6,7 @@ import {
   resolveRepoExecutionHostTarget,
   resolveWorktreeResourceTarget,
   type ExecutionHostTarget
-} from '@/lib/execution-host-facts'
+} from '@/runtime/hosts/platform/execution-host-facts'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { getIndexedReposById } from '@/store/repos/repository-catalog-index'
 import {
@@ -21,6 +21,8 @@ import {
   runtimeHostContactForEntry
 } from '../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
+import { runtimeHostPlatform } from '@/components/terminal-pane/pty-transport/host-ownership/pty-owner-machine-platform'
 
 /** Identity facts for the picker's owner and acquisition keys; readiness stays out of them. */
 export function readAgentMenuLaunchFacts(
@@ -38,6 +40,12 @@ export function readAgentMenuLaunchFacts(
   return {
     executionHostId: input.executionHostId,
     runtimeId: host?.kind === 'runtime' ? lastVerifiedRuntimeStatus(status)?.runtimeId : null,
+    hostPlatform:
+      host?.kind === 'local'
+        ? getRendererAppPlatform()
+        : host?.kind === 'runtime'
+          ? runtimeHostPlatform(state, host.environmentId)
+          : null,
     pairingRevision:
       host?.kind === 'runtime' ? getRuntimeEnvironmentRevision(host.environmentId) : undefined,
     contact: `${status?.connectionGeneration}:${status?.hostContactEpoch}:${isRuntimeHostContactRevokedVerdict(contact)}`,

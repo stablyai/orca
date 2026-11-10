@@ -1,4 +1,4 @@
-import { ImeTextarea } from '@/lib/ime-text-field'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import { Textarea } from '@/components/ui/textarea'
 import { useRef, useState, type RefObject } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
@@ -13,11 +13,12 @@ import { NativeChatPromptCollapseToggle } from './NativeChatPromptCollapse'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
 import { useNativeChatQuestionAutoAdvance } from './use-native-chat-question-auto-advance'
 import { useNativeChatQuestionKeys } from './use-native-chat-question-keys'
-import { isEditableTarget } from '@/lib/editable-target'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import type { AgentJournalFreeTextInput } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   askAcceptsEmptyAnswer,
   askConfirmAction,
+  askQuestionShowsPreviews,
   askConfirmLabel,
   askTypedText,
   toggleAskOption
@@ -82,6 +83,7 @@ export function NativeChatQuestionCard({
   const questionAllowsOther = Array.isArray(allowOther) ? (allowOther[index] ?? false) : allowOther
   const freeTextInput = freeTextInputs?.[index]
   const fieldTakesFocus = q.options.length === 0 || undefined
+  const showsPreviews = askQuestionShowsPreviews(q)
   const answerPlaceholder =
     freeTextInput?.placeholder ??
     t('components.native-chat.question.otherPlaceholder', 'Type your answer')
@@ -156,15 +158,31 @@ export function NativeChatQuestionCard({
     }
   }
 
-  // Briefly show a single-select pick before advancing; picking again retracts it.
-  const pickOption = (optionIndex: number): void => {
+  // Briefly show a single-select pick before advancing; picking again retracts it. With previews,
+  // a pick stays put: a digit focuses its row, and Enter on the chosen row confirms.
+  const pickOption = (
+    optionIndex: number,
+    via: 'pointer' | 'digit' | 'enter' = 'pointer'
+  ): void => {
     const cur = selections[index] ?? []
+    // Focus first, so Enter after any digit acts on the row that digit named.
+    if (showsPreviews && via === 'digit') {
+      cardRef.current
+        ?.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
+        [optionIndex]?.focus()
+    }
+    if (showsPreviews && cur.includes(optionIndex)) {
+      if (via === 'enter') {
+        confirm(true)
+      }
+      return
+    }
     const picked = !cur.includes(optionIndex)
     const chosen = toggleAskOption(cur, optionIndex, q.multiSelect)
     const next = selections.map((s, i) => (i === index ? chosen : s))
     setSelections(next)
     autoAdvance.cancel()
-    if (picked && !q.multiSelect) {
+    if (picked && !q.multiSelect && !showsPreviews) {
       autoAdvance.schedule(() => advanceOrSubmit(next, otherText))
     }
   }
@@ -298,6 +316,7 @@ export function NativeChatQuestionCard({
                 initialFocus={i === 0}
                 label={opt.label}
                 description={opt.description}
+                preview={opt.preview}
                 selected={(selections[index] ?? []).includes(i)}
                 disabled={isSubmitting}
                 onSelect={() => pickOption(i)}

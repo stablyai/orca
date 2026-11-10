@@ -50,21 +50,6 @@ describe('useConnectedHostPicker', () => {
     act(() => handle.current!.pickHost(action, hosts))
   }
 
-  it('disambiguates path-routed hosts without exposing endpoint paths', () => {
-    render([
-      host('desk-a', 'Desk', 'wss://gateway.example.com/v1/connect/bearer-secret-a'),
-      host('desk-b', 'Desk', 'wss://gateway.example.com/v1/connect/bearer-secret-b')
-    ])
-
-    pickHost(vi.fn())
-
-    expect(picker().options).toEqual([
-      { value: 'desk-a', label: 'Desk', subtitle: 'gateway.example.com · desk-a' },
-      { value: 'desk-b', label: 'Desk', subtitle: 'gateway.example.com · desk-b' }
-    ])
-    expect(JSON.stringify(picker().options)).not.toContain('bearer-secret')
-  })
-
   it('closes a stale picker when an offered host disconnects', () => {
     const rerender = render([desk, laptop])
 

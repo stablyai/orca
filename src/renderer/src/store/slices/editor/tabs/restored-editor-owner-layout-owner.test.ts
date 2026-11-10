@@ -3,7 +3,7 @@
 // With main layout ownership, restored-file moves and content rekeys must arrive together in main’s frame.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-provenance'
+import { captureEditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import type { AppState } from '@/store/types'
 import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'

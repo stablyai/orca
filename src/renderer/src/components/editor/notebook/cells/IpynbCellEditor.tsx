@@ -1,12 +1,12 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Components } from 'react-markdown'
 import type { editor } from 'monaco-editor'
-import { monaco } from '@/lib/monaco-setup'
+import { monaco } from '@/lib/editor/monaco/monaco-setup'
 import {
   EDITOR_TYPOGRAPHY_SURFACE_CLASS,
   editorTypographyTextStyle,
   monacoTypographyOptions
-} from '@/lib/editor-typography'
+} from '@/lib/editor/appearance/editor-typography'
 import { useEditorTypography } from '@/hooks/use-editor-typography'
 import { cn } from '@/lib/utils'
 import { installMonacoEditorFindShortcut } from '../../editor-shortcuts'

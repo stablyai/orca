@@ -152,8 +152,8 @@ export function TerminalThemeCatalogSection({
   }
 
   const pickerTitle = isLightTarget
-    ? t('auto.components.settings.TerminalThemeSections.8273bc75d7', 'Light Theme')
-    : t('auto.components.settings.TerminalThemeSections.9499ad1dc4', 'Dark Theme')
+    ? t('auto.components.settings.TerminalThemeSections.3d91303d0d', 'Light theme')
+    : t('auto.components.settings.TerminalThemeSections.44a006ab99', 'Dark theme')
   const pickerDescription = isLightTarget
     ? t(
         'auto.components.settings.TerminalThemeSections.d56af60e6f',
@@ -164,8 +164,8 @@ export function TerminalThemeCatalogSection({
         'Choose the terminal theme used in dark mode.'
       )
   const dividerTitle = isLightTarget
-    ? t('auto.components.settings.TerminalThemeSections.ec2e33ad80', 'Light Divider Color')
-    : t('auto.components.settings.TerminalThemeSections.b739d2abfe', 'Dark Divider Color')
+    ? t('auto.components.settings.TerminalThemeSections.43afde3df7', 'Light divider color')
+    : t('auto.components.settings.TerminalThemeSections.3a05b51211', 'Dark divider color')
   const dividerDescription = isLightTarget
     ? t(
         'auto.components.settings.TerminalThemeSections.5e0c24b5c8',
@@ -180,7 +180,7 @@ export function TerminalThemeCatalogSection({
     <section className="space-y-5">
       <SettingsSubsectionHeader
         className="items-center"
-        title={t('auto.components.settings.TerminalThemeSections.catalog_title', 'Terminal Themes')}
+        title={t('auto.components.settings.TerminalThemeSections.a39d64fe4a', 'Terminal themes')}
         action={
           showThemeImport ? (
             <div className="flex flex-wrap items-center justify-end gap-2">
@@ -195,13 +195,13 @@ export function TerminalThemeCatalogSection({
         <div className={advancedContent ? 'border-b border-border/40' : undefined}>
           <div className="space-y-3">
             <SearchableSetting
-              title={t('auto.components.settings.TerminalThemeSections.target_title', 'Theme Mode')}
+              title={t('auto.components.settings.TerminalThemeSections.2318e07c68', 'Theme mode')}
               keywords={['terminal', 'theme', 'dark', 'light']}
               forceVisible
             >
               <div className="space-y-2">
                 <p className="text-xs font-medium text-muted-foreground">
-                  {t('auto.components.settings.TerminalThemeSections.target_title', 'Theme Mode')}
+                  {t('auto.components.settings.TerminalThemeSections.2318e07c68', 'Theme mode')}
                 </p>
                 <SettingsSegmentedControl
                   value={target}
@@ -339,8 +339,8 @@ export function TerminalThemeCatalogSection({
         <TerminalSettingsPreview
           title={
             isLightTarget
-              ? t('auto.components.settings.TerminalThemeSections.db210115c5', 'Light Mode Preview')
-              : t('auto.components.settings.TerminalThemeSections.bc8e8a251a', 'Dark Mode Preview')
+              ? t('auto.components.settings.TerminalThemeSections.2a11e028ff', 'Light mode preview')
+              : t('auto.components.settings.TerminalThemeSections.3ebb499929', 'Dark mode preview')
           }
           description={
             isLightTarget

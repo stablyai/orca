@@ -37,4 +37,13 @@ describe('transitionDictationSession', () => {
     expect(transitionDictationSession(abandoned, { type: 'cancel' })).toBe(abandoned)
     expect(run('start', 'engine-ready', 'cancel')).toMatchObject({ phase: 'idle', sessionId: null })
   })
+
+  it('retries a failed recording as a new finishing session, and lets a new dictation replace it', () => {
+    const failed = run('start', 'engine-ready', 'abandon', 'fail')
+    const retried = transitionDictationSession(failed, { type: 'retry' })
+    expect(retried).toMatchObject({ phase: 'stopping' })
+    expect(retried.sessionId).not.toBeNull()
+    expect(transitionDictationSession(failed, { type: 'start' }).phase).toBe('starting')
+    expect(run('start', 'retry').phase).toBe('starting')
+  })
 })
