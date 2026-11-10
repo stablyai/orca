@@ -1,4 +1,7 @@
-import { getActiveWorkspaceUrl, openWorkspaceUrlInOrcaBrowser } from '@/lib/workspace-ports/workspace-url-open'
+import {
+  getActiveWorkspaceUrl,
+  openWorkspaceUrlInOrcaBrowser
+} from '@/lib/workspace-ports/workspace-url-open'
 import type { KeybindingActionId } from '../../../shared/keybindings/types'
 
 /** Claims the shortcut only when the active workspace has a saved link. */

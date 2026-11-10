@@ -79,7 +79,9 @@ export function WorktreeCardMetaDetailsHover({
       automationProvenance={card.metaAutomationProvenance}
       cliProvenance={card.metaCliProvenance}
       detailsAfter={
-        card.hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} worktree={worktree} /> : null
+        card.hasPorts ? (
+          <WorktreeCardPortsDetails ports={workspacePorts} worktree={worktree} />
+        ) : null
       }
       hoverControl={card.detailsHoverControl}
       onEditIssue={affiliateListMode ? undefined : card.handleEditIssue}
