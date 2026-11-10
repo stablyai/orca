@@ -6,7 +6,7 @@ import {
   makeWorktree
 } from '../../../../components/worktree-jump/worktree-jump-palette-test-fixtures'
 import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
-import { patchWorktreeMetadataSet } from './worktree-metadata-set-patch'
+import { patchWorktreeMetadataSet, reapplyPendingIssueTitles } from './worktree-metadata-set-patch'
 
 const ID = 'repo-1::/work/orca'
 const titled = (title: string): WorkspaceAttachment[] => [
@@ -28,6 +28,8 @@ function state() {
 
 function record(seq: number, title: string, epoch = 'e1') {
   return {
+    kind: 'set' as const,
+    domain: 'workspaceMetadata' as const,
     hostId: 'ssh:build-box' as const,
     epoch,
     seq,
@@ -58,5 +60,27 @@ describe('addressed workspace metadata records', () => {
 
     const applied = { ...state(), ...first }
     expect(patchWorktreeMetadataSet(applied, record(1, 'Old title'), 'ssh:build-box')).toBe(applied)
+  })
+
+  it('refills a title a late listing dropped, but never restores a link removed after the record', () => {
+    const titledState = {
+      ...state(),
+      ...patchWorktreeMetadataSet(state(), record(5, 'Fix login', 'e2'), 'ssh:build-box')
+    }
+    // A listing that read metadata before the title was saved lands afterwards with the bare link.
+    const lateListing = { ...titledState, worktreesByRepo: state().worktreesByRepo }
+    const refilled = { ...lateListing, ...reapplyPendingIssueTitles(lateListing) }
+    expect(
+      selectWorktreesByRepo(refilled)['repo-1'].find((row) => row.hostId === 'ssh:build-box')
+        ?.linkedItems
+    ).toEqual(titled('Fix login'))
+
+    const unlinked = {
+      ...refilled,
+      worktreesByRepo: {
+        'repo-1': [makeWorktree(ID, 'ssh orca', { hostId: 'ssh:build-box', linkedItems: [] })]
+      }
+    }
+    expect(reapplyPendingIssueTitles(unlinked)).toBe(unlinked)
   })
 })

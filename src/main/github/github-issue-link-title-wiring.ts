@@ -90,6 +90,8 @@ export function wireGitHubIssueLinkTitleFill(
       // Resolved rows embed metadata; refresh them so the next listing read agrees.
       runtime.invalidateResolvedWorktreeCache()
       runtime.publishWorkspaceMetadataSet({
+        kind: 'set',
+        domain: 'workspaceMetadata',
         hostId,
         epoch,
         seq: ++seq,

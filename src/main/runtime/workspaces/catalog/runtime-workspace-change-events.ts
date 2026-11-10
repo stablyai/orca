@@ -36,7 +36,7 @@ export abstract class RuntimeWorkspaceChangeEvents extends NativeChatLaunchDraft
     })
   }
 
-  /** One workspace's metadata, addressed: clients patch that row instead of refetching its repo. */
+  /** One workspace's metadata, addressed: clients patch that row instead of refetching its repo. Interim transport for the record. */
   publishWorkspaceMetadataSet(set: WorkspaceMetadataSet): void {
     this.notifier?.workspaceMetadataSet?.(set)
     this.emitClientEvent({ type: 'workspaceMetadataSet', ...set })

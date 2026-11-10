@@ -15,6 +15,8 @@ export type WorkspaceMetadataSetRow = Pick<
  * workspace, ordered by `seq` within `epoch`. A gap, a new epoch or an unknown row falls back to the listing.
  */
 export type WorkspaceMetadataSet = {
+  kind: 'set'
+  domain: 'workspaceMetadata'
   hostId: ExecutionHostId
   epoch: string
   seq: number
@@ -43,9 +45,11 @@ export function readWorkspaceMetadataSet(value: unknown): WorkspaceMetadataSet |
   if (!isRecord(value) || !isRecord(value.row)) {
     return null
   }
-  const { epoch, seq, id, repoId, worktreeId, row } = value
+  const { kind, domain, epoch, seq, id, repoId, worktreeId, row } = value
   const hostId = normalizeExecutionHostId(typeof value.hostId === 'string' ? value.hostId : null)
   if (
+    kind !== 'set' ||
+    domain !== 'workspaceMetadata' ||
     !hostId ||
     typeof epoch !== 'string' ||
     typeof seq !== 'number' ||
@@ -59,6 +63,8 @@ export function readWorkspaceMetadataSet(value: unknown): WorkspaceMetadataSet |
     return null
   }
   return {
+    kind,
+    domain,
     hostId,
     epoch,
     seq,
