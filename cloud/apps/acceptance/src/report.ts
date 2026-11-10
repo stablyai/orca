@@ -41,6 +41,10 @@ function latestResults(runs: RunFile[]): Map<string, { result: CheckResult; run:
   const out = new Map<string, { result: CheckResult; run: RunFile }>()
   for (const run of runs) {
     for (const result of run.checks) {
+      // A skipped run (precondition missing) does not hide the last real result.
+      if (result.status === 'skipped' && out.has(result.id)) {
+        continue
+      }
       out.set(result.id, { result, run })
     }
   }
