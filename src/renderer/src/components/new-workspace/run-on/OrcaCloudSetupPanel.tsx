@@ -165,19 +165,18 @@ function planDetail(step: CloudSetupStep, t: Translate): string | null {
  * 'checkout', 'requested'); say it in words, or nothing. Undefined: not a session code.
  */
 export function sessionDetailCopy(step: CloudSetupStep, t: Translate): string | null | undefined {
-  if (step.id === 'plan') {
-    switch (step.detail) {
-      case 'subscription':
-        // "Team plan · Done" already says it.
-        return null
-      case 'trial':
-        return t('components.newWorkspace.cloudSetup.planCoveredByTrial', 'Your trial covers it.')
-      case 'checkout':
-        return t(
-          'components.newWorkspace.cloudSetup.planCheckoutOpen',
-          'Finish checkout in your browser.'
-        )
-    }
+  if (step.id === 'plan' && step.detail === 'subscription') {
+    // "Team plan · Done" already says it.
+    return null
+  }
+  if (step.id === 'plan' && step.detail === 'trial') {
+    return t('components.newWorkspace.cloudSetup.planCoveredByTrial', 'Your trial covers it.')
+  }
+  if (step.id === 'plan' && step.detail === 'checkout') {
+    return t(
+      'components.newWorkspace.cloudSetup.planCheckoutOpen',
+      'Finish checkout in your browser.'
+    )
   }
   if (step.id === 'github' && step.detail === 'requested') {
     return t(
