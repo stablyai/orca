@@ -15,6 +15,7 @@ import {
   type BrowserOpenOutcome
 } from './browser-link-destination'
 import { isLiveLinkOpenGroup } from '../../link-open-intent'
+import { findReusableBrowserLinkTab } from './browser-link-tab-reuse'
 import {
   afterPendingEntityTabs,
   hasPendingEntityTab
@@ -98,16 +99,24 @@ export async function openLocalBrowserLink(params: {
   let retainCreatedTab = false
   try {
     validate(state)
-    let result = selection.match
+    const reusable = selection.match
+      ? null
+      : findReusableBrowserLinkTab(state, destination, context.linkIntent)
+    const existing = selection.match ?? reusable
+    if (reusable) {
+      state.setBrowserPageUrl(reusable.browserPageId, params.url)
+    }
+    let result = existing
     if (result) {
       const match = result
-      const workspace = (state.browserTabsByWorktree[destination.worktreeId] ?? []).find(
+      const current = useAppStore.getState()
+      const workspace = (current.browserTabsByWorktree[destination.worktreeId] ?? []).find(
         (item) => item.id === match.browserWorkspaceId
       )
-      const page = (state.browserPagesByWorkspace[match.browserWorkspaceId] ?? []).find(
+      const page = (current.browserPagesByWorkspace[match.browserWorkspaceId] ?? []).find(
         (item) => item.id === match.browserPageId
       )
-      if (!workspace || !page || !browserLinkPageMatches(state, destination, workspace, page)) {
+      if (!workspace || !page || !browserLinkPageMatches(current, destination, workspace, page)) {
         return { status: 'refused' }
       }
     } else {
@@ -162,7 +171,7 @@ export async function openLocalBrowserLink(params: {
     ) {
       return { status: 'refused' }
     }
-    if (selection.match && !currentBrowserLinkMatch(current, destination, actual)) {
+    if (existing && !currentBrowserLinkMatch(current, destination, actual)) {
       return { status: 'refused' }
     }
     if (

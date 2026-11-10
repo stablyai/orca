@@ -1,21 +1,29 @@
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
-import { getLinkRoutingBackgroundSearchEntry } from './browser-link-routing-copy'
+import type { SettingsSearchEntry } from '../../search/settings-search'
+import {
+  getLinkRoutingBackgroundSearchEntry,
+  getLinkRoutingExistingTabSearchEntry
+} from './browser-link-routing-copy'
 import { useTranslate } from '../../../../i18n/use-translate'
 
-type BrowserLinkRoutingBackgroundSettingProps = {
-  settings: Pick<GlobalSettings, 'openLinksInAppInBackground'>
+type BrowserLinkOpeningToggleKey = 'openLinksInAppInBackground' | 'openLinksInExistingBrowserTab'
+
+type BrowserLinkOpeningToggleProps<Key extends BrowserLinkOpeningToggleKey> = {
+  settings: Pick<GlobalSettings, Key>
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
-export function BrowserLinkRoutingBackgroundSetting({
-  settings,
-  updateSettings
-}: BrowserLinkRoutingBackgroundSettingProps): React.JSX.Element {
-  const t = useTranslate()
-  const entry = getLinkRoutingBackgroundSearchEntry(t)
-
+function BrowserLinkOpeningToggle({
+  entry,
+  checked,
+  onToggle
+}: {
+  entry: SettingsSearchEntry
+  checked: boolean
+  onToggle: () => void
+}): React.JSX.Element {
   return (
     <SearchableSetting
       title={entry.title}
@@ -26,14 +34,46 @@ export function BrowserLinkRoutingBackgroundSetting({
         <SettingsSwitchRow
           label={entry.title}
           description={entry.description}
-          checked={settings.openLinksInAppInBackground === true}
-          onChange={() =>
-            updateSettings({
-              openLinksInAppInBackground: settings.openLinksInAppInBackground !== true
-            })
-          }
+          checked={checked}
+          onChange={onToggle}
         />
       </div>
     </SearchableSetting>
+  )
+}
+
+export function BrowserLinkRoutingBackgroundSetting({
+  settings,
+  updateSettings
+}: BrowserLinkOpeningToggleProps<'openLinksInAppInBackground'>): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <BrowserLinkOpeningToggle
+      entry={getLinkRoutingBackgroundSearchEntry(t)}
+      checked={settings.openLinksInAppInBackground === true}
+      onToggle={() =>
+        updateSettings({
+          openLinksInAppInBackground: settings.openLinksInAppInBackground !== true
+        })
+      }
+    />
+  )
+}
+
+export function BrowserLinkRoutingExistingTabSetting({
+  settings,
+  updateSettings
+}: BrowserLinkOpeningToggleProps<'openLinksInExistingBrowserTab'>): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <BrowserLinkOpeningToggle
+      entry={getLinkRoutingExistingTabSearchEntry(t)}
+      checked={settings.openLinksInExistingBrowserTab === true}
+      onToggle={() =>
+        updateSettings({
+          openLinksInExistingBrowserTab: settings.openLinksInExistingBrowserTab !== true
+        })
+      }
+    />
   )
 }

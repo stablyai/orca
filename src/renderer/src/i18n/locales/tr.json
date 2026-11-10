@@ -9933,7 +9933,11 @@
             "5a70844e54": "Varsayılan Arama Motoru",
             "f1da035bcb": "Oturum ve Çerezler",
             "f6de9e25a0": "Varsayılan Yakınlaştırma",
-            "1c2aff8f82": "Varsayılan Ana Sayfa"
+            "1c2aff8f82": "Varsayılan Ana Sayfa",
+            "linkRoutingExistingTab": {
+              "reuse": "yeniden kullan",
+              "split": "bölme"
+            }
           },
           "use": {
             "search": {
@@ -13405,6 +13409,10 @@
         },
         "BrowserUseEnableSwitch": {
           "ce4d6f80d8": "Ajan Tarayıcı Kullanımını Etkinleştir"
+        },
+        "BrowserLinkRoutingExistingTabSetting": {
+          "title": "Bağlantıları geçerli tarayıcı sekmesinde aç",
+          "description": "Terminal, sohbet ve markdown bağlantıları yeni bir sekme veya bölme yerine en son kullandığınız tarayıcı sekmesinde yüklenir."
         }
       },
       "right": {

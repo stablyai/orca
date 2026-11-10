@@ -9770,7 +9770,11 @@
             "5a70844e54": "預設搜尋引擎",
             "f1da035bcb": "工作階段和 Cookie",
             "f6de9e25a0": "預設縮放",
-            "1c2aff8f82": "預設首頁"
+            "1c2aff8f82": "預設首頁",
+            "linkRoutingExistingTab": {
+              "reuse": "重複使用",
+              "split": "分割"
+            }
           },
           "use": {
             "search": {
@@ -13242,6 +13246,10 @@
         },
         "BrowserUseEnableSwitch": {
           "ce4d6f80d8": "啟用代理程式使用瀏覽器"
+        },
+        "BrowserLinkRoutingExistingTabSetting": {
+          "title": "在目前的瀏覽器分頁中開啟連結",
+          "description": "終端機、聊天和 Markdown 中的連結會在你上次使用的瀏覽器分頁中載入，而不是開啟新分頁或分割。"
         }
       },
       "right": {

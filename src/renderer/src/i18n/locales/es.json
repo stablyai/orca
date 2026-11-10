@@ -9528,7 +9528,11 @@
             "5a70844e54": "Motor de búsqueda predeterminado",
             "f1da035bcb": "Sesión y cookies",
             "f6de9e25a0": "Zoom predeterminado",
-            "1c2aff8f82": "Página de inicio predeterminada"
+            "1c2aff8f82": "Página de inicio predeterminada",
+            "linkRoutingExistingTab": {
+              "reuse": "reutilizar",
+              "split": "dividir"
+            }
           },
           "use": {
             "search": {
@@ -13062,6 +13066,10 @@
         },
         "BrowserUseEnableSwitch": {
           "ce4d6f80d8": "Activar Agent Browser Use"
+        },
+        "BrowserLinkRoutingExistingTabSetting": {
+          "title": "Abrir enlaces en la pestaña actual del navegador",
+          "description": "Los enlaces de la terminal, el chat y markdown se cargan en la última pestaña del navegador que usaste en lugar de una pestaña o división nueva."
         }
       },
       "right": {
