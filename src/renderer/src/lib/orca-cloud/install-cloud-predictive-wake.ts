@@ -2,6 +2,12 @@
 // the ordinary wake IPC (main's wake is single-flight per workspace, so a later open joins it).
 import { useAppStore } from '@/store'
 import {
+  getLastBillingStatus,
+  refreshBillingSummary
+} from '@/components/billing/billing-summary-store'
+import { sandboxLimitFromBilling } from '@/components/worktree-creation/vm-build-failure-copy'
+import { predictiveWakeServerVerdict } from './cloud-predictive-wake-preflight'
+import {
   claimPredictiveWake,
   isPredictiveWakeOutstanding,
   createPredictiveWakeController,
@@ -14,6 +20,19 @@ import {
   isCloudWorkspaceArchived,
   refreshCloudWorkspaceStatus
 } from './orca-cloud-workspace-store'
+
+/** A fresh status (cheap while asleep: no VM probe) and billing's caps, read just before waking. */
+async function serverAllowsPredictiveWake(workspaceId: string): Promise<boolean> {
+  await Promise.all([
+    refreshCloudWorkspaceStatus(workspaceId),
+    getLastBillingStatus() ? null : refreshBillingSummary()
+  ])
+  const entry = getCloudWorkspaceSnapshot().status[workspaceId]
+  // A failed read keeps the previous status; a guess is not worth acting on stale hints.
+  const status = entry && !entry.error ? entry.status : null
+  const limit = sandboxLimitFromBilling(getLastBillingStatus())
+  return predictiveWakeServerVerdict(status, limit) === 'ok'
+}
 
 function claimInMain(workspaceId: string): void {
   void window.api.ephemeralVm.resumeWorkspace({ workspaceId, claimOnly: true }).catch(() => null)
@@ -36,6 +55,7 @@ export function installCloudPredictiveWake(): () => void {
           !snapshot.wake[workspaceId]
         )
       },
+      preflight: serverAllowsPredictiveWake,
       wake: async (workspaceId) => {
         // Quiet: a refusal leaves no failed-resume record behind (main), and no card (store).
         const result = await window.api.ephemeralVm

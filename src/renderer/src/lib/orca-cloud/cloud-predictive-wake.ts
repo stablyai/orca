@@ -5,8 +5,10 @@
 // window, sleeping them only when their server reports no work, unless they are opened (any
 // activation claims them); weak signals (hover, focus) share one rate limit; a refusal (seat cap,
 // plan) is silent and backs off. It never runs on app launch, on archived workspaces, right after
-// a sleep, or (for focus) on a workspace the user slept until they act on it again. Opening the
-// workspace claims the wake (single-flight in main) and shows its progress.
+// a sleep (from any client: the server reports the last one someone chose), with its owner's seat
+// at or one below its running cap, during a drag, or (for focus) on a workspace the user slept
+// until they act on it again. Opening the workspace claims the wake (single-flight in main) and
+// shows its progress.
 
 export type PredictiveWakeTrigger = 'hover' | 'select' | 'focus'
 
@@ -16,6 +18,11 @@ export type PredictiveWakeDeps = {
   isEnabled: () => boolean
   /** Cloud, known asleep (not archived, not already waking). */
   isWakeCandidate: (workspaceId: string) => boolean
+  /**
+   * Fresh server checks just before waking: false skips this wake quietly (no backoff), e.g. it was
+   * slept on purpose from another client moments ago, or its owner's seat is at or near its cap.
+   */
+  preflight?: (workspaceId: string) => Promise<boolean>
   /** Starts the ordinary wake quietly; resolves true when the sandbox woke, false when refused. */
   wake: (workspaceId: string) => Promise<boolean>
   /** Schedules `run`; returns a cancel function. */
@@ -42,6 +49,9 @@ export type PredictiveWakeController = {
   select: (workspaceId: string) => void
   windowBlur: () => void
   windowFocus: (activeWorkspaceId: string | null) => void
+  /** A drag began: nothing pending fires, and nothing new is armed until it ends. */
+  dragStart: () => void
+  dragEnd: () => void
   noteSlept: (workspaceId: string) => void
   /** The sleep was the idle timer, not the user: coming back to Orca may wake it again. */
   noteIdleSlept: (workspaceId: string) => void
@@ -65,6 +75,7 @@ export function createPredictiveWakeController(deps: PredictiveWakeDeps): Predic
   const unopened = new Map<string, () => void>()
   const pending = new Map<string, () => void>()
   let lastWeakWakeAt = Number.NEGATIVE_INFINITY
+  let dragging = false
   // Why: the first focus after launch is the app opening, not someone coming back to it.
   let blurredSinceLaunch = false
 
@@ -115,10 +126,18 @@ export function createPredictiveWakeController(deps: PredictiveWakeDeps): Predic
     running.add(workspaceId)
     silent.add(workspaceId)
     void Promise.resolve()
-      .then(() => deps.wake(workspaceId))
+      .then(async () => {
+        if (deps.preflight && !(await deps.preflight(workspaceId).catch(() => false))) {
+          return 'skipped' as const
+        }
+        return deps.wake(workspaceId)
+      })
       .catch(() => false)
       .then((woke) => {
         const claimed = !silent.has(workspaceId)
+        if (woke === 'skipped') {
+          return
+        }
         if (!woke) {
           refusedUntil.set(workspaceId, deps.now() + REFUSAL_BACKOFF_MS)
         } else if (!claimed) {
@@ -133,7 +152,7 @@ export function createPredictiveWakeController(deps: PredictiveWakeDeps): Predic
 
   const schedule = (workspaceId: string, trigger: PredictiveWakeTrigger, ms: number): void => {
     cancelPending(workspaceId)
-    if (!deps.isEnabled()) {
+    if (!deps.isEnabled() || dragging) {
       return
     }
     pending.set(
@@ -157,6 +176,15 @@ export function createPredictiveWakeController(deps: PredictiveWakeDeps): Predic
         return
       }
       schedule(activeWorkspaceId, 'focus', SELECT_DEBOUNCE_MS)
+    },
+    dragStart: () => {
+      dragging = true
+      for (const workspaceId of Array.from(pending.keys())) {
+        cancelPending(workspaceId)
+      }
+    },
+    dragEnd: () => {
+      dragging = false
     },
     noteSlept: (workspaceId) => {
       cancelPending(workspaceId)
@@ -207,6 +235,12 @@ export function notePredictiveWakeHoverEnd(workspaceId: string): void {
 }
 export function notePredictiveWakeSelect(workspaceId: string): void {
   current?.select(workspaceId)
+}
+export function notePredictiveWakeDragStart(): void {
+  current?.dragStart()
+}
+export function notePredictiveWakeDragEnd(): void {
+  current?.dragEnd()
 }
 export function notePredictiveWakeSlept(workspaceId: string): void {
   current?.noteSlept(workspaceId)

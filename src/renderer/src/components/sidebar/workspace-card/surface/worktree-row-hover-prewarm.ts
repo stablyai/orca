@@ -1,5 +1,7 @@
 import { setTerminalPrewarmWorktrees } from '../../../terminal/terminal-worktree-prewarm'
 import {
+  notePredictiveWakeDragEnd,
+  notePredictiveWakeDragStart,
   notePredictiveWakeHoverEnd,
   notePredictiveWakeHoverStart,
   notePredictiveWakeSelect
@@ -14,9 +16,12 @@ let dwellTimer: ReturnType<typeof setTimeout> | null = null
 let dwellWorktreeId: string | null = null
 let graceTimer: ReturnType<typeof setTimeout> | null = null
 let prewarmedWorktreeId: string | null = null
-let wheelListenerInstalled = false
+let windowListenersInstalled = false
 // The row a predictive-wake dwell is armed for (outlives the shorter prewarm dwell).
 let predictiveHoverId: string | null = null
+// The row under a press. Its wake waits for the release: a press held still and then dragged is a
+// move, and a debounce alone can't tell the two apart.
+let pressedId: string | null = null
 
 function clearDwell(): void {
   if (dwellTimer !== null) {
@@ -47,11 +52,11 @@ function armDwell(worktreeId: string, delayMs = HOVER_PREWARM_DWELL_MS): void {
 }
 
 // Rows scrolling under a resting pointer fire pointerenter; restart the dwell so scrolling never prewarms.
-function installWheelListener(): void {
-  if (wheelListenerInstalled || typeof window === 'undefined') {
+function installWindowListeners(): void {
+  if (windowListenersInstalled || typeof window === 'undefined') {
     return
   }
-  wheelListenerInstalled = true
+  windowListenersInstalled = true
   window.addEventListener(
     'wheel',
     () => {
@@ -65,13 +70,46 @@ function installWheelListener(): void {
     },
     { capture: true, passive: true }
   )
+  // A press that turns into a drag is moving the row, not opening it: drop its pending wake.
+  window.addEventListener('dragstart', () => noteWorktreeRowDragStart(), { capture: true })
+  window.addEventListener('dragend', () => noteWorktreeRowDragEnd(), { capture: true })
+  window.addEventListener('drop', () => noteWorktreeRowDragEnd(), { capture: true })
+  window.addEventListener(
+    'pointerup',
+    () => {
+      const released = pressedId
+      pressedId = null
+      if (released !== null) {
+        notePredictiveWakeSelect(released)
+      }
+    },
+    { capture: true }
+  )
+  window.addEventListener(
+    'pointercancel',
+    () => {
+      pressedId = null
+    },
+    { capture: true }
+  )
+}
+
+/** A row drag began (native or the board's pointer drag): no intent wake fires until it ends. */
+export function noteWorktreeRowDragStart(): void {
+  predictiveHoverId = null
+  pressedId = null
+  notePredictiveWakeDragStart()
+}
+
+export function noteWorktreeRowDragEnd(): void {
+  notePredictiveWakeDragEnd()
 }
 
 export function noteWorktreeRowHoverStart(worktreeId: string): void {
   // A sleeping cloud workspace starts waking on a longer dwell (no-op for everything else).
   predictiveHoverId = worktreeId
   notePredictiveWakeHoverStart(worktreeId)
-  installWheelListener()
+  installWindowListeners()
   if (prewarmedWorktreeId === worktreeId) {
     clearDwell()
     clearGrace()
@@ -82,7 +120,10 @@ export function noteWorktreeRowHoverStart(worktreeId: string): void {
 
 /** A press is intent enough to skip the hover dwell; the mount still waits a task so it can't delay the press's focus move or drag start. */
 export function noteWorktreeRowPress(worktreeId: string): void {
-  notePredictiveWakeSelect(worktreeId)
+  installWindowListeners()
+  // The press may become a drag: hold the wake (and stop the hover dwell's) until the release.
+  notePredictiveWakeHoverEnd(worktreeId)
+  pressedId = worktreeId
   if (prewarmedWorktreeId !== worktreeId) {
     armDwell(worktreeId, 0)
   }

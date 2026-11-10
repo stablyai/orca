@@ -55,6 +55,8 @@ export type SandboxRow = {
   create_ms?: number | null
   /** Resume claim to ready of its latest wake (0035). */
   wake_ms?: number | null
+  /** Last sleep someone asked for (not the idle timer), from any client (0038). */
+  user_slept_at?: number | null
   archived_at: number | null
   archive_expires_at: number | null
   /** Registry (0006). `user_id` is the current owner (reassignable); `created_by` never changes. */
@@ -169,6 +171,11 @@ export async function countActiveSandboxesForUser(db: D1Database, accountId: str
     .bind(accountId, userId, ...ACTIVE_STATUSES)
     .first<{ n: number }>()
   return row?.n ?? 0
+}
+
+/** A sleep someone asked for. Not a `transition`: it never bumps `generation`. */
+export async function markUserSlept(db: D1Database, id: string, now: number): Promise<void> {
+  await db.prepare('UPDATE sandboxes SET user_slept_at = ? WHERE id = ?').bind(now, id).run()
 }
 
 export async function listByStatus(db: D1Database, statuses: readonly SandboxStatus[]): Promise<SandboxRow[]> {
