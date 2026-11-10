@@ -1,3 +1,4 @@
+import { capturePRPendingAction } from '../../github/pr-watch/pr-pending-actions'
 import type Database from '../../sqlite/sync-database'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -96,6 +97,18 @@ export function writeJournalDomainLifecycleItem(
     writtenSequence: position.sequence,
     stopSettle: position.stopSettle
   })
+  if (!position.recovered) {
+    const storedItem = items.find((item) => item.itemId === itemId)
+    if (storedItem) {
+      capturePRPendingAction(
+        db,
+        target.sessionId,
+        storedItem,
+        position.savedAt,
+        previous?.item.body
+      )
+    }
+  }
   if (tombstone) {
     db.prepare(
       `DELETE FROM journal_item_tombstones WHERE session_id=? AND epoch=? AND item_id=?`

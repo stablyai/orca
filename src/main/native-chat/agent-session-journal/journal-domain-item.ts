@@ -1,3 +1,11 @@
+import type { JournalDomainItemWrite, JournalDomainItemCommit } from './journal-domain-item-write'
+import { capturePRPendingAction } from '../../github/pr-watch/pr-pending-actions'
+import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../shared/native-chat/native-chat-pull-request-event'
+import { JournalSqlScope } from './journal-sql-scope'
+import {
+  journalDomainNewestTurn,
+  journalDomainUnsettledInputs
+} from './journal-domain-input-populations'
 import { journalContextEpoch } from './context-epochs/journal-context-cursor'
 import type Database from '../../sqlite/sync-database'
 import {
@@ -5,19 +13,11 @@ import {
   agentJournalSubmissionKey
 } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
-  AgentJournalCursor,
-  AgentJournalItemIdentity
-} from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type {
-  AgentJournalMessageItem,
-  AgentJournalItemBody,
   AgentJournalRenderItem,
-  AgentJournalSubmission,
-  AgentJournalAcceptanceReceipt
+  AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalLinkageFields } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { JournalStopSettleFact } from './journal-writer-host-facts'
-import type { JournalItemAppendOptions } from './journal-store-contracts'
 import { journalItemRevisionValue } from './projection/journal-item-fold'
 import { isProviderUserMessageEcho } from './projection/journal-item-echo'
 import { isJournalProviderActivity } from './projection/journal-provider-activity'
@@ -31,45 +31,12 @@ import { resolveJournalGuardedItem } from './writing/journal-timeline-resolution
 import { journalRowBase } from './writing/journal-row-builders'
 import { assertJournalFence } from './writing/journal-write-guards'
 import type { JournalItemRow } from './durable-rows/journal-row-schema'
-import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
 import { writeJournalDomainTextSnapshot } from './journal-domain-text-snapshot'
 import { appendJournalSqlEvent } from './journal-sql-event-tail'
-import {
-  readJournalSqlAcceptedInputs,
-  type JournalSqlAcceptedInputs
-} from './journal-sql-accepted-inputs'
+import { readJournalSqlAcceptedInputs } from './journal-sql-accepted-inputs'
 
-type JournalDomainItemFields = {
-  identity: AgentJournalItemIdentity
-  options: JournalItemAppendOptions
-  scopeItemIds?: readonly string[]
-}
-
-export type JournalDomainItemWrite = JournalDomainItemFields &
-  (
-    | { kind: 'item'; body: AgentJournalItemBody }
-    | {
-        kind: 'text-snapshot'
-        body: AgentJournalMessageItem
-      }
-  )
-
-export type JournalDomainItemCommit = {
-  cursor: AgentJournalCursor
-  publicCursor?: AgentJournalCursor
-  outcome:
-    | { kind: 'committed'; wrote: boolean }
-    | { kind: 'dropped'; reason: 'turn-settled'; turnItemId: string }
-  items: AgentJournalRenderItem[]
-  insertedItemIds?: string[]
-  receipts: AgentJournalAcceptanceReceipt[]
-  cards: QueuedMessageRow[]
-  inputChanged: boolean
-  acceptedInputs?: JournalSqlAcceptedInputs
-  editDeadline?: number | null
-}
-
+export type { JournalDomainItemWrite, JournalDomainItemCommit } from './journal-domain-item-write'
 /** Runs only on the owning writer connection, inside its command SAVEPOINT. */
 export function assertJournalDomainItemAuthority(
   db: Database.Database,
@@ -109,6 +76,15 @@ export function applyJournalDomainItem(
     receipts: [],
     cards: [],
     inputChanged: false
+  }
+  if (input.options.onlyBetweenTurns) {
+    const scope = new JournalSqlScope(db, sessionId, epoch)
+    if (
+      journalDomainNewestTurn(scope)?.state === 'running' ||
+      !journalDomainUnsettledInputs(scope, true).next().done
+    ) {
+      return empty
+    }
   }
   const rawId = agentJournalItemKey(input.identity)
   const alias = db
@@ -237,6 +213,12 @@ export function applyJournalDomainItem(
           ownerFence: row.ownerFence!,
           executionOwner
         })
+  if (!input.options.recovered) {
+    const storedItem = items.find((item) => item.itemId === itemId)
+    if (storedItem) {
+      capturePRPendingAction(db, sessionId, storedItem, savedAt, previous?.body)
+    }
+  }
   const result: JournalDomainItemCommit = {
     cursor: { epoch, sequence },
     publicCursor: { epoch: journalContextEpoch(epoch, Number(head.context_boundary)), sequence },
@@ -297,7 +279,13 @@ export function applyJournalDomainItem(
       submissions: result.receipts.map((receipt) => receipt.clientMessageId),
       cards: result.cards.map((card) => card.messageId)
     },
-    { fence: row.fence, observedAt: row.ts }
+    {
+      fence: row.fence,
+      observedAt:
+        row.body.kind === 'status' && row.body.presentation === PULL_REQUEST_EVENT_PRESENTATION
+          ? 0
+          : row.ts
+    }
   )
   return result
 }
