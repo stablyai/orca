@@ -16,7 +16,6 @@ import { CloudWorkspaceRow } from './CloudWorkspaceRow'
 import { NEW_SECTION } from './CloudWorkspaceRowMenu'
 import { ANY, CloudWorkspacesToolbar, type CloudWorkspacesFilters } from './CloudWorkspacesToolbar'
 import { EmptyState, ErrorState, NewSectionDialog, SkeletonRows } from './CloudWorkspacesStates'
-import { OrcaCloudTrialUsedUpBanner } from '../new-workspace/run-on/OrcaCloudTrialUsedUpNotice'
 import { CloudWorkspaceConfirmDialog, type PendingConfirm } from './CloudWorkspaceConfirmDialog'
 import { CloudReadSnapshotSheet } from './CloudReadSnapshotSheet'
 import { useCloudReadPanel } from './use-cloud-read-panel'
@@ -306,8 +305,6 @@ export function CloudWorkspacesHome({
         reading={reading}
         onRefresh={refresh}
       />
-      {/* T4: the team's trial ran out; running sandboxes sleep until a plan starts. */}
-      <OrcaCloudTrialUsedUpBanner />
 
       <div
         aria-busy={stale || state.status === 'loading'}

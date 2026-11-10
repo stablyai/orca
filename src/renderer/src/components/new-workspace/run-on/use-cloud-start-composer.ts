@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
+import { claimOrcaCloudTrial } from '@/components/billing/claim-trial'
 import { translate } from '@/i18n/i18n'
 import type {
   ProjectHostSetupOption,
@@ -29,30 +30,14 @@ import {
   getCloudPrimaryAction,
   getOpenSetupSteps,
   getOrcaCloudSegmentState,
-  isCloudSetupPanelVisible,
-  type CloudSetupStep
+  isCloudSetupPanelVisible
 } from './cloud-start-model'
 import { getOrcaCloudStartToast } from './orca-cloud-hours-copy'
 import { useCloudStartSteps } from './use-cloud-start-steps'
 import { useRunOnDefault } from './use-run-on-default'
+import { prefersReducedMotion, type CloudStartView } from './cloud-start-view'
 
-/** What the card renders: Run on's Orca Cloud segment, the setup panel and the fallback button. */
-export type CloudStartView = {
-  steps: CloudSetupStep[]
-  panelVisible: boolean
-  allSet: boolean
-  onSelectOrcaCloud: () => void
-  onUserPick: () => void
-  /** Present while setup blocks a start: creates the same prompt on this computer. */
-  onUseThisComputer?: () => void
-}
-
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
-  )
-}
+export type { CloudStartView } from './cloud-start-view'
 
 export function useCloudStartComposer({
   active,
@@ -129,9 +114,13 @@ export function useCloudStartComposer({
         return
       }
       toast.message(
-        translate('components.newWorkspace.cloudStart.githubGranted', 'GitHub access granted for {{repo}}', {
-          repo: repoName
-        }),
+        translate(
+          'components.newWorkspace.cloudStart.githubGranted',
+          'GitHub access granted for {{repo}}',
+          {
+            repo: repoName
+          }
+        ),
         {
           action: {
             label: getCloudPrimaryLabel('start'),
@@ -244,6 +233,17 @@ export function useCloudStartComposer({
       .catch(() => fallback?.())
   }, [access, agent, availability, openInstall, profileId, prompt, repoId, setupSessionId, steps])
 
+  // B1: only the trial is missing. Claiming it is the whole setup; the billing cache then reads
+  // entitled and the auto-start above submits. A personal account needs a team first: setup trip.
+  const startTrial = useCallback(() => {
+    setSetupStarted(true)
+    void claimOrcaCloudTrial().then((result) => {
+      if (result.status !== 'ok') {
+        runSetup()
+      }
+    })
+  }, [runSetup])
+
   const recordCreated = useCallback(() => {
     if (!repoId) {
       return
@@ -297,7 +297,9 @@ export function useCloudStartComposer({
         ? useThisComputer
         : action === 'checking'
           ? () => undefined
-          : runSetup
+          : action === 'startTrial'
+            ? startTrial
+            : runSetup
   return {
     view,
     primaryActionLabel: getCloudPrimaryLabel(allSet ? 'start' : action),

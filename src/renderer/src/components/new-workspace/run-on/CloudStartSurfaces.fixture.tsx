@@ -1,6 +1,5 @@
 // Cloud-start surfaces outside the composer (spec v2): the Landing trial card (E2), the empty Cloud
 // workspaces button (E3), the build sheet's hours chip (A7, O4) and the trial-used-up notice (T4).
-import React from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { LandingCloudCard } from '../../landing/LandingCloudCard'
 import { EmptyState } from '../../cloud-workspaces/CloudWorkspacesStates'
@@ -65,7 +64,11 @@ export const t4RunningMember = defineFixture({
   setup,
   render: () => (
     <div className="p-4">
-      <OrcaCloudTrialUsedUpNotice canManageBilling={false} teamName="acme" onAskForPlan={() => {}} />
+      <OrcaCloudTrialUsedUpNotice
+        canManageBilling={false}
+        teamName="acme"
+        onAskForPlan={() => {}}
+      />
     </div>
   )
 })

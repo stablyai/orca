@@ -64,7 +64,5 @@ export function OrcaCloudTrialUsedUpBanner(): React.JSX.Element | null {
   if (access.state !== 'no-plan' || !access.trialUsedUp) {
     return null
   }
-  return (
-    <OrcaCloudTrialUsedUpNotice canManageBilling={access.canManageBilling} className="mb-3" />
-  )
+  return <OrcaCloudTrialUsedUpNotice canManageBilling={access.canManageBilling} />
 }

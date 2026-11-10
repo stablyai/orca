@@ -15,6 +15,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { repoLabel, type MemberDirectory } from './cloud-workspace-format'
+import { OrcaCloudTrialUsedUpBanner } from '../new-workspace/run-on/OrcaCloudTrialUsedUpNotice'
 
 export const ANY = '__any'
 
@@ -173,6 +174,8 @@ export function CloudWorkspacesToolbar({
           {t('auto.components.cloudWorkspaces.archived', 'Archived')}
         </label>
       </div>
+      {/* T4: the team's trial ran out; running sandboxes sleep until a plan starts. */}
+      <OrcaCloudTrialUsedUpBanner />
     </div>
   )
 }

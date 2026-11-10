@@ -1,6 +1,5 @@
 // "Start in Orca Cloud" composer frames from cloud-start-onboarding spec v2: E1, A1, A6, A7, T1,
 // T2, E, X2 and the panel's GitHub rows D1–D3. Entry points and T4 are in CloudStartSurfaces.
-import React from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
 import type { CloudSetupStep } from './cloud-start-model'
@@ -227,11 +226,7 @@ export const eReturning = defineFixture({
       access={entitled}
       cloudSelected
       github={githubDone}
-      steps={[
-        { id: 'account', state: 'done' },
-        { id: 'plan', state: 'done' },
-        githubDone
-      ]}
+      steps={[{ id: 'account', state: 'done' }, { id: 'plan', state: 'done' }, githubDone]}
       prompt="Bump eslint to v10 and fix the new warnings."
     />
   )

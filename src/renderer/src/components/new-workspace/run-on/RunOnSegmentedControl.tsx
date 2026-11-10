@@ -133,7 +133,7 @@ export default function RunOnSegmentedControl(
                     'components.newWorkspace.runOn.cloudUnreachableReason',
                     "Orca Cloud: can't reach it right now. Check your connection."
                   )
-                : t('components.newWorkspace.runOn.cloudTooltip', 'Hosted sandbox')
+                : t('components.newWorkspace.runOn.cloudHosted', 'Hosted sandbox')
           }
         ]),
     {
@@ -161,10 +161,7 @@ export default function RunOnSegmentedControl(
   return (
     <Popover open={moreOpen} onOpenChange={setMoreOpen}>
       <PopoverAnchor asChild>
-        <div
-          className="w-fit max-w-full"
-          data-run-on-segmented="true"
-        >
+        <div className="w-fit max-w-full" data-run-on-segmented="true">
           <SettingsSegmentedControl<RunOnSegment>
             value={segment ?? 'local'}
             activation="manual"

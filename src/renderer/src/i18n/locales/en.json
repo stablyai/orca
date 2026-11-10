@@ -1376,8 +1376,7 @@
     "copy": "Copy",
     "selectAll": "Select All",
     "quitAndStopAllSessions": "Quit Completely...",
-    "quitAndStopAllSessionsTooltip": "Also stops every terminal session, including running agents. Plain Quit keeps them running so Orca reattaches on next launch.",
-    "newCloudWorkspace": "New cloud workspace"
+    "quitAndStopAllSessionsTooltip": "Also stops every terminal session, including running agents. Plain Quit keeps them running so Orca reattaches on next launch."
   },
   "tray": {
     "openOrca": "Open Orca",
@@ -22987,13 +22986,11 @@
       },
       "cloudSetup": {
         "account": "Orca account",
-        "accountNeeded": "Sign in or create one",
         "team": "Team",
         "plan": "Team plan",
         "github": "GitHub access",
         "githubNeeded": "Orca Cloud clones your code from GitHub. Give access to this repository once.",
         "agent": "Agent",
-        "agentLater": "Sign in once the workspace starts",
         "planAfterSignIn": "Checked after you sign in",
         "askOwner": "Ask an owner or admin to fix it.",
         "planEnded": "Your Team plan ended.",
@@ -23012,7 +23009,6 @@
         "allSet": "All set",
         "title": "Set up Orca Cloud",
         "starting": "Starting your cloud workspace…",
-        "subtitle": "One visit to your browser. Your prompt stays here and starts when you’re done.",
         "agentSetUpAfterSignIn": "{{agent}}: set up once in Settings → Agent accounts after you sign in",
         "agentSetUpOnce": "{{agent}}: set up once in Settings → Agent accounts",
         "comparePlans": "Compare plans",
@@ -23032,18 +23028,15 @@
         "trialOffer_other": "{{hours}} sandbox hours to try Orca Cloud"
       },
       "runOn": {
-        "cloudUnreachable": "Can't reach Orca Cloud right now. Check your connection.",
         "thisComputer": "This computer",
-        "thisComputerTooltip": "{{machine}} · {{shortcut}}",
-        "noLocalCheckout": "This project has no location on this computer.",
         "orcaCloud": "Orca Cloud",
-        "cloudTooltip": "Hosted sandbox · {{shortcut}}",
         "moreWithTarget": "More places to run: {{name}}",
         "more": "More places to run",
         "cloudUnreachableReason": "Orca Cloud: can't reach it right now. Check your connection.",
         "thisComputerUnusable": "This computer, {{reason}}",
         "locationNotSet": "Project location not set",
-        "cloudUnreachableName": "Orca Cloud, can't reach it right now"
+        "cloudUnreachableName": "Orca Cloud, can't reach it right now",
+        "cloudHosted": "Hosted sandbox"
       },
       "cloudHours": {
         "trialChip_one": "Trial · {{hours}} sandbox hour left",
@@ -23416,27 +23409,12 @@
     "landing": {
       "cloudCard": {
         "title": "Run agents in Orca Cloud",
-        "body": "Hosted sandboxes keep running while your laptop sleeps. Start one from any project.",
         "notNow": "Not now",
         "tryTitle": "Try Orca Cloud",
         "planBody": "Agents keep running while your laptop sleeps.",
         "trialBody": "Agents keep running while your laptop sleeps. No card needed.",
         "try": "Try Orca Cloud"
       }
-    },
-    "cmdJ": {
-      "newCloudWorkspace": {
-        "description": "Start a workspace in Orca Cloud.",
-        "verbs": {
-          "newCloud": "new cloud workspace",
-          "orcaCloud": "orca cloud",
-          "sandbox": "sandbox"
-        }
-      }
-    },
-    "sidebar": {
-      "newWorkspaceMore": "More ways to create",
-      "newWorkspaceLocal": "New workspace on this computer"
     },
     "cloudWorkspaces": {
       "emptyMineStartBody": "Start one and it keeps running while your laptop sleeps.",
@@ -25442,8 +25420,7 @@
       "1524825c2c": "Toggle workspace board",
       "d286d1ab85": "Clear pane title",
       "cloudWorkspaceCopyLink": "Copy cloud workspace link",
-      "workspaceRun": "Run or restart the run action",
-      "workspaceCreateCloud": "New cloud workspace"
+      "workspaceRun": "Run or restart the run action"
     },
     "group": {
       "global": "Global",
