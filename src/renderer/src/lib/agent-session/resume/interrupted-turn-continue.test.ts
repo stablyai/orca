@@ -150,7 +150,7 @@ describe('interrupted turn continue', () => {
     armInterruptedTurnsForHostRestart('ws', NOW)
     // The pane is closed for 10 minutes (well past the 90s relaunch window), then reopened.
     let clock = NOW
-    const send = vi.fn(async () => true)
+    const send = vi.fn(async (_args: { ptyId: string; prompt: string }) => true)
     const sent = await continueInterruptedTurns('ws', {
       now: () => clock,
       sleep: async (ms: number) => {
