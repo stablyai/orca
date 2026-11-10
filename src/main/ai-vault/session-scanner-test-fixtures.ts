@@ -78,7 +78,8 @@ export function isolatedScanRoots(root: string) {
     kimiSessionsDir: join(root, 'kimi-sessions'),
     museSessionsDir: join(root, 'muse-sessions'),
     jcodeSessionsDir: join(root, 'jcode-sessions'),
-    kiroSessionsDir: join(root, 'kiro-sessions')
+    kiroSessionsDir: join(root, 'kiro-sessions'),
+    anteSessionsDir: join(root, 'ante-sessions')
   }
 }
 

@@ -20,6 +20,7 @@ import {
 } from './scanners/cursor/session-scanner-cursor-chat-meta'
 import { rovoSessionCwd } from './scanners/session-scanner-graph-parsers'
 import { grokSessionCwd } from './scanners/grok/session-scanner-grok-parser'
+import { anteMetadataCwd } from './scanners/ante/session-scanner-ante-parser'
 import { listedKiroMetadata } from './scanners/kiro/session-scanner-kiro-parser'
 import { openCodeSessionCwd } from './scanners/opencode/session-scanner-opencode-parser'
 
@@ -118,6 +119,7 @@ export const AI_VAULT_SCOPE_CWD_SOURCES: Record<AiVaultAgent, SessionScopeCwdSou
     return metadata ? rovoSessionCwd(metadata) : null
   }),
   cline: document(clineManifestCwd),
+  ante: document(anteMetadataCwd),
   kiro: document((content) => {
     const metadata = listedKiroMetadata(content)
     return metadata ? extractString(metadata.cwd) : null

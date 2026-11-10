@@ -4,6 +4,7 @@ import {
   writeOmpScannerFixture,
   writePrimeAgentScannerFixture
 } from './session-scanner-test-fixtures'
+import { writeAnteScannerFixture } from './scanners/ante/session-scanner-ante-fixture'
 import { jsonlBody, type AgentVaultRoots } from './session-scanner-vault-roots'
 
 export async function writeLogAgentFixtures(
@@ -148,6 +149,10 @@ export async function writeLogAgentFixtures(
   )
 
   const ompSessionFile = await writeOmpScannerFixture(roots.ompSessionsDir)
+
+  // Ante lists one folder per session: meta.json identity plus an events.jsonl sibling.
+  await writeAnteScannerFixture(roots.anteSessionsDir)
+
   const primeAgentSessionFile = await writePrimeAgentScannerFixture(roots.primeAgentSessionsDir)
 
   await mkdir(roots.droidSessionsDir, { recursive: true })

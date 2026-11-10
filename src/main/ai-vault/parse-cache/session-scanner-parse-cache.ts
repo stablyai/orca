@@ -86,6 +86,8 @@ function resumableStateFactoryFor(
     case 'opencode2':
     case 'zcode':
     case 'rovo':
+    case 'ante':
+      // `meta.json` is rewritten in place, so an append cursor would mix two document versions.
       return null
   }
 }

@@ -211,6 +211,9 @@ function buildAgentResumeInvocation(
     case 'openclaw':
     case 'droid':
     case 'jcode':
+    // Ante resumes by session folder id (`ante --resume ses_…`), not a transcript path.
+    // falls through
+    case 'ante':
     // OMP/Prime use the same --resume form with absolute transcript paths.
     // falls through
     case 'omp':
