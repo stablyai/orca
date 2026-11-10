@@ -8,11 +8,9 @@ import {
   type CloudSecretsResult,
   type CloudSecretsStatus
 } from '../../shared/cloud-secrets/cloud-secrets-wire'
-import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
-import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
 import { withCloudBuildDefaults } from '../cloud-build-defaults'
 import { getHostedSandboxConfig } from '../hosted-sandbox/hosted-sandbox-config'
-import { HOSTED_SANDBOX_DRIVER_ID } from '../hosted-sandbox/hosted-sandbox-driver'
+import { orcaCloudSandboxIdFor } from '../hosted-sandbox/orca-cloud-sandbox-id'
 import { getOrcaCloudAvailability } from '../hosted-sandbox/hosted-sandbox-install'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import {
@@ -90,18 +88,6 @@ async function attempt<T>(
     console.warn(`[cloud-secrets] request failed: ${code}`)
     return { ok: false, error: code }
   }
-}
-
-function sandboxIdFor(userDataPath: string, runtimeEnvironmentId: string): string | null {
-  const runtime = listEphemeralVmRuntimes(userDataPath).find(
-    (record) =>
-      record.runtimeEnvironmentId === runtimeEnvironmentId &&
-      record.recipe?.provider === 'orca-cloud'
-  )
-  const handle = runtime?.recipeResult
-    ? environmentHandleFromRecipeResult(runtime.recipeResult, HOSTED_SANDBOX_DRIVER_ID)
-    : null
-  return handle?.environmentId ?? null
 }
 
 export function registerCloudSecretsHandlers(userDataPath: string): void {
@@ -197,7 +183,7 @@ export function registerCloudSecretsHandlers(userDataPath: string): void {
     if (!request.success) {
       return invalid
     }
-    const sandboxId = sandboxIdFor(userDataPath, request.data.runtimeEnvironmentId)
+    const sandboxId = orcaCloudSandboxIdFor(userDataPath, request.data.runtimeEnvironmentId)
     return sandboxId
       ? attempt(client, (c) => c.workspaceSharing(sandboxId))
       : { ok: false, error: 'not_found' }
@@ -207,7 +193,7 @@ export function registerCloudSecretsHandlers(userDataPath: string): void {
     if (!request.success) {
       return invalid
     }
-    const sandboxId = sandboxIdFor(userDataPath, request.data.runtimeEnvironmentId)
+    const sandboxId = orcaCloudSandboxIdFor(userDataPath, request.data.runtimeEnvironmentId)
     return sandboxId
       ? attempt(client, (c) => c.refreshEnv(sandboxId))
       : { ok: false, error: 'not_found' }

@@ -323,6 +323,18 @@ export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
       agent: OrcaCloudAccountAgent,
       source: AgentSource
     ): Promise<OrcaCloudAgentsResult<AgentSourcesView>> =>
-      attempt((client) => client.setDefaultSource(agent, source))
+      attempt((client) => client.setDefaultSource(agent, source)),
+
+    /** One workspace's Sources (sandbox id), for the build sheet's ⋯ menu. */
+    workspaceSources: (workspaceId: string): Promise<OrcaCloudAgentsResult<AgentSourcesView>> =>
+      attempt((client) => client.sources(undefined, workspaceId)),
+
+    /** The per-workspace override (S1-b). It applies at the next request (D10). */
+    setWorkspaceSource: (
+      agent: OrcaCloudAccountAgent,
+      source: AgentSource,
+      workspaceId: string
+    ): Promise<OrcaCloudAgentsResult<AgentSourcesView>> =>
+      attempt((client) => client.setWorkspaceSource(agent, source, workspaceId))
   }
 }

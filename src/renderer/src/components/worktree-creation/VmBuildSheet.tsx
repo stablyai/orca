@@ -19,7 +19,7 @@ import { VmBuildStepRow } from './VmBuildStepRow'
 import { firstBuildLogErrorLine, VmBuildLog } from './VmBuildLog'
 import { VmBuildFailureCard } from './VmBuildFailureCard'
 import { VmBuildAgentSignInRow } from './VmBuildAgentSignInRow'
-import { VmBuildCloudAgentStep } from '../cloud-agent-setup/VmBuildCloudAgentStep'
+import { VmBuildCloudAgentsRow } from './cloud-agents-row/VmBuildCloudAgentsRow'
 import { VmBuildSecretsRow } from '../cloud-secrets-ask/VmBuildSecretsRow'
 import { OrcaCloudQueuedPrompt } from '@/components/orca-cloud/OrcaCloudQueuedPrompt'
 import {
@@ -93,7 +93,7 @@ export function VmBuildSheet({
   onReturnToComposer,
   onEditRecipe,
   agentSignInRow,
-  cloudAgentStep,
+  cloudAgentsRow,
   secretsRow,
   stepTimings
 }: {
@@ -111,8 +111,8 @@ export function VmBuildSheet({
   onEditRecipe: () => void
   /** Fixtures only: a fixed sign-in row in place of the live one. */
   agentSignInRow?: React.ReactNode
-  /** Fixtures only: a fixed "Add an agent" step (null for none) in place of the live one. */
-  cloudAgentStep?: React.ReactNode
+  /** Fixtures only: a fixed cloud Agents row (null for none) in place of the live one. */
+  cloudAgentsRow?: React.ReactNode
   /** Fixtures only: a fixed Secrets row (null for none) in place of the live one. */
   secretsRow?: React.ReactNode
   /** Fixtures only: measured step timings in place of the control plane's. */
@@ -246,13 +246,17 @@ export function VmBuildSheet({
                   t={t}
                 />
               ))}
-              {cloudAgentStep !== undefined ? (
-                cloudAgentStep
-              ) : (
-                <VmBuildCloudAgentStep creationId={creationId} entry={entry} />
-              )}
+              {/* Orca Cloud: one fixed-height row from the Orca account, never a per-sandbox sign-in
+                  (spec §5b). Other VMs keep the host's own sign-in row. */}
+              {cloud ? (
+                cloudAgentsRow !== undefined ? (
+                  cloudAgentsRow
+                ) : (
+                  <VmBuildCloudAgentsRow creationId={creationId} entry={entry} />
+                )
+              ) : null}
               {agentSignInRow ??
-                (entry.vmEnvironmentId ? (
+                (!cloud && entry.vmEnvironmentId ? (
                   <VmBuildAgentSignInRow
                     creationId={creationId}
                     environmentId={entry.vmEnvironmentId}
