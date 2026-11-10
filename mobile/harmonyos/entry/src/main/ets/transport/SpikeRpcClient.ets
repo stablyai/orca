@@ -185,7 +185,8 @@ export class SpikeRpcClient {
   }
 
   /** Connects and runs the E2EE handshake (framing 'v2' or 'legacy'); resolves once authenticated. */
-  connect(endpoint: string, deviceToken: string, serverPublicKeyB64: string, framing: string): Promise<void> {
+  connect(endpoint: string, deviceToken: string, serverPublicKeyB64: string, framing: string,
+    onHandshakeStarted?: () => void): Promise<void> {
     if (this.relayOptions?.pairingRecovery && framing !== 'v2') {
       return Promise.reject(new Error('Relay pairing recovery requires E2EE v2'));
     }
@@ -208,13 +209,13 @@ export class SpikeRpcClient {
       this.log(this.relayOptions ? '正在建立 Relay 加密连接' : '正在建立直连加密连接');
       this.ws.on('open', (_err: BusinessError, _value: Object) => {
         try {
-          if (this.state === 'closed') { return; }
+          if (this.state !== 'connecting') { return; }
           if (this.relayOptions) {
             this.state = 'awaiting-relay';
             let auth: Record<string, Object> = { 'type': 'relay-auth', 'v': 1, 'mode': 'connect', 'credential': this.relayOptions.credential };
             this.sendRaw(JSON.stringify(auth)); return;
           }
-          this.beginHandshake(serverPublicKeyB64);
+          this.beginHandshake(serverPublicKeyB64, onHandshakeStarted);
         } catch (e) {
           failed(e as Error);
         }
@@ -222,7 +223,7 @@ export class SpikeRpcClient {
       this.ws.on('message', (_err: BusinessError, value: string | ArrayBuffer) => {
         try {
           if (this.relayRefused) { return; }
-          if (this.state === 'awaiting-relay') { this.acceptRelayHello(value, serverPublicKeyB64); return; }
+          if (this.state === 'awaiting-relay') { this.acceptRelayHello(value, serverPublicKeyB64, onHandshakeStarted); return; }
           if (this.state !== 'closed') { this.handleMessage(value, deviceToken, connected, failed); }
         } catch (e) {
           this.log('连接协议验证失败');
@@ -254,16 +255,19 @@ export class SpikeRpcClient {
     });
   }
 
-  private beginHandshake(serverPublicKeyB64: string): void {
+  private beginHandshake(serverPublicKeyB64: string, onHandshakeStarted?: () => void): void {
     this.state = 'awaiting-ready';
+    let hello: string;
     if (this.framing === 'legacy') {
-      this.legacy = new LegacyE2eeChannel(serverPublicKeyB64); this.sendRaw(this.legacy.helloJson);
+      this.legacy = new LegacyE2eeChannel(serverPublicKeyB64); hello = this.legacy.helloJson;
     } else {
       this.session = new E2eeV2ClientSession(this.relayOptions ? 'relay' : 'direct', this.relayOptions ? this.relayOptions.relayHostId : '');
-      this.session.setPinnedKey(serverPublicKeyB64); this.sendRaw(this.session.helloJson);
+      this.session.setPinnedKey(serverPublicKeyB64); hello = this.session.helloJson;
     }
+    onHandshakeStarted?.();
+    if (this.state === 'awaiting-ready') { this.sendRaw(hello); }
   }
-  private acceptRelayHello(value: string | ArrayBuffer, publicKeyB64: string): void {
+  private acceptRelayHello(value: string | ArrayBuffer, publicKeyB64: string, onHandshakeStarted?: () => void): void {
     if (typeof value !== 'string' || value.length > 16384 || !this.relayOptions) { throw new Error('Invalid relay hello'); }
     let hello: ESObject = JSON.parse(value);
     if (hello && hello['type'] === 'relay-moved' && hello['v'] === 1 && isRelayOrigin(hello['cellUrl'])
@@ -292,7 +296,7 @@ export class SpikeRpcClient {
       }
       this.relayAcceptedVersion = acceptedVersion;
     }
-    this.beginHandshake(publicKeyB64);
+    this.beginHandshake(publicKeyB64, onHandshakeStarted);
   }
   private confirmResume(connected: () => void, failed: (error: Error) => void): void {
     let params: Record<string, string> = { 'resumeConfirmReqId': `confirm-${Date.now()}-${this.requestCounter++}` };

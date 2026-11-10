@@ -9,7 +9,7 @@ import { rotateRelayCredential } from './RelayCredentialManager';
 import { appendLog, LOG_LEVEL_INFO, LOG_LEVEL_SUCCESS, LOG_LEVEL_WARN, LOG_LEVEL_ERROR } from '../diagnostics/ConnectionLogStore';
 import { directPath, RelayHostReachability } from '../diagnostics/ConnectionDiagnostics';
 
-export type SessionPhase = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'stopped' | 'auth-failed';
+export type SessionPhase = 'idle' | 'connecting' | 'handshaking' | 'connected' | 'reconnecting' | 'stopped' | 'auth-failed';
 type Listener = (phase: SessionPhase, detail: string) => void;
 const STALE_DIAL_AGE_MS = 2000;
 
@@ -133,6 +133,9 @@ export class HostSession {
     return fence;
   }
   private async connectAttempt(client: SpikeRpcClient, useRelay: boolean): Promise<void> {
+    let onHandshakeStarted = (): void => {
+      if (!this.stopped && this.client === client) { this.publish('handshaking', ''); }
+    };
     if (this.context && this.meta.relay) {
       let owner = await getDeviceToken(this.context, this.meta.id);
       if (owner !== this.token) { this.ownerSuperseded = true; throw new Error('Connection owner was superseded'); }
@@ -142,7 +145,7 @@ export class HostSession {
     }
     if (!useRelay || !this.meta.relay || !this.credential) {
       this.pendingPath = this.localPath;
-      await client.connect(this.meta.endpoint, this.token, this.meta.publicKeyB64, 'v2');
+      await client.connect(this.meta.endpoint, this.token, this.meta.publicKeyB64, 'v2', onHandshakeStarted);
       await settleRuntimeCapabilities(client); return;
     }
     let endpoint = this.meta.relay;
@@ -160,7 +163,7 @@ export class HostSession {
     }
     if (this.stopped || this.client !== client) { throw new Error('Connection cancelled'); }
     client.configureRelay({ relayHostId: endpoint.relayHostId, credential: token, credentialKind: 'resume', credentialVersion: version });
-    await client.connect(relayConnectUrl(endpoint.cellUrl, endpoint.relayHostId), this.token, this.meta.publicKeyB64, 'v2');
+    await client.connect(relayConnectUrl(endpoint.cellUrl, endpoint.relayHostId), this.token, this.meta.publicKeyB64, 'v2', onHandshakeStarted);
     await settleRuntimeCapabilities(client);
   }
   private retry(client: SpikeRpcClient, livenessFailed: boolean = false, error?: Error): void {

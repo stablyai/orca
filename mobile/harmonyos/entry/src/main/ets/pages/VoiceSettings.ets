@@ -131,7 +131,7 @@ struct VoiceSettings {
     if (!this.shown) { return; }
     let ready = this.desktops.find((desktop: VoiceDesktop): boolean => desktop.lease.connection.getClient() !== null);
     this.connecting = !ready && this.desktops.some((desktop: VoiceDesktop): boolean =>
-      ['idle', 'connecting', 'reconnecting'].includes(desktop.lease.connection.getPhase()));
+      ['idle', 'connecting', 'handshaking', 'reconnecting'].includes(desktop.lease.connection.getPhase()));
     let client = ready?.lease.connection.getClient() ?? null;
     if (client === this.client) { return; }
     this.requestEpoch++; this.stopPolling();

@@ -750,9 +750,11 @@ test('a socket close reconnects the supervised session and stop cancels further 
   session.stop()
   assert.deepEqual(phases, [
     'connecting',
+    'handshaking',
     'connected',
     'reconnecting',
     'reconnecting',
+    'handshaking',
     'connected',
     'stopped'
   ])
@@ -777,7 +779,7 @@ test('a network change replaces a stranded handshake and ignores the old socket 
   const session = new HostSession(meta, 'synthetic-token')
   t.after(() => session.stop())
   session.start()
-  assert.equal(session.getPhase(), 'connecting')
+  assert.equal(session.getPhase(), 'handshaking')
 
   availablePath = currentPath
   now += 3000

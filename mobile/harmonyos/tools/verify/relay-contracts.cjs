@@ -116,12 +116,22 @@ function createRelayPeer({
 test('relay resume waits for authoritative confirmation after the outer and pinned handshakes', async () => {
   const peer = createRelayPeer()
   let connected = false
+  let sentAtHandshake
   const connecting = peer.client
-    .connect('wss://cell.example/v1/connect/abcdefghijklmnop', 'device-token', 'pinned-key', 'v2')
+    .connect(
+      'wss://cell.example/v1/connect/abcdefghijklmnop',
+      'device-token',
+      'pinned-key',
+      'v2',
+      () => {
+        sentAtHandshake = peer.sent.map((frame) => frame.type)
+      }
+    )
     .then(() => {
       connected = true
     })
   assert.equal(connected, false)
+  assert.deepEqual(sentAtHandshake, ['relay-auth'])
   assert.equal(peer.sent[0].type, 'relay-auth')
   assert.equal(peer.sent[0].credential, 'A'.repeat(43))
   assert.equal(peer.contexts[0].transport, 'relay')

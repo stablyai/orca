@@ -529,7 +529,7 @@ struct Home {
     runtime.unobserve = lease.connection.observe((phase: SessionPhase): void => {
       if (epoch !== this.epoch || this.runtimes.get(hostId) !== runtime) { return; }
       runtime.online = phase === 'connected';
-      runtime.connecting = phase === 'connecting' || phase === 'reconnecting';
+      runtime.connecting = phase === 'connecting' || phase === 'handshaking' || phase === 'reconnecting';
       let client = lease.connection.getClient();
       if (runtime.client !== client) {
         if (runtime.refreshTimer >= 0) { clearTimeout(runtime.refreshTimer); runtime.refreshTimer = -1; }
@@ -987,7 +987,7 @@ struct Home {
   }
 
   private desktopIsLive(id: string): boolean {
-    return ['connecting', 'connected', 'reconnecting'].includes(this.hostPhases[id]);
+    return ['connecting', 'handshaking', 'connected', 'reconnecting'].includes(this.hostPhases[id]);
   }
 
   private desktopSubtitle(host: HostMeta | null): string {
