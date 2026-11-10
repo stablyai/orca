@@ -5617,29 +5617,10 @@
           "85457c02fe": "Claude",
           "b2cf4310ce": "Overview",
           "grokUsageTab": "Grok",
-          "trackingSince": "Tracking since {{value0}}",
-          "c79f073d4c": "Usage Analytics"
+          "trackingSince": "Tracking since {{value0}}"
         },
         "UsageOverviewPane": {
-          "3887b94ce5": "Total tokens",
-          "33f7b043d2": "Providers",
-          "70f36452d4": "Cache share",
-          "327603fe8b": "Active days",
-          "0eaf937335": "Est. cost",
-          "2d13e57f72": "Enable OpenCode",
-          "2f1ee2878b": "Enable Codex",
-          "0ea0cae435": "Enable Claude",
-          "6c00c46815": "Enable a provider to scan local agent logs and build the combined token ledger.",
-          "49405ccc8d": "Start tracking tokens",
-          "ca6bc5fded": "Refresh",
-          "e06d1baf5c": "Refresh usage overview",
-          "c760c481c5": "Usage Overview",
-          "55c910f4f1": "- some model prices are unavailable",
-          "enableMuse": "Enable Muse",
-          "noLocalUsageYet": "No local Claude, Codex, OpenCode, or Muse usage found yet. The overview will populate after the next agent session writes token logs.",
-          "providersEnabledWithData": "{{enabled}} enabled - {{withData}} with data",
-          "sessionCount_one": "{{formatted}} session",
-          "sessionCount_other": "{{formatted}} sessions"
+          "3887b94ce5": "Total tokens"
         },
         "share": {
           "card": {

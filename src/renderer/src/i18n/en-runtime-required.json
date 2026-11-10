@@ -1071,29 +1071,6 @@
         }
       },
       "stats": {
-        "StatsPane": {
-          "c79f073d4c": "Usage Analytics"
-        },
-        "UsageOverviewPane": {
-          "0ea0cae435": "Enable Claude",
-          "0eaf937335": "Est. cost",
-          "2d13e57f72": "Enable OpenCode",
-          "2f1ee2878b": "Enable Codex",
-          "327603fe8b": "Active days",
-          "33f7b043d2": "Providers",
-          "49405ccc8d": "Start tracking tokens",
-          "55c910f4f1": "- some model prices are unavailable",
-          "6c00c46815": "Enable a provider to scan local agent logs and build the combined token ledger.",
-          "70f36452d4": "Cache share",
-          "c760c481c5": "Usage Overview",
-          "ca6bc5fded": "Refresh",
-          "e06d1baf5c": "Refresh usage overview",
-          "enableMuse": "Enable Muse",
-          "noLocalUsageYet": "No local Claude, Codex, OpenCode, or Muse usage found yet. The overview will populate after the next agent session writes token logs.",
-          "providersEnabledWithData": "{{enabled}} enabled - {{withData}} with data",
-          "sessionCount_one": "{{formatted}} session",
-          "sessionCount_other": "{{formatted}} sessions"
-        },
         "usage": {
           "overview": {
             "sections": {
