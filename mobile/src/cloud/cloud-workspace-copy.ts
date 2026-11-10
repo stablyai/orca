@@ -83,13 +83,13 @@ export function readSnapshotRefusedMessage(
     case 'signer_changed':
       return t(
         'cloud.snapshot.signerChanged',
-        'This workspace’s copy is signed by a different key than before, so it isn’t shown. Wake it to see it as it is now.'
+        'The saved copy of this workspace is signed by a different key than before, so it isn’t shown. Wake the workspace to see it as it is now.'
       )
     case 'unsigned':
     case 'bad_signature':
       return t(
         'cloud.snapshot.unsigned',
-        'Orca Cloud sent a copy this workspace didn’t sign, so it isn’t shown. Wake the workspace to see it as it is now.'
+        'The saved copy of this workspace couldn’t be verified, so it isn’t shown. Wake the workspace to see it as it is now.'
       )
   }
 }
