@@ -37,9 +37,15 @@ type ArmedTurn = {
   ptyIdAtArm: string | null
 }
 
-/** How long after the restart settles a relaunched agent may take to come up. */
+/** How long after its pane is open a relaunched agent may take to come up. */
 const RELAUNCH_WAIT_MS = 90_000
 const POLL_MS = 1_000
+/**
+ * A pane that isn't open relaunches its agent only when the user reopens it (the agent view or the
+ * workspace), possibly long after the restart. Keep the turn armed until then, as long as the
+ * turn is still fresh (the same bound the cold-restore continue uses), polling slowly meanwhile.
+ */
+const CLOSED_PANE_POLL_MS = 5_000
 /** A relaunched agent's TUI keeps drawing briefly after its first hook fires. */
 const SETTLE_AFTER_REPORT_MS = 2_000
 
@@ -152,8 +158,10 @@ async function continueOne(turn: ArmedTurn, deps: ContinueDeps): Promise<boolean
   if (sentTurns.has(turn.turnKey)) {
     return false
   }
-  const deadline = deps.now() + RELAUNCH_WAIT_MS
-  while (deps.now() < deadline) {
+  const freshUntil = turn.armedAt + AGENT_STATUS_STALE_AFTER_MS
+  // Starts when the pane is (re)opened: only then can its agent relaunch and read input.
+  let relaunchDeadline: number | null = null
+  while (deps.now() < Math.min(freshUntil, relaunchDeadline ?? freshUntil)) {
     if (
       continuedOnItsOwn(turn.paneKey, turn.armedAt) ||
       // A cold-restore resume already carried `continue`, or a person typed into the pane since.
@@ -163,11 +171,18 @@ async function continueOne(turn: ArmedTurn, deps: ContinueDeps): Promise<boolean
       return false
     }
     const ptyId = deps.ptyIdFor(turn.paneKey)
+    if (!ptyId) {
+      // Not open: wait for the user to reopen it instead of giving up after the relaunch window.
+      relaunchDeadline = null
+      await deps.sleep(CLOSED_PANE_POLL_MS)
+      continue
+    }
+    relaunchDeadline ??= deps.now() + RELAUNCH_WAIT_MS
     // The relaunched agent already reported (its hooks only run inside the agent), so its TUI is
     // up and reading input: submit once it has settled and owns the terminal. Some agents (Codex)
     // resume idle and never emit the paste-readiness signal the generic path waits for.
     const reported = relaunchReport(turn)
-    if (ptyId && reported) {
+    if (reported) {
       trace(
         `reported ${turn.paneKey.slice(-4)} ${reported.state} age=${deps.now() - reported.updatedAt}`
       )
@@ -184,7 +199,7 @@ async function continueOne(turn: ArmedTurn, deps: ContinueDeps): Promise<boolean
         markInterruptedTurnContinued(turn.turnKey)
         return true
       }
-    } else if (ptyId) {
+    } else {
       const sent = await deps.send({
         ptyId,
         agent: turn.agent,

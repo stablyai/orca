@@ -62,6 +62,8 @@ export type CloudMoveState =
       timedOut: boolean
       /** The local worktree that was created before the failure, if any. */
       localWorktreeId: string | null
+      /** Set when the apply step failed on an existing worktree: "Apply changes again" retries it. */
+      retry?: { prepared: CloudTransferPrepared; worktreePath: string } | null
       /** The user's archive-afterwards choice, so Try again keeps it. */
       archiveAfter: boolean
       /** Settled while hidden: stays a notice until Show (never steals focus). */

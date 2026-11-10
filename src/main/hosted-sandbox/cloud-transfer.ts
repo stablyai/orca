@@ -3,17 +3,22 @@
 // in the VM, downloads and imports the branch; finish (after the window created the local worktree
 // through its ordinary create path) applies changes and installs remapped agent sessions.
 import { randomUUID } from 'node:crypto'
-import { mkdir, readdir, rm, stat } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rm, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { ipcMain, type BrowserWindow } from 'electron'
 import { getEphemeralVmRecipeResultConnection } from '../../shared/ephemeral-vm-recipes'
 import {
   CLOUD_TRANSFER_ARCHIVE,
-  CLOUD_TRANSFER_MAX_BYTES,
-  claudeProjectDirName
+  CLOUD_TRANSFER_MAX_BYTES
 } from '../../shared/hosted-sandbox/cloud-transfer-pack'
-import { gunzipCapped, safeExtractTar } from './cloud-transfer-tar'
+import { safeExtractTar } from './cloud-transfer-tar'
+import {
+  TRANSFER_STATE_FILE,
+  applyTransferToWorktree,
+  loadPersistedTransfer,
+  persistTransfer
+} from './cloud-transfer-apply'
 import {
   ORCA_CLOUD_TRANSFER_CHANNELS as CH,
   type CloudTransferFinished,
@@ -23,13 +28,9 @@ import {
   type CloudTransferResult
 } from '../../shared/hosted-sandbox/cloud-transfer-api'
 import {
-  applyPatch,
   cleanUpCloud,
   downloadCloudFile,
-  fileSize,
   importBundle,
-  installSessions,
-  listFiles,
   packInCloud,
   pickCloudWorktree,
   type Prepared,
@@ -75,6 +76,7 @@ export function installCloudTransferHandlers(deps: {
   )
   ipcMain.removeHandler(CH.prepare)
   ipcMain.removeHandler(CH.finish)
+  ipcMain.removeHandler(CH.reapply)
   ipcMain.handle(
     CH.prepare,
     async (
@@ -143,7 +145,9 @@ export function installCloudTransferHandlers(deps: {
         if (!branch) {
           throw new Error('The cloud workspace has no commits to move.')
         }
-        prepared.set(transferId, { dir, manifest, repoPath, workspaceId: args.workspaceId })
+        const entry = { dir, manifest, repoPath, workspaceId: args.workspaceId }
+        prepared.set(transferId, entry)
+        await persistTransfer(entry)
         const baseBranch = manifest.upstream?.replace(/^[^/]+\//, '') ?? null
         return {
           ok: true,
@@ -188,63 +192,46 @@ export function installCloudTransferHandlers(deps: {
         emit({ workspaceId: entry.workspaceId, transferId: args.transferId, phase })
       try {
         step('applying')
-        const leftovers = join(entry.dir, 'unapplied')
-        const appliedStaged = await applyPatch(
-          args.worktreePath,
-          join(entry.dir, 'staged.patch'),
-          true,
-          leftovers
-        )
-        const appliedUnstaged = await applyPatch(
-          args.worktreePath,
-          join(entry.dir, 'unstaged.patch'),
-          false,
-          leftovers
-        )
-        if ((await fileSize(join(entry.dir, 'untracked.tgz'))) > 0) {
-          // Inflate with a cap (no gzip bombs), then extract without clobbering the branch's files.
-          const untrackedTar = join(entry.dir, 'untracked.tar')
-          await gunzipCapped(
-            join(entry.dir, 'untracked.tgz'),
-            untrackedTar,
-            CLOUD_TRANSFER_MAX_BYTES
-          )
-          await safeExtractTar(untrackedTar, args.worktreePath, {
-            maxBytes: CLOUD_TRANSFER_MAX_BYTES,
-            noClobber: true
-          })
-          await rm(untrackedTar, { force: true })
+        const finished = await applyTransferToWorktree(entry, args.worktreePath, { claudeHome, codexHome })
+        // Kept in memory while something is left to apply, so "Apply changes again" can retry.
+        if (!finished.leftoverPatchDir) {
+          prepared.delete(args.transferId)
         }
-        const claudeSessions = await installSessions(
-          join(entry.dir, 'claude'),
-          join(claudeHome, 'projects', claudeProjectDirName(args.worktreePath)),
-          entry.manifest.root,
-          args.worktreePath
-        )
-        const codexSessions = await installSessions(
-          join(entry.dir, 'codex'),
-          join(codexHome, 'sessions'),
-          entry.manifest.root,
-          args.worktreePath
-        )
-        const kept = (await listFiles(leftovers)).length > 0
-        if (!kept) {
-          await rm(entry.dir, { recursive: true, force: true })
-        }
-        prepared.delete(args.transferId)
         step('done')
-        return {
-          ok: true,
-          value: {
-            worktreePath: args.worktreePath,
-            appliedStaged,
-            appliedUnstaged,
-            untrackedFiles: entry.manifest.untrackedFiles,
-            claudeSessions,
-            codexSessions,
-            leftoverPatchDir: kept ? leftovers : null
-          }
+        return { ok: true, value: finished }
+      } catch (error) {
+        return fail(entry.workspaceId, args.transferId, error)
+      }
+    }
+  )
+  ipcMain.handle(
+    CH.reapply,
+    async (
+      _event,
+      args: { transferId: string; worktreePath: string }
+    ): Promise<CloudTransferResult<CloudTransferFinished>> => {
+      // "Apply changes again": same worktree, never a new one. Works after a restart too (the
+      // transfer folder records what it is), as long as the folder is still there.
+      if (!/^[0-9a-f-]{36}$/i.test(args.transferId)) {
+        return { ok: false, code: 'not_found', message: 'That transfer is no longer available.' }
+      }
+      const entry =
+        prepared.get(args.transferId) ??
+        (await loadPersistedTransfer(join(deps.userDataPath, 'cloud-transfers', args.transferId)))
+      const worktreeOk = await stat(args.worktreePath).then((s) => s.isDirectory(), () => false)
+      if (!entry || !worktreeOk) {
+        return { ok: false, code: 'not_found', message: 'That transfer is no longer available.' }
+      }
+      try {
+        emit({ workspaceId: entry.workspaceId, transferId: args.transferId, phase: 'applying' })
+        const finished = await applyTransferToWorktree(entry, args.worktreePath, { claudeHome, codexHome })
+        if (finished.leftoverPatchDir) {
+          prepared.set(args.transferId, entry)
+        } else {
+          prepared.delete(args.transferId)
         }
+        emit({ workspaceId: entry.workspaceId, transferId: args.transferId, phase: 'done' })
+        return { ok: true, value: finished }
       } catch (error) {
         return fail(entry.workspaceId, args.transferId, error)
       }
@@ -253,6 +240,7 @@ export function installCloudTransferHandlers(deps: {
   return () => {
     ipcMain.removeHandler(CH.prepare)
     ipcMain.removeHandler(CH.finish)
+    ipcMain.removeHandler(CH.reapply)
   }
 }
 
@@ -273,8 +261,25 @@ export async function sweepCloudTransfers(root: string, now: number): Promise<nu
     if (leftovers && now - leftovers.mtimeMs < LEFTOVER_TTL_MS) {
       continue
     }
+    // An apply was attempted but did not finish: keep it so "Apply changes again" still works.
+    if (await appliedAttemptWithin(dir, now)) {
+      continue
+    }
     await rm(dir, { recursive: true, force: true })
     removed++
   }
   return removed
+}
+
+async function appliedAttemptWithin(dir: string, now: number): Promise<boolean> {
+  const info = await stat(join(dir, TRANSFER_STATE_FILE)).catch(() => null)
+  if (!info || now - info.mtimeMs >= LEFTOVER_TTL_MS) {
+    return false
+  }
+  try {
+    const state = JSON.parse(await readFile(join(dir, TRANSFER_STATE_FILE), 'utf8')) as { worktreePath?: unknown }
+    return typeof state.worktreePath === 'string'
+  } catch {
+    return false
+  }
 }

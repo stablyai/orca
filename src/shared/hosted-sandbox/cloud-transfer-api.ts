@@ -46,6 +46,10 @@ export type CloudTransferFinished = {
   codexSessions: number
   /** Patches that did not apply cleanly were saved here instead of being dropped. */
   leftoverPatchDir: string | null
+  /** Files the saved patches touch that changed here since; the patch was not forced onto them. */
+  conflicts?: string[]
+  /** Untracked files not written because something is already at that path. */
+  skippedUntracked?: string[]
 }
 
 export type CloudTransferResult<T> =
@@ -61,11 +65,17 @@ export type OrcaCloudTransferApi = {
     transferId: string
     worktreePath: string
   }) => Promise<CloudTransferResult<CloudTransferFinished>>
+  /** "Apply changes again" onto the same local worktree after a partial or failed apply. */
+  reapplyTransferToLocal: (args: {
+    transferId: string
+    worktreePath: string
+  }) => Promise<CloudTransferResult<CloudTransferFinished>>
   onTransferProgress: (callback: (event: CloudTransferProgressEvent) => void) => () => void
 }
 
 export const ORCA_CLOUD_TRANSFER_CHANNELS = {
   prepare: 'orcaCloudWorkspace:prepareTransferToLocal',
   finish: 'orcaCloudWorkspace:finishTransferToLocal',
+  reapply: 'orcaCloudWorkspace:reapplyTransferToLocal',
   progress: 'orcaCloudWorkspace:transferProgress'
 } as const

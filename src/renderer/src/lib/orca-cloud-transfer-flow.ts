@@ -12,7 +12,10 @@ import {
   setCloudMoveState,
   type CloudMoveStep
 } from '@/lib/orca-cloud/orca-cloud-move-store'
-import type { CloudTransferProgressEvent } from '../../../shared/hosted-sandbox/cloud-transfer-api'
+import type {
+  CloudTransferPrepared,
+  CloudTransferProgressEvent
+} from '../../../shared/hosted-sandbox/cloud-transfer-api'
 
 const STEP_OF_PHASE: Partial<Record<CloudTransferProgressEvent['phase'], CloudMoveStep>> = {
   packing: 'packing',
@@ -49,6 +52,7 @@ export async function runOrcaCloudTransferToLocal(
   let totalBytes: number | null = null
   let timedOut = false
   let localWorktreeId: string | null = null
+  let retry: { prepared: CloudTransferPrepared; worktreePath: string } | null = null
   const isHidden = (): boolean => {
     const current = getCloudMoveState()
     return current.stage === 'running' && current.hidden
@@ -149,6 +153,7 @@ export async function runOrcaCloudTransferToLocal(
         { branchIntent: 'open-existing-v2' }
       )
     localWorktreeId = worktree.id
+    retry = { prepared: prepared.value, worktreePath: worktree.path }
     step = 'applying'
     publish()
     const finished = await api.finishTransferToLocal({ transferId, worktreePath: worktree.path })
@@ -202,6 +207,7 @@ export async function runOrcaCloudTransferToLocal(
         step,
         timedOut: false,
         localWorktreeId,
+        retry,
         archiveAfter,
         hidden: isHidden()
       })
@@ -212,5 +218,74 @@ export async function runOrcaCloudTransferToLocal(
       inFlightRun = null
     }
     dispose()
+  }
+}
+
+/**
+ * "Apply changes again": re-applies the saved changes and chats onto the SAME local worktree after
+ * a partial or failed apply (never creates another one). Main skips what is already there and never
+ * forces a patch over edits made here since; whatever still conflicts stays saved and is reported.
+ */
+export async function reapplyOrcaCloudTransfer(args: {
+  workspaceId: string
+  name: string
+  localWorktreeId: string
+  prepared: CloudTransferPrepared
+  worktreePath: string
+  archiveAfter: boolean
+}): Promise<void> {
+  const api = window.api?.orcaCloudWorkspace
+  if (!api?.reapplyTransferToLocal || inFlightRun !== null) {
+    return
+  }
+  const run = ++runCounter
+  inFlightRun = run
+  const startedAt = Date.now()
+  const base = { workspaceId: args.workspaceId, name: args.name, archiveAfter: args.archiveAfter }
+  setCloudMoveState({
+    ...base,
+    stage: 'running',
+    step: 'applying',
+    skipped: ['waking', 'packing', 'downloading', 'creating'],
+    startedAt,
+    bytes: null,
+    totalBytes: null,
+    hidden: false
+  })
+  try {
+    const result = await api.reapplyTransferToLocal({
+      transferId: args.prepared.transferId,
+      worktreePath: args.worktreePath
+    })
+    if (!result.ok) {
+      throw new Error(result.message)
+    }
+    noteCloudWorkspaceMoved(args.workspaceId, Date.now(), args.localWorktreeId)
+    setCloudMoveState({
+      stage: 'done',
+      workspaceId: args.workspaceId,
+      name: args.name,
+      localWorktreeId: args.localWorktreeId,
+      prepared: args.prepared,
+      finished: result.value,
+      elapsedMs: Date.now() - startedAt,
+      archivedAfter: false,
+      hidden: false
+    })
+  } catch (error) {
+    console.error('[orca-cloud] apply changes again failed', error)
+    setCloudMoveState({
+      ...base,
+      stage: 'failed',
+      step: 'applying',
+      timedOut: false,
+      localWorktreeId: args.localWorktreeId,
+      retry: { prepared: args.prepared, worktreePath: args.worktreePath },
+      hidden: false
+    })
+  } finally {
+    if (inFlightRun === run) {
+      inFlightRun = null
+    }
   }
 }

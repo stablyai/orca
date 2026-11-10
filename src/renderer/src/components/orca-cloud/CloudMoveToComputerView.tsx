@@ -38,7 +38,8 @@ export function CloudMoveToComputerView({
   onOpenLocal,
   onClose,
   onArchiveAfterChange,
-  onHide
+  onHide,
+  onReapply
 }: {
   state: OpenState
   conflicts: CloudMoveConflicts
@@ -53,6 +54,8 @@ export function CloudMoveToComputerView({
   onClose: () => void
   onArchiveAfterChange: (archiveAfter: boolean) => void
   onHide: () => void
+  /** "Apply changes again" on the same local worktree (failed apply, or partial result). */
+  onReapply?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const primary = useRef<HTMLButtonElement | null>(null)
@@ -246,7 +249,12 @@ export function CloudMoveToComputerView({
         <InlineError
           title={cloudMoveFailureCause(state.step, state.timedOut, t)}
           detail={
-            localStarted
+            localStarted && state.retry
+              ? t(
+                  'orcaCloudMove.failedLocalReapply',
+                  'Apply changes again to bring them over. Nothing you changed here is overwritten, and your files are safe in the cloud workspace.'
+                )
+              : localStarted
               ? t(
                   'orcaCloudMove.failedLocalNext',
                   'Use Move again from the sandbox panel to bring them over. Your files are safe in the cloud workspace.'
@@ -261,6 +269,11 @@ export function CloudMoveToComputerView({
           <Button variant="ghost" size="sm" onClick={onClose}>
             {t('orcaCloudMove.close', 'Close')}
           </Button>
+          {localStarted && state.retry && onReapply ? (
+            <Button variant="outline" size="sm" onClick={onReapply}>
+              {t('orcaCloudMove.reapply', 'Apply changes again')}
+            </Button>
+          ) : null}
           {state.localWorktreeId ? (
             <Button
               ref={primary}
@@ -359,6 +372,19 @@ export function CloudMoveToComputerView({
             <FolderOpen />
             {t('orcaCloudMove.openFolder', 'Open folder')}
           </Button>
+          {onReapply ? (
+            <Button size="xs" variant="ghost" className="self-start" onClick={onReapply}>
+              {t('orcaCloudMove.reapply', 'Apply changes again')}
+            </Button>
+          ) : null}
+          {finished.conflicts && finished.conflicts.length > 0 ? (
+            <p className="text-xs text-muted-foreground">
+              {t('orcaCloudMove.conflicts', 'Changed here since: {{files}}', {
+                files: finished.conflicts.slice(0, 5).join(', '),
+                count: finished.conflicts.length
+              })}
+            </p>
+          ) : null}
           <p className="break-all font-mono text-xs text-muted-foreground" title={partial}>
             {partial}
           </p>

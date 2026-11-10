@@ -145,6 +145,35 @@ describe('interrupted turn continue', () => {
     expect(await continueInterruptedTurns('ws', never.deps)).toBe(0)
   })
 
+  it('waits for a closed pane to be reopened (agent view reopened after the restart), then continues', async () => {
+    state.agentStatusByPaneKey = { 'tab-a:1': working('tab-a:1', 'claude') }
+    armInterruptedTurnsForHostRestart('ws', NOW)
+    // The pane is closed for 10 minutes (well past the 90s relaunch window), then reopened.
+    let clock = NOW
+    const send = vi.fn(async () => true)
+    const sent = await continueInterruptedTurns('ws', {
+      now: () => clock,
+      sleep: async (ms: number) => {
+        clock += ms
+      },
+      ptyIdFor: () => (clock - NOW >= 10 * 60_000 ? 'pty-reopened' : null),
+      send,
+      submit: vi.fn(async () => true),
+      agentInForeground: async () => true
+    })
+    expect(sent).toBe(1)
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(send.mock.calls[0]![0]).toMatchObject({ ptyId: 'pty-reopened', prompt: 'continue' })
+  })
+
+  it('gives up on a pane that is never reopened while the turn is fresh', async () => {
+    state.agentStatusByPaneKey = { 'tab-a:1': working('tab-a:1', 'claude') }
+    armInterruptedTurnsForHostRestart('ws', NOW)
+    const { send, deps: d } = deps({ ptyIdFor: () => null })
+    expect(await continueInterruptedTurns('ws', d)).toBe(0)
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('disarm forgets a failed restart', async () => {
     state.agentStatusByPaneKey = { 'tab-a:1': working('tab-a:1', 'claude') }
     armInterruptedTurnsForHostRestart('ws', NOW)

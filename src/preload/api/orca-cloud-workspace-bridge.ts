@@ -33,6 +33,7 @@ export const orcaCloudWorkspaceApi = {
     return () => ipcRenderer.removeListener(CH.oom, listener)
   },
   prepareTransferToLocal: (args) => ipcRenderer.invoke(TRANSFER.prepare, args),
+  reapplyTransferToLocal: (args) => ipcRenderer.invoke(TRANSFER.reapply, args),
   finishTransferToLocal: (args) => ipcRenderer.invoke(TRANSFER.finish, args),
   onTransferProgress: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, event: CloudTransferProgressEvent): void =>
