@@ -211,7 +211,7 @@ describe('createRuntimeClientEventsSync', () => {
     }
   })
 
-  it('resubscribes with an unchanged key when the stream closes, including mid-setup', async () => {
+  it('resubscribes on its own when the stream closes, backing off until a stream stays up', async () => {
     vi.useFakeTimers()
     try {
       const closes: (() => void)[] = []
@@ -222,14 +222,14 @@ describe('createRuntimeClientEventsSync', () => {
           _onEvent: unknown,
           _onError: unknown,
           _isCurrent: unknown,
-          onClose: () => void
+          onClose?: () => void
         ): Promise<RuntimeClientEventSubscriptionHandle> => {
           const unsubscribe = vi.fn()
           unsubscribes.push(unsubscribe)
-          closes.push(onClose)
+          closes.push(() => onClose?.())
           // The first stream closes before its setup settles.
           if (closes.length === 1) {
-            onClose()
+            onClose?.()
           }
           return Promise.resolve({ unsubscribe })
         }
@@ -240,24 +240,39 @@ describe('createRuntimeClientEventsSync', () => {
         subscribe,
         onEvent: vi.fn(),
         retryDelayMs: 10,
+        retryMaxDelayMs: 40,
         random: () => 1
       })
 
       sync.sync()
-      await Promise.resolve()
+      await vi.advanceTimersByTimeAsync(0)
       expect(unsubscribes[0]).toHaveBeenCalledTimes(1)
       await vi.advanceTimersByTimeAsync(10)
       expect(subscribe).toHaveBeenCalledTimes(2)
 
-      closes[1]()
-      sync.sync()
-      expect(subscribe).toHaveBeenCalledTimes(3)
-      await Promise.resolve()
+      // Streams that close right after setup back off 20, 40, then stay capped at 40.
+      for (const [attempt, delay] of [
+        [2, 20],
+        [3, 40],
+        [4, 40]
+      ]) {
+        closes[attempt - 1]()
+        await vi.advanceTimersByTimeAsync(delay - 1)
+        expect(subscribe).toHaveBeenCalledTimes(attempt)
+        await vi.advanceTimersByTimeAsync(1)
+        expect(subscribe).toHaveBeenCalledTimes(attempt + 1)
+      }
 
       // A late close from a replaced stream must not drop the live one.
       closes[1]()
-      sync.sync()
-      expect(subscribe).toHaveBeenCalledTimes(3)
+      await vi.advanceTimersByTimeAsync(40)
+      expect(subscribe).toHaveBeenCalledTimes(5)
+
+      // A stream that stayed up 30s ends the streak: the next retry uses the base delay.
+      await vi.advanceTimersByTimeAsync(30_000)
+      closes[4]()
+      await vi.advanceTimersByTimeAsync(10)
+      expect(subscribe).toHaveBeenCalledTimes(6)
     } finally {
       vi.useRealTimers()
     }

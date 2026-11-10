@@ -36,6 +36,9 @@ export type RuntimeClientEventsSync = {
 }
 
 /** Reconcile one subscription per desired environment; remove/re-add can race two in-flight subscribes without a generation change. Keep the first winner and unsubscribe duplicates rather than overwriting and leaking its handle. */
+// A stream that stays up this long ends its failure streak; shorter lives keep backing off.
+const STABLE_STREAM_MS = 30_000
+
 export function createRuntimeClientEventsSync(
   deps: RuntimeClientEventsSyncDeps
 ): RuntimeClientEventsSync {
@@ -61,6 +64,14 @@ export function createRuntimeClientEventsSync(
     }
     clearTimeout(retryTimer)
     retryTimers.delete(environmentId)
+  }
+
+  const recordFailure = (environmentId: string, subscriptionKey: string): void => {
+    const failure = consecutiveFailures.get(environmentId)
+    consecutiveFailures.set(environmentId, {
+      key: subscriptionKey,
+      count: failure?.key === subscriptionKey ? failure.count + 1 : 1
+    })
   }
 
   const nextRetryDelayMs = (environmentId: string, subscriptionKey: string): number => {
@@ -163,6 +174,7 @@ export function createRuntimeClientEventsSync(
         (pending.get(environmentId) === pendingSubscriptionToken ||
           subscriptions.get(environmentId)?.token === pendingSubscriptionToken)
       let closed = false
+      let installedAt: number | undefined
       void deps
         .subscribe(
           environmentId,
@@ -183,6 +195,10 @@ export function createRuntimeClientEventsSync(
               return
             }
             subscriptions.delete(environmentId)
+            if (installedAt !== undefined && Date.now() - installedAt >= STABLE_STREAM_MS) {
+              consecutiveFailures.delete(environmentId)
+            }
+            recordFailure(environmentId, subscriptionKey)
             scheduleRetry(environmentId, subscriptionKey, subscribeGeneration)
           }
         )
@@ -207,10 +223,11 @@ export function createRuntimeClientEventsSync(
           }
           if (closed) {
             subscription.unsubscribe()
+            recordFailure(environmentId, subscriptionKey)
             scheduleRetry(environmentId, subscriptionKey, subscribeGeneration)
             return
           }
-          consecutiveFailures.delete(environmentId)
+          installedAt = Date.now()
           subscriptions.set(environmentId, {
             key: subscriptionKey,
             token: pendingSubscriptionToken,
@@ -230,11 +247,7 @@ export function createRuntimeClientEventsSync(
             console.warn('[runtime-client-events] failed to subscribe:', error)
             // Count failures only while retrying this desired environment; late rejection after removal must not penalize re-entry.
             if (deps.getDesiredEnvironmentIds().includes(environmentId)) {
-              const failure = consecutiveFailures.get(environmentId)
-              consecutiveFailures.set(environmentId, {
-                key: subscriptionKey,
-                count: failure?.key === subscriptionKey ? failure.count + 1 : 1
-              })
+              recordFailure(environmentId, subscriptionKey)
               scheduleRetry(environmentId, subscriptionKey, subscribeGeneration)
             } else {
               consecutiveFailures.delete(environmentId)
