@@ -113,7 +113,8 @@ class TestUsageStore extends UsageProviderStoreLifecycle<
     scan: TestScan,
     splitCacheFile: TestSplit,
     capture: ReturnType<typeof vi.fn<UsageTelemetryHost['capture']>>,
-    readCatalog?: UsageStoreHost['readCatalog']
+    readCatalog?: UsageStoreHost['readCatalog'],
+    isEnabled?: UsageTelemetryHost['isEnabled']
   ) {
     super(
       {
@@ -122,7 +123,8 @@ class TestUsageStore extends UsageProviderStoreLifecycle<
           telemetryEnabled: true,
           capture
         }),
-        ...(readCatalog ? { readCatalog } : {})
+        ...(readCatalog ? { readCatalog } : {}),
+        ...(isEnabled ? { telemetry: { isEnabled, capture } } : {})
       },
       {
         tokenUsage: {
@@ -503,5 +505,36 @@ describe('UsageProviderStoreLifecycle', () => {
     expect(JSON.parse(readFileSync(cacheFile, 'utf-8')).scanState.lastScanError).toBe(
       'scan exploded'
     )
+  })
+
+  it('keeps a successful scan when the first async telemetry consent request rejects', async () => {
+    const cacheFile = join(tempDirectory, 'consent-rejection.json')
+    const consent = vi
+      .fn<UsageTelemetryHost['isEnabled']>()
+      .mockRejectedValue(new Error('No RPC credit'))
+    const store = new TestUsageStore(cacheFile, scan, split, capture, undefined, consent)
+    stores.push(store)
+    await store.setEnabled(true)
+    scan.mockResolvedValueOnce({
+      sessions: [{ id: 'fresh' }],
+      dailyAggregates: [{ day: '2026-04-10' }]
+    })
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await expect(store.refresh(true)).resolves.toMatchObject({
+      isScanning: false,
+      lastScanCompletedAt: NOW,
+      lastScanError: null,
+      hasAnyTestData: true
+    })
+    await store.flush()
+    expect(store.getState().sessions).toEqual([{ id: 'fresh' }])
+    expect(JSON.parse(readFileSync(cacheFile, 'utf8'))).toMatchObject({
+      sessions: [{ id: 'fresh' }],
+      dailyAggregates: [{ day: '2026-04-10' }],
+      scanState: { lastScanCompletedAt: NOW, lastScanError: null }
+    })
+    expect(consent).toHaveBeenCalledTimes(1)
+    expect(capture).not.toHaveBeenCalled()
   })
 })

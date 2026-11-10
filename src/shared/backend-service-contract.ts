@@ -7,6 +7,7 @@ export const BACKEND_PORT_DELIVERY = 'backend:port'
 export const BACKEND_CONNECTION_CHANGED = 'backend:connectionChanged'
 export const BACKEND_UTILITY_PROCESS_NAME = 'Orca backend'
 
+export type BackendConnectionPurpose = 'demand' | 'recovery'
 export type BackendConnectionStatus = { connected: boolean; unavailable?: boolean }
 export type BackendConnectionDetail = { initial?: boolean; unavailable?: boolean }
 export type BackendConnectionListener = (

@@ -1,4 +1,7 @@
-import type { BackendConnectionListener } from '../../../../../shared/backend-service-contract'
+import type {
+  BackendConnectionListener,
+  BackendConnectionPurpose
+} from '../../../../../shared/backend-service-contract'
 import type {
   ClaudeUsageRange,
   ClaudeUsageScope,
@@ -35,14 +38,17 @@ export type UsageData<T extends UsageProviderTypes<string, string, UsageSnapshot
 
 export type UsageApi<T extends UsageProviderTypes<string, string, UsageSnapshot>> = {
   onConnectionChanged?: (listener: BackendConnectionListener) => () => void
-  getScanState: () => Promise<T['snapshot']['scanState']>
+  getScanState: (purpose?: BackendConnectionPurpose) => Promise<T['snapshot']['scanState']>
   setEnabled: (args: { enabled: boolean }) => Promise<T['snapshot']['scanState']>
   refresh: (args?: { force?: boolean }) => Promise<T['snapshot']['scanState']>
-  getSnapshot: (args: {
-    scope: T['scope']
-    range: T['range']
-    limit?: number
-  }) => Promise<T['snapshot']>
+  getSnapshot: (
+    args: {
+      scope: T['scope']
+      range: T['range']
+      limit?: number
+    },
+    purpose?: BackendConnectionPurpose
+  ) => Promise<T['snapshot']>
 }
 
 export type ProviderUsageSlice<

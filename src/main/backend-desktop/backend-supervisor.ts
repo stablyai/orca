@@ -17,7 +17,6 @@ import {
   BACKEND_UTILITY_PROCESS_NAME,
   type AutomationUsageClient
 } from '../../shared/backend-service-contract'
-import { agentTokenUsageSchema } from '../../shared/telemetry-agent-token-usage-schema'
 import { backendMessagePort } from '../backend/backend-message-port'
 import {
   currentWorkerEntryLayout,
@@ -26,9 +25,7 @@ import {
 import { ManagedOrcadEventWindow } from '../managed-server/lifecycle/orcad-managed-event-window'
 import { ORCAD_SHUTDOWN_DEADLINE_MS } from '../orcad/orcad-stop-deadlines'
 import { isRendererDocumentNavigation } from '../window/renderer-document-navigation'
-import { loadKnownUsageWorktreesByRepo } from '../usage/usage-worktree-metadata'
-import { claudeProfileTranscriptDirs } from '../claude-usage/transcript-file-discovery'
-import { isTelemetryEnabled, track } from '../telemetry/client'
+import { createBackendDesktopCapabilities } from './backend-desktop-capabilities'
 import type { Store } from '../persistence/loading-store/store'
 
 export { captureBackendBootstrap } from './backend-bootstrap'
@@ -51,60 +48,74 @@ export class BackendSupervisor {
     if (!capturedBootstrap) {
       throw new Error('Backend paths were not captured during preflight.')
     }
-    ipcMain.handle(BACKEND_PORT_REQUEST, async (event, token: unknown) => {
-      if (typeof token !== 'string' || !/^[0-9a-f-]{36}$/i.test(token)) {
-        throw new Error('Invalid backend connection request.')
-      }
-      const { sender, senderFrame } = event
-      if (!senderFrame || senderFrame !== sender.mainFrame || !this.trusts(sender)) {
-        throw new Error('This document cannot connect to Orca.')
-      }
-      this.documents.get(sender.id)?.retire()
-      const document: Document = {
-        contents: sender,
-        frame: senderFrame,
-        token,
-        retire: () => {}
-      }
-      const retire = (): void => {
-        if (this.documents.get(sender.id) !== document) {
-          return
+    ipcMain.handle(
+      BACKEND_PORT_REQUEST,
+      async (event, token: unknown, purpose: unknown = 'demand') => {
+        if (
+          typeof token !== 'string' ||
+          !/^[0-9a-f-]{36}$/i.test(token) ||
+          (purpose !== 'demand' && purpose !== 'recovery')
+        ) {
+          throw new Error('Invalid backend connection request.')
         }
-        this.documents.delete(sender.id)
-        this.child?.postMessage({ type: 'retire', token: document.token })
-        sender.off('did-frame-navigate', navigation)
-        sender.off('destroyed', retire)
-        sender.off('render-process-gone', retire)
-      }
-      const navigation = (
-        _event: unknown,
-        _url: string,
-        _httpCode: number,
-        _httpStatus: string,
-        mainFrame: boolean
-      ): void => {
-        if (mainFrame) {
-          retire()
+        const { sender, senderFrame } = event
+        if (!senderFrame || senderFrame !== sender.mainFrame || !this.trusts(sender)) {
+          throw new Error('This document cannot connect to Orca.')
         }
+        this.documents.get(sender.id)?.retire()
+        const document: Document = {
+          contents: sender,
+          frame: senderFrame,
+          token,
+          retire: () => {}
+        }
+        const retire = (): void => {
+          if (this.documents.get(sender.id) !== document) {
+            return
+          }
+          this.documents.delete(sender.id)
+          this.child?.postMessage({ type: 'retire', token: document.token })
+          sender.off('did-frame-navigate', navigation)
+          sender.off('destroyed', retire)
+          sender.off('render-process-gone', retire)
+        }
+        const navigation = (
+          _event: unknown,
+          _url: string,
+          _httpCode: number,
+          _httpStatus: string,
+          mainFrame: boolean
+        ): void => {
+          if (mainFrame) {
+            retire()
+          }
+        }
+        document.retire = retire
+        this.documents.set(sender.id, document)
+        sender.on('did-frame-navigate', navigation)
+        sender.once('destroyed', retire)
+        sender.once('render-process-gone', retire)
+        if (!this.desiredRunning) {
+          throw new Error('Orca is shutting down.')
+        }
+        const ready = purpose === 'recovery' ? this.ready : this.ensureReady(true)
+        if (!ready) {
+          throw new Error('Usage is unavailable. Try refreshing the usage view.')
+        }
+        await ready
+        if (
+          this.documents.get(sender.id) !== document ||
+          sender.isDestroyed() ||
+          sender.mainFrame !== senderFrame
+        ) {
+          throw new Error('The document was replaced before Orca connected.')
+        }
+        const { port1, port2 } = new MessageChannelMain()
+        this.child!.postMessage({ type: 'client', token: document.token }, [port1])
+        senderFrame.postMessage(BACKEND_PORT_DELIVERY, { token: document.token }, [port2])
+        return document.token
       }
-      document.retire = retire
-      this.documents.set(sender.id, document)
-      sender.on('did-frame-navigate', navigation)
-      sender.once('destroyed', retire)
-      sender.once('render-process-gone', retire)
-      await this.ensureReady(true)
-      if (
-        this.documents.get(sender.id) !== document ||
-        sender.isDestroyed() ||
-        sender.mainFrame !== senderFrame
-      ) {
-        throw new Error('The document was replaced before Orca connected.')
-      }
-      const { port1, port2 } = new MessageChannelMain()
-      this.child!.postMessage({ type: 'client', token: document.token }, [port1])
-      senderFrame.postMessage(BACKEND_PORT_DELIVERY, { token: document.token }, [port2])
-      return document.token
-    })
+    )
     void this.ensureReady(false).catch(() => {})
   }
 
@@ -124,6 +135,7 @@ export class BackendSupervisor {
     this.stopping ??= (async () => {
       this.desiredRunning = false
       clearTimeout(this.restartTimer)
+      this.restartTimer = undefined
       const child = this.child
       for (const document of this.documents.values()) {
         document.retire()
@@ -180,6 +192,7 @@ export class BackendSupervisor {
     if (explicit) {
       this.failures.forget('backend')
       clearTimeout(this.restartTimer)
+      this.restartTimer = undefined
     }
     if (this.failures.recent('backend').length >= 3) {
       throw new Error('Usage could not start. Try refreshing the usage view.')
@@ -197,25 +210,7 @@ export class BackendSupervisor {
     this.control = new BackendPortRpc(
       backendMessagePort(port1),
       'desktop',
-      async (method, params) => {
-        if (method === 'usage.catalog') {
-          const repos = this.store.getRepos()
-          return {
-            repoIds: repos.map((repo) => repo.id),
-            worktreesByRepo: [...loadKnownUsageWorktreesByRepo(this.store, repos)]
-          }
-        }
-        if (method === 'usage.claudeProfileDirs') {
-          return claudeProfileTranscriptDirs()
-        }
-        if (method === 'usage.telemetry.enabled') {
-          return isTelemetryEnabled()
-        }
-        if (method === 'usage.telemetry.capture') {
-          return track('agent_token_usage', agentTokenUsageSchema.parse(params))
-        }
-        throw new Error('This desktop capability is not supported.')
-      }
+      createBackendDesktopCapabilities(this.store)
     )
     let childPid = child.pid
     child.once('spawn', () => {
@@ -290,12 +285,17 @@ export class BackendSupervisor {
         this.notify(false, this.desiredRunning && this.failures.recent('backend').length >= 3)
         if (this.desiredRunning) {
           if (this.failures.recent('backend').length < 3) {
-            this.restartTimer = setTimeout(
+            const restartTimer = setTimeout(
               () => {
+                if (this.restartTimer !== restartTimer) {
+                  return
+                }
+                this.restartTimer = undefined
                 void this.ensureReady(false).catch(() => {})
               },
               250 * 2 ** this.failures.recent('backend').length
             )
+            this.restartTimer = restartTimer
           }
         }
       }

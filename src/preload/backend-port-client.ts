@@ -4,15 +4,20 @@ import {
   BACKEND_CONNECTION_CHANGED,
   BACKEND_PORT_DELIVERY,
   BACKEND_PORT_REQUEST,
+  type BackendConnectionPurpose,
   type BackendConnectionStatus,
   type BackendConnectionListener
 } from '../shared/backend-service-contract'
 
 let connection: BackendPortRpc | undefined
 let connecting: Promise<BackendPortRpc> | undefined
-let pendingPort:
-  | { token: string; resolve(client: BackendPortRpc): void; reject(error: Error): void }
-  | undefined
+type PortAttempt = {
+  token: string
+  purpose: BackendConnectionPurpose
+  resolve(client: BackendPortRpc): void
+  reject(error: Error): void
+}
+let pendingPort: PortAttempt | undefined
 const connectionListeners = new Set<BackendConnectionListener>()
 let connected: boolean | undefined
 let unavailable = false
@@ -84,22 +89,32 @@ ipcRenderer.on(BACKEND_PORT_DELIVERY, (event, data: { token?: string }) => {
   publishConnection(true)
 })
 
-function connect(): Promise<BackendPortRpc> {
+function requestPort(attempt: PortAttempt): void {
+  void ipcRenderer
+    .invoke(BACKEND_PORT_REQUEST, attempt.token, attempt.purpose)
+    .catch((error: Error) => {
+      if (pendingPort === attempt) {
+        pendingPort = undefined
+        attempt.reject(error)
+      }
+    })
+}
+
+function connect(purpose: BackendConnectionPurpose = 'demand'): Promise<BackendPortRpc> {
   if (connection) {
     return Promise.resolve(connection)
   }
   if (connecting) {
+    if (purpose === 'demand' && pendingPort?.purpose === 'recovery') {
+      pendingPort = { ...pendingPort, token: crypto.randomUUID(), purpose }
+      requestPort(pendingPort)
+    }
     return connecting
   }
   const attemptPromise = new Promise<BackendPortRpc>((resolve, reject) => {
-    const attempt = { token: crypto.randomUUID(), resolve, reject }
+    const attempt = { token: crypto.randomUUID(), purpose, resolve, reject }
     pendingPort = attempt
-    void ipcRenderer.invoke(BACKEND_PORT_REQUEST, attempt.token).catch((error: Error) => {
-      if (pendingPort === attempt) {
-        pendingPort.reject(error)
-        pendingPort = undefined
-      }
-    })
+    requestPort(attempt)
   })
   const result = attemptPromise.finally(() => {
     if (connecting === result) {
@@ -128,6 +143,9 @@ export const backendUsageTransport = {
       connectionListeners.delete(listener)
     }
   },
-  invoke: async (method: string, params?: unknown): Promise<unknown> =>
-    (await connect()).call(method, params)
+  invoke: async (
+    method: string,
+    params?: unknown,
+    purpose?: BackendConnectionPurpose
+  ): Promise<unknown> => (await connect(purpose)).call(method, params)
 }

@@ -282,10 +282,13 @@ export abstract class UsageProviderStoreLifecycle<
 
   private async reportTokenUsage(): Promise<void> {
     const config = this.config.tokenUsage
-    if (!config || !(await this.host.telemetry.isEnabled()) || !this.state.scanState.enabled) {
+    if (!config) {
       return
     }
     try {
+      if (!(await this.host.telemetry.isEnabled()) || !this.state.scanState.enabled) {
+        return
+      }
       if (!this.tokenReporter) {
         const { dir, name } = parse(this.config.resolveCacheFile())
         this.tokenReporter = new AgentTokenUsageReporter(

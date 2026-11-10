@@ -69,7 +69,10 @@ export function createUsageProviderSlice<
     ): Promise<T['snapshot']['scanState'] | undefined> => {
       while (!current.disconnected) {
         const { scope, range } = read()
-        const snapshot = await api.getSnapshot({ scope, range, limit: 10 })
+        const snapshot = await api.getSnapshot(
+          { scope, range, limit: 10 },
+          current.intent === 0 ? 'recovery' : undefined
+        )
         if (current.disconnected) {
           return
         }
@@ -147,7 +150,7 @@ export function createUsageProviderSlice<
             pending = null
             try {
               const api = config.getApi()
-              const state = await api.getScanState()
+              const state = await api.getScanState(next === 0 ? 'recovery' : undefined)
               if (current.disconnected) {
                 throw new Error('Usage disconnected.')
               }
