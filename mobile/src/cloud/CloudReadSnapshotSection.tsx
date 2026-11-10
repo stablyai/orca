@@ -226,6 +226,8 @@ function prChecksLabel(pr: ReadSnapshotPr, t: Translate): string | null {
     case 'pending':
     case 'running':
       return t('cloud.snapshot.checks.pending', 'Checks running')
+    // No status, or one this build doesn't name: the VM's own summary line, if any.
+    case undefined:
     default:
       return pr.checksSummary
   }

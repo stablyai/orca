@@ -1,6 +1,6 @@
 // Home: the org's cloud workspaces (registry on the control plane), filterable by who owns them,
 // which repo they are in, Mine/Team and archived, grouped by section, with live presence and cost.
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
@@ -18,7 +18,7 @@ import { ANY, CloudWorkspacesToolbar, type CloudWorkspacesFilters } from './Clou
 import { EmptyState, ErrorState, NewSectionDialog, SkeletonRows } from './CloudWorkspacesStates'
 import { CloudWorkspaceConfirmDialog, type PendingConfirm } from './CloudWorkspaceConfirmDialog'
 import { CloudReadSnapshotSheet } from './CloudReadSnapshotSheet'
-import type { CloudReadWake } from '../orca-cloud/read-snapshot/CloudReadSnapshotView'
+import { useCloudReadPanel } from './use-cloud-read-panel'
 import { formatSandboxHours, sandboxHours, type MemberDirectory } from './cloud-workspace-format'
 import { refreshCloudMessageSenders } from '@/lib/cloud-message-sender'
 import { describeError } from './cloud-workspace-errors'
@@ -87,22 +87,7 @@ export function CloudWorkspacesHome({
   const [now, setNow] = useState(() => Date.now())
   const [sectionFor, setSectionFor] = useState<CloudWorkspace | null>(null)
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null)
-  // The Asleep workspace whose read-only copy is open (never wakes it).
-  const [readingId, setReadingIdState] = useState<string | null>(null)
-  // A wake started from the read panel: shown there (elapsed, slow, failed) until it opens.
-  const [readWake, setReadWake] = useState<CloudReadWake | null>(null)
-  const readingRef = useRef<string | null>(null)
-  const setReadingId = useCallback(
-    (next: string | null | ((id: string | null) => string | null)) => {
-      const value = typeof next === 'function' ? next(readingRef.current) : next
-      if (value !== readingRef.current) {
-        setReadWake(null)
-      }
-      readingRef.current = value
-      setReadingIdState(value)
-    },
-    []
-  )
+  const { readingId, readingRef, setReadingId, readWake, setReadWake } = useCloudReadPanel()
   const signIn = useAppStore((s) => s.connectCurrentOrcaProfile)
   const scope = orgId ? filters.scope : 'mine'
   const { state, stale, reading, refresh, replace } = useCloudWorkspaces(
@@ -210,7 +195,7 @@ export function CloudWorkspacesHome({
         setOpening((current) => (current === w.id ? null : current))
       }
     },
-    [setReadingId]
+    [readingRef, setReadWake, setReadingId]
   )
 
   const patch = useCallback(
