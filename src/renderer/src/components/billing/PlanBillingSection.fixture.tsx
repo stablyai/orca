@@ -77,6 +77,27 @@ export const overageCapReached = defineFixture({
   )
 })
 
+// Overage is off by default: out of included hours, running sandboxes go to sleep.
+export const hoursUsedOverageOff = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      result={{
+        status: 'ok',
+        entitlement: {
+          ...sampleTeam,
+          usedSeconds: sampleTeam.includedSeconds,
+          remainingIncludedSeconds: 0,
+          usageWarningPercent: 100,
+          canStartSandbox: false,
+          reason: 'included_hours_exhausted'
+        }
+      }}
+    />
+  )
+})
+
 export const pastDueMember = defineFixture({
   width: 600,
   render: () => (

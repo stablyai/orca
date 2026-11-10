@@ -145,7 +145,7 @@ describe('glossary error copy', () => {
     )
     expect(hours.code).toBe('cloud_out_of_hours')
     expect(hours.message).toBe(
-      "Your team is out of sandbox hours. Nothing was created, and you weren't charged."
+      "Your team is out of sandbox hours. Running sandboxes go to sleep and new ones can't start. Nothing was created, and you weren't charged."
     )
     expect(hours.data).toMatchObject({ nextSteps: ['Ask an owner or admin to add hours.'] })
     const cap = cloudApiError(
@@ -164,7 +164,9 @@ describe('glossary error copy', () => {
         { error: 'entitlement_denied', reason: 'included_hours_exhausted' },
         { credentials: user }
       ).message
-    ).toBe('Your team is out of sandbox hours. Your files are safe.')
+    ).toBe(
+      "Your team is out of sandbox hours. Running sandboxes go to sleep and new ones can't start. Your files are safe."
+    )
   })
 
   it('uses the exact 409, admin and rate-limit copy, with codes kept in data', () => {

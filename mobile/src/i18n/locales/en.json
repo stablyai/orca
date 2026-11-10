@@ -5128,8 +5128,6 @@
       "title": "Connect Orca Cloud"
     },
     "denied": {
-      "hours": "Out of sandbox hours.",
-      "cap": "Spend cap reached.",
       "payment": "Payment failed, so new sandboxes can’t start.",
       "plan": "Orca Cloud needs a Team plan.",
       "teamLimit": "Your team is at its limit of running sandboxes (3 per seat).",
@@ -5156,8 +5154,11 @@
       "message": "{{problem}} {{safety}} {{next}}",
       "safety": {
         "create": "Nothing was created, and you weren’t charged.",
-        "existing": "Your files are safe."
-      }
+        "existing": "Your files are safe.",
+        "asleep": "Nothing is deleted, and your files are safe."
+      },
+      "hours2": "Out of sandbox hours. Running sandboxes go to sleep and new ones can’t start.",
+      "cap2": "Spend cap reached. Running sandboxes go to sleep and new ones can’t start."
     },
     "wake": {
       "slowQueued": "Taking longer than usual. Your files are safe. Your prompt sends as soon as it’s awake.",

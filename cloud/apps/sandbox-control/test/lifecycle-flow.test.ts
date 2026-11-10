@@ -251,6 +251,21 @@ describe('sandbox control plane cron', () => {
     expect((await h.call('GET', `/v1/sandboxes/${a}`)).body.sandbox.status).toBe('suspended')
   })
 
+  it('at the spend cap, puts every running sandbox of the account to sleep and deletes nothing', async () => {
+    const h = await createHarness()
+    const a = (await h.call('POST', '/v1/sandboxes', { body: create })).body.sandbox.id
+    const b = (await h.call('POST', '/v1/sandboxes', { body: { ...create, workspaceId: 'ws-2' } })).body.sandbox.id
+    h.billing.usageAnswer = { canStartSandbox: false, reason: 'overage_cap_reached', suspendRunning: true }
+    h.advance(10 * MIN)
+    await h.reconcile()
+    for (const id of [a, b]) {
+      expect((await h.call('GET', `/v1/sandboxes/${id}`)).body.sandbox.status).toBe('suspended')
+    }
+    // Asleep, not deleted: the VMs (and their disks) are kept, and no data-retention clock starts.
+    expect(h.vercel.boxes.size).toBe(2)
+    expect(h.raw.prepare(`SELECT COUNT(*) AS n FROM account_holds WHERE reason <> 'active'`).get()).toEqual({ n: 0 })
+  })
+
   it('refuses machine sizes billing does not sell', async () => {
     const h = await createHarness()
     expect((await h.call('POST', '/v1/sandboxes', { body: { ...create, machineSize: 'xlarge' } })).status).toBe(400)
