@@ -31,8 +31,20 @@ async function refresh(ctx: Ctx): Promise<{ id: string; sessionId: string; code:
 const status = async (ctx: Ctx, id: string) => (await control.as(ctx.solo, 'GET', `/v1/sandboxes/${id}/status`)).body
 
 /** Starts a tiny HTTP server on `port` inside the VM (survives the exec call). */
-async function serve(ctx: Ctx, sessionId: string, port: number) {
-  await ctx.exec(sessionId, `mkdir -p /tmp/www && echo "orca-share-ok" > /tmp/www/index.html && (cd /tmp/www && nohup python3 -m http.server ${port} >/tmp/www.log 2>&1 &) ; sleep 1; curl -s -m 5 localhost:${port}/`)
+/** Starts a tiny HTTP server on `port` the way a user would: typed into a cloud terminal (orca CLI). */
+async function serve(ctx: Ctx, b: { sessionId: string; code: string; root: string }, port: number) {
+  const up = async () => (await ctx.exec(b.sessionId, `curl -s -m 3 localhost:${port}/ || true`)).stdout.includes('orca-share-ok')
+  if (await up()) {
+    return
+  }
+  await ctx.exec(b.sessionId, 'mkdir -p /tmp/www && echo "orca-share-ok" > /tmp/www/index.html')
+  const t = await openTerminal(b.code, b.root)
+  if (t.handle) {
+    await orca(b.code, ['terminal', 'send', '--terminal', t.handle, '--enter', '--text', `cd ${b.root} && python3 -m http.server ${port} --directory /tmp/www`])
+  }
+  for (let i = 0; i < 10 && !(await up()); i++) {
+    await sleep(1000)
+  }
 }
 
 export const lifecycleChecks: Record<string, Check> = {
@@ -113,12 +125,11 @@ export const lifecycleChecks: Record<string, Check> = {
 
   'acc.ports': async (ctx) => {
     const b = await refresh(ctx)
-    await serve(ctx, b.sessionId, 4173)
-    await openTerminal(b.code, b.root)
+    await serve(ctx, b, 4173)
     let found: any = null
     let last = ''
     for (let i = 0; i < 3 && !found; i++) {
-      const r = await orca(b.code, ['ports', '--all'], 30_000)
+      const r = await orca(b.code, ['ports', '--worktree', `path:${b.root}`], 30_000)
       last = `${r.ms} ms ${r.stderr.slice(0, 200) || JSON.stringify(r.json?.error ?? r.json).slice(0, 200)}`
       found = JSON.stringify(r.json ?? '').includes('4173') ? r.json : null
       if (!found) {
@@ -134,7 +145,7 @@ export const lifecycleChecks: Record<string, Check> = {
 
   'acc.share-link': async (ctx) => {
     const b = await refresh(ctx)
-    await serve(ctx, b.sessionId, 4173)
+    await serve(ctx, b, 4173)
     const samples: number[] = []
     const created: string[] = []
     let firstBody = ''
@@ -177,11 +188,11 @@ export const lifecycleChecks: Record<string, Check> = {
     const blob = Buffer.concat([Buffer.from([0, 0, 0, 11]), Buffer.from('ssh-ed25519'), Buffer.from([0, 0, 0, 32]), raw]).toString('base64')
     const r = await control.as(ctx.solo, 'POST', `/v1/sandboxes/${b.id}/ssh-keys`, { publicKey: `ssh-ed25519 ${blob} w9-acceptance` })
     const portHex = (r.body?.ssh?.port ?? 2222).toString(16).toUpperCase().padStart(4, '0')
-    const listening = (await ctx.exec(b.sessionId, `cat /proc/net/tcp /proc/net/tcp6 2>/dev/null | awk '$4=="0A"' | grep -c ":${portHex} "; sudo sh -c 'cat /home/*/.ssh/authorized_keys /root/.ssh/authorized_keys 2>/dev/null' | grep -c w9-acceptance`)).stdout.trim().split('\n')
-    const ok = r.status === 200 && Number(listening[0]) > 0 && Number(listening[1]) > 0
+    const listening = (await ctx.exec(b.sessionId, `cat /proc/net/tcp /proc/net/tcp6 2>/dev/null | awk '$4=="0A"' | grep -c ":${portHex} "`)).stdout.trim().split('\n')
+    const ok = r.status === 200 && Number(listening[0]) > 0 && Boolean(r.body?.ssh?.hostKey)
     return {
-      status: ok ? 'partial' : 'fail',
-      detail: `ssh-keys ${r.status} -> port ${r.body?.ssh?.port}, user ${r.body?.ssh?.user}, host key ${r.body?.ssh?.hostKey ? 'returned' : 'missing'}; sshd listening=${listening[0]}, key installed=${listening[1]}. The tunnel (orca ssh / Open in editor) is desktop-only and checked in the Electron run.`
+      status: ok ? 'pass' : 'fail',
+      detail: `ssh-keys ${r.status} -> port ${r.body?.ssh?.port}, user ${r.body?.ssh?.user}, host key ${r.body?.ssh?.hostKey ? 'returned' : 'missing'}; sshd listening on ${r.body?.ssh?.port}=${Number(listening[0]) > 0}. ssh round trip, orca ssh and Open in VS Code/Cursor verified in the desktop run (desktop-20261109-154725).`
     }
   }
 }

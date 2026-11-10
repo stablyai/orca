@@ -3,7 +3,7 @@
 //   tsx src/sweep.ts [--dry-run]
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { vercel } from './clients'
+import { control, vercel } from './clients'
 import { config } from './env'
 import { loadRuns } from './run-state'
 import { stripe } from './stripe'
@@ -26,6 +26,15 @@ for (const run of loadRuns()) {
         r.destroyedAt = new Date().toISOString()
         r.label = `${r.label ?? ''} [swept]`
         changed = true
+      }
+    } else if (r.kind === 'other' && r.id.startsWith('key_')) {
+      console.log(`${run.runId} api key ${r.id}`)
+      if (!dry) {
+        const d = await control.as({ sub: 'w9-eval' }, 'DELETE', `/v1/api-keys/${r.id}`)
+        if (d.status < 300 || d.status === 404) {
+          r.destroyedAt = new Date().toISOString()
+          changed = true
+        }
       }
     } else if (r.kind === 'stripe_customer') {
       console.log(`${run.runId} stripe customer ${r.id}`)

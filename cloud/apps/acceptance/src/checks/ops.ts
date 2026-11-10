@@ -124,6 +124,13 @@ export const opsChecks: Record<string, Check> = {
   'ops.cleanup': async (ctx) => {
     // Runs last: everything this run created must be gone at Vercel (sandboxes and snapshots).
     const { failed } = await ctx.sandboxes.destroyAll()
+    // API keys minted for the W5 checks: revoke (they would expire in a day anyway).
+    for (const r of ctx.run.file.resources.filter((x) => x.kind === 'other' && x.id.startsWith('key_') && !x.destroyedAt)) {
+      const d = await control.as(ctx.solo, 'DELETE', `/v1/api-keys/${r.id}`)
+      if (d.status < 300 || d.status === 404) {
+        ctx.run.destroyed('other', r.id)
+      }
+    }
     const ours = ctx.run.file.resources.filter((r) => r.kind === 'sandbox').map((r) => (r.id.startsWith('orca-') ? r.id : `orca-dev-${r.id}`))
     const listing = await vercelRest('GET', '/v2/sandboxes', { project: config.vercelProjectId, limit: '100' })
     const live = (listing.json?.sandboxes ?? []).filter((s: any) => ours.includes(s.name)).map((s: any) => `${s.name}:${s.status}`)

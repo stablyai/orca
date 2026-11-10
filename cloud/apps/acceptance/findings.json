@@ -1,15 +1,18 @@
 {
   "findings": [
-    "<b>F1 (bug, core/vercel-driver, filed 2026-11-09):</b> <code>POST /v1/sandboxes/:id/resume</code> on a sandbox that is already <i>running</i> hangs ~60 s and answers <code>502 provider_unavailable / orcad_start_failed</code> (2/2 repro, VM stays running). Wake-on-open after a desktop restart hits this path. Expected: idempotent, return the live pairing in &lt;1 s.",
-    "<b>F2 (UX, core):</b> creating with <code>repo</code> for an account with no GitHub App binding fails as <code>502 orcad_start_failed</code> after 3.8 s instead of a clear <code>github_not_connected</code> the desktop can turn into a Connect GitHub prompt.",
-    "<b>F3 (blocker for agent.real-task, W6):</b> <code>ai-gateway.vercel.sh</code> is not on the sandbox egress allowlist (DNS fails, curl rc 6), so Claude Code/Codex via the AI Gateway key cannot run in a cloud VM. Secret injection itself works (ANTHROPIC_* reach orcad's env).",
-    "<b>F4 (parity gap, golden image):</b> the login shell lacks the <code>orca</code> CLI (Conductor ships its CLI in the VM, P0), <code>rg</code>, <code>tmux</code>, <code>vim</code>, <code>git-lfs</code> and Chrome/Chromium. Present: node 24, npm, pnpm, python3, git, gh, jq, Claude Code 2.1.319, Codex 0.166.0.",
-    "<b>F5 (parity gap):</b> standard disk is 32 GB (Conductor 64 GB since 0.82); no low-disk alert yet.",
+    "<b>W1-1 (bug, w1-env-builds, open 2026-11-09):</b> an environment build only advances while a client streams <code>GET …/builds/:id/events</code>. Polling <code>GET …/builds/:id</code> every 10 s (documented as also advancing the build) left the build in <code>running</code> with 0 log bytes for 25 min, and again for 4 min in a minimal repro. The same build finished in 15–19 s once the events stream was opened. API, CLI and MCP clients that poll, or a desktop that closes Settings mid-build, stall builds. The harness now follows the events stream the way the desktop does.",
+    "<b>D-1 (bug, core desktop, high):</b> starting an Orca Cloud create before signing in, then signing in from the card, created a sandbox owned by the fallback dev user (<code>desktop-dogfood</code>), not the signed-in user. Keep-alive, Copy SSH Command and Delete then got <code>not_found</code>. Likely cause: <code>getHostedSandboxConfig()</code> caches the token for the app process and does not reset it on sign-in (<code>src/main/hosted-sandbox/hosted-sandbox-config.ts</code>).",
+    "<b>D-2 (bug, core desktop, high):</b> Delete Workspace hides the row and reports success when the control plane answers <code>not_found</code>, while the VM keeps running (a billing leak).",
+    "<b>D-3 (bug, core desktop):</b> after a cloud create, the checkout at <code>/vercel/sandbox/project</code> is added as a new project named \"project\" instead of being grouped under orca-sandbox-push-test.",
+    "<b>D-4 (minor, desktop):</b> the \"Sign in to use Orca Cloud\" card stays after sign-in; the Ports panel says \"Port scan unavailable on unknown\" while waking; \"Move to this computer\" has no confirmation and copies rather than moves (the VM keeps running); the agent picker is disabled for Orca Cloud.",
+    "<b>W6-1 (check, w6-agents-secrets):</b> <code>sec.precedence</code> on <code>OPENAI_API_KEY</code> no longer saw the org value in orcad's env, likely because egress placeholders now replace provider keys. The check moved to <code>AWS_REGION</code> (also an agent-key name); W6 to confirm that org beats personal is still enforced at the egress swap.",
+    "<b>Fixed since the last report:</b> F1 resume on a running sandbox now returns in 0.5 s (was a 60 s 502); F3 ai-gateway.vercel.sh is allowlisted (real Claude Code task passes); F4 the image now has orca, rg, tmux, vim, git-lfs and Chrome; F5 disk is 64 GB.",
     "<b>Note:</b> kill-switch drain mode is not exercised on the shared dev Worker (it would suspend other workstreams' sandboxes); refusal of creates and wakes is verified."
   ],
   "gaps": [
-    "Real Anthropic-model Claude run pending an AI Gateway credit top-up (free credits ~$4.94, no anthropic/* models); the agent check uses moonshotai/kimi-k2.",
-    "Seat proration and the dunning flow (grace -> suspend -> pay -> resume) need MEMBERSHIP_SYNC_TOKEN / CONTROL_PLANE_TOKEN wiring for the harness (billing e2e-test-mode.ts covers them in isolation).",
-    "Team create/invite need the Orca Cloud auth endpoints deployed (merged, not deployed)."
+    "Real Anthropic-model Claude run is pending an AI Gateway credit top-up (no anthropic/* models on free credits); agent.real-task uses moonshotai/kimi-k2 through Claude Code.",
+    "Payment-grace expiry (96 h) is not waited on: dunning verifies past_due, blocked starts, grace window, and pay leading to resume.",
+    "Team create/invite need the Orca Cloud auth endpoints on staging (team-billing-ux is standing them up).",
+    "The 15-min idle auto-sleep is not waited out in the routine run (config value checked); the mobile app UI is covered by W8's own runs (device-session API verified here)."
   ]
 }

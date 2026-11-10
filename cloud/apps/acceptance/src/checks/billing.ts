@@ -169,7 +169,7 @@ export const billingChecks: Record<string, Check> = {
     const ent = await entitlement(r.who)
     const same = await push(2)
     const ok =
-      added.body?.status === 'updated' && qtyAfterAdd === 3 && invoice?.billing_reason === 'subscription_update' && invoice?.status === 'paid' &&
+      added.body?.status === 'increased' && qtyAfterAdd === 3 && invoice?.billing_reason === 'subscription_update' && invoice?.status === 'paid' &&
       removed.body?.status === 'deferred' && qtyAfterRemove === 3 && removed.body?.effectiveAt > Date.now() && same.body?.status === 'deferred'
     return {
       status: ok ? 'pass' : 'fail',

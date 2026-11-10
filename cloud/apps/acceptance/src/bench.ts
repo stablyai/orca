@@ -15,7 +15,8 @@ export const EARLIER: Record<string, string> = {
   'create.usable': 'Desktop dogfood 2026-11-09: create -> ready in app 8-12 s',
   'wake.api': 'Pro 2026-11-09: resume -> ready 6.0 s (n=1); Hobby 2 vCPU: 4.3-5.1 s',
   'suspend.api': 'Pro 2026-11-09: drain + stop 7.6 s (n=1); Hobby stop 2.2 s',
-  'rollover.gap': 'Pro 2026-11-09: 12.2 s via dev Worker, 17.3 s at shortened cap'
+  'rollover.gap': 'Pro 2026-11-09: 12.2 s via dev Worker, 17.3 s at shortened cap',
+  'desktop.createToTerminal': 'Desktop dogfood 2026-11-09: 8-12 s'
 }
 export const CONDUCTOR: Record<string, string> = {
   'create.api': '0.80: "1.5-3x faster sandbox start" (no absolute number published)',
@@ -24,7 +25,10 @@ export const CONDUCTOR: Record<string, string> = {
   'rollover.gap': 'no rollover: hard stop at 23h50m, manual wake + resend turn',
   'suspend.api': 'not published (20 min idle sleep)',
   'port.forward': '0.83 auto port forwarding; latency not published',
-  'share.coldLoad': '0.84.1 share links; latency not published'
+  'share.coldLoad': '0.84.1 share links; latency not published',
+  'keystroke.echo': 'not published (terminal is a remote PTY too)',
+  'wake.firstKeystroke': 'not published; wake on open',
+  'desktop.createToTerminal': 'not published; 0.80 "1.5-3x faster start"'
 }
 
 async function firstEcho(code: string, root: string, kind: 'git' | 'folder') {

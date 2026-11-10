@@ -2,10 +2,10 @@
 import { createPrivateKey, createPublicKey, diffieHellman, generateKeyPairSync, hkdfSync, createDecipheriv } from 'node:crypto'
 import { SignJWT } from 'jose'
 import { control } from '../clients'
-import { config } from '../env'
+import { config, secrets } from '../env'
 import { log, type Check, type Ctx } from '../context'
 import { orca } from '../orca-cli'
-import type { Identity } from '../tokens'
+import { sandboxToken, type Identity } from '../tokens'
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const tag = (ctx: Ctx) => ctx.run.file.runId.replace(/[^0-9]/g, '').slice(-10)
@@ -14,15 +14,44 @@ const tag = (ctx: Ctx) => ctx.run.file.runId.replace(/[^0-9]/g, '').slice(-10)
 type BuildState = { envId: string; first: any; second: any; error?: string }
 let builds: Promise<BuildState> | null = null
 
+/** Follows the build the way the desktop does (live NDJSON events); polls GET as a fallback. */
 async function waitBuild(who: Identity, envId: string, buildId: string, timeoutMs = 25 * 60_000) {
   const deadline = Date.now() + timeoutMs
   let b: any = null
   while (Date.now() < deadline) {
-    b = (await control.as(who, 'GET', `/v1/environments/${envId}/builds/${buildId}`)).body?.build
+    const ctl = new AbortController()
+    const timer = setTimeout(() => ctl.abort(), Math.min(5 * 60_000, deadline - Date.now()))
+    try {
+      const r = await fetch(`${config.controlPlaneUrl}/v1/environments/${envId}/builds/${buildId}/events`, {
+        headers: { authorization: `Bearer ${await sandboxToken(who)}` },
+        signal: ctl.signal
+      })
+      const dec = new TextDecoder()
+      let buf = ''
+      for await (const chunk of r.body as unknown as AsyncIterable<Uint8Array>) {
+        buf += dec.decode(chunk, { stream: true })
+        const lines = buf.split('\n')
+        buf = lines.pop() ?? ''
+        for (const line of lines.filter(Boolean)) {
+          const e = JSON.parse(line)
+          if (e.type === 'build') {
+            b = e.build
+          }
+        }
+        if (['succeeded', 'failed', 'canceled'].includes(b?.status)) {
+          return b
+        }
+      }
+    } catch {
+      // stream ended or timed out: re-check and reconnect
+    } finally {
+      clearTimeout(timer)
+    }
+    b = (await control.as(who, 'GET', `/v1/environments/${envId}/builds/${buildId}`)).body?.build ?? b
     if (['succeeded', 'failed', 'canceled'].includes(b?.status)) {
       return b
     }
-    await sleep(10_000)
+    await sleep(2000)
   }
   return b
 }
@@ -108,6 +137,8 @@ function key(ctx: Ctx) {
 }
 const api = async (ctx: Ctx, method: string, path: string, body?: unknown) => control.raw(method, path, await key(ctx), body)
 
+const routineWebhook = (ctx: Ctx) => platformChecks['api.routine-webhook-impl']!(ctx)
+
 export const platformChecks: Record<string, Check> = {
   'env.build': async (ctx) => {
     const s = await environmentBuilds(ctx)
@@ -130,10 +161,10 @@ export const platformChecks: Record<string, Check> = {
     const list = await control.as(ctx.owner, 'GET', `/v1/environments/${s.envId}/builds`)
     const act = await control.as(ctx.owner, 'POST', `/v1/environments/${s.envId}/builds/${s.first.id}/activate`)
     const env = (await control.as(ctx.owner, 'GET', `/v1/environments/${s.envId}`)).body
-    const ok = s.second.status === 'succeeded' && (list.body?.builds?.length ?? 0) >= 2 && act.status === 200 && env?.environment?.activeBuild?.id === s.first.id
+    const ok = s.second.status === 'succeeded' && (list.body?.builds?.length ?? 0) >= 2 && act.status === 200 && env?.environment?.activeBuildId === s.first.id
     return {
       status: ok ? 'pass' : 'fail',
-      detail: `build 2 -> ${s.second.status} (${Math.round((s.second.durationMs ?? 0) / 1000)} s); history ${list.body?.builds?.length} builds; activate older build 1 (rollback) -> ${act.status}, active=${env?.environment?.activeBuild?.id === s.first.id ? 'build 1' : env?.environment?.activeBuild?.id}`
+      detail: `build 2 -> ${s.second.status} (${Math.round((s.second.durationMs ?? 0) / 1000)} s); history ${list.body?.builds?.length} builds; activate older build 1 (rollback) -> ${act.status}, active=${env?.environment?.activeBuildId === s.first.id ? 'build 1' : env?.environment?.activeBuildId}`
     }
   },
 
@@ -293,6 +324,24 @@ export const platformChecks: Record<string, Check> = {
   }),
 
   'api.routine-webhook': async (ctx) => {
+    // Routine runs act with the creator's credentials: give the account the gateway key the product way.
+    const gw = secrets.aiGatewayKey()
+    const agentEnv: Record<string, string> = gw
+      ? { ANTHROPIC_BASE_URL: 'https://ai-gateway.vercel.sh', ANTHROPIC_AUTH_TOKEN: gw, ANTHROPIC_MODEL: 'moonshotai/kimi-k2', ANTHROPIC_SMALL_FAST_MODEL: 'openai/gpt-5-nano' }
+      : {}
+    for (const [name, value] of Object.entries(agentEnv)) {
+      await control.as(ctx.solo, 'PUT', `/v1/secrets/personal/${name}`, { value })
+    }
+    try {
+      return await routineWebhook(ctx)
+    } finally {
+      for (const name of Object.keys(agentEnv)) {
+        await control.as(ctx.solo, 'DELETE', `/v1/secrets/personal/${name}`)
+      }
+    }
+  },
+
+  'api.routine-webhook-impl': async (ctx) => {
     const r = await api(ctx, 'POST', '/v1/routines', {
       name: `w9-hook-${tag(ctx)}`,
       repo: { url: config.testRepo },

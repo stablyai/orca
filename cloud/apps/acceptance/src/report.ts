@@ -82,7 +82,7 @@ function benchTable(runs: RunFile[]): string {
       }
     }
   }
-  const names = ['create.api', 'create.usable', 'create.firstEcho', 'wake.api', 'wake.firstEcho', 'suspend.api', 'rollover.gap', 'port.forward', 'share.coldLoad']
+  const names = ['create.api', 'create.usable', 'create.firstEcho', 'desktop.createToTerminal', 'keystroke.echo', 'wake.api', 'wake.firstEcho', 'wake.firstKeystroke', 'suspend.api', 'rollover.gap', 'port.forward', 'share.coldLoad']
   const rows = names.map((name) => {
     const b = latest.get(name)
     const n = b?.samples.length ?? 0
