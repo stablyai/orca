@@ -511,6 +511,10 @@
                     "body": "This repository's execution host is disconnected, so Orca cannot refresh {{reviewLabel}} status.",
                     "title": "Host disconnected"
                   },
+                  "host_off": {
+                    "body": "Orca refreshes {{reviewLabel}} status through this project’s WSL host, which is off. Reconnect it to refresh.",
+                    "title": "WSL host is off"
+                  },
                   "not_git": {
                     "body": "Orca could not treat this folder as a Git repository for {{reviewLabel}} status.",
                     "title": "Not a Git repository"

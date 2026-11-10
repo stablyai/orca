@@ -208,7 +208,7 @@ export type TerminalActions = {
   queueTabStartupCommand: (
     tabId: string,
     startup: {
-      command: string
+      command?: string
       delivery?: 'terminal-paste'
       startupCommandDelivery?: StartupCommandDelivery
       env?: Record<string, string>
@@ -236,7 +236,7 @@ export type TerminalActions = {
     tabId: string,
     expected?: TerminalState['pendingStartupByTabId'][string]
   ) => {
-    command: string
+    command?: string
     delivery?: 'terminal-paste'
     startupCommandDelivery?: StartupCommandDelivery
     env?: Record<string, string>

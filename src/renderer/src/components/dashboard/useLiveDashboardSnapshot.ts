@@ -5,7 +5,7 @@ import { useAppStore } from '@/store'
 import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import type { DashboardSnapshot } from '../../../../shared/dashboard-snapshot'
 import { buildDashboardSnapshot } from './build-dashboard-snapshot'
-import { useChatProgramFactsVersion } from '@/lib/host-chat-program-acquisition'
+import { useChatProgramFactsVersion } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { createWorktreeAgentRowsCache } from './worktree-agent-rows-cache'
 import { selectAgentLaunchRouteView } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import {

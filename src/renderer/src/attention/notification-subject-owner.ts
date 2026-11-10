@@ -10,7 +10,7 @@ import { getPtyExecutionHost } from '../../../shared/terminal/pty/lifecycle/term
 import type { Tab } from '../../../shared/tab-types'
 import type { AppState } from '@/store/types'
 import type { PtyTransport } from '@/components/terminal-pane/pty-transport/pty-transport-types'
-import { resolveTerminalTabPtyOwnership } from '@/lib/terminal-tab-for-pty-id'
+import { resolveTerminalTabPtyOwnership } from '@/lib/workspace/tabs/terminal-tab-for-pty-id'
 import {
   resolveExactWorktreeRoute,
   routeForOwner

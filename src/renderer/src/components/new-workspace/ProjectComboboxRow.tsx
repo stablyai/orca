@@ -2,7 +2,7 @@ import React from 'react'
 import { FolderOpen } from 'lucide-react'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { cn } from '@/lib/utils'
-import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
+import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
 import { splitPathHeadForElision } from '@/lib/path-head-elision'
 
 /** Identity mark shared by the field and every row, so a project reads the same in both. */

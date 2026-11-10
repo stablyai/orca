@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react'
-import { applyDocumentTheme } from '@/lib/document-theme'
-import { resolvePaintedTheme } from '@/lib/terminal-app-theme'
+import { applyDocumentTheme } from '@/app-shell/appearance/document-theme'
+import { resolvePaintedTheme } from '@/app-shell/appearance/terminal-app-theme'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import type { SettingsNavInstallStatus } from '@/lib/settings-navigation-types'
 import {

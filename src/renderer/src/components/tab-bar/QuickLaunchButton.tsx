@@ -13,7 +13,10 @@ import { toast } from 'sonner'
 import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
-import { agentLaunchPromptOwnership, newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
+import {
+  agentLaunchPromptOwnership,
+  newAgentPromptOutcome
+} from '@/lib/agent-session/launch/prompt/new-agent-prompt-outcome'
 import { activeAgentNotesSendFailureMessage } from '@/lib/agent-session/messaging/terminal/active-agent-note-send-result'
 import { AgentSettingsMenuItem } from '@/components/agent/AgentSettingsMenuItem'
 import { TabAgentSurfaceChoiceRow } from './TabAgentSurfaceChoiceRow'

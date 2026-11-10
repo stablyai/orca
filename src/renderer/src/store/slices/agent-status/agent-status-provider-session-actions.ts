@@ -1,7 +1,9 @@
+import type { OwnedPaneAgentRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   isPaneSleepRecord,
   isResumablePaneRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import type {
@@ -166,10 +168,10 @@ export function createAgentStatusProviderSessionActions(
             ...(nextConversations !== s.agentConversationsByPaneKey
               ? { agentConversationsByPaneKey: nextConversations }
               : {}),
-            sleepingAgentSessionsByPaneKey: {
-              ...s.sleepingAgentSessionsByPaneKey,
-              [paneKey]: record
-            },
+            sleepingAgentSessionsByPaneKey: replaceRecordEntries<OwnedPaneAgentRecord>(
+              s.sleepingAgentSessionsByPaneKey,
+              [[paneKey, record]]
+            ),
             agentLaunchConfigByPaneKey: nextLaunchConfigs,
             acknowledgedAgentsByPaneKey: removePaneKeys(
               s.acknowledgedAgentsByPaneKey,

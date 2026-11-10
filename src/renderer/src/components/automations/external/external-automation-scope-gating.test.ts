@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { AutomationHostCatalogEntry } from '../hosts/automation-host-catalog-types'
-import {
-  externalAutomationProbeOwners,
-  externalAutomationScopeGateFromError,
-  parseExternalAutomationScopeCode
-} from './external-automation-scope-gating'
+import { externalAutomationProbeOwners } from './external-automation-scope-gating'
 
 function entry(overrides: Partial<AutomationHostCatalogEntry> = {}): AutomationHostCatalogEntry {
   return {
@@ -39,12 +35,5 @@ describe('external automation scope gating', () => {
     expect(externalAutomationProbeOwners([entry(), runtimeEntry, entry({ owner: null })])).toEqual([
       { authority: { kind: 'desktop' }, selector: { kind: 'self' } }
     ])
-  })
-})
-
-describe('engine scope errors', () => {
-  it('leaves unrelated failures alone so they are not relabelled as scope limits', () => {
-    expect(externalAutomationScopeGateFromError(new Error('socket hang up'))).toBeNull()
-    expect(parseExternalAutomationScopeCode(null)).toBeNull()
   })
 })

@@ -24,6 +24,7 @@ import {
   discardHookLaneCompletionRequests,
   submitHookLaneCompletion
 } from './agent-hook-completion-revision-hold'
+import * as finishDrops from '@/attention/agent-finish-drop-breadcrumb'
 
 type CoordinatorEntry = {
   worktreeId: string
@@ -67,8 +68,9 @@ function pruneClosedPaneCoordinators(): void {
   }
   lastPrunedLivenessSnapshot = livenessSnapshot
   const tabIndex = buildTabIndex(livenessSnapshot.tabsByWorktree)
-  for (const paneKey of coordinatorsByPaneKey.keys()) {
+  for (const [paneKey, entry] of coordinatorsByPaneKey) {
     if (!paneIsPlaced(paneKey, tabIndex)) {
+      finishDrops.recordPrunedPendingFinish(entry.worktreeId, paneKey, entry.coordinator)
       disposeCoordinatorForPaneKey(paneKey)
     }
   }
@@ -148,6 +150,7 @@ function createCoordinator(paneKey: string, worktreeId: string): AgentCompletion
     dispatchHookLifecycle: (payload) => dispatchAgentHookTerminalLifecycle(paneKey, payload),
     dispatchCompletion: (title, meta) => {
       if (!hookLaneDispatchEnabled(paneKey)) {
+        finishDrops.recordHookLaneDisabled(worktreeId, paneKey)
         return
       }
       const snapshot = meta?.agentStatus
@@ -204,6 +207,7 @@ export function observeAgentHookCompletionForNotification({
   if (seedOnly !== true) {
     pruneClosedPaneCoordinators()
     if (!paneCanReceiveHookCompletion(paneKey)) {
+      finishDrops.recordFinishOnPaneNotLive(worktreeId, paneKey, payload.state)
       return
     }
   }

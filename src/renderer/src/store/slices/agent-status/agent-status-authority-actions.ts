@@ -1,6 +1,7 @@
+import type { OwnedPaneAgentRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
-import { rendererAgentStatusObservations } from '../../../lib/renderer-agent-status-observations'
+import { rendererAgentStatusObservations } from '../../../lib/agent-status/evidence/renderer-agent-status-observations'
 import {
   resolveAgentPaneAuthorityKey,
   retireAgentPaneAuthorityAliases,
@@ -22,6 +23,7 @@ import {
   removePanesAttention
 } from '../workspace-attention/subject-attention-transitions'
 import { settleAttentionRemovedBy } from '../workspace-attention/attention-removal-follow-up'
+import { replaceRecordEntries } from '../../keyed-record-transitions'
 
 export function createAgentStatusAuthorityActions(
   runtime: AgentStatusRuntime
@@ -175,6 +177,7 @@ export function createAgentStatusAuthorityActions(
       set((s, changedPaneKeys) => {
         changedPaneKeys.add(from)
         changedPaneKeys.add(to)
+        const sleepingSession = s.sleepingAgentSessionsByPaneKey[from]
         return {
           agentStatusByPaneKey: movePaneKeyedRecord(s.agentStatusByPaneKey, from, to, (entry) => ({
             ...entry,
@@ -196,12 +199,13 @@ export function createAgentStatusAuthorityActions(
             from,
             to
           ),
-          sleepingAgentSessionsByPaneKey: movePaneKeyedRecord(
-            s.sleepingAgentSessionsByPaneKey,
-            from,
-            to,
-            (record) => ({ ...record, paneKey: to, tabId: targetTabId })
-          ),
+          sleepingAgentSessionsByPaneKey:
+            sleepingSession === undefined
+              ? s.sleepingAgentSessionsByPaneKey
+              : replaceRecordEntries<OwnedPaneAgentRecord>(s.sleepingAgentSessionsByPaneKey, [
+                  [from, null],
+                  [to, { ...sleepingSession, paneKey: to, tabId: targetTabId }]
+                ]),
           agentLaunchConfigByPaneKey: movePaneKeyedRecord(
             s.agentLaunchConfigByPaneKey,
             from,

@@ -1,5 +1,6 @@
 import { isResumablePaneRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { useAppStore } from '@/store'
+import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   parseLegacyNumericPaneKey,
@@ -24,7 +25,10 @@ export function requestSleepingAgentWakeOnMount(
   tabIds: readonly string[]
 ): void {
   const wanted = new Set(tabIds)
-  for (const record of Object.values(useAppStore.getState().sleepingAgentSessionsByPaneKey)) {
+  for (const [, record] of sleepingAgentRecordIndex.entries(
+    useAppStore.getState().sleepingAgentSessionsByPaneKey,
+    worktreeId
+  )) {
     if (!isResumablePaneRecord(record)) {
       continue
     }

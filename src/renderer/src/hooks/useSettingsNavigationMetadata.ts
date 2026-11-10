@@ -15,7 +15,7 @@ import { isWebClientLocation } from '@/lib/web-client-location'
 import {
   isWindowsTerminalCapabilityHost,
   useWindowsTerminalCapabilities
-} from '@/lib/windows-terminal-capabilities'
+} from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import { useAppStore } from '@/store'
 import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'

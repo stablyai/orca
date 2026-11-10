@@ -70,6 +70,7 @@ export function useWorktreeJumpPaletteOpenTabs({
   paletteSearchContext,
   hasQuery,
   worktreeMatches,
+  hidesPaletteWorkspace,
   resolveWorktree
 }: WorktreeJumpPaletteOpenTabsInput) {
   const t = useTranslate()
@@ -236,7 +237,10 @@ export function useWorktreeJumpPaletteOpenTabs({
             }
           : null
       })
-      .filter((item): item is WorktreePaletteItem => item !== null)
+      .filter(
+        (item): item is WorktreePaletteItem =>
+          item !== null && !hidesPaletteWorkspace?.(item.worktree)
+      )
     if (!hasQuery) {
       return items
     }
@@ -259,7 +263,7 @@ export function useWorktreeJumpPaletteOpenTabs({
         }
       )
     )
-  }, [hasQuery, resolveWorktree, worktreeMatches])
+  }, [hasQuery, hidesPaletteWorkspace, resolveWorktree, worktreeMatches])
   const browserItems = useMemo<BrowserPaletteItem[]>(
     () => buildBrowserPaletteItems(browserMatches),
     [browserMatches]

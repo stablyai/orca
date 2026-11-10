@@ -17,7 +17,7 @@ import { ActivityThreadCollapseContext } from '@/components/activity/activity-th
 import { useSidebarProjectDrop } from './project-admission/drop/useSidebarProjectDrop'
 import { useWorkspaceBoardPanel } from './workspace-board/surface/useWorkspaceBoardPanel'
 import { useWorkspaceRevealBodyRedirect } from './worktree-list/navigation/use-workspace-reveal-body-redirect'
-import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
+import { resolveLeftSidebarStyleVariables } from '@/app-shell/appearance/left-sidebar-appearance'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { LocalGitToolchainScanBanner } from './LocalGitToolchainScanBanner'
 import { SeveredTerminalDaemonBanner } from './SeveredTerminalDaemonBanner'

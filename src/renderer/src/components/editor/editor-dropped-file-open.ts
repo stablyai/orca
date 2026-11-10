@@ -19,7 +19,7 @@ import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expect
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { DROP_STAGING_RELATIVE_DIR } from '../../../../shared/drop-staging-ignore'
-import { openDocumentInFloatingWorkspace } from '@/lib/open-document-in-floating-workspace'
+import { openDocumentInFloatingWorkspace } from '@/components/floating-terminal/open-document-in-floating-workspace'
 import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
