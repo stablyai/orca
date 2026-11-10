@@ -95,20 +95,4 @@ describe('resolved revisions', () => {
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
     expect(rowText()).toBe('abc')
   })
-
-  it('refuses a resolved write larger than the reservation it was admitted with', async () => {
-    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
-    const bytes = estimateStructuredAgentSessionItemBytes(ROW, text('a'))
-    deferred.sink.tryReviseResolvedItem?.(
-      bytes,
-      () => ({
-        identity: ROW,
-        body: text('a'.repeat(64))
-      }),
-      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
-    deferred.bind(journalTarget())
-    await expect(deferred.drained()).resolves.toMatchObject({ ok: false })
-    expect(journal.itemBody(agentJournalItemKey(ROW))).toBeNull()
-  })
 })

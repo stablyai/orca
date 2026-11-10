@@ -34,7 +34,6 @@ export function registerPtyConnectionCommandCodeStatusInferenceTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -58,8 +57,9 @@ export function registerPtyConnectionCommandCodeStatusInferenceTests(): void {
 
     it('seeds a working status for Command Code startup prompts after spawn', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const ptyId = 'pty-command-code'
       const transport = createMockTransport(ptyId)
       transportFactoryQueue.push(transport)
@@ -106,8 +106,9 @@ export function registerPtyConnectionCommandCodeStatusInferenceTests(): void {
 
     it('seeds a working status from Command Code thinking output without a startup prompt', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const ptyId = 'pty-command-code'
       const transport = createMockTransport(ptyId)
@@ -155,8 +156,9 @@ export function registerPtyConnectionCommandCodeStatusInferenceTests(): void {
 
     it('ignores delayed Command Code output after the leaf rebinds to another SSH host', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const oldPtyId = toAppSshPtyId('ssh-a', 'pty-command-code')
       const newPtyId = toAppSshPtyId('ssh-b', 'pty-command-code')
@@ -193,8 +195,9 @@ export function registerPtyConnectionCommandCodeStatusInferenceTests(): void {
     it('marks a Command Code no-tool turn done after the idle prompt settles', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks5 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const transport = createMockTransport('pty-command-code')
       transport.connect.mockImplementation(
@@ -251,8 +254,9 @@ export function registerPtyConnectionCommandCodeStatusInferenceTests(): void {
     it('keeps Command Code working when an active repaint follows the idle prompt before settle', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks6 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const transport = createMockTransport('pty-command-code')
       transport.connect.mockImplementation(
@@ -296,8 +300,9 @@ export function registerPtyConnectionCommandCodeStatusInferenceTests(): void {
 
     it('does not downgrade a completed Command Code turn back to working from stale TUI output', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks7 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const transport = createMockTransport('pty-command-code')
       transport.connect.mockImplementation(
@@ -345,8 +350,9 @@ export function registerPtyConnectionCommandCodeStatusInferenceTests(): void {
 
     it('starts a new Command Code turn after done when TUI output carries a different prompt', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks8 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks8 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const transport = createMockTransport('pty-command-code')
       transport.connect.mockImplementation(

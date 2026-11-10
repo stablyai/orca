@@ -1,3 +1,5 @@
+import type { AppState } from '@/store/types'
+import { createAgentStatusEpochSelector } from './agent-status/evidence/agent-status-epoch-selector'
 import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { isFreshNonDoneAgentStatus } from '../../../shared/agent-status/contracts/agent-status-freshness'
@@ -27,6 +29,16 @@ export function getWorktreeIdsWithLiveAgent(
 ): Set<string> {
   return new Set(getLiveAgentStatusByWorktreeId(agentStatusByPaneKey, tabsByWorktree, now).keys())
 }
+
+/** Live-agent worktree ids for a store subscription; recomputes on an agent-status epoch or input change. */
+export const createLiveAgentWorktreeIdsSelector = () =>
+  createAgentStatusEpochSelector(
+    (
+      state: Pick<AppState, 'agentStatusEpoch' | 'agentStatusByPaneKey'>,
+      tabsByWorktree: TabsByWorktree | null | undefined,
+      now: number
+    ) => getWorktreeIdsWithLiveAgent(state.agentStatusByPaneKey, tabsByWorktree, now)
+  )
 
 export function getLiveAgentStatusByWorktreeId(
   agentStatusByPaneKey: Record<string, AgentStatusEntry> | null | undefined,

@@ -6,7 +6,7 @@ import { safeFit } from '@/lib/pane-manager/pane-fit'
 import '@/lib/pane-manager/pane-webgl-renderer'
 import { getWindowParkVisible, subscribeWindowParkVisibility } from '@/lib/window-park-visibility'
 import { useAppStore } from '@/store'
-import { createCodexBackfillErrorDetector } from '../codex-backfill-error-detector'
+import { createCodexBackfillErrorDetector } from '../provider-notices/codex-backfill/codex-backfill-error-detector'
 import { hasWorktreeSleepIntent, onWorktreeSleepIntentCleared } from '@/lib/worktree-sleep-intent'
 
 import { recordPtyConnectDiagnostic } from './instrumentation/pty-connect-diagnostics'

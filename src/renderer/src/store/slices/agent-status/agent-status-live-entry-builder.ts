@@ -1,4 +1,4 @@
-import { canonicalOrchestrationForRow } from '@/runtime/visible-agent-orchestration'
+import { canonicalOrchestrationForRow } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import { resolveAgentSessionStartedAt } from '../../../../../shared/agent-session/lifecycle/agent-session-start-time'
 import { sameAgentStatusTerminalOwner } from '../../../../../shared/agent-status/identity/agent-status-terminal-owner'
 import type { AppState } from '../../types'
@@ -26,14 +26,17 @@ import type {
   AgentStatusRouting,
   AgentStatusTiming
 } from './agent-status-contract'
-import { registryEntryMatchesStatus } from './agent-status-launch-config'
+import {
+  invocationLaunchConfig,
+  ownerLaunchAttested,
+  registryEntryMatchesStatus
+} from './agent-status-launch-config'
 import { findAgentPaneWorktreeId, getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
 import { mergeCurrentOrchestrationContext } from './agent-status-orchestration-context'
 import { deriveAgentStatusLiveFacts } from './agent-status-live-facts'
 import { liveEntryChildFields } from './agent-status-live-entry-children'
 import {
   canReuseStatusProviderSession,
-  recordLaunchConfigForStatus,
   statusRetainsResumableIdentity
 } from '../../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
 
@@ -191,24 +194,20 @@ export function buildAgentStatusLiveEntry(
     providerSessionChanged
   })
   const matchedRegistryLaunchConfig = registryMatched ? registryEntry?.launchConfig : undefined
-  const existingSleepingRecord = state.sleepingAgentSessionsByPaneKey[paneKey]
   const retainsResumableRecoveryIdentity = statusRetainsResumableIdentity(
     { agentType: identity.agentType, state: payload.state },
     providerSession
   )
-  const matchedSleepingLaunchConfig =
-    payload.state !== 'done' || retainsResumableRecoveryIdentity
-      ? recordLaunchConfigForStatus(existingSleepingRecord, {
-          agentType: identity.agentType,
-          providerSession
-        })
-      : undefined
-  const launchConfigSource =
-    (payload.state !== 'done' && !providerSessionChanged && metadata?.launchToken
-      ? metadata?.launchConfig
-      : undefined) ??
-    matchedRegistryLaunchConfig ??
-    matchedSleepingLaunchConfig
+  // Local main's note-or-null or a paired host's frame fact; an OSC update says nothing.
+  const launchAttested = ownerLaunchAttested(metadata?.launchConfig, existing, identity.agentType)
+  const launchConfigSource = invocationLaunchConfig({
+    statement: metadata?.launchConfig,
+    launchAttested,
+    registry: matchedRegistryLaunchConfig,
+    record: state.sleepingAgentSessionsByPaneKey[paneKey],
+    agentType: identity.agentType,
+    providerSession
+  })
   const mainAgent = resolveAgentStatusLiveEntryMainAgent(existing, payload, identity.agentType)
   const programStatus =
     payload.programStatus === undefined ? existing?.programStatus : payload.programStatus
@@ -258,6 +257,7 @@ export function buildAgentStatusLiveEntry(
     ...liveEntryChildFields(existing, payload),
     ...(mainAgent ? { mainAgent } : {}),
     ...(providerSession ? { providerSession } : {}),
+    ...(launchAttested !== undefined ? { launchAttested } : {}),
     ...(metadata?.terminalResumeEligible === false
       ? { terminalResumeEligible: false as const }
       : {}),

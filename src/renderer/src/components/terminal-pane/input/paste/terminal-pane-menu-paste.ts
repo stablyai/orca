@@ -2,7 +2,7 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 import { requestNativeChatCoverPaste } from './native-chat-cover-paste'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { pasteTerminalClipboard } from '../../clipboard/terminal-clipboard-paste'
 import { createTerminalClipboardCopiedFiles } from '../../clipboard/terminal-clipboard-copied-files'
@@ -18,7 +18,7 @@ import { scheduleImagePasteWebglAtlasRecovery } from '../../render-health/termin
 import { useAppStore } from '@/store/index'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { resolveTerminalInputHostPlatform } from '../terminal-input-host-platform'
-import { recordTerminalUserInputForLeaf } from '../../terminal-input-activity'
+import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
 
 export type TerminalPaneMenuPasteContext = {
   managerRef: React.RefObject<PaneManager | null>

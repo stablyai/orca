@@ -3,13 +3,13 @@ import { useAppStore } from '@/store/index'
 import {
   confirmRuntimeTerminalForegroundProcess,
   inspectRuntimeTerminalProcess
-} from '@/runtime/runtime-terminal-inspection'
+} from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 
 import { translate } from '@/i18n/i18n'
 import {
   getCodexAccountDisplayLabel,
   normalizeCodexAccountEmail
-} from '../../../codex-account-display-label'
+} from '../../../provider-accounts/codex-account-display-label'
 import { isShellProcess } from '../../../../../../shared/agent-status/process/shell-process-detection'
 import {
   isCodexForegroundProcess,

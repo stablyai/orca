@@ -3,7 +3,7 @@ import { OptionalGhAccountExpectation } from '../../../shared/rpc-contract/githu
 import { ipcMain } from 'electron'
 import type { GitHubOwnerRepo } from '../../../shared/github/pull-request-types'
 import type { GitHubIssueUpdate } from '../../../shared/issue-mutation-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { addIssueComment } from '../../github/issue-comment'
 import { listAssignableUsers, listLabels } from '../../github/issue-field-options'
 import { updateIssue } from '../../github/issue-update'

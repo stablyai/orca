@@ -1,6 +1,5 @@
 import type { AgentProcessVerdict } from '../../../../../../shared/agent-status/process/agent-process-presence'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-create-capabilities'
-import '../../../unused-default-rpc-methods.test-fixture'
 import { appendFile, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'

@@ -2,13 +2,14 @@ import { useCallback, useEffect, useMemo } from 'react'
 import { getFolderWorkspaceStatusRequestDependencies } from '@/store/folder-workspaces/folder-path-status'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
-import { useFolderWorkspacePathStatusCacheExpiryTick } from '@/lib/folder-workspace-path-status-cache-expiry'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import { useFolderWorkspacePathStatusCacheExpiryTick } from '@/lib/workspace/paths/folder-workspace-path-status-cache-expiry'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { AppState } from '@/store/types'
 import { getFolderPathStatusRouteOptionsForRows } from './folder-path-status-routing'
+import { recomputeOn } from '@/lib/recompute-on'
 
 type FolderPathStatusRequest = Parameters<AppState['fetchFolderWorkspacePathStatus']>[0]
 
@@ -166,23 +167,24 @@ export function useFolderWorkspacePathStatusRows(args: {
     getFolderWorkspacePathStatusCacheKey,
     projectGroups
   ])
-  const getCachedFolderWorkspacePathStatus = useCallback(
-    (request: FolderPathStatusRequest) => {
-      const options = getFolderPathStatusRouteOptions(request)
-      if (!options) {
-        return null
-      }
-      const cacheKey = getFolderWorkspacePathStatusCacheKey(request, options)
-      // Why: don't let an expired negative status keep folder workspaces disabled while a refresh is in flight.
-      void folderWorkspacePathStatuses[cacheKey]
-      void folderPathStatusCacheExpiryTick
-      return getFreshFolderWorkspacePathStatus(request, options)
-    },
+  // Why: status writes and expiry ticks renew the getter so an expired negative status can't keep
+  // folder workspaces disabled while a refresh is in flight.
+  const getCachedFolderWorkspacePathStatus = useMemo(
+    () =>
+      recomputeOn(
+        [folderWorkspacePathStatuses, folderPathStatusCacheExpiryTick],
+        () => (request: FolderPathStatusRequest) => {
+          const options = getFolderPathStatusRouteOptions(request)
+          if (!options) {
+            return null
+          }
+          return getFreshFolderWorkspacePathStatus(request, options)
+        }
+      ),
     [
       folderWorkspacePathStatuses,
       folderPathStatusCacheExpiryTick,
       getFolderPathStatusRouteOptions,
-      getFolderWorkspacePathStatusCacheKey,
       getFreshFolderWorkspacePathStatus
     ]
   )

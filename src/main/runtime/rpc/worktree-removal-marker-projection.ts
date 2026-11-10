@@ -1,4 +1,4 @@
-import { WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY } from '../../../shared/worktree-runtime-capabilities'
 import type { DetectedWorktreeListResult } from '../../../shared/worktree/types'
 import type {
   RuntimeWorktreeListResult,

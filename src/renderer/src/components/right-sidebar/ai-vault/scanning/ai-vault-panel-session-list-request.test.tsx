@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render, screen, fireEvent } from '@testing-library/react'
+import { act, cleanup, render, screen, fireEvent } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ComponentProps } from 'react'
 import { useAppStore } from '@/store/index'
@@ -14,6 +14,8 @@ import {
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY
 } from '../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import { getDefaultSettings } from '../../../../../../shared/constants'
+import { resolveAiVaultSearchSettings } from '../../../../../../shared/ai-vault/search/ai-vault-search-settings'
 import { aiVaultSearchHitToSession } from '../search/ai-vault-search-session'
 import type { AiVaultSessionVirtualList } from '../session-list/AiVaultSessionVirtualList'
 import type { AiVaultResumeInChatEligibility } from '../session-actions/ai-vault-session-resume-in-chat'
@@ -25,6 +27,7 @@ import {
 
 type PanelRequest = {
   scopePaths: readonly string[]
+  scopeOnly: boolean
   executionHostScope: string
   sessionLimit: number | 'unlimited'
 }
@@ -35,7 +38,7 @@ const panelRows = vi.hoisted(
   (): { session: AiVaultSession; resume: AiVaultResumeInChatEligibility }[] => []
 )
 
-vi.mock('@/runtime/local-runtime-capabilities', async (importOriginal) => ({
+vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readLocalRuntimeCapabilitiesOrUnknown: () => [
     STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
@@ -51,9 +54,10 @@ vi.mock('./ai-vault-session-refresh', () => ({
   useAiVaultSessionRefresh: (
     scopePaths: PanelRequest['scopePaths'],
     executionHostScope: PanelRequest['executionHostScope'],
-    sessionLimit: PanelRequest['sessionLimit']
+    sessionLimit: PanelRequest['sessionLimit'],
+    scopeOnly: PanelRequest['scopeOnly']
   ) => {
-    panelRequests.push({ scopePaths, executionHostScope, sessionLimit })
+    panelRequests.push({ scopePaths, scopeOnly, executionHostScope, sessionLimit })
     return {
       error: null,
       loading: false,
@@ -138,13 +142,47 @@ it.each([false, true])(
     returned.sessions = [session]
     const { default: AiVaultPanel } = await import('../panel/AiVaultPanel')
     render(<AiVaultPanel workspace={bound ? { worktreeId: folderId } : undefined} />)
+    expect(panelRequests.at(-1)).toMatchObject({ scopeOnly: true })
     expect(panelRequests.at(-1)?.scopePaths).toContain('/var/example')
     expect(panelRows).toEqual([{ session, resume: { available: true, workspaceId: folderId } }])
     expect(panelRows[0].session).toBe(session)
     fireEvent.click(screen.getByRole('radio', { name: /^All$/ }))
+    expect(panelRequests.at(-1)).toMatchObject({ scopeOnly: false })
     expect(panelRequests.at(-1)?.scopePaths).toContain('/var/example')
     expect(panelRows).toEqual([{ session, resume: { available: true, workspaceId: folderId } }])
     expect(panelRows[0].session.cwd).toBe('/private/var/example')
     expect(panelRows[0].session.sessionId).toBe(session.sessionId)
   }
 )
+
+it('lists title matches from loaded history until full-text search answers', async () => {
+  useAppStore.setState({
+    settings: {
+      ...getDefaultSettings('/tmp'),
+      aiVaultSearch: { ...resolveAiVaultSearchSettings({}), enabled: true }
+    }
+  })
+  const loaded = (sessionId: string, title: string) =>
+    aiVaultSearchHitToSession(
+      { ...searchHit(), agent: 'claude', cwd: '/repo/wt', sessionId, title },
+      'local'
+    )
+  returned.sessions = [loaded('login', 'Fix login redirect'), loaded('parser', 'Refactor parser')]
+  const search = vi.mocked(window.api.aiVault.searchSessions).mockReturnValue(new Promise(() => {}))
+  const { default: AiVaultPanel } = await import('../panel/AiVaultPanel')
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    render(<AiVaultPanel />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search sessions' }), {
+      target: { value: 'login' }
+    })
+    expect(panelRows.map((row) => row.session.sessionId)).toEqual(['login'])
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250)
+    })
+    expect(search).toHaveBeenCalled()
+    expect(panelRows.map((row) => row.session.sessionId)).toEqual(['login'])
+  } finally {
+    vi.useRealTimers()
+  }
+})

@@ -1,5 +1,5 @@
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { useAppStore } from '@/store'
 import { getWindowsTerminalCapabilityOwnerKey } from '@/lib/windows-terminal-capabilities'
 import { isWebClientLocation } from '@/lib/web-client-location'
 
@@ -39,7 +39,7 @@ export function useWindowsTerminalCapabilityOwnerKey(
   sshConnectionId?: string | null
 ): string {
   const isWebClient = isWebClientLocation()
-  return useAppStore((state) =>
+  return useAppStateValue((state) =>
     resolveWindowsTerminalCapabilityOwnerKey({
       activeRuntimeEnvironmentId,
       isWebClient,

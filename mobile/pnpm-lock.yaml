@@ -203,6 +203,9 @@ importers:
       '@react-native-async-storage/async-storage':
         specifier: ^2.2.0
         version: 2.2.0(react-native@0.83.10(patch_hash=9430d1c3d0071e5b8e2c9d98f9ba5594ad3bb27f4f6e8f3884ab1f03658fb6f0)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.85.2(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.2.8)(supports-color@8.1.1))
+      '@tanstack/query-persist-client-core':
+        specifier: 5.105.3
+        version: 5.105.3
       '@tanstack/react-query':
         specifier: 5.105.3
         version: 5.105.3(@types/react@19.2.18)(react@19.2.8)
@@ -218,6 +221,9 @@ importers:
       buffer:
         specifier: ^6.0.3
         version: 6.0.3
+      diff:
+        specifier: 8.0.4
+        version: 8.0.4
       expo:
         specifier: ^55.0.31
         version: 55.0.31(0def556739f9e1a9e497ee4bc3b81b41)
@@ -2774,6 +2780,9 @@ packages:
   '@tanstack/query-core@5.105.3':
     resolution: {integrity: sha512-v1rbNy7MB/4Akth7CQH+CerV13K7Ok9hAusEsfz4sCjDdu3/kOSJPoWfoB+YjdEX1eBFBWKNAGE5nqZCgdlHDw==}
 
+  '@tanstack/query-persist-client-core@5.105.3':
+    resolution: {integrity: sha512-VcK3dfkvYkEb1AsX/VK/LJAa9nGN0OE5x2SnFHKY5Rwzixg9zqXdcr7fCpyolEWj/cygOd8Nt1ZRTPzfB0lEaw==}
+
   '@tanstack/react-query@5.105.3':
     resolution: {integrity: sha512-dj5hGWZmwoc9NG4enoXuYbiYwb5FxgJYPVv06eUgicMTfEMTRXn08Xv9D/r1V8TfjAv+BpxdvZFzJ1h3hSWZcQ==}
     peerDependencies:
@@ -4082,6 +4091,10 @@ packages:
   diff-sequences@29.6.3:
     resolution: {integrity: sha512-EjePK1srD3P08o2j4f0ExnylqRs5B9tJjcp9t1krH2qRi8CCdsYfwe9JgSLurFBWwq4uOlipzfk5fHNvwFKr8Q==}
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
+
+  diff@8.0.4:
+    resolution: {integrity: sha512-DPi0FmjiSU5EvQV0++GFDOJ9ASQUVFh5kD+OzOnYdi7n3Wpm9hWWGfB/O2blfHcMVTL5WkQXSnRiK9makhrcnw==}
+    engines: {node: '>=0.3.1'}
 
   dnssd-advertise@1.1.6:
     resolution: {integrity: sha512-Ndrrf6BMPalkQPd/zubL+4YghH2J9NspapQ09uDXwYbvOPkP0oaqf5CkcwJ0b50kS2O3ul6yVu+jz+RY62Cejg==}
@@ -10290,6 +10303,10 @@ snapshots:
 
   '@tanstack/query-core@5.105.3': {}
 
+  '@tanstack/query-persist-client-core@5.105.3':
+    dependencies:
+      '@tanstack/query-core': 5.105.3
+
   '@tanstack/react-query@5.105.3(@types/react@19.2.18)(react@19.2.8)':
     dependencies:
       '@tanstack/query-core': 5.105.3
@@ -11717,6 +11734,8 @@ snapshots:
       dequal: 2.0.3
 
   diff-sequences@29.6.3: {}
+
+  diff@8.0.4: {}
 
   dnssd-advertise@1.1.6: {}
 

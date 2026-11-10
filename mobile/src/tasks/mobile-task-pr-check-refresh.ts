@@ -1,7 +1,7 @@
 import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
 import { matchesGitHubWorkItemTarget } from '../../../src/shared/github/work-item-target'
 import { acceptPRCheckObservation } from '../../../src/shared/github/complete-pr-check-owner'
-import { captureMobilePRCheckContract } from '../transport/pr-check-observation-contract'
+import { captureMobilePRCheckContract } from '../source-control/review/pr-check-observation-contract'
 import { githubWorkItemBySlugRead } from './mobile-task-source-search-operations'
 import { githubTaskKey, sameGitHubTask, requireGitHubTaskTarget } from './github-task-identity'
 import { buildGitHubCheckSummary } from './github-check-summary'

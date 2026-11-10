@@ -3,11 +3,11 @@ import { Share2, Trash2 } from 'lucide-react'
 import { readIpcErrorDetail } from '@/lib/ipc-error'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
-import { discoverSkillsForRuntimeTarget } from '@/runtime/runtime-skills-client'
+import { discoverSkillsForRuntimeTarget } from '@/runtime/skills/configuration/runtime-skills-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useActiveSkillDiscoveryRuntimeTarget } from '@/hooks/use-active-skill-discovery-runtime-target'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { getRuntimeTargetHostId } from '@/runtime/runtime-client-target'
+import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { UNRESOLVED_OWNER_HOST_ID } from '../../../../shared/execution-host'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../../shared/skills'
 import { MAX_SKILL_DELETE_BATCH } from '../../../../shared/skill-delete-contract'
@@ -34,7 +34,7 @@ import { SkillSharedLinksView } from './SkillSharedLinksView'
 import { useOwnedSkillShares } from './use-owned-skill-shares'
 import type { SkillsPageView } from './skills-page-view'
 import { useSkillsPageKeyboardNavigation } from './use-skills-page-keyboard-navigation'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   INSTALLED_AGENT_SKILLS_CHANGED_EVENT,
   INSTALLED_AGENT_SKILLS_REFRESHED_EVENT
@@ -69,6 +69,7 @@ type SkillScanState = {
 }
 
 export default function SkillsPage(): React.JSX.Element {
+  const t = useTranslate()
   const closeSkillsPage = useAppStore((s) => s.closeSkillsPage)
   const pendingSkillShareId = useAppStore((s) => s.pendingSkillShareId)
   const clearPendingSkillShare = useAppStore((s) => s.clearPendingSkillShare)
@@ -234,14 +235,11 @@ export default function SkillsPage(): React.JSX.Element {
         <SkillsSelectionHeader
           title={
             deleting
-              ? translate(
+              ? t(
                   'auto.components.skills.SkillsSelectionHeader.deleteTitle',
                   'Select skills to delete'
                 )
-              : translate(
-                  'auto.components.skills.SkillsSelectionHeader.title',
-                  'Select skills to share'
-                )
+              : t('auto.components.skills.SkillsSelectionHeader.title', 'Select skills to share')
           }
           icon={
             deleting ? (
@@ -253,8 +251,8 @@ export default function SkillsPage(): React.JSX.Element {
           actionIcon={deleting ? <Trash2 className="size-3.5" /> : <Share2 className="size-3.5" />}
           actionLabel={
             deleting
-              ? skillDeleteActionLabel(selectedSkillIds.size)
-              : shareSelectionActionLabel(selectedSkillIds.size)
+              ? skillDeleteActionLabel(selectedSkillIds.size, t)
+              : shareSelectionActionLabel(selectedSkillIds.size, t)
           }
           destructive={deleting}
           busy={deleting && deleteFlow.running}

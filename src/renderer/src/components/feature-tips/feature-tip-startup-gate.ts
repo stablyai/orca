@@ -2,7 +2,8 @@ import {
   getCompletedFeatureTipIds,
   getOrderedUnseenFeatureTips,
   type FeatureTip,
-  type FeatureTipId
+  type FeatureTipId,
+  type FeatureTipSeenId
 } from '../../../../shared/feature-tips'
 import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault/search/ai-vault-search-settings'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
@@ -26,6 +27,7 @@ export function isCliFeatureTipCompleted(status: CliInstallStatus): boolean {
 export type FeatureTipSettings = {
   voice?: GlobalSettings['voice']
   aiVaultSearch?: GlobalSettings['aiVaultSearch']
+  telemetry?: GlobalSettings['telemetry']
 }
 
 export function isSessionSearchFeatureTipCompleted(
@@ -38,7 +40,7 @@ export function isSessionSearchFeatureTipCompleted(
 
 /** Unseen tips whose feature the user has not already set up, in display order. */
 export function getPendingFeatureTips(args: {
-  seenTipIds: readonly FeatureTipId[]
+  seenTipIds: readonly FeatureTipSeenId[]
   cliInstalled: boolean
   featureInteractions: FeatureInteractionState
   chatUiLaunchTipVariant: ChatUiLaunchTipVariant
@@ -47,6 +49,7 @@ export function getPendingFeatureTips(args: {
 }): FeatureTip[] {
   return getOrderedUnseenFeatureTips({
     seenTipIds: new Set(args.seenTipIds),
+    telemetry: args.settings?.telemetry,
     completedTipIds: getCompletedFeatureTipIds({
       cliInstalled: args.cliInstalled,
       voiceDictationEnabled: args.settings?.voice?.enabled === true,
@@ -60,7 +63,7 @@ export function getPendingFeatureTips(args: {
 export function getFeatureTipsAppOpenDecision(args: {
   activeModal: string
   cliInstalled: boolean | null
-  featureTipsSeenIds: readonly FeatureTipId[]
+  featureTipsSeenIds: readonly FeatureTipSeenId[]
   featureInteractions: FeatureInteractionState
   /** Null until main answers. */
   chatUiLaunchTipVariant: ChatUiLaunchTipVariant | null

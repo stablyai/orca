@@ -3,12 +3,11 @@ import { mkdtemp, mkdir, readFile, writeFile, appendFile, rm } from 'node:fs/pro
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude-helper-kill-poller'
-import {
-  createHookListenerState,
-  seedLegacyAgentStatusForTests
-} from '../../../shared/agent-hook-listener/listener-state'
+import { createHookListenerState } from '../../../shared/agent-hook-listener/listener-state'
+import { seedLegacyAgentStatusForTests } from '../../../shared/agent-hook-listener/legacy-agent-status-test-seed'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import { createTestStore, makeTab } from '../store/slices/store-test-helpers'
+import { createTestStore } from '../store/testing/app-store-test-fixture'
+import { makeTab } from '../store/terminals/terminal-tab.test-fixture'
 import { buildRunningAgentChildRowModels } from '../../../shared/running-agent-child-rows'
 import { worktreeAgentChildRows } from '../../../../mobile/src/worktree/worktree-agent-child-rows'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
@@ -52,11 +51,11 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/components/terminal-pane/use-notification-dispatch', () => ({
+vi.mock('@/components/terminal-pane/notifications/dispatch-terminal-notification', () => ({
   dispatchTerminalNotification
 }))
 
-vi.mock('@/components/terminal-pane/agent-hook-terminal-lifecycle', () => ({
+vi.mock('@/components/terminal-pane/agent-completion/agent-hook-terminal-lifecycle', () => ({
   dispatchAgentHookTerminalLifecycle
 }))
 

@@ -6,7 +6,7 @@ import {
   openMobileNativeChatSendBudget,
   readMobileNativeChatInputClear
 } from '../mobile-native-chat-send'
-import { nativeChatTerminalWrite } from '../../mobile-session-write-operations'
+import { nativeChatTerminalWrite } from '../../../terminal/session/mobile-session-terminal-operations'
 import type { MobileNativeChatRpcSender } from '../mobile-native-chat-send'
 
 // Wait for the TUI to register bracketed image attachments before text/Enter arrives.

@@ -38,7 +38,15 @@ const assetSchema = z.looseObject({
   path: MobileWebBundleAssetPathSchema,
   sha256: z.string().regex(SHA256_PATTERN),
   byteLength: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES),
-  contentType: z.string().min(1)
+  contentType: z.string().min(1),
+  // An unreadable length means no brotli copy, never a refused bundle; the reader also requires it under byteLength.
+  brotliByteLength: z
+    .number()
+    .int()
+    .nonnegative()
+    .max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES)
+    .optional()
+    .catch(undefined)
 })
 
 // Read unknown schema versions as numbers so compatibility can name the required update.
@@ -112,6 +120,12 @@ export const MobileWebBundleChunkReplySchema = z.looseObject({
 export const MobileWebBundleRangeReplySchema = z.looseObject({
   ...windowHeaderFields,
   encoding: z.string().min(1).max(32),
+  dataBase64: z.string().max(MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH)
+})
+
+// Windows of the brotli copy are its raw bytes; the header still names the inflated asset.
+export const MobileWebBundleBrotliRangeReplySchema = z.looseObject({
+  ...windowHeaderFields,
   dataBase64: z.string().max(MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH)
 })
 

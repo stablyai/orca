@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   decodeBrowserScreencastFrame,
   type BrowserScreencastFormat
-} from '../../../../shared/browser-screencast-protocol'
+} from '../../../../shared/browser/screencast/browser-screencast-protocol'
 import { createBrowserScreencastMessageHandler } from './browser-screencast-cdp-events'
 import { createBrowserScreencastFramePacer } from './browser-screencast-frame-pacer'
 import type { BrowserScreencastOptions } from './browser-screencast-stream-types'

@@ -120,6 +120,67 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.voice.pane.search.10d45a9fce', 'stt')
     ]
   },
+  {
+    title: translate('auto.components.settings.voice.pane.search.vocabularyTitle', 'Vocabulary'),
+    description: translate(
+      'auto.components.settings.voice.pane.search.vocabularyDescription',
+      'Names and code terms dictation spells your way, for you or for one repo.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.089d31a45b',
+        'dictation'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.vocabularyKeyword',
+        'dictionary'
+      )
+    ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.voice.pane.search.fillerWordsTitle',
+      'Remove Filler Words'
+    ),
+    description: translate(
+      'auto.components.settings.voice.pane.search.fillerWordsDescription',
+      'Drop “um”, “uh” and similar sounds from dictated text.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.089d31a45b',
+        'dictation'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.fillerWordsKeyword',
+        'filler words'
+      )
+    ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.voice.pane.search.modelUnloadTitle',
+      'Unload Speech Model'
+    ),
+    description: translate(
+      'auto.components.settings.voice.pane.search.modelUnloadDescription',
+      'Choose when the on-device speech model is unloaded from memory.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.080202facb', 'model'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.modelUnloadKeyword',
+        'unload'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.modelMemoryKeyword',
+        'memory'
+      )
+    ]
+  },
   getOpenaiTranscriptionSearchEntry(),
   {
     title: translate('auto.components.settings.voice.pane.search.7e62cd7c41', 'Speech Model'),

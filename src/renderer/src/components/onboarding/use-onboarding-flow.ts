@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { useAppStore } from '@/store'
 import { selectOnboardingWorkspaceId } from './onboarding-workspace-selection'
 import { applyDocumentTheme } from '@/lib/document-theme'
@@ -16,7 +16,7 @@ import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboardi
 import { resolveOnboardingSettingsHydration } from './onboarding-settings-hydration'
 import { translate } from '@/i18n/i18n'
 import { useOnboardingYoloPermissions } from './use-onboarding-yolo-permissions'
-import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
+import { isWindowsUserAgent } from '@/lib/user-agent-platform'
 import {
   isSkippedStepIndex,
   remapOpenOnboardingLastCompletedStep,
@@ -24,7 +24,6 @@ import {
   shouldSkipIntegrationsStep,
   shouldSkipWindowsTerminalStep
 } from './onboarding-flow-state'
-
 import { useOnboardingFlowActions } from './use-onboarding-flow-actions'
 import { useOnboardingFlowTelemetry } from './use-onboarding-flow-telemetry'
 
@@ -320,7 +319,6 @@ export function useOnboardingFlow(
     hasSelectedWorkspace: selectedWorkspaceId !== null,
     detectedSet,
     isDetectingAgents,
-    refreshDetectedAgents,
     next,
     setUpLater,
     dismissOnboarding,

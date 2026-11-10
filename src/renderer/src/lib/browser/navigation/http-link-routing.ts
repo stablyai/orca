@@ -15,7 +15,7 @@ import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { toast } from 'sonner'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import { reselectWorkspaceKeepingHost } from '../../active-workspace-host'
+import { reselectWorkspaceKeepingHost } from '../../workspace/ownership/active-workspace-host'
 import {
   captureBrowserLinkReveal,
   type BrowserLinkSelectionSubscriber

@@ -4,50 +4,15 @@ import { useAppStore } from '@/store/index'
 import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../../../shared/draft-paste-ready-timeout'
-import { waitForAgentDraftInputReady } from '@/lib/agent-draft-readiness'
-import { sendAgentDraftPasteContent } from '@/lib/agent-draft-paste-content'
+import { waitForAgentDraftInputReady } from '@/lib/agent-session/messaging/paste/agent-draft-readiness'
+import { sendAgentDraftPasteContent } from '@/lib/agent-session/messaging/paste/agent-draft-paste-content'
 import { createPasteReadinessTimeoutNotice } from '@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice'
 import { PTY_PRECONNECT_INPUT_MAX_CODE_UNITS } from '../../pty-transport/input/pty-preconnect-input-buffer'
 import { writeTerminalPastePtyInput } from '../../input/paste/terminal-pty-paste-writer'
 import { findColdRestoreResumeSource } from './cold-restore-resume-startup'
 import { paneHasStartupWork } from '../pane-transport-options'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
-
-const BACKSPACE = '\x7f'
-const CTRL_H = '\b'
-
-/** Ignore control/escape input so drafts cannot submit; Backspace deletes and pasted line breaks become spaces. */
-export function appendTypedDraftText(draft: string, data: string, maxCodeUnits: number): string {
-  if (data.startsWith('\x1b')) {
-    return draft
-  }
-  const isPasteChunk = data.length > 1
-  let next = draft
-  let pendingSpace = false
-  for (const char of data) {
-    if (char === BACKSPACE || char === CTRL_H) {
-      next = Array.from(next).slice(0, -1).join('')
-      continue
-    }
-    if (isPasteChunk && (char === '\r' || char === '\n')) {
-      pendingSpace = next !== '' && !/\s$/.test(next)
-      continue
-    }
-    const code = char.codePointAt(0) ?? 0
-    if (code < 0x20 || (code >= 0x7f && code < 0xa0)) {
-      continue
-    }
-    if (pendingSpace && next.length < maxCodeUnits) {
-      next += ' '
-    }
-    pendingSpace = false
-    if (next.length + char.length > maxCodeUnits) {
-      break
-    }
-    next += char
-  }
-  return next
-}
+import { appendTypedDraftText } from '../../input/draft/typed-draft-text'
 
 type DraftPhase = 'capturing' | 'delivering' | 'closed'
 

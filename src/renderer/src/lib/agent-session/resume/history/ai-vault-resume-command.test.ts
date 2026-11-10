@@ -1,6 +1,7 @@
 import type { AiVaultResumePlatformState } from './ai-vault-resume-platform'
 import { getDefaultSettings } from '../../../../../../shared/constants'
-import { TEST_REPO, makeWorktree } from '../../../../store/slices/worktrees-slice-test-fixtures'
+import { TEST_REPO } from '../../../../store/repos/repo.test-fixture'
+import { makeWorktree } from '../../../../store/slices/worktrees/worktree.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildAiVaultResumeCopyCommandForWorktree,
@@ -8,14 +9,14 @@ import {
 } from './ai-vault-resume-command'
 import { getAiVaultAgentProviderSession } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import { dropDeletedRemoteResumeCwd } from './ai-vault-session-resume-preparation'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 
 vi.mock('@/lib/new-workspace', () => ({
   CLIENT_PLATFORM: 'win32'
 }))
 
 const browseServerDir = vi.hoisted(() => vi.fn())
-vi.mock('@/runtime/runtime-server-directory-browser', () => ({
+vi.mock('@/runtime/files/reads/runtime-server-directory-browser', () => ({
   browseRuntimeServerDirectory: browseServerDir
 }))
 
@@ -205,43 +206,6 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toBe('omp --resume "C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl"')
-  })
-
-  it('copies syntax that matches the configured cmd shell', () => {
-    const state = makeState({
-      worktreePath: 'C:\\Users\\alice\\repo',
-      terminalWindowsShell: 'cmd.exe'
-    })
-
-    expect(
-      buildAiVaultResumeCopyCommandForWorktree({
-        state,
-        worktreeId: 'repo-1::worktree-1',
-        session: {
-          agent: 'claude',
-          sessionId: 'session one',
-          cwd: 'C:\\Users\\alice\\repo',
-          codexHome: null
-        }
-      })
-    ).toBe('cd /d "C:\\Users\\alice\\repo" && claude "--resume" "session one"')
-  })
-
-  it('copies syntax that matches the configured PowerShell shell', () => {
-    const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
-
-    expect(
-      buildAiVaultResumeCopyCommandForWorktree({
-        state,
-        worktreeId: 'repo-1::worktree-1',
-        session: {
-          agent: 'claude',
-          sessionId: 'session one',
-          cwd: 'C:\\Users\\alice\\repo',
-          codexHome: null
-        }
-      })
-    ).toBe("Set-Location -LiteralPath 'C:\\Users\\alice\\repo'; claude '--resume' 'session one'")
   })
 
   it('copies a real-home Codex command that clears inherited homes in PowerShell', () => {

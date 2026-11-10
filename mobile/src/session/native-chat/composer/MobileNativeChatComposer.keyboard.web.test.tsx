@@ -5,6 +5,7 @@ import type * as ReactNative from 'react-native'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 import { MobileNativeChatLowerRegion } from '../MobileNativeChatLowerRegion.web'
+import { NATIVE_CHAT_STEER_CHORD_HOLD_MS } from '../../../../../src/shared/native-chat/input/use-native-chat-steer-chord-preview'
 
 vi.mock('react-native', () => vi.importActual<typeof ReactNative>('react-native-web'))
 vi.mock(
@@ -31,7 +32,16 @@ vi.mock('./MobileNativeChatComposerMic', () => ({ MobileNativeChatComposerMic: (
 vi.mock('./MobileNativeChatContextUsageRing', () => ({
   useMobileNativeChatContextRing: () => ({ barProps: {}, ring: null })
 }))
-vi.mock('./MobileNativeChatSendButton', () => ({ MobileNativeChatSendButton: () => null }))
+vi.mock('./MobileNativeChatSendButton', () => ({
+  MobileNativeChatSendButton: () => null,
+  MobileNativeChatSteerPreviewButton: (props: { preview: string; onPress: () => void }) => (
+    <button type="button" data-preview={props.preview} onClick={props.onPress} />
+  )
+}))
+vi.mock(
+  './use-mobile-native-chat-steer-chord-preview',
+  () => import('./use-mobile-native-chat-steer-chord-preview.web')
+)
 vi.mock('./MobileNativeChatEditActions', () => ({ MobileNativeChatEditActions: () => null }))
 vi.mock('./MobileNativeChatComposerAttachments', () => ({
   MobileNativeChatComposerAttachments: () => null
@@ -163,27 +173,6 @@ describe('mobile composer modifier submit in the paired web page', () => {
     expect(input.value).toBe('retained draft')
   })
 
-  it.each([true, false])(
-    'sends raw text with alternate intent, retaining focus on accepted:%s',
-    async (accepted) => {
-      onSend.mockResolvedValue(accepted)
-      await render()
-      expect((await key({ metaKey: true })).defaultPrevented).toBe(true)
-      expect(onSend).toHaveBeenCalledExactlyOnceWith(' hello ', { alternate: true })
-      expect(document.activeElement).toBe(field())
-      expect(field().value).toBe(' hello ')
-    }
-  )
-
-  it('uses Ctrl on Android and leaves Cmd alone', async () => {
-    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Android')
-    await render()
-    expect((await key({ metaKey: true })).defaultPrevented).toBe(false)
-    expect(onSend).not.toHaveBeenCalled()
-    expect((await key({ ctrlKey: true })).defaultPrevented).toBe(true)
-    expect(onSend).toHaveBeenCalledExactlyOnceWith(' hello ', { alternate: true })
-  })
-
   it.each([
     {},
     { shiftKey: true },
@@ -200,19 +189,29 @@ describe('mobile composer modifier submit in the paired web page', () => {
     expect(field().value).toBe(' hello ')
   })
 
-  it('consumes a refused send without changing the draft or focus', async () => {
-    await render({ sendDisabled: true })
-    expect((await key({ metaKey: true })).defaultPrevented).toBe(true)
-    expect(onSend).not.toHaveBeenCalled()
-    expect(field().value).toBe(' hello ')
-    expect(document.activeElement).toBe(field())
-  })
-
-  it('saves a queued edit without alternate intent', async () => {
-    await render({ editSession: { cancel: vi.fn(), refuseCommand: () => false, locked: false } })
-    expect((await key({ metaKey: true })).defaultPrevented).toBe(true)
-    expect(onSend).toHaveBeenCalledExactlyOnceWith(' hello ')
-    expect(document.activeElement).toBe(field())
+  it('holding Cmd alone on an empty composer shows Steer queued in Send, lights the head card and sends it on a press', async () => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+    const steerHead = { steers: () => true, run: vi.fn(() => true), light: vi.fn() }
+    await render({ value: '', sendFollowUp: { action: 'queue', offersChoice: true }, steerHead })
+    const preview = () => container.querySelector<HTMLButtonElement>('[data-preview]')
+    vi.useFakeTimers()
+    try {
+      await act(async () => {
+        field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Meta', bubbles: true }))
+      })
+      await act(async () => vi.advanceTimersByTime(NATIVE_CHAT_STEER_CHORD_HOLD_MS))
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(preview()?.dataset.preview).toBe('steer-queued')
+    expect(steerHead.light).toHaveBeenLastCalledWith(true)
+    await act(async () => preview()?.click())
+    expect(steerHead.run).toHaveBeenCalledExactlyOnceWith(true)
+    await act(async () => {
+      field().dispatchEvent(new KeyboardEvent('keyup', { key: 'Meta', bubbles: true }))
+    })
+    expect(preview()).toBeNull()
+    expect(steerHead.light).toHaveBeenLastCalledWith(false)
   })
 
   it.each([

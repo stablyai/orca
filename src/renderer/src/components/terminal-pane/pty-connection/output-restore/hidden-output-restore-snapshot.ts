@@ -1,7 +1,7 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-fit'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
-import { waitForTerminalReplayWritesParsed } from '../../replay-guard'
+import { waitForTerminalReplayWritesParsed } from '../../snapshots/replay-guard'
 import {
   POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET,
   POST_REPLAY_LIVE_SNAPSHOT_RESET,
@@ -23,8 +23,8 @@ import {
 
 import { HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING } from './hidden-output-restore-limits'
 import { shouldWritePtyOutputForeground } from '../output/foreground-output-visibility'
-import { restoredSnapshotPaintsPrintableContent } from '../../restored-snapshot-coverage'
-import { recordTerminalFreezeBreadcrumb } from '../../terminal-freeze-breadcrumbs'
+import { restoredSnapshotPaintsPrintableContent } from '../../snapshots/restored-snapshot-coverage'
+import { recordTerminalFreezeBreadcrumb } from '../../render-health/diagnostics/terminal-freeze-breadcrumbs'
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 

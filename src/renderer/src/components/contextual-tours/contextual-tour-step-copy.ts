@@ -50,8 +50,8 @@ const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
   }),
   'agent-sessions-split-chat': () => ({
     title: translate(
-      'auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.split.title',
-      'Split a terminal pane'
+      'components.contextualTours.agentSessions.splitChatPane.title',
+      'Open a pane beside the chat'
     ),
     body: translate(
       'components.contextualTours.agentSessions.splitChat.body',
@@ -62,8 +62,8 @@ const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
       'Click the split button at the top of the chat. Each side gets its own tabs.'
     ),
     primaryActionLabel: translate(
-      'auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.split.action',
-      'Split terminal'
+      'components.contextualTours.agentSessions.splitChatPane.action',
+      'Split pane'
     )
   }),
   'agent-sessions-split': () => ({
@@ -92,16 +92,6 @@ const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
     body: translate(
       'auto.components.contextual.tours.contextual.tour.step.copy.agent.sessions.parallel.body',
       'Each worktree gets its own branch, so parallel work stays separate.'
-    )
-  }),
-  'browser-grab': () => ({
-    title: translate(
-      'auto.components.contextual.tours.contextual.tour.step.copy.browser.grab.title',
-      'Grab page context for agents'
-    ),
-    body: translate(
-      'auto.components.contextual.tours.contextual.tour.step.copy.browser.grab.body',
-      "Use the grab tool to copy a page element's context for agents."
     )
   }),
   'browser-annotate': () => ({

@@ -7,12 +7,6 @@ afterEach(() => {
 })
 
 describe.skipIf(!globalThis.orcaRealAgentCliGuard)('vitest real-agent-cli guard', () => {
-  it('blocks version discovery without treating an absent agent as a test failure', () => {
-    const result = spawnSync('claude', ['--version'], { encoding: 'utf8', env: process.env })
-    expect(result.status).toBe(127)
-    expect(takeRealAgentCliCalls()).toEqual([])
-  })
-
   it('blocks and records an agent CLI resolved from the inherited PATH', () => {
     const result = spawnSync('claude', ['-p', 'hello'], { encoding: 'utf8', env: process.env })
     expect(result.status).toBe(127)

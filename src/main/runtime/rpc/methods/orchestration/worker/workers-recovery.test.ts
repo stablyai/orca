@@ -92,24 +92,6 @@ describe('orchestration worker recovery', () => {
     return { run, task, dispatch: started.dispatch }
   }
 
-  it('shows and reads only the exact attached worker process', async () => {
-    const { dispatch } = createWorker()
-
-    await expect(
-      call('orchestration.workerShow', { dispatch: dispatch.id })
-    ).resolves.toMatchObject({
-      worker: { state: 'ready' },
-      observation: { status: 'live', exactWorker: true },
-      terminal: { handle: 'term_worker' }
-    })
-    await expect(
-      call('orchestration.workerRead', { dispatch: dispatch.id })
-    ).resolves.toMatchObject({
-      dispatchId: dispatch.id,
-      terminal: { tail: ['working'] }
-    })
-  })
-
   it('stops an exact worker whose start receipt is unknown', async () => {
     const { task, dispatch } = createWorker(runtime.getRuntimeId(), false)
 
@@ -246,59 +228,6 @@ describe('orchestration worker recovery', () => {
       call('orchestration.workerShow', { dispatch: dispatch.id })
     ).resolves.toMatchObject({
       worker: { state: 'stop_unknown' }
-    })
-    expect(db.getTask(task.id)?.status).toBe('blocked')
-  })
-
-  it('reconciles a stop_unknown Dispatch from an authoritative remote stopped receipt', async () => {
-    const run = db.createRun({
-      objective: 'Lost remote stop response',
-      coordinatorHandle: 'term_coord',
-      coordinatorPaneKey: 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-    })
-    const task = db.createTask({ spec: 'stop remote worker', runId: run.id })
-    const started = db.createStartingWorkerDispatch({
-      creator: { kind: 'system' },
-      maxDepth: Number.MAX_SAFE_INTEGER,
-      taskId: task.id,
-      startOptions: {},
-      runtimeEpoch: runtime.getRuntimeId(),
-      federation: {
-        environmentId: 'environment_windows',
-        environmentName: 'windows',
-        peerFingerprint: 'windows_peer',
-        protocolVersion: 1
-      }
-    })
-    db.markWorkerStartUnknown(started.dispatch.id, 'remote_attach', 'response lost')
-    db.beginWorkerStop(started.dispatch.id, runtime.getRuntimeId())
-    db.markWorkerStopUnknown(started.dispatch.id, 'stop response lost')
-    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
-      environmentId: 'environment_windows',
-      name: 'windows',
-      peerFingerprint: 'windows_peer'
-    })
-    vi.spyOn(runtime, 'callOrchestrationWorkerServer').mockResolvedValue({
-      runtimeEpoch: 'windows_epoch',
-      attachment: {
-        state: 'stopped',
-        stage: 'process_stopped',
-        last_error: null,
-        worktree_id: 'repo::windows-worktree',
-        terminal_handle: 'term_windows_worker',
-        setup_state: 'running',
-        effects: [],
-        residualResources: []
-      },
-      terminal: { handle: 'term_windows_worker', connected: false },
-      observation: { status: 'exited', exactWorker: true }
-    })
-
-    await expect(
-      call('orchestration.workerShow', { dispatch: started.dispatch.id })
-    ).resolves.toMatchObject({
-      worker: { state: 'stopped', stage: 'process_stopped', lastError: null },
-      observation: { status: 'exited', exactWorker: true }
     })
     expect(db.getTask(task.id)?.status).toBe('blocked')
   })

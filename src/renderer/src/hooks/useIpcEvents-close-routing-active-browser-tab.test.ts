@@ -11,12 +11,18 @@ const { closeWebRuntimeSessionTab, destroyWorkspaceWebviews, isWebRuntimeSession
     isWebRuntimeSessionActive: vi.fn(() => true)
   }))
 
-vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({ closeWebRuntimeSessionTab }))
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle', () => ({
+  closeWebRuntimeSessionTab
+}))
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: vi.fn()
 }))
-vi.mock('@/runtime/web-runtime-session-environment', () => ({ isWebRuntimeSessionActive }))
-vi.mock('@/store/slices/browser-webview-cleanup', () => ({ destroyWorkspaceWebviews }))
+vi.mock('@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
+  isWebRuntimeSessionActive
+}))
+vi.mock('@/store/slices/browser/cleanup/browser-webview-cleanup', () => ({
+  destroyWorkspaceWebviews
+}))
 
 const closeBrowserTab = vi.fn()
 const closeUnifiedTab = vi.fn()

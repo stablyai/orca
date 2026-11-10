@@ -15,12 +15,14 @@ import {
   osc52ClipboardDefaultOnOverridesPersistedOff
 } from '../../../shared/osc52-clipboard-settings'
 import { splitLegacyTerminalColorOverrides } from '../../../shared/terminal-themes/terminal-color-overrides'
+import { migrateWindowsTerminalFontWeight } from '../../../shared/terminal/appearance/terminal-font-weight-windows-regular'
 import {
   migrateTerminalScrollbackRows,
   migrateTerminalTuiScrollSensitivityDefault
 } from '../applying-settings/terminal-settings-migrations'
 import {
   canonicalizePersistedFloatingWorkspaceDirectory,
+  canonicalTrustedFloatingTerminalCwd,
   normalizeFloatingWorkspaceTrustedCwds
 } from '../restoring-sessions/floating-workspace-normalization'
 
@@ -32,6 +34,7 @@ export type PreparedLoadedTerminalSettings = {
     changed: boolean
   }
   migratedTerminalScrollback: { rows: number; needsSave: boolean }
+  migratedTerminalFontWeight: ReturnType<typeof migrateWindowsTerminalFontWeight>
   migratedTerminalTuiScrollSensitivity: {
     settings: Pick<
       GlobalSettings,
@@ -74,6 +77,13 @@ export function prepareLoadedTerminalSettings(
     typeof parsed.settings === 'object' &&
     Object.hasOwn(parsed.settings, 'enableGitHubAttribution')
   ) {
+    markNeedsSave()
+  }
+  const migratedTerminalFontWeight = migrateWindowsTerminalFontWeight(
+    parsed.settings,
+    process.platform
+  )
+  if (Object.keys(migratedTerminalFontWeight).length > 0) {
     markNeedsSave()
   }
   const migratedTerminalTuiScrollSensitivity = migrateTerminalTuiScrollSensitivityDefault(
@@ -142,7 +152,7 @@ export function prepareLoadedTerminalSettings(
   const floatingTerminalCwdMigrated =
     parsed.settings?.floatingTerminalCwdMigratedToAppWorkspace === true
   // Repair the old empty notes-directory migration; terminal cwd and notes now resolve separately.
-  const migratedFloatingTerminalCwd = floatingTerminalCwdMigrated
+  const configuredFloatingTerminalCwd = floatingTerminalCwdMigrated
     ? !parsed.settings?.floatingTerminalCwd
       ? defaults.settings.floatingTerminalCwd
       : parsed.settings.floatingTerminalCwd
@@ -177,10 +187,23 @@ export function prepareLoadedTerminalSettings(
   if (normalizedFloatingTerminalTrustedCwds.changed) {
     markNeedsSave()
   }
+  // Why: settings are raw JSON here; a malformed cwd falls back to the default instead of failing reads.
+  const migratedFloatingTerminalCwd =
+    typeof configuredFloatingTerminalCwd === 'string'
+      ? canonicalTrustedFloatingTerminalCwd(
+          configuredFloatingTerminalCwd,
+          migratedFloatingTerminalTrustedCwds,
+          homeDir
+        )
+      : defaults.settings.floatingTerminalCwd
+  if (migratedFloatingTerminalCwd !== configuredFloatingTerminalCwd) {
+    markNeedsSave()
+  }
   return {
     defaults,
     migratedExternalVisibility,
     migratedTerminalScrollback,
+    migratedTerminalFontWeight,
     migratedTerminalTuiScrollSensitivity,
     migratedSourceControlAi,
     migratedOptionAsAlt,

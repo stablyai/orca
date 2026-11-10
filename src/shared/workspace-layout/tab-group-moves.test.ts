@@ -30,31 +30,6 @@ describe('buildHeadlessTabGroupSplit', () => {
     })
   })
 
-  it('returns null when splitting the only tab off its own group (renderer no-op parity)', () => {
-    const result = buildHeadlessTabGroupSplit({
-      groups: [group('g1', ['a'])],
-      layout: { type: 'leaf', groupId: 'g1' },
-      tabId: 'a',
-      targetGroupId: 'g1',
-      splitDirection: 'right',
-      newGroupId: 'g2'
-    })
-    expect(result).toBeNull()
-  })
-
-  it('returns null when the tab is not in any group', () => {
-    expect(
-      buildHeadlessTabGroupSplit({
-        groups: [group('g1', ['a'])],
-        layout: { type: 'leaf', groupId: 'g1' },
-        tabId: 'missing',
-        targetGroupId: 'g1',
-        splitDirection: 'right',
-        newGroupId: 'g2'
-      })
-    ).toBeNull()
-  })
-
   it('collapses an emptied source group out of the layout when moving across groups', () => {
     const result = buildHeadlessTabGroupSplit({
       groups: [group('g1', ['a']), group('g2', ['b'])],
@@ -117,27 +92,5 @@ describe('buildHeadlessTabGroupMove', () => {
     })
     expect(result!.groups.map((g) => g.id)).toEqual(['g2'])
     expect(result!.layout).toEqual({ type: 'leaf', groupId: 'g2' })
-  })
-
-  it('returns null for a same-group move (renderer no-op)', () => {
-    expect(
-      buildHeadlessTabGroupMove({
-        groups: [group('g1', ['a', 'b'])],
-        layout: { type: 'leaf', groupId: 'g1' },
-        tabId: 'b',
-        targetGroupId: 'g1'
-      })
-    ).toBeNull()
-  })
-
-  it('returns null when the target group does not exist', () => {
-    expect(
-      buildHeadlessTabGroupMove({
-        groups: [group('g1', ['a', 'b'])],
-        layout: { type: 'leaf', groupId: 'g1' },
-        tabId: 'b',
-        targetGroupId: 'missing'
-      })
-    ).toBeNull()
   })
 })

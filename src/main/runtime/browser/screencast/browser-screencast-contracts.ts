@@ -1,10 +1,11 @@
-import type { BrowserScreencastResult } from '../../../../shared/runtime-browser-contracts'
+import type { BrowserScreencastResult } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type {
   BrowserScreencastFrameBudget,
   BrowserScreencastSession,
   BrowserScreencastViewport
 } from '../../../browser/cdp/screencast/browser-screencast-stream-types'
 import type { ScreencastSubscriberDeliveryState } from './browser-screencast-ghost-subscriber-eviction'
+import type { BrowserScreencastFrameCredit } from './browser-screencast-frame-credit'
 import type { RpcBinarySender } from '../../rpc/rpc-binary-sender'
 import type { BrowserCommandTargetParams } from '../commands/browser-command-contracts'
 
@@ -19,6 +20,8 @@ export type BrowserScreencastParams = {
   mobile?: boolean
   everyNthFrame?: number
   minFrameIntervalMs?: number
+  // The viewer acks frames with browser.screencast.ack; `ready` echoes `frameAck: true`.
+  frameAck?: 1
 } & BrowserCommandTargetParams
 
 export type BrowserScreencastStartResult = {
@@ -42,6 +45,8 @@ export type ActiveBrowserScreencastSubscriber = {
   // Device identity survives reconnects; connection ids cannot replace stale subscriptions.
   pairedDeviceId?: string
   delivery: ScreencastSubscriberDeliveryState
+  // Present when the viewer acks frames; `release` unregisters it from acks.
+  frameCredit: { credit: BrowserScreencastFrameCredit; release: () => void } | null
 }
 
 export type ActiveBrowserScreencastPage = {

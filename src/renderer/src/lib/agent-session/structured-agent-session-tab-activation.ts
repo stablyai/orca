@@ -1,14 +1,14 @@
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../workspace/ownership/worktree-runtime-owner'
-import { requestNativeChatComposerFocus } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
+import { requestNativeChatComposerFocus } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import { useAppStore } from '@/store/index'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   executionHostIdForStructuredTarget,
   structuredAgentSessionOwnerForTab
-} from '@/runtime/structured-agent-session-owner'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import type { Tab } from '../../../../shared/tab-types'
 
 export function findStructuredAgentSessionTab(

@@ -1,3 +1,4 @@
+// @orca-isolated-worker: the module-level pane subscription captures this file's bridge.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LegacyRelayBridgedPane } from '../../../../../../shared/legacy-relay-bridge-contract'
 import type { PtyTransport } from '../pty-transport-types'
@@ -51,7 +52,7 @@ vi.stubGlobal('window', {
 const { createLegacyRelayBridgeTransport: createTransport } =
   await import('./legacy-relay-bridge-transport')
 const { legacyRelayBridgePtyIdForPane, legacyRelayBridgedPtyIdsForClosingTab } =
-  await import('../../legacy-relay-bridge-panes')
+  await import('./legacy-relay-bridge-panes')
 
 const created: PtyTransport[] = []
 function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransport): PtyTransport {

@@ -35,6 +35,8 @@ export const reposApi = {
 
   clone: (args) => ipcRenderer.invoke('repos:clone', args),
 
+  checkCloneTarget: (args) => ipcRenderer.invoke('repos:checkCloneTarget', args),
+
   cloneAbort: () => ipcRenderer.invoke('repos:cloneAbort'),
 
   onCloneProgress: (callback: (data: { phase: string; percent: number }) => void): (() => void) => {

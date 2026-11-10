@@ -1,6 +1,7 @@
 import type { AppState } from '@/store/types'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { getFolderWorkspaceCandidateRepos } from '../../../folder-workspace-connection'
+import '../../../workspace/ownership/folder-workspace-connection'
+import { findFolderWorkspaceCandidateRepos } from '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getAiVaultResumeWorkspaceExecutionHostId } from './ai-vault-resume-target'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
@@ -12,7 +13,10 @@ import {
 } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { parseWslUncPath } from '../../../../../../shared/wsl-paths'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type AiVaultResumeShellState = Pick<
   AppState,
@@ -106,7 +110,9 @@ export function getAiVaultResumeWorkspaceWslDistro(
     ) {
       return null
     }
-    if (getFolderWorkspaceCandidateRepos(runtimeState, workspaceKey.folderWorkspaceId).length > 1) {
+    if (
+      findFolderWorkspaceCandidateRepos(runtimeState, workspaceKey.folderWorkspaceId).length > 1
+    ) {
       return undefined
     }
   }

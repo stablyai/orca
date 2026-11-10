@@ -4,7 +4,7 @@ import type {
   ClaudeRateLimitAccountsState
 } from '../../shared/managed-account-types'
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { RateLimitService } from '../rate-limits/service'
+import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
 import { claudeStateFile, readClaudeFolderLogin } from './claude-account-folder'
 import { savedWslClaudeAccountHome } from './claude-profile-wsl-paths'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'

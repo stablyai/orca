@@ -1,6 +1,6 @@
 import { useId, useState, useSyncExternalStore } from 'react'
 import { Check, Copy, ExternalLink, X } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-feedback'
 import {
   cancelHostAccountSignIn,
@@ -8,7 +8,7 @@ import {
   readHostAccountSignIn,
   submitHostAccountSignInCode,
   subscribeHostAccountSignIns
-} from '@/runtime/runtime-host-account-sign-in-client'
+} from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
 import {
   isHostAccountSignInPage,
   type HostAccountSignInProvider
@@ -19,14 +19,15 @@ import { showHostCancelFailure } from './account-add-cancel-target'
 import { Input } from '../../../ui/input'
 
 function CopyButton(props: { text: string; label: string }): React.JSX.Element {
+  const t = useTranslate()
   const { copyText, status } = useClipboardTextCopyFeedback(props.text)
   return (
     <Button variant="outline" size="xs" onClick={() => void copyText()}>
       {status === 'copied' ? <Check /> : <Copy />}
       {status === 'copied'
-        ? translate('accounts.hostSignIn.copied', 'Copied')
+        ? t('accounts.hostSignIn.copied', 'Copied')
         : status === 'failed'
-          ? translate('accounts.hostSignIn.copyFailed', 'Could not copy')
+          ? t('accounts.hostSignIn.copyFailed', 'Could not copy')
           : props.label}
     </Button>
   )
@@ -36,6 +37,7 @@ function PastedCodeForm(props: {
   owner: RuntimeClientTarget
   provider: HostAccountSignInProvider
 }): React.JSX.Element {
+  const t = useTranslate()
   const [code, setCode] = useState('')
   const [pending, setPending] = useState(false)
   const [refusal, setRefusal] = useState<string | null>(null)
@@ -58,7 +60,7 @@ function PastedCodeForm(props: {
       }}
     >
       <p id={helpId} className="text-xs text-muted-foreground">
-        {translate(
+        {t(
           'accounts.hostSignIn.pasteCodeHelp',
           'After you sign in, the page shows a code. Paste it here.'
         )}
@@ -78,7 +80,7 @@ function PastedCodeForm(props: {
           }}
         />
         <Button type="submit" size="sm" variant="outline" disabled={pending || !trimmed}>
-          {translate('accounts.hostSignIn.continue', 'Continue')}
+          {t('accounts.hostSignIn.continue', 'Continue')}
         </Button>
       </div>
       {refusal !== null ? (
@@ -95,6 +97,7 @@ export function HostAccountSignInPrompt(props: {
   provider: HostAccountSignInProvider
   hostLabel: string
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const read = () => readHostAccountSignIn(props.owner, props.provider)
   const status = useSyncExternalStore(subscribeHostAccountSignIns, read, read)
   const readRunning = () => hasHostAccountSignIn(props.owner, props.provider)
@@ -109,14 +112,14 @@ export function HostAccountSignInPrompt(props: {
       <div className="flex items-start justify-between gap-2">
         <p role="status" className="text-xs text-muted-foreground">
           {!status || status.phase === 'starting'
-            ? translate('accounts.hostSignIn.starting', 'Starting sign-in on {{host}}…', {
+            ? t('accounts.hostSignIn.starting', 'Starting sign-in on {{host}}…', {
                 host: props.hostLabel
               })
             : status.phase === 'verifying'
-              ? translate('accounts.hostSignIn.verifying', 'Finishing sign-in on {{host}}…', {
+              ? t('accounts.hostSignIn.verifying', 'Finishing sign-in on {{host}}…', {
                   host: props.hostLabel
                 })
-              : translate(
+              : t(
                   'accounts.hostSignIn.waiting',
                   'Open this page on this device and sign in. The account is saved on {{host}}.',
                   { host: props.hostLabel }
@@ -132,7 +135,7 @@ export function HostAccountSignInPrompt(props: {
           className="gap-1.5"
         >
           <X />
-          {translate('accounts.hostSignIn.cancel', 'Cancel')}
+          {t('accounts.hostSignIn.cancel', 'Cancel')}
         </Button>
       </div>
       {url ? (
@@ -140,24 +143,24 @@ export function HostAccountSignInPrompt(props: {
           <span className="min-w-0 flex-1 truncate rounded bg-muted px-1.5 py-1 font-mono text-[11px] text-foreground/80">
             {url}
           </span>
-          <CopyButton text={url} label={translate('accounts.hostSignIn.copyLink', 'Copy link')} />
+          <CopyButton text={url} label={t('accounts.hostSignIn.copyLink', 'Copy link')} />
           <Button variant="ghost" size="xs" onClick={() => void window.api.shell.openUrl(url)}>
             <ExternalLink />
-            {translate('accounts.hostSignIn.open', 'Open')}
+            {t('accounts.hostSignIn.open', 'Open')}
           </Button>
         </div>
       ) : null}
       {url && prompt?.userCode ? (
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">
-            {translate('accounts.hostSignIn.enterCode', 'Enter this code on that page:')}
+            {t('accounts.hostSignIn.enterCode', 'Enter this code on that page:')}
           </span>
           <span className="rounded bg-muted px-1.5 py-1 font-mono text-xs text-foreground">
             {prompt.userCode}
           </span>
           <CopyButton
             text={prompt.userCode}
-            label={translate('accounts.hostSignIn.copyCode', 'Copy code')}
+            label={t('accounts.hostSignIn.copyCode', 'Copy code')}
           />
         </div>
       ) : null}

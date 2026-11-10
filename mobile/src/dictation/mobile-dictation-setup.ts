@@ -1,9 +1,13 @@
-import { hostDictationErrorMessage } from '../../../src/shared/host-dictation-error-messages'
+import {
+  DICTATION_SESSION_LOST_MESSAGE,
+  hostDictationErrorMessage
+} from '../../../src/shared/host-dictation-error-messages'
 import { translate } from '../i18n/mobile-i18n'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
-import type { RpcResponse } from '../transport/types'
-import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
-import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
+import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
+import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
+import '../transport/connection/stable-logical-rpc-client'
+import { LogicalClientCutoverError } from '../transport/connection/logical-client-cutover-error'
 import {
   dictationConfigWrite,
   dictationModelDelete,
@@ -40,7 +44,7 @@ function speechlessServerMessage(): string {
   )
 }
 
-function isSpeechlessServerError(message: string): boolean {
+export function isSpeechlessServerError(message: string): boolean {
   return message.startsWith('speech_unavailable')
 }
 
@@ -55,19 +59,33 @@ export function dictationFailureMessage(message: string): string {
   switch (message) {
     case 'dictation_already_active':
       return translate('dictation.setup.alreadyActive', fallback)
+    case 'dictation_session_limit':
+      return translate('dictation.setup.sessionLimit', fallback)
+    case 'dictation_model_busy':
+      return translate('dictation.setup.modelBusy', fallback)
     case 'dictation_requires_mobile_client':
       return translate('dictation.setup.repairRequired', fallback)
     case 'dictation_owner_mismatch':
     case 'dictation_stream_not_started':
     case 'dictation_stream_closing':
-      return translate('dictation.setup.sessionLost', fallback)
+      return dictationSessionLostMessage()
     default:
       return fallback
   }
 }
 
+export function dictationSessionLostMessage(): string {
+  return translate('dictation.setup.sessionLost', DICTATION_SESSION_LOST_MESSAGE)
+}
+
 export function dictationSessionErrorMessage(
-  kind: 'permission-denied' | 'unavailable' | 'no-speech' | 'interrupted' | 'input-closed'
+  kind:
+    | 'permission-denied'
+    | 'unavailable'
+    | 'recording-failed'
+    | 'no-speech'
+    | 'interrupted'
+    | 'input-closed'
 ): string {
   switch (kind) {
     case 'permission-denied':
@@ -79,6 +97,11 @@ export function dictationSessionErrorMessage(
       return translate(
         'hooks.useMobileDictation.microphoneInitFailed',
         'Failed to initialize microphone'
+      )
+    case 'recording-failed':
+      return translate(
+        'hooks.dictationDesktopStart.recordingFailed',
+        'Failed to start microphone recording'
       )
     case 'no-speech':
       return translate('hooks.useMobileDictation.noSpeech', 'No speech detected.')
@@ -103,8 +126,12 @@ export function isDictationSetupRequiredError(message: string): boolean {
   return SETUP_REQUIRED_CODES.has(message) || message.startsWith('voice_model_not_ready:')
 }
 
-export async function fetchDictationSetup(client: RpcOperationSender): Promise<MobileSpeechSetup> {
-  const reply = await requestDictationSetupReply(client)
+/** `worktreeId` asks for that repo's dictionary terms too. */
+export async function fetchDictationSetup(
+  client: RpcOperationSender,
+  worktreeId?: string
+): Promise<MobileSpeechSetup> {
+  const reply = await requestDictationSetupReply(client, worktreeId ? { worktreeId } : null)
   if (isLegacyDesktopSpeechSetupReply(reply)) {
     throw new Error(
       translate(
@@ -122,15 +149,18 @@ export async function fetchDictationSetup(client: RpcOperationSender): Promise<M
   )
 }
 
-async function requestDictationSetupReply(client: RpcOperationSender): Promise<RpcResponse> {
+async function requestDictationSetupReply(
+  client: RpcOperationSender,
+  params: { worktreeId: string } | null
+): Promise<RpcResponse> {
   try {
-    return await dictationSetupRead.request(client, null)
+    return await dictationSetupRead.request(client, params)
   } catch (error) {
     if (!(error instanceof LogicalClientCutoverError)) {
       throw error
     }
     // Replay this read on authenticated replacement; mutations must surface cutover to avoid replaying unknown commits.
-    return dictationSetupRead.request(client, null)
+    return dictationSetupRead.request(client, params)
   }
 }
 
@@ -158,7 +188,12 @@ export async function deleteDictationModel(
 
 export async function setDictationConfig(
   client: RpcOperationSender,
-  params: { enabled?: boolean; modelId?: string; dictationMode?: 'toggle' | 'hold' }
+  params: {
+    enabled?: boolean
+    modelId?: string
+    dictationMode?: 'toggle' | 'hold'
+    dictationHoldToRecord?: boolean
+  }
 ): Promise<MobileSpeechSetup> {
   const reply = await dictationConfigWrite.request(client, params)
   return interpretOrThrowRefusalMessage(

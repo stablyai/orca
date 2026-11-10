@@ -10,8 +10,8 @@ import {
 } from '../legacy-worker-terminal-recovery-event'
 import { useAppStore } from '../../store'
 import { forgetRefusedPaneResume, namesRefusedResume } from '@/lib/forget-refused-pane-resume'
-import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
-import { resolvePaneKey } from './agent-status-routing'
+import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-status/agent-pane-authority'
+import { resolvePaneKey } from '../../lib/agent-status/ownership/agent-status-pane-ownership'
 import type { PendingAgentStatusEvent } from './agent-status-bridge-types'
 
 /** An already delivered event for the pane naming a refused conversation would restore it. */

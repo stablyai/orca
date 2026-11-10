@@ -1,5 +1,5 @@
 import { Buffer } from 'buffer'
-import type { BrowserScreencastFrame } from '../transport/browser-screencast-protocol'
+import type { BrowserScreencastFrame } from './browser-screencast-protocol'
 
 // Reuse bridge b64: re-encoding costs 75–90% of page frame handling and grows with frame size.
 // Optional b64 keeps non-bridge callers working via native encoding; streaming always supplies it.

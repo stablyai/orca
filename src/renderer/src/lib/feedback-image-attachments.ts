@@ -4,7 +4,7 @@ import {
   INVALID_RASTER_IMAGE_PREVIEW_ERROR,
   RASTER_IMAGE_PREVIEW_TOO_LARGE_ERROR,
   assertRasterImagePreviewWithinLimits
-} from '../../../shared/raster-image-preview-limits'
+} from '../../../shared/file-preview/raster-image-preview-limits'
 import {
   MAX_FEEDBACK_IMAGE_BYTES,
   MAX_FEEDBACK_IMAGE_COUNT,
