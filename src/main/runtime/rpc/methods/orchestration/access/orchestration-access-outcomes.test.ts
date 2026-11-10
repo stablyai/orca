@@ -111,6 +111,24 @@ type Case = { method: string; params: (caller: string, ids: Ids) => unknown }
 
 /** One call per method (several where its own rule has several paths), each made by every caller. */
 const CASES = {
+  approvalAllow: {
+    method: 'orchestration.approvalAnswer',
+    params: (from, ids) => ({ dispatch: ids.dispatch, prompt: 'item_1', decision: 'allow', from })
+  },
+  approvalDeny: {
+    method: 'orchestration.approvalAnswer',
+    params: (from, ids) => ({
+      dispatch: ids.dispatch,
+      prompt: 'item_1',
+      decision: 'deny',
+      reason: 'Use a script file.',
+      from
+    })
+  },
+  approvalDenyNoReason: {
+    method: 'orchestration.approvalAnswer',
+    params: (from, ids) => ({ dispatch: ids.dispatch, prompt: 'item_1', decision: 'deny', from })
+  },
   ask: {
     method: 'orchestration.ask',
     params: (from) => ({ to: 'term_lone', question: 'q', wait: false, from })
@@ -341,6 +359,12 @@ const CASES = {
 
 /** Recorded on main before the access check existed; every row must stay the same. Callers: term_owner, term_other, term_lone, term_worker. */
 const EXPECTED: Record<string, string> & Record<keyof typeof CASES, string> = {
+  // Added with the method: an agent caller can never allow, and the terminal worker here has no chat prompt.
+  approvalAllow:
+    'approval_requires_person approval_requires_person approval_requires_person approval_requires_person',
+  approvalDeny:
+    'approval_unsupported approval_unsupported approval_unsupported approval_unsupported',
+  approvalDenyNoReason: 'invalid_argument invalid_argument invalid_argument invalid_argument',
   ask: 'dispatch_inactive dispatch_inactive dispatch_inactive dispatch_run_mismatch',
   callerShow: 'ok ok ok ok',
   check: 'ok ok ok ok',

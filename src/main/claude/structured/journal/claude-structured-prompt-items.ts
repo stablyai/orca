@@ -17,14 +17,14 @@ import { encodeClaudeQuestionOptionId } from './claude-structured-prompt-replies
 import type { ClaudePendingPrompt } from '../../claude-prompt-registry'
 
 const APPROVAL_OPTIONS: readonly AgentJournalPromptOption[] = [
-  { id: 'allow', label: 'Allow' },
-  { id: 'allowForSession', label: 'Allow for this session' },
-  { id: 'deny', label: 'Deny' }
+  { id: 'allow', label: 'Allow', intent: 'allow_once' },
+  { id: 'allowForSession', label: 'Allow for this session', intent: 'allow_always' },
+  { id: 'deny', label: 'Deny', intent: 'reject_once' }
 ]
 
 const PLAN_APPROVAL_OPTIONS: readonly AgentJournalPromptOption[] = [
-  { id: 'allow', label: 'Approve plan' },
-  { id: 'deny', label: 'Keep planning' }
+  { id: 'allow', label: 'Approve plan', intent: 'allow_once' },
+  { id: 'deny', label: 'Keep planning', intent: 'reject_once' }
 ]
 
 const PENDING = {

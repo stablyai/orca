@@ -1,0 +1,51 @@
+import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import { structuredMailboxCustody } from '../../../../orchestration/mailbox/routing/structured-session-mail-target'
+import { readStructuredSessionGateFacts } from '../../../../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host'
+import {
+  describeMailboxDeliveryHold,
+  readMailboxDeliveryHold
+} from '../../../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
+import type { SendRecipientWarning } from './recipient-routing'
+
+/** The receipt line for mail the delivery gate would hold right now; null when it would deliver. */
+export async function sendDeliveryHoldWarning(
+  runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold'>,
+  db: OrchestrationDb,
+  recipient: string
+): Promise<SendRecipientWarning | null> {
+  if (recipient.startsWith('run:')) {
+    return null
+  }
+  const hold = await readMailboxDeliveryHold(recipient, {
+    chatSessionFor: (mailbox) => {
+      const custody = structuredMailboxCustody(mailbox, db)
+      return typeof custody === 'object' ? custody.sessionId : null
+    },
+    readChatFacts: readStructuredSessionGateFacts,
+    terminalFor: (mailbox) => {
+      if (!mailbox.startsWith('dispatch:')) {
+        return mailbox
+      }
+      const dispatch = db.getDispatchContextById(mailbox.slice('dispatch:'.length))
+      return dispatch?.status === 'dispatched' ? dispatch.assignee_handle : null
+    },
+    readTerminalHold: (handle) => runtime.readTerminalMailHold(handle)
+  })
+  return hold
+    ? {
+        code: 'recipient_delivery_held',
+        recipient,
+        message: describeMailboxDeliveryHold(recipient, hold)
+      }
+    : null
+}
+
+/** A paired server's worker: this Orca sees only that the relay took the mail. */
+export function relayedDeliveryUnknownWarning(recipient: string): SendRecipientWarning {
+  return {
+    code: 'recipient_delivery_unknown',
+    recipient,
+    message: `Accepted for relay to the server running ${recipient}; its delivery state is unknown here.`
+  }
+}

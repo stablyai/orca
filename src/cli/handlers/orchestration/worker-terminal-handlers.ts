@@ -15,6 +15,13 @@ import {
 } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import { callOrchestrationMutation } from './mutation-request'
+import { resolveOrchestrationTerminalHandle } from './terminal-identity'
+
+type WorkerApprovalAnswerView = {
+  approvalId: string
+  option: string
+  reasonMessageId: string | null
+}
 import { formatWorkerRelease, type WorkerReleaseReceipt } from './worker-output'
 import { formatWorkerListScope, resolveWorkerListRunScope } from './worker-list-run-scope'
 
@@ -45,6 +52,30 @@ const keepWorkerOpen: CommandHandler = async ({ flags, client, json }) => {
 }
 
 export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandler> = {
+  'orchestration deny': async ({ flags, client, cwd, json }) => {
+    const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
+    const result = await callOrchestrationMutation<WorkerApprovalAnswerView>(
+      client,
+      flags,
+      'orchestration.approvalAnswer',
+      {
+        dispatch: getRequiredStringFlag(flags, 'dispatch'),
+        prompt: getRequiredStringFlag(flags, 'prompt'),
+        decision: 'deny',
+        reason: getRequiredStringFlag(flags, 'reason'),
+        from
+      }
+    )
+    printOrchestrationResult(result, json, {
+      fields: (value) => ({
+        approvalId: value.approvalId,
+        denied: value.option,
+        reason: value.reasonMessageId
+          ? `sent to the worker as message ${value.reasonMessageId}`
+          : undefined
+      })
+    })
+  },
   'orchestration worker-stop': async ({ flags, client, json }) => {
     const result = await callOrchestrationMutation<WorkerStopReceipt>(
       client,

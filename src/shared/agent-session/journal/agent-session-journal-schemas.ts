@@ -16,6 +16,7 @@ import type {
   AgentJournalResolution,
   AgentJournalRenderItem
 } from './agent-session-journal-types'
+import { AGENT_JOURNAL_PROMPT_INTENTS } from './agent-session-journal-types'
 
 const BoundedPayload = z.object({
   head: z.string(),
@@ -117,7 +118,8 @@ const PromptOption = z.object({
   id: z.string(),
   label: z.string(),
   description: z.string().optional(),
-  preview: z.string().optional()
+  preview: z.string().optional(),
+  intent: z.enum(AGENT_JOURNAL_PROMPT_INTENTS).optional()
 })
 
 const FreeTextInput = z.object({
