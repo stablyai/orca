@@ -5036,7 +5036,8 @@
       "emptyDetail": "Start one here. It keeps running while this phone and your computer sleep.",
       "new": "New cloud workspace",
       "createdAgo": "Created {{ago}} ago",
-      "openWorkspace": "Open {{title}}, {{detail}}"
+      "openWorkspace": "Open {{title}}, {{detail}}",
+      "createdJustNow": "Created just now"
     },
     "connect": {
       "signedOut": "Sign in to Orca on {{desktop}}, then try again.",
