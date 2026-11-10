@@ -22,7 +22,8 @@ const MAP: Record<string, string> = {
   'life.delete-after-oob-destroy': 'cli.desktop-delete-gone',
   'auth.picker-sign-in': 'cli.desktop-picker-signin',
   'life.delete-asleep': 'cli.desktop-delete-asleep',
-  'life.delete-asleep-after-move': 'cli.desktop-delete-asleep-moved'
+  'life.delete-asleep-after-move': 'cli.desktop-delete-asleep-moved',
+  'life.move-then-delete': 'cli.desktop-move-then-delete'
 }
 const checks: CheckResult[] = []
 const benchmarks: RunFile['benchmarks'] = []
