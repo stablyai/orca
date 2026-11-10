@@ -1,3 +1,4 @@
+import { testJournalWorkReader } from '../../../agent-session-journal/journal-current-work.test-fixture'
 import { readTestJournalSnapshot } from '../../../agent-session-journal/journal-observation.test-support'
 // Dismiss stale-generation prompts in the journal without stopping current turns or withdrawing queued work.
 
@@ -99,6 +100,7 @@ function context(
     logger: createStructuredAgentSessionLogger(),
     sessionId: 'session-1',
     journal,
+    readWork: testJournalWorkReader(journal, LIVE),
     fence: LIVE,
     agents: NO_STRUCTURED_AGENTS,
     agent: 'codex',
@@ -139,7 +141,7 @@ describe('a question an ended generation raised, cancelled from a client that st
     )
 
     expect(result).toMatchObject({ ok: true, value: { turnId: 'turn-2', cancelled: true } })
-    expect(resolution(journal, itemId)).toBe('cancelled')
+    expect(await resolution(journal, itemId)).toBe('cancelled')
     expect(stop).not.toHaveBeenCalled()
     expect(interrupt).not.toHaveBeenCalled()
     expect(agent.cancelTurn).not.toHaveBeenCalled()
