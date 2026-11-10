@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import type React from 'react'
 import { Puzzle } from 'lucide-react'
 import { resolvePluginIconGlyph } from '@/components/plugins/plugin-icon-glyphs'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { PluginWorktreeBadgeIcon as BadgeIcon } from '../../../../../../shared/plugins/contributions/plugin-worktree-badge-contribution'
 
 /** Named icons come from the panel icon set; a plugin SVG is a mask, so it takes the text color in
