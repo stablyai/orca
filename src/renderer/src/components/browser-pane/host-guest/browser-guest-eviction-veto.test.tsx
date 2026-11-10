@@ -51,7 +51,8 @@ it('keeps downloads and paired viewers protected across retention toggles, witho
     for (let id = 1; id <= 23; id++) {
       const webview = document.createElement('div')
       Object.defineProperty(webview, 'getWebContentsId', { value: () => id })
-      registerPersistentWebview(`page-${id}`, webview as Electron.WebviewTag)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The DOM element supplies registry listeners/style/removal and the injected guest identity method.
+      registerPersistentWebview(`page-${id}`, webview as unknown as Electron.WebviewTag)
       setBrowserGuestVisible(`page-${id}`, false)
     }
     requested({ downloadId: 'download', browserPageId: 'page-1' })
@@ -73,6 +74,6 @@ it('keeps downloads and paired viewers protected across retention toggles, witho
     for (const id of browserGuestActivity.keys()) {
       unregisterPersistentWebview(id)
     }
-    delete (window as unknown as { api?: unknown }).api
+    Reflect.deleteProperty(window, 'api')
   }
 })

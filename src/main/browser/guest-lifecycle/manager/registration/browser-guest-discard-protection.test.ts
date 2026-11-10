@@ -7,9 +7,11 @@ import {
 import { BROWSER_GUEST_PROTECTION_REPORT } from '../../../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
 
 it('binds edit protection to the current main-frame document and real lifecycle coverage', () => {
-  const mainFrame = { frames: [] as object[], send: vi.fn() }
+  const frames: object[] = []
+  const mainFrame = { frames, send: vi.fn<(channel: string, generation: string) => void>() }
   let audible = false
   let crashed = false
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The EventEmitter fixture implements all WebContents methods used by this owner.
   const guest = Object.assign(new EventEmitter(), {
     id: 7,
     mainFrame,
@@ -26,7 +28,13 @@ it('binds edit protection to the current main-frame document and real lifecycle 
       payload
     )
   }
-  const generation = (): string => mainFrame.send.mock.lastCall?.[1] as string
+  const generation = (): string => {
+    const value = mainFrame.send.mock.lastCall?.[1]
+    if (value === undefined) {
+      throw new Error('No document challenge was sent')
+    }
+    return value
+  }
   try {
     expect(readBrowserGuestDiscardProtection(guest).protection).toBe('unknown')
     send({ ready: true })

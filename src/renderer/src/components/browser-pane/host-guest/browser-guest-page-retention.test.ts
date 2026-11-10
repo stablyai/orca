@@ -23,6 +23,7 @@ const clean = (id: number): BrowserGuestDiscardProtection => ({
   reason: 'clean'
 })
 function guest(id: number): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This controller fixture reads only the guest identity method.
   registerBrowserGuestActivity(`page-${id}`, { getWebContentsId: () => id } as Electron.WebviewTag)
   setBrowserGuestVisible(`page-${id}`, false)
 }

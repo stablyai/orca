@@ -32,6 +32,7 @@ it('preserves independent drafts and clears only controls a completed native res
     target: Element,
     options: { isTrusted?: boolean; defaultPrevented?: boolean } = {}
   ): void => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The observer reads only these event fields; trusted input is supplied at its listener seam.
     listeners.get(name)?.({
       isTrusted: options.isTrusted ?? true,
       defaultPrevented: options.defaultPrevented ?? false,
