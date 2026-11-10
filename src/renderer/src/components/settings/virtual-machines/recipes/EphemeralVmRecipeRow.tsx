@@ -4,7 +4,7 @@ import type { OrcaHooks } from '../../../../../../shared/orca-yaml-hook-types'
 import { isRecipeEnvNamePassed } from '../../../../../../shared/ephemeral-vm-recipe-env'
 import { Button } from '../../../ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { isWindowsUserAgent } from '@/lib/user-agent-platform'
+import { isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
 
 type RecipeCatalogEntry = Awaited<
   ReturnType<typeof window.api.ephemeralVm.listRecipeCatalog>
