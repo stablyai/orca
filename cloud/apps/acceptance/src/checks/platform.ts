@@ -5,7 +5,8 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SignJWT } from 'jose'
-import { control } from '../clients'
+import { control, vercelRest } from '../clients'
+import { d1Control } from './billing'
 import { config, secrets } from '../env'
 import { log, type Check, type Ctx } from '../context'
 import { orca } from '../orca-cli'
@@ -117,6 +118,24 @@ function openGrant(sealed: any, grantId: string, pair: ReturnType<typeof x25519P
   d.setAAD(Buffer.from(`orca-cloud-grant-v1:${grantId}`))
   d.setAuthTag(ct.subarray(ct.length - 16))
   return JSON.parse(Buffer.concat([d.update(ct.subarray(0, ct.length - 16)), d.final()]).toString('utf8'))
+}
+
+/** Opens a read snapshot (src/shared/cloud-workspaces/read-snapshot.ts construction) with node:crypto. */
+function openReadSnapshot(s: any, pair: ReturnType<typeof x25519Pair>): any {
+  const aesOpen = (key: Buffer, nonceB64: string, ctB64: string, aad: string) => {
+    const ct = Buffer.from(ctB64, 'base64')
+    const d = createDecipheriv('aes-256-gcm', key, Buffer.from(nonceB64, 'base64'))
+    d.setAAD(Buffer.from(aad))
+    d.setAuthTag(ct.subarray(ct.length - 16))
+    return Buffer.concat([d.update(ct.subarray(0, ct.length - 16)), d.final()])
+  }
+  const r = s.recipient
+  const eph = Buffer.from(r.ephemeralPublicKeyB64, 'base64')
+  const ephKey = createPublicKey({ key: { kty: 'OKP', crv: 'X25519', x: eph.toString('base64url') }, format: 'jwk' })
+  const shared = diffieHellman({ privateKey: pair.privateKey, publicKey: ephKey })
+  const kek = Buffer.from(hkdfSync('sha256', shared, Buffer.concat([eph, pair.publicRaw]), Buffer.from('orca-cloud-read-wrap-v1'), 32))
+  const dek = aesOpen(kek, r.nonceB64, r.wrappedKeyB64, `orca-cloud-read-wrap-v1:${s.workspaceId}:${s.snapshotId}:${r.keyId}`)
+  return JSON.parse(aesOpen(dek, s.nonceB64, s.ciphertextB64, `orca-cloud-read-v1:${s.workspaceId}:${s.snapshotId}`).toString('utf8'))
 }
 
 let teamWs: Promise<{ shared: string; priv: string }> | null = null
@@ -340,6 +359,69 @@ export const platformChecks: Record<string, Check> = {
     return { status: ok ? 'pass' : 'fail', detail: `cost in list: compute ${w?.cost?.computeMs} ms, $${((w?.cost?.totalUsdMicros ?? 0) / 1e6).toFixed(4)}` }
   },
 
+
+  'life.read-asleep': async (ctx) => {
+    // Gap 5: a teammate's device reads a SLEEPING team workspace (git state, agents, chats) without
+    // waking it; end-to-end encrypted to the device's X25519 reader key. Also checks that an outsider
+    // is refused and that the control-plane DB holds no plaintext (a marker file name never appears).
+    const tag = ctx.run.file.runId.replace(/[^0-9]/g, '').slice(-8)
+    const marker = `w9readmarker${tag}`
+    const pair = x25519Pair()
+    const reg = await control.as(ctx.member, 'PUT', '/v1/reader-keys', { publicKeyB64: pair.publicRaw.toString('base64'), deviceLabel: 'w9 reader', deviceKind: 'desktop' })
+    const keyId = reg.body?.key?.id ?? reg.body?.readerKey?.id ?? reg.body?.id
+    if (!keyId) {
+      return { status: 'fail', detail: `reader key ${reg.status} ${JSON.stringify(reg.body).slice(0, 200)}` }
+    }
+    const box = await ctx.sandboxes.create(ctx.owner, { workspaceId: `w9-read-${tag}`, title: 'W9 read asleep', visibility: 'team', repo: { url: config.testRepo }, useEnvironment: false })
+    try {
+      if (box.status !== 200) {
+        return { status: 'fail', detail: `create ${box.status} ${JSON.stringify(box.body).slice(0, 200)}` }
+      }
+      const id = box.body.sandbox.id
+      await ctx.exec(box.body.sandbox.session!.id, `cd ${box.body.connection.projectRoot} && echo hi > ${marker}.txt`)
+      const sus = await ctx.sandboxes.suspend(id)
+      const provider = async () => (await vercelRest('GET', `/v2/sandboxes/orca-dev-${id}`, { projectId: config.vercelProjectId })).json
+      const before = await provider()
+      const samples: number[] = []
+      let payload: any = null
+      let err = ''
+      for (let i = 0; i < 20; i++) {
+        const t0 = performance.now()
+        const r = await control.as(ctx.member, 'GET', `/v1/team/workspaces/${id}/read-snapshot?keyId=${keyId}`)
+        const s = r.body?.snapshot
+        if (!s) {
+          err = `${r.status} ${JSON.stringify(r.body).slice(0, 160)}`
+          break
+        }
+        payload = openReadSnapshot(s, pair)
+        samples.push(Math.round(performance.now() - t0))
+      }
+      const after = await provider()
+      const stillStopped = !['running', 'pending'].includes(after?.session?.status ?? after?.sandbox?.status ?? '')
+      const outsider = await control.as(ctx.outsider, 'GET', `/v1/team/workspaces/${id}/read-snapshot?keyId=${keyId}`)
+      const text = JSON.stringify(payload ?? '')
+      const sawMarker = text.includes(marker)
+      const dbRows = d1Control(`SELECT COUNT(*) AS n FROM read_snapshots WHERE sandbox_id = '${id}' AND (ciphertext LIKE '%${marker}%')`)
+      const plaintextInDb = Number(dbRows[0]?.n ?? 0) > 0
+      if (samples.length) {
+        ctx.run.bench('read.asleep', samples, 'teammate fetch + decrypt of a sleeping workspace snapshot, from this Mac')
+      }
+      const sorted = [...samples].sort((a, b) => a - b)
+      const ok = sus.status === 200 && samples.length === 20 && payload?.workspaceId === id && sawMarker && stillStopped && outsider.status >= 400 && !plaintextInDb
+      return {
+        status: ok ? 'pass' : 'fail',
+        detail: err
+          ? `read-snapshot: ${err}`
+          : `teammate decrypted the sleeping workspace's snapshot (sections: ${Object.keys(payload ?? {}).join(', ')}; git shows the new file: ${sawMarker}); 20 reads p50 ${sorted[9]} ms, max ${sorted.at(-1)} ms; Vercel session ${before?.session?.status ?? before?.sandbox?.status} -> ${after?.session?.status ?? after?.sandbox?.status} (no wake: ${stillStopped}); outsider -> ${outsider.status}; plaintext marker in D1: ${plaintextInDb}`,
+        ...(sorted.length ? { timingsMs: { readP50: sorted[9]!, readMax: sorted.at(-1)! } } : {})
+      }
+    } finally {
+      await control.as(ctx.member, 'DELETE', `/v1/reader-keys/${keyId}`)
+      if (box.status === 200) {
+        await ctx.sandboxes.destroy(box.body.sandbox.id)
+      }
+    }
+  },
   // ---------------- W5 ----------------
   'api.rest': async (ctx) => {
     const created = await api(ctx, 'POST', '/v1/workspaces', { name: `w9-api-${tag(ctx)}`, repo: { url: config.testRepo } })
