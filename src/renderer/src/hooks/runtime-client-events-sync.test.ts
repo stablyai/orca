@@ -349,7 +349,7 @@ describe('createRuntimeClientEventsSync', () => {
     }
   })
 
-  it('an external sync retries a waiting environment immediately (recovery path)', async () => {
+  it('an explicit recovery wake retries a waiting environment immediately', async () => {
     vi.useFakeTimers()
     try {
       const subscribe = vi.fn((): Promise<RuntimeClientEventSubscriptionHandle> =>
@@ -369,9 +369,107 @@ describe('createRuntimeClientEventsSync', () => {
       expect(subscribe).toHaveBeenCalledTimes(1)
 
       // Reachability changes retry immediately instead of waiting on backoff.
-      sync.sync()
+      sync.sync(['A'])
       await vi.advanceTimersByTimeAsync(0)
       expect(subscribe).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([10, 100])('keeps retries local to due hosts in a fleet of %i', async (hostCount) => {
+    vi.useFakeTimers()
+    try {
+      const desired = Array.from({ length: hostCount }, (_, i) => `host-${i}`)
+      const getDesiredEnvironmentIds = vi.fn(() => desired)
+      const getSubscriptionKey = vi.fn((id: string) => id)
+      const closes = new Map<string, () => void>()
+      const subscribe = vi.fn(
+        (id: string, _event: unknown, _error: unknown, _current: unknown, close: () => void) => {
+          closes.set(id, close)
+          return Promise.resolve({ unsubscribe: vi.fn() })
+        }
+      )
+      const sync = createRuntimeClientEventsSync({
+        getDesiredEnvironmentIds,
+        getSubscriptionKey,
+        subscribe,
+        onEvent: vi.fn(),
+        random: () => 1
+      })
+      sync.sync()
+      await vi.advanceTimersByTimeAsync(0)
+      getDesiredEnvironmentIds.mockClear()
+      getSubscriptionKey.mockClear()
+      subscribe.mockClear()
+
+      closes.get('host-0')!()
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(subscribe.mock.calls.map(([id]) => id)).toEqual(['host-0'])
+      expect(getDesiredEnvironmentIds).not.toHaveBeenCalled()
+      expect(getSubscriptionKey).not.toHaveBeenCalled()
+
+      subscribe.mockClear()
+      for (const close of closes.values()) {
+        close()
+      }
+      // Every host is due once within 2s; only host-0 has a prior failure.
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(subscribe).toHaveBeenCalledTimes(hostCount)
+      expect(new Set(subscribe.mock.calls.map(([id]) => id)).size).toBe(hostCount)
+      expect(getDesiredEnvironmentIds).not.toHaveBeenCalled()
+      expect(getSubscriptionKey).not.toHaveBeenCalled()
+      sync.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('preserves sibling deadlines across retries, reconciliation, and scoped recovery', async () => {
+    vi.useFakeTimers()
+    try {
+      const closes = new Map<string, () => void>()
+      const attempts: { id: string; at: number }[] = []
+      const sync = createRuntimeClientEventsSync({
+        getDesiredEnvironmentIds: () => ['A', 'B'],
+        subscribe: (id, _event, _error, _current, close) => {
+          attempts.push({ id, at: Date.now() })
+          closes.set(id, close)
+          return Promise.resolve({ unsubscribe: vi.fn() })
+        },
+        onEvent: vi.fn(),
+        random: () => 1
+      })
+      vi.setSystemTime(0)
+      sync.sync()
+      await vi.advanceTimersByTimeAsync(0)
+      for (const delay of [1_000, 2_000, 4_000, 8_000, 16_000]) {
+        closes.get('A')!()
+        await vi.advanceTimersByTimeAsync(delay)
+      }
+      // A is due at 61s. B's first close at 31s must not reset A's deadline.
+      closes.get('A')!()
+      closes.get('B')!()
+      sync.sync()
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(attempts.filter(({ id }) => id === 'A').map(({ at }) => at)).toEqual([
+        0, 1_000, 3_000, 7_000, 15_000, 31_000
+      ])
+      expect(attempts.filter(({ id }) => id === 'B').map(({ at }) => at)).toEqual([0, 32_000])
+
+      closes.get('B')!()
+      sync.sync(['B'])
+      await vi.advanceTimersByTimeAsync(0)
+      expect(attempts.filter(({ id }) => id === 'B').map(({ at }) => at)).toEqual([
+        0, 32_000, 32_000
+      ])
+      await vi.advanceTimersByTimeAsync(28_999)
+      expect(attempts.filter(({ id }) => id === 'A')).toHaveLength(6)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(attempts.filter(({ id }) => id === 'A').map(({ at }) => at)).toEqual([
+        0, 1_000, 3_000, 7_000, 15_000, 31_000, 61_000
+      ])
+      sync.stop()
     } finally {
       vi.useRealTimers()
     }

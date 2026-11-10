@@ -5,8 +5,8 @@ export type RuntimeClientEventSubscriptionHandle = {
 }
 
 export type RuntimeClientEventsSyncDeps = {
-  /** Current set of runtime environment ids that should have a live client-event
-   *  subscription. Re-read on every sync and at subscribe-resolution time. */
+  /** Current desired hosts. Membership and key changes must synchronously call sync;
+   *  retries and settlements use the ownership that reconciliation established. */
   getDesiredEnvironmentIds: () => string[]
   /** Changes when an environment's transport generation requires a fresh subscription. */
   getSubscriptionKey?: (environmentId: string) => string
@@ -28,249 +28,160 @@ export type RuntimeClientEventsSyncDeps = {
 }
 
 export type RuntimeClientEventsSync = {
-  /** Reconciles live subscriptions to the desired environment set. */
-  sync: () => void
-  /** Tears down all subscriptions and bumps the generation so in-flight
-   *  subscribes resolve into a no-op. */
+  /** Reconciles desired hosts; recovery ids explicitly wake those hosts before their retry deadline. */
+  sync: (recoveryEnvironmentIds?: readonly string[]) => void
+  /** Retires all ownership so in-flight subscriptions are released on settlement. */
   stop: () => void
 }
 
-/** Reconcile one subscription per desired environment; remove/re-add can race two in-flight subscribes without a generation change. Keep the first winner and unsubscribe duplicates rather than overwriting and leaking its handle. */
-// A stream that stays up this long ends its failure streak; shorter lives keep backing off.
 const STABLE_STREAM_MS = 30_000
+
+type SubscriptionAttempt = {
+  closed: boolean
+  unsubscribe?: () => void
+  installedAt?: number
+}
+
+type EnvironmentSubscription = {
+  key: string
+  attempt?: SubscriptionAttempt
+  failures: number
+  retryTimer?: ReturnType<typeof setTimeout>
+}
 
 export function createRuntimeClientEventsSync(
   deps: RuntimeClientEventsSyncDeps
 ): RuntimeClientEventsSync {
-  type SubscriptionToken = { key: string; generation: number }
-  const subscriptions = new Map<
-    string,
-    { key: string; token: SubscriptionToken; unsubscribe: () => void }
-  >()
-  const pending = new Map<string, SubscriptionToken>()
-  const retryTimers = new Map<string, ReturnType<typeof setTimeout>>()
-  const consecutiveFailures = new Map<string, { key: string; count: number }>()
+  const environments = new Map<string, EnvironmentSubscription>()
   const retryDelayMs = deps.retryDelayMs ?? 1_000
   const retryMaxDelayMs = deps.retryMaxDelayMs ?? 30_000
   const random = deps.random ?? Math.random
   const getSubscriptionKey = deps.getSubscriptionKey ?? ((environmentId: string) => environmentId)
-  let generation = 0
   let syncInvocation = 0
 
-  const clearRetryTimer = (environmentId: string): void => {
-    const retryTimer = retryTimers.get(environmentId)
-    if (!retryTimer) {
+  const clearRetry = (entry: EnvironmentSubscription): void => {
+    if (entry.retryTimer !== undefined) {
+      clearTimeout(entry.retryTimer)
+      entry.retryTimer = undefined
+    }
+  }
+
+  const retire = (entry: EnvironmentSubscription): void => {
+    clearRetry(entry)
+    const attempt = entry.attempt
+    entry.attempt = undefined
+    attempt?.unsubscribe?.()
+  }
+
+  const scheduleRetry = (environmentId: string, entry: EnvironmentSubscription): void => {
+    if (environments.get(environmentId) !== entry || entry.retryTimer !== undefined) {
       return
     }
-    clearTimeout(retryTimer)
-    retryTimers.delete(environmentId)
-  }
-
-  const recordFailure = (environmentId: string, subscriptionKey: string): void => {
-    const failure = consecutiveFailures.get(environmentId)
-    consecutiveFailures.set(environmentId, {
-      key: subscriptionKey,
-      count: failure?.key === subscriptionKey ? failure.count + 1 : 1
-    })
-  }
-
-  const nextRetryDelayMs = (environmentId: string, subscriptionKey: string): number => {
-    // Exponential capped jitter paces dead hosts without synchronized retries; external reachability/desired transitions still retry immediately.
-    const failure = consecutiveFailures.get(environmentId)
-    const failures = failure?.key === subscriptionKey ? failure.count : 0
-    const capped = Math.min(retryDelayMs * 2 ** Math.max(0, failures - 1), retryMaxDelayMs)
-    return capped * (0.5 + random() * 0.5)
-  }
-
-  const scheduleRetry = (
-    environmentId: string,
-    subscriptionKey: string,
-    subscribeGeneration: number
-  ): void => {
-    if (retryTimers.has(environmentId)) {
-      return
-    }
-    // Store writes no longer drive retries; keep a bounded timer while failed environments remain desired.
-    const retryTimer = setTimeout(
+    const capped = Math.min(retryDelayMs * 2 ** Math.max(0, entry.failures - 1), retryMaxDelayMs)
+    entry.retryTimer = setTimeout(
       () => {
-        retryTimers.delete(environmentId)
-        if (
-          subscribeGeneration !== generation ||
-          !deps.getDesiredEnvironmentIds().includes(environmentId) ||
-          getSubscriptionKey(environmentId) !== subscriptionKey
-        ) {
+        entry.retryTimer = undefined
+        if (environments.get(environmentId) === entry) {
+          startAttempt(environmentId, entry)
+        }
+      },
+      capped * (0.5 + random() * 0.5)
+    )
+  }
+
+  const startAttempt = (environmentId: string, entry: EnvironmentSubscription): void => {
+    if (environments.get(environmentId) !== entry || entry.attempt) {
+      return
+    }
+    clearRetry(entry)
+    const attempt: SubscriptionAttempt = { closed: false }
+    entry.attempt = attempt
+    const ownsAttempt = (): boolean =>
+      environments.get(environmentId) === entry && entry.attempt === attempt
+    const isCurrent = (): boolean => ownsAttempt() && !attempt.closed
+    void deps
+      .subscribe(
+        environmentId,
+        (event) => {
+          if (isCurrent()) {
+            deps.onEvent(environmentId, event)
+          }
+        },
+        (error) => console.warn('[runtime-client-events] subscription error:', error),
+        isCurrent,
+        () => {
+          attempt.closed = true
+          if (!ownsAttempt() || attempt.installedAt === undefined) {
+            return
+          }
+          entry.attempt = undefined
+          if (Date.now() - attempt.installedAt >= STABLE_STREAM_MS) {
+            entry.failures = 0
+          }
+          entry.failures += 1
+          scheduleRetry(environmentId, entry)
+        }
+      )
+      .then((subscription) => {
+        if (!ownsAttempt()) {
+          subscription.unsubscribe()
           return
         }
-        sync()
-      },
-      nextRetryDelayMs(environmentId, subscriptionKey)
-    )
-    retryTimers.set(environmentId, retryTimer)
+        if (attempt.closed) {
+          entry.attempt = undefined
+          subscription.unsubscribe()
+          entry.failures += 1
+          scheduleRetry(environmentId, entry)
+          return
+        }
+        attempt.unsubscribe = subscription.unsubscribe
+        attempt.installedAt = Date.now()
+      })
+      .catch((error) => {
+        if (ownsAttempt()) {
+          entry.attempt = undefined
+          console.warn('[runtime-client-events] failed to subscribe:', error)
+          entry.failures += 1
+          scheduleRetry(environmentId, entry)
+        }
+      })
+  }
+
+  const sync = (recoveryEnvironmentIds: readonly string[] = []): void => {
+    const invocation = ++syncInvocation
+    const desiredIds = new Set(deps.getDesiredEnvironmentIds())
+    for (const [environmentId, entry] of environments) {
+      if (invocation !== syncInvocation) {
+        return
+      }
+      if (desiredIds.has(environmentId) && entry.key === getSubscriptionKey(environmentId)) {
+        continue
+      }
+      environments.delete(environmentId)
+      retire(entry)
+    }
+    const recoveryIds = new Set(recoveryEnvironmentIds)
+    for (const environmentId of desiredIds) {
+      if (invocation !== syncInvocation) {
+        return
+      }
+      let entry = environments.get(environmentId)
+      if (!entry) {
+        entry = { key: getSubscriptionKey(environmentId), failures: 0 }
+        environments.set(environmentId, entry)
+      }
+      if (entry.retryTimer === undefined || recoveryIds.has(environmentId)) {
+        startAttempt(environmentId, entry)
+      }
+    }
   }
 
   const stop = (): void => {
-    generation += 1
-    const stoppedSubscriptions = [...subscriptions.values()]
-    subscriptions.clear()
-    pending.clear()
-    for (const retryTimer of retryTimers.values()) {
-      clearTimeout(retryTimer)
-    }
-    retryTimers.clear()
-    consecutiveFailures.clear()
-    for (const subscription of stoppedSubscriptions) {
-      subscription.unsubscribe()
-    }
-  }
-
-  const sync = (): void => {
-    const syncGeneration = generation
-    const currentSyncInvocation = ++syncInvocation
-    const desiredIds = new Set(deps.getDesiredEnvironmentIds())
-    for (const environmentId of retryTimers.keys()) {
-      if (desiredIds.has(environmentId)) {
-        continue
-      }
-      clearRetryTimer(environmentId)
-    }
-    for (const environmentId of consecutiveFailures.keys()) {
-      if (!desiredIds.has(environmentId)) {
-        consecutiveFailures.delete(environmentId)
-      }
-    }
-
-    for (const [environmentId, subscription] of subscriptions) {
-      if (syncGeneration !== generation || currentSyncInvocation !== syncInvocation) {
-        return
-      }
-      if (desiredIds.has(environmentId) && subscription.key === getSubscriptionKey(environmentId)) {
-        continue
-      }
-      subscriptions.delete(environmentId)
-      subscription.unsubscribe()
-    }
-
-    for (const environmentId of desiredIds) {
-      if (syncGeneration !== generation || currentSyncInvocation !== syncInvocation) {
-        return
-      }
-      const subscriptionKey = getSubscriptionKey(environmentId)
-      const pendingSubscription = pending.get(environmentId)
-      if (pendingSubscription && pendingSubscription.key !== subscriptionKey) {
-        pending.delete(environmentId)
-      }
-      if (
-        subscriptions.get(environmentId)?.key === subscriptionKey ||
-        pending.get(environmentId)?.key === subscriptionKey
-      ) {
-        continue
-      }
-      clearRetryTimer(environmentId)
-      const subscribeGeneration = generation
-      const pendingSubscriptionToken = { key: subscriptionKey, generation: subscribeGeneration }
-      pending.set(environmentId, pendingSubscriptionToken)
-      const isCurrent = (): boolean =>
-        subscribeGeneration === generation &&
-        (pending.get(environmentId) === pendingSubscriptionToken ||
-          subscriptions.get(environmentId)?.token === pendingSubscriptionToken)
-      let closed = false
-      let installedAt: number | undefined
-      void deps
-        .subscribe(
-          environmentId,
-          (event) => {
-            // Initial frames arrive before setup settles; only the owning attempt may deliver.
-            if (isCurrent()) {
-              deps.onEvent(environmentId, event)
-            }
-          },
-          (error) => {
-            console.warn('[runtime-client-events] subscription error:', error)
-          },
-          isCurrent,
-          () => {
-            // Main closes streams whose host connection was replaced; the key can stay unchanged.
-            closed = true
-            if (subscriptions.get(environmentId)?.token !== pendingSubscriptionToken) {
-              return
-            }
-            subscriptions.delete(environmentId)
-            if (installedAt !== undefined && Date.now() - installedAt >= STABLE_STREAM_MS) {
-              consecutiveFailures.delete(environmentId)
-            }
-            recordFailure(environmentId, subscriptionKey)
-            scheduleRetry(environmentId, subscriptionKey, subscribeGeneration)
-          }
-        )
-        .then((subscription) => {
-          const isCurrentPending = pending.get(environmentId) === pendingSubscriptionToken
-          if (isCurrentPending) {
-            pending.delete(environmentId)
-          }
-          if (
-            !isCurrentPending ||
-            subscribeGeneration !== generation ||
-            !deps.getDesiredEnvironmentIds().includes(environmentId) ||
-            getSubscriptionKey(environmentId) !== subscriptionKey
-          ) {
-            subscription.unsubscribe()
-            return
-          }
-          // Another subscribe already won; unsubscribe this duplicate instead of overwriting and leaking the winner’s handle.
-          if (subscriptions.get(environmentId)?.key === subscriptionKey) {
-            subscription.unsubscribe()
-            return
-          }
-          if (closed) {
-            subscription.unsubscribe()
-            recordFailure(environmentId, subscriptionKey)
-            scheduleRetry(environmentId, subscriptionKey, subscribeGeneration)
-            return
-          }
-          installedAt = Date.now()
-          subscriptions.set(environmentId, {
-            key: subscriptionKey,
-            token: pendingSubscriptionToken,
-            unsubscribe: subscription.unsubscribe
-          })
-        })
-        .catch((error) => {
-          const isCurrentPending = pending.get(environmentId) === pendingSubscriptionToken
-          if (isCurrentPending) {
-            pending.delete(environmentId)
-          }
-          if (
-            isCurrentPending &&
-            subscribeGeneration === generation &&
-            getSubscriptionKey(environmentId) === subscriptionKey
-          ) {
-            console.warn('[runtime-client-events] failed to subscribe:', error)
-            // Count failures only while retrying this desired environment; late rejection after removal must not penalize re-entry.
-            if (deps.getDesiredEnvironmentIds().includes(environmentId)) {
-              recordFailure(environmentId, subscriptionKey)
-              scheduleRetry(environmentId, subscriptionKey, subscribeGeneration)
-            } else {
-              consecutiveFailures.delete(environmentId)
-            }
-          }
-        })
-    }
-
-    if (syncGeneration !== generation || currentSyncInvocation !== syncInvocation) {
-      return
-    }
-    for (const [environmentId, pendingSubscription] of pending) {
-      if (
-        desiredIds.has(environmentId) &&
-        pendingSubscription.key === getSubscriptionKey(environmentId)
-      ) {
-        continue
-      }
-      pending.delete(environmentId)
-    }
-
-    if (desiredIds.size === 0 && subscriptions.size === 0) {
-      generation += 1
+    syncInvocation += 1
+    const stopped = [...environments.values()]
+    environments.clear()
+    for (const entry of stopped) {
+      retire(entry)
     }
   }
 

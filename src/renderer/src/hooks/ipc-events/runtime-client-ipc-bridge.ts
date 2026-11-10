@@ -272,7 +272,7 @@ export function registerRuntimeClientIpcBridge(
               useAppStore.getState().markEnvironmentSshStateStale(environmentId),
             hydrateEnvironmentSshState: () =>
               hydrateRuntimeEnvironmentSshState(environmentId, { force: true }),
-            sync: runtimeClientEventsSync.sync
+            sync: () => runtimeClientEventsSync.sync([environmentId])
           })
         },
         { hostsBrowserPages: hostsBrowserPagesFor(environmentId), onClose }
