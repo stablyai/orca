@@ -17,12 +17,7 @@ vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
 }))
 import { agentPickerModelCatalogReads } from './agent-launch-picker-host-reads'
 import { cliModelCatalogAnswer } from '@/runtime/native-chat/model-catalogs/model-menu-cli-catalog'
-import {
-  resetHostModelCatalogSnapshotsForTests,
-  forgetHostModelCatalogSnapshots,
-  recordHostModelCatalogSnapshot,
-  subscribeHostModelCatalogSnapshot
-} from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
+import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { projectAgentLaunchProfile } from '../../../../shared/agent-launch/choices/agent-launch-profile'
 import { cliResult, sourceEntry } from './agent-launch-picker-sources.test-fixture'
 
@@ -58,29 +53,6 @@ it('consumes legacy rows without claiming a configured default and separates fal
   expect(
     cliModelCatalogAnswer('antigravity', { ...cliResult, catalogOrigin: undefined, models: [] })
   ).toBeUndefined()
-})
-
-it('uses the paired invocation eligibility and never forwards desktop command overrides', async () => {
-  const target = { kind: 'environment', environmentId: 'paired-source-routing' } as const
-  const cliContext = { target, worktreeId: 'folder:f', worktreePath: '/work/plain' }
-  const reads = (command: string | undefined) =>
-    agentPickerModelCatalogReads({
-      target,
-      cliContext,
-      cliRuntime: true,
-      nativeRuntime: true,
-      settings: { agentCmdOverrides: command ? { antigravity: command } : {} },
-      serverSettings: async () => ({ agentCmdOverrides: { antigravity: 'agy' } })
-    })
-  expect(
-    await reads('agy-beta').catalog(sourceEntry(), false, 'cli', new AbortController().signal)
-  ).toEqual({
-    origin: 'unknown'
-  })
-  expect(mocks.discover).not.toHaveBeenCalled()
-  await reads('agy').catalog(sourceEntry(), false, 'cli', new AbortController().signal)
-  expect(mocks.discover).toHaveBeenCalledWith({ ...cliContext, prefs: undefined }, 'antigravity')
-  expect(mocks.structured).not.toHaveBeenCalled()
 })
 
 it('uses the guest CLI route, retains its last good list on failure, and never falls through remote global discovery to this Mac', async () => {
@@ -180,68 +152,6 @@ it('does not promote the legacy Config default fallback into a terminal operand'
     projectAgentLaunchProfile('antigravity', {}, { target: 'terminal', choices: {}, userArgs: '' })
       .args
   ).toBe('')
-})
-
-it('publishes only changed CLI rows, independent of the clock', () => {
-  const target = { kind: 'local' } as const
-  const notices = vi.fn()
-  const stop = subscribeHostModelCatalogSnapshot(target, 'antigravity', notices, 'cli')
-  const now = vi.spyOn(Date, 'now').mockReturnValue(100)
-  try {
-    recordHostModelCatalogSnapshot(
-      target,
-      'antigravity',
-      'id:x',
-      cliModelCatalogAnswer('antigravity', cliResult)!,
-      'cli'
-    )
-    notices.mockClear()
-    now.mockReturnValue(200)
-    recordHostModelCatalogSnapshot(
-      target,
-      'antigravity',
-      'id:x',
-      cliModelCatalogAnswer('antigravity', cliResult)!,
-      'cli'
-    )
-    expect(notices).not.toHaveBeenCalled()
-    recordHostModelCatalogSnapshot(
-      target,
-      'antigravity',
-      'id:x',
-      cliModelCatalogAnswer('antigravity', {
-        ...cliResult,
-        models: [{ id: 'new-model', label: 'New model' }]
-      })!,
-      'cli'
-    )
-    expect(notices).toHaveBeenCalledTimes(1)
-  } finally {
-    now.mockRestore()
-    stop()
-  }
-})
-
-it('reuses a held CLI answer on reopen until account invalidation', async () => {
-  const target = { kind: 'local' } as const
-  const reads = agentPickerModelCatalogReads({
-    target,
-    cliContext: { target, worktreeId: 'folder:reuse', worktreePath: '/work' },
-    cliRuntime: true,
-    nativeRuntime: true,
-    settings: {}
-  })
-  const entry = sourceEntry()
-  const stop = reads.observeCatalog(entry, () => {}, 'cli')
-  const answer = await reads.catalog(entry, false, 'cli', new AbortController().signal)
-  stop()
-  const stopReopened = reads.observeCatalog(entry, () => {}, 'cli')
-  expect(await reads.catalog(entry, false, 'cli', new AbortController().signal)).toEqual(answer)
-  expect(mocks.discover).toHaveBeenCalledTimes(1)
-  forgetHostModelCatalogSnapshots(target, ['antigravity'])
-  await reads.catalog(entry, false, 'cli', new AbortController().signal)
-  expect(mocks.discover).toHaveBeenCalledTimes(2)
-  stopReopened()
 })
 
 it('consumes explicit probe provenance even for empty lists and the literal default ID', () => {

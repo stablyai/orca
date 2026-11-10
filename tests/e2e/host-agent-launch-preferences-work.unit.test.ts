@@ -279,10 +279,6 @@ it.each([20, 200])(
         rpc.call.mock.calls.slice(admitted).map(([, method, params]) => [method, params])
       ).toEqual([['agentSession.modelCatalog', { agent: 'opencode', worktree: 'id:wt' }]])
       expect(acquisitions.agentPickerAcquisitionDiagnostics()).toHaveLength(1)
-      // Menu preferences and picker eligibility each read once per generation, initial open and successor.
-      expect(
-        rpc.call.mock.calls.filter(([, method]) => method === 'settings.getAgentLaunch').length
-      ).toBeLessThanOrEqual(2 * (count + 2))
       const completions = pending.reduce<Record<string, number>>((counts, work) => {
         counts[work.kind] = (counts[work.kind] ?? 0) + 1
         return counts

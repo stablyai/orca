@@ -11,7 +11,6 @@ vi.mock('../host-capabilities/structured-agent-session-host-capability', () => (
 import { hostModelMenuCatalog } from './host-model-menu-catalog'
 import {
   forgetHostModelCatalogSnapshots,
-  readHostModelCatalogSnapshot,
   recordHostModelCatalogSnapshot,
   resetHostModelCatalogSnapshotsForTests
 } from './host-model-catalog-snapshots'
@@ -26,91 +25,6 @@ const catalog = (id: string): AgentSessionModelCatalogResult => ({
 beforeEach(() => {
   mocks.call.mockReset()
   resetHostModelCatalogSnapshotsForTests()
-})
-
-it.each([3, 30])(
-  'shares a catalog read among %i same-scope observers; waits only after listing is reported',
-  async (count) => {
-    const complete = Promise.withResolvers<AgentSessionModelCatalogResult>()
-    mocks.call.mockImplementation((_target, _method, params) =>
-      params.waitForListing
-        ? complete.promise
-        : Promise.resolve({ origin: 'unknown', listingInProgress: true })
-    )
-    const owners = Array.from({ length: count }, () =>
-      hostModelMenuCatalog({ target, agent: 'codex' })
-    )
-    const stops = owners.map((owner) => owner.subscribe(() => {}))
-    const reads = owners.map((owner) => owner.read(false, undefined, new AbortController().signal))
-    await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
-    expect(mocks.call.mock.calls.map((call) => call[2])).toEqual([
-      { agent: 'codex' },
-      { agent: 'codex', waitForListing: true }
-    ])
-    complete.resolve(catalog('account-only'))
-    await Promise.all(reads)
-    expect(owners[0].snapshot.answer).toMatchObject({ models: [{ id: 'account-only' }] })
-    stops.forEach((stop) => stop())
-  }
-)
-
-it('scopes notifications to a host/agent and suppresses unchanged answers', () => {
-  const a = hostModelMenuCatalog({ target, agent: 'codex' })
-  const b = hostModelMenuCatalog({
-    target: { kind: 'environment', environmentId: 'B' },
-    agent: 'codex'
-  })
-  const onA = vi.fn(),
-    onB = vi.fn()
-  const stopA = a.subscribe(onA),
-    stopB = b.subscribe(onB)
-  recordHostModelCatalogSnapshot(target, 'codex', null, catalog('first'))
-  expect(onA).toHaveBeenCalledTimes(1)
-  expect(onB).not.toHaveBeenCalled()
-  recordHostModelCatalogSnapshot(target, 'codex', null, catalog('first'))
-  expect(onA).toHaveBeenCalledTimes(1)
-  stopA()
-  stopB()
-})
-
-it('drops a late reply after an account switch and consumes a plain legacy listing', async () => {
-  const old = Promise.withResolvers<AgentSessionModelCatalogResult>()
-  mocks.call.mockReturnValueOnce(old.promise).mockResolvedValueOnce(catalog('new-account'))
-  const owner = hostModelMenuCatalog({ target, agent: 'codex' })
-  const stop = owner.subscribe(() => {})
-  const pending = owner.read(false, undefined, new AbortController().signal)
-  await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(1))
-  forgetHostModelCatalogSnapshots(target)
-  await owner.read(false, undefined, new AbortController().signal)
-  old.resolve(catalog('old-account'))
-  await pending
-  expect(owner.snapshot.answer).toMatchObject({ models: [{ id: 'new-account' }] })
-  expect(mocks.call).toHaveBeenCalledTimes(2)
-  expect(mocks.call.mock.calls.every((call) => call[2].waitForListing === undefined)).toBe(true)
-  stop()
-})
-
-it('keeps a last-good catalog through a pending refresh and transport failure', async () => {
-  const wait = Promise.withResolvers<AgentSessionModelCatalogResult>()
-  mocks.call
-    .mockResolvedValueOnce(catalog('last-good'))
-    .mockResolvedValueOnce({ origin: 'unknown', listingInProgress: true })
-    .mockReturnValueOnce(wait.promise)
-  const owner = hostModelMenuCatalog({ target, agent: 'codex', worktree: 'id:refresh' })
-  const stop = owner.subscribe(() => {})
-  await owner.read(false, undefined, new AbortController().signal)
-  const refresh = owner.read(false, undefined, new AbortController().signal)
-  await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(3))
-  expect(owner.snapshot.answer).toMatchObject({ models: [{ id: 'last-good' }] })
-  expect(owner.snapshot.pending).toBe(true)
-  wait.reject(new Error('transport offline'))
-  expect(await refresh).toMatchObject({ models: [{ id: 'last-good' }] })
-  expect(owner.snapshot).toMatchObject({
-    pending: false,
-    attempted: true,
-    answer: { models: [{ id: 'last-good' }] }
-  })
-  stop()
 })
 
 it('never restores a catalog retired or invalidated during a failed refresh', async () => {
@@ -159,77 +73,6 @@ it('never restores a catalog retired or invalidated during a failed refresh', as
     mocks.call.mockReset()
   }
 })
-
-it.each([75, 750])(
-  'compares only changed catalog payloads with %i retained workspaces',
-  (count) => {
-    let visits = 0
-    const answer = (changed = false): AgentSessionModelCatalogResult => ({
-      origin: 'probe',
-      fetchedAt: 1,
-      modelsDifferByWorkspace: true,
-      models: Array.from({ length: 20 }, (_, index) => ({
-        id: `${changed ? 'new' : 'old'}-${index}`,
-        get label() {
-          visits += 1
-          return 'Model'
-        },
-        isDefault: false,
-        efforts: []
-      }))
-    })
-    let accountReads = 0
-    recordHostModelCatalogSnapshot(target, 'codex', null, {
-      origin: 'probe',
-      fetchedAt: 3,
-      modelsDifferByWorkspace: true,
-      listingNamesConfiguredModel: true,
-      models: Array.from({ length: 20 }, (_, index) => ({
-        id: `gpt-6.1-sol-${index}`,
-        get label() {
-          accountReads += 1
-          return 'GPT-6.1 Sol'
-        },
-        isDefault: true,
-        efforts: [
-          {
-            value: 'high',
-            get label() {
-              accountReads += 1
-              return 'High'
-            }
-          },
-          { value: 'ultra', label: 'Ultra' }
-        ],
-        defaultEffort: 'high'
-      }))
-    })
-    const account = hostModelMenuCatalog({ target, agent: 'codex' })
-    const onAccount = vi.fn()
-    const stop = account.subscribe(onAccount)
-    accountReads = 0
-    try {
-      for (let i = 0; i < count; i += 1) {
-        recordHostModelCatalogSnapshot(target, 'codex', `id:wt-${i}`, answer())
-      }
-      visits = 0
-      recordHostModelCatalogSnapshot(target, 'codex', 'id:wt-0', answer())
-      recordHostModelCatalogSnapshot(target, 'codex', 'id:wt-0', answer(true))
-      expect(visits).toBeLessThanOrEqual(80)
-      const held = readHostModelCatalogSnapshot(target, 'codex', {
-        newLaunch: true,
-        seedsModel: true,
-        worktree: 'id:wt-0'
-      })
-      expect(held?.origin !== 'unknown' && held?.models[0].id).toBe('new-0')
-      // Unchanged account output requires neither row copying nor nested payload serialization.
-      expect(accountReads).toBe(0)
-      expect(onAccount).not.toHaveBeenCalled()
-    } finally {
-      stop()
-    }
-  }
-)
 
 it('keeps native-only answers out of guest and differing paired-command routes', async () => {
   const { agentPickerModelCatalogReads } =

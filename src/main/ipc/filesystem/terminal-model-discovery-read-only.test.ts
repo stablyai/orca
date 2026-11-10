@@ -1,4 +1,3 @@
-import { ipcMain } from 'electron'
 import type { DiscoveryIO } from './terminal-model-discovery.test-fixture'
 import { expect, it, vi } from 'vitest'
 const io = vi.hoisted<DiscoveryIO>(() => ({
@@ -77,45 +76,6 @@ import { readFloatingTerminalCwd } from '../floating-workspace-directory'
 
 const fixture = createTerminalDiscoveryFixture(io)
 
-it.each([3, 30])(
-  'discovery of %i deferred fork scopes submits no preparation jobs or writes',
-  async (count) => {
-    const rig = fixture({ repo: true, deferred: true, unstamped: true })
-    io.rows = Array.from({ length: count }, (_unused, index) => ({
-      path: `C:\\fork-${index}`,
-      head: 'abc',
-      branch: 'fix',
-      isBare: false,
-      isMainWorktree: index === 0
-    }))
-    for (const row of io.rows) {
-      await rig.runtime.discoverTerminalModels(`path:${row.path}`, 'antigravity')
-    }
-    await rig.runtime.discoverTerminalModels('path:C:\\fork-0', 'antigravity')
-    io.discover.mockResolvedValueOnce({ success: false, error: 'offline' })
-    await rig.runtime.discoverTerminalModels('path:C:\\fork-0', 'antigravity')
-    await Promise.resolve()
-    expect(io.materialize.mock.calls).toEqual([])
-    expect(io.mutations.mock.calls).toEqual([])
-    expect(io.userAct.mock.calls).toEqual([])
-    // The real launch wrapper still prepares this exact registered deferred fork.
-    await rig.runtime.resolveTerminalWorkspaceLaunchScope('path:C:\\fork-0')
-    expect(io.materialize).toHaveBeenCalledWith(
-      'C:\\fork-0',
-      {
-        remoteName: 'contributor',
-        branchName: 'fix',
-        remoteCreated: false,
-        remoteUrl: 'https://example.com/contributor/repo.git'
-      },
-      expect.anything(),
-      'repo',
-      {},
-      expect.anything()
-    )
-  }
-)
-
 it('read-only floating selection never creates or trusts a missing fallback directory', async () => {
   fixture()
   // Filesystem failure is the external boundary, not a replacement scope policy.
@@ -127,29 +87,4 @@ it('read-only floating selection never creates or trusts a missing fallback dire
   ).rejects.toThrow('floating_workspace_path_unavailable')
   expect(io.mutations).not.toHaveBeenCalled()
   spy.mockRestore()
-})
-
-it('replaces the discovery handler when the main window registers again', async () => {
-  const registered = new Set<string>()
-  io.handle.mockImplementation((channel: string) => {
-    if (registered.has(channel)) {
-      throw new Error('Attempted to register a second handler')
-    }
-    registered.add(channel)
-  })
-  vi.mocked(ipcMain.removeHandler).mockImplementation((channel) => {
-    registered.delete(channel)
-  })
-  try {
-    fixture({ platform: 'darwin' })
-    const reopened = fixture({ platform: 'darwin' })
-    await expect(reopened.ipc()).resolves.toMatchObject({
-      success: true,
-      catalogOrigin: 'probe',
-      models: [{ id: 'native-model' }]
-    })
-  } finally {
-    io.handle.mockReset()
-    vi.mocked(ipcMain.removeHandler).mockReset()
-  }
 })

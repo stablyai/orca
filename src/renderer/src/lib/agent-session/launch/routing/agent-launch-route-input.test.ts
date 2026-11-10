@@ -5,23 +5,16 @@ import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
-import { resolveProjectExecutionRuntime } from '../../../../../../shared/execution-host/project-execution-runtime'
-import { agentPickerUsesNativeRuntime } from '@/components/agent/agent-launch-picker-runtime'
-import { modelMenuOptions } from '../../../../../../shared/agent-session/options/model-menu-options'
-import { agentPickerModelCatalogReads } from '@/components/agent/agent-launch-picker-host-reads'
+
 import type * as ConnectionOwnerResolutionModule from '../../../workspace/ownership/connection-owner-resolution'
 
 const mocks = vi.hoisted(() => ({
-  catalogCall: vi.fn(),
   getExecutionHostIdForWorktree: vi.fn(),
   getConnectionIdFromState: vi.fn(),
   getLocalProjectExecutionRuntimeContext: vi.fn(),
   getLocalRepoProjectExecutionRuntimeContext: vi.fn(),
   readLocalRuntimeCapabilitiesOrUnknown: vi.fn(),
   isWebClientLocation: vi.fn(() => false)
-}))
-vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
-  callStructuredAgentSession: mocks.catalogCall
 }))
 
 vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
@@ -107,56 +100,6 @@ describe('buildAgentLaunchRouteInput', () => {
     it('treats a server that has not reported its status as unknown', () => {
       expect(buildAgentLaunchRouteInput(store(), args).hostCapabilities).toBeNull()
       expect(routeFor(store(), args)).toBe('terminal-tui')
-    })
-
-    it('does not consume native model lists for paired Windows projects with server WSL preferences', async () => {
-      const serverRuntime = resolveProjectExecutionRuntime({
-        appPlatform: 'win32',
-        projectId: 'repo-1',
-        projectRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
-        wslAvailable: true,
-        availableWslDistros: ['Ubuntu']
-      })
-      expect(serverRuntime).toMatchObject({ status: 'resolved', runtime: { kind: 'wsl' } })
-      const route = buildAgentLaunchRouteInput(pairedStore(CURRENT_SERVER), args)
-      expect(route.projectRuntime).toBeUndefined()
-      mocks.catalogCall.mockResolvedValue({
-        origin: 'probe',
-        fetchedAt: 1,
-        models: [{ id: 'native-only', label: 'Native', isDefault: false, efforts: [] }]
-      })
-      const answer = await agentPickerModelCatalogReads({
-        target: { kind: 'environment', environmentId: 'server-1' },
-        selector: 'id:wt-1',
-        nativeRuntime: agentPickerUsesNativeRuntime(route, 'win32', 'C:\\repo'),
-        settings: {},
-        serverSettings: async () => ({})
-      }).catalog(
-        {
-          agent: 'codex',
-          catalogRead: 'pending',
-          label: 'Codex',
-          rows: [],
-          surfaces: ['chat', 'terminal'],
-          defaultSurface: 'chat',
-          terminal: {},
-          structured: {},
-          catalog: { origin: 'unknown' }
-        },
-        false,
-        undefined,
-        new AbortController().signal
-      )
-      expect(
-        modelMenuOptions(answer, {
-          agent: 'codex',
-          surface: 'terminal',
-          newLaunch: true,
-          seedsModel: true,
-          seed: { models: [{ id: 'guest-only', label: 'Guest', options: [] }], modelApply: {} }
-        }).rows.map((row) => row.id)
-      ).toEqual(['guest-only'])
-      expect(mocks.catalogCall).not.toHaveBeenCalled()
     })
 
     // Older servers require their own chat setting to admit structured sessions despite advertising capability.

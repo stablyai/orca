@@ -72,8 +72,6 @@ export function createTerminalDiscoveryFixture(io: DiscoveryIO) {
       repoId?: string
       executionHostId?: string
       runtime?: { kind: 'wsl'; distro: string; git: 'windows-host' } | { kind: 'windows-host' }
-      unstamped?: boolean
-      deferred?: boolean
     } = {}
   ) {
     Object.defineProperty(process, 'platform', {
@@ -90,12 +88,6 @@ export function createTerminalDiscoveryFixture(io: DiscoveryIO) {
       executionHostId: options.executionHostId ?? 'local'
     }
     const id = `${repo.id}::${path}`
-    const pushTarget = {
-      remoteName: 'contributor',
-      branchName: 'fix',
-      remoteCreated: false,
-      remoteUrl: 'https://example.com/contributor/repo.git'
-    }
     const folder = {
       id: FOLDER_ID,
       folderPath: path,
@@ -110,8 +102,7 @@ export function createTerminalDiscoveryFixture(io: DiscoveryIO) {
     io.rows = [{ path, head: 'abc', branch: 'fix', isBare: false, isMainWorktree: true }]
     const metadata = new Map<string, Partial<WorktreeMeta>>()
     const initialMeta = (): Partial<WorktreeMeta> => ({
-      ...(options.unstamped ? {} : { instanceId: 'fixture-instance' }),
-      ...(options.deferred ? { pushTarget } : {})
+      instanceId: 'fixture-instance'
     })
     const getWorktreeMeta = (id: string) => metadata.get(id) ?? initialMeta()
     const store = {

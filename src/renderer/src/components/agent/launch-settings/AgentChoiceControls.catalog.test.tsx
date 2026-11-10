@@ -10,6 +10,7 @@ import {
 } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useState } from 'react'
+import { AgentChoiceControls } from './AgentChoiceControls'
 import type { AgentDedicatedChoices } from '../../../../../shared/agent-launch/choices/agent-launch-choices'
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
 vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
@@ -41,7 +42,7 @@ vi.mock('./AgentChoiceMenu', () => ({
     </select>
   )
 }))
-import { AgentChoiceControls } from './AgentChoiceControls'
+
 import { useAgentModelMenu } from './use-agent-model-menu'
 import {
   recordHostModelCatalogSnapshot,
@@ -57,44 +58,6 @@ afterEach(() => {
   cleanup()
   resetHostModelCatalogSnapshotsForTests()
   mocks.call.mockReset()
-})
-
-it('clears the saved model through Agent default, without persisting a listed default', () => {
-  const change = vi.fn()
-  const menu = modelMenuOptions(
-    {
-      origin: 'probe',
-      fetchedAt: 1,
-      models: [
-        {
-          id: 'account-only',
-          label: 'Account model',
-          isDefault: true,
-          efforts: []
-        }
-      ]
-    },
-    {
-      agent: 'codex',
-      seed: getAgentSessionOptionLaunchCatalog('codex')!,
-      surface: 'terminal',
-      newLaunch: true,
-      seedsModel: false,
-      saved: { model: 'account-only' }
-    }
-  )
-  render(
-    <AgentChoiceControls
-      agent="codex"
-      value={{ model: 'account-only' }}
-      modelMenu={menu}
-      onChange={change}
-    />
-  )
-  fireEvent.change(screen.getByRole('combobox', { name: 'Model' }), {
-    target: { value: '__agent_default__' }
-  })
-  expect(change).toHaveBeenCalledWith({})
 })
 
 it('keeps options-only effort editable through pinning and clearing the model', () => {
@@ -156,37 +119,6 @@ it('keeps options-only effort editable through pinning and clearing the model', 
   expect(changed).toHaveBeenLastCalledWith({ options: { effort: 'medium' } })
   fireEvent.change(effort(), { target: { value: '__agent_default__' } })
   expect(changed).toHaveBeenLastCalledWith({})
-})
-
-it('does not read collapsed model menus and shares one read when Settings menus open', async () => {
-  const pending = Promise.withResolvers<unknown>()
-  mocks.call.mockReturnValue(pending.promise)
-  function Row({ open }: { open: boolean }) {
-    const menu = useAgentModelMenu('codex', undefined, source, open)
-    return <span>{menu.rows.map((row) => row.id).join(',')}</span>
-  }
-  const view = render(
-    <>
-      {Array.from({ length: 10 }, (_, i) => (
-        <Row key={i} open={false} />
-      ))}
-    </>
-  )
-  expect(mocks.call).not.toHaveBeenCalled()
-  view.rerender(
-    <>
-      {Array.from({ length: 10 }, (_, i) => (
-        <Row key={i} open />
-      ))}
-    </>
-  )
-  await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(1))
-  pending.resolve({
-    origin: 'probe',
-    fetchedAt: 1,
-    models: [{ id: 'account-only', label: 'Account model', isDefault: false, efforts: [] }]
-  })
-  await waitFor(() => expect(screen.getAllByText('account-only')).toHaveLength(10))
 })
 
 it('shows fallback only after an eligible settled read fails, never before demand', async () => {

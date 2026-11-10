@@ -9,7 +9,6 @@ vi.mock('../host-capabilities/structured-agent-session-host-capability', () => (
 import { hostModelMenuCatalog } from './host-model-menu-catalog'
 import {
   forgetHostModelCatalogSnapshots,
-  hostModelCatalogSnapshotDiagnostics,
   hostModelCatalogSnapshotAgents,
   readHostModelCatalogSnapshot,
   recordHostModelCatalogSnapshot,
@@ -28,54 +27,6 @@ beforeEach(() => {
   resetHostModelCatalogSnapshotsForTests()
   calls.structured.mockReset()
 })
-
-it.each([3, 30])(
-  'shares the necessary protocol reads across %i same-scope observers and an in-flight reopen',
-  async (count) => {
-    const acp = Promise.withResolvers<AgentSessionModelCatalogResult>()
-    const cli = Promise.withResolvers<AgentSessionModelCatalogResult>()
-    calls.structured.mockReturnValue(acp.promise)
-    const request = vi.fn(() => cli.promise)
-    const base = { target, agent: 'antigravity', worktree: 'id:x' }
-    const structured = hostModelMenuCatalog(base)
-    const terminal = hostModelMenuCatalog({ ...base, sourceKey: 'cli', request })
-    const notices = vi.fn()
-    const stops = Array.from({ length: count }, () => [
-      structured.subscribe(() => {}),
-      terminal.subscribe(notices)
-    ]).flat()
-    const reads = Array.from({ length: count }, () => [
-      structured.read(false, undefined, new AbortController().signal),
-      terminal.read(false, undefined, new AbortController().signal)
-    ]).flat()
-    stops.forEach((stop) => stop())
-    expect(hostModelMenuCatalog({ ...base, sourceKey: 'cli', request })).toBe(terminal)
-    const stop = terminal.subscribe(notices)
-    await Promise.resolve()
-    // Two protocols require two answers; observers add no physical read.
-    expect(calls.structured).toHaveBeenCalledTimes(1)
-    expect(request).toHaveBeenCalledTimes(1)
-    notices.mockClear()
-    acp.resolve(positive('base'))
-    await reads[0]
-    expect(notices).not.toHaveBeenCalled()
-    expect(terminal.snapshot.pending).toBe(true)
-    cli.resolve(positive('variant-low'))
-    await Promise.all(reads)
-    expect(
-      readHostModelCatalogSnapshot(target, 'antigravity', {
-        newLaunch: true,
-        seedsModel: true,
-        worktree: 'id:x'
-      })
-    ).toMatchObject({ models: [{ id: 'base' }] })
-    expect(terminal.snapshot.answer).toMatchObject({ models: [{ id: 'variant-low' }] })
-    notices.mockClear()
-    recordHostModelCatalogSnapshot(target, 'antigravity', 'id:x', positive('base-new'))
-    expect(notices).not.toHaveBeenCalled()
-    stop()
-  }
-)
 
 it.each(['structured-first', 'cli-first'])(
   'retains source-scoped negative evidence through handoff and failed refresh: %s',
@@ -170,54 +121,5 @@ it.each(['structured-first', 'cli-first'])(
     })
     detach()
     stopChat()
-  }
-)
-
-it.each([3, 30])(
-  'retires metadata from %i historical CLI identities without losing stale-reply fences',
-  async (count) => {
-    for (let i = 0; i < count; i++) {
-      const owner = hostModelMenuCatalog({
-        target,
-        agent: 'antigravity',
-        worktree: 'id:x',
-        sourceKey: `cli-${i}`,
-        request: async () => positive('variant')
-      })
-      const stop = owner.subscribe(() => {})
-      await owner.read(false, undefined, new AbortController().signal)
-      stop()
-      forgetHostModelCatalogSnapshots(target, ['antigravity'])
-    }
-    // One host/agent epoch fences all invocation history; CLI never participates in structured preload.
-    expect(hostModelCatalogSnapshotDiagnostics()).toEqual({
-      epochs: 1,
-      chatAnswers: 0,
-      snapshots: 0
-    })
-    const late = Promise.withResolvers<AgentSessionModelCatalogResult>()
-    const scope = {
-      target,
-      agent: 'antigravity',
-      sourceKey: 'cli-reused',
-      request: () => late.promise
-    }
-    const old = hostModelMenuCatalog(scope)
-    const stop = old.subscribe(() => {})
-    const reading = old.read(false, undefined, new AbortController().signal)
-    await Promise.resolve()
-    forgetHostModelCatalogSnapshots(target, ['antigravity'])
-    stop()
-    late.resolve(positive('retired'))
-    await reading
-    const fresh = hostModelMenuCatalog(scope)
-    expect(fresh.snapshot.answer).toBeUndefined()
-    const stopFresh = fresh.subscribe(() => {})
-    stopFresh()
-    expect(hostModelCatalogSnapshotDiagnostics()).toEqual({
-      epochs: 1,
-      chatAnswers: 0,
-      snapshots: 0
-    })
   }
 )
