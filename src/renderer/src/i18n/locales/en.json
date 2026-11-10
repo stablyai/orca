@@ -14434,7 +14434,7 @@
             "invalid": "Orca Cloud rejected that request. Check the fields and try again.",
             "rateLimitedFor": "Too many requests. Try again in {{seconds}} seconds.",
             "rateLimited": "Too many requests. Try again in a minute.",
-            "network": "Couldn’t reach Orca Cloud, so nothing was changed. Check your connection and try again.",
+            "network": "Couldn’t reach Orca Cloud. Check your connection and try again.",
             "invalidResponse": "Orca Cloud sent an answer this version of Orca does not understand. Update Orca and try again.",
             "server": "Orca Cloud had a problem and nothing was changed. Try again in a moment."
           },
@@ -14614,7 +14614,7 @@
             "manual": "Manual"
           },
           "runError": {
-            "startFailed": "The workspace couldn’t start. Nothing was charged.",
+            "startFailed": "The workspace couldn’t start, so nothing was charged.",
             "workspaceLost": "The workspace went to sleep or was deleted before the run finished.",
             "postFailed": "The run finished, but Orca couldn’t post the results.",
             "queueExpired": "The run waited too long to start and was skipped.",

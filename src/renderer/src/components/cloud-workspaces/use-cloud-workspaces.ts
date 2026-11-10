@@ -3,6 +3,7 @@ import type {
   CloudWorkspace,
   CloudWorkspaceListQuery
 } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
+import { availabilityRetryDelay } from '@/lib/availability-retry'
 import { installWindowVisibilityTimeoutPoller } from '@/lib/window-visibility-timeout-poller'
 
 /** Presence is live; the list re-reads on this beat while visible (and on focus). */
@@ -27,19 +28,29 @@ function setAvailable(value: boolean): void {
   }
 }
 
-const AVAILABILITY_RETRY_MS = 5_000
+let failedProbes = 0
+let retryTimer: ReturnType<typeof setTimeout> | null = null
 
 export function cloudWorkspacesAvailable(): Promise<boolean> {
   availability ??= (window.api.cloudWorkspaces?.available() ?? Promise.resolve(false)).then(
     (value) => {
+      failedProbes = 0
       setAvailable(value)
       return value
     },
     () => {
-      // A failed probe is not an answer: forget it and ask again shortly, so one transient
-      // error doesn't hide Orca Cloud until the app restarts.
+      // A failed probe is not an answer: forget it and ask again with capped backoff, so one
+      // transient error doesn't hide Orca Cloud until restart. Stop while nobody is listening;
+      // the next subscriber asks again.
       availability = null
-      setTimeout(() => void cloudWorkspacesAvailable(), AVAILABILITY_RETRY_MS)
+      if (!retryTimer) {
+        retryTimer = setTimeout(() => {
+          retryTimer = null
+          if (availabilityListeners.size > 0) {
+            void cloudWorkspacesAvailable()
+          }
+        }, availabilityRetryDelay(failedProbes++))
+      }
       return false
     }
   )

@@ -9,7 +9,11 @@ import type {
   RoutineRun,
   RoutineRunPage
 } from '../../../../../shared/cloud-api/cloud-api-types'
-import { cloudApiErrorCopy, routineRunErrorCopy, routineRunTriggerLabel } from './cloud-api-copy'
+import {
+  cloudApiErrorCopy,
+  describeRoutineRunError,
+  routineRunTriggerLabel
+} from './cloud-api-copy'
 import { formatAbsoluteTime, formatRelativeFromNow, formatRunDuration } from './cloud-api-format'
 import { CloudApiErrorNotice, RoutineRunStatusPill } from './cloud-api-parts'
 import { isActiveRunStatus } from './routine-run-status'
@@ -309,7 +313,7 @@ function RunRow({
       {run.result?.summary ? (
         <p className="line-clamp-2 text-xs text-muted-foreground">{run.result.summary}</p>
       ) : null}
-      {run.error ? <InlineError title={routineRunErrorCopy(run.error, t)} /> : null}
+      {run.error ? <RunFailure error={run.error} /> : null}
     </li>
   )
 }
@@ -333,4 +337,11 @@ function RunAction({
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
   )
+}
+
+/** Why a run didn't succeed: one quiet line under the row; red icon only for real failures. */
+function RunFailure({ error }: { error: string }): React.JSX.Element {
+  const t = useTranslate()
+  const { text, tone } = describeRoutineRunError(error, t)
+  return <InlineError layout="line" tone={tone} title={text} />
 }

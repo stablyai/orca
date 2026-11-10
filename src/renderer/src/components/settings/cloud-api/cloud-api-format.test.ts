@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { CLOUD_API_SCOPES } from '../../../../../shared/cloud-api/cloud-api-types'
-import { cloudApiErrorCopy, routineRunErrorCopy, routineRunTone } from './cloud-api-copy'
+import {
+  cloudApiErrorCopy,
+  describeRoutineRunError,
+  routineRunErrorCopy,
+  routineRunTone
+} from './cloud-api-copy'
 import {
   describeRoutineTrigger,
   formatCountdown,
@@ -87,7 +92,7 @@ describe('copy', () => {
 describe('run failure copy', () => {
   it('maps control-plane codes (with detail) to plain words and never shows the code', () => {
     expect(routineRunErrorCopy('start_failed:clone_failed')).toBe(
-      'The workspace couldn’t start. Nothing was charged.'
+      'The workspace couldn’t start, so nothing was charged.'
     )
     expect(routineRunErrorCopy('workspace_lost:suspended')).toBe(
       'The workspace went to sleep or was deleted before the run finished.'
@@ -103,5 +108,22 @@ describe('run failure copy', () => {
       'The routine changed while this run was queued.'
     )
     expect(routineRunErrorCopy('totally_new:detail')).toBe('The run failed.')
+  })
+})
+
+describe('run failure tone', () => {
+  it('keeps red for real failures and neutral for expected outcomes', () => {
+    const tone = (code: string) => describeRoutineRunError(code).tone
+    expect(['start_failed', 'post_failed', 'agent_interrupted', 'mystery'].map(tone)).toEqual([
+      'error',
+      'error',
+      'error',
+      'error'
+    ])
+    expect(['queue_expired', 'routine_changed', 'workspace_lost:suspended'].map(tone)).toEqual([
+      'neutral',
+      'neutral',
+      'neutral'
+    ])
   })
 })
