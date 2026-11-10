@@ -181,14 +181,17 @@ export function usePluginFrameEntry(
       load()
     }
     const unsubscribe = pluginsApi.onChanged ? pluginsApi.onChanged(load) : null
-    // The host went away: draw the panel again, on the host if it is back, else here.
+    // The host went away: draw the panel again, on the host if it is back, else here. Its bind may
+    // still be in flight (main's notice can beat the bind answer); the new read makes it stale.
     const unsubscribeClosed = pluginsApi.onRemotePanelClosed?.((sessionToken) => {
-      if (cancelled || sessionToken !== boundToken) {
+      if (cancelled || !binds.has(sessionToken)) {
         return
       }
       // Main already ended that binding.
       binds.delete(sessionToken)
-      boundToken = null
+      if (boundToken === sessionToken) {
+        boundToken = null
+      }
       currentHtml = null
       setEntry({ status: 'loading' })
       load()

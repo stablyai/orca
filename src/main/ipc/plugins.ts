@@ -158,11 +158,13 @@ export function registerPluginHandlers(
   ipcMain.handle(
     'plugins:panelAction',
     async (event, args: unknown): Promise<PluginHostCallOutcome> => {
-      await pluginService.whenReady()
+      // Why first: a call made while the panel runs on a paired host goes to that host. Routing
+      // after the refresh wait would run it here if the panel left the host meanwhile.
       const forwarded = remotePanels.forward(event.sender.id, args)
       if (forwarded) {
         return forwarded
       }
+      await pluginService.whenReady()
       return pluginService.panels.execute(rendererPanelOwner(event.sender.id), args, {
         desktop: true,
         callerWebContentsId: event.sender.id
