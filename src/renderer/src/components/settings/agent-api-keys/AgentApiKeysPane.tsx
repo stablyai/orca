@@ -43,7 +43,7 @@ import {
   type AgentApiKeysNoticeState
 } from './AgentApiKeyCloudLine'
 import { AgentApiKeysImportPanel, useAgentApiKeysImport } from './AgentApiKeysImportPanel'
-import { isMacPlatform, type ImportScanState } from './agent-api-keys-import'
+import type { ImportScanState } from './agent-api-keys-import'
 
 type Editing = { agent: TuiAgent; keyId: string | null } | null
 
@@ -191,7 +191,7 @@ export function AgentApiKeysPane({
     const error = await model.remove(apiKey.id, fromAccount)
     setFailure(error)
     if (!error && asked && !fromAccount) {
-      setNotice({ kind: 'kept', envName: apiKey.envName })
+      setNotice({ kind: 'kept' })
     }
   }
   const [extraAgents, setExtraAgents] = useState<TuiAgent[]>(
@@ -225,8 +225,8 @@ export function AgentApiKeysPane({
           <ShieldCheck className="mt-0.5 size-4 shrink-0" />
           <p>
             {t(
-              'auto.components.settings.agentApiKeys.promise',
-              'Keys are sealed in your OS keychain. When an agent starts, here, on an SSH host or on a paired machine, Orca passes it the key for that run only and never writes it to that machine.'
+              'agentApiKeys.promiseAccount',
+              'Keys are sealed on this computer. When you’re signed in to Orca, they’re also saved in your Orca account for cloud workspaces. On SSH hosts and paired machines, Orca passes a key for that run only and never writes it there.'
             )}
           </p>
         </div>
@@ -350,9 +350,7 @@ export function AgentApiKeysPane({
         {model.scanThisComputer && !importer.scan ? (
           <Button variant="outline" size="sm" disabled={!canEdit} onClick={importer.start}>
             <Download />
-            {isMacPlatform()
-              ? t('agentApiKeys.import.open', 'Import from this Mac')
-              : t('agentApiKeys.import.openComputer', 'Import from this computer')}
+            {t('agentApiKeys.import.openComputer', 'Import from this computer')}
           </Button>
         ) : null}
         {otherAgents.length > 0 ? (

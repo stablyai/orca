@@ -234,15 +234,23 @@ export const importScanning = defineFixture({
   )
 })
 
-/** An edit that didn't reach the account: the account still holds the earlier value. */
+const STALE: AgentApiKeysState = {
+  ...SIGNED_IN,
+  cloud: { signedIn: true, synced: [], managed: ['synced'] }
+}
+
+/** The account holds an older copy of a key this computer saved there. */
 export const cloudStale = defineFixture({
+  width: 720,
+  render: () => <AgentApiKeysPane model={model(STALE)} hosts={HOSTS} />
+})
+
+/** An edit saved here, but the account write failed: one line, with retry. */
+export const cloudStaleFailed = defineFixture({
   width: 720,
   render: () => (
     <AgentApiKeysPane
-      model={model(
-        { ...SIGNED_IN, cloud: { signedIn: true, synced: [], managed: ['synced'] } },
-        { cloudFailures: { synced: 'timeout' } }
-      )}
+      model={model(STALE, { cloudFailures: { synced: 'timeout' } })}
       hosts={HOSTS}
     />
   )

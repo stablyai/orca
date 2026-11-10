@@ -35,8 +35,35 @@ export function AgentApiKeyCloudLine({
     await onSaveToAccount()
     setSaving(false)
   }
+  // A failed account write replaces the status line: one line says what happened and offers retry.
+  if (failure && canSave && (state === 'local' || state === 'stale')) {
+    const transport = failure === 'unavailable' || failure === 'timeout' || failure === 'unknown'
+    return (
+      <div className="pl-[22px]">
+        <InlineError
+          density="compact"
+          title={
+            state === 'stale'
+              ? t(
+                  'agentApiKeys.cloud.updateFailed',
+                  'Saved on this computer. Couldn’t update your Orca account, so cloud workspaces still use the older copy.'
+                )
+              : t(
+                  'agentApiKeys.cloud.saveFailedLocal',
+                  'Saved on this computer. Couldn’t save it to your Orca account.'
+                )
+          }
+          // Transport copy says "Nothing was changed", which isn't true after a local save.
+          detail={transport ? undefined : cloudSecretsErrorCopy(failure, t)}
+          retryLabel={t('agentApiKeys.cloud.retry', 'Try again')}
+          retrying={saving}
+          onRetry={() => void save()}
+        />
+      </div>
+    )
+  }
   return (
-    <div className="space-y-1 pl-[22px]">
+    <div className="pl-[22px]">
       <div className="flex min-h-6 items-center gap-2 text-xs text-muted-foreground">
         {state === 'synced' ? (
           <>
@@ -59,8 +86,8 @@ export function AgentApiKeyCloudLine({
                   )
                 : state === 'stale'
                   ? t(
-                      'agentApiKeys.cloud.stale',
-                      'Your Orca account has an earlier copy · cloud workspaces still use it'
+                      'agentApiKeys.cloud.staleCopy',
+                      'Your Orca account has an older copy. Cloud workspaces still use it.'
                     )
                   : t('agentApiKeys.cloud.local', 'Only on this computer')}
             </span>
@@ -72,37 +99,26 @@ export function AgentApiKeyCloudLine({
                 className="shrink-0 aria-disabled:pointer-events-none"
                 aria-disabled={saving || undefined}
                 aria-busy={saving || undefined}
-                aria-label={t(
-                  'agentApiKeys.cloud.saveLabel',
-                  'Save {{name}} to your Orca account',
-                  {
-                    name: envName
-                  }
-                )}
+                aria-label={
+                  state === 'stale'
+                    ? t('agentApiKeys.cloud.updateLabel', 'Update {{name}} in your Orca account', {
+                        name: envName
+                      })
+                    : t('agentApiKeys.cloud.saveLabel', 'Save {{name}} to your Orca account', {
+                        name: envName
+                      })
+                }
                 onClick={() => void save()}
               >
                 {saving ? <Loader2 className="motion-safe:animate-spin" /> : null}
-                {t('agentApiKeys.cloud.save', 'Save to your Orca account')}
+                {state === 'stale'
+                  ? t('agentApiKeys.cloud.update', 'Update your Orca account')
+                  : t('agentApiKeys.cloud.save', 'Save to your Orca account')}
               </Button>
             ) : null}
           </>
         )}
       </div>
-      {failure && (state === 'local' || state === 'stale') ? (
-        <InlineError
-          layout="line"
-          title={t(
-            'agentApiKeys.cloud.saveFailed',
-            'Saved on this computer, but not in your Orca account.'
-          )}
-          detail={
-            // The generic transport copy says "Nothing was changed", which isn't true here.
-            failure === 'unavailable' || failure === 'timeout' || failure === 'unknown'
-              ? t('agentApiKeys.cloud.saveFailedRetry', 'Couldn’t reach Orca Cloud. Try again.')
-              : cloudSecretsErrorCopy(failure, t)
-          }
-        />
-      ) : null}
     </div>
   )
 }
@@ -134,7 +150,7 @@ export function AgentApiKeyRemoveFromAccountConfirm({
       </p>
       <div className="flex flex-wrap items-center justify-end gap-1.5">
         <Button variant="ghost" size="xs" onClick={onCancel}>
-          {t('auto.components.settings.agentApiKeys.keep', 'Keep')}
+          {t('agentApiKeys.remove.cancel', 'Cancel')}
         </Button>
         <Button variant="outline" size="xs" onClick={() => onRemove(false)}>
           {t('agentApiKeys.remove.thisComputerOnly', 'Remove from this computer only')}
@@ -147,10 +163,7 @@ export function AgentApiKeyRemoveFromAccountConfirm({
   )
 }
 
-export type AgentApiKeysNoticeState =
-  | { kind: 'kept'; envName: string }
-  | { kind: 'imported'; count: number }
-  | null
+export type AgentApiKeysNoticeState = { kind: 'kept' } | { kind: 'imported'; count: number } | null
 
 /** One line above the list: the last removal or import, or what failed. */
 export function AgentApiKeysNotice({
@@ -170,11 +183,9 @@ export function AgentApiKeysNotice({
         tone="neutral"
         density="compact"
         title={t(
-          'agentApiKeys.remove.kept',
-          'Removed from this computer. {{name}} is still in your Orca account.',
-          { name: notice.envName }
+          'agentApiKeys.remove.stillInAccount',
+          'Still in your Orca account. Manage it in Settings → Orca Cloud → Cloud secrets.'
         )}
-        detail={t('agentApiKeys.remove.keptDetail', 'Manage it in Settings › Cloud secrets.')}
       />
     )
   }

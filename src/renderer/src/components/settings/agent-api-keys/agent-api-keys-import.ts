@@ -16,11 +16,6 @@ export function defaultImportSelection(scan: AgentApiKeysScanResult): string[] {
   return scan.keys.filter((key) => !key.alreadySaved).map((key) => key.name)
 }
 
-/** "this Mac" on macOS, "this computer" elsewhere. */
-export function isMacPlatform(userAgent: string = globalThis.navigator?.userAgent ?? ''): boolean {
-  return /Mac/i.test(userAgent)
-}
-
 export function importSourceLabel(source: LocalAgentKeySource, t: Translate): string {
   switch (source) {
     case 'opencode-auth':

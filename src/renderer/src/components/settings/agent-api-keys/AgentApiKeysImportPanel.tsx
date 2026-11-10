@@ -13,7 +13,6 @@ import {
   defaultImportSelection,
   importOutcome,
   importSourceLabel,
-  isMacPlatform,
   signInProviderLabel,
   type ImportScanState
 } from './agent-api-keys-import'
@@ -71,9 +70,6 @@ export function AgentApiKeysImportPanel({
   onClose: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const place = isMacPlatform()
-    ? t('agentApiKeys.import.thisMac', 'this Mac')
-    : t('agentApiKeys.import.thisComputer', 'this computer')
   const [selected, setSelected] = useState<string[] | null>(null)
   const [importing, setImporting] = useState(false)
   const [failed, setFailed] = useState(false)
@@ -99,7 +95,7 @@ export function AgentApiKeysImportPanel({
     >
       <div className="space-y-1">
         <h4 id="agent-api-keys-import-title" className="text-sm font-medium">
-          {t('agentApiKeys.import.title', 'Keys found on {{place}}', { place })}
+          {t('agentApiKeys.import.title', 'Keys found on this computer')}
         </h4>
         <p className="text-xs text-muted-foreground">
           {signedIn
@@ -123,9 +119,7 @@ export function AgentApiKeysImportPanel({
       ) : scan.kind === 'failed' ? (
         <InlineError
           density="compact"
-          title={t('agentApiKeys.import.scanFailed', 'Couldn’t look for keys on {{place}}.', {
-            place
-          })}
+          title={t('agentApiKeys.import.scanFailed', 'Couldn’t look for keys on this computer.')}
           retryLabel={t('agentApiKeys.import.retry', 'Try again')}
           onRetry={onRetry}
         />
@@ -190,7 +184,7 @@ export function AgentApiKeysImportPanel({
                   <span className="min-w-0 flex-1">
                     {t(
                       'agentApiKeys.import.signIn',
-                      '{{agent}} is signed in with {{provider}}. Sign in once in Settings › Agent accounts.',
+                      '{{agent}} is signed in with {{provider}}. Sign in once in Settings → Agent accounts.',
                       {
                         agent: getAgentLabel(signIn.agent),
                         provider: signInProviderLabel(signIn)

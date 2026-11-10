@@ -14288,7 +14288,6 @@
           "confirmRemove": "Remove key",
           "edit": "Edit key",
           "remove": "Remove key",
-          "promise": "Keys are sealed in your OS keychain. When an agent starts, here, on an SSH host or on a paired machine, Orca passes it the key for that run only and never writes it to that machine.",
           "unavailableTitle": "Orca won't store API keys on this computer",
           "noKey": "No key. The agent uses its own sign-in.",
           "addKey": "Add key",
@@ -27390,44 +27389,45 @@
       "local": "Only on this computer",
       "saveLabel": "Save {{name}} to your Orca account",
       "save": "Save to your Orca account",
-      "saveFailed": "Saved on this computer, but not in your Orca account.",
-      "stale": "Your Orca account has an earlier copy · cloud workspaces still use it",
-      "saveFailedRetry": "Couldn’t reach Orca Cloud. Try again."
+      "updateFailed": "Saved on this computer. Couldn’t update your Orca account, so cloud workspaces still use the older copy.",
+      "saveFailedLocal": "Saved on this computer. Couldn’t save it to your Orca account.",
+      "retry": "Try again",
+      "staleCopy": "Your Orca account has an older copy. Cloud workspaces still use it.",
+      "updateLabel": "Update {{name}} in your Orca account",
+      "update": "Update your Orca account"
     },
     "remove": {
       "confirmLabel": "Remove {{name}}",
       "fromAccountQuestion": "Also remove it from your Orca account? Cloud workspaces will stop using it.",
       "thisComputerOnly": "Remove from this computer only",
       "both": "Remove from both",
-      "kept": "Removed from this computer. {{name}} is still in your Orca account.",
-      "keptDetail": "Manage it in Settings › Cloud secrets."
+      "cancel": "Cancel",
+      "stillInAccount": "Still in your Orca account. Manage it in Settings → Orca Cloud → Cloud secrets."
     },
     "import": {
-      "title": "Keys found on {{place}}",
+      "title": "Keys found on this computer",
       "detailSignedIn": "Orca shows names only. Imported keys are sealed on this computer, used on every host, and saved in your Orca account.",
       "detailSignedOut": "Orca shows names only. Imported keys are sealed on this computer and used on every host.",
       "scanning": "Looking for keys…",
-      "scanFailed": "Couldn’t look for keys on {{place}}.",
+      "scanFailed": "Couldn’t look for keys on this computer.",
       "retry": "Try again",
       "empty": "No agent API keys found in your shell environment, OpenCode or ~/.gemini/.env.",
       "alreadySaved": "Already saved for {{agent}}",
-      "signIn": "{{agent}} is signed in with {{provider}}. Sign in once in Settings › Agent accounts.",
+      "signIn": "{{agent}} is signed in with {{provider}}. Sign in once in Settings → Agent accounts.",
       "failed": "Couldn’t import. Nothing was changed.",
       "cancel": "Cancel",
       "submitOne": "Import 1 key",
       "submit": "Import {{count}} keys",
-      "thisMac": "this Mac",
-      "thisComputer": "this computer",
       "doneOne": "Imported 1 key.",
       "done": "Imported {{count}} keys.",
       "cloudFailed": "{{name}} is saved on this computer, but not in your Orca account.",
-      "open": "Import from this Mac",
       "openComputer": "Import from this computer",
       "source": {
         "opencode": "OpenCode sign-in file",
         "geminiEnv": "~/.gemini/.env",
         "shell": "Shell environment"
       }
-    }
+    },
+    "promiseAccount": "Keys are sealed on this computer. When you’re signed in to Orca, they’re also saved in your Orca account for cloud workspaces. On SSH hosts and paired machines, Orca passes a key for that run only and never writes it there."
   }
 }
