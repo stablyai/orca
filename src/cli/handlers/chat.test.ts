@@ -42,20 +42,31 @@ function item(body: unknown) {
 function fakeClient(
   responses: unknown[],
   capabilities: string[] = [AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY]
-) {
+): RuntimeClient & { call: ReturnType<typeof vi.fn> } {
+  const client = new RuntimeClient('/tmp/orca-chat-test', 60_000, null, null)
   const call = vi.fn()
   for (const response of responses) {
     call.mockResolvedValueOnce(response)
   }
-  return {
-    call,
-    getCliStatus: vi.fn(async () => ({
-      result: { runtime: { reachable: true, runtimeId: 'runtime-1', capabilities } }
-    }))
-  }
+  vi.spyOn(client, 'call').mockImplementation(call)
+  vi.spyOn(client, 'getCliStatus').mockResolvedValue({
+    id: 'status',
+    ok: true,
+    result: {
+      app: { running: true, pid: 123 },
+      runtime: { state: 'ready', reachable: true, runtimeId: 'runtime-1', capabilities },
+      graph: { state: 'ready' }
+    },
+    _meta: { runtimeId: 'runtime-1' }
+  })
+  return Object.assign(client, { call })
 }
 
-async function run(command: string, flags: Record<string, string | boolean>, client: unknown) {
+async function run(
+  command: string,
+  flags: Record<string, string | boolean>,
+  client: RuntimeClient
+) {
   const logs: string[] = []
   const spy = vi.spyOn(console, 'log').mockImplementation((line: string) => logs.push(line))
   try {
@@ -64,14 +75,17 @@ async function run(command: string, flags: Record<string, string | boolean>, cli
       client,
       cwd: '/tmp',
       json: true
-    } as never)
+    })
   } finally {
     spy.mockRestore()
   }
   return JSON.parse(logs.join('\n')).result
 }
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
 
 describe('chat send', () => {
   it('sends a host-valid message fenced to the chat it read, queued while the agent works', async () => {
@@ -120,10 +134,7 @@ describe('chat send', () => {
   })
 
   it('with --wait, waits for its queued message to run and returns that turn', async () => {
-    vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: () => void) => {
-      fn()
-      return 0
-    }) as never)
+    vi.useFakeTimers()
     const client = fakeClient([
       historyPage([], 7, { working: true }),
       ok({
@@ -151,11 +162,13 @@ describe('chat send', () => {
         item({ kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'All pass' }] })
       ])
     ])
-    const result = await run(
+    const pending = run(
       'chat send',
       { session: SESSION, text: 'Run the tests', wait: true },
       client
     )
+    await vi.advanceTimersByTimeAsync(5_000)
+    const result = await pending
     expect(client.call).toHaveBeenCalledTimes(6)
     expect(result).toMatchObject({
       delivery: 'queued',
