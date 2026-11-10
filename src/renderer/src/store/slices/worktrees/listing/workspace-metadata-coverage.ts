@@ -102,7 +102,10 @@ export function noteWorkspaceMetadataRecord(
   return { replayed: false, gap }
 }
 
-/** After a gap, every listed projection of the producer must be listed again at or past the last seq. */
+/**
+ * After a gap, every listed projection of the producer must be listed again at or past the last seq;
+ * the live projections replace all earlier ones.
+ */
 export function requireWorkspaceMetadataCoverage(
   key: string,
   projections: Iterable<{ repoId: string; hostId: ExecutionHostId }>
@@ -111,18 +114,17 @@ export function requireWorkspaceMetadataCoverage(
   if (!producer) {
     return
   }
-  for (const { repoId, hostId } of projections) {
-    producer.projections.set(projectionKey(repoId, hostId), {
-      repoId,
-      hostId,
-      latest: producer.lastSeq
-    })
-  }
+  producer.projections = new Map(
+    [...projections].map(({ repoId, hostId }) => [
+      projectionKey(repoId, hostId),
+      { repoId, hostId, latest: producer.lastSeq }
+    ])
+  )
 }
 
 /**
  * Where a listing stands against the newest record that touched its projection. `stale` read before
- * that record; `unstamped` comes from a path or host that doesn't say; `unknown` has nothing to check.
+ * that record; `unstamped` comes from a path, host or producer run that can't say; `unknown` has nothing to check.
  */
 export function workspaceMetadataListingCoverage(
   key: string,
@@ -135,11 +137,11 @@ export function workspaceMetadataListingCoverage(
   if (!producer || !projection) {
     return 'unknown'
   }
-  if (!stamp) {
+  // Another epoch's stamp can't be ordered against this one's records (a restart either way).
+  if (!stamp || stamp.epoch !== producer.epoch) {
     return 'unstamped'
   }
-  // A different epoch read after a restart, so it includes everything the old epoch wrote.
-  return stamp.epoch !== producer.epoch || stamp.seq >= projection.latest ? 'covered' : 'stale'
+  return stamp.seq >= projection.latest ? 'covered' : 'stale'
 }
 
 /**

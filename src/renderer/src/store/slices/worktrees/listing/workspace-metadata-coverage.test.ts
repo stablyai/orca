@@ -30,16 +30,23 @@ describe('workspace metadata listing coverage', () => {
     expect(
       workspaceMetadataListingCoverage('local', 'repo-b', 'local', { epoch: 'gap', seq: 0 })
     ).toBe('unknown')
+
+    // A later gap after repo-b was removed forgets it.
+    noteWorkspaceMetadataRecord('local', 'gap', 5, 'repo-a', 'local', listed)
+    requireWorkspaceMetadataCoverage('local', [{ repoId: 'repo-a', hostId: 'local' }])
+    expect(
+      workspaceMetadataListingCoverage('local', 'repo-b', 'ssh:box', { epoch: 'gap', seq: 5 })
+    ).toBe('unknown')
   })
 
-  it("a restarted producer's listing already includes what it wrote before", () => {
+  it("another producer run's listing keeps titles without claiming to cover them", () => {
     noteWorkspaceMetadataRecord('env:e1:1:1', 'before', 9, 'repo-a', 'runtime:e1', listed)
     expect(
       workspaceMetadataListingCoverage('env:e1:1:1', 'repo-a', 'runtime:e1', {
         epoch: 'after',
         seq: 1
       })
-    ).toBe('covered')
+    ).toBe('unstamped')
   })
 })
 
