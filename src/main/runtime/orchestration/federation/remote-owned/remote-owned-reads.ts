@@ -120,7 +120,8 @@ type WorkerListPage = {
 
 /**
  * Workers paired servers run for the listed Runs join the first page after this Orca's own, newest
- * first and as each server last reported them; no server is asked. Every page's `total` counts
+ * first, at most `maxRows` of them and as each server last reported them; no server is asked. So
+ * the first page can hold up to twice its limit, and nothing is pushed past it. Every page's `total` counts
  * them. Later pages follow this Orca's own cursor, and a terminal-state filter leaves them out,
  * since only their server knows their terminals.
  */
