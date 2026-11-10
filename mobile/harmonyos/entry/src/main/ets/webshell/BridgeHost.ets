@@ -255,7 +255,7 @@ export class BridgeHost {
 
   setTerminalRailClaimSink(sink: (claim: TerminalRailClaim | null) => void): void { this.railClaimSink = sink; }
   setTerminalRailFocus(focused: boolean): void { this.railFocused = focused; }
-  hasTerminalRail(): boolean { return this.routeGrants(this.entryPathname).includes('terminalKeyRail'); }
+  hasTerminalRail(): boolean { return this.routeGrants(this.documentHostAreaPath() || this.entryPathname).includes('terminalKeyRail'); }
 
   private isTerminalRailRoute(path: string): boolean {
     return !this.overlayNavigation && BridgeHost.routeMatches('/h/[hostId]/session/[worktreeId]', path);
@@ -524,8 +524,14 @@ export class BridgeHost {
   }
 
   layoutChangesRouteView(wide: boolean): boolean {
-    return wide !== this.wideLayout && !this.desktopListBack
-      && this.hostAreaAvailable(wide) !== this.hostAreaAvailable(this.wideLayout);
+    return wide !== this.wideLayout && (this.desktopListBack ? this.hostAreaAvailable(true)
+      : this.hostAreaAvailable(wide) !== this.hostAreaAvailable(this.wideLayout));
+  }
+
+  private documentHostAreaPath(): string {
+    let root = `/h/${this.meta.id}`;
+    return (this.entryPathname === root || (this.desktopListBack && this.wideLayout))
+      && this.hostAreaAvailable(this.wideLayout) ? root : '';
   }
 
   private hostAreaAvailable(wide: boolean): boolean {
@@ -793,7 +799,7 @@ export class BridgeHost {
       return;
     }
     let served = this.routeBlock(pathname) === '';
-    if (navigate && pathname !== this.routePathname && (!served || !this.ownsHostArea(this.entryPathname))) {
+    if (navigate && pathname !== this.routePathname && (!served || !this.documentHostAreaPath())) {
       this.shellNavigation?.(pathname, params, replace);
       return;
     }
@@ -931,7 +937,7 @@ export class BridgeHost {
     let key: string = msg['key'];
     let valueValue: ESObject = msg['value'];
     let value: string | null = typeof valueValue === 'string' ? valueValue : null;
-    let hostArea = this.ownsHostArea(this.entryPathname);
+    let hostArea = this.documentHostAreaPath() !== '';
     if (typeof key !== 'string'
       || key.length === 0
       || key.length > PAGE_STORAGE_MAX_KEY_CHARS
@@ -1202,8 +1208,7 @@ export class BridgeHost {
       this.sendLocalNativeError(id, 'native_verb_failed', `${method} could not be served on this device`);
       return;
     }
-    let granted = this.ownsHostArea(this.entryPathname);
-    if (!granted) {
+    if (!this.documentHostAreaPath()) {
       this.sendLocalNativeError(id, 'native_verb_ungranted', 'the page was not granted native.storage.read');
       return;
     }
@@ -1328,9 +1333,9 @@ export class BridgeHost {
   }
 
   private sendInit(refreshTerminalShortcuts: boolean = false): void {
-    // A desktop document can show a session without changing its entry route.
-    let ownsHostArea = this.ownsHostArea(this.entryPathname);
-    let grants = this.routeGrants(ownsHostArea ? this.entryPathname : this.routePathname);
+    let hostAreaPath = this.documentHostAreaPath();
+    let ownsHostArea = hostAreaPath !== '';
+    let grants = this.routeGrants(hostAreaPath || this.routePathname);
     let pageRoutes: string[] = [];
     let pageRouteGrants: PageRouteGrant[] = [];
     let hostRoot = `/h/${this.meta.id}`;
@@ -1357,8 +1362,10 @@ export class BridgeHost {
       native: grants
     };
     let hostParams: Record<string, string> = this.requestedOpen ? { 'open': this.requestedOpen } : {};
-    let route: BridgeRouteWire = { pathname: ownsHostArea ? this.entryPathname : this.routePathname,
-      params: ownsHostArea ? hostParams : this.routeParams };
+    // A wide standalone session owns its sidebar but starts at the session URL.
+    let startsAtDesktop = ownsHostArea && this.entryPathname === hostRoot;
+    let route: BridgeRouteWire = { pathname: startsAtDesktop ? hostRoot : this.routePathname,
+      params: startsAtDesktop ? hostParams : this.routeParams };
     let hostValue: BridgeInitHostWire = {
       id: this.meta.id,
       name: this.meta.name,

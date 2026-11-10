@@ -118,6 +118,50 @@ test('a standalone session stores its exact workspace key without accepting a pr
   client.close()
 })
 
+test('a standalone session can show its desktop sidebar when expanded and return to its native list', async (t) => {
+  const root = `/h/${hostId}`
+  const pathname = `${root}/session/tree`
+  const { bridge, client, view } = await bridgeSession(['navigate', 'storage'], pathname)
+  t.after(() => {
+    bridge.dispose()
+    client.close()
+  })
+  bridge.setDesktopListBack()
+  assert.equal(bridge.layoutChangesRouteView(true), true)
+  bridge.setWideLayout(true)
+  const siblingKey = `orca:nativeChatTabs:${hostId}:another-workspace`
+  const foreignKey = 'orca:nativeChatTabs:other-host:tree'
+  const writes = new Map()
+  bridge.setStorage({
+    entries: () => new Map(),
+    write: (key, value) => writes.set(key, value)
+  })
+  const backs = []
+  bridge.setNavigation(
+    (home) => backs.push(home),
+    () => {}
+  )
+  post(bridge, { type: 'ready' })
+  const init = view.frames.find((frame) => frame.type === 'init')
+  assert.equal(init.ownsHostArea, true)
+  assert.equal(init.route.pathname, pathname)
+  assert.deepEqual(init.pageRoutes, ['/h/[hostId]/session/[worktreeId]'])
+  for (const key of [siblingKey, foreignKey]) {
+    post(bridge, { type: 'notify', name: 'storage', key, value: '{"tab":"chat"}' })
+    post(bridge, { type: 'request', id: key, method: 'native.storage.read', params: { key } })
+  }
+  assert.deepEqual([...writes], [[siblingKey, '{"tab":"chat"}']])
+  assert.deepEqual(view.frames.find((frame) => frame.id === siblingKey).payload.result, {
+    value: '{"tab":"chat"}'
+  })
+  assert.equal(
+    view.frames.find((frame) => frame.id === foreignKey).error.code,
+    'native_verb_params'
+  )
+  post(bridge, { type: 'notify', name: 'navigate', href: root })
+  assert.deepEqual(backs, [false])
+})
+
 test('large multilingual desktop replies reach the page in bounded reconstructable parts', async () => {
   const { bridge, client, view, sent, receiveText } = await bridgeSession()
   post(bridge, { type: 'request', id: 'large', method: 'git.diff', params: {} })
