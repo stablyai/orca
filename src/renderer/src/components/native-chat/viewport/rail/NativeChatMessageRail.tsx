@@ -218,7 +218,7 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
     >
       {expanded ? (
         <span className="text-xs font-medium">
-          {t('components.native-chat.railLabel', 'Your messages')}
+          {t('components.native-chat.railLabel', 'Chat history')}
         </span>
       ) : null}
       <Tooltip>
@@ -276,7 +276,7 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
             id={listId}
             role="toolbar"
             data-native-chat-rail
-            aria-label={t('components.native-chat.railLabel', 'Your messages')}
+            aria-label={t('components.native-chat.railLabel', 'Chat history')}
             aria-orientation="vertical"
             onBlur={(event) => {
               if (!event.currentTarget.contains(event.relatedTarget)) {
