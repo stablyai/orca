@@ -14,6 +14,7 @@ import { detectRepoIconAndUpstream } from '../../repository-icons/repo-icon-auto
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { describeWslUncAccessDenied } from '../../wsl/filesystem/wsl-unc-access-denied'
 import { createLocalProjectRecord } from '../../workspaces/catalog/local-project-record'
+import { resolveWslMappedDrivePath } from '../../wsl/filesystem/wsl-mapped-drive-path'
 
 export async function addLocalRepoFromPath(
   store: Store,
@@ -23,6 +24,7 @@ export async function addLocalRepoFromPath(
 ): Promise<{ repo: Repo; alreadyExisted: boolean } | { error: string }> {
   const repoKind = kind === 'folder' ? 'folder' : 'git'
   if (repoKind === 'git') {
+    path = await resolveWslMappedDrivePath(path)
     await awaitWindowsHostGitEnvironmentReady({ cwd: path })
   }
   const gitInfo = repoKind === 'git' ? await inspectGitRepoForRegistrationAsync(path) : null
