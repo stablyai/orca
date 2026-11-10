@@ -158,17 +158,21 @@ async function render(visible = true) {
   )
 }
 
-it('labels same-repo sections by worktree name and a detached section by its HEAD', async () => {
+it('identifies same-repo cards by name and shows their branch when collapsed', async () => {
   const [onBranch, detached] = setup(2)
   useAppStore.setState({
     worktreesByRepo: { repo: [onBranch!, { ...detached!, branch: '', head: 'abc1234def' }] }
   })
   await render()
-  expect(
-    [...container.querySelectorAll('section button[aria-expanded]')].map(
-      (toggle) => toggle.textContent
-    )
-  ).toEqual(['ChildChild 0feature-0', 'ChildChild 1Detached HEAD · abc1234'])
+  const toggles = [
+    ...container.querySelectorAll<HTMLButtonElement>('section button[aria-expanded]')
+  ]
+  expect(toggles.map((toggle) => toggle.textContent)).toEqual(['ChildChild 0', 'ChildChild 1'])
+  await act(async () => toggles.forEach((toggle) => toggle.click()))
+  expect([...container.querySelectorAll('section')].map((section) => section.textContent)).toEqual([
+    'ChildChild 0feature-0',
+    'ChildChild 1Detached HEAD · abc1234'
+  ])
 })
 
 function ScopedStatusObserver({ owner }: { owner: SourceControlScope }) {
