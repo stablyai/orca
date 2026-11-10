@@ -1,6 +1,13 @@
-// A reopened pane the continue logic won't type into on its own (a late reopen whose session or
+// Helpers for the interrupted-turn continue. A reopened pane the continue logic won't type into on its own (a late reopen whose session or
 // activity can't be confirmed): one click sends `continue`, once per interrupted turn.
 import { toast } from 'sonner'
+import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
+import { TUI_AGENT_CONFIG } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import {
+  isAgentForegroundWrapperProcess,
+  isExpectedAgentProcess
+} from '../../../../../shared/agent-status/process/agent-process-recognition'
 import { translate } from '@/i18n/i18n'
 import { getPtyIdForPaneKey } from '@/hooks/pane-key-pty-id'
 import { sendBracketedPasteToRunningAgent } from '@/lib/agent-session/messaging/paste/agent-paste-draft'
@@ -32,4 +39,17 @@ export function offerInterruptedTurnContinue(paneKey: string, turnKey: string): 
       }
     }
   })
+}
+
+/** The relaunched agent (not a shell) is the terminal's foreground process. */
+export async function agentOwnsTerminal(ptyId: string, agent: TuiAgent): Promise<boolean> {
+  try {
+    const foreground = (await inspectRuntimeTerminalProcess(ptyId)).foregroundProcess ?? ''
+    return (
+      isExpectedAgentProcess(foreground, TUI_AGENT_CONFIG[agent].expectedProcess) ||
+      isAgentForegroundWrapperProcess(foreground)
+    )
+  } catch {
+    return false
+  }
 }

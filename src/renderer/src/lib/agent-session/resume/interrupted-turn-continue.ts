@@ -6,7 +6,7 @@
 // a sleep: those are the restarts that cut a working turn. (A pane's sleeping record is no signal
 // here: it can outlive the wake that resumed the agent.)
 import { useAppStore } from '@/store'
-import { offerInterruptedTurnContinue } from './interrupted-turn-continue-offer'
+import { agentOwnsTerminal, offerInterruptedTurnContinue } from './interrupted-turn-continue-offer'
 import { getPtyIdForPaneKey } from '@/hooks/pane-key-pty-id'
 import { sendFollowupPromptWhenAgentReady } from '@/lib/agent-session/messaging/paste/agent-followup-delivery'
 import { sendBracketedPasteToRunningAgent } from '@/lib/agent-session/messaging/paste/agent-paste-draft'
@@ -24,11 +24,6 @@ import {
   paneHadUserInputSince,
   workspaceHadUserInputSince
 } from '@/components/terminal-pane/input/wake-input-buffer'
-import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
-import {
-  isAgentForegroundWrapperProcess,
-  isExpectedAgentProcess
-} from '../../../../../shared/agent-status/process/agent-process-recognition'
 
 type ArmedTurn = {
   workspaceId: string
@@ -297,18 +292,6 @@ type ContinueDeps = {
   agentInForeground: (ptyId: string, agent: TuiAgent) => Promise<boolean>
   /** Late reopen that may not be typed into: offer "Continue" instead. */
   offer?: (turn: ArmedTurn) => void
-}
-
-async function agentOwnsTerminal(ptyId: string, agent: TuiAgent): Promise<boolean> {
-  try {
-    const foreground = (await inspectRuntimeTerminalProcess(ptyId)).foregroundProcess ?? ''
-    return (
-      isExpectedAgentProcess(foreground, TUI_AGENT_CONFIG[agent].expectedProcess) ||
-      isAgentForegroundWrapperProcess(foreground)
-    )
-  } catch {
-    return false
-  }
 }
 
 const defaultDeps: ContinueDeps = {
