@@ -213,3 +213,34 @@ describe('withHostAgentApiKeyEnv asks the host', () => {
     )
   })
 })
+
+describe('host answer cache', () => {
+  it('asks again after a "not cloud" answer, so a re-paired id that is now a cloud VM gets no keys', async () => {
+    const { setCloudDesktopKeysUserDataPath, withHostAgentApiKeyEnv } =
+      await import('./cloud-desktop-keys')
+    setCloudDesktopKeysUserDataPath('/u')
+    environments.set('env-repaired', {
+      source: 'manual',
+      endpoints: [{ endpoint: 'wss://10.0.0.9:6768' }]
+    })
+    launchEnv = { CODEX_API_KEY: 'custom-name-real-key' }
+    const params = { launchAgent: 'codex', command: 'codex', env: {} }
+    const answer = (caps: string[]) => async () => ({
+      ok: true as const,
+      id: 's',
+      result: { capabilities: caps },
+      _meta: { runtimeId: 'r' }
+    })
+    expect(
+      await withHostAgentApiKeyEnv('env-repaired', 'terminal.create', params, answer([]))
+    ).not.toBe(params)
+    expect(
+      await withHostAgentApiKeyEnv(
+        'env-repaired',
+        'terminal.create',
+        params,
+        answer(['host.orca-cloud.v1'])
+      )
+    ).toBe(params)
+  })
+})

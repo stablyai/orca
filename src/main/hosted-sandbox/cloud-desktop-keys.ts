@@ -127,7 +127,11 @@ async function hostSaysOrcaCloud(
       return null
     }
     const cloud = capabilities.includes(ORCA_CLOUD_HOST_RUNTIME_CAPABILITY)
-    hostKinds.set(environmentId, { cloud, at: Date.now() })
+    // Only "cloud" is remembered: it can only withhold keys. A "not cloud" answer is asked again on
+    // the next launch, so a re-paired id that now points at a cloud VM is never sent keys from cache.
+    if (cloud) {
+      hostKinds.set(environmentId, { cloud, at: Date.now() })
+    }
     return cloud
   } catch {
     return null
