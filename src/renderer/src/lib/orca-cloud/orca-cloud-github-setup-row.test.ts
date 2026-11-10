@@ -39,7 +39,7 @@ describe('orcaCloudGitHubSetupRow', () => {
       label: 'GitHub access',
       status: 'Needed',
       note: 'It clones your code from GitHub. Give access to this repository once.',
-      action: { kind: 'install' },
+      primary: { kind: 'install', label: 'Give access and start' },
       blocksStart: true
     })
   })

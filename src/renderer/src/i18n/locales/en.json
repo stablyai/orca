@@ -27101,7 +27101,7 @@
         "missing": "Orca Cloud can’t reach {{repo}} yet.",
         "neededStatus": "Needed",
         "missingNote": "It clones your code from GitHub. Give access to this repository once.",
-        "giveAccess": "Give access",
+        "giveAccessAndStart": "Give access and start",
         "public": "{{repo}} is public. Nothing to do.",
         "doneStatus": "Done"
       }

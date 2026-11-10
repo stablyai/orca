@@ -17,7 +17,10 @@ export type OrcaCloudGitHubSetupRow = {
   status?: string
   /** Second line under the detail (D1/D2). */
   note?: string
-  action?: { kind: 'install'; label: string } | { kind: 'push-help'; label: string; url: string }
+  /** In-row button (D3's "How to push"). */
+  action?: { kind: 'push-help'; label: string; url: string }
+  /** What the panel's primary (⌘↵) button becomes while this row is the blocker (D1). */
+  primary?: { kind: 'install'; label: string }
   /** D3 outranks account and plan rows: buying can't fix a project that isn't on GitHub. */
   blocksStart: boolean
 }
@@ -86,9 +89,10 @@ export function orcaCloudGitHubSetupRow(
           'orcaCloud.setup.github.missingNote',
           'It clones your code from GitHub. Give access to this repository once.'
         ),
-        action: {
+        // D1: no button in the row; the panel's primary action opens GitHub's install page.
+        primary: {
           kind: 'install',
-          label: translate('orcaCloud.setup.github.giveAccess', 'Give access')
+          label: translate('orcaCloud.setup.github.giveAccessAndStart', 'Give access and start')
         },
         blocksStart: true
       }
