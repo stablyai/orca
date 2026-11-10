@@ -9,7 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { splitPathHeadForElision } from '@/lib/path-display/path-head-elision'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { useWslHostDistro, WslHostMark } from '@/components/wsl-host-mark/WslHostMark'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 const NO_SECONDARY_MATCHES: readonly { text: string; ranges: readonly MatchRange[] }[] = []
 

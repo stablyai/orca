@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
+import '@/diagnostics/crash-reporting/crash-diagnostics'
+import { recordRendererCrashBreadcrumb } from '../../../../diagnostics/crash-reporting/crash-breadcrumb-recorder'
 import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
 import { isEventTargetInsideCurrentTarget } from './worktree-card-dom-events'
 import {

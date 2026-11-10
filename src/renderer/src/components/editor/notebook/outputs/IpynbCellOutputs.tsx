@@ -1,5 +1,5 @@
 import type { ITheme } from '@xterm/xterm'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import '@/lib/terminal-theme'
 import { getTheme } from '@/lib/terminal-themes-data'
 import {

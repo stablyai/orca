@@ -3,7 +3,10 @@ import { Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
-import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
+import {
+  getUpdateCheckClickOptions,
+  getUpdateCheckHint
+} from '@/app-shell/updates/update-check-click-options'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 
 export function GeneralRemoteServerUpdates(): React.JSX.Element | null {

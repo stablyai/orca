@@ -20,7 +20,7 @@ import {
   ExternalLink,
   EllipsisVertical
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   GITHUB_TASK_STICKY_ID_CELL_CLASS,
   GITHUB_TASK_STICKY_TITLE_CELL_CLASS,

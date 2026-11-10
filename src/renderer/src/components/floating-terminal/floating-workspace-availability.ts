@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { isWebClientLocation } from '../../lib/web-client-location'
+import { isWebClientLocation } from '../../app-shell/platform/web-client-location'
 
 /** The floating workspace's terminals and notes live on this computer; a browser tab has none. */
 export function floatingWorkspaceUnavailableReason(t: Translate = translate): string | null {

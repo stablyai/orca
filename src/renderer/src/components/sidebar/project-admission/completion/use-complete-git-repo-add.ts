@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react'
 import { useAppStore } from '@/store/index'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry-events'
 import {
   buildAddRepoExistingWorkspacesTelemetry,

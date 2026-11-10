@@ -15,9 +15,9 @@ import { RecoverableRenderErrorBoundary } from './components/error-boundaries/Re
 import { applyDocumentTheme } from './app-shell/appearance/document-theme'
 import { resolvePaintedTheme } from './app-shell/appearance/terminal-app-theme'
 import { buildAppFontFamily } from './app-shell/appearance/app-font-family'
-import { getOrCreateRendererRoot } from './lib/react-renderer-root'
+import { getOrCreateRendererRoot } from './app-shell/startup/react-renderer-root'
 import { I18nProvider } from './i18n/I18nProvider'
-import { useAppStore } from './store'
+import { useAppStore } from './store/index'
 import { installBodyOverlayAttributes } from './lib/body-overlay-attributes'
 import { useReduceVisualEffects } from './hooks/use-reduce-visual-effects'
 
