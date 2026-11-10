@@ -326,6 +326,8 @@ function runLanguageServer() {
     intentionalClientExit = true
     watchdog.stop()
     terminateLanguageServerChild(child)
+    // A child that ignores SIGTERM must not pin the bridge process; the idle reap arms the same guard.
+    setTimeout(() => process.exit(0), 2_000).unref()
   }
   process.on('exit', () => child.kill())
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK']) {
