@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
@@ -65,9 +66,13 @@ export function CloudSecretsSection({ orgId }: { orgId: string | null }): React.
   }
   if (!api || !available) {
     return (
-      <p className="text-sm text-muted-foreground">
-        {t('cloudSecrets.unavailable', 'Cloud secrets aren’t available for this account yet.')}
-      </p>
+      <InlineError
+        tone="neutral"
+        title={t(
+          'cloudSecrets.unavailable',
+          'Cloud secrets aren’t available for this account yet.'
+        )}
+      />
     )
   }
   const common = {

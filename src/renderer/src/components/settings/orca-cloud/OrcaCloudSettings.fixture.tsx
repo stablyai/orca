@@ -95,7 +95,7 @@ const TWO: OrcaCloudMcpWorkspace[] = [
   { runtimeId: 'rt-2', name: 'acme/api · billing-webhooks', environmentId: 'env-2' }
 ]
 
-function mcpPage(workspaces: OrcaCloudMcpWorkspace[] | null): React.JSX.Element {
+function mcpPage(workspaces: OrcaCloudMcpWorkspace[] | null | 'failed'): React.JSX.Element {
   return (
     <Page
       id="cloud-mcp"
@@ -104,6 +104,7 @@ function mcpPage(workspaces: OrcaCloudMcpWorkspace[] | null): React.JSX.Element 
     >
       <OrcaCloudMcpServersView
         workspaces={workspaces}
+        onRetry={noop}
         renderSync={(workspace, onlyOne) => (
           <CloudMcpSyncPanel
             status={{ ...MCP_STATUS, environmentId: workspace.environmentId }}
@@ -123,6 +124,7 @@ export const mcpOneWorkspace = defineFixture({ width: 784, render: () => mcpPage
 export const mcpTwoWorkspaces = defineFixture({ width: 784, render: () => mcpPage(TWO) })
 export const mcpNoneRunning = defineFixture({ width: 784, render: () => mcpPage([]) })
 export const mcpLoading = defineFixture({ width: 784, render: () => mcpPage(null) })
+export const mcpLoadFailed = defineFixture({ width: 784, render: () => mcpPage('failed') })
 
 export const secretsPage = defineFixture({
   width: 784,

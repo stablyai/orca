@@ -159,6 +159,9 @@ export function EphemeralVmRuntimeRow({
             size="xs"
             className="gap-1 text-muted-foreground hover:text-foreground"
             onClick={() => openSettingsTarget({ pane: 'cloud-mcp', repoId: null })}
+            aria-label={t('settings.orcaCloud.mcp.openFor', 'MCP servers for {{name}}', {
+              name: runtime.workspaceName || runtime.recipeId
+            })}
           >
             {t('cloudMcpSync.title', 'MCP servers')}
             <ChevronRight className="size-3" />

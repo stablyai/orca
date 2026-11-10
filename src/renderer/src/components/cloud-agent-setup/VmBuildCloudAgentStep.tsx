@@ -141,7 +141,7 @@ export function VmBuildCloudAgentStepView({
         title={t('cloudAgentSetup.skippedTitle', 'Agent setup skipped')}
         detail={t(
           'cloudAgentSetup.skippedDetailCloudGroup',
-          'Set it up any time from Settings › Orca Cloud › Cloud secrets.'
+          'Set it up any time from Settings → Orca Cloud → Cloud secrets.'
         )}
       />
     )

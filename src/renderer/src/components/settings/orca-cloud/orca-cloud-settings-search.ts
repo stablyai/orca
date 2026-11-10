@@ -56,7 +56,7 @@ export const getOrcaCloudEnvironmentsSearchEntries = createLocalizedCatalog(() =
     title: translate('settings.orcaCloud.environments.title', 'Cloud environments'),
     description: translate(
       'settings.orcaCloud.environments.searchDescription',
-      'Repos and install script built into a snapshot, and waking cloud workspaces before you open them.'
+      'Repositories and install script built into a snapshot, and waking cloud workspaces before you open them.'
     ),
     keywords: [
       ...translateSearchKeyword('settings.orcaCloud.environments.keywordSnapshot', 'snapshot'),

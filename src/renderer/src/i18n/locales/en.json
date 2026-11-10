@@ -1352,12 +1352,15 @@
         "keywordMcp": "mcp",
         "keywordSync": "sync",
         "keywordCloud": "cloud",
-        "description": "MCP servers from Claude Code and Codex on this computer, synced to your cloud workspaces."
+        "description": "MCP servers from Claude Code and Codex on this computer, synced to your cloud workspaces.",
+        "loadFailed": "Couldn’t list your cloud workspaces",
+        "unnamed": "Cloud workspace",
+        "openFor": "MCP servers for {{name}}"
       },
       "environments": {
         "title": "Cloud environments",
         "unavailable": "Cloud environments aren’t available for this account yet.",
-        "searchDescription": "Repos and install script built into a snapshot, and waking cloud workspaces before you open them.",
+        "searchDescription": "Repositories and install script built into a snapshot, and waking cloud workspaces before you open them.",
         "keywordSnapshot": "snapshot",
         "keywordInstall": "install script",
         "keywordWake": "wake",
@@ -26370,7 +26373,6 @@
       "memberAsk": "Ask an owner or admin to set it up."
     },
     "loading": "Loading environment…",
-    "title": "Cloud environment",
     "descriptionTeam": "Your team’s repos and install script, built once into a snapshot so every cloud workspace starts with dependencies installed.",
     "you": "You",
     "loadFailed": "Couldn’t load the cloud environment",
@@ -26671,7 +26673,6 @@
     "openaiKey": "OpenAI API key",
     "gatewayKey": "AI Gateway API key",
     "claudeModel": "Claude Code model (optional)",
-    "gatewayModelHint": "Free gateway accounts can’t use anthropic/* models; try moonshotai/kimi-k2.",
     "codexModel": "Codex model (optional)",
     "gatewayCodexHint": "A gateway model id, such as openai/gpt-5.",
     "baseUrl": "Base URL",
@@ -26719,7 +26720,6 @@
     "composerHint": "Claude Code and Codex need access in Orca Cloud. Add it now, or sign in once the workspace starts.",
     "later": "Later",
     "skippedTitle": "Agent setup skipped",
-    "skippedDetail": "Set it up any time from Settings › Orca Account › Cloud secrets.",
     "signInPending": "Agent sign-in",
     "signInPendingDetail": "Opens when the sandbox is ready. Keep Orca open until then.",
     "signInCancelled": "Sign-in cancelled",
@@ -26735,7 +26735,7 @@
     "keepEditing": "Keep editing",
     "signInHandedOff": "Continues in the Agent sign-in row below.",
     "gatewayModelDefaultHint": "Leave empty to use the gateway’s default model.",
-    "skippedDetailCloudGroup": "Set it up any time from Settings › Orca Cloud › Cloud secrets."
+    "skippedDetailCloudGroup": "Set it up any time from Settings → Orca Cloud → Cloud secrets."
   },
   "cloudSecrets": {
     "editor": {

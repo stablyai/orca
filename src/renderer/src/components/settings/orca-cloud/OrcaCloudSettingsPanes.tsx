@@ -1,4 +1,5 @@
 import { CircleUserRound } from 'lucide-react'
+import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
 import { useTranslate } from '@/i18n/use-translate'
@@ -110,12 +111,13 @@ export function OrcaCloudTeamPane(): React.JSX.Element {
         account.billing ? (
           <TeamSettingsLink orgId={account.orgId} orgName={account.orgName} />
         ) : (
-          <p className="text-sm text-muted-foreground">
-            {t(
+          <InlineError
+            tone="neutral"
+            title={t(
               'settings.orcaCloud.team.unavailable',
               'Teams aren’t available for this account yet.'
             )}
-          </p>
+          />
         )
       }
     </OrcaCloudAccountGate>
@@ -142,12 +144,13 @@ export function OrcaCloudEnvironmentsPane(): React.JSX.Element {
           ) : configured ? (
             <CloudEnvironmentSection orgId={account.orgId} viewerUserId={account.userId} />
           ) : (
-            <p className="text-sm text-muted-foreground">
-              {t(
+            <InlineError
+              tone="neutral"
+              title={t(
                 'settings.orcaCloud.environments.unavailable',
                 'Cloud environments aren’t available for this account yet.'
               )}
-            </p>
+            />
           )}
           {account.sandbox ? <CloudPredictiveWakeSetting /> : null}
         </div>

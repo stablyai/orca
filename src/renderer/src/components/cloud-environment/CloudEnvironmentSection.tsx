@@ -29,11 +29,6 @@ import { useCloudEnvironment } from './use-cloud-environment'
 
 const LOG_TAIL_LINES = 80
 
-/** Hidden unless this build talks to an Orca Cloud control plane. */
-export function useOrcaCloudEnvironmentsConfigured(): boolean {
-  return useOrcaCloudEnvironmentsAvailability() === true
-}
-
 /** Null until main answers, so a pane can show a placeholder instead of flashing "unavailable". */
 export function useOrcaCloudEnvironmentsAvailability(): boolean | null {
   const [configured, setConfigured] = useState<boolean | null>(null)
@@ -77,18 +72,15 @@ function useLocalRepoSuggestions(): {
   }, [repos])
 }
 
-/** Settings block: Orca Cloud environment (repos + install script → snapshot builds). */
+/** Settings block: Orca Cloud environment (repos + install script → snapshot builds).
+ *  The caller checks useOrcaCloudEnvironmentsAvailability first, so this never re-probes. */
 export function CloudEnvironmentSection({
   orgId,
   viewerUserId
 }: {
   orgId: string | null
   viewerUserId: string | null
-}): React.JSX.Element | null {
-  const configured = useOrcaCloudEnvironmentsConfigured()
-  if (!configured) {
-    return null
-  }
+}): React.JSX.Element {
   // Settings › Orca Cloud › Cloud environments owns the title and description.
   return (
     <CloudEnvironmentController
