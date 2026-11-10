@@ -5088,7 +5088,10 @@
       "promptPlaceholder": "Optional. What should the agent start on?",
       "creating": "Starting your cloud workspace",
       "createAndStart": "Start workspace and agent",
-      "create": "Start workspace"
+      "create": "Start workspace",
+      "repoOther": "Other repository…",
+      "repoNotePicker": "Private repos need the Orca Cloud GitHub app, connected once from Orca on your computer.",
+      "repoNone": "No repository (blank project)"
     },
     "line": {
       "runningFor": "Up {{elapsed}}. Agents keep working when you close the app.",
@@ -5214,6 +5217,10 @@
       "asleep": "{{name}} is asleep",
       "asleepDetail": "Files are kept. Wake it to keep working.",
       "wake": "Wake"
+    },
+    "idle": {
+      "sleeps_one": "Sleeps after {{count}} minute idle.",
+      "sleeps_other": "Sleeps after {{count}} minutes idle."
     }
   }
 }

@@ -18,6 +18,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { homeListStyles as styles } from './home-list-styles'
 import { MobileHomeSectionHeading } from './MobileHomeSectionHeading'
+import { ORCA_CLOUD_IDLE_SLEEP_MINUTES } from '../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 
 export type CloudEnrollDesktop = { name: string; client: RpcClient }
 
@@ -83,6 +84,12 @@ export function MobileHomeCloudSection(props: {
                   'cloud.home.emptyDetail',
                   'Start one here. It keeps running while this phone and your computer sleep.'
                 )}
+              </Text>
+              <Text style={styles.subtitle}>
+                {t('cloud.idle.sleeps', 'Sleeps after {{count}} minutes idle.', {
+                  count: ORCA_CLOUD_IDLE_SLEEP_MINUTES,
+                  defaultValue_one: 'Sleeps after {{count}} minute idle.'
+                })}
               </Text>
             </View>
           </View>

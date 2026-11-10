@@ -41,7 +41,12 @@ import {
 import { nextCloudWorkspaceTitle } from './cloud-workspace-display'
 import { roleForCloudError } from './cloud-entitlement-copy'
 import { createErrorMessage } from './cloud-workspace-copy'
-import { ORCA_CLOUD_SANDBOX_SPEC } from '../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
+import {
+  ORCA_CLOUD_IDLE_SLEEP_MINUTES,
+  ORCA_CLOUD_SANDBOX_SPEC
+} from '../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
+import { cloudRepoPickerRows } from './cloud-repo-picker-rows'
+import { cloudRepoChoices, loadRecentCloudRepos, recordRecentCloudRepo } from './cloud-recent-repos'
 
 export function NewCloudWorkspaceScreen() {
   useMobileColorScheme()
@@ -51,6 +56,18 @@ export function NewCloudWorkspaceScreen() {
   const invalidate = useInvalidateCloudWorkspaces()
   const existing = useCloudWorkspaces(useCloudEnrollment()).data
   const [repo, setRepo] = useState('')
+  const [recents, setRecents] = useState<string[]>([])
+  // "Other repository…": the free-text field, also the only field when there is nothing to pick.
+  const [typing, setTyping] = useState(false)
+  useEffect(() => {
+    void loadRecentCloudRepos().then(setRecents)
+  }, [])
+  const choices = cloudRepoChoices(
+    recents,
+    (existing ?? []).flatMap((workspace) => (workspace.repo ? [workspace.repo.url] : []))
+  )
+  // The field stays while what's typed isn't one of the rows, even if the rows load mid-typing.
+  const showField = typing || choices.length === 0 || (repo !== '' && !choices.includes(repo))
   const [branch, setBranch] = useState('')
   const [agent, setAgent] = useState(ORCA_CLOUD_DEFAULT_AGENT)
   const [prompt, setPrompt] = useState('')
@@ -125,6 +142,9 @@ export function NewCloudWorkspaceScreen() {
     }
     // The sandbox exists from here on: nothing below may report "couldn't create" or create again.
     const { projectRoot } = created
+    if (repoUrl) {
+      void recordRecentCloudRepo(repoUrl).catch(() => undefined)
+    }
     const workspace = {
       ...created.workspace,
       title: nextCloudWorkspaceTitle(created.workspace.title, existing ?? [])
@@ -169,12 +189,18 @@ export function NewCloudWorkspaceScreen() {
         >
           <SettingsSection
             first
+            radioGroup={choices.length > 0}
             title={t('cloud.new.repoHeading', 'Repository')}
             footer={
               repoInvalid ? (
                 <SettingsNote error>
                   {t('cloud.new.repoInvalid', 'Use a GitHub repository, like owner/repo.')}
                 </SettingsNote>
+              ) : choices.length > 0 ? (
+                t(
+                  'cloud.new.repoNotePicker',
+                  'Private repos need the Orca Cloud GitHub app, connected once from Orca on your computer.'
+                )
               ) : (
                 t(
                   'cloud.new.repoNote',
@@ -183,20 +209,47 @@ export function NewCloudWorkspaceScreen() {
               )
             }
           >
-            <View key="repo" style={styles.field}>
-              <TextInput
-                style={styles.input}
-                value={repo}
-                onChangeText={setRepo}
-                editable={!creating}
-                placeholder={t('cloud.new.repoPlaceholder', 'owner/repo')}
-                placeholderTextColor={colors.textMuted}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="url"
-                accessibilityLabel={t('cloud.new.repoLabel', 'GitHub repository')}
-              />
-            </View>
+            {cloudRepoPickerRows({
+              choices,
+              repo,
+              typing,
+              disabled: creating,
+              t,
+              onPick: (next) => {
+                setTyping(false)
+                setRepo(next)
+              },
+              onOther: () => {
+                // Choosing it again keeps what was typed.
+                if (!typing) {
+                  setTyping(true)
+                  setRepo('')
+                }
+              }
+            })}
+            {showField ? (
+              <View key="repo" style={styles.field}>
+                <TextInput
+                  style={styles.input}
+                  value={repo}
+                  onChangeText={(text) => {
+                    setRepo(text)
+                    // Typing here is choosing "Other repository…", even if the rows load mid-typing.
+                    if (choices.length > 0) {
+                      setTyping(true)
+                    }
+                  }}
+                  editable={!creating}
+                  autoFocus={typing}
+                  placeholder={t('cloud.new.repoPlaceholder', 'owner/repo')}
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                  accessibilityLabel={t('cloud.new.repoLabel', 'GitHub repository')}
+                />
+              </View>
+            ) : null}
           </SettingsSection>
           <SettingsSection title={t('cloud.new.branchLabel', 'Branch')}>
             <View key="branch" style={styles.field}>
@@ -216,10 +269,22 @@ export function NewCloudWorkspaceScreen() {
 
           <SettingsSection
             title={t('cloud.new.agentHeading', 'First task')}
-            footer={t('cloud.size.note', 'Every sandbox gets {{vcpus}} vCPU · {{memoryGb}} GB.', {
-              vcpus: String(ORCA_CLOUD_SANDBOX_SPEC.vcpus),
-              memoryGb: String(ORCA_CLOUD_SANDBOX_SPEC.memoryGb)
-            })}
+            footer={
+              <>
+                <SettingsNote>
+                  {t('cloud.size.note', 'Every sandbox gets {{vcpus}} vCPU · {{memoryGb}} GB.', {
+                    vcpus: String(ORCA_CLOUD_SANDBOX_SPEC.vcpus),
+                    memoryGb: String(ORCA_CLOUD_SANDBOX_SPEC.memoryGb)
+                  })}
+                </SettingsNote>
+                <SettingsNote>
+                  {t('cloud.idle.sleeps', 'Sleeps after {{count}} minutes idle.', {
+                    count: ORCA_CLOUD_IDLE_SLEEP_MINUTES,
+                    defaultValue_one: 'Sleeps after {{count}} minute idle.'
+                  })}
+                </SettingsNote>
+              </>
+            }
           >
             <View key="task" style={styles.field}>
               <CloudAgentPicker value={agent} onChange={setAgent} disabled={creating} />
