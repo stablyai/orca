@@ -275,6 +275,9 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
     }
     for (const leaf of this.leaves.values()) {
       this.adoptPreAllocatedHandle(leaf)
+      if (leaf.ptyId && this._orchestrationDb?.hasAnyDispatchContexts()) {
+        this.issueHandle(leaf)
+      }
       const previousLeaf = previousLeaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
       // A pane newly showing a terminal can bind it to the pane's Run or Dispatch mailbox.
       if (
