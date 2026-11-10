@@ -4,6 +4,7 @@ import {
   type StructuredAgentResolutionOperation
 } from '../../native-chat/structured-agent-command-resolution'
 import { homedir } from 'node:os'
+import { setTimeout as delay } from 'node:timers/promises'
 import { join } from 'node:path'
 import type { AgentCliVersionReader } from '../../agent-launch/preflight/agent-cli-version-probe'
 import type { AgentModelCatalogProbe } from '../../native-chat/agent-model-catalog/agent-model-catalog-store'
@@ -190,46 +191,24 @@ export function createAcpModelCatalogProbe(
 const folderlessListing = (spec: AcpLaunchSpec) =>
   new AgentModelCatalogListingStoppedError(`${spec.agent} lists in a chat's folder`)
 
-// Agents (notably opencode) answer session/new with a transient -32603 while
-// their providers still open; without a retry one probe failure degrades the picker.
-const TRANSIENT_AGENT_RETRY_DELAYS_MS = [250, 500] as const
-
-const isTransientAgentFailure = (error: unknown): boolean =>
-  error instanceof AcpAgentError && error.code === -32603
-
-/** Retries transient -32603 agent answers at most three attempts total, stopping on abort or agent switch. */
-async function retryTransientAgentFailure<T>(
-  run: () => Promise<T>,
+// OpenCode can answer -32603 while its providers are still opening; a later attempt lists them.
+async function startListingSession(
+  connection: AcpModelCatalogSessionConnection,
+  workspace: string,
   operation?: StructuredAgentResolutionOperation
-): Promise<T> {
-  for (let attempt = 0; ; attempt++) {
+): Promise<AcpSessionStarted> {
+  for (const backoffMs of [250, 500]) {
     try {
-      return await run()
+      return await connection.start({ cwd: workspace, mcpServers: [] })
     } catch (error) {
-      if (attempt >= TRANSIENT_AGENT_RETRY_DELAYS_MS.length || !isTransientAgentFailure(error)) {
+      if (!(error instanceof AcpAgentError && error.code === -32603)) {
         throw error
       }
-      await sleep(TRANSIENT_AGENT_RETRY_DELAYS_MS[attempt], operation?.signal)
-      assertStructuredAgentResolutionCurrent(operation)
     }
+    await delay(backoffMs, undefined, { signal: operation?.signal })
+    assertStructuredAgentResolutionCurrent(operation)
   }
-}
-
-/** Resolves on timeout or abort; the caller must re-check operation currency afterwards. */
-async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  if (signal?.aborted) {
-    return
-  }
-  await new Promise<void>((resolve) => {
-    const timer = setTimeout(finish, ms)
-    const onAbort = (): void => finish()
-    function finish(): void {
-      clearTimeout(timer)
-      signal?.removeEventListener('abort', onAbort)
-      resolve()
-    }
-    signal?.addEventListener('abort', onAbort)
-  })
+  return connection.start({ cwd: workspace, mcpServers: [] })
 }
 
 async function readSessionModels(
@@ -241,17 +220,14 @@ async function readSessionModels(
   selectedModels?: readonly string[],
   ready?: (cleanup: () => Promise<unknown>) => void
 ): Promise<{ models: AgentSessionModelOption[]; attemptedModels: string[] }> {
-  const initialized = await retryTransientAgentFailure(() => connection.initialize(), operation)
+  const initialized = await connection.initialize()
   assertStructuredAgentResolutionCurrent(operation)
   observeAcpForkSupport(spec.agent, initialized)
   const deletes = Boolean(initialized.agentCapabilities?.sessionCapabilities?.delete)
   if (!deletes && !listing.sessionFolderArgs) {
     throw new Error(`${spec.agent} cannot delete a session, so it lists its models only in chats`)
   }
-  const started = await retryTransientAgentFailure(
-    () => connection.start({ cwd: workspace, mcpServers: [] }),
-    operation
-  )
+  const started = await startListingSession(connection, workspace, operation)
   let stopped = false
   const cleanup = async (): Promise<void> => {
     stopped = true
