@@ -19,7 +19,7 @@ import type { GitHistoryResult } from '../../../../../shared/git/history/git-his
 const { getHistory, getRefs, viewport } = vi.hoisted(() => ({
   getHistory: vi.fn(),
   getRefs: vi.fn(),
-  viewport: { rows: 20 }
+  viewport: { rows: 20, rendered: Infinity }
 }))
 vi.mock('@/runtime/source-control/git/runtime-git-status-client', async (original) => ({
   ...(await original<object>()),
@@ -34,7 +34,10 @@ vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: (options: { count: number; getScrollElement: () => HTMLElement | null }) => ({
     getTotalSize: () => options.count * 28,
     getVirtualItems: () =>
-      Array.from({ length: options.count }, (_, index) => ({ index, start: index * 28 })),
+      Array.from({ length: Math.min(options.count, viewport.rendered) }, (_, index) => ({
+        index,
+        start: index * 28
+      })),
     get range() {
       return options.count
         ? { startIndex: 0, endIndex: Math.min(options.count, viewport.rows) - 1 }
@@ -66,6 +69,7 @@ afterEach(async () => {
   await act(async () => root.unmount())
   root = createRoot(container)
   viewport.rows = 20
+  viewport.rendered = Infinity
   disposeGitGraphHistory(`${workspaceId}::git-graph`)
   useAppStore.setState(initialState, true)
   vi.restoreAllMocks()
@@ -730,3 +734,48 @@ it('stops paging on a page that adds no commits, and ends on an empty last page'
   })
   expect(container.textContent).not.toContain('Load more')
 })
+
+it.each([50_000, 500_000])(
+  'releases %i commits of replaced history while the pane stays mounted',
+  async (count) => {
+    viewport.rows = Infinity
+    viewport.rendered = 40
+    getHistory
+      .mockReset()
+      .mockImplementationOnce(async () => ({
+        ...result,
+        refs: 'all',
+        hasMore: true,
+        items: Array.from({ length: count }, (_, index) => ({
+          id: `old-${index}`,
+          subject: `Old ${index}`,
+          message: `Old ${index}`,
+          parentIds: []
+        }))
+      }))
+      .mockRejectedValueOnce(new Error('network down'))
+      .mockResolvedValue({ ...result, refs: 'head' })
+    await renderTab()
+    const replaced = (() => {
+      const loaded = gitGraphHistoryForTab(workspaceId).view.getState().result!
+      expect(loaded.items).toHaveLength(count)
+      return new WeakRef(loaded)
+    })()
+    await act(async () =>
+      useAppStore.setState({ gitGraphFiltersByWorktree: { [workspaceId]: 'head' } })
+    )
+    await act(async () => {
+      await gitGraphHistoryForTab(workspaceId).settledResult()
+    })
+    expect(loadedCount()).toBe(1)
+    getHistory.mockReset()
+    if (typeof globalThis.gc !== 'function') {
+      throw new Error('Run with the repository Vitest --expose-gc config')
+    }
+    for (let round = 0; round < 3; round++) {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      globalThis.gc()
+    }
+    expect(replaced.deref()).toBeUndefined()
+  }
+)
