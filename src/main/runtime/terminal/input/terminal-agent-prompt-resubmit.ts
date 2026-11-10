@@ -11,6 +11,9 @@ import {
 } from './agent-prompt-submission-verification'
 import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 
+/** dsh's launchpad can outlast the fixed submit budget on a busy host; keep pressing while it still holds our prompt. */
+const DSH_LAUNCHPAD_SUBMIT_EXTENSION_MS = 4 * 60_000
+
 type HeldAgentPrompt = {
   baseline: AgentPromptActivity
   readActivity: () => AgentPromptActivity
@@ -36,7 +39,8 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
     if (retryDelayMs === undefined || (!blind && !gated)) {
       return 0
     }
-    const deadline = Date.now() + held.heldBudgetMs
+    let deadline = Date.now() + held.heldBudgetMs
+    const hardDeadline = deadline + (readsLaunchDraft ? DSH_LAUNCHPAD_SUBMIT_EXTENSION_MS : 0)
     let resubmits = 0
     let gatedResubmits = 0
     try {
@@ -64,8 +68,18 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
         }
         await options.beforeWrite?.(ptyId)
         // Recheck after yielding: read the screen before the synchronous deadline/turn checks to avoid stale writes.
-        if (!blind && (!(await holdsPrompt()) || Date.now() >= deadline)) {
-          return resubmits
+        if (!blind) {
+          // dsh paints its launchpad before the session can submit; a busy host can outlast the fixed
+          // budget, so keep pressing while the launchpad still holds our prompt (#38131).
+          if (!(await holdsPrompt())) {
+            return resubmits
+          }
+          if (Date.now() >= deadline) {
+            if (Date.now() >= hardDeadline) {
+              return resubmits
+            }
+            deadline = hardDeadline
+          }
         }
         if (await agentPromptSettledWithin(held, 0, options.signal)) {
           return resubmits
