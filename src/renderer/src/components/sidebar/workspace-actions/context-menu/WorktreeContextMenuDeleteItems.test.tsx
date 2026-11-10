@@ -6,6 +6,7 @@ import type { AppState } from '@/store/types'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: replaced before rendering with every store field read by the production selector.
 const mocks = vi.hoisted(() => ({ state: {} as AppState }))
 vi.mock('@/store', () => ({
   useAppStore: (select: (s: AppState) => unknown) => select(mocks.state)
@@ -28,6 +29,7 @@ it('advertises the shortcut only on the committed paired copy when physical host
     runtimeOwnerEnvironmentId: 'server-b'
   })
   const active = { ...inactive, runtimeOwnerEnvironmentId: 'server-a' }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the isolated store mock supplies every field read by the production selector.
   mocks.state = {
     activeView: 'terminal',
     activeWorktreeId: active.id,
@@ -44,6 +46,7 @@ it('advertises the shortcut only on the committed paired copy when physical host
   document.body.append(container)
   const root = createRoot(container)
   const model = (worktree: typeof inactive) =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies every model field read by DeleteItems; other menu sections never render.
     ({
       worktree,
       batchDeleteWorktrees: [],

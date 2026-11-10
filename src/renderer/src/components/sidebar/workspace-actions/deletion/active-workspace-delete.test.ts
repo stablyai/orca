@@ -7,6 +7,7 @@ import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 
 const mocks = vi.hoisted(() => ({
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: replaced before each test with every store field read by these shortcut callers.
   state: {} as AppState,
   deleteWorktree: vi.fn(),
   folder: vi.fn()
@@ -29,6 +30,7 @@ const other = makeWorktree({ id: 'other', repoId: 'repo1', hostId: 'local', inst
 let ipcDelete: () => void
 
 function runRenderer(): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: delete uses store state; unrelated shortcut actions are never invoked.
   const state = {
     activeView: 'terminal',
     activeWorktreeId: 'active',
@@ -50,6 +52,7 @@ function runRenderer(): void {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.folder.mockReturnValue(null)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this isolated store mock supplies every field read by the tested production paths.
   mocks.state = {
     activeView: 'terminal',
     activeModal: 'none',
@@ -195,6 +198,7 @@ describe.each([
   it('refuses while a creation surface owns the workspace', () => {
     mocks.state.activePendingCreationId = 'pending'
     mocks.state.pendingWorktreeCreations = {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: creation eligibility reads only status and loaderVisible.
       pending: {
         status: 'error',
         loaderVisible: true
@@ -209,6 +213,7 @@ describe.each([
     dialog.role = 'dialog'
     dialog.innerHTML = '<button>Cancel</button>'
     document.body.append(dialog)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: overlay visibility reads only the returned rectangle count.
     vi.spyOn(dialog, 'getClientRects').mockReturnValue([
       new DOMRect(0, 0, 300, 200)
     ] as unknown as DOMRectList)
@@ -226,6 +231,7 @@ describe.each([
     if (!menu) {
       throw new Error('Missing menu')
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: overlay visibility reads only the returned rectangle count.
     vi.spyOn(menu, 'getClientRects').mockReturnValue([
       new DOMRect(0, 0, 300, 200)
     ] as unknown as DOMRectList)
