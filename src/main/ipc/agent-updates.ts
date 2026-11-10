@@ -7,7 +7,7 @@ import {
   refreshAgentUpdates,
   startAgentUpdates
 } from '../agent-updates/agent-update-service'
-import type { AgentUpdateSettings } from '../agent-updates/check-agent-updates'
+import { pickAgentUpdateSettings } from '../agent-updates/check-agent-updates'
 import type { Store } from '../persistence/loading-store/store'
 import { isTrustedUIRenderer, sendToTrustedUIRenderer } from './ui'
 
@@ -19,10 +19,7 @@ function assertTrustedSender(event: IpcMainInvokeEvent): void {
 }
 
 export function registerAgentUpdatesHandlers(store: Pick<Store, 'getSettings'>): void {
-  const readSettings = (): AgentUpdateSettings => {
-    const { disabledTuiAgents, agentCmdOverrides } = store.getSettings()
-    return { disabledTuiAgents, agentCmdOverrides }
-  }
+  const readSettings = () => pickAgentUpdateSettings(store.getSettings())
 
   onAgentUpdatesChanged((state) => sendToTrustedUIRenderer('agentUpdates:state', state))
 

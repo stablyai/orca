@@ -15,6 +15,14 @@ import { planAgentUpdate } from './update-plan'
 
 export type AgentUpdateSettings = Pick<GlobalSettings, 'disabledTuiAgents' | 'agentCmdOverrides'>
 
+/** A runtime store's settings may omit fields; missing ones mean nothing disabled or overridden. */
+export function pickAgentUpdateSettings({
+  disabledTuiAgents,
+  agentCmdOverrides
+}: Partial<AgentUpdateSettings>): AgentUpdateSettings {
+  return { disabledTuiAgents: disabledTuiAgents ?? [], agentCmdOverrides: agentCmdOverrides ?? {} }
+}
+
 export type AgentUpdateCheckResult = {
   rows: AgentUpdateRow[]
   /** False only when every latest-version lookup failed (e.g. offline), which is not "up to date". */
