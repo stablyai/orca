@@ -184,7 +184,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
         access?: LocalFileAccess
         wakeWslDistro?: boolean
       }
-    ): Promise<{ size: number; isDirectory: boolean; mtime: number }> => {
+    ): Promise<{ size: number; isDirectory: boolean; mtime: number } | null> => {
       if (args.connectionId) {
         throw new SshHostNotServedError(args.connectionId)
       }
@@ -196,7 +196,12 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
           return { size: stats.size, isDirectory: stats.isDirectory(), mtime: stats.mtimeMs }
         },
         { wake: args.wakeWslDistro === true }
-      )
+      ).catch((error: unknown) => {
+        if (isPathAbsentError(error)) {
+          return null
+        }
+        throw error
+      })
     }
   )
 

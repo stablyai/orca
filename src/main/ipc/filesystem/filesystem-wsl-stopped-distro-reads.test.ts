@@ -3,6 +3,7 @@ import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktre
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   handlers,
+  REPO_PATH,
   store,
   readdirMock,
   readFileMock,
@@ -173,5 +174,32 @@ describe('filesystem reads of a stopped WSL distro', () => {
       WslDistroUnverifiableError
     )
     expect(realpathMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('filesystem metadata absence', () => {
+  beforeEach(() => {
+    resetFilesystemIpcMocks()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The harness store implements the accessors these handlers read.
+    registerFilesystemHandlers(store as never)
+  })
+
+  it.each(['ENOENT', 'ENOTDIR'])('returns missing without rejecting IPC for %s', async (code) => {
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code }))
+    await expect(invoke('fs:stat', { filePath: REPO_PATH })).resolves.toBeNull()
+  })
+
+  it('preserves permission failures', async () => {
+    const error = Object.assign(new Error('permission denied'), { code: 'EACCES' })
+    statMock.mockRejectedValue(error)
+    await expect(invoke('fs:stat', { filePath: REPO_PATH })).rejects.toBe(error)
+  })
+
+  it('returns metadata for existing files', async () => {
+    await expect(invoke('fs:stat', { filePath: REPO_PATH })).resolves.toEqual({
+      size: 10,
+      isDirectory: false,
+      mtime: 123
+    })
   })
 })
