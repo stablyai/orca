@@ -96,10 +96,6 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-function settled(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 20))
-}
-
 async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
   const submissions = new Map<string, AgentJournalSubmission>()
   const turns = new Map<string, string>()
@@ -126,6 +122,7 @@ async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
       )
     }
   })
+  await vi.waitFor(() => expect(working).toEqual([false]))
   working.length = 0
   const body = hostTestMessage('hi')
   await host.send(CALLER, {
@@ -141,7 +138,7 @@ async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
     },
     body
   })
-  await settled()
+  await vi.waitFor(() => expect(claude.current.connections[0]?.sent).toHaveLength(1))
   const connection = claude.current.connections[0]!
   if (backlog) {
     // Queue the previous result immediately ahead of the new echo in the same read.
@@ -158,11 +155,11 @@ async function expectWorkingThroughEcho(backlog: boolean): Promise<void> {
     })
   }
   connection.handlers.onMessage?.({ ...connection.sent.at(-1)!, uuid: 'echo-uuid' })
-  await settled()
-
-  expect([...submissions.values()].map((submission) => submission.dispatchState)).toEqual([
-    'accepted'
-  ])
+  await vi.waitFor(() =>
+    expect([...submissions.values()].map((submission) => submission.dispatchState)).toEqual([
+      'accepted'
+    ])
+  )
   expect([...turns.values()]).toEqual(['running'])
   expect(working).not.toContain(false)
 }
