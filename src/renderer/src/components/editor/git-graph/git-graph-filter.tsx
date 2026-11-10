@@ -6,7 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { getRuntimeGitRefs } from '@/runtime/source-control/git/runtime-git-status-client'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { GIT_HISTORY_REFS_CAPABILITY } from '../../../../../shared/source-control/runtime/git-graph-capabilities'
-import { gitGraphScope, useGitGraphScope } from '@/lib/git-graph-tab'
+import { gitGraphScope, useGitGraphScope } from '@/lib/source-control/graph/git-graph-tab'
 import { useTranslate } from '@/i18n/use-translate'
 import type {
   GitHistoryItemRef,

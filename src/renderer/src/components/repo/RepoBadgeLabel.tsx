@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 type RepoBadgeMarkProps = {
   color: string | null | undefined

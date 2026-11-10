@@ -11,8 +11,8 @@ import {
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
-import { useOnboardingSkillRuntime } from '@/hooks/use-onboarding-skill-runtime'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { useOnboardingSkillRuntime } from '@/hooks/skills/runtime/use-onboarding-skill-runtime'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { isAgentCapabilitiesDone } from './feature-wall-setup-progress'

@@ -1,8 +1,8 @@
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import type { UseMobileDictationResult } from '../hooks/mobile-dictation-session-state'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
-import { useHostDisplay } from '../transport/hosts/use-host-display'
-import { useHostProfile } from '../transport/hosts/use-host-profile'
+import { useHostDisplay } from '../host-descriptors/use-host-display'
+import { useHostProfile } from '../host-catalog/use-host-profile'
 import type { MobileDictationLive } from './mobile-dictation-live-context'
 import { dictationFailureReason } from './mobile-dictation-controls-copy'
 

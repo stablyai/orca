@@ -1,6 +1,6 @@
 import type { AgentLaunchInputViews } from '../../../../../../shared/agent-launch/choices/agent-launch-choices'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
-import type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
+import type { LinkedWorkItemContext } from '@/lib/work-items/linked-work-item-context'
 import type { TaskProvider } from '../../../../../../shared/work-items/task-providers'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../../../shared/workspace-source'

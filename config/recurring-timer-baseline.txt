@@ -85,9 +85,9 @@
 1 src/renderer/src/components/terminal-pane/render-health/terminal-render-desync-sentinel.ts
 1 src/renderer/src/hooks/use-now.ts
 1 src/renderer/src/lib/agent-session/hibernation/agent-hibernation-coordinator.ts
-1 src/renderer/src/lib/crash-diagnostics.ts
-1 src/renderer/src/lib/window-visibility-interval.ts
-1 src/renderer/src/lib/worker-auto-close.ts
+1 src/renderer/src/diagnostics/crash-reporting/crash-diagnostics.ts
+1 src/renderer/src/lib/window-activity/window-visibility-interval.ts
+1 src/renderer/src/runtime/agent-orchestration/worker-auto-close.ts
 1 src/renderer/src/runtime/hosts/wsl/wsl-refused-read-watch.ts
 1 src/shared/remote-runtime/control/remote-runtime-shared-control-app-heartbeat.ts
 1 src/shared/remote-runtime/remote-runtime-socket-liveness.ts

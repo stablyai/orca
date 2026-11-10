@@ -14,7 +14,7 @@ import { getAllDrivers } from '../../pane-manager/mobile-driver-state'
 import {
   getForegroundTerminalTabIds,
   getForegroundTerminalTabLastSeenAtById
-} from '../../foreground-terminal-tabs'
+} from '../../../components/terminal-pane/parking/retention/foreground-terminal-tabs'
 import { getAgentHibernationOutputSignature } from './agent-hibernation-output-activity'
 import {
   getHibernationBoundaryResolvedAtByPaneKey,
@@ -28,7 +28,10 @@ import {
   resolveAgentHibernationRuntimeOwner,
   type HostPtyEvidence
 } from './agent-hibernation-host-evidence'
-import { getWindowParkVisible, subscribeWindowParkVisibility } from '../../window-park-visibility'
+import {
+  getWindowParkVisible,
+  subscribeWindowParkVisibility
+} from '../../window-activity/window-park-visibility'
 
 export const AGENT_HIBERNATION_TICK_MS = 60 * 1000
 

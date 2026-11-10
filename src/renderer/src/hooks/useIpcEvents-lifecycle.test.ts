@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Mock } from 'vitest'
-import { createHarnessStoreState } from './ipc-events-test-harness'
+import './ipc-events-test-harness'
+import { createHarnessStoreState } from './ipc-events-harness-store-state'
 
 type ListenerRecord = {
   active: boolean

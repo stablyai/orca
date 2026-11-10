@@ -2,7 +2,7 @@ import React from 'react'
 import type {
   NeedsSetupProjectHostOption,
   ReadyProjectHostSetupOption
-} from '@/lib/project-host-setup-options'
+} from '@/lib/workspace/creation/project-host-setup-options'
 import { HostRowIcon, RunTargetRow } from './RunTargetComboboxRow'
 import { ConnectHostButton, NeedsSetupHostIcon, SetLocationButton } from './RunTargetRowActions'
 import { RecipesSubmenuRow } from './RunTargetSubmenus'

@@ -23,10 +23,8 @@ import { cliChatResumeClosingPaneKeys } from './cli-chat-resume-close-terminal'
 import { cliConversationExitGuidance } from '@/lib/cli-conversation-exit-guidance'
 import type { AgentSessionLaunchPlan } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { structuredLaunchesHoldingIdentity } from '@/lib/agent-session/launch/structured-agent-session-launch-holders'
-import {
-  structuredLaunchIdentity,
-  type StructuredLaunchState
-} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { structuredLaunchIdentity } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import type { StructuredLaunchState } from '@/lib/agent-session/launch/structured-agent-session-launch-state-store'
 import { openStructuredAgentSessionProvisionalTab } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 
 /** keep: the agent quit, so the terminal stays; close: continuing stops the pane's agent;

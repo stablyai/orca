@@ -3,11 +3,11 @@ import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import {
   sendMobileNativeChatMessageWithOutcome,
   type MobileNativeChatSendOutcome
-} from '../mobile-native-chat-send'
+} from '../composer/mobile-native-chat-send'
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
-} from '../mobile-native-chat-terminal-write-lock'
+} from '../composer/mobile-native-chat-terminal-write-lock'
 
 export function sendMobileNativeChatPermissionResponse(args: {
   client: RpcClient

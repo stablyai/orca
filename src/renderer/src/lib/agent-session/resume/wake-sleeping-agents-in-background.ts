@@ -132,9 +132,9 @@ function getCanonicalPassiveWakeRecords(
 
 /** Wake mobile-visible sleepers without desktop navigation: wake mounted hibernated panes and collect claims; target-mount unmounted passive hibernation tabs; resume other records without navigation, skipping claims; mount those activate:false resume tabs so startup reaches PTYs. Skip restoreOnTabOpenOnly records to preserve explicit sleep. PTYs republish automatically, so await no spawn. */
 export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): void {
-  const sleptRecords = Object.values(useAppStore.getState().sleepingAgentSessionsByPaneKey).filter(
-    (record) => record.worktreeId === worktreeId
-  )
+  const sleptRecords = sleepingAgentRecordIndex
+    .entries(useAppStore.getState().sleepingAgentSessionsByPaneKey, worktreeId)
+    .map(([, record]) => record)
   // No sleepers means no mounting: phone browsing must not accumulate desktop workspaces/PTYS.
   if (sleptRecords.length === 0) {
     return
@@ -190,3 +190,4 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
   }
   resumeSleepingAgentSessionsForWorktree(worktreeId, resumeOptions)
 }
+import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'

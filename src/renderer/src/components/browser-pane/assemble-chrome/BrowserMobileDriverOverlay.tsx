@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState, type ReactElement } from 'react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { RuntimeTerminalDriverState } from '../../../../../shared/runtime-session-contracts'
 import { useTranslate } from '@/i18n/use-translate'
 
