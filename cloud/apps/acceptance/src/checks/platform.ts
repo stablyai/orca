@@ -225,16 +225,58 @@ export const platformChecks: Record<string, Check> = {
   },
 
   'env.setup-script': async (ctx) => {
-    const s = await environmentBuilds(ctx)
-    const ok = s.first?.status === 'succeeded'
-    // Teardown of the environment rides on the last env check.
-    if (s.envId) {
-      const d = await control.as(ctx.owner, 'DELETE', `/v1/environments/${s.envId}`)
-      if (d.status === 200) {
-        ctx.run.destroyed('other', s.envId)
+    // Per-repo orca.yaml scripts.setup runs inside the VM on a workspace created through the API
+    // (core #168): exactly once, even across a sleep/wake. Uses branch w9-setup-script of the test
+    // repo, whose orca.yaml appends one line to .w9-setup-marker per run.
+    // Teardown of the environment the env.* checks built rides on this, the last env check.
+    if (builds) {
+      const s = await builds
+      if (s.envId) {
+        const d = await control.as(ctx.owner, 'DELETE', `/v1/environments/${s.envId}`)
+        if (d.status === 200) {
+          ctx.run.destroyed('other', s.envId)
+        }
       }
     }
-    return { status: ok ? 'partial' : 'fail', detail: 'install script ran during the build (marker in env.from-build); per-repo orca.yaml setup: desktop workspaces run it in orcad's worktree create (setup prompt), API/CLI/phone/routine workspaces once on create (sandbox-control src/project-setup.ts), skipped on environment builds' }
+    const created = await api(ctx, 'POST', '/v1/workspaces', { name: `w9-setup-${tag(ctx)}`, repo: { url: config.testRepo, ref: 'w9-setup-script' } })
+    const id = created.body?.workspace?.id ?? created.body?.id
+    if (!id) {
+      return { status: 'fail', detail: `create ${created.status} ${JSON.stringify(created.body).slice(0, 200)}` }
+    }
+    ctx.run.created({ kind: 'sandbox', id, label: 'orca.yaml setup workspace', vcpus: 4 })
+    try {
+      const session = async () => (await control.as(ctx.solo, 'GET', `/v1/sandboxes/${id}`)).body?.sandbox?.session?.id as string
+      const read = async (sid: string) =>
+        (await ctx.sandboxes.exec(sid, `cd /vercel/sandbox/project && echo "lines=$(wc -l < .w9-setup-marker 2>/dev/null || echo 0)"; cat ~/.orca-sandbox/project-setup/exit* 2>/dev/null | head -1; ls ~/.orca-sandbox/project-setup/ 2>/dev/null | tr '\\n' ' '`)).stdout
+      let out = ''
+      const t0 = Date.now()
+      while (Date.now() - t0 < 120_000) {
+        out = await read(await session())
+        if (/lines=[1-9]/.test(out)) {
+          break
+        }
+        await sleep(3000)
+      }
+      const ranMs = Date.now() - t0
+      const first = Number(/lines=(\d+)/.exec(out)?.[1] ?? 0)
+      // Sleep and wake: the setup must not run again.
+      await api(ctx, 'POST', `/v1/workspaces/${id}/sleep`)
+      await api(ctx, 'POST', `/v1/workspaces/${id}/wake`)
+      await sleep(10_000)
+      const again = await read(await session())
+      const second = Number(/lines=(\d+)/.exec(again)?.[1] ?? 0)
+      const ok = first === 1 && second === 1
+      return {
+        status: ok ? 'pass' : 'fail',
+        detail: `orca.yaml scripts.setup ran inside the VM for an API-created workspace (${first} run within ${Math.round(ranMs / 1000)} s; log dir: ${out.split('\n').slice(1).join(' ').trim().slice(0, 120)}); after sleep/wake still ${second} run (exactly once). Desktop-created workspaces run setup after the trust prompt (UI). The environment-build skip path is unit-tested by core.`,
+        timingsMs: { setupVisible: ranMs }
+      }
+    } finally {
+      const d = await api(ctx, 'DELETE', `/v1/workspaces/${id}`)
+      if (d.status < 300 || d.status === 404) {
+        ctx.run.destroyed('sandbox', id)
+      }
+    }
   },
 
   // ---------------- W4 ----------------
