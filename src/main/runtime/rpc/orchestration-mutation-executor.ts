@@ -32,6 +32,14 @@ export type DurableMutationInvocation = {
   replayedReceipt?: unknown
 }
 
+/** Mutations whose pending receipt a restart re-enters, so a stop or cancel still finishes rather
+ *  than answering operation_unknown: each re-runs its ordinary owner, which is safe to repeat. */
+const RESUMABLE_PENDING_METHODS: ReadonlySet<string> = new Set([
+  'orchestration.workerRelease',
+  'orchestration.workerStop',
+  'orchestration.peerRunCancel'
+])
+
 type InFlightMutation = {
   method: string
   payloadHash: string
@@ -134,7 +142,7 @@ export class OrchestrationMutationExecutor {
       isResumablePendingWorkerDone(request.method, params, begun.row.receipt)
     const resumedPendingMutation =
       begun.disposition === 'pending' &&
-      (request.method === 'orchestration.workerRelease' || resumedPendingWorkerDone)
+      (RESUMABLE_PENDING_METHODS.has(request.method) || resumedPendingWorkerDone)
 
     if (begun.disposition === 'completed') {
       const active = this.inFlight.get(key)
@@ -191,7 +199,7 @@ export class OrchestrationMutationExecutor {
           { requestId }
         )
       }
-      if (request.method !== 'orchestration.workerRelease' && !resumedPendingWorkerDone) {
+      if (!resumedPendingMutation) {
         const recovery = getPendingWorkerStartRecovery(request.method, begun.row.receipt)
         throw new OrchestrationError(
           'operation_unknown',

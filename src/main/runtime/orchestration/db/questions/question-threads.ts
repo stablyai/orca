@@ -39,6 +39,7 @@ export function createQuestion(
         question: params.question,
         options: params.options ?? []
       }),
+      senderDispatchId: dispatch.id,
       runId: params.runId
     })
     this.db.prepare('UPDATE messages SET thread_id = ? WHERE id = ?').run(message.id, message.id)

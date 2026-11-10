@@ -15,7 +15,7 @@ import { withoutMethodsThisHostDoesNotServe } from './methods/terminal/session-t
 import { emulatorProbe, emulatorProbeError } from '../../emulator/emulator-probe'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { isDurableMutation } from '../../../shared/orchestration/orchestration-rpc-contract'
-import type { OrchestrationSessionCaller } from '../orchestration/addressing/orchestration-caller-identity'
+import type { OrchestrationEntryCaller } from '../orchestration/addressing/orchestration-caller-identity'
 import {
   getOrchestrationMutationExecutor,
   type DurableMutationInvocation,
@@ -45,7 +45,7 @@ type AdmittedUnaryCall = {
   request: RpcRequest
   method: RpcMethod
   params: unknown
-  caller: OrchestrationSessionCaller | undefined
+  caller: OrchestrationEntryCaller | undefined
 }
 
 export class RpcDispatcher {
@@ -231,7 +231,11 @@ export class RpcDispatcher {
       return desktopBrowser.result
     }
 
-    const compatibility = await legacyOrchestration.tryHandle(request, params, context.signal)
+    // A paired Orca is never a legacy caller, so its calls reach only the declared access check.
+    const compatibility =
+      caller?.kind === 'peer'
+        ? { handled: false as const }
+        : await legacyOrchestration.tryHandle(request, params, context.signal)
     if (compatibility.handled) {
       return compatibility.result
     }
@@ -275,7 +279,7 @@ export class RpcDispatcher {
       effectiveParams,
       invoke,
       callerFingerprint,
-      context.orchestrationCaller?.orcaSessionId
+      context.orchestrationCaller?.orcaSessionId ?? undefined
     )
     if (request.method.startsWith('orchestration.')) {
       queueMicrotask(() => {

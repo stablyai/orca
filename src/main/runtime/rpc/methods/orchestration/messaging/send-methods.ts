@@ -39,6 +39,8 @@ export const ORCHESTRATION_SEND_METHODS = [
     access: {
       kind: 'writes',
       caller: 'from',
+      callerPane: 'senderPaneKey',
+      server: 'on',
       targets: { to: 'party', threadId: 'message', run: 'run', payload: 'dispatch' }
     },
     permission: 'workspace',
