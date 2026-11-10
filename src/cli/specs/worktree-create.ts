@@ -6,7 +6,7 @@ export const WORKTREE_CREATE_COMMAND_SPEC: CommandSpec = {
   repeatableFlags: ['reference'],
   summary: 'Create a new Orca-managed worktree',
   usage:
-    'orca worktree create --name <name> [--repo <selector>|--project <id-or-name> [--host <host>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--model <id>] [--effort <level>] [--surface chat|terminal] [--setup run|skip|inherit] [--base-branch <ref>] [--branch <name>] [--reference <url-or-jira-key>...] [--reference-site <id>] [--issue <number>] [--pr <number>] [--linear-issue <identifier-or-url>] [--gitlab-issue <number-or-url>] [--gitlab-mr <number-or-url>] [--comment <text>] [--parent-worktree <selector> [--parent-environment <environment>]] [--no-parent] [--run-hooks] [--activate] [--retry-launch <operationId>] [--json]',
+    'orca worktree create --name <name> [--repo <selector>|--project <id-or-name> [--host <host>]|--project-host-setup <id>] [--on <target> [--idempotency-key <key>] [--progress text|json|none]] [--agent <id>] [--prompt <text>] [--model <id>] [--effort <level>] [--surface chat|terminal] [--setup run|skip|inherit] [--base-branch <ref>] [--branch <name>] [--reference <url-or-jira-key>...] [--reference-site <id>] [--issue <number>] [--pr <number>] [--linear-issue <identifier-or-url>] [--gitlab-issue <number-or-url>] [--gitlab-mr <number-or-url>] [--comment <text>] [--parent-worktree <selector> [--parent-environment <environment>]] [--no-parent] [--run-hooks] [--activate] [--retry-launch <operationId>] [--json]',
   allowedFlags: [
     ...GLOBAL_FLAGS,
     'repo',
@@ -14,6 +14,12 @@ export const WORKTREE_CREATE_COMMAND_SPEC: CommandSpec = {
     'host',
     'project-host-setup',
     'name',
+    'on',
+    'idempotency-key',
+    'progress',
+    'size',
+    'input',
+    'inputs-file',
     'agent',
     'prompt',
     'model',
@@ -57,6 +63,10 @@ export const WORKTREE_CREATE_COMMAND_SPEC: CommandSpec = {
     'Repo-defined setup hooks follow the repository setup policy; pass --setup run to force them.',
     'Pass --activate when the CLI caller intentionally wants to reveal the new worktree in the app.',
     'Passing --run-hooks is kept as a legacy alias for --setup run and reveals the worktree.',
+    '--on <target> picks where the workspace runs. An existing host (local, ssh:<id>, runtime:<id>, or a name from `orca host list`) works exactly like --host, so it goes with --project (--repo already names its host). A provider target creates a new host for this workspace first: recipe:<id> for an orca.yaml environment recipe, plugin:<plugin>/<id> for an approved plugin recipe; `orca provider list` shows them. Without --on nothing changes.',
+    "A provider create runs on the Orca desktop app on this computer (not with --environment or --pairing-code). It prints named steps to stderr (--progress json writes them as JSON lines; --json defaults to none) and the new host's id as soon as it is recorded. Ctrl+C stops it and destroys a host that finished its create step. Each create sends an idempotency key (printed; set it with --idempotency-key): rerunning with the same key returns the same workspace instead of creating another host.",
+    'Provider create failures use code host_create_failed; data.phase names the failed step, data.providerCode the provider failure code, and data.host.state says whether the new host was destroyed, is left-running (no destroy step) or destroy-failed. Exit codes: 2 invalid input, 4 the workspace was created but a follow-up (agent launch) failed (data.result has the workspace), 5 failed and a host may still be running.',
+    '--activate, --parent-worktree, --parent-environment and --retry-launch are refused with a provider target for now; provisioned-root recipes also refuse --setup run, --run-hooks and sparse checkout. --size and --input apply only to providers that declare sizes or inputs; none do yet.',
     'Use --pr for GitHub pull requests; --gitlab-issue and --gitlab-mr write separate GitLab links. GitLab URLs must match the stored source project or remote; they cannot select a foreign project.'
   ],
   examples: [
@@ -69,6 +79,7 @@ export const WORKTREE_CREATE_COMMAND_SPEC: CommandSpec = {
     'orca worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json',
     'orca worktree create --repo id:<repoId> --name related-task --parent-worktree active --json',
     'orca worktree create --environment <environment-id> --repo id:<repoId> --name child --parent-environment local --parent-worktree folder:<folderId> --json',
-    'orca worktree create --repo id:<repoId> --name independent-task --no-parent --json'
+    'orca worktree create --repo id:<repoId> --name independent-task --no-parent --json',
+    'orca worktree create --repo id:<repoId> --name vm-task --on recipe:dev-vm --agent codex --prompt "hi" --json'
   ]
 }

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { WorkspaceProviderTargetSchema } from '../workspace-provider-target'
 import { WorkspaceAttachmentsSchema } from '../workspace-attachments/workspace-attachment-schema'
 import { WorkspaceLinkedItemSchema } from '../workspace-attachments/workspace-linked-item-schema'
 import { TaskSourceContextSchema } from '../work-items/task-source-context-schema'
@@ -33,6 +34,8 @@ export const WorktreeCreate = z
     /** Scope same-ID repo copies by host; absent retains legacy selector lookup, which refuses ambiguous IDs. */
     repoHostId: OptionalExecutionHostId,
     name: OptionalString,
+    /** A provider that creates a new host for this workspace (`--on recipe:<id>` and kin). */
+    target: WorkspaceProviderTargetSchema.optional(),
     /** Generated names may skip/retire candidates; absent means user-typed and bypasses that policy. */
     nameWasGenerated: z.boolean().optional(),
     baseBranch: OptionalString,

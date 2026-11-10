@@ -572,6 +572,7 @@ import {
   ProjectHostSetupUpdate,
   ProjectUpdate
 } from './project-runtime-params'
+import { ProviderList } from './provider-params'
 import { RecipeVmWakeParams } from './recipe-vm-wake-params'
 import { ReferenceFind, ReferenceList } from './reference-params'
 import {
@@ -1451,6 +1452,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'projectHostSetup.list': null,
   'projectHostSetup.setupExistingFolder': ProjectHostSetupExistingFolder,
   'projectHostSetup.update': ProjectHostSetupUpdate,
+  'provider.list': ProviderList,
   'reference.find': ReferenceFind,
   'reference.list': ReferenceList,
   'repo.add': RepoPath,

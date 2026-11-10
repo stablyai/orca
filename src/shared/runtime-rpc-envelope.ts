@@ -40,11 +40,19 @@ const Failure = z
   })
   .strip()
 
+const Progress = z
+  .object({ phase: z.string().min(1).max(200), runtimeId: z.string().min(1).max(200).optional() })
+  .strip()
+
 const Keepalive = z
   .object({
-    _keepalive: z.literal(true)
+    _keepalive: z.literal(true),
+    // Optional named step of a long poll; clients that predate it strip the field.
+    progress: Progress.optional()
   })
   .strip()
+
+export type RuntimeRpcProgress = z.infer<typeof Progress>
 
 export const RuntimeRpcEnvelopeSchema = z.union([Success, Failure, Keepalive])
 

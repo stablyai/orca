@@ -12,9 +12,20 @@ const CREATE_METHOD_BY_TARGET_KIND = {
 } as const satisfies Record<Exclude<AgentLaunchTarget['kind'], 'existing'>, string>
 
 export function assertAgentLaunchTargetAuthorized(
-  target: Pick<AgentLaunchTarget, 'kind'>,
+  target: Pick<AgentLaunchTarget, 'kind'> & { create?: unknown },
   context: Pick<RpcContext, 'clientKind'>
 ): void {
+  if (
+    target.kind === 'create-worktree' &&
+    typeof target.create === 'object' &&
+    target.create !== null &&
+    'target' in target.create &&
+    target.create.target !== undefined
+  ) {
+    throw new Error(
+      'Create the workspace on its provider first, then launch the agent on its new host.'
+    )
+  }
   // `clientKind` is the paired device's scope, stamped from its validated token.
   if (target.kind === 'existing' || context.clientKind !== 'mobile') {
     return

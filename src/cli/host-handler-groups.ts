@@ -38,5 +38,15 @@ export const HOST_HANDLER_GROUPS: readonly HandlerGroup[] = [
     name: 'vm-env',
     keys: ['vm env doctor'],
     load: async () => (await import('./handlers/vm-env.js')).VM_ENV_HANDLERS
+  },
+  {
+    name: 'provider',
+    keys: ['provider list', 'provider show'],
+    load: async () => (await import('./handlers/provider.js')).PROVIDER_HANDLERS
+  },
+  {
+    name: 'provider-doctor',
+    keys: ['provider doctor'],
+    load: async () => (await import('./handlers/vm.js')).PROVIDER_DOCTOR_HANDLERS
   }
 ]
