@@ -1,5 +1,6 @@
 import type { AgentSessionUnavailable } from './agent-session-availability'
 import type { AgentSessionFrameFields } from './agent-session-frame-fields'
+import type { AgentSessionUsageLimitContinue } from './agent-session-usage-limit-continue-wire'
 import type { AgentSessionCurrentWorkFields } from './requests/agent-session-current-work-wire'
 import type {
   AgentSessionBackgroundTask,
@@ -190,13 +191,7 @@ export type AgentSessionSubscribeEvent =
 
 /** Host-projected list status avoids client transcript replay; older hosts lack this additive method. */
 export type AgentSessionStatusSummary = {
-  usageLimitContinue?: {
-    turnItemId: string
-    resetsAt: number
-    /** The later reset the account still shows spent, which Orca waits for; absent: `resetsAt`. */
-    continueAt?: number
-    state: 'scheduled' | 'cancelled' | 'failed' | 'off'
-  }
+  usageLimitContinue?: AgentSessionUsageLimitContinue
   rewindBlockedReason?: AgentSessionRewindReason
   sessionId: string
   workspaceId: string
