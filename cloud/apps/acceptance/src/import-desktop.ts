@@ -19,7 +19,10 @@ const MAP: Record<string, string> = {
   'proj.cloud-name': 'cli.desktop-project-name',
   'life.destroy': 'cli.desktop-delete',
   'life.delete-unconfirmed': 'cli.desktop-delete-unconfirmed',
-  'life.delete-after-oob-destroy': 'cli.desktop-delete-gone'
+  'life.delete-after-oob-destroy': 'cli.desktop-delete-gone',
+  'auth.picker-sign-in': 'cli.desktop-picker-signin',
+  'life.delete-asleep': 'cli.desktop-delete-asleep',
+  'life.delete-asleep-after-move': 'cli.desktop-delete-asleep-moved'
 }
 const checks: CheckResult[] = []
 const benchmarks: RunFile['benchmarks'] = []

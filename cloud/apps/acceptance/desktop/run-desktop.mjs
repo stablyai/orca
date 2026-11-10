@@ -449,6 +449,84 @@ async function waitForWorkspaceReady(step, t0, { onTick } = {}) {
   }
 }
 
+/** Click the Force Delete offer wherever the app shows it (toast action or the delete dialog). */
+async function clickForceDelete(step, name) {
+  const visible = page.getByRole('button', { name: /^Force Delete$/i }).filter({ visible: true })
+  if ((await visible.count()) === 0) {
+    // Not offered in place: reopen Delete and look in the dialog.
+    await page.keyboard.press('Escape').catch(() => {})
+    await openRowMenu(name)
+    await page.getByRole('menuitem', { name: /^Delete/ }).click()
+    await sleep(800)
+    step.forceSurface = 'dialog (reopened)'
+  } else {
+    step.forceSurface = (await page.getByRole('dialog').filter({ visible: true }).count()) ? 'dialog' : 'toast'
+  }
+  await shot(step, 'force-offer')
+  await page.getByRole('button', { name: /^Force Delete$/i }).filter({ visible: true }).first().click({ timeout: 10_000 })
+  await sleep(600)
+  // A confirm for the force action, if any.
+  await page.getByRole('dialog').getByRole('button', { name: /^(Force Delete|Delete( Workspace)?)$/i }).first().click({ timeout: 2000 }).catch(() => {})
+}
+
+/** Asleep delete (#149): no wake, refusal offering Force delete, Force delete destroys the VM. */
+async function asleepDeleteCheck(step, name, id) {
+  step.sandboxId = id
+  step.before = await sandboxStatus(id)
+  const o = await uiDelete(step, name, 'asleep', 30_000)
+  step.firstDelete = o
+  const refused = o.kind === 'error' && /asleep/i.test(o.text ?? '') && /Force delete/i.test(o.text ?? '')
+  // No wake: the control plane never sees a resume.
+  const states = []
+  for (let i = 0; i < 6; i++) {
+    states.push((await sandboxStatus(id)).status)
+    await sleep(500)
+  }
+  step.statesAfterRefusal = states
+  const woke = states.some((x) => /running|resum|starting/.test(String(x)))
+  const t0 = Date.now()
+  let forced = null
+  if (o.kind !== 'removed') {
+    await clearToasts()
+    await clickForceDelete(step, name)
+    let gone = false
+    while (Date.now() - t0 < 120_000) {
+      if (!(await rowShown(name))) { gone = true; break }
+      await sleep(250)
+    }
+    forced = { rowGone: gone, ms: Date.now() - t0, toasts: (await toasts()).map(redact) }
+    await shot(step, 'after-force')
+  }
+  step.forceDelete = forced
+  const w = await waitSandboxStatus(id, ['destroyed'], 120_000)
+  step.timings.forceToRowGoneMs = forced?.ms ?? null
+  step.timings.forceToDestroyedMs = forced ? Date.now() - t0 : null
+  step.finalSandboxStatus = w.status
+  const direct = o.kind === 'removed' && !o.rowVisibleAfter
+  // Delete Workspace in the dialog went through without any Force delete offer: the VM still must not
+  // wake and must be destroyed, but the #149 "offers Force delete" half is not what the UI does.
+  step.status = refused && !woke && forced?.rowGone && !w.timedOut ? 'pass' : direct && !woke && !w.timedOut ? 'partial' : 'fail'
+  step.detail = `before: ${step.before.status}; Delete -> ${o.kind}${o.text ? ` "${o.text}"` : ''}${direct ? ' (dialog "Delete Workspace" deleted it directly; no refusal, no Force delete offer)' : ''}; control plane right after: ${JSON.stringify(states)} (woke: ${woke}); ${forced ? `Force delete via ${step.forceSurface} -> row gone ${forced.rowGone} in ${forced.ms}ms; ` : ''}sandbox ${id} -> ${w.status}${w.timedOut ? ' (timed out)' : ''}; toasts during delete ${JSON.stringify(o.toasts)}`
+  if (step.status === 'partial') {
+    bug(step.id, {
+      title: 'Asleep Orca Cloud Delete from the dialog deletes directly (no wake, destroyed) without the "Use Force delete" refusal #149 describes',
+      expected: 'without force: refusal offering Force delete; Force delete destroys',
+      actual: step.detail,
+      repro: step.id === 'life.delete-asleep-after-move' ? 'Orca Cloud workspace -> Move to this computer -> Delete -> Delete Workspace' : 'Orca Cloud workspace -> Sleep -> Delete -> Delete Workspace',
+      screenshot: step.screenshots.find((x) => x.includes('asleep-confirm'))
+    })
+  }
+  if (step.status === 'fail') {
+    bug(step.id, {
+      title: 'Asleep Orca Cloud Delete does not follow the #149 flow (refuse without force, no wake, Force delete destroys)',
+      expected: 'refusal offering Force delete, VM stays asleep, Force delete removes the row and destroys the sandbox',
+      actual: step.detail,
+      repro: step.id === 'life.delete-asleep-after-move' ? 'Orca Cloud workspace -> Move to this computer -> Delete the cloud row' : 'Orca Cloud workspace -> Sleep -> Delete',
+      screenshot: step.screenshots.at(-1)
+    })
+  }
+}
+
 /** A plain signed-in Orca Cloud create for checks that consume a workspace. */
 async function createExtraWorkspace(step, name) {
   const d = await openComposer(step, `${name}-composer`)
@@ -506,9 +584,9 @@ async function uiDelete(step, name, label, timeoutMs = 90_000, watchAfterMs = 0)
   while (Date.now() - t0 < timeoutMs) {
     const gone = !(await rowShown(name))
     const body = await page.evaluate(() => document.body.innerText)
-    const err = [...(await toasts()), body].find((t) => /couldn.t confirm|could not confirm|Couldn.t delete|Failed to delete/i.test(t))
+    const err = [...(await toasts()), body].find((t) => /couldn.t confirm|could not confirm|Couldn.t delete|Failed to delete|is asleep/i.test(t))
     if (err) {
-      outcome = { kind: 'error', text: redact(err.match(/[^\n]*(couldn.t confirm|could not confirm|Couldn.t delete|Failed to delete)[\s\S]{0,240}/i)?.[0] ?? err.slice(0, 300)) }
+      outcome = { kind: 'error', text: redact(err.match(/[^\n]*(couldn.t confirm|could not confirm|Couldn.t delete|Failed to delete|is asleep)[\s\S]{0,300}/i)?.[0] ?? err.slice(0, 300)) }
       break
     }
     if (gone) {
@@ -600,12 +678,17 @@ async function main() {
     const watched = [USER, 'desktop-dogfood', 'dev-user']
     const baseline = await sandboxIdsFor(watched)
     const d = await openComposer(step, 'signed-out')
-    const pickedAt = Date.now()
+    const pickT0 = Date.now()
+    const pickStartedAt = new Date().toISOString()
     const runOn = await pickOrcaCloud(step, d)
-    // Dev auth signs in without a browser; give a pick-started sign-in a moment to settle.
-    for (let i = 0; i < 16; i++) {
-      await sleep(500)
-      if (!(await store(() => Boolean(window.__store.getState().orcaProfileSignInProgress)))) break
+    // Dev auth signs in without a browser. #149: the pick should end with Orca Cloud selected.
+    let pickToSelectedMs = null
+    while (Date.now() - pickT0 < 15_000) {
+      if (/Orca Cloud/.test((await runOnValue(d)) ?? '') && (await authState()).state === 'connected') {
+        pickToSelectedMs = Date.now() - pickT0
+        break
+      }
+      await sleep(250)
     }
     step.afterPick = { auth: await authState(), runOn: await runOnValue(d), dialogOpen: await d.isVisible().catch(() => false) }
     await shot(step, 'after-pick')
@@ -613,6 +696,31 @@ async function main() {
     // D-1 for the picker itself: picking Orca Cloud signed out must not create anything.
     const afterPickLists = await sandboxIdsFor(watched)
     step.createdByPick = Object.fromEntries(watched.map((u) => [u, afterPickLists[u].filter((id) => !baseline[u].includes(id))]))
+    {
+      const selected = step.afterPick.auth.state === 'connected' && /Orca Cloud/.test(step.afterPick.runOn ?? '')
+      const none = Object.values(step.createdByPick).every((ids) => ids.length === 0)
+      const pick = {
+        id: 'auth.picker-sign-in',
+        title: 'Signed out: picking the Orca Cloud row signs in and leaves Orca Cloud selected (#149)',
+        status: selected && none ? 'pass' : 'fail',
+        detail: `picker row "${runOn}"; after the pick: auth ${step.afterPick.auth.state} as ${step.afterPick.auth.userId}, Run on "${step.afterPick.runOn}" (${pickToSelectedMs === null ? 'not selected within 15s' : `selected ${pickToSelectedMs}ms after the pick`}); sandboxes created by the pick ${JSON.stringify(step.createdByPick)}`,
+        screenshots: step.screenshots.filter((x) => /signed-out|after-pick/.test(x)),
+        timings: { pickToSelectedMs },
+        startedAt: pickStartedAt,
+        durationMs: Date.now() - pickT0
+      }
+      results.steps.push(pick)
+      if (pick.status === 'fail') {
+        bug('auth.picker-sign-in', {
+          title: 'Signing in from the Run-on picker\u2019s Orca Cloud row does not leave Orca Cloud selected',
+          expected: 'signed in, Run on = Orca Cloud, nothing created',
+          actual: pick.detail,
+          repro: 'Fresh profile, signed out: New workspace -> Run on -> Orca Cloud ("Sign in to start a sandbox")',
+          screenshot: pick.screenshots.at(-1)
+        })
+      }
+      save()
+    }
     if (step.afterPick.auth.state === 'connected') {
       // The signed-out Orca Cloud row ("Sign in to start a sandbox") signs in instead of selecting the
       // target, and the composer keeps Local Mac. A store sign-out also drops Orca Cloud from Run on, so
@@ -716,12 +824,12 @@ async function main() {
     step.sandboxId = signedOutSandboxId
     const others = await sandboxIdsFor(['desktop-dogfood', 'dev-user'])
     step.otherAccountsAfter = others
-    const rowShown = await rowShown(name)
-    if (rowShown) signedOutWs = name
+    const rowIsShown = await rowShown(name)
+    if (rowIsShown) signedOutWs = name
     step.d1 = { pass: d1NoSandbox, createdWhileSignedOut }
     step.d4 = { pass: Boolean(signedOutSandboxId) && !cardStill && cardGoneMs !== null, ownedBy: signedOutSandboxId ? `dev:${USER}` : null, cardGoneMs, cardStill }
-    step.status = step.d1.pass && step.d4.pass && rowShown ? 'pass' : 'fail'
-    step.detail = `${path_}; card after ${step.timings.createToSignInCardMs}ms; sandboxes while signed out ${JSON.stringify(createdWhileSignedOut)} (D-1 ${step.d1.pass ? 'pass' : 'FAIL'}); sign in from card -> card gone ${cardGoneMs}ms, first terminal output ${ready.firstOutput}ms, sandbox ${signedOutSandboxId ?? 'NOT listed'} for dev:${USER} (D-4 ${step.d4.pass ? 'pass' : 'FAIL'}); row "${name}" shown: ${rowShown}; auth ${JSON.stringify(step.authAfter)}`
+    step.status = step.d1.pass && step.d4.pass && rowIsShown ? 'pass' : 'fail'
+    step.detail = `${path_}; card after ${step.timings.createToSignInCardMs}ms; sandboxes while signed out ${JSON.stringify(createdWhileSignedOut)} (D-1 ${step.d1.pass ? 'pass' : 'FAIL'}); sign in from card -> card gone ${cardGoneMs}ms, first terminal output ${ready.firstOutput}ms, sandbox ${signedOutSandboxId ?? 'NOT listed'} for dev:${USER} (D-4 ${step.d4.pass ? 'pass' : 'FAIL'}); row "${name}" shown: ${rowIsShown}; auth ${JSON.stringify(step.authAfter)}`
     if (!d1NoSandbox) {
       bug('auth.signed-out-create', {
         title: 'Signed-out Orca Cloud create still creates a sandbox',
@@ -875,18 +983,25 @@ async function main() {
         step.status = 'fail'
         step.detail = `after switching team to ${other} (${JSON.stringify(step.selectOrg)}) the workspace row "${name}" is not shown, so Delete can't be tried; api as switched identity ${JSON.stringify(step.apiAsSwitched)}`
       } else {
-        const o = await uiDelete(step, name, 'unconfirmed', 90_000, 45_000)
+        const o = await uiDelete(step, name, 'unconfirmed', 90_000, 20_000)
         step.outcome = o
-        const owner = await sandboxStatus(id)
+        step.sandboxId = id
+        const t1 = Date.now()
+        const owner = await waitSandboxStatus(id, ['destroyed'], o.kind === 'removed' ? 90_000 : 5_000)
         step.ownerViewAfter = owner
+        step.timings.uiDeleteMs = o.ms
+        step.timings.rowGoneToDestroyedMs = o.kind === 'removed' && !owner.timedOut ? Date.now() - t1 : null
         const errText = o.kind === 'error' ? o.text : o.laterError?.text
-        const errOk = /couldn.t confirm/i.test(errText ?? '')
-        step.status = errOk && o.rowVisibleAfter && owner.status !== 'destroyed' ? 'pass' : errOk ? 'partial' : 'fail'
-        step.detail = `team ${before.orgId ?? '(personal)'} -> ${step.authSwitched.orgId}; control plane to switched identity: ${JSON.stringify(step.apiAsSwitched)}; UI Delete -> ${o.kind}${o.text ? ` "${o.text}"` : ''} in ${o.ms}ms; later error within 45s: ${o.laterError ? JSON.stringify(o.laterError) : 'none'}; row kept: ${o.rowVisibleAfter}; owner (personal) sees sandbox ${JSON.stringify(owner)} 45s later`
+        const unconfirmedKept = /couldn.t confirm/i.test(errText ?? '') && o.rowVisibleAfter && owner.status !== 'destroyed'
+        const serverDestroyed = o.kind === 'removed' && !o.rowVisibleAfter && owner.status === 'destroyed'
+        const surfacedFailure = /Couldn.t delete the sandbox/i.test([...(o.toasts ?? []), errText ?? ''].join(' '))
+        step.result = serverDestroyed ? 'destroyed across teams' : unconfirmedKept ? 'unconfirmed, row kept' : surfacedFailure ? 'destroy failure surfaced' : 'silent'
+        step.status = serverDestroyed || unconfirmedKept ? 'pass' : 'fail'
+        step.detail = `team ${before.orgId ?? '(personal)'} -> ${step.authSwitched.orgId}; control plane GET as switched identity: ${JSON.stringify(step.apiAsSwitched)}; UI Delete -> ${o.kind}${o.text ? ` "${o.text}"` : ''} in ${o.ms}ms; later error: ${o.laterError ? JSON.stringify(o.laterError) : 'none'}; row kept: ${o.rowVisibleAfter}; owner (personal) sees ${owner.status}${owner.timedOut ? ' (not destroyed within 90s)' : ` ${step.timings.rowGoneToDestroyedMs ?? '-'}ms after the row went`} => ${step.result}`
         if (step.status === 'fail') {
           bug('life.delete-unconfirmed', {
-            title: 'Delete of an Orca Cloud workspace whose sandbox the control plane answers not_found (team switched) removes the row silently and leaves the sandbox running',
-            expected: '"Orca Cloud couldn\'t confirm this sandbox was deleted…" and the row stays',
+            title: 'Delete after switching team away from the sandbox owner neither destroys the sandbox nor keeps the row with "couldn\u2019t confirm"',
+            expected: 'server destroys it (creator can delete across teams); otherwise the row stays with "couldn\u2019t confirm", and a failed destroy shows a persistent "Couldn\u2019t delete the sandbox" toast with Try again',
             actual: step.detail,
             repro: 'Signed in, create an Orca Cloud workspace on the personal team, switch team to Acme Dev, Delete the workspace',
             screenshot: step.screenshots.at(-1)
@@ -1175,56 +1290,35 @@ async function main() {
     step.localCopyDeleted = !existsSync(local.path)
   })
 
-  await runStep('life.destroy', 'Delete the cloud workspace through the UI and confirm the VM is gone', async (step) => {
-    step.sandboxBefore = sandboxId ? await sandboxStatus(sandboxId) : null
-    let o = await uiDelete(step, wsName, 'delete', 180_000)
-    if (o.kind === 'error' && /asleep/i.test(o.text ?? '')) {
-      step.asleepRefusal = o
-      bug('life.destroy', {
-        title: 'Delete on an asleep Orca Cloud workspace is refused ("This workspace\u2019s VM is asleep. Open the workspace to wake it.")',
-        expected: 'Delete works on an asleep workspace (or wakes it itself); the user asked to throw it away',
-        actual: `"${o.text}"; row kept`,
-        repro: 'Orca Cloud workspace -> Move to this computer (cloud VM goes to sleep) or Sleep -> Delete -> confirm',
-        screenshot: step.screenshots.at(-1)
-      })
-      step.timings.wakeBeforeDeleteMs = await wakeWorkspace(wsName)
-      o = await uiDelete(step, wsName, 'delete-awake', 180_000)
-    }
+  await runStep('life.delete-asleep-after-move', 'Delete right after Move to this computer (VM asleep): no wake; refused without force, offers Force delete; Force delete destroys the VM (#149)', async (step) => {
+    await asleepDeleteCheck(step, wsName, sandboxId)
+  })
+
+  await runStep('life.delete-asleep', 'Delete a workspace put to sleep from the menu: no wake; Force delete destroys the VM (#149)', async (step) => {
+    const ws = await createExtraWorkspace(step, `${wsName}-zz`)
+    await openRowMenu(ws.name)
+    await page.getByRole('menuitem', { name: /^(Suspend VM|Sleep)$/ }).first().click()
+    await page.getByRole('dialog').getByRole('button', { name: /^(Sleep|Suspend)/ }).click({ timeout: 1500 }).catch(() => {})
+    const w = await waitSandboxStatus(ws.sandboxId, ['suspended', 'stopped'], 120_000)
+    step.timings.sleepMs = w.ms
+    if (w.timedOut) throw new Error(`not asleep after 120s (${w.status})`)
+    await sleep(2000)
+    await asleepDeleteCheck(step, ws.name, ws.sandboxId)
+  })
+
+  await runStep('life.destroy', 'Normal Delete of an awake cloud workspace reaches destroyed', async (step) => {
+    const ws = await createExtraWorkspace(step, `${wsName}-del`)
+    const o = await uiDelete(step, ws.name, 'delete', 120_000)
     step.outcome = o
-    step.dialog = o.dialog
     step.timings.uiRowGoneMs = o.kind === 'removed' ? o.ms : null
-    if (o.kind !== 'removed' || o.rowVisibleAfter) {
-      step.status = 'fail'
-      step.finalSandboxStatus = sandboxId ? (await sandboxStatus(sandboxId)).status : null
-      step.detail = `UI Delete -> ${o.kind}${o.text ? ` "${o.text}"` : ''} after ${o.ms}ms; row still shown: ${o.rowVisibleAfter}; sandbox before ${JSON.stringify(step.sandboxBefore)}, after ${step.finalSandboxStatus}; toasts ${JSON.stringify(o.toasts)}`
-      bug('life.destroy', {
-        title: 'Delete on a cloud workspace (asleep after Move to this computer) does not remove the row or the sandbox',
-        expected: 'row removed, sandbox destroyed',
-        actual: step.detail,
-        repro: 'Orca Cloud workspace -> sleep/wake -> Move to this computer -> delete the local copy -> Delete the cloud row and confirm',
-        screenshot: step.screenshots.at(-1)
-      })
-      return
-    }
-    if (!sandboxId) {
-      step.status = 'partial'
-      step.detail = 'row removed; no sandbox id to confirm against the API'
-      return
-    }
-    // The control plane tombstones deleted sandboxes, so a delete that went through reads destroyed.
-    const w = await waitSandboxStatus(sandboxId, ['destroyed'], 120_000)
+    const w = await waitSandboxStatus(ws.sandboxId, ['destroyed'], 120_000)
     step.timings.deleteToDestroyedMs = w.ms
     step.finalSandboxStatus = w.status
-    const listed = (await listSandboxes(USER)).items.some((s) => s.id === sandboxId && s.status !== 'destroyed')
-    step.status = !w.timedOut && !listed ? 'pass' : 'fail'
-    step.detail = `row gone in ${step.timings.uiRowGoneMs}ms; sandbox ${sandboxId} -> ${w.status} after ${w.ms}ms; still listed: ${listed}`
-    if (w.timedOut) {
-      bug('life.destroy', {
-        title: 'Deleting a cloud workspace in the UI leaves the sandbox running',
-        expected: 'sandbox destroyed',
-        actual: `status ${w.status} 120s after delete`,
-        screenshot: step.screenshots.at(-1)
-      })
+    step.sandboxId = ws.sandboxId
+    step.status = o.kind === 'removed' && !o.rowVisibleAfter && !w.timedOut ? 'pass' : 'fail'
+    step.detail = `UI Delete -> ${o.kind}${o.text ? ` "${o.text}"` : ''}, row gone ${step.timings.uiRowGoneMs}ms; sandbox ${ws.sandboxId} -> ${w.status} ${w.ms}ms after the row went`
+    if (step.status === 'fail') {
+      bug('life.destroy', { title: 'Normal Delete of an awake cloud workspace does not destroy it', expected: 'row gone, sandbox destroyed', actual: step.detail, repro: 'Create an Orca Cloud workspace, Delete, confirm', screenshot: step.screenshots.at(-1) })
     }
   })
 
