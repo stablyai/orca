@@ -32,7 +32,18 @@ function contains(commit: string, ancestor: string): boolean {
 }
 
 for (;;) {
-  const a = active()
+  let a: ReturnType<typeof active> = null
+  try {
+    a = active()
+  } catch (error) {
+    // Transient Cloudflare API/auth errors: keep waiting rather than dying.
+    console.log(JSON.stringify({ at: new Date().toISOString(), error: String(error).split('\n')[0]!.slice(0, 160) }))
+    if (!wait) {
+      break
+    }
+    await new Promise((r) => setTimeout(r, 120_000))
+    continue
+  }
   const ok = a?.commit && required ? contains(a.commit, required) : null
   console.log(JSON.stringify({ at: new Date().toISOString(), ...a, containsRequired: ok }))
   if (!wait || ok) {
