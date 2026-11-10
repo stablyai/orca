@@ -96,6 +96,7 @@ export function MobileNativeChatOptionPreviewSheet({
 }
 
 function ReadablePreview({ preview }: { preview: string }): React.JSX.Element {
+  useMobileColorScheme()
   const text = useMemo(() => prepareOptionPreview(preview).lines.join('\n'), [preview])
   return (
     <ScrollView style={styles.preview} showsVerticalScrollIndicator nestedScrollEnabled>
