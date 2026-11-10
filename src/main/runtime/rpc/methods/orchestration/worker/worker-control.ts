@@ -17,8 +17,10 @@ import { sessionIdFromStructuredWorkerIncarnation } from '../../../../orchestrat
 import { readExactWorkerOutput } from './worker-output'
 import { exposeWorkerTerminalResource } from './worker-terminal-resource-presentation'
 import { liveWorkerTerminalAutoReleaseAt } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
-import { readFederatedWorkerOutput } from '../federation/federated-worker-read'
-import { showFederatedWorker } from '../federation/federated-worker-show'
+import {
+  readFederatedWorkerOutput,
+  showFederatedWorker
+} from '../../../../orchestration/legacy-remote-home/legacy-remote-home'
 import {
   WorkerDispatchParams,
   WorkerReadParams
