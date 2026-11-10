@@ -159,5 +159,75 @@ export const agentChecks: Record<string, Check> = {
         await ctx.sandboxes.destroy(box.body.sandbox.id)
       }
     }
-  }
+  },
+  'image.agents': async (ctx) => {
+    const p = await ctx.primary()
+    const r = await ctx.exec(
+      p.sandbox.session!.id,
+      `bash -lc 'for t in claude codex cursor-agent opencode gemini copilot; do v=$(timeout 30 $t --version 2>/dev/null | head -1); echo "$t=\${v:-MISSING}"; done'`,
+      180_000
+    )
+    const lines = r.stdout.trim().split('\n')
+    const missing = lines.filter((l) => l.endsWith('=MISSING')).map((l) => l.split('=')[0])
+    return {
+      status: missing.length === 0 ? 'pass' : 'fail',
+      detail: `agent CLIs on a fresh VM: ${lines.join('; ')}`,
+      evidence: [log('--version', r.stdout)]
+    }
+  },
+
+  'agent.keys-swap': async (ctx) => {
+    // Gemini and Cursor without a real account: stand-in keys go through the egress swap. The VM only
+    // ever holds placeholders; the provider sees the stand-in (and rejects it as invalid), and a
+    // foreign key or a non-allowed path is refused by Orca's egress. No model call, no gateway credit.
+    const tag = ctx.run.file.runId.replace(/[^0-9]/g, '').slice(-8)
+    const who = { sub: `w9-keys-${tag}` }
+    const stand = { GEMINI_API_KEY: `AIzaW9standin${tag}xxxxxxxxxxxxxxxxx`, CURSOR_API_KEY: `key_w9standin${tag}` }
+    for (const [name, value] of Object.entries(stand)) {
+      await control.as(who, 'PUT', `/v1/secrets/personal/${name}`, { value })
+    }
+    const box = await ctx.sandboxes.create(who, { workspaceId: `w9-keys-${tag}` })
+    try {
+      if (box.status !== 200) {
+        return { status: 'fail', detail: `create ${box.status}` }
+      }
+      const sid = box.body.sandbox.session!.id
+      const env = `eval "$(tr '\\0' '\\n' < /proc/$(cat ~/.orca-sandbox/orcad.pid)/environ | grep -E '^(GEMINI_API_KEY|CURSOR_API_KEY)=' | sed 's/^/export /')"`
+      const r = await ctx.exec(
+        sid,
+        [
+          env,
+          `echo "gemini_placeholder=$([ "$GEMINI_API_KEY" != "${stand.GEMINI_API_KEY}" ] && [ -n "$GEMINI_API_KEY" ] && echo yes || echo no)"`,
+          `echo "gemini_swap=$(curl -s -m 20 -H "x-goog-api-key: $GEMINI_API_KEY" 'https://generativelanguage.googleapis.com/v1beta/models' -o /tmp/g.json -w '%{http_code}') $(grep -o API_KEY_INVALID /tmp/g.json | head -1)"`,
+          `echo "gemini_foreign=$(curl -s -m 20 -H 'x-goog-api-key: AIzaForeignKeyNotOursxxxxxxxxxxxxxxxx' 'https://generativelanguage.googleapis.com/v1beta/models' -o /tmp/gf.txt -w '%{http_code}') $(grep -o orca-egress-denied /tmp/gf.txt | head -1)"`,
+          `echo "cursor_swap=$(curl -s -m 20 -X POST -H "Authorization: Bearer $CURSOR_API_KEY" -H 'content-type: application/json' -d '{}' https://api2.cursor.sh/auth/exchange_user_api_key -o /tmp/c.txt -w '%{http_code}') body=$(head -c 40 /tmp/c.txt)"`,
+          `echo "cursor_other_path=$(curl -s -m 20 -H "Authorization: Bearer $CURSOR_API_KEY" https://api2.cursor.sh/some/other/path -o /tmp/c2.txt -w '%{http_code}') $(grep -o path_not_allowed /tmp/c2.txt | head -1)"`,
+          // Keys off the VM: the stand-in values must appear nowhere, not in files, not in any process env.
+          `echo "w9_marker=1" > /dev/null; files=$(grep -rIl -e '${stand.GEMINI_API_KEY}' -e '${stand.CURSOR_API_KEY}' /home /root /tmp /vercel /opt 2>/dev/null | wc -l)`,
+          `procs=0; for f in /proc/[0-9]*/environ; do pid=$(basename $(dirname $f)); [ "$pid" = "$$" ] && continue; if tr '\\0' '\\n' < $f 2>/dev/null | grep -q -e '${stand.GEMINI_API_KEY}' -e '${stand.CURSOR_API_KEY}'; then procs=$((procs+1)); fi; done; echo "keys_in_files=$files keys_in_proc_env=$procs"`
+        ].join('\n'),
+        120_000
+      )
+      const o = r.stdout
+      const placeholder = /gemini_placeholder=yes/.test(o)
+      const geminiSwap = /gemini_swap=400 API_KEY_INVALID/.test(o)
+      const geminiForeign = /gemini_foreign=403 orca-egress-denied/.test(o)
+      const cursorSwap = /cursor_swap=401 body=\{\}/.test(o)
+      const cursorPath = /cursor_other_path=403 path_not_allowed/.test(o)
+      const offVm = /keys_in_files=0 keys_in_proc_env=0/.test(o)
+      const ok = placeholder && geminiSwap && geminiForeign && cursorSwap && cursorPath && offVm
+      return {
+        status: ok ? 'pass' : 'fail',
+        detail: `stand-in keys via the egress swap: VM holds placeholders=${placeholder}; Gemini real host saw the swapped key -> 400 API_KEY_INVALID=${geminiSwap}; foreign key -> 403 orca-egress-denied=${geminiForeign}; Cursor exchange with the placeholder -> 401 {}=${cursorSwap}; other Cursor path -> 403 path_not_allowed=${cursorPath}; stand-in values on the VM: ${/keys_in_files=(\d+) keys_in_proc_env=(\d+)/.exec(o)?.slice(1).join(' files / ') ?? '?'} procs`,
+        evidence: [log('egress probes', o)]
+      }
+    } finally {
+      for (const name of Object.keys(stand)) {
+        await control.as(who, 'DELETE', `/v1/secrets/personal/${name}`)
+      }
+      if (box.status === 200) {
+        await ctx.sandboxes.destroy(box.body.sandbox.id)
+      }
+    }
+  },
 }

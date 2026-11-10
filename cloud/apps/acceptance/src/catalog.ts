@@ -45,7 +45,7 @@ export const CATALOG: Feature[] = [
   { id: 'local.checkpoints', section: S.acct, feature: 'Per-turn code checkpoints: revert restores files and chat together', conductor: '0.19 (Claude), 0.44 (Codex) checkpoints', owner: 'gap-checkpoints', priority: 'P0' },
   // 1. Substrate
   { id: 'sub.create', section: S.sub, feature: 'Hosted microVM per workspace, one call / one click', conductor: '0.78 GA', owner: 'core', priority: 'P0' },
-  { id: 'sub.size', section: S.sub, feature: 'Machine sizes (standard 4 vCPU, large 8 vCPU)', conductor: 'Fixed 8 vCPU / 16 GB', owner: 'core', priority: 'P0', better: 'Choice of size' },
+  { id: 'sub.size', section: S.sub, feature: 'Machine size: Standard 8 vCPU / 16 GB (Conductor parity)', conductor: 'Fixed 8 vCPU / 16 GB', owner: 'core', priority: 'P0' },
   { id: 'sub.disk', section: S.sub, feature: 'Disk >= 32 GB and low-disk alert', conductor: '64 GB (0.82), low-disk alerts', owner: 'w1-env-builds', priority: 'P1' },
   { id: 'sub.tools', section: S.sub, feature: 'Preinstalled tools (node, git, gh, rg, jq, python3, orca CLI, Claude, Codex)', conductor: 'AL2023, Node 24, git, gh, jq, rg, LFS, tmux, Vim, Chrome', owner: 'core', priority: 'P0' },
   { id: 'sub.region', section: S.sub, feature: 'Region iad1', conductor: 'us-east-1 only', owner: 'core', priority: 'P0' },
@@ -65,6 +65,9 @@ export const CATALOG: Feature[] = [
   { id: 'sec.egress-deny', section: S.sec, feature: 'Egress fails closed: unlisted hosts do not resolve; foreign tokens refused', conductor: 'not documented', owner: 'core', priority: 'P0', better: 'Default-deny egress' },
   { id: 'agent.real-task', section: S.sec, feature: 'Real agent task in the VM (Claude Code / Codex via AI Gateway key)', conductor: 'Claude Code, Codex, Cursor with API key or subscription', owner: 'w6-agents-secrets', priority: 'P0' },
   { id: 'agent.signin', section: S.sec, feature: 'Agent sign-in on the VM persists across sleep/rollover', conductor: 'Per-org agent connections', owner: 'w6-agents-secrets', priority: 'P0' },
+  { id: 'image.agents', section: S.sec, feature: 'Agent CLIs in the image: Claude Code, Codex, Cursor, OpenCode, Gemini, Copilot', conductor: 'Claude Code, Codex, Cursor (+ OpenCode)', owner: 'gap-agents', priority: 'P0' },
+  { id: 'agent.keys-swap', section: S.sec, feature: 'Gemini/Cursor keys via egress swap (placeholder on VM, real key only at the provider); keys never on the VM', conductor: 'Keys as plain env in the VM', owner: 'gap-agents', priority: 'P0', better: 'Agent keys never on the VM; foreign keys and paths refused' },
+  { id: 'agent.more-agents', section: S.sec, feature: 'OpenCode and Copilot (BYOK) finish a real task and commit in a cloud workspace', conductor: 'Cursor, OpenCode in cloud', owner: 'gap-agents', priority: 'P1' },
   // 4. Lifecycle
   { id: 'life.sleep-wake', section: S.life, feature: 'Sleep (stop + snapshot) and wake keep files and pairing', conductor: 'Files + chats survive sleep; processes do not', owner: 'core', priority: 'P0', better: 'Same pairing; no re-pair' },
   { id: 'life.idle-sleep', section: S.life, feature: 'Auto-sleep when idle (lease lapses / idle stop)', conductor: '20 min idle', owner: 'w2-lifecycle', priority: 'P0' },
