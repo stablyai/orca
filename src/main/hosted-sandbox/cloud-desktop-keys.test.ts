@@ -126,3 +126,33 @@ describe('withHostAgentApiKeyLaunchEnv (SSH)', () => {
     })
   })
 })
+
+describe('withoutCarriedAgentCredentials (on the VM)', () => {
+  it('on an Orca Cloud VM, drops agent credentials a launch tries to set to anything but the session value', async () => {
+    const { withoutCarriedAgentCredentials } = await import('./cloud-desktop-keys')
+    const host = { ORCA_IS_CLOUD: '1', GEMINI_API_KEY: 'orca-ph-gemini-api-key-sbx1' }
+    expect(
+      withoutCarriedAgentCredentials(
+        {
+          GEMINI_API_KEY: 'AIzaSy-from-a-desktop',
+          OPENROUTER_API_KEY: 'sk-or-from-a-desktop',
+          CURSOR_API_KEY: 'key_from_a_desktop',
+          FOO: 'bar'
+        },
+        host
+      )
+    ).toEqual({ FOO: 'bar' })
+    // The session's own value (the stand-in) may be passed through unchanged.
+    expect(
+      withoutCarriedAgentCredentials({ GEMINI_API_KEY: 'orca-ph-gemini-api-key-sbx1' }, host)
+    ).toEqual({
+      GEMINI_API_KEY: 'orca-ph-gemini-api-key-sbx1'
+    })
+  })
+
+  it('changes nothing on any other host', async () => {
+    const { withoutCarriedAgentCredentials } = await import('./cloud-desktop-keys')
+    const env = { GEMINI_API_KEY: 'AIzaSy-local' }
+    expect(withoutCarriedAgentCredentials(env, {})).toBe(env)
+  })
+})
