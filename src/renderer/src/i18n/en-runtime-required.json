@@ -205,6 +205,8 @@
         }
       },
       "billing": {
+        "overageHoursOnly2_one": "{{hours}} sandbox hour of overage this month",
+        "overageHoursOnly2_other": "{{hours}} sandbox hours of overage this month",
         "plans": {
           "seatsPerMember_one": "{{count}} seat, one per team member",
           "seatsPerMember_other": "{{count}} seats, one per team member"

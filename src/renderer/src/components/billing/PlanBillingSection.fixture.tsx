@@ -61,7 +61,7 @@ export const overageCapReached = defineFixture({
           usedSeconds: 333 * HOUR,
           remainingIncludedSeconds: 0,
           usageWarningPercent: 100,
-          overageSeconds: 33 * HOUR,
+          overageSeconds: 25 * HOUR,
           overage: {
             optedIn: true,
             active: true,

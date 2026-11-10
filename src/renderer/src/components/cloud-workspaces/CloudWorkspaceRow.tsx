@@ -169,7 +169,7 @@ export function CloudWorkspaceRow({
         }
       }}
       className={cn(
-        'group relative isolate flex items-center gap-3 rounded-lg pr-2 transition-colors hover:bg-accent',
+        'group @container relative isolate flex items-center gap-3 rounded-lg pr-2 transition-colors hover:bg-accent',
         menuOpen && 'bg-accent'
       )}
     >
@@ -295,8 +295,10 @@ export function CloudWorkspaceRow({
       />
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="w-14 text-right text-xs tabular-nums text-muted-foreground">
-            {hours}
+          {/* The list has no column headers, so the unit is spelled out; a narrow row drops the
+              column rather than the unit. */}
+          <span className="hidden shrink-0 text-right text-xs tabular-nums whitespace-nowrap text-muted-foreground @[34rem]:inline">
+            {usage}
           </span>
         </TooltipTrigger>
         <TooltipContent side="top">

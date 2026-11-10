@@ -95,9 +95,15 @@ export function UsageSummary({
       ) : null}
       {entitlement.overageSeconds > 0 ? (
         <p className="text-xs text-muted-foreground tabular-nums">
-          {t('auto.components.billing.overageHoursOnly', '{{value0}} overage hours this month', {
-            value0: formatHours(entitlement.overageSeconds)
-          })}
+          {t(
+            'auto.components.billing.overageHoursOnly2',
+            '{{hours}} sandbox hours of overage this month',
+            {
+              count: Number(formatHours(entitlement.overageSeconds)),
+              hours: formatHours(entitlement.overageSeconds),
+              defaultValue_one: '{{hours}} sandbox hour of overage this month'
+            }
+          )}
         </p>
       ) : null}
       {entitlement.usageWarningPercent !== null && entitlement.usageWarningPercent < 100 ? (
