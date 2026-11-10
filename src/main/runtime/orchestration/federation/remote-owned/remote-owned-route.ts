@@ -158,7 +158,7 @@ async function routeServerCall(
       undefined,
       { expectedEnvironmentPairingRevision: server.pairingRevision }
     )
-    return { handled: true, result: inServerTerms(answer, forward, server.name) }
+    return { handled: true, result: inServerTerms(answer, { server: server.name, forward }) }
   }
 }
 
@@ -230,18 +230,18 @@ async function forwardToLink(
       whileLink: ['open']
     })
     seedNamedDispatches(db, link, answer)
-    return inServerTerms(answer, forward, server)
+    return inServerTerms(answer, { server, forward, link })
   } catch (error) {
     const record = dispatchId ? getRemoteDispatch(db, dispatchId) : undefined
     if (record && method === 'orchestration.workerShow' && isRemoteServerUnreachable(error)) {
       // The server is off: what this Orca last heard about the worker, never its output.
       return offlineRemoteWorkerShow(runtime, record)
     }
-    throw inServerTerms(
-      explainRemoteServerFailure(error, { server, method, params, dispatchId }),
+    throw inServerTerms(explainRemoteServerFailure(error, { server, method, params, dispatchId }), {
+      server,
       forward,
-      server
-    )
+      link
+    })
   }
 }
 
@@ -265,10 +265,14 @@ async function stopRemoteWorker(
   // The server knows this attempt by its stop key; the caller knows only its own request ID.
   const stopKey = forward && { key: remoteStopKey(owed.record), requestId: forward.requestId }
   try {
-    return inServerTerms(await sendOwedRemoteStop(runtime, owed.record), stopKey, server)
+    return inServerTerms(await sendOwedRemoteStop(runtime, owed.record), {
+      server,
+      forward: stopKey,
+      link: subject.link
+    })
   } catch (error) {
     if (!serverNeverAnswered(error) || !getOpenRemoteRunLink(db, subject.link.conversation_id)) {
-      throw inServerTerms(error, stopKey, server)
+      throw inServerTerms(error, { server, forward: stopKey, link: subject.link })
     }
     return {
       dispatchId,

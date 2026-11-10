@@ -143,7 +143,7 @@ export async function startRemoteOwnedWorker(
       error,
       key: forward.key
     })
-    throw inServerTerms(error, forward, server.name)
+    throw inServerTerms(error, { server: server.name, forward })
   }
   const started = StartedOnServer.safeParse(receipt)
   if (started.success) {
@@ -165,7 +165,7 @@ export async function startRemoteOwnedWorker(
       agent: null
     })
   }
-  const answer = inServerTerms(receipt, forward, server.name)
+  const answer = inServerTerms(receipt, { server: server.name, forward })
   return withRun(
     answer && typeof answer === 'object'
       ? {
