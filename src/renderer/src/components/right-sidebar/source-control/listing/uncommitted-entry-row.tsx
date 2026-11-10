@@ -1,3 +1,4 @@
+import { useSourceControlReview } from './use-source-control-review'
 import React from 'react'
 import { ChevronDown, MessageSquare, Minus, Plus, Trash, Undo2 } from 'lucide-react'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
@@ -80,6 +81,8 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   // When set, the row is a dirty submodule: clicking toggles lazy expansion instead of opening an uninformative gitlink diff.
   submoduleExpansion?: { isExpanded: boolean; onToggle: () => void }
 }): React.JSX.Element {
+  const review = useSourceControlReview(currentWorktreeId, worktreePath)
+  const viewed = review.isViewed(entry, entry.area === 'staged' ? 'staged' : 'unstaged')
   const t = useTranslate()
   useUiLanguageRevision()
   const fileName = basename(entry.path)
@@ -123,6 +126,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
         className={cn(
           'group relative flex cursor-pointer items-center gap-1 pr-3 py-1 transition-colors',
           getSourceControlRowHighlightClass(isOpenFile),
+          viewed && 'opacity-50',
           !isOpenFile && selected && 'bg-accent/60'
         )}
         style={{

@@ -1,3 +1,4 @@
+import { useSourceControlReview } from './use-source-control-review'
 import React from 'react'
 import { MessageSquare } from 'lucide-react'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
@@ -42,6 +43,8 @@ export function BranchEntryRow({
   commentCount: number
   showPathHint?: boolean
 }): React.JSX.Element {
+  const review = useSourceControlReview(currentWorktreeId, worktreePath)
+  const viewed = review.isViewed(entry, 'branch')
   const t = useTranslate()
   const fileName = basename(entry.path)
   const parentDir = dirname(entry.path)
@@ -63,7 +66,8 @@ export function BranchEntryRow({
         data-current={isOpenFile ? 'true' : undefined}
         className={cn(
           'group flex cursor-pointer items-center gap-1 pr-3 py-1 transition-colors',
-          getSourceControlRowHighlightClass(isOpenFile)
+          getSourceControlRowHighlightClass(isOpenFile),
+          viewed && 'opacity-50'
         )}
         style={{
           paddingLeft: `${depth * SOURCE_CONTROL_TREE_INDENT_PX + SOURCE_CONTROL_TREE_FILE_PADDING_PX}px`
