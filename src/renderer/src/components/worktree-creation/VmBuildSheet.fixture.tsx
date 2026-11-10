@@ -254,6 +254,26 @@ export const cloudChecksFailed = frame(
   )
 )
 
+// One failure plus a warning: the title counts failures only, in the singular.
+export const cloudChecksFailedOne = frame(
+  entry(
+    {
+      environmentCheck: {
+        status: 'failed',
+        checks: FAILED_CHECKS?.filter((check) => check.id !== 'git.push'),
+        ...CHECKS_FAILED_AT
+      }
+    },
+    CLOUD_RECIPE
+  )
+)
+
+// A narrow sheet: the pills keep one column and Delete sandbox wraps under the recovery actions.
+export const cloudChecksFailedNarrow = defineFixture({
+  ...cloudChecksFailed,
+  width: 420
+})
+
 // A build replayed on a timer, for recording the transitions: log streams, checks run and fail,
 // the card opens, Retry collapses it, and a second pass succeeds.
 const TIMELINE: { at: number; patch: Partial<PendingWorktreeCreation> }[] = [

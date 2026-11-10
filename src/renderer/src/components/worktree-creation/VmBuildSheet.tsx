@@ -194,7 +194,11 @@ export function VmBuildSheet({
               ) : (
                 <AlertTriangle
                   aria-hidden
-                  className="size-4 text-destructive motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-90 motion-safe:duration-200"
+                  // Failed checks leave a running sandbox that needs a decision, not a broken start.
+                  className={cn(
+                    'size-4 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-90 motion-safe:duration-200',
+                    failure?.kind === 'checks' ? 'text-status-warning-text' : 'text-destructive'
+                  )}
                 />
               )}
             </span>

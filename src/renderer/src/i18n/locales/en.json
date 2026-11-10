@@ -4190,7 +4190,6 @@
           },
           "VmBuildSheet": {
             "checks": "Check environment",
-            "checksFailed": "The VM is up, but its environment checks failed",
             "create": "Create workspace",
             "editRecipe": "Edit recipe",
             "fixWithAgent": "Fix with agent",
@@ -4222,13 +4221,11 @@
           },
           "VmBuildFailureCard": {
             "createFailedTitle": "Couldn’t create workspace",
-            "checksTitleCloud": "The sandbox is up, but its environment checks failed",
             "planTitle": "Orca Cloud needs a Team plan",
             "signInTitle": "Sign in to use Orca Cloud",
             "unavailableTitle": "Orca Cloud is unavailable right now",
             "networkTitle": "Couldn’t reach Orca Cloud",
             "snapshotTitle": "This project’s saved environment is missing",
-            "provisionBodyCloud": "Something went wrong while starting the sandbox. Try again, or open the logs for details.",
             "stillRunningCloud": "The sandbox is running and using sandbox hours until you choose.",
             "stillRunningLocal": "The VM is running and using hours until you choose.",
             "tryAgain": "Try again",
@@ -4237,7 +4234,6 @@
             "deleteSandbox": "Delete sandbox",
             "deleteVm": "Delete VM",
             "updatePayment": "Update payment method",
-            "checksBodyCloud": "Open anyway to fix these inside the workspace, or retry the checks after changing your project.",
             "showWorkspaces": "Show cloud workspaces",
             "contactSupport": "Contact support",
             "provisionTitleCloud": "The sandbox didn’t start",
@@ -4275,7 +4271,17 @@
             "planBodyMember3": "Nothing was created, and you weren’t charged. Ask an owner or admin to choose a Team plan.",
             "outOfHoursBodyMember3": "Your team has used this month’s sandbox hours, so sandboxes can’t start or keep running. Nothing was created, and you weren’t charged. Ask an owner or admin to add hours.",
             "spendCapReachedBodyMember4": "Your team has reached this month’s spend cap, so sandboxes can’t start or keep running. Nothing was created, and you weren’t charged. Ask an owner or admin to raise the spend cap.",
-            "paymentFailedBodyMember2": "New sandboxes can’t start until the payment goes through. Nothing was created, and you weren’t charged. Ask an owner or admin to update the payment method."
+            "paymentFailedBodyMember2": "New sandboxes can’t start until the payment goes through. Nothing was created, and you weren’t charged. Ask an owner or admin to update the payment method.",
+            "checksAttentionTitleCloud": "The sandbox is up, but some environment checks need attention",
+            "checksAttentionTitleVm": "The VM is up, but some environment checks need attention",
+            "checksCountTitleCloud_one": "The sandbox is up, but {{count}} environment check failed",
+            "checksCountTitleCloud_other": "The sandbox is up, but {{count}} environment checks failed",
+            "checksCountTitleVm_one": "The VM is up, but {{count}} environment check failed",
+            "checksCountTitleVm_other": "The VM is up, but {{count}} environment checks failed",
+            "checksBodyCloud2_one": "Open it anyway and fix it inside the workspace, or run the checks again after changing your project.",
+            "checksBodyCloud2_other": "Open it anyway and fix them inside the workspace, or run the checks again after changing your project.",
+            "provisionBodyCloudKept": "Something went wrong while starting the sandbox. Try again, or delete the sandbox to stop using sandbox hours.",
+            "provisionBodyCloud2": "Something went wrong while starting the sandbox. Nothing was created, and you weren’t charged."
           },
           "VmBuildLog": {
             "jumpToError": "Jump to first error",
