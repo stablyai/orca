@@ -14,6 +14,7 @@ import { dispatchTerminalSideEffectBatch } from '../pty-transport/output/termina
 import { createGlobalSettingsFixture } from '../../../../../shared/global-settings-test-fixture'
 import type { ActivityTerminalPortalTarget } from '../../activity/activity-terminal-portal'
 import type { RuntimeHostStatusSnapshot } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 
 const WORKSPACE = 'repo1::/repo1/background-policy'
 const TAB = 'background-policy-tab'
@@ -50,7 +51,9 @@ afterEach(() => {
 
 function watchBackgroundTab(
   ptyId: string,
-  activityTerminalPortals: ActivityTerminalPortalTarget[] = []
+  activityTerminalPortals: ActivityTerminalPortalTarget[] = [],
+  initialWorkspaceSurfaceIds = [WORKSPACE],
+  worktreeId = WORKSPACE
 ) {
   useAppStore.setState({
     repos: [TEST_REPO],
@@ -58,7 +61,7 @@ function watchBackgroundTab(
     activeWorktreeId: null,
     activeView: 'terminal',
     settings: createGlobalSettingsFixture({ terminalSshViewParking: false }),
-    tabsByWorktree: { [WORKSPACE]: [makeTab({ id: TAB, worktreeId: WORKSPACE, ptyId })] },
+    tabsByWorktree: { [worktreeId]: [makeTab({ id: TAB, worktreeId, ptyId })] },
     unifiedTabsByWorktree: {},
     ptyIdsByTabId: { [TAB]: [ptyId] },
     terminalLayoutsByTabId: { [TAB]: singlePaneLayoutSnapshot(LEAF, ptyId) },
@@ -67,7 +70,6 @@ function watchBackgroundTab(
     unreadTerminalTabs: {},
     unreadTerminalPanes: {}
   })
-  const workspaceSurfaceIds = [WORKSPACE]
   const mountedWorktreeIdsRef = { current: new Set<string>() }
   const measurableBackgroundWorktreeIdsRef = { current: new Set<string>() }
   const activationDeferredMountTabIdsByWorktreeRef = {
@@ -75,33 +77,37 @@ function watchBackgroundTab(
   }
   const noTabs = new Set<string>()
   const getEffectiveLayoutForWorktree = () => undefined
-  renderHook(() => {
-    const tabsByWorktree = useAppStore((state) => state.tabsByWorktree)
-    useTerminalWatcherEffects({
-      ...useAppStore.getState(),
-      tabsByWorktree,
-      workspaceSurfaceIds,
-      mountedWorktreeIdsRef,
-      measurableBackgroundWorktreeIdsRef,
-      activationDeferredMountTabIdsByWorktreeRef,
-      getEffectiveLayoutForWorktree,
-      activityTerminalPortals,
-      effectiveParkedTerminalWorktreeIds: noTabs,
-      evictionExemptTerminalTabIds: noTabs,
-      pairedRuntimeParkingEnvironmentIds: noTabs,
-      anyMountedWorktreeHasLayout: false,
-      backgroundMountRevision: 0,
-      renderedActiveWorktreeId: null,
-      startupTerminalTabHold: null,
-      hydrationSucceeded: true,
-      workspaceSessionReady: true,
-      terminalStartupRestorationReady: true,
-      terminalParkingEnabled: true,
-      terminalSshParkingEnabled: true,
-      terminalTitleSnapshotAuthorityEnabled: true,
-      terminalProviderSnapshotCapabilityRevision: 0
-    })
-  })
+  return renderHook(
+    ({ workspaceSurfaceIds }) => {
+      const tabsByWorktree = useAppStore((state) => state.tabsByWorktree)
+      useTerminalWatcherEffects({
+        ...useAppStore.getState(),
+        tabsByWorktree,
+        workspaceSurfaceIds,
+        workspaceSurfaceIdSet: new Set(workspaceSurfaceIds),
+        mountedWorktreeIdsRef,
+        measurableBackgroundWorktreeIdsRef,
+        activationDeferredMountTabIdsByWorktreeRef,
+        getEffectiveLayoutForWorktree,
+        activityTerminalPortals,
+        effectiveParkedTerminalWorktreeIds: noTabs,
+        evictionExemptTerminalTabIds: noTabs,
+        pairedRuntimeParkingEnvironmentIds: noTabs,
+        anyMountedWorktreeHasLayout: false,
+        backgroundMountRevision: 0,
+        renderedActiveWorktreeId: null,
+        startupTerminalTabHold: null,
+        hydrationSucceeded: true,
+        workspaceSessionReady: true,
+        terminalStartupRestorationReady: true,
+        terminalParkingEnabled: true,
+        terminalSshParkingEnabled: true,
+        terminalTitleSnapshotAuthorityEnabled: true,
+        terminalProviderSnapshotCapabilityRevision: 0
+      })
+    },
+    { initialProps: { workspaceSurfaceIds: initialWorkspaceSurfaceIds } }
+  )
 }
 
 function emitTitleAndBell(ptyId: string, seq: number, title: string): void {
@@ -143,6 +149,34 @@ it('starts a never-mounted watcher only after host snapshot coverage resolves', 
   })
   emitTitleAndBell(ptyId, 2, 'After coverage')
   expectWatched('After coverage')
+})
+
+it('waits for a retained workspace to return to the catalog before consuming output', async () => {
+  const ptyId = `${WORKSPACE}@@retained`
+  const { rerender } = watchBackgroundTab(ptyId, [], [])
+  await act(async () => {
+    await synchronizeTerminalProviderSnapshotCapabilities([ptyId], async () => [
+      { id: ptyId, authoritative: true }
+    ])
+  })
+  emitTitleAndBell(ptyId, 1, 'Outside catalog')
+  expectUnwatched('Outside catalog')
+
+  rerender({ workspaceSurfaceIds: [WORKSPACE] })
+  emitTitleAndBell(ptyId, 2, 'Back in catalog')
+  expectWatched('Back in catalog')
+})
+
+it('leaves floating terminal output to the floating panel owner', async () => {
+  const ptyId = `${FLOATING_TERMINAL_WORKTREE_ID}@@floating-panel`
+  watchBackgroundTab(ptyId, [], [], FLOATING_TERMINAL_WORKTREE_ID)
+  await act(async () => {
+    await synchronizeTerminalProviderSnapshotCapabilities([ptyId], async () => [
+      { id: ptyId, authoritative: true }
+    ])
+  })
+  emitTitleAndBell(ptyId, 1, 'Floating panel output')
+  expectUnwatched('Floating panel output')
 })
 
 it('re-verdicts paired capability gain, loss, recovery and revocation without mounting', () => {

@@ -52,6 +52,7 @@ type TerminalWatcherController = Pick<
   | 'terminalStartupRestorationReady'
   | 'terminalTitleSnapshotAuthorityEnabled'
   | 'workspaceSessionReady'
+  | 'workspaceSurfaceIdSet'
   | 'workspaceSurfaceIds'
 >
 
@@ -80,6 +81,7 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
     terminalSshParkingEnabled,
     terminalTitleSnapshotAuthorityEnabled,
     workspaceSessionReady,
+    workspaceSurfaceIdSet,
     workspaceSurfaceIds
   } = controller
 
@@ -178,6 +180,9 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
     }
     const syncEntriesByWorktreeId = new Map<string, ParkedTerminalTabWatcherSyncEntry>()
     for (const workspaceId of dirty) {
+      if (!workspaceSurfaceIdSet.has(workspaceId)) {
+        continue
+      }
       if (
         anyMountedWorktreeHasLayout &&
         mountedWorktreeIdsRef.current.has(workspaceId) &&
@@ -279,6 +284,7 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
     terminalSshParkingEnabled,
     terminalTitleSnapshotAuthorityEnabled,
     workspaceSessionReady,
+    workspaceSurfaceIdSet,
     workspaceSurfaceIds
   ])
   useEffect(() => () => disposeAllParkedTerminalWatchers(), [])

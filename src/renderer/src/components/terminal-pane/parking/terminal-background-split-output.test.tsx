@@ -113,6 +113,7 @@ it('receives a new background split pane title and bell without mounting the wor
       ...useAppStore.getState(),
       tabsByWorktree,
       workspaceSurfaceIds,
+      workspaceSurfaceIdSet: new Set(workspaceSurfaceIds),
       mountedWorktreeIdsRef,
       measurableBackgroundWorktreeIdsRef,
       activationDeferredMountTabIdsByWorktreeRef,
