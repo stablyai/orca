@@ -165,7 +165,14 @@ async function handleCloudSetup(
     if (!body.success) {
       return json({ error: 'invalid_request' }, 400)
     }
-    const created = await createSetupSession(env, caller, body.data, now)
+    const created = await createSetupSession(
+      env,
+      deps.trial,
+      caller,
+      body.data,
+      now,
+      request.headers.get('cf-connecting-ip') ?? undefined
+    )
     return created.ok
       ? json({ id: created.id, url: created.url, expiresAt: created.expiresAt }, 201)
       : json({ error: created.error }, created.status)
