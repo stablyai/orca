@@ -254,6 +254,42 @@ export const d4GitHubProjectPicked = defineFixture({
     />
   )
 })
+/** D3 for a folder: Orca Cloud stays selectable; the panel offers a GitHub repository instead. */
+export const d3FolderProject = defineFixture({
+  width: 560,
+  setup,
+  render: () => (
+    <ComposerPreview
+      availability="offered"
+      access={entitled}
+      cloudSelected
+      folderProject
+      cloudRepos={cloudRepos}
+      github={{
+        id: 'github',
+        state: 'failed',
+        need: 'github',
+        blocksStart: true,
+        label: 'GitHub repository',
+        status: 'Needed',
+        detail:
+          'Orca Cloud starts from a GitHub repository. This project is a folder on this computer.'
+      }}
+      prompt="Summarize the notes in this folder."
+    />
+  )
+})
+/** D3 for a folder, after "Choose a GitHub repository": the picker opens at the D4 section. */
+export const d3FolderChooseRepository = defineFixture({
+  ...d3FolderProject,
+  interact: async (frame) => {
+    const link = [...frame.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('Choose a GitHub repository')
+    )
+    link?.click()
+    await new Promise((resolve) => setTimeout(resolve, 300))
+  }
+})
 /** E: returning, entitled; remembered Orca Cloud, no panel, "Start in Orca Cloud". */
 export const eReturning = defineFixture({
   width: 560,

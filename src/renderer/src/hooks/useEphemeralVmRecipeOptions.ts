@@ -34,16 +34,21 @@ function orcaCloudNeedsSetup(availability: OrcaCloudAvailability | undefined): b
 const ORCA_CLOUD_SETUP_RECIPE: OrcaVmRecipe = {
   id: ORCA_CLOUD_RECIPE_ID,
   name: 'Orca Cloud',
-  description: 'Hosted by Orca. Sleeps when idle and keeps your files.',
   provider: 'orca-cloud',
   create: 'orca-cloud create'
 }
 
 export function withOrcaCloudSetupRecipe(
   recipes: OrcaVmRecipe[],
-  availability: OrcaCloudAvailability | undefined
+  availability: OrcaCloudAvailability | undefined,
+  /** A plain folder: main lists no recipes for it, but Orca Cloud is still offered (D3). */
+  folder = false
 ): OrcaVmRecipe[] {
-  if (!orcaCloudNeedsSetup(availability) || recipes.some((r) => r.id === ORCA_CLOUD_RECIPE_ID)) {
+  const offeredForFolder = folder && availability === 'offered'
+  if (
+    !(orcaCloudNeedsSetup(availability) || offeredForFolder) ||
+    recipes.some((r) => r.id === ORCA_CLOUD_RECIPE_ID)
+  ) {
     return recipes
   }
   return [ORCA_CLOUD_SETUP_RECIPE, ...recipes]
@@ -65,10 +70,11 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
   const [errors, setErrors] = useState<EphemeralVmFailure[]>([])
   const [orcaCloud, setOrcaCloud] = useState<OrcaCloudAvailability>('unavailable')
   const requestGeneration = useRef(0)
+  // A plain folder still loads: it offers Orca Cloud only, and the setup panel then says the
+  // project needs a GitHub repository (D3/D4) instead of the option vanishing.
   const canLoad =
     args.enabled &&
     Boolean(args.repoId) &&
-    args.repoIsGit &&
     !args.repoConnectionId &&
     args.repoExecutionHostId === LOCAL_EXECUTION_HOST_ID &&
     !args.projectGroupTarget
@@ -96,9 +102,11 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
           // Orca Cloud rides its account capability, not the experimental VM-recipes flag.
           const nextRecipes = withOrcaCloudSetupRecipe(
             (result.recipes ?? []).filter(
-              (recipe) => args.customRecipesEnabled || recipe.provider === 'orca-cloud'
+              (recipe) =>
+                recipe.provider === 'orca-cloud' || (args.customRecipesEnabled && args.repoIsGit)
             ),
-            result.orcaCloud
+            result.orcaCloud,
+            !args.repoIsGit
           )
           setRecipes(nextRecipes)
           setOrcaCloud(result.orcaCloud ?? 'unavailable')
@@ -125,7 +133,7 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
             const fieldLabel = diagnostic.field ? `.${diagnostic.field}` : ''
             return { error: `${recipeLabel}${fieldLabel}: ${diagnostic.message}` }
           })
-          if (!args.customRecipesEnabled) {
+          if (!args.customRecipesEnabled || !args.repoIsGit) {
             setErrors([])
             return
           }
@@ -155,7 +163,7 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
           )
         })
     },
-    [args.customRecipesEnabled, args.initialRecipeId, args.repoId, canLoad]
+    [args.customRecipesEnabled, args.initialRecipeId, args.repoId, args.repoIsGit, canLoad]
   )
 
   useEffect(() => {
@@ -200,7 +208,7 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
     selectedRecipeId,
     setSelectedRecipeId,
     error,
-    offered: args.customRecipesEnabled || recipes.length > 0,
+    offered: (args.customRecipesEnabled && args.repoIsGit) || recipes.length > 0,
     orcaCloud: canLoad ? orcaCloud : 'unavailable'
   }
 }

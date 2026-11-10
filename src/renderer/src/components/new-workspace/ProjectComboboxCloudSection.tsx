@@ -1,7 +1,7 @@
 // The Project picker's "On GitHub · Orca Cloud only" section (cloud-start D4): repositories Orca
 // Cloud can reach with no clone on this computer, plus a way to give it access to more. Shown only
 // while Orca Cloud is the Run on target.
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import { Check, ChevronDown, Github, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
@@ -13,8 +13,50 @@ export const CLOUD_REPO_KEY_PREFIX = 'cloud-only-repo:'
 export const CLOUD_REPO_MORE_KEY = 'cloud-only-repo-more-access'
 export const CLOUD_REPO_SHOW_MORE_KEY = 'cloud-only-repo-show-more'
 
+/** Runs `open` each time `signal` is bumped (never on mount), with the latest closure. */
+export function useOpenOnSignal(signal: number, open: () => void): void {
+  const openRef = useRef(open)
+  useEffect(() => {
+    openRef.current = open
+  })
+  useEffect(() => {
+    if (signal > 0) {
+      openRef.current()
+    }
+  }, [signal])
+}
+
 export function cloudRepoKey(fullName: string): string {
   return `${CLOUD_REPO_KEY_PREFIX}${fullName}`
+}
+
+/**
+ * Commits a cloud-only row (D4). 'kept-open' for Show more, 'handled' for the access link or a
+ * listed repository, null for anything else (a project id, Add project). Project ids such as
+ * `github:<owner>/<repo>` never match: rows live in their own `cloud-only-repo:` namespace.
+ */
+export function commitCloudRow(
+  key: string,
+  rows: {
+    cloudRepos: readonly OrcaCloudGitHubRepository[] | null
+    onShowMoreCloudRepos?: (() => void) | null
+    onMoreCloudAccess?: () => void
+    onCloudRepoSelected?: (fullName: string) => void
+  }
+): 'kept-open' | 'handled' | null {
+  if (key === CLOUD_REPO_SHOW_MORE_KEY) {
+    rows.onShowMoreCloudRepos?.()
+    return 'kept-open'
+  }
+  if (key === CLOUD_REPO_MORE_KEY) {
+    rows.onMoreCloudAccess?.()
+    return 'handled'
+  }
+  if (rows.cloudRepos?.some((repo) => cloudRepoKey(repo.fullName) === key)) {
+    rows.onCloudRepoSelected?.(key.slice(CLOUD_REPO_KEY_PREFIX.length))
+    return 'handled'
+  }
+  return null
 }
 
 /** Case-insensitive substring match; the list is short and names are owner/repo. */

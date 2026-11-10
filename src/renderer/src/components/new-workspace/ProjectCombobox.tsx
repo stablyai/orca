@@ -17,12 +17,13 @@ import { isWithinComboboxRoot, useTypeAheadCombobox } from './use-type-ahead-com
 import { COMBOBOX_FIELD_SHELL, COMBOBOX_POPOVER_SURFACE } from './type-ahead-combobox-styles'
 import type { OrcaCloudGitHubRepository } from '@/lib/orca-cloud/use-orca-cloud-github-repositories'
 import {
-  CLOUD_REPO_KEY_PREFIX,
   CLOUD_REPO_MORE_KEY,
   CLOUD_REPO_SHOW_MORE_KEY,
   cloudRepoKey,
+  commitCloudRow,
   filterCloudRepos,
-  ProjectComboboxCloudSection
+  ProjectComboboxCloudSection,
+  useOpenOnSignal
 } from './ProjectComboboxCloudSection'
 
 type ProjectComboboxProps = {
@@ -43,6 +44,8 @@ type ProjectComboboxProps = {
   onMoreCloudAccess?: () => void
   /** Present while GitHub has more repositories than are listed. */
   onShowMoreCloudRepos?: (() => void) | null
+  /** Bumped to open the list at its cloud-only section ("Choose a GitHub repository"). */
+  openSignal?: number
 }
 
 const ADD_PROJECT_KEY = 'add-project'
@@ -63,7 +66,8 @@ export default function ProjectCombobox({
   cloudRepoValue = null,
   onCloudRepoSelected,
   onMoreCloudAccess,
-  onShowMoreCloudRepos = null
+  onShowMoreCloudRepos = null,
+  openSignal = 0
 }: ProjectComboboxProps): React.JSX.Element {
   const t = useTranslate()
   const [tooltipOpen, setTooltipOpen] = useState(false)
@@ -113,6 +117,14 @@ export default function ProjectCombobox({
     () => sectionProjectOptions(matches, query, recentIds),
     [matches, query, recentIds]
   )
+  // "Choose a GitHub repository": open with the first cloud-only row armed (scrolled into view).
+  useOpenOnSignal(openSignal, () => {
+    inputRef.current?.focus()
+    setOpen(true)
+    if (cloudRepos?.[0]) {
+      arm(cloudRepoKey(cloudRepos[0].fullName))
+    }
+  })
   const ambiguous = useMemo(() => getAmbiguousProjectOptionIds(options), [options])
   const cloudMatches = useMemo(
     () => (cloudRepos ? filterCloudRepos(cloudRepos, query) : []),
@@ -123,76 +135,53 @@ export default function ProjectCombobox({
   const committed = (selected !== null || cloudRepoValue !== null) && query.length === 0
   const committedName = cloudRepoValue ?? selected?.displayName ?? ''
 
-  const commit = useCallback(
-    (key: string | null): void => {
-      if (key === null) {
-        return
-      }
-      if (key === CLOUD_REPO_SHOW_MORE_KEY) {
-        // Keep the list open: the next page appends in place.
-        onShowMoreCloudRepos?.()
-        return
-      }
-      close()
-      if (key === ADD_PROJECT_KEY) {
-        onAddProject?.()
-        return
-      }
-      if (key === CLOUD_REPO_MORE_KEY) {
-        onMoreCloudAccess?.()
-        return
-      }
-      // Only a listed cloud-only row; a project id never reaches this branch.
-      if (
-        key.startsWith(CLOUD_REPO_KEY_PREFIX) &&
-        cloudRepos?.some((repo) => cloudRepoKey(repo.fullName) === key)
-      ) {
-        onCloudRepoSelected?.(key.slice(CLOUD_REPO_KEY_PREFIX.length))
-        return
-      }
-      onValueChange(key)
-      onValueSelected?.(key)
-    },
-    [
-      close,
-      onAddProject,
-      cloudRepos,
-      onCloudRepoSelected,
-      onMoreCloudAccess,
-      onShowMoreCloudRepos,
-      onValueChange,
-      onValueSelected
-    ]
-  )
+  const cloudRows = { cloudRepos, onShowMoreCloudRepos, onMoreCloudAccess, onCloudRepoSelected }
+  const commit = (key: string | null): void => {
+    if (key === null) {
+      return
+    }
+    // Show more keeps the list open: the next page appends in place.
+    const cloudRow = commitCloudRow(key, cloudRows)
+    if (cloudRow === 'kept-open') {
+      return
+    }
+    close()
+    if (cloudRow === 'handled') {
+      return
+    }
+    if (key === ADD_PROJECT_KEY) {
+      onAddProject?.()
+      return
+    }
+    onValueChange(key)
+    onValueSelected?.(key)
+  }
 
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLInputElement>): void => {
-      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        event.preventDefault()
-        setOpen(true)
-        moveArm(event.key === 'ArrowDown' ? 1 : -1)
-        return
-      }
-      if (event.key === 'Enter' && open) {
-        event.preventDefault()
-        commit(armedKey)
-        return
-      }
-      // Handle Escape even while closed to clear stranded queries; bubble only when there is no committed display to restore.
-      if (event.key === 'Escape' && (open || query.length > 0)) {
-        event.preventDefault()
-        event.stopPropagation()
-        close()
-        return
-      }
-      if (event.key === 'Backspace' && committed) {
-        event.preventDefault()
-        setQuery(committedName)
-        setOpen(true)
-      }
-    },
-    [armedKey, close, commit, committed, committedName, moveArm, open, query, setOpen, setQuery]
-  )
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      setOpen(true)
+      moveArm(event.key === 'ArrowDown' ? 1 : -1)
+      return
+    }
+    if (event.key === 'Enter' && open) {
+      event.preventDefault()
+      commit(armedKey)
+      return
+    }
+    // Handle Escape even while closed to clear stranded queries; bubble only when there is no committed display to restore.
+    if (event.key === 'Escape' && (open || query.length > 0)) {
+      event.preventDefault()
+      event.stopPropagation()
+      close()
+      return
+    }
+    if (event.key === 'Backspace' && committed) {
+      event.preventDefault()
+      setQuery(committedName)
+      setOpen(true)
+    }
+  }
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>

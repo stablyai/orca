@@ -68,7 +68,8 @@ export function ComposerPreview({
   allSet = false,
   prompt = 'Fix the flaky login test in e2e/auth.spec.ts and open a PR.',
   cloudRepos,
-  pickedCloudRepo = null
+  pickedCloudRepo = null,
+  folderProject = false
 }: {
   availability: OrcaCloudAvailability
   access: OrcaCloudRunTargetAccess
@@ -81,6 +82,8 @@ export function ComposerPreview({
   /** D4: GitHub repositories with no clone here. */
   cloudRepos?: OrcaCloudGitHubRepository[]
   pickedCloudRepo?: string | null
+  /** The project is a plain folder (D3 for folders). */
+  folderProject?: boolean
 }): React.JSX.Element {
   const [picked, setPicked] = useState<string | null>(pickedCloudRepo)
   const [host, setHost] = useState('local')
@@ -100,6 +103,7 @@ export function ComposerPreview({
     allSet,
     onSelectOrcaCloud: () => setRecipe('cloud'),
     onUserPick: () => {},
+    folderProject,
     ...(cloudRepos
       ? {
           cloudOnly: {
@@ -107,6 +111,7 @@ export function ComposerPreview({
             showMore: () => {},
             picked: cloudRepos.find((repo) => repo.fullName === picked) ?? null,
             githubStep: null,
+            folderProject,
             pick: setPicked,
             clear: () => setPicked(null),
             moreAccess: () => {},

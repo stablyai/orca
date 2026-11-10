@@ -13,6 +13,8 @@ export type CloudStartView = {
   onUseThisComputer?: () => void
   /** D4: GitHub repositories with no clone here, and the one picked. */
   cloudOnly?: CloudOnlyRepo
+  /** The project is a plain folder: Orca Cloud needs a GitHub repository instead (D3/D4). */
+  folderProject?: boolean
 }
 
 export function prefersReducedMotion(): boolean {
