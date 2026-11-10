@@ -2,6 +2,7 @@ import React from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { OrcaCloudAgentsStatus } from '../../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 import type { HostAgentSignInReport } from '../../../../../shared/host-agent-sign-in-status'
+import type { SshAgentSignInReport } from '../../../../../shared/ssh-agent-sign-in-types'
 import {
   overviewRows,
   type OverviewHost,
@@ -36,7 +37,7 @@ function host(
 }
 
 function probe(
-  value: HostAgentSignInReport | null,
+  value: SshAgentSignInReport | null,
   over: Partial<OverviewProbe> = {}
 ): OverviewProbe {
   return { report: value, checking: false, failed: false, expired: [], ...over }
@@ -234,6 +235,32 @@ export const manyHosts = defineFixture({
             probe(report(index % 4 === 0 ? 'signedOut' : 'signedIn', 'signedIn'))
           ])
         ]),
+        cloud: CLOUD
+      })}
+    />
+  )
+})
+
+const CLASSIC = host('ssh:build-01', 'build-01', 'sshClassic')
+
+/** Classic SSH reports an API key overriding a sign-in (hasLogin); it needs attention. */
+export const keyOverrides = defineFixture({
+  width: 860,
+  render: () => (
+    <Frame
+      {...BASE}
+      rows={overviewRows({
+        hosts: [LOCAL, CLASSIC],
+        probes: {
+          local: probe(report('signedIn', 'signedIn')),
+          'ssh:build-01': probe({
+            checkedAt: CHECKED,
+            agents: [
+              { agent: 'claude', state: 'signedIn', method: 'apiKey', hasLogin: true },
+              { agent: 'codex', state: 'signedIn', method: 'cliLogin' }
+            ]
+          })
+        },
         cloud: CLOUD
       })}
     />
