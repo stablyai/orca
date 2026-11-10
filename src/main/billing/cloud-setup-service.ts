@@ -168,10 +168,7 @@ export async function startCloudSetup(
     if (connected.status !== 'connected') {
       return connected.status === 'unconfigured'
         ? { status: 'unconfigured' }
-        : {
-            status: 'failed',
-            error: connected.status === 'failed' ? connected.error : connected.status
-          }
+        : { status: 'failed', error: connected.error }
     }
     const session = outcome.created
     if (!session) {
