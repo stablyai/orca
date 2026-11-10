@@ -37,6 +37,14 @@ export function readBrowserGuestDiscardProtection(
   if (guest.isCurrentlyAudible()) {
     return result('protected', 'audio')
   }
+  try {
+    // URL recovery cannot restore earlier documents or their drafts.
+    if (guest.navigationHistory.length() > 1) {
+      return result('protected', 'history')
+    }
+  } catch {
+    return result('unknown', 'observer')
+  }
   return result('discardable', 'clean')
 }
 
@@ -149,6 +157,11 @@ export function installBrowserGuestDiscardProtection(
     publish()
   }
   const audioChanged = (): void => publish()
+  const inPageNavigation = (_event: Electron.Event, _url: string, isMainFrame: boolean): void => {
+    if (isMainFrame) {
+      publish()
+    }
+  }
   guest.on('ipc-message', report)
   guest.on('did-start-navigation', navigation)
   guest.on('dom-ready', settled)
@@ -158,6 +171,7 @@ export function installBrowserGuestDiscardProtection(
   guest.on('render-process-gone', unresponsive)
   guest.on('frame-created', frameCreated)
   guest.on('audio-state-changed', audioChanged)
+  guest.on('did-navigate-in-page', inPageNavigation)
   return () => {
     if (owners.get(guest) === owner) {
       owners.delete(guest)
@@ -171,5 +185,6 @@ export function installBrowserGuestDiscardProtection(
     guest.off('render-process-gone', unresponsive)
     guest.off('frame-created', frameCreated)
     guest.off('audio-state-changed', audioChanged)
+    guest.off('did-navigate-in-page', inPageNavigation)
   }
 }

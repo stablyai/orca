@@ -11,10 +11,20 @@ it('binds edit protection to the current main-frame document and real lifecycle 
   const mainFrame = { frames, send: vi.fn<(channel: string, generation: string) => void>() }
   let audible = false
   let crashed = false
+  let historyLength = 1
+  let historyUnavailable = false
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The EventEmitter fixture implements all WebContents methods used by this owner.
   const guest = Object.assign(new EventEmitter(), {
     id: 7,
     mainFrame,
+    navigationHistory: {
+      length: () => {
+        if (historyUnavailable) {
+          throw new Error('History unavailable')
+        }
+        return historyLength
+      }
+    },
     isDestroyed: () => false,
     isCrashed: () => crashed,
     isCurrentlyAudible: () => audible
@@ -58,10 +68,21 @@ it('binds edit protection to the current main-frame document and real lifecycle 
     expect(readBrowserGuestDiscardProtection(guest).protection).toBe('unknown')
     send({ generation: second, dirty: true })
     expect(readBrowserGuestDiscardProtection(guest).reason).toBe('edits')
-    send({ generation: second, dirty: false })
+    guest.emit('dom-ready')
+    send({ generation: generation(), dirty: false })
     audible = true
     expect(readBrowserGuestDiscardProtection(guest).reason).toBe('audio')
     audible = false
+    historyLength = 2
+    guest.emit('did-navigate-in-page', {}, 'https://example.test/step-2', true)
+    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('history')
+    changed.mockClear()
+    guest.emit('did-navigate-in-page', {}, 'https://example.test/step-3', true)
+    expect(changed).not.toHaveBeenCalled()
+    historyUnavailable = true
+    expect(readBrowserGuestDiscardProtection(guest).protection).toBe('unknown')
+    historyUnavailable = false
+    historyLength = 1
     mainFrame.frames.push({})
     guest.emit('frame-created')
     const challenges = mainFrame.send.mock.calls.length

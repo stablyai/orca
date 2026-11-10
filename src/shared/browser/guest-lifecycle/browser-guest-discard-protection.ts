@@ -4,7 +4,7 @@ export const BROWSER_GUEST_PROTECTION_REPORT = 'browser:guest-protection-report'
 export type BrowserGuestDiscardProtection = {
   webContentsId: number
   protection: 'discardable' | 'protected' | 'unknown' | 'gone'
-  reason: 'clean' | 'edits' | 'audio' | 'frames' | 'observer' | 'gone'
+  reason: 'clean' | 'edits' | 'audio' | 'frames' | 'history' | 'observer' | 'gone'
 }
 
 export type BrowserGuestDiscardProtectionChange = BrowserGuestDiscardProtection & {
