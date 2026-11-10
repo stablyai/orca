@@ -102,8 +102,11 @@ export const MobileWebBundleCatalogSchema = z
 
 export type MobileWebBundleCatalog = z.infer<typeof MobileWebBundleCatalogSchema>
 
+/** The fields buildId hashes; readers with looser optional fields can still recompute it. */
+type HashedAsset = Pick<MobileWebBundleAsset, 'path' | 'sha256' | 'byteLength' | 'contentType'>
+
 /** Code-unit order, not `localeCompare`: the sort feeds a content hash, so it must not vary. */
-function compareAssetPaths(left: MobileWebBundleAsset, right: MobileWebBundleAsset): number {
+function compareAssetPaths(left: HashedAsset, right: HashedAsset): number {
   if (left.path === right.path) {
     return 0
   }
@@ -111,7 +114,7 @@ function compareAssetPaths(left: MobileWebBundleAsset, right: MobileWebBundleAss
 }
 
 /** Canonical buildId input: path-sorted assets, fixed key order, no whitespace. Sorting here makes the hash independent of caller order. */
-export function serializeMobileWebBundleAssets(assets: readonly MobileWebBundleAsset[]): string {
+export function serializeMobileWebBundleAssets(assets: readonly HashedAsset[]): string {
   return JSON.stringify(
     [...assets].sort(compareAssetPaths).map((asset) => ({
       path: asset.path,
@@ -123,7 +126,7 @@ export function serializeMobileWebBundleAssets(assets: readonly MobileWebBundleA
 }
 
 /** Pure-JS SHA-256 lets phones recompute cached manifest ids; Metro provides no Node core shims. */
-export function computeMobileWebBundleId(assets: readonly MobileWebBundleAsset[]): string {
+export function computeMobileWebBundleId(assets: readonly HashedAsset[]): string {
   const digest = sha256(new TextEncoder().encode(serializeMobileWebBundleAssets(assets)))
   return Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
