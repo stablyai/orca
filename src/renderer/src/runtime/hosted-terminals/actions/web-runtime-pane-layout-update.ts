@@ -53,13 +53,13 @@ export async function updateWebRuntimePaneLayout(args: {
   const seq = ++pushSeq
   latestPush.set(pushKey, seq)
   for (let send = 1; ; send++) {
-    const sent = await sendPaneLayout(callEnvironment, args, hostTabId)
+    const result = await sendPaneLayout(callEnvironment, args, hostTabId)
     const newest = latestPush.get(pushKey) === seq
     // Still waking after the host's hold: the same push lands once it is up, unless a newer one
     // for this tab has replaced it meanwhile.
     if (
-      sent !== true &&
-      isRecipeVmWakingRefusal(sent) &&
+      !result.sent &&
+      isRecipeVmWakingRefusal(result.error) &&
       send < PANE_LAYOUT_WAKING_SENDS &&
       newest
     ) {
@@ -68,12 +68,12 @@ export async function updateWebRuntimePaneLayout(args: {
     if (newest) {
       latestPush.delete(pushKey)
     }
-    if (sent === true) {
+    if (result.sent) {
       return true
     }
     console.warn(
       '[web-runtime-session] failed to update pane layout:',
-      sent instanceof Error ? sent.message : String(sent)
+      result.error instanceof Error ? result.error.message : String(result.error)
     )
     return false
   }
@@ -83,7 +83,7 @@ async function sendPaneLayout(
   callEnvironment: ReturnType<typeof captureRuntimeEnvironmentCall>,
   args: Parameters<typeof updateWebRuntimePaneLayout>[0],
   hostTabId: string
-): Promise<true | unknown> {
+): Promise<{ sent: true } | { sent: false; error: unknown }> {
   try {
     const response = await callEnvironment({
       method: 'session.tabs.updatePaneLayout',
@@ -99,8 +99,8 @@ async function sendPaneLayout(
       timeoutMs: 15_000
     })
     unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ updated: true }>)
-    return true
+    return { sent: true }
   } catch (error) {
-    return error
+    return { sent: false, error }
   }
 }
