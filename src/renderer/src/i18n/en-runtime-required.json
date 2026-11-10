@@ -212,11 +212,15 @@
           "lineItemYearly_other": "{{seats}} × {{price}} per seat, billed yearly"
         },
         "plans": {
+          "sandboxHoursLeftResets_one": "{{count}} sandbox hour left · resets {{date}}",
+          "sandboxHoursLeftResets_other": "{{count}} sandbox hours left · resets {{date}}",
           "seatsPerMember_one": "{{count}} seat, one per team member",
           "seatsPerMember_other": "{{count}} seats, one per team member"
         },
-        "sandboxHoursOver_one": "{{count}} sandbox hour over",
-        "sandboxHoursOver_other": "{{count}} sandbox hours over",
+        "sandboxHoursLeftCount_one": "{{count}} sandbox hour left",
+        "sandboxHoursLeftCount_other": "{{count}} sandbox hours left",
+        "sandboxHoursOverIncluded_one": "{{count}} sandbox hour over the included amount this month",
+        "sandboxHoursOverIncluded_other": "{{count}} sandbox hours over the included amount this month",
         "seatsAnnual_one": "{{count}} seat · Annual",
         "seatsAnnual_other": "{{count}} seats · Annual",
         "seatsMonthly_one": "{{count}} seat · Monthly",

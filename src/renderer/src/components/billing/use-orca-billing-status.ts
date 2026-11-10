@@ -1,80 +1,49 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useOrcaAccountKey } from '@/hooks/use-orca-account-key'
 import type { OrcaBillingStatusResult } from '../../../../shared/orca-billing'
-import {
-  getBillingGeneration,
-  getLastBillingStatus,
-  recordBillingStatusIfCurrent
-} from './billing-summary-store'
+import { refreshBillingStatus, useBillingState, watchBillingStatus } from './billing-summary-store'
 
 type BillingStatusState = {
+  /** True until the first answer for this account arrives, and while a read runs. */
   loading: boolean
   result: OrcaBillingStatusResult | null
 }
 
-function readBillingStatus(): Promise<OrcaBillingStatusResult> {
-  return window.api.orcaProfiles
-    .billingStatus()
-    .catch((error: unknown): OrcaBillingStatusResult => ({
-      status: 'failed',
-      error: error instanceof Error ? error.message : String(error)
-    }))
-}
-
 /**
- * Reads the billing status while `enabled`, again on `refresh()`, and whenever the window regains
- * focus (the user comes back from Checkout or the Portal in their browser). A team or account
- * switch drops the previous team's status and reads the new one; an answer that started before
- * the switch is never shown or recorded.
+ * The shared billing status while `enabled`: read on mount, again on `refresh()`, and whenever the
+ * window regains focus (the user comes back from Checkout or the Portal in their browser). A failed
+ * re-read keeps the last good answer. A team or account switch drops the previous team's status and
+ * reads the new one; an answer that started before the switch is never shown or recorded.
  */
 export function useOrcaBillingStatus(
   enabled: boolean
 ): BillingStatusState & { refresh: () => void } {
-  const [state, setState] = useState<BillingStatusState>(() => ({
-    loading: enabled,
-    result: enabled ? getLastBillingStatus() : null
-  }))
-  const [reloadKey, setReloadKey] = useState(0)
-  const refresh = useCallback(() => setReloadKey((key) => key + 1), [])
+  const snapshot = useBillingState()
   const accountKey = useOrcaAccountKey()
-  const loadedAccount = useRef(accountKey)
+  // Billing just changed in-app (or the user asked): a read that started earlier may be stale.
+  const refresh = useCallback(() => void refreshBillingStatus({ supersede: true }), [])
 
   useEffect(() => {
     if (!enabled) {
       return
     }
-    let disposed = false
-    let latest = 0
-    const switched = loadedAccount.current !== accountKey
-    loadedAccount.current = accountKey
-    const load = (): void => {
-      const request = ++latest
-      const startedGeneration = getBillingGeneration()
-      // The previous team's plan must not stay on screen while the new team's loads.
-      setState((previous) =>
-        switched && request === 1 ? { loading: true, result: null } : { ...previous, loading: true }
-      )
-      void readBillingStatus().then((result) => {
-        // A newer request, or unmounting, supersedes this one.
-        if (disposed || request !== latest) {
-          return
-        }
-        // The account or team changed while this was in flight: the answer is for the old one.
-        if (getBillingGeneration() !== startedGeneration) {
-          load()
-          return
-        }
-        recordBillingStatusIfCurrent(startedGeneration, result)
-        setState({ loading: false, result })
-      })
-    }
+    const release = watchBillingStatus()
+    const load = (): void => void refreshBillingStatus()
     load()
     window.addEventListener('focus', load)
     return () => {
-      disposed = true
+      release()
       window.removeEventListener('focus', load)
     }
-  }, [enabled, reloadKey, accountKey])
+  }, [enabled, accountKey])
 
-  return { ...state, refresh }
+  if (!enabled) {
+    return { loading: false, result: null, refresh }
+  }
+  return {
+    // No answer yet means one is on its way (the read starts after the first paint).
+    loading: snapshot.loading || snapshot.result === null,
+    result: snapshot.result,
+    refresh
+  }
 }

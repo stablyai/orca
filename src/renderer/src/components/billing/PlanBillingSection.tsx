@@ -3,6 +3,7 @@ import { SettingsGroupHeader } from '@/components/settings/section-layout/Settin
 import { CreditCard, ExternalLink, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { formatCents } from './plans/plans-pricing'
 import { cn } from '@/lib/utils'
@@ -18,11 +19,17 @@ import { OverageControls, UsageSummary } from './PlanBillingUsage'
 import { denyReasonCopy, openFailureCopy, overageFailureCopy } from './plan-billing-copy'
 import { PlanStatusBadge } from './PlanStatusBadge'
 import { useOrcaBillingStatus } from './use-orca-billing-status'
-import { invalidateOrcaCloudBilling } from '../new-workspace/orca-cloud-billing-cache'
+import { useAppStore } from '@/store/index'
+import { BILLING_CAPABILITY } from './register-plan-billing-menu-item'
 
 export function PlanBillingSection(): React.JSX.Element | null {
   const t = useTranslate()
+  const locale = useIntlLocale()
   const { loading, result, refresh } = useOrcaBillingStatus(true)
+  // Only billing-flagged accounts get a skeleton; others hear "unconfigured" and show nothing.
+  const billingFlagged = useAppStore(
+    (state) => state.orcaProfileAuthStatus?.capabilities?.flags[BILLING_CAPABILITY] === true
+  )
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<PlanBillingNotice | null>(null)
   const [userRefreshing, setUserRefreshing] = useState(false)
@@ -61,11 +68,12 @@ export function PlanBillingSection(): React.JSX.Element | null {
       }))
     setBusy(false)
     if (outcome.status === 'ok') {
+      // One shared store: this re-read also updates the Run-on picker's Orca Cloud row.
       refresh()
-      // The Run-on picker's Orca Cloud row reads a shared copy; overage/cap just changed it.
-      invalidateOrcaCloudBilling()
     } else {
-      const failure = overageFailureCopy(outcome, t)
+      const maxCap =
+        result?.status === 'ok' ? (result.entitlement.offers?.team.maxSpendCapCents ?? null) : null
+      const failure = overageFailureCopy(outcome, t, maxCap, locale)
       setNotice(failure ? { kind: 'error', text: failure } : null)
       setOverageFailures((count) => count + 1)
     }
@@ -74,7 +82,7 @@ export function PlanBillingSection(): React.JSX.Element | null {
   return (
     <PlanBillingView
       result={result}
-      loading={loading}
+      loading={loading && (result !== null || billingFlagged)}
       refreshing={userRefreshing}
       busy={busy}
       notice={notice}
@@ -123,6 +131,9 @@ export function PlanBillingView({
 }: PlanBillingViewProps): React.JSX.Element | null {
   const t = useTranslate()
   const locale = useIntlLocale()
+  if (!result && loading) {
+    return <PlanBillingSkeleton />
+  }
   if (!result || result.status === 'unconfigured' || result.status === 'signed-out') {
     // The pane above already handles sign-in; billing stays out of builds without a service.
     return null
@@ -265,6 +276,39 @@ export function PlanBillingView({
           {notice.text}
         </p>
       ) : null}
+    </div>
+  )
+}
+
+/** Same rows as a loaded plan (header, plan line, usage, overage card) so nothing jumps in. */
+function PlanBillingSkeleton(): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <div
+      className="space-y-4 border-t border-border/60 pt-5"
+      role="status"
+      aria-busy
+      aria-label={t('auto.components.billing.loadingPlan', 'Loading your plan…')}
+    >
+      <SettingsGroupHeader
+        className="px-0"
+        title={t('auto.components.billing.title', 'Plan & billing')}
+      />
+      <div className="flex items-center gap-2">
+        <Skeleton shape="circle" className="size-4" />
+        <Skeleton shape="small" className="h-4 w-16" />
+        <Skeleton shape="small" className="h-3 w-28" />
+      </div>
+      <div className="space-y-2">
+        <div className="flex justify-between gap-3">
+          <Skeleton shape="small" className="h-3 w-56" />
+          <Skeleton shape="small" className="h-3 w-28" />
+        </div>
+        <Skeleton shape="circle" className="h-2 w-full" />
+        <Skeleton shape="small" className="h-3 w-40" />
+      </div>
+      <Skeleton shape="card" className="h-20 w-full" />
+      <Skeleton className="h-8 w-32" />
     </div>
   )
 }

@@ -111,7 +111,8 @@ const OffersSchema = z
       concurrentSandboxesPerSeat: z.number().int().nonnegative(),
       idleSleepMinutes: z.number().int().positive(),
       overageCentsPerHour: z.number().int().positive(),
-      defaultSpendCapCents: z.number().int().nonnegative()
+      defaultSpendCapCents: z.number().int().nonnegative(),
+      maxSpendCapCents: z.number().int().positive().nullable().catch(null)
     }),
     enterprise: z.object({
       label: z.string().max(40),
