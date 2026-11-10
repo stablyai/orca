@@ -2377,7 +2377,6 @@
     }
   },
   "secretRequest": {
-    "help": "Saved to your Cloud secrets. Commands in this workspace can read it as ${{name}}.",
     "more_one": "{{count}} more request",
     "more_other": "{{count}} more requests"
   },

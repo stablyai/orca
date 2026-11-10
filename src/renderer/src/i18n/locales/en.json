@@ -27269,7 +27269,6 @@
     "dismiss": "Dismiss",
     "valueLabel": "Value for {{name}}",
     "valuePlaceholder": "Value",
-    "help": "Saved to your Cloud secrets. Commands in this workspace can read it as ${{name}}.",
     "repoHint": "{{agent}} suggested Repository",
     "unreachable": "Couldn’t reach Orca Cloud.",
     "nothingChanged": "Nothing was changed.",
