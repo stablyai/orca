@@ -52,6 +52,7 @@ export function NativeChatAssistantMessageRow({
     trailingRun,
     continuesTurn = false,
     endsResponse,
+    latestResponse = true,
     actionsHang = false,
     inSubagentSection = false,
     runtimeContext,
@@ -123,6 +124,9 @@ export function NativeChatAssistantMessageRow({
           }
           className={cn(
             'mt-1 w-fit select-none',
+            !latestResponse &&
+              fork?.pendingItemId !== message.id &&
+              'transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100',
             // They hang into the gap below only when nothing left-side starts there. Never in a
             // section, which keeps them inside its border.
             actionsHang && '-mb-5'

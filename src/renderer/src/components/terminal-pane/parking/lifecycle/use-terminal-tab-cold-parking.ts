@@ -25,10 +25,7 @@ import {
 } from '../verdict/use-terminal-park-verdict-pin'
 import { withholdUnparkableTerminalTabs } from '../retention/terminal-cold-park-withheld-tabs'
 import { getTerminalParkingPolicyOverrides } from '../instrumentation/terminal-parking-e2e-overrides'
-import {
-  selectEvictionExemptTerminalTabIds,
-  selectEvictionExemptTerminalTabLayoutKey
-} from '../retention/terminal-eviction-exempt-tabs'
+import { selectEvictionExemptTerminalTabIds } from '../retention/terminal-eviction-exempt-tabs'
 import { selectSleepingRecordParkExemptTabIds } from '../retention/sleeping-record-park-exemption'
 import { usePendingStartupParkPresence } from '../retention/terminal-pending-startup-park-presence'
 import { canWatcherCoverParkedTerminalTab } from '../output-watchers/terminal-parked-tab-watchers'
@@ -36,8 +33,7 @@ import { captureNewlyParkedTerminalTabs } from '../capture/parked-terminal-tab-c
 import { createTerminalTabActivationOrder } from '../retention/terminal-tab-activation-order'
 import { buildTerminalTabColdParkCandidates } from '../retention/terminal-tab-park-candidates'
 import {
-  getTerminalParkingAssignmentsKey,
-  getTerminalParkingInputsKey,
+  useTerminalParkingWorkspaceInputs,
   useParkedTerminalWatcherSynchronization
 } from './use-parked-terminal-watcher-synchronization'
 import {
@@ -80,19 +76,12 @@ export function useTerminalTabColdParking(args: {
     activityTerminalPortals,
     activationDeferredMountTabIds
   } = args
-  const terminalParkingInputsKey = useMemo(
-    () => getTerminalParkingInputsKey(terminalTabs),
-    [terminalTabs]
-  )
-  const terminalParkingAssignmentsKey = useMemo(
-    () => getTerminalParkingAssignmentsKey(assignments),
-    [assignments]
-  )
-  const terminalParkingTabsDependency = coldParkTerminalPanes
-    ? terminalParkingInputsKey
-    : terminalTabs
+  const parkingInputs = useTerminalParkingWorkspaceInputs(worktreeId)
+  const parkingInputRevision = parkingInputs.revision
+  const terminalParkingTabsDependency = coldParkTerminalPanes ? parkingInputRevision : terminalTabs
+  // Accepted assignment changes already advance the workspace revision; renders do not own park clocks.
   const terminalParkingAssignmentsDependency = coldParkTerminalPanes
-    ? terminalParkingAssignmentsKey
+    ? parkingInputRevision
     : assignments
   const pendingStartupByTabId = usePendingStartupParkPresence(terminalTabs)
   const terminalParkingEnabled = useAppStore(
@@ -250,21 +239,19 @@ export function useTerminalTabColdParking(args: {
     terminalParkingEnabled,
     terminalSshParkingEnabled,
     terminalTabParkingRevision,
+    parkingInputRevision,
     terminalParkingAssignmentsDependency,
     terminalParkingTabsDependency,
     worktreeId
   ])
 
-  // Force-park exemptions depend on layout leaf PTYs even when terminalTabs is unchanged.
-  const evictionExemptLayoutKey = useAppStore((state) =>
-    isForceParked ? selectEvictionExemptTerminalTabLayoutKey(state, terminalTabs) : ''
-  )
   // Cache exemption layout walks until force-park, tabs, or layout PTYs change.
   const evictionExemptTerminalTabIds = useMemo(
     () =>
-      isForceParked ? selectEvictionExemptTerminalTabIds(worktreeId, terminalTabs) : EMPTY_TAB_IDS,
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the layout key encodes the store fields the selector re-reads internally.
-    [evictionExemptLayoutKey, isForceParked, terminalTabs, worktreeId]
+      isForceParked
+        ? selectEvictionExemptTerminalTabIds(parkingInputs.worktreeId, terminalTabs)
+        : EMPTY_TAB_IDS,
+    [parkingInputs, isForceParked, terminalTabs]
   )
 
   // Render and watcher sync must share the pinned verdict, excluding portal-hosted tabs.
@@ -298,7 +285,7 @@ export function useTerminalTabColdParking(args: {
       if (
         activationDeferredMountTabIds?.has(terminalTab.id) &&
         !hasActivityTerminalPortal &&
-        canWatcherCoverParkedTerminalTab(worktreeId, terminalTab)
+        canWatcherCoverParkedTerminalTab(parkingInputs.worktreeId, terminalTab)
       ) {
         parked.add(terminalTab.id)
       }
@@ -316,6 +303,7 @@ export function useTerminalTabColdParking(args: {
     sleepingRecordOwnedTabIds,
     terminalTabs,
     terminalPaneSplitMountLeaseTabIds,
+    parkingInputs,
     worktreeId
   ])
 
@@ -328,14 +316,7 @@ export function useTerminalTabColdParking(args: {
   })
 
   // Sync in the park/reveal effect flush: dispose watchers before remounted-pane IPC and start them after unmount capture.
-  useParkedTerminalWatcherSynchronization({
-    worktreeId,
-    terminalTabs,
-    assignmentsKey: terminalParkingAssignmentsKey,
-    inputsKey: terminalParkingInputsKey,
-    parkedTabIds: parkedTerminalTabIds,
-    activationDeferredMountTabIds
-  })
+  useParkedTerminalWatcherSynchronization({ ...args, parkedTabIds: parkedTerminalTabIds })
 
   return parkedTerminalTabIds
 }

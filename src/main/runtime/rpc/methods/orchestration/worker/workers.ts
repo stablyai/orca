@@ -1,7 +1,8 @@
 import { stopHelperAfterStart } from './worker-stop'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { z } from 'zod'
-import { defineMethod, type RpcContext } from '../../../core'
+import type { RpcContext } from '../../../core'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { startFederatedWorker } from '../../../../orchestration/legacy-remote-home/legacy-remote-home'
 import { startLocalWorker } from './local-worker-start'
 import type { WorkerFollowUp } from './worker-follow-up-placement'
@@ -37,15 +38,28 @@ type WorkerStartContext = Pick<
 >
 
 export const ORCHESTRATION_WORKER_START_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.workerStart',
+    access: {
+      kind: 'writes',
+      caller: 'from',
+      targets: {
+        task: 'task',
+        parent: 'task',
+        deps: 'task',
+        run: 'run',
+        retryOf: 'dispatch',
+        terminal: 'worker'
+      }
+    },
     requires: ['accounts'],
     permission: 'workspace',
     params: WorkerStartParams,
     handler: async (params, ctx) => startWorker(params, ctx)
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.workerLaunchPreflight',
+    access: { kind: 'reads', targets: { terminal: 'worker' } },
     permission: 'workspace',
     params: FederationWorkerLaunchParams,
     handler: async (params, { runtime }) => {

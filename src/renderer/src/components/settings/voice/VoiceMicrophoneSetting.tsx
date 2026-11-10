@@ -10,12 +10,14 @@ import { Label } from '../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import {
   buildVoiceMicrophoneSelectOptions,
-  microphoneDeviceIdFromSelectValue
+  microphoneDeviceIdFromSelectValue,
+  resolveMicrophoneDevice
 } from '@/components/dictation/microphone-devices'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { cn } from '@/lib/utils'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { useVoiceMicrophoneDevices } from './use-voice-microphone-devices'
 
@@ -189,19 +191,41 @@ export function VoiceMicrophoneSetting({
   )
 
   const showAccessHint = voiceSettings.enabled && devices.length === 0
+  const microphoneMissing =
+    voiceSettings.enabled &&
+    resolveMicrophoneDevice({
+      devices: devicesKnown ? devices : null,
+      preferredDeviceId: voiceSettings.microphoneDeviceId,
+      preferredDeviceLabel: voiceSettings.microphoneDeviceLabel
+    }).kind === 'missing'
 
   const testBusy = ['starting', 'recording', 'playing'].includes(test.phase.kind)
 
   return (
-    <div data-settings-row="" className="space-y-2 py-2">
+    <div data-settings-row="" className="space-y-2 py-3">
       <div className="flex items-center justify-between gap-4">
-        <div className="min-w-0 space-y-0.5">
-          <Label>{t('auto.components.settings.VoiceMicrophoneSetting.label', 'Microphone')}</Label>
-          <p className="text-xs text-muted-foreground">
-            {t(
-              'auto.components.settings.VoiceMicrophoneSetting.description',
-              'Input device used for voice dictation. System default follows the OS microphone setting.'
+        <div className="min-w-0 flex-1 space-y-1">
+          <Label>{t('components.settings.voice.input.title', 'Input')}</Label>
+          <p
+            className={cn(
+              'text-xs',
+              microphoneMissing ? 'text-status-warning-text' : 'text-muted-foreground'
             )}
+          >
+            {microphoneMissing
+              ? t(
+                  'components.settings.voice.input.missing',
+                  '{{microphone}} isn’t connected. Using the system default until it’s back.',
+                  {
+                    microphone:
+                      voiceSettings.microphoneDeviceLabel ||
+                      t('components.settings.voice.setup.savedMicrophone', 'Your microphone')
+                  }
+                )
+              : t(
+                  'components.settings.voice.input.description',
+                  'Follows your system setting unless you pick one.'
+                )}
           </p>
           {showAccessHint && (
             <div className="flex flex-wrap items-center gap-2 pt-1">
