@@ -40,6 +40,9 @@ describe('Codex fullscreen composer paste gate', () => {
     // Codex 0.167 with `status_line = ["git-branch"]` outside a git repo: only the hint row repaints.
     expect(scanner.observe(`${BEGIN}\x1b[40;3H← agents · ? for shortcuts${END}`).ready).toBe(false)
     expect(scanner.observe(IDLE_REPORT).ready).toBe(true)
+    expect(scanner.observe('\x1b]7501;state=blocked:kind=question:app=codex\x1b\\').ready).toBe(
+      false
+    )
   })
 
   it.each(['\x1b[?2004l', '\x1b[?1049l'])(

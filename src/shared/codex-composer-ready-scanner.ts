@@ -84,16 +84,16 @@ export function createCodexComposerReadyScanner(): {
     observe: (data) => {
       let scanned = 0
       for (const event of scanProgramStatus(data)) {
-        if (
-          event.type === 'report' &&
-          event.report.id === null &&
-          event.report.app === 'codex' &&
-          event.report.state === 'idle'
-        ) {
+        if (event.type === 'report' && event.report.id === null && event.report.app === 'codex') {
+          const { state } = event.report
+          // Working keeps the composer open (MCP startup); a blocked view or exit discards input.
+          if (state === 'working' || state === 'done') {
+            continue
+          }
           // In byte order: only a mode exit after the report revokes it.
           scanner.observe(data.slice(scanned, event.offset))
           scanned = event.offset
-          reportedIdle = true
+          reportedIdle = state === 'idle'
         }
       }
       scanner.observe(data.slice(scanned))
