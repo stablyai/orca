@@ -1,21 +1,19 @@
 // A slot qualified once on an unchanged host need not re-run the disposable startup preflight.
 import { createHash, randomUUID } from 'node:crypto'
-import { readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises'
 import { release } from 'node:os'
-import { isAbsolute, join, relative } from 'node:path'
+import { dirname, isAbsolute, join, relative } from 'node:path'
 import process from 'node:process'
-import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
+import {
+  ORCAD_MANAGED_ACTIVATION_ROOT_ENV,
+  ORCAD_STARTUP_QUALIFICATION_DIR_ENV
+} from '../../shared/orcad-managed-launch-env'
 import { ORCAD_NODE_RUNTIME_IDENTITY } from '../../shared/orcad-node-runtime-identity'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import { listOrcadArtifactFilenames } from './orcad-artifact-identity'
 import { detectNativeHostAbi } from './native-host-abi'
 
 export const ORCAD_STARTUP_QUALIFIED_FILENAME = '.orcad-startup-qualified'
-/**
- * A writable directory for the marker of a slot installed read-only (the Orca Cloud image). The
- * launcher opts in by setting it, so every boot from the image skips the disposable preflight.
- */
-export const ORCAD_STARTUP_QUALIFICATION_DIR_ENV = 'ORCA_ORCAD_STARTUP_QUALIFICATION_DIR'
 const ARTIFACT_STAT_CONCURRENCY = 16
 
 // Launch environment that changes how Node, its native modules or the probe's temp files behave.
@@ -131,6 +129,7 @@ export async function recordOrcadStartupQualification(
   const marker = markerPath(directory, env)
   const temporary = `${marker}.${randomUUID()}.tmp`
   try {
+    await mkdir(dirname(marker), { recursive: true, mode: 0o700 })
     await writeFile(temporary, key, { mode: 0o600 })
     await rename(temporary, marker)
   } catch {

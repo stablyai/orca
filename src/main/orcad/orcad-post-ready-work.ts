@@ -44,7 +44,7 @@ export function orcadPostReadyDeps(
 ): OrcadPostReadyDeps {
   return {
     warmRpcMethods: () => rpc.preloadRpcMethods(),
-    warmTerminalList: () => runtime.listTerminals(),
+    warmTerminalList: async () => runtime.listTerminals(),
     startAgentStateRules: async () => {
       const { startAgentStateRulesLiveUpdates } =
         await import('../runtime/agent-state-rules/agent-state-rules-live-update')

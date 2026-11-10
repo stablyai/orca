@@ -1,5 +1,8 @@
 import { ORCAD_IDLE_TIMEOUT_ENV } from './orcad-idle-exit'
-import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from './orcad-managed-launch-env'
+import {
+  ORCAD_MANAGED_ACTIVATION_ROOT_ENV,
+  ORCAD_STARTUP_QUALIFICATION_DIR_ENV
+} from './orcad-managed-launch-env'
 
 /** WSL-host launch marker; SSH guests and WSLg retain their original PATH. */
 export const ORCAD_WSL_HOST_ENV = 'ORCA_WSL_ORCAD_HOST'
@@ -14,6 +17,8 @@ export const ORCAD_WSL_DISTRO_GUID_ENV = 'ORCA_WSL_DISTRO_GUID'
 export const ORCAD_SERVER_LAUNCH_ENV_KEYS = [
   // Not client-managed.
   ORCAD_MANAGED_ACTIVATION_ROOT_ENV,
+  // Does not share or overwrite the server's startup-qualified marker.
+  ORCAD_STARTUP_QUALIFICATION_DIR_ENV,
   // Keeps the default idle window.
   ORCAD_IDLE_TIMEOUT_ENV,
   // Not a WSL host: no migration capabilities, no /mnt/c refusal, no account-push wait.
