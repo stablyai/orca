@@ -11249,7 +11249,10 @@
               "a5fb30e4da": "Diktat aktivieren",
               "ffaa3efe7c": "OpenAI-Transkription",
               "c7a7eaa0da": "Füllwörter entfernen",
-              "d0c230c061": "Diktatmodus"
+              "d0c230c061": "Diktatmodus",
+              "silenceStopTitle": "Nach Stille stoppen",
+              "silenceStopDescription": "Lege fest, wie lange das Diktieren weiterhört, wenn du nicht mehr sprichst.",
+              "silenceStopKeyword": "Stille"
             }
           }
         },
@@ -16945,7 +16948,6 @@
           "micFallback": "Ausgewähltes Mikrofon nicht verfügbar. Systemstandard wird verwendet.",
           "micDisconnected": "Mikrofon getrennt. Diktat gestoppt.",
           "cloudLimitReached": "Diktat am 10-Minuten-Limit der Cloud gestoppt.",
-          "stoppedAfterSilence": "Nach einer Minute Stille beendet",
           "retryUnmatched": "Beim erneuten Versuch war nicht erkennbar, welche Wörter schon eingegeben waren, daher wurden alle eingefügt."
         },
         "dictation-transcript-delivery": {
@@ -20755,6 +20757,11 @@
           "heardLabel": "{{model}} hat verstanden",
           "heardNothing": "Keine Wörter. Sprich lauter.",
           "heardFailed": "{{model}} konnte die Aufnahme nicht transkribieren."
+        },
+        "silenceStop": {
+          "title": "Nach Stille stoppen",
+          "description": "Hört auf zuzuhören, wenn du so lange still warst. Nie, während du das Kürzel gedrückt hältst.",
+          "off": "Aus"
         }
       },
       "repositoryHooks": {
@@ -20921,6 +20928,9 @@
           "action": "Bereich teilen"
         }
       }
+    },
+    "dictation": {
+      "stoppedAfterSilenceSeconds": "Nach {{seconds}} Sekunden Stille gestoppt"
     }
   },
   "dashboardPopout": {
