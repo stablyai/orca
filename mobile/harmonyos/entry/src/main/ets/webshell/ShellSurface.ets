@@ -117,6 +117,7 @@ export struct ShellSurface {
   private pendingSession: ShellRoute | null = null;
   private opensSessionNatively: boolean = false;
   private triedCachedBundle: boolean = false;
+  private layoutBlocked: boolean = false;
   private cacheOnly: boolean = false;
   private attachingClient: SpikeRpcClient | null = null;
   private activationFallback: BundleActivationFallback | null = null;
@@ -296,11 +297,21 @@ export struct ShellSurface {
   private isWideSurface(): boolean { return this.surface.width >= 700 && this.surface.height >= 600; }
 
   private reconcileDocumentLayout(): void {
-    let document = this.document;
-    let meta = this.desktop?.connection.getPairedMeta();
-    if (!document || !meta || this.disposed || !this.pageVisible || !this.foreground || this.navigation.isPending()
-      || this.keyboardTop >= 0 || !this.bridge?.layoutChangesRouteView(this.isWideSurface())) { return; }
-    this.remountDocument(document, meta);
+    if (this.disposed || !this.pageVisible || !this.foreground || this.navigation.isPending() || this.keyboardTop >= 0) { return; }
+    let connection = this.desktop?.connection;
+    let meta = connection?.getPairedMeta();
+    if (!meta) { return; }
+    let wide = this.isWideSurface();
+    let client = connection?.getClient();
+    if (this.document && this.bridge?.layoutChangesRouteView(wide)) {
+      if (client && this.routeAdmission(this.document.manifest, wide)) {
+        this.openConnectedBundle(client, meta).catch(() => {});
+      } else { this.remountDocument(this.document, meta); }
+    } else if (!this.document && this.layoutBlocked && !wide) {
+      this.layoutBlocked = false;
+      if (client) { this.openConnectedBundle(client, meta).catch(() => {}); }
+      else { this.triedCachedBundle = false; this.openCachedBundle(meta); }
+    }
   }
 
   private remountDocument(document: ShellDocument, meta: HostMeta): void {
@@ -451,6 +462,7 @@ export struct ShellSurface {
     }
     this.startup.cancel(); this.generation++; this.releaseBridge();
     this.painted = false; this.bundleRemedy = error.remedy;
+    if (this.layoutBlocked && !this.desktop?.connection.getClient()) { this.publishPhase('连接中断', 'offline'); return; }
     if (!error.message.startsWith('page-route-')) { WebBundleFetcher.forgetPairedBundle(getContext(this), this.hostId); }
     this.publishPhase(`失败：${error.message}`, 'incompatible');
   }
@@ -539,19 +551,20 @@ export struct ShellSurface {
     await this.openConnectedBundle(client, meta);
   }
 
-  private routeAdmission(manifest: BundleManifest): string {
+  private routeAdmission(manifest: BundleManifest, wide: boolean = this.isWideSurface()): string {
     let root = desktopPath(this.hostId);
     let pathname = this.pendingSession || (this.request.pathname === root && isDesktopSession(
       { hostId: this.hostId, pathname: this.routePathname, params: this.routeParams })) ? root : this.routePathname;
     return BridgeHost.classifyRoute(pathname, manifest, (grant: string): boolean =>
       ['fault', 'externalLink', 'externalNavigation', 'haptics'].includes(grant)
-      || (!this.asDrawer && grant === 'terminalKeyRail') || BridgeHost.supportsCoreGrant(grant, NATIVE_DEVICE_METHODS));
+      || (!this.asDrawer && grant === 'terminalKeyRail') || BridgeHost.supportsCoreGrant(grant, NATIVE_DEVICE_METHODS), wide);
   }
 
-  private readWorkingBundle(meta: HostMeta, status?: DesktopBundleStatus): CachedWebBundle | null {
+  private readWorkingBundle(meta: HostMeta, status?: DesktopBundleStatus,
+    wide: boolean = this.isWideSurface()): CachedWebBundle | null {
     if (this.asDrawer) { return null; }
     let cached = WebBundleFetcher.readPairedBundle(getContext(this), meta.id, meta.lastConnected);
-    if (!cached || this.routeAdmission(cached.manifest)) { return null; }
+    if (!cached || this.routeAdmission(cached.manifest, wide)) { return null; }
     try {
       if (status) { WebBundleFetcher.requireCompatibility(status, cached.manifest); }
       return cached;
@@ -579,7 +592,7 @@ export struct ShellSurface {
         return;
       }
       if (!current()) { return; }
-      this.requireRoute(this.routeAdmission(manifest));
+      this.requireBundleRoute(manifest);
       let completed = fetcher.completedDirectory(manifest);
       if (fallback && !completed) {
         this.mountBundle(client, meta, fallback.manifest, fallback.directory, generation);
@@ -631,8 +644,9 @@ export struct ShellSurface {
   private openCachedBundle(meta: HostMeta): void {
     if (this.asDrawer || this.bridge || this.triedCachedBundle || this.disposed) { return; }
     this.triedCachedBundle = true;
-    let cached = this.readWorkingBundle(meta);
+    let cached = this.readWorkingBundle(meta, undefined, false);
     if (!cached) { return; }
+    if (this.routeAdmission(cached.manifest)) { this.layoutBlocked = true; return; }
     let generation = ++this.generation;
     this.cacheOnly = true;
     this.startupGeneration = this.startup.begin();
@@ -682,8 +696,15 @@ export struct ShellSurface {
     if (block === 'mobile') { throw new BundleCompatibilityError('mobile', 'page-route-grant-missing'); }
   }
 
+  private requireBundleRoute(manifest: BundleManifest): void {
+    let block = this.routeAdmission(manifest);
+    this.layoutBlocked = block !== '' && this.isWideSurface() && this.routeAdmission(manifest, false) === '';
+    this.requireRoute(block);
+  }
+
   private mountBundle(client: SpikeRpcClient | null, meta: HostMeta, manifest: BundleManifest, baseDir: string,
     generation: number): void {
+    this.requireBundleRoute(manifest);
       let path = this.desktop?.connection.getActivePath() ?? 'lan';
     let warm = claimHomeDocument(meta, baseDir);
     let document = warm ?? new ShellDocument(manifest, baseDir, false);

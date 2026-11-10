@@ -118,6 +118,36 @@ test('a standalone session stores its exact workspace key without accepting a pr
   client.close()
 })
 
+test('wide workspace admission requires an implemented desktop sidebar owner', () => {
+  const { BridgeHost } = loadArkts('webshell/BridgeHost.ets', ['BridgeHost'])
+  const root = `/h/${hostId}`
+  const session = `${root}/session/tree`
+  const listRoute = { pathname: '/h/[hostId]', grants: ['navigate'] }
+  const sessionRoute = { pathname: '/h/[hostId]/session/[worktreeId]', grants: ['navigate'] }
+  const legacy = { routes: [listRoute, sessionRoute] }
+  const supports = (grant) => grant === 'navigate'
+
+  for (const pathname of [root, session]) {
+    assert.equal(BridgeHost.classifyRoute(pathname, legacy, supports, false), '')
+    assert.equal(BridgeHost.classifyRoute(pathname, legacy, supports, true), 'desktop')
+  }
+  const wideOwner = { ...listRoute, canOwnHostArea: true }
+  assert.equal(
+    BridgeHost.classifyRoute(session, { routes: [wideOwner, sessionRoute] }, supports, true),
+    ''
+  )
+  const unimplementedOwner = { ...wideOwner, grants: ['future-native-grant'] }
+  assert.equal(
+    BridgeHost.classifyRoute(
+      session,
+      { routes: [unimplementedOwner, sessionRoute] },
+      supports,
+      true
+    ),
+    'mobile'
+  )
+})
+
 test('a standalone session can show its desktop sidebar when expanded and return to its native list', async (t) => {
   const root = `/h/${hostId}`
   const pathname = `${root}/session/tree`

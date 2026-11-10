@@ -509,14 +509,24 @@ export class BridgeHost {
     return routes.filter((route: BundleRoute): boolean => route.grants.every((grant: string): boolean => this.supportsGrant(grant)));
   }
 
-  static classifyRoute(pathname: string, manifest: BundleManifest, supports: (grant: string) => boolean): string {
-    let declared = manifest.routes.filter((route: BundleRoute): boolean => BridgeHost.routeMatches(route.pathname, pathname));
-    if (declared.length === 0) { return 'desktop'; }
-    return declared.some((route: BundleRoute): boolean => route.grants.every(supports)) ? '' : 'mobile';
+  private static servesRoute(routes: BundleRoute[], pathname: string, wide: boolean): boolean {
+    if (!routes.some((route: BundleRoute): boolean => BridgeHost.routeMatches(route.pathname, pathname))) { return false; }
+    if (!wide) { return true; }
+    let segments = pathname.split('/');
+    if (segments[0] !== '' || segments[1] !== 'h' || !segments[2]) { return false; }
+    let root = `/h/${segments[2]}`;
+    return routes.some((route: BundleRoute): boolean => route.canOwnHostArea === true && BridgeHost.routeMatches(route.pathname, root));
   }
 
-  routeBlock(pathname: string): string {
-    return BridgeHost.classifyRoute(pathname, this.manifest, (grant: string): boolean => this.supportsGrant(grant));
+  static classifyRoute(pathname: string, manifest: BundleManifest, supports: (grant: string) => boolean,
+    wide: boolean = false): string {
+    if (!BridgeHost.servesRoute(manifest.routes, pathname, wide)) { return 'desktop'; }
+    let implemented = manifest.routes.filter((route: BundleRoute): boolean => route.grants.every(supports));
+    return BridgeHost.servesRoute(implemented, pathname, wide) ? '' : 'mobile';
+  }
+
+  routeBlock(pathname: string, wide: boolean = this.wideLayout): string {
+    return BridgeHost.classifyRoute(pathname, this.manifest, (grant: string): boolean => this.supportsGrant(grant), wide);
   }
 
   ownsHostArea(pathname: string = this.routePathname): boolean {
@@ -524,8 +534,9 @@ export class BridgeHost {
   }
 
   layoutChangesRouteView(wide: boolean): boolean {
-    return wide !== this.wideLayout && (this.desktopListBack ? this.hostAreaAvailable(true)
-      : this.hostAreaAvailable(wide) !== this.hostAreaAvailable(this.wideLayout));
+    return wide !== this.wideLayout && (this.routeBlock(this.routePathname, wide) !== this.routeBlock(this.routePathname)
+      || (this.desktopListBack ? this.hostAreaAvailable(true)
+        : this.hostAreaAvailable(wide) !== this.hostAreaAvailable(this.wideLayout)));
   }
 
   private documentHostAreaPath(): string {
