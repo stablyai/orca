@@ -33,6 +33,7 @@ describe('registerRuntimeHandlers', () => {
   })
 
   it("passes the orchestration contract fence for the window's own mutations", async () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fence answers before any other runtime member is read.
     registerRuntimeHandlers({ getRuntimeId: () => 'runtime-1' } as never)
     const registration = handleMock.mock.calls.find(([channel]) => channel === 'runtime:call')
     const frame = {}
