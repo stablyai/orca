@@ -16,6 +16,7 @@ const ACTIONS: SecretRequestCardActions = {
   onRestart: noop,
   onDismiss: noop,
   onToggleCollapsed: noop,
+  onCollapse: noop,
   onDetails: noop
 }
 

@@ -291,6 +291,7 @@ export function useSecretRequestCard(args: {
       },
       onDismiss: () => dismissSecretRequest(environmentId, requestId),
       onToggleCollapsed: () => setCollapsed((current) => !current),
+      onCollapse: () => setCollapsed(true),
       onDetails: openPanel
         ? () => openPanel({ hostId: environmentId, focus: { secret: event.name } })
         : undefined,
