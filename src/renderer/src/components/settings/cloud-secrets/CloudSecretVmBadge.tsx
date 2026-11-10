@@ -17,15 +17,17 @@ export function CloudSecretVmBadge({ name }: { name: string }): React.JSX.Elemen
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Badge
-          variant="referenceLabel"
+        {/* The focus target is the wrapper: Badge owns its shape. */}
+        <span
           tabIndex={0}
-          className="rounded-sm outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+          className="inline-flex rounded-sm outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
         >
-          <TriangleAlert aria-hidden className="text-status-warning" />
-          {t('cloudSecrets.vm.badge', 'Real value in sandbox')}
-          <span className="sr-only">{why}</span>
-        </Badge>
+          <Badge variant="referenceLabel">
+            <TriangleAlert aria-hidden className="text-status-warning" />
+            {t('cloudSecrets.vm.badge', 'Real value in sandbox')}
+            <span className="sr-only">{why}</span>
+          </Badge>
+        </span>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4} className="max-w-72">
         {why}
