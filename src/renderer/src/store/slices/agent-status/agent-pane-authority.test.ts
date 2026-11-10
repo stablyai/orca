@@ -73,6 +73,34 @@ describe('agent pane authority', () => {
     expect(retirePaneAuthority).toHaveBeenCalledWith(TARGET, expect.any(String))
   })
 
+  it('re-retiring an already-retired pane renews recovery identity without changing epochs', () => {
+    const store = createTestStore()
+    store.getState().setAgentStatus(TARGET, { state: 'working', prompt: 'target' })
+    store.getState().retireAgentPaneAuthority(TARGET)
+    const before = store.getState()
+
+    store.getState().retireAgentPaneAuthority(TARGET)
+    const after = store.getState()
+    expect(after.recentlyRetiredAgentStatusPaneKeys[TARGET]).not.toBe(
+      before.recentlyRetiredAgentStatusPaneKeys[TARGET]
+    )
+    expect(after.agentStatusEpoch).toBe(before.agentStatusEpoch)
+    expect(after.sortEpoch).toBe(before.sortEpoch)
+  })
+
+  it('retires the pane activity cutoff with the rest of its pane-owned state', () => {
+    const store = createTestStore()
+    store.setState({
+      activityClearedAtByPaneKey: {
+        [TARGET]: 1_000,
+        [SIBLING]: 2_000
+      }
+    })
+
+    store.getState().retireAgentPaneAuthority(TARGET)
+
+    expect(store.getState().activityClearedAtByPaneKey).toEqual({ [SIBLING]: 2_000 })
+  })
   // Detach/reattach must lift renderer tombstones or still-running panes lose status permanently (STA-4114).
   it('lifts the retirement fence on re-attach so an in-flight turn can still report done', () => {
     const store = createTestStore()

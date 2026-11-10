@@ -14,6 +14,7 @@ const NAME_TOKENS: readonly (readonly [string, TerminalAgent])[] = [
   ['claude', 'claude'],
   ['openclaude', 'openclaude'],
   ['codex', 'codex'],
+  ['jcode', 'jcode'],
   ['copilot', 'copilot'],
   ['cursor', 'cursor'],
   ['gemini', 'gemini'],
