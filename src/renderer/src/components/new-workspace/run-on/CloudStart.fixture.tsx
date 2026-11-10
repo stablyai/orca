@@ -3,7 +3,7 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
 import type { CloudSetupStep } from './cloud-start-model'
-import { ComposerPreview } from './cloud-start-fixture-preview'
+import { ComposerPreview } from './cloud-start-preview-fixture'
 
 const setup = (): void => {
   window.api.agentApiKeys = undefined

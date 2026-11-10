@@ -1,7 +1,10 @@
 // Which sandbox hours a start spends (O4): the start toast and the build sheet chip. Hours only,
 // never dollars; during a trial they say so.
 import type { Translate } from '@/i18n/use-translate'
-import { getOrcaCloudHoursLeft, type OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
+import {
+  getOrcaCloudHoursLeft,
+  type OrcaCloudRunTargetAccess
+} from '../orca-cloud-run-target-access'
 
 function hoursArgs(remainingSeconds: number, locale: string) {
   const count = getOrcaCloudHoursLeft(remainingSeconds)
@@ -23,11 +26,13 @@ export function getOrcaCloudHoursChip(
   const args = hoursArgs(access.remainingSeconds, locale)
   return access.trial
     ? t('components.newWorkspace.cloudHours.trialChip', 'Trial · {{hours}} sandbox hours left', {
-        ...args,
+        count: args.count,
+        hours: args.hours,
         defaultValue_one: 'Trial · {{hours}} sandbox hour left'
       })
     : t('components.newWorkspace.cloudHours.planChip', '{{hours}} sandbox hours left', {
-        ...args,
+        count: args.count,
+        hours: args.hours,
         defaultValue_one: '{{hours}} sandbox hour left'
       })
 }
@@ -46,12 +51,20 @@ export function getOrcaCloudStartToast(
     ? t(
         'components.newWorkspace.cloudHours.trialToast',
         'Using sandbox hours · {{hours}} sandbox hours left in your trial',
-        { ...args, defaultValue_one: 'Using sandbox hours · {{hours}} sandbox hour left in your trial' }
+        {
+          count: args.count,
+          hours: args.hours,
+          defaultValue_one: 'Using sandbox hours · {{hours}} sandbox hour left in your trial'
+        }
       )
     : t(
         'components.newWorkspace.cloudHours.planToast',
         'Using sandbox hours · {{hours}} sandbox hours left',
-        { ...args, defaultValue_one: 'Using sandbox hours · {{hours}} sandbox hour left' }
+        {
+          count: args.count,
+          hours: args.hours,
+          defaultValue_one: 'Using sandbox hours · {{hours}} sandbox hour left'
+        }
       )
 }
 
