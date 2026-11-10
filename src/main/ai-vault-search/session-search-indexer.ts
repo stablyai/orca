@@ -101,11 +101,15 @@ export class SessionSearchIndexer {
       () => {
         this.sweepNext = true
       },
-      (path) => this.work.queue.rowChanged(path, this.store.fileRow(path))
+      (path) => {
+        const row = this.store.fileRow(path)
+        this.work.queue.rowChanged(path, row)
+        this.work.candidates.rowChanged(path, row)
+      }
     )
     liveIndexerPaths.add(this.ownershipPath)
     this.store.setRetentionCutoffMs(this.cutoffMs())
-    this.unregister = registerSessionSearchIndexConsumer(this.store)
+    this.unregister = registerSessionSearchIndexConsumer(this.store, this.work.candidates)
   }
 
   /** Begin inventory capture, then consume changes and retained debt at the normal cadence. */

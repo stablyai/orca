@@ -41,12 +41,12 @@ export type SessionSearchIndexStore = Pick<
   | 'fileRows'
   | 'setFileState'
   | 'stateCounts'
-  | 'removeFile'
   | 'purgeOlderThan'
   | 'close'
   | 'retentionCutoff'
   | 'setRetentionCutoffMs'
 > & {
+  removeFile(path: string): boolean | Promise<boolean>
   readonly acceptingReads?: boolean
   prepare?(): Promise<void>
   flush?(): Promise<void>

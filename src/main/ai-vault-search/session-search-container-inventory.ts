@@ -1,3 +1,4 @@
+import { recordSessionScanIssue } from '../ai-vault/session-scan-issues'
 import { SessionObservationRetries } from '../ai-vault/session-observation-retries'
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { throwIfAiVaultScanCancelled } from '../ai-vault/ai-vault-scan-cancellation'
@@ -20,6 +21,11 @@ type Family = {
 
 /** Recent observations add facts; only a successful exhaustive observation can withdraw them. */
 export class SessionSearchContainerInventory {
+  private readonly pathLists = new Map<
+    string,
+    { paths: readonly string[]; complete: boolean; issues: AiVaultScanIssue[] }
+  >()
+  private seenPathLists = new Set<string>()
   private readonly families = new Map<string, Family>()
   private seen = new Set<string>()
   private recentLimit = 12
@@ -29,6 +35,7 @@ export class SessionSearchContainerInventory {
 
   begin(full: boolean, recentLimit: number): void {
     this.seen = new Set()
+    this.seenPathLists = new Set()
     this.retries.begin(full)
     this.recentLimit = recentLimit
     this.removed.clear()
@@ -41,7 +48,15 @@ export class SessionSearchContainerInventory {
     }
   }
   get pending(): boolean {
+    for (const [root, list] of this.pathLists) {
+      if (!list.complete && !this.retries.heldOut(`paths:${root}`)) {
+        return true
+      }
+    }
     for (const [key, family] of this.families) {
+      if (this.retries.heldOut(`paths:${key.slice(key.indexOf(':') + 1)}`)) {
+        continue
+      }
       for (const [path, physical] of family.physical) {
         if (physical.fullDue && !this.retries.heldOut(`${key}:${path}`)) {
           return true
@@ -49,6 +64,37 @@ export class SessionSearchContainerInventory {
       }
     }
     return false
+  }
+  async containerPaths(
+    root: string,
+    read: (issues: AiVaultScanIssue[]) => Promise<readonly string[]>,
+    issues: AiVaultScanIssue[]
+  ): Promise<{ paths: readonly string[]; complete: boolean }> {
+    this.seenPathLists.add(root)
+    const key = `paths:${root}`
+    const previous = this.pathLists.get(root)
+    if (!this.retries.mayAttempt(key)) {
+      for (const issue of previous?.issues ?? []) {
+        recordSessionScanIssue(issues, issue)
+      }
+      return previous ?? { paths: [], complete: false }
+    }
+    const ownIssues: AiVaultScanIssue[] = []
+    const paths = await read(ownIssues)
+    const complete = !ownIssues.some((issue) => issue.kind !== 'notice')
+    const result = {
+      paths: complete ? paths : [...new Set([...(previous?.paths ?? []), ...paths])],
+      complete,
+      issues: ownIssues
+    }
+    this.pathLists.set(root, result)
+    issues.push(...ownIssues)
+    if (complete) {
+      this.retries.delete(key)
+    } else {
+      this.retries.fail(key)
+    }
+    return result
   }
   async discover(
     key: string,
@@ -95,7 +141,10 @@ export class SessionSearchContainerInventory {
         this.release(key, path, family, physical)
         continue
       }
-      const full = physical.fullDue && this.retries.mayAttempt(retryKey)
+      const full =
+        physical.fullDue &&
+        !this.retries.heldOut(`paths:${key.slice(key.indexOf(':') + 1)}`) &&
+        this.retries.mayAttempt(retryKey)
       const discovery = await read([path], full ? Infinity : this.recentLimit)
       family.discovery = discovery
       throwIfAiVaultScanCancelled(signal)
@@ -162,6 +211,12 @@ export class SessionSearchContainerInventory {
     return { ...family.discovery, files: changes, sourceOrder: family.sourceOrder }
   }
   end(): void {
+    for (const root of this.pathLists.keys()) {
+      if (!this.seenPathLists.has(root)) {
+        this.pathLists.delete(root)
+        this.retries.delete(`paths:${root}`)
+      }
+    }
     for (const [key, family] of this.families) {
       if (!this.seen.has(key)) {
         for (const [path, physical] of family.physical) {
@@ -172,6 +227,7 @@ export class SessionSearchContainerInventory {
     }
   }
   clear(): void {
+    this.pathLists.clear()
     this.families.clear()
     this.retries.clear()
     this.proofs.clear()

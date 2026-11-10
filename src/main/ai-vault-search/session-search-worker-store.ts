@@ -43,6 +43,7 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
     const owner = new AbortController()
     this.invalidations.set(owner, candidate.file.path)
     const readSignal = signal ? AbortSignal.any([owner.signal, signal]) : owner.signal
+    let settlement: Promise<boolean> = Promise.resolve(false)
     let ended = false
     let cancelled = false
     let failed = false
@@ -124,6 +125,7 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
         .catch(() => undefined)
     }
     return {
+      settled: () => settlement,
       failed: () => failed,
       cancelled: () => !active(),
       drain: async () => {
@@ -186,14 +188,19 @@ export class SessionSearchWorkerStore extends SessionSearchWorkerStoreBase {
           contentHash: hash
         }
         this.speculative.set(candidate.file.path, speculative)
-        void post({ op: 'finish', handle, outcome, hash })
-          .then(() => {
+        settlement = post({ op: 'finish', handle, outcome, hash })
+          .then((response) => {
+            const accepted =
+              response.accepted === true &&
+              valid() &&
+              this.committed.get(candidate.file.path)?.state === 'current'
             if (this.speculative.get(candidate.file.path) === speculative) {
               this.speculative.delete(candidate.file.path)
             }
             this.invalidations.delete(owner)
+            return accepted
           })
-          .catch(() => undefined)
+          .catch(() => false)
         return true
       },
       discard: () => {

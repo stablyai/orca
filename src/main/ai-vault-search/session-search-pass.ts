@@ -40,11 +40,13 @@ export class SessionSearchPassState {
     return (
       this.discovery.pending ||
       this.queue.size > 0 ||
+      this.candidates.pendingPublications ||
       this.retirement !== null ||
       this.retire.size > 0
     )
   }
   close(): Promise<void> {
+    this.candidates.closePublications()
     return this.discovery.close()
   }
 }
@@ -82,6 +84,7 @@ export async function runSessionSearchPass(
     await store.purgeOlderThan(store.retentionCutoff, signal)
     args.onPurged?.()
   }
+  state.candidates.beginPublications(args.full || !!args.purge)
   state.discovery.begin({
     full: args.full,
     maintenance: args.purge ?? args.full,
@@ -125,6 +128,13 @@ export async function runSessionSearchPass(
     }
     for (const candidate of update.candidates) {
       state.parkedRetire.delete(candidate.file.path)
+      if (
+        state.discovery.forced.has(candidate.file.path) ||
+        update.forced.has(candidate.file.path) ||
+        state.discovery.metadata.has(candidate.file.path)
+      ) {
+        state.candidates.requirePublication(candidate.file.path)
+      }
       state.queue.enqueue(
         candidate,
         store,
@@ -133,10 +143,13 @@ export async function runSessionSearchPass(
         state.discovery.metadata.has(candidate.file.path)
       )
     }
+    const readOverdue = args.startReadDeadline?.() ?? (() => false)
     const read = await runSessionSearchIndexPass(store, state.queue, {
       signal,
-      overdue: args.startReadDeadline?.()
+      overdue: readOverdue,
+      publications: state.candidates
     })
+    await state.candidates.reconcilePublications(store, readOverdue, signal)
     const listings = state.discovery.listings()
     const roots = listings.map((listing) => listing.root)
     const rootsWithFiles = new Set(

@@ -230,7 +230,7 @@ async function execute({ id, command: c }: SearchWorkerRequest): Promise<SearchW
       path = c.path
       break
     case 'remove':
-      store.removeFile(c.path)
+      accepted = store.removeFile(c.path)
       path = c.path
       break
     case 'purge': {

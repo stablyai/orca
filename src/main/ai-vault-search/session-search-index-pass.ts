@@ -1,3 +1,4 @@
+import type { SessionSearchCandidateInventory } from './session-search-candidate-inventory'
 import {
   getSessionParseCacheEntry,
   sessionParseCacheKey
@@ -18,7 +19,11 @@ import type { SessionSearchWorkQueue } from './session-search-work-queue'
 export async function runSessionSearchIndexPass(
   store: SessionSearchIndexStore,
   queue: SessionSearchWorkQueue,
-  options: { signal?: AbortSignal; overdue?: () => boolean }
+  options: {
+    signal?: AbortSignal
+    overdue?: () => boolean
+    publications?: SessionSearchCandidateInventory
+  }
 ): Promise<{ stats: SessionParseStats; outOfTime: boolean; left: number }> {
   const stats = createSessionParseStats()
   // Retry once per cycle; rotating the failed path cannot monopolize a pass.
@@ -65,9 +70,13 @@ export async function runSessionSearchIndexPass(
         true
       )
       let published: SessionSearchFileWrite | undefined
-      const consumer = new SessionSearchIndexConsumer(store, (write) => {
-        published = write
-      }).beginRead({
+      const consumer = new SessionSearchIndexConsumer(
+        store,
+        (write) => {
+          published = write
+        },
+        options.publications
+      ).beginRead({
         candidate,
         mode: 'append',
         previousByteOffset: row.byteOffset,

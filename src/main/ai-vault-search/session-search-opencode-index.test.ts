@@ -67,6 +67,8 @@ vi.mock(
     }
   }
 )
+import { readWholeTranscript } from '../ai-vault/transcripts/session-transcript-reader'
+import { buildOpenCodeSqliteCandidatePath } from '../../shared/opencode-sqlite-session-path'
 import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
 import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'
 import {
@@ -421,6 +423,22 @@ it('chooses the original earlier database when an equal-time alias is imported l
     'ses_shared'
   )
   expect(openEngine().search({ query: 'laterdatabasecopy' }).hits).toHaveLength(0)
+  // Opening the retained raw alias still parses it for History, without republishing search output.
+  const foreground = await readWholeTranscript({
+    candidate: {
+      agent: 'opencode',
+      codexHome: null,
+      file: {
+        path: buildOpenCodeSqliteCandidatePath(alternative, 'ses_shared'),
+        mtimeMs: 1740000060000,
+        modifiedAt: '2025-02-19T21:21:00.000Z'
+      }
+    },
+    platform: process.platform
+  })
+  await subject.settled()
+  expect(foreground?.sessionId).toBe('ses_shared')
+  expect(openEngine().search({ query: 'laterdatabasecopy' }).hits).toHaveLength(0)
 })
 
 it('settles a healthy physical full list when another family reports a concurrent refusal', async () => {
@@ -505,7 +523,11 @@ it('retains a restored old row when a family listing loses the earlier absence p
   source.close()
   const subject = new SessionSearchIndexer({
     databasePath: harness.databasePath,
-    roots: { ...harness.roots, opencodeStorageDir: join(dirname(dbPath()), 'storage') },
+    roots: {
+      ...harness.roots,
+      opencodeDbPaths: undefined,
+      opencodeStorageDir: join(dirname(dbPath()), 'storage')
+    },
     historyDays: null,
     clock,
     discoveryDeadlineMs: 0,
@@ -549,5 +571,54 @@ it('retains a restored old row when a family listing loses the earlier absence p
     expect(openEngine().search({ query: 'restoredoldneedle' }).hits).toHaveLength(1)
   } finally {
     listing.mockRestore()
+  }
+})
+
+it('settles a full attempt blocked by persistent family enumeration while retaining recovery', async () => {
+  writeOpenCodeSqliteDatabase(dbPath(), [
+    { id: 'ses_family', turns: [{ role: 'user', parts: ['retainedfamilyneedle'] }] }
+  ])
+  const subject = new SessionSearchIndexer({
+    databasePath: harness.databasePath,
+    roots: {
+      ...harness.roots,
+      opencodeDbPaths: undefined,
+      opencodeStorageDir: join(dirname(dbPath()), 'storage')
+    },
+    historyDays: null,
+    clock,
+    fullSweepEveryCycles: 1000
+  })
+  indexer = subject
+  await subject.start()
+  const completed = subject.status().lastSweepCompletedAt
+  expect(openEngine().search({ query: 'retainedfamilyneedle' }).hits).toHaveLength(1)
+  const actual = filesystem.wslGatedReaddir
+  let refused = true
+  const reads = vi.spyOn(filesystem, 'wslGatedReaddir').mockImplementation((path, ...rest) => {
+    if (refused && path === dirname(dbPath())) {
+      return Promise.reject(Object.assign(new Error('fixture family refusal'), { code: 'EACCES' }))
+    }
+    return actual(path, ...rest)
+  })
+  try {
+    clock.costPerNowMs = 1
+    await subject.reconcile({ full: true })
+    for (let cycle = 0; cycle < 6; cycle++) {
+      clock.advance(20000)
+      await subject.settled()
+    }
+    expect(subject.status().lastSweepCompletedAt).not.toBe(completed)
+    expect(openEngine().search({ query: 'retainedfamilyneedle' }).hits).toHaveLength(1)
+    refused = false
+    appendOpenCodeSqliteTurn(dbPath(), 'ses_family', {
+      role: 'assistant',
+      parts: ['recoveredfamilyneedle']
+    })
+    await subject.reconcile({ full: true })
+    expect(openEngine().search({ query: 'recoveredfamilyneedle' }).hits).toHaveLength(1)
+    expect(subject.status().phase).toBe('current')
+  } finally {
+    reads.mockRestore()
   }
 })

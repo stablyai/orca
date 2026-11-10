@@ -146,9 +146,24 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
       void this.send({ op: 'state', path, state, mtime })
     }
   }
-  removeFile(path: string): void {
-    if (this.acceptingReads) {
-      void this.send({ op: 'remove', path })
+  async removeFile(path: string): Promise<boolean> {
+    if (!this.acceptingReads) {
+      return false
+    }
+    const epoch = this.client.epoch,
+      snapshotEpoch = this.snapshotEpoch
+    try {
+      const response = await this.send({ op: 'remove', path })
+      return (
+        this.acceptingReads &&
+        epoch === this.client.epoch &&
+        snapshotEpoch === this.snapshotEpoch &&
+        response.accepted === true &&
+        !response.failure &&
+        !this.committed.has(path)
+      )
+    } catch {
+      return false
     }
   }
   async purgeOlderThan(cutoff: number | null, signal?: AbortSignal): Promise<void> {

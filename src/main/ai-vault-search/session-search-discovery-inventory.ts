@@ -213,6 +213,14 @@ export class SessionSearchDiscoveryInventory implements SessionDiscoveryContext 
     }
   }
 
+  containerPaths(
+    root: string,
+    read: (issues: AiVaultScanIssue[]) => Promise<readonly string[]>,
+    issues: AiVaultScanIssue[]
+  ) {
+    return this.containers.containerPaths(root, read, issues)
+  }
+
   container(
     key: string,
     paths: readonly string[],

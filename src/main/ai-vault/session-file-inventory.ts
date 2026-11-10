@@ -3,6 +3,7 @@ import {
   type SessionInventoryDirectory as Directory
 } from './session-file-inventory-directories'
 import type { Dirent } from 'node:fs'
+import { SessionInputFrontier } from './session-input-frontier'
 import { SessionObservationRetries } from './session-observation-retries'
 import { dirname, join, relative } from 'node:path'
 import { wslGatedReaddir, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
@@ -35,8 +36,8 @@ export class SessionFileInventory {
     return this.observations.dependencies
   }
   private readonly directories: SessionInventoryDirectories
-  private readonly dirty = new Map<string, boolean>()
-  private readonly walks = new Map<string, Walk>()
+  private readonly dirty = new SessionInputFrontier<boolean>()
+  private readonly walks = new SessionInputFrontier<Walk>()
   private readonly trailing = new Set<string>()
   private readonly failures = new SessionObservationRetries()
   private reconcileAgain = false
@@ -133,15 +134,15 @@ export class SessionFileInventory {
   ): Promise<{ changes: SessionFileChange[]; removed: string[]; removedDirectories: string[] }> {
     let consumed = 0
     while ((this.dirty.size || this.walks.size) && (consumed === 0 || !overdue())) {
+      consumed++
       if (this.dirty.size && (!this.walks.size || this.chooseDirty)) {
         this.chooseDirty = false
         await this.drainDirty(args, recentLimit)
-        consumed++
         continue
       }
       this.chooseDirty = true
       throwIfAiVaultScanCancelled(args.signal)
-      const walk = this.walks.values().next().value!
+      const walk = this.walks.first!
       if (!this.failures.mayAttempt(walk.path)) {
         this.walks.delete(walk.path)
         continue
@@ -201,7 +202,6 @@ export class SessionFileInventory {
         }
         walk.offset++
       }
-      consumed++
       if (walk.offset === walk.entries.length) {
         this.walks.delete(walk.path)
         if (this.trailing.delete(walk.path)) {
@@ -226,7 +226,7 @@ export class SessionFileInventory {
   }
 
   private async drainDirty(args: DiscoverSessionFilesArgs, recentLimit: number): Promise<void> {
-    const first = this.dirty.entries().next().value
+    const first = this.dirty.firstEntry()
     if (!first) {
       return
     }

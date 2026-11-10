@@ -1,4 +1,8 @@
-import { currentSessionDiscovery, discoverSessionContainer } from '../../session-discovery-context'
+import {
+  currentSessionDiscovery,
+  discoverSessionContainer,
+  discoverSessionContainerPaths
+} from '../../session-discovery-context'
 import { basename, dirname, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
@@ -28,16 +32,12 @@ export function opencodeDiscoveries(
 ): Promise<SessionFileDiscovery>[] {
   return opencodeSources(options, wslHomeDirs).flatMap((source) => {
     const { storageDir } = source
-    const enumerationIssues: AiVaultScanIssue[] = []
-    const paths = source.dbPaths(enumerationIssues).then((dbPaths) => {
-      issues.push(...enumerationIssues)
-      return dbPaths
-    })
+    const paths = discoverSessionContainerPaths(storageDir, source.dbPaths, issues)
     return [
-      paths.then((dbPaths) =>
+      paths.then(({ paths: dbPaths, complete }) =>
         discoverOpenCodeSessions({
           storageDir,
-          enumerationComplete: !enumerationIssues.some((issue) => issue.kind !== 'notice'),
+          enumerationComplete: complete,
           dbPaths: dbPaths.filter((path) => !isOpenCodeV2DatabaseName(basename(path))),
           limitPerAgent: limit,
           issues,
@@ -46,15 +46,8 @@ export function opencodeDiscoveries(
         })
       ),
       // Current releases share opencode.db with v1; the worker checks for v2 tables.
-      paths.then((dbPaths) =>
-        discoverOpenCode2Sessions(
-          storageDir,
-          dbPaths,
-          limit,
-          issues,
-          options,
-          !enumerationIssues.some((issue) => issue.kind !== 'notice')
-        )
+      paths.then(({ paths: dbPaths, complete }) =>
+        discoverOpenCode2Sessions(storageDir, dbPaths, limit, issues, options, complete)
       )
     ]
   })

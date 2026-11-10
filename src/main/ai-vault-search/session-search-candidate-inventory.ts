@@ -1,3 +1,8 @@
+import {
+  SessionSearchCandidatePublications,
+  rows,
+  type Row
+} from './session-search-candidate-publication'
 import { splitOpenCodeSqliteCandidate } from '../../shared/opencode-sqlite-session-path'
 import { basename, dirname, extname } from 'node:path'
 import { sessionFileExecutionNamespace } from '../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
@@ -11,11 +16,6 @@ import type {
   SessionFileDiscovery
 } from '../ai-vault/session-scanner-types'
 
-type Row = { candidate: SessionFileCandidate; root: string }
-type Group = Row | Map<string, Row>
-function rows(group: Group | undefined): Row[] {
-  return group ? (group instanceof Map ? [...group.values()] : [group]) : []
-}
 function rowId(row: Row): string {
   return `${row.candidate.agent}:${row.candidate.file.path}`
 }
@@ -33,11 +33,8 @@ function groupKey(candidate: SessionFileCandidate, root: string): string {
 }
 
 /** Ordinary paths own one record; only competing aliases allocate a group and selected set. */
-export class SessionSearchCandidateInventory {
+export class SessionSearchCandidateInventory extends SessionSearchCandidatePublications {
   private readonly sourceOrders = new Map<string, ReadonlyMap<string, number>>()
-  private readonly groups = new Map<string, Group>()
-  private readonly byPath = new Map<string, string | Set<string>>()
-  private readonly selected = new Map<string, Set<string>>()
   has(path: string, agent?: string | null): boolean {
     const owner = this.byPath.get(path)
     if (!agent) {
@@ -65,12 +62,16 @@ export class SessionSearchCandidateInventory {
       }
     }
     const previous = new Map<string, Set<string>>()
+    const affectedPaths = new Set<string>()
     const forced = new Set<string>()
     const touch = (key: string) => {
       if (previous.has(key)) {
         return
       }
       const group = this.groups.get(key)
+      for (const { candidate } of rows(group)) {
+        affectedPaths.add(candidate.file.path)
+      }
       previous.set(
         key,
         this.selected.get(key) ??
@@ -224,6 +225,7 @@ export class SessionSearchCandidateInventory {
       }
       candidates.push(...selected)
     }
+    this.updatePublications(previous, affectedPaths)
     for (const path of suppressed) {
       const owner = this.byPath.get(path)
       if (

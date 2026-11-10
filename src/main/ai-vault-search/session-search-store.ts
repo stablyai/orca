@@ -276,11 +276,13 @@ export class SessionSearchStore {
   }
 
   /** Only proven deletion permits removal; unreadable sources retain their indexed rows. */
-  removeFile(path: string): void {
+  removeFile(path: string): boolean {
     try {
       this.writer.removeFile(path)
+      return true
     } catch (error) {
       this.onError(error)
+      return false
     }
   }
 

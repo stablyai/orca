@@ -1,3 +1,4 @@
+import { SessionInputFrontier } from '../ai-vault/session-input-frontier'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import { fileIdentity } from './session-search-file-cursor'
 import { sessionSearchReadDecision } from './session-search-read-decision'
@@ -12,8 +13,8 @@ export type SessionSearchWork = {
 
 /** A unique path owns its debt even when it leaves the next recent list. */
 export class SessionSearchWorkQueue {
-  private readonly backlog = new Map<string, SessionSearchWork>()
-  private readonly changed = new Map<string, SessionSearchWork>()
+  private readonly backlog = new SessionInputFrontier<SessionSearchWork>()
+  private readonly changed = new SessionInputFrontier<SessionSearchWork>()
   private version = 0
   private chooseChanged = true
   private due = new Set<string>()
@@ -64,10 +65,7 @@ export class SessionSearchWorkQueue {
   next(): SessionSearchWork | undefined {
     const preferred = this.chooseChanged ? this.changed : this.backlog
     this.chooseChanged = !this.chooseChanged
-    return (
-      preferred.values().next().value ??
-      (preferred === this.changed ? this.backlog : this.changed).values().next().value
-    )
+    return preferred.first ?? (preferred === this.changed ? this.backlog : this.changed).first
   }
 
   acknowledge(work: SessionSearchWork, retry: boolean): void {

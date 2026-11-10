@@ -318,7 +318,7 @@ it.each(['first-file', 'accepted-file', 'directory'] as const)(
   async (kind) => {
     const harness = await openSessionSearchIndexerHarness('ss-refused-observation')
     const clock = new FakeSessionSearchClock()
-    const directory = join(harness.claudeProjectDir, 'refused')
+    const directory = join(harness.roots.claudeProjectsDir, 'refused')
     const path = join(directory, 'history.jsonl')
     const subject = new SessionSearchIndexer({
       databasePath: harness.databasePath,
@@ -528,6 +528,60 @@ it.each([40, 400])(
       expect(listings.mock.calls.filter(([path]) => path.startsWith(`${removed}/`))).toHaveLength(0)
     } finally {
       listings.mockRestore()
+      await harness.cleanup()
+    }
+  }
+)
+
+it.each([40, 400])(
+  'charges refused directory attempts to the expired %s-directory discovery budget',
+  async (population) => {
+    const harness = await openSessionSearchIndexerHarness('ss-refused-budget')
+    const root = harness.claudeProjectDir
+    for (let index = 0; index < population; index++) {
+      await mkdir(join(root, `child-${index}`), { recursive: true })
+    }
+    const inventory = new SessionFileInventory(root)
+    const args = {
+      rootDir: root,
+      agent: 'claude' as const,
+      limit: Infinity,
+      extensions: ['.jsonl'],
+      issues: []
+    }
+    let quanta = 0
+    await inventory.drain(args, () => ++quanta >= Math.ceil(population / 16), 12)
+    const actual = filesystem.wslGatedReaddir
+    let refused = true
+    const reads = vi.spyOn(filesystem, 'wslGatedReaddir').mockImplementation((path, ...rest) => {
+      if (refused && path.startsWith(`${root}/`)) {
+        return Promise.reject(
+          Object.assign(new Error('fixture refused directory'), { code: 'EACCES' })
+        )
+      }
+      return actual(path, ...rest)
+    })
+    try {
+      inventory.begin(false, args)
+      await inventory.drain(args, () => true, 12)
+      // An expired slice admits one attempted input, including a failed observation.
+      expect(reads.mock.calls).toHaveLength(1)
+      expect(inventory.pending).toBe(true)
+      for (let cycle = 0; cycle < population * 3 && inventory.pending; cycle++) {
+        inventory.begin(false, args)
+        inventory.retryFailures()
+        await inventory.drain(args, () => true, 12)
+      }
+      expect(inventory.pending).toBe(false)
+      refused = false
+      const recovered = join(root, 'child-0', 'recovered.jsonl')
+      await writeFile(recovered, '{}\n')
+      inventory.invalidate(join(root, 'child-0'))
+      inventory.begin(false, args)
+      const result = await inventory.drain(args, () => false, 12)
+      expect(result.changes.map((change) => change.file.path)).toContain(recovered)
+    } finally {
+      reads.mockRestore()
       await harness.cleanup()
     }
   }

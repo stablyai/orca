@@ -14,6 +14,11 @@ export type SessionDiscoveryDependency = {
 }
 
 export type SessionDiscoveryContext = {
+  containerPaths(
+    root: string,
+    read: (issues: AiVaultScanIssue[]) => Promise<readonly string[]>,
+    issues: AiVaultScanIssue[]
+  ): Promise<{ paths: readonly string[]; complete: boolean }>
   files(args: DiscoverSessionFilesArgs): Promise<SessionFileDiscovery>
   container(
     key: string,
@@ -48,4 +53,16 @@ export function discoverSessionContainer(
     currentSessionDiscovery()?.container(key, paths, read, limit, issues, enumerationComplete) ??
     read(paths, limit)
   )
+}
+
+export async function discoverSessionContainerPaths(
+  root: string,
+  read: (issues: AiVaultScanIssue[]) => Promise<readonly string[]>,
+  issues: AiVaultScanIssue[]
+): Promise<{ paths: readonly string[]; complete: boolean }> {
+  const context = currentSessionDiscovery()
+  if (context) {
+    return context.containerPaths(root, read, issues)
+  }
+  return { paths: await read(issues), complete: true }
 }
