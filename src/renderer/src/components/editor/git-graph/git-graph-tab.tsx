@@ -98,7 +98,7 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
   useEffect(() => {
     // Viewport demand, not scroll events: page whenever the end of loaded rows is in view.
     if (endInView) {
-      loadMoreInView(controller)
+      loadMoreInView(controller, result)
     }
   }, [endInView, result, loading, controller])
   const selected = result?.items.find((item) => item.id === selectedId)
