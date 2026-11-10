@@ -3,14 +3,14 @@
 // their own rows. Verdicts, emails and hints only: never tokens, CLI output or key values.
 import {
   HOST_AGENT_SIGN_IN_AGENTS,
-  type HostAgentSignInAgent,
-  type HostAgentSignInReport
+  type HostAgentSignInAgent
 } from '../../../../../../shared/host-agent-sign-in-status'
 import type {
   AgentKeyKind,
   OrcaCloudAgentsStatus
 } from '../../../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { SshAgentSignInReport } from '../../../../../../shared/ssh-agent-sign-in-types'
 import { ORCA_CLOUD_HOST_LABEL } from '../../../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 import type { ExecutionHostHealth } from '../../../../../../shared/execution-host/execution-host-health'
 import { orcaCloudAgentCoverage } from '@/lib/orca-cloud/orca-cloud-agent-accounts-model'
@@ -28,6 +28,8 @@ export type OverviewCell =
   | { kind: 'signedOut' }
   | { kind: 'expired' }
   | { kind: 'apiKey' }
+  /** §7: an API key signs the agent in while a CLI login underneath goes unused. */
+  | { kind: 'apiKeyOverrides' }
   | { kind: 'notInstalled' }
   | { kind: 'notConnected' }
   | { kind: 'checking' }
@@ -50,7 +52,8 @@ export type OverviewHost = {
 }
 
 export type OverviewProbe = {
-  report: HostAgentSignInReport | null
+  /** Classic SSH entries may carry hasLogin. */
+  report: SshAgentSignInReport | null
   /** Asked on this open and not answered yet. */
   checking: boolean
   /** Asked and the host answered nothing. */
@@ -79,6 +82,7 @@ export type OverviewRow = {
 
 const ATTENTION: ReadonlySet<OverviewCell['kind']> = new Set([
   'expired',
+  'apiKeyOverrides',
   'couldntCheck',
   'cloudExpired'
 ])
@@ -105,7 +109,9 @@ function hostCell(
   switch (entry.state) {
     case 'signedIn':
       if (entry.method === 'apiKey') {
-        return { kind: 'apiKey' }
+        return 'hasLogin' in entry && entry.hasLogin === true
+          ? { kind: 'apiKeyOverrides' }
+          : { kind: 'apiKey' }
       }
       // A host that can't answer now shows its last verdict with the date (never woken to check).
       return host.availability === 'available' && !probe?.failed
@@ -125,7 +131,7 @@ function hostAction(host: OverviewHost, cells: OverviewRow['cells']): OverviewAc
     return { kind: 'accounts' }
   }
   const urgent = HOST_AGENT_SIGN_IN_AGENTS.find((agent) =>
-    ['expired', 'signedOut'].includes(cells[agent].kind)
+    ['expired', 'signedOut', 'apiKeyOverrides'].includes(cells[agent].kind)
   )
   if (urgent) {
     return { kind: 'review', agent: urgent }

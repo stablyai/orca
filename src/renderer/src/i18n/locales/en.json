@@ -27545,7 +27545,10 @@
       "noAnswer": "{{host}} didn’t answer. It may run an older Orca.",
       "checking": "Checking…",
       "lastChecked": "last checked {{date}}",
-      "signInHint": "Start {{agent}} in a workspace on {{host}} to sign in."
+      "signInHint": "Start {{agent}} in a workspace on {{host}} to sign in.",
+      "apiKeyOverrides": "API key overrides sign-in",
+      "selectedAccount": "Account: {{name}} (selected in Accounts)",
+      "apiKeyOverridesDetail": "Usage is billed to the API key, not your {{product}} account. Remove the key for this host to use the sign-in."
     },
     "ssh": {
       "signIn": "Sign in",
@@ -27909,7 +27912,8 @@
       "cloudAccount": "Your Orca account",
       "cloudKeyMember": "{{key}} · set by your team",
       "cloudNotSetUp": "Not set up",
-      "cloudPaused": "Each workspace signs in (temporarily)"
+      "cloudPaused": "Each workspace signs in (temporarily)",
+      "apiKeyOverrides": "API key overrides sign-in"
     }
   },
   "agentSignInStrip": {

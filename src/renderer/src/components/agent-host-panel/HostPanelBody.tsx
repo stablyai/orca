@@ -16,6 +16,9 @@ import { agentApiKeysForHost, hostAgentPanelRows } from './host-agents-panel-mod
 import { openAgentHostSettings } from './open-agent-host-settings'
 import type { ResolvedAgentHost } from './use-agent-host'
 import { useHostAgentReport } from './use-host-agent-report'
+import { wslSelectedAccounts } from './wsl-selected-account'
+import { useAppStore } from '@/store'
+import { isWslHostRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { useSshClassicAgents } from './ssh-classic/use-ssh-classic-agents'
 import { SshSignOutDialog } from './ssh-classic/SshSignOutDialog'
 import {
@@ -116,6 +119,19 @@ export function useHostPanelBody(
   const ssh = useSshClassicAgents(host, generation)
   const report = host.kind === 'sshClassic' ? ssh : runtimeReport
   const keys = useHostKeys(host.hostId)
+  const wslAccounts = useAppStore((state) => {
+    if (host.kind !== 'wsl' || !host.environmentId) {
+      return null
+    }
+    const environment = state.runtimeEnvironments.find((entry) => entry.id === host.environmentId)
+    const distro =
+      environment && isWslHostRuntimeEnvironment(environment)
+        ? environment.orcadDeployment.distro
+        : null
+    const accounts = wslSelectedAccounts(state.settings, distro)
+    // A primitive snapshot so the selector stays stable between renders.
+    return `${accounts.claude ?? ''}\u0000${accounts.codex ?? ''}`
+  })
   const recipeSummary = useRecipeEnvSummary(host.kind === 'recipe')
   const [signOutAgent, setSignOutAgent] = useState<HostAgentSignInAgent | null>(null)
   const unavailable = host.availability !== 'available'
@@ -133,6 +149,14 @@ export function useHostPanelBody(
         actionsDisabledReason={capabilities.actionsDisabledReason}
         onSignOut={setSignOutAgent}
         onCheckAgain={onCheckAgain}
+        {...(wslAccounts !== null
+          ? {
+              accounts: {
+                claude: wslAccounts.split('\u0000')[0] || null,
+                codex: wslAccounts.split('\u0000')[1] || null
+              }
+            }
+          : {})}
         {...(ssh.targetId
           ? {
               codeSignIn: {

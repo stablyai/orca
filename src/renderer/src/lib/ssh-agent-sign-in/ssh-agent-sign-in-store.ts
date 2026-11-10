@@ -2,17 +2,15 @@
 // disconnected host shows its dated last check) and any code sign-in running there. Main asks the
 // host only while it's connected; nothing here connects.
 import { useSyncExternalStore } from 'react'
-import type {
-  HostAgentSignInAgent,
-  HostAgentSignInReport
-} from '../../../../shared/host-agent-sign-in-status'
+import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
 import type {
   SshAgentSignInFlow,
+  SshAgentSignInReport,
   SshAgentSignInStatusResult
 } from '../../../../shared/ssh-agent-sign-in-types'
 
 type HostState = {
-  report: HostAgentSignInReport | null
+  report: SshAgentSignInReport | null
   /** The last ask found the host disconnected or silent. */
   failed: boolean
   flows: Partial<Record<HostAgentSignInAgent, SshAgentSignInFlow>>
@@ -78,7 +76,7 @@ export function useSshAgentState(targetId: string | null): HostState {
 function apply(
   targetId: string,
   result: SshAgentSignInStatusResult | null
-): HostAgentSignInReport | null {
+): SshAgentSignInReport | null {
   if (result?.ok) {
     set(targetId, { report: result.report, failed: false })
     return result.report
@@ -91,7 +89,7 @@ function apply(
 export async function refreshSshAgentReport(
   targetId: string,
   force = false
-): Promise<HostAgentSignInReport | null> {
+): Promise<SshAgentSignInReport | null> {
   listen()
   const bridge = api()
   if (!bridge) {

@@ -150,4 +150,25 @@ describe('overviewRows', () => {
     })
     expect(away?.cells.claude.kind).toBe('notConnected')
   })
+
+  it('flags an API key overriding a CLI login (hasLogin) as needing attention', () => {
+    const [row] = overviewRows({
+      hosts: [host({ hostId: 'ssh:old', kind: 'sshClassic', environmentId: null })],
+      probes: {
+        'ssh:old': probe({
+          report: {
+            checkedAt: 1,
+            agents: [
+              { agent: 'claude', state: 'signedIn', method: 'apiKey', hasLogin: true },
+              { agent: 'codex', state: 'signedIn', method: 'apiKey', hasLogin: false }
+            ]
+          }
+        })
+      },
+      cloud: null
+    })
+    expect([row?.cells.claude.kind, row?.cells.codex.kind]).toEqual(['apiKeyOverrides', 'apiKey'])
+    expect(row?.attention).toBe(true)
+    expect(row?.action).toEqual({ kind: 'review', agent: 'claude' })
+  })
 })

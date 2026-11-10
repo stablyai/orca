@@ -44,7 +44,8 @@ export function HostFixture({
   failed = false,
   lastChecked = null,
   dot = null,
-  codeSignIn
+  codeSignIn,
+  accounts
 }: {
   kind: AgentHostKind
   host: string
@@ -55,6 +56,7 @@ export function HostFixture({
   lastChecked?: string | null
   dot?: CloudDotState | null
   codeSignIn?: React.ComponentProps<typeof HostAgentsPanelSection>['codeSignIn']
+  accounts?: React.ComponentProps<typeof HostAgentsPanelSection>['accounts']
 }): React.JSX.Element {
   const capabilities = hostCapabilities(kind, availability, { host, date: lastChecked }, translate)
   return (
@@ -78,6 +80,7 @@ export function HostFixture({
               onSignOut={noop}
               onCheckAgain={noop}
               codeSignIn={codeSignIn}
+              accounts={accounts}
             />
           }
           keys={<HostKeysRows keys={keys} />}
@@ -101,6 +104,7 @@ export function HostFixture({
 
 const NO_KEYS: AgentApiKeySummary[] = []
 const LAST = 'Nov 9, 2026'
+const WSL_ACCOUNTS = { claude: 'work@acme.dev', codex: null }
 
 export const local = defineFixture({
   width: 1000,
@@ -114,7 +118,9 @@ export const sshOrcad = defineFixture({
 
 export const wsl = defineFixture({
   width: 1000,
-  render: () => <HostFixture kind="wsl" host="Ubuntu-24.04" keys={NO_KEYS} />
+  render: () => (
+    <HostFixture kind="wsl" host="Ubuntu-24.04" keys={NO_KEYS} accounts={WSL_ACCOUNTS} />
+  )
 })
 
 export const wslStopped = defineFixture({
@@ -125,6 +131,7 @@ export const wslStopped = defineFixture({
       host="Ubuntu-24.04"
       availability="stopped"
       keys={NO_KEYS}
+      accounts={WSL_ACCOUNTS}
       lastChecked={LAST}
     />
   )
