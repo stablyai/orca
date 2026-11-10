@@ -23,6 +23,8 @@ describe('member role changes cap keys and MCP grants', () => {
     expect((await h.call('GET', '/v1/me', { bearer: secret })).body.scopes).toEqual(['workspaces:read'])
 
     // Re-promoted: a signed-in request with the live role re-syncs it (self-heal without the auth call).
+    // Its token is newer than the role-changed push; an older one could carry the pre-push role.
+    h.advance(1_000)
     const promoted = await h.token('ada', 'acme', 'sandbox', { orgRole: 'admin' })
     await h.call('GET', '/v1/me', { bearer: promoted })
     expect((await h.call('GET', '/v1/audit', { bearer: secret })).status).toBe(200)

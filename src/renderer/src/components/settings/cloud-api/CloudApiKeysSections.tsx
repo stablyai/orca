@@ -12,6 +12,7 @@ import type {
   CloudApiSettings
 } from '../../../../../shared/cloud-api/cloud-api-types'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { PersonSentence } from './PersonName'
 import { formatAbsoluteTime, formatRelativeFromNow } from './cloud-api-format'
 import { CloudApiErrorNotice, CloudApiSkeletonRows, CopyValueButton } from './cloud-api-parts'
 import type { CloudLoadState } from './cloud-load-state'
@@ -240,25 +241,38 @@ function auditActionLabel(entry: CloudApiAuditEntry, t: Translate): string {
     : base
 }
 
-function actorLabel(entry: CloudApiAuditEntry, viewer: CloudApiMe | null, t: Translate): string {
-  const who =
-    entry.actor.userId && entry.actor.userId === viewer?.userId
-      ? t('auto.components.settings.cloudApi.audit.you', 'You')
-      : t('auto.components.settings.cloudApi.audit.teammate', 'A teammate')
-  if (entry.actor.type === 'api_key') {
-    return t('auto.components.settings.cloudApi.audit.viaKey', '{{value0}} via API key', {
-      value0: who
-    })
-  }
-  if (entry.actor.type === 'mcp') {
-    return t('auto.components.settings.cloudApi.audit.viaMcp', '{{value0}} via MCP', {
-      value0: who
-    })
-  }
+function ActorLabel({
+  entry,
+  viewer
+}: {
+  entry: CloudApiAuditEntry
+  viewer: CloudApiMe | null
+}): React.JSX.Element {
+  const t = useTranslate()
   if (entry.actor.type === 'workspace_token') {
-    return t('auto.components.settings.cloudApi.audit.viaAgent', 'Agent in a cloud workspace')
+    return (
+      <>{t('auto.components.settings.cloudApi.audit.viaAgent', 'Agent in a cloud workspace')}</>
+    )
   }
-  return who
+  const mine = Boolean(entry.actor.userId) && entry.actor.userId === viewer?.userId
+  const personId = entry.actor.userId ?? entry.actor.id
+  const sentence =
+    entry.actor.type === 'api_key'
+      ? mine
+        ? t('auto.components.settings.cloudApi.audit.youViaKey', 'You via API key')
+        : t('auto.components.settings.cloudApi.audit.personViaKey', '<person></person> via API key')
+      : entry.actor.type === 'mcp'
+        ? mine
+          ? t('auto.components.settings.cloudApi.audit.youViaMcp', 'You via MCP')
+          : t('auto.components.settings.cloudApi.audit.personViaMcp', '<person></person> via MCP')
+        : mine
+          ? t('auto.components.settings.cloudApi.audit.you', 'You')
+          : '<person></person>'
+  return mine ? (
+    <>{sentence}</>
+  ) : (
+    <PersonSentence sentence={sentence} name={entry.actor.userName} id={personId} />
+  )
 }
 
 export function AuditLog({
@@ -331,7 +345,7 @@ export function AuditLog({
                 {auditActionLabel(entry, t)}
               </span>
               <span className="w-44 shrink-0 truncate text-muted-foreground">
-                {actorLabel(entry, viewer, t)}
+                <ActorLabel entry={entry} viewer={viewer} />
               </span>
               <span
                 className="shrink-0 text-muted-foreground"

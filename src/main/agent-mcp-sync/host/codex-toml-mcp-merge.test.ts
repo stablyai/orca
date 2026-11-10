@@ -66,4 +66,27 @@ describe('mergeCodexMcpServers', () => {
     expect(() => mergeCodexMcpServers('[[broken', { fs }, null)).toThrow()
     expect(() => mergeCodexMcpServers(`${CODEX_MCP_BLOCK_START}\n`, { fs }, null)).toThrow()
   })
+
+  it('keeps owning its block when Codex only reformats it (same servers, different text)', () => {
+    const first = mergeCodexMcpServers(
+      null,
+      { fs: { command: 'npx', args: ['-y', 'server-fs'] } },
+      null
+    )
+    const reformatted = first.text!.replace(
+      /args = \[ "-y", "server-fs" \]|args = \["-y", "server-fs"\]/,
+      "args = [ '-y', 'server-fs' ]"
+    )
+    expect(reformatted).not.toBe(first.text)
+    const again = mergeCodexMcpServers(
+      reformatted,
+      { fs: { command: 'npx', args: ['-y', 'server-fs'] } },
+      first.blockPrint
+    )
+    expect(again.outcomes).toEqual({ fs: 'unchanged' })
+    // Still one marked block, not an unmarked copy plus a new block.
+    const text = again.text ?? reformatted
+    expect(text.split(CODEX_MCP_BLOCK_START)).toHaveLength(2)
+    expect(parse(text).mcp_servers).toEqual({ fs: { command: 'npx', args: ['-y', 'server-fs'] } })
+  })
 })

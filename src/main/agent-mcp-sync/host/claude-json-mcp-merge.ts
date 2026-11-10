@@ -15,7 +15,9 @@ export type ClaudeMcpMergeResult = {
 export function mergeClaudeMcpServers(
   text: string | null,
   desired: Readonly<Record<string, Record<string, unknown>>>,
-  ledger: Readonly<Record<string, string>>
+  ledger: Readonly<Record<string, string>>,
+  /** Write under `projects[projectPath].mcpServers` (Claude's project scope) instead of user scope. */
+  projectPath?: string
 ): ClaudeMcpMergeResult {
   let root: Record<string, unknown> = {}
   if (text !== null && text.trim()) {
@@ -25,7 +27,10 @@ export function mergeClaudeMcpServers(
     }
     root = parsed
   }
-  const current = isMcpRecord(root.mcpServers) ? root.mcpServers : {}
+  const projects = isMcpRecord(root.projects) ? root.projects : {}
+  const project = projectPath && isMcpRecord(projects[projectPath]) ? projects[projectPath] : {}
+  const scope = projectPath ? project.mcpServers : root.mcpServers
+  const current = isMcpRecord(scope) ? scope : {}
   const servers: Record<string, unknown> = { ...current }
   const nextLedger: Record<string, string> = {}
   const outcomes: Record<string, McpSyncHostOutcome> = {}
@@ -63,8 +68,11 @@ export function mergeClaudeMcpServers(
     return { text: null, ledger: nextLedger, outcomes }
   }
   // Claude Code itself writes this file with two-space indentation.
+  const next = projectPath
+    ? { ...root, projects: { ...projects, [projectPath]: { ...project, mcpServers: servers } } }
+    : { ...root, mcpServers: servers }
   return {
-    text: `${JSON.stringify({ ...root, mcpServers: servers }, null, 2)}\n`,
+    text: `${JSON.stringify(next, null, 2)}\n`,
     ledger: nextLedger,
     outcomes
   }

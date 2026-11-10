@@ -43,6 +43,14 @@ function findBlock(text: string, markers: CodexMcpBlockMarkers): Block | null {
   }
 }
 
+function serversPrint(body: string): string | null {
+  try {
+    return fingerprintMcpValue({ mcp_servers: blockServers(body) })
+  } catch {
+    return null
+  }
+}
+
 function blockServers(body: string): Record<string, unknown> {
   const parsed = parseToml(body)
   return isMcpRecord(parsed.mcp_servers) ? parsed.mcp_servers : {}
@@ -72,7 +80,12 @@ export function mergeCodexMcpServers(
   // Refuse to edit a file Codex itself could not load.
   parseToml(source)
   const block = findBlock(source, markers) ?? (adopt ? findBlock(source, adopt) : null)
-  const handEdited = block !== null && fingerprintMcpValue(block.body) !== lastBlockPrint
+  // Ours while the servers in it are what we last wrote, however Codex reformatted the text. The
+  // body-text print is what older ledgers stored.
+  const handEdited =
+    block !== null &&
+    lastBlockPrint !== fingerprintMcpValue(block.body) &&
+    lastBlockPrint !== serversPrint(block.body)
   const outside = block
     ? handEdited
       ? joinParts([block.before, block.body, block.after])
@@ -107,9 +120,17 @@ export function mergeCodexMcpServers(
       ? joinParts([block.before, blockText, block.after])
       : joinParts([outside, blockText])
   if (next === source) {
-    return { text: null, blockPrint: body ? fingerprintMcpValue(body) : null, outcomes }
+    return {
+      text: null,
+      blockPrint: body ? fingerprintMcpValue({ mcp_servers: servers }) : null,
+      outcomes
+    }
   }
   // A config that no longer loads would take every Codex session on the host down with it.
   parseToml(next)
-  return { text: next, blockPrint: body ? fingerprintMcpValue(body) : null, outcomes }
+  return {
+    text: next,
+    blockPrint: body ? fingerprintMcpValue({ mcp_servers: servers }) : null,
+    outcomes
+  }
 }

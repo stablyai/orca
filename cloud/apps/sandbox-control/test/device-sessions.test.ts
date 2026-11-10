@@ -1,5 +1,6 @@
 import { SignJWT, exportJWK, generateKeyPair } from 'jose'
 import { describe, expect, it, vi } from 'vitest'
+import { generateGrantRecipientKey } from '../../../../src/main/cloud-workspaces/sealed-grant-node'
 import { createHarness } from './harness'
 
 async function deviceKey() {
@@ -9,9 +10,11 @@ async function deviceKey() {
   return { privateKey, publicKeyB64 }
 }
 
+const OP = 'o'.repeat(40)
+
 async function setup() {
   vi.spyOn(console, 'log').mockImplementation(() => {})
-  const h = await createHarness()
+  const h = await createHarness({ OPERATOR_TOKEN: OP })
   const key = await deviceKey()
   const enroll = (bearer?: string, publicKeyB64 = key.publicKeyB64) =>
     h.call('POST', '/v1/device-sessions', { body: { label: 'Neil’s iPhone', platform: 'ios', publicKeyB64 }, bearer })
@@ -131,5 +134,112 @@ describe('device sessions', () => {
     expect(again).toBe(first)
     const listed = await h.call('GET', '/v1/device-sessions', { bearer: await h.token('alice') })
     expect(listed.body.deviceSessions).toHaveLength(1)
+  })
+
+  it('revokes a removed member’s phones on either auth push, and only theirs', async () => {
+    for (const path of ['/v1/internal/org-members/removed', '/v1/internal/members/removed']) {
+      const { h, enroll, deviceToken } = await setup()
+      const bob = await deviceKey()
+      const aliceId = (await enroll(await h.token('alice', 'acme'))).body.deviceSession.id
+      const bobId = (await enroll(await h.token('bob', 'acme'), bob.publicKeyB64)).body.deviceSession.id
+      const removed = await h.call('POST', path, { bearer: OP, body: { accountId: 'org:acme', userId: 'bob' } })
+      expect(removed.status).toBe(200)
+      expect(removed.body.devicesRevoked).toBe(1)
+      expect((await h.call('GET', '/v1/sandboxes', { bearer: await deviceToken(bobId, bob.privateKey) })).status).toBe(401)
+      expect((await h.call('GET', '/v1/sandboxes', { bearer: await deviceToken(aliceId) })).status).toBe(200)
+    }
+  })
+
+  it('moves a phone with its member’s role, and a phone’s stored role never re-raises their keys', async () => {
+    const { h, enroll, deviceToken } = await setup()
+    const asAdmin = await h.token('ada', 'acme', 'sandbox', { orgRole: 'admin' })
+    const id = (await enroll(asAdmin)).body.deviceSession.id
+    const { secret } = (await h.call('POST', '/v1/api-keys', { bearer: asAdmin, body: { name: 'audit', scopes: ['audit:read', 'workspaces:read'] } })).body
+    expect((await h.call('GET', '/v1/me', { bearer: await deviceToken(id) })).body.role).toBe('admin')
+
+    await h.call('POST', '/v1/internal/members/role-changed', { bearer: OP, body: { accountId: 'org:acme', userId: 'ada', role: 'member' } })
+    expect((await h.call('GET', '/v1/me', { bearer: await deviceToken(id) })).body.role).toBe('member')
+    expect((await h.call('GET', '/v1/audit', { bearer: secret })).status).toBe(403)
+
+    // Even a stale admin snapshot on the phone (a missed sync) must not hand the keys admin back.
+    await h.env.SANDBOX_DB.prepare(`UPDATE device_sessions SET org_role = 'admin' WHERE id = ?`).bind(id).run()
+    h.advance(61_000)
+    await h.call('GET', '/v1/me', { bearer: await deviceToken(id) })
+    expect((await h.call('GET', '/v1/audit', { bearer: secret })).status).toBe(403)
+  })
+
+  it('an admin desktop token from before a demotion can neither re-raise the role nor re-vouch a phone', async () => {
+    const { h, enroll, deviceToken } = await setup()
+    const oldAdmin = await h.token('ada', 'acme', 'sandbox', { orgRole: 'admin' })
+    const id = (await enroll(oldAdmin)).body.deviceSession.id
+    const { secret } = (await h.call('POST', '/v1/api-keys', { bearer: oldAdmin, body: { name: 'audit', scopes: ['audit:read', 'workspaces:read'] } })).body
+    h.advance(1_000)
+    await h.call('POST', '/v1/internal/members/role-changed', { bearer: OP, body: { accountId: 'org:acme', userId: 'ada', role: 'member' } })
+    h.advance(61_000)
+    await h.call('GET', '/v1/me', { bearer: oldAdmin })
+    expect((await h.call('GET', '/v1/audit', { bearer: secret })).status).toBe(403)
+    expect((await enroll(oldAdmin)).status).toBe(403)
+    expect((await h.call('GET', '/v1/me', { bearer: await deviceToken(id) })).body.role).toBe('member')
+    // A token minted after the change carries the live role again.
+    const fresh = await h.token('ada', 'acme', 'sandbox', { orgRole: 'member' })
+    expect((await enroll(fresh)).status).toBe(200)
+  })
+
+  it('a desktop token from before a removal cannot enroll a new phone', async () => {
+    const { h, enroll } = await setup()
+    const old = await h.token('bob', 'acme')
+    h.advance(1_000)
+    await h.call('POST', '/v1/internal/members/removed', { bearer: OP, body: { accountId: 'org:acme', userId: 'bob' } })
+    // The token no longer authenticates at all once its member is gone.
+    expect((await enroll(old)).status).toBe(401)
+  })
+
+  it('either removal push also revokes the workspace devices a removed member’s phone was granted', async () => {
+    for (const path of ['/v1/internal/org-members/removed', '/v1/internal/members/removed']) {
+      const { h, enroll, deviceToken } = await setup()
+      const alice = () => h.token('alice', 'acme', 'sandbox', { orgRole: 'member' })
+      const sandbox = (await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: await alice() })).body.sandbox
+      await h.call('PATCH', `/v1/team/workspaces/${sandbox.id}`, { body: { visibility: 'team' }, bearer: await alice() })
+      const bob = await deviceKey()
+      const phone = (await enroll(await h.token('bob', 'acme'), bob.publicKeyB64)).body.deviceSession.id
+      const granted = await h.call('POST', `/v1/team/workspaces/${sandbox.id}/grants`, {
+        body: { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: 'Bob’s iPhone', deviceKind: 'mobile' },
+        bearer: await deviceToken(phone, bob.privateKey)
+      })
+      expect(granted.status).toBe(200)
+      h.advance(1_000)
+      const removed = await h.call('POST', path, { bearer: OP, body: { accountId: 'org:acme', userId: 'bob' } })
+      expect(removed.body).toMatchObject({ devicesRevoked: 1, grantsRevoked: 1 })
+      const box = [...h.vercel.boxes.values()][0]!
+      expect(box.devices.some((d) => d.startsWith('dev-grant'))).toBe(false)
+    }
+  })
+
+  it('a removed member’s unexpired desktop token stops working everywhere; a re-added member’s new one works', async () => {
+    const { h } = await setup()
+    const old = await h.token('bob', 'acme')
+    expect((await h.call('GET', '/v1/sandboxes', { bearer: old })).status).toBe(200)
+    h.advance(1_000)
+    await h.call('POST', '/v1/internal/org-members/removed', { bearer: OP, body: { accountId: 'org:acme', userId: 'bob' } })
+    expect((await h.call('GET', '/v1/sandboxes', { bearer: old })).status).toBe(401)
+    expect((await h.call('POST', '/v1/api-keys', { bearer: old, body: { name: 'k', scopes: ['workspaces:read'] } })).status).toBe(401)
+    // Their personal account is not the team's to close.
+    expect((await h.call('GET', '/v1/sandboxes', { bearer: await h.token('bob') })).status).toBe(200)
+    h.advance(1_000)
+    expect((await h.call('GET', '/v1/sandboxes', { bearer: await h.token('bob', 'acme') })).status).toBe(200)
+  })
+
+  it('counts a change from auth’s reported time, clamped to how long a token can live', async () => {
+    const { h, enroll } = await setup()
+    const start = h.now()
+    await h.call('POST', '/v1/internal/members/role-changed', { bearer: OP, body: { accountId: 'org:acme', userId: 'ada', role: 'member', changedAt: start + 5_000 } })
+    h.advance(3_000)
+    // Minted before auth's change time (auth's clock ran ahead of ours): still stale.
+    expect((await enroll(await h.token('ada', 'acme'))).status).toBe(403)
+    h.advance(3_000)
+    expect((await enroll(await h.token('ada', 'acme'))).status).toBe(200)
+    await h.call('POST', '/v1/internal/members/removed', { bearer: OP, body: { accountId: 'org:acme', userId: 'cy', changedAt: h.now() + 24 * 60 * 60_000 } })
+    h.advance(15 * 60_000 + 1_000)
+    expect((await h.call('GET', '/v1/sandboxes', { bearer: await h.token('cy', 'acme') })).status).toBe(200)
   })
 })

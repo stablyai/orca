@@ -141,14 +141,23 @@ function CloudWorkspaceRow({
     .findLast(Boolean)
   const reference = now || workspace.createdAt
   // With no branch to tell same-named workspaces apart, when each was made does.
+  const lastActive = workspace.lastActivityAt ?? workspace.createdAt
+  const createdLine = repoName === workspace.title && !workspace.repo?.branch
   const detail =
-    repoName === workspace.title
-      ? (workspace.repo?.branch ??
-        t('cloud.home.createdAgo', 'Created {{ago}} ago', {
-          ago: formatTimeAgo(workspace.createdAt, reference)
-        }))
-      : cloudRepoLine(workspace)
-  const when = formatTimeAgo(workspace.lastActivityAt ?? workspace.createdAt, reference)
+    repoName !== workspace.title
+      ? cloudRepoLine(workspace)
+      : !createdLine
+        ? workspace.repo?.branch
+        : reference - workspace.createdAt < 60_000
+          ? t('cloud.home.createdJustNow', 'Created just now')
+          : t('cloud.home.createdAgo', 'Created {{ago}} ago', {
+              ago: formatTimeAgo(workspace.createdAt, reference)
+            })
+  // "Created just now · just now" says one thing twice: the activity time adds nothing yet.
+  const when =
+    createdLine && lastActive - workspace.createdAt < 60_000
+      ? null
+      : formatTimeAgo(lastActive, reference)
   const line = [status, detail, when].filter(Boolean).join(' · ')
   return (
     <Pressable

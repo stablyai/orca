@@ -91,10 +91,10 @@ export function describeRoutineTrigger(
   if (trigger.kind === 'schedule') {
     return t(
       'auto.components.settings.cloudRoutines.trigger.scheduleSummaryZone',
-      '{{value0}} {{value1}}',
+      '{{schedule}} {{zone}}',
       {
-        value0: formatUiAutomationSchedule(trigger.cron, t, intlLocale),
-        value1: shortTimeZoneName(trigger.timezone, intlLocale)
+        schedule: formatUiAutomationSchedule(trigger.cron, t, intlLocale),
+        zone: shortTimeZoneName(trigger.timezone, intlLocale)
       }
     )
   }
@@ -106,8 +106,8 @@ export function describeRoutineTrigger(
     intlLocale
   )
   if (!trigger.labels?.length) {
-    return t('auto.components.settings.cloudRoutines.trigger.githubSummary', 'GitHub: {{value0}}', {
-      value0: events
+    return t('auto.components.settings.cloudRoutines.trigger.githubSummary', 'GitHub: {{events}}', {
+      events: events
     })
   }
   return t(

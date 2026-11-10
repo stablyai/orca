@@ -205,10 +205,10 @@ export function RoutineScheduleFields({
         <p className="text-xs text-muted-foreground" aria-live="polite">
           {t(
             'auto.components.settings.cloudRoutines.editor.schedulePreview',
-            'Schedule: {{value0}} {{value1}}',
+            'Schedule: {{schedule}} {{zone}}',
             {
-              value0: formatUiAutomationSchedule(cron, t, locale),
-              value1: shortTimeZoneName(draft.timezone, locale)
+              schedule: formatUiAutomationSchedule(cron, t, locale),
+              zone: shortTimeZoneName(draft.timezone, locale)
             }
           )}
         </p>

@@ -4,7 +4,7 @@ import { z } from 'zod'
 
 export * from './cloud-api-primitives'
 export * from './cloud-api-routine-types'
-import { CLOUD_API_SCOPES, Id, Millis, Scopes } from './cloud-api-primitives'
+import { CLOUD_API_SCOPES, Id, Millis, PersonName, Scopes } from './cloud-api-primitives'
 
 export const CloudApiMeSchema = z.object({
   accountId: Id,
@@ -21,6 +21,7 @@ export const CloudApiKeySchema = z.object({
   prefix: z.string().max(64),
   scopes: Scopes,
   createdBy: Id,
+  createdByName: PersonName,
   createdAt: Millis,
   lastUsedAt: Millis.nullable(),
   expiresAt: Millis.nullable()
@@ -62,6 +63,7 @@ export const CloudApiGrantSchema = z.object({
   clientId: z.string().max(200).nullable(),
   clientName: z.string().max(200).nullable(),
   userId: Id,
+  userName: PersonName,
   scopes: Scopes,
   /** Where the app sends people after approval: the real identity behind a self-declared name. */
   redirectHosts: z.array(z.string().max(253)).max(20).optional(),
@@ -87,7 +89,8 @@ export const CloudApiAuditEntrySchema = z.object({
   actor: z.object({
     type: z.string().max(64),
     id: z.string().max(128),
-    userId: z.string().max(128).nullable()
+    userId: z.string().max(128).nullable(),
+    userName: PersonName
   }),
   action: z.string().max(128),
   target: z.object({ type: z.string().max(64), id: z.string().max(128).nullable() }).nullable(),

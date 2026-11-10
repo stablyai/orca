@@ -43,6 +43,17 @@ else
   test "$(git rev-parse HEAD)" = "$ORCA_SRC_SHA"
 fi
 
+# The image files come from this commit too (VM scripts, provision, manifest pins). The env the
+# caller passed is only a fallback for commits from before commit-provision-env.mjs existed.
+image_dir="$src/cloud/apps/sandbox-control/image"
+if [ -f "$image_dir/commit-provision-env.mjs" ]; then
+  node "$image_dir/commit-provision-env.mjs" "$image_dir" >/tmp/commit-provision.env
+  # shellcheck disable=SC1091
+  . /tmp/commit-provision.env
+  rm -f /tmp/commit-provision.env
+  log "image files from $ORCA_SRC_SHA"
+fi
+
 log 'build orcad + CLI'
 export CI=1 ELECTRON_SKIP_BINARY_DOWNLOAD=1 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 corepack pnpm install --frozen-lockfile >/tmp/src-install.log 2>&1 || { tail -40 /tmp/src-install.log >&2; exit 1; }

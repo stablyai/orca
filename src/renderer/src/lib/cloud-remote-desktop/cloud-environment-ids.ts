@@ -7,7 +7,7 @@ let primed = false
 const listeners = new Set<() => void>()
 
 export function refreshCloudEnvironmentIds(): Promise<void> {
-  const list = window.api.ephemeralVm.cloudEnvironmentIds
+  const list = window.api?.ephemeralVm?.cloudEnvironmentIds
   if (typeof list !== 'function') {
     return Promise.resolve()
   }
@@ -50,4 +50,9 @@ export function usePrimeCloudEnvironmentIds(): void {
       void refreshCloudEnvironmentIds()
     }
   }, [])
+}
+
+/** The loaded list itself, for memos that read isKnownCloudEnvironment imperatively. */
+export function useCloudEnvironmentIds(): ReadonlySet<string> {
+  return useSyncExternalStore(subscribe, () => ids)
 }

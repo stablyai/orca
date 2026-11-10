@@ -3,6 +3,8 @@ import { translate } from '@/i18n/i18n'
 import { loopbackOAuthRedirectPort } from '../../../../../shared/loopback-oauth-redirect'
 import type { HttpLinkSourceOwner } from './http-link-routing'
 
+export const RELAY_OPEN_TIMEOUT_MS = 4_000
+
 /** Before a host's OAuth page opens in this computer's browser, listen on its loopback redirect port
  * and carry the callback to the host, where the agent (an MCP sign-in, say) is waiting for it.
  * Null when there is nothing to relay, so ordinary links open without waiting a turn. */
@@ -22,7 +24,20 @@ export function relayRemoteOAuthCallback(
 }
 
 async function forwardThenWarn(forward: Promise<{ ok: boolean }>): Promise<void> {
-  const result = await forward.catch(() => null)
+  // A dead tunnel must not hold the browser back: past this the page opens anyway (and the relay
+  // may still come up in time, since the user approves on the provider's page first).
+  const timedOut = Symbol('timeout')
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const result = await Promise.race([
+    forward.catch(() => null),
+    new Promise<typeof timedOut>((resolve) => {
+      timer = setTimeout(() => resolve(timedOut), RELAY_OPEN_TIMEOUT_MS)
+    })
+  ])
+  clearTimeout(timer)
+  if (result === timedOut) {
+    return
+  }
   if (!result?.ok) {
     toast.warning(
       translate(

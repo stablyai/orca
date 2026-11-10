@@ -9,6 +9,7 @@
 // not running it is queued and applied at the next boot before orcad starts.
 import { z } from 'zod'
 import type { SandboxCaller } from './auth'
+import { isDeviceSessionLive } from './device-sessions'
 import { markRevoked, runVmRevoke, type GrantRow } from './grant-revokes'
 import { LifecycleError, resumeSandbox, syncMemberGit, type LifecycleDeps } from './lifecycle'
 import { ensureEntryPoints } from './golden-images'
@@ -142,17 +143,29 @@ export async function issueGrant(
     await deps.db.prepare(`UPDATE workspace_grants SET status = 'failed' WHERE id = ?`).bind(id).run()
     throw new LifecycleError('provider_unavailable', 'grant_failed')
   }
-  // Re-check after the slow VM call: if the workspace went private or changed hands meanwhile,
-  // the device is revoked at once instead of slipping past the revoke that ran concurrently.
+  // Re-check after the slow VM call: if the workspace went private or changed hands, or the phone
+  // that asked was revoked meanwhile, the device is revoked at once instead of slipping through.
   const after = await getSandbox(deps.db, row.id)
-  const stillAllowed = after !== null && canOpen(caller, after)
-  await deps.db
-    .prepare(`UPDATE workspace_grants SET status = ?, orcad_device_id = ? WHERE id = ?`)
+  const sessionLive = !caller.deviceSessionId || (await isDeviceSessionLive(deps.db, caller.deviceSessionId, deps.now()))
+  const stillAllowed = after !== null && canOpen(caller, after) && sessionLive
+  // Only an `issuing` row may become active: a revoke that ran during the VM call (member removed,
+  // phone revoked) already moved it on, and saw no device id to kill, so it must not be undone.
+  const activated = await deps.db
+    .prepare(`UPDATE workspace_grants SET status = ?, orcad_device_id = ? WHERE id = ? AND status = 'issuing'`)
     .bind(stillAllowed ? 'active' : 'revoking', output.deviceId, id)
     .run()
+  if (activated.meta.changes === 0) {
+    await deps.db
+      .prepare(`UPDATE workspace_grants SET status = 'revoking', orcad_device_id = ? WHERE id = ?`)
+      .bind(output.deviceId, id)
+      .run()
+  }
   const grant = (await getGrant(deps.db, id))!
-  if (!stillAllowed) {
-    await revokeGrants(deps, after ?? live.row, [grant], { by: 'system', reason: 'access_changed' })
+  if (!stillAllowed || activated.meta.changes === 0) {
+    const audit = activated.meta.changes === 0
+      ? { by: grant.revoked_by ?? 'system', reason: grant.revoke_reason ?? 'access_changed' }
+      : { by: 'system', reason: 'access_changed' }
+    await revokeGrants(deps, after ?? live.row, [grant], audit)
     throw new WorkspaceError('not_found')
   }
   await touchActivity(deps.db, row.id, caller.userId, deps.now())

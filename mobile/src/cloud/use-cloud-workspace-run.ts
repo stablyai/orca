@@ -32,6 +32,7 @@ import {
   launchCloudPrompt,
   type CloudLaunchedAgent
 } from './cloud-workspace-host-operations'
+import { roleForCloudError } from './cloud-entitlement-copy'
 import { cloudWorkspaceProjectRoot, recordCloudWorkspaceHost } from './cloud-workspace-links'
 import { removeHostAndCloseClient } from '../transport/hosts/host-removal-lifecycle'
 import { useInvalidateCloudWorkspaces } from './use-cloud-workspaces'
@@ -251,7 +252,11 @@ export function useCloudWorkspaceRun(sandboxId: string, workspace: CloudWorkspac
         await forgetRevokedCloudSession(error, removal)
         // Prompts that were going out with this attach now say so, instead of "waiting".
         await markWaitingCloudPromptsFailed(sandboxId, 'not_connected').catch(() => undefined)
-        setRun({ kind: 'error', message: attachErrorMessage(error, t), retry: intent })
+        const role = await roleForCloudError(error, plane, controller.signal)
+        if (controller.signal.aborted || !mountedRef.current) {
+          return
+        }
+        setRun({ kind: 'error', message: attachErrorMessage(error, t, role), retry: intent })
         invalidate()
       } finally {
         inFlight.current = false

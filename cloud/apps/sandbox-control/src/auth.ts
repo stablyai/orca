@@ -9,6 +9,7 @@ import {
 } from 'jose'
 import { z } from 'zod'
 import { authenticateDeviceToken, isDeviceToken } from './device-sessions'
+import { tokenPredatesRemoval } from './member-changes'
 import type { Env } from './env'
 
 const ID = z
@@ -41,6 +42,8 @@ export type SandboxCaller = {
   deviceSessionId?: string
   /** Display name from the token, for labels next to the user id; never used for access. */
   name?: string
+  /** Desktop tokens: when it was issued (ms), so a token older than a membership change can't write it back. */
+  tokenIssuedAt?: number
 }
 
 /** One line of plain text, ≤80 chars; anything else is dropped rather than trusted. */
@@ -96,6 +99,7 @@ async function verify(
     return {
       userId: claims.sub,
       accountId: accountIdFor(claims),
+      ...(typeof payload.iat === 'number' ? { tokenIssuedAt: payload.iat * 1000 } : {}),
       ...(displayName(claims.name) ? { name: displayName(claims.name) } : {}),
       ...(claims.org ? { orgId: claims.org, ...((claims.orgRole ?? claims.org_role) ? { orgRole: claims.orgRole ?? claims.org_role } : {}) } : {})
     }
@@ -118,7 +122,7 @@ export async function authenticateDesktop(
   }
   const caller = await verify(token, keysFor(env), env, env.SANDBOX_AUTH_ISSUER, now)
   if (caller || !env.SANDBOX_DEV_JWKS || env.SANDBOX_ENV === 'prod') {
-    return caller
+    return caller && (await tokenPredatesRemoval(env.SANDBOX_DB, caller)) ? null : caller
   }
   if (devKeys?.source !== env.SANDBOX_DEV_JWKS) {
     devKeys = {
@@ -132,5 +136,6 @@ export async function authenticateDesktop(
     return null
   }
   // Org-less dev tokens keep their historical `dev:<sub>` account; org dev tokens get `dev:org:<id>`.
-  return { ...dev, accountId: dev.orgId ? `dev:org:${dev.orgId}` : `dev:${dev.userId}`, dev: true }
+  const devCaller: SandboxCaller = { ...dev, accountId: dev.orgId ? `dev:org:${dev.orgId}` : `dev:${dev.userId}`, dev: true }
+  return (await tokenPredatesRemoval(env.SANDBOX_DB, devCaller)) ? null : devCaller
 }

@@ -17,7 +17,8 @@ export const AGENT_CONFIG_METHODS = [
         throw new Error('Only an Orca desktop can sync its MCP servers to this host.')
       }
       return syncHostMcpServers(params, {
-        paths: defaultHostMcpSyncPaths(getAppEnvironment().getPath('userData'))
+        paths: defaultHostMcpSyncPaths(getAppEnvironment().getPath('userData')),
+        projectPath: process.env.ORCA_WORKSPACE_PATH?.trim() || null
       })
     }
   })

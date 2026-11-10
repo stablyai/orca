@@ -29,6 +29,8 @@ export type HostMcpSyncPaths = {
 
 export type HostMcpSyncDeps = {
   paths: HostMcpSyncPaths
+  /** The host workspace's project root (Claude project scope key); Orca Cloud sets ORCA_WORKSPACE_PATH. */
+  projectPath?: string | null
   commandExists?: (command: string) => Promise<boolean>
   resolves?: (hostname: string) => Promise<boolean>
 }
@@ -133,18 +135,24 @@ function unreadable(
 async function syncClaude(
   paths: HostMcpSyncPaths,
   desired: Record<string, Record<string, unknown>>,
-  ledger: McpSyncLedger
+  ledger: McpSyncLedger,
+  projectPath?: string
 ): Promise<Record<string, McpSyncHostOutcome>> {
+  const scopeLedger = (projectPath ? ledger.claudeProject : ledger.claude) ?? {}
   for (let attempt = 0; attempt < WRITE_ATTEMPTS; attempt += 1) {
     const text = await readText(paths.claudeConfig)
     let merged: ReturnType<typeof mergeClaudeMcpServers>
     try {
-      merged = mergeClaudeMcpServers(text, desired, ledger.claude)
+      merged = mergeClaudeMcpServers(text, desired, scopeLedger, projectPath)
     } catch {
       return unreadable(desired)
     }
     if (merged.text === null || (await writePrivate(paths.claudeConfig, text, merged.text))) {
-      ledger.claude = merged.ledger
+      if (projectPath) {
+        ledger.claudeProject = merged.ledger
+      } else {
+        ledger.claude = merged.ledger
+      }
       return merged.outcomes
     }
   }
@@ -203,6 +211,21 @@ export async function syncHostMcpServers(
     const outcomes: Record<string, McpSyncHostOutcome> = {}
     const desired = await runnable(params.claude, commandExists, outcomes)
     result.claude = { ...outcomes, ...(await syncClaude(deps.paths, desired, ledger)) }
+  }
+  // Project scope: named alongside user scope means "this complete set" (empty when omitted), so
+  // project servers removed on the desktop leave the host too.
+  if (
+    params.claudeProject ||
+    (params.claude && Object.keys(ledger.claudeProject ?? {}).length > 0)
+  ) {
+    const outcomes: Record<string, McpSyncHostOutcome> = {}
+    const desired = await runnable(params.claudeProject ?? {}, commandExists, outcomes)
+    const projectPath = deps.projectPath ?? null
+    const project = projectPath
+      ? await syncClaude(deps.paths, desired, ledger, projectPath)
+      : // No workspace project on this host: never widen project servers to user scope.
+        unreadable(desired)
+    result.claude = { ...result.claude, ...outcomes, ...project }
   }
   if (params.codex) {
     const outcomes: Record<string, McpSyncHostOutcome> = {}

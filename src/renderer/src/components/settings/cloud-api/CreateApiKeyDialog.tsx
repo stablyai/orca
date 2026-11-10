@@ -245,9 +245,9 @@ function FormStep({
             <ShieldAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
             {t(
               'auto.components.settings.cloudApi.create.restricted',
-              'Only team owners and admins can grant access to: {{value0}}. Ask one of them if a script needs it.',
+              'Only team owners and admins can grant access to: {{scopes}}. Ask one of them if a script needs it.',
               {
-                value0: formatList(
+                scopes: formatList(
                   restricted.map((scope) => cloudApiScopeDescription(scope, t).toLowerCase())
                 )
               }
@@ -286,8 +286,8 @@ function FormStep({
             </SelectItem>
             {(['7', '30', '90'] as const).map((days) => (
               <SelectItem key={days} value={days}>
-                {t('auto.components.settings.cloudApi.create.expiryDays', 'In {{value0}} days', {
-                  value0: days
+                {t('auto.components.settings.cloudApi.create.expiryDays', 'In {{days}} days', {
+                  days: days
                 })}
               </SelectItem>
             ))}
@@ -336,9 +336,9 @@ function SecretStep({
           {created.key
             ? t(
                 'auto.components.settings.cloudApi.secret.description',
-                '“{{value0}}” is ready to use.',
+                '“{{keyName}}” is ready to use.',
                 {
-                  value0: created.key.name
+                  keyName: created.key.name
                 }
               )
             : t(
