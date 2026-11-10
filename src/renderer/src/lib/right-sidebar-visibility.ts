@@ -3,6 +3,7 @@ import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { isPluginPanelTabKey } from '../../../shared/plugins/frames/plugin-tab-key'
 
 type ActiveView = AppState['activeView']
 
@@ -17,8 +18,9 @@ const RIGHT_SIDEBAR_SUPPRESSED_VIEWS = new Set<ActiveView>([
   'mobile'
 ])
 
+/** Main pages, including plugin pages, must not mount an auxiliary sidebar copy. */
 export function canShowRightSidebarForView(activeView: ActiveView): boolean {
-  return !RIGHT_SIDEBAR_SUPPRESSED_VIEWS.has(activeView)
+  return !RIGHT_SIDEBAR_SUPPRESSED_VIEWS.has(activeView) && !isPluginPanelTabKey(activeView)
 }
 
 /** The toggle button, its shortcut and the menu item share this rule, so none hides what another opens. */

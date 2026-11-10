@@ -24,6 +24,9 @@ export const PLUGIN_HOST_ACTIONS_SINCE = '1.4.248'
 /** First release that plays an app theme's `background.videoPath`. */
 export const PLUGIN_THEME_VIDEO_BACKGROUND_SINCE = '1.4.254'
 
+/** First release planned to place plugin panels in the left navigation. */
+export const PLUGIN_PANEL_PLACEMENT_SINCE = '1.4.246'
+
 type PluginFieldDoc = {
   description: string
   'x-orca-since': string

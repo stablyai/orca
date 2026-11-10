@@ -1,8 +1,14 @@
 import { useAppStore } from '@/store/index'
 import type { WorktreeNavHistoryViewEntry } from '@/store/slices/ui/workspace-navigation-history'
+import { isPluginPanelTabKey } from '../../../../../shared/plugins/frames/plugin-tab-key'
 
 // Replay via setActiveView: open*Page would mutate previousViewBefore* or duplicate history (navigateToIndex).
+/** Restore plugin route identity before handling provider-specific task detail entries. */
 export function applyWorktreeNavViewEntry(entry: WorktreeNavHistoryViewEntry): void {
+  if (typeof entry === 'string' && isPluginPanelTabKey(entry)) {
+    useAppStore.getState().setActiveView(entry)
+    return
+  }
   if (entry === 'automations' || entry === 'artifacts' || entry === 'skills') {
     useAppStore.getState().setActiveView(entry)
     return

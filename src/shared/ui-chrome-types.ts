@@ -128,3 +128,4 @@ export type TopLevelView =
   | 'skills'
   | 'artifacts'
   | 'mobile'
+  | `plugin:${string}`

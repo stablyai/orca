@@ -1,0 +1,23 @@
+{
+  "manifestVersion": 2,
+  "execution": "sandboxed-ui",
+  "id": "left-navigation",
+  "publisher": "your-github-user",
+  "name": "Left Navigation Example",
+  "version": "1.0.0",
+  "description": "A minimal panel that opens a main page from Orca's left navigation.",
+  "engines": { "orca": ">=1.4.246" },
+  "pluginApi": 1,
+  "contributes": {
+    "panels": [
+      {
+        "id": "reviews",
+        "title": "MRs",
+        "icon": "code",
+        "placement": "left-navigation",
+        "entry": "panel.html"
+      }
+    ]
+  },
+  "capabilities": []
+}
