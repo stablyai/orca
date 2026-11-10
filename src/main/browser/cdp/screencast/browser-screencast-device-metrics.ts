@@ -31,11 +31,7 @@ export function createBrowserScreencastDeviceMetrics(
       return
     }
     const [currentWidth, currentHeight] = owner.getContentSize()
-    if (
-      !originalSurfaceSize &&
-      typeof currentWidth === 'number' &&
-      typeof currentHeight === 'number'
-    ) {
+    if (!originalSurfaceSize) {
       originalSurfaceSize = { width: currentWidth, height: currentHeight }
     }
     if (currentWidth !== width || currentHeight !== height) {

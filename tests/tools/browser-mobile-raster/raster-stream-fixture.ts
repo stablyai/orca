@@ -31,39 +31,28 @@ app
     const state = () => wc.executeJavaScript('window.__rasterProbe()')
     const initial = await state()
     const dpr = Number(process.env.RASTER_DPR ?? 2)
-    const scenarios =
-      dpr === 3
-        ? ([
-            ['portrait', 360, 534, 900, 1335, 900, 1335],
-            ['reload', 360, 534, 900, 1335, 900, 1335],
-            ['landscape', 534, 360, 1335, 900, 1335, 900],
-            ['budget', 360, 534, 360, 534, 360, 534],
-            ['fallback', 360, 534, 360, 534, 360, 534],
-            ['click', 360, 534, 900, 1335, 900, 1335]
-          ] as const)
-        : ([
-            ['portrait', 360, 534, 900, 1335, 720, 1068],
-            ['reload', 360, 534, 900, 1335, 720, 1068],
-            ['landscape', 534, 360, 1335, 900, 1068, 720],
-            ['budget', 360, 534, 360, 534, 360, 534],
-            ['fallback', 360, 534, 360, 534, 360, 534],
-            ['click', 360, 534, 900, 1335, 720, 1068]
-          ] as const)
+    const scenarios = [
+      ['portrait', 360, 534, 900, 1335, [720, 1068], [900, 1335]],
+      ['reload', 360, 534, 900, 1335, [720, 1068], [900, 1335]],
+      ['landscape', 534, 360, 1335, 900, [1068, 720], [1335, 900]],
+      ['budget', 360, 534, 360, 534, [360, 534], [360, 534]],
+      ['fallback', 360, 534, 360, 534, [360, 534], [360, 534]],
+      ['click', 360, 534, 900, 1335, [720, 1068], [900, 1335]]
+    ] as const
     const results: unknown[] = []
     const failures: string[] = []
-    for (const [
-      name,
-      width,
-      height,
-      maxWidth,
-      maxHeight,
-      expectedWidth,
-      expectedHeight
-    ] of scenarios) {
+    for (const [name, width, height, maxWidth, maxHeight, at2x, at3x] of scenarios) {
+      const [expectedWidth, expectedHeight] = dpr === 3 ? at3x : at2x
       const sizes: { width: number; height: number }[] = []
       const errors: string[] = []
       let firstImage: Buffer | null = null
       let changed = false
+      let onObserved: (() => void) | undefined
+      const waitForFrame = () =>
+        new Promise<void>((resolve) => {
+          onObserved = resolve
+        })
+      let observed = waitForFrame()
       const stream = await startBrowserScreencast(wc, {
         format: 'jpeg',
         quality: 72,
@@ -81,16 +70,26 @@ app
           sizes.push(nativeImage.createFromBuffer(buffer).getSize())
           changed ||= firstImage !== null && !firstImage.equals(buffer)
           firstImage ??= buffer
+          if (changed) {onObserved?.()}
         },
         onError: (message) => errors.push(message)
       })
       if (name === 'reload') {
-        await wc.reload()
+        sizes.length = 0
+        firstImage = null
+        changed = false
+        observed = waitForFrame()
+        const loaded = new Promise<void>((resolve) => wc.once('did-finish-load', () => resolve()))
+        wc.reload()
+        await loaded
       }
-      await new Promise((resolve) => setTimeout(resolve, 1400))
+      await observed
       const capture = wc.capturePage
       if (name === 'fallback') {
         await wc.debugger.sendCommand('Page.stopScreencast')
+        sizes.length = 0
+        firstImage = null
+        observed = waitForFrame()
         wc.capturePage = () => Promise.reject(new Error('fixture capture unavailable'))
         await stream.updateViewport({
           viewportWidth: width,
@@ -98,11 +97,15 @@ app
           deviceScaleFactor: dpr,
           mobile: true
         })
+        await observed
         wc.capturePage = capture
       }
       let click: unknown
       if (name === 'click') {
         const before = await state()
+        await wc.executeJavaScript(
+          'window.__rasterClicked = new Promise(resolve => document.querySelector("#button").addEventListener("click", resolve, {once: true})); true'
+        )
         wc.sendInputEvent({
           type: 'mouseDown',
           x: Math.round(before.button.x),
@@ -117,11 +120,8 @@ app
           button: 'left',
           clickCount: 1
         })
-        let after = await state()
-        for (let attempt = 0; after.clicks === before.clicks && attempt < 100; attempt++) {
-          await new Promise((resolve) => setTimeout(resolve, 10))
-          after = await state()
-        }
+        await wc.executeJavaScript('window.__rasterClicked.then(() => true)')
+        const after = await state()
         click = { before: before.clicks, after: after.clicks, trusted: after.trusted }
         if (after.clicks !== before.clicks + 1 || !after.trusted) {
           failures.push(`${name}: click`)
