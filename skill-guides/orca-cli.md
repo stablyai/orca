@@ -292,7 +292,7 @@ ORCA chat read --session <session> --limit 10 --json
 ORCA chat send --session <session> --text "<message>" --json
 ```
 
-- `chat read` returns messages, tool calls, and approvals or questions; `pending: true` marks one waiting for the user.
+- `chat read` returns messages, tool calls, errors, and approvals or questions; `pending: true` marks one waiting for the user.
 - `chat send` sends the text as the user's message. While the agent works, a host with a message queue holds it until the turn ends and reports `delivery: "queued"`.
 - A refused send was not delivered. Read the chat again before resending.
 - `chat send --wait` (or `chat wait`) returns when the chat is idle or `settled: "waiting"` on an approval or question, with the entries since the last user message; `settled: "timeout"` or `"held"` (queued message stopped or failed) exits 1. Pass `--timeout-ms`. Long or quoted text goes through `--text-file -` on stdin.

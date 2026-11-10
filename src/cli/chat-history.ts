@@ -7,13 +7,13 @@ import {
   AGENT_SESSION_UNATTACHED_REFUSAL_CODE,
   isUnattachedAgentSessionReadRefusal
 } from '../shared/agent-session/failures/structured-agent-session-read-refusal'
+import { structuredAgentSessionQueueSendsNext } from '../shared/agent-session/view/structured-agent-session-live-turn'
 import { chatTranscript, formatChatRead, type ChatTranscriptEntry } from './chat-sessions'
 import type { RuntimeClient, RuntimeRpcSuccess } from './runtime-client'
 import { RuntimeClientError } from './runtime-client'
 
 export const DEFAULT_READ_LIMIT = 20
-// Status frames and turn markers share the journal with the conversation, so fetch more rows than shown.
-const HISTORY_ROWS_PER_ENTRY = 4
+// Status frames and turn markers share the journal, so read the most rows a page allows.
 const WAIT_POLL_MS = 1000
 
 export type ChatTranscript = {
@@ -43,15 +43,12 @@ export async function readHistory(
 export async function readTranscript(
   client: RuntimeClient,
   session: string,
-  limit: number
+  limit?: number
 ): Promise<RuntimeRpcSuccess<ChatTranscript>> {
-  const response = await readHistory(
-    client,
-    session,
-    Math.min(limit * HISTORY_ROWS_PER_ENTRY, AGENT_SESSION_HISTORY_MAX_LIMIT)
-  )
+  const response = await readHistory(client, session, AGENT_SESSION_HISTORY_MAX_LIMIT)
   const { page } = response.result
-  const entries = chatTranscript(page.items).slice(-limit)
+  const all = chatTranscript(page.items)
+  const entries = limit === undefined ? all : all.slice(-limit)
   return { ...response, result: { session, entries, cursor: page.window.newest } }
 }
 
@@ -79,7 +76,12 @@ export async function waitForChat(
       return 'waiting'
     }
     const queued = page.queuedMessages?.find((m) => m.messageId === queuedMessageId)
-    if (!page.working && !queued) {
+    // Between turns the host names its next automatic send while working is briefly false.
+    const sendsNext = structuredAgentSessionQueueSendsNext(
+      page.nextQueuedMessageId,
+      page.working === true
+    )
+    if (!page.working && !queued && !sendsNext) {
       return 'idle'
     }
     // A stopped queue or a failed card keeps the message until the user acts in Orca.
@@ -103,7 +105,7 @@ export async function readSettledTurn(
     // Chained commands such as `send --wait && ...` need a failing exit when the chat did not settle.
     process.exitCode = 1
   }
-  const response = await readTranscript(client, session, DEFAULT_READ_LIMIT)
+  const response = await readTranscript(client, session)
   const { entries } = response.result
   const lastUser = entries.findLastIndex((e) => e.kind === 'message' && e.role === 'user')
   return {

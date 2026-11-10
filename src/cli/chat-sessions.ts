@@ -25,6 +25,7 @@ export type ChatTranscriptEntry =
   | { kind: 'message'; role: string; text: string }
   | { kind: 'tool'; name: string; state: string }
   | { kind: 'approval' | 'question'; text: string; pending: boolean }
+  | { kind: 'error'; text: string }
 
 /** The session id a chat is addressed by, from its id, its handle, or a pane key that names it. */
 export function parseChatSessionSelector(value: string): string {
@@ -74,7 +75,9 @@ function messageText(item: AgentJournalRenderItem): string {
     return ''
   }
   return item.body.blocks
-    .map((block) => (block.type === 'text' ? block.text : ''))
+    .map((block) =>
+      block.type === 'text' ? block.text : block.type === 'image-ref' ? '[image]' : ''
+    )
     .filter((text) => text.length > 0)
     .join('\n')
     .trim()
@@ -96,6 +99,9 @@ export function chatTranscript(items: readonly AgentJournalRenderItem[]): ChatTr
       if (text.length > 0 && body.role !== 'reasoning') {
         entries.push({ kind: 'message', role: body.role, text })
       }
+    } else if (body.kind === 'status' && body.tone === 'error') {
+      // Start failures and dead agents land as error status rows; without them a wait reads "Done.".
+      entries.push({ kind: 'error', text: String(body.text) })
     } else if (body.kind === 'tool-call') {
       entries.push({ kind: 'tool', name: body.name, state: body.state })
     } else if (body.kind === 'approval') {
@@ -144,6 +150,9 @@ export function formatChatRead(result: {
     .map((entry) => {
       if (entry.kind === 'message') {
         return `${entry.role}: ${entry.text}`
+      }
+      if (entry.kind === 'error') {
+        return `[error] ${entry.text}`
       }
       if (entry.kind === 'tool') {
         return `[tool ${entry.name}: ${entry.state}]`
