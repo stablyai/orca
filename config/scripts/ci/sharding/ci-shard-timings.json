@@ -6201,7 +6201,6 @@
       "src/renderer/src/hooks/useIpcEvents-cmd-j-digit-chord.test.ts": 2703,
       "src/renderer/src/hooks/useIpcEvents-lifecycle.test.ts": 2326,
       "src/renderer/src/hooks/useIpcEvents-new-workspace-shortcut.test.ts": 72,
-      "src/renderer/src/hooks/useIpcEvents-rate-limit-hydration.test.ts": 1597,
       "src/renderer/src/hooks/useIpcEvents-runtime-environment-selectors.test.ts": 530,
       "src/renderer/src/hooks/useIpcEvents-session-tab-close-request.test.ts": 2252,
       "src/renderer/src/hooks/useIssueMetadata.test.tsx": 344,
