@@ -1,9 +1,7 @@
 import { federationRelayPrefix } from '../federation/relay/federation-relay-prefix'
-import {
-  federationRelayWireItem,
-  type FederatedLifecycleSettlement
-} from '../legacy-remote/legacy-remote'
+import { federationRelayWireItem } from '../legacy-remote/federation-relay-wire'
 import type { FederationRuntime } from '../federation/federation-runtime'
+import type { FederatedLifecycleSettlement } from '../legacy-remote/federation-lifecycle-settlement'
 import '../../../../shared/protocol-version'
 import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { OrchestrationError } from '../orchestration-error'

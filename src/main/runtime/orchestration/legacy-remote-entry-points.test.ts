@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 const SRC = resolve(import.meta.dirname, '../../..')
 // Each folder has one entry module, plus a DB-only one so the DB layer never loads rpc code.
+// The two folders are one frozen unit and may import each other directly.
 const DB_LAYER = 'main/runtime/orchestration/db/'
 const LEGACY_ENTRIES_BY_FOLDER = {
   'main/runtime/orchestration/legacy-remote/': {
@@ -59,7 +60,10 @@ describe('legacy remote-attachment folders', () => {
         }
         const to = srcPath(target)
         for (const [folder, { entry, dbEntry }] of Object.entries(LEGACY_ENTRIES_BY_FOLDER)) {
-          if (to.startsWith(folder) && !from.startsWith(folder)) {
+          if (
+            to.startsWith(folder) &&
+            !Object.keys(LEGACY_ENTRIES_BY_FOLDER).some((f) => from.startsWith(f))
+          ) {
             if (to === entry || (to === dbEntry && from.startsWith(DB_LAYER))) {
               entryImporters.add(`${from} -> ${to}`)
             } else {
