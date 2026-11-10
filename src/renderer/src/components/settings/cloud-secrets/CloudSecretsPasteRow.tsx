@@ -4,7 +4,8 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   cloudSecretKind,
   cloudSecretNameError,
-  cloudSecretValueError
+  cloudSecretValueError,
+  cloudSecretStoredOnVm
 } from '../../../../../shared/cloud-secrets/cloud-secret-rules'
 import type { CloudSecretsErrorCode } from '../../../../../shared/cloud-secrets/cloud-secrets-wire'
 import {
@@ -12,7 +13,7 @@ import {
   type DotenvPasteIssue
 } from '../../../../../shared/cloud-secrets/dotenv-paste'
 import { Badge } from '../../ui/badge'
-import { CloudSecretVmBadge } from './CloudSecretVmBadge'
+import { CloudSecretVmBadge, cloudSecretVmWarning } from './CloudSecretVmBadge'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { cloudSecretKindLabel, cloudSecretsErrorCopy } from './cloud-secrets-copy'
@@ -174,7 +175,9 @@ export function PasteRowEditor({
             describedBy={issue ? `${id}-issue` : undefined}
           />
         </div>
-        {row.name && cloudSecretKind(row.name) === 'agent_key' ? (
+        {row.name &&
+        cloudSecretKind(row.name) === 'agent_key' &&
+        !cloudSecretStoredOnVm(row.name) ? (
           <Badge variant="referenceLabel">{cloudSecretKindLabel(row.name, t)}</Badge>
         ) : null}
         {row.name ? <CloudSecretVmBadge name={row.name} /> : null}
@@ -188,6 +191,9 @@ export function PasteRowEditor({
       >
         {note ? `${status} · ${note}` : status}
       </p>
+      {row.name && cloudSecretStoredOnVm(row.name) ? (
+        <p className="pl-5.5 text-2xs text-muted-foreground">{cloudSecretVmWarning(t, row.name)}</p>
+      ) : null}
     </li>
   )
 }
