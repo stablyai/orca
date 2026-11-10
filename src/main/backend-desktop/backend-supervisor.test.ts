@@ -2,10 +2,18 @@ import { EventEmitter } from 'node:events'
 import { afterEach, expect, it, vi } from 'vitest'
 import {
   BACKEND_CONNECTION_CHANGED,
+  BACKEND_PORT_DELIVERY,
   BACKEND_PORT_REQUEST
 } from '../../shared/backend-service-contract'
-const rig = vi.hoisted(() => ({ fork: vi.fn(), handle: vi.fn(), call: vi.fn() }))
+const rig = vi.hoisted(() => ({
+  fork: vi.fn(),
+  handle: vi.fn(),
+  call: vi.fn(),
+  appOn: vi.fn(),
+  appOff: vi.fn()
+}))
 vi.mock('electron', () => ({
+  app: { on: rig.appOn, off: rig.appOff },
   BrowserWindow: { fromWebContents: () => ({}) },
   ipcMain: { handle: rig.handle, removeHandler: vi.fn() },
   utilityProcess: { fork: rig.fork },
@@ -165,5 +173,45 @@ it('publishes terminal unavailability on the third death and preserves explicit 
   })
   const stopped = supervisor.stop()
   children[3].emit('exit', 0)
+  await stopped
+})
+
+it('retires only the exited renderer document and rejects its pending port delivery', async () => {
+  const child = Object.assign(new EventEmitter(), { postMessage: vi.fn(), kill: vi.fn() })
+  rig.fork.mockReturnValue(child)
+  const supervisor = new BackendSupervisor({ getRepos: () => [], getAllWorktreeMeta: () => ({}) })
+  const frame = { postMessage: vi.fn() }
+  const sender = Object.assign(new EventEmitter(), {
+    id: 3,
+    mainFrame: frame,
+    isDestroyed: () => false,
+    getType: () => 'window',
+    getURL: () => 'file:///index.html'
+  })
+  const request = rig.handle.mock.calls.find(([channel]) => channel === BACKEND_PORT_REQUEST)?.[1]
+  const gone = rig.appOn.mock.calls.find(([event]) => event === 'render-process-gone')?.[1]
+  const token = '33333333-3333-3333-3333-333333333333'
+  const initial = request({ sender, senderFrame: frame }, token)
+  const rejected = expect(initial).rejects.toThrow('The document was replaced')
+  gone({}, { id: 99 })
+  expect(child.postMessage).not.toHaveBeenCalledWith({ type: 'retire', token })
+  gone({}, sender)
+  expect(child.postMessage).toHaveBeenCalledWith({ type: 'retire', token })
+  child.emit('message', { type: 'ready', protocol: 1, capabilities: ['usage'] })
+  await rejected
+  expect(frame.postMessage.mock.calls.some(([channel]) => channel === BACKEND_PORT_DELIVERY)).toBe(
+    false
+  )
+  await request({ sender, senderFrame: frame }, token)
+  expect(
+    child.postMessage.mock.calls.filter(([message]) => message.type === 'client')
+  ).toHaveLength(1)
+  gone({}, sender)
+  expect(
+    child.postMessage.mock.calls.filter(([message]) => message.type === 'retire')
+  ).toHaveLength(2)
+  const stopped = supervisor.stop()
+  expect(rig.appOff).toHaveBeenCalledWith('render-process-gone', gone)
+  child.emit('exit', 0)
   await stopped
 })

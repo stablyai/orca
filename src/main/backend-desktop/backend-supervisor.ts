@@ -1,4 +1,5 @@
 import {
+  app,
   BrowserWindow,
   ipcMain,
   MessageChannelMain,
@@ -44,10 +45,14 @@ export class BackendSupervisor {
   private readonly documents = new Map<number, Document>()
   private stopping?: Promise<void>
 
+  private readonly retireRenderer = (_event: unknown, contents: WebContents): void =>
+    this.documents.get(contents.id)?.retire()
+
   constructor(private readonly store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
     if (!capturedBootstrap) {
       throw new Error('Backend paths were not captured during preflight.')
     }
+    app.on('render-process-gone', this.retireRenderer)
     ipcMain.handle(
       BACKEND_PORT_REQUEST,
       async (event, token: unknown, purpose: unknown = 'demand') => {
@@ -77,7 +82,6 @@ export class BackendSupervisor {
           this.child?.postMessage({ type: 'retire', token: document.token })
           sender.off('did-frame-navigate', navigation)
           sender.off('destroyed', retire)
-          sender.off('render-process-gone', retire)
         }
         const navigation = (
           _event: unknown,
@@ -94,7 +98,6 @@ export class BackendSupervisor {
         this.documents.set(sender.id, document)
         sender.on('did-frame-navigate', navigation)
         sender.once('destroyed', retire)
-        sender.once('render-process-gone', retire)
         if (!this.desiredRunning) {
           throw new Error('Orca is shutting down.')
         }
@@ -134,6 +137,7 @@ export class BackendSupervisor {
   stop(): Promise<void> {
     this.stopping ??= (async () => {
       this.desiredRunning = false
+      app.off('render-process-gone', this.retireRenderer)
       clearTimeout(this.restartTimer)
       this.restartTimer = undefined
       const child = this.child

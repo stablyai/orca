@@ -85,6 +85,8 @@ it('deduplicates overview failure, retries unknown providers without enabling, a
     </TooltipProvider>
   )
   expect(screen.getAllByRole('alert')).toHaveLength(1)
+  expect(screen.queryByText('Start tracking tokens')).toBeNull()
+  expect(screen.queryByText('0 enabled - 0 with data')).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Refresh usage overview' }))
   for (const [prefix, name] of providers) {
     expect(fixture.state[`refresh${name}Usage`]).toHaveBeenCalledTimes(1)
@@ -97,6 +99,14 @@ it('deduplicates overview failure, retries unknown providers without enabling, a
     </TooltipProvider>
   )
   expect(screen.queryByRole('alert')).toBeNull()
+  setup('disabled')
+  view.rerender(
+    <TooltipProvider>
+      <UsageOverviewPane />
+    </TooltipProvider>
+  )
+  expect(screen.getByText('Start tracking tokens')).toBeTruthy()
+  expect(screen.getByText('0 enabled - 0 with data')).toBeTruthy()
 })
 
 it('renders translated failure and retry on the provider and overview', async () => {
@@ -115,6 +125,7 @@ it('renders translated failure and retry on the provider and overview', async ()
       <UsageOverviewPane />
     </TooltipProvider>
   )
+  expect(screen.queryByText('Empezar a rastrear tokens')).toBeNull()
   expect(screen.getByRole('alert').textContent).toContain(
     'No se pudo completar la actualización anterior.'
   )

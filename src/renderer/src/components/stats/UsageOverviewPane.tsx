@@ -136,6 +136,7 @@ export function UsageOverviewPane(): React.JSX.Element {
     opencode: openCodeScanState,
     muse: museScanState
   }
+  const allProvidersKnown = Object.values(knownProviders).every(Boolean)
   const canRefresh =
     overview.hasAnyEnabledProvider ||
     failureGroups.size > 0 ||
@@ -202,7 +203,7 @@ export function UsageOverviewPane(): React.JSX.Element {
           </Tooltip>
         </div>
 
-        {!overview.hasAnyEnabledProvider ? (
+        {allProvidersKnown && !overview.hasAnyEnabledProvider ? (
           <div className="mt-4 rounded-lg border border-dashed border-border/60 bg-card/30 px-4 py-5">
             <div className="max-w-xl space-y-3">
               <div>
@@ -263,7 +264,7 @@ export function UsageOverviewPane(): React.JSX.Element {
               </div>
             </div>
           </div>
-        ) : (
+        ) : overview.hasAnyEnabledProvider ? (
           <>
             <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <StatCard
@@ -288,21 +289,21 @@ export function UsageOverviewPane(): React.JSX.Element {
               />
             </div>
 
-            {!overview.hasAnyData ? (
+            {!overview.hasAnyData && allProvidersKnown ? (
               <div className="mt-4 rounded-lg border border-dashed border-border/60 bg-card/30 px-4 py-5 text-sm text-muted-foreground">
                 {t(
                   'auto.components.stats.UsageOverviewPane.noLocalUsageYet',
                   'No local Claude, Codex, OpenCode, or Muse usage found yet. The overview will populate after the next agent session writes token logs.'
                 )}
               </div>
-            ) : (
+            ) : overview.hasAnyData ? (
               <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
                 <DailyIntensityGrid days={recentDays} bestDay={overview.bestDay} />
                 <TokenMixBar overview={overview} />
               </div>
-            )}
+            ) : null}
           </>
-        )}
+        ) : null}
       </section>
 
       <section className="space-y-3">
@@ -312,11 +313,13 @@ export function UsageOverviewPane(): React.JSX.Element {
               {t('auto.components.stats.UsageOverviewPane.33f7b043d2', 'Providers')}
             </h4>
             <p className="text-xs text-muted-foreground">
-              {t(
-                'auto.components.stats.UsageOverviewPane.providersEnabledWithData',
-                '{{enabled}} enabled - {{withData}} with data',
-                { enabled: overview.enabledProviderCount, withData: overview.dataProviderCount }
-              )}
+              {allProvidersKnown
+                ? t(
+                    'auto.components.stats.UsageOverviewPane.providersEnabledWithData',
+                    '{{enabled}} enabled - {{withData}} with data',
+                    { enabled: overview.enabledProviderCount, withData: overview.dataProviderCount }
+                  )
+                : '—'}
             </p>
           </div>
           <Badge variant="outline" className="gap-1">
