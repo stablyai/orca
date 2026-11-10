@@ -61,7 +61,12 @@ export const waitingCodex = shot(
 export const signedIn = shot(gate({ step: 'signed', email: 'nw@stably.ai' }))
 export const portBusy = shot(
   gate(
-    { step: 'error', kind: 'port_busy', message: 'Port 1455 is busy.', port: 1455 },
+    {
+      step: 'error',
+      kind: 'port_busy',
+      message: 'Port 1455 is in use on this computer.',
+      port: 1455
+    },
     { agent: 'codex' }
   )
 )

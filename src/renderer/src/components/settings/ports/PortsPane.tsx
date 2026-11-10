@@ -123,8 +123,8 @@ export function PortsPane({ settings }: { settings: GlobalSettings }): React.JSX
       <SettingsSwitchRow
         label={t('auto.components.settings.ports.exclusive', 'Same port number only')}
         description={t(
-          'auto.components.settings.ports.exclusiveDescription',
-          'If the port is taken here, skip it instead of remapping.'
+          'auto.components.settings.ports.exclusiveDescriptionInUse',
+          'If the port is in use on this computer, skip it instead of remapping.'
         )}
         // Off reads as off: a dependent switch that cannot act should not look on.
         checked={forwarding.exclusive && !off}
