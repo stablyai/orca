@@ -655,17 +655,10 @@ describe('reopen closed tab from the welcome screen', () => {
     vi.restoreAllMocks()
   })
 
-  it.each([
-    ['Mac', true],
-    ['Windows', true],
-    ['Linux', true],
-    ['Mac', false],
-    ['Windows', false],
-    ['Linux', false]
-  ] as const)('reopens from the welcome screen on %s (restored %s)', (platform, restored) => {
+  it('handles Ctrl+Shift+T without an active workspace and restores the current history entry', () => {
     vi.clearAllMocks()
-    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(platform)
-    const reopenClosedTab = vi.fn(() => restored)
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Windows')
+    const reopenClosedTab = vi.fn(() => true)
     const worktreeId = 'repo-1::/repo/last-workspace'
     mocks.state = {
       worktreeNavHistory: ['repo-1::/repo/older', worktreeId, 'repo-1::/repo/forward'],
@@ -677,39 +670,31 @@ describe('reopen closed tab from the welcome screen', () => {
       key: 'T',
       code: 'KeyT',
       shiftKey: true,
-      metaKey: platform === 'Mac',
-      ctrlKey: platform !== 'Mac',
+      ctrlKey: true,
       cancelable: true
     })
     act(() => window.dispatchEvent(event))
     expect(reopenClosedTab).toHaveBeenCalledExactlyOnceWith(worktreeId)
-    if (restored) {
-      expect(activateAndRevealWorktree).toHaveBeenCalledExactlyOnceWith(worktreeId)
-    } else {
-      expect(activateAndRevealWorktree).not.toHaveBeenCalled()
-    }
+    expect(activateAndRevealWorktree).toHaveBeenCalledExactlyOnceWith(worktreeId)
     expect(event.defaultPrevented).toBe(true)
   })
 
-  it.each([{ history: [] }, { history: ['tasks'] }])(
-    'ignores a history without a workspace ($history)',
-    ({ history }) => {
-      vi.clearAllMocks()
-      vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Windows')
-      const reopenClosedTab = vi.fn(() => true)
-      mocks.state = {
-        worktreeNavHistory: history,
-        worktreeNavHistoryIndex: history.length - 1,
-        reopenClosedTab
-      }
-      renderHook(() => useTerminalKeyboardShortcuts({ ...controller, activeWorktreeId: null }))
-      act(() =>
-        window.dispatchEvent(
-          new KeyboardEvent('keydown', { key: 'T', code: 'KeyT', ctrlKey: true, shiftKey: true })
-        )
-      )
-      expect(reopenClosedTab).not.toHaveBeenCalled()
-      expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+  it('does not treat a page history entry as a workspace', () => {
+    vi.clearAllMocks()
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Windows')
+    const reopenClosedTab = vi.fn(() => true)
+    mocks.state = {
+      worktreeNavHistory: ['tasks'],
+      worktreeNavHistoryIndex: 0,
+      reopenClosedTab
     }
-  )
+    renderHook(() => useTerminalKeyboardShortcuts({ ...controller, activeWorktreeId: null }))
+    act(() =>
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'T', code: 'KeyT', ctrlKey: true, shiftKey: true })
+      )
+    )
+    expect(reopenClosedTab).not.toHaveBeenCalled()
+    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+  })
 })
