@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import {
   createForkWorktree,
@@ -69,7 +70,7 @@ export function nativeChatWorktreeForkPlan(
   }
   const sourceTitle = source.displayName || shortBranch(branch)
   const taken = new Set(
-    (state.worktreesByRepo[source.repoId] ?? []).flatMap((worktree) => [
+    (selectWorktreesByRepo(state)[source.repoId] ?? []).flatMap((worktree) => [
       worktree.path.split(/[\\/]/).at(-1) ?? '',
       (worktree.branch ? shortBranch(worktree.branch) : '').split('/').at(-1) ?? ''
     ])

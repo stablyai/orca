@@ -28,6 +28,9 @@ export function mobileSubagentForkAvailable(
   )
 }
 
+// The prompt's input kind, not shown text.
+const PLAIN_TEXT_PROMPT = 'plain-text'
+
 /** Asks for the subagent's task; null when cancelled or empty. */
 function askMobileSubagentTask(): Promise<string | null> {
   return new Promise((resolve) => {
@@ -48,7 +51,7 @@ function askMobileSubagentTask(): Promise<string | null> {
           onPress: (value?: string) => resolve(value?.trim() || null)
         }
       ],
-      'plain-text'
+      PLAIN_TEXT_PROMPT
     )
   })
 }

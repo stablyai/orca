@@ -20948,8 +20948,6 @@
           "cancel": "Cancel",
           "creating": "Creating worktree…",
           "confirm": "Fork",
-          "action": "Fork into a new worktree",
-          "tooltip": "Fork into a new worktree. Its chat includes this whole response, up to the end of its turn.",
           "menu": "Fork into New Worktree…",
           "sidebarMenu": "Fork Chat into New Worktree",
           "forkNotStarted": "The worktree was created, but the chat could not be forked into it.",
