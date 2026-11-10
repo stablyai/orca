@@ -78,4 +78,19 @@ describe('shell probe lifetime', () => {
 
     lifetime.release()
   })
+
+  it('leaves no exit listener behind once the grace timer has fired', async () => {
+    setPlatform('linux')
+    vi.useFakeTimers()
+    const before = process.listenerCount('exit')
+    const lifetime = bindShellProbeLifetime(fakeChild())
+
+    lifetime.terminate()
+    // The caller settles and releases on the timeout, as both callers do.
+    lifetime.release()
+    await vi.advanceTimersByTimeAsync(SHELL_PROBE_TERMINATE_GRACE_MS)
+
+    // The force timer owns the remaining registration; retaining it would pin the child.
+    expect(process.listenerCount('exit')).toBe(before)
+  })
 })

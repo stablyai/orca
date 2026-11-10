@@ -53,6 +53,9 @@ export function bindShellProbeLifetime(child: ChildProcess): ShellProbeLifetime 
       } else {
         kill()
       }
+      // release() removed one registration; drop the one this timer owns so the child is not
+      // retained by an exit listener until the process itself exits (#40489 review).
+      process.off('exit', killAndStopGuarding)
     }, SHELL_PROBE_TERMINATE_GRACE_MS)
     force.unref?.()
   }
