@@ -20872,7 +20872,8 @@
         "routines": "Routines",
         "archiveConfirmTitle": "Archive {{name}}?",
         "archiveConfirmBody": "{{owner}}'s agents in this workspace will stop. Files are kept and it can be unarchived.",
-        "archiveBusy": "This workspace is still starting or going to sleep. Nothing was changed. Try again in a moment."
+        "archiveBusy": "This workspace is still starting or going to sleep. Nothing was changed. Try again in a moment.",
+        "showCloudWorkspaces": "Show cloud workspaces"
       },
       "orcaCloud": {
         "QueuedPrompt": {
