@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { getDefaultSettings } from '../../../shared/constants'
-import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-seeding'
+import { getDefaultSettings } from '../../../../../shared/constants'
+import { ensureWorktreeHasInitialTerminal } from './initial-surface/worktree-initial-terminal-seeding'
 import {
   createMockStore,
   registerWorktreeActivationReset,

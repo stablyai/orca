@@ -1,7 +1,7 @@
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { getTerminalSetupScriptSearchEntries } from './terminal-window-setup-search'
+import { getTerminalSetupScriptSearchEntries } from './appearance/terminal-window-search'
 import { translate } from '@/i18n/i18n'
 
 type TerminalSetupScriptSectionProps = {
