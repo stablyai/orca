@@ -6,7 +6,12 @@ import { realpath } from 'node:fs/promises'
  *  config that trusts the folder still wins. */
 export async function codexProjectConfigIsolationArgs(dir: string): Promise<string[]> {
   const real = await realpath(dir).catch(() => dir)
-  const table = [...new Set([dir, real])]
+  // Windows Codex tries an ASCII-lowercased key first; a saved "trusted" one would win.
+  const spellings =
+    process.platform === 'win32'
+      ? [dir, real].map((folder) => folder.replace(/[A-Z]/g, (letter) => letter.toLowerCase()))
+      : []
+  const table = [...new Set([dir, real, ...spellings])]
     .map((folder) => `${JSON.stringify(folder)}={trust_level="untrusted"}`)
     .join(',')
   return ['-c', `projects={${table}}`]
