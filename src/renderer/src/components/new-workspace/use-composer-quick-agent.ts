@@ -13,7 +13,7 @@ import {
   pickOrcaCloudAgent
 } from '@/lib/orca-cloud/orca-cloud-agent-picker'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { NewTabAgentMenuSettings } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import { isOrcaCloudSelection } from './run-target-options'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
 
@@ -31,7 +31,7 @@ type ComposerQuickAgentProps = Pick<
 /** The composer's agent: the user's pick when the launch host can start it, else the default. */
 export function useComposerQuickAgent(
   cardProps: ComposerQuickAgentProps,
-  settings: GlobalSettings | null | undefined,
+  settings: NewTabAgentMenuSettings | null | undefined,
   quickAgentOverride: TuiAgent | null | undefined,
   setQuickAgentOverride: (agent: TuiAgent | null | undefined) => void
 ) {
@@ -69,8 +69,9 @@ export function useComposerQuickAgent(
     selectedChoiceUnresolved: Boolean(quickAgentOverride && choicePending(quickAgentOverride)),
     disabledTuiAgents: settings?.disabledTuiAgents
   })
-  if (resolved.quickAgentOverride !== quickAgentOverride) {
-    // Repair invalid picks (e.g. a local-only agent once Orca Cloud is chosen) before children render it.
+  // Repair invalid picks before children render them. Orca Cloud only derives its agent, so a
+  // local-only pick returns when the user switches back to a host that has it.
+  if (!orcaCloud && resolved.quickAgentOverride !== quickAgentOverride) {
     setQuickAgentOverride(resolved.quickAgentOverride)
   }
   const quickAgent = resolved.quickAgent

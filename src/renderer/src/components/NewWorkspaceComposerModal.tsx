@@ -191,9 +191,12 @@ function QuickTabBody({
       entry?: AgentPickerEntry
     ) => {
       setQuickAgentOverride(agent)
-      setQuickAgentPick({ agent, surface, draft, entry, contextKey: observation.contextKey })
+      // Orca Cloud is terminal-only; keeping its surface would pin the agent to a terminal locally.
+      setQuickAgentPick(
+        orcaCloud ? { agent } : { agent, surface, draft, entry, contextKey: observation.contextKey }
+      )
     },
-    [observation.contextKey]
+    [observation.contextKey, orcaCloud]
   )
 
   const handleCreate = useCallback(async (): Promise<void> => {
