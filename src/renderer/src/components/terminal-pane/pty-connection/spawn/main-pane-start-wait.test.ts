@@ -38,7 +38,9 @@ const sendLayoutApply = vi.hoisted(() =>
 vi.mock('@/runtime/workspace-layout/commands/layout-apply-send', () => ({ sendLayoutApply }))
 const mainStartsPane = vi.hoisted(() => vi.fn(() => true))
 vi.mock('./main-starts-pane', () => ({ mainStartsPane, startMainPaneOnFirstView: vi.fn() }))
-vi.mock('../reattach/deferred-session-reattach-connect', () => ({ startDeferredSessionReattach: vi.fn() }))
+vi.mock('../reattach/deferred-session-reattach-connect', () => ({
+  startDeferredSessionReattach: vi.fn()
+}))
 
 const PANE_KEY = 'tab-1:leaf-1'
 

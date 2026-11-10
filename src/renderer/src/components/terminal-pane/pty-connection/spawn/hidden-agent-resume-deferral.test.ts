@@ -70,7 +70,8 @@ describe('deferHiddenAgentResume', () => {
   })
 
   it('consumes a pending wake mark when a visible or disposed pane bypasses the hidden deferral', async () => {
-    const { isPaneSpawnDeferred } = await import('@/lib/pane-spawn-deferral-registry')
+    const { isPaneSpawnDeferred } =
+      await import('@/components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry')
     wakeRequests.take.mockClear()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: deferHiddenAgentResume reads only these session members.
     const visible = {
@@ -148,7 +149,8 @@ describe('deferHiddenAgentResume', () => {
   })
 
   it('covers the start-request dispatch window and reads status by the session pane key', async () => {
-    const { isPaneSpawnDeferred } = await import('@/lib/pane-spawn-deferral-registry')
+    const { isPaneSpawnDeferred } =
+      await import('@/components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry')
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: deferHiddenAgentResume reads only these session members.
     const visible = {
       ...hiddenPaneSession(),

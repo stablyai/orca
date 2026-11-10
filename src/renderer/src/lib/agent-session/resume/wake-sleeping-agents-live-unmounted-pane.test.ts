@@ -7,7 +7,12 @@ import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { wakeSleepingAgentsForWorktreeInBackground } from './wake-sleeping-agents-in-background'
-import { hasSleepingAgentWakeRequest } from './sleeping-agent-wake-requests'
+import {
+  hasSleepingAgentWakeRequest,
+  takeSleepingAgentWakeRequest
+} from './sleeping-agent-wake-requests'
+import { markSleepingAgentWakeRequest } from './sleeping-agent-wake-request-registry'
+import { recordPaneIsOwnedByPreservedPane } from './sleeping-agent-pane-ownership'
 import { waitForWorktreeAgentActivationGateForTests } from '../../workspace/activation/worktree-agent-activation-gate'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
@@ -205,5 +210,30 @@ describe('background wake of a pane whose PTY the host still holds', () => {
     expect(await wakeAndSettle()).toBe('resumed')
 
     expect(queuedResumes()).toEqual([SESSION])
+  })
+
+  it('treats the dispatcher wake mark as pane ownership until it is consumed', () => {
+    const state = unmountedLivePaneState()
+    useAppStore.setState({
+      ...state,
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {
+        'tab-live': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: {}
+        }
+      }
+    })
+    const record = useAppStore.getState().sleepingAgentSessionsByPaneKey[PANE_KEY]!
+    // No live PTY, deferred pane, SSH target or in-place start: the tab alone owns nothing.
+    expect(recordPaneIsOwnedByPreservedPane(record, useAppStore.getState())).toBe(false)
+    // The wake promise is the ownership proof the fork decision consults.
+    markSleepingAgentWakeRequest(record)
+    expect(recordPaneIsOwnedByPreservedPane(record, useAppStore.getState())).toBe(true)
+    // Consuming the mark on mount releases ownership again, so a later sweep is not misled.
+    expect(takeSleepingAgentWakeRequest(record)).toBe(true)
+    expect(recordPaneIsOwnedByPreservedPane(record, useAppStore.getState())).toBe(false)
   })
 })
