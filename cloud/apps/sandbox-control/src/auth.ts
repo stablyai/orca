@@ -75,6 +75,25 @@ export function accountIdFor(claims: { sub: string; org?: string }): string {
   return claims.org ? `org:${claims.org}` : `user:${claims.sub}`
 }
 
+let stagingKeys: { source: string; keys: JWTVerifyGetKey } | null = null
+
+/** Staging auth's keys and issuer; never honored in prod. Same accounts as billing dev (it trusts staging too). */
+function stagingKeysFor(env: Env): { keys: JWTVerifyGetKey; issuer: string } | null {
+  const source = env.SANDBOX_STAGING_JWKS_URL ?? (env.SANDBOX_STAGING_JWKS ? `inline:${env.SANDBOX_STAGING_JWKS}` : null)
+  if (env.SANDBOX_ENV === 'prod' || !source || !env.SANDBOX_STAGING_AUTH_ISSUER) {
+    return null
+  }
+  if (stagingKeys?.source !== source) {
+    stagingKeys = {
+      source,
+      keys: env.SANDBOX_STAGING_JWKS_URL
+        ? createRemoteJWKSet(new URL(env.SANDBOX_STAGING_JWKS_URL))
+        : createLocalJWKSet(JSON.parse(env.SANDBOX_STAGING_JWKS ?? '{"keys":[]}') as JSONWebKeySet)
+    }
+  }
+  return { keys: stagingKeys.keys, issuer: env.SANDBOX_STAGING_AUTH_ISSUER }
+}
+
 /** Dev-only operator keys (issuer DEV_TEST_ISSUER) so live tests run before Orca auth mints sandbox tokens. */
 export const DEV_TEST_ISSUER = 'orca-sandbox-dev-test'
 let devKeys: { source: string; keys: JWTVerifyGetKey } | null = null
@@ -120,7 +139,10 @@ export async function authenticateDesktop(
   if (isDeviceToken(token)) {
     return authenticateDeviceToken(env.SANDBOX_DB, token, env.SANDBOX_JWT_AUDIENCE, now)
   }
-  const caller = await verify(token, keysFor(env), env, env.SANDBOX_AUTH_ISSUER, now)
+  const staging = stagingKeysFor(env)
+  const caller =
+    (await verify(token, keysFor(env), env, env.SANDBOX_AUTH_ISSUER, now)) ??
+    (staging ? await verify(token, staging.keys, env, staging.issuer, now) : null)
   if (caller || !env.SANDBOX_DEV_JWKS || env.SANDBOX_ENV === 'prod') {
     return caller && (await tokenPredatesRemoval(env.SANDBOX_DB, caller)) ? null : caller
   }
