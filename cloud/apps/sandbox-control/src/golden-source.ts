@@ -9,6 +9,8 @@ export type GitSource = { repoUrl: string; owner: string; repo: string; ref: str
 /** Paths whose changes reach the VM (orcad, the CLI, their packages and build). Renderer-only edits don't. */
 const VM_PATHS = [
   /^src\/(main|shared|cli|relay|orcad)\//,
+  // The image itself: provision, VM entry points, manifest pins (a script-only merge needs a rebuild too).
+  /^cloud\/apps\/sandbox-control\/image\/(?!.*\.test\.ts$)/,
   /^packages\//,
   /^mobile\//,
   /^config\/scripts\/(orcad-distribution|cli-build)\//,

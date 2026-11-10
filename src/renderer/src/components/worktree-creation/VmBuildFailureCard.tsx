@@ -3,7 +3,8 @@ import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
 import { VmBuildReveal } from './VmBuildReveal'
 import { isAccountGate, type VmBuildFailure } from './vm-build-failure'
-import { vmBuildFailureCopy } from './vm-build-failure-copy'
+import { getLastBillingStatus } from '@/components/billing/billing-summary-store'
+import { sandboxLimitFromBilling, vmBuildFailureCopy } from './vm-build-failure-copy'
 import { FailureActionRow, type VmBuildFailureActions } from './VmBuildFailureActions'
 import { CheckRow } from './VmBuildCheckRow'
 
@@ -54,12 +55,22 @@ export function VmBuildFailureCard({
   }
   const visible = failure ?? shown
   const copy = visible
-    ? vmBuildFailureCopy(visible, { cloud, canManageBilling, repoName }, t)
+    ? vmBuildFailureCopy(
+        visible,
+        {
+          cloud,
+          canManageBilling,
+          repoName,
+          sandboxLimit: sandboxLimitFromBilling(getLastBillingStatus())
+        },
+        t
+      )
     : null
   const headingRef = React.useRef<HTMLHeadingElement>(null)
   const cardRef = React.useRef<HTMLDivElement>(null)
   // Move focus to the card when it opens, so keyboard and screen-reader users land on the way forward.
-  React.useEffect(() => {
+  // Layout effect: focus lands before paint, so the collapsing card never strands it on <body>.
+  React.useLayoutEffect(() => {
     const card = cardRef.current
     const sheet = card?.closest('[data-vm-build-sheet]')
     const active = document.activeElement

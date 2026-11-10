@@ -31,6 +31,7 @@ import {
   getRuntimeEnvironmentTransportGeneration
 } from './runtime-environment-transport-generation'
 import { noteRuntimeEnvironmentSharedControlContact } from './runtime-environment-contact-loss'
+import { reconnectSharedControlIfIdle } from './runtime-environment-shared-control-reconnect'
 import { declareWslHostClient } from '../../wsl/host-lifecycle/wsl-host-client-declaration'
 
 type CachedRuntimeConnection = {
@@ -85,7 +86,7 @@ export function getRuntimeEnvironmentStatusOwner(
         ),
       establish: () => {
         ensureRemoteRuntimeSharedControlConnection(environment.id, pairedConnection)
-        reconnectRemoteRuntimeSharedControlConnection(environment.id)
+        reconnectSharedControlIfIdle(sharedControlConnections.get(environment.id)?.connection)
       },
       pause: () => pauseRemoteRuntimeSharedControlRetry(environment.id)
     })

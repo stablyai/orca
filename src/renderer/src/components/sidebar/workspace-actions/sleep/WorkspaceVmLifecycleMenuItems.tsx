@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
+import { useIsCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import { selectEphemeralVmWorkspaceRuntime } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import {
   resumeEphemeralVmWorkspace,
@@ -97,6 +98,8 @@ export function WorkspaceVmLifecycleMenuItems({
     })
   )
   const t = useTranslate()
+  // Orca Cloud speaks the product's lifecycle verbs (sleep / wake), never "Suspend/Resume VM".
+  const cloud = useIsCloudWorkspace(worktreeId)
   const action = getWorkspaceVmLifecycleAction(status, waking, canSuspend)
   if (!action) {
     return <>{sleepItems}</>
@@ -104,6 +107,7 @@ export function WorkspaceVmLifecycleMenuItems({
   const vmItem = (
     <VmLifecycleMenuItem
       action={action}
+      cloud={cloud}
       retry={status === 'resume_failed'}
       disabled={disabled}
       t={t}
@@ -134,6 +138,7 @@ export function WorkspaceVmLifecycleMenuItems({
 
 function VmLifecycleMenuItem({
   action,
+  cloud,
   retry,
   disabled,
   t,
@@ -141,6 +146,7 @@ function VmLifecycleMenuItem({
   onSuspend
 }: {
   action: NonNullable<WorkspaceVmLifecycleAction>
+  cloud: boolean
   retry: boolean
   disabled: boolean
   t: Translate
@@ -151,7 +157,9 @@ function VmLifecycleMenuItem({
     return (
       <DropdownMenuItem disabled>
         <Loader2 className="size-3.5 animate-spin" />
-        {t('workspace.vm.menu.waking', 'Waking VM…')}
+        {cloud
+          ? t('orcaCloudWorkspace.menu.waking', 'Waking…')
+          : t('workspace.vm.menu.waking', 'Waking VM…')}
       </DropdownMenuItem>
     )
   }
@@ -159,9 +167,13 @@ function VmLifecycleMenuItem({
     return (
       <DropdownMenuItem disabled={disabled} onSelect={onResume}>
         <Play className="size-3.5" />
-        {retry
-          ? t('workspace.vm.menu.retryResume', 'Retry Resume VM')
-          : t('workspace.vm.menu.resume', 'Resume VM')}
+        {cloud
+          ? retry
+            ? t('orcaCloudWorkspace.menu.retryWake', 'Try waking again')
+            : t('orcaCloudWorkspace.menu.wake', 'Wake')
+          : retry
+            ? t('workspace.vm.menu.retryResume', 'Retry Resume VM')
+            : t('workspace.vm.menu.resume', 'Resume VM')}
       </DropdownMenuItem>
     )
   }
@@ -170,14 +182,21 @@ function VmLifecycleMenuItem({
       <TooltipTrigger asChild>
         <DropdownMenuItem disabled={disabled} onSelect={onSuspend}>
           <Moon className="size-3.5" />
-          {t('workspace.vm.menu.suspend', 'Suspend VM')}
+          {cloud
+            ? t('orcaCloudWorkspace.menu.sleep', 'Sleep')
+            : t('workspace.vm.menu.suspend', 'Suspend VM')}
         </DropdownMenuItem>
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={8} className="max-w-[220px]">
-        {t(
-          'workspace.vm.menu.suspendDescription',
-          "Close this workspace's panels and suspend its VM. Opening the workspace wakes it."
-        )}
+        {cloud
+          ? t(
+              'orcaCloudWorkspace.menu.sleepDescription',
+              "Close this workspace's panels and put its sandbox to sleep. Opening the workspace wakes it."
+            )
+          : t(
+              'workspace.vm.menu.suspendDescription',
+              "Close this workspace's panels and suspend its VM. Opening the workspace wakes it."
+            )}
       </TooltipContent>
     </Tooltip>
   )

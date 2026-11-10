@@ -2,8 +2,12 @@
 export type CloudRemoteDesktopFailureCode =
   /** Not an Orca Cloud workspace, or this build has no control plane. */
   | 'not_cloud'
-  /** The workspace is asleep or still starting. */
+  /** The sandbox is asleep: waking it is the next step. */
   | 'not_running'
+  /** The workspace is archived: unarchive it first. */
+  | 'archived'
+  /** The sandbox is starting or waking: try again in a moment. */
+  | 'starting'
   /** The workspace's image predates the remote desktop. */
   | 'not_installed'
   | 'signed_out'
@@ -17,16 +21,12 @@ export type CloudRemoteDesktopResult =
   | { ok: false; code: CloudRemoteDesktopFailureCode }
 
 /**
- * noVNC page on the forwarded port. resize=remote makes the VM's screen follow the tab size;
- * reconnect rides out a forward re-dial. The password rides in the fragment, which never goes
- * over HTTP; it differs per VM boot, so a stale tab can never attach to another workspace.
+ * noVNC page on the forwarded port. It holds no secret: Orca hands the page a single-use ticket
+ * for each WebSocket after it loads (and again for a reconnect), so the URL can be shown, kept in
+ * the tab and restored. resize=remote makes the VM's screen follow the tab size; noVNC's own
+ * connect and reconnect are off because each attempt needs a ticket from Orca.
  */
-export function cloudRemoteDesktopUrl(localPort: number, path: string, password: string): string {
-  const params = new URLSearchParams({
-    autoconnect: '1',
-    resize: 'remote',
-    reconnect: '1',
-    reconnect_delay: '1000'
-  })
-  return `http://localhost:${localPort}/${path}?${params.toString()}#password=${encodeURIComponent(password)}`
+export function cloudRemoteDesktopUrl(localPort: number, path: string): string {
+  const params = new URLSearchParams({ autoconnect: '0', reconnect: '0', resize: 'remote' })
+  return `http://localhost:${localPort}/${path}?${params.toString()}`
 }

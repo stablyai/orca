@@ -94,7 +94,7 @@ async function main(): Promise<void> {
     }
     while (exitCode === null) {
       await new Promise((resolve) => setTimeout(resolve, 15_000))
-      ;({ exitCode } = await api.getCommand(sid, commandId))
+      ;({ exitCode } = await api.getCommand(sid, commandId, { wait: true, waitMs: 4_000 }))
       // The command status can stay "running" after the script exited; the marker file is the truth.
       exitCode ??= await marker()
       if (exitCode === null && Math.round((Date.now() - started) / 15_000) % 8 === 0) {

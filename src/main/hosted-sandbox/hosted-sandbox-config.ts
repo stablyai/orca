@@ -8,7 +8,11 @@ import { cleanCloudServiceUrl } from '../../shared/cloud-service-url'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
 import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
 import { runWithFreshOrcaCloudSession } from '../orca-profiles/profile-cloud-session-refresh'
-import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
+import {
+  ensureActiveOrcaProfile,
+  type ActiveOrcaProfileState
+} from '../orca-profiles/profile-index-store'
+import { getOrcaProfileIndexGeneration } from '../orca-profiles/profile-index-generation'
 import { EnvironmentProviderError } from '../environment-providers/environment-provider-driver'
 
 export type HostedSandboxConfig = {
@@ -32,6 +36,15 @@ const DevKeyFile = z.object({
   })
 })
 
+type CachedSandboxToken = {
+  token: string
+  expiresAt: number
+  /** Who the token speaks for; a different signed-in user, team or profile never reuses it. */
+  identity: string
+  /** Profile index generation the identity was last confirmed at. */
+  generation: number
+}
+
 /** Sandbox tokens are minted per call by Orca Cloud auth; cached until a minute before expiry. */
 export function getHostedSandboxConfig(
   userDataPath: string,
@@ -46,33 +59,81 @@ export function getHostedSandboxConfig(
   const devKeyFile = cloudDevSigningAllowed(packaged)
     ? env.ORCA_CLOUD_SANDBOX_DEV_KEY_FILE?.trim()
     : undefined
-  let cached: { token: string; expiresAt: number } | null = null
+  let cached: CachedSandboxToken | null = null
+  let inflight: {
+    identity: string
+    promise: Promise<{ token: string; expiresAt: number }>
+  } | null = null
+  const fresh = (entry: CachedSandboxToken | null): entry is CachedSandboxToken =>
+    entry !== null && entry.expiresAt - Date.now() > 60_000
+  const mint = (active: ActiveOrcaProfileState) =>
+    devKeyFile
+      ? mintDevSandboxToken(devKeyFile, active.profile.cloud, env)
+      : mintSandboxToken(userDataPath, active, env, packaged, fetchImpl)
   return {
     controlPlaneUrl,
     getAccessToken: async () => {
-      if (cached && cached.expiresAt - Date.now() > 60_000) {
+      // Why: sign-in, sign-out and team or profile switches all rewrite the profile index. A token
+      // minted for the previous identity would create sandboxes the new one can't see or delete.
+      if (fresh(cached) && cached.generation === getOrcaProfileIndexGeneration()) {
         return cached.token
       }
-      cached = devKeyFile
-        ? await mintDevSandboxToken(
-            devKeyFile,
-            ensureActiveOrcaProfile(userDataPath).profile.cloud,
-            env
-          )
-        : await mintSandboxToken(userDataPath, env, packaged, fetchImpl)
-      return cached.token
+      for (let attempt = 0; ; attempt++) {
+        const generation = getOrcaProfileIndexGeneration()
+        const active = ensureActiveOrcaProfile(userDataPath)
+        const identity = sandboxIdentity(active)
+        if (fresh(cached) && cached.identity === identity) {
+          cached = { ...cached, generation }
+          return cached.token
+        }
+        // Concurrent callers for the same identity share one mint.
+        let shared = inflight?.identity === identity ? inflight : null
+        if (!shared) {
+          const entry = { identity, promise: mint(active) }
+          shared = entry
+          inflight = entry
+          void entry.promise
+            .catch(() => undefined)
+            .finally(() => {
+              if (inflight === entry) {
+                inflight = null
+              }
+            })
+        }
+        const minted = await shared.promise
+        // An identity change while minting must not hand the old identity's token to the caller.
+        if (
+          generation !== getOrcaProfileIndexGeneration() &&
+          sandboxIdentity(ensureActiveOrcaProfile(userDataPath)) !== identity
+        ) {
+          if (attempt >= 2) {
+            throw new EnvironmentProviderError(
+              'unavailable',
+              'Your Orca account changed while signing in to Orca Cloud. Try again.'
+            )
+          }
+          continue
+        }
+        cached = { ...minted, identity, generation }
+        return minted.token
+      }
     }
   }
 }
 
+function sandboxIdentity(active: ActiveOrcaProfileState): string {
+  const cloud = active.profile.cloud
+  return JSON.stringify([active.profile.id, cloud?.userId ?? null, cloud?.activeOrgId ?? null])
+}
+
 async function mintSandboxToken(
   userDataPath: string,
+  active: ActiveOrcaProfileState,
   env: NodeJS.ProcessEnv,
   packaged: boolean,
   fetchImpl: typeof fetch
 ): Promise<{ token: string; expiresAt: number }> {
   const auth = getOrcaCloudAuthConfig(env, packaged)
-  const active = ensureActiveOrcaProfile(userDataPath)
   if (!auth.configured || !active.profile.cloud) {
     throw new EnvironmentProviderError('unauthorized', 'Sign in to Orca to use Orca Cloud.')
   }
@@ -119,16 +180,23 @@ async function mintSandboxToken(
   return result.value
 }
 
-/** Dev builds only: sign with the dev operator key the dev control plane trusts (issuer orca-sandbox-dev-test). */
+/**
+ * Dev builds only: sign with the dev operator key the dev control plane trusts (issuer
+ * orca-sandbox-dev-test), as the signed-in Orca user. Signed out is an error, never a fallback
+ * identity: a sandbox created as anyone else can't be kept alive or deleted after sign-in.
+ */
 async function mintDevSandboxToken(
   keyFile: string,
   cloud: { userId: string; activeOrgId?: string; displayName?: string } | undefined,
   env: NodeJS.ProcessEnv
 ): Promise<{ token: string; expiresAt: number }> {
-  const userId = cloud?.userId
+  const userId = cloud?.userId?.trim()
+  if (!cloud || !userId) {
+    throw new EnvironmentProviderError('unauthorized', 'Sign in to Orca to use Orca Cloud.')
+  }
   // Team dogfood: two dev profiles in one dev org share workspaces; the role comes from env.
   const orgRole = env.ORCA_CLOUD_SANDBOX_DEV_ORG_ROLE?.trim()
-  const org = cloud?.activeOrgId
+  const org = cloud.activeOrgId
     ? {
         org: cloud.activeOrgId,
         org_role: orgRole === 'owner' || orgRole === 'admin' ? orgRole : 'member'
@@ -143,9 +211,9 @@ async function mintDevSandboxToken(
     kid: parsed.private.kid ?? 'dev1'
   })
   const payload = encode({
-    sub: userId ?? 'desktop-dogfood',
+    sub: userId,
     // Auth mints a display-name claim; dev tokens carry one so labels look real.
-    ...(cloud?.displayName ? { name: cloud.displayName.slice(0, 80) } : {}),
+    ...(cloud.displayName ? { name: cloud.displayName.slice(0, 80) } : {}),
     ...org,
     purpose: 'sandbox',
     iss: 'orca-sandbox-dev-test',

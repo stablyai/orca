@@ -26,9 +26,16 @@ flock -w 60 9
 # background (ready is not delayed); `repo add` of an already-registered path is a no-op error.
 register_project() {
   [ -x "$ORCA_HOME/bin/orca" ] && [ -d "$PROJECT" ] || return 0
-  local kind=()
+  local kind=() name=()
   [ -e "$PROJECT/.git" ] || kind=(--kind folder)
-  setsid "$ORCA_HOME/bin/orca" repo add --path "$PROJECT" "${kind[@]}" --json \
+  # The checkout lives at .../project; name it after the repository (owner/name.git -> name).
+  if [ -n "${ORCA_REPO_URL:-}" ]; then
+    local base="${ORCA_REPO_URL%/}"
+    base="${base##*/}"
+    base="${base%.git}"
+    [ -n "$base" ] && name=(--display-name "$base")
+  fi
+  setsid "$ORCA_HOME/bin/orca" repo add --path "$PROJECT" "${kind[@]}" "${name[@]}" --json \
     >"$STATE/register-project.log" 2>&1 </dev/null 9>&- &
 }
 

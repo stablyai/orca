@@ -4,6 +4,7 @@ import { formatRepoList, formatRepoRefs, formatRepoShow, printResult } from '../
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalRepoKind,
+  getOptionalStringFlag,
   getRequiredStringFlag
 } from '../flags'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
@@ -18,10 +19,12 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
   'repo add': async ({ flags, client, cwd, json }) => {
     const repoPath = getRequiredStringFlag(flags, 'path')
     const kind = getOptionalRepoKind(flags)
+    const displayName = getOptionalStringFlag(flags, 'display-name')
     const result = await client
       .call<{ repo: Record<string, unknown> }>('repo.add', {
         path: resolveRepoPathArgument(repoPath, cwd, client.isRemote, 'Remote repo add'),
-        ...(kind === undefined ? {} : { kind })
+        ...(kind === undefined ? {} : { kind }),
+        ...(displayName === undefined ? {} : { displayName })
       })
       .catch((error: unknown) => {
         if (

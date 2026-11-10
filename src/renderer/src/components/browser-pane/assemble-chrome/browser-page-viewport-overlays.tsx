@@ -21,6 +21,7 @@ import { BrowserLoadFailureOverlay } from '../navigate/browser-load-failure-over
 import { useSshWorkspaceBrowserLoadFailureRoute } from '../use-ssh-workspace-browser-route'
 import type { BrowserLoadFailureAutoRetry } from '../navigate/browser-load-failure-auto-retry'
 import BrowserFind from './BrowserFind'
+import { RemoteDesktopKeyboardHint } from '../../cloud-remote-desktop/RemoteDesktopKeyboardHint'
 import { BrowserNewTabPage } from '../new-tab/BrowserNewTabPage'
 import { BrowserGuestAnnotateOverlays } from '../annotate/browser-guest-annotate-overlays'
 import { BrowserPasswordFillDropdown } from '../passwords/BrowserPasswordFillDropdown'
@@ -116,6 +117,7 @@ export function BrowserPageViewportOverlays({
         webviewRef={webviewRef}
       />
       <BrowserLinkStatusBubble browserPageId={browserTab.id} />
+      <RemoteDesktopKeyboardHint browserPageId={browserTab.id} webviewRef={webviewRef} />
       {showFailureOverlay && browserTab.loadError ? (
         <BrowserPageLoadFailure
           browserTab={browserTab}

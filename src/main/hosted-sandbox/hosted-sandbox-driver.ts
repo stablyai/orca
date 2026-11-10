@@ -25,12 +25,16 @@ import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-p
 
 export const HOSTED_SANDBOX_DRIVER_ID = 'orca-cloud'
 
+/** Destroy failure reason: the control plane didn't confirm the sandbox is gone. */
+export const HOSTED_SANDBOX_DELETE_NOT_CONFIRMED = 'delete_not_confirmed'
+
 /** Measured on Vercel: stop is a reboot (PTYs lost), disk persists, Pro caps a session at 24h. */
 export const HOSTED_SANDBOX_CAPABILITIES: HostedEnvironmentCapabilities = Object.freeze({
   memoryPause: false,
   maxSessionMs: 24 * 60 * 60_000,
   fsPersistOnStop: true,
   egressInjection: true,
+  // Fallback only: the control plane's status (`idleSleepMinutes`) wins once read.
   idleStopMs: ORCA_CLOUD_IDLE_SLEEP_MINUTES * 60_000
 })
 
@@ -84,13 +88,28 @@ export function createHostedSandboxDriver(
 
     async destroy(handle, ctx) {
       ctx?.onProgress?.({ phase: 'destroying' })
+      let view: HostedSandboxView
       try {
-        await client.destroy(sandboxIdOf(handle), ctx?.signal)
+        view = await client.destroy(sandboxIdOf(handle), ctx?.signal)
       } catch (error) {
-        // Why: destroy is the cleanup of last resort, so an environment that is already gone is done.
-        if (!isEnvironmentProviderError(error, 'not_found')) {
-          throw error
+        // Why: the control plane keeps a tombstone for every sandbox it ever made, so a repeat
+        // delete answers "destroyed". not_found means this identity can't see it (another account,
+        // team or a signed-out token): the sandbox may still be running and billing. Never call
+        // that deleted.
+        if (isEnvironmentProviderError(error, 'not_found')) {
+          throw new EnvironmentProviderError(
+            'not_found',
+            "Orca Cloud couldn't confirm this sandbox was deleted.",
+            HOSTED_SANDBOX_DELETE_NOT_CONFIRMED
+          )
         }
+        throw error
+      }
+      if (view.status !== 'destroyed') {
+        throw new EnvironmentProviderError(
+          'unavailable',
+          `Orca Cloud answered ${view.status} instead of destroyed.`
+        )
       }
     },
 

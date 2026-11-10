@@ -55,6 +55,28 @@ describe('Orca Cloud built-in recipe steps', () => {
     expect([...plane.sandboxes.values()].map((s) => s.status)).toEqual(['destroyed'])
   })
 
+  it('fails the delete step when the control plane does not confirm the sandbox is gone', async () => {
+    const { plane, step } = setup()
+    const created = await step({ mode: 'create', repoPath, context })
+    const parsed = parseEphemeralVmRecipeResult(created.stdout)
+    if (!parsed.ok) {
+      throw new Error('expected a recipe result')
+    }
+    // A sandbox this identity can't see answers not_found while it keeps running.
+    plane.sandboxes.clear()
+    const stdin = JSON.stringify(
+      buildEphemeralVmRecipeLifecyclePayload({
+        mode: 'destroy',
+        recipe: ORCA_CLOUD_RECIPE,
+        context,
+        recipeResult: parsed.result
+      })
+    )
+    const destroyed = await step({ mode: 'destroy', repoPath, context, stdin })
+    expect(destroyed.exitCode).toBe(1)
+    expect(destroyed.failure?.errorCode).toBe('cloudDeleteNotConfirmed')
+  })
+
   it('turns a billing refusal into the plan upsell failure', async () => {
     const { plane, step } = setup()
     plane.denyNextStart('no_subscription')

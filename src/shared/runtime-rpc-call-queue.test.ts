@@ -100,6 +100,44 @@ describe('runtime RPC call queue', () => {
     await expect(Promise.all(reads)).resolves.toEqual(Array(6).fill('chunk'))
   })
 
+  it('runs a download in its own four-wide lane beside preview reads', async () => {
+    const queue = new RuntimeRpcCallQueuePool(8, 2)
+    const previewRelease: (() => void)[] = []
+    const downloadRelease: (() => void)[] = []
+    const previews = Array.from({ length: 3 }, () =>
+      queue.enqueue('web-runtime', 'files.readChunk', async () => {
+        await new Promise<void>((resolve) => previewRelease.push(resolve))
+        return 'preview'
+      })
+    )
+    const downloads = Array.from({ length: 6 }, () =>
+      queue.enqueue(
+        'web-runtime',
+        'files.readChunk',
+        async () => {
+          await new Promise<void>((resolve) => downloadRelease.push(resolve))
+          return 'page'
+        },
+        0,
+        undefined,
+        'download'
+      )
+    )
+    await vi.waitFor(() => expect(downloadRelease).toHaveLength(4))
+    expect(previewRelease).toHaveLength(2)
+
+    for (let finished = 0; finished < 6; finished += 1) {
+      await vi.waitFor(() => expect(downloadRelease.length).toBeGreaterThan(0))
+      downloadRelease.shift()?.()
+    }
+    await expect(Promise.all(downloads)).resolves.toEqual(Array(6).fill('page'))
+    for (let finished = 0; finished < 3; finished += 1) {
+      await vi.waitFor(() => expect(previewRelease.length).toBeGreaterThan(0))
+      previewRelease.shift()?.()
+    }
+    await expect(Promise.all(previews)).resolves.toEqual(Array(3).fill('preview'))
+  })
+
   it('frees the queue slot when a runtime call throws synchronously', async () => {
     const queue = new RuntimeRpcCallQueuePool(1, 1)
     const first = queue.enqueue('web-runtime', 'status.get', () => {

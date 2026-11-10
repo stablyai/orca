@@ -165,6 +165,11 @@ export function mergePreviousProjectMetadata(
   if (localBadgeColor !== null) {
     // Why: badge color is per-host repo metadata; a remote host sharing the project must not repaint the color the user chose locally.
     project.badgeColor = localBadgeColor
+    if (hostId !== LOCAL_EXECUTION_HOST_ID) {
+      // Why: a remote host names its checkout after its own folder (an Orca Cloud sandbox clones
+      // into ".../project"); that must not rename a project this computer already knows by name.
+      project.displayName = previous.displayName
+    }
   }
   if (hostId === LOCAL_EXECUTION_HOST_ID) {
     // Why: localWindowsRuntimePreference belongs to the local host; a local refresh that omits it is authoritative and clears stale renderer state.

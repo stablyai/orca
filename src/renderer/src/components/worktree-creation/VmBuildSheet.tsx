@@ -27,6 +27,7 @@ import {
 } from './vm-build-failure'
 import { deriveVmBuildSteps, isOrcaCloudBuild, type VmBuildStep } from './vm-build-steps'
 import { useMinimumRunningSteps } from './use-minimum-running-steps'
+import { useRetryAfterCloudSignIn } from './use-retry-after-cloud-sign-in'
 import {
   connectOrcaCloudGitHub,
   orcaCloudRepoName,
@@ -152,13 +153,14 @@ export function VmBuildSheet({
     void connectOrcaCloudGitHub().finally(() => setConnectingGitHub(false))
   }
 
+  const retryAfterSignIn = useRetryAfterCloudSignIn(failure?.kind === 'signIn', onRetry)
   const signIn = (): void => {
     void useAppStore
       .getState()
       .connectCurrentOrcaProfile()
       .then((result) => {
         if (result?.status === 'connected') {
-          onRetry()
+          retryAfterSignIn()
         }
       })
       .catch((signInError: unknown) => {
@@ -173,10 +175,7 @@ export function VmBuildSheet({
           <div className="flex items-center gap-2">
             <span className="grid size-4 shrink-0 place-items-center">
               {building ? (
-                <Loader2
-                  aria-hidden
-                  className="size-4 text-muted-foreground motion-safe:animate-spin"
-                />
+                <Loader2 aria-hidden className="size-4 text-muted-foreground animate-spin" />
               ) : state === 'ready' ? (
                 <CircleCheck aria-hidden className="size-4 text-foreground" />
               ) : gated ? (

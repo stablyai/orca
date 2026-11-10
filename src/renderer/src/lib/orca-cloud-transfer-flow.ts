@@ -1,67 +1,123 @@
 // "Move to this computer" for an Orca Cloud workspace: wake it if asleep, pack and download over
 // orcad, create the local workspace through the ordinary create path (reusing the transferred
 // branch), apply the uncommitted work and chats, then open it. The cloud workspace is left as is.
+// Progress, success and failure render in CloudMoveToComputerDialog (orca-cloud-move-store).
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import {
+  getCloudMoveState,
+  noteCloudWorkspaceMoved,
+  setCloudMoveState,
+  type CloudMoveStep
+} from '@/lib/orca-cloud/orca-cloud-move-store'
 import type { CloudTransferProgressEvent } from '../../../shared/hosted-sandbox/cloud-transfer-api'
 
-const PHASE_COPY: Record<CloudTransferProgressEvent['phase'], [string, string]> = {
-  packing: ['auto.lib.orcaCloudTransfer.packing', 'Packing the cloud workspace…'],
-  downloading: ['auto.lib.orcaCloudTransfer.downloading', 'Downloading…'],
-  importing: ['auto.lib.orcaCloudTransfer.importing', 'Bringing the branch over…'],
-  'creating-worktree': ['auto.lib.orcaCloudTransfer.creating', 'Creating the local workspace…'],
-  applying: ['auto.lib.orcaCloudTransfer.applying', 'Applying uncommitted changes and chats…'],
-  done: ['auto.lib.orcaCloudTransfer.done', 'Moved to this computer'],
-  failed: ['auto.lib.orcaCloudTransfer.failed', 'Could not move the workspace']
+const STEP_OF_PHASE: Partial<Record<CloudTransferProgressEvent['phase'], CloudMoveStep>> = {
+  packing: 'packing',
+  downloading: 'downloading',
+  importing: 'downloading',
+  'creating-worktree': 'creating',
+  applying: 'applying'
 }
 
-function formatBytes(bytes: number): string {
-  return bytes >= 1024 * 1024
-    ? `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-    : `${Math.ceil(bytes / 1024)} KB`
-}
+/** A move that hasn't settled by now is reported as failed (the pack or download stalled). */
+export const MOVE_TIMEOUT_MS = 15 * 60_000
 
-export async function runOrcaCloudTransferToLocal(workspaceId: string): Promise<void> {
+/** The run that holds the one-move-at-a-time guard; a timed-out run releases it. */
+let inFlightRun: number | null = null
+let runCounter = 0
+
+export async function runOrcaCloudTransferToLocal(
+  workspaceId: string,
+  name: string,
+  options: { archiveAfter?: boolean; onArchive?: (workspaceId: string, name: string) => void } = {}
+): Promise<void> {
   const api = window.api?.orcaCloudWorkspace
-  if (!api?.prepareTransferToLocal) {
+  // One move at a time: a second click (or a retry racing the first) must not start another pack.
+  if (!api?.prepareTransferToLocal || inFlightRun !== null) {
     return
   }
-  const toastId = `orca-cloud-transfer-${workspaceId}`
-  const show = (phase: CloudTransferProgressEvent['phase'], detail?: string): void => {
-    const [key, fallback] = PHASE_COPY[phase]
-    toast.loading(translate(key, fallback), {
-      id: toastId,
-      description: detail,
-      duration: Infinity
-    })
+  const run = ++runCounter
+  inFlightRun = run
+  const archiveAfter = options.archiveAfter ?? false
+  const startedAt = Date.now()
+  let step: CloudMoveStep = 'packing'
+  let skipped: CloudMoveStep[] = ['waking']
+  let bytes: number | null = null
+  let totalBytes: number | null = null
+  let timedOut = false
+  let localWorktreeId: string | null = null
+  const isHidden = (): boolean => {
+    const current = getCloudMoveState()
+    return current.stage === 'running' && current.hidden
   }
-  const dispose = api.onTransferProgress((event) => {
-    if (event.workspaceId !== workspaceId || event.phase === 'failed' || event.phase === 'done') {
+  const publish = (): void => {
+    if (timedOut) {
       return
     }
-    show(
-      event.phase,
-      event.phase === 'downloading' && event.bytes ? formatBytes(event.bytes) : undefined
-    )
+    const previous = getCloudMoveState()
+    setCloudMoveState({
+      stage: 'running',
+      workspaceId,
+      name,
+      step,
+      skipped,
+      startedAt,
+      bytes,
+      totalBytes,
+      archiveAfter,
+      hidden: previous.stage === 'running' ? previous.hidden : false
+    })
+  }
+  const timeout = setTimeout(() => {
+    // Stop waiting: release the guard so Try again works; this run's late results are ignored
+    // except a late success, which still lands as a notice (the workspace really is here).
+    timedOut = true
+    if (inFlightRun === run) {
+      inFlightRun = null
+    }
+    setCloudMoveState({
+      stage: 'failed',
+      workspaceId,
+      name,
+      step,
+      timedOut: true,
+      localWorktreeId,
+      archiveAfter,
+      hidden: isHidden()
+    })
+  }, MOVE_TIMEOUT_MS)
+  const live = (): boolean => !timedOut && getCloudMoveState().stage === 'running'
+  const dispose = api.onTransferProgress((event) => {
+    const next = event.workspaceId === workspaceId ? STEP_OF_PHASE[event.phase] : undefined
+    if (!next) {
+      return
+    }
+    step = next
+    bytes = event.bytes ?? bytes
+    totalBytes = event.totalBytes ?? totalBytes
+    publish()
   })
   try {
-    show('packing')
+    publish()
     let prepared = await api.prepareTransferToLocal({ workspaceId })
     if (!prepared.ok && prepared.code === 'asleep') {
-      toast.loading(translate('auto.lib.orcaCloudTransfer.waking', 'Waking the workspace…'), {
-        id: toastId,
-        duration: Infinity
-      })
+      step = 'waking'
+      skipped = []
+      publish()
       await window.api.ephemeralVm.resumeWorkspace({ workspaceId })
+      step = 'packing'
+      publish()
       prepared = await api.prepareTransferToLocal({ workspaceId })
     }
     if (!prepared.ok) {
       throw new Error(prepared.message)
     }
     const { transferId, repoId, branch, baseBranch } = prepared.value
-    show('creating-worktree')
+    step = 'creating'
+    publish()
     const { worktree } = await useAppStore
       .getState()
       .createWorktree(
@@ -92,35 +148,69 @@ export async function runOrcaCloudTransferToLocal(workspaceId: string): Promise<
         undefined,
         { branchIntent: 'open-existing-v2' }
       )
+    localWorktreeId = worktree.id
+    step = 'applying'
+    publish()
     const finished = await api.finishTransferToLocal({ transferId, worktreePath: worktree.path })
     if (!finished.ok) {
       throw new Error(finished.message)
     }
-    const { claudeSessions, codexSessions, leftoverPatchDir } = finished.value
-    const chats = claudeSessions + codexSessions
-    toast.success(translate('auto.lib.orcaCloudTransfer.done', 'Moved to this computer'), {
-      id: toastId,
-      duration: 8_000,
-      description: leftoverPatchDir
-        ? translate(
-            'auto.lib.orcaCloudTransfer.leftovers',
-            'Some changes did not apply cleanly; they were saved to {{dir}}.',
-            { dir: leftoverPatchDir }
-          )
-        : translate(
-            'auto.lib.orcaCloudTransfer.summary',
-            'Branch {{branch}} with your uncommitted changes and agent chats ({{count}}). The cloud workspace is unchanged.',
-            { branch, count: chats }
-          )
+    if (timedOut) {
+      noteCloudWorkspaceMoved(workspaceId, Date.now(), worktree.id)
+      toast.success(
+        translate('orcaCloudMove.notice.lateDone', '{{name}} finished moving to this computer', {
+          name
+        }),
+        {
+          duration: 12_000,
+          action: {
+            label: translate('orcaCloudMove.done.open', 'Open workspace'),
+            onClick: () => activateAndRevealWorktree(worktree.id)
+          }
+        }
+      )
+      return
+    }
+    noteCloudWorkspaceMoved(workspaceId, Date.now(), worktree.id)
+    const hidden = isHidden()
+    setCloudMoveState({
+      stage: 'done',
+      workspaceId,
+      name,
+      localWorktreeId: worktree.id,
+      prepared: prepared.value,
+      finished: finished.value,
+      elapsedMs: Date.now() - startedAt,
+      archivedAfter: archiveAfter,
+      hidden
     })
-    activateAndRevealWorktree(worktree.id)
+    // Hidden: the user kept working elsewhere; the notice offers Open instead of jumping there.
+    if (!hidden) {
+      activateAndRevealWorktree(worktree.id)
+    }
+    if (archiveAfter) {
+      options.onArchive?.(workspaceId, name)
+    }
   } catch (error) {
-    toast.error(translate('auto.lib.orcaCloudTransfer.failed', 'Could not move the workspace'), {
-      id: toastId,
-      duration: 12_000,
-      description: error instanceof Error ? error.message : String(error)
-    })
+    // Details go to the log, not the dialog (error tone: plain words, nothing lost, one action).
+    console.error('[orca-cloud] move to this computer failed', error)
+    if (live()) {
+      setCloudMoveState({
+        stage: 'failed',
+        workspaceId,
+        name,
+        step,
+        timedOut: false,
+        localWorktreeId,
+        archiveAfter,
+        hidden: isHidden()
+      })
+    }
   } finally {
+    clearTimeout(timeout)
+    if (inFlightRun === run) {
+      inFlightRun = null
+    }
     dispose()
   }
 }

@@ -198,13 +198,14 @@ export async function revokeWorkspaceTokens(db: D1Database, sandboxId: string, n
     .run()
 }
 
-export function apiKeyView(row: ApiKeyRow) {
+export function apiKeyView(row: ApiKeyRow, names: ReadonlyMap<string, string> = new Map()) {
   return {
     id: row.id,
     name: row.name,
     prefix: row.prefix,
     scopes: row.scopes.split(' ').filter(Boolean),
     createdBy: row.created_by,
+    createdByName: names.get(row.created_by) ?? null,
     createdAt: row.created_at,
     lastUsedAt: row.last_used_at,
     expiresAt: row.expires_at

@@ -5,7 +5,10 @@ import {
   openCloudRemoteDesktop
 } from '../hosted-sandbox/hosted-remote-desktop'
 import type { HostedSandboxControlPlaneClient } from '../hosted-sandbox/hosted-sandbox-control-plane-client'
-import { openRuntimePortForward } from '../runtime-port-forward/runtime-port-forward-manager'
+import {
+  getRuntimePortForwardManager,
+  openRuntimePortForward
+} from '../runtime-port-forward/runtime-port-forward-service'
 
 function environmentIdOf(value: unknown): string | null {
   const id =
@@ -33,7 +36,11 @@ export function registerCloudRemoteDesktopHandlers(client: HostedSandboxControlP
         {
           userDataPath: app.getPath('userData'),
           client,
-          openForward: openRuntimePortForward
+          openForward: openRuntimePortForward,
+          isForwardLive: ({ environmentId: env, localPort, remotePort }) =>
+            getRuntimePortForwardManager()
+              ?.list(env)
+              .some((f) => f.localPort === localPort && f.remotePort === remotePort) ?? false
         },
         environmentId
       )

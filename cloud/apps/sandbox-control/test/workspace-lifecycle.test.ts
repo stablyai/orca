@@ -325,3 +325,30 @@ describe('adopted wakes boot like real wakes', () => {
     expect((h.raw.prepare('SELECT usage_settled_at FROM sandboxes WHERE id = ?').get(id) as any).usage_settled_at).toBe(cursor)
   })
 })
+
+describe('idle sleep minutes', () => {
+  it('reports one idle-sleep value, equal to the billing plan, overridable by IDLE_SLEEP_MINUTES, only to clients that ask', async () => {
+    const { DEFAULT_PLANS } = await import('../../billing/src/plans')
+    const { DEFAULT_IDLE_SLEEP_MINUTES } = await import('../src/workspace-lifecycle')
+    expect(DEFAULT_IDLE_SLEEP_MINUTES).toBe(DEFAULT_PLANS.team.idleSleepMinutes)
+    const statusOf = async (h: Awaited<ReturnType<typeof createHarness>>, id: string, features?: string) => {
+      const response = await h.send(
+        new Request(`https://sandbox.test/v1/sandboxes/${id}/status`, {
+          headers: {
+            authorization: `Bearer ${await h.token('alice')}`,
+            ...(features ? { 'x-orca-sandbox-features': features } : {})
+          }
+        })
+      )
+      return ((await response.json()) as any).status
+    }
+    const { h, id } = await running()
+    // Older strict desktops never see the new field.
+    expect((await statusOf(h, id)).idleSleepMinutes).toBeUndefined()
+    const status = HostedWorkspaceStatusResponseSchema.parse({ sandbox: (await h.call('GET', `/v1/sandboxes/${id}`)).body.sandbox, status: await statusOf(h, id, 'archive,idle-minutes') }).status
+    expect(status.idleSleepMinutes).toBe(15)
+    const custom = await createHarness({ IDLE_SLEEP_MINUTES: '7' })
+    const made = (await custom.call('POST', '/v1/sandboxes', { body: create })).body
+    expect((await statusOf(custom, made.sandbox.id, 'idle-minutes')).idleSleepMinutes).toBe(7)
+  })
+})

@@ -15,6 +15,7 @@ function setup(options: { source?: string; seedExpiresInMs?: number; fetch?: typ
   const expiries = new Map<string, number | null>([['snap_seed', options.seedExpiresInMs === undefined ? null : now + options.seedExpiresInMs]])
   vercel.snapshots.set('snap_seed', { id: 'snap_seed', status: 'created', sourceSessionId: 'sess_seed', sandboxName: 'build', creationMethod: 'manual', createdAt: now })
   const commands = new Map<string, number | null>()
+  const commandReads: { wait?: boolean; waitMs?: number }[] = []
   let counter = 0
   const golden: GoldenImageProviderApi = {
     async createBuildSandbox(params) {
@@ -36,7 +37,8 @@ function setup(options: { source?: string; seedExpiresInMs?: number; fetch?: typ
       commands.set(id, null)
       return id
     },
-    async getCommand(_session, commandId) {
+    async getCommand(_session, commandId, options) {
+      commandReads.push(options ?? {})
       return { exitCode: commands.get(commandId) ?? null }
     },
     async streamCommandLogs() {
@@ -57,6 +59,7 @@ function setup(options: { source?: string; seedExpiresInMs?: number; fetch?: typ
     deps,
     vercel,
     commands,
+    commandReads,
     raw,
     advance: (ms: number) => (now += ms),
     statuses: () => raw.prepare('SELECT source, status, snapshot_id FROM golden_images ORDER BY source DESC').all()
@@ -154,6 +157,9 @@ describe('golden image rotation', () => {
     expect(appCalls).toEqual(['GET /repos/acme/orca-private/installation', 'POST /app/installations/9/access_tokens'])
     t.commands.set([...t.commands.keys()][0]!, 0)
     expect(await advanceGoldenImages(t.deps)).toBe('built')
+    // Exit codes come only to waiting readers (W1/W9): every poll is a bounded wait=true read.
+    expect(t.commandReads.length).toBeGreaterThan(0)
+    expect(t.commandReads.every((read) => read.wait === true && (read.waitMs ?? 0) > 0)).toBe(true)
     expect(await advanceGoldenImages(t.deps)).toBe('activated')
     const active = () => t.raw.prepare(`SELECT bundle_sha256 FROM golden_images WHERE status = 'active'`).get() as { bundle_sha256: string }
     expect(active().bundle_sha256).toBe(`git:${SHA_A}`)
@@ -172,6 +178,8 @@ describe('golden image rotation', () => {
     expect(touchesVm('src/shared/hosted-sandbox/wire.ts')).toBe(true)
     expect(touchesVm('pnpm-lock.yaml')).toBe(true)
     expect(touchesVm('src/renderer/src/App.tsx')).toBe(false)
+    expect(touchesVm('cloud/apps/sandbox-control/image/vm/orca-desktop-proxy')).toBe(true)
+    expect(touchesVm('cloud/apps/sandbox-control/image/golden-image.test.ts')).toBe(false)
     expect(touchesVm('cloud/apps/billing/src/index.ts')).toBe(false)
   })
 })

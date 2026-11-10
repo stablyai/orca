@@ -5,20 +5,31 @@ import type { HostedSandboxConfigResponse } from '../../shared/hosted-sandbox/ho
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import { failure } from './hosted-workspace-runtime'
 
+const CONFIG_TTL_MS = 5 * 60_000
+
 export const HOSTED_ACCOUNT_CHANNELS = [CH.getConfig, CH.connectGitHub] as const
 
 export function registerHostedAccountHandlers(
   client: Pick<HostedSandboxControlPlaneClient, 'config' | 'connectGitHub'>
 ): void {
-  // Timings move slowly and the Worker caches them for 5 minutes; one read per app session is plenty.
-  let config: Promise<HostedSandboxConfigResponse | null> | null = null
+  // The Worker re-measures every 5 minutes; match it so each new build sheet sees a fresh median.
+  let config: { at: number; value: Promise<HostedSandboxConfigResponse | null> } | null = null
   ipcMain.handle(CH.getConfig, () => {
-    config ??= client.config().catch(() => {
-      // Offline now says nothing about later: ask again next time.
-      config = null
-      return null
-    })
-    return config
+    const now = Date.now()
+    if (!config || now - config.at >= CONFIG_TTL_MS) {
+      const entry = {
+        at: now,
+        value: client.config().catch(() => {
+          // Offline now says nothing about later: ask again next time.
+          if (config === entry) {
+            config = null
+          }
+          return null
+        })
+      }
+      config = entry
+    }
+    return config.value
   })
 
   ipcMain.handle(CH.connectGitHub, async () => {

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import { VmBuildSheet } from '../worktree-creation/VmBuildSheet'
@@ -99,6 +99,34 @@ export const buildReadyTeam = sheet({
   canShare: false
 })
 
+/** The sandbox reports in while the user is on the queued sign-in row: the row stays, focused. */
+function HandedOffStep(): React.JSX.Element {
+  const [handedOff, setHandedOff] = useState(false)
+  useEffect(() => {
+    document.querySelector<HTMLElement>('[data-vm-build-cloud-agent]')?.focus()
+    setHandedOff(true)
+  }, [])
+  return (
+    <VmBuildCloudAgentStepView
+      model={{ readiness: NONE, canShare: false }}
+      actions={actions}
+      initialMode={{ kind: 'signIn' }}
+      handedOff={handedOff}
+    />
+  )
+}
+
+export const buildSignInHandedOff = defineFixture({
+  width: 760,
+  render: () => (
+    <div className="bg-background p-3">
+      <ol className="flex flex-col rounded-lg border border-border bg-card px-4 py-2 text-sm">
+        <HandedOffStep />
+      </ol>
+    </div>
+  )
+})
+
 function Dialogish({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
     <div className="bg-background p-6">
@@ -171,6 +199,16 @@ export const dialogCustomInvalid = dialog('custom', {
 })
 
 export const dialogServerError = dialog('gateway', { failure: { error: 'unavailable' } })
+
+export const dialogDiscardConfirm = dialog('api-key', {
+  interact: async (frame) => {
+    const key = frame.querySelector<HTMLInputElement>('input[type="password"]')
+    typeInto(key, 'sk-ant-api03-Zq9xR2mVt8LwPcA1')
+    await settle()
+    key?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await settle()
+  }
+})
 
 export const dialogSaved = defineFixture({
   width: 640,

@@ -5,6 +5,9 @@ import { z } from 'zod'
 import { GuardrailError, consumeCreateToken } from '../guardrails'
 import type { LifecycleDeps } from '../lifecycle'
 import { AGENTS } from './vm-agent'
+import { memberNamesFor, rememberCallerName } from '../member-names'
+import { syncRoleFromSession } from './member-role-sync'
+import { readIdempotencyKey, withIdempotency } from './idempotency'
 import { allowed, authorize, canSee, isOrgAdmin, isWorkspaceOwner } from './access'
 import { ApiError, actorOf, authenticateApi, isAdmin, requireAdmin, requireScope, scopesForRole, type ApiCaller } from './caller'
 import { auditCaller, auditView, consumeRate, listAudit, rateHeaders, RateLimitedError, type RateLimit } from './audit'
@@ -142,6 +145,11 @@ export async function handleApi(request: Request, url: URL, env: Parameters<type
   if (!caller || caller.via === 'oauth') {
     return json({ error: 'unauthorized' }, 401, { 'www-authenticate': caller ? 'Bearer error="invalid_token"' : 'Bearer' })
   }
+  if (caller.via === 'session' || caller.via === 'device') {
+    // Labels for teammates, and the live role capping this member's keys and grants. Best effort.
+    await rememberCallerName(ctx.db, caller, ctx.now()).catch(() => undefined)
+    await syncRoleFromSession(ctx.db, caller, ctx.now()).catch(() => undefined)
+  }
   return handleApiAs(caller, request, url, ctx)
 }
 
@@ -217,7 +225,8 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
     }
     if (!id && method === 'GET') {
       const rows = await listApiKeys(ctx.db, caller.accountId, isAdmin(caller) ? {} : { createdBy: caller.userId })
-      return json({ keys: rows.map(apiKeyView), availableScopes: scopesForRole(caller) })
+      const names = await memberNamesFor(ctx.db, caller.accountId, rows.map((row) => row.created_by))
+      return json({ keys: rows.map((row) => apiKeyView(row, names)), availableScopes: scopesForRole(caller) })
     }
     if (!id && method === 'POST') {
       const body = parse(CreateKeyBody, await ctx.readJson())
@@ -276,7 +285,8 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
     const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit') ?? 50) || 50))
     const before = Number(url.searchParams.get('before')) || undefined
     const rows = await listAudit(ctx.db, caller.accountId, { before, limit })
-    return json({ entries: rows.map(auditView), nextBefore: rows.length === limit ? rows.at(-1)!.created_at : null })
+    const names = await memberNamesFor(ctx.db, caller.accountId, rows.flatMap((row) => (row.user_id ? [row.user_id] : [])))
+    return json({ entries: rows.map((row) => auditView(row, names)), nextBefore: rows.length === limit ? rows.at(-1)!.created_at : null })
   }
 
   if (resource === 'projects') {
@@ -359,7 +369,11 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
     if (!id && method === 'POST') {
       requireScope(caller, 'workspaces:write')
       const life = requireLife(ctx)
-      const body = parse(CreateWorkspaceBody, await ctx.readJson())
+      const idempotencyKey = readIdempotencyKey(request)
+      const raw = await ctx.readJson()
+      const body = parse(CreateWorkspaceBody, raw)
+      // The key is the caller's, scoped per member: a teammate's identical key never collides.
+      return withIdempotency(ctx.db, { accountId: caller.accountId, scope: `workspace.create:${caller.userId}`, key: idempotencyKey, body: raw, now }, async () => {
       if (body.message) {
         requireScope(caller, 'messages:write')
         await consumeRate(ctx.db, messageBucket(caller), MESSAGES_PER_MINUTE, now)
@@ -385,7 +399,8 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
         ctx.waitUntil(deliverMessage(life, queued))
         message = messageView(queued)
       }
-      return json({ workspace: workspaceView(row), ...(message ? { message } : {}) }, 201)
+      return { status: 201, body: { workspace: workspaceView(row), ...(message ? { message } : {}) } }
+      })
     }
     if (id) {
       const row = await getWorkspace(ctx.db, caller.accountId, id)
@@ -457,7 +472,9 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
       if (sub === 'messages' && !subId && method === 'GET') {
         requireScope(caller, 'workspaces:read')
         authorize(caller, row, 'open')
-        return json({ messages: (await listMessages(ctx.db, row.id, 50)).map(messageView) })
+        const messages = await listMessages(ctx.db, row.id, 50)
+        const names = await memberNamesFor(ctx.db, caller.accountId, messages.map((m) => m.sent_by))
+        return json({ messages: messages.map((m) => messageView(m, names)) })
       }
       if (sub === 'messages' && subId && method === 'GET') {
         requireScope(caller, 'workspaces:read')

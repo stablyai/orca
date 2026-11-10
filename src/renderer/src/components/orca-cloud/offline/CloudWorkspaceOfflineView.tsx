@@ -51,7 +51,7 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
   return (
     <section
       className="flex h-full min-h-0 w-full max-w-3xl flex-col gap-5 px-6 py-8"
-      aria-label={t('components.orcaCloud.offline.region', 'Sleeping workspace (read-only)')}
+      aria-label={t('components.orcaCloud.offline.region', 'Asleep workspace (read-only)')}
       data-cloud-offline-view=""
     >
       <CloudWorkspaceHeader
