@@ -17,7 +17,6 @@ export const SOURCE_CONTROL_ACTION_VARIABLES: Record<AiActionId, SourceControlAc
   branchName: ['basePrompt', 'firstPrompt', 'assistantMessage'],
   conversationName: ['basePrompt', 'firstPrompt'],
   dictationCleanup: ['basePrompt'],
-  workspaceIcon: ['basePrompt', 'workspaces'],
   fixCommitFailure: ['basePrompt'],
   fixPushFailure: ['basePrompt'],
   fixChecks: ['basePrompt'],
@@ -81,11 +80,6 @@ export const SOURCE_CONTROL_ACTION_VARIABLE_INFO = {
   assistantMessage: {
     description: 'The initial agent response, when Orca has one available.',
     example: 'I will inspect the failing check, patch the issue, and run tests.'
-  },
-  workspaces: {
-    description:
-      'The numbered workspace names in this icon batch. Each reply SVG must start with <svg id="icon-N"> for its number.',
-    example: '1. "fix-login-flow"\n2. "terminal-perf"'
   },
   linkedIssue: {
     description:

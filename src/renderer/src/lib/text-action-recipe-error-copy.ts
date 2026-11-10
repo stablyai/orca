@@ -12,7 +12,6 @@ type TextActionRecipeFailureCode = Extract<
   | 'commandTemplateEmptyPullRequest'
   | 'commandTemplateEmptyBranchName'
   | 'commandTemplateEmptyChatName'
-  | 'commandTemplateEmptyWorkspaceIcon'
   | 'sourceControlAgentUnsupported'
   | 'chatNameAgentUnsupported'
   | 'sourceControlCustomCommandEmpty'
@@ -21,7 +20,6 @@ type TextActionRecipeFailureCode = Extract<
   | 'agentCannotGeneratePullRequest'
   | 'agentCannotGenerateBranchName'
   | 'agentCannotGenerateChatName'
-  | 'agentCannotGenerateWorkspaceIcon'
 >
 
 // Recipe misconfiguration copy, merged into the text-generation copy table.
@@ -51,12 +49,6 @@ export const TEXT_ACTION_RECIPE_ERROR_COPY: Record<
     translate(
       'sourceControl.textGeneration.errors.commandTemplateEmptyChatName',
       EN.commandTemplateEmptyChatName,
-      values
-    ),
-  commandTemplateEmptyWorkspaceIcon: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.commandTemplateEmptyWorkspaceIcon',
-      EN.commandTemplateEmptyWorkspaceIcon,
       values
     ),
   sourceControlAgentUnsupported: (values) =>
@@ -105,12 +97,6 @@ export const TEXT_ACTION_RECIPE_ERROR_COPY: Record<
     translate(
       'sourceControl.textGeneration.errors.agentCannotGenerateChatName',
       EN.agentCannotGenerateChatName,
-      values
-    ),
-  agentCannotGenerateWorkspaceIcon: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.agentCannotGenerateWorkspaceIcon',
-      EN.agentCannotGenerateWorkspaceIcon,
       values
     )
 }

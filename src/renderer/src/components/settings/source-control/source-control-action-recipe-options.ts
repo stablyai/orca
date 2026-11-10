@@ -31,10 +31,6 @@ export const getActionDescriptions = createLocalizedCatalog((): Record<AiActionI
     'settings.voice.cleanup.recipeDescription',
     'Clean up dictated text before it lands.'
   ),
-  workspaceIcon: translate(
-    'settings.git.workspaceIcons.recipeDescription',
-    'Draw the AI-generated workspace card icons, many workspaces per call.'
-  ),
   commitMessage: translate(
     'auto.components.settings.source.control.action.recipe.options.commitMessage',
     'Generate the commit message from staged changes.'

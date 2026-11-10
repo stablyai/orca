@@ -38,7 +38,6 @@ export function useWorktreeCardSecondaryDetails({
   linkedAzureDevOpsPR,
   linkedGiteaPR,
   newCardStyle,
-  worktreeCardStyle,
   compactCards,
   cardDetails,
   agentActivityDisplayMode,
@@ -226,8 +225,8 @@ export function useWorktreeCardSecondaryDetails({
     },
     [linearIssue, openTaskPage]
   )
-  // 1.0 draws the PR in its status lane; Classic and 2.0 list it with the other details.
-  const reviewInStatusLane = newCardStyle && worktreeCardStyle !== 'experimental-2'
+  // The experimental card draws the PR in its status lane; Classic lists it with the other details.
+  const reviewInStatusLane = newCardStyle
   const hasDetails =
     getWorkspaceAttachments(worktree).length > 0 ||
     hasWorktreeCardDetails({

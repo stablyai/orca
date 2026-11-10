@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { SourceControlGroupOrder } from '../../../../../shared/ui-chrome-types'
 import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
@@ -13,8 +13,6 @@ import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { BranchPrefixFeedback } from './BranchPrefixFeedback'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { AutoRenameBranchFromWorkSetting } from './AutoRenameBranchFromWorkSetting'
-import { WorkspaceIconSetting } from './WorkspaceIconSetting'
-import { getWorkspaceIconSearchEntry } from './workspace-icon-search'
 import {
   JIRA_ISSUE_KEY_CASING_KEYWORDS,
   JiraIssueKeyCasingSetting,
@@ -149,22 +147,6 @@ export function GitPane({
   const storeSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const searchQuery = settingsSearchQuery ?? storeSearchQuery
   const keepLocalMainUpToDateTitle = getKeepLocalMainUpToDateTitle(t)
-  // The branch prompt and icon recipe share the page's single Git dirty guard.
-  const dirtyPartsRef = useRef({ branch: false, icon: false })
-  const reportBranchDirty = useCallback(
-    (dirty: boolean): void => {
-      dirtyPartsRef.current.branch = dirty
-      onBranchPromptDirtyChange?.(dirty || dirtyPartsRef.current.icon)
-    },
-    [onBranchPromptDirtyChange]
-  )
-  const reportIconDirty = useCallback(
-    (dirty: boolean): void => {
-      dirtyPartsRef.current.icon = dirty
-      onBranchPromptDirtyChange?.(dirty || dirtyPartsRef.current.branch)
-    },
-    [onBranchPromptDirtyChange]
-  )
 
   const isBranchPrefixInputMode = settings.branchPrefix !== 'none'
   // Local drafts preserve caret/fast typing through async IPC; adopt external reloads but ignore delayed echoes of our own edits.
@@ -334,19 +316,9 @@ export function GitPane({
         updateSettings={updateSettings}
         writeSourceControlAiSettings={writeSourceControlAiSettings}
         forceVisible={hasUnsavedBranchPromptChanges}
-        onBranchPromptDirtyChange={reportBranchDirty}
+        onBranchPromptDirtyChange={onBranchPromptDirtyChange}
         branchPromptDiscardSignal={branchPromptDiscardSignal}
         settingsSearchQuery={searchQuery}
-      />
-    ) : null,
-    hasUnsavedBranchPromptChanges ||
-    matchesSettingsSearch(searchQuery, getWorkspaceIconSearchEntry()) ? (
-      <WorkspaceIconSetting
-        key={`workspace-icon-${branchPromptDiscardSignal ?? 0}`}
-        settings={settings}
-        writeSourceControlAiSettings={writeSourceControlAiSettings}
-        onDirtyChange={reportIconDirty}
-        forceVisible={hasUnsavedBranchPromptChanges}
       />
     ) : null
   ].filter(Boolean)

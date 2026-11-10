@@ -1,10 +1,5 @@
 import { isGlobalAiTextAction } from './recipes/source-control-ai-actions'
 import {
-  WORKSPACE_ICON_DEFAULT_AGENT,
-  WORKSPACE_ICON_DEFAULT_MODEL
-} from './recipes/source-control-ai-actions'
-import { isTuiAgentEnabled } from '../../agent-launch/catalog/tui-agent-selection'
-import {
   CUSTOM_AGENT_ID,
   getCommitMessageAgentSpec,
   getCommitMessageModel,
@@ -94,7 +89,6 @@ const COMMAND_TEMPLATE_EMPTY = {
   branchName: 'commandTemplateEmptyBranchName',
   conversationName: 'commandTemplateEmptyChatName',
   dictationCleanup: 'commandTemplateEmptyDictationCleanup',
-  workspaceIcon: 'commandTemplateEmptyWorkspaceIcon'
 } as const satisfies Record<AiTextOperation, TextGenerationFailureCode>
 
 const AGENT_CANNOT_GENERATE = {
@@ -103,7 +97,6 @@ const AGENT_CANNOT_GENERATE = {
   branchName: 'agentCannotGenerateBranchName',
   conversationName: 'agentCannotGenerateChatName',
   dictationCleanup: 'agentCannotGenerateDictationCleanup',
-  workspaceIcon: 'agentCannotGenerateWorkspaceIcon'
 } as const satisfies Record<AiTextOperation, TextGenerationFailureCode>
 
 // Each failure names the settings page where the action's agent is chosen.
@@ -113,7 +106,6 @@ const AGENT_UNSUPPORTED = {
   branchName: 'sourceControlAgentUnsupported',
   conversationName: 'chatNameAgentUnsupported',
   dictationCleanup: 'dictationCleanupAgentUnsupported',
-  workspaceIcon: 'sourceControlAgentUnsupported'
 } as const satisfies Record<AiTextOperation, TextGenerationFailureCode>
 
 const CUSTOM_COMMAND_EMPTY = {
@@ -123,7 +115,6 @@ const CUSTOM_COMMAND_EMPTY = {
   conversationName: 'chatNameCustomCommandEmpty',
   // The custom command is set under Source Control AI for every action that isn't a chat name.
   dictationCleanup: 'sourceControlCustomCommandEmpty',
-  workspaceIcon: 'sourceControlCustomCommandEmpty'
 } as const satisfies Record<AiTextOperation, TextGenerationFailureCode>
 
 function supportedAgentLabels(): string {
@@ -159,16 +150,7 @@ export function resolveSourceControlAiForOperation(
   if (!actionRecipe.commandInputTemplate.trim()) {
     return resolveFailure(textGenerationFailure(COMMAND_TEMPLATE_EMPTY[input.operation]))
   }
-  // An unpicked icon agent means Orca's cheap default, not the user's general Source Control agent.
-  const iconDefault =
-    input.operation === 'workspaceIcon' &&
-    !actionRecipe.agentId &&
-    isTuiAgentEnabled(WORKSPACE_ICON_DEFAULT_AGENT, input.settings.disabledTuiAgents)
-  const preferredAgent = iconDefault
-    ? WORKSPACE_ICON_DEFAULT_AGENT
-    : hasActionAgentRecipe(actionRecipe)
-      ? actionRecipe.agentId
-      : source.agentId
+  const preferredAgent = hasActionAgentRecipe(actionRecipe) ? actionRecipe.agentId : source.agentId
   const agentChoice = resolveCommitMessageAgentChoice(
     preferredAgent,
     input.settings.defaultTuiAgent,
@@ -232,9 +214,6 @@ export function resolveSourceControlAiForOperation(
   }
   const hostKey = input.discoveryHostKey ?? LOCAL_COMMIT_MESSAGE_HOST_KEY
   const persistedModelId = selectPersistedModelId({
-    ...(input.operation === 'workspaceIcon' && resolvedAgent === WORKSPACE_ICON_DEFAULT_AGENT
-      ? { operationDefaultModelId: WORKSPACE_ICON_DEFAULT_MODEL }
-      : {}),
     source,
     legacy,
     repoOverrides,

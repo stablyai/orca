@@ -27,7 +27,6 @@ const request = z.object({
       'jira-issue-summary',
       'conversation-name',
       'dictation-cleanup',
-      'worktree-icon'
     ])
     .optional(),
   timeoutMs: z.number().int().positive()

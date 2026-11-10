@@ -97,9 +97,7 @@ function resolveAgentArgsPlaceholderAgent(
 function getActionLabel(actionId: AiActionId, t: Translate = translate): string {
   return actionId === 'conversationName'
     ? t('settings.chat.names.recipe', 'Chat name')
-    : actionId === 'workspaceIcon'
-      ? t('settings.git.workspaceIcons.recipe', 'Workspace icon')
-      : SOURCE_CONTROL_ACTION_LABELS[actionId]
+    : SOURCE_CONTROL_ACTION_LABELS[actionId]
 }
 
 export function SourceControlActionRecipeRow<ActionId extends AiActionId>({

@@ -1,5 +1,4 @@
 import { collectRenderedSidebarRowKeys } from './rendered-row-keys'
-import { useCardDisclosureRows } from './worktree-card-disclosure-rows'
 import React, { useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store/index'
@@ -163,7 +162,7 @@ const WorktreeList = React.memo(function WorktreeList({
     prCache,
     agentSendTargetWorktreeId
   })
-  const disclosedSectionRows = useCardDisclosureRows(rowModel.sectionRows, rowModel.occurrencePlan)
+  const disclosedSectionRows = rowModel.sectionRows
   const disclosedRowKeys = useMemo(
     () => collectRenderedSidebarRowKeys(disclosedSectionRows),
     [disclosedSectionRows]

@@ -1,5 +1,4 @@
 import { useEffect } from 'react'
-import { getWorktreeCardStyle } from '../../../shared/worktree/card-style'
 import { useAppStore } from '@/store/index'
 import { isWindowVisible } from '@/lib/window-activity/window-visibility-interval'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
@@ -29,7 +28,7 @@ export function useVisibleHostedReviewRefresh({ enabled }: { enabled: boolean })
       referenceTargets = references
       if (reviewInputsChanged) {
         hostedTargets = getVisibleHostedReviewRefreshTargets(state, useAppStore.getState, {
-          selectedOnly: selectedOnly && getWorktreeCardStyle(state.settings) !== 'experimental-2'
+          selectedOnly
         })
       }
       scheduler.update([

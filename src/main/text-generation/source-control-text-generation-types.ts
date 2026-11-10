@@ -51,7 +51,6 @@ export type TextGenerationOperation =
   | 'jira-issue-summary'
   | 'conversation-name'
   | 'dictation-cleanup'
-  | 'worktree-icon'
 
 export type CommitMessageGenerationTarget =
   | { kind: 'local'; cwd: string; env?: NodeJS.ProcessEnv; wslDistro?: string; laneId?: string }

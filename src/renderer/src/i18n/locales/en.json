@@ -254,8 +254,6 @@
       "keywordUnhide": "unhide"
     },
     "cardSlot": {
-      "openCard": "Show workspace activity",
-      "closeCard": "Hide workspace activity",
       "needsYouLabel": "Waiting on you",
       "failedLabel": "Last turn failed",
       "markedUnread": "Marked unread by you",
@@ -267,30 +265,10 @@
       "needYouCount": "{{count}} need you",
       "needsYou": "Needs you",
       "failed": "Failed",
-      "lastSeen": "Last seen {{state}}",
       "detailsRow": "Details row",
-      "hostRemoved": "host removed",
-      "disconnected": "disconnected",
       "orcaServer": "Orca server",
-      "childNeeds_one": "{{count}} needs you",
-      "childNeeds_other": "{{count}} need you",
-      "childFailed": "{{count}} failed",
-      "childUnread": "{{count}} unread",
-      "childWorking": "{{count}} working",
       "workspaceUnread": "Unread in this workspace",
-      "unreadTab": "Unread tab",
-      "prOpen": "{{count}} open",
-      "prDraft": "{{count}} draft",
-      "prMerged": "{{count}} merged",
-      "prClosed": "{{count}} closed"
-    },
-    "cardIcon": {
-      "aiFailed": "Could not generate workspace icons",
-      "tabs": "Tabs",
-      "pr": "PR",
-      "none": "None",
-      "ai": "AI-generated",
-      "label": "Icon"
+      "unreadTab": "Unread tab"
     }
   },
   "app": {
@@ -1471,23 +1449,6 @@
       }
     },
     "experimental": {},
-    "git": {
-      "workspaceIcons": {
-        "recipe": "Workspace icon",
-        "saveFailed": "Could not save workspace icon settings.",
-        "regenerateFailed": "Could not clear the saved icons.",
-        "regenerate": "Regenerate icons",
-        "defaultAgent": "Default (Claude Haiku)",
-        "recipeDescription": "Draw the AI-generated workspace card icons, many workspaces per call.",
-        "title": "AI workspace icons",
-        "description": "Agent, model, and prompt for the AI-generated card icon. Orca draws up to 16 icons per agent call and keeps each one by workspace name.",
-        "searchIcon": "icon",
-        "searchCard": "workspace card",
-        "searchModel": "model",
-        "searchTemplate": "command template",
-        "searchRegenerate": "regenerate"
-      }
-    },
     "groupHooks": {
       "title": "Project Settings > {{name}}",
       "example": "Example: create a worktree in each repo (this machine only)",
@@ -8784,11 +8745,10 @@
           },
           "worktreeCardStyle": {
             "title": "Card style",
-            "copy": "Choose how workspace cards look in the sidebar. Experimental 2.0 shows only what needs you, on the right.",
+            "copy": "Choose how workspace cards look in the sidebar.",
             "ariaLabel": "Card style",
             "classic": "Classic",
-            "experimental1": "Experimental 1.0",
-            "experimental2": "Experimental 2.0"
+            "experimental": "Experimental"
           }
         },
         "FloatingWorkspacePane": {
@@ -10992,7 +10952,7 @@
             },
             "worktreeCardStyle": {
               "title": "Card style",
-              "description": "Choose how workspace cards look in the sidebar. Experimental 2.0 shows only what needs you, on the right."
+              "description": "Choose how workspace cards look in the sidebar."
             }
           }
         },
@@ -23072,8 +23032,7 @@
       "patch": "The branch diff against the base branch used for PR-details generation.",
       "firstPrompt": "The first user request for this workspace or chat.",
       "assistantMessage": "The initial agent response, when Orca has one available.",
-      "linkedIssue": "The GitHub issue number linked to this workspace. Empty when no GitHub issue is linked (including GitLab-linked workspaces). Prefer instructional templates: a bare \"Fixes #{linkedIssue}\" becomes \"Fixes #\" when unlinked.",
-      "workspaces": "The numbered workspace names in this icon batch. Each reply SVG must start with <svg id=\"icon-N\"> for its number."
+      "linkedIssue": "The GitHub issue number linked to this workspace. Empty when no GitHub issue is linked (including GitLab-linked workspaces). Prefer instructional templates: a bare \"Fixes #{linkedIssue}\" becomes \"Fixes #\" when unlinked."
     },
     "model": {
       "configDefault": "Config default",
@@ -23122,7 +23081,6 @@
         "commandTemplateEmptyPullRequest": "Command template is empty for pull request details.",
         "commandTemplateEmptyBranchName": "Command template is empty for branch names.",
         "commandTemplateEmptyChatName": "Command template is empty for chat names.",
-        "commandTemplateEmptyWorkspaceIcon": "Command template is empty for workspace icons.",
         "sourceControlAgentUnsupported": "Choose a supported Source Control AI agent for this action in Settings -> Git -> Source Control AI. Supported agents: {{agents}}, or Custom command.",
         "chatNameAgentUnsupported": "Choose a supported chat name agent for this action in Settings -> Chat -> Chat names. Supported agents: {{agents}}, or Custom command.",
         "sourceControlCustomCommandEmpty": "Custom command is empty. Add one in Settings -> Git -> Source Control AI.",
@@ -23131,7 +23089,6 @@
         "agentCannotGeneratePullRequest": "Agent \"{{agent}}\" does not support Source Control AI pull request details. Supported agents: {{agents}}, or Custom command.",
         "agentCannotGenerateBranchName": "Agent \"{{agent}}\" does not support Source Control AI branch names. Supported agents: {{agents}}, or Custom command.",
         "agentCannotGenerateChatName": "Agent \"{{agent}}\" does not support chat names. Supported agents: {{agents}}, or Custom command.",
-        "agentCannotGenerateWorkspaceIcon": "Agent \"{{agent}}\" does not support workspace icons. Supported agents: {{agents}}, or Custom command.",
         "noModelForAgent": "No model is available for {{label}}.",
         "planCustomCommandEmpty": "Custom command is empty. Add one in Settings → Git → AI Commit Messages.",
         "planAgentUnsupported": "Agent \"{{agent}}\" does not support AI commit messages.",

@@ -10,7 +10,7 @@ export function getNewWorktreeCardStyleSearchEntry(): SettingsSearchEntry {
     ),
     description: translate(
       'auto.components.settings.experimental.search.worktreeCardStyle.description',
-      'Choose how workspace cards look in the sidebar. Experimental 2.0 shows only what needs you, on the right.'
+      'Choose how workspace cards look in the sidebar.'
     ),
     keywords: [
       ...translateSearchKeyword(

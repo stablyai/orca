@@ -12,11 +12,9 @@ import type { WorktreeCardController } from '../controller/use-worktree-card-con
 
 export function WorktreeCardSecondaryRows({
   card,
-  presentation,
-  slotRows
+  presentation
 }: {
   card: WorktreeCardController
-  slotRows?: React.ReactNode
   presentation: WorktreeCardPresentation
 }): React.JSX.Element {
   const {
@@ -61,10 +59,8 @@ export function WorktreeCardSecondaryRows({
         />
       ) : null}
 
-      {slotRows}
-
       {/* Why: counterbalance the card stack gap (-mt-1) so agents right after the title read as one header group. */}
-      {slotRows === undefined && showInlineAgentList && (
+      {showInlineAgentList && (
         <WorktreeCardAgents
           worktreeId={worktree.id}
           agents={agentActivityDisplayMode === 'compact' ? compactInlineAgentRows : undefined}
@@ -72,7 +68,7 @@ export function WorktreeCardSecondaryRows({
         />
       )}
 
-      {slotRows === undefined && showLineageChildChip && (
+      {showLineageChildChip && (
         <WorktreeLineageToggle
           childWorktreeIds={lineageChildWorktreeIds}
           collapsed={lineageCollapsed}

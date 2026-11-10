@@ -1,6 +1,6 @@
 import type { GlobalSettings } from '../global-settings-types'
 
-export const WORKTREE_CARD_STYLES = ['classic', 'experimental-1', 'experimental-2'] as const
+export const WORKTREE_CARD_STYLES = ['classic', 'experimental-1'] as const
 
 export type WorktreeCardStyle = (typeof WORKTREE_CARD_STYLES)[number]
 
@@ -14,8 +14,8 @@ export function isWorktreeCardStyle(value: unknown): value is WorktreeCardStyle 
 }
 
 /**
- * Older clients only write the boolean, so it wins whenever the two disagree on
- * classic vs experimental; the style then only picks which experimental card.
+ * Older clients only write the boolean, so it wins whenever the two disagree. A stored
+ * 'experimental-2' (the retired second card) reads as the one experimental card.
  */
 export function getWorktreeCardStyle(
   settings: Partial<WorktreeCardStyleSettings> | null | undefined
@@ -28,7 +28,6 @@ export function getWorktreeCardStyle(
   return legacyExperimental ? 'experimental-1' : 'classic'
 }
 
-/** Both experimental cards share the 1.0 data plumbing; only 2.0 changes what the card draws. */
 export function isExperimentalWorktreeCardStyle(style: WorktreeCardStyle): boolean {
   return style !== 'classic'
 }

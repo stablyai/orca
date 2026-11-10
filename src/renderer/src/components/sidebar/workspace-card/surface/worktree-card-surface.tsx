@@ -1,5 +1,3 @@
-import { buildWorktreeCardPresentation } from './worktree-card-presentation'
-import { WorktreeCardSlotContent } from '../../WorktreeCardSlotContent'
 import React from 'react'
 import { LoaderCircle } from 'lucide-react'
 
@@ -9,29 +7,9 @@ import WorktreeContextMenu from '../../workspace-actions/context-menu/WorktreeCo
 import { useIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
 import { getWorktreeCardFrameGeometry } from './worktree-card-frame-geometry'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
-import { useWorktreeCardOpen } from './worktree-card-open-state'
-import {
-  getLineageChildrenInlineStyle,
-  SLOT_CARD_MIN_CONTENT_INSET,
-  SLOT_LINEAGE_TITLE_COLUMN_SHIFT
-} from '../../worktree-list/rows/indentation'
 import { DEFAULT_WORKSPACE_CARD_TEMPLATE } from '../template/default-workspace-card'
 import { renderWorkspaceCardTemplate } from '../template/render-workspace-card-template'
-import { getWorktreeCardIconStyle } from '../../../../../../shared/worktree/card-display-settings-types'
-
-/** Children follow the title column, including the leading icon only when shown. */
-function slotLineageChildrenStyle(
-  style: React.CSSProperties | undefined,
-  hasIcon: boolean
-): React.CSSProperties | undefined {
-  if (style?.marginLeft === undefined) {
-    return style
-  }
-  const offset = typeof style.marginLeft === 'number' ? `${style.marginLeft}px` : style.marginLeft
-  // The hidden icon removes its 18px tile and 6px header gap from the title column.
-  const titleColumnShift = SLOT_LINEAGE_TITLE_COLUMN_SHIFT - (hasIcon ? 0 : 24)
-  return getLineageChildrenInlineStyle(`calc(${offset} + ${titleColumnShift}px)`)
-}
+import { WorktreeCardTitleStatusProvider } from './worktree-card-title-status'
 
 export function WorktreeCardSurface({ card }: { card: WorktreeCardController }): React.JSX.Element {
   const {
@@ -67,16 +45,9 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     setShowRenameErrorDialog,
     contentIndent
   } = card
-  const slotLayout = card.worktreeCardStyle === 'experimental-2'
   const isSleeping = useIsSleepingWorktree(worktree.id)
-  const cardOpen = useWorktreeCardOpen(worktree, card.lineageDescendantIdentities, slotLayout)
   const geometryFor = (statusLane: boolean) =>
-    getWorktreeCardFrameGeometry({
-      flushSurface,
-      contentIndent,
-      statusLane,
-      minContentInset: slotLayout ? SLOT_CARD_MIN_CONTENT_INSET : undefined
-    })
+    getWorktreeCardFrameGeometry({ flushSurface, contentIndent, statusLane })
   const { content: templateContent, frame } = renderWorkspaceCardTemplate(
     card,
     DEFAULT_WORKSPACE_CARD_TEMPLATE,
@@ -87,17 +58,13 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         : undefined
     }
   )
-  const parentCardContent = slotLayout ? (
-    <WorktreeCardSlotContent
-      card={card}
-      presentation={buildWorktreeCardPresentation(card)}
-      open={cardOpen.open}
-      onToggleOpen={cardOpen.toggle}
-    />
+  const parentCardContent = newCardStyle ? (
+    // One roll-up per card feeds the status lane, the title and the title's right-hand slot.
+    <WorktreeCardTitleStatusProvider card={card}>{templateContent}</WorktreeCardTitleStatusProvider>
   ) : (
     templateContent
   )
-  const { cardStyle } = geometryFor(!slotLayout && frame.statusLane)
+  const { cardStyle } = geometryFor(frame.statusLane)
   const titleOnlyCard = frame.singleLine
 
   const cardBody = (
@@ -105,7 +72,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
       className={cn(
         'relative flex cursor-pointer flex-col transition-[background-color,border-color,opacity,box-shadow] duration-200 outline-none select-none',
         'pr-1.5',
-        titleOnlyCard ? 'py-2' : slotLayout ? 'pt-2 pb-1.5' : 'pt-1.25 pb-1.5',
+        titleOnlyCard ? 'py-2' : 'pt-1.25 pb-1.5',
         flushSurface ? 'ml-1 w-[calc(100%-0.25rem)]' : 'ml-1',
         'overflow-hidden rounded-lg',
         // Navigation updates the live attribute before React; it must own the complete active style.
@@ -160,23 +127,11 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         parentCardContent
       )}
 
-      {lineageChildren && (!slotLayout || cardOpen.open) ? (
+      {lineageChildren ? (
         <div
-          className={cn(
-            'space-y-1',
-            newCardStyle ? 'mt-1.5' : 'mt-3',
-            // 2.0 draws a guide in the original offset; it's painted, so the layout is unchanged.
-            slotLayout && 'worktree-card-slot-lineage'
-          )}
+          className={cn('space-y-1', newCardStyle ? 'mt-1.5' : 'mt-3')}
           data-worktree-lineage-children=""
-          style={
-            slotLayout
-              ? slotLineageChildrenStyle(
-                  lineageChildrenStyle,
-                  getWorktreeCardIconStyle(card.settings) !== 'none'
-                )
-              : lineageChildrenStyle
-          }
+          style={lineageChildrenStyle}
         >
           {lineageChildren}
         </div>

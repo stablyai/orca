@@ -1,5 +1,4 @@
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
-import { setWorktreeCardDisclosure } from './workspace-card/surface/worktree-card-open-state'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type {
@@ -142,10 +141,6 @@ export function slotTargetsOfKind(
 
 /** Open the target the way its own row would, after unfolding its card's agent list. */
 export function openSlotTarget(target: SlotTarget): void {
-  setWorktreeCardDisclosure(
-    composeWorktreeHostIdentity(target.executionHostId, target.worktreeId),
-    { open: true, closedOver: null }
-  )
   if (target.tabId !== undefined) {
     activateUnreadTab(target.worktreeId, target.tabId, target.executionHostId)
     return

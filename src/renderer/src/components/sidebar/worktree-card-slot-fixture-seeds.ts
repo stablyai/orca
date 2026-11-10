@@ -191,7 +191,7 @@ export function seedWorkspaces(seeds: readonly WorkspaceSeed[], now: number): vo
     settings: state.settings
       ? {
           ...state.settings,
-          ...worktreeCardStyleSettingsUpdate('experimental-2')
+          ...worktreeCardStyleSettingsUpdate('experimental-1')
         }
       : state.settings,
     worktreeCardProperties: ['status', 'inline-agents'],

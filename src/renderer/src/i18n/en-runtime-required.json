@@ -659,6 +659,14 @@
           "4d03dec2d0": "Read app interface trees and perform requested actions.",
           "6b5a2cd3a5": "Accessibility"
         },
+        "ExperimentalPane": {
+          "newWorktreeCardStyle": {
+            "copy": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
+            "description": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
+            "title": "New card style",
+            "toggleLabel": "Toggle new card style"
+          }
+        },
         "McpConfigSection": {
           "detectedServers_one": "{{detected}} detected · {{count}} server",
           "detectedServers_other": "{{detected}} detected · {{count}} servers"
@@ -823,6 +831,14 @@
           "permissionsRequired_one": "{{value0}} permission required before agents can operate app windows.",
           "permissionsRequired_other": "{{value0}} permissions required before agents can operate app windows."
         },
+        "experimental": {
+          "search": {
+            "newWorktreeCardStyle": {
+              "description": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
+              "title": "New card style"
+            }
+          }
+        },
         "repository": {
           "search": {
             "keepForkUpToDate": "Keep Fork Up to Date"
@@ -871,22 +887,6 @@
           "imported_other": "Imported {{value0}} themes",
           "over_limit_one": "Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect {{value1}} new theme and try again.",
           "over_limit_other": "Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect {{value1}} new themes and try again."
-        },
-        "ExperimentalPane": {
-          "newWorktreeCardStyle": {
-            "copy": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
-            "description": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
-            "title": "New card style",
-            "toggleLabel": "Toggle new card style"
-          }
-        },
-        "experimental": {
-          "search": {
-            "newWorktreeCardStyle": {
-              "description": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
-              "title": "New card style"
-            }
-          }
         }
       },
       "sidebar": {
@@ -2566,10 +2566,6 @@
         "working_other": "{{count}} working"
       }
     },
-    "cardSlot": {
-      "childNeeds_one": "{{count}} needs you",
-      "childNeeds_other": "{{count}} need you"
-    },
     "createProject": {
       "errors": {
         "createDirectoryFailed": "Failed to create directory: {{detail}}",
@@ -2646,7 +2642,6 @@
         "agentCannotGenerateChatName": "Agent \"{{agent}}\" does not support chat names. Supported agents: {{agents}}, or Custom command.",
         "agentCannotGenerateCommitMessage": "Agent \"{{agent}}\" does not support Source Control AI commit messages. Supported agents: {{agents}}, or Custom command.",
         "agentCannotGeneratePullRequest": "Agent \"{{agent}}\" does not support Source Control AI pull request details. Supported agents: {{agents}}, or Custom command.",
-        "agentCannotGenerateWorkspaceIcon": "Agent \"{{agent}}\" does not support workspace icons. Supported agents: {{agents}}, or Custom command.",
         "agentCouldNotStart": "{{label}} could not be started. Check the agent command in Settings and try again.",
         "agentFailedToStart": "{{label}} failed to start. Check the agent command in Settings and try again.",
         "agentReportedError": "{{label}} reported an error.",
@@ -2663,7 +2658,6 @@
         "commandTemplateEmptyChatName": "Command template is empty for chat names.",
         "commandTemplateEmptyCommitMessage": "Command template is empty for commit messages.",
         "commandTemplateEmptyPullRequest": "Command template is empty for pull request details.",
-        "commandTemplateEmptyWorkspaceIcon": "Command template is empty for workspace icons.",
         "commitMessageUnparseable": "Generated commit message could not be parsed.",
         "emptyCommitMessage": "{{label}} returned an empty message.",
         "emptyCommitMessageWithDetail": "{{label}} returned an empty message. CLI output: {{detail}}",

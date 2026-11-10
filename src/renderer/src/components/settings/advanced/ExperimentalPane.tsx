@@ -12,10 +12,7 @@ import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { getExperimentalSearchEntry } from './experimental-search'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
-import {
-  NumberField,
-  SettingsSegmentedControl
-} from '../form-controls/SettingsFormControls'
+import { NumberField, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentDashboardExperimentalSetting } from '../../dashboard/AgentDashboardExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from '../virtual-machines/recipes/EphemeralVmsExperimentalSetting'
@@ -221,7 +218,7 @@ export function ExperimentalPane({
             )}
             description={t(
               'auto.components.settings.ExperimentalPane.worktreeCardStyle.copy',
-              'Choose how workspace cards look in the sidebar. Experimental 2.0 shows only what needs you, on the right.'
+              'Choose how workspace cards look in the sidebar.'
             )}
             keywords={getExperimentalSearchEntry().newWorktreeCardStyle.keywords}
             className="space-y-3 py-3"
@@ -238,7 +235,7 @@ export function ExperimentalPane({
                 <p className="text-xs text-muted-foreground">
                   {t(
                     'auto.components.settings.ExperimentalPane.worktreeCardStyle.copy',
-                    'Choose how workspace cards look in the sidebar. Experimental 2.0 shows only what needs you, on the right.'
+                    'Choose how workspace cards look in the sidebar.'
                   )}
                 </p>
               </div>
@@ -261,15 +258,8 @@ export function ExperimentalPane({
                   {
                     value: 'experimental-1',
                     label: t(
-                      'auto.components.settings.ExperimentalPane.worktreeCardStyle.experimental1',
-                      'Experimental 1.0'
-                    )
-                  },
-                  {
-                    value: 'experimental-2',
-                    label: t(
-                      'auto.components.settings.ExperimentalPane.worktreeCardStyle.experimental2',
-                      'Experimental 2.0'
+                      'auto.components.settings.ExperimentalPane.worktreeCardStyle.experimental',
+                      'Experimental'
                     )
                   }
                 ]}

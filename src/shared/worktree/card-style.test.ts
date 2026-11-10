@@ -10,9 +10,18 @@ describe('getWorktreeCardStyle', () => {
   })
 
   it('round-trips every style through the paired settings update', () => {
-    for (const style of ['classic', 'experimental-1', 'experimental-2'] as const) {
+    for (const style of ['classic', 'experimental-1'] as const) {
       expect(getWorktreeCardStyle(worktreeCardStyleSettingsUpdate(style))).toBe(style)
     }
+  })
+
+  it('reads the retired second experimental card as the experimental card', () => {
+    expect(
+      getWorktreeCardStyle({
+        worktreeCardStyle: 'experimental-2',
+        experimentalNewWorktreeCardStyle: true
+      })
+    ).toBe('experimental-1')
   })
 
   it('lets an older client that only flips the boolean win', () => {

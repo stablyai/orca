@@ -1,5 +1,3 @@
-import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { setWorktreeCardDisclosure, useCardDisclosures } from '../surface/worktree-card-open-state'
 import { useCallback, useEffect, useState } from 'react'
 
 export type WorktreeAgentExpansionState = {
@@ -7,8 +5,6 @@ export type WorktreeAgentExpansionState = {
   expandedLineageParents: ReadonlySet<string>
   expandedIdleChildGroups: ReadonlySet<string>
   compactRootListExpanded: boolean
-  // 2.0 cards fold to their title (and details) row until opened.
-  cardOpen: boolean
 }
 
 const EMPTY_PANE_KEYS: ReadonlySet<string> = new Set()
@@ -16,8 +12,7 @@ const EMPTY_PANE_KEYS: ReadonlySet<string> = new Set()
 const DEFAULT_EXPANSION_STATE: WorktreeAgentExpansionState = {
   expandedLineageParents: EMPTY_PANE_KEYS,
   expandedIdleChildGroups: EMPTY_PANE_KEYS,
-  compactRootListExpanded: false,
-  cardOpen: false
+  compactRootListExpanded: false
 }
 
 // Retain disclosures across virtualizer/lineage remounts in a bounded renderer-session cache; reload resets them.
@@ -43,7 +38,6 @@ function persistExpansionState(worktreeId: string, state: WorktreeAgentExpansion
   expansionByWorktreeId.delete(worktreeId)
   if (
     state.compactRootListExpanded ||
-    state.cardOpen ||
     state.expandedLineageParents.size > 0 ||
     state.expandedIdleChildGroups.size > 0
   ) {
@@ -57,10 +51,10 @@ const expansionListeners = new Map<string, Set<() => void>>()
 /** Unfold a card's agent list from outside the card, e.g. when a rolled-up slot opens one of its agents. */
 export function expandWorktreeAgentList(worktreeId: string): void {
   const base = readExpansionState(worktreeId)
-  if (base.compactRootListExpanded && base.cardOpen) {
+  if (base.compactRootListExpanded) {
     return
   }
-  persistExpansionState(worktreeId, { ...base, compactRootListExpanded: true, cardOpen: true })
+  persistExpansionState(worktreeId, { ...base, compactRootListExpanded: true })
   notifyExpansion(worktreeId)
 }
 
@@ -97,11 +91,9 @@ export type WorktreeAgentExpansionControls = {
   expandedLineageParents: ReadonlySet<string>
   expandedIdleChildGroups: ReadonlySet<string>
   compactRootListExpanded: boolean
-  cardOpen: boolean
   toggleLineageParent: (paneKey: string) => void
   toggleIdleChildGroup: (parentPaneKey: string) => void
   toggleCompactRootList: () => void
-  toggleCardOpen: () => void
 }
 
 /** Restore each worktree’s disclosures across virtualizer and sibling-lineage remounts. */
@@ -119,7 +111,7 @@ export function useWorktreeAgentExpansionState(worktreeId: string): WorktreeAgen
     (next: WorktreeAgentExpansionState) => {
       persistExpansionState(worktreeId, next)
       setRendered({ worktreeId, state: next })
-      // The surface and its content both read this state; keep every mounted reader in step.
+      // The agent list and the title's roll-up both read this state; keep every mounted reader in step.
       notifyExpansion(worktreeId)
     },
     [worktreeId]
@@ -158,26 +150,18 @@ export function useWorktreeAgentExpansionState(worktreeId: string): WorktreeAgen
     commit({ ...base, compactRootListExpanded: !base.compactRootListExpanded })
   }, [commit, worktreeId])
 
-  const toggleCardOpen = useCallback(() => {
-    const base = readExpansionState(worktreeId)
-    commit({ ...base, cardOpen: !base.cardOpen })
-  }, [commit, worktreeId])
-
   return {
     expandedLineageParents: current.expandedLineageParents,
     expandedIdleChildGroups: current.expandedIdleChildGroups,
     compactRootListExpanded: current.compactRootListExpanded,
-    cardOpen: current.cardOpen,
     toggleLineageParent,
     toggleIdleChildGroup,
-    toggleCompactRootList,
-    toggleCardOpen
+    toggleCompactRootList
   }
 }
 
 export function clearWorktreeAgentExpansionStateForTests(): void {
   expansionByWorktreeId.clear()
-  useCardDisclosures.setState({ cards: new Map() })
 }
 
 export function getWorktreeAgentExpansionCountForTests(): number {
@@ -189,8 +173,4 @@ export function seedWorktreeAgentExpansionStateForTests(
   state: WorktreeAgentExpansionState
 ): void {
   persistExpansionState(worktreeId, state)
-  setWorktreeCardDisclosure(composeWorktreeHostIdentity(undefined, worktreeId), {
-    open: state.cardOpen,
-    closedOver: null
-  })
 }

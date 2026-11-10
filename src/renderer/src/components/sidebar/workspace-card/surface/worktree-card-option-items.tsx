@@ -19,13 +19,7 @@ import {
   getWorktreeCardDisplayOptions
 } from '../../worktree-list/controls/sidebar-workspace-option-items'
 import { useTranslate } from '@/i18n/use-translate'
-import { retryFailedWorktreeAiIcons } from '../../use-worktree-ai-icon'
 import { getWorktreeCardStyle } from '../../../../../../shared/worktree/card-style'
-import {
-  getWorktreeCardIconStyle,
-  WORKTREE_CARD_ICON_STYLES,
-  type WorktreeCardIconStyle
-} from '../../../../../../shared/worktree/card-display-settings-types'
 
 type CardMenuItemProps = {
   preserveWorkspaceBoardOpen: boolean
@@ -66,41 +60,6 @@ function AgentModelProperty(): React.JSX.Element {
   )
 }
 
-function CardIconStyleItems(): React.JSX.Element {
-  const t = useTranslate()
-  const iconStyle = useAppStore((s) => getWorktreeCardIconStyle(s.settings))
-  const updateSettings = useAppStore((s) => s.updateSettings)
-  const labels: Record<WorktreeCardIconStyle, string> = {
-    tabs: t('sidebar.cardIcon.tabs', 'Tabs'),
-    pr: t('sidebar.cardIcon.pr', 'PR'),
-    none: t('sidebar.cardIcon.none', 'None'),
-    ai: t('sidebar.cardIcon.ai', 'AI-generated')
-  }
-  return (
-    <>
-      <DropdownMenuLabel>{t('sidebar.cardIcon.label', 'Icon')}</DropdownMenuLabel>
-      <DropdownMenuRadioGroup
-        value={iconStyle}
-        onValueChange={(value) => {
-          const next = WORKTREE_CARD_ICON_STYLES.find((style) => style === value)
-          if (next) {
-            if (next === 'ai') {
-              retryFailedWorktreeAiIcons()
-            }
-            void updateSettings({ worktreeCardIcon: next })
-          }
-        }}
-      >
-        {WORKTREE_CARD_ICON_STYLES.map((style) => (
-          <DropdownMenuRadioItem key={style} value={style} onSelect={(e) => e.preventDefault()}>
-            {labels[style]}
-          </DropdownMenuRadioItem>
-        ))}
-      </DropdownMenuRadioGroup>
-    </>
-  )
-}
-
 /** "Card display": the experimental card style's property rows. */
 export function WorktreeCardDisplayMenuItem({
   preserveWorkspaceBoardOpen
@@ -110,7 +69,7 @@ export function WorktreeCardDisplayMenuItem({
   const hasProjectGroups = useAppStore((s) => s.projectGroups.length > 0)
   const toggleProperty = useToggleCardProperty()
   const options = useMemo(() => getWorktreeCardDisplayOptions(hasProjectGroups), [hasProjectGroups])
-  const slotLayout = useAppStore((s) => getWorktreeCardStyle(s.settings) === 'experimental-2')
+  const experimentalCard = useAppStore((s) => getWorktreeCardStyle(s.settings) !== 'classic')
   const detailsRow = useAppStore((s) => s.settings?.worktreeCardDetailsRow === true)
   const updateSettings = useAppStore((s) => s.updateSettings)
   return (
@@ -127,7 +86,7 @@ export function WorktreeCardDisplayMenuItem({
         className="w-56"
         data-workspace-board-preserve-open={boardAttr(preserveWorkspaceBoardOpen)}
       >
-        {slotLayout ? (
+        {experimentalCard ? (
           <>
             <DropdownMenuCheckboxItem
               checked={detailsRow}
@@ -138,8 +97,6 @@ export function WorktreeCardDisplayMenuItem({
             >
               {t('sidebar.cardSlot.detailsRow', 'Details row')}
             </DropdownMenuCheckboxItem>
-            <DropdownMenuSeparator />
-            <CardIconStyleItems />
             <DropdownMenuSeparator />
           </>
         ) : null}

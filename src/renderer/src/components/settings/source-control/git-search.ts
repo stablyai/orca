@@ -1,5 +1,4 @@
 import { getAutoRenameBranchSearchEntries } from './auto-rename-branch-search'
-import { getWorkspaceIconSearchEntry } from './workspace-icon-search'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
@@ -133,6 +132,5 @@ export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
       )
     ]
   },
-  ...getAutoRenameBranchSearchEntries(),
-  getWorkspaceIconSearchEntry()
+  ...getAutoRenameBranchSearchEntries()
 ])
