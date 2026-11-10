@@ -24,6 +24,10 @@ const syntheticTitleSpinnerByPaneKey = new Map<
   SyntheticTitleSpinnerEntry<SyntheticAgentTitleProfile>
 >()
 let syntheticTitleSpinnerTimer: ReturnType<typeof setInterval> | null = null
+// Why: hooks restate a held wait on every event (Codex re-sends one per tool call while an async
+// question stays open), so ring BEL once per prompt per needs-input stretch or each restatement
+// becomes another OS notification.
+const rungNeedsInputPromptsByPaneKey = new Map<string, Set<string>>()
 
 function isSyntheticTitleWindowVisible(): boolean {
   const window = state.mainWindow
@@ -64,6 +68,7 @@ function canSendDecorativeSyntheticTitle(): boolean {
 }
 
 export function stopSyntheticTitleSpinner(paneKey: string): void {
+  rungNeedsInputPromptsByPaneKey.delete(paneKey)
   if (syntheticTitleSpinnerByPaneKey.delete(paneKey)) {
     stopSyntheticTitleSpinnerTimerIfIdle()
   }
@@ -117,14 +122,24 @@ export function resumeSyntheticTitleSpinnerTimer(): void {
   ensureSyntheticTitleSpinnerTimer()
 }
 
+function isNeedsInputState(agentState: AgentStatusState): boolean {
+  return agentState === 'blocked' || agentState === 'waiting'
+}
+
 export function driveSyntheticTitleFromHook(
   paneKey: string,
   agentState: AgentStatusState,
-  profile: SyntheticAgentTitleProfile
+  profile: SyntheticAgentTitleProfile,
+  /** Identifies what the agent is waiting on; a new prompt in the same wait rings again. */
+  needsInputPromptKey = ''
 ): void {
   const ptyId = getPtyIdForPaneKey(paneKey)
   if (!ptyId) {
     return
+  }
+  const needsUserInput = isNeedsInputState(agentState)
+  if (!needsUserInput) {
+    rungNeedsInputPromptsByPaneKey.delete(paneKey)
   }
   if (agentState === 'working') {
     // Emit immediately so visible startup does not wait for the next 80ms tick.
@@ -143,10 +158,17 @@ export function driveSyntheticTitleFromHook(
     return
   }
   // Stop before the next tick can restore working; only permission frames ring BEL, completion owns its own notifications.
+  const rungPrompts = rungNeedsInputPromptsByPaneKey.get(paneKey)
   stopSyntheticTitleSpinner(paneKey)
-  const needsUserInput = agentState === 'blocked' || agentState === 'waiting'
   const label = needsUserInput ? profile.permissionLabel : profile.idleLabel
-  sendSyntheticTitle(ptyId, `\x1b]0;${label}\x07${needsUserInput ? '\x07' : ''}`, { force: true })
+  let ringsBell = false
+  if (needsUserInput) {
+    const prompts = rungPrompts ?? new Set<string>()
+    ringsBell = !prompts.has(needsInputPromptKey)
+    prompts.add(needsInputPromptKey)
+    rungNeedsInputPromptsByPaneKey.set(paneKey, prompts)
+  }
+  sendSyntheticTitle(ptyId, `\x1b]0;${label}\x07${ringsBell ? '\x07' : ''}`, { force: true })
 }
 
 // Why: a profile that leaves working titles to the agent never overwrites the rest label Orca
@@ -187,7 +209,13 @@ export function initializeSyntheticTitleRuntime(): void {
 
 export function driveSyntheticTitleFromHookStatus(event: {
   paneKey: string
-  payload: { state: AgentStatusState; agentType?: string }
+  payload: {
+    state: AgentStatusState
+    agentType?: string
+    toolName?: string
+    toolInput?: string
+    interactivePrompt?: string
+  }
   providerSessionOnly?: boolean
   structuredHost?: unknown
 }): void {
@@ -200,8 +228,18 @@ export function driveSyntheticTitleFromHookStatus(event: {
   if (!profile) {
     return
   }
+  // Profiles that leave working titles to the agent never reach the drive below on working.
+  if (!isNeedsInputState(event.payload.state)) {
+    rungNeedsInputPromptsByPaneKey.delete(event.paneKey)
+  }
   if (shouldDriveSyntheticAgentTitleFromHook(event.payload.agentType, event.payload.state)) {
-    driveSyntheticTitleFromHook(event.paneKey, event.payload.state, profile)
+    const { toolName, toolInput, interactivePrompt } = event.payload
+    driveSyntheticTitleFromHook(
+      event.paneKey,
+      event.payload.state,
+      profile,
+      JSON.stringify([toolName ?? null, interactivePrompt ?? toolInput ?? null])
+    )
   } else if (event.payload.state === 'working' && profile.synthesizeTerminalTitle !== false) {
     retractSyntheticRestTitle(event.paneKey, profile)
   }
