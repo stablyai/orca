@@ -1,9 +1,10 @@
-import { memo, useId, useLayoutEffect, useRef, useState } from 'react'
+import { memo, useCallback, useId, useLayoutEffect, useRef, useState } from 'react'
 import { PanelRightClose, PanelRightOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { VirtualizedList } from '@/components/virtualized-list'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -68,6 +69,14 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
   const t = useTranslate()
   useUiLanguageRevision()
   const [expanded, setExpanded] = useState(false)
+  const [railElement, setRailElement] = useState<HTMLDivElement | null>(null)
+  const attachRail = useCallback(
+    (element: HTMLDivElement | null) => {
+      railRef.current = element
+      setRailElement(element)
+    },
+    [railRef]
+  )
   const listId = useId()
   const toggleRef = useRef<HTMLButtonElement>(null)
   const restoreToggleFocus = useRef(false)
@@ -87,14 +96,19 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
     }
     const index = drawnItems.findIndex((item) => item.id === focusId)
     if (index !== -1) {
+      const button = Array.from(railElement?.querySelectorAll('button') ?? []).find(
+        (element) => element.dataset.messageId === focusId
+      )
+      if (!button) {
+        return
+      }
       focusRequest.current = null
-      const button = railRef.current?.querySelectorAll('button')[index]
       button?.focus({ preventScroll: expanded })
       if (expanded) {
         button?.scrollIntoView?.({ block: 'nearest' })
       }
     }
-  }, [drawnItems, expanded, focusId, railRef])
+  }, [drawnItems, expanded, focusId, railElement])
 
   if (!rail.visible) {
     return null
@@ -127,6 +141,112 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
     ? t('components.native-chat.railCollapse', 'Collapse message list')
     : t('components.native-chat.railExpand', 'Expand message list')
 
+  const renderItem = (item: NativeChatRailItem): React.JSX.Element => {
+    // Preview ownership overrides scroll-position highlighting.
+    const lit = item.id === (previewedId ?? rail.activeId)
+    return (
+      <button
+        key={item.id}
+        ref={(button) => {
+          // Windowed rows may mount after the rail's own focus effect has run.
+          if (expanded && button && focusRequest.current === item.id) {
+            focusRequest.current = null
+            button.focus({ preventScroll: true })
+            button.scrollIntoView?.({ block: 'nearest' })
+          }
+        }}
+        type="button"
+        tabIndex={item.id === tabId ? 0 : -1}
+        aria-label={railItemLabel(item, t)}
+        data-message-id={item.id}
+        aria-current={item.id === rail.activeId ? 'true' : undefined}
+        aria-busy={item.id === pendingId ? true : undefined}
+        onPointerEnter={(event) => {
+          if (!expanded && event.pointerType !== 'touch') {
+            show(item, event.currentTarget)
+          }
+        }}
+        onFocus={(event) => {
+          rail.onFocusItem(item.id)
+          // A click focuses the tick too, and must not reopen the preview it dismissed.
+          if (!expanded && event.currentTarget.matches(':focus-visible')) {
+            show(item, event.currentTarget)
+          }
+        }}
+        onClick={() => onSelect(item)}
+        // Padding, not a gap, so the pointer never falls between two ticks.
+        className={cn(
+          'flex w-full shrink-0 cursor-pointer rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          expanded
+            ? 'px-3 py-2 text-left hover:bg-accent focus-visible:ring-inset'
+            : [
+                'items-center justify-center',
+                ticks.length > NATIVE_CHAT_RAIL_ROOMY_TICKS ? 'py-0.5' : 'py-1'
+              ],
+          expanded && item.id === rail.activeId && 'bg-accent'
+        )}
+        data-current={item.id === rail.activeId ? 'true' : undefined}
+      >
+        {expanded ? (
+          <span className="line-clamp-2 min-w-0 flex-1 break-words text-sm leading-snug">
+            {railItemLabel(item, t)}
+          </span>
+        ) : (
+          <span
+            aria-hidden
+            className={cn(
+              'h-[3px] rounded-full transition-[width,background-color] duration-150 motion-reduce:transition-none',
+              lit ? 'w-5 bg-foreground' : 'w-3 bg-foreground/50',
+              item.id === pendingId &&
+                'animate-pulse motion-reduce:animate-none motion-reduce:opacity-60'
+            )}
+          />
+        )}
+        {expanded && item.id === pendingId ? (
+          <LoadingSpinner className="ml-2 size-3.5 shrink-0" />
+        ) : null}
+      </button>
+    )
+  }
+
+  const controls = (
+    <div
+      className={cn(
+        'flex shrink-0 items-center',
+        expanded && 'justify-between border-b border-border px-3 py-2'
+      )}
+    >
+      {expanded ? (
+        <span className="text-xs font-medium">
+          {t('components.native-chat.railLabel', 'Your messages')}
+        </span>
+      ) : null}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            ref={toggleRef}
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label={toggleLabel}
+            aria-expanded={expanded}
+            aria-controls={listId}
+            onClick={toggleExpanded}
+          >
+            {expanded ? (
+              <PanelRightClose className="size-4" />
+            ) : (
+              <PanelRightOpen className="size-4" />
+            )}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}>
+          {toggleLabel}
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  )
+
   return (
     <div
       className={cn(
@@ -142,6 +262,7 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
         }
       }}
     >
+      {expanded ? controls : null}
       {/* Reuse one preview card so moving between ticks does not replay exit/entry animations. */}
       <HoverCard
         open={previewedId !== null}
@@ -151,7 +272,7 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
       >
         <HoverCardTrigger asChild>
           <div
-            ref={railRef}
+            ref={attachRail}
             id={listId}
             role="toolbar"
             data-native-chat-rail
@@ -214,64 +335,18 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
               ]
             )}
           >
-            {drawnItems.map((item) => {
-              // Preview ownership overrides scroll-position highlighting.
-              const lit = item.id === (previewedId ?? rail.activeId)
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  tabIndex={item.id === tabId ? 0 : -1}
-                  aria-label={railItemLabel(item, t)}
-                  aria-current={item.id === rail.activeId ? 'true' : undefined}
-                  aria-busy={item.id === pendingId ? true : undefined}
-                  onPointerEnter={(event) => {
-                    if (!expanded && event.pointerType !== 'touch') {
-                      show(item, event.currentTarget)
-                    }
-                  }}
-                  onFocus={(event) => {
-                    rail.onFocusItem(item.id)
-                    // A click focuses the tick too, and must not reopen the preview it dismissed.
-                    if (!expanded && event.currentTarget.matches(':focus-visible')) {
-                      show(item, event.currentTarget)
-                    }
-                  }}
-                  onClick={() => onSelect(item)}
-                  // Padding, not a gap, so the pointer never falls between two ticks.
-                  className={cn(
-                    'flex w-full shrink-0 cursor-pointer rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    expanded
-                      ? 'px-3 py-2 text-left hover:bg-accent focus-visible:ring-inset'
-                      : [
-                          'items-center justify-center',
-                          ticks.length > NATIVE_CHAT_RAIL_ROOMY_TICKS ? 'py-0.5' : 'py-1'
-                        ],
-                    expanded && item.id === rail.activeId && 'bg-accent'
-                  )}
-                  data-current={item.id === rail.activeId ? 'true' : undefined}
-                >
-                  {expanded ? (
-                    <span className="line-clamp-2 min-w-0 flex-1 break-words text-sm leading-snug">
-                      {railItemLabel(item, t)}
-                    </span>
-                  ) : (
-                    <span
-                      aria-hidden
-                      className={cn(
-                        'h-[3px] rounded-full transition-[width,background-color] duration-150 motion-reduce:transition-none',
-                        lit ? 'w-5 bg-foreground' : 'w-3 bg-foreground/50',
-                        item.id === pendingId &&
-                          'animate-pulse motion-reduce:animate-none motion-reduce:opacity-60'
-                      )}
-                    />
-                  )}
-                  {expanded && item.id === pendingId ? (
-                    <LoadingSpinner className="ml-2 size-3.5 shrink-0" />
-                  ) : null}
-                </button>
-              )
-            })}
+            {expanded ? (
+              <VirtualizedList
+                rows={items}
+                getRowKey={(item) => item.id}
+                renderRow={renderItem}
+                scrollElement={railElement}
+                estimateRowHeightPx={56}
+                activeRowKey={tabId}
+              />
+            ) : (
+              ticks.map(renderItem)
+            )}
           </div>
         </HoverCardTrigger>
         <HoverCardContent
@@ -293,41 +368,7 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
           ) : null}
         </HoverCardContent>
       </HoverCard>
-      <div
-        className={cn(
-          'flex shrink-0 items-center',
-          expanded && 'order-first justify-between border-b border-border px-3 py-2'
-        )}
-      >
-        {expanded ? (
-          <span className="text-xs font-medium">
-            {t('components.native-chat.railLabel', 'Your messages')}
-          </span>
-        ) : null}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              ref={toggleRef}
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              aria-label={toggleLabel}
-              aria-expanded={expanded}
-              aria-controls={listId}
-              onClick={toggleExpanded}
-            >
-              {expanded ? (
-                <PanelRightClose className="size-4" />
-              ) : (
-                <PanelRightOpen className="size-4" />
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {toggleLabel}
-          </TooltipContent>
-        </Tooltip>
-      </div>
+      {!expanded ? controls : null}
     </div>
   )
 })
