@@ -293,6 +293,20 @@
       "package": "lucide-static",
       "version": "0.577.0",
       "source": "package/icons/key-round.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_sun_moon.svg",
+      "sha256": "62caf041488278eec6b354cff0129d024a364ccd7073b9e1579c177bfe919771",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/sun-moon.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_life_buoy.svg",
+      "sha256": "326623e72c531ce5e353e1433e62d76ae208fb6898cf9e5428a20c9b6f118faa",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/life-buoy.svg"
     }
   ]
 }

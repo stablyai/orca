@@ -21,7 +21,7 @@ import { AgentActivityWrites } from '../home/AgentActivityWrites';
 import { AgentActions } from '../home/AgentActions';
 import { AgentsTab } from '../home/AgentsTab';
 import { DesktopActions } from '../home/DesktopActions';
-import { describeDesktopConnection, DesktopConnectionVerdict, endpointLabel } from '../diagnostics/ConnectionDiagnostics';
+import { appVersion, describeDesktopConnection, DesktopConnectionVerdict, endpointLabel } from '../diagnostics/ConnectionDiagnostics';
 import { appendLog, LOG_LEVEL_INFO } from '../diagnostics/ConnectionLogStore';
 import { HomeUsageCard, HomeUsageWindow, HomeAutomation, HomeAutomationRun, homeUsageEventType, readHomeUsage, readHomeAutomations,
   readHomeAutomationRuns, homeAutomationToggleParams } from '../home/HomeAccountUsage';
@@ -203,6 +203,7 @@ struct Home {
   private onboardingChecked: boolean = false;
   private onboardingSteps: string[] = [];
   private onboardingNavigating: boolean = false;
+  private readonly installedVersion: string = appVersion();
 
   // ---------------------------------------------------------------- helpers
 
@@ -1833,23 +1834,23 @@ struct Home {
       ForEach(items, (row: SettingsMenuItem, index: number) => {
         Column() {
           if (index > 0) {
-            this.hairline(46)
+            this.hairline(52)
           }
-          Row({ space: 11 }) {
-            Image(row.icon).supportSvg2(true)
-              .width(18).height(18)
-              .colorFilter(lucideColorFilter(this.pal().textSecondary))
-            Text(uiText(row.label, this.uiLocale))
-              .fontFamily('Geist').fontSize(16)
-              .fontColor(this.pal().textPrimary)
-              .maxLines(1)
-              .layoutWeight(1)
-            Image($r('app.media.lucide_chevron_right')).supportSvg2(true)
-              .width(14).height(14)
-              .colorFilter(lucideColorFilter(this.pal().textMuted))
-          }
-          .width('100%')
-          .padding({ top: 12, bottom: 12, left: 16, right: 14 })
+          Button({ type: ButtonType.Normal }) {
+            Row({ space: 12 }) {
+              Row() {
+                Image(row.icon).supportSvg2(true).width(18).height(18)
+                  .colorFilter(lucideColorFilter(this.pal().textSecondary)).accessibilityLevel('no')
+              }.width(24).justifyContent(FlexAlign.Center)
+              Text(uiText(row.label, this.uiLocale)).fontFamily('Geist').fontSize(15)
+                .fontColor(this.pal().textPrimary).maxLines(1).layoutWeight(1)
+              if (!external) {
+                Image($r('app.media.lucide_chevron_right')).supportSvg2(true).width(15).height(15)
+                  .colorFilter(lucideColorFilter(this.pal().textMuted)).accessibilityLevel('no')
+              }
+            }.width('100%').padding({ top: 8, bottom: 8, left: 16, right: 16 })
+          }.width('100%').constraintSize({ minHeight: 48 }).padding(0).borderRadius(0).backgroundColor(Color.Transparent)
+          .accessibilityText(uiText(row.label, this.uiLocale))
           .onClick(() => {
             if (external) {
               let context = getContext(this) as common.UIAbilityContext;
@@ -1864,9 +1865,8 @@ struct Home {
     }
     .width('100%')
     .borderRadius(16)
-    .backgroundColor(this.pal().bgPanel)
+    .backgroundColor(this.pal().sheetGroup)
     .clip(true)
-    .margin({ top: 8 })
   }
 
   @Builder
@@ -1874,13 +1874,21 @@ struct Home {
     Column() {
       this.tabHeader('设置')
       Scroll() {
-        Column({ space: 12 }) {
+        Column({ space: 16 }) {
           this.settingsGroup(SETTINGS_MENU_ITEMS, false)
+          if (this.installedVersion !== '' && this.installedVersion !== 'unknown') {
+            Row() {
+              Text(uiText('settings.appUpdateSettingsRows.installedVersion', this.uiLocale)
+                .replace('{{version}}', this.installedVersion)).fontFamily('Geist').fontSize(15)
+                .fontColor(this.pal().textPrimary)
+            }.width('100%').constraintSize({ minHeight: 48 }).padding({ top: 8, bottom: 8, left: 16, right: 16 })
+              .borderRadius(16).backgroundColor(this.pal().sheetGroup)
+          }
           PendingCredentialCleanupCard()
           this.settingsGroup(SETTINGS_LINK_ITEMS, true)
         }
         .width('100%')
-        .padding({ left: 16, right: 16, bottom: TAB_BAR_HEIGHT + 24 })
+        .padding({ top: 8, left: 16, right: 16, bottom: TAB_BAR_HEIGHT + 24 })
       }
       .scrollBar(BarState.Off)
       .width('100%')

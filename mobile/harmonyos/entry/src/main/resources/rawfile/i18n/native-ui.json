@@ -8051,5 +8051,18 @@
     "tr": "Eşleştirme kimlik bilgilerini temizlemeyi yeniden dene",
     "zh-Hant": "重試清除配對憑證",
     "zh": "重试清除配对凭据"
+  },
+  "settings.appUpdateSettingsRows.installedVersion": {
+    "de": "Version {{version}}",
+    "en": "Version {{version}}",
+    "es": "Versión {{version}}",
+    "fr": "Version {{version}}",
+    "ja": "バージョン {{version}}",
+    "ko": "버전 {{version}}",
+    "pt": "Versão {{version}}",
+    "ru": "Версия {{version}}",
+    "tr": "Sürüm {{version}}",
+    "zh-Hant": "版本 {{version}}",
+    "zh": "版本 {{version}}"
   }
 }

@@ -286,5 +286,21 @@
       "mobile/src/i18n/locales/zh-Hant.json": "69487f3e5e3bb3eb229f818045caf9e10b8bde7b946958bbf981509f6c5232c3",
       "mobile/src/i18n/locales/zh.json": "3925c7f7a4541d4ee514a3cc90bf9ac5a2ffa92e62b93f511fe96a0908ba9276"
     }
+  },
+  "installedAppVersionSources": {
+    "revision": "d1466f6017c4bb6006b77eb46f2fc0f461ef021e",
+    "catalogs": {
+      "mobile/src/i18n/locales/de.json": "aa0e7d340d11b8872abb96cf639fbd7d290ee4a30d8d38c8ce9acf076aa8d363",
+      "mobile/src/i18n/locales/en.json": "819c4f6d6b7d6898b57d7cb2d56756b17deebae22fcbb06df3deedcab26baca0",
+      "mobile/src/i18n/locales/es.json": "a7124202253a64ac28c485d010f55d349cfe0def00059e6c2f43ef3aea605f9a",
+      "mobile/src/i18n/locales/fr.json": "6a7032263d8920dfe70fdceb957b0fb90cdc624534d98155882bf27043e81aab",
+      "mobile/src/i18n/locales/ja.json": "0b6a6f3506a626e04c876035c4acf1f306a40face7caab1c94b43ed463c2783a",
+      "mobile/src/i18n/locales/ko.json": "3e690561dc832a0d5f4b4f6b857caeb7a5dc1012db81df3937727447e020d975",
+      "mobile/src/i18n/locales/pt.json": "471dd8d3f2937cd42f34b10c719d66afb6d2a207e56d21c459bdd4653cb3de9b",
+      "mobile/src/i18n/locales/ru.json": "17fe2a7fb42ad444421e09897c3b0bff4517ab703252abba2d31748ba2aee040",
+      "mobile/src/i18n/locales/tr.json": "38ed605cf8ea743e023b4376bb06d19cab6653237c3c00443f7506bcd979dd89",
+      "mobile/src/i18n/locales/zh-Hant.json": "ca1cf749da457ec91e56a42349f12e757c420cbb1b5e7216b56ca8c9ac68b08f",
+      "mobile/src/i18n/locales/zh.json": "862867348d929fb6507d90e7bc8bf2360032ee1dc5ec64d1e2e8e93e1c52ba35"
+    }
   }
 }
