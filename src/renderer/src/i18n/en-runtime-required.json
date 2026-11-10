@@ -702,8 +702,10 @@
           "syncedServerSingular": "Synced {{count}} server"
         },
         "WarpThemeImportModal": {
+          "found_theme": "Found {{value0}} themes",
           "found_theme_one": "Found {{value0}} theme",
           "found_theme_other": "Found {{value0}} themes",
+          "import_theme": "Import {{value0}} Themes",
           "import_theme_one": "Import {{value0}} Theme",
           "import_theme_other": "Import {{value0}} Themes"
         },
@@ -783,6 +785,11 @@
         "computerUseSummary": {
           "permissionsRequired_one": "{{value0}} permission required before agents can operate app windows.",
           "permissionsRequired_other": "{{value0}} permissions required before agents can operate app windows."
+        },
+        "repository": {
+          "search": {
+            "keepForkUpToDate": "Keep Fork Up to Date"
+          }
         },
         "sshHostServer": {
           "automationsLeftDisabled_one": "This host’s Orca server took over {{count}} automation but couldn’t turn it back on. Turn it on in Automations.",

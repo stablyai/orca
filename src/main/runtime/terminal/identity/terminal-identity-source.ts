@@ -8,6 +8,7 @@ import type { TerminalHandleRecord, PtyIncarnationHandleRecord } from './termina
 import { OrderedTerminalCandidates } from './ordered-terminal-candidates'
 import { TerminalIncarnationBindings } from './terminal-incarnation-bindings'
 import { TerminalPaneCandidates } from './terminal-pane-candidates'
+import { retireReplacedLaunch } from '../launch/launch-evidence'
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] }
 /** Canonical terminal facts; semantic operations retain selection, callbacks and failure policy. */
@@ -83,6 +84,7 @@ export class TerminalIdentitySource {
   }
 
   setPtyIncarnationId(record: RuntimePtyWorktreeRecord, value: string | null): void {
+    retireReplacedLaunch(record, value)
     this.setPtyField(record, 'incarnationId', value)
   }
 

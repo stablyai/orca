@@ -1,3 +1,4 @@
+import type { DaemonLaunchNoteChange } from '../../../daemon/protocol/daemon-launch-note-protocol'
 import type {
   TerminalLimitStatus,
   TerminalLimitUpdate
@@ -172,6 +173,7 @@ export type RuntimePtyController = {
   supportsForegroundObservation?(ptyId: string): boolean
   confirmForegroundProcess?(ptyId: string): Promise<string | null>
   confirmShellForeground?(ptyId: string): Promise<boolean>
+  setLaunchNote?(ptyId: string, change: DaemonLaunchNoteChange): void
   hasChildProcesses?(ptyId: string): Promise<boolean>
   clearBuffer?(ptyId: string): Promise<void>
   resetInputModes?(ptyId: string): Promise<void>

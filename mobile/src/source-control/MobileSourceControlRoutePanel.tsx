@@ -10,6 +10,8 @@ export function MobileSourceControlRoutePanel(props: MobileSourceControlPanelPro
   if (parseWorkspaceKey(props.worktreeId)?.type === 'folder') {
     return (
       <MobileFolderSourceControlPanel
+        // One folder per mount: its creates' late answers can't reach another folder's screen.
+        key={`${props.hostId}\0${props.worktreeId}`}
         hostId={props.hostId}
         folderWorktreeId={props.worktreeId}
         name={props.name ?? ''}

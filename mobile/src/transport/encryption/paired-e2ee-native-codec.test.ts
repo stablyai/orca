@@ -1,4 +1,4 @@
-import { gunzipSync } from 'node:zlib'
+import { brotliDecompressSync, gunzipSync } from 'node:zlib'
 import sodium from 'react-native-libsodium'
 
 import { beforeAll, describe, expect, it, vi } from 'vitest'
@@ -38,6 +38,8 @@ function libsodiumBindings(): PairedE2EENativeBindings {
     },
     codec: {
       gunzip: (input, outputLimit) => new Uint8Array(gunzipSync(input)).slice(0, outputLimit),
+      brotliDecompress: async (input, outputLimit) =>
+        new Uint8Array(brotliDecompressSync(input)).slice(0, outputLimit),
       decodeUtf8: (input) => {
         if (input[0] === 0xef && input[1] === 0xbb && input[2] === 0xbf) {
           return null

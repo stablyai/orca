@@ -83,7 +83,7 @@ export function FloatingWorkspacePane({
   return (
     <section className="space-y-4">
       <SearchableSetting
-        title={t('auto.components.settings.FloatingWorkspacePane.1f67f39384', 'Floating Workspace')}
+        title={t('auto.components.settings.FloatingWorkspacePane.2374e81dd8', 'Floating workspace')}
         description={t(
           'auto.components.settings.FloatingWorkspacePane.37df688d6f',
           'Enable the floating workspace and choose where new tabs start.'
@@ -103,8 +103,8 @@ export function FloatingWorkspacePane({
       >
         <SettingsSwitchRow
           label={t(
-            'auto.components.settings.FloatingWorkspacePane.5136813663',
-            'Enable Floating Workspace'
+            'auto.components.settings.FloatingWorkspacePane.172d1d75c3',
+            'Enable floating workspace'
           )}
           description={t(
             'auto.components.settings.FloatingWorkspacePane.41eb95f7f0',
@@ -126,8 +126,8 @@ export function FloatingWorkspacePane({
         <SettingsRow
           alignTop
           label={t(
-            'auto.components.settings.FloatingWorkspacePane.12aa09f10c',
-            'Terminal Directory'
+            'auto.components.settings.FloatingWorkspacePane.7cedc178d6',
+            'Terminal directory'
           )}
           description={t(
             'auto.components.settings.FloatingWorkspacePane.81afb79785',
@@ -159,8 +159,8 @@ export function FloatingWorkspacePane({
 
         <SettingsRow
           label={t(
-            'auto.components.settings.FloatingWorkspacePane.5e5a8da236',
-            'Toggle Button Location'
+            'auto.components.settings.FloatingWorkspacePane.b9c2a85346',
+            'Toggle button location'
           )}
           description={t(
             'auto.components.settings.FloatingWorkspacePane.3c900e26e5',
@@ -181,10 +181,10 @@ export function FloatingWorkspacePane({
               }}
             >
               <ToggleGroupItem value="floating-button">
-                {t('auto.components.settings.FloatingWorkspacePane.9fb225f2d7', 'Floating Button')}
+                {t('auto.components.settings.FloatingWorkspacePane.73ac917638', 'Floating button')}
               </ToggleGroupItem>
               <ToggleGroupItem value="status-bar">
-                {t('auto.components.settings.FloatingWorkspacePane.aeaf76fda9', 'Status Bar')}
+                {t('auto.components.settings.FloatingWorkspacePane.dd7eb9270a', 'Status bar')}
               </ToggleGroupItem>
             </ToggleGroup>
           }
