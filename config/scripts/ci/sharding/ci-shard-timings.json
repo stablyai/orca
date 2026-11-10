@@ -5802,8 +5802,6 @@
       "src/renderer/src/components/terminal-pane/layout/close/RunningTerminalCloseDialog.test.tsx": 2303,
       "src/renderer/src/components/terminal-pane/session-fork/TerminalAgentSessionForkDialog.test.tsx": 266,
       "src/renderer/src/components/terminal-pane/titles/TerminalPaneHeaderOverlay.test.tsx": 1104,
-      "src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/recovery/TerminalPaneRecoveryPortals.test.tsx": 670,
-      "src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/recovery/TerminalRemoteRuntimeReconnectBanner.test.tsx": 812,
       "src/renderer/src/components/terminal-pane/account-restart/detached/account-restart-queue-progress.test.ts": 1988,
       "src/renderer/src/components/terminal-pane/agent-completion/agent-completion-coordinator-attention-dispatch.test.ts": 301,
       "src/renderer/src/components/terminal-pane/agent-completion/agent-completion-coordinator-completion-replay-guard.test.ts": 318,
