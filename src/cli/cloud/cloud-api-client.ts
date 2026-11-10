@@ -80,7 +80,8 @@ export class CloudApiClient {
       throw cloudApiError(response.status, jsonFields(body), {
         credentials: this.credentials,
         retryAfter: response.headers.get('retry-after'),
-        intent: options.intent
+        intent: options.intent,
+        path
       })
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the client's typed boundary; each caller names the control-plane response shape it reads

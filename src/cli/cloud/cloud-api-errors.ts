@@ -13,6 +13,8 @@ export type CloudApiErrorContext = {
   credentials: Pick<CloudCredentials, 'source' | 'token' | 'path'>
   retryAfter?: string | null
   intent?: CloudRequestIntent
+  /** Request path; picks the 404 wording (workspace or routine). */
+  path?: string
 }
 
 const NOTHING_CREATED = "Nothing was created, and you weren't charged."
@@ -198,12 +200,14 @@ export function cloudApiError(
     return new RuntimeClientError('cloud_forbidden', forbiddenMessage(reason), data([]))
   }
   if (status === 404) {
+    const routine = context.path?.startsWith('/v1/routines') ?? false
+    const noun = routine ? 'routine' : 'workspace'
     return new RuntimeClientError(
       'cloud_not_found',
-      inVm
-        ? 'Not found. A workspace token sees only its own workspace and the workspaces it created.'
-        : "Not found, or these credentials can't see it.",
-      data(['Run `orca cloud workspace list` to see the workspaces you can use.'])
+      inVm && !routine
+        ? "No workspace with that ID, or you don't have access to it. A workspace token sees only its own workspace and the workspaces it created."
+        : `No ${noun} with that ID, or you don't have access to it.`,
+      data([`Run \`orca cloud ${noun} list\` to see the ${noun}s you can use.`])
     )
   }
   if (status === 429) {

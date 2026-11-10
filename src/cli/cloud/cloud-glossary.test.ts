@@ -197,6 +197,16 @@ describe('glossary error copy', () => {
     expect(
       cloudApiError(502, { error: 'provider_unavailable' }, { credentials: user }).message
     ).not.toContain('provider_unavailable')
+    expect(
+      cloudApiError(404, { error: 'not_found' }, { credentials: user, path: '/v1/workspaces/x' })
+        .message
+    ).toBe("No workspace with that ID, or you don't have access to it.")
+    expect(
+      cloudApiError(404, { error: 'not_found' }, { credentials: user, path: '/v1/routines/x' })
+    ).toMatchObject({
+      message: "No routine with that ID, or you don't have access to it.",
+      data: { nextSteps: ['Run `orca cloud routine list` to see the routines you can use.'] }
+    })
   })
 
   it('turns a failed wake (resume_failed) into the glossary copy', async () => {
