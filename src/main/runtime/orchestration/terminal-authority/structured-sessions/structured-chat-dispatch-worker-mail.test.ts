@@ -1,4 +1,3 @@
-import '../../../rpc/unused-default-rpc-methods.test-fixture'
 // Worker mail belongs to its Dispatch mailbox; a message the provider may have taken before it died is never handed over again, even after a later turn, a restart or a clear: check keeps it.
 
 import { describe, expect, it, vi } from 'vitest'

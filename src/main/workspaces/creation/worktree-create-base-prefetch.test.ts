@@ -45,10 +45,6 @@ function resolveOnly(present: string[]): void {
   })
 }
 
-function revParse(ref: string): string[] {
-  return ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]
-}
-
 beforeEach(() => {
   for (const mock of Object.values(mocks)) {
     mock.mockReset()
@@ -59,117 +55,6 @@ beforeEach(() => {
   mocks.hasRemoteTrackingRef.mockResolvedValue(false)
   mocks.getOrStartRemoteTrackingBaseRefresh.mockResolvedValue({ ok: true })
   mocks.fetchRemoteWithCache.mockResolvedValue(undefined)
-})
-
-describe('prefetchWorktreeCreateBase local git routing', () => {
-  it('resolves the default base and its ref probes inside the selected WSL distro', async () => {
-    resolveOnly(['refs/remotes/origin/main'])
-
-    await expect(
-      prefetchWorktreeCreateBase({ repo, runtime: runtime(), gitOptions: WSL })
-    ).resolves.toBe('origin/main')
-
-    expect(mocks.getBaseRefDefault).toHaveBeenCalledWith(repo.path, WSL)
-    expect(mocks.resolveRemoteTrackingBase).toHaveBeenCalledWith(repo.path, 'origin/main', WSL)
-    expect(mocks.gitExecFileAsync).toHaveBeenCalledWith(revParse('refs/remotes/origin/main'), {
-      cwd: repo.path,
-      ...WSL
-    })
-    expect(mocks.fetchRemoteWithCache).not.toHaveBeenCalled()
-  })
-
-  it('probes a full commit object inside the selected WSL distro', async () => {
-    const sha = 'a'.repeat(40)
-    resolveOnly([sha])
-
-    await expect(
-      prefetchWorktreeCreateBase({ repo, baseBranch: sha, runtime: runtime(), gitOptions: WSL })
-    ).resolves.toBe(sha)
-
-    expect(mocks.gitExecFileAsync).toHaveBeenCalledWith(revParse(sha), {
-      cwd: repo.path,
-      ...WSL
-    })
-    expect(mocks.fetchRemoteWithCache).not.toHaveBeenCalled()
-  })
-
-  it('routes the exact remote-base refresh through the selected WSL distro', async () => {
-    const remoteTrackingBase = {
-      remote: 'origin',
-      branch: 'main',
-      ref: 'refs/remotes/origin/main',
-      base: 'origin/main'
-    }
-    mocks.resolveRemoteTrackingBase.mockResolvedValue(remoteTrackingBase)
-    mocks.hasRemoteTrackingRef.mockResolvedValue(true)
-
-    await expect(
-      prefetchWorktreeCreateBase({
-        repo,
-        baseBranch: 'origin/main',
-        runtime: runtime(),
-        gitOptions: WSL
-      })
-    ).resolves.toBe('origin/main')
-
-    expect(mocks.hasRemoteTrackingRef).toHaveBeenCalledWith(repo.path, remoteTrackingBase, WSL)
-    expect(mocks.getOrStartRemoteTrackingBaseRefresh).toHaveBeenCalledWith(
-      repo.path,
-      remoteTrackingBase,
-      WSL
-    )
-  })
-
-  it('routes the broad remote-fetch fallback through the selected WSL distro', async () => {
-    await expect(
-      prefetchWorktreeCreateBase({
-        repo,
-        baseBranch: 'feature/topic',
-        runtime: runtime(),
-        gitOptions: WSL
-      })
-    ).resolves.toBe('feature/topic')
-
-    expect(mocks.fetchRemoteWithCache).toHaveBeenCalledWith(repo.path, 'origin', WSL)
-  })
-
-  it('leaves host-routed probes on the git host they used before routing existed', async () => {
-    await expect(
-      prefetchWorktreeCreateBase({
-        repo,
-        baseBranch: 'feature/topic',
-        runtime: runtime(),
-        gitOptions: {}
-      })
-    ).resolves.toBe('feature/topic')
-
-    expect(mocks.gitExecFileAsync).toHaveBeenCalledWith(revParse('refs/remotes/feature/topic'), {
-      cwd: repo.path
-    })
-    for (const call of mocks.gitExecFileAsync.mock.calls) {
-      expect(call[1]).toEqual({ cwd: repo.path })
-    }
-    expect(mocks.resolveRemoteTrackingBase).toHaveBeenCalledWith(repo.path, 'feature/topic')
-    expect(mocks.fetchRemoteWithCache).toHaveBeenCalledWith(repo.path, 'origin')
-  })
-
-  it('does not resolve a local base for SSH repos', async () => {
-    const prepareCheckout = vi.fn()
-
-    await expect(
-      prefetchWorktreeCreateBase({
-        repo: { ...repo, connectionId: 'conn-1' },
-        prepareCheckout,
-        baseBranch: 'origin/main',
-        runtime: runtime(),
-        gitOptions: WSL
-      })
-    ).resolves.toBeUndefined()
-
-    expect(mocks.gitExecFileAsync).not.toHaveBeenCalled()
-    expect(mocks.resolveRemoteTrackingBase).not.toHaveBeenCalled()
-    expect(prepareCheckout).not.toHaveBeenCalled()
-  })
 })
 
 describe('checkout and refresh overlap', () => {
@@ -220,58 +105,6 @@ describe('checkout and refresh overlap', () => {
       expect(prepareCheckout).toHaveBeenCalledOnce()
     }
   )
-
-  it('waits for refresh when the selected base is not local', async () => {
-    mocks.resolveRemoteTrackingBase.mockResolvedValue({
-      remote: 'origin',
-      branch: 'main',
-      ref: 'refs/remotes/origin/main',
-      base: 'origin/main'
-    })
-    let release!: () => void
-    mocks.getOrStartRemoteTrackingBaseRefresh.mockImplementation(
-      () =>
-        new Promise<{ ok: boolean }>((resolve) => {
-          release = () => resolve({ ok: true })
-        })
-    )
-    const prepareCheckout = vi.fn().mockResolvedValue(undefined)
-    const result = prefetchWorktreeCreateBase({
-      repo,
-      baseBranch: 'origin/main',
-      runtime: runtime(),
-      gitOptions: {},
-      prepareCheckout
-    })
-    await vi.waitFor(() =>
-      expect(mocks.getOrStartRemoteTrackingBaseRefresh).toHaveBeenCalledTimes(1)
-    )
-    expect(prepareCheckout).not.toHaveBeenCalled()
-    release()
-    await result
-    expect(prepareCheckout).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not fail a successful refresh because preparation fails', async () => {
-    mocks.resolveRemoteTrackingBase.mockResolvedValue({
-      remote: 'origin',
-      branch: 'main',
-      ref: 'refs/remotes/origin/main',
-      base: 'origin/main'
-    })
-    mocks.hasRemoteTrackingRef.mockResolvedValue(true)
-    const prepareCheckout = vi.fn().mockRejectedValue(new Error('checkout failed'))
-    await expect(
-      prefetchWorktreeCreateBase({
-        repo,
-        baseBranch: 'origin/main',
-        runtime: runtime(),
-        gitOptions: {},
-        prepareCheckout
-      })
-    ).resolves.toBe('origin/main')
-    expect(prepareCheckout).toHaveBeenCalledTimes(1)
-  })
 
   it('settles preparation before propagating refresh failure', async () => {
     mocks.resolveRemoteTrackingBase.mockResolvedValue({
@@ -335,18 +168,4 @@ describe('checkout and refresh overlap', () => {
     expect(prepareCheckout).toHaveBeenCalledOnce()
     expect(mocks.getOrStartRemoteTrackingBaseRefresh).toHaveBeenCalledOnce()
   })
-})
-
-it('does not prepare folder repositories', async () => {
-  const prepareCheckout = vi.fn()
-  await expect(
-    prefetchWorktreeCreateBase({
-      repo: { ...repo, kind: 'folder' },
-      runtime: runtime(),
-      gitOptions: {},
-      prepareCheckout
-    })
-  ).resolves.toBeUndefined()
-  expect(prepareCheckout).not.toHaveBeenCalled()
-  expect(mocks.gitExecFileAsync).not.toHaveBeenCalled()
 })

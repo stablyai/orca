@@ -3,8 +3,8 @@ import {
   armPrimarySelectionNativePasteSuppression,
   isPrimarySelectionEnabled,
   readPrimarySelectionText
-} from '@/lib/primary-selection'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+} from '@/lib/clipboard/primary-selection/primary-selection'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { resolveTerminalPasteRuntime } from '../paste/terminal-paste-runtime'
 import { isTerminalPanePasteTargetCurrent } from '../paste/terminal-paste-target-state'
 import { pasteTextIntoTerminalPane } from '../paste/terminal-pane-paste-dispatch'

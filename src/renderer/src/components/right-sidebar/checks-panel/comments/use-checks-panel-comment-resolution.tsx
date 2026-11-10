@@ -2,7 +2,7 @@ import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { resolveChecksActionAgent } from '@/lib/source-control/ai/source-control-agent-picker'
 import type { SourceControlActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
-import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import { useCallback, useEffect } from 'react'
 import { toast } from 'sonner'
 import {
@@ -21,7 +21,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { isReviewThreadResolutionInFlight } from '@/store/github/review-threads/review-thread-resolution-in-flight'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 import { errorMessage } from '../../../../../../shared/error-message'
 import type { GitLabDiscussionResolveResult } from '../../../../../../shared/gitlab-types'
 

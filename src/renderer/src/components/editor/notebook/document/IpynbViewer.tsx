@@ -1,7 +1,7 @@
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { useCallback, useMemo, useState } from 'react'
 import { AlertCircle, Save } from 'lucide-react'
-import { computeEditorFontSize } from '@/lib/editor-font-zoom'
+import { computeEditorFontSize } from '@/lib/editor/appearance/editor-font-zoom'
 import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
 import {
@@ -15,7 +15,7 @@ import {
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import { editorShortcutMatches } from '../../editor-shortcuts'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { IpynbCellToolbar, IpynbToolbarButton } from '../cells/IpynbCellToolbar'
 import { IpynbCellSource } from '../cells/IpynbCellEditor'

@@ -19,7 +19,7 @@ import type {
   SessionOptionDescriptor,
   SessionOptionValue
 } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
-import type { MobileNativeChatSendOutcome } from '../mobile-native-chat-send'
+import type { MobileNativeChatSendOutcome } from '../composer/mobile-native-chat-send'
 import {
   createNativeChatPtySessionOptions,
   type NativeChatPtySessionOptionsSurface

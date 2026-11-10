@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import type * as LegacyWslRuntimeAuthDrain from './legacy-wsl-runtime-auth-drain'
+import type * as WslCodexSessionBridge from '../codex/history/bridges/wsl-codex-session-bridge'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
   createCodexAuthJson,
@@ -15,6 +17,15 @@ import {
 // These launches are the user's own, so the E9 exec gate lets their prep run.
 vi.mock('../wsl/discovery/wsl-background-exec-gate', () => ({
   blockedWslDistroForExec: async () => null
+}))
+// Background WSL drain/bridge spawn wsl.exe and warn after the file ends; these specs cover only routing.
+vi.mock('./legacy-wsl-runtime-auth-drain', async (importOriginal) => ({
+  ...(await importOriginal<typeof LegacyWslRuntimeAuthDrain>()),
+  startLegacyWslRuntimeAuthDrain: async () => {}
+}))
+vi.mock('../codex/history/bridges/wsl-codex-session-bridge', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslCodexSessionBridge>()),
+  startWslCodexSessionBridgeInBackground: async () => {}
 }))
 vi.mock('electron', () => ({
   app: {

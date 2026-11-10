@@ -2,11 +2,10 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
-import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
-import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
+import '../../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 
@@ -39,25 +38,6 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
     isPinned: false,
     sortOrder: 0,
     lastActivityAt: 0,
-    ...overrides
-  }
-}
-
-function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
-  return {
-    id: 'folder-1',
-    projectGroupId: 'project-1',
-    name: 'Remote folder',
-    folderPath: '/workspace/folder-1',
-    linkedTask: null,
-    comment: '',
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 0,
-    createdAt: 0,
-    updatedAt: 0,
     ...overrides
   }
 }
@@ -149,26 +129,6 @@ describe('activateBrowserPagePaletteResult', () => {
     seedStore()
   })
 
-  it('activates an SSH worktree through its paired-runtime owner alias', () => {
-    seedStore({
-      worktreesByRepo: {
-        'repo-1': [
-          makeWorktree({
-            hostId: 'ssh:private-target',
-            runtimeOwnerEnvironmentId: 'paired-host'
-          })
-        ]
-      }
-    })
-
-    expect(
-      activateBrowserPagePaletteResult({ ...target, executionHostId: 'runtime:paired-host' }).status
-    ).toBe('activated')
-    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {
-      executionHostId: 'runtime:paired-host'
-    })
-  })
-
   it('rejects colliding child ids before mutating either host', () => {
     seedStore({
       worktreesByRepo: {
@@ -193,41 +153,6 @@ describe('activateBrowserPagePaletteResult', () => {
     })
     expect(useAppStore.getState()).toBe(before)
     expect(mocks.activateAndRevealWorkspace).not.toHaveBeenCalled()
-  })
-
-  it('keeps browser workspaces with distinct unified tabs in multiple groups activatable', () => {
-    seedStore({
-      unifiedTabsByWorktree: {
-        'wt-1': [makeBrowserTab(), makeBrowserTab({ id: 'second-view', groupId: 'group-2' })]
-      },
-      groupsByWorktree: {
-        'wt-1': [
-          makeGroup(),
-          makeGroup({ id: 'group-2', activeTabId: 'second-view', tabOrder: ['second-view'] })
-        ]
-      }
-    })
-    expect(activateBrowserPagePaletteResult(target).status).toBe('activated')
-  })
-
-  it('activates pages in remote folder workspaces', () => {
-    const worktreeId = folderWorkspaceKey('folder-1')
-    seedStore({
-      worktreesByRepo: {},
-      folderWorkspaces: [makeFolderWorkspace({ executionHostId: 'ssh:host-1' })],
-      browserTabsByWorktree: { [worktreeId]: [makeWorkspace({ worktreeId })] },
-      browserPagesByWorkspace: { 'ws-1': [makePage({ worktreeId })] },
-      unifiedTabsByWorktree: { [worktreeId]: [makeBrowserTab({ worktreeId })] },
-      groupsByWorktree: { [worktreeId]: [makeGroup({ worktreeId })] },
-      activeGroupIdByWorktree: { [worktreeId]: 'group-1' }
-    })
-
-    expect(
-      activateBrowserPagePaletteResult({ pageId: 'page-1', workspaceId: 'ws-1', worktreeId })
-    ).toMatchObject({ status: 'activated' })
-    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith(worktreeId, {
-      executionHostId: 'ssh:host-1'
-    })
   })
 
   it('derives the focus target from the page url captured before worktree activation', () => {

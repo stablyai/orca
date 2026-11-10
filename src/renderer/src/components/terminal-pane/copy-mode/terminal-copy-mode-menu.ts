@@ -1,5 +1,5 @@
-import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
-import { APP_MENU_SELECTION_ACTION_EVENT } from '@/lib/app-menu-selection-actions'
+import { APP_MENU_PASTE_EVENT } from '@/lib/clipboard/menu/app-menu-paste'
+import { APP_MENU_SELECTION_ACTION_EVENT } from '@/lib/app-commands/app-menu-selection-actions'
 import { consumeCopyModeEvent } from './terminal-copy-mode-key-guard'
 import type { TerminalCopyModeView } from './terminal-copy-mode-view'
 

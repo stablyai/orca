@@ -5,7 +5,7 @@ import type {
 } from './catalog/runtime-worktree-selection'
 import { resolveRuntimeWorktreeRemovalTarget } from './removal/runtime-worktree-removal-target'
 import type { LocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { splitWorktreeId, worktreeIdsEqual } from '../../../shared/worktree/id'
 import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../workspaces/removal/worktree-removal-repo-owner'
 import {
@@ -26,7 +26,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { invalidateAuthorizedRootsCacheForRepo } from '../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation'
-import { dropOrcaCreatedAgentTrustForRemovedWorktree } from '../worktree-removal-agent-trust-cleanup'
+import { dropOrcaCreatedAgentTrustForRemovedWorktree } from './removal/worktree-removal-agent-trust-cleanup'
 import {
   resumeInterruptedWorktreeRemovals,
   retryFailedWorktreeRemoval,

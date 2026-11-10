@@ -7,7 +7,7 @@ import { getAllWorktreeMetaForHost } from '../../persistence/loading-store/workt
 import { normalizeWorktreeLinkedItemMetadata } from '../../persistence/tracking-repos/worktree-metadata-normalization'
 
 import { collectDependentStateBlockers } from './ssh-target-orcad-dependents'
-import { emptyDependentStateStore } from './ssh-target-orcad-dependents-fixture'
+import { emptyDependentStateStore } from './testing/ssh-target-orcad-dependents-fixture'
 import { orcadTargetBlockerMessage } from './ssh-target-orcad-claims'
 
 function blockersFor(overrides: Parameters<typeof emptyDependentStateStore>[0]) {

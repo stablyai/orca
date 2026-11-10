@@ -4,13 +4,24 @@
 //   POST /__admin/assign  { userId, relayHostId, cellId, assignmentEpoch, devices? }
 //   POST /__admin/export  { relayHostId }  freezes the host for the move away (409 while connected)
 //   POST /__admin/erase   { userId, relayHostId }
+//   POST /__admin/drain   { relayHostId }  sends the host's live control back to the director
+// Replay: a token with a `jti` (16-128 chars) is single use, enforced by the target host's object
+// (admin-jti.ts; a repeat is 409 `replay`). Transitional: a token without one is still accepted
+// (metric `admin_no_jti`) until the director sends it everywhere; ADMIN_REQUIRE_JTI=1 then makes
+// it mandatory (401 without).
+// Key rotation (each signer takes a primary and an optional _NEXT key; either one verifies):
+//   1. set ADMIN_SIGNING_KEY_NEXT (new key) on the edge and deploy;
+//   2. switch the director to sign with the new key;
+//   3. move the new key to ADMIN_SIGNING_KEY and clear ADMIN_SIGNING_KEY_NEXT.
+// The erasure job's ERASE_SIGNING_KEY / ERASE_SIGNING_KEY_NEXT rotate the same way.
 import { jwtVerify } from 'jose'
 import { z } from 'zod'
 import type { Env } from './env'
+import type { AdminReplayGuard } from './admin-jti'
 
 export const ADMIN_AUDIENCE = 'orca-relay-edge-admin'
 export const ADMIN_PURPOSE = 'edge-admin'
-export type AdminOp = 'assign' | 'export' | 'erase'
+export type AdminOp = 'assign' | 'export' | 'erase' | 'drain'
 
 const HOST_ID = /^[A-Za-z0-9_-]{16}$/
 const ADMIN_BODY_MAX = 256 * 1024
@@ -52,6 +63,7 @@ export const AssignBodySchema = z
 export type AssignBody = z.infer<typeof AssignBodySchema>
 
 export const ExportBodySchema = z.object({ relayHostId: z.string().regex(HOST_ID) }).strict()
+export const DrainBodySchema = z.object({ relayHostId: z.string().regex(HOST_ID) }).strict()
 export const EraseBodySchema = z.object({ userId: z.string().min(1), relayHostId: z.string().regex(HOST_ID) }).strict()
 
 async function sha256B64url(bytes: ArrayBuffer): Promise<string> {
@@ -61,13 +73,21 @@ async function sha256B64url(bytes: ArrayBuffer): Promise<string> {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
+export const ADMIN_TOKEN_MAX_AGE_S = 120
+const JTI_MIN = 16
+const JTI_MAX = 128
+
+export type VerifiedAdmin = { body: unknown; replay: AdminReplayGuard | null }
+
+// Signing keys shorter than 32 characters are never used (edgeConfig refuses the admin ones).
+function signingKeys(...keys: (string | undefined)[]): string[] {
+  return keys.filter((key): key is string => key !== undefined && key.length >= 32)
+}
+
 // Verifies the bearer token for `op` over `body`; returns the parsed body or null (401).
-export async function verifyAdminRequest(
-  env: Env,
-  request: Request,
-  op: AdminOp
-): Promise<{ body: unknown } | null> {
-  if (!env.ADMIN_SIGNING_KEY || !env.ADMIN_ISSUER) { return null }
+export async function verifyAdminRequest(env: Env, request: Request, op: AdminOp): Promise<VerifiedAdmin | null> {
+  const adminIssuer = env.ADMIN_ISSUER
+  if (!env.ADMIN_SIGNING_KEY || !adminIssuer) { return null }
   const auth = request.headers.get('authorization') ?? ''
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
   if (!token) { return null }
@@ -76,28 +96,43 @@ export async function verifyAdminRequest(
   const raw = await request.arrayBuffer()
   if (raw.byteLength > ADMIN_BODY_MAX) { return null }
   // The director signs every op; the erasure job, with its own key and issuer, only `erase`.
-  const signers = [{ key: env.ADMIN_SIGNING_KEY, issuer: env.ADMIN_ISSUER }]
-  if (op === 'erase' && env.ERASE_SIGNING_KEY && env.ERASE_SIGNING_KEY.length >= 32 && env.ERASE_ISSUER) {
-    signers.push({ key: env.ERASE_SIGNING_KEY, issuer: env.ERASE_ISSUER })
+  const signers = signingKeys(env.ADMIN_SIGNING_KEY, env.ADMIN_SIGNING_KEY_NEXT).map((key) => ({ key, issuer: adminIssuer }))
+  if (op === 'erase' && env.ERASE_ISSUER) {
+    const issuer = env.ERASE_ISSUER
+    signers.push(...signingKeys(env.ERASE_SIGNING_KEY, env.ERASE_SIGNING_KEY_NEXT).map((key) => ({ key, issuer })))
   }
+  const requireJti = env.ADMIN_REQUIRE_JTI === '1'
   for (const signer of signers) {
-    const verified = await verifyWith(token, signer.key, signer.issuer, op, raw)
+    const verified = await verifyWith(token, signer.key, signer.issuer, op, raw, requireJti)
     if (verified) { return verified }
   }
   return null
 }
 
-async function verifyWith(token: string, key: string, issuer: string, op: AdminOp, raw: ArrayBuffer): Promise<{ body: unknown } | null> {
+export async function verifyWith(
+  token: string,
+  key: string,
+  issuer: string,
+  op: AdminOp,
+  raw: ArrayBuffer,
+  requireJti = false
+): Promise<VerifiedAdmin | null> {
   try {
     const { payload } = await jwtVerify(token, new TextEncoder().encode(key), {
       algorithms: ['HS256'],
       audience: ADMIN_AUDIENCE,
       issuer,
-      maxTokenAge: '2m'
+      maxTokenAge: ADMIN_TOKEN_MAX_AGE_S
     })
     if (payload.purpose !== ADMIN_PURPOSE || payload.op !== op) { return null }
     if (payload.bodySha256 !== (await sha256B64url(raw))) { return null }
-    return { body: JSON.parse(new TextDecoder().decode(raw)) }
+    const { jti } = payload
+    if (jti === undefined && requireJti) { return null }
+    if (jti !== undefined && (typeof jti !== 'string' || jti.length < JTI_MIN || jti.length > JTI_MAX)) { return null }
+    // maxTokenAge makes iat mandatory; the token stops verifying at exp or iat + max age.
+    const lastValidS = Math.min(payload.exp ?? Number.POSITIVE_INFINITY, (payload.iat ?? 0) + ADMIN_TOKEN_MAX_AGE_S)
+    const replay = jti === undefined ? null : { jti, expiresAt: lastValidS * 1000 }
+    return { body: JSON.parse(new TextDecoder().decode(raw)), replay }
   } catch {
     return null
   }

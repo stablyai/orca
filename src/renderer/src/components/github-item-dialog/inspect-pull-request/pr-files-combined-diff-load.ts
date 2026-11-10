@@ -18,10 +18,10 @@ import type {
   GitHubPRFile,
   GitHubPRFileContents
 } from '../../../../../shared/github/pull-request-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { loadPRFileContents } from '../load-item-details/pr-file-content-cache'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 type LoadSectionArgs = {
   index: number

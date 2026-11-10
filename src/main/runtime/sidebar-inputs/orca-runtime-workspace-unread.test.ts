@@ -1,9 +1,9 @@
 // Runs on plain Node, as orcad does: a host with no window raises and clears its own unread flags.
-import '../rpc/unused-default-rpc-methods.test-fixture'
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { AgentHookServer } from '../../agent-hooks/server'
+import { AgentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { RpcDispatcher } from '../rpc/dispatcher'
 import type { RpcDispatchStreamingOptions } from '../rpc/dispatcher-stream-options'
@@ -17,7 +17,7 @@ import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
-} from '../../../shared/protocol-version'
+} from '../../../shared/browser/runtime/browser-runtime-capabilities'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import {
   partialRuntimeStore,

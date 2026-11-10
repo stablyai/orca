@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { loadWorkspaceLayoutWithoutReport } from '../../../../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../../../shared/workspace-layout/workspace-layout-minted-ids'
@@ -15,7 +15,7 @@ import { createTestStore } from '../../testing/app-store-test-fixture'
 import { makeOpenFile } from '../../slices/editor/types/open-file.test-fixture'
 import { makeUnifiedTab } from '../../slices/tabs/tab-group.test-fixture'
 import type { AppState } from '../../types'
-import { beginPendingTab } from '@/runtime/layout-owner-pending-tabs'
+import { beginPendingTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { buildLayoutFrameSlices } from './workspace-layout-frame-slices'
 import { buildLayoutFrameStorePatch } from './workspace-layout-frame-store-patch'
 import {
@@ -32,7 +32,7 @@ vi.mock('../../../../../shared/layout-owner-switch', () => ({
   }
 }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })

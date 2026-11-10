@@ -1,8 +1,8 @@
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../ownership/worktree-runtime-owner'
-import { noteUserWorkspaceOpen } from '../../workspace-switch-user-act'
+import { noteUserWorkspaceOpen } from './workspace-switch-user-act'
 import { useAppStore } from '@/store/index'
-import { activateWebRuntimeSessionWorktree } from '@/runtime/web-runtime-worktree-activation'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
+import { activateWebRuntimeSessionWorktree } from '@/runtime/web-session-tabs-sync/actions/web-runtime-worktree-activation'
+import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { registerWorktreeActivation } from '@/lib/workspace/activation/worktree-activation-nav-registration'
 import { workspaceHasSleepingAgentSessions } from '@/lib/workspace/activation/worktree-agent-activation-gate'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/agent-session/resume/resume-sleeping-agent-session'
@@ -11,11 +11,11 @@ import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../../shared/wor
 import {
   folderWorkspaceActivationBlocked,
   notifyBlockedFolderWorkspacePath
-} from '../../folder-workspace-path-status'
+} from '../paths/folder-workspace-path-status'
 import {
   findFolderWorkspaceOwner,
   getRuntimeEnvironmentIdForFolderWorkspace
-} from '../../folder-workspace-runtime-owner'
+} from '../ownership/folder-workspace-runtime-owner'
 import '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../../shared/folder-workspaces/folder-workspace-host-id'
 import {
@@ -23,7 +23,7 @@ import {
   ensureWorktreeHasInitialTerminal
 } from '@/lib/workspace/activation/initial-surface/worktree-initial-terminal-seeding'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
-import { applyWorktreeNavViewEntry } from '@/lib/worktree-nav-view-history-replay'
+import { applyWorktreeNavViewEntry } from '@/lib/workspace/activation/worktree-nav-view-history-replay'
 import {
   activationProvidesInitialSurface,
   activationSeedsUserDefaultSurface,
@@ -47,8 +47,7 @@ import {
   type WorkspaceActivationOutcome,
   type FolderWorkspaceActivationOptions,
   type WorkspaceRevealOptions
-} from '@/lib/worktree-activation-outcome'
-export type { ActivateAndRevealResult } from '@/lib/worktree-activation-outcome'
+} from '@/lib/workspace/activation/worktree-activation-outcome'
 
 const canInspectAgentActivationInventory = (): boolean =>
   typeof window !== 'undefined' &&

@@ -1,6 +1,6 @@
 import { PNG } from 'pngjs'
 import type { ElectronApplication } from '@stablyai/playwright-test'
-import { APP_MENU_PASTE_EVENT } from '../../src/renderer/src/lib/app-menu-paste'
+import { APP_MENU_PASTE_EVENT } from '../../src/renderer/src/lib/clipboard/menu/app-menu-paste'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { pressShortcut } from './helpers/shortcuts'

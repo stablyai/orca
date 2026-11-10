@@ -2,7 +2,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-provenance'
+import { captureEditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import type { AppState } from '@/store/types'
 import { buildWorkspaceSessionPayload } from '../../../../lib/workspace/persistence/workspace-session'
 import {
@@ -12,12 +12,12 @@ import {
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 

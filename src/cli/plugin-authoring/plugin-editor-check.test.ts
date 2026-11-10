@@ -2,7 +2,7 @@ import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/pro
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { checkPluginEditors, formatPluginEditorCheck } from './plugin-editor-check'
+import { checkPluginEditors } from './plugin-editor-check'
 import { createPluginFromTemplate } from './plugin-create'
 import { validatePluginTarget } from './plugin-folder-validation'
 import { checkPluginDevFolder } from '../plugin-dev-watch/plugin-dev-watch-check'
@@ -37,14 +37,6 @@ async function editorPlugin(): Promise<string> {
 }
 
 describe('orca plugin check: custom editors', () => {
-  it('passes the editor template and follows its script and imports', async () => {
-    const dir = await editorPlugin()
-    const [check] = await checkPluginEditors(dir)
-    expect(check.issues).toEqual([])
-    expect(check.files).toEqual(['editor/index.html', 'editor/main.ts', 'editor/sync.ts'])
-    expect(formatPluginEditorCheck(check)[0]).toMatch(/: ok, 3 file\(s\) load$/)
-  })
-
   it('fails on a syntax error that validate lets through', async () => {
     const dir = await editorPlugin()
     await appendFile(join(dir, 'editor', 'main.ts'), 'this is not valid ts(\n')

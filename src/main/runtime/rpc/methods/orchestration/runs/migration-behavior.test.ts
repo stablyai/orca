@@ -1,10 +1,9 @@
-import '../../../unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
-} from '../../../../../../shared/protocol-version'
+} from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import '../../../../orchestration/db/contract-constants'
@@ -14,7 +13,7 @@ import '../../../../orchestration/db/attempt-outcome-projection'
 
 import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../orchestration'
-import { startFederatedWorker } from '../federation/federated-worker-start'
+import { startFederatedWorker } from '../../../../orchestration/legacy-remote-home/federated-worker-start'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 
 describe('orchestration migration behavior', () => {

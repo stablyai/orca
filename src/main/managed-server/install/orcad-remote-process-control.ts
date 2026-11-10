@@ -4,7 +4,7 @@ import {
   isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
+} from '../../ssh/remote-host/ssh-remote-platform'
 import {
   ORCAD_READINESS_FILENAME,
   ORCAD_PID_FILENAME,

@@ -1,24 +1,32 @@
-import '../../unused-default-rpc-methods.test-fixture'
 import { mkdirSync, mkdtempSync, rmSync, truncateSync, unlinkSync, writeFileSync } from 'node:fs'
+
 import { tmpdir } from 'node:os'
+
 import { join } from 'node:path'
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import {
   MOBILE_WEB_BUNDLE_CHUNK_BYTES,
   MobileWebBundleChunkResultSchema,
   MobileWebBundleManifestResultSchema
 } from '../../../../../shared/mobile-web-bundle/bundle-rpc-contract'
+
 import '../../server/runtime-rpc-mobile-method-allowlist'
 import type { RpcRequest, RpcResponse } from '../../core'
+
 import '../../../../../shared/orcad-artifacts'
 import type { RpcDispatcher } from '../../dispatcher'
 
-import { resetBundledMobileWebBundleCacheForTests } from '../../../bundled-mobile-web-bundle'
+import { resetBundledMobileWebBundleCacheForTests } from './bundled-mobile-web-bundle'
+
 import {
   fillMobileWebBundleReadWindow,
   resetMobileWebBundleAssetVerdictsForTests
 } from './mobile-web-bundle-asset-reader'
+
 import { resetMobileWebBundleReadAdmissionForTests } from './mobile-web-bundle-read-admission'
+
 import {
   installMobileWebBundleAppPath,
   mobileWebBundleDispatcher,
@@ -203,6 +211,47 @@ describe('an install that carries a mobile web bundle', () => {
 
     expect(response.ok).toBe(false)
     expect(errorMessage(response)).toBe('client_disconnected')
+  })
+})
+
+describe('the language catalogs a build serves on request', () => {
+  let bundle: SyntheticMobileWebBundle
+
+  beforeEach(() => {
+    bundle = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 1, [], {
+      de: { greeting: 'Hallo' }
+    })
+  })
+
+  it('serves the listed catalog, then nothing to a phone that already holds it', async () => {
+    const [german] = bundle.catalogs
+
+    const first = await call('mobileWeb.bundle.localeCatalog', { locale: 'de' })
+    const again = await call('mobileWeb.bundle.localeCatalog', {
+      locale: 'de',
+      knownSha256: german.sha256
+    })
+
+    expect(first.ok && first.result).toEqual({
+      locale: 'de',
+      sha256: german.sha256,
+      catalog: { greeting: 'Hallo' }
+    })
+    expect(again.ok && again.result).toEqual({
+      locale: 'de',
+      sha256: german.sha256,
+      catalog: null
+    })
+  })
+
+  it('refuses a locale the build has no catalog for, and a catalog file that changed', async () => {
+    writeFileSync(join(bundle.root, bundle.catalogs[0].path), '{"greeting":"Servus"}')
+
+    const french = await call('mobileWeb.bundle.localeCatalog', { locale: 'fr' })
+    const changed = await call('mobileWeb.bundle.localeCatalog', { locale: 'de' })
+
+    expect(errorMessage(french)).toBe('mobile_web_bundle_asset_unknown')
+    expect(errorMessage(changed)).toBe('mobile_web_bundle_asset_changed')
   })
 })
 

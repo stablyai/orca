@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState, type RefObject } from 'react'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import type { DocPreviewFileFailure } from '../../../../../shared/doc-preview-scheme'
+import type { DocPreviewFileFailure } from '../../../../../shared/document-preview/doc-preview-scheme'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'

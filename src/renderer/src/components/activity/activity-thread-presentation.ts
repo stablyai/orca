@@ -1,7 +1,7 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
-import { showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
+import { showsAgentToolPreview } from '@/lib/agent-status/presentation/agent-row-tool-preview'
 import {
   agentMainAgentVerdict,
   agentVerdictDisplayMark
@@ -13,6 +13,7 @@ import {
 } from '@/lib/activity-thread-display'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type {
   AgentStatusEntry,
   AgentStatusState
@@ -36,12 +37,16 @@ const ABSOLUTE_DATE_OPTIONS: Intl.DateTimeFormatOptions = {
   minute: '2-digit'
 }
 
-export function formatAbsoluteDate(timestamp: number): string {
-  return uiDateTimeFormat(ABSOLUTE_DATE_OPTIONS).format(new Date(timestamp))
+export function formatAbsoluteDate(timestamp: number, intlLocale?: string): string {
+  return uiDateTimeFormat(ABSOLUTE_DATE_OPTIONS, intlLocale).format(new Date(timestamp))
 }
 
-export function formatRelativeTime(timestamp: number, now = Date.now()): string {
-  return formatUiRelativeTime(timestamp - now)
+export function formatRelativeTime(
+  timestamp: number,
+  now = Date.now(),
+  intlLocale?: string
+): string {
+  return formatUiRelativeTime(timestamp - now, intlLocale)
 }
 
 function truncatePreservingSurrogates(value: string, maxLength: number): string {
@@ -189,46 +194,40 @@ function threadCurrentState(
   )
 }
 
-export function threadAgentStateLabel(thread: AgentPaneThread): string {
+export function threadAgentStateLabel(thread: AgentPaneThread, t: Translate = translate): string {
   // Literal translation keys/fallbacks register catalog references and avoid bundling every state string at boot.
   switch (activityThreadStatusId(thread)) {
     case 'working':
-      return translate('auto.components.activity.ActivityPrototypePage.state.working', 'Working')
+      return t('auto.components.activity.ActivityPrototypePage.state.working', 'Working')
     case 'monitoring':
-      return translate(
+      return t(
         'auto.components.activity.ActivityPrototypePage.state.monitoring',
         'Monitoring background tasks'
       )
     case 'blocked':
-      return translate('auto.components.activity.ActivityPrototypePage.state.blocked', 'Blocked')
+      return t('auto.components.activity.ActivityPrototypePage.state.blocked', 'Blocked')
     case 'waiting':
-      return translate(
-        'auto.components.activity.ActivityPrototypePage.state.waiting',
-        'Waiting for input'
-      )
+      return t('auto.components.activity.ActivityPrototypePage.state.waiting', 'Waiting for input')
     case 'interrupted':
-      return translate('auto.components.activity.ActivityPrototypePage.interrupted', 'Interrupted')
+      return t('auto.components.activity.ActivityPrototypePage.interrupted', 'Interrupted')
     case 'failed':
-      return translate('auto.components.activity.ActivityPrototypePage.state.failed', 'Failed')
+      return t('auto.components.activity.ActivityPrototypePage.state.failed', 'Failed')
     case 'done':
-      return translate('auto.components.activity.ActivityPrototypePage.state.done', 'Done')
+      return t('auto.components.activity.ActivityPrototypePage.state.done', 'Done')
     case 'idle':
-      return translate('auto.components.activity.ActivityPrototypePage.state.idle', 'Idle')
+      return t('auto.components.activity.ActivityPrototypePage.state.idle', 'Idle')
     case 'unverifiable':
-      return translate(
+      return t(
         'auto.components.activity.ActivityPrototypePage.state.unverifiable',
         'No recent update'
       )
     case 'unconfirmed':
-      return translate(
+      return t(
         'auto.components.activity.ActivityPrototypePage.state.unconfirmed',
         'Couldn’t confirm'
       )
     case 'permission':
-      return translate(
-        'auto.components.activity.ActivityPrototypePage.state.permission',
-        'Needs attention'
-      )
+      return t('auto.components.activity.ActivityPrototypePage.state.permission', 'Needs attention')
   }
 }
 
@@ -254,7 +253,10 @@ function previewDuplicatesIdentity(preview: string, title: string, workspace: st
   return normalized === normalizeScanLabel(title) || normalized === normalizeScanLabel(workspace)
 }
 
-export function activityThreadRowCopy(thread: AgentPaneThread): ActivityThreadRowCopy {
+export function activityThreadRowCopy(
+  thread: AgentPaneThread,
+  t?: Translate
+): ActivityThreadRowCopy {
   const workspaceLabel = getActivityThreadWorkspaceTitle(thread.worktree)
   const taskTitle = thread.paneTitle.trim() || workspaceLabel
   const renderedPreview = activityThreadResponseRenderPreview({
@@ -277,7 +279,7 @@ export function activityThreadRowCopy(thread: AgentPaneThread): ActivityThreadRo
   if (state !== 'done' && state !== 'idle') {
     return {
       taskTitle,
-      statusLine: threadAgentStateLabel(thread),
+      statusLine: threadAgentStateLabel(thread, t),
       statusKind: 'state',
       needsAttention,
       workspaceLabel

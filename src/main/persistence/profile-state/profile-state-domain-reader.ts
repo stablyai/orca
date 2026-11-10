@@ -6,9 +6,10 @@ import {
 import { readProfileStateAutomationRunsDocument } from './profile-state-automation-runs'
 import { openProfileStateDatabaseReadOnly } from './profile-state-database'
 import {
-  validateProfileStateDocumentRow,
-  type ProfileStateParsedDocument
-} from './profile-state-document-validation'
+  PROFILE_STATE_DOCUMENT_ROW_COLUMNS,
+  readProfileStateDocumentRow
+} from './profile-state-document-parts-reader'
+import type { ProfileStateParsedDocument } from './profile-state-document-validation'
 
 export type ProfileStateDomainReadResult =
   | { kind: 'value'; value: unknown }
@@ -96,16 +97,14 @@ function readSelectedDocuments(
   const placeholders = domains.map(() => '?').join(',')
   const rows = db
     .prepare(
-      `SELECT domain, payload, domain_version, revision, updated_at, content_hash
+      `SELECT ${PROFILE_STATE_DOCUMENT_ROW_COLUMNS}
        FROM profile_state_documents
        WHERE domain IN (${placeholders})
        ORDER BY rowid`
     )
     .iterate(...domains)
   return Array.from(rows, (row) => {
-    const { payload: _payload, ...document } = validateProfileStateDocumentRow(row, {
-      retainParsedValue: true
-    })
+    const { payload: _payload, ...document } = readProfileStateDocumentRow(db, row, true)
     return { ...document, value: document.value }
   })
 }

@@ -1,13 +1,16 @@
-import { capturePRCheckContract, type PRCheckContract } from '../../pr-check-observation-contract'
+import {
+  capturePRCheckContract,
+  type PRCheckContract
+} from '../../source-control/checks/pr-check-observation-contract'
 import { acceptPRCheckObservation } from '../../../../../shared/github/complete-pr-check-owner'
 import type { GhAccountBinding } from '../../../../../shared/github/account-binding'
-import { getWorkItemRepo } from '../../work-item-repo-row'
+import { getWorkItemRepo } from '../work-item-repo-row'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
 } from '../../../../../shared/github/work-item-types'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { callGitHubTargetOperation } from './github-work-item-target-request'
@@ -21,7 +24,7 @@ import {
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost,
   getGitHubSourceRuntimeTarget
-} from '../../github-source-runtime-context'
+} from './github-source-runtime-context'
 
 type GitHubWorkItemLookupArgs = {
   repoPath: string

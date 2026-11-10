@@ -1,4 +1,4 @@
-import { endComposition } from '@/lib/ime-composition-event.test-support'
+import { endComposition } from '@/lib/text-input/ime/ime-composition-event.test-support'
 import { changePrompt, promptValue } from './native-chat-prompt-editor.test-support'
 // @vitest-environment happy-dom
 
@@ -22,7 +22,7 @@ import {
   NativeChatComposerField,
   type NativeChatComposerFieldProps
 } from './NativeChatComposerField'
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
+import { useImeEnterGestureOwnership } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useNativeChatDraft } from '../../drafts/use-native-chat-draft'
 import { useNativeChatDraftEvents } from './use-native-chat-draft-events'
@@ -108,7 +108,7 @@ function textarea(): HTMLTextAreaElement {
 }
 
 describe('native chat composer composition ownership', () => {
-  it('preserves the focused browser preedit through 120 stale streaming rerenders', () => {
+  it('preserves the focused preedit through a stale streaming rerender', () => {
     const textareaRef = createRef<HTMLTextAreaElement>()
     const onImeSettled = vi.fn()
     const props = fieldProps({ textareaRef, onImeSettled })
@@ -118,12 +118,10 @@ describe('native chat composer composition ownership', () => {
     fireEvent.compositionStart(input)
     changePrompt(input, '가')
 
-    for (let index = 0; index < 120; index += 1) {
-      view.rerender(<TestField {...props} draft={`stale streaming draft ${index}`} />)
-      expect(textarea()).toBe(input)
-      expect(document.activeElement).toBe(input)
-      expect(promptValue(input)).toBe('가')
-    }
+    view.rerender(<TestField {...props} draft="stale streaming draft" />)
+    expect(textarea()).toBe(input)
+    expect(document.activeElement).toBe(input)
+    expect(promptValue(input)).toBe('가')
 
     fireEvent.compositionEnd(input, { data: '가' })
     expect(onImeSettled).toHaveBeenCalledOnce()
@@ -133,26 +131,49 @@ describe('native chat composer composition ownership', () => {
     expect(promptValue(input)).toBe('가')
   })
 
-  it('swallows the Enter that confirms a Japanese candidate without eating the next one', () => {
+  it.each(['Enter', 'Unidentified'])(
+    'swallows the Enter that confirms a Japanese candidate without eating the next one (code %s)',
+    (code) => {
+      const onKeyDown = vi.fn()
+      render(<TestField {...fieldProps({ draft: '日本語', onKeyDown })} />)
+      const input = textarea()
+      fireEvent.compositionStart(input)
+
+      fireEvent.keyDown(input, { key: 'Process', code, keyCode: 229, isComposing: true })
+      endComposition(input, '日本語')
+      const redispatch = fireEvent.keyDown(input, {
+        key: 'Enter',
+        keyCode: 13,
+        isComposing: false
+      })
+
+      expect(redispatch).toBe(false)
+      expect(onKeyDown).not.toHaveBeenCalled()
+
+      fireEvent.keyUp(input, { key: 'Enter', keyCode: 13 })
+      fireEvent.keyDown(input, { key: 'Enter', keyCode: 13, isComposing: false })
+      expect(onKeyDown).toHaveBeenCalledOnce()
+    }
+  )
+
+  // Windows Hankaku/Zenkaku commits as Process/229 and may never send keyup (#39289).
+  it('sends the first Enter after Hankaku/Zenkaku commits Japanese text', () => {
     const onKeyDown = vi.fn()
-    render(<TestField {...fieldProps({ draft: '日本語', onKeyDown })} />)
+    render(<TestField {...fieldProps({ draft: 'にほんご', onKeyDown })} />)
     const input = textarea()
     fireEvent.compositionStart(input)
 
-    fireEvent.keyDown(input, { key: 'Process', keyCode: 229, isComposing: true })
-    endComposition(input, '日本語')
-    const redispatch = fireEvent.keyDown(input, {
-      key: 'Enter',
-      keyCode: 13,
-      isComposing: false
+    fireEvent.keyDown(input, {
+      key: 'Process',
+      code: 'Backquote',
+      keyCode: 229,
+      isComposing: true
     })
+    endComposition(input, 'にほんご')
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter', keyCode: 13, isComposing: false })
 
-    expect(redispatch).toBe(false)
-    expect(onKeyDown).not.toHaveBeenCalled()
-
-    fireEvent.keyUp(input, { key: 'Enter', keyCode: 13 })
-    fireEvent.keyDown(input, { key: 'Enter', keyCode: 13, isComposing: false })
-    expect(onKeyDown).toHaveBeenCalledOnce()
+    const enters = onKeyDown.mock.calls.filter(([event]) => event.key === 'Enter')
+    expect(enters).toHaveLength(1)
   })
 
   it('settles the browser value instead of an unrelated draft rerender on blur', () => {

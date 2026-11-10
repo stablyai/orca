@@ -16,7 +16,7 @@ import {
   GITHUB_ACCOUNT_EXPECTATION_RUNTIME_CAPABILITY,
   GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY,
   GITHUB_EXACT_DETAILS_READ_INTENT_RUNTIME_CAPABILITY
-} from '../../../../../shared/task-source-runtime-capabilities'
+} from '../../../../../shared/work-items/task-source-runtime-capabilities'
 
 // Capture before the probe and carry the same authority through the actual queued dispatch.
 export async function callGitHubTargetOperation<TResult>(args: {

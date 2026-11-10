@@ -14,7 +14,8 @@ type LoadedCohortMigrationOperationsRuntime = Pick<StoreRuntimeState, 'loadNeeds
 export class LoadedCohortMigrationOperations {
   constructor(private readonly runtime: LoadedCohortMigrationOperationsRuntime) {}
 
-  migrateKeybindings(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
+  /** Freezes each rollout's new-or-existing cohort on first load, before a save makes a fresh install look existing. */
+  migrateCohortSeeds(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
     // Secondary profiles start with only the install's telemetry consent, before their first load.
     const telemetryOnly =
       Object.keys(state).length === 1 &&
@@ -22,7 +23,11 @@ export class LoadedCohortMigrationOperations {
       Object.keys(state.settings).length === 1 &&
       isRecord(state.settings.telemetry)
     const existingProfile = fileExistedOnLoad && !telemetryOnly
-    for (const key of ['tabSwitchKeybindingSeed', 'searchKeybindingSeed'] as const) {
+    for (const key of [
+      'tabSwitchKeybindingSeed',
+      'searchKeybindingSeed',
+      'nonMacSearchKeybindingSeed'
+    ] as const) {
       const existing = state.settings?.[key]
       if (existing === 'legacy' || existing === 'done') {
         continue
@@ -34,6 +39,18 @@ export class LoadedCohortMigrationOperations {
         settings: {
           ...state.settings,
           [key]: existing === 'pending' || existingProfile ? 'legacy' : 'done'
+        }
+      }
+    }
+    if (state.settings?.claudeCodeThemeSyncOffer === undefined) {
+      this.runtime.loadNeedsSave = true
+      // Why every profile: settings.json is global, so even a fresh profile must not restyle Claude Code unasked.
+      state = {
+        ...state,
+        settings: {
+          ...state.settings,
+          claudeCodeThemeSync: false,
+          claudeCodeThemeSyncOffer: 'pending'
         }
       }
     }
@@ -102,6 +119,41 @@ export class LoadedCohortMigrationOperations {
   }
 
   migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
+    return this.seedMilestoneInstallCohort(
+      this.migrateTelemetryIdentity(state, fileExistedOnLoad),
+      fileExistedOnLoad
+    )
+  }
+
+  /** Freeze once so upgraded profiles' first post-release interaction is never counted as activation. */
+  private seedMilestoneInstallCohort(
+    state: PersistedState,
+    fileExistedOnLoad: boolean
+  ): PersistedState {
+    const telemetry = state.settings?.telemetry
+    if (!telemetry || telemetry.protectedMilestones?.installCohort !== undefined) {
+      return state
+    }
+    this.runtime.loadNeedsSave = true
+    return {
+      ...state,
+      settings: {
+        ...state.settings,
+        telemetry: {
+          ...telemetry,
+          protectedMilestones: {
+            ...telemetry.protectedMilestones,
+            installCohort: fileExistedOnLoad ? 'existing' : 'fresh'
+          }
+        }
+      }
+    }
+  }
+
+  private migrateTelemetryIdentity(
+    state: PersistedState,
+    fileExistedOnLoad: boolean
+  ): PersistedState {
     const existing = state.settings?.telemetry
     // Partial telemetry blocks still require migration unless all invariants hold.
     if (

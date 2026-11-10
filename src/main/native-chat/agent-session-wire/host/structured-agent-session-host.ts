@@ -9,7 +9,7 @@ import type { AgentSessionSubscribeInput } from '../publication/subscribers/agen
 import { createStartupRecovery } from '../recovery/structured-agent-session-restart-reconcile'
 import { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
-import { structuredAgentSessionEntryDelegates } from '../acquisition/structured-agent-session-create'
+import { structuredAgentSessionEntryDelegates } from '../acquisition/structured-agent-session-entry-delegates'
 import type { StructuredAgentSessionLifetimeContext } from '../termination/structured-agent-session-host-lifetime'
 import * as agentStart from '../startup/structured-agent-session-agent-start'
 import * as mutationWiring from './structured-agent-session-host-mutation-wiring'
@@ -304,9 +304,9 @@ export class StructuredAgentSessionHost {
 
   readonly continuationContext: ReturnType<typeof contextReader>
 
-  observeConversationPublications: typeof this.sessions.observeConversationPublications = (
-    ...args
-  ) => this.sessions.observeConversationPublications(...args)
+  observeConversationPublications = this.sessions.observeConversationPublications
+  beginConversationTitleWait = (sessionId: string) =>
+    this.runtimeState.acquireAborts.begin(sessionId)
   journalSnapshot = (sessionId: string) => this.backgroundTasks.journalSnapshot(sessionId)
   journalCurrentRead = this.reads.journalCurrentRead
   queuedSendAnswer = this.reads.queuedSendAnswer

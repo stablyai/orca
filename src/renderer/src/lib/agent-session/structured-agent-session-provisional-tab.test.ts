@@ -24,12 +24,12 @@ import {
   nativeChatPendingAttachmentSnapshot
 } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 import { applyStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
-import { makeEmptyHostSnapshot } from '@/runtime/host-session-mirror-frame-fixtures'
+import { makeEmptyHostSnapshot } from '@/runtime/web-session-tabs-sync/hydration/testing/host-session-mirror-frame-fixtures'
 import * as unlisted from './launch/pane/structured-agent-session-unlisted-created-chats'
 import { buildFullWorktreePurgeState } from '@/store/slices/worktrees/teardown/worktree-purge-state'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
+import { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   drawTabsFromMain,
@@ -38,7 +38,7 @@ import {
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
   const client = (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
   return {
     ...client,
@@ -48,9 +48,9 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
         : client.callRuntimeRpc(...args)
   }
 })
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
@@ -82,7 +82,7 @@ import {
   retryStructuredAgentSessionLaunch
 } from './launch/structured-agent-session-launch'
 import { assertProvisionalSelectionLifetime } from './structured-agent-session-provisional-selection-lifetime.test-fixture'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import { openStructuredAgentSessionProvisionalTab } from './launch/structured-agent-session-launch-surface'
 import { markStructuredAgentSessionLaunchPublished } from './launch/structured-agent-session-launch-publication'
 

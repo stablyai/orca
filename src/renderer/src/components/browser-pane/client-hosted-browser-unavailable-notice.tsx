@@ -2,9 +2,9 @@ import { useEffect } from 'react'
 import { Globe } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { readBrowserClientHostId } from '@/runtime/browser-client-host-identity'
+import { readBrowserClientHostId } from '@/runtime/browser/client-hosting/browser-client-host-identity'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
-import { ensureBrowserClientHostOnRuntimeContact } from '@/runtime/restored-client-hosted-browser-host-attach'
+import { ensureBrowserClientHostOnRuntimeContact } from '@/runtime/browser/client-hosting/restored-client-hosted-browser-host-attach'
 import {
   isRuntimeHostContactRevokedVerdict,
   runtimeHostContactForEntry
@@ -13,7 +13,8 @@ import {
   ReopenBrowserPageOnServerButton,
   reopenOnServerCaveat
 } from './ReopenBrowserPageOnServerButton'
-import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import '../../../../shared/protocol-version'
+import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../shared/browser/runtime/browser-runtime-capabilities'
 
 /** No guest exists here to retry; offer reopening on a capable server when hosting is unavailable or belongs to another desktop. */
 export function ClientHostedBrowserUnavailableNotice({

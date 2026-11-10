@@ -1,4 +1,4 @@
-import { gitGraphSupport, openGitGraph } from '@/lib/git-graph-tab'
+import { gitGraphSupport, openGitGraph } from '@/lib/source-control/graph/git-graph-tab'
 import {
   GitGraph,
   FileText,

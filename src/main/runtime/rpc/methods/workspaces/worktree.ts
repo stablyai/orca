@@ -24,10 +24,11 @@ import {
   WorktreeActivate,
   WorktreeForceDeleteBranch,
   WorktreeRemove,
+  WorktreePreviewNestedRemoval,
   WorktreeResolveMrBase,
   WorktreeResolvePrBase,
   WorktreeRunApprovedSetup,
-  WorktreeSelector,
+  WorktreeShow,
   WorktreeSortOrder,
   WorktreeTeardownMissingTerminalsParams,
   WorktreeResolveCallerParent
@@ -38,7 +39,7 @@ import { waitsForWorktreeRemoval } from '../../worktree-removal-marker-projectio
 import { queueWorkspaceDelete } from '../../../workspaces/lifecycle/workspace-lifecycle-commands'
 import { WORKTREE_SLEEP_METHOD } from './worktree-sleep-method'
 import { WORKTREE_SET_METHOD } from './worktree-set-method'
-import { runApprovedCreatedWorktreeSetup } from '../../../created-worktree-approved-setup'
+import { runApprovedCreatedWorktreeSetup } from '../../../workspaces/creation/created-worktree-approved-setup'
 
 export const WORKTREE_METHODS = [
   ...WORKTREE_CATALOG_METHODS,
@@ -88,9 +89,11 @@ export const WORKTREE_METHODS = [
   defineMethod({
     name: 'worktree.show',
     permission: 'workspace',
-    params: WorktreeSelector,
+    params: WorktreeShow,
     handler: async (params, { runtime }) => ({
-      worktree: await runtime.showManagedWorktree(params.worktree)
+      worktree: await runtime.showManagedWorktree(params.worktree, undefined, {
+        matchFolders: params.matchFolderWorkspaces === true
+      })
     })
   }),
   WORKTREE_SLEEP_METHOD,
@@ -217,6 +220,9 @@ export const WORKTREE_METHODS = [
     params: WorktreeRemove,
     handler: async (params, context) => {
       const { runtime } = context
+      if (runtime.ownsRecipeWorkspaceRemoval?.(params)) {
+        return runtime.removeRecipeWorkspace(params)
+      }
       // Translate a paired client's runtime-local host spelling before host-qualified reads.
       let resolvedHostId = resolvePairedCallerHostId(
         () => runtime.listRepos(),
@@ -245,11 +251,19 @@ export const WORKTREE_METHODS = [
         params.worktree,
         resolvedHostId,
         params,
-        (removal) =>
-          runtime.removeManagedWorktree(params.worktree, {
+        (removal) => {
+          const options = {
             ...removal,
             waitForBackgroundRemoval: waitsForWorktreeRemoval(context, params)
-          })
+          }
+          return params.approvedNestedWorktrees
+            ? runtime.removeManagedWorktreeWithNested(
+                params.worktree,
+                params.approvedNestedWorktrees,
+                options
+              )
+            : runtime.removeManagedWorktree(params.worktree, options)
+        }
       )
       return {
         removed: result.removing !== true,
@@ -257,6 +271,16 @@ export const WORKTREE_METHODS = [
         ...(repoId ? { catalogVersion: getLocalWorktreeCatalogVersion(repoId) } : {})
       }
     }
+  }),
+  defineMethod({
+    name: 'worktree.previewNestedRemoval',
+    permission: 'workspace',
+    params: WorktreePreviewNestedRemoval,
+    handler: async (params, { runtime }) =>
+      runtime.previewNestedManagedWorktreeRemoval(
+        params.worktree,
+        resolvePairedCallerHostId(() => runtime.listRepos(), params.worktree, params.hostId)
+      )
   }),
   defineMethod({
     name: 'worktree.forceDeleteBranch',

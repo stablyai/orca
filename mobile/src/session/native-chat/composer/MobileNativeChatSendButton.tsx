@@ -16,7 +16,7 @@ import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useKeyboardPersistingTaps } from '../../../platform/keyboard-persisting-taps'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
+import type { MobileNativeChatSendIntent } from './mobile-native-chat-send'
 
 const FOLLOW_UP_ICON = { queue: ListEnd, steer: CornerDownRight } as const
 

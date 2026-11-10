@@ -3,16 +3,17 @@ import { Loader2 } from 'lucide-react'
 import type { FeatureTip, FeatureTipAction } from '../../../../shared/feature-tips'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { getLocalizedFeatureTipCopy } from './feature-tip-localized-copy'
 
-function getPrimaryBusyLabel(action: FeatureTipAction): string {
+function getPrimaryBusyLabel(action: FeatureTipAction, t: Translate = translate): string {
   if (action === 'setup-cli') {
-    return translate('auto.components.feature.tips.FeatureTipActions.installing', 'Installing...')
+    return t('auto.components.feature.tips.FeatureTipActions.installing', 'Installing...')
   }
   if (action === 'enable-session-search') {
-    return translate('auto.components.feature.tips.FeatureTipActions.turningOn', 'Turning on...')
+    return t('auto.components.feature.tips.FeatureTipActions.turningOn', 'Turning on...')
   }
-  return translate('auto.components.feature.tips.FeatureTipActions.working', 'Working...')
+  return t('auto.components.feature.tips.FeatureTipActions.working', 'Working...')
 }
 
 export function FeatureTipActions({
@@ -41,6 +42,7 @@ export function FeatureTipActions({
   /** Overrides the secondary button's default "Maybe Later". */
   secondaryLabel?: string
 }): JSX.Element {
+  const t = useTranslate()
   const skipButton = showSkip ? (
     <Button
       ref={swapButtons ? primaryButtonRef : undefined}
@@ -50,7 +52,7 @@ export function FeatureTipActions({
       disabled={primaryBusy}
     >
       {secondaryLabel ??
-        translate('auto.components.feature.tips.FeatureTipActions.eb04abece8', 'Maybe Later')}
+        t('auto.components.feature.tips.FeatureTipActions.eb04abece8', 'Maybe Later')}
     </Button>
   ) : null
 
@@ -67,7 +69,7 @@ export function FeatureTipActions({
         {primaryBusy ? (
           <>
             <Loader2 className="size-4 animate-spin" />
-            {getPrimaryBusyLabel(currentTip.action)}
+            {getPrimaryBusyLabel(currentTip.action, t)}
           </>
         ) : (
           (label ?? getLocalizedFeatureTipCopy(currentTip).ctaLabel)

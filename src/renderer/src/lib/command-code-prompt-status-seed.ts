@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { getConnectionIdFromState } from './connection-owner-resolution'
-import { resolveLiveAgentStatusConnectionRouting } from './agent-status-connection-ownership'
+import { getConnectionIdFromState } from './workspace/ownership/connection-owner-resolution'
+import { resolveLiveAgentStatusConnectionRouting } from './agent-status/ownership/agent-status-connection-ownership'
 import { rendererAgentStatusObservations } from './renderer-agent-status-observations'
 
 // Command Code lacks prompt-submit hooks; seed working when generated input is delivered so rows do not stay idle until its next hook.

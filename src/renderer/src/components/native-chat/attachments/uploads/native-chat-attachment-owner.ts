@@ -3,8 +3,8 @@ import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '../../../../l
 
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import { getKnownExecutionHostIdForWorktree } from '../../../../lib/workspace/ownership/worktree-runtime-owner'
-import { runtimeEnvironmentIdForWorkspaceOwner } from '../../../../lib/resolve-owner'
-import { getConnectionIdFromState } from '../../../../lib/connection-owner-resolution'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '../../../../lib/workspace/ownership/resolve-owner'
+import { getConnectionIdFromState } from '../../../../lib/workspace/ownership/connection-owner-resolution'
 import {
   type ExecutionHostId,
   toRuntimeExecutionHostId,

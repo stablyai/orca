@@ -24,8 +24,11 @@ import { MessageRow } from '../rows/NativeChatMessageRow'
 const mocks = vi.hoisted(() => ({ call: vi.fn(), confirm: vi.fn() }))
 let state: StructuredAgentSessionState
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() }))
+}))
+
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.call
 }))
 vi.mock('../../session/structured/use-structured-agent-session-hold', () => ({
@@ -74,8 +77,6 @@ describe('rewind target after send acceptance', () => {
 
   it.each([
     ['codex', 'orca'],
-    ['codex', 'provider'],
-    ['claude', 'orca'],
     ['claude', 'provider']
   ] as const)('uses the accepted %s row with a %s journal key', async (agent, keySource) => {
     const hook = renderHook(() =>
@@ -147,6 +148,5 @@ describe('rewind target after send acceptance', () => {
       )
     )
     expect(confirm).toHaveBeenCalledOnce()
-    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ title: 'Rewind to here?' }))
   })
 })

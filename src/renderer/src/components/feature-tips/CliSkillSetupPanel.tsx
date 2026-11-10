@@ -1,17 +1,21 @@
 import { CliSkillSetupTerminal } from './CliSkillSetupTerminal'
 import { AgentSkillSetupPanel } from '@/components/skills/setup/AgentSkillSetupPanel'
-import { ORCA_CLI_SKILL_NAME, ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import {
+  ORCA_CLI_SKILL_NAME,
+  ORCHESTRATION_SKILL_NAME
+} from '@/lib/skills/installation/agent-feature-skill-names'
+import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   hasInstalledAgentSkill,
   useInstalledAgentSkillNames
-} from '@/hooks/useInstalledAgentSkills'
-import { translate } from '@/i18n/i18n'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { useTranslate } from '@/i18n/use-translate'
 
 const CLI_TIP_SKILL_NAMES = [ORCA_CLI_SKILL_NAME, ORCHESTRATION_SKILL_NAME] as const
 
 function BundledCliSkillSetupPanel(): React.JSX.Element {
+  const t = useTranslate()
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   // Why: a repair-required runtime has no distro to scan; Install stays disabled for it.
   const agentRuntime = activeSkillRuntime.installDisabledReason
@@ -30,8 +34,8 @@ function BundledCliSkillSetupPanel(): React.JSX.Element {
       variant="inline"
       hideHeader
       className="min-w-0"
-      title={translate('auto.components.feature.tips.CliSkillSetupPanel.title', 'Skill setup')}
-      description={translate(
+      title={t('auto.components.feature.tips.CliSkillSetupPanel.title', 'Skill setup')}
+      description={t(
         'auto.components.feature.tips.CliSkillSetupPanel.description',
         'Install the Orca CLI and orchestration skills for your agents.'
       )}

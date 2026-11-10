@@ -35,7 +35,7 @@ import {
   filterEnabledTuiAgents,
   isTuiAgentEnabled
 } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { useAppStore } from '@/store'
 import { isSshConnectInProgress } from '@/lib/new-workspace-ssh-gate'
 import {

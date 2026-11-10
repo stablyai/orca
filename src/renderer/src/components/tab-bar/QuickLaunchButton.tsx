@@ -14,7 +14,7 @@ import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-a
 import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import { agentLaunchPromptOwnership, newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
-import { activeAgentNotesSendFailureMessage } from '@/lib/active-agent-note-send-result'
+import { activeAgentNotesSendFailureMessage } from '@/lib/agent-session/messaging/terminal/active-agent-note-send-result'
 import { AgentSettingsMenuItem } from '@/components/agent/AgentSettingsMenuItem'
 import { TabAgentSurfaceChoiceRow } from './TabAgentSurfaceChoiceRow'
 import {
@@ -22,13 +22,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut
 } from '@/components/ui/dropdown-menu'
-import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAgentMenuShortcutLabels } from './agent-menu-shortcut-labels'
 import type { AgentPickerInventorySource } from '../agent/use-agent-launch-picker-inventory'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { cn } from '@/lib/utils'
 import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
@@ -195,6 +197,7 @@ export function ProjectedAgentMenuItems({
   onSelectPickerAgent?: (agent: AgentPickerEntry['agent']) => void
   hidePickerSearch?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const desktopDefaultAgent = useAppStateValue((s) => s.settings?.defaultTuiAgent)
   const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
   const shortcutLabels = useAgentMenuShortcutLabels(pickerInventory ? model : undefined)
@@ -211,7 +214,7 @@ export function ProjectedAgentMenuItems({
             key={width}
             variant="launch"
             disabled
-            aria-label={translate(
+            aria-label={t(
               'auto.components.tab.bar.QuickLaunchButton.agentsLoading',
               'Loading agents'
             )}
@@ -238,24 +241,18 @@ export function ProjectedAgentMenuItems({
           className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 text-muted-foreground"
         >
           {needsServerUpdate
-            ? translate(
+            ? t(
                 'auto.components.tab.bar.QuickLaunchButton.terminalListNeedsServerUpdate',
                 'Update Orca on this server to list terminal agents'
               )
             : detectionFailed
-              ? translate(
+              ? t(
                   'auto.components.tab.bar.QuickLaunchButton.terminalListFailed',
                   'Couldn’t list terminal agents for this workspace'
                 )
               : detectedIds && detectedIds.length > 0
-                ? translate(
-                    'auto.components.tab.bar.QuickLaunchButton.8dea9b5cdf',
-                    'No enabled agents'
-                  )
-                : translate(
-                    'auto.components.tab.bar.QuickLaunchButton.e518f544b1',
-                    'No agents detected'
-                  )}
+                ? t('auto.components.tab.bar.QuickLaunchButton.8dea9b5cdf', 'No enabled agents')
+                : t('auto.components.tab.bar.QuickLaunchButton.e518f544b1', 'No agents detected')}
         </DropdownMenuItem>
       ) : null}
       {pickerInventory ? (
@@ -279,18 +276,18 @@ export function ProjectedAgentMenuItems({
                 <AgentIcon agent={agent} size={14} />
                 <span className="flex-1">{label}</span>
                 <span className="font-normal text-muted-foreground">
-                  {chatUnavailableLabel(row.reason)}
+                  {chatUnavailableLabel(row.reason, t)}
                 </span>
               </DropdownMenuItem>
             )
           }
           const showsDefaultAgentShortcut =
             newAgentShortcut !== null && defaultAgent !== 'blank' && agent === defaultAgent
-          const pendingReason = terminalPendingReason(model.terminalPending, row)
+          const pendingReason = terminalPendingReason(model.terminalPending, row, t)
           const rowContent = (
             <>
               <AgentIcon agent={agent} size={14} />
-              <span className="min-w-0 flex-1 truncate">{rowLabel(row)}</span>
+              <span className="min-w-0 flex-1 truncate">{rowLabel(row, t)}</span>
               {pendingReason ? (
                 <span className="min-w-0 shrink truncate text-xs text-muted-foreground">
                   {pendingReason}
@@ -326,7 +323,7 @@ export function ProjectedAgentMenuItems({
                       event.preventDefault()
                     }
                   }}
-                  title={rowTitle(row, label)}
+                  title={rowTitle(row, label, t)}
                 >
                   {rowContent}
                 </DropdownMenuItem>

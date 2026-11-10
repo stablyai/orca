@@ -3,9 +3,9 @@ import {
   emptyCrew,
   type OrchestrationCrewSnapshot,
   type OrchestrationCrewRow
-} from '../../../../shared/orchestration-crew'
+} from '../../../../shared/orchestration/orchestration-crew'
 import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
-import { isPublicOrchestrationAddress } from '../../../../shared/orchestration-agent-reference'
+import { isPublicOrchestrationAddress } from '../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import { createLineageRunningSessionResolver } from '../addressing/session-lineage/structured-session-lineage'
 import { crewDisplayName, crewTaskDisplay } from './crew-rules'
 import type { CrewAssignmentRow } from './crew-query'
@@ -13,8 +13,13 @@ import type { CrewAssignmentRow } from './crew-query'
 import type { Party } from './crew-parties'
 import { crewParentRelations } from './crew-parent-relations'
 import { createCrewHostDerivation } from './crew-host-derivation'
-import { statusForFleetWorker } from '../../../../shared/orchestration-fleet-status-index'
-import { projectLiveness } from '../../../../shared/orchestration-fleet-worker-projection'
+import { statusForFleetWorker } from '../../../../shared/orchestration/fleet/orchestration-fleet-status-index'
+import {
+  projectLiveness,
+  sessionActivityEvidence
+} from '../../../../shared/orchestration/fleet/orchestration-fleet-worker-projection'
+import { createSessionWorkerLivenessReader } from '../workers/lifecycle/session-worker-liveness'
+import { isStructuredWorkerHandle } from '../../../../shared/orchestration/workers/structured-worker-handle'
 import { federatedMessageNamesOnlyHome } from '../workers/reports/dispatch-report-mailbox'
 import { workerReportRefusal } from '../workers/reports/worker-report-admission'
 import { isEquivalentPaneKey } from '../db/pane-key-match'
@@ -50,6 +55,7 @@ export function buildCrewSnapshot(
   const { party, alias, addressOf, getParty, aliasesFor } = registry
   const records = host.deps.records
   const runningSession = createLineageRunningSessionResolver(records)
+  const observeSession = createSessionWorkerLivenessReader(db, host.deps.statuses, records)
   const hydrate = (addresses: string[], panes: string[] = []) => {
     const provenance = host.sourceInputs.provenance(addresses, panes)
     for (const family of [provenance.local, provenance.remote]) {
@@ -149,8 +155,13 @@ export function buildCrewSnapshot(
           evidence.binding.terminalHandle === target.terminalHandle &&
           evidence.binding.paneKey === target.paneKey &&
           (evidence.binding.kind !== 'worker' || evidence.binding.dispatchId === assignment?.id)))
-    const fresh =
-      bound && projectLiveness({ resource: null }, evidence, now).verdict === 'live'
+    // Chats keep their own status row: their reach check queries SQLite on every Crew rebuild.
+    const session = isStructuredWorkerHandle(worker?.agentTerminalHandle)
+      ? observeSession(worker!)
+      : undefined
+    const fresh = session
+      ? sessionActivityEvidence(session)
+      : bound && projectLiveness({ resource: null }, evidence, now).verdict === 'live'
         ? evidence
         : undefined
     const row: OrchestrationCrewRow = {

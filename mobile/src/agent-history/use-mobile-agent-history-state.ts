@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { mobileStructuredSessionStatusFeed } from '../session/mobile-structured-session-status-feed'
+import { mobileStructuredSessionStatusFeed } from '../session/native-chat/agent-session/mobile-structured-session-status-feed'
 import type { AgentSessionConversationNames } from '../../../src/shared/agent-session/agent-session-conversation-names'
-import { useForceReconnect } from '../transport/host-client-hooks'
-import { useWorkspaceClient } from '../transport/use-workspace-client'
-import type { RpcClient } from '../transport/rpc-client'
-import { connectionRetryAction } from '../transport/connection-retry-action'
+import { useForceReconnect } from '../transport/connection/host-client-hooks'
+import { useWorkspaceClient } from '../worktree/use-workspace-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { connectionRetryAction } from '../transport/connection/connection-retry-action'
 import type {
   AiVaultScanIssue,
   AiVaultScope,
@@ -17,13 +17,13 @@ import { defineHostQuery, readHostQueryLive, useHostQuery } from '../query/host-
 import { hostScreenState } from '../query/host-query-screen-state'
 import {
   deriveMobileAiVaultScopePaths,
-  mobileAiVaultScanScopePaths
+  mobileAiVaultScanScopeArgs
 } from './agent-history-scope-paths'
 import {
   agentHistoryCapabilityRead,
   agentHistorySessionScan
 } from './mobile-agent-history-operations'
-import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
+import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
 import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -65,6 +65,7 @@ type ScanScope = { scopeFilterPaths: string[]; activeWorktreePath: string | null
 
 async function readAgentHistory(
   client: RpcClient,
+  scope: AiVaultScope,
   scan: ScanScope,
   force: boolean,
   associationRevision: number
@@ -81,7 +82,8 @@ async function readAgentHistory(
   const reply = await agentHistorySessionScan.request(client, {
     limit: MOBILE_AI_VAULT_SESSION_LIMIT,
     force,
-    scopePaths: mobileAiVaultScanScopePaths(scan.scopeFilterPaths)
+    // From the query's own scope key, so rows cached under Workspace are always Workspace-only ones.
+    ...mobileAiVaultScanScopeArgs(scope, scan.scopeFilterPaths)
   })
   const result = interpretOrThrowRefusalMessage(
     () => agentHistorySessionScan.interpret(reply),
@@ -111,7 +113,7 @@ function agentHistoryQuery(
     // No desktop signal for new transcripts, so foreground revalidates once older than 30 s.
     refetchOnWindowFocus: true,
     fetch: (client, _target, input: { scope: AiVaultScope }) =>
-      readAgentHistory(client, scan, force, startRevision(input.scope))
+      readAgentHistory(client, input.scope, scan, force, startRevision(input.scope))
   })
 }
 

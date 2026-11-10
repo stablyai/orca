@@ -4,6 +4,7 @@ import { z } from 'zod'
 import {
   AI_VAULT_AGENTS,
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
+  boundedAiVaultScopeArgs,
   type AiVaultListArgs,
   type AiVaultListResult,
   type AiVaultSession
@@ -87,7 +88,7 @@ export async function scanRuntimeAiVaultSessions(
       force: args.force,
       ...(args.afterFingerprint !== undefined ? { afterFingerprint: args.afterFingerprint } : {}),
       // Cap paths for older hosts too; omitted scope paths lose deep-history coverage, not recent sessions.
-      scopePaths: args.scopePaths?.slice(0, AI_VAULT_SCOPE_PATHS_MAX_COUNT),
+      ...boundedAiVaultScopeArgs(args.scopePaths, args.scopeOnly),
       executionHostId
     },
     options.timeoutMs

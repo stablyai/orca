@@ -30,6 +30,7 @@
     "react/static-components": "error",
     "react/use-memo": "error",
     "react/void-use-memo": "error",
+    "react/no-deriving-state-in-effects": "error",
     "react/jsx-curly-brace-presence": [
       "error",
       { "props": "never", "children": "never", "propElementValues": "always" }

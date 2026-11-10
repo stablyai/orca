@@ -1,5 +1,5 @@
 import { useCallback, type MutableRefObject } from 'react'
-import type { RpcClient } from '../../../transport/rpc-client'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import {
   clearMobileNativeChatInput,
   openMobileNativeChatSendBudget,
@@ -8,11 +8,11 @@ import {
   typeMobileNativeChatCommandWithOutcome,
   type MobileNativeChatSendIntent,
   type MobileNativeChatSendOutcome
-} from '../mobile-native-chat-send'
+} from '../composer/mobile-native-chat-send'
 import type { CatalogCommandDelivery } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-types'
 import { isSlashCommandDraft } from '../../../../../src/shared/native-chat/input/native-chat-slash-commands'
-import { healMobileNativeChatStaleInput } from '../mobile-native-chat-stale-input'
-import { classifyMobileNativeChatSend } from '../mobile-native-chat-send-classification'
+import { healMobileNativeChatStaleInput } from '../composer/mobile-native-chat-stale-input'
+import { classifyMobileNativeChatSend } from '../composer/mobile-native-chat-send-classification'
 import { readMobileNativeChatSkillOrigin } from '../composer/mobile-native-chat-draft-store'
 import { nativeChatSendTextOwner } from './mobile-native-chat-send-text-owner'
 import {
@@ -22,12 +22,12 @@ import {
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
-} from '../mobile-native-chat-terminal-write-lock'
-import type { MobileNativeChatSendOrigin } from '../mobile-native-chat-pending-echo'
+} from '../composer/mobile-native-chat-terminal-write-lock'
+import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
 import {
   UNCONFIRMED_SEND_MESSAGE,
   UNCONFIRMED_SEND_RESTORED_MESSAGE
-} from '../use-mobile-native-chat-unconfirmed-sends'
+} from '../composer/use-mobile-native-chat-unconfirmed-sends'
 import type { MobileNativeChatLaunchDraftSeed } from '../composer/use-mobile-native-chat-launch-draft-seed'
 import { buildNativeChatPasteBytes } from '../../../../../src/shared/native-chat/input/native-chat-paste-bytes'
 

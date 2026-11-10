@@ -20,6 +20,14 @@ type SweepActivityInputs = Pick<
   | 'worktreeIdsWithStructuredChat'
 >
 
+const NO_RETAINED_IDS: ReadonlySet<string> = new Set()
+// Why: store-side readers (removal successor) must see the same grace rows the sidebar shows.
+let committedRetainedIds = NO_RETAINED_IDS
+
+export function getSidebarSleepingSweepRetainedIds(): ReadonlySet<string> {
+  return committedRetainedIds
+}
+
 /** Rows the "Hide sleeping" sweep must keep through a transient PTY rebind gap (#15996). */
 export function useSleepingSweepRetention(
   args: SweepActivityInputs & {
@@ -77,7 +85,11 @@ export function useSleepingSweepRetention(
 
   useEffect(() => {
     committedStateRef.current = pass.state ?? createSleepingSweepRetentionState()
-  }, [pass.state])
+    committedRetainedIds = pass.retainedIds ?? NO_RETAINED_IDS
+    return () => {
+      committedRetainedIds = NO_RETAINED_IDS
+    }
+  }, [pass.state, pass.retainedIds])
 
   // Wake at expiry or the final grace window would retain its row until an unrelated store write.
   const { nextExpiryInMs } = pass

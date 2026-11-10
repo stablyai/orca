@@ -11,11 +11,11 @@ import {
   linearReadAccountRejections,
   withoutLinearAccountWorkspaces
 } from '@/store/slices/linear/linear-cache'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import {
   getTaskSourceRuntimeSettings,
   type TaskSourceContext
-} from '../../../../shared/task-source-context'
+} from '../../../../shared/work-items/task-source-context'
 import type { LinearConnectionStatus } from '../../../../shared/linear/workspace-types'
 
 type LinearSourceConnection = {

@@ -11,7 +11,7 @@ export function getMiniMaxStatusBarToggleSearchEntry(): {
 } {
   return {
     id: 'minimax',
-    title: translate('auto.components.settings.appearance.search.0f08f6b483', 'MiniMax Usage'),
+    title: translate('auto.components.settings.appearance.search.96e32c1118', 'MiniMax usage'),
     description: translate(
       'auto.components.settings.appearance.search.e46178eb1b',
       'Show MiniMax subscription usage in the status bar.'

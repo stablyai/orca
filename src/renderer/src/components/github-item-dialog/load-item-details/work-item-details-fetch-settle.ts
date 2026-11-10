@@ -12,7 +12,10 @@ import type {
 } from '../../../../../shared/github/work-item-types'
 import type { GitHubTaskRecordCache } from '@/store/github/task-records/task-record-cache'
 import type { TaskBinding } from '@/store/github/task-records/task-record-model'
-import { githubTaskRpcOptions, type GitHubTaskTarget } from '@/lib/github-task-target'
+import {
+  githubTaskRpcOptions,
+  type GitHubTaskTarget
+} from '@/lib/work-items/github/github-task-target'
 import { useAppStore } from '@/store'
 import { lookupGitHubWorkItemDetailsForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import {

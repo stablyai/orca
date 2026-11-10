@@ -28,6 +28,7 @@ export function beginClaudeOptionMutation(session: ClaudeSession, key: string): 
   if (key === 'model') {
     delete session.appliedOptions
     delete session.reportedOptions.reportedModel
+    session.modelMutationDispatch = session.dispatchSequence
   } else {
     if (session.reportedModelMutation === previous) {
       session.reportedModelMutation = sequence
@@ -76,7 +77,12 @@ function observeClaudeResponseModel(
   frame: Record<string, unknown>
 ): boolean {
   const response = readClaudeResponseModel(frame)
-  if (!response) {
+  // Why: a turn running at a model pick keeps answering on the old model; it must not unseat the pick.
+  if (
+    !response ||
+    (session.modelMutationDispatch === session.dispatchSequence &&
+      session.reportedModelMutation !== session.optionMutationSequence)
+  ) {
     return false
   }
   const model =

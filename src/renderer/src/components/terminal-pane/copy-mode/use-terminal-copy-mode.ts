@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { registerTerminalCopyModeTarget } from './terminal-copy-mode-targets'
 import { installCopyModeMenuGuard } from './terminal-copy-mode-menu'
 import { installCopyModeKeyGuard } from './terminal-copy-mode-key-guard'

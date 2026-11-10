@@ -1,4 +1,4 @@
-import { ImeInput } from '@/lib/ime-text-field'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import type React from 'react'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { LoaderCircle, Search } from 'lucide-react'
@@ -18,7 +18,7 @@ import { useRemoteFileBrowserFilterKeyCommands } from './use-remote-file-browser
 import { useRemoteFileBrowserListing } from './use-remote-file-browser-listing'
 import { useRemoteFileBrowserPathPreview } from './use-remote-file-browser-path-preview'
 import { useTranslate } from '@/i18n/use-translate'
-import type { FilesystemPathFlavor } from '../../../../../shared/filesystem-entry-types'
+import type { FilesystemPathFlavor } from '../../../../../shared/file-access/filesystem-path-flavor'
 
 // Both IDs select an SSH host owned and listed by the paired server.
 type RemoteFileBrowserProps = (

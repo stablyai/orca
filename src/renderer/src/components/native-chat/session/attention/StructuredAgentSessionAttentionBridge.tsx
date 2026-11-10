@@ -14,10 +14,10 @@ import type { RuntimeClientTarget } from '../../../../../../shared/runtime-clien
 import {
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForHost
-} from '@/runtime/structured-agent-session-owner'
-import { getStructuredAgentSessionTurnCompletionFeed } from '@/runtime/structured-agent-session-turn-completion-feed'
-import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
-import { acknowledgeStructuredAgentSessionAttention } from '@/runtime/structured-agent-session-client'
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
+import { getStructuredAgentSessionTurnCompletionFeed } from '@/runtime/native-chat/status/structured-agent-session-turn-completion-feed'
+import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
+import { acknowledgeStructuredAgentSessionAttention } from '@/runtime/native-chat/attention/structured-agent-session-attention-acknowledgment'
 import type { AgentJournalCursor } from '../../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionExecutionLocation } from '../../../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionStatusSummary } from '../../../../../../shared/agent-session/agent-session-wire'

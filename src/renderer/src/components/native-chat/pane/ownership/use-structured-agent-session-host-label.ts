@@ -1,5 +1,5 @@
-import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
-import { executionHostIdForStructuredTarget } from '@/runtime/structured-agent-session-owner'
+import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
+import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { useAppStore } from '../../../../store/index'
 

@@ -12,14 +12,14 @@ import {
   parsePathInput,
   shouldDeferRemoteFileBrowserPasteResolve
 } from './remote-file-browser-entry-actions'
-import { shouldHandleTextControlPaste as isRemoteFileBrowserPathResolveTextTooLarge } from '../../../lib/text-control-paste'
+import { shouldHandleTextControlPaste as isRemoteFileBrowserPathResolveTextTooLarge } from '../../../lib/text-input/paste/text-control-paste'
 import {
   committedPrefix,
   resolvePathInput as resolvePathInputAgainstListings,
   type PreviewState
 } from './remote-file-browser-path-preview-resolver'
 import type { FetchListing } from './use-remote-file-browser-listing'
-import type { FilesystemPathFlavor } from '../../../../../shared/filesystem-entry-types'
+import type { FilesystemPathFlavor } from '../../../../../shared/file-access/filesystem-path-flavor'
 
 const PATH_DEBOUNCE_MS = 300
 

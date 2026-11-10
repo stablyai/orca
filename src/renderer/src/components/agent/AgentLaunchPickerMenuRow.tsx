@@ -6,7 +6,7 @@ import {
   DropdownMenuShortcut,
   useDropdownMenuClose
 } from '@/components/ui/dropdown-menu'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { AgentDefaultContextMenu } from './agent-combobox-items'
 import { AgentLaunchSetupButton, type AgentPickerSetupIdentity } from './AgentLaunchSetupButton'
@@ -19,6 +19,7 @@ import {
   type AgentPickerEntry,
   type AgentPickerSurface
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import { useTranslate } from '@/i18n/use-translate'
 
 function pickerLaunchRow(entry: AgentPickerEntry, surface: AgentPickerSurface): NewTabAgentMenuRow {
   return {
@@ -89,6 +90,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   /** Base agent rows only; setup rows are presets, not default-agent choices. */
   onSetDefault?: (agent: AgentPickerEntry['agent']) => void
 }) {
+  const t = useTranslate()
   useUiLanguageRevision()
   const setupId = useId()
   const preset = initialModel ? { model: initialModel, effort: initialEffort } : undefined
@@ -113,9 +115,10 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
     return (
       <AgentDefaultContextMenu isDefault={isDefault} onSetDefault={setDefault}>
         <DropdownMenuItem
+          className="min-h-9"
           disabled={disabled || launchBlocked || !entry.surfaces.length}
           data-search-default={searchDefault || undefined}
-          aria-description={launchBlocked ? terminalPendingLabel() : undefined}
+          aria-description={launchBlocked ? terminalPendingLabel(t) : undefined}
           onSelect={(event) => {
             onSelectAgent?.(entry.agent)
             if (
@@ -139,7 +142,6 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   }
   return (
     <AgentLaunchSetupButton
-      submenu
       draftScope={draftScope}
       draftId={draftId}
       preset={preset}
@@ -150,7 +152,6 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
       mode={mode}
       terminalBlocked={terminalBlocked}
       open={openSetup === setupId}
-      replacedByAnotherSetup={openSetup !== null && openSetup !== setupId}
       disabled={disabled || setupDisabled || !entry.surfaces.length}
       onOpenChange={(next) => {
         if (next || openSetup === setupId) {
@@ -160,6 +161,11 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
           onSelectAgent?.(entry.agent)
         }
       }}
+      onSelect={
+        mode === 'select'
+          ? (draft) => runLaunch(pickerLaunchRow(entry, draft.surface), draft, entry)
+          : undefined
+      }
       onUse={(draft) => {
         const chosen = mode === 'select' ? draft.surface : undefined
         const result =
@@ -210,6 +216,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
               type="button"
               variant="menu-launch"
               size="menu"
+              className="h-9"
               aria-disabled={launchBlocked || undefined}
               aria-describedby={launchBlocked ? reasonId : undefined}
             >

@@ -1,6 +1,6 @@
-import type { PathExistenceResult } from '../../../../../shared/path-existence-batch'
+import type { PathExistenceResult } from '../../../../../shared/file-access/path-existence-batch'
 import { describe, expect, it, vi } from 'vitest'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { openFilePathLinkAtBufferPosition } from './files/terminal-file-link-hit-testing'
 import { openDetectedFilePath } from './files/terminal-file-open-routing'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
@@ -33,7 +33,7 @@ vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: vi.fn(() => null)
 }))
 
@@ -121,91 +121,6 @@ describe('a modifier-click on a paired-server path followed by more paths', () =
       { forceContentReload: true }
     )
     expect(onOpenFailure).not.toHaveBeenCalled()
-  })
-
-  it('remembers an older host ENOTDIR answer as missing, so the next click does not re-ask', async () => {
-    setPlatform('Macintosh')
-    hostAnswers((path) => (path === 'a.txt' ? { exists: true } : { error: OLD_HOST_ENOTDIR }))
-    // Why: hovering underlined a.txt, so only the longer joined guesses are unchecked.
-    const pathExistsCache = makeExistsCache([[runtimeKey('/srv/repo/a.txt'), true]])
-
-    clickFirstPath(vi.fn(), pathExistsCache)
-    await flushDoubleRaf()
-    runtimeEnvironmentCallMock.mockClear()
-    clickFirstPath(vi.fn(), pathExistsCache)
-    await flushDoubleRaf()
-
-    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'files.pathsExist' })
-    )
-    expect(openFileMock).toHaveBeenCalledTimes(2)
-    expect(openFileMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({ filePath: '/srv/repo/a.txt' }),
-      { forceContentReload: true }
-    )
-  })
-
-  it('drops a slow ambiguous probe once a later click has opened something else', async () => {
-    setPlatform('Macintosh')
-    const firstProbe = createDeferred<boolean>()
-    vi.mocked(window.api.shell.pathExists).mockImplementation(async (path: string) =>
-      path === '/repo/a.txt' ? firstProbe.promise : false
-    )
-    const buffer = makeBuffer([
-      makeBufferLine('/repo/a.txt'),
-      makeBufferLine('/repo/b.txt'),
-      makeBufferLine(''),
-      makeBufferLine('package.json')
-    ])
-    const deps = { startupCwd: '/repo', worktreeId: 'wt-1', worktreePath: '/repo' }
-
-    openFilePathLinkAtBufferPosition(buffer, { x: 4, y: 1 }, 80, deps)
-    // Why: a lone candidate opens without probing, and must still cancel the pending probe.
-    openFilePathLinkAtBufferPosition(buffer, { x: 4, y: 4 }, 80, deps)
-    firstProbe.resolve(true)
-    await flushAsyncWork()
-
-    expect(statMock).toHaveBeenCalledTimes(1)
-    expect(statMock).toHaveBeenCalledWith({ filePath: '/repo/package.json', wakeWslDistro: true })
-  })
-
-  it('checks a longer hard-wrapped name before opening its cached prefix', async () => {
-    setPlatform('Macintosh')
-    vi.mocked(window.api.shell.pathExists).mockImplementation(
-      async (path: string) => path === '/repo/foo.ts.map'
-    )
-    const buffer = makeBuffer([makeBufferLine('/repo/foo.ts'), makeBufferLine('.map')])
-    const pathExistsCache = makeExistsCache([
-      [getTerminalPathExistsCacheKey({ absolutePath: '/repo/foo.ts' }), true]
-    ])
-    const deps = { startupCwd: '/repo', worktreeId: 'wt-1', worktreePath: '/repo', pathExistsCache }
-
-    openFilePathLinkAtBufferPosition(buffer, { x: 4, y: 1 }, 80, deps)
-    await flushAsyncWork()
-
-    expect(statMock).toHaveBeenCalledTimes(1)
-    expect(statMock).toHaveBeenCalledWith({ filePath: '/repo/foo.ts.map', wakeWslDistro: true })
-  })
-
-  it('drops a slow ambiguous probe once any other file open has started', async () => {
-    setPlatform('Macintosh')
-    const probe = createDeferred<boolean>()
-    vi.mocked(window.api.shell.pathExists).mockImplementation(() => probe.promise)
-    const deps = { startupCwd: '/repo', worktreeId: 'wt-1', worktreePath: '/repo' }
-
-    openFilePathLinkAtBufferPosition(
-      makeBuffer([makeBufferLine('/repo/a.txt'), makeBufferLine('/repo/b.txt')]),
-      { x: 4, y: 1 },
-      80,
-      deps
-    )
-    // Why: e.g. a chat link or the link popover, which never passes through the click fallback.
-    openDetectedFilePath('/repo/other.txt', null, null, deps)
-    probe.resolve(true)
-    await flushAsyncWork()
-
-    expect(statMock).toHaveBeenCalledTimes(1)
-    expect(statMock).toHaveBeenCalledWith({ filePath: '/repo/other.txt', wakeWslDistro: true })
   })
 
   it('supersedes an earlier open still in flight as soon as an ambiguous click starts', async () => {

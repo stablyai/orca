@@ -8,7 +8,7 @@ import {
   captureRuntimeEnvironmentCall,
   captureWebSessionIntentOwner,
   isWebRuntimeSessionActive
-} from '../../web-runtime-session-environment'
+} from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
 import {
   beginWebRuntimeSplitFocusRequest,
   captureWebRuntimeSplitFocusTarget,

@@ -1,7 +1,7 @@
 import { createCipheriv, createHash, randomBytes } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { decryptCookieValueRaw } from './browser-cookie-decryption'
-import type { EncryptionKeyResult } from './browser-cookie-sqlite'
+import type { EncryptionKeyResult } from './chromium-encryption-key-contract'
 
 const HOST_KEY = '.example.com'
 const cbcKey = randomBytes(16)
