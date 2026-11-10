@@ -9,11 +9,9 @@ import type {
   ClaudePermissionHolds
 } from '../../../../agent-hooks/server/claude-permission-hook-hold'
 import type { AgentHookEventPayload } from '../../../../../shared/agent-hook-listener/listener-event'
-import {
-  claudePermissionCloseEvidence,
-  claudeShowsHookAnswer,
-  showsClaudeDialog
-} from '../../../terminal/wait/claude-open-dialog-hold'
+import { showsClaudeDialog } from '../../../terminal/wait/claude-open-dialog-hold'
+import { claudeToolClose, type ClaudeToolResult } from './claude-tool-result-close'
+import { firstWithin } from './first-within'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow } from '../../db/orchestration-records'
 import {
@@ -28,9 +26,6 @@ import type {
 
 // Why 500 ms: Esc posts no hook, so only the screen says the dialog left; a click is refused within it.
 const DIALOG_POLL_MS = 500
-// Why 3 s: Claude closes its dialog at once on a hook's answer (probe F2); longer means it was not taken.
-const SCREEN_WAIT_MS = 3_000
-const SCREEN_RETRY_MS = 100
 // A closed prompt waits this long for its tool's result before its closing line says no more than "closed".
 const CLOSE_EVIDENCE_MS = 10 * 60_000
 
@@ -45,6 +40,8 @@ export type TerminalWorkerApprovalHoldsDeps = Pick<WorkerTurnStopReportDeps, 'no
   processIncarnation: (handle: string) => string | null
   /** The pane's screen once it has applied every PTY chunk; null while it lags or is unreadable. */
   readScreen: (paneKey: string) => readonly string[] | null
+  /** The tool_result Claude's transcript records for this tool call, once written. */
+  readToolResult: (call: { transcriptPath: string; toolUseId: string }) => ClaudeToolResult | null
   setTimer: (run: () => void, delayMs: number) => { cancel: () => void }
 }
 
@@ -52,6 +49,7 @@ type Hold = {
   approvalId: string
   paneKey: string
   toolUseId: string
+  transcriptPath: string
   handle: string
   incarnation: string | null
   db: OrchestrationDb
@@ -61,6 +59,8 @@ type Hold = {
   /** Compare-and-set: only the step out of `open` may write a decision to the hook. */
   state: 'open' | 'answering' | 'answered' | 'closed'
   dialogSeen: boolean
+  /** Its PostToolUse arrived while an answer was in flight: the tool ran. */
+  ranSeen: boolean
   /** The coordinator was told about it, so it is owed one closing line. */
   reported: boolean
   timer: { cancel: () => void } | null
@@ -83,8 +83,9 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
   admit(request: ClaudePermissionHold): boolean {
     const { event, promptId } = request
     const { paneKey, toolUseId } = event
-    // No single open call matches it (or none was seen): the screen alone cannot say which it is.
-    if (!toolUseId || !promptId || event.toolAgentId !== undefined) {
+    const transcriptPath = event.providerSession?.transcriptPath
+    // No single open call matches it, or no transcript can say how it closed.
+    if (!toolUseId || !promptId || !transcriptPath || event.toolAgentId !== undefined) {
       return false
     }
     const worker = this.deps.canAnswerPane(paneKey) ? this.deps.resolveWorker(paneKey) : null
@@ -104,6 +105,7 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
         .slice(0, 16)}`,
       paneKey,
       toolUseId,
+      transcriptPath,
       handle: worker.handle,
       incarnation: this.deps.processIncarnation(worker.handle),
       db: worker.db,
@@ -116,6 +118,7 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
       channel: request.openChannel(),
       state: 'open',
       dialogSeen: false,
+      ranSeen: false,
       reported: false,
       timer: null
     }
@@ -132,7 +135,11 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
       const open = this.openByPane.get(event.paneKey)
       const hold =
         open?.toolUseId === event.toolUseId ? open : this.closingByToolUseId.get(event.toolUseId)
-      if (hold?.paneKey === event.paneKey && hold.state !== 'answering') {
+      if (hold?.paneKey !== event.paneKey) {
+        return
+      }
+      hold.ranSeen = true
+      if (hold.state !== 'answering') {
         this.close(hold, { by: 'worker-terminal', decision: 'allow' })
       }
       return
@@ -160,8 +167,9 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
     return this.payload(hold)
   }
 
-  /** Writes a decision only to a dialog still on a caught-up screen, and claims it only once Claude
-   *  shows it applied: a Yes, a No or the 2:00 auto-block that won the race names its own close. */
+  /** Writes a decision only to a dialog still on a caught-up screen, and claims it only once this
+   *  call's tool_result shows Claude took it: a Yes, a No or the 2:00 auto-block that won the race
+   *  names its own close. A person's Yes and Orca's allow record the same result. */
   async answer(input: {
     dispatchId: string
     approvalId: string
@@ -177,7 +185,7 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
     if (!hold || hold.dispatch.id !== input.dispatchId || !this.stillBound(hold)) {
       return notOpen
     }
-    const before = await this.screenWhere(hold.paneKey, () => true)
+    const before = await firstWithin(this.deps.setTimer, () => this.deps.readScreen(hold.paneKey))
     if (hold.state !== 'open' || !before || !showsClaudeDialog(before)) {
       return notOpen
     }
@@ -188,12 +196,11 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
         ? { behavior: 'allow' }
         : { behavior: 'deny', message: input.message }
     )
-    const after = written
-      ? await this.screenWhere(hold.paneKey, (lines) => !showsClaudeDialog(lines))
-      : null
-    if (!after || !claudeShowsHookAnswer(after, input.decision)) {
+    const result = written ? await this.toolResult(hold) : null
+    const ours = input.decision === 'deny' ? 'hook-denied' : 'ran'
+    if (!result || claudeToolClose(result, input.message) !== ours || hold.state !== 'answering') {
       hold.state = 'open'
-      this.settleFromScreen(hold, after)
+      await this.settle(hold, result)
       return notOpen
     }
     hold.state = 'answered'
@@ -209,7 +216,7 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
       const lines = this.deps.readScreen(hold.paneKey)
       const shown = lines ? showsClaudeDialog(lines) : null
       if (shown === false && hold.dialogSeen) {
-        this.settleFromScreen(hold, lines)
+        void this.toolResult(hold).then((result) => this.settle(hold, result))
         return
       }
       hold.dialogSeen ||= shown === true
@@ -223,30 +230,42 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
       this.close(hold, null)
       return
     }
-    const lines = await this.screenWhere(hold.paneKey, (screen) => !showsClaudeDialog(screen))
-    this.settleFromScreen(hold, lines)
+    await this.settle(hold, await this.toolResult(hold))
   }
 
-  /** Names a close from the screen Claude left: No, the auto-block, or nothing yet (wait for a result). */
-  private settleFromScreen(hold: Hold, lines: readonly string[] | null): void {
+  /** Names a close from this call's tool_result; with none yet, from whether the dialog is still up. */
+  private async settle(hold: Hold, result: ClaudeToolResult | null): Promise<void> {
     if (hold.state !== 'open') {
       return
     }
-    if (!lines || showsClaudeDialog(lines)) {
-      // The dialog is up but Orca can no longer answer it: a person must, in the terminal.
-      this.close(hold, { by: 'terminal-only', decision: null })
-      return
-    }
-    switch (claudePermissionCloseEvidence(lines)) {
-      case 'user-interrupted':
+    switch (hold.ranSeen ? 'ran' : result && claudeToolClose(result, null)) {
+      case 'ran':
+        this.close(hold, { by: 'worker-terminal', decision: 'allow' })
+        return
+      case 'user-denied':
         this.close(hold, { by: 'worker-terminal', decision: 'deny' })
         return
       case 'auto-denied':
         this.close(hold, { by: 'auto', decision: 'deny' })
         return
       case 'hook-denied':
-      case null:
-        this.closeAwaitingEvidence(hold)
+      case 'other':
+        this.close(hold, null)
+        return
+      case null: {
+        const lines = await firstWithin(this.deps.setTimer, () =>
+          this.deps.readScreen(hold.paneKey)
+        )
+        if (hold.state !== 'open') {
+          return
+        }
+        if (!lines || showsClaudeDialog(lines)) {
+          // The dialog is up but Orca can no longer answer it: a person must, in the terminal.
+          this.close(hold, { by: 'terminal-only', decision: null })
+        } else {
+          this.closeAwaitingEvidence(hold)
+        }
+      }
     }
   }
 
@@ -309,25 +328,8 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
     )
   }
 
-  /** The first caught-up screen that passes `until`, or the last caught-up one within the wait. */
-  private screenWhere(
-    paneKey: string,
-    until: (lines: readonly string[]) => boolean
-  ): Promise<readonly string[] | null> {
-    return new Promise((resolve) => {
-      let waited = 0
-      let last: readonly string[] | null = null
-      const check = (): void => {
-        last = this.deps.readScreen(paneKey) ?? last
-        if ((last && until(last)) || waited >= SCREEN_WAIT_MS) {
-          resolve(last)
-          return
-        }
-        waited += SCREEN_RETRY_MS
-        this.deps.setTimer(check, SCREEN_RETRY_MS)
-      }
-      check()
-    })
+  private toolResult(hold: Hold): Promise<ClaudeToolResult | null> {
+    return firstWithin(this.deps.setTimer, () => this.deps.readToolResult(hold))
   }
 
   private payload(hold: Hold, outcome?: WorkerApprovalOutcome): WorkerApprovalPayload {
