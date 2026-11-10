@@ -38,6 +38,11 @@ export const CATALOG: Feature[] = [
   { id: 'billing.overage', section: S.acct, feature: 'Overage opt-in at $0.75/h with a monthly spend cap that blocks starts', conductor: 'No metering ("no extra charge today")', owner: 'team-billing-ux', priority: 'P0', better: 'Metered from day one with a hard cap' },
   { id: 'billing.dunning', section: S.acct, feature: 'Payment failure -> grace -> suspend -> pay -> resume (test clocks)', conductor: 'not documented', owner: 'team-billing-ux', priority: 'P0' },
   { id: 'billing.entitlement-gate', section: S.acct, feature: 'Account without a plan is refused a sandbox (fail closed)', conductor: 'Pro/org required', owner: 'core', priority: 'P0' },
+  // Conductor's local core workflow (added after the independent audit; the cloud matrix left it out)
+  { id: 'local.core-workflow', section: S.acct, feature: 'Local core workflow: create a local worktree, run an agent, see the diff, commit (desktop)', conductor: 'Core local app (free)', owner: 'w9-eval (m4air desktop run)', priority: 'P0' },
+  { id: 'local.run-actions', section: S.acct, feature: 'Run actions: named run scripts (several, run_mode, auto-run after setup) with a per-workspace port block; Conductor import keeps them', conductor: '0.70 multiple run scripts, CONDUCTOR_PORT 10-port block', owner: 'gap-run-actions', priority: 'P0' },
+  { id: 'life.read-asleep', section: S.life, feature: 'Chats, PR comments and check logs readable while asleep from any device (no wake)', conductor: '0.80/0.85, server-held', owner: 'gap-read-asleep', priority: 'P0' },
+  { id: 'local.checkpoints', section: S.acct, feature: 'Per-turn code checkpoints: revert restores files and chat together', conductor: '0.19 (Claude), 0.44 (Codex) checkpoints', owner: 'gap-checkpoints', priority: 'P0' },
   // 1. Substrate
   { id: 'sub.create', section: S.sub, feature: 'Hosted microVM per workspace, one call / one click', conductor: '0.78 GA', owner: 'core', priority: 'P0' },
   { id: 'sub.size', section: S.sub, feature: 'Machine sizes (standard 4 vCPU, large 8 vCPU)', conductor: 'Fixed 8 vCPU / 16 GB', owner: 'core', priority: 'P0', better: 'Choice of size' },
