@@ -52,11 +52,11 @@ let storeSubscribers: ((state: StoreState) => void)[] = []
 // Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
   scheduleRuntimeGraphSync
 }))
 
@@ -77,7 +77,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } =
     await import('../test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
@@ -161,7 +161,9 @@ describe('connectPanePty', () => {
 
   it('reattaches a remounted split pane to its restored leaf PTY instead of the tab-level PTY', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     mockStoreState = {
@@ -196,7 +198,9 @@ describe('connectPanePty', () => {
 
   it('publishes async layout bindings by the pane leaf, not a remapped numeric id', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     const syncPanePtyLayoutBindingForLeaf = vi.fn()
@@ -219,7 +223,9 @@ describe('connectPanePty', () => {
 
   it('does not publish a stale layout callback after a successor transport takes the pane slot', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const reattach = createDeferred<{ id: string; isReattach: true }>()
     const staleTransport = createMockTransport('terminal-old')
     staleTransport.connect.mockImplementation(async () => reattach.promise)
@@ -251,7 +257,9 @@ describe('connectPanePty', () => {
 
   it('does not clear a successor pane error from a stale stream callback', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const staleTransport = createMockTransport('terminal-old')
     let callbacks: ConnectCallbacks | undefined
     staleTransport.connect.mockImplementation(async (options) => {
@@ -282,7 +290,9 @@ describe('connectPanePty', () => {
 
   it('does not clear a successor pane error when a stale binding is disposed', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const staleTransport = createMockTransport('terminal-old')
     transportFactoryQueue.push(staleTransport)
     const paneTransportsRef = { current: new Map<number, MockTransport>() }
@@ -307,7 +317,9 @@ describe('connectPanePty', () => {
 
   it('does not spend queued startup from a stale spawn callback', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const staleTransport = createMockTransport()
     transportFactoryQueue.push(staleTransport)
     const paneTransportsRef = { current: new Map<number, MockTransport>() }
@@ -333,7 +345,9 @@ describe('connectPanePty', () => {
 
   it('resizes a reattached PTY to the current grid when the pane narrows before reattach resolves', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const reattach = createDeferred<void>()
     let currentPtyId: string | null = null
     const transport = createMockTransport()
@@ -382,7 +396,9 @@ describe('connectPanePty', () => {
 
   it('does not let a stale pane transport publish a completed reattach', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks8 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks8 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const reattach = createDeferred<{ id: string; isReattach: true }>()
     const staleTransport = createMockTransport()
     let stalePtyId: string | null = 'terminal-old'
@@ -424,7 +440,9 @@ describe('connectPanePty', () => {
 
   it('accepts an explicit reattach id before the transport publishes its id', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks9 = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks9 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const reattach = createDeferred<{ id: string; isReattach: true }>()
     const transport = createMockTransport()
     let transportPtyId: string | null = null
@@ -454,8 +472,9 @@ describe('connectPanePty', () => {
 
   it('does not replace a split sibling with the tab-level source PTY', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks10 =
-      await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks10 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     // A split spawn can report reattach while the source pane remains mounted and this leaf has no stale session ID.
     const sourceTransport = createMockTransport('tab-pty')
     const splitTransport = createMockTransport('split-pty')
@@ -505,8 +524,9 @@ describe('connectPanePty', () => {
 
   it('infers a replacement when the tab PTY is bound to this leaf', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks11 =
-      await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks11 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const splitTransport = createMockTransport('replacement-pty')
     splitTransport.connect.mockResolvedValue({ id: 'replacement-pty', isReattach: true })
     transportFactoryQueue.push(splitTransport)
@@ -550,8 +570,9 @@ describe('connectPanePty', () => {
     'does not let a stale pane transport clear ownership on %s',
     async (_label, result) => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks12 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks12 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const reattach = createDeferred<
         { id: string; isReattach: true; sessionExpired?: boolean } | undefined
       >()
@@ -601,8 +622,9 @@ describe('connectPanePty', () => {
       ptyId === eagerPtyId ? { flush: () => '', dispose: () => {} } : undefined
     )
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks13 =
-      await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks13 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     mockStoreState = {
@@ -662,8 +684,9 @@ describe('connectPanePty', () => {
       ptyId === otherTabPtyId ? { flush: () => '', dispose: () => {} } : undefined
     )
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks14 =
-      await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks14 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const transport = createMockTransport()
     transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
       if (opts.sessionId) {
@@ -709,8 +732,9 @@ describe('connectPanePty', () => {
   it('fresh-spawns a shell into any PTY-less tab, so agent launches must never publish one', async () => {
     // Why: #2989 depends on PTY-less tabs taking this legitimate fresh-shell path.
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks15 =
-      await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks15 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const transport = createMockTransport()
     transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
       if (opts.sessionId) {
@@ -761,8 +785,9 @@ describe('connectPanePty', () => {
 
   it('spawns a fresh PTY when a restored daemon split session cannot reattach', async () => {
     const { connectPanePty } = await import('../connect-pane-pty')
-    const agentTitleMocks16 =
-      await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+    const agentTitleMocks16 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+      '@/lib/agent-status/aggregation/worktree-agent-status'
+    )
     const transport = createMockTransport()
     transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
       if (opts.sessionId) {

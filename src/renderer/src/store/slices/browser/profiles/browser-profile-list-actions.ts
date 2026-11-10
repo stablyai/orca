@@ -5,7 +5,7 @@ import type {
   BrowserProfileCreateResult,
   BrowserProfileDeleteResult,
   BrowserProfileListResult
-} from '../../../../../../shared/runtime-browser-contracts'
+} from '../../../../../../shared/browser/runtime/runtime-browser-contracts'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {

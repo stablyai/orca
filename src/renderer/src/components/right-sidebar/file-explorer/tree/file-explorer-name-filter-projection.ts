@@ -1,19 +1,22 @@
-import { getRelativePathInsideRoot, joinPath, normalizeRelativePath } from '@/lib/path'
-import { compareFileNames } from '../../../../../../shared/file-name-sort'
+import { getRelativePathInsideRoot, joinPath } from '@/lib/path'
+import {
+  normalizeRelativePath,
+  splitPathSegments
+} from '../../../../../../shared/cross-platform-path'
+import { compareFileNames } from '../../../../../../shared/file-listing/file-name-sort'
 import {
   FILE_NAME_FILTER_QUERY_MAX_BYTES,
   isFileNameFilterQueryTooLarge,
   pathMatchesFileNameFilterTokens,
   splitFileNameFilterTokens
-} from '../../../../../../shared/file-name-filter-tokens'
+} from '../../../../../../shared/file-listing/file-name-filter-tokens'
 import type { FileExplorerOperationOwner, TreeNode } from './file-explorer-types'
 import {
   createFileExplorerRowProjectionFromParts,
   type FileExplorerRowProjection
 } from './file-explorer-row-projection'
 import { isDotfileRelativePath } from './file-explorer-entries'
-import { splitPathSegments } from '../../../../../../shared/cross-platform-path'
-import { isPathIgnored } from '../../../../lib/git-path-decoration'
+import { isPathIgnored } from '../../../../lib/source-control/paths/git-path-decoration'
 
 export type FileExplorerNameFilterProjectionSource = {
   query: string

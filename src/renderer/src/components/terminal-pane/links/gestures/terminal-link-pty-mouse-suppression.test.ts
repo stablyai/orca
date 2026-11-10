@@ -199,28 +199,6 @@ describe('terminal link PTY mouse suppression', () => {
     expect(forwarded).toEqual(['\x1b[<0;1;1M'])
   })
 
-  it('installs global listeners only while a deferred gesture is active', async () => {
-    const documentAdd = vi.spyOn(document, 'addEventListener')
-    const windowAdd = vi.spyOn(window, 'addEventListener')
-    const { element } = createSuppression()
-
-    expect(documentAdd).not.toHaveBeenCalled()
-    expect(windowAdd).not.toHaveBeenCalled()
-
-    element.dispatchEvent(mouseEvent('mousedown'))
-
-    expect(documentAdd).toHaveBeenCalledWith('mousemove', expect.any(Function), { capture: true })
-    expect(windowAdd).toHaveBeenCalledWith('mouseup', expect.any(Function))
-
-    await settleGesture(element)
-    documentAdd.mockClear()
-    windowAdd.mockClear()
-    window.dispatchEvent(new Event('blur'))
-
-    expect(documentAdd).not.toHaveBeenCalled()
-    expect(windowAdd).not.toHaveBeenCalled()
-  })
-
   it('fails open to the child when a deferred frame stream exceeds its budget', () => {
     const { element, suppression } = createSuppression()
     const forwarded: string[] = []

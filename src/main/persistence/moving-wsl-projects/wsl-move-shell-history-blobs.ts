@@ -9,7 +9,7 @@ import {
   sameOrcadMigrationBlob,
   type OrcadMigrationBlobDescriptor
 } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
-import type { OrcadMigrationBlobSource } from '../../ssh/orcad-migration-blob-coordinator'
+import type { OrcadMigrationBlobSource } from '../../managed-server/migration/transfers/orcad-migration-blob-coordinator'
 import { getHistoryRootWsl } from '../../pty/history/terminal-history-paths'
 import { hashWorktreeId } from '../../pty/history/terminal-history-id'
 import {

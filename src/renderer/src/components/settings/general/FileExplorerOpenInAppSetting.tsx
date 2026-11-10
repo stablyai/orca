@@ -3,8 +3,8 @@ import type { GlobalSettings } from '../../../../../shared/global-settings-types
 import type { OpenInApplication } from '../../../../../shared/ui-chrome-types'
 import { Label } from '../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
-import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
-import { translate } from '@/i18n/i18n'
+import { OpenInApplicationIcon } from '@/lib/files/os-open/open-in-app-catalog'
+import { useTranslate } from '@/i18n/use-translate'
 
 const ORCA_EDITOR_VALUE = '__orca-editor__'
 
@@ -20,6 +20,7 @@ export function FileExplorerOpenInAppSetting({
   selectedApplicationId,
   updateSettings
 }: FileExplorerOpenInAppSettingProps): React.JSX.Element | null {
+  const t = useTranslate()
   if (applications.length === 0) {
     return null
   }
@@ -29,13 +30,13 @@ export function FileExplorerOpenInAppSetting({
     <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
       <div className="min-w-0 flex-1 space-y-1">
         <Label>
-          {translate(
+          {t(
             'auto.components.settings.OpenInMenuSetting.fileExplorerClick',
             'Open files from File Explorer in'
           )}
         </Label>
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.OpenInMenuSetting.fileExplorerClickDescription',
             'Choose where a click on a file opens it. Workspaces the app cannot reach open in the Orca editor.'
           )}
@@ -54,7 +55,7 @@ export function FileExplorerOpenInAppSetting({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value={ORCA_EDITOR_VALUE}>
-            {translate('auto.components.settings.OpenInMenuSetting.orcaEditor', 'Orca editor')}
+            {t('auto.components.settings.OpenInMenuSetting.orcaEditor', 'Orca editor')}
           </SelectItem>
           {applications.map((application) => (
             <SelectItem key={application.id} value={application.id}>

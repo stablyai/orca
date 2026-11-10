@@ -1,12 +1,13 @@
 import { toast } from 'sonner'
+import { notifyAgentLaunchFailure } from '@/lib/agent-session/launch/failure/agent-launch-failure'
 import {
   planAgentCliArgsSuffix,
   type AgentStartupShell
 } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { getAgentLabel } from '../../../agent-catalog'
+import { getAgentLabel } from '../../../agent-catalog/agent-catalog'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 
-import '@/lib/new-workspace'
+import '@/lib/workspace/creation/new-workspace'
 import { isGitLabIssueUrl } from '../../../../../../shared/new-workspace/workspace-source'
 import { translate } from '@/i18n/i18n'
 
@@ -23,12 +24,15 @@ export function gitLabIssueNumber(item: DirectLaunchIssueLike): number | undefin
 }
 
 export const resolvePrHeadErrorMessage = (): string =>
-  translate('auto.lib.launch.work.item.direct.8bc45efdbc', 'Failed to resolve PR head.')
+  translate(
+    'auto.lib.launch.work.item.direct.8bc45efdbc',
+    'Could not read the pull request. Check that you can open it, then try again.'
+  )
 
 export const unavailableAgentErrorMessage = (): string =>
   translate(
     'auto.lib.launch.work.item.direct.19c7683acf',
-    'Selected agent is not available in the created workspace.'
+    'The selected agent is unavailable. Check the workspace’s agent settings, then try again.'
   )
 
 export const workspaceActivationErrorMessage = (): string =>
@@ -43,23 +47,32 @@ export const agentLaunchCommandErrorMessage = (): string =>
     'Could not build the agent launch command.'
   )
 
-export function validateActionTerminalArgs(
+export function invalidTerminalArgsMessage(
   agent: TuiAgent,
   args: string | null | undefined,
-  shell: AgentStartupShell,
-  notify = true
-): boolean {
-  if (planAgentCliArgsSuffix(args, shell).ok) {
-    return true
-  }
-  if (notify) {
-    toast.error(
-      translate(
-        'settings.sourceControl.actionModel.invalidArgs',
-        'The CLI arguments for {{value0}} are invalid. Fix them in Settings → Source Control AI.',
+  shell: AgentStartupShell
+): string | null {
+  return planAgentCliArgsSuffix(args, shell).ok
+    ? null
+    : translate(
+        'agentLaunch.invalidArgs',
+        'The CLI arguments for {{value0}} have an unclosed quote. Fix them, then try again.',
         { value0: getAgentLabel(agent) }
       )
-    )
+}
+
+export function directWorkItemFailureReporter(
+  onFailureNotified?: () => void,
+  getAgent?: () => TuiAgent | undefined
+) {
+  return (message: string): false => {
+    const agent = getAgent?.()
+    if (agent) {
+      notifyAgentLaunchFailure(agent, message)
+    } else {
+      toast.error(message)
+    }
+    onFailureNotified?.()
+    return false
   }
-  return false
 }

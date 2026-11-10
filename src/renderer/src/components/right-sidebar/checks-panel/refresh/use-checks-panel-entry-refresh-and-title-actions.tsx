@@ -1,5 +1,5 @@
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
 import React, { useCallback, useEffect, useRef } from 'react'
 import { ENTRY_REFRESH_GRACE_MS, shouldEntryRefresh } from './checks-entry-refresh'
@@ -11,7 +11,7 @@ import type { ChecksPanelControllerState } from '../use-checks-panel-controller-
 import type { ChecksPanelReviewState } from '../use-checks-panel-review-state'
 import type { ChecksPanelPollingState } from './use-checks-panel-polling'
 import type { ChecksPanelReviewDataState } from '../use-checks-panel-review-data'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 type ChecksPanelEntryRefreshAndTitleActionsInput = Pick<
   ChecksPanelContextState,

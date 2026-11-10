@@ -1,4 +1,5 @@
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import '../../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard-text'

@@ -1,6 +1,6 @@
 import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
 import { parseRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { isWebRuntimeSessionActive } from '../../web-runtime-session-environment'
+import { isWebRuntimeSessionActive } from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
 
 // Clear host buffer or snapshot replay undoes local terminal.clear().
 export function clearWebRuntimeTerminalBuffer(ptyId: string | null | undefined): boolean {

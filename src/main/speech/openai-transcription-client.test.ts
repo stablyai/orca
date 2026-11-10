@@ -25,24 +25,6 @@ describe('sanitizeOpenAiTranscriptionErrorMessage', () => {
 describe('OpenAiTranscriptionSession', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it('sends the dictation language only when one is chosen', async () => {
-    const languages: (FormDataEntryValue | null)[] = []
-    vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
-      languages.push(init.body instanceof FormData ? init.body.get('language') : 'not multipart')
-      return new Response(JSON.stringify({ text: 'ok' }))
-    })
-    for (const language of ['ko', undefined]) {
-      const session = new OpenAiTranscriptionSession(
-        'openai-gpt-4o-mini-transcribe',
-        () => 'test-key',
-        language
-      )
-      session.feedAudio(new Float32Array([0.1]), 16000)
-      await session.finish()
-    }
-    expect(languages).toEqual(['ko', null])
-  })
-
   it('preserves multipart WAV bytes across owned, resampled and empty audio chunks', async () => {
     const uploads: Buffer[] = []
     vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
@@ -53,8 +35,9 @@ describe('OpenAiTranscriptionSession', () => {
       if (!(form instanceof FormData)) {
         throw new Error('Expected multipart body')
       }
-      expect(form.get('model')).toBe('gpt-4o-mini-transcribe')
-      expect(form.get('response_format')).toBe('json')
+      expect(form.get('model')).toBe('gpt-transcribe')
+      expect(form.getAll('languages[]')).toEqual(['de'])
+      expect(form.has('language')).toBe(false)
       const file = form.get('file')
       if (!(file instanceof File)) {
         throw new Error('Expected WAV upload')
@@ -65,8 +48,13 @@ describe('OpenAiTranscriptionSession', () => {
       return new Response(JSON.stringify({ text: ' complete dictation ' }))
     })
     const session = new OpenAiTranscriptionSession(
-      'openai-gpt-4o-mini-transcribe',
-      () => 'test-key'
+      () => ({
+        url: 'https://api.openai.com/v1/audio/transcriptions',
+        model: 'gpt-transcribe',
+        apiKey: 'test-key',
+        label: 'OpenAI'
+      }),
+      'de'
     )
     const input = new Float32Array([
       -2,
@@ -97,22 +85,30 @@ describe('OpenAiTranscriptionSession', () => {
     ])
   })
 
-  it('keeps the first 10 minutes and reports the cap once instead of throwing', async () => {
-    const uploadBytes: number[] = []
+  it('sends a keyless server the singular language field and no Authorization header', async () => {
+    let sent: RequestInit | undefined
     vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
-      const file = init.body instanceof FormData ? init.body.get('file') : null
-      uploadBytes.push(file instanceof File ? file.size : -1)
-      return new Response(JSON.stringify({ text: 'first ten minutes' }))
+      sent = init
+      return new Response(JSON.stringify({ text: 'hola' }))
     })
     const session = new OpenAiTranscriptionSession(
-      'openai-gpt-4o-mini-transcribe',
-      () => 'test-key'
+      () => ({
+        url: 'http://127.0.0.1:8000/v1/audio/transcriptions',
+        model: 'whisper-large-v3-turbo',
+        apiKey: '',
+        label: '127.0.0.1:8000'
+      }),
+      'es'
     )
-    const sevenSeconds = new Float32Array(7 * 16000).fill(0.1)
-    const capReports = Array.from({ length: 90 }, () => session.feedAudio(sevenSeconds, 16000))
-    expect(capReports.indexOf(true)).toBe(85)
-    expect(capReports.filter(Boolean)).toHaveLength(1)
-    expect(await session.finish()).toBe('first ten minutes')
-    expect(uploadBytes).toEqual([44 + 600 * 16000 * 2])
+    session.feedAudio(new Float32Array(160), 16000)
+
+    expect(await session.finish()).toBe('hola')
+    const form = sent?.body
+    if (!(form instanceof FormData)) {
+      throw new Error('Expected multipart body')
+    }
+    expect(form.get('language')).toBe('es')
+    expect(form.has('languages[]')).toBe(false)
+    expect(sent?.headers).toEqual({})
   })
 })

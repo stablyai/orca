@@ -13,7 +13,7 @@ import {
 } from '../../../../../shared/agent-session/options/structured-agent-session-selection-operations'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import { enqueueSessionOptionSettingsWrite } from '@/components/native-chat/native-chat-session-option-settings-write'
+import { enqueueSessionOptionSettingsWrite } from '@/components/native-chat/session/options/native-chat-session-option-settings-write'
 
 type SelectionCatalogState = { runtimeEnvironmentCatalogHydrated: boolean }
 type SelectionCatalogStore = {

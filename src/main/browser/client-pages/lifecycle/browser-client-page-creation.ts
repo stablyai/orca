@@ -1,14 +1,12 @@
 import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
-import {
-  cleanupBrowserClientPage,
-  type BrowserClientPageNetworkRoute as RetainedNetworkRoute,
-  type BrowserClientPageRenderer
-} from './browser-client-page-cleanup'
+import { cleanupBrowserClientPage } from './browser-client-page-cleanup'
+import type { BrowserClientPageNetworkRoute as RetainedNetworkRoute } from '../../network/client-routes/browser-client-page-network-route'
+import type { BrowserClientPageRenderer } from '../renderer/browser-client-page-renderer-contract'
 import {
   assertBrowserClientPageCommandNotAborted,
-  assertCurrentBrowserClientPageRenderer,
-  browserClientPageIdentity
+  assertCurrentBrowserClientPageRenderer
 } from '../execution/browser-client-page-command-admission'
+import { browserClientPageIdentity } from '../renderer/browser-client-page-renderer-contract'
 import type { BrowserClientPageAuthorityIdentity } from '../execution/browser-client-page-command-executor-dependencies'
 import { BrowserClientPageCommandError } from '../execution/browser-client-page-command-failure'
 import type { BrowserClientPageGuestBinding } from './browser-client-page-guest-binding'

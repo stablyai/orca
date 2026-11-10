@@ -14,7 +14,8 @@ import { RepositorySourceControlAiHostedReviewDefaults } from './RepositorySourc
 import { normalizeRepoAiDraft } from './repository-source-control-ai-draft'
 import { useRepositorySourceControlAiGlobalUx } from './repository-source-control-ai-global-ux'
 import { getSettingOwnershipSummary } from '../../page/setting-ownership'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 type RepositorySourceControlAiSectionProps = {
   repo: Repo
@@ -29,6 +30,7 @@ export function RepositorySourceControlAiSection({
   updateRepo,
   writeSourceControlAiSettings
 }: RepositorySourceControlAiSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const settings = useAppStore(
     useShallow(
       (state) =>
@@ -39,7 +41,7 @@ export function RepositorySourceControlAiSection({
         }
     )
   )
-  const ownership = getSettingOwnershipSummary('repositorySourceControlAi')
+  const ownership = getSettingOwnershipSummary('repositorySourceControlAi', t)
   const source = useMemo(
     () => normalizeSourceControlAiSettings(settings?.sourceControlAi, settings?.commitMessageAi),
     [settings?.sourceControlAi, settings?.commitMessageAi]
@@ -76,57 +78,58 @@ export function RepositorySourceControlAiSection({
   })
 
   return (
-    <section
+    <div
       id={getRepositorySourceControlAiSectionId(repo.id)}
       data-settings-section={getRepositorySourceControlAiSectionId(repo.id)}
-      className="space-y-4"
     >
-      <div className="min-w-0 space-y-1">
-        <h3 className="text-sm font-semibold">
-          {translate(
-            'auto.components.settings.RepositorySourceControlAiSection.71b003b62b',
-            'Source Control AI'
-          )}
-        </h3>
-        <p className="text-xs text-muted-foreground">{ownership.description}</p>
-        {saveError ? <p className="text-xs text-destructive">{saveError}</p> : null}
-      </div>
-
-      <RepositorySourceControlAiEnablement
-        value={displayRepoAi.enabled}
-        source={source}
-        onChange={updateEnablement}
-      />
-      <RepositorySourceControlAiCustomCommand
-        value={displayRepoAi.customAgentCommand}
-        source={source}
-        onChange={updateCustomCommand}
-        onCommit={commitCustomCommand}
-      />
-      <RepositorySourceControlAiActionRows
-        repoId={repo.id}
-        repoAi={displayRepoAi}
-        actionTextDrafts={actionTextDrafts}
-        source={source}
-        defaultTuiAgent={settings?.defaultTuiAgent}
-        savingActionIds={savingActionIds}
-        actionDirtyById={actionDirtyById}
-        onActionModeChange={updateActionMode}
-        onActionAgentChange={updateActionAgent}
-        onActionTextModelChoice={updateActionTextModelChoice}
-        writeSourceControlAiSettings={writeSourceControlAiSettings}
-        onActionLaunchPreferencesChange={updateActionLaunchPreferences}
-        onActionTemplateChange={updateActionTemplate}
-        onActionAgentArgsChange={updateActionAgentArgs}
-        onAppendVariable={appendVariable}
-        onActionDiscard={discardActionRecipeText}
-        onActionSave={(actionId) => void saveActionRecipeText(actionId)}
-      />
-      <RepositorySourceControlAiHostedReviewDefaults
-        value={displayRepoAi.prCreationDefaults}
-        source={source}
-        onChange={updateHostedReviewDefault}
-      />
-    </section>
+      <SettingsGroup
+        title={t(
+          'auto.components.settings.RepositorySourceControlAiSection.112f3b934f',
+          'Source control AI'
+        )}
+        description={
+          <>
+            {ownership.description}
+            {saveError ? <span className="block text-destructive">{saveError}</span> : null}
+          </>
+        }
+      >
+        <RepositorySourceControlAiEnablement
+          value={displayRepoAi.enabled}
+          source={source}
+          onChange={updateEnablement}
+        />
+        <RepositorySourceControlAiCustomCommand
+          value={displayRepoAi.customAgentCommand}
+          source={source}
+          onChange={updateCustomCommand}
+          onCommit={commitCustomCommand}
+        />
+        <RepositorySourceControlAiActionRows
+          repoId={repo.id}
+          repoAi={displayRepoAi}
+          actionTextDrafts={actionTextDrafts}
+          source={source}
+          defaultTuiAgent={settings?.defaultTuiAgent}
+          savingActionIds={savingActionIds}
+          actionDirtyById={actionDirtyById}
+          onActionModeChange={updateActionMode}
+          onActionAgentChange={updateActionAgent}
+          onActionTextModelChoice={updateActionTextModelChoice}
+          writeSourceControlAiSettings={writeSourceControlAiSettings}
+          onActionLaunchPreferencesChange={updateActionLaunchPreferences}
+          onActionTemplateChange={updateActionTemplate}
+          onActionAgentArgsChange={updateActionAgentArgs}
+          onAppendVariable={appendVariable}
+          onActionDiscard={discardActionRecipeText}
+          onActionSave={(actionId) => void saveActionRecipeText(actionId)}
+        />
+        <RepositorySourceControlAiHostedReviewDefaults
+          value={displayRepoAi.prCreationDefaults}
+          source={source}
+          onChange={updateHostedReviewDefault}
+        />
+      </SettingsGroup>
+    </div>
   )
 }

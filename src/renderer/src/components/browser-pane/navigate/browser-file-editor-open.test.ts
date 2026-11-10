@@ -1,19 +1,19 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import type * as ConnectionOwnerModule from '@/lib/connection-owner-resolution'
+import type * as ConnectionOwnerModule from '@/lib/workspace/ownership/connection-owner-resolution'
 
 // A workspace this computer owns.
-vi.mock('@/lib/connection-owner-resolution', async (importOriginal) => ({
+vi.mock('@/lib/workspace/ownership/connection-owner-resolution', async (importOriginal) => ({
   ...(await importOriginal<typeof ConnectionOwnerModule>()),
   getConnectionIdFromState: () => null,
   getConnectionIdForFileFromState: () => null
 }))
-vi.mock('@/lib/user-opened-local-path', () => ({
+vi.mock('@/lib/files/access/user-opened-local-path', () => ({
   statUserOpenedPath: vi.fn().mockResolvedValue({ isDirectory: false, escapesWorktree: false })
 }))
 
 import { useAppStore } from '@/store'
-import { editorTabFileAccess } from '@/lib/local-file-access'
-import { statUserOpenedPath } from '@/lib/user-opened-local-path'
+import { editorTabFileAccess } from '@/lib/files/access/local-file-access'
+import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
 import { openBrowserFileSource } from './browser-file-editor-open'

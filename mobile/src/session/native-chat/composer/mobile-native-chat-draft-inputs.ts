@@ -4,6 +4,7 @@ import { pickedSkillsInText } from '../../../../../src/shared/agent-session/requ
 import type { AgentJournalSkillRef } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
+import { saveMobileNativeChatDraft } from './mobile-native-chat-draft-persistence'
 import type {
   MobileDictationAnchor,
   MobileDictationPreview
@@ -53,6 +54,10 @@ export function mobileNativeChatDraftDestination(scope: string): MobileNativeCha
 export function readMobileNativeChatDraftInputs(scope: string | null): MobileNativeChatDraftInputs {
   return scope ? (drafts.get(scope) ?? empty) : empty
 }
+/** Scopes holding chips or picks, including ones with no text yet. */
+export function mobileNativeChatDraftInputScopes(): string[] {
+  return [...drafts.keys()]
+}
 export function updateMobileNativeChatDraftInputs(
   target: string | MobileNativeChatDraftDestination,
   update: (current: MobileNativeChatDraftInputs) => MobileNativeChatDraftInputs
@@ -63,6 +68,8 @@ export function updateMobileNativeChatDraftInputs(
   }
   drafts.set(destination.scope, update(readMobileNativeChatDraftInputs(destination.scope)))
   listeners.get(destination.scope)?.forEach((listener) => listener())
+  // Chips and picks are saved with the text; a sent chip must not come back, so save at once.
+  saveMobileNativeChatDraft(destination.scope, 'immediate')
 }
 /** Adds uploaded images to the draft they were picked for, each under a fresh chip id. */
 export function addMobileNativeChatDraftImages(
@@ -216,13 +223,6 @@ export function captureMobileNativeChatTextDestination():
   | MobileNativeChatTextDestination
   | undefined {
   return focusedScope ? textDestinations.get(focusedScope)?.() : undefined
-}
-
-export function resetMobileNativeChatDraftInputsForTests(): void {
-  drafts.clear()
-  destinations.clear()
-  textDestinations.clear()
-  focusedScope = null
 }
 
 export function pruneMobileNativeChatDraftSkills(

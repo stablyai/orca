@@ -13,7 +13,7 @@ import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
 const {
   default: { publicLineageFixture, canonicalChatRow, LINEAGE_PARENT, LINEAGE_CHILD }
 } = await vi.importActual<{ default: RuntimeAgentLineageTestModule }>(
-  '../../../../../../main/runtime/runtime-agent-lineage.test-fixture'
+  '../../../../../../main/runtime/workspaces/process-listing/runtime-agent-lineage.test-fixture'
 )
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
@@ -50,10 +50,11 @@ export async function verifyMirroredTerminalLineage(
   const { toWebTerminalSurfaceTabId } =
     await import('../../../../../../shared/workspace-layout/terminal-surface-id')
   const { projectStatus } =
-    await import('@/components/native-chat/structured-agent-session-status-projection')
+    await import('@/components/native-chat/session/status/structured-agent-session-status-projection')
   const { structuredAgentSessionPaneKey: pane, structuredAgentSessionTabId: tabId } =
     await import('../../../../../../shared/agent-session/view/structured-agent-session-projection')
-  const { selectVisibleAgentOrchestration } = await import('@/runtime/visible-agent-orchestration')
+  const { selectVisibleAgentOrchestration } =
+    await import('@/runtime/agent-orchestration/visible-agent-orchestration')
   const worktree = makeWorktree({ id: 'folder-a', repoId: TEST_REPO.id })
   patch({ repos: [TEST_REPO], worktreesByRepo: { [TEST_REPO.id]: [worktree] } })
   const f = publicLineageFixture('folder-a')

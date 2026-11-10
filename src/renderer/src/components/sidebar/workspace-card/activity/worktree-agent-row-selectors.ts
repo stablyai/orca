@@ -1,4 +1,4 @@
-import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/structured-agent-session-tabs'
+import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
@@ -7,8 +7,7 @@ import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-p
 import {
   type LiveEntriesByWorktreeCache,
   liveEntryWorktreeId,
-  patchLiveEntriesByWorktree,
-  recordLiveEntriesFullRebuild
+  patchLiveEntriesByWorktree
 } from './worktree-agent-live-index-patch'
 import './worktree-agent-orchestration-index'
 import { createWorktreeRecordSelector } from '@/store/terminals/worktree-terminal-record-selector'
@@ -150,7 +149,6 @@ function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, Ag
       return patched
     }
   }
-  recordLiveEntriesFullRebuild()
   const previous = liveEntriesByWorktreeCache?.entriesByWorktree
   const entriesByWorktree = new Map<string, AgentStatusEntry[]>()
   for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {

@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react'
 import { useAppStore } from '@/store'
-import { getLocalPathOpenOwnerHostId, type LocalPathOpenOwner } from '@/lib/local-path-open-guard'
-import { getFileExplorerOpenInApplication } from '@/lib/open-in-application-selection'
+import { getLocalPathOpenOwnerHostId, type LocalPathOpenOwner } from '@/lib/files/os-open/local-path-open-guard'
+import { getFileExplorerOpenInApplication } from '@/lib/files/os-open/open-in-application-selection'
 import { openWorktreePath } from '@/components/sidebar/workspace-actions/open/WorktreeOpenInMenu'
 import {
   getOpenInApplicationAvailability,

@@ -1,10 +1,9 @@
-import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
-import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
+import type { RuntimeTerminalWait } from '../../../shared/runtime-terminal-contracts'
 import { TerminalPublishedOutputRings } from '../terminal/output/terminal-published-output-ring'
 import {
   TerminalStreamOpcode,
@@ -22,10 +21,14 @@ async function startCreditedSubscription() {
   let dataListener: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null =
     null
   let outputSeq = 0
+  let exitListener: (() => void) | null = null
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This partial runtime supplies the terminal RPC methods these tests invoke.
   const runtime = {
     getRuntimeId: () => 'test-runtime',
-    subscribeToPtyExit: vi.fn(() => vi.fn()),
+    subscribeToPtyExit: vi.fn((_ptyId: string, listener: () => void) => {
+      exitListener = listener
+      return vi.fn()
+    }),
     registerRemoteTerminalViewSubscriber: () => () => {},
     requestRendererTerminalTabMount: () => false,
     resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
@@ -123,6 +126,10 @@ async function startCreditedSubscription() {
           { connectionId: 'conn-phone', pairedDeviceId }
         )
       ).ok,
+    exit: async () => {
+      exitListener!()
+      await done
+    },
     stop: async () => {
       runtime.cleanupSubscription('terminal-1:phone-1')
       await done
@@ -151,6 +158,16 @@ describe('terminal.subscribe output credit', () => {
     await stream.ack('stale-token', CHUNK)
     expect(stream.sentOutputUnits()).toBe(512 * 1024)
     await stream.stop()
+  })
+
+  it("sends the PTY's last output, held or batched, when it exits", async () => {
+    const stream = await startCreditedSubscription()
+    stream.output(9)
+    stream.output(1, 100)
+    expect(stream.sentOutputUnits()).toBe(512 * 1024)
+
+    await stream.exit()
+    expect(stream.sentOutputUnits()).toBe(576 * 1024 + 100)
   })
 
   it('replaces overflowed output with one recovery snapshot once the window drains', async () => {

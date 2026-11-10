@@ -18,6 +18,7 @@ import WorktreeVisibilitySourceList, {
   type WorktreeVisibilitySourceRow
 } from '../../sidebar/workspace-visibility/sources/WorktreeVisibilitySourceList'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 
 type Props = {
@@ -35,6 +36,7 @@ export function GlobalWorktreeVisibilitySourcesSetting({
   sourceDefaultsSupported,
   updateSettings
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   const defaults = settings.worktreeVisibilityDefaults ?? DEFAULT_WORKTREE_VISIBILITY_DEFAULTS
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -151,6 +153,7 @@ export function GlobalWorktreeVisibilitySourcesSetting({
         customSources={customSources}
         removableSourceIds={removableSourceIds}
         showCounts={false}
+        switches
         disabled={pending || !defaultsSupported}
         sourceDefaultsDisabled={!sourceDefaultsSupported}
         onAdd={handleAdd}
@@ -159,14 +162,14 @@ export function GlobalWorktreeVisibilitySourcesSetting({
       />
       {!defaultsSupported ? (
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.GlobalWorktreeVisibilitySourcesSetting.updateServerDefaults',
             'Update this server to configure visibility defaults.'
           )}
         </p>
       ) : !sourceDefaultsSupported ? (
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.GlobalWorktreeVisibilitySourcesSetting.updateServer',
             'Update this server to configure source defaults.'
           )}

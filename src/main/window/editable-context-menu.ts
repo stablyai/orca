@@ -4,7 +4,7 @@ import {
   type RichMarkdownContextMenuCommandPayload,
   type RichMarkdownContextMenuTableTarget
 } from '../../shared/rich-markdown-context-menu'
-import type { ContextMenuSpelling } from '../../shared/browser-guest-events'
+import type { ContextMenuSpelling } from '../../shared/browser/guest-lifecycle/browser-guest-events'
 import { translateMain } from '../i18n/main-i18n'
 import { editableContextMenuLabels } from './editable-context-menu-labels'
 

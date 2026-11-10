@@ -8,11 +8,11 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger
 } from '@/components/ui/context-menu'
-import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
-import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
+import { OpenInApplicationIcon } from '@/lib/files/os-open/open-in-app-catalog'
+import { NO_OPEN_IN_APPLICATIONS } from '@/lib/files/os-open/open-in-application-selection'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { OpenInApplication } from '../../../../shared/ui-chrome-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   openOpenInAppsSettings,
   openWorktreePath
@@ -33,6 +33,7 @@ export function OpenInContextSubmenu({
   workspaceId,
   owner
 }: OpenInContextSubmenuProps): React.JSX.Element {
+  const t = useTranslate()
   const openInApplications = useAppStateValue(
     (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
   )
@@ -60,14 +61,15 @@ export function OpenInContextSubmenu({
     <ContextMenuSub>
       <ContextMenuSubTrigger disabled={!path}>
         <FolderOpen className="size-3.5" />
-        {translate('auto.components.sidebar.WorktreeOpenInMenu.8009ab69a6', 'Open in')}
+        {t('auto.components.sidebar.WorktreeOpenInMenu.8009ab69a6', 'Open in')}
       </ContextMenuSubTrigger>
       <ContextMenuSubContent className="w-52">
         {openInApplications.map((application) => {
           const availability = getOpenInApplicationAvailability(
             application,
             openInRoute,
-            runtimeSshHost
+            runtimeSshHost,
+            t
           )
           return (
             <ContextMenuItem
@@ -91,7 +93,7 @@ export function OpenInContextSubmenu({
         })}
         {openInApplications.length > 0 ? <ContextMenuSeparator /> : null}
         <ContextMenuItem onSelect={openOpenInAppsSettings}>
-          {translate('auto.components.sidebar.WorktreeOpenInMenu.1417fd8380', 'Customize apps...')}
+          {t('auto.components.sidebar.WorktreeOpenInMenu.1417fd8380', 'Customize apps...')}
         </ContextMenuItem>
       </ContextMenuSubContent>
     </ContextMenuSub>

@@ -1,18 +1,18 @@
 import type { TaskPageGitHubListProjectionModel } from './use-task-page-github-list-projection'
 import { useCallback, useEffect } from 'react'
-import { stripRepoQualifiers } from '../../../../../shared/task-query'
-import { taskPageToGitHubApiPage } from '../../../../../shared/work-items'
+import { stripRepoQualifiers } from '../../../../../shared/work-items/task-query'
+import { taskPageToGitHubApiPage } from '../../../../../shared/work-items/work-item-pagination'
 import {
   resolveEmptyPageOutcome,
   applyEmptyPageClamp,
   applyWindowPageLimit
-} from '../../../../../shared/work-item-empty-page'
+} from '../../../../../shared/work-items/work-item-empty-page'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { overlayPendingOnTaskPagePages } from '@/components/task-page/github/task-page-github-work-item-mutation-pages'
-import { scopeGitHubTaskSearch } from '../../../../../shared/task-github-search'
+import { scopeGitHubTaskSearch } from '../../../../../shared/work-items/task-github-search'
 import { useGitHubTaskSearchCommit } from '@/components/use-github-task-search-commit'
-import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
+import { getTaskPageRepoSourceContext } from '../../../lib/work-items/task-repo-source-context'
 export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProjectionModel) {
   const {
     setTaskResumeState,

@@ -1,4 +1,5 @@
 import type { CommandHandler } from '../../dispatch'
+import { refuseAgentServerRoute } from './agent-server-route'
 import { printResult } from '../../format'
 import { withReceiptNext } from './receipt-next-text'
 import { printOrchestrationResult } from './agent-view'
@@ -11,7 +12,7 @@ import {
   prepareOrchestrationCheckOutput,
   type LegacyCompatibilityResult,
   type OrchestrationMessageSummary as MessageSummary
-} from '../../../shared/orchestration-check-output'
+} from '../../../shared/orchestration/mailbox/orchestration-check-output'
 import { startCheckKeepalive } from './check-keepalive'
 import { callOrchestrationMutation } from './mutation-request'
 import { getOptionalPositiveIntegerValueFlag } from './numeric-flags'
@@ -32,7 +33,9 @@ type CheckResult = {
 }
 
 export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
-  'orchestration check': async ({ flags, client, cwd, json }) => {
+  'orchestration check': async (ctx) => {
+    const { flags, client, cwd, json } = ctx
+    await refuseAgentServerRoute('check', ctx)
     const wait = flags.has('wait')
     const peek = flags.has('peek')
     // Older runtimes ignore peek, making --unread --peek destructive.

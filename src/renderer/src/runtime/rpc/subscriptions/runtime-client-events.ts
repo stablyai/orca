@@ -8,7 +8,7 @@ import { isRuntimeSubscriptionReplayResponse } from '../../../../../shared/runti
 import { admitSshConnectionState } from '../../../../../shared/ssh-retained-payload-admission'
 import { getRuntimeEnvironmentRevision } from '../environment-revisions/runtime-environment-revision'
 import { subscribeRuntimeEnvironment } from '../environment-revisions/runtime-environment-pairing-refresh'
-import { answerBrowserClientHostRequest } from '../../browser-client-host-request-answer'
+import { answerBrowserClientHostRequest } from '../../browser/client-hosting/browser-client-host-request-answer'
 
 export type RuntimeClientEventSubscription = {
   unsubscribe: () => void

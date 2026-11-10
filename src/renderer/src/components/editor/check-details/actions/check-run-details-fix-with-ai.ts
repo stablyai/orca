@@ -9,10 +9,10 @@ import {
   resolveCheckRunDetailsFixRepo
 } from './check-run-details-fix-context'
 import { openSourceControlAiSettingsTarget } from '@/components/right-sidebar/source-control/panel/source-control-ai-settings-navigation'
-import { getConnectionId } from '@/lib/connection-context'
-import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
+import { startFixChecksAgent } from '@/lib/source-control/checks/fix-checks-agent-launch'
 import { readSourceControlLaunchRecipeAgentId } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
-import { resolveRepoWorktreeLaunchPlatform } from '@/lib/execution-host-facts'
+import { resolveRepoWorktreeLaunchPlatform } from '@/runtime/hosts/platform/execution-host-facts'
 import { useAppStore } from '@/store/index'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { resolveSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
@@ -26,6 +26,7 @@ import type {
 } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../../shared/github/check-types'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export async function startCheckRunDetailsFixWithAI(args: {
@@ -112,6 +113,7 @@ export function useCheckRunDetailsFixWithAI(args: {
   openSourceControlAiSettings: () => void
   fixWithAI: () => Promise<boolean>
 } {
+  const t = useTranslate()
   const [isFixing, setIsFixing] = useState(false)
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
@@ -126,7 +128,7 @@ export function useCheckRunDetailsFixWithAI(args: {
     return findFirstIndexedWorktree(selectWorktreesByRepo(useAppStore.getState()), args.worktreeId)
   }, [args.worktreeId])
   const canFixWithAI = isCheckRunDetailsFixCandidate(args.check, args.details)
-  const disabledReason = getCheckRunDetailsFixDisabledReason(args.worktreeId)
+  const disabledReason = getCheckRunDetailsFixDisabledReason(args.worktreeId, t)
   const fixPrompt = useMemo(() => {
     if (!args.worktreeId || !canFixWithAI) {
       return null

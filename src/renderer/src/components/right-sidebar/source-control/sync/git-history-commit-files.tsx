@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import type React from 'react'
 import { ArrowUpRight } from 'lucide-react'
-import { STATUS_COLORS } from '../../../../lib/git-path-decoration'
+import { STATUS_COLORS } from '../../../../lib/source-control/paths/git-path-decoration'
 import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 import {
   toPermanentSourceControlRowOpenEvent,
@@ -10,7 +10,7 @@ import {
 } from '../listing/split-open'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { basename, dirname } from '@/lib/path'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { formatGitHistoryTimestamp } from './git-history-format'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { GitFileStatus } from '../../../../../../shared/git/status/git-status-types'
@@ -84,6 +84,7 @@ function CommitFilesBody({
   onOpenFile: (entry: GitBranchChangeEntry, event: SourceControlRowOpenEvent) => void
   onOpenAll?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   if (state.status === 'loading') {
     return <div className="h-6" />
   }
@@ -99,7 +100,7 @@ function CommitFilesBody({
   if (state.entries.length === 0) {
     return (
       <div className="py-1 pl-9 pr-3 text-[11px] text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.right.sidebar.GitHistoryCommitFiles.b2c3d4e5f6',
           'No file changes in this commit'
         )}
@@ -120,7 +121,7 @@ function CommitFilesBody({
         >
           <ArrowUpRight className="size-3 shrink-0" />
           <span>
-            {translate(
+            {t(
               'auto.components.right.sidebar.GitHistoryCommitFiles.c3d4e5f6a7',
               'Open all changes together'
             )}
@@ -144,7 +145,10 @@ export function GitHistoryCommitFiles({
   onOpenFile: (entry: GitBranchChangeEntry, event: SourceControlRowOpenEvent) => void
   onOpenAll?: () => void
 }): React.JSX.Element {
-  const meta = [author, formatGitHistoryTimestamp(timestamp)].filter(Boolean).join(' · ')
+  const intlLocale = useIntlLocale()
+  const meta = [author, formatGitHistoryTimestamp(timestamp, intlLocale)]
+    .filter(Boolean)
+    .join(' · ')
   return (
     <div className="border-l border-border/60 bg-muted/20">
       {meta && <div className="py-1 pl-9 pr-3 text-[11px] text-muted-foreground">{meta}</div>}

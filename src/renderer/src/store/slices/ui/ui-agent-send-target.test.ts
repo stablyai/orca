@@ -20,17 +20,22 @@ const mocks = vi.hoisted(() => ({
   toastError: vi.fn()
 }))
 
-vi.mock('@/lib/active-agent-note-send', () => ({
+vi.mock('@/lib/agent-session/messaging/terminal/active-agent-note-send', () => ({
+  sendNotesToActiveAgentSession: mocks.sendNotesToActiveAgentSession
+}))
+vi.mock('@/lib/agent-session/messaging/terminal/active-agent-note-send-result', () => ({
   activeAgentNotesSendFailureMessage: (
     status: string,
     options: { explicitTarget?: boolean } = {}
-  ) => (options.explicitTarget ? `selected:${status}` : status),
-  sendNotesToActiveAgentSession: mocks.sendNotesToActiveAgentSession
+  ) => (options.explicitTarget ? `selected:${status}` : status)
 }))
 
-vi.mock('@/components/native-chat/structured-agent-session-message-sender', () => ({
-  sendStructuredAgentSessionMessage: mocks.sendStructuredAgentSessionMessage
-}))
+vi.mock(
+  '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender',
+  () => ({
+    sendStructuredAgentSessionMessage: mocks.sendStructuredAgentSessionMessage
+  })
+)
 // The chat's tab names its host; the send only needs to find one.
 vi.mock('@/store/index', () => ({
   useAppStore: {
@@ -41,7 +46,7 @@ vi.mock('@/store/index', () => ({
     })
   }
 }))
-vi.mock('@/runtime/structured-agent-session-owner', () => ({
+vi.mock('@/runtime/native-chat/session-ownership/structured-agent-session-owner', () => ({
   structuredAgentSessionTargetForTab: () => ({ kind: 'local' })
 }))
 

@@ -13,15 +13,15 @@ import { hasRegisteredRuntimeTerminalTab } from '@/runtime/hosted-terminals/moun
 import {
   buildCodexAccountRestartStartup,
   buildPaneAccountRestartStartup
-} from '@/lib/agent-account-restart-startup'
-import { isClaudePaneMidTurn } from '@/lib/claude-session-account-move'
+} from '@/lib/agent-session/accounts/agent-account-restart-startup'
+import { isClaudePaneMidTurn } from '@/lib/agent-session/accounts/claude/claude-session-account-move'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import { isForeignMachineCodexPtyId } from '@/lib/codex-pane-selection-lane'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   getCachedWindowsTerminalCapabilities,
   hasCachedWindowsTerminalCapabilities
-} from '@/lib/windows-terminal-capabilities'
+} from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import '../../pty-transport/delivery/pty-dispatcher'
 import { ptyDataHandlers } from '../../pty-transport/shutdown/pty-shutdown-data-suspension'
 import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-pane-layout-tree'

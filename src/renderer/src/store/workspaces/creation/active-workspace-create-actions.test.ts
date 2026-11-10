@@ -9,7 +9,7 @@ import { TEST_REPO } from '../../repos/repo.test-fixture'
 // Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 
@@ -25,7 +25,7 @@ vi.mock('@/store/slices/browser/tabs/paired-browser-tab-creator', () => ({
   loadPairedBrowserTabCreator: async () => createWebRuntimeSessionBrowserTabMock
 }))
 
-vi.mock('@/lib/focus-terminal-tab-surface', () => ({
+vi.mock('@/components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: vi.fn()
 }))
 

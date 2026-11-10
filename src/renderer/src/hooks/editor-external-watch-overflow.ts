@@ -3,12 +3,12 @@ import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { EditorExternalWatchBatchPathIndex } from '@/components/editor/external-changes/editor-external-watch-path-index'
 import { isExternalReloadableEditorTab } from '@/components/editor/autosave/editor-autosave'
 import { forgetCombinedDiffViewBodiesForWorktree } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
-import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
+import { getRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 import { runtimePathsExist } from '@/runtime/files/metadata/runtime-path-existence-batch'
 import {
   PATH_EXISTENCE_BATCH_MAX,
   type PathExistenceResult
-} from '../../../shared/path-existence-batch'
+} from '../../../shared/file-access/path-existence-batch'
 import {
   getLocalWindowsWslAliasOption,
   getOpenFileRuntimeOwner,

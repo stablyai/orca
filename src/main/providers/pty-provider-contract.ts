@@ -1,10 +1,11 @@
+import type { DaemonLaunchNoteChange } from '../daemon/protocol/daemon-launch-note-protocol'
 import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
 } from '../../shared/terminal/pty/lifecycle/pty-fenced-termination'
-import type { SpawnIntent } from '../../shared/host-spawn-admission'
+import type { SpawnIntent } from '../../shared/terminal/pty/admission/spawn-admission-contract'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
-import type { AgentWorkspaceTrustSpawnRequest } from '../../shared/agent-workspace-trust-spawn-request'
+import type { AgentWorkspaceTrustSpawnRequest } from '../../shared/agent-launch/permissions/agent-workspace-trust-spawn-request'
 import type { PtyStartupIngressIntent } from '../../shared/terminal/pty/ingress/pty-startup-ingress-intent'
 import type { TerminalOscColorQueryReplyColors } from '../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import type { StartupCommandDelivery } from '../../shared/agent-launch/startup/codex-startup-delivery'
@@ -207,6 +208,8 @@ export type IPtyProvider = {
   confirmForegroundProcess?: (id: string) => Promise<string | null>
   /** Fresh execution-host proof that the spawned shell owns the PTY foreground. */
   confirmShellForeground?: (id: string) => Promise<boolean>
+  /** Persist main's live launch where the PTY outlives main; only the daemon keeps one. */
+  setLaunchNote?: (id: string, change: DaemonLaunchNoteChange) => void
   serialize(ids: string[]): Promise<string>
   revive(state: string): Promise<void>
   listProcesses(opts?: {

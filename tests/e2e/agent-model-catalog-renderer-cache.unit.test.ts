@@ -1,13 +1,16 @@
 // @vitest-environment happy-dom
 
-import { resolveHiddenProbeCwd } from '../../src/main/rate-limits/hidden-probe-cwd'
+import { resolveHiddenProbeCwd } from '../../src/main/lib/hidden-probe-cwd'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), cli: vi.fn() }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call
-}))
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/requests/structured-agent-session-call',
+  () => ({
+    callStructuredAgentSession: mocks.call
+  })
+)
 vi.mock('@/runtime/source-control/git/runtime-git-generation-client', () => ({
   discoverRuntimeCommitMessageModels: mocks.cli
 }))
@@ -24,7 +27,7 @@ import {
   readHostModelCatalogSnapshot,
   recordHostModelCatalogSnapshot,
   resetHostModelCatalogSnapshotsForTests
-} from '../../src/renderer/src/runtime/host-model-catalog-snapshots'
+} from '../../src/renderer/src/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 
 const LOCAL = { kind: 'local' } as const
 const NEW_CHAT = { newLaunch: true, worktree: 'wt-1', seedsModel: false }

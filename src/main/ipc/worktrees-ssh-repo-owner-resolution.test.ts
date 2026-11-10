@@ -2,7 +2,7 @@ import type * as WorktreeScanCacheModule from '../git/worktrees/catalog/worktree
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProviderRequestId } from '../../shared/detected-worktree-provider-contract'
 import { toSshExecutionHostId } from '../../shared/execution-host'
-import { getSshProviderAuthority } from '../ssh/ssh-provider-authority'
+import { getSshProviderAuthority } from '../ssh/connection/authority/ssh-provider-authority'
 import { listWorktreesMock } from './worktrees-test-module-mocks'
 import { handlers, ipcEvent, setupWorktreeHandlers, store } from './worktrees-test-harness'
 

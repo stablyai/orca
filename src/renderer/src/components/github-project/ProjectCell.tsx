@@ -11,7 +11,7 @@ import type {
   GitHubProjectFieldMutationValue,
   GitHubProjectRow
 } from '../../../../shared/github/project-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ProjectTitleCell, ProjectTypeCell } from './ProjectCellIdentity'
 import { ProjectAssigneesCell, ProjectLabelsCell } from './ProjectCellRepositoryEditors'
 import { ProjectIterationCell, ProjectSingleSelectCell } from './ProjectCellSelectionEditors'
@@ -47,6 +47,7 @@ export default function ProjectCell({
   sourceHost,
   sourceTarget
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   const contentValue = projectContentField(row.content, field.dataType)
   const value = row.fieldValuesByFieldId[field.id]
   const editableValue = editable && row.itemType !== 'REDACTED'
@@ -116,7 +117,7 @@ export default function ProjectCell({
           <>
             {' '}
             <span className="shrink-0">
-              {translate(
+              {t(
                 'auto.components.github.project.ProjectCell.linkedPullRequestsOverflow',
                 '+{{count}} more',
                 { count: overflow }
@@ -163,7 +164,7 @@ export default function ProjectCell({
       <ProjectTextCell
         value={text}
         editable={editableValue}
-        placeholder={translate('auto.components.github.project.ProjectCell.9cb1a0c984', 'Add text')}
+        placeholder={t('auto.components.github.project.ProjectCell.9cb1a0c984', 'Add text')}
         onCommit={(next) =>
           onEditField?.(field.id, next === '' ? null : { kind: 'text', text: next })
         }
@@ -177,10 +178,7 @@ export default function ProjectCell({
         value={number}
         editable={editableValue}
         numeric
-        placeholder={translate(
-          'auto.components.github.project.ProjectCell.bb7ebc11e3',
-          'Add number'
-        )}
+        placeholder={t('auto.components.github.project.ProjectCell.bb7ebc11e3', 'Add number')}
         onCommit={(next) => commitNumber(field.id, next, onEditField)}
       />
     )

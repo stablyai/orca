@@ -1,4 +1,4 @@
-import { BROWSER_NETWORK_TUNNEL_MAX_DATA_BYTES } from '../../../../shared/browser-network-tunnel-protocol'
+import { BROWSER_NETWORK_TUNNEL_MAX_DATA_BYTES } from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import type { BrowserNetworkTunnelConnectionCredit } from './browser-network-tunnel-connection-credit'
 import { browserNetworkTunnelMaxPendingChunks } from './browser-network-tunnel-stream-state'
 

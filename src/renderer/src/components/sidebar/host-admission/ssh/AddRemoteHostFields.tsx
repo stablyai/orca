@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   translateHostAccessLinkError,
   translateRemotePairingEndpointKind
@@ -12,8 +12,8 @@ import type { ParseHostAccessLinkResult } from '../../../../../../shared/remote-
 import {
   applyParsedSshHostInput,
   type EditingTarget
-} from '../../../settings/ssh/targets/ssh-target-draft'
-import { SshHostAdvancedFields } from '../../../settings/ssh/targets/SshHostAdvancedFields'
+} from '../../../ssh-host-form/ssh-target-draft'
+import { SshHostAdvancedFields } from '../../../ssh-host-form/SshHostAdvancedFields'
 
 export function SshHostFields({
   form,
@@ -34,6 +34,7 @@ export function SshHostFields({
   onSubmit: () => void
   offerProxyConnectionReuse?: boolean
 }) {
+  const t = useTranslate()
   const [advancedOpen, setAdvancedOpen] = useState(preferAdvancedOpen)
   return (
     <form
@@ -45,14 +46,14 @@ export function SshHostFields({
     >
       <div className="space-y-1.5">
         <Label htmlFor="add-ssh-label">
-          {translate('auto.components.sidebar.AddRemoteHostDialog.label', 'Label')}
+          {t('auto.components.sidebar.AddRemoteHostDialog.label', 'Label')}
         </Label>
         <Input
           id="add-ssh-label"
           value={form.label}
           disabled={disabled}
           onChange={(event) => onFormChange((draft) => ({ ...draft, label: event.target.value }))}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.sidebar.AddRemoteHostDialog.sshLabelPlaceholder',
             'Dev box'
           )}
@@ -60,7 +61,7 @@ export function SshHostFields({
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="add-ssh-host">
-          {translate('auto.components.sidebar.AddRemoteHostDialog.sshHost', 'Host or alias')}
+          {t('auto.components.sidebar.AddRemoteHostDialog.sshHost', 'Host or alias')}
         </Label>
         <Input
           id="add-ssh-host"
@@ -69,7 +70,7 @@ export function SshHostFields({
           autoFocus
           onBlur={() => onFormChange(applyParsedSshHostInput)}
           onChange={(event) => onFormChange((draft) => ({ ...draft, host: event.target.value }))}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.sidebar.AddRemoteHostDialog.sshHostPlaceholder',
             'deploy@server:22'
           )}
@@ -77,7 +78,7 @@ export function SshHostFields({
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="add-ssh-username">
-          {translate('auto.components.sidebar.AddRemoteHostDialog.username', 'Username')}
+          {t('auto.components.sidebar.AddRemoteHostDialog.username', 'Username')}
         </Label>
         <Input
           id="add-ssh-username"
@@ -86,7 +87,7 @@ export function SshHostFields({
           onChange={(event) =>
             onFormChange((draft) => ({ ...draft, username: event.target.value }))
           }
-          placeholder={translate(
+          placeholder={t(
             'auto.components.sidebar.AddRemoteHostDialog.usernamePlaceholder',
             'deploy'
           )}
@@ -94,7 +95,7 @@ export function SshHostFields({
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="add-ssh-port">
-          {translate('auto.components.sidebar.AddRemoteHostDialog.port', 'Port')}
+          {t('auto.components.sidebar.AddRemoteHostDialog.port', 'Port')}
         </Label>
         <Input
           id="add-ssh-port"
@@ -109,7 +110,7 @@ export function SshHostFields({
       </div>
       <div className="space-y-1.5 sm:col-span-2">
         <Label htmlFor="add-ssh-identity-file">
-          {translate('auto.components.sidebar.AddRemoteHostDialog.identityFile', 'Identity file')}
+          {t('auto.components.sidebar.AddRemoteHostDialog.identityFile', 'Identity file')}
         </Label>
         <Input
           id="add-ssh-identity-file"
@@ -118,14 +119,14 @@ export function SshHostFields({
           onChange={(event) =>
             onFormChange((draft) => ({ ...draft, identityFile: event.target.value }))
           }
-          placeholder={translate(
+          placeholder={t(
             'auto.components.sidebar.AddRemoteHostDialog.identityFilePlaceholder',
             '~/.ssh/id_ed25519 (optional)'
           )}
         />
         {configIdentityAlias && form.identityFile.trim() === '' ? (
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.sidebar.AddRemoteHostDialog.identityFileFromConfigHint',
               'Left empty on purpose: Orca uses every key ~/.ssh/config resolves for {{value0}}. Type a path to use just that key.',
               { value0: configIdentityAlias }
@@ -166,6 +167,7 @@ export function RemoteServerFields({
   onAllowLoopbackChange: (value: boolean) => void
   onSubmit: () => void
 }) {
+  const t = useTranslate()
   const inputError = pairingCode.trim() !== '' && !parsedLink.ok
   const loopbackBlocked =
     parsedLink.ok && parsedLink.value.endpointKind === 'loopback' && !allowLoopback
@@ -184,7 +186,7 @@ export function RemoteServerFields({
     >
       <div className="space-y-1.5">
         <Label htmlFor="add-server-name">
-          {translate('auto.components.sidebar.AddRemoteHostDialog.nameInOrca', 'Name in Orca')}
+          {t('auto.components.sidebar.AddRemoteHostDialog.nameInOrca', 'Name in Orca')}
         </Label>
         <Input
           id="add-server-name"
@@ -192,7 +194,7 @@ export function RemoteServerFields({
           disabled={disabled}
           autoFocus
           onChange={(event) => onNameChange(event.target.value)}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.sidebar.AddRemoteHostDialog.serverNamePlaceholder',
             'Dev box'
           )}
@@ -200,7 +202,7 @@ export function RemoteServerFields({
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="add-server-pairing-code">
-          {translate('auto.components.sidebar.AddRemoteHostDialog.accessLink', 'Access link')}
+          {t('auto.components.sidebar.AddRemoteHostDialog.accessLink', 'Access link')}
         </Label>
         <Input
           id="add-server-pairing-code"
@@ -209,33 +211,30 @@ export function RemoteServerFields({
           value={pairingCode}
           disabled={disabled}
           onChange={(event) => onPairingCodeChange(event.target.value)}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.sidebar.AddRemoteHostDialog.pairingCodePlaceholder',
             'orca://pair?code=...'
           )}
           className="font-mono"
         />
         <p id="add-server-pairing-code-help" className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.sidebar.AddRemoteHostDialog.pairingHelpShareComputer',
             'Create this under Settings → Remote Orca Servers → Share this computer on the other computer.'
           )}
         </p>
         {inputError ? (
           <p id="add-server-pairing-code-error" role="alert" className="text-xs text-destructive">
-            {parsedLink.ok ? null : translateHostAccessLinkError(parsedLink.kind)}
+            {parsedLink.ok ? null : translateHostAccessLinkError(parsedLink.kind, t)}
           </p>
         ) : null}
       </div>
       {parsedLink.ok ? (
         <div className="space-y-1 rounded-md border border-border/60 p-3">
           <div className="flex items-center gap-2 text-xs font-medium">
-            {translate(
-              'auto.components.sidebar.AddRemoteHostDialog.linkDestination',
-              'Link destination'
-            )}
+            {t('auto.components.sidebar.AddRemoteHostDialog.linkDestination', 'Link destination')}
             <Badge variant="outline">
-              {translateRemotePairingEndpointKind(parsedLink.value.endpointKind)}
+              {translateRemotePairingEndpointKind(parsedLink.value.endpointKind, t)}
             </Badge>
           </div>
           <div className="font-mono text-sm">{parsedLink.value.displayEndpoint}</div>
@@ -248,13 +247,13 @@ export function RemoteServerFields({
               />
               <span>
                 <span className="block font-medium">
-                  {translate(
+                  {t(
                     'auto.components.sidebar.AddRemoteHostDialog.sshTunnel',
                     'I am using an SSH tunnel'
                   )}
                 </span>
                 <span className="text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.sidebar.AddRemoteHostDialog.sshTunnelHelp',
                     'Otherwise, this link points back to this device and cannot identify the other computer.'
                   )}
@@ -266,7 +265,7 @@ export function RemoteServerFields({
       ) : null}
       {loopbackBlocked ? (
         <p id="add-server-loopback-blocked" role="alert" className="text-xs text-destructive">
-          {translate(
+          {t(
             'auto.components.sidebar.AddRemoteHostDialog.loopbackBlocked',
             'Enable the SSH tunnel override or create a new link using the other host’s Tailscale or LAN address.'
           )}

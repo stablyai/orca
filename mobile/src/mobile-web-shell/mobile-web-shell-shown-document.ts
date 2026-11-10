@@ -12,10 +12,9 @@ import type {
 } from './mobile-web-shell-session-contract'
 import {
   readFailureSide,
-  type MobileWebShellUpdateFailureCause,
-  type MobileWebShellUpdateFailureFacts
+  type MobileWebShellUpdateFailureCause
 } from './mobile-web-shell-update-failure'
-import { updateFailureOutcomeOf } from './mobile-web-shell-update-failure-outcome'
+import { updateFailureRecordEffect } from './mobile-web-shell-update-failure-outcome'
 import { cachedGenerationWall, gateVerdict } from './mobile-web-shell-gates'
 import { CLEAR_PAGE_DOCUMENT_STATE } from './page-document-state'
 import { step } from './mobile-web-shell-session-step'
@@ -84,16 +83,10 @@ export function onUpdateFailed(
   session: MobileWebShellSession,
   cause: MobileWebShellUpdateFailureCause
 ): MobileWebShellStep {
-  const failure: MobileWebShellUpdateFailureFacts = {
-    ...cause,
-    offeredBuildId: session.requestedBuildId,
-    cachedBuildId: session.cached?.buildId ?? null,
-    ...updateFailureOutcomeOf(session.state)
-  }
   return step(
     session,
     readFailureSide(cause.reason) === 'bundle' ? { updateNotice: 'update-failed' } : {},
-    [{ kind: 'record-update-failure', failure }]
+    [updateFailureRecordEffect(session, cause, session.state)]
   )
 }
 

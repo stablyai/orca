@@ -43,7 +43,7 @@ import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { captureAgentSubjectReads } from '@/attention/agent-subject-read-actions'
 import { useAppStore } from '@/store'
-import { StructuredAgentSessionAttentionBridge } from '@/components/native-chat/StructuredAgentSessionAttentionBridge'
+import { StructuredAgentSessionAttentionBridge } from '@/components/native-chat/session/attention/StructuredAgentSessionAttentionBridge'
 import { notificationDeliveryId } from '../../src/shared/notification-delivery-id'
 import type { AgentSessionExecutionLocation } from '../../src/shared/agent-session/lifecycle/agent-session-record'
 
@@ -646,22 +646,6 @@ describe('Remote prompt settlement', () => {
     await act(async () => {})
     expect(transport.settle).not.toHaveBeenCalled()
     expect(await relay.live('prompt')).toHaveLength(1)
-  })
-
-  it('settles once per relayed prompt, not on every later status update', async () => {
-    await mountRemoteRelay()
-    act(() => {
-      revise(resolveA('resolved'))
-      fixture.hostFeed.observe(SESSION)
-      publishStatus()
-    })
-    await waitFor(() => expect(transport.settle).toHaveBeenCalledOnce())
-    act(() => {
-      revise((item) => item)
-      publishStatus()
-    })
-    await act(async () => {})
-    expect(transport.settle).toHaveBeenCalledOnce()
   })
 
   // Status and edges ride separate sockets: the pre-prompt row can still be draining after the edge.

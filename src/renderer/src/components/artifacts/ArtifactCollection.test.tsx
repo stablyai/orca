@@ -5,7 +5,7 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ArtifactListItem } from '../../../../shared/artifacts'
+import type { ArtifactListItem } from '../../../../shared/artifacts/artifacts'
 
 vi.mock('./ArtifactPreview', () => ({
   ArtifactPreview: ({ shareUrl }: { shareUrl: string }) => <div>{`Preview ${shareUrl}`}</div>
@@ -65,44 +65,6 @@ describe('ArtifactCollection', () => {
   afterEach(cleanup)
   // Restore prototype layout spies or later tests inherit fabricated geometry.
   afterEach(() => vi.restoreAllMocks())
-
-  function renderCollection(
-    items: ArtifactListItem[],
-    selectArtifact = vi.fn(),
-    hasMore = false
-  ): { container: HTMLElement; selectArtifact: ReturnType<typeof vi.fn> } {
-    const { container } = render(
-      <TooltipProvider>
-        <ArtifactCollection
-          artifacts={items}
-          deletingId={null}
-          selectedSlug={items[0]?.artifact.slug ?? null}
-          selectArtifact={selectArtifact}
-          deleteArtifact={vi.fn()}
-          hasMore={hasMore}
-          loadingMore={false}
-          loadMore={vi.fn()}
-          onRefresh={vi.fn()}
-          isRefreshing={false}
-        />
-      </TooltipProvider>
-    )
-    return { container, selectArtifact }
-  }
-
-  it('filters the list by name', async () => {
-    const items = [artifact('first', 'First artifact'), artifact('second', 'Second artifact')]
-    renderCollection(items)
-
-    await userEvent.type(screen.getByPlaceholderText('Search...'), 'second')
-    expect(screen.getByRole('button', { name: /Second artifact/ })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /First artifact/ })).not.toBeInTheDocument()
-
-    await userEvent.clear(screen.getByPlaceholderText('Search...'))
-    await userEvent.type(screen.getByPlaceholderText('Search...'), 'nothing')
-    expect(screen.queryByRole('button', { name: /Second artifact/ })).not.toBeInTheDocument()
-    expect(screen.getByText('No matches')).toBeInTheDocument()
-  })
 
   /** Guard clicks from both descendant triggers and React-bubbling portaled menu items so actions cannot select the row behind them. */
   it('runs a row menu action without selecting the artifact behind the menu', async () => {

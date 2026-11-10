@@ -10,7 +10,10 @@ import { isLiveLinkOpenGroup as isLiveEditorOpenGroup } from '../../../../lib/li
 import { EDITOR_FOCUS_REQUEST_TTL_MS } from '../types/pending-editor-reveal'
 import { takeNextEditorFocusRequestToken } from '../focus/editor-focus-reveal'
 import { applyOpenFileToState, type OpenFileApplyScratch } from './open-file-apply'
-import { afterPendingTab, pendingTabGroupId } from '@/runtime/layout-owner-pending-tabs'
+import {
+  afterPendingTab,
+  pendingTabGroupId
+} from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 
 export function createOpenFileAction(
   set: EditorSet,

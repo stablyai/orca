@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo } from 'react'
-import { useTerminalSplitLayout } from './use-terminal-split-layout'
-import { createLiveInputCapture } from './live-input-capture'
+import { useTerminalSplitLayout } from '../terminal/session/use-terminal-split-layout'
+import { createLiveInputCapture } from '../terminal/session/live-input-capture'
 import { Animated, type ScrollView } from 'react-native'
 import type { MobileTerminalLinkOpenMode } from '../storage/preferences'
 import type { TerminalKeyboardAvoidanceMetrics } from '../terminal/terminal-webview-contract'
@@ -9,22 +9,19 @@ import {
   getVisibleTerminalAccessoryKeys
 } from '../terminal/terminal-accessory-layout'
 import type { CustomKey } from '../terminal/terminal-custom-keys'
-import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
-import type { AppliedSnapshotMarker } from './session-tab-snapshot-gate'
-import { useWorktreeSessionTabsLoaded } from './use-initial-session-terminal-autocreate'
-import { createMobileSessionCreateWarningState } from './mobile-session-create-warning-state'
+import type { AppliedSnapshotMarker } from './tabs/session-tab-snapshot-gate'
+import { useWorktreeSessionTabsLoaded } from '../terminal/session/use-initial-session-terminal-autocreate'
+import { createMobileSessionCreateWarningState } from './tabs/mobile-session-create-warning-state'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
+import type { DiffNotesDelivery } from '../source-control/review/mobile-review-comment-state'
 import type {
-  DiffNotesDelivery,
   DirtyMarkdownDraft,
   FileDocState,
-  MarkdownDocState,
-  MobileDisplayMode,
-  MobileNewTabAgentLoadState,
-  MobileSessionTab,
-  Terminal
-} from './mobile-session-route-types'
-import { useMobileSessionTabActionTargets } from './use-mobile-session-tab-action-targets'
+  MarkdownDocState
+} from '../files/session-documents/session-document-state'
+import type { MobileDisplayMode, Terminal } from '../terminal/session/mobile-terminal-model'
+import type { MobileSessionTab } from './tabs/mobile-session-tabs'
+import { useMobileSessionTabActionTargets } from './tabs/use-mobile-session-tab-action-targets'
 import type { MobileSessionFoundationModel } from './use-mobile-session-foundation'
 
 export function useMobileSessionScreenState(scope: MobileSessionFoundationModel) {
@@ -73,9 +70,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   )
   const [showCreateTabDrawer, setShowCreateTabDrawer] = useState(false)
   const [showQuickCommands, setShowQuickCommands] = useState(false)
-  const [createTabAgentLoadState, setCreateTabAgentLoadState] =
-    useState<MobileNewTabAgentLoadState>('idle')
-  const [createTabAgentOptions, setCreateTabAgentOptions] = useState<MobileNewTabAgentOption[]>([])
   const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
   const [showHeaderMoreActions, setShowHeaderMoreActions] = useState(false)
   const [showTerminalLayout, setShowTerminalLayout] = useState(false)
@@ -88,6 +82,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [renameTarget, setRenameTarget] = useState<Terminal | null>(null)
   const [customKeys, setCustomKeys] = useState<CustomKey[]>([])
   const [directionPadEnabled, setDirectionPadEnabled] = useState(true)
+  const [smartRailEnabled, setSmartRailEnabled] = useState(false)
   const [visibleBuiltInIds, setVisibleBuiltInIds] = useState<string[]>(
     getDefaultTerminalAccessoryBuiltInIds
   )
@@ -171,10 +166,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setShowCreateTabDrawer,
     showQuickCommands,
     setShowQuickCommands,
-    createTabAgentLoadState,
-    setCreateTabAgentLoadState,
-    createTabAgentOptions,
-    setCreateTabAgentOptions,
     showCreateBrowserModal,
     setShowCreateBrowserModal,
     showHeaderMoreActions,
@@ -192,6 +183,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setCustomKeys,
     directionPadEnabled,
     setDirectionPadEnabled,
+    smartRailEnabled,
+    setSmartRailEnabled,
     visibleBuiltInIds,
     setVisibleBuiltInIds,
     showCustomKeyModal,

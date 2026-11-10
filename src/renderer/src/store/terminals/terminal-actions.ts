@@ -1,3 +1,4 @@
+import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { TerminalState } from './terminal-state'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TabSplitTarget } from '../slices/tabs/tabs-slice-contract'
@@ -207,7 +208,7 @@ export type TerminalActions = {
   queueTabStartupCommand: (
     tabId: string,
     startup: {
-      command: string
+      command?: string
       delivery?: 'terminal-paste'
       startupCommandDelivery?: StartupCommandDelivery
       env?: Record<string, string>
@@ -217,6 +218,7 @@ export type TerminalActions = {
       resumeOrigin?: 'saved'
       launchToken?: string
       launchAgent?: TuiAgent
+      freshAgentLaunch?: FreshWorkspaceAgentLaunch
       agentArgsOverride?: string | null
       draftPrompt?: string
       sessionOptions?: Record<string, SessionOptionValue>
@@ -234,7 +236,7 @@ export type TerminalActions = {
     tabId: string,
     expected?: TerminalState['pendingStartupByTabId'][string]
   ) => {
-    command: string
+    command?: string
     delivery?: 'terminal-paste'
     startupCommandDelivery?: StartupCommandDelivery
     env?: Record<string, string>
@@ -244,6 +246,7 @@ export type TerminalActions = {
     resumeOrigin?: 'saved'
     launchToken?: string
     launchAgent?: TuiAgent
+    freshAgentLaunch?: FreshWorkspaceAgentLaunch
     agentArgsOverride?: string | null
     draftPrompt?: string
     sessionOptions?: Record<string, SessionOptionValue>

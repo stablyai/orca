@@ -2,7 +2,7 @@ import type {
   BrowserGrabComputedStyles,
   BrowserGrabPayload,
   BrowserPageAnnotation
-} from '../../../../../shared/browser-grab-types'
+} from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { isWindowsAbsolutePathLike } from '../../../../../shared/cross-platform-path'
 
 function formatPageHeading(payload: BrowserGrabPayload): string {

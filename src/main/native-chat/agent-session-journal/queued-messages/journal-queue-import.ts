@@ -201,7 +201,7 @@ export class LegacyQueuedCards {
     }
   }
 
-  /** Atomically adopt readable unanswered cards and delete legacy rows; failure leaves both unchanged. */
+  /** Adopt readable cards and accepted-handoff evidence before deleting the legacy rows atomically. */
   importAtOpen(): Promise<void> {
     if (this.deps.readOnly() || this.rows().length === 0) {
       return Promise.resolve()

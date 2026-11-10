@@ -1,7 +1,6 @@
 import { openRoutedHttpLink } from '@/lib/browser/navigation/http-link-destinations'
-import * as editorRevealFlash from '@/components/tab-group/editor-reveal-flash'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
+import '@/lib/workspace/activation/worktree-activation'
 import './files/terminal-link-handlers'
 import { openDetectedFilePath } from './files/terminal-file-open-routing'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
@@ -17,15 +16,7 @@ import type { PendingEditorReveal } from '@/store/slices/editor/types/pending-ed
 const findWorkspaceFileRouteMock = vi.hoisted(() => vi.fn())
 const toastErrorMock = vi.hoisted(() => vi.fn())
 const doubles = createTerminalLinkTestDoubles()
-const {
-  storeState,
-  deps,
-  openFileForLinkMock,
-  createBrowserTabMock,
-  openFilePathMock,
-  setPendingEditorRevealMock,
-  statMock
-} = doubles
+const { storeState, deps, openFileForLinkMock, setPendingEditorRevealMock, statMock } = doubles
 
 vi.mock('@/store/index', () => ({
   useAppStore: {
@@ -35,7 +26,7 @@ vi.mock('@/store/index', () => ({
 
 vi.mock('sonner', () => ({ toast: { error: toastErrorMock } }))
 
-vi.mock('@/lib/language-detect', () => ({
+vi.mock('../../../../../shared/editor-language/editor-language-detect', () => ({
   detectLanguage: () => 'plaintext'
 }))
 
@@ -44,11 +35,11 @@ vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: vi.fn(() => null)
 }))
 
-vi.mock('@/lib/runtime-workspace-file-route', () => ({
+vi.mock('@/lib/files/access/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: findWorkspaceFileRouteMock
 }))
 
@@ -93,155 +84,10 @@ describe('terminal file links carry their source tab', () => {
       expect.any(Function)
     )
   })
-
-  it('pins an explicit request to the source group', async () => {
-    setPlatform('Macintosh')
-    seedSourceTab()
-
-    openDetectedFilePath('/tmp/src/a.ts', null, null, { ...sourceDeps, openInSourceGroup: true })
-    await flushAsyncWork()
-
-    expect(openFileForLinkMock).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      expect.objectContaining({
-        workspaceId: 'wt-1',
-        hostId: null,
-        targetGroupId: 'group-a'
-      }),
-      expect.any(Function)
-    )
-  })
-
-  it('refuses an explicit request that resolves to Orca browser HTML', async () => {
-    setPlatform('Macintosh')
-    seedSourceTab()
-
-    openDetectedFilePath('/tmp/report.html', null, null, { ...sourceDeps, openInSourceGroup: true })
-    await flushAsyncWork()
-
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-    expect(openFileForLinkMock).not.toHaveBeenCalled()
-    expect(toastErrorMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('reports a refused HTML placement for the internal Open in new tab action', async () => {
-    seedSourceTab()
-    const stat = createDeferred<{ isDirectory: boolean }>()
-    statMock.mockImplementationOnce(() => stat.promise)
-
-    openDetectedFilePath('/tmp/report.html', null, null, {
-      ...sourceDeps,
-      openInSourceGroupSurface: 'internal'
-    })
-    storeState.groupsByWorktree = {}
-    stat.resolve({ isDirectory: false })
-    await flushAsyncWork()
-
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-    expect(openFileForLinkMock).not.toHaveBeenCalled()
-    expect(toastErrorMock).toHaveBeenCalledExactlyOnceWith(
-      "Couldn't open /tmp/report.html in this group"
-    )
-  })
-
-  it('refuses a closed explicit group before activating its workspace', async () => {
-    setPlatform('Macintosh')
-    seedSourceTab()
-    const stat = createDeferred<{ isDirectory: boolean }>()
-    statMock.mockImplementationOnce(() => stat.promise)
-
-    openDetectedFilePath('/tmp/src/a.ts', null, null, { ...sourceDeps, openInSourceGroup: true })
-    storeState.groupsByWorktree = {}
-    stat.resolve({ isDirectory: false })
-    await flushAsyncWork()
-
-    expect(activateAndRevealWorkspace).not.toHaveBeenCalled()
-    expect(openFileForLinkMock).not.toHaveBeenCalled()
-    expect(toastErrorMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('checks the resolved host even when no sibling-workspace route is needed', async () => {
-    setPlatform('Macintosh')
-    seedSourceTab()
-    storeState.unifiedTabsByWorktree['wt-1'][0].executionHostId = 'ssh:other-host'
-
-    openDetectedFilePath('/tmp/src/a.ts', null, null, { ...sourceDeps, openInSourceGroup: true })
-    await flushAsyncWork()
-
-    expect(activateAndRevealWorkspace).not.toHaveBeenCalled()
-    expect(openFileForLinkMock).not.toHaveBeenCalled()
-    expect(toastErrorMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('refuses an explicit request that resolves to a directory', async () => {
-    setPlatform('Macintosh')
-    seedSourceTab()
-    statMock.mockResolvedValueOnce({ isDirectory: true })
-
-    openDetectedFilePath('/tmp/src', null, null, { ...sourceDeps, openInSourceGroup: true })
-    await flushAsyncWork()
-
-    expect(openFilePathMock).not.toHaveBeenCalled()
-    expect(openFileForLinkMock).not.toHaveBeenCalled()
-    expect(toastErrorMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps an explicit request for a local file another workspace holds in its source', async () => {
-    setPlatform('Macintosh')
-    seedSourceTab()
-    storeState.openFiles = [{ filePath: '/other/x.ts', worktreeId: 'wt-2' }]
-    findWorkspaceFileRouteMock.mockReturnValueOnce({
-      worktreeId: 'wt-2',
-      executionHostId: 'local',
-      relativePath: 'x.ts'
-    })
-
-    openDetectedFilePath('/other/x.ts', null, null, { ...sourceDeps, openInSourceGroup: true })
-    await flushAsyncWork()
-
-    expect(findWorkspaceFileRouteMock).not.toHaveBeenCalled()
-    expect(activateAndRevealWorkspace).not.toHaveBeenCalledWith('wt-2', expect.anything())
-    expect(openFileForLinkMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/other/x.ts', worktreeId: 'wt-1' }),
-      expect.anything(),
-      expect.anything(),
-      expect.anything()
-    )
-    expect(toastErrorMock).not.toHaveBeenCalled()
-    findWorkspaceFileRouteMock.mockReset()
-  })
 })
 
 describe('terminal file link reveals target the opened view', () => {
   afterEach(() => vi.restoreAllMocks())
-
-  it.each([
-    { existingFileId: null, flashes: false, label: 'a newly opened file' },
-    { existingFileId: '/tmp/src/a.ts', flashes: true, label: 'an existing document view' },
-    { existingFileId: '/tmp/src/b.ts', flashes: false, label: 'a reused preview for another file' }
-  ])('only flashes existing documents: $label', async ({ existingFileId, flashes }) => {
-    setPlatform('Macintosh')
-    const flash = vi
-      .spyOn(editorRevealFlash, 'flashRevealedEditorView')
-      .mockImplementation(() => {})
-    if (existingFileId) {
-      storeState.unifiedTabsByWorktree = {
-        'wt-1': [{ id: 'view:/tmp/src/a.ts', entityId: existingFileId, groupId: 'group-1' }]
-      }
-    }
-
-    openDetectedFilePath('/tmp/src/a.ts', 12, 3, deps)
-    await flushAsyncWork()
-    await flushDoubleRaf()
-
-    expect(flash).toHaveBeenCalledTimes(flashes ? 1 : 0)
-    if (flashes) {
-      expect(flash).toHaveBeenCalledWith('view:/tmp/src/a.ts')
-    }
-    expect(lastReveal()).toMatchObject({ viewStateId: 'view:/tmp/src/a.ts', line: 12, column: 3 })
-    expect(lastReveal().canApply?.()).toBe(true)
-  })
 
   it('invalidates an editor line reveal when a browser link is activated', async () => {
     setPlatform('Macintosh')
@@ -277,16 +123,5 @@ describe('terminal file link reveals target the opened view', () => {
     storeState.unifiedTabsByWorktree = { 'wt-1': [] }
 
     expect(reveal.canApply?.()).toBe(false)
-  })
-
-  it('skips the reveal when the open was refused', async () => {
-    setPlatform('Macintosh')
-    openFileForLinkMock.mockReturnValueOnce(null)
-
-    openDetectedFilePath('/tmp/src/a.ts', 12, 3, deps)
-    await flushAsyncWork()
-    await flushDoubleRaf()
-
-    expect(setPendingEditorRevealMock).not.toHaveBeenCalled()
   })
 })

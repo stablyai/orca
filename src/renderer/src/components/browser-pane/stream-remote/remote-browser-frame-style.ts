@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
+import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
 import { getPositiveFiniteNumber } from './remote-browser-page-input-model'
 
 // Use the host’s displayed CSS viewport; bitmap dimensions vary with DPR and frame-budget scaling.

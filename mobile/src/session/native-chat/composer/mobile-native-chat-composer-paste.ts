@@ -6,13 +6,13 @@ import {
 import { isNativeChatLongPaste } from '../../../../../src/shared/native-chat/input/native-chat-long-paste'
 import type { ClipboardReader } from '../../../platform/clipboard'
 import type { PickedMobileImage } from '../../../platform/media-picker-contract'
-import { encodeBase64Bytes } from '../../../transport/base64-byte-codec'
+import { encodeBase64Bytes } from '../../../transport/encryption/base64-byte-codec'
 import {
   MOBILE_CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
   normalizeMobileClipboardImageBase64,
   prepareMobileClipboardImageBase64
-} from '../../mobile-clipboard-image'
-import { resizeMobileClipboardImage } from '../../mobile-clipboard-image-resize'
+} from '../../../files/attachments/mobile-clipboard-image'
+import { resizeMobileClipboardImage } from '../../../files/attachments/mobile-clipboard-image-resize'
 
 /** One paste's image: the event's file, or null when WebKit left the bytes out and the shell clipboard holds them. */
 export type MobilePastedImages = { readonly file: File | null }

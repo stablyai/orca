@@ -44,6 +44,9 @@ import {
 import { queuedSendAnswer } from '../delivery/structured-agent-session-queued-send-answer'
 import { STOP_COMMAND_RECEIPT } from './structured-agent-session-stop-acceptance'
 import { runTargetedCancel } from './structured-agent-session-targeted-cancel'
+import { journalRowReceiptResult } from './structured-agent-session-journal-row-receipt'
+
+export { journalRowReceiptResult }
 import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
 import type { CommandReceiptResult } from '../../agent-session-journal/writing/command-receipt-schema'
 import type { JournalRow } from '../../agent-session-journal/durable-rows/journal-row-schema'
@@ -93,16 +96,6 @@ export type MutationCommandReceipt<TValue> = {
   unwritten?: (value: TValue, ctx: AgentSessionTurnContext) => CommandReceiptResult | null
 }
 
-export function journalRowReceiptResult(
-  row: JournalRow | undefined,
-  ...kinds: JournalRow['kind'][]
-): CommandReceiptResult {
-  if (!row || !kinds.includes(row.kind)) {
-    throw new Error(`an accepted command requires its ${kinds.join(' or ')} row`)
-  }
-  return { kind: 'journal-row', epoch: row.epoch, sequence: row.seq }
-}
-
 function submissionOrDraftReceipt<TValue>(clientMessageId: string): MutationCommandReceipt<TValue> {
   return {
     result: (row) =>
@@ -144,7 +137,6 @@ export function sendPlan(
     recoverUnknownFromDurableState: true,
     // retryUnknown is compatibility-only; recorded sends replay without redelivery.
     run: async (ctx) => {
-      params.beforeRun?.()
       const source = sendSource(params)
       return performSend(ctx, {
         origin: params.userSend ? 'client' : 'host',
@@ -158,12 +150,7 @@ export function sendPlan(
       })
     },
     replay: (ctx, outcome) => {
-      // Replay requested queue sends from card/handoff, including withdrawn cards; direct sends
-      // must answer from submissions readable by clients that never supplied delivery.
-      const queued =
-        params.delivery === 'queue-if-active'
-          ? queuedSendAnswer(ctx.journal, clientMessageId)
-          : null
+      const queued = queuedSendAnswer(ctx.journal, clientMessageId)
       if (queued) {
         return queued
       }
@@ -226,11 +213,7 @@ export function conversationCommandPlan(params: {
       return sent.ok ? { ok: true, value: { clientMessageId } } : sent
     },
     replay: (ctx) => {
-      // Only queue-requesting commands may replay from cards before their submission exists.
-      const queued =
-        params.delivery === 'queue-if-active'
-          ? queuedSendAnswer(ctx.journal, clientMessageId)
-          : null
+      const queued = queuedSendAnswer(ctx.journal, clientMessageId)
       if (queued) {
         return 'queued' in queued
           ? { queued: queued.queued }

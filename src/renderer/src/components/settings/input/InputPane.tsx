@@ -2,8 +2,8 @@ import type { GlobalSettings } from '../../../../../shared/global-settings-types
 import { Label } from '../../ui/label'
 import { Switch } from '../../ui/switch'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { isDefaultPrimarySelectionMiddleClickPasteUserAgent } from '@/hooks/usePrimarySelectionPaste'
-import { translate } from '@/i18n/i18n'
+import { isDefaultPrimarySelectionMiddleClickPasteUserAgent } from '@/hooks/clipboard/primary-selection/usePrimarySelectionPaste'
+import { useTranslate } from '@/i18n/use-translate'
 
 type InputPaneProps = {
   settings: GlobalSettings
@@ -11,6 +11,7 @@ type InputPaneProps = {
 }
 
 export function InputPane({ settings, updateSettings }: InputPaneProps): React.JSX.Element {
+  const t = useTranslate()
   const enabled =
     settings.primarySelectionMiddleClickPaste ??
     isDefaultPrimarySelectionMiddleClickPasteUserAgent()
@@ -18,11 +19,11 @@ export function InputPane({ settings, updateSettings }: InputPaneProps): React.J
   return (
     <section className="space-y-4">
       <SearchableSetting
-        title={translate(
-          'auto.components.settings.InputPane.ad31c3c5fb',
-          'Middle-click Paste from Selection'
+        title={t(
+          'auto.components.settings.InputPane.dc26974909',
+          'Middle-click paste from selection'
         )}
-        description={translate(
+        description={t(
           'auto.components.settings.InputPane.db15068196',
           'Enabled by default on Linux and macOS. Linux uses the system selection clipboard; other platforms use a private buffer.'
         )}
@@ -43,22 +44,22 @@ export function InputPane({ settings, updateSettings }: InputPaneProps): React.J
       >
         <div className="space-y-0.5">
           <Label>
-            {translate(
-              'auto.components.settings.InputPane.ad31c3c5fb',
-              'Middle-click Paste from Selection'
+            {t(
+              'auto.components.settings.InputPane.dc26974909',
+              'Middle-click paste from selection'
             )}
           </Label>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.InputPane.db15068196',
               'Enabled by default on Linux and macOS. Linux uses the system selection clipboard; other platforms use a private buffer.'
             )}
           </p>
         </div>
         <Switch
-          aria-label={translate(
-            'auto.components.settings.InputPane.ad31c3c5fb',
-            'Middle-click Paste from Selection'
+          aria-label={t(
+            'auto.components.settings.InputPane.dc26974909',
+            'Middle-click paste from selection'
           )}
           checked={enabled}
           onCheckedChange={(checked) =>
