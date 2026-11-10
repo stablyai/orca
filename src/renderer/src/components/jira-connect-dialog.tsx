@@ -5,7 +5,7 @@ import {
 } from '@/lib/work-items/task-provider-error-copy'
 import { useId, useState } from 'react'
 import { LoaderCircle, Lock } from 'lucide-react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '@/components/ui/button'
 import {
@@ -19,7 +19,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   getProviderRuntimeContextKey,
   isEnvironmentRuntimeContextKey

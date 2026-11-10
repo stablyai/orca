@@ -1,7 +1,7 @@
 import React from 'react'
 import { FolderOpen } from 'lucide-react'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
 import { splitPathHeadForElision } from '@/lib/path-display/path-head-elision'
 

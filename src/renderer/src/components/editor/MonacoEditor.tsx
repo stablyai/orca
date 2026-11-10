@@ -8,7 +8,7 @@ import { monacoTypographyOptions } from '@/lib/editor/appearance/editor-typograp
 import { useEditorTypography } from '@/hooks/use-editor-typography'
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
-import { isLinuxUserAgent } from '../../lib/user-agent-platform'
+import { isLinuxUserAgent } from '../../app-shell/platform/user-agent-platform'
 import { MAX_TOKENIZATION_LINE_LENGTH } from '@/lib/monaco-languages/monarch-embed-entry-budget'
 import { buildFileEditorWordWrapOptions } from './file-editor-word-wrap-options'
 import { resolveFileEditorMinimapEnabled } from '../../../../shared/editor/editor-typography'

@@ -2,7 +2,7 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import React, { useMemo, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useRepoAssigneesBySlug, useRepoLabelsBySlug } from '@/hooks/useGitHubSlugMetadata'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type { GitHubProjectRow } from '../../../../shared/github/project-types'
 import { EmptyProjectCell, ProjectLabelChip, ProjectUserChip } from './ProjectCellValueEditors'

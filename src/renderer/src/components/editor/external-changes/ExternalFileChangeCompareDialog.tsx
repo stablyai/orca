@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
 import { editorTabFileAccess } from '@/lib/files/access/local-file-access'
 import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'

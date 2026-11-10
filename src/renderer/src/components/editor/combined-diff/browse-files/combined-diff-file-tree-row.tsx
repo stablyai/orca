@@ -5,7 +5,7 @@ import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-la
 import type { SourceControlTreeNode } from '../../../../../../shared/source-control/listing/source-control-tree'
 import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
 import { basename, dirname, joinPath } from '@/lib/path'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/files/drop/workspace-file-drag'
 import { writeWorkspaceFileDragSourceForWorkspace } from '@/lib/files/drop/workspace-file-drag-source'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'

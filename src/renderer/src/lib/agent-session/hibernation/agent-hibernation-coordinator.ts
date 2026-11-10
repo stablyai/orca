@@ -28,7 +28,10 @@ import {
   resolveAgentHibernationRuntimeOwner,
   type HostPtyEvidence
 } from './agent-hibernation-host-evidence'
-import { getWindowParkVisible, subscribeWindowParkVisibility } from '../../window-park-visibility'
+import {
+  getWindowParkVisible,
+  subscribeWindowParkVisibility
+} from '../../window-activity/window-park-visibility'
 
 export const AGENT_HIBERNATION_TICK_MS = 60 * 1000
 

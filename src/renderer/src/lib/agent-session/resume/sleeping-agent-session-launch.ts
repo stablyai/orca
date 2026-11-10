@@ -2,7 +2,7 @@ import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-o
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { buildAgentResumeStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
-import '@/lib/telemetry'
+import '@/diagnostics/telemetry/telemetry'
 import { tuiAgentToAgentKind } from '../../../../../shared/agent-kind'
 import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
 import {
