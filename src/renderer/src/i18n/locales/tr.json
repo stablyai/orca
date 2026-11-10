@@ -5031,8 +5031,13 @@
             "readAgo": "Okunma zamanı: {{time}}",
             "notRead": "Kullanım bilinmiyor: henüz okunmadı"
           },
+          "AccountSwitchList": {
+            "used": "Kullanılan",
+            "left": "Kalan",
+            "reset": "Sıfırlanma"
+          },
           "InlineUsageBars": {
-            "resetsAt": "Sıfırlanma zamanı: {{when}}"
+            "resetsIn": "{{duration}} içinde sıfırlanır"
           }
         }
       },

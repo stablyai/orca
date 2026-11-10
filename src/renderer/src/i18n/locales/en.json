@@ -5433,8 +5433,13 @@
             "readAgo": "Read {{time}}",
             "notRead": "Usage unknown: not read yet"
           },
+          "AccountSwitchList": {
+            "used": "Used",
+            "left": "Left",
+            "reset": "Reset"
+          },
           "InlineUsageBars": {
-            "resetsAt": "Resets {{when}}"
+            "resetsIn": "resets in {{duration}}"
           }
         }
       },

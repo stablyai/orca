@@ -4459,8 +4459,13 @@
             "readAgo": "{{time}} に取得",
             "notRead": "使用量は不明：未取得"
           },
+          "AccountSwitchList": {
+            "used": "使用済み",
+            "left": "残り",
+            "reset": "リセット"
+          },
           "InlineUsageBars": {
-            "resetsAt": "{{when}} にリセット"
+            "resetsIn": "{{duration}}後にリセット"
           }
         }
       },

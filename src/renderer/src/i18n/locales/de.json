@@ -5047,8 +5047,13 @@
             "readAgo": "Ausgelesen {{time}}",
             "notRead": "Nutzung unbekannt: noch nicht ausgelesen"
           },
+          "AccountSwitchList": {
+            "used": "Verbraucht",
+            "left": "Übrig",
+            "reset": "Zurücksetzung"
+          },
           "InlineUsageBars": {
-            "resetsAt": "Zurücksetzung um {{when}}"
+            "resetsIn": "Zurücksetzung in {{duration}}"
           }
         }
       },
