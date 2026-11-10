@@ -56,8 +56,25 @@ export function useAgentApiKeys(api: AgentApiKeysApi | undefined): AgentApiKeysM
         }
       }
     )
+    // Main retried a save or Orca became reachable again: show the fresh state.
+    const unsubscribe = api.onChanged?.(() => {
+      void api.list().then(
+        (next) => {
+          if (!cancelled) {
+            setState(next)
+            setCloudFailures((current) =>
+              Object.fromEntries(
+                Object.entries(current).filter(([id]) => !next.cloud?.synced.includes(id))
+              )
+            )
+          }
+        },
+        () => undefined
+      )
+    })
     return () => {
       cancelled = true
+      unsubscribe?.()
     }
   }, [api])
 

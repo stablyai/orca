@@ -6,7 +6,7 @@ import type { CloudSecretsClient } from '../cloud-secrets/cloud-secrets-client'
 import { getOrcaCloudAvailability } from '../hosted-sandbox/hosted-sandbox-install'
 import { getOrcaProfileIndexGeneration } from '../orca-profiles/profile-index-generation'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
-import type { AgentApiKeyCloudConnection } from './agent-api-key-cloud-sync'
+import type { AgentApiKeyCloudLink } from './agent-api-key-cloud-sync'
 
 let client: CloudSecretsClient | null = null
 let recorder: ((agent: TuiAgent, envName: string) => Promise<void>) | null = null
@@ -26,15 +26,27 @@ export function setAgentApiKeyCloudClient(next: CloudSecretsClient | null): void
   client = next
 }
 
-/** The signed-in Orca account with Orca Cloud, or null: signed out, no capability, or offline. */
-export async function agentApiKeyCloudConnection(): Promise<AgentApiKeyCloudConnection | null> {
+/**
+ * Where this desktop stands with the Orca account. Signed in but `unavailable` means the session
+ * couldn't be refreshed (offline), not a sign-out: the account is still the profile's.
+ */
+export async function agentApiKeyCloudLink(): Promise<AgentApiKeyCloudLink> {
   const current = client
   const generation = getOrcaProfileIndexGeneration()
-  if (!current || (await getOrcaCloudAvailability()) !== 'offered') {
-    return null
+  if (!current) {
+    return { kind: 'signed-out' }
   }
+  const availability = await getOrcaCloudAvailability()
   const accountId = ensureActiveOrcaProfile(app.getPath('userData')).profile.cloud?.userId
   // Every sign-in, sign-out and account or team switch rewrites the profile index.
   const isCurrent = (): boolean => getOrcaProfileIndexGeneration() === generation
-  return accountId && isCurrent() ? { accountId, client: current, isCurrent } : null
+  if (!accountId || !isCurrent()) {
+    return { kind: 'signed-out' }
+  }
+  if (availability === 'offered') {
+    return { kind: 'connected', connection: { accountId, client: current, isCurrent } }
+  }
+  return availability === 'unavailable'
+    ? { kind: 'unreachable', accountId }
+    : { kind: 'signed-out' }
 }

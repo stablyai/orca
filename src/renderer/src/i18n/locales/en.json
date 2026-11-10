@@ -27508,7 +27508,9 @@
       "retry": "Try again",
       "staleCopy": "Your Orca account has an older copy. Cloud workspaces still use it.",
       "updateLabel": "Update {{name}} in your Orca account",
-      "update": "Update your Orca account"
+      "update": "Update your Orca account",
+      "unreachable": "Can’t reach your Orca account right now",
+      "unreachableDetail": "Showing the last known state. Keys you save now go to your Orca account when Orca is back."
     },
     "remove": {
       "confirmLabel": "Remove {{name}}",

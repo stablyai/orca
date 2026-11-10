@@ -2,8 +2,6 @@
 // secret of the same variable. Cloud secrets are write-only, so this is one way (desktop → account),
 // and a key removed here leaves the account copy alone unless this computer wrote it and the user
 // confirms. The ledger records which variables this computer wrote, per account; it holds no values.
-import { readFile } from 'node:fs/promises'
-import { writeSecureFile } from '../../shared/secure-storage/secure-file'
 import type { AgentApiKeySummary } from '../../shared/agent-api-keys/agent-api-key-catalog'
 import {
   agentApiKeyCloudEligible,
@@ -16,6 +14,13 @@ import {
   cloudSecretsFailureCode,
   type CloudSecretsClient
 } from '../cloud-secrets/cloud-secrets-client'
+import {
+  CloudKeyLedger,
+  namesWrittenBy,
+  pendingOf,
+  type LedgerEntry,
+  type LedgerFile
+} from './agent-api-key-cloud-ledger'
 
 /** The signed-in account that can hold personal Cloud secrets, or null (signed out, no Cloud). */
 export type AgentApiKeyCloudConnection = {
@@ -25,137 +30,116 @@ export type AgentApiKeyCloudConnection = {
   isCurrent: () => boolean
 }
 
-type LedgerEntry = {
-  /** The vault key whose value was written. */
-  keyId: string
-  /** That key's `updatedAt` when it was written, so a later edit that failed to sync isn't "synced". */
-  keyUpdatedAt: number
-  syncedAt: number
-}
+/**
+ * Where the desktop stands with the Orca account. `unreachable`: signed in, but Orca can't be
+ * reached now (offline, or the session refresh failed); rows keep their last-known state.
+ */
+export type AgentApiKeyCloudLink =
+  | { kind: 'connected'; connection: AgentApiKeyCloudConnection }
+  | { kind: 'unreachable'; accountId: string }
+  | { kind: 'signed-out' }
 
-type LedgerFile = {
-  version: 1
-  /** accountId → variable → what this computer wrote there. */
-  accounts: Record<string, Record<string, LedgerEntry>>
-}
+/** Failures worth retrying on their own; anything else needs the user. */
+const TRANSIENT: ReadonlySet<CloudSecretsErrorCode> = new Set([
+  'unavailable',
+  'timeout',
+  'unknown',
+  'unauthorized'
+])
 
-const MAX_LEDGER_BYTES = 256 * 1024
 const PERSONAL = { scope: 'personal' } as const
-
-function isEntry(value: unknown): value is LedgerEntry {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'keyId' in value &&
-    'keyUpdatedAt' in value &&
-    'syncedAt' in value &&
-    typeof value.keyId === 'string' &&
-    typeof value.keyUpdatedAt === 'number' &&
-    typeof value.syncedAt === 'number'
-  )
-}
-
-function parseLedger(text: string): LedgerFile {
-  const ledger: LedgerFile = { version: 1, accounts: {} }
-  if (text.length > MAX_LEDGER_BYTES) {
-    return ledger
-  }
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(text)
-  } catch {
-    return ledger
-  }
-  if (
-    typeof parsed !== 'object' ||
-    parsed === null ||
-    !('version' in parsed) ||
-    parsed.version !== 1 ||
-    !('accounts' in parsed) ||
-    typeof parsed.accounts !== 'object' ||
-    parsed.accounts === null
-  ) {
-    return ledger
-  }
-  for (const [accountId, names] of Object.entries(parsed.accounts)) {
-    if (typeof names !== 'object' || names === null) {
-      continue
-    }
-    const kept: Record<string, LedgerEntry> = {}
-    for (const [name, entry] of Object.entries(names)) {
-      if (isEntry(entry)) {
-        kept[name] = entry
-      }
-    }
-    ledger.accounts[accountId] = kept
-  }
-  return ledger
-}
 
 export type AgentApiKeyCloudSyncOptions = {
   ledgerPath: string
-  /** Null when signed out of Orca or Orca Cloud isn't offered: keys then stay on this computer. */
-  connection: () => Promise<AgentApiKeyCloudConnection | null>
+  /** Signed out (or no Orca Cloud): keys stay on this computer. */
+  link: () => Promise<AgentApiKeyCloudLink>
   /** Unseals one vault key for a single write. */
   valueOf: (keyId: string) => Promise<string | null>
   /** The vault's keys now, to tell whether another key owns a variable's account copy. */
   listKeys: () => Promise<AgentApiKeySummary[]>
+  /** Called when something now waits on Orca (it's unreachable, or a save is pending). */
+  onWaiting?: () => void
   now?: () => number
 }
 
-/** The variables `keyId` wrote to the account (more than one after a rename). */
-function namesWrittenBy(names: Record<string, LedgerEntry>, keyId: string): string[] {
-  return Object.entries(names)
-    .filter(([, entry]) => entry.keyId === keyId)
-    .map(([name]) => name)
-}
-
 export class AgentApiKeyCloudSync {
-  private cached: LedgerFile | null = null
+  private readonly book: CloudKeyLedger
 
-  constructor(private readonly options: AgentApiKeyCloudSyncOptions) {}
+  constructor(private readonly options: AgentApiKeyCloudSyncOptions) {
+    this.book = new CloudKeyLedger(options.ledgerPath)
+  }
 
   private now(): number {
     return this.options.now?.() ?? Date.now()
   }
 
-  private async ledger(): Promise<LedgerFile> {
-    if (this.cached) {
-      return this.cached
-    }
-    let text = ''
-    try {
-      text = await readFile(this.options.ledgerPath, 'utf8')
-    } catch {
-      // Missing or unreadable: nothing was synced from here that we can prove, so remove nothing.
-    }
-    return (this.cached = parseLedger(text))
+  private ledger(): Promise<LedgerFile> {
+    return this.book.read()
   }
 
-  private async setNames(accountId: string, names: Record<string, LedgerEntry>): Promise<void> {
-    const ledger = await this.ledger()
-    const next: LedgerFile = { ...ledger, accounts: { ...ledger.accounts, [accountId]: names } }
-    writeSecureFile(this.options.ledgerPath, JSON.stringify(next, null, 2))
-    this.cached = next
+  private setNames(accountId: string, names: Record<string, LedgerEntry>): Promise<void> {
+    return this.book.setNames(accountId, names)
+  }
+
+  private async setPending(
+    accountId: string,
+    keyId: string,
+    updatedAt: number | null
+  ): Promise<void> {
+    if (await this.book.setPending(accountId, keyId, updatedAt)) {
+      this.options.onWaiting?.()
+    }
+  }
+
+  /** The last link seen, so the reconnect check costs nothing while there's nothing to wait for. */
+  lastLink: AgentApiKeyCloudLink['kind'] | null = null
+
+  private async link(): Promise<AgentApiKeyCloudLink> {
+    let link: AgentApiKeyCloudLink
+    try {
+      link = await this.options.link()
+    } catch {
+      link = { kind: 'signed-out' }
+    }
+    this.lastLink = link.kind
+    if (link.kind === 'unreachable') {
+      this.options.onWaiting?.()
+    }
+    return link
   }
 
   private async connection(): Promise<AgentApiKeyCloudConnection | null> {
-    try {
-      return await this.options.connection()
-    } catch {
-      return null
-    }
+    const link = await this.link()
+    return link.kind === 'connected' ? link.connection : null
+  }
+
+  /** Saves waiting to reach the account, for any account (cheap: the ledger is cached). */
+  hasPending(): boolean {
+    return this.book.hasPending()
   }
 
   async state(keys: readonly AgentApiKeySummary[]): Promise<AgentApiKeysCloudState> {
-    const connection = await this.connection()
-    if (!connection) {
+    const link = await this.link()
+    if (link.kind === 'signed-out') {
       return { signedIn: false, synced: [], managed: [] }
     }
-    const names = (await this.ledger()).accounts[connection.accountId] ?? {}
+    const accountId = link.kind === 'connected' ? link.connection.accountId : link.accountId
+    const ledger = await this.ledger()
+    if (link.kind === 'unreachable' && !ledger.accounts[accountId]) {
+      // Never connected from here: nothing known to show, so this reads as signed out.
+      return { signedIn: false, synced: [], managed: [] }
+    }
+    if (link.kind === 'connected' && !ledger.accounts[accountId]) {
+      // Remember the account was connected, so a later offline spell shows its last-known state.
+      await this.setNames(accountId, {})
+    }
+    const names = (await this.ledger()).accounts[accountId] ?? {}
+    const pending = (await this.ledger()).pending?.[accountId] ?? {}
     const managed = keys.filter((key) => namesWrittenBy(names, key.id).length > 0)
     return {
       signedIn: true,
+      ...(link.kind === 'unreachable' ? { unreachable: true } : {}),
+      ...pendingOf(keys, pending),
       managed: managed.map((key) => key.id),
       synced: managed
         .filter((key) => {
@@ -180,8 +164,8 @@ export class AgentApiKeyCloudSync {
     key: AgentApiKeySummary,
     { replace = false }: { replace?: boolean } = {}
   ): Promise<AgentApiKeyCloudOutcome> {
-    const connection = await this.connection()
-    if (!connection || key.hostScope.kind !== 'all') {
+    const link = await this.link()
+    if (link.kind === 'signed-out' || key.hostScope.kind !== 'all') {
       return { kind: 'skipped' }
     }
     const failed = (error: CloudSecretsErrorCode): AgentApiKeyCloudOutcome => ({
@@ -192,6 +176,22 @@ export class AgentApiKeyCloudSync {
     if (!agentApiKeyCloudEligible(key)) {
       return failed('not_swappable')
     }
+    if (link.kind === 'unreachable') {
+      // Saved while signed in: it goes to the account as soon as Orca is reachable again.
+      if ((await this.ledger()).accounts[link.accountId]) {
+        await this.setPending(link.accountId, key.id, key.updatedAt)
+      }
+      return failed('unavailable')
+    }
+    const { connection } = link
+    const retryLater = async (error: CloudSecretsErrorCode): Promise<AgentApiKeyCloudOutcome> => {
+      await this.setPending(
+        connection.accountId,
+        key.id,
+        TRANSIENT.has(error) ? key.updatedAt : null
+      )
+      return failed(error)
+    }
     const owner = (await this.ledger()).accounts[connection.accountId]?.[key.envName]?.keyId
     if (
       !replace &&
@@ -199,7 +199,7 @@ export class AgentApiKeyCloudSync {
       owner !== key.id &&
       (await this.options.listKeys()).some((other) => other.id === owner)
     ) {
-      return failed('desktop_key_conflict')
+      return retryLater('desktop_key_conflict')
     }
     const value = await this.options.valueOf(key.id)
     if (!value) {
@@ -212,7 +212,7 @@ export class AgentApiKeyCloudSync {
     try {
       await connection.client.put(PERSONAL, key.envName, value)
     } catch (error) {
-      return failed(logged('save', cloudSecretsFailureCode(error)))
+      return retryLater(logged('save', cloudSecretsFailureCode(error)))
     }
     // A sign-in or account switch mid-write: the token may have been another account's, so this
     // computer can't claim the variable (and must never later delete it on that claim).
@@ -222,7 +222,36 @@ export class AgentApiKeyCloudSync {
     const names = { ...(await this.ledger()).accounts[connection.accountId] }
     names[key.envName] = { keyId: key.id, keyUpdatedAt: key.updatedAt, syncedAt: this.now() }
     await this.setNames(connection.accountId, names)
+    await this.setPending(connection.accountId, key.id, null)
     return { kind: 'synced' }
+  }
+
+  /**
+   * Retries saves the user made while signed in that haven't reached the account. Only those keys,
+   * only at the version that was saved: a key edited, rescoped or removed since is dropped.
+   * Returns whether anything changed.
+   */
+  async flushPending(): Promise<boolean> {
+    const connection = await this.connection()
+    const pending = connection ? (await this.ledger()).pending?.[connection.accountId] : undefined
+    if (!connection || !pending || Object.keys(pending).length === 0) {
+      return false
+    }
+    const keys = await this.options.listKeys()
+    let changed = false
+    for (const [keyId, updatedAt] of Object.entries(pending)) {
+      const key = keys.find((entry) => entry.id === keyId)
+      if (!key || key.updatedAt !== updatedAt || !agentApiKeyCloudEligible(key)) {
+        await this.setPending(connection.accountId, keyId, null)
+        continue
+      }
+      const outcome = await this.push(key)
+      changed ||= outcome.kind === 'synced'
+      if (outcome.kind === 'failed' && TRANSIENT.has(outcome.error)) {
+        break // Still unreachable: try again on the next check.
+      }
+    }
+    return changed
   }
 
   /** Records a write of `key` made elsewhere (the cloud workspace setup's "Save to your Orca account"). */
@@ -288,6 +317,7 @@ export class AgentApiKeyCloudSync {
           Object.entries(names).filter(([, entry]) => entry.keyId !== key.id)
         )
         await this.setNames(connection.accountId, rest)
+        await this.setPending(connection.accountId, key.id, null)
       }
     }
   }

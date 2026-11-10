@@ -71,7 +71,8 @@ function KeyLine({
   cloudFailure,
   onEdit,
   onRemove,
-  onSaveToAccount
+  onSaveToAccount,
+  initiallyConfirming = false
 }: {
   apiKey: AgentApiKeySummary
   hosts: readonly AgentApiKeyHostChoice[]
@@ -81,9 +82,10 @@ function KeyLine({
   onEdit: () => void
   onRemove: (fromAccount: boolean) => Promise<void>
   onSaveToAccount: () => Promise<CloudSecretsErrorCode | null>
+  initiallyConfirming?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const [confirming, setConfirming] = useState(false)
+  const [confirming, setConfirming] = useState(initiallyConfirming)
   const asksAboutAccount = agentApiKeyRemoveAsksAboutAccount(apiKey, cloud)
   return (
     <li className="group space-y-1 rounded-md px-2 py-1.5 hover:bg-accent/40">
@@ -153,6 +155,7 @@ function KeyLine({
         <AgentApiKeyCloudLine
           envName={apiKey.envName}
           state={agentApiKeyCloudRowState(apiKey, cloud)}
+          offline={cloud?.unreachable === true}
           canSave={agentApiKeyCloudEligible(apiKey)}
           failure={cloudFailure}
           onSaveToAccount={onSaveToAccount}
@@ -166,7 +169,8 @@ export function AgentApiKeysPane({
   model,
   hosts,
   initiallyEditing = null,
-  initialImport = null
+  initialImport = null,
+  initiallyRemoving = null
 }: {
   model: AgentApiKeysModel
   hosts: readonly AgentApiKeyHostChoice[]
@@ -174,6 +178,8 @@ export function AgentApiKeysPane({
   initiallyEditing?: Editing
   /** Fixtures: open "Import from this Mac" in a given state. */
   initialImport?: ImportScanState | null
+  /** Fixtures: a key whose remove prompt starts open. */
+  initiallyRemoving?: string | null
 }): React.JSX.Element {
   const t = useTranslate()
   const [editing, setEditing] = useState<Editing>(initiallyEditing)
@@ -245,7 +251,11 @@ export function AgentApiKeysPane({
         </div>
       ) : null}
 
-      <AgentApiKeysNotice failure={failure} notice={notice} />
+      <AgentApiKeysNotice
+        failure={failure}
+        notice={notice}
+        unreachable={model.state?.cloud?.unreachable === true}
+      />
 
       <SettingsGroup bodyClassName="px-0">
         {agents.map((agent) => {
@@ -301,6 +311,7 @@ export function AgentApiKeysPane({
                       <KeyLine
                         key={apiKey.id}
                         apiKey={apiKey}
+                        initiallyConfirming={initiallyRemoving === apiKey.id}
                         hosts={hosts}
                         canEdit={canEdit}
                         cloud={cloud}
