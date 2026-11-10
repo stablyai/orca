@@ -40,4 +40,4 @@ Use the [device checklist](device-testing.md) for device acceptance. A physical 
 
 The Agents list keeps local and SSH workspaces separate when their raw workspace IDs collide. The shared desktop session inventory and terminal subscriptions still key sessions by the raw workspace ID, so ambiguous rows stay visible and block pane navigation. Delegated runtimes require a separate capability for activity writes.
 
-The official gateway limitation prevents terminated-app notification parity. The maintainer-owned AppGallery Connect project, app identity, signing and Huawei Push Kit credentials belong to the production release. The local debug package uses the contributor's development bundle ID and supports online notifications.
+The official gateway limitation prevents terminated-app notification parity. The maintainer-owned AppGallery Connect project, app identity, signing and Huawei Push Kit credentials belong to the production release. The source defaults to an example bundle ID for the emulator. A signed debug package uses the local developer's provisioned bundle ID and supports online notifications.

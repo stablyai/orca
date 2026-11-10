@@ -1,7 +1,7 @@
 {
   app: {
-    bundleName: 'com.jsy.orca.mobile',
-    vendor: 'jsy',
+    bundleName: 'org.example.orca.harmonyos',
+    vendor: 'Orca',
     versionCode: 1000000,
     versionName: '0.1.0',
     icon: '$media:app_icon',

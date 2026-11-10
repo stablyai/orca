@@ -18,8 +18,8 @@ bash tools/build.sh --clean
 ## Physical-device signing
 
 1. Open the project in DevEco Studio and connect an API 26 HarmonyOS device with developer mode and USB debugging enabled.
-2. Keep the current `AppScope/app.json5` bundle ID unless you also update the corresponding Huawei signing profile. This prototype's ID is a development identity, not an official release application.
-3. Open Project Structure → Signing Configs, sign in to your Huawei account and enable automatic signing for the connected device. DevEco writes the ignored local `build-profile.json5`.
+2. Run `node tools/configure-build.mjs` if the ignored `build-profile.json5` is missing. Set `bundleName` on the `app.products` entry named `default` to match your development provisioning profile. For an existing test install, use its bundle name and signing profile to keep the same app identity. The checked-in `AppScope/app.json5` uses an example identity for unsigned emulator builds.
+3. Open Project Structure → Signing Configs, sign in to your Huawei account and configure signing for the `default` product and connected device. DevEco stores signing settings in the ignored local `build-profile.json5`.
 4. Run `bash tools/build.sh --clean --require-signed`, then `bash tools/verify-hap.sh`.
 5. Verify the output's signing/profile and target device before installing. Signed HAPs may contain device provisioning data and belong in local artifacts, not in a source PR.
 

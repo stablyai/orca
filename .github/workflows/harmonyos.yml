@@ -4,6 +4,7 @@ on:
     paths:
       - 'mobile/harmonyos/**'
       - '.github/workflows/harmonyos.yml'
+      - '.gitattributes'
   workflow_dispatch:
 permissions:
   contents: read

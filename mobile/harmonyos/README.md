@@ -12,7 +12,7 @@ node tools/check.mjs
 bash tools/build.sh --clean
 ```
 
-`build-profile.example.json5` is the unsigned, committed template. `build-profile.json5` is local and ignored; the configure command never overwrites an existing signing configuration. For a physical device, use DevEco Studio's automatic signing with your own Huawei account, bundle ID and registered device, then run:
+`build-profile.example.json5` is the unsigned, committed template. `build-profile.json5` is local and ignored. The configure command preserves existing signing settings. For a physical device, set the `default` product's `bundleName` in the local profile to match your development provisioning profile. Configure signing for that product in DevEco Studio, then run:
 
 ```bash
 bash tools/build.sh --clean --require-signed
