@@ -84,7 +84,7 @@ describe('agent-update-service', () => {
     ])
 
     checkAgentUpdates.mockResolvedValue(checked([]))
-    vi.setSystemTime(new Date('2026-11-09T13:00:01Z'))
+    vi.setSystemTime(new Date('2026-11-09T15:00:01Z'))
     const rechecked = await service.refreshAgentUpdates(SETTINGS)
 
     expect(checkAgentUpdates).toHaveBeenCalledTimes(2)
@@ -96,7 +96,7 @@ describe('agent-update-service', () => {
     checkAgentUpdates.mockResolvedValueOnce(checked([row('claude', '2.1.319', '2.1.320')]))
     runAgentUpdate.mockResolvedValue({ status: 'done', version: '2.1.320' })
     await service.refreshAgentUpdates(SETTINGS)
-    vi.setSystemTime(new Date('2026-11-09T13:00:01Z'))
+    vi.setSystemTime(new Date('2026-11-09T15:00:01Z'))
     let finishCheck: (result: ReturnType<typeof checked>) => void = () => {}
     checkAgentUpdates.mockReturnValueOnce(
       new Promise((resolve) => {
@@ -137,12 +137,16 @@ describe('agent-update-service', () => {
     expect(service.getAgentUpdatesState().rows[0].run).toEqual({ state: 'done' })
   })
 
-  it('checks again inside the cache window when no release source was reachable', async () => {
+  it('waits an hour before checking again when no release source was reachable', async () => {
     const service = await loadService()
     checkAgentUpdates.mockResolvedValue({ rows: [], sourcesReachable: false })
     const offline = await service.refreshAgentUpdates(SETTINGS)
 
     vi.setSystemTime(new Date('2026-11-09T09:30:00Z'))
+    await service.refreshAgentUpdates(SETTINGS)
+    expect(checkAgentUpdates).toHaveBeenCalledTimes(1)
+
+    vi.setSystemTime(new Date('2026-11-09T10:00:01Z'))
     await service.refreshAgentUpdates(SETTINGS)
 
     expect(offline.checkedAt).toBeNull()
