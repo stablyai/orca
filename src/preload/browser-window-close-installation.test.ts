@@ -27,7 +27,7 @@ describe('browser window close guard', () => {
   it.each([true, false])('routes a close only from the top frame: %s', (isMainFrame) => {
     const sendToHost = vi.fn()
     const nativeClose = vi.fn()
-    const pageWindow = { close: nativeClose }
+    const pageWindow = { close: nativeClose, addEventListener: vi.fn() }
     const preload = buildSync({
       entryPoints: [fileURLToPath(new URL('./browser-guest.ts', import.meta.url))],
       bundle: true,
@@ -39,11 +39,12 @@ describe('browser window close guard', () => {
 
     runInNewContext(preload, {
       window: pageWindow,
+      document: { addEventListener: vi.fn() },
       process: { isMainFrame },
       require: (name: string) => {
         expect(name).toBe('electron')
         return {
-          ipcRenderer: { sendToHost },
+          ipcRenderer: { sendToHost, send: vi.fn(), on: vi.fn() },
           contextBridge: {
             executeInMainWorld: (script: {
               func: (requestClose: () => void) => void

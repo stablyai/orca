@@ -71,6 +71,7 @@ describe('browserManager page prompt routing', () => {
     const guest = {
       id: 107,
       isDestroyed: vi.fn(() => false),
+      isCrashed: vi.fn(() => false),
       isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       getURL: vi.fn(() => 'https://trusted.example/home'),
@@ -163,6 +164,7 @@ describe('browserManager page prompt routing', () => {
     const guest = {
       id: 109,
       isDestroyed: vi.fn(() => false),
+      isCrashed: vi.fn(() => false),
       isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       getURL: vi.fn(() => ''),

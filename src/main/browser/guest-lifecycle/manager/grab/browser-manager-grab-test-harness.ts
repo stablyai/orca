@@ -26,6 +26,7 @@ export function makeGuest(id: number, mocks: GrabTestMocks): Electron.WebContent
   return {
     id,
     isDestroyed: mocks.guestIsDestroyedMock,
+    isCrashed: vi.fn(() => false),
     isCurrentlyAudible: vi.fn(() => false),
     getType: vi.fn(() => 'webview'),
     setBackgroundThrottling: mocks.guestSetBackgroundThrottlingMock,

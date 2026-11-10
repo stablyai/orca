@@ -81,6 +81,7 @@ describe('browserManager', () => {
     const guest = {
       id: 144,
       isDestroyed: vi.fn(() => false),
+      isCrashed: vi.fn(() => false),
       isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
@@ -168,6 +169,7 @@ describe('browserManager', () => {
     const guest = {
       id: 150,
       isDestroyed: vi.fn(() => false),
+      isCrashed: vi.fn(() => false),
       isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
@@ -209,6 +211,7 @@ describe('browserManager', () => {
       const child = {
         id: 1500 + index,
         isDestroyed: vi.fn(() => false),
+        isCrashed: vi.fn(() => false),
         isCurrentlyAudible: vi.fn(() => false),
         getType: vi.fn(() => 'webview'),
         setBackgroundThrottling: vi.fn(),

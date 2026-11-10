@@ -86,6 +86,7 @@ describe('browserManager', () => {
     const guest = {
       id: 1711,
       isDestroyed: vi.fn(() => false),
+      isCrashed: vi.fn(() => false),
       isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: vi.fn(),
@@ -143,6 +144,7 @@ describe('browserManager', () => {
     const makeGuest = (id: number) => ({
       id,
       isDestroyed: vi.fn(() => false),
+      isCrashed: vi.fn(() => false),
       isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: vi.fn(),

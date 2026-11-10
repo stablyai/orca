@@ -80,11 +80,13 @@ function openTab(url: string): { tab: string; id: number; handle: ViewportGuestH
 }
 
 function navigate(url: string, { inPlace = false } = {}): void {
-  const didStartNavigation = mocks.guestOnMock.mock.calls.findLast(
+  const didStartNavigation = mocks.guestOnMock.mock.calls.filter(
     ([event]) => event === 'did-start-navigation'
-  )?.[1]
-  expect(didStartNavigation).toBeTypeOf('function')
-  didStartNavigation(null, url, inPlace, true)
+  )
+  expect(didStartNavigation.length).toBeGreaterThan(0)
+  for (const [, listener] of didStartNavigation) {
+    listener({ url, isSameDocument: inPlace, isMainFrame: true }, url, inPlace, true)
+  }
 }
 
 function failDeviceMetrics(handle: ViewportGuestHandle): void {
