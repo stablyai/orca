@@ -1,5 +1,8 @@
-import { mutateStoredHosts } from './host-list-mutation-queue'
-import { withReportedDescriptor, type ReportedHostDescriptor } from './host-name-identity'
+import { mutateStoredHosts } from '../host-catalog/host-list-mutation-queue'
+import {
+  withReportedDescriptor,
+  type ReportedHostDescriptor
+} from '../host-catalog/host-name-identity'
 
 // Keep authenticated descriptor upkeep best-effort; older hosts omitting both fields must not churn stored rows.
 export async function updateHostDescriptor(

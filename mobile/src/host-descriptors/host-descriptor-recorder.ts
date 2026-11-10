@@ -1,7 +1,7 @@
 import { recordHostDescriptor } from './host-descriptor-store'
-import './host-store'
+import '../host-catalog/host-store'
 import { updateHostDescriptor } from './host-descriptor-persistence'
-import type { HostStatusReply } from './host-status-reply-schema'
+import type { HostStatusReply } from '../transport/hosts/host-status-reply-schema'
 
 // Update live rows and persisted last-known descriptors together; best-effort bookkeeping must never gate connection.
 export function recordHostDescriptorFromStatus(hostId: string, status: HostStatusReply): void {

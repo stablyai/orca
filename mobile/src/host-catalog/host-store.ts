@@ -1,4 +1,4 @@
-import type { MobileRelayEndpoint } from '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
+import type { MobileRelayEndpoint } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { HostProfileSchema } from './host-profile'
 import type { HostCatalogEntry, HostProfile, StoredHostProfile } from './host-profile'
 
@@ -6,27 +6,30 @@ import { getNextHostNameFromHosts } from './host-names'
 import { mergeHostNameIdentity, withPersonalName } from './host-name-identity'
 import * as hostListLoads from './host-list-load-sharing'
 import { joinHostCatalogCredentials } from './host-catalog-credential-join'
-import { resetPairingKeychainForTests } from './pairing-keychain'
-import { readHostDeviceToken, writeHostDeviceToken } from './host-device-token-store'
+import { resetPairingKeychainForTests } from '../host-credentials/pairing-keychain'
+import {
+  readHostDeviceToken,
+  writeHostDeviceToken
+} from '../host-credentials/host-device-token-store'
 import {
   cancelPendingHostCredentialCleanup,
   recordHostCredentialCleanupIntent,
   retryPendingHostCredentialCleanups,
   scheduleHostCredentialCleanup
-} from './host-credential-cleanup'
+} from '../host-credentials/host-credential-cleanup'
 import {
   loadMobileRelayHostRoutingState,
   removeMobileRelayHostRouting,
   removeMobileRelayHostRoutings,
   saveMobileRelayHostRouting
 } from './mobile-relay-host-overlay-store'
-import { scheduleOrphanedMobileRelayCleanup } from '../relay/mobile-relay-orphan-cleanup'
+import { scheduleOrphanedMobileRelayCleanup } from '../transport/relay/mobile-relay-orphan-cleanup'
 import {
   getHostCredentialWriteRevision,
   markHostCredentialWrite,
   resetHostCredentialWriteRevisionsForTests
-} from './host-credential-write-revision'
-import { createUnpairedHostCredentialDeletion } from '../../pairing/unpaired-host-credential-deletion'
+} from '../host-credentials/host-credential-write-revision'
+import { createUnpairedHostCredentialDeletion } from '../pairing/unpaired-host-credential-deletion'
 import {
   loadStoredHostProfiles,
   readStoredHostProfilesForMutation,
@@ -148,7 +151,7 @@ function removeOrphanOverlayIfUnpaired(hostId: string): Promise<void> {
   })
 }
 
-import './host-descriptor-persistence'
+import '../host-descriptors/host-descriptor-persistence'
 
 export class RelayRoutingHostRemovedError extends Error {}
 
@@ -313,22 +316,6 @@ export async function updateHostNameAndEndpoint(
     next[index] = updated
     return next
   })
-}
-
-export async function updateLastConnected(hostId: string): Promise<void> {
-  try {
-    await mutateStoredHosts((hosts) => {
-      const index = hosts.findIndex((h) => h.id === hostId)
-      if (index === -1) {
-        return hosts
-      }
-      const next = hosts.slice()
-      next[index] = { ...next[index]!, lastConnected: Date.now() }
-      return next
-    })
-  } catch {
-    // Swallow bookkeeping failures because void callers cannot catch them.
-  }
 }
 
 export function resetHostStoreForTests(): void {

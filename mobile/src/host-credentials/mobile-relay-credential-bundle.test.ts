@@ -19,7 +19,7 @@ vi.mock('expo-secure-store', () => ({
 vi.mock('react-native', () => ({ Platform: platform }))
 
 import { promotePairingJournalCredential } from './mobile-relay-credential-bundle'
-import type { MobileRelayPairingJournal } from '../../pairing/mobile-relay-pairing-journal'
+import type { MobileRelayPairingJournal } from '../pairing/mobile-relay-pairing-journal'
 import { resetPairingKeychainForTests } from './pairing-keychain'
 
 const journal = {

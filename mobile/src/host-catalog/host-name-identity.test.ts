@@ -25,7 +25,7 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'ios' }
 }))
 
-vi.mock('./host-credential-cleanup', () => ({
+vi.mock('../host-credentials/host-credential-cleanup', () => ({
   cancelPendingHostCredentialCleanup: vi.fn().mockResolvedValue(undefined),
   recordHostCredentialCleanupIntent: vi.fn().mockResolvedValue(undefined),
   scheduleHostCredentialCleanup: vi.fn().mockResolvedValue(undefined),
@@ -38,7 +38,7 @@ import {
   savePairedHost,
   updateHostNameAndEndpoint
 } from './host-store'
-import { updateHostDescriptor } from './host-descriptor-persistence'
+import { updateHostDescriptor } from '../host-descriptors/host-descriptor-persistence'
 import { resetMobileRelayHostOverlayStoreForTests } from './mobile-relay-host-overlay-store'
 import { StoredHostProfileSchema, type StoredHostProfile } from './host-profile'
 

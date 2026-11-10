@@ -1,5 +1,5 @@
-import '../../mobile-web-shell/bridge/page-host-profile'
-import type { ReportedHostDescriptor } from './host-name-identity'
+import '../mobile-web-shell/bridge/page-host-profile'
+import type { ReportedHostDescriptor } from '../host-catalog/host-name-identity'
 
 // Last-known descriptors belong to the native host list.
 export function updateHostDescriptor(

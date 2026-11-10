@@ -1,6 +1,6 @@
 import { GENERATED_HOST_NAME_PATTERN, getNextHostNameFromHosts } from './host-names'
 import type { StoredHostProfile } from './host-profile'
-import { sameHostMachine, type HostMachine } from '../../../../src/shared/host-machine-line'
+import { sameHostMachine, type HostMachine } from '../../../src/shared/host-machine-line'
 
 // Resolve name identity inside host-store’s serialized mutation so display name and sources commit together; see withReportedDescriptor’s omission exception.
 
