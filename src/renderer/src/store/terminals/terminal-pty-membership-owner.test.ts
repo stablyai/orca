@@ -174,9 +174,10 @@ describe('live retirement ownership', () => {
       expect(plan('a').sharedPtyIds).toEqual(['remote:a@@same'])
       expect(plan('b').sharedPtyIds).toEqual([])
       store.setState((state) => ({
-        worktreesByRepo: replaceRecordEntries(state.worktreesByRepo, [
-          ['repo', [{ ...holder, hostId: 'runtime:b' }]]
-        ])
+        worktreesByRepo: replaceRecordEntries<AppState['worktreesByRepo'][string]>(
+          state.worktreesByRepo,
+          [['repo', [{ ...holder, hostId: 'runtime:b' }]]]
+        )
       }))
       expect(plan('a').sharedPtyIds).toEqual(['remote:a@@same'])
       expect(plan('b').sharedPtyIds).toEqual(['remote:b@@same'])

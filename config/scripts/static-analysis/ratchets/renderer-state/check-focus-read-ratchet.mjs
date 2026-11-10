@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
+import { omitFocusInvalidationReaderUses } from './focus-invalidation-observer.mjs'
 import {
   diffCounts,
   parseCountBaseline,
@@ -371,7 +372,11 @@ export function collectCurrentCounts(root = process.cwd()) {
     if (!rel.startsWith(`${SCAN_ROOT}/`)) {
       continue
     }
-    const found = countFocusSettingReads(source, readers.namesFor(rel), readers.memberNames)
+    const found = countFocusSettingReads(
+      omitFocusInvalidationReaderUses(rel, source),
+      readers.namesFor(rel),
+      readers.memberNames
+    )
     if (found > 0) {
       counts.set(rel, found)
     }
