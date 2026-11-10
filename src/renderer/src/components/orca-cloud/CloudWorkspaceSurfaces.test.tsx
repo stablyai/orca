@@ -150,6 +150,52 @@ describe('Orca Cloud surfaces', () => {
     expect(queryByRole('button', { name: 'Try again' })).not.toBeNull()
   })
 
+  it('type-through: slow at 10 s with the reassurance, Connecting… once up, keys waiting in plural', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(T0)
+    const wake = {
+      workspaceId: 'ws',
+      phase: 'waking' as const,
+      source: 'open' as const,
+      startedAt: T0 - 9_000,
+      at: T0
+    }
+    const props = {
+      workspaceName: 'w',
+      autoFocus: false,
+      typeThrough: true,
+      onRetry: noop,
+      onRestart: noop,
+      onDismiss: noop
+    }
+    const { container, queryByRole, rerender } = render(
+      <CloudWakingOverlay wake={wake} pendingInput={1} {...props} />
+    )
+    expect(container.textContent).not.toContain('Taking longer')
+    expect(container.textContent).toContain('1 key waiting · it goes to the terminal when it’s up')
+    rerender(
+      <CloudWakingOverlay wake={{ ...wake, startedAt: T0 - 10_000 }} pendingInput={12} {...props} />
+    )
+    expect(container.textContent).toContain(
+      'Taking longer than usual. Your files and chats are safe.'
+    )
+    expect(container.textContent).toContain(
+      '12 keys waiting · they go to the terminal when it’s up'
+    )
+    // Still the pill (no skeleton cover), and recovery only once stuck.
+    expect(container.querySelector('[data-cloud-waking-overlay]')?.className).toContain(
+      'justify-end'
+    )
+    expect(queryByRole('button', { name: 'Try again' })).toBeNull()
+    rerender(
+      <CloudWakingOverlay
+        wake={{ ...wake, phase: 'connecting', startedAt: T0 - 4_000 }}
+        {...props}
+      />
+    )
+    expect(container.textContent).toMatch(/Connecting…\s*4s/)
+  })
+
   it('a failed wake is a dismissible alert whose primary action is Try again', () => {
     const onRetry = vi.fn()
     const onDismiss = vi.fn()

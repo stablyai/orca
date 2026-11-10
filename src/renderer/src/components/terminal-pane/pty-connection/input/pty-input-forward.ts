@@ -25,6 +25,7 @@ import {
   rebindWakeInputTarget
 } from '../../input/wake-input-buffer'
 import { findColdRestoreResumeSource } from '../startup/cold-restore-resume-startup'
+import { registerWakePane } from '../../input/wake-pane-attach'
 
 export function installPtyInputForward(session: ConnectPanePtySession): void {
   session.forwardPtyInput = (data: string, wasUserInput = false): void => {
@@ -172,6 +173,14 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     return Boolean(transport?.isConnected() && (phase ?? 'connected') === 'connected')
   }
   rebindWakeInputTarget(session.deps.worktreeId, wakeInputKey, forwardUserInput, wakeInputReady)
+  // The waking pill stays until the pane in front is attached again (it can take keys then).
+  const unregisterWakePane = registerWakePane(session.deps.worktreeId, wakeInputKey, {
+    isReady: wakeInputReady,
+    isActive: () =>
+      !session.disposed &&
+      Boolean(session.deps.isActiveRef.current) &&
+      session.manager.getActivePane()?.id === session.pane.id
+  })
   // Typing is only held for shell panes: a woken agent pane relaunches the agent, and text typed
   // for the old screen must not become its prompt.
   const isAgentPane = (): boolean => {
@@ -182,36 +191,39 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     )
   }
   const forwardUnclassifiedInput = (data: string): void => session.forwardPtyInput(data, false)
-  session.onDataDisposable = subscribeToTerminalInputData(
-    session.pane.terminal,
-    (data, wasUserInput) => {
-      if (wasUserInput) {
-        noteUserInputForPane(wakeInputKey, Date.now(), session.deps.worktreeId)
-      }
-      // Typing into a workspace whose server is waking is accepted now and delivered, in order,
-      // once this pane is attached to the woken terminal.
-      if (
-        wasUserInput &&
-        hasWakeInput(session.deps.worktreeId) &&
-        !isAgentPane() &&
-        captureWakeInput(
-          session.deps.worktreeId,
-          wakeInputKey,
-          data,
-          forwardUserInput,
-          wakeInputReady
-        )
-      ) {
-        return
-      }
-      const forward = wasUserInput ? forwardUserInput : forwardUnclassifiedInput
-      if (session.deps.deferPtyInput) {
-        session.deps.deferPtyInput(session.pane.id, data, forward)
-        return
-      }
-      forward(data)
+  const inputData = subscribeToTerminalInputData(session.pane.terminal, (data, wasUserInput) => {
+    if (wasUserInput) {
+      noteUserInputForPane(wakeInputKey, Date.now(), session.deps.worktreeId)
     }
-  )
+    // Typing into a workspace whose server is waking is accepted now and delivered, in order,
+    // once this pane is attached to the woken terminal.
+    if (
+      wasUserInput &&
+      hasWakeInput(session.deps.worktreeId) &&
+      !isAgentPane() &&
+      captureWakeInput(
+        session.deps.worktreeId,
+        wakeInputKey,
+        data,
+        forwardUserInput,
+        wakeInputReady
+      )
+    ) {
+      return
+    }
+    const forward = wasUserInput ? forwardUserInput : forwardUnclassifiedInput
+    if (session.deps.deferPtyInput) {
+      session.deps.deferPtyInput(session.pane.id, data, forward)
+      return
+    }
+    forward(data)
+  })
+  session.onDataDisposable = {
+    dispose: () => {
+      unregisterWakePane()
+      inputData.dispose()
+    }
+  }
   session.imeCompositionRouteDisposable = installTerminalImeCompositionRoute({
     terminalElement: session.pane.terminal.element,
     terminal: session.pane.terminal,

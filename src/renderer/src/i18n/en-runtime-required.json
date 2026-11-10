@@ -2239,8 +2239,8 @@
     "idleSleptMinutes_one": "{{name}} slept after {{count}} minute idle",
     "idleSleptMinutes_other": "{{name}} slept after {{count}} minutes idle",
     "overlay": {
-      "pendingKeys_one": "{{count}} key waiting · goes to the terminal when it’s up",
-      "pendingKeys_other": "{{count}} keys waiting · go to the terminal when it’s up"
+      "pendingKeys_one": "{{count}} key waiting · it goes to the terminal when it’s up",
+      "pendingKeys_other": "{{count}} keys waiting · they go to the terminal when it’s up"
     }
   },
   "pet": {
