@@ -215,8 +215,8 @@ export function CloudAgentSetupFields({
             {...ids('model')}
             label={t('cloudAgentSetup.claudeModel', 'Claude model (optional)')}
             help={t(
-              'cloudAgentSetup.gatewayModelHint',
-              'Free gateway accounts can’t use anthropic/* models; try moonshotai/kimi-k2.'
+              'cloudAgentSetup.gatewayModelDefaultHint',
+              'Leave empty to use the gateway’s default model.'
             )}
             error={errorFor('model')}
           >

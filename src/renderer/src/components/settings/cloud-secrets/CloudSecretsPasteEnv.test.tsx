@@ -92,6 +92,14 @@ describe('CloudSecretsPasteEnv', () => {
     expect(nameInputs().map((input) => input.value)).toEqual(['C'])
   })
 
+  it('names every value field after its row, or its line while the name is empty', () => {
+    renderPaste('DATABASE_URL=postgres://db\nAPI_TOKEN=abc')
+    expect(screen.getByLabelText('Value for DATABASE_URL')).toBeTruthy()
+    expect(screen.getByLabelText('Value for API_TOKEN')).toBeTruthy()
+    fireEvent.change(nameInputs()[0], { target: { value: '' } })
+    expect(screen.getByLabelText('Value, line 1')).toBeTruthy()
+  })
+
   it('tells the user the paste field is paste only', () => {
     renderPaste('')
     expect(screen.getByRole('textbox').getAttribute('aria-describedby')).toContain('-hint')

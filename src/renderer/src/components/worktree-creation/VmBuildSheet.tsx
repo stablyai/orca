@@ -299,7 +299,7 @@ export function VmBuildSheet({
               onOpenBilling: () => {
                 const store = useAppStore.getState()
                 store.openSettingsTarget({
-                  pane: 'orca-account',
+                  pane: 'cloud-billing',
                   repoId: null,
                   // "Turn on overage" / "Raise spend cap" land on the overage card itself; the
                   // payment notice is at the top of the section already.

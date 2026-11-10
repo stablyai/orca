@@ -15,6 +15,11 @@ export const SETTINGS_NAV_GROUPS = [
   },
   { id: 'setup', titleKey: 'auto.components.settings.Settings.9abb9be3bc', titleDefault: 'Set Up' },
   {
+    id: 'orca-cloud',
+    titleKey: 'settings.groups.orcaCloud',
+    titleDefault: 'Orca Cloud'
+  },
+  {
     id: 'workflows',
     titleKey: 'auto.components.settings.Settings.e1578cd4bc',
     titleDefault: 'Workflows'

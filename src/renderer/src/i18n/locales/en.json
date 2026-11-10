@@ -1342,6 +1342,62 @@
       "settings": "Settings",
       "label": "Settings breadcrumb",
       "close": "Close settings"
+    },
+    "agentApiKeys": {
+      "descriptionCloudSecretsLink": "Keys here work on this computer and your SSH and paired hosts. To use a key in cloud workspaces, save it to your Orca account in <secrets>Cloud secrets</secrets>.",
+      "searchTitle": "Agent API keys",
+      "title": "Agent API keys",
+      "descriptionCloudSecrets": "Keys here work on this computer and your SSH and paired hosts. To use a key in cloud workspaces, save it to your Orca account in Cloud secrets."
+    },
+    "orcaCloud": {
+      "mcp": {
+        "loadFailed": "Couldn’t list your cloud workspaces",
+        "emptyTitle": "No cloud workspace is running",
+        "emptyBody": "MCP servers sync to a cloud workspace while it runs. Start or wake one to choose which servers it gets.",
+        "unnamed": "Cloud workspace",
+        "workspaceLabel": "MCP servers in {{name}}",
+        "searchDescription": "Choose which MCP servers from this computer sync to your cloud workspaces.",
+        "keywordMcp": "mcp",
+        "keywordSync": "sync",
+        "keywordCloud": "cloud",
+        "openFor": "MCP servers for {{name}}",
+        "description": "MCP servers from Claude Code and Codex on this computer, synced to your cloud workspaces."
+      },
+      "environments": {
+        "title": "Cloud environments",
+        "unavailable": "Cloud environments aren’t available for this account yet.",
+        "searchDescription": "Repositories and install script built into a snapshot, and waking cloud workspaces before you open them.",
+        "keywordSnapshot": "snapshot",
+        "keywordInstall": "install script",
+        "keywordWake": "wake",
+        "keywordSandbox": "sandbox"
+      },
+      "signedOut": {
+        "reconnectTitle": "Sign in again",
+        "body": "Orca Cloud settings belong to your Orca account. Sign in to manage them."
+      },
+      "team": {
+        "unavailable": "Teams aren’t available for this account yet.",
+        "searchDescription": "Members, invites and seats for your Orca Cloud team.",
+        "keywordMembers": "members",
+        "keywordInvite": "invite",
+        "keywordSeats": "seats"
+      },
+      "billing": {
+        "searchDescription": "Your Orca Cloud plan, sandbox hours, overage and payment.",
+        "keywordPlan": "plan",
+        "keywordBilling": "billing",
+        "keywordInvoice": "invoice",
+        "keywordUsage": "usage",
+        "keywordOverage": "overage",
+        "description": "Your Orca Cloud plan, sandbox hours and payment."
+      }
+    },
+    "groups": {
+      "orcaCloud": "Orca Cloud"
+    },
+    "orcaAccount": {
+      "descriptionWithCloud": "Sign-in, plan, team and Orca Cloud settings."
     }
   },
   "menu": {
@@ -14229,14 +14285,12 @@
           "addKey": "Add key",
           "anotherAgent": "Add a key for another agent",
           "search": {
-            "title": "Agent API Keys",
             "description": "Give agents an API key on every host or only some, without signing in on each machine.",
             "apiKey": "api key",
             "secret": "secret",
             "env": "environment",
             "bedrock": "bedrock"
           },
-          "title": "Agent API Keys",
           "description": "Optional. Give an agent an API key on every host, or only some, instead of signing in on each machine."
         },
         "ports": {
@@ -20752,7 +20806,8 @@
         "trialOneTime": "Trial hours are a one-time allowance and don’t reset. When they’re used up, choose a plan to keep going. No card needed until then.",
         "trialProduct": "Orca Cloud",
         "trialRowChoosePlan": "{{trial}}. Choose plan",
-        "trialUsedUpTitle": "Your trial is used up"
+        "trialUsedUpTitle": "Your trial is used up",
+        "unconfigured": "Billing isn’t available in this build of Orca."
       },
       "ports": {
         "RuntimePortAutoForwarder": {
@@ -26414,7 +26469,6 @@
       "memberAsk": "Ask an owner or admin to set it up."
     },
     "loading": "Loading environment…",
-    "title": "Cloud environment",
     "descriptionTeam": "Your team’s repos and install script, built once into a snapshot so every cloud workspace starts with dependencies installed.",
     "you": "You",
     "loadFailed": "Couldn’t load the cloud environment",
@@ -26736,7 +26790,6 @@
     "openaiKey": "OpenAI API key",
     "gatewayKey": "AI Gateway API key",
     "claudeModel": "Claude model (optional)",
-    "gatewayModelHint": "Free gateway accounts can’t use anthropic/* models; try moonshotai/kimi-k2.",
     "codexModel": "Codex model (optional)",
     "gatewayCodexHint": "A gateway model id, such as openai/gpt-5.",
     "baseUrl": "Base URL",
@@ -26782,7 +26835,6 @@
     "composerHint": "Claude and Codex need access in Orca Cloud. Add it now, or sign in once the workspace starts.",
     "later": "Later",
     "skippedTitle": "Agent setup skipped",
-    "skippedDetail": "Set it up any time from Settings › Orca Account › Cloud secrets.",
     "signInPending": "Agent sign-in",
     "signInPendingDetail": "Opens when the sandbox is ready. Keep Orca open until then.",
     "signInCancelled": "Sign-in cancelled",
@@ -26808,7 +26860,9 @@
       "failed": "Couldn’t save {{name}}. Nothing was changed.",
       "rowSaved": "{{agent}}: your API key ••••{{hint}}",
       "scopeNote": "Not used in Orca Cloud. Save a key to your Orca account to use it in cloud workspaces."
-    }
+    },
+    "gatewayModelDefaultHint": "Leave empty to use the gateway’s default model.",
+    "skippedDetailCloudGroup": "Set it up any time from Settings → Orca Cloud → Cloud secrets."
   },
   "cloudSecrets": {
     "editor": {
@@ -26923,7 +26977,9 @@
       "lineName": "line {{line}}",
       "skippedLine": "Line {{line}} · skipped",
       "renamed": "Renamed from {{name}}",
-      "normalized": "Spaces and dashes become underscores"
+      "normalized": "Spaces and dashes become underscores",
+      "valueLabel": "Value for {{name}}",
+      "valueLabelLine": "Value, line {{line}}"
     },
     "value": {
       "hide": "Hide value",
@@ -26960,7 +27016,9 @@
     "vm": {
       "badge": "Stored on workspace",
       "warning": "Orca can’t swap this key at the network edge, so cloud workspaces get the real value. Anything running in the workspace can read it."
-    }
+    },
+    "loading": "Loading cloud secrets…",
+    "unavailable": "Cloud secrets aren’t available for this account yet."
   },
   "cloudMcpSync": {
     "appliesEverywhere": "Applies to every cloud workspace",
