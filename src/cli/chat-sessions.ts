@@ -76,6 +76,7 @@ function messageText(item: AgentJournalRenderItem): string {
     .map((block) => (block.type === 'text' ? block.text : ''))
     .filter((text) => text.length > 0)
     .join('\n')
+    .trim()
 }
 
 /** The conversation as a reader follows it: messages, the tools the agent ran, and the
@@ -86,7 +87,8 @@ export function chatTranscript(items: readonly AgentJournalRenderItem[]): ChatTr
     const body = item.body
     if (body.kind === 'message') {
       const text = messageText(item)
-      if (text.length > 0) {
+      // Reasoning is the model's scratch work, folded away in the app too.
+      if (text.length > 0 && body.role !== 'reasoning') {
         entries.push({ kind: 'message', role: body.role, text })
       }
     } else if (body.kind === 'tool-call') {

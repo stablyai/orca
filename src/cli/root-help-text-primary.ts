@@ -124,6 +124,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  chat list                 List agent chats with their workspace, state and last reply',
   '  chat read                 Read the latest messages of an agent chat',
   '  chat send                 Send a message to an agent chat',
+  '  chat wait                 Wait until an agent chat finishes or needs your answer',
   '  chat rename               Rename a chat tab',
   '',
   'Files:',

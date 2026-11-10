@@ -42,15 +42,30 @@ export const CHAT_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['chat', 'send'],
     summary: 'Send a message to an agent chat',
-    usage: 'orca chat send --session <id-or-handle> --text <text> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'session', 'text'],
+    usage:
+      'orca chat send --session <id-or-handle> (--text <text> | --text-file <path|->) [--wait] [--timeout-ms <ms>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'session', 'text', 'text-file', 'wait', 'timeout-ms'],
     notes: [
-      'Sends the text as your message, as if typed in the chat.',
+      'Sends the text as your message, as if typed in the chat. --text-file - reads it from stdin.',
       'While the agent is working, hosts with a message queue hold the message until the turn ends; the result says "queued".',
+      '--wait returns once the chat finishes or waits for your answer, with what it did since your message. A wait that times out exits 1.',
       'A chat that restarted since it was read refuses the send; read it again and resend.'
     ],
     examples: [
-      'orca chat send --session codex_1234 --text "Run the tests, then summarize failures"'
+      'orca chat send --session codex_1234 --text "Run the tests, then summarize failures"',
+      'orca chat send --session codex_1234 --text "Run the tests" --wait --timeout-ms 600000 --json',
+      'cat notes.md | orca chat send --session codex_1234 --text-file -'
     ]
+  },
+  {
+    path: ['chat', 'wait'],
+    summary: 'Wait until an agent chat finishes or needs your answer',
+    usage: 'orca chat wait --session <id-or-handle> [--timeout-ms <ms>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'session', 'timeout-ms'],
+    notes: [
+      'Returns at once when the chat is idle. "waiting" means an approval or question needs an answer.',
+      'Prints what the chat did since the last user message. A wait that times out exits 1.'
+    ],
+    examples: ['orca chat wait --session codex_1234 --timeout-ms 600000 --json']
   }
 ]
