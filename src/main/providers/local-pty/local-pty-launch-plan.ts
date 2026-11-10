@@ -26,6 +26,20 @@ import { buildWindowsPowerShellSpawnAttempts } from '../windows-shell-fallback-c
 import { resolveWindowsShellLaunchArgs } from '../windows-shell-args'
 import { assertSafeAgentStartupCwd } from '../pty-default-cwd'
 import type { PtySpawnOptions } from '../pty-provider-contract'
+import { stripLegacyTerminalShimEnv } from '../../pty/shell-startup/legacy-terminal-shim-dir'
+
+/** The spawn PATH without the legacy shim dirs finalization strips, so pwsh never resolves from one. */
+function posixPwshResolverPath(env: Record<string, string> | undefined): string {
+  const scrubbed: Record<string, string> = {}
+  for (const key of ['PATH', 'ORCA_ATTRIBUTION_SHIM_DIR']) {
+    const value = env?.[key] ?? process.env[key]
+    if (value !== undefined) {
+      scrubbed[key] = value
+    }
+  }
+  stripLegacyTerminalShimEnv(scrubbed, process.platform)
+  return scrubbed.PATH ?? ''
+}
 
 type WslLaunchContext = { distro: string; treatPosixCwdAsWsl: true }
 type LocalPtyLaunchSeed = {
@@ -263,7 +277,7 @@ export function createLocalPtyLaunchPlan(
     })
   return needsPosixPaneShellResolution(requestedShellPath)
     ? new DeferredLocalPtyLaunchPlan(
-        resolvePosixPaneShellPath(requestedShellPath, args.env?.PATH),
+        resolvePosixPaneShellPath(requestedShellPath, posixPwshResolverPath(args.env)),
         finish
       )
     : finish(requestedShellPath)
