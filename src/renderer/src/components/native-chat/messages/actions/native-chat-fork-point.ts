@@ -6,7 +6,8 @@ import type { AgentJournalCursor } from '../../../../../../shared/agent-session/
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   nativeChatForkInventory,
-  nativeChatLatestForkItemId
+  nativeChatLatestForkItemId,
+  type NativeChatForkSupport
 } from '../../../../../../shared/native-chat/native-chat-fork-offer'
 
 /** The newest response still in context that a fork copies through; with `beforeItemId`, the newest
@@ -35,4 +36,26 @@ export function nativeChatForkPoint(
     ),
     forkableItemIds: nativeChatForkInventory(items).forkableItemIds
   })
+}
+
+/** The fork point offered from one of your own messages. A tip-only agent forks only its newest
+ *  reply, or, with original-resolution support, a reply copied from the chat it was forked from. */
+export function nativeChatUserForkPoint(
+  chat: Parameters<typeof nativeChatForkPoint>[0] & { support: NativeChatForkSupport },
+  beforeItemId: string
+): string | undefined {
+  const point = nativeChatForkPoint(chat, beforeItemId)
+  const { support, items } = chat
+  if (point === undefined || support.kind !== 'known' || support.fork !== 'tip') {
+    return point
+  }
+  if (point === nativeChatForkPoint(chat)) {
+    return point
+  }
+  const sequence = items.find((item) => item.itemId === point)?.sequence
+  return support.inheritedOriginal === true &&
+    sequence !== undefined &&
+    sequence <= nativeChatForkInventory(items).inheritedThroughSequence
+    ? point
+    : undefined
 }

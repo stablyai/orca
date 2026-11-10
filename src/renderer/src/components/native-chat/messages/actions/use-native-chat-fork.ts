@@ -35,7 +35,7 @@ import {
 } from '@/components/native-chat/messages/actions/native-chat-fork-launch'
 import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
 import type { NativeChatWorktreeForkMode } from './native-chat-worktree-fork'
-import { nativeChatForkPoint } from './native-chat-fork-point'
+import { nativeChatForkPoint, nativeChatUserForkPoint } from './native-chat-fork-point'
 import { useNativeChatWorktreeForkDialog } from './use-native-chat-worktree-fork-dialog'
 import { captureStructuredLaunchSurfaceAddress } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { beginNativeChatSideChatPlacement } from '@/components/native-chat/messages/actions/native-chat-side-chat-placement'
@@ -215,17 +215,11 @@ export function useNativeChatFork(input: {
     (): string | undefined => nativeChatForkPoint(latest.current),
     []
   )
-  const forkPointBefore = useCallback((messageItemId: string): string | undefined => {
-    const point = nativeChatForkPoint(latest.current, messageItemId)
-    const { support } = latest.current
-    // A tip-only agent forks only its newest reply, as response rows already offer it.
-    return support.kind === 'known' &&
-      support.fork === 'tip' &&
-      support.inheritedOriginal !== true &&
-      point !== nativeChatForkPoint(latest.current)
-      ? undefined
-      : point
-  }, [])
+  const forkPointBefore = useCallback(
+    (messageItemId: string): string | undefined =>
+      nativeChatUserForkPoint(latest.current, messageItemId),
+    []
+  )
   const forkLatest = useCallback((): NativeChatForkLatestOutcome => {
     if (inFlight.current) {
       return 'pending'
