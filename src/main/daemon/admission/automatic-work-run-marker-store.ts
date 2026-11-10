@@ -61,10 +61,9 @@ export class AutomaticWorkRunMarker {
     this.boot = boot
     const previous = readPreviousMarker(this.path)
     this.currentMode = decideStartupAutomaticWorkMode(previous, boot, now)
-    // A carried-over pause is a separate fact from how the previous host exited.
+    // `running` means an armed host never wrote a clean exit; `clean-exit` cannot prove one, because the marker only turns `running` once automatic work is armed.
     this.log('automatic-work-start', {
-      previousExit:
-        previous === null ? 'unknown' : previous.state === 'running' ? 'unclean' : 'clean',
+      previousMarker: previous?.state ?? 'none',
       previousMode: previous?.mode.kind ?? 'none',
       mode: this.currentMode.kind
     })
