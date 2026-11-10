@@ -183,7 +183,8 @@ export function createUsageProviderSlice<
                         refreshed &&
                         !refreshed.isScanning &&
                         !refreshed.lastScanError) ||
-                        (olderFailure === read().failure &&
+                        (next === 1 &&
+                          olderFailure === read().failure &&
                           baseline &&
                           completed.lastScanCompletedAt !== null &&
                           (baseline.lastScanCompletedAt === null ||

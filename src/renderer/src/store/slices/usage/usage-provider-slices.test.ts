@@ -403,3 +403,17 @@ it('retains unacknowledged setting writes through cache reads and never enables 
   expect(store.getState().claudeUsageFailure).toBeNull()
   remount()
 })
+
+it('does not treat an unsuccessful forced command as ordinary newer-scan recovery', async () => {
+  const { api, store } = fixture()
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  api.refresh.mockRejectedValueOnce(new Error('lost Refresh'))
+  await store.getState().refreshClaudeUsage()
+  api.getSnapshot.mockResolvedValueOnce(snapshot).mockResolvedValueOnce({
+    ...snapshot,
+    scanState: { ...scanState, lastScanCompletedAt: 2 }
+  })
+  api.refresh.mockResolvedValueOnce({ ...scanState, lastScanError: 'scan failed' })
+  await store.getState().refreshClaudeUsage()
+  expect(store.getState().claudeUsageFailure?.refresh).toBe(true)
+})
