@@ -869,6 +869,14 @@ jobs:
             src/shared/startup-shell-portability.live-shell.test.ts \
             src/shared/posix-command-path-lookup.test.ts
 
+      # Own serial step: RLIMIT_NPROC counts every task of the runner user, so nothing else may run.
+      - name: Prove a PTY spawn at the process limit fails alone (#40326)
+        env:
+          ORCA_REQUIRE_PROCESS_LIMIT_PROOF: '1'
+        run: |
+          pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 \
+            src/main/daemon/pty-subprocess/testing/node-pty-process-limit.test.ts
+
   # Shards wait only for the plan, not preflight, which moves them about two minutes earlier.
   unit_plan:
     needs: [code_paths]

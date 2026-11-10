@@ -2215,3 +2215,89 @@ diff --git a/src/native.d.ts b/src/native.d.ts
    fork(file: string, args: string[], parsedEnv: string[], cwd: string, cols: number, rows: number, uid: number, gid: number, useUtf8: boolean, helperPath: string, onExitCallback: (code: number, signal: number) => void): IUnixProcess;
    open(cols: number, rows: number): IUnixOpenProcess;
    process(fd: number, pty?: string): string;
+diff --git a/src/unix/pty.cc b/src/unix/pty.cc
+index 297b471..f7ef598 100644
+--- a/src/unix/pty.cc
++++ b/src/unix/pty.cc
+@@ -26,6 +26,7 @@
+ #include <stdio.h>
+ #include <unistd.h>
+ #include <string>
++#include <system_error>
+ #include <thread>
+ #include <vector>
+ 
+@@ -159,9 +160,17 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pid_t pid) {
+       0,                            // Unlimited queue
+       1,                            // Only one thread will use this initially
+       [th](Napi::Env) {   // Finalizer used to clean threads up
+-        th->join();
++        // Orca: a watcher that never started has nothing to join.
++        if (th->joinable()) {
++          th->join();
++        }
+         delete th;
+       });
++  // Orca: at a process or thread limit (for example a cgroup pids.max) the thread cannot start and
++  // std::thread throws std::system_error. Only Napi::Error is caught for JS, so let PtyFork turn it
++  // into one; release the function here so its finalizer still runs.
++  Napi::ThreadSafeFunction owner = tsfn;
++  try {
+   *th = std::thread([tsfn = std::move(tsfn), pid] {
+     auto callback = [](Napi::Env env, Napi::Function cb, ExitEvent *exit_event) {
+       cb.Call({Napi::Number::New(env, exit_event->exit_code),
+@@ -250,6 +259,10 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pid_t pid) {
+         Napi::Error::Fatal("SetupExitCallback", "ThreadSafeFunction.BlockingCall() failed");
+     }
+   });
++  } catch (const std::exception&) {
++    owner.Release();
++    throw;
++  }
+ }
+ 
+ /**
+@@ -454,6 +467,7 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+   pthread_sigmask(SIG_SETMASK, &newmask, &oldmask);
+ 
+   pid = forkpty(&master, nullptr, static_cast<termios*>(term), static_cast<winsize*>(&winp));
++  int fork_errno = errno;
+ 
+   if (!pid) {
+     // remove all signal handler from child
+@@ -470,7 +484,9 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+ 
+   switch (pid) {
+     case -1:
+-      throw Napi::Error::New(napiEnv, "forkpty(3) failed.");
++      // Orca: keep errno so a process limit (EAGAIN) reads as one.
++      throw Napi::Error::New(napiEnv, std::string("node-pty: forkpty failed: ") + strerror(fork_errno) +
++                                          " (errno " + std::to_string(fork_errno) + ")");
+     case 0:
+       if (strlen(cwd_.c_str())) {
+         if (chdir(cwd_.c_str()) == -1) {
+@@ -515,7 +531,23 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+ 
+   // Set up process exit callback.
+   Napi::Function cb = info[10].As<Napi::Function>();
+-  SetupExitCallback(napiEnv, cb, pid);
++  // Orca: nothing would ever reap this child or report its exit if its watcher cannot start, so end
++  // it instead of leaking it, and report why. A failed allocation carries no errno: report ENOMEM.
++  auto fail_exit_watcher = [&](const char *what, int error_code) -> Napi::Error {
++    kill(pid, SIGKILL);
++    while (waitpid(pid, nullptr, 0) == -1 && errno == EINTR) {
++    }
++    close(master);
++    return Napi::Error::New(napiEnv, std::string("node-pty: exit_watcher_thread failed: ") + what +
++                                         " (errno " + std::to_string(error_code) + ")");
++  };
++  try {
++    SetupExitCallback(napiEnv, cb, pid);
++  } catch (const std::system_error& error) {
++    throw fail_exit_watcher(error.what(), error.code().value());
++  } catch (const std::exception& error) {
++    throw fail_exit_watcher(error.what(), ENOMEM);
++  }
+   return obj;
+ }
+ 
