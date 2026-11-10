@@ -2482,7 +2482,8 @@
         "5f3d2c8a1b": "Failed to resolve MR base.",
         "dropPartiallyAttached_one": "{{failureCount}} of {{count}} item could not be attached.",
         "dropPartiallyAttached_other": "{{failureCount}} of {{count}} items could not be attached.",
-        "dropPartiallyAttached": "{{failureCount}} of {{count}} items could not be attached."
+        "dropPartiallyAttached": "{{failureCount}} of {{count}} items could not be attached.",
+        "folderSetupSupportCheckFailed": "Couldn't confirm whether this host runs folder setup scripts. Try again."
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "Failed to upload dropped files.",
@@ -11478,11 +11479,9 @@
             "fbfd2386e8": "archive script",
             "4c17787d7b": "archive",
             "8655e3387b": "hooks",
-            "acd1157f0c": "Local and shared scripts that run before a worktree is archived.",
             "491b05d6e6": "setup command",
             "a31b43a7f8": "setup script",
             "5590388dfa": "setup",
-            "baaf70bb37": "Local and shared scripts that run after a new worktree is created.",
             "d73fb47b45": ".claude/mcp.json",
             "db11b337c4": ".claude.json",
             "26f42fe773": ".cursor/mcp.json",
@@ -21991,6 +21990,15 @@
       },
       "repositoryHooks": {
         "availableEnvVars": "Available environment variables"
+      },
+      "RepositoryHooksSection": {
+        "folderRunPolicyDescription": "Default behavior when a new workspace is created.",
+        "folderTitle": "Workspace hooks",
+        "folderDescription": "Scripts that run in this folder when a workspace is created or removed. Every workspace shares the folder. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.",
+        "folderSetupDescription": "Local and shared scripts that run after a new workspace is created.",
+        "folderArchiveDescription": "Local and shared scripts that run before a workspace is removed.",
+        "folderSetupFieldDescription": "Runs after a new workspace is created; create child worktrees, install deps, copy env files.",
+        "folderArchiveFieldDescription": "Runs before a workspace is removed."
       }
     },
     "agentChildRow": {
