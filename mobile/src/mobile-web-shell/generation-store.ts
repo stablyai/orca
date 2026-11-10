@@ -6,6 +6,7 @@ import type {
 import { joinUri } from './generation-cache-uri'
 import { createGenerationHostOrder, withHostLast } from './generation-host-order'
 import { createDeferredCommits } from './generation-deferred-commits'
+import { adoptLegacyRoot } from './generation-legacy-root'
 import { MANIFEST_FILE_NAME } from './generation-asset-path'
 import { parseGenerationManifest, readWaitingStage } from './generation-manifest-read'
 import { reusableAssetsOf, reusableAssetsOfHosts } from './generation-reuse'
@@ -72,6 +73,8 @@ export function createGenerationStore(options: {
   fileSystem: GenerationFileSystem
   // Runs before a host's built files are deleted, so nothing still reading them outlives them.
   beforeHostFilesDeleted?: (hostKey: string) => Promise<void>
+  // An older root whose contents move here before any other work, so changing roots costs no download.
+  legacyRootUri?: string
 }): GenerationStore {
   const fs = options.fileSystem
   const hostOrder = createGenerationHostOrder(fs)
@@ -308,7 +311,10 @@ export function createGenerationStore(options: {
   }
 
   // Serialize across the whole store to order stage/commit/sweep/delete and keep same-build staging writes contiguous.
-  let tail: Promise<unknown> = Promise.resolve()
+  let tail: Promise<unknown> =
+    options.legacyRootUri === undefined
+      ? Promise.resolve()
+      : adoptLegacyRoot(fs, options.legacyRootUri).catch(() => undefined)
   function serialize<T>(operation: () => Promise<T>): Promise<T> {
     const run = tail.then(operation, operation)
     tail = run.catch(() => undefined)

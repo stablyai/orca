@@ -5,8 +5,8 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 export const getMobileEmulatorSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
-      'auto.components.settings.mobile.emulator.search.cdd3c31918',
-      'Mobile Emulator'
+      'auto.components.settings.mobile.emulator.search.f8468700d1',
+      'Mobile emulator'
     ),
     description: translate(
       'auto.components.settings.mobile.emulator.search.9595354cff',
@@ -69,8 +69,8 @@ export const getMobileEmulatorSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.mobile.emulator.search.54184cb9c5',
-      'Default Emulator Device'
+      'auto.components.settings.mobile.emulator.search.b8c9f903eb',
+      'Default emulator device'
     ),
     description: translate(
       'auto.components.settings.mobile.emulator.search.2348045036',
@@ -101,8 +101,8 @@ export const getMobileEmulatorSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.mobile.emulator.search.0b95dfd5b3',
-      'Emulator Availability'
+      'auto.components.settings.mobile.emulator.search.de556a0911',
+      'Emulator availability'
     ),
     description: translate(
       'auto.components.settings.mobile.emulator.search.ea1f51b980',
@@ -133,8 +133,8 @@ export const getMobileEmulatorSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.mobile.emulator.search.ea3eac39bb',
-      'Agent CLI Control'
+      'auto.components.settings.mobile.emulator.search.0d6e7dba38',
+      'Agent CLI control'
     ),
     description: translate(
       'auto.components.settings.mobile.emulator.search.2e0b45b2ba',

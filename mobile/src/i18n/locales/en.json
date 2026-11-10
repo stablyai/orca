@@ -564,6 +564,7 @@
       "movedTo": "This phone stopped transcribing. Continuing on {{computer}}.",
       "movedToComputer": "This phone stopped transcribing. Continuing on the computer.",
       "stoppedKept": "Dictation stopped. {{reason}}. Your recording is kept.",
+      "stoppedKeptGeneric": "Dictation stopped. Your recording is kept.",
       "stillListening": "Still listening."
     },
     "pill": {
