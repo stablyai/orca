@@ -127,6 +127,13 @@ export type SettingsNavSection = {
   repoIcon?: Repo['repoIcon']
   upstream?: Repo['upstream']
   isRemote?: boolean
+  projectCopy?: {
+    projectId: string
+    projectTitle: string
+    split: boolean
+    hostId: ExecutionHostId
+    path: string
+  }
   badge?: string
   installStatus?: SettingsNavInstallStatus
 }

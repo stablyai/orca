@@ -40,6 +40,11 @@ export function buildRemoteSettingsSections(
   t: Translate = translate
 ): SettingsNavSection[] {
   const repoLookup = buildProjectSetupRepoLookup(repos)
+  const projectList = buildSettingsProjectList(repos, projectGrouping)
+  const copyCounts = new Map<string, number>()
+  for (const entry of projectList) {
+    copyCounts.set(entry.projectId, (copyCounts.get(entry.projectId) ?? 0) + 1)
+  }
   const showDesktopOnlySettings = !isWebClient
   return [
     ...(showDesktopOnlySettings
@@ -154,7 +159,7 @@ export function buildRemoteSettingsSections(
         ]
       : []),
     // Collapse host-specific repo rows to one project entry using the same inputs as settings panes.
-    ...buildSettingsProjectList(repos, projectGrouping).map((settingsProject) => {
+    ...projectList.map((settingsProject) => {
       const {
         project,
         representativeRepoId,
@@ -167,6 +172,11 @@ export function buildRemoteSettingsSections(
         hostId: representativeHostId,
         repoId: representativeRepoId
       })
+      const setup =
+        setups.find(
+          (candidate) =>
+            candidate.repoId === representativeRepoId && candidate.hostId === representativeHostId
+        ) ?? setups[0]
       const hostSummary =
         setups.length > 1
           ? t('auto.hooks.useSettingsNavigationMetadata.projectHostsSummary', '{{value0}} hosts', {
@@ -182,21 +192,31 @@ export function buildRemoteSettingsSections(
         repoIcon: representativeRepo?.repoIcon,
         upstream: representativeRepo?.upstream,
         isRemote: Boolean(representativeRepo?.connectionId),
-        searchEntries: representativeRepo
-          ? getRepositoryPaneSearchEntries(
-              representativeRepo,
-              {
-                windowsRuntimeSupported: isWindowsTerminalHost
-              },
-              t
-            )
-          : [
-              {
-                title: checkoutLabel ?? project.displayName,
-                description: hostSummary,
-                keywords: setups.map((setup) => setup.path)
-              }
-            ],
+        projectCopy: {
+          projectId: settingsProject.projectId,
+          projectTitle: project.displayName,
+          split: (copyCounts.get(settingsProject.projectId) ?? 0) > 1,
+          hostId: setup?.executionHostId ?? representativeHostId,
+          path: setup?.path ?? representativeRepo?.path ?? ''
+        },
+        searchEntries: [
+          { title: project.displayName, keywords: setups.map((setup) => setup.path) },
+          ...(representativeRepo
+            ? getRepositoryPaneSearchEntries(
+                representativeRepo,
+                {
+                  windowsRuntimeSupported: isWindowsTerminalHost
+                },
+                t
+              )
+            : [
+                {
+                  title: checkoutLabel ?? project.displayName,
+                  description: hostSummary,
+                  keywords: setups.map((setup) => setup.path)
+                }
+              ])
+        ],
         group: 'repositories'
       }
     })

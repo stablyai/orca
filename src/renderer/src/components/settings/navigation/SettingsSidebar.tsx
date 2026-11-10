@@ -1,15 +1,12 @@
 import type { RefObject } from 'react'
 import { useMemo } from 'react'
-import { ArrowLeft, Search, Server } from 'lucide-react'
-import type { RepoIcon } from '../../../../../shared/repo-icon'
+import { ArrowLeft, Search } from 'lucide-react'
 import type { SettingsNavIcon, SettingsNavInstallStatus } from '@/lib/settings-navigation-types'
-import type { GitHubRepositoryIdentity } from '../../../../../shared/github/pull-request-types'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '../../ShortcutKeyCombo'
 import { cn } from '@/lib/utils'
-import { RepoIconGlyph } from '../../repo/repo-icon'
-import { RepoForkIndicator } from '../../repo/repo-fork-indicator'
+import { SettingsProjectTree, type RepoNavSection } from './SettingsProjectTree'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { SetupGuideProgressRing } from '../../setup-guide/SetupGuideProgressRing'
@@ -31,13 +28,6 @@ type NavGroup = {
   id: string
   title: string
   sections: NavSection[]
-}
-
-type RepoNavSection = NavSection & {
-  badgeColor?: string
-  isRemote?: boolean
-  repoIcon?: RepoIcon | null
-  upstream?: GitHubRepositoryIdentity | null
 }
 
 type SettingsSidebarProps = {
@@ -261,34 +251,12 @@ export function SettingsSidebar({
 
             {repoSections.length > 0 ? (
               <div className="space-y-1">
-                {repoSections.map((section) => {
-                  const isActive = activeSectionId === section.id
-
-                  return (
-                    <button
-                      key={section.id}
-                      aria-current={isActive ? 'page' : undefined}
-                      data-current={isActive ? 'true' : undefined}
-                      onClick={() => onSelectSection(section.id)}
-                      className={navItemClassName(isActive)}
-                    >
-                      <RepoIconGlyph
-                        repoIcon={section.repoIcon}
-                        color={section.badgeColor}
-                        className="size-4 shrink-0 text-muted-foreground"
-                        iconClassName="size-3.5"
-                      />
-                      <span className="truncate">{section.title}</span>
-                      <RepoForkIndicator upstream={section.upstream} />
-                      {section.isRemote && (
-                        <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
-                          <Server className="size-3" />
-                          {t('auto.components.settings.SettingsSidebar.e0900f83e7', 'SSH')}
-                        </span>
-                      )}
-                    </button>
-                  )
-                })}
+                <SettingsProjectTree
+                  sections={repoSections}
+                  activeSectionId={activeSectionId}
+                  onSelectSection={onSelectSection}
+                  rowClassName={navItemClassName}
+                />
               </div>
             ) : (
               <p className="px-3 text-xs text-muted-foreground">
