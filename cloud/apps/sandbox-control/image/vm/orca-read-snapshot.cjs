@@ -201,11 +201,76 @@ function prOf(linked) {
 }
 
 const STATUSES = new Set(['working', 'attention', 'idle'])
+const PANE_PREFIX = 'structured-agent-session-'
+
+/**
+ * Chats as orcad stores them (agent-session-journal.db, read-only): every session's provider, name
+ * and last turn, open tabs first. The local socket can't stream agentSession.subscribeStatus, and
+ * worktree.ps lists only agents that are live right now, so this is the complete list.
+ */
+function storedSessions(dataDir) {
+  let db
+  try {
+    const { DatabaseSync } = require('node:sqlite')
+    db = new DatabaseSync(path.join(dataDir, 'agent-session-journal.db'), { readOnly: true })
+    const open = new Set(db.prepare('SELECT session_id FROM agent_session_tabs').all().map((r) => r.session_id))
+    const out = []
+    for (const row of db.prepare('SELECT session_id, record_json FROM agent_session_records').all()) {
+      let record
+      try {
+        record = JSON.parse(row.record_json)
+      } catch {
+        continue
+      }
+      const last = isObj(record.lastTurn) ? record.lastTurn : {}
+      out.push({
+        sessionId: row.session_id,
+        agent: str(record.provider, 40),
+        title: str(record.conversationName, 200) || str(last.prompt, 200),
+        status: last.state === 'running' || last.state === 'submitted' ? 'working' : last.state === 'settled' ? 'idle' : 'unknown',
+        turnOutcome: str(last.outcome, 40),
+        updatedAt: num(record.updatedAt),
+        open: open.has(row.session_id),
+        lastPrompt: str(last.prompt, LIMITS.messageChars),
+        lastReply: str(last.reply, LIMITS.messageChars),
+        lastAt: num(last.at)
+      })
+    }
+    return out
+  } catch {
+    return []
+  } finally {
+    try {
+      db && db.close()
+    } catch {}
+  }
+}
+
+/** Live agent rows from worktree.ps, keyed by session id (their status wins over the stored one). */
+function liveAgents(worktrees) {
+  const out = new Map()
+  for (const w of worktrees) {
+    for (const a of Array.isArray(w.agents) ? w.agents.filter(isObj) : []) {
+      const tab = typeof a.paneKey === 'string' ? a.paneKey.split(':')[0] : ''
+      if (!tab.startsWith(PANE_PREFIX)) {
+        continue
+      }
+      const state = a.mainAgent && typeof a.mainAgent.state === 'string' ? a.mainAgent.state : a.state
+      out.set(tab.slice(PANE_PREFIX.length), {
+        agent: str(a.agentType, 40),
+        title: str(a.conversationName, 200) || str(a.taskTitle, 200) || str(a.displayName, 200),
+        status: state === 'working' ? 'working' : state === 'blocked' || state === 'waiting' || state === 'attention' ? 'attention' : 'idle',
+        updatedAt: num(a.updatedAt)
+      })
+    }
+  }
+  return out
+}
 
 /** `call(method, params)` -> result | null. Never throws: a missing piece is left out. */
-async function gather(call, { workspaceId, snapshotId, reason, now, deadline }) {
+async function gather(call, { workspaceId, snapshotId, reason, now, deadline, listSessions = () => [] }) {
   const timeLeft = () => deadline - Date.now()
-  const [statusFeed, ps] = await Promise.all([call('agentSession.subscribeStatus', null), call('worktree.ps', { limit: 20 })])
+  const ps = await call('worktree.ps', { limit: 20 })
   const worktrees = isObj(ps) && Array.isArray(ps.worktrees) ? ps.worktrees.filter(isObj) : []
   const project = worktrees.find((w) => w.path === PROJECT) || worktrees[0] || null
   const selector = project && typeof project.path === 'string' ? `path:${project.path}` : `path:${PROJECT}`
@@ -213,22 +278,38 @@ async function gather(call, { workspaceId, snapshotId, reason, now, deadline }) 
     call('git.status', { worktree: selector, includeLineStats: true }),
     call('git.history', { worktree: selector, limit: LIMITS.commits })
   ])
-  const summaries = isObj(statusFeed) && Array.isArray(statusFeed.sessions) ? statusFeed.sessions.filter(isObj) : []
-  // Newest activity first; chats with nothing in them still list (agent + status).
-  const picked = summaries
+  const live = liveAgents(worktrees)
+  const byId = new Map()
+  for (const s of listSessions()) {
+    byId.set(s.sessionId, s)
+  }
+  for (const [sessionId, a] of live) {
+    byId.set(sessionId, { ...(byId.get(sessionId) || { sessionId, open: true }), ...Object.fromEntries(Object.entries(a).filter(([, v]) => v !== null)) })
+  }
+  // Open chats first, then newest activity.
+  const picked = [...byId.values()]
     .filter((s) => typeof s.sessionId === 'string')
-    .sort((a, b) => (num(b.updatedAt) || 0) - (num(a.updatedAt) || 0))
+    .sort((a, b) => Number(Boolean(b.open)) - Number(Boolean(a.open)) || (num(b.updatedAt) || 0) - (num(a.updatedAt) || 0))
     .slice(0, LIMITS.sessions)
   const sessions = []
   for (const s of picked) {
     const history = timeLeft() > 1_000 ? await call('agentSession.history', { sessionId: s.sessionId, direction: 'tail', limit: LIMITS.messagesPerSession }) : null
-    const { messages, hasOlder } = messagesOf(history)
+    let { messages, hasOlder } = messagesOf(history)
+    if (messages.length === 0) {
+      // No readable history (or out of time): the stored last turn still says what happened.
+      const at = s.lastAt || s.updatedAt || 0
+      messages = [
+        ...(s.lastPrompt ? [{ itemId: `${s.sessionId}:last-prompt`, role: 'user', text: s.lastPrompt, at }] : []),
+        ...(s.lastReply ? [{ itemId: `${s.sessionId}:last-reply`, role: 'assistant', text: s.lastReply, at }] : [])
+      ]
+      hasOlder = hasOlder || messages.length > 0
+    }
     sessions.push({
       sessionId: s.sessionId.slice(0, 200),
-      agent: str(s.agent, 40),
-      title: str(s.conversationName, 200) || str(s.latestPrompt, 200),
+      agent: s.agent || null,
+      title: s.title || null,
       status: STATUSES.has(s.status) ? s.status : 'unknown',
-      turnOutcome: str(s.turnOutcome, 40),
+      turnOutcome: s.turnOutcome || null,
       updatedAt: num(s.updatedAt),
       messages: messages.slice(-LIMITS.messagesPerSession),
       truncated: hasOlder || messages.length > LIMITS.messagesPerSession
@@ -308,14 +389,16 @@ async function main() {
   }
   const deadline = started + TOTAL_BUDGET_MS
   const call = (method, params) => rpc(metadata, method, params, Math.max(250, Math.min(CALL_TIMEOUT_MS, deadline - Date.now())))
-  const payload = fitToBudget(await gather(call, { workspaceId, snapshotId, reason: (env.ORCA_READ_REASON || 'sleep').slice(0, 20), now: Date.now(), deadline }))
+  const payload = fitToBudget(
+    await gather(call, { workspaceId, snapshotId, reason: (env.ORCA_READ_REASON || 'sleep').slice(0, 20), now: Date.now(), deadline, listSessions: () => storedSessions(dataDir) })
+  )
   const out = seal(payload, recipients, workspaceId, snapshotId)
   // Timing only: counts and sizes would describe the plaintext to the control plane's logs.
   out.stats = { collectMs: Date.now() - started }
   process.stdout.write(`${JSON.stringify(out)}\n`)
 }
 
-module.exports = { seal, gather, fitToBudget, messagesOf, gitOf, prOf, rpc }
+module.exports = { seal, gather, fitToBudget, messagesOf, gitOf, prOf, rpc, storedSessions, liveAgents }
 
 if (require.main === module) {
   // A fixed message: an error text could carry workspace content into the control plane's logs.
