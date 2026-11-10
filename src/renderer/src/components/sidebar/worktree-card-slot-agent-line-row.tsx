@@ -158,17 +158,11 @@ export const SlotAgentLineRow = React.memo(function SlotAgentLineRow({
   ) : (
     <WorktreeCardSlot signal={slotForLine(displaySignal)} now={now} stale={offline} />
   )
-  // A Needs you / Failed pill must stay readable on hover, so dismiss slides in beside it instead.
   const pillSlot = !offline && (displaySignal.kind === 'needs' || displaySignal.kind === 'failed')
   const dismissButton = onDismiss ? (
     <button
       type="button"
-      className={cn(
-        'z-10 inline-flex items-center justify-center text-muted-foreground/70 transition-opacity hover:text-foreground focus-visible:opacity-100 can-hover:group-hover/slot-line:opacity-100',
-        pillSlot
-          ? 'w-0 overflow-hidden opacity-0 focus-visible:ml-1 focus-visible:w-3 can-hover:group-hover/slot-line:ml-1 can-hover:group-hover/slot-line:w-3'
-          : 'peer opacity-0'
-      )}
+      className="inline-flex size-3 shrink-0 items-center justify-center text-muted-foreground/70 opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 can-hover:group-hover/slot-line:opacity-100"
       aria-label={translate(
         'auto.components.dashboard.DashboardAgentRow.b06e13fcf7',
         'Dismiss agent'
@@ -190,22 +184,16 @@ export const SlotAgentLineRow = React.memo(function SlotAgentLineRow({
     ) : sendTarget.status === 'sending' ? (
       <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" />
     ) : null
-  ) : dismissButton && pillSlot ? (
-    <span className="inline-flex shrink-0 items-center">
-      {lineSlot}
-      {dismissButton}
-    </span>
-  ) : dismissButton ? (
-    // Time and dismiss share the slot; hover or keyboard focus swaps in the dismiss control.
-    // Button comes first so the time can follow it as a `peer` without :has(); z-10 keeps it on top.
-    <span className="grid shrink-0 items-center justify-items-end [&>*]:col-start-1 [&>*]:row-start-1">
-      {dismissButton}
-      <span className="transition-opacity peer-focus-visible:opacity-0 can-hover:group-hover/slot-line:opacity-0">
-        {lineSlot}
-      </span>
-    </span>
   ) : (
-    lineSlot
+    <span className="inline-flex shrink-0 items-center gap-1">
+      {pillSlot ? lineSlot : null}
+      {dismissButton}
+      {pillSlot ? (
+        <WorktreeCardSlot signal={{ kind: 'time', at: displaySignal.at }} now={now} />
+      ) : (
+        lineSlot
+      )}
+    </span>
   )
 
   return (
