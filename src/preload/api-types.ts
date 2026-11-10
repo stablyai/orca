@@ -73,6 +73,7 @@ import type {
 import type { UiCommandEventApi } from './api/window-ui/ui-command-event-api'
 import type { UiWindowApi } from './api/window-ui/ui-window-api'
 import type { UpdaterApi } from './api/updater/updater-api'
+import type { AgentUpdatesApi } from './api/agent-updates/agent-updates-api'
 import type { WorkspaceCleanupApi, WorkspaceSpaceApi } from './api/workspaces/workspace-cleanup-api'
 import type {
   LocalhostWorktreeLabelsApi,
@@ -148,6 +149,7 @@ export type PreloadApi = {
   cache: WorkspaceSessionApi['cache']
   session: WorkspaceSessionApi['session']
   updater: UpdaterApi
+  agentUpdates: AgentUpdatesApi
   notebook: FilesystemApi['notebook']
   docPreview: DocPreviewApi['docPreview']
   stats: StatsApi
