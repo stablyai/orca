@@ -704,7 +704,7 @@ it('keeps an accepted alias while its deferred replacement is owed by a held-out
     defaultCodexHomeDir: dirname(harness.roots.codexSessionsDir!),
     additionalCodexSessionsDirs: [copyRoot]
   }
-  const polling = vi.spyOn(policy, 'sessionSearchRequiresPolling').mockResolvedValue(true)
+  const polling = vi.spyOn(policy, 'sessionSearchRequiresPolling').mockResolvedValue(false)
   const actualStat = filesystem.wslGatedStat
   let refusing = false
   const probe = vi.spyOn(filesystem, 'wslGatedStat').mockImplementation((path, ...rest) => {
@@ -753,6 +753,7 @@ it('keeps an accepted alias while its deferred replacement is owed by a held-out
     expect(matching('canonicalnewneedle')).toEqual({ n: 0 })
     expect(matching('canonicaloldneedle')).toEqual({ n: 1 })
     refusing = true
+    notifySessionSearchOverflow(harness.roots.codexSessionsDir!)
     for (let cycle = 0; cycle < 3; cycle++) {
       await subject.reconcile()
     }
