@@ -188,6 +188,7 @@ describe('reads of workers a paired server runs, from this Orca’s records', ()
     expect(mixed.workers.slice(-2).map((worker) => worker.dispatchId)).toEqual(['ctx_w2', 'ctx_w1'])
     expect(mixed.page).toMatchObject({ total: 103, hasMore: true })
     const next = await listWorkers({ run: run.id, paginate: true, cursor: mixed.page?.nextCursor })
+    expect(next.page).toMatchObject({ total: 103 })
     expect(next.workers.map((worker) => worker.dispatchId)).toEqual([
       expect.stringMatching(/^ctx_local_/)
     ])
@@ -219,8 +220,15 @@ describe('reads of workers a paired server runs, from this Orca’s records', ()
       code: 'remote_runtime_unavailable',
       data: { server: 'devB', reachable: false }
     })
-    expect((change as Error).message).toContain(
-      'devB did not answer (Could not connect to the remote Orca runtime.), so this Orca cannot tell whether the command reached it.'
+    expect(change).toHaveProperty(
+      'message',
+      expect.stringContaining(
+        'devB did not answer (Could not connect to the remote Orca runtime.), so this Orca cannot tell whether the command reached it.'
+      )
+    )
+    expect(change).toHaveProperty(
+      'message',
+      expect.stringContaining('Retry only with the same request ID (--retry-request)')
     )
 
     const read = explainRemoteServerFailure(
@@ -233,8 +241,14 @@ describe('reads of workers a paired server runs, from this Orca’s records', ()
       }
     )
     expect(read).toMatchObject({ code: 'runtime_timeout' })
-    expect((read as Error).message).toContain('devB could not be reached (Timed out.)')
-    expect((read as Error).message).toContain('its output is kept only on devB')
+    expect(read).toHaveProperty(
+      'message',
+      expect.stringContaining('devB could not be reached (Timed out.)')
+    )
+    expect(read).toHaveProperty(
+      'message',
+      expect.stringContaining('its output is kept only on devB')
+    )
 
     const unknown = new OrchestrationError('operation_unknown', 'The stop is still pending.')
     expect(
