@@ -1,5 +1,7 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store/index'
+import { useTranslate } from '@/i18n/use-translate'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { agentChoicePending } from '@/lib/host-chat-program'
 import { useAgentsOfferedForLaunch } from '@/lib/host-chat-program-acquisition'
 import {
@@ -9,6 +11,7 @@ import {
 } from '@/lib/quick-workspace-agent-selection'
 import {
   ORCA_CLOUD_AGENT_IDS,
+  orcaCloudAgentFallback,
   orcaCloudAgentMenuModel,
   pickOrcaCloudAgent
 } from '@/lib/orca-cloud/orca-cloud-agent-picker'
@@ -35,6 +38,7 @@ export function useComposerQuickAgent(
   quickAgentOverride: TuiAgent | null | undefined,
   setQuickAgentOverride: (agent: TuiAgent | null | undefined) => void
 ) {
+  const t = useTranslate()
   // The picker rows' workspace when known, so the offered list and the rows read one host.
   const launchWorkspace =
     cardProps.agentRows?.target.workspace ?? composerLaunchWorkspace(cardProps)
@@ -79,5 +83,23 @@ export function useComposerQuickAgent(
   const chipAgentIds =
     offeredAgentIds &&
     new Set([...offeredAgentIds, ...(quickAgent && choicePending(quickAgent) ? [quickAgent] : [])])
-  return { orcaCloud, orcaCloudModel, quickAgent, chipAgentIds }
+  // Said, not silent: the agent the user wanted isn't on the image, so another one is selected.
+  const orcaCloudFallback = orcaCloud
+    ? orcaCloudAgentFallback({
+        override: quickAgentOverride,
+        defaultAgent: settings?.defaultTuiAgent,
+        selected: quickAgent
+      })
+    : null
+  const agentNotice = orcaCloudFallback
+    ? t(
+        'components.newWorkspace.orcaCloudAgentFallback',
+        '{{agent}} isn’t available on Orca Cloud yet, so {{fallback}} is selected.',
+        {
+          agent: formatAgentTypeLabel(orcaCloudFallback.wanted),
+          fallback: formatAgentTypeLabel(orcaCloudFallback.selected)
+        }
+      )
+    : undefined
+  return { orcaCloud, orcaCloudModel, quickAgent, chipAgentIds, agentNotice }
 }

@@ -12,7 +12,8 @@ vi.mock('../components/MobileAgentIcon', () => ({
   MobileAgentIcon: 'MobileAgentIcon'
 }))
 vi.mock('../i18n/use-mobile-translation', () => ({
-  useMobileTranslation: () => (_key: string, fallback: string) => fallback
+  useMobileTranslation: () => (_key: string, fallback: string, values?: Record<string, string>) =>
+    fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => values?.[name] ?? '')
 }))
 vi.mock('../theme/use-mobile-color-scheme', () => ({
   useMobileColorScheme: () => 'dark'
@@ -69,6 +70,15 @@ describe('CloudAgentPicker', () => {
     expect(group.props.accessibilityLabel).toBe('Agent')
     const checked = radios(tree).filter((node) => node.props.accessibilityState.checked)
     expect(checked.map(iconOf)).toEqual(['gemini'])
+    // Each chip says its name, plus its state when selected, with catalog names.
+    expect(radios(tree).map((node) => node.props.accessibilityLabel)).toEqual([
+      'Claude',
+      'Codex',
+      'OpenCode',
+      'Gemini, selected',
+      'Cursor',
+      'GitHub Copilot'
+    ])
   })
 
   it('reports the pressed agent and holds every chip while disabled', () => {

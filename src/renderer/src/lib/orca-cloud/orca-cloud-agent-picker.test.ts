@@ -4,7 +4,8 @@ import { resolveQuickWorkspaceAgentSelection } from '@/lib/quick-workspace-agent
 import {
   ORCA_CLOUD_AGENT_IDS,
   orcaCloudAgentMenuModel,
-  pickOrcaCloudAgent
+  pickOrcaCloudAgent,
+  orcaCloudAgentFallback
 } from './orca-cloud-agent-picker'
 
 describe('pickOrcaCloudAgent', () => {
@@ -83,5 +84,31 @@ describe('Orca Cloud composer selection repair', () => {
         offeredAgentIds: ORCA_CLOUD_AGENT_IDS
       })
     ).toEqual({ quickAgent: 'cursor', quickAgentOverride: 'cursor' })
+  })
+})
+
+describe('orcaCloudAgentFallback', () => {
+  it('names the agent the user wanted when the image does not ship it', () => {
+    expect(
+      orcaCloudAgentFallback({ override: 'aider', defaultAgent: 'claude', selected: 'claude' })
+    ).toEqual({ wanted: 'aider', selected: 'claude' })
+    expect(
+      orcaCloudAgentFallback({ override: undefined, defaultAgent: 'goose', selected: 'claude' })
+    ).toEqual({ wanted: 'goose', selected: 'claude' })
+  })
+
+  it('says nothing once the pick is on the image, for Blank Terminal, or with nothing selected', () => {
+    expect(
+      orcaCloudAgentFallback({ override: 'gemini', defaultAgent: 'goose', selected: 'gemini' })
+    ).toBeNull()
+    expect(
+      orcaCloudAgentFallback({ override: undefined, defaultAgent: 'codex', selected: 'codex' })
+    ).toBeNull()
+    expect(
+      orcaCloudAgentFallback({ override: null, defaultAgent: 'goose', selected: null })
+    ).toBeNull()
+    expect(
+      orcaCloudAgentFallback({ override: undefined, defaultAgent: 'blank', selected: null })
+    ).toBeNull()
   })
 })

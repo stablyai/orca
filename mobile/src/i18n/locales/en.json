@@ -4969,7 +4969,8 @@
       "deviceLabelConnected": "{{device}}, connected {{date}}"
     },
     "agent": {
-      "label": "Agent"
+      "label": "Agent",
+      "chipSelected": "{{agent}}, selected"
     },
     "started": {
       "title": "{{agent}} started with your prompt",

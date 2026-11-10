@@ -59,11 +59,15 @@ export function LandingCloudCard({
       : null
   const title =
     trialHours !== null
-      ? t('components.newWorkspace.cloudSetup.trialOffer', '{{hours}} sandbox hours to try Orca Cloud', {
-          count: trialHours,
-          hours: String(trialHours),
-          defaultValue_one: '{{hours}} sandbox hour to try Orca Cloud'
-        })
+      ? t(
+          'components.newWorkspace.cloudSetup.trialOffer',
+          '{{hours}} sandbox hours to try Orca Cloud',
+          {
+            count: trialHours,
+            hours: String(trialHours),
+            defaultValue_one: '{{hours}} sandbox hour to try Orca Cloud'
+          }
+        )
       : access.state === 'entitled'
         ? t('components.landing.cloudCard.title', 'Run agents in Orca Cloud')
         : t('components.landing.cloudCard.tryTitle', 'Try Orca Cloud')

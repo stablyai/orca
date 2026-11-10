@@ -79,7 +79,7 @@ export default function AgentCombobox({
 }: AgentComboboxProps): React.JSX.Element {
   const t = useTranslate()
   const blankText =
-    blankLabel ?? t('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')
+    blankLabel ?? t('auto.components.agent.AgentCombobox.986f946354', 'Blank terminal')
   const allowBlankTerminal = selection.allowBlankTerminal === true
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
