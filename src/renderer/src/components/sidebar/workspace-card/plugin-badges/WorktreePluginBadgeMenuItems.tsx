@@ -14,6 +14,8 @@ import {
   type PluginWorktreeBadgeMatch
 } from './use-matching-plugin-worktree-badges'
 
+/** Runs `command` on the workspace (and `folder`, unless it is the workspace's own `''`), showing
+ *  its message, or a toast when it fails. */
 async function runPluginWorktreeCommand(
   command: ActivePluginCommand,
   worktreeId: string,

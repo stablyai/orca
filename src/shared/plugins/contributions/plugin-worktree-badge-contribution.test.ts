@@ -34,6 +34,7 @@ function manifest(
   }
 }
 
+/** The manifest's parse error, or `''` when it parses. */
 function issues(raw: unknown): string {
   const parsed = parsePluginManifest(raw)
   return parsed.ok ? '' : parsed.error

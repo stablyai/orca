@@ -4,6 +4,7 @@ import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import { assertPluginWorkerCommand, workerCommandArgs } from './plugin-command-invocation'
 import type { PluginWorkspaceCommandArgs } from '../../shared/plugins/contributions/plugin-workspace-command-args'
 
+/** The Engine test plugin, granted `capabilities` (workspace:read by default). */
 function plugin(capabilities = [{ kind: 'workspace:read' }]): ValidDiscoveredPlugin {
   const parsed = parsePluginManifest({
     manifestVersion: 2,

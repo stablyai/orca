@@ -121,6 +121,8 @@ export type PluginWorktreeBadgeEntry = {
   commands: string[]
 }
 
+/** Checks what the schema cannot: unique badge ids, commands that are worker commands with
+ *  `when: "workspace"`, and the `workspace:read` capability. */
 export function validatePluginWorktreeBadges(
   manifest: {
     contributes: {

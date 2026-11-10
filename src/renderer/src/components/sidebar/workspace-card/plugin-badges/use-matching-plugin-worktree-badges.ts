@@ -46,10 +46,12 @@ function setScan(key: string, scan: FolderScan): void {
   listeners.forEach((listener) => listener())
 }
 
+/** Identifies a scan by host, root and the search it runs, so badges with the same `when` share it. */
 function scanKey(root: PluginBadgeSearchRoot, when: BadgeWhen): string {
   return [root.connectionId ?? '', root.path, when.searchDepth, ...when.pathExists].join('\0')
 }
 
+/** Starts a folder scan unless one is running or the last finished under `RESCAN_AFTER_MS` ago. */
 function requestFolderScan(root: PluginBadgeSearchRoot, when: BadgeWhen, now: number): void {
   const key = scanKey(root, when)
   const previous = scans.get(key)

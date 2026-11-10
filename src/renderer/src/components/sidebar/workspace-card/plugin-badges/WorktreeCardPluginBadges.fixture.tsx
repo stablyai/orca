@@ -61,6 +61,7 @@ const FOLDERS: Record<string, string[]> = {
   '/work/starfall-racer/Tools': ['LevelEditor']
 }
 
+/** Enables the Engine plugin, or none, over a fake file system holding two project markers. */
 function installPlugin(enabled: boolean): void {
   usePluginPanelsStore.getState().setPlugins(enabled ? [enginePlugin] : [])
   Object.assign(window.api.fs, {
@@ -88,6 +89,7 @@ function Cards(): React.JSX.Element {
   )
 }
 
+/** The first card badge in `frame`, once the folder search shows it; throws after about 2 s. */
 async function waitForBadge(frame: HTMLElement): Promise<HTMLElement> {
   for (let attempt = 0; attempt < 40; attempt++) {
     const badge = frame.querySelector<HTMLElement>('[data-worktree-card-plugin-badge]')

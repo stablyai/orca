@@ -88,7 +88,8 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-// Why a path per test: path checks are cached for the session, like the sidebar's.
+/** Renders the badges of a workspace at `path`, on the SSH target `connectionId` names. Each test
+ *  uses its own path, since path checks are cached for the session, like the sidebar's. */
 function renderBadges(path: string, connectionId: string | null = null) {
   return render(
     <WorktreeCardPluginBadges

@@ -28,6 +28,8 @@ export async function projectPluginWorktreeBadges(
   )
 }
 
+/** A panel icon name as is, or an SVG path's markup; an unreadable or non-SVG file falls back to
+ *  the default icon. */
 async function resolveBadgeIcon(rootDir: string, icon: string): Promise<PluginWorktreeBadgeIcon> {
   if (!isPluginWorktreeBadgeSvgIcon(icon)) {
     return { kind: 'named', name: icon }
