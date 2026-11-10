@@ -24,8 +24,8 @@ type ComposerInitialTargetStateInput = Pick<
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { isWorkspaceStatusId } from '../../../../shared/workspace-statuses'
-import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-target'
-import { findActionableFolderProjectGroup } from '@/lib/new-workspace-project-options'
+import { resolveWorkspaceCreationTarget } from '@/lib/workspace/creation/project-host-workspace-target'
+import { findActionableFolderProjectGroup } from '@/lib/workspace/creation/new-workspace-project-options'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 
 export function useComposerInitialTargetState(input: ComposerInitialTargetStateInput) {

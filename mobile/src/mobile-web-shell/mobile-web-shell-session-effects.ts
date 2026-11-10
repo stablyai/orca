@@ -1,8 +1,10 @@
 import { fetchMobileWebBundle } from '../transport/web-bundle/mobile-web-bundle-fetch'
+import { mobileWebBundleStreamBytes } from '../transport/web-bundle/mobile-web-bundle-window-reader'
 import { mobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-operations'
-import type {
-  MobileWebBundleManifestRead,
-  MobileWebBundleManifestReply
+import {
+  shellDownloadedAssets,
+  type MobileWebBundleManifestRead,
+  type MobileWebBundleManifestReply
 } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import type { MobileWebBundleCompatManifest } from '../transport/web-bundle/mobile-web-bundle-compat'
 import { runRpcOperation } from '../transport/rpc/rpc-operation'
@@ -87,8 +89,9 @@ export async function readManifest(
     manifest: {
       ...compatOf(manifest),
       buildId: manifest.buildId,
-      totalBytes: manifest.totalBytes,
-      totalAssets: manifest.assets.length,
+      // What this shell downloads: wire bytes, without the catalog chunks it skips.
+      totalBytes: mobileWebBundleStreamBytes(opened),
+      totalAssets: shellDownloadedAssets(manifest).length,
       routes: manifest.routes
     }
   })

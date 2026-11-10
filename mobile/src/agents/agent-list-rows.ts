@@ -159,6 +159,18 @@ export function selectAgentsNeedingYou(input: AgentListInput): AgentListRow[] {
     .sort(byStatusThenRecent)
 }
 
+/** Live agents that need the user or are working, workers included: Feed's Active rows. */
+export function selectActiveAgents(input: AgentListInput): AgentListRow[] {
+  return input.hosts
+    .flatMap((host) => everyRow(hostAgents(input, host.id).roots))
+    .filter((row) => {
+      const group = agentStatusGroup(row.dotState)
+      return !row.stale && (group === 'needs-you' || group === 'working')
+    })
+    .map(asTopLevel)
+    .sort(byStatusThenRecent)
+}
+
 export function countAgentsNeedingYouByHost(
   rows: readonly AgentListRow[]
 ): Readonly<Record<string, number>> {

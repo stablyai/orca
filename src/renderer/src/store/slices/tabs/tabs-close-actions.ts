@@ -4,7 +4,6 @@ import {
   emptiedWorktreeLandingPatch,
   landOnEmptiedWorktree
 } from './tabs-empty-workspace'
-export { landOnEmptiedWorktree } from './tabs-empty-workspace'
 import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/drafts/native-chat-draft-position-retirement'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'

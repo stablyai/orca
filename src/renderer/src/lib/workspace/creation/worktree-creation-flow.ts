@@ -20,7 +20,7 @@ import {
 import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
-} from '@/lib/workspace-create-error-format'
+} from '@/lib/workspace/creation/workspace-create-error-format'
 
 type ContinueBackgroundWorktreeCreationOptions = {
   revealCreationSurface?: boolean

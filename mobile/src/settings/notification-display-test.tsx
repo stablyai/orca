@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ListRow } from '../components/list/ListGroup'
 import { useAllHostClients } from '../transport/connection/use-all-host-clients'
-import { loadHostCatalog } from '../transport/hosts/host-store'
+import { loadHostCatalog } from '../host-catalog/host-store'
 import { pushDeliveryTest } from '../notifications/mobile-push-delivery-test-operations'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'

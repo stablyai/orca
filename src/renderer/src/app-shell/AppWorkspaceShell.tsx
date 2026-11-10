@@ -1,11 +1,12 @@
 import { memo, Suspense, useCallback, useRef } from 'react'
-import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-capture'
 import { pendingCreationOpensNativeChat } from '@/lib/workspace/creation/pending-worktree-creation'
+import { showsFloatingRightSidebarToggle } from '@/lib/right-sidebar-visibility'
 import Sidebar from '../components/Sidebar'
-import RightSidebar from '../components/right-sidebar'
+import RightSidebar from '../components/right-sidebar/index'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import { FloatingTerminalToggleButton } from '../components/floating-terminal/FloatingTerminalToggleButton'
 import { TerminalWorkbenchContainer } from '../components/TerminalWorkbenchContainer'
@@ -194,7 +195,7 @@ export function AppWorkspaceShell(props: {
               ) : null}
               <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
                 {/* Match the open sidebar header’s alignment to prevent toggle jitter. */}
-                {layout.workspaceChromeActive && !layout.rightSidebarOpen && (
+                {showsFloatingRightSidebarToggle(layout) && (
                   <div
                     className="absolute top-0 z-10 flex items-center h-[36px]"
                     style={
@@ -205,7 +206,7 @@ export function AppWorkspaceShell(props: {
                       } as React.CSSProperties
                     }
                   >
-                    {layout.showRightSidebarControls ? <RightSidebarToggle /> : null}
+                    <RightSidebarToggle />
                   </div>
                 )}
                 <div className="flex flex-1 min-w-0 min-h-0 flex-col">

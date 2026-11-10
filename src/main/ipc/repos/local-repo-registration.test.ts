@@ -7,7 +7,7 @@ import type { Store } from '../../persistence/loading-store/store'
 import { addLocalRepoFromPath } from './local-repo-registration'
 
 vi.mock('../../repository-icons/repo-icon-autodetect', () => ({
-  detectRepoIconAndUpstream: vi.fn().mockResolvedValue({})
+  detectRepoLocalMetadata: vi.fn().mockResolvedValue({})
 }))
 vi.mock('../../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: vi.fn().mockResolvedValue(undefined)

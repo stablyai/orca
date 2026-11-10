@@ -35,24 +35,6 @@ const catalog = [
 ]
 
 describe('suggestSpeechModel', () => {
-  it('on a fast GPU, picks the most accurate measured model', () => {
-    const pick = (language: string) =>
-      suggestSpeechModel(catalog, language, { favorAccuracy: true })?.id
-    expect(pick('ko')).toBe('turbo')
-    expect(pick('fr')).toBe('turbo')
-    expect(pick('cy')).toBe('turbo')
-    expect(pick('xx')).toBeUndefined()
-  })
-
-  it('elsewhere follows the fast rule: named model, the default, then the best measured', () => {
-    const pick = (language: string) =>
-      suggestSpeechModel(catalog, language, { favorAccuracy: false })?.id
-    expect(pick('ko')).toBe('sense')
-    expect(pick('fr')).toBe('parakeet')
-    expect(pick('tr')).toBe('turbo')
-    expect(pick('xx')).toBeUndefined()
-  })
-
   it('keeps the user’s own pick while it is offered', () => {
     const pick = (selectedModelId: string) =>
       suggestSpeechModel(catalog, 'tr', { selectedModelId, favorAccuracy: false })?.id

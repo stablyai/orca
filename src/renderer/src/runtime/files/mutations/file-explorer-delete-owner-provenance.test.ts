@@ -15,7 +15,7 @@ import type {
   TreeNode
 } from '@/components/right-sidebar/file-explorer/tree/file-explorer-types'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
-import { renameFileOnDisk } from '@/lib/rename-file'
+import { renameFileOnDisk } from '@/lib/editor/file-operations/rename-file'
 
 const { confirm, toastError } = vi.hoisted(() => ({
   confirm: vi.fn(),

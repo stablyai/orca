@@ -4,8 +4,11 @@ import { isWorktreeRemovalFenceError } from '../../../../../shared/worktree/remo
 import { safeFit } from '@/lib/pane-manager/pane-fit'
 // Preserve WebGL hook registration before deferred connection setup.
 import '@/lib/pane-manager/pane-webgl-renderer'
-import { getWindowParkVisible, subscribeWindowParkVisibility } from '@/lib/window-park-visibility'
-import { useAppStore } from '@/store'
+import {
+  getWindowParkVisible,
+  subscribeWindowParkVisibility
+} from '@/lib/window-activity/window-park-visibility'
+import { useAppStore } from '@/store/index'
 import { createCodexBackfillErrorDetector } from '../provider-notices/codex-backfill/codex-backfill-error-detector'
 import { hasWorktreeSleepIntent, onWorktreeSleepIntentCleared } from '@/lib/worktree-sleep-intent'
 

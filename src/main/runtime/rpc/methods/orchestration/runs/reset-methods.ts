@@ -1,9 +1,10 @@
-import { defineMethod } from '../../../core'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { ResetParams } from '../../../../../../shared/rpc-contract/orchestration-params'
 
 export const ORCHESTRATION_RESET_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.reset',
+    access: { kind: 'localOnly', targets: {} },
     permission: 'workspace',
     params: ResetParams,
     handler: (params, { runtime }) => {
