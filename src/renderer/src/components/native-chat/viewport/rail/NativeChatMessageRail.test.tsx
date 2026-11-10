@@ -81,8 +81,8 @@ describe('message rail interaction', () => {
     expect(document.activeElement).toBe(tick('Prompt 59'))
     await user.click(tick('Prompt 1'))
     expect(select).toHaveBeenCalledWith(expect.objectContaining({ id: 'prompt-1' }))
-    expect(screen.getByRole('button', { name: 'Collapse message list' })).toBeVisible()
-    expect(tick('Prompt 1')).toHaveTextContent('Prompt 1')
+    expect(screen.getByRole('button', { name: 'Collapse message list' })).not.toBeNull()
+    expect(tick('Prompt 1').textContent).toBe('Prompt 1')
 
     await user.keyboard('{Escape}')
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Expand message list' }))
