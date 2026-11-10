@@ -273,6 +273,14 @@ function SessionOptionPopover(props: {
           }
         }}
       >
+        {props.isWorking && model.transport === 'agent-session' ? (
+          <p className="px-3 pt-2 text-xs text-muted-foreground">
+            {t(
+              'components.native-chat.composer.optionsApplyNext',
+              'The agent is working. Changes apply to your next message.'
+            )}
+          </p>
+        ) : null}
         {model.kind.type === 'select' && !model.action ? (
           <NativeChatModelCombobox
             choices={model.kind.choices}

@@ -20280,7 +20280,8 @@
           "medium": "Med",
           "xhigh": "XHigh"
         },
-        "imageUnavailable": "Preview unavailable"
+        "imageUnavailable": "Preview unavailable",
+        "optionsApplyNext": "The agent is working. Changes apply to your next message."
       },
       "tool": {
         "exitCode": "exit {{value0}}",
