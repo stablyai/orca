@@ -1,6 +1,6 @@
 import type { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import type { OrchestrationEntryCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import type { OrchestrationCompatibilityCallerAuthority } from '../../../../orchestration/terminal-authority/orchestration-compatibility-authority'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import {
@@ -20,7 +20,7 @@ const NOTHING_SENT = { effectsApplied: false } as const
 export function peerMailLocalCaller(args: {
   runtime: OrcaRuntimeService
   from: string | undefined
-  orchestrationCaller: OrchestrationSessionCaller | undefined
+  orchestrationCaller: OrchestrationEntryCaller | undefined
   attestedCaller: OrchestrationCompatibilityCallerAuthority | undefined
 }): { address: string; paneKey: string | null } {
   if (args.orchestrationCaller) {
@@ -51,7 +51,7 @@ export function peerMailLocalCaller(args: {
 export async function sendPeerMail(args: {
   params: z.infer<typeof SendParams> & { on: string }
   runtime: OrcaRuntimeService
-  orchestrationCaller: OrchestrationSessionCaller | undefined
+  orchestrationCaller: OrchestrationEntryCaller | undefined
   attestedCaller: OrchestrationCompatibilityCallerAuthority | undefined
   orchestrationMutation: { callerFingerprint: string; requestId: string } | undefined
   recordMutationReceipt: ((receipt: unknown) => void) | undefined

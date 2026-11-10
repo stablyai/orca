@@ -5,6 +5,9 @@ import type { SessionLink } from '../../../../../shared/session-link'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
 
 export function isSessionLinkOwner(context: RpcContext): boolean {
+  if (context.orchestrationCaller?.kind === 'peer') {
+    return false
+  }
   return (
     context.caller?.kind === 'desktop' ||
     (context.caller?.kind === 'paired-device' && context.clientKind === 'runtime')
@@ -24,7 +27,10 @@ export function sessionLinkActor(context: RpcContext, link: SessionLink): string
     return 'owner'
   }
   const caller = context.orchestrationCaller
-  const participant = caller && link.participants.find((p) => p.sessionId === caller.sessionId)
+  const participant =
+    caller?.kind !== 'peer' &&
+    caller &&
+    link.participants.find((p) => p.sessionId === caller.sessionId)
   if (!participant) {
     throw new OrchestrationError(
       'participant_required',

@@ -30,6 +30,7 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
   access: {
     kind: 'writes',
     caller: 'from',
+    server: 'on',
     targets: { id: 'message', run: 'run' },
     rule: replyAccess
   },

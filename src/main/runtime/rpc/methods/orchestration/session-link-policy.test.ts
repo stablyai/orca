@@ -8,6 +8,10 @@ import { SESSION_LINK_METHODS } from './session-link-methods'
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
 import { sessionLinkSendReceipt } from '../../../../../shared/session-link-receipt'
 import { sessionLinkNextMessage } from '../../../../../shared/session-link-wait'
+import {
+  peerCoordinatorCaller,
+  type OrchestrationSessionCaller
+} from '../../../orchestration/addressing/orchestration-caller-identity'
 
 vi.mock('../../../orchestration/session-links/session-link-delivery', () => ({
   redriveSessionLinks: vi.fn(async () => {}),
@@ -26,7 +30,7 @@ describe('owner-controlled collaboration policy', () => {
   let db: OrchestrationDb
   let store: SessionLinkStore
   let owner: RpcContext
-  let agent: RpcContext
+  let agent: RpcContext & { orchestrationCaller: OrchestrationSessionCaller }
   beforeEach(() => {
     db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
@@ -79,6 +83,49 @@ describe('owner-controlled collaboration policy', () => {
       action: 'resume',
       ownerMessage
     })
+
+  it('refuses a paired peer coordinator as both a link owner and a participant without effects', async () => {
+    const peer = peerCoordinatorCaller(
+      db.admitPeerRun({
+        peerFingerprint: 'paired-server',
+        peerRun: { runId: 'remote-run', conversationId: 'remote-conversation', label: 'Peer' }
+      })
+    )
+    const context: RpcContext = {
+      ...owner,
+      caller: { kind: 'paired-device', deviceId: 'paired-server' },
+      clientKind: 'runtime',
+      orchestrationCaller: peer
+    }
+    const before = store.get('link')
+    const events = store.events('link')
+    await expect(
+      call(
+        'linkSetPolicy',
+        {
+          id: 'link',
+          operationId: 'peer-policy',
+          version: before.version,
+          policy: { turnLimit: null }
+        },
+        context
+      )
+    ).rejects.toThrow('is not in the Run Peer coordinates here')
+    await expect(
+      call(
+        'linkSend',
+        {
+          id: 'link',
+          operationId: 'peer-message',
+          kind: 'message',
+          body: 'Peer message'
+        },
+        context
+      )
+    ).rejects.toThrow('is not in the Run Peer coordinates here')
+    expect(store.get('link')).toEqual(before)
+    expect(store.events('link')).toEqual(events)
+  })
 
   it('runs beyond six wake-ups and twelve messages, while retaining repetition and backlog protection', async () => {
     await policy(null)
@@ -269,7 +316,7 @@ describe('owner-controlled collaboration policy', () => {
       {
         ...agent,
         orchestrationCaller: {
-          ...agent.orchestrationCaller!,
+          ...agent.orchestrationCaller,
           orcaSessionId: testOrcaSessionId('claude_review'),
           sessionId: testOrcaSessionId('claude_review')
         }
