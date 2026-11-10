@@ -11,7 +11,12 @@ import { encodePaletteIdentity } from '../../../../shared/palette-match/palette-
 import type { activateAndRevealWorkspace as ActivateWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import type { WorkspaceTabPaletteActivationResult } from '@/lib/workspace/search/tabs/workspace-tab-palette-activation'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
-import { makeFolderWorkspace, makeRepo, makeWorktree } from './worktree-jump-palette-test-fixtures'
+import {
+  makeFolderWorkspace,
+  makeRecentTabState,
+  makeRepo,
+  makeWorktree
+} from './worktree-jump-palette-test-fixtures'
 
 const { activateAndRevealWorkspace } = vi.hoisted(() => ({
   activateAndRevealWorkspace: vi.fn<typeof ActivateWorkspace>(() => ({ primaryTabId: null }))
@@ -205,6 +210,22 @@ describe('WorktreeJumpPalette', () => {
     })
     document.body.replaceChildren()
     useAppStore.setState(initialAppState, true)
+  })
+
+  it('lists and selects Workspaces ahead of Open Tabs when a query matches both', async () => {
+    await renderPalette(makeRecentTabState())
+
+    await act(async () => setCommandQuery?.('alpha'))
+    await flushEffects()
+    const items = [...testContainer.querySelectorAll<HTMLElement>('[data-command-item]')].map(
+      (node) => node.dataset.commandItem ?? ''
+    )
+    const worktreePrefix = encodePaletteIdentity(['worktree'])
+    expect(items.some((item) => !item.startsWith(worktreePrefix))).toBe(true)
+    expect(items[0]?.startsWith(worktreePrefix)).toBe(true)
+    expect(
+      testContainer.querySelector<HTMLElement>('[data-command-dialog]')?.dataset.commandValue
+    ).toBe(items[0])
   })
 
   it('excludes only the current host when folder ids collide', async () => {

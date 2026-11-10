@@ -265,7 +265,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(after.some((id) => before.includes(id))).toBe(false)
   })
 
-  /** A tab whose title starts with the query, against worktrees that only match mid-name. */
+  /** A tab whose title starts with the query, against a worktree that only matches mid-name. */
   function makeTypedRelevanceState(): Partial<AppState> {
     const weak = makeWorktree('wt-weak', 'improve-agent-dashboard-performance')
     const host = makeWorktree('wt-host', 'docs-update')
@@ -290,23 +290,23 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     await renderPalette(makeTypedRelevanceState())
 
     await act(async () => {
-      setCommandQuery?.('improve')
+      setCommandQuery?.('review')
     })
     await flushEffects()
-    expect(getCommandValue()).toBe(encodePaletteIdentity(['worktree', '|wt-weak']))
+    expect(getCommandValue()).toBe(
+      encodePaletteIdentity(['workspace-tab', '', 'wt-host', 'tab-host'])
+    )
 
     await act(async () => {
       setCommandQuery?.('perf')
-      setCommandSelection?.(encodePaletteIdentity(['worktree', '|wt-weak']))
+      setCommandSelection?.(encodePaletteIdentity(['workspace-tab', '', 'wt-host', 'tab-host']))
     })
     await flushEffects()
 
     expect(getRenderedRowIds().find((id) => id.length > 0)).toBe(
-      encodePaletteIdentity(['workspace-tab', '', 'wt-host', 'tab-host'])
+      encodePaletteIdentity(['worktree', '|wt-weak'])
     )
-    expect(getCommandValue()).toBe(
-      encodePaletteIdentity(['workspace-tab', '', 'wt-host', 'tab-host'])
-    )
+    expect(getCommandValue()).toBe(encodePaletteIdentity(['worktree', '|wt-weak']))
   })
 
   it('captures the order when tabs hydrate after the palette is already open', async () => {
