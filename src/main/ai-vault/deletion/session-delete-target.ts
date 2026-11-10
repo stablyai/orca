@@ -47,7 +47,7 @@ export function validateAiVaultSessionDeleteTarget(
   if (!filePath) {
     return rejected(agent, 'invalid-path')
   }
-  if (!isAiVaultDeletableAgent(agent)) {
+  if (agent === 'codex' || !isAiVaultDeletableAgent(agent)) {
     return rejected(agent, 'unsupported-agent')
   }
   // Electron removal acts only on this host; remote paths require their own execution host.

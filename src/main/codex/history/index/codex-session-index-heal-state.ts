@@ -1,3 +1,4 @@
+import { createCodexRolloutVisibilityPredicate } from '../deletion/codex-session-deletion-record'
 import { appendFileSync, mkdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname } from 'node:path'
 import {
@@ -41,6 +42,7 @@ export type HealMarkerSummary = {
 export async function collectPendingHealThreads(
   paths: CodexSessionIndexHealPaths
 ): Promise<PendingHealThread[]> {
+  const canPublish = await createCodexRolloutVisibilityPredicate({ includePending: true })
   const processed = await readProcessedHealThreads(paths)
   const pendingByThreadId = new Map<string, PendingHealThread>()
   for await (const line of streamCodexSessionLedgerRecords(paths.auditLogPath, {
@@ -57,7 +59,7 @@ export async function collectPendingHealThreads(
       continue
     }
     const rollout = parseCodexRolloutThreadId(line.target)
-    if (!rollout) {
+    if (!rollout || !canPublish(line.target)) {
       continue
     }
     const { threadId } = rollout

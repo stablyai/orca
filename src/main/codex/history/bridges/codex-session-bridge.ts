@@ -1,3 +1,4 @@
+import { createCodexRolloutVisibilityPredicate, withCodexRolloutPublication } from '../deletion/codex-session-deletion-record'
 import {
   existsSync,
   lstatSync,
@@ -82,18 +83,22 @@ export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
     limit: LEGACY_COPY_READ_BUDGET_BYTES
   }
   const hasLegacyCopies = existsSync(join(managedHome, '.orca-session-copies'))
+  const canPublish = await createCodexRolloutVisibilityPredicate({ includePending: true })
   try {
     for await (const systemSessionFilePath of listCodexSessionJsonlFilesIncrementally(
       systemSessionsRoot,
       options
     )) {
       summary.scannedFiles += 1
+      if (!canPublish(systemSessionFilePath)) {
+        continue
+      }
       const relativePath = relative(systemSessionsRoot, systemSessionFilePath)
       const managedSessionFilePath = join(managedSessionsRoot, relativePath)
       let bridged: boolean | 'existing' | 'missing'
       let mayBeMovedAside = hasLegacyCopies
       do {
-        bridged = bridgeSystemCodexSessionFile(
+        bridged = await bridgeSystemCodexSessionFile(
           systemSessionFilePath,
           managedSessionFilePath,
           relativePath,
@@ -120,7 +125,8 @@ export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
       if (bridged === 'existing') {
         if (hasLegacyCopies && existsSync(legacySessionCopyMarkerPath(managedHome, relativePath))) {
           // Past the read budget a copy waits for a later pass; only its marker is hidden from older builds.
-          await (readBudget.exhausted
+          await withCodexRolloutPublication(systemSessionFilePath, undefined, async () => {
+            await (readBudget.exhausted
             ? protectLegacySessionCopy({ managedHome, relativePath })
             : swapLegacySessionCopy({
                 managedHome,
@@ -128,6 +134,7 @@ export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
                 expectedSourcePath: systemSessionFilePath,
                 readBudget
               }))
+          })
         }
       } else if (bridged) {
         summary.linkedFiles += 1
@@ -140,14 +147,17 @@ export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
   return summary
 }
 
-function bridgeSystemCodexSessionFile(
+async function bridgeSystemCodexSessionFile(
   systemSessionFilePath: string,
   managedSessionFilePath: string,
   relativePath: string,
   mayBeMovedAside = false
-): boolean | 'existing' | 'missing' {
+): Promise<boolean | 'existing' | 'missing'> {
   if (existsSync(managedSessionFilePath)) {
-    return (
+    if (!lstatSync(managedSessionFilePath).isSymbolicLink()) {
+      return 'existing'
+    }
+    return withCodexRolloutPublication(systemSessionFilePath, 'existing' as const, async () =>
       replaceSymlinkSessionBridgeWithHardlink(
         systemSessionFilePath,
         managedSessionFilePath,
@@ -159,8 +169,10 @@ function bridgeSystemCodexSessionFile(
   if (mayBeMovedAside) {
     return 'missing'
   }
-  mkdirSync(dirname(managedSessionFilePath), { recursive: true })
-  return linkSystemCodexSessionFile(systemSessionFilePath, managedSessionFilePath, relativePath)
+  return withCodexRolloutPublication(systemSessionFilePath, false, async () => {
+    mkdirSync(dirname(managedSessionFilePath), { recursive: true })
+    return linkSystemCodexSessionFile(systemSessionFilePath, managedSessionFilePath, relativePath)
+  })
 }
 
 function linkSystemCodexSessionFile(

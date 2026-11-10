@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 
 export type CodexSessionBridgeIncrementalOptions = {
+  includeSymlinkFiles?: boolean
   /** Directory entries to process before yielding back to the event loop. */
   batchSize?: number
   /** Delay after each processed batch; zero still yields on a timer turn. */
@@ -92,7 +93,7 @@ async function* listCodexSessionFilesIncrementally(
         const childPath = join(currentDirectory, entry.name)
         if (entry.isDirectory()) {
           pendingDirectories.push(childPath)
-        } else if (entry.isFile() && isSessionFile(entry.name)) {
+        } else if ((entry.isFile() || (options.includeSymlinkFiles && entry.isSymbolicLink())) && isSessionFile(entry.name)) {
           yield childPath
         }
         entriesSinceYield += 1

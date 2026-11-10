@@ -3,6 +3,7 @@ import type { CodexSessionBridgeIncrementalOptions } from '../rollouts/codex-ses
 export type CodexSessionBackfillSummary = {
   scanTruncated?: boolean
   stopped: boolean
+  deferredFiles?: number
   scannedFiles: number
   linkedFiles: number
   copiedFiles: number
