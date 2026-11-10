@@ -20,6 +20,7 @@ import {
 } from '../../../../../shared/git/history/git-history-graph'
 import { useGitGraphHistory, gitGraphFilterSupported } from './use-git-graph-history'
 import { GitGraphFilter } from './git-graph-filter'
+import { loadMoreInView } from './git-graph-viewport-paging'
 import { GitGraphDetails } from './git-graph-details'
 import { GitGraphRefs, useGitGraphWorkspaces } from './git-graph-ref-menu'
 import { cn } from '@/lib/utils'
@@ -93,21 +94,13 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
   const virtualItems = virtualizer.getVirtualItems()
   // Null while the pane has no height; read after getVirtualItems() recomputes it.
   const lastVisibleIndex = virtualizer.range?.endIndex ?? -1
-  const pagedResult = useRef<typeof result>(undefined)
+  const endInView = lastVisibleIndex >= 0 && lastVisibleIndex >= rows.length - 1 - PAGE_AHEAD_ROWS
   useEffect(() => {
-    // Viewport demand, not scroll events: page whenever the end of loaded rows is in view, once per result.
-    if (
-      !result?.hasMore ||
-      loading ||
-      lastVisibleIndex < 0 ||
-      lastVisibleIndex < rows.length - 1 - PAGE_AHEAD_ROWS ||
-      pagedResult.current === result
-    ) {
-      return
+    // Viewport demand, not scroll events: page whenever the end of loaded rows is in view.
+    if (endInView) {
+      loadMoreInView(controller)
     }
-    pagedResult.current = result
-    void controller.loadMore()
-  }, [result, rows.length, lastVisibleIndex, loading, controller])
+  }, [endInView, result, loading, controller])
   const selected = result?.items.find((item) => item.id === selectedId)
   useLayoutEffect(() => {
     if (scroll.current) {

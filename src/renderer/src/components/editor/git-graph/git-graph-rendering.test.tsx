@@ -697,7 +697,7 @@ it('pages a pane taller than the loaded commits until they overflow it, and agai
   expect(container.textContent).not.toContain('Load more')
 })
 
-it('leaves a failed page to Load more instead of retrying it automatically', async () => {
+it('leaves a failed page to Load more, even after switching tabs away and back', async () => {
   viewport.rows = Infinity
   getHistory
     .mockReset()
@@ -705,6 +705,7 @@ it('leaves a failed page to Load more instead of retrying it automatically', asy
     .mockRejectedValueOnce(new Error('network down'))
     .mockImplementation(async (_owner, options) => longPage(options.skip))
   await renderTab()
+  await act(async () => root.render(<div>Another tab</div>))
   await renderTab()
   expect(loadedCount()).toBe(50)
   expect(container.textContent).toContain('network down')
