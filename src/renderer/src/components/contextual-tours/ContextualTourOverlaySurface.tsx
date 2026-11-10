@@ -28,7 +28,7 @@ import {
   type ContextualTourFloatingPosition
 } from './contextual-tour-floating-position'
 import { useTranslate } from '@/i18n/use-translate'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import { getMeasurableContextualTourTarget } from './contextual-tour-gate'
 

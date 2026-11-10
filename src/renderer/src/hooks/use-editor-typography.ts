@@ -5,7 +5,7 @@ import {
   resolveEditorTypography,
   type EditorTypography,
   type EditorTypographySurface
-} from '@/lib/editor-typography'
+} from '@/lib/editor/appearance/editor-typography'
 
 type ResolvedEditorTypography = {
   settings: AppState['settings']

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { ClientHostedBrowserRowsEvent } from '../../../shared/client-hosted-browser-rows'
 import {
-  createHarnessStoreState,
   loadIpcEventsHarness,
   type IpcEventsHarness,
   type IpcEventsHarnessOptions
 } from './ipc-events-test-harness'
+import { createHarnessStoreState } from './ipc-events-harness-store-state'
 
 const WT = 'wt-1'
 

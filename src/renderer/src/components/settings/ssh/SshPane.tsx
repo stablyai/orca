@@ -26,7 +26,7 @@ import {
   EMPTY_FORM,
   type EditingTarget,
   getEditingTargetForSshTarget
-} from './targets/ssh-target-draft'
+} from '../../ssh-host-form/ssh-target-draft'
 
 import { buildSshTargetSavePayload } from './targets/ssh-target-save-payload'
 import { HostRemoveDialog } from '../../sidebar/HostRemoveDialog'

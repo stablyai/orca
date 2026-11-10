@@ -1,12 +1,12 @@
 import type { EditorFileDropDestination } from './editor-file-drop-destination'
 import { toast } from 'sonner'
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../shared/editor-language/editor-language-detect'
 import {
   isPathInsideWorktree,
   toWorktreeRelativePath
 } from '../../../../shared/terminal/links/terminal-links'
 import { useAppStore } from '@/store'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { basename, joinPath } from '@/lib/path'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
@@ -19,7 +19,7 @@ import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expect
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { DROP_STAGING_RELATIVE_DIR } from '../../../../shared/drop-staging-ignore'
-import { openDocumentInFloatingWorkspace } from '@/lib/open-document-in-floating-workspace'
+import { openDocumentInFloatingWorkspace } from '@/components/floating-terminal/open-document-in-floating-workspace'
 import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {

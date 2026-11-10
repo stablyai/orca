@@ -20,21 +20,15 @@ import {
   structuredAgentSessionIdOfDraftScope
 } from '../../drafts/native-chat-draft-scope'
 import { resolveNativeChatComposerDraftOwner } from '../../drafts/native-chat-composer-draft-memory'
+import {
+  chipScopes,
+  nativeChatPendingAttachmentScope
+} from './native-chat-pending-attachment-scopes'
 
 const EMPTY: readonly NativeChatComposerImageAttachment[] = Object.freeze([])
 const pendingCache = new Map<string, readonly NativeChatComposerImageAttachment[]>()
-// Capture ownership before tab removal can erase it.
-const chipScopes = new Map<string, string>()
 const pendingOwners = new Map<string, NativeChatComposerDraftOwner>()
 const listeners = new Map<string, Set<() => void>>()
-
-export function nativeChatPendingAttachmentScope(scope: string, id: string): string {
-  return currentDraftScope(chipScopes.get(id) ?? scope)
-}
-
-export function hasNativeChatPendingAttachment(id: string): boolean {
-  return chipScopes.has(id)
-}
 
 /** Keep snapshot identity stable until pending chips change. */
 export function nativeChatPendingAttachmentSnapshot(
@@ -119,7 +113,7 @@ export function takeNativeChatPendingAttachment(
   scopeKey: string,
   id: string
 ): NativeChatComposerImageAttachment | undefined {
-  scopeKey = pendingDestination(scopeKey, id)
+  scopeKey = nativeChatPendingAttachmentScope(scopeKey, id)
   const current = nativeChatPendingAttachmentSnapshot(scopeKey)
   const taken = current.find((attachment) => attachment.id === id && attachment.pending)
   if (taken) {
@@ -190,10 +184,6 @@ export function moveLaunchPendingAttachmentListeners(from: string, to: string): 
   listeners.set(to, target)
 }
 
-function pendingDestination(scope: string, id: string): string {
-  return currentDraftScope(chipScopes.get(id) ?? scope)
-}
-
 /** Persist completed images in attachment order; return false if already removed. */
 export function settleNativeChatPendingAttachment(
   scopeKey: string,
@@ -201,7 +191,7 @@ export function settleNativeChatPendingAttachment(
   path: string,
   connectionId?: string | null
 ): boolean {
-  scopeKey = pendingDestination(scopeKey, id)
+  scopeKey = nativeChatPendingAttachmentScope(scopeKey, id)
   const current = nativeChatPendingAttachmentSnapshot(scopeKey)
   const index = current.findIndex((chip) => chip.id === id && chip.pending)
   if (index === -1) {
@@ -241,7 +231,9 @@ export function settleNativeChatPendingAttachmentReferences(
   insertAtCaret?: (paths: string[]) => void
 ): boolean {
   const originalScope = currentDraftScope(scopeKey)
-  scopeKey = references.length ? pendingDestination(scopeKey, references[0].id) : scopeKey
+  scopeKey = references.length
+    ? nativeChatPendingAttachmentScope(scopeKey, references[0].id)
+    : scopeKey
   const owner = pendingOwners.get(scopeKey)
   const paths = references.flatMap(({ id, path }) =>
     takeNativeChatPendingAttachment(scopeKey, id) ? [path] : []

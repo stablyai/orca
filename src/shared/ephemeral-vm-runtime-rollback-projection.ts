@@ -1,11 +1,30 @@
 import { featureIdentity, sortRuntimeFeatures } from './ephemeral-vm-runtime-feature-store'
 import {
+  hasEphemeralVmRecipeResult,
   RollbackEphemeralVmRuntimeRecordSchema,
+  type EphemeralVmProvisionedRuntimeRecord,
   type EphemeralVmRuntimeRecord
 } from './ephemeral-vm-runtimes'
 
+/** Older builds require `recipeResult` on every record, so write-ahead records live in a sidecar they never read. */
+export function partitionRuntimesForRollback(runtimes: readonly EphemeralVmRuntimeRecord[]): {
+  rollback: EphemeralVmRuntimeRecord[]
+  writeAhead: EphemeralVmRuntimeRecord[]
+} {
+  const rollback: EphemeralVmRuntimeRecord[] = []
+  const writeAhead: EphemeralVmRuntimeRecord[] = []
+  for (const runtime of runtimes) {
+    if (hasEphemeralVmRecipeResult(runtime)) {
+      rollback.push(projectRuntimeForRollback(runtime))
+    } else {
+      writeAhead.push(runtime)
+    }
+  }
+  return { rollback, writeAhead }
+}
+
 export function projectRuntimeForRollback(
-  runtime: EphemeralVmRuntimeRecord
+  runtime: EphemeralVmProvisionedRuntimeRecord
 ): EphemeralVmRuntimeRecord {
   const recipe = runtime.recipe
     ? (({ checkoutMode: _checkoutMode, ...rollbackRecipe }) => rollbackRecipe)(runtime.recipe)

@@ -68,7 +68,7 @@ export function ConflictBadge({ entry }: { entry: GitStatusEntry }): React.JSX.E
   }
 
   return (
-    <TooltipProvider delayDuration={300}>
+    <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>{badge}</TooltipTrigger>
         <TooltipContent side="left" sideOffset={6}>

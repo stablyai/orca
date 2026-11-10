@@ -5,18 +5,11 @@ import type { OpenFile } from '../types/open-file'
 import { ownsGlobalSelection } from '../../../workspaces/selection/global-selection-owner'
 import type { EditorOpenLinkIntent } from '../types/editor-open-link-intent'
 import { pickAdjacentEditorOpenGroupId } from './editor-open-adjacent-group'
-import {
-  captureLinkOpenIntent,
-  isLiveLinkOpenGroup as isLiveEditorOpenGroup
-} from '@/lib/link-open-intent'
+import { captureLinkOpenIntent, isLiveLinkOpenGroup } from '@/lib/link-open-intent'
 import type { LinkPlacementState } from '@/lib/link-open-intent'
 import { collectTabGroupLayoutGroupIds } from '../../../../../../shared/workspace-layout/tab-group-moves'
 import { resolveLinkOpenSidePlacement } from '@/lib/adjacent-link-open-group'
 import type { TabSplitTarget } from '../../tabs/tabs-slice-contract'
-export {
-  isLiveLinkOpenGroup as isLiveEditorOpenGroup,
-  canOpenLinkInSourceGroup
-} from '@/lib/link-open-intent'
 
 export function captureEditorOpenLinkIntent(
   state: Pick<AppState, 'unifiedTabsByWorktree'>,
@@ -141,7 +134,7 @@ export function resolveEditorLinkOpenPlacement(
 ): EditorLinkOpenPlacement {
   if (intent.targetGroupId) {
     return intent.workspaceId === worktreeId &&
-      isLiveEditorOpenGroup(state, worktreeId, intent.targetGroupId)
+      isLiveLinkOpenGroup(state, worktreeId, intent.targetGroupId)
       ? { kind: 'group', groupId: intent.targetGroupId }
       : { kind: 'refused' }
   }

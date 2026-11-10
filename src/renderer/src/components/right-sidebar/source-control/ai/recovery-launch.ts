@@ -8,21 +8,21 @@ import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/us
 import {
   AgentLaunchChoiceCancelled,
   acquireAgentLaunchChoices
-} from '@/lib/host-chat-program-acquisition'
+} from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { settleAgentTabLaunch } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
 import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import {
   ensureDetectedAgentsForWorktree,
   type WorktreeAgentInventoryState
-} from '@/lib/agent-detection-target-inventory'
+} from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import {
   pickSourceControlLaunchAgent,
   readSourceControlLaunchRecipeAgentId
@@ -35,7 +35,7 @@ import {
 import type { SourceControlLaunchActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { buildSourceControlRecoveryAgentCommandInput } from '../../../../../../shared/source-control/recovery/source-control-recovery-agent-command'
 import { translate } from '@/i18n/i18n'
-import { agentChoiceMayOpenAsChat } from '@/lib/host-chat-program'
+import { agentChoiceMayOpenAsChat } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 
 type SourceControlAiLaunchStoreSnapshot = Pick<AppState, 'settings'> & WorktreeAgentInventoryState

@@ -28,6 +28,7 @@ import { probeOpenCodeLaunchCapabilities } from './opencode-launch-capabilities'
 import { reserveOpenCodeStartupPrompt } from './opencode-startup-prompt-owner'
 import { installOpenCodeStartupPromptForLaunch } from './opencode-startup-prompt-installer'
 import { needsOpenCodePrivateServer, withOpenCodeStandaloneServer } from './opencode-private-server'
+import { applyOpenCodeRootModelOverlay } from './opencode-root-model-launch'
 
 export async function prepareOpenCodePtyLaunch(options: {
   command: string | undefined
@@ -138,6 +139,16 @@ export async function prepareOpenCodePtyLaunch(options: {
     }
   }
   if (capabilities.pluginApi === 'v2' && options.shell && !options.wsl && command) {
+    command = await applyOpenCodeRootModelOverlay({
+      command,
+      shell: options.shell,
+      version: capabilities.version,
+      launchEnv,
+      probeEnv,
+      envToDelete: options.envToDelete,
+      cwd: options.cwd,
+      promptBody: body
+    })
     // Only launches that would start the shared service may claim its port.
     const standalone = withOpenCodeStandaloneServer(command, options.shell)
     if (standalone !== command && needsOpenCodePrivateServer(probeEnv)) {

@@ -35,6 +35,7 @@ type ProfilePreferencesRuntime = Pick<
   | 'githubCacheDirty'
   | 'githubCachePersistedAt'
   | 'githubCacheLegacyFileHash'
+  | 'githubCachePersistenceDisabled'
   | 'githubCachePersistTimer'
   | 'githubCacheRetryDelayMs'
   | 'githubCacheWriteListeners'

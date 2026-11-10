@@ -16,11 +16,11 @@ import {
 import { browserAnnotationLimitMessage } from '../annotate/browser-annotation-limit-message'
 import {
   isBrowserAnnotationPageFull,
-  type BrowserGrabPayload
-} from '../../../../../shared/browser-grab-types'
+  type BrowserGrabPayload,
+  type GrabIntent
+} from '../../../../../shared/browser/element-grab/browser-grab-types'
 import type { GrabModeHook } from '../annotate/useGrabMode'
 import { preventAgentSendTargetOutsideDismiss } from '../annotate/prevent-agent-send-target-outside-dismiss'
-import type { GrabIntent } from '../describe-page/browser-page-types'
 
 export function BrowserPageChromeBanners({
   resourceNotice,

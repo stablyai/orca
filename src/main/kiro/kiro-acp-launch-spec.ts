@@ -4,7 +4,7 @@ import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
 import { KIRO_ACP_DIALECT } from '../acp/acp-dialects/kiro-dialect'
 import { KIRO_MODEL_LISTING_ARGS, parseKiroModelListing } from './kiro-model-listing'
 import type { StructuredAgentSessionHistory } from '../native-chat/structured-agent-cli-conversations'
-import { agentSessionSignInFor } from '../../shared/agent-session/lifecycle/agent-session-sign-in'
+import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/agent-session-setup-commands'
 
 // Chats cannot adopt Kiro's terminal conversations yet.
 const KIRO_SESSION_HISTORY: StructuredAgentSessionHistory = {
@@ -23,7 +23,7 @@ export const KIRO_LAUNCH_SPEC: AcpLaunchSpec = {
   args: () => ['acp', '--agent-engine', 'v3', '--auth-method', 'cli'],
   env: {},
   dialect: KIRO_ACP_DIALECT,
-  loginCommand: agentSessionSignInFor('kiro')?.loginCommand ?? [],
+  loginCommand: agentSessionSetupFor('kiro')?.loginCommand ?? [],
   // V3 ignores KIRO_HOME and reads its sign-in from the CLI store; the default home matches V2.
   account: directoryAccountBinding('KIRO_HOME', (homePath) => join(homePath, '.kiro')),
   installDirectories: ({ env, homePath }) => [

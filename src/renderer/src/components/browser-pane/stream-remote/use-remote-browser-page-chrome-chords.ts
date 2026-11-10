@@ -10,7 +10,7 @@ import {
   REMOTE_BROWSER_FIND_UNAVAILABLE_NOTICE_ID,
   type RemoteBrowserPaneNotice
 } from './remote-browser-page-input-model'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 const FIND_UNAVAILABLE_NOTICE_MS = 4000
 

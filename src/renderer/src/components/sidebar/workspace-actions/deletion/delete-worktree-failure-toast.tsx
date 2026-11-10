@@ -144,10 +144,7 @@ export function showDeleteWorktreeFailureToast({
     id: worktreeId,
     executionHostId: executionHostId ?? null
   })
-  const nestedTarget =
-    isNestedWorktreeRemovalError(error) && window.api?.worktrees.previewNestedRemoval
-      ? nestedRemovalTarget
-      : undefined
+  const nestedTarget = isNestedWorktreeRemovalError(error) ? nestedRemovalTarget : undefined
 
   // Custom content gives multiline errors their own line instead of squeezing them into Sonner’s action/title row.
   showToast(toastCopy.title, {

@@ -8,7 +8,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   activateFloatingWorkspaceCyclableTab,
   isFloatingWorkspacePanelFocused
-} from '@/lib/floating-workspace-terminal-actions'
+} from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import {
   isRecentTabSwitcherCommitRelease,
   matchesRecentTabSwitcherChord
@@ -20,7 +20,7 @@ import {
   type RecentTabSwitcherItem
 } from './recent-tab-switching'
 import { useTranslate } from '@/i18n/use-translate'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { cn } from '@/lib/utils'
 
 type SwitcherState = {

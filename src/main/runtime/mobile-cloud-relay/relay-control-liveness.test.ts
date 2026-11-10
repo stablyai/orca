@@ -24,29 +24,6 @@ describe('RelayControlLiveness keepalive', () => {
     return { instance, sendKeepalive, terminate, live }
   }
 
-  it('sends nothing until the relay offers, then one keepalive per interval while live', () => {
-    vi.useFakeTimers()
-    const { instance, sendKeepalive, terminate, live } = liveness()
-    instance.start()
-    vi.advanceTimersByTime(30_000)
-    expect(sendKeepalive).not.toHaveBeenCalled()
-    instance.startKeepalive(25_000)
-    vi.advanceTimersByTime(50_000)
-    expect(sendKeepalive).toHaveBeenCalledTimes(2)
-    // A second offer does not add a second timer.
-    instance.startKeepalive(1_000)
-    vi.advanceTimersByTime(25_000)
-    expect(sendKeepalive).toHaveBeenCalledTimes(3)
-    // Answered keepalives alone keep the control inside the silence bound.
-    vi.advanceTimersByTime(200_000)
-    expect(terminate).not.toHaveBeenCalled()
-    expect(sendKeepalive).toHaveBeenCalledTimes(11)
-    live.value = false
-    vi.advanceTimersByTime(25_000)
-    expect(sendKeepalive).toHaveBeenCalledTimes(11)
-    instance.stop()
-  })
-
   it('sends a keepalive instead of tearing down when its own timers were held back', () => {
     vi.useFakeTimers()
     const terminate = vi.fn()

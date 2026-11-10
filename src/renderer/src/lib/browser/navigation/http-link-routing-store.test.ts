@@ -247,38 +247,6 @@ it.each(['workspace', 'view'] as const)(
   }
 )
 
-it.each([false, true])(
-  'reveals the tab layout for a foreground source-aware HTTP link (already open: %s)',
-  async (reuse) => {
-    if (reuse) {
-      useAppStore.getState().createBrowserTab(WORKSPACE, URL_TO_OPEN, {
-        targetGroupId: 'b',
-        activate: false,
-        browserRuntimeEnvironmentId: null,
-        sessionProfileId: null
-      })
-    }
-    const opening = vi.spyOn(workspaceBrowserTabOpen, 'openWorkspaceBrowserTabForLink')
-    openHttpLink(URL_TO_OPEN, {
-      worktreeId: WORKSPACE,
-      sourceOwner: { kind: 'local' },
-      linkContext: {
-        linkIntent: captureLinkOpenIntent(useAppStore.getState(), WORKSPACE, 'source')
-      }
-    })
-    await vi.waitFor(() => expect(opening).toHaveBeenCalledOnce())
-    const outcome = await opening.mock.results[0]!.value
-
-    expect(outcome).toMatchObject({ status: 'opened' })
-    if (outcome.status !== 'opened') {
-      throw new Error('Expected opened link')
-    }
-    expect(useAppStore.getState().activeView).toBe('terminal')
-    expect(useAppStore.getState().activeGroupIdByWorktree[WORKSPACE]).toBe(outcome.result.groupId)
-    expect(useAppStore.getState().browserTabsByWorktree[WORKSPACE]).toHaveLength(reuse ? 2 : 1)
-  }
-)
-
 it('keeps the Activity view and current pane selected for background source-aware HTTP links', async () => {
   useAppStore.setState({
     settings: {
@@ -341,20 +309,16 @@ it('keeps the main view and workspace selected when revealing a floating HTTP li
   expect(useAppStore.getState().groupsByWorktree[floating]).toHaveLength(3)
 })
 
-it('opens a new page for an HTTP link without source context', async () => {
-  const browser = useAppStore.getState().createBrowserTab(WORKSPACE, URL_TO_OPEN, {
-    targetGroupId: 'b',
-    browserRuntimeEnvironmentId: null,
-    sessionProfileId: null,
-    activate: false
-  })
-  const completed = observeBrowserLinkOpen()
-  openHttpLink(URL_TO_OPEN, { worktreeId: WORKSPACE, sourceOwner: { kind: 'local' } })
-  const outcome = await completed
-  expect(outcome.status).toBe('opened')
-  if (outcome.status !== 'opened') {
-    throw new Error('Expected opened link')
-  }
-  expect(outcome.result.browserWorkspaceId).not.toBe(browser.id)
-  expect(useAppStore.getState().browserTabsByWorktree[WORKSPACE]).toHaveLength(2)
+it('reports where an opened link went', () => {
+  const openUrl = vi.fn(async () => undefined)
+  vi.stubGlobal('window', { ...window, api: { ...window.api, shell: { openUrl } } })
+
+  expect(openHttpLink(URL_TO_OPEN, { worktreeId: WORKSPACE })).toBe('orca-browser')
+  expect(openHttpLink(URL_TO_OPEN, { worktreeId: WORKSPACE, forceSystemBrowser: true })).toBe(
+    'system-browser'
+  )
+  expect(openUrl).toHaveBeenCalledExactlyOnceWith(URL_TO_OPEN)
+  expect(
+    openHttpLink(URL_TO_OPEN, { worktreeId: WORKSPACE, sourceOwner: { kind: 'unknown' } })
+  ).toBe('none')
 })

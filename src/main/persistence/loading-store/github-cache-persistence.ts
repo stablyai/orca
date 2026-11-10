@@ -2,15 +2,16 @@ import type { StoreRuntimeState } from './store-runtime-state'
 import {
   GITHUB_CACHE_BARRIER_BUSY_TIMEOUT_MS,
   GITHUB_CACHE_ROUTINE_BUSY_TIMEOUT_MS,
-  isGitHubCacheBusyError,
   writeGitHubCacheDatabase
 } from './github-cache-database'
+import { classifyRowCacheFailure, nextRetryDelayMs } from '../../sqlite/row-cache/row-cache-failure'
 
 type GitHubCachePersistenceRuntime = Pick<
   StoreRuntimeState,
   | 'dataFile'
   | 'githubCacheDirty'
   | 'githubCacheLegacyFileHash'
+  | 'githubCachePersistenceDisabled'
   | 'githubCachePersistedAt'
   | 'githubCachePersistTimer'
   | 'githubCacheRetryDelayMs'
@@ -39,7 +40,7 @@ export function persistGithubCache(
   runtime: GitHubCachePersistenceRuntime,
   mode: 'routine' | 'barrier'
 ): void {
-  if (!runtime.githubCacheDirty) {
+  if (!runtime.githubCacheDirty || runtime.githubCachePersistenceDisabled) {
     return
   }
   if (mode === 'barrier') {
@@ -91,27 +92,25 @@ function writeGithubCacheNow(runtime: GitHubCachePersistenceRuntime, barrier: bo
   suspendGithubCachePersistence(runtime)
   try {
     // Synchronous: no later mutation can interleave, so the cache is clean once this returns.
-    const retired = writeGitHubCacheDatabase(runtime.dataFile, runtime.state.githubCache, {
+    writeGitHubCacheDatabase(runtime.dataFile, runtime.state.githubCache, {
       busyTimeoutMs: barrier
         ? GITHUB_CACHE_BARRIER_BUSY_TIMEOUT_MS
         : GITHUB_CACHE_ROUTINE_BUSY_TIMEOUT_MS,
       importedLegacyFileHash: runtime.githubCacheLegacyFileHash
     })
-    // A sidecar left behind is harmless: the committed fingerprint retires it next launch.
-    void retired.catch(() => {})
     runtime.githubCacheDirty = false
     runtime.githubCacheLegacyFileHash = null
     runtime.githubCachePersistedAt = Date.now()
     runtime.githubCacheRetryDelayMs = 0
   } catch (error) {
     // Another connection holds the lock (or the disk refused): back off rather than block.
-    const delay = Math.min(
-      Math.max(GITHUB_CACHE_FIRST_RETRY_MS, runtime.githubCacheRetryDelayMs * 2),
-      GITHUB_CACHE_PERSIST_INTERVAL_MS
-    )
+    const delay = nextRetryDelayMs(runtime.githubCacheRetryDelayMs, {
+      minMs: GITHUB_CACHE_FIRST_RETRY_MS,
+      maxMs: GITHUB_CACHE_PERSIST_INTERVAL_MS
+    })
     runtime.githubCacheRetryDelayMs = delay
     armGithubCacheTimer(runtime, delay, 'retry')
-    if (!isGitHubCacheBusyError(error)) {
+    if (classifyRowCacheFailure(error) !== 'busy') {
       console.warn('[persistence] Failed to write github cache snapshot:', error)
     }
   }

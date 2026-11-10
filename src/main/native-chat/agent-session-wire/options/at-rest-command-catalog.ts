@@ -11,6 +11,12 @@ import { atRestCommandContextReady } from './at-rest-command-context'
 import { stat } from 'node:fs/promises'
 import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import {
+  type AtRestCommandStamp,
+  type AtRestCommandStamped,
+  rescanIfStampChanged,
+  stampBeforeScan
+} from './at-rest-command-stamp'
 
 /** Running chats supply their own lists; rescan resting folders/accounts after this TTL. */
 export const AT_REST_COMMANDS_TTL_MS = 5 * 60_000
@@ -40,6 +46,8 @@ export type AtRestCommandSource = {
     admitted: () => void,
     demand: AtRestCommandDemand
   ) => Promise<AtRestCommandScan>
+  /** A menu open rescans before the TTL once this changes. */
+  stamp?: AtRestCommandStamp
   scanTimeoutMs?: number
   maxFailedScans?: number | null
   evictUnreadMs?: number | null
@@ -66,6 +74,8 @@ type Entry = {
   attempt?: AbortController
   lastReadAt: number
   settled: Set<() => void>
+  stamped?: AtRestCommandStamped
+  restamping?: Promise<void>
 }
 
 /** Cache commands from each resting chat’s launch folder; publish changed scan results. */
@@ -79,7 +89,10 @@ export class AtRestCommandCatalog implements StructuredAgentSessionAtRestCommand
   constructor(private readonly source: AtRestCommandSource) {}
 
   retireContext = (workspaceId?: string): void => {
-    this.generation += 1
+    // One folder's retirement keeps the launch context other folders' probes share.
+    if (workspaceId === undefined) {
+      this.generation += 1
+    }
     for (const [key, entry] of this.entries) {
       if (workspaceId !== undefined && entry.workspaceId !== workspaceId) {
         continue
@@ -127,6 +140,15 @@ export class AtRestCommandCatalog implements StructuredAgentSessionAtRestCommand
 
   settled = async (record: AgentSessionRecord, budgetMs: number, independent = false) => {
     const deadline = Date.now() + budgetMs
+    // Menu opens only; dispose empties entries, so a disposed catalog finds none.
+    const opened =
+      independent && this.source.accepts(record) ? this.entries.get(this.key(record)) : undefined
+    if (opened && this.source.stamp) {
+      const owned = (): boolean => this.entries.get(opened.key) === opened
+      await rescanIfStampChanged(opened, this.source.stamp, owned, () =>
+        this.scanInto(opened, record, true)
+      )
+    }
     for (;;) {
       const entry = this.readEntry(record, independent)
       if (!entry) {
@@ -229,7 +251,7 @@ export class AtRestCommandCatalog implements StructuredAgentSessionAtRestCommand
       admittedAt ??= this.now()
     }
     entry.scanning = true
-    void (async () => {
+    void (async (): Promise<AtRestCommandScan & { stamped?: Entry['stamped'] }> => {
       const wait = <T>(work: Promise<T>): Promise<T> =>
         waitForPromiseWithSignal(work, attempt.signal)
       await wait(Promise.resolve(atRestCommandContextReady()))
@@ -252,19 +274,21 @@ export class AtRestCommandCatalog implements StructuredAgentSessionAtRestCommand
         }
         return { commands: undefined, fromAgent: false }
       }
+      const stamped = await wait(stampBeforeScan(this.source.stamp, chat, cwd, attempt.signal))
       const answer = await wait(
         this.source.scan(chat, cwd, isCurrent, entry.generation, attempt.signal, admitted, demand)
       )
       attempt.signal.throwIfAborted()
-      return answer
+      return { ...answer, stamped }
     })()
       .then(
-        ({ commands, fromAgent }) => {
+        ({ commands, fromAgent, stamped }) => {
           if (!isCurrent()) {
             return
           }
           entry.scannedAt = admittedAt ?? this.now()
           entry.failures = 0
+          entry.stamped = stamped
           // Refresh settles even when fallback cannot supersede an agent-provided list.
           if (entry.fromAgent && !fromAgent) {
             return

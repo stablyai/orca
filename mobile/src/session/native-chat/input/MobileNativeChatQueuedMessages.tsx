@@ -9,7 +9,7 @@ import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useLargeSystemText } from '../../../theme/use-large-system-text'
-import type { MobileQueuedMessageCard } from '../../mobile-structured-queued-message-cards'
+import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
 import type { MobileQueuedHeadLight } from './mobile-queued-head-light'
 import {
   createMobileQueuedCardActionStore,
@@ -18,10 +18,10 @@ import {
 } from './mobile-queued-card-actions'
 import { headSteerableQueuedMessageCard } from '../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import type { AgentSessionQueuePause } from '../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
-import type { MobileQueuedMessageEdit } from '../../use-mobile-structured-queued-message-controls'
-import type { MobileQueuedMessageInlineEditor } from '../../mobile-queued-message-edit-draft'
-import { MobileQueuedMessageCardRow } from '../../MobileQueuedMessageCardRow'
-import { MobileQueuedMessageScrollList } from '../../MobileQueuedMessageScrollList'
+import type { MobileQueuedMessageEdit } from './use-mobile-structured-queued-message-controls'
+import type { MobileQueuedMessageInlineEditor } from './mobile-queued-message-edit-draft'
+import { MobileQueuedMessageCardRow } from './MobileQueuedMessageCardRow'
+import { MobileQueuedMessageScrollList } from './MobileQueuedMessageScrollList'
 import { queuedMessageStyles as styles } from './mobile-native-chat-queued-message-styles'
 import { useMobileNativeChatLowerRegion } from '../mobile-native-chat-lower-region-context'
 

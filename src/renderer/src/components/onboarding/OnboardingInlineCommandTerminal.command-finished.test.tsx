@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/telemetry', () => ({ track: mocks.track }))
-vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
+vi.mock('@/hooks/skills/runtime/useActiveProjectSkillRuntime', () => ({
   useActiveProjectSkillRuntime: () => ({
     agentRuntime: { runtime: 'wsl', wslDistro: 'Ubuntu', label: 'WSL Ubuntu' },
     installDisabledReason: null,
@@ -46,7 +46,7 @@ vi.mock('@/components/terminal-pane/TerminalPane', () => ({
   )
 }))
 
-vi.mock('@/lib/focus-terminal-tab-surface', () => ({
+vi.mock('@/components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: vi.fn()
 }))
 

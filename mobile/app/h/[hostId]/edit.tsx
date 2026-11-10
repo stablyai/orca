@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Alert,
   View,
@@ -45,6 +46,7 @@ export default function EditHostScreen() {
   const primeHosts = usePrimeHosts()
   const refreshHostClient = useRefreshHostClient()
   const forgetHostClient = useForgetHostClient()
+  const queryClient = useQueryClient()
 
   const [host, setHost] = useState<HostProfile | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -189,7 +191,7 @@ export default function EditHostScreen() {
       return
     }
     try {
-      await removeHostAndCloseClient(host.id, forgetHostClient)
+      await removeHostAndCloseClient(host.id, forgetHostClient, queryClient)
     } catch {
       setConfirmRemove(true)
       Alert.alert(

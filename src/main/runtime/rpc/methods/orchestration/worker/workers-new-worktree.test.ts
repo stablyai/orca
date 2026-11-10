@@ -137,6 +137,29 @@ describe('orchestration new-worktree workers', () => {
     }
   }
 
+  it("skips setup when the project's setup is off and the coordinator did not ask for it", async () => {
+    vi.mocked(runtime.showRepo).mockResolvedValue({
+      id: 'repo',
+      path: '/repo',
+      displayName: 'repo',
+      badgeColor: 'gray',
+      addedAt: 1,
+      kind: 'git',
+      hookSettings: {
+        mode: 'auto',
+        setupRunPolicy: 'skip-by-default',
+        scripts: { setup: '', archive: '' }
+      }
+    })
+    mockCreatedWorktree({ state: 'skipped' })
+
+    await startWorker()
+
+    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ setupDecision: 'skip' })
+    )
+  })
+
   // Composer and idle readiness paths must both record setup evidence; the composer path previously dropped it.
 
   it('does not inject task input when the gated setup terminal fails to start', async () => {

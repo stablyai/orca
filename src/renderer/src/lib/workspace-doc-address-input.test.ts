@@ -11,7 +11,7 @@ const plan = vi.hoisted(() => ({
 }))
 const hosts = vi.hoisted(() => new Map<string, string | null>())
 const places = vi.hoisted(() => new Map<string, string>())
-vi.mock('./resolve-owner', () => ({
+vi.mock('./workspace/ownership/resolve-owner', () => ({
   resolveOwner: (_state: unknown, ref: { workspaceId: string }) => {
     const environmentId = hosts.has(ref.workspaceId) ? hosts.get(ref.workspaceId) : 'server-1'
     return environmentId
@@ -25,7 +25,7 @@ vi.mock('./resolve-owner', () => ({
       : { kind: 'ambiguous' }
   }
 }))
-vi.mock('@/lib/file-preview', () => ({
+vi.mock('@/lib/browser/documents/file-preview', () => ({
   getWorkspaceFilePreviewPlan: (_state: unknown, worktreeId: string, filePath: string) => {
     plan.calls.push({ worktreeId, filePath })
     return plan.result
