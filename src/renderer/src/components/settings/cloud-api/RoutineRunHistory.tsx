@@ -9,7 +9,7 @@ import type {
   RoutineRun,
   RoutineRunPage
 } from '../../../../../shared/cloud-api/cloud-api-types'
-import { cloudApiErrorCopy, routineRunTriggerLabel } from './cloud-api-copy'
+import { cloudApiErrorCopy, routineRunErrorCopy, routineRunTriggerLabel } from './cloud-api-copy'
 import { formatAbsoluteTime, formatRelativeFromNow, formatRunDuration } from './cloud-api-format'
 import { CloudApiErrorNotice, RoutineRunStatusPill } from './cloud-api-parts'
 import { isActiveRunStatus } from './routine-run-status'
@@ -309,14 +309,7 @@ function RunRow({
       {run.result?.summary ? (
         <p className="line-clamp-2 text-xs text-muted-foreground">{run.result.summary}</p>
       ) : null}
-      {run.error ? (
-        <p className="text-xs text-muted-foreground">
-          <span className="font-medium text-destructive">
-            {t('auto.components.settings.cloudRoutines.runs.why', 'Why:')}
-          </span>{' '}
-          {run.error}
-        </p>
-      ) : null}
+      {run.error ? <InlineError title={routineRunErrorCopy(run.error, t)} /> : null}
     </li>
   )
 }
