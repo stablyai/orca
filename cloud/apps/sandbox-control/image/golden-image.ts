@@ -20,6 +20,8 @@ export const VM_SCRIPTS = [
   'orca-sandbox-grant',
   'orca-sandbox-revoke',
   'orca-sandbox-members',
+  'orca-sandbox-read-snapshot',
+  'orca-read-snapshot.cjs',
   'orca-git-as',
   'orca-git-identity',
   'orcad-boot',

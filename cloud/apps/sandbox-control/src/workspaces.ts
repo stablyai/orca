@@ -13,6 +13,7 @@ import type { SandboxCaller } from './auth'
 import type { MachineSize } from './entitlements'
 import { getSandbox, touchActivity, updateRegistry, type SandboxRow } from './store'
 import { memberNamesFor } from './member-names'
+import { readSnapshotTimes } from './read-snapshots'
 import { sandboxView } from './wire'
 
 export const PRESENCE_TTL_MS = 45_000
@@ -158,10 +159,11 @@ function repoView(row: SandboxRow) {
 
 export async function workspaceViews(db: D1Database, caller: SandboxCaller, rows: readonly SandboxRow[], now: number) {
   const ids = rows.map((r) => r.id)
-  const [presence, compute, granted] = await Promise.all([
+  const [presence, compute, granted, readAt] = await Promise.all([
     presenceFor(db, ids, now),
     computeMsFor(db, ids),
-    activeGrantUsers(db, ids, caller.userId)
+    activeGrantUsers(db, ids, caller.userId),
+    readSnapshotTimes(db, ids)
   ])
   const referenced = (row: SandboxRow, live: readonly PresenceRow[]) =>
     [row.user_id, row.created_by, row.last_activity_by, ...live.map((p) => p.user_id)].filter(
@@ -195,7 +197,9 @@ export async function workspaceViews(db: D1Database, caller: SandboxCaller, rows
       access,
       presence: live.map((p) => ({ userId: p.user_id, clientId: p.client_id, state: p.state, chatId: p.chat_id, at: p.updated_at })),
       // Display names (token `name` claim) for the ids above; the roster wins where it has one.
-      memberNames
+      memberNames,
+      // When its sleeping read-only copy was saved ("As of"); only for those who may read it.
+      readSnapshotAt: canOpen(caller, row) ? (readAt.get(row.id) ?? null) : null
     }
   })
 }

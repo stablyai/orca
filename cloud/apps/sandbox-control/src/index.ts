@@ -32,6 +32,7 @@
 // Operator (OPERATOR_TOKEN): /v1/internal/* (see operator.ts)
 // Public share links (src/share-gateway.ts): /s/<token>/*, plus the root-path cookie fallback
 // Vercel network-policy forwardURL target (Vercel sandbox OIDC):  /v1/egress/proxy
+import { ReadSnapshotRouteError, getReadSnapshot, handleReaderKeysRoute, pruneReadSnapshotToOwner, revokeDeviceSessionReaderKeys } from './read-snapshots'
 import { refreshStaleEnvironments } from './environment-golden-refresh'
 import { ORCA_CLOUD_IDLE_SLEEP_MINUTES } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 import { z } from 'zod'
@@ -836,6 +837,14 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       const state = await createConnectState(env.SANDBOX_DB, connect.stateSecret, { accountId: `dev:${sub}`, userId: sub }, (deps.now ?? Date.now)())
       return Response.redirect(authorizeUrl(connect, url.origin, state), 302)
     }
+    if (url.pathname === '/v1/reader-keys' || url.pathname.startsWith('/v1/reader-keys/')) {
+      const now = (deps.now ?? Date.now)()
+      const caller = await authenticateDesktop(env, request, now)
+      if (!caller) {
+        return fail('unauthorized', 401)
+      }
+      return await handleReaderKeysRoute(request, url, { db: env.SANDBOX_DB, caller, now, readJson: () => readJson(request) })
+    }
     if (url.pathname === '/v1/device-sessions' || url.pathname.startsWith('/v1/device-sessions/')) {
       const now = (deps.now ?? Date.now)()
       const caller = await authenticateDesktop(env, request, now)
@@ -851,6 +860,8 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         onRevoked:
           deps.onDeviceSessionRevoked ??
           (async (deviceSessionId) => {
+            // Its reader key first: no VM involved, so this can't be held up by a sleeping workspace.
+            await revokeDeviceSessionReaderKeys(env.SANDBOX_DB, deviceSessionId, now)
             const life = await lifecycleDeps(env, deps)
             if (life) {
               await revokeGrantsForDeviceSession(life, deviceSessionId)
@@ -1283,7 +1294,7 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
   if (url.pathname === '/v1/team/workspaces') {
     return request.method === 'GET' ? json(await listWorkspaces(db, caller, url, now)) : fail('not_found', 404)
   }
-  const match = /^\/v1\/team\/workspaces\/(sbx_[0-9a-f]{24})(?:\/(presence|wake|lease|grants|sent)(?:\/(grt_[0-9a-f]{24}))?)?$/.exec(url.pathname)
+  const match = /^\/v1\/team\/workspaces\/(sbx_[0-9a-f]{24})(?:\/(presence|wake|lease|grants|sent|read-snapshot)(?:\/(grt_[0-9a-f]{24}))?)?$/.exec(url.pathname)
   if (!match) {
     return fail('not_found', 404)
   }
@@ -1293,6 +1304,16 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
   const view = async (r = row) => (await workspaceViews(db, caller, [r], clock()))[0]
   if (route === 'GET ') {
     return json({ workspace: await view() })
+  }
+  if (route === 'GET read-snapshot') {
+    try {
+      return json(await getReadSnapshot(db, caller, row, url.searchParams.get('keyId'), now))
+    } catch (error) {
+      if (error instanceof ReadSnapshotRouteError) {
+        return fail(error.code, error.status)
+      }
+      throw error
+    }
   }
   if (route === 'POST sent') {
     // The caller's own client: "I just sent a message here" (opens their git-as-sender window).
@@ -1320,6 +1341,10 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
         return fail('invalid_request', 400)
       }
       const patched = await patchWorkspace(db, caller, row, body.data, now)
+      if (patched.revoke !== 'none') {
+        // Readers lose the sleeping copy at once, before (and regardless of) the VM-side revokes.
+        await pruneReadSnapshotToOwner(db, patched.row)
+      }
       const revoked =
         patched.revoke === 'none' ? null : await revokeForAccessChange(life, patched.row, patched.revoke, caller.userId)
       return json({ workspace: await view(patched.row), ...(revoked ? { revoked } : {}) })
