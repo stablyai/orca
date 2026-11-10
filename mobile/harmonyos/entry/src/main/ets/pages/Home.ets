@@ -1834,7 +1834,7 @@ struct Home {
       ForEach(items, (row: SettingsMenuItem, index: number) => {
         Column() {
           if (index > 0) {
-            this.hairline(52)
+            Divider().strokeWidth(0.5).color(this.pal().borderSubtle).margin({ left: 52 })
           }
           Button({ type: ButtonType.Normal }) {
             Row({ space: 12 }) {

@@ -71,15 +71,17 @@ struct HostDetail {
   }
 
   private async saveEditor(): Promise<void> {
-    let endpoint = this.endpointEdit?.endpoint;
-    if (!this.canSave() || !endpoint) { return; }
-    let changed = this.endpointEdit?.kind === 'changed';
+    let edit = this.endpointEdit;
+    if (!this.canSave() || !edit?.endpoint) { return; }
+    let name = this.personalName.trim();
+    let personalName = name === (this.host?.personalName ?? '') ? undefined : name;
+    let endpoint = edit.kind === 'changed' ? edit.endpoint : undefined;
     this.saving = true; this.saveError = '';
     let epoch = this.epoch;
     try {
       let context = getContext(this) as common.UIAbilityContext;
-      await updateHostNameAndEndpoint(context, this.hostId, this.personalName.trim(), endpoint);
-      refreshDesktopConnection(this.hostId, changed ? 'endpoint' : 'name');
+      let endpointChanged = await updateHostNameAndEndpoint(context, this.hostId, personalName, endpoint);
+      refreshDesktopConnection(this.hostId, endpointChanged ? 'endpoint' : 'name');
       if (epoch === this.epoch) { router.back(); }
     } catch (e) {
       if (epoch === this.epoch) { this.saveError = '保存失败，请检查桌面地址并重试'; }

@@ -389,18 +389,25 @@ export function updateRelayCredential(context: common.Context, hostId: string, c
   });
 }
 
-export function updateHostNameAndEndpoint(context: common.Context, hostId: string, personalName: string, endpoint: string): Promise<void> {
-  return mutateHost(async (): Promise<void> => {
-    let name = personalName.trim(); let address = endpoint.trim();
-    if (!/^[a-f0-9]{32}$/.test(hostId) || name.length > 1024 || /[\x00-\x1f]/.test(name)
-      || !isDirectEndpoint(address)) { throw new Error('Invalid desktop name or endpoint'); }
+export async function updateHostNameAndEndpoint(context: common.Context, hostId: string, personalName?: string,
+  endpoint?: string): Promise<boolean> {
+  let endpointChanged = false;
+  await mutateHost(async (): Promise<void> => {
+    let name = personalName?.trim(); let address = endpoint?.trim();
+    if (!/^[a-f0-9]{32}$/.test(hostId) || (name !== undefined && (name.length > 1024 || /[\x00-\x1f]/.test(name)))
+      || (address !== undefined && !isDirectEndpoint(address))) { throw new Error('Invalid desktop name or endpoint'); }
     let hosts = await readHostList(context);
     let host = hosts.find((item: HostMeta): boolean => item.id === hostId);
     if (!host) { throw new Error('Desktop was removed'); }
+    endpointChanged = address !== undefined && address !== host.endpoint;
     let machineName = host.machineName ?? (!host.personalName ? host.name : '');
-    host.machineName = machineName; host.personalName = name; host.name = name || machineName || address; host.endpoint = address;
+    host.machineName = machineName;
+    if (name !== undefined) { host.personalName = name; }
+    host.endpoint = address ?? host.endpoint;
+    host.name = host.personalName || machineName || host.endpoint;
     await writeHostList(context, hosts);
   });
+  return endpointChanged;
 }
 
 export function updateHostMachine(context: common.Context, paired: HostMeta, descriptor: HostMachineDescriptor): Promise<void> {

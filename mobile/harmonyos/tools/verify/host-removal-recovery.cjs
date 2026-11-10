@@ -647,6 +647,44 @@ test('desktop machine details survive a host-list reload and stale status cannot
   assert.equal(repaired.hostMachine, undefined)
 })
 
+test('desktop edits preserve fields changed since the editor opened', async () => {
+  const { host, meta, advance } = hostStorage()
+  await host.saveHost({}, { ...meta }, 'first-device-token', undefined, advance())
+  await host.saveHost(
+    {},
+    { ...meta, name: 'Repaired desktop', endpoint: 'ws://repaired.invalid:6768' },
+    'second-device-token',
+    undefined,
+    advance()
+  )
+
+  const nameOnly = await host.updateHostNameAndEndpoint({}, meta.id, 'My desktop')
+  const [renamed] = await host.listHosts({})
+  assert.equal(nameOnly, false)
+  assert.equal(renamed.name, 'My desktop')
+  assert.equal(renamed.endpoint, 'ws://repaired.invalid:6768')
+
+  const endpointOnly = await host.updateHostNameAndEndpoint(
+    {},
+    meta.id,
+    undefined,
+    'ws://edited.invalid:6768'
+  )
+  assert.equal(endpointOnly, true)
+  assert.equal((await host.listHosts({}))[0].name, 'My desktop')
+
+  const resetName = await host.updateHostNameAndEndpoint(
+    {},
+    meta.id,
+    '',
+    'ws://edited.invalid:6768'
+  )
+  const [reset] = await host.listHosts({})
+  assert.equal(resetName, false)
+  assert.equal(reset.name, 'Repaired desktop')
+  assert.equal(reset.endpoint, 'ws://edited.invalid:6768')
+})
+
 test('a late relay credential writer cannot overwrite credentials from a newer pairing', async () => {
   const { host, pairing, offer, client, meta, relay, protocol, advance } = hostStorage()
   const journal = await pairing.beginRelayPairing({}, offer, advance(), active)
