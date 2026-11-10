@@ -5,6 +5,7 @@ import type {
   OrcaBillingStatusResult
 } from '../../../../shared/orca-billing'
 import type { VmBuildFailure } from './vm-build-failure'
+import { sandboxLimitBody } from './vm-build-limit-copy'
 
 /** The running-sandbox caps billing enforces: per member, and per team (per seat × seats). */
 export type SandboxLimit = { perSeat: number; team: number }
@@ -167,16 +168,7 @@ export function vmBuildFailureCopy(
           'auto.components.worktree.creation.VmBuildFailureCard.teamLimitTitle',
           'You’re at your team’s limit of running sandboxes'
         ),
-        body: sandboxLimit
-          ? t(
-              'auto.components.worktree.creation.VmBuildFailureCard.teamLimitBody',
-              'Your team can run {{value0}} sandboxes at once ({{value1}} per seat). Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.',
-              { value0: String(sandboxLimit.team), value1: String(sandboxLimit.perSeat) }
-            )
-          : t(
-              'auto.components.worktree.creation.VmBuildFailureCard.limitBody',
-              'Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.'
-            )
+        body: sandboxLimitBody(t, 'team', sandboxLimit)
       }
     case 'memberConcurrency':
       return {
@@ -184,16 +176,7 @@ export function vmBuildFailureCopy(
           'auto.components.worktree.creation.VmBuildFailureCard.memberLimitTitle',
           'You’re at your limit of running sandboxes'
         ),
-        body: sandboxLimit
-          ? t(
-              'auto.components.worktree.creation.VmBuildFailureCard.memberLimitBody2',
-              'You can run {{value0}} sandboxes at once. Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.',
-              { value0: String(sandboxLimit.perSeat) }
-            )
-          : t(
-              'auto.components.worktree.creation.VmBuildFailureCard.limitBody',
-              'Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.'
-            )
+        body: sandboxLimitBody(t, 'member', sandboxLimit)
       }
     case 'githubNotConnected':
       return {
