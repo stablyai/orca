@@ -210,7 +210,6 @@ export function createAgentCompletionNotificationController({
     } else if (
       optionsOverride.agentStatus &&
       (optionsOverride.notifyWithoutLifecycle === true ||
-        optionsOverride.agentStatus.fromHistory === true ||
         options.usesHookTurnEnds?.(optionsOverride.agentStatus) === true)
     ) {
       // Why: carry the hook's own snapshot; the stored row may be a newer state (a pinned `working`) or too old to lend content.

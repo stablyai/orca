@@ -1,4 +1,3 @@
-import { placedAgentStatusForPane } from '@/components/sidebar/workspace-card/activity/worktree-slept-agent-index'
 import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
 import { emitAgentSubjectReads } from '@/attention/agent-subject-read-actions'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
@@ -41,7 +40,7 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
           }
           const prev = s.acknowledgedAgentsByPaneKey[key] ?? 0
           let stamp = now
-          const liveEntry = placedAgentStatusForPane(s, key)
+          const liveEntry = s.agentStatusByPaneKey?.[key]
           if (liveEntry) {
             collectAcknowledgedAgentNotificationId({
               state: s,
@@ -96,7 +95,7 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
             next ??= { ...s.acknowledgedAgentsByPaneKey }
             delete next[key]
           }
-          const turnTimestamp = placedAgentStatusForPane(s, key)?.stateStartedAt
+          const turnTimestamp = s.agentStatusByPaneKey?.[key]?.stateStartedAt
           if (
             turnTimestamp !== undefined &&
             s.manuallyUnreadTurnsByPaneKey[key] !== turnTimestamp

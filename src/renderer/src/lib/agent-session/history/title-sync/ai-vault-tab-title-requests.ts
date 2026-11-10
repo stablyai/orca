@@ -1,4 +1,3 @@
-import { paneAgentRecordIdentity } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentProviderSessionMetadata } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   AgentStatusEntry,
@@ -119,7 +118,6 @@ function lastReportedCandidate(
   const repo = worktree ? getIndexedRepoMap(state.repos).get(worktree.repoId) : undefined
   if (
     !pane ||
-    !identity.providerSession?.id ||
     tab?.worktreeId !== identity.worktreeId ||
     (tab.leafIds && !tab.leafIds.has(pane.leafId)) ||
     identity.executionHostId !== getExecutionHostIdForWorktree(state, identity.worktreeId) ||
@@ -200,10 +198,10 @@ export function collectAgentPaneConversations<Agent extends AgentType>(
 
   for (const record of sleeping) {
     registerCandidate(state, tabsById, candidates, isAgent, {
-      agent: paneAgentRecordIdentity(record).agent,
+      agent: record.agent,
       paneKey: record.paneKey,
       priority: 20,
-      providerSession: paneAgentRecordIdentity(record).providerSession,
+      providerSession: record.providerSession,
       refresh: false,
       tabId: record.tabId,
       worktreeId: record.worktreeId

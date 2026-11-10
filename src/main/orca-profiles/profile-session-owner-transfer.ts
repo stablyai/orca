@@ -1,5 +1,5 @@
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { OwnedPaneAgentRecord } from '../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import type { BrowserPage, BrowserWorkspace } from '../../shared/browser-workspace-types'
 import { remapBrowserPageDocLocation } from '../../shared/browser-page-doc-location'
 import type { Tab, TabGroup } from '../../shared/tab-types'
@@ -22,7 +22,9 @@ export type SessionOwnerProjection = {
   mapOwnerKey: (ownerKey: string) => string | null
   mapWorktreeId: (worktreeId: string) => string
   /** Keep only records that can still resume after transfer. */
-  projectSleepingAgentSession?: (record: OwnedPaneAgentRecord) => OwnedPaneAgentRecord | null
+  projectSleepingAgentSession?: (
+    record: SleepingAgentSessionRecord
+  ) => SleepingAgentSessionRecord | null
   /** Project focus when selected entities are dormant. */
   projectSessionFocus?: (args: {
     source: WorkspaceSessionState

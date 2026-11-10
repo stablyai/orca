@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { parsePaneKey } from '../workspace-layout/stable-pane-id'
-import { ownedPaneAgentRecordSchema } from '../workspace-session/workspace-session-sleeping-agents'
+import { sleepingAgentSessionRecordSchema } from '../workspace-session/workspace-session-sleeping-agents'
 
 // copied, not imported: import cycle
 const OnTab = { workspace: z.string().min(1), tabId: z.string().min(1) }
@@ -16,42 +16,10 @@ export const SleepCommand = z
     type: z.literal('sleep'),
     ...OnTab,
     paneKeys: z.array(z.string().min(1)).min(1),
-    records: z.array(ownedPaneAgentRecordSchema),
-    expectedRecords: z.array(ownedPaneAgentRecordSchema).optional(),
-    expectedAbsentPaneKeys: z.array(z.string().min(1)).optional(),
-    expectedTargets: z
-      .array(
-        z.object({
-          paneKey: z.string().min(1),
-          ptyId: z.string().min(1),
-          ptyIncarnationId: z.string().min(1),
-          authorityGeneration: z.string().min(1),
-          sourceUpdatedAt: z.number().finite().optional()
-        })
-      )
-      .optional(),
+    records: z.array(sleepingAgentSessionRecordSchema),
     recordOnly: z.literal(true).optional()
   })
   .refine(paneKeysNameTab)
-  .refine((command) => {
-    const keys = command.paneKeys
-    const uniqueMembers = (values: string[]) =>
-      new Set(values).size === values.length && values.every((key) => keys.includes(key))
-    return (
-      new Set(keys).size === keys.length &&
-      uniqueMembers(command.records.map((r) => r.paneKey)) &&
-      uniqueMembers(command.expectedRecords?.map((r) => r.paneKey) ?? []) &&
-      uniqueMembers(command.expectedAbsentPaneKeys ?? []) &&
-      (!command.expectedTargets ||
-        (command.recordOnly === true &&
-          command.expectedTargets.length === keys.length &&
-          uniqueMembers(command.expectedTargets.map((t) => t.paneKey)))) &&
-      !(command.expectedAbsentPaneKeys ?? []).some((key) =>
-        command.expectedRecords?.some((r) => r.paneKey === key)
-      )
-    )
-  })
-  .refine((command) => command.expectedRecords === undefined || command.recordOnly === true)
   .refine((command) =>
     command.records.every(
       (record) =>

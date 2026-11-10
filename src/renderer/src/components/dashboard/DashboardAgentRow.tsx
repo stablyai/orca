@@ -372,7 +372,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
           onToggleChildAgents={onToggleChildAgents}
           expanded={expanded}
           hideExpand={hideExpand}
-          hideDismiss={agent.rowSource === 'subagent' || agent.rowSource === 'sleeping'}
+          hideDismiss={agent.rowSource === 'subagent'}
           sendTargetStatus={sendTargetStatus}
           onDismiss={onDismiss}
           onToggleExpanded={handleToggleExpanded}

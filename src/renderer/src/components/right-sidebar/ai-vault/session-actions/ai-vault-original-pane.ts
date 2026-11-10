@@ -1,4 +1,3 @@
-import { paneAgentRecordIdentity } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentRowDisplayDotState } from '@/lib/agent-status/presentation/agent-row-dot-state'
 import type { AppState } from '@/store/types'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
@@ -270,8 +269,8 @@ export function findOriginalAiVaultSessionPane(
 
   for (const record of Object.values(state.sleepingAgentSessionsByPaneKey)) {
     if (
-      agentMatches(session, paneAgentRecordIdentity(record).agent) &&
-      providerSessionMatches(session, paneAgentRecordIdentity(record).providerSession?.id)
+      agentMatches(session, record.agent) &&
+      providerSessionMatches(session, record.providerSession?.id)
     ) {
       const target = resolveOriginalPaneTarget({
         state,

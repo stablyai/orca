@@ -10,5 +10,4 @@ export type HookLiveAgentRow = Pick<
   | 'turnEndDisposition'
   | 'worktreeId'
   | 'programStatus'
-  | 'previousCompletion'
 >

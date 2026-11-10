@@ -103,7 +103,7 @@ export function demoteRuntimeMobileAgentStatus(
         : status.updatedAt,
     stateStartedAt: pty?.lastAgentStatusStartedAtEpochMs ?? status.stateStartedAt,
     paneKey: status.paneKey,
-    stateHistory: status.stateHistory,
+    stateHistory: [],
     agentType: status.agentType,
     ...completedTurnFields(status),
     ...(status.providerSession ? { providerSession: status.providerSession } : {})
@@ -153,7 +153,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     updatedAt,
     stateStartedAt,
     paneKey: status.paneKey,
-    stateHistory: status.stateHistory,
+    stateHistory: [],
     ...(status.agentType ? { agentType: status.agentType } : {}),
     ...(status.terminalHandle ? { terminalHandle: status.terminalHandle } : {}),
     ...(status.worktreeId ? { worktreeId: status.worktreeId } : {}),
@@ -299,7 +299,6 @@ function toHookLiveAgentRow(row: AgentStatusIpcPayload): HookLiveAgentRow {
     ...(row.evidenceObservedAt !== undefined ? { evidenceObservedAt: row.evidenceObservedAt } : {}),
     stateStartedAt: row.stateStartedAt ?? row.receivedAt,
     ...pickHostTurnEnd(row),
-    ...(row.previousCompletion ? { previousCompletion: row.previousCompletion } : {}),
     ...(row.worktreeId ? { worktreeId: row.worktreeId } : {}),
     ...(row.programStatus ? { programStatus: row.programStatus } : {})
   }
@@ -310,7 +309,10 @@ export function resolveRuntimeHookLiveAgentRow(
   pty: RuntimePtyWorktreeRecord | null,
   nonAgentTitle: boolean
 ): HookLiveAgentRow | null {
-  if (!live || live.payload.interactivePrompt != null) {
+  if (!live) {
+    return null
+  }
+  if (live.payload.interactivePrompt != null) {
     return live
   }
   if (workingHookOwnsIdleTitleInterval(live.payload, agentStatusAuthorityObservedAt(live), pty)) {

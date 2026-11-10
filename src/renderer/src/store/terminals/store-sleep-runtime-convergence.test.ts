@@ -64,41 +64,9 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
         repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
       },
       tabsByWorktree: { [wt]: [makeTab({ id: 'tab-1', worktreeId: wt })] },
-      ptyIdsByTabId: { 'tab-1': ['pty-fails', 'pty-slow'] },
-      terminalLayoutsByTabId: {
-        'tab-1': {
-          root: {
-            type: 'split',
-            direction: 'horizontal',
-            ratio: 0.5,
-            first: { type: 'leaf', leafId: '11111111-1111-4111-8111-111111111111' },
-            second: { type: 'leaf', leafId: '22222222-2222-4222-8222-222222222222' }
-          },
-          activeLeafId: '11111111-1111-4111-8111-111111111111',
-          expandedLeafId: null,
-          ptyIdsByLeafId: {
-            '11111111-1111-4111-8111-111111111111': 'pty-fails',
-            '22222222-2222-4222-8222-222222222222': 'pty-slow'
-          }
-        }
-      }
+      ptyIdsByTabId: { 'tab-1': ['pty-fails', 'pty-slow'] }
     })
 
-    mockApi.pty.inspectProcess.mockImplementation(async (ptyId: string) => ({
-      foregroundProcess: 'zsh',
-      hasChildProcesses: false,
-      foregroundObservation: {
-        verdict: 'observed',
-        source: 'pty-master',
-        foregroundKind: 'shell',
-        processName: 'zsh',
-        ptyId,
-        ptyIncarnationId: `inc-${ptyId}`,
-        authorityGeneration: 'authority',
-        observationEpoch: 1,
-        capturedAgeMs: 0
-      }
-    }))
     const shutdown = store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
     const rejection = expect(shutdown).rejects.toThrow('physical stop failed')
     await vi.waitFor(() => expect(mockApi.pty.kill).toHaveBeenCalledTimes(2))

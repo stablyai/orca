@@ -1,4 +1,3 @@
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { withoutGitGraph } from '../../../../../shared/workspace-layout/workspace-layout-client-visibility'
 import { readsGitGraph, createGitGraphFrameProjection } from '../../git-graph-layout-projection'
 // Paired desktops use layout read/stream/apply only when the server offers layout.intents.v1; mobile is excluded.
@@ -102,16 +101,7 @@ export const LAYOUT_APPLY_METHODS = [
     name: 'layout.apply',
     permission: 'workspace',
     params: LayoutApplyParams,
-    handler: async (params, { runtime, clientCapabilities, caller }) => {
-      if (
-        !ORCA_LAYOUT_OWNER_IS_MAIN &&
-        (caller?.kind !== 'desktop' ||
-          params.command.type !== 'sleep' ||
-          params.command.recordOnly !== true ||
-          !params.command.expectedTargets)
-      ) {
-        return { ok: false as const, code: 'host_not_owned' as const }
-      }
+    handler: async (params, { runtime, clientCapabilities }) => {
       return runtime.applyLayoutCommand(
         params.command,
         readsGitGraph(clientCapabilities) ? undefined : { visibility: withoutGitGraph }

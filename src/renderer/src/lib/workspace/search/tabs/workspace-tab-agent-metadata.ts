@@ -1,6 +1,5 @@
-import { isDisplayOnlyPaneSleep } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { OwnedPaneAgentRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentStatusEvidenceObservedAt } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
@@ -33,7 +32,7 @@ export function maxAgentActivityAt(metadata: readonly AgentMetadata[]): number |
 
 export type WorkspaceTabAgentMetadataState = {
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
-  sleepingAgentSessionsByPaneKey: Record<string, OwnedPaneAgentRecord>
+  sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord>
 }
 
 function normalizeText(value: string | null | undefined): string {
@@ -112,21 +111,18 @@ function collectLiveMetadata(
 }
 
 function collectSleepingMetadata(
-  record: OwnedPaneAgentRecord
+  record: SleepingAgentSessionRecord
 ): Pick<AgentMetadata, 'snippetCandidates' | 'textParts' | 'lastActivityAt'> {
-  const display = isDisplayOnlyPaneSleep(record)
-    ? { ...record.display, agent: record.display.agentType }
-    : record
   const textParts: string[] = []
   const snippetCandidates: string[] = []
-  addText(textParts, display.prompt)
-  addText(snippetCandidates, display.prompt)
-  addText(textParts, display.agent)
-  addText(textParts, display.state)
-  addText(textParts, display.terminalTitle)
-  addText(snippetCandidates, display.terminalTitle)
-  addProviderSession(textParts, display.providerSession)
-  return { textParts, snippetCandidates, lastActivityAt: display.updatedAt }
+  addText(textParts, record.prompt)
+  addText(snippetCandidates, record.prompt)
+  addText(textParts, record.agent)
+  addText(textParts, record.state)
+  addText(textParts, record.terminalTitle)
+  addText(snippetCandidates, record.terminalTitle)
+  addProviderSession(textParts, record.providerSession)
+  return { textParts, snippetCandidates, lastActivityAt: record.updatedAt }
 }
 
 export function collectAgentMetadataForTerminal({

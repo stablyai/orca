@@ -1,4 +1,3 @@
-import { isResumablePaneRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { useAppStore } from '@/store'
 import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -29,9 +28,6 @@ export function requestSleepingAgentWakeOnMount(
     useAppStore.getState().sleepingAgentSessionsByPaneKey,
     worktreeId
   )) {
-    if (!isResumablePaneRecord(record)) {
-      continue
-    }
     const tabId = getSleepingRecordTabId(record)
     if (record.worktreeId === worktreeId && tabId !== null && wanted.has(tabId)) {
       requestedRecords.add(record)

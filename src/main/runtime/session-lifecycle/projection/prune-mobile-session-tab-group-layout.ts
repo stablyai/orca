@@ -1,4 +1,3 @@
-import { getPlacedPaneSleepAgentStatus } from './pane-sleeping-record'
 import { selectFreshAgentRowForMobileTab } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from '../../session-tabs/session-tabs-change-publication'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
@@ -93,6 +92,7 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     )
   }
 
+  /** Transforms an internal mobile session tab snapshot into a sanitized client payload, resolving launch-agent ownership and normalizing titles. */
   protected toMobileSessionTabsResult(
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsResult {
@@ -117,6 +117,7 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     }
   }
 
+  /** The desktop tab's rename, else the chat's saved name; null leaves the agent's default label. */
   private structuredConversationTabName(workspaceId: string, sessionId: string): string | null {
     const record = getStructuredAgentSessionHost()?.deps?.store?.getConversation(sessionId)
     const customLabel = this.getWorkspaceSessionForWorktree(workspaceId)?.unifiedTabs?.[
@@ -140,12 +141,6 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
       getProviderSessionRows: (paneKey) => this.getAgentProviderSessionRowsForPaneFn?.(paneKey),
       getProviderSessionSnapshot: () => this.getAgentProviderSessionSnapshotFn?.() ?? [],
       getStatusSnapshot: () => this.getAgentStatusSnapshotFn?.() ?? [],
-      getSleptAgentStatus: (worktreeId, tab) =>
-        getPlacedPaneSleepAgentStatus(
-          this.getWorkspaceSessionForWorktree(worktreeId),
-          worktreeId,
-          tab
-        ),
       getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
       findPty: (worktreeId, tab, options) =>
         this.findPtyForMobileTerminalTab(worktreeId, tab, options),
@@ -171,6 +166,7 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
     retained: RuntimeAgentRowSnapshot | null,
     getHookRowsForPane: (paneKey: string) => AgentStatusIpcPayload[]
   ): { agentStatus: AgentStatusEntry } | Record<string, never> {
+    // Phone status uses display records to include stale-working title clears.
     const displayPty = pty ? this.getPtyDisplayRecord(pty) : null
     return buildRuntimeMobileAgentStatus(
       displayPty,

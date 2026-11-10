@@ -1,7 +1,5 @@
-import { agentTypeToIconAgent } from '../../../shared/agent-status/presentation/agent-type-icon-agent'
-import { paneAgentRecordIdentity } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
-import type { OwnedPaneAgentRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
@@ -23,7 +21,7 @@ export type OpenTabOccupantAgentInput = {
   launchAgent?: TuiAgent
   layout?: TerminalLayoutSnapshot
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
-  sleepingAgentSessionsByPaneKey: Record<string, OwnedPaneAgentRecord>
+  sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord>
   paneForegroundAgentByPaneKey?: Record<string, PaneForegroundAgentEntry>
 }
 
@@ -55,9 +53,7 @@ export function resolveOpenTabOccupantAgent({
     ? (paneForegroundAgentByPaneKey?.[focusedPaneKey]?.agent ?? null)
     : null
   const sleepingSessionAgent = focusedPaneKey
-    ? (agentTypeToIconAgent(
-        paneAgentRecordIdentity(sleepingAgentSessionsByPaneKey[focusedPaneKey]).agent
-      ) ?? null)
+    ? (sleepingAgentSessionsByPaneKey[focusedPaneKey]?.agent ?? null)
     : null
   return resolveTabAgentFromSignalSnapshot({
     title: title?.trim() || '',

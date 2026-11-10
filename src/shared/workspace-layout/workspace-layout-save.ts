@@ -1,6 +1,6 @@
 // Serialize the model and beside records into session documents older builds understand; derive redundant fields from one source.
 
-import type { OwnedPaneAgentRecord } from '../agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
 import type { BrowserWorkspace } from '../browser-workspace-types'
 import type { ClosedTerminalTabTombstonesByTabId } from './closed-terminal-tab-tombstones'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../tab-types'
@@ -125,7 +125,7 @@ function saveWorkspaceRecords({
   layout,
   carried
 }: LoadedWorkspaceLayout): Partial<WorkspaceSessionState> {
-  const sleeping: Record<string, OwnedPaneAgentRecord> = {
+  const sleeping: Record<string, SleepingAgentSessionRecord> = {
     ...carried.unplacedSleepingRecords
   }
   const incarnations: Record<string, string> = { ...carried.unplacedIncarnations }

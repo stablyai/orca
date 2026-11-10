@@ -1,4 +1,3 @@
-import { isResumablePaneRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
 import { useAppStore } from '@/store/index'
 import type { PtyListedSession } from '../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
@@ -88,7 +87,8 @@ export function workspaceHasSleepingAgentSessions(
 ): boolean {
   return sleepingAgentRecordIndex
     .entries(state.sleepingAgentSessionsByPaneKey, worktreeId)
-    .some(([, record]) => isResumablePaneRecord(record) && record.worktreeId === worktreeId)
+    .map(([, record]) => record)
+    .some((record) => record.worktreeId === worktreeId)
 }
 
 function hasStructuredSession(store: ActivationStore, worktreeId: string): boolean {
@@ -124,11 +124,10 @@ function liveSleepingAgentClaims(
       session.paneKey ? [[session.paneKey, session.id] as const] : []
     )
   )
-  for (const [, record] of sleepingAgentRecordIndex.entries(
-    store.sleepingAgentSessionsByPaneKey,
-    worktreeId
-  )) {
-    if (!isResumablePaneRecord(record) || record.worktreeId !== worktreeId) {
+  for (const record of sleepingAgentRecordIndex
+    .entries(store.sleepingAgentSessionsByPaneKey, worktreeId)
+    .map(([, record]) => record)) {
+    if (record.worktreeId !== worktreeId) {
       continue
     }
     const stable = parsePaneKey(record.paneKey)
@@ -254,11 +253,10 @@ export async function runWorktreeAgentActivationGate(
   )
   const hasUnclaimedRecovery = sleepingAgentRecordIndex
     .entries(store.sleepingAgentSessionsByPaneKey, worktreeId)
+    .map(([, record]) => record)
     .some(
-      ([, record]) =>
-        isResumablePaneRecord(record) &&
-        record.worktreeId === worktreeId &&
-        !claims.keys.has(getProviderSessionClaimKey(record))
+      (record) =>
+        record.worktreeId === worktreeId && !claims.keys.has(getProviderSessionClaimKey(record))
     )
   // A surfaced PTY without a conversation claim may still own the sleeping session.
   if (

@@ -9,10 +9,6 @@ export type AgentStateHistoryEntry = {
   startedAt: number
   /** The switching write's updatedAt orders/identifies this entry; startedAt may move backwards when an answered ask returns to its turn end. */
   observedAt?: number
-  turnStartedAt?: number
-  turnEndedAt?: number
-  turnEndDisposition?: 'identified' | 'ambiguous'
-  turnCompletedAt?: number
   /** True when this `done` was a cancellation (agent hook like Claude `is_interrupt`,
    *  or Orca's guarded fallback). Always falsy for non-`done` states so retention logic can preserve it. */
   interrupted?: boolean

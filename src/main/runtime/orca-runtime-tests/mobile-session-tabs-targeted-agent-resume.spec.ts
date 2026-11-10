@@ -1,4 +1,3 @@
-import { resumablePaneRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { describe, expect, it, vi } from 'vitest'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import './runtime-test-module-registration.spec'
@@ -141,7 +140,7 @@ function makeRuntime(
 }
 
 function storedRecord(fixture: Fixture) {
-  return resumablePaneRecord(fixture.getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY])
+  return fixture.getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]
 }
 
 describe('resumeAgentSessionInWorkspace', () => {

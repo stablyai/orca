@@ -17,7 +17,6 @@ export type AgentPaneActivityFlags = {
   hasLiveWorking: boolean
   hasLiveMonitoring: boolean
   hasFailed: boolean
-  hasSleptFailed?: boolean
   hasInterrupted: boolean
   hasUnconfirmed: boolean
   hasLiveDone: boolean
@@ -90,10 +89,6 @@ export function rankWorktreeStatus(
   }
   if (flags.hasLiveMonitoring || heuristic === 'monitoring') {
     return 'monitoring'
-  }
-  // A sleeping failure has no expiry and must not hide current work.
-  if (flags.hasSleptFailed) {
-    return 'failed'
   }
   // Why: an end Orca cannot prove is not a finish, and unlike a user's Stop it is news.
   if (flags.hasUnconfirmed) {

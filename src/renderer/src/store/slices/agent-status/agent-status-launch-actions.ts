@@ -1,4 +1,3 @@
-import type { OwnedPaneAgentRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
@@ -64,18 +63,15 @@ export function createAgentStatusLaunchActions(
               })
             : null
           if (refreshedRecord) {
-            nextSleepingAgentSessions = replaceRecordEntries<OwnedPaneAgentRecord>(
-              s.sleepingAgentSessionsByPaneKey,
+            nextSleepingAgentSessions = replaceRecordEntries(s.sleepingAgentSessionsByPaneKey, [
               [
-                [
-                  paneKey,
-                  {
-                    ...refreshedRecord,
-                    capturedAt: existingSleepingRecord.capturedAt
-                  }
-                ]
+                paneKey,
+                {
+                  ...refreshedRecord,
+                  capturedAt: existingSleepingRecord.capturedAt
+                }
               ]
-            )
+            ])
           }
         }
         if (!registryChanged && nextSleepingAgentSessions === s.sleepingAgentSessionsByPaneKey) {

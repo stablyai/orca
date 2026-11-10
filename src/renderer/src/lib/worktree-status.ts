@@ -210,7 +210,6 @@ export function resolveWorktreeStatus(args: {
   hasLiveWorking: boolean
   hasLiveMonitoring?: boolean
   hasFailed?: boolean
-  hasSleptFailed?: boolean
   hasInterrupted?: boolean
   hasUnconfirmed?: boolean
   hasLiveDone: boolean

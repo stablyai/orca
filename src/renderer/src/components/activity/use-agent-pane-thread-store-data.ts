@@ -1,4 +1,3 @@
-import { unoccupiedSleptAgentStatusByPaneKey } from '../sidebar/workspace-card/activity/worktree-unoccupied-slept-agent-index'
 import { useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { selectVisibleAgentOrchestration } from '@/runtime/agent-orchestration/visible-agent-orchestration'
@@ -24,7 +23,6 @@ export type AllAgentPaneThreadsStoreData = Pick<
   | 'migrationUnsupportedByPtyId'
   | 'tabsByWorktree'
   | 'repos'
-  | 'projectGroups'
   | 'worktreesByRepo'
   | 'folderWorkspaces'
   | 'floatingWorkspacePath'
@@ -36,7 +34,6 @@ export type AllAgentPaneThreadsStoreData = Pick<
   | 'unacknowledgeAgents'
 > & {
   /** Current native-chat originals and terminal tabs with semantic identity reuse. */
-  sleepingAgentStatusByPaneKey: ReturnType<typeof unoccupiedSleptAgentStatusByPaneKey>
   activityTabs: ActivityTabProjection
   worktreeMap: ReturnType<typeof getIndexedWorktreeMap>
   repoMap: ReturnType<typeof getIndexedRepoMap>
@@ -63,7 +60,6 @@ export function useAllAgentPaneThreadStoreData(): AllAgentPaneThreadsStoreData {
   return useAppStore(
     useShallow((s) => ({
       agentStatusByPaneKey: s.agentStatusByPaneKey,
-      sleepingAgentStatusByPaneKey: unoccupiedSleptAgentStatusByPaneKey(s),
       runtimeAgentOrchestrationByPaneKey: selectVisibleAgentOrchestration(s),
       migrationUnsupportedByPtyId: s.migrationUnsupportedByPtyId,
       tabsByWorktree: s.tabsByWorktree,
@@ -77,7 +73,6 @@ export function useAllAgentPaneThreadStoreData(): AllAgentPaneThreadsStoreData {
         return projected
       })(),
       repos: s.repos,
-      projectGroups: s.projectGroups,
       worktreesByRepo: selectWorktreesByRepo(s),
       folderWorkspaces: selectFolderWorkspaces(s),
       floatingWorkspacePath: s.floatingWorkspacePath,

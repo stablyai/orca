@@ -1,4 +1,3 @@
-import { isResumablePaneRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT,
   type WakeHibernatedAgentsWorktreeDetail
@@ -150,11 +149,9 @@ export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): v
   )
   // Why: main resumes a workspace sleep's placed records; the steps below are the window's own hibernation and stranded sleeps.
   const state = useAppStore.getState()
-  const worktreeRecords = sleptRecords
-    .filter(isResumablePaneRecord)
-    .filter(
-      (record) => !isWorkspaceSleepRecord(record) || isStrandedWorkspaceSleepRecord(record, state)
-    )
+  const worktreeRecords = sleptRecords.filter(
+    (record) => !isWorkspaceSleepRecord(record) || isStrandedWorkspaceSleepRecord(record, state)
+  )
   if (worktreeRecords.length === 0) {
     return
   }

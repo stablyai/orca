@@ -1,4 +1,3 @@
-import type { PaneSleepStopCondition } from '../../shared/agent-session/lifecycle/pane-sleep-target'
 import type { RuntimeTerminalAttention } from '../../shared/runtime-terminal-contracts'
 import type { PaintedRestorePane } from '../../shared/painted-restore-ack'
 import type {
@@ -186,15 +185,8 @@ export const ptySessionControlApi = {
   },
   killFenced: (request: PtyFencedTerminationRequest): Promise<PtyFencedTerminationOutcome> =>
     ipcRenderer.invoke('pty:killFenced', request),
-  kill: (
-    id: string,
-    opts?: { keepHistory?: boolean; sleepCondition?: PaneSleepStopCondition }
-  ): Promise<void> =>
-    ipcRenderer.invoke('pty:kill', {
-      id,
-      keepHistory: opts?.keepHistory ?? false,
-      ...(opts?.sleepCondition ? { sleepCondition: opts.sleepCondition } : {})
-    }),
+  kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
+    ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
   listSessions: (
     scope?: PtySessionListScope,
     admission?: ResourceViewAdmission

@@ -225,17 +225,16 @@ async function seedAgentRecoveryMetadata(
           const sleeping = state?.sleepingAgentSessionsByPaneKey[paneKey]
           return {
             liveProviderSessionId: live?.providerSession?.id ?? null,
-            sleeping:
-              sleeping && sleeping.kind !== 'display-only'
-                ? {
-                    paneKey: sleeping.paneKey,
-                    tabId: sleeping.tabId,
-                    worktreeId: sleeping.worktreeId,
-                    origin: sleeping.origin,
-                    providerSessionId: sleeping.providerSession.id,
-                    agentCommand: sleeping.launchConfig?.agentCommand ?? null
-                  }
-                : null,
+            sleeping: sleeping
+              ? {
+                  paneKey: sleeping.paneKey,
+                  tabId: sleeping.tabId,
+                  worktreeId: sleeping.worktreeId,
+                  origin: sleeping.origin,
+                  providerSessionId: sleeping.providerSession.id,
+                  agentCommand: sleeping.launchConfig?.agentCommand ?? null
+                }
+              : null,
             expected: { paneKey, providerSessionId, worktreeId }
           }
         },

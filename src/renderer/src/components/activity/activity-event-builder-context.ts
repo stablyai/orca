@@ -24,12 +24,7 @@ import { standaloneActivityWorktree } from './activity-standalone-worktree'
 import type { Translate } from '@/i18n/use-translate'
 
 export type ActivityTabContext = { worktreeId: string; tab: TerminalTab }
-export type ActivityEventOwner = {
-  worktree: Worktree
-  repo: Repo | null
-  knownWorktree: boolean
-  standalone: boolean
-}
+export type ActivityEventOwner = { worktree: Worktree; repo: Repo | null; knownWorktree: boolean }
 export type ActivityTabHostIndex = Map<string, Map<string, ExecutionHostId | null>>
 
 // Key derived tab context by original native tab and saved name so unchanged pane builds retain identity.
@@ -141,7 +136,7 @@ export function resolveActivityExecutionHostId(
   return connectionId ? toSshExecutionHostId(connectionId) : undefined
 }
 
-export function selectActivityEventOwner(
+export function resolveActivityEventOwner(
   args: BuildActivityEventsArgs,
   context: ActivityTabContext,
   entry: AgentStatusEntry,
@@ -182,7 +177,6 @@ export function selectActivityEventOwner(
   const owner: ActivityEventOwner = {
     worktree,
     repo: repo ?? args.repoMap.get(worktree.repoId) ?? null,
-    standalone: !resolvedWorktree && !mappedWorktree,
     knownWorktree: Boolean(
       resolvedWorktree || mappedWorktree || args.tabsByWorktree[context.worktreeId]
     )
@@ -190,5 +184,3 @@ export function selectActivityEventOwner(
   ownerCache.set(ownerCacheKey, owner)
   return owner
 }
-
-export const resolveActivityEventOwner = selectActivityEventOwner

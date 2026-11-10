@@ -1,4 +1,3 @@
-import { agentEvidencePredatesProcess } from './runtime-agent-process-evidence'
 import {
   normalizeCompatibleAgentStatusEntryForOwner,
   normalizeCompatibleAgentTitleForOwner
@@ -171,14 +170,13 @@ export function buildRuntimeMobileAgentStatus(
     newestHookRow(hookRows.filter((row) => row.providerSessionOnly !== true)) ??
     newestHookRow(hookRows)
   if (
+    processStartedAt != null &&
     shownSegment &&
-    agentEvidencePredatesProcess(
-      processStartedAt,
-      newestEvidenceAt,
-      Boolean(pty?.lastAgentStatus || leaf?.lastAgentStatus)
-    )
+    newestEvidenceAt < processStartedAt &&
+    !pty?.lastAgentStatus &&
+    !leaf?.lastAgentStatus
   ) {
-    return identityOnly(processStartedAt!, shownSegment)
+    return identityOnly(processStartedAt, shownSegment)
   }
   // Prefer OSC 9999 state/prompt/agent so hook-only transitions surface (#7970).
   const liveRow = retained ?? resolveRuntimeHookLiveAgentRow(hookRow.live, pty, nonAgentTitle)
@@ -193,10 +191,7 @@ export function buildRuntimeMobileAgentStatus(
           : {}),
         stateStartedAt: liveRow.stateStartedAt,
         ...pickHostTurnEnd(liveRow),
-        stateHistory: liveRow.previousCompletion ? [liveRow.previousCompletion.end] : [],
-        ...(liveRow.previousCompletion
-          ? { lastCompletedAssistantMessage: liveRow.previousCompletion.lastAssistantMessage }
-          : {}),
+        stateHistory: [],
         ...(terminalHandle ? { terminalHandle } : {}),
         ...((pty?.worktreeId ?? liveRow.worktreeId)
           ? { worktreeId: pty?.worktreeId ?? liveRow.worktreeId }

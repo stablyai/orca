@@ -13,8 +13,6 @@ export type AgentCompletionStatusSnapshot = ParsedAgentStatusPayload & {
   turnEndDisposition?: TurnEndDisposition
   /** Renderer-local boundary used only to reject a delayed cross-host completion. */
   localStateStartedAt?: number
-  /** Renderer-local provenance: this end was read from accepted completion history. */
-  fromHistory?: true
 }
 
 export type AgentCompletionDispatchMeta = {

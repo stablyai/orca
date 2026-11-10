@@ -13,7 +13,7 @@ import type { AppState } from '@/store/types'
 import { applyAgentRowLineage, type DashboardAgentRowWithLineage } from './agent-row-lineage'
 import { buildWorktreeAgentRows } from '../sidebar/workspace-card/activity/worktree-agent-rows'
 import {
-  selectPlacedAgentStatusEntriesForWorktree,
+  selectLiveAgentStatusEntriesForWorktree,
   selectMigrationUnsupportedEntriesForWorktree,
   selectTerminalLayoutsForWorktree
 } from '../sidebar/workspace-card/activity/worktree-agent-row-selectors'
@@ -82,16 +82,7 @@ export type WorktreeAgentRowsState = Pick<
   | 'ptyIdsByTabId'
   | 'runtimePaneTitlesByTabId'
 > &
-  Partial<
-    Pick<
-      AppState,
-      | 'unifiedTabsByWorktree'
-      | 'paneForegroundAgentByPaneKey'
-      | 'sleepingAgentSessionsByPaneKey'
-      | 'sshConnectionStates'
-      | 'transientClearedAgentStatusConnectionIds'
-    >
-  >
+  Partial<Pick<AppState, 'unifiedTabsByWorktree' | 'paneForegroundAgentByPaneKey'>>
 
 // Selectors rebuild top-level records but retain per-tab values; compare shallowly within the worktree’s bounded tab set.
 function shallowRecordEqual(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
@@ -116,7 +107,7 @@ export function selectWorktreeAgentRowsCached(args: {
 }): DashboardAgentRowWithLineage[] {
   const { state, worktreeId, orchestration, now, generation, cache } = args
   cache?.seenWorktreeIds.add(worktreeId)
-  const liveEntries = selectPlacedAgentStatusEntriesForWorktree(state, worktreeId)
+  const liveEntries = selectLiveAgentStatusEntriesForWorktree(state, worktreeId)
   const migrationUnsupported = selectMigrationUnsupportedEntriesForWorktree(state, worktreeId)
   const tabs = state.tabsByWorktree[worktreeId]
   const terminalLayoutsByTabId = selectTerminalLayoutsForWorktree(state, worktreeId)

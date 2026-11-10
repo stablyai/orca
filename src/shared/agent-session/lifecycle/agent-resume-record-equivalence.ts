@@ -1,8 +1,5 @@
-import { structuralValuesEqualIgnoringUndefined } from '../../structural-value-equality'
 import {
   type SleepingAgentSessionRecord,
-  type OwnedPaneAgentRecord,
-  isResumablePaneRecord,
   type SleepingAgentLaunchConfig,
   agentProviderSessionsEqual
 } from './agent-session-resume'
@@ -28,10 +25,10 @@ export function launchConfigsEqual(
 }
 
 export function sleepingRecordsEquivalentIgnoringCaptureTime(
-  existing: OwnedPaneAgentRecord | undefined,
+  existing: SleepingAgentSessionRecord | undefined,
   next: SleepingAgentSessionRecord
 ): boolean {
-  if (!existing || !isResumablePaneRecord(existing)) {
+  if (!existing) {
     return false
   }
   return (
@@ -40,7 +37,6 @@ export function sleepingRecordsEquivalentIgnoringCaptureTime(
     existing.worktreeId === next.worktreeId &&
     existing.agent === next.agent &&
     agentProviderSessionsEqual(existing.agent, existing.providerSession, next.providerSession) &&
-    structuralValuesEqualIgnoringUndefined(existing.completion, next.completion) &&
     existing.prompt === next.prompt &&
     existing.state === next.state &&
     existing.updatedAt === next.updatedAt &&
@@ -53,10 +49,10 @@ export function sleepingRecordsEquivalentIgnoringCaptureTime(
 }
 
 export function recoveryRecordMatches(
-  existing: OwnedPaneAgentRecord | undefined,
+  existing: SleepingAgentSessionRecord | undefined,
   next: SleepingAgentSessionRecord
 ): boolean {
-  if (!existing || !isResumablePaneRecord(existing)) {
+  if (!existing) {
     return false
   }
   // Why: completion or interruption must replace a pre-status working checkpoint.
@@ -66,7 +62,6 @@ export function recoveryRecordMatches(
     existing.worktreeId === next.worktreeId &&
     existing.tabId === next.tabId &&
     existing.state === next.state &&
-    structuralValuesEqualIgnoringUndefined(existing.completion, next.completion) &&
     agentMainAgentVerdict(existing) === agentMainAgentVerdict(next) &&
     agentProviderSessionsEqual(existing.agent, existing.providerSession, next.providerSession) &&
     // Why: effort and permission mode are not session identity, but a stale value would resume wrong.
@@ -77,10 +72,10 @@ export function recoveryRecordMatches(
 }
 
 export function recoveryRecordTargetsSameSession(
-  existing: OwnedPaneAgentRecord | undefined,
+  existing: SleepingAgentSessionRecord | undefined,
   next: SleepingAgentSessionRecord
 ): boolean {
-  if (!existing || !isResumablePaneRecord(existing)) {
+  if (!existing) {
     return false
   }
   return (

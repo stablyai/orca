@@ -125,7 +125,6 @@ export function submitHookLaneCompletion(
     return (
       lane.keepsAuthority() &&
       (!row ||
-        row.sessionBoundary === true ||
         (row.state === 'done' &&
           row.stateStartedAt === segment &&
           row.turnEndedAt === done?.turnEndedAt))

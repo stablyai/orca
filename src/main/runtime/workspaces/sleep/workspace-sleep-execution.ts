@@ -1,5 +1,5 @@
 import type { AgentSessionWorkspaceSleepResult } from '../../../../shared/agent-session/agent-session-workspace-sleep'
-import type { OwnedPaneAgentRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
@@ -37,7 +37,7 @@ export type WorkspaceSleepDeps = {
   /** Suspends the VM once its turn comes, unless `wanted` no longer holds by then. */
   suspendVm: ((worktreeId: string, wanted: () => boolean) => Promise<void>) | null
   /** The wake records main keeps for this host's workspace, read after its terminals stopped. */
-  ownRecords: (worktreeId: string) => OwnedPaneAgentRecord[]
+  ownRecords: (worktreeId: string) => SleepingAgentSessionRecord[]
   /** Starts watching for the workspace being reopened; the returned check says whether it was. */
   watchReopen: (worktreeId: string) => () => boolean
 }

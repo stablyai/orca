@@ -1,13 +1,8 @@
-import { paneAgentCompletion, type PreviousPaneCompletion } from './pane-agent-completion'
 // Share status-to-resume rules with main so accepted hook statuses can checkpoint panes no window opened.
 
 import { agentVerdictFields } from '../../agent-status/lifecycle/agent-main-agent-verdict'
 import {
   agentProviderSessionsEqual,
-  isDisplayOnlyPaneSleep,
-  isPaneSleepRecord,
-  isResumablePaneRecord,
-  type OwnedPaneAgentRecord,
   isResumableTuiAgent,
   type AgentProviderSessionMetadata,
   type SleepingAgentLaunchConfig,
@@ -33,32 +28,11 @@ export type ResumeRecordStatus = Pick<
   | 'connectionId'
   | 'terminalTitle'
   | 'lastAssistantMessage'
-  | 'lastAssistantMessageIsToolOutput'
   | 'terminalResumeEligible'
   | 'interrupted'
   | 'mainAgent'
   | 'worktreeId'
-  | 'lastCompletedAssistantMessage'
-  | 'sessionBoundary'
-> &
-  Partial<
-    Pick<
-      AgentStatusEntry,
-      | 'stateStartedAt'
-      | 'firstStateStartedAt'
-      | 'turnStartedAt'
-      | 'turnEndedAt'
-      | 'turnEndDisposition'
-    >
-  > & {
-    isReplay?: boolean
-    restoredUnconfirmed?: boolean
-    providerSessionOnly?: boolean
-    evidenceObservedAt?: number
-    stateHistory?: AgentStatusEntry['stateHistory']
-    previousCompletion?: PreviousPaneCompletion
-    turnCompletedAt?: number
-  }
+>
 
 export type ResumeRecordTab = { id: string; title?: string }
 
@@ -101,22 +75,13 @@ export function resumeRecordFromStatus(args: {
     ...(args.entry.connectionId !== undefined ? { connectionId: args.entry.connectionId } : {}),
     prompt: args.entry.prompt,
     state: args.entry.state,
-    ...(args.origin === 'worktree-sleep' ? { completion: paneAgentCompletion(args.entry) } : {}),
     capturedAt: args.capturedAt,
     updatedAt: args.entry.updatedAt,
-    stateStartedAt: args.entry.stateStartedAt,
-    firstStateStartedAt: args.entry.firstStateStartedAt,
-    turnStartedAt: args.entry.turnStartedAt,
-    turnEndedAt: args.entry.turnEndedAt,
-    turnEndDisposition: args.entry.turnEndDisposition,
     ...((args.entry.terminalTitle ?? tab?.title)
       ? { terminalTitle: (args.entry.terminalTitle ?? tab?.title)! }
       : {}),
     ...(args.entry.lastAssistantMessage
       ? { lastAssistantMessage: args.entry.lastAssistantMessage }
-      : {}),
-    ...(args.entry.lastAssistantMessageIsToolOutput !== undefined
-      ? { lastAssistantMessageIsToolOutput: args.entry.lastAssistantMessageIsToolOutput }
       : {}),
     ...(args.launchConfig ? { launchConfig: copyLaunchConfig(args.launchConfig) } : {}),
     ...agentVerdictFields(args.entry),
@@ -151,12 +116,10 @@ export function statusRetainsResumableIdentity(
 
 /** The recipe a pane's earlier record kept, when it records this status's own session. */
 export function recordLaunchConfigForStatus(
-  record: OwnedPaneAgentRecord | undefined,
+  record: SleepingAgentSessionRecord | undefined,
   status: Pick<AgentStatusEntry, 'agentType' | 'providerSession'>
 ): SleepingAgentLaunchConfig | undefined {
-  return record &&
-    isResumablePaneRecord(record) &&
-    record.launchConfig &&
+  return record?.launchConfig &&
     record.agent === status.agentType &&
     status.providerSession &&
     agentProviderSessionsEqual(status.agentType, record.providerSession, status.providerSession)
@@ -191,25 +154,9 @@ export function liveResumeRecord(args: {
 }
 
 export function liveResumeRecordChange(
-  existing: OwnedPaneAgentRecord | undefined,
-  live: SleepingAgentSessionRecord | null,
-  accepted?: Pick<
-    ResumeRecordStatus,
-    'updatedAt' | 'evidenceObservedAt' | 'isReplay' | 'providerSessionOnly' | 'restoredUnconfirmed'
-  > & { stopping?: boolean }
+  existing: SleepingAgentSessionRecord | undefined,
+  live: SleepingAgentSessionRecord | null
 ): { set: SleepingAgentSessionRecord } | 'clear' | null {
-  if (
-    existing &&
-    isPaneSleepRecord(existing) &&
-    (!accepted ||
-      accepted.stopping ||
-      accepted.isReplay ||
-      accepted.providerSessionOnly ||
-      accepted.restoredUnconfirmed ||
-      (accepted.evidenceObservedAt ?? accepted.updatedAt) <= existing.capturedAt)
-  ) {
-    return null
-  }
   if (live) {
     return recoveryRecordMatches(existing, live) ? null : { set: live }
   }
@@ -219,7 +166,7 @@ export function liveResumeRecordChange(
 /** Quit captures keep running agents resumable; periodic capture must not replace a quit record. Null leaves the existing record. */
 export function capturedResumeRecord(args: {
   entry: ResumeRecordStatus
-  existing: OwnedPaneAgentRecord | undefined
+  existing: SleepingAgentSessionRecord | undefined
   mode: 'quit' | 'periodic'
   capturedAt: number
   worktreeIdOf: () => string | null
@@ -227,9 +174,6 @@ export function capturedResumeRecord(args: {
   launchConfigOf: () => SleepingAgentLaunchConfig | undefined
 }): SleepingAgentSessionRecord | null {
   const { entry, existing, mode, capturedAt } = args
-  if (existing && isDisplayOnlyPaneSleep(existing)) {
-    return null
-  }
   const origin = mode === 'quit' ? ('quit' as const) : ('live' as const)
   if (entry.state === 'done') {
     if (

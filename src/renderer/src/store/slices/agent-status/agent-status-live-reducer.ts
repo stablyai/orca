@@ -1,4 +1,4 @@
-import type { OwnedPaneAgentRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { replaceRecordEntries } from '../../keyed-record-transitions'
 import { projectAgentPaneConversation } from './agent-pane-conversation'
 import type { AppState } from '../../types'
@@ -67,18 +67,14 @@ export function reduceAgentStatusLiveUpdate(
     nextLaunchConfigs = { ...state.agentLaunchConfigByPaneKey }
     delete nextLaunchConfigs[paneKey]
   }
-  const recordChange = liveResumeRecordChange(
-    existingSleepingRecord,
-    liveRecoveryRecord,
-    build.sleepSuccessorEvidence
-  )
+  const recordChange = liveResumeRecordChange(existingSleepingRecord, liveRecoveryRecord)
   if (recordChange === 'clear') {
-    nextSleepingAgentSessions = replaceRecordEntries<OwnedPaneAgentRecord>(
+    nextSleepingAgentSessions = replaceRecordEntries<SleepingAgentSessionRecord>(
       state.sleepingAgentSessionsByPaneKey,
       [[paneKey, null]]
     )
   } else if (recordChange) {
-    nextSleepingAgentSessions = replaceRecordEntries<OwnedPaneAgentRecord>(
+    nextSleepingAgentSessions = replaceRecordEntries<SleepingAgentSessionRecord>(
       state.sleepingAgentSessionsByPaneKey,
       [[paneKey, recordChange.set]]
     )

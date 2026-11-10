@@ -1,4 +1,3 @@
-import { paneAgentRecordIdentity } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentProviderSessionMetadata } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   isAiVaultTitleAgent,
@@ -73,21 +72,17 @@ function agentRecordsEqual(current: AppState, previous: AppState): boolean {
   }
 
   const relevantSleeping = (entry: AppState['sleepingAgentSessionsByPaneKey'][string]): boolean =>
-    isAiVaultTitleAgent(paneAgentRecordIdentity(entry).agent) &&
-    Boolean(paneAgentRecordIdentity(entry).providerSession?.id)
+    isAiVaultTitleAgent(entry.agent) && Boolean(entry.providerSession.id)
   return relevantRecordEqual(
     current.sleepingAgentSessionsByPaneKey,
     previous.sleepingAgentSessionsByPaneKey,
     relevantSleeping,
     (left, right) =>
-      paneAgentRecordIdentity(left).agent === paneAgentRecordIdentity(right).agent &&
+      left.agent === right.agent &&
       left.paneKey === right.paneKey &&
       left.tabId === right.tabId &&
       left.worktreeId === right.worktreeId &&
-      providerSessionEqual(
-        paneAgentRecordIdentity(left).providerSession,
-        paneAgentRecordIdentity(right).providerSession
-      )
+      providerSessionEqual(left.providerSession, right.providerSession)
   )
 }
 

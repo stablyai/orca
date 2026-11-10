@@ -11,7 +11,7 @@ import {
   resolveActivityExecutionHostId
 } from '@/components/activity/activity-event-builder-context'
 import { buildWorktreeAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-agent-rows'
-import { selectPlacedAgentStatusEntriesForWorktree } from '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
+import { selectLiveAgentStatusEntriesForWorktree } from '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import { isExecutionHostAliasForWorktree } from '@/lib/workspace/ownership/worktree-execution-host-alias'
 import {
   findIndexedDetectedWorktrees,
@@ -80,7 +80,7 @@ export function getWorkspaceCleanupAgentEvidence(
       representedTabs: state.unifiedTabsByWorktree
         ? getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree)
         : undefined,
-      entries: selectPlacedAgentStatusEntriesForWorktree(state, worktreeId),
+      entries: selectLiveAgentStatusEntriesForWorktree(state, worktreeId),
       runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
       ptyIdsByTabId: state.ptyIdsByTabId,
       terminalLayoutsByTabId: state.terminalLayoutsByTabId,

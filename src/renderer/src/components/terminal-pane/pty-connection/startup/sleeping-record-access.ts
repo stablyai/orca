@@ -8,7 +8,6 @@ import { findLegacyNumericSleepingRecord } from '../../../../../../shared/sleepi
 import { neutralTerminalTitle } from '../../../../../../shared/workspace-layout/terminal-pane-title-reset'
 import {
   agentProviderSessionsEqual,
-  isResumablePaneRecord,
   type SleepingAgentSessionRecord
 } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { recognizeAgentProcessFromCommandLine } from '../../../../../../shared/agent-status/process/agent-process-recognition'
@@ -28,7 +27,7 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
     state: ReturnType<typeof useAppStore.getState>
   ): { paneKey: string; record: SleepingAgentSessionRecord } | null => {
     const stableRecord = state.sleepingAgentSessionsByPaneKey[session.cacheKey]
-    if (stableRecord && isResumablePaneRecord(stableRecord)) {
+    if (stableRecord) {
       return { paneKey: session.cacheKey, record: stableRecord }
     }
     const legacy = findLegacyNumericSleepingRecord(
@@ -56,7 +55,6 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
       consumed.record.worktreeId
     )) {
       if (
-        isResumablePaneRecord(record) &&
         paneKey !== consumed.paneKey &&
         paneKey !== keepPaneKey &&
         record.worktreeId === consumed.record.worktreeId &&

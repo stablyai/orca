@@ -215,10 +215,7 @@ function completeRecordedWorker(
     state: 'done',
     origin: 'live'
   })
-  if (!record || record.kind === 'display-only') {
-    throw new Error('Expected resumable worker')
-  }
-  return record
+  return record!
 }
 
 function recordCompletedWorker(): SleepingAgentSessionRecord {

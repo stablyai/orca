@@ -206,13 +206,6 @@ export function retireTerminalSurfaceFromPersistence(
         [surface.worktreeId]: nextTabsForWorktree
       },
       terminalLayoutsByTabId,
-      sleepingAgentSessionsByPaneKey: Object.fromEntries(
-        Object.entries(session.sleepingAgentSessionsByPaneKey ?? {}).filter(([key]) =>
-          removeParent
-            ? !key.startsWith(`${surface.parentTabId}:`)
-            : key !== `${surface.parentTabId}:${surface.leafId}`
-        )
-      ),
       activeTabIdByWorktree,
       ...(unifiedTabs ? { unifiedTabs } : {}),
       ...(tabGroups ? { tabGroups } : {}),

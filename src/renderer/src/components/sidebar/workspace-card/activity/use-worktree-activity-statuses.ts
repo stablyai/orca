@@ -23,7 +23,6 @@ export function selectWorktreeActivityStatuses(
       hasLiveWorking,
       hasLiveMonitoring,
       hasFailed,
-      hasSleptFailed,
       hasInterrupted,
       hasUnconfirmed,
       hasLiveDone,
@@ -48,7 +47,6 @@ export function selectWorktreeActivityStatuses(
         hasLiveWorking,
         hasLiveMonitoring,
         hasFailed,
-        hasSleptFailed,
         hasInterrupted,
         hasUnconfirmed,
         hasLiveDone

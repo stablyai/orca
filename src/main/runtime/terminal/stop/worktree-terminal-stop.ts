@@ -315,7 +315,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     return anySleepKeyNames(this.terminalSleepStateByHostWorktree.keys(), worktreeId)
   }
 
-  async runWorktreeTerminalMutation<T>(
+  protected async runWorktreeTerminalMutation<T>(
     worktreeId: string,
     operation: () => Promise<T>
   ): Promise<T> {

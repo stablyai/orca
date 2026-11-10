@@ -1,4 +1,3 @@
-import { isResumablePaneRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 // Store-free so store slices can send; `layout-owner-command` reads the store for other callers.
 import {
   runtimeEnvironmentIdForWorkspaceOwner,
@@ -24,7 +23,7 @@ import {
   type LayoutApplyOrigin
 } from '@/runtime/workspace-layout/server/server-layout-apply-routes'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { OwnedPaneAgentRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { SplitRatioIntent } from '../../../../../shared/workspace-layout/split-ratio-intents'
 import type { PaneSide } from '../../../../../shared/workspace-layout/terminal-pane-tree'
 import type { LayoutEditorFile } from '../../../../../shared/workspace-layout/workspace-layout-model'
@@ -158,8 +157,7 @@ export type WindowLayoutCommand =
       type: 'sleep'
       tabId: string
       paneKeys: string[]
-      records: OwnedPaneAgentRecord[]
-      expectedRecords?: OwnedPaneAgentRecord[]
+      records: SleepingAgentSessionRecord[]
       /** Records how the panes' agents resume without stopping them (a live or quit capture). */
       recordOnly?: true
     }
@@ -233,14 +231,6 @@ export function sendLayoutApply(
 ): boolean {
   // Use mirror ownership, never server focus: hostless rows are local. Twins retain local-main handling rather than choosing either host, matching terminal creation.
   const environmentId = runtimeEnvironmentIdUnlessTwin(state, worktreeId)
-  if (environmentId && command.type === 'sleep') {
-    const records = command.records.filter(isResumablePaneRecord)
-    if (records.length === 0) {
-      return true
-    }
-    const keys = new Set(records.map((record) => record.paneKey))
-    command = { ...command, records, paneKeys: command.paneKeys.filter((key) => keys.has(key)) }
-  }
   // A paired server's workspace: its main takes the intent when its frames draw the workspace.
   const server = environmentId
     ? serverLayoutApplyFor(environmentId, worktreeId, command, state)

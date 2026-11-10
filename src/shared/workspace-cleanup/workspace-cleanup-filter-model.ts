@@ -73,7 +73,6 @@ export type WorkspaceCleanupStatusFilter = {
 
 export type WorkspaceCleanupAgentFilter = {
   states: WorkspaceCleanupAgentState[]
-  /** Legacy wire spelling; matches current Done agents, including explicitly slept panes. */
   retainedDoneAgents: WorkspaceCleanupTriState
 }
 

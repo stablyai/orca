@@ -40,7 +40,6 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
   protected abstract markPaneLiveTitlesDirty(): void
   /** A title moved a terminal agent to another status; worktree.ps rows show it without a hook row. */
   protected abstract onTitleAgentStatusChanged(): void
-  protected abstract recordTerminalSleepSuccessor(ptyId: string): void
 
   observeClaudeTerminalEvidence(ptyId: string, evidence: ClaudeTerminalEvidence): void {
     if (!this.onClaudeTerminalEvidence || this.ptysById.get(ptyId)?.connectionId) {
@@ -202,9 +201,6 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       }
       leaf.lastAgentStatus = agentStatus
       leaf.lastAgentStatusObservedLive = true
-    }
-    if (agentStatus !== null && ptyRecordChanged) {
-      this.recordTerminalSleepSuccessor(ptyId)
     }
     if (ptyInputEdge) {
       this.deliverPendingMessagesForPty(ptyId)

@@ -1,4 +1,3 @@
-import { paneAgentRecordIdentity } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentRowDisplayDotState } from '@/lib/agent-status/presentation/agent-row-dot-state'
 import { agentPaneConversationForEntry } from '@/store/slices/agent-status/agent-pane-conversation'
 import type { AgentDotState } from '@/components/AgentStateDot'
@@ -75,11 +74,10 @@ export function buildAiVaultOriginalPaneIndex(state: OriginalPaneState): AiVault
     }
   }
   for (const record of Object.values(state.sleepingAgentSessionsByPaneKey)) {
-    const identity = paneAgentRecordIdentity(record)
-    if (identity.agent && identity.providerSession) {
+    if (record) {
       appendToIndex(
         sleepingByProvider,
-        providerKey(identity.agent, identity.providerSession.id),
+        providerKey(record.agent, record.providerSession.id),
         record
       )
     }

@@ -1,9 +1,8 @@
 import {
-  type OwnedPaneAgentRecord,
+  type SleepingAgentSessionRecord,
   agentProviderSessionsEqual,
   type AgentProviderSessionMetadata,
-  type SleepingAgentLaunchConfig,
-  type SleepingAgentSessionRecord
+  type SleepingAgentLaunchConfig
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { canonicalOrchestrationForRow } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import { sameAgentStatusTerminalOwner } from '../../../../../shared/agent-status/identity/agent-status-terminal-owner'
@@ -31,7 +30,7 @@ import {
 } from './agent-status-launch-config'
 import { findAgentPaneWorktreeId, getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
 import { mergeCurrentOrchestrationContext } from './agent-status-orchestration-context'
-import { agentSleepSuccessorEvidence, deriveAgentStatusLiveFacts } from './agent-status-live-facts'
+import { deriveAgentStatusLiveFacts } from './agent-status-live-facts'
 import {
   localAgentConversationAcceptance,
   conversationSessionStartedAt
@@ -45,9 +44,8 @@ import {
 export type AgentStatusLiveEntryBuild = {
   entry: AgentStatusEntry
   conversationSource: ReturnType<typeof localAgentConversationAcceptance>['source']
-  sleepSuccessorEvidence: ReturnType<typeof agentSleepSuccessorEvidence>
   existing: AgentStatusEntry | undefined
-  existingSleepingRecord: OwnedPaneAgentRecord | undefined
+  existingSleepingRecord: SleepingAgentSessionRecord | undefined
   liveRecoveryRecord: SleepingAgentSessionRecord | null
   launchConfigSource: SleepingAgentLaunchConfig | undefined
   registryEntry: AppState['agentLaunchConfigByPaneKey'][string] | undefined
@@ -285,7 +283,6 @@ export function buildAgentStatusLiveEntry(
   return {
     entry,
     conversationSource: conversation.source,
-    sleepSuccessorEvidence: agentSleepSuccessorEvidence(state, entry, timing),
     existing,
     ...facts,
     launchConfigSource,

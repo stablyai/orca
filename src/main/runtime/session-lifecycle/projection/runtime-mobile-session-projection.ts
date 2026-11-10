@@ -1,4 +1,4 @@
-import { frameAgentStatus, finiteTurnCompletedAt } from './frame-agent-status'
+import { frameAgentStatus } from './frame-agent-status'
 import {
   normalizeCompatibleAgentStatusEntryForOwner,
   normalizeCompatibleAgentTitleForOwner,
@@ -37,6 +37,8 @@ export function projectRuntimeMobileSessionTabs(
 ): RuntimeMobileSessionTabsResult {
   const tabs: RuntimeMobileSessionClientTab[] = []
   const liveBrowserTabsByPageId = host.getLiveBrowserTabs(snapshot.worktree)
+  // Production reads hook rows by pane; the snapshot fallback remains for tests
+  // and embedders that have not adopted the narrow getter.
   let hookRowsByPaneKey: Map<string, AgentStatusIpcPayload[]> | null = null
   const hookRowsForPane = new Map<string, AgentStatusIpcPayload[]>()
   const getHookRowsForPane = (paneKey: string): AgentStatusIpcPayload[] => {
@@ -256,7 +258,7 @@ export function projectRuntimeMobileSessionTabs(
         })
       : livePty
     const terminalHandle = terminalPty ? host.issuePtyHandle(terminalPty) : null
-    const liveAgentStatus =
+    const projectedAgentStatus =
       agentStatus ??
       host.buildPtyStatus(
         // Main layout supplies the live pane leaf whose terminal owns status.
@@ -266,22 +268,19 @@ export function projectRuntimeMobileSessionTabs(
         retainedAgentStatus,
         getHookRowsForPane
       )
-    const sleepStatus =
-      !liveAgentStatus.agentStatus || liveAgentStatus.agentStatus.restoredUnconfirmed
-        ? host.getSleptAgentStatus?.(snapshot.worktree, tab)
-        : null
     const { projectedTurnCompletedAt, ...clientAgentStatus } = frameAgentStatus(
-      sleepStatus ?? liveAgentStatus.agentStatus,
+      projectedAgentStatus.agentStatus,
       snapshot.worktree,
       terminalPty
     )
-    const rawTurnCompletedAt = sleepStatus
-      ? projectedTurnCompletedAt
-      : (hookAgentStatus?.live?.payload.turnCompletedAt ??
-        selectRuntimeHookAgentRowForPane(getHookRowsForPane(paneKey)).live?.payload
-          .turnCompletedAt ??
-        projectedTurnCompletedAt)
-    const turnCompletedAt = finiteTurnCompletedAt(rawTurnCompletedAt)
+    const rawTurnCompletedAt =
+      hookAgentStatus?.live?.payload.turnCompletedAt ??
+      selectRuntimeHookAgentRowForPane(getHookRowsForPane(paneKey)).live?.payload.turnCompletedAt ??
+      projectedTurnCompletedAt
+    const turnCompletedAt =
+      typeof rawTurnCompletedAt === 'number' && Number.isFinite(rawTurnCompletedAt)
+        ? rawTurnCompletedAt
+        : undefined
     tabs.push({
       type: 'terminal',
       id: tab.id,

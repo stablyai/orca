@@ -1,4 +1,4 @@
-import type { OwnedPaneAgentRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -12,7 +12,7 @@ export type WorkspaceTerminalRowPlan = {
   canonicalTabIdBySubsumedTabId: Map<string, string>
   reconnectPtyIdByRetainedTabId: Map<string, string>
   releasedPtyIdsByTabId: Map<string, Set<string>>
-  sleepingAgentSessionsByPaneKey: Record<string, OwnedPaneAgentRecord>
+  sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord>
   tabsByWorktree: Record<string, TerminalTab[]>
   validTabIds: Set<string>
 }

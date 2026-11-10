@@ -1,15 +1,12 @@
-import { displayOnlyPaneSleepFromEntry } from '../../../../../shared/agent-session/lifecycle/pane-sleep-agent-status'
 import type { AppState } from '../../types'
 import { sleepingAgentRecordIndex } from '../../terminals/sleeping-agent-record-index'
+import '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getAgentResumeArgv } from '../../../../../shared/agent-launch/startup/agent-resume-argv'
-import {
-  isResumablePaneRecord,
-  type OwnedPaneAgentRecord,
-  type SleepingAgentSessionRecord
-} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { paneKeyMatchesAnyTabPrefix } from './agent-status-pane-key-tab-binding'
 import {
   isValidCompletedAgentHibernationEntry,
+  manualSleepCaptureEntry,
   markManualSleepLazyRestore,
   normalizeSleepingAgentSessionCollectOptions,
   sleepingRecordFromEntry,
@@ -22,7 +19,7 @@ export function collectSleepingAgentSessionRecordsForWorktree(
   state: AppState,
   worktreeId: string,
   options?: readonly string[] | CollectSleepingAgentSessionRecordsOptions
-): Record<string, OwnedPaneAgentRecord> {
+): Record<string, SleepingAgentSessionRecord> {
   const capturedAt = Date.now()
   const collectOptions = normalizeSleepingAgentSessionCollectOptions(options)
   const allowedPaneKeys = collectOptions.paneKeys ? new Set(collectOptions.paneKeys) : null
@@ -34,7 +31,7 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     ? 'worktree-sleep'
     : undefined
   const tabPrefixes = (state.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
-  const records: Record<string, OwnedPaneAgentRecord> = {}
+  const records: Record<string, SleepingAgentSessionRecord> = {}
   const promotedLiveRecoveryPaneKeys = new Set<string>()
 
   if (isManualWorktreeSleep) {
@@ -44,7 +41,6 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     )) {
       const liveEntry = state.agentStatusByPaneKey[existing.paneKey]
       if (
-        !isResumablePaneRecord(existing) ||
         existing.worktreeId !== worktreeId ||
         existing.origin !== 'live' ||
         (liveEntry !== undefined &&
@@ -82,21 +78,16 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     if (isCompletedAgentHibernation && !isValidCompletedAgentHibernationEntry(entry)) {
       continue
     }
-    const resumable = sleepingRecordFromEntry({
+    const record = sleepingRecordFromEntry({
       state,
-      entry,
+      entry: isManualWorktreeSleep ? manualSleepCaptureEntry(entry, capturedAt) : entry,
       worktreeId,
       capturedAt,
       launchConfig: getLaunchConfigForEntry(state, entry),
       origin
     })
-    const record =
-      resumable ??
-      (isManualWorktreeSleep && !entry.restoredUnconfirmed
-        ? displayOnlyPaneSleepFromEntry(entry, worktreeId, capturedAt)
-        : null)
     if (record) {
-      if (isManualWorktreeSleep && isResumablePaneRecord(record)) {
+      if (isManualWorktreeSleep) {
         markManualSleepLazyRestore(record)
       }
       records[record.paneKey] = record

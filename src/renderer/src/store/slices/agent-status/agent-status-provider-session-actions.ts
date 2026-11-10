@@ -8,12 +8,9 @@ import type {
 } from './agent-status-contract'
 import {
   agentProviderSessionsEqual,
-  isPaneSleepRecord,
-  isResumablePaneRecord,
-  type OwnedPaneAgentRecord,
+  type SleepingAgentSessionRecord,
   type ResumableTuiAgent,
-  type AgentProviderSessionMetadata,
-  type SleepingAgentSessionRecord
+  type AgentProviderSessionMetadata
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getAgentResumeArgv } from '../../../../../shared/agent-launch/startup/agent-resume-argv'
 import { resolveAgentPaneAuthorityKey } from './agent-pane-authority'
@@ -60,13 +57,8 @@ export function createAgentStatusProviderSessionActions(
       let removedLiveStatus = false
       settleAttentionRemovedBy(set, get, () =>
         set((s, changedPaneKeys) => {
+          const existingRecord = s.sleepingAgentSessionsByPaneKey[paneKey]
           const existingStatus = s.agentStatusByPaneKey[paneKey]
-          const ownedRecord = s.sleepingAgentSessionsByPaneKey[paneKey]
-          if (ownedRecord && isPaneSleepRecord(ownedRecord)) {
-            return s
-          }
-          const existingRecord =
-            ownedRecord && isResumablePaneRecord(ownedRecord) ? ownedRecord : undefined
           if (
             (existingStatus && updatedAt < existingStatus.updatedAt) ||
             (existingRecord && updatedAt < existingRecord.updatedAt)
@@ -172,7 +164,7 @@ export function createAgentStatusProviderSessionActions(
             ...(nextConversations !== s.agentConversationsByPaneKey
               ? { agentConversationsByPaneKey: nextConversations }
               : {}),
-            sleepingAgentSessionsByPaneKey: replaceRecordEntries<OwnedPaneAgentRecord>(
+            sleepingAgentSessionsByPaneKey: replaceRecordEntries<SleepingAgentSessionRecord>(
               s.sleepingAgentSessionsByPaneKey,
               [[paneKey, record]]
             ),

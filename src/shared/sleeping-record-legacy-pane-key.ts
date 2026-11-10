@@ -1,10 +1,6 @@
 // Pre-stable-ID panes still persist numbered keys (tab:2) until their old panes retire.
 
-import {
-  isResumablePaneRecord,
-  type OwnedPaneAgentRecord,
-  type SleepingAgentSessionRecord
-} from './agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from './agent-session/lifecycle/agent-session-resume'
 import { parseLegacyNumericPaneKey } from './workspace-layout/stable-pane-id'
 
 /** One provider conversation in a workspace; aliases of one conversation share it. */
@@ -18,22 +14,18 @@ export function getProviderSessionClaimKey(record: SleepingAgentSessionRecord): 
 /** Prefer the pane’s numbered record, otherwise the oldest if all numbered records name one conversation.
  * Unknown pane numbers require that one-conversation fallback; aliases contains every numbered key in the workspace/tab. */
 export function findLegacyNumericSleepingRecord(
-  records: Readonly<Record<string, OwnedPaneAgentRecord>>,
+  records: Readonly<Record<string, SleepingAgentSessionRecord>>,
   pane: { tabId: string; numericPaneId?: string },
   inWorkspace: (record: SleepingAgentSessionRecord) => boolean
 ): { paneKey: string; record: SleepingAgentSessionRecord; aliases: string[] } | null {
-  const legacyMatches = Object.entries(records).filter(
-    (entry): entry is [string, SleepingAgentSessionRecord] => {
-      const [paneKey, record] = entry
-      const legacy = parseLegacyNumericPaneKey(paneKey)
-      return (
-        isResumablePaneRecord(record) &&
-        legacy?.tabId === pane.tabId &&
-        inWorkspace(record) &&
-        (!record.tabId || record.tabId === pane.tabId)
-      )
-    }
-  )
+  const legacyMatches = Object.entries(records).filter(([paneKey, record]) => {
+    const legacy = parseLegacyNumericPaneKey(paneKey)
+    return (
+      legacy?.tabId === pane.tabId &&
+      inWorkspace(record) &&
+      (!record.tabId || record.tabId === pane.tabId)
+    )
+  })
   const exactLegacyMatch =
     pane.numericPaneId === undefined
       ? undefined

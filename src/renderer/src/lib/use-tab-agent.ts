@@ -1,5 +1,3 @@
-import { agentTypeToIconAgent } from '../../../shared/agent-status/presentation/agent-type-icon-agent'
-import { paneAgentRecordIdentity } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -82,11 +80,7 @@ export function useTabAgent(tab: TerminalTab): TerminalAgent | null {
   )
   // Why: a hibernated pane's session record is the freshest identity once PTY, hook, and process signals are all gone.
   const sleepingSessionAgent = useAppStore((s) =>
-    focusedPaneKey
-      ? (agentTypeToIconAgent(
-          paneAgentRecordIdentity(s.sleepingAgentSessionsByPaneKey[focusedPaneKey]).agent
-        ) ?? null)
-      : null
+    focusedPaneKey ? (s.sleepingAgentSessionsByPaneKey[focusedPaneKey]?.agent ?? null) : null
   )
 
   // Focused pane's PTY; only used to reset per-process-generation signals on respawn.

@@ -54,14 +54,8 @@ function makeLayout(leafId: string, ptyId = 'pty-1'): Record<string, unknown> {
 }
 
 describe('waking panes slept by a manual workspace sleep', () => {
-  it('keeps an explicitly slept interrupted wait with an old observation owned by its preserved pane', () => {
-    const record = makeRecord({
-      interrupted: true,
-      state: 'waiting',
-      capturedAt: 3_600_001,
-      updatedAt: 1,
-      stateStartedAt: 1
-    })
+  it('keeps an interrupted worktree-sleep record owned by a preserved pane', () => {
+    const record = makeRecord({ interrupted: true })
     useAppStore.setState({
       activeWorktreeId: 'wt-1',
       activeTabType: 'terminal',

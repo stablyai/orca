@@ -203,7 +203,7 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
       .poll(() =>
         orcaPage.evaluate((paneKey) => {
           const record = window.__store?.getState().sleepingAgentSessionsByPaneKey[paneKey]
-          return record && record.kind !== 'display-only'
+          return record
             ? {
                 origin: record.origin,
                 state: record.state,

@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from '../execution-host'
-import type { OwnedPaneAgentRecord } from '../agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
 import type { WorkspaceKey } from '../workspace-scope'
 import type { Tab, TabGroup, TabGroupLayoutNode, WorkspaceVisibleTabType } from '../tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../workspace-layout/terminal-tab-types'
@@ -91,7 +91,7 @@ export type WorkspaceSessionState = {
   /** Persist default-tab admission so reopening a workspace after closing all tabs does not recreate its template. */
   defaultTerminalTabsAppliedByWorktreeId?: Record<string, true>
   /** Provider-session resume records captured when workspaces sleep. */
-  sleepingAgentSessionsByPaneKey?: Record<string, OwnedPaneAgentRecord>
+  sleepingAgentSessionsByPaneKey?: Record<string, SleepingAgentSessionRecord>
   /** Host-issued process incarnation for each durable terminal surface. */
   terminalPtyIncarnationsByPaneKey?: Record<string, string>
   /** Monotonic host authority watermark for terminal membership in each repo. */

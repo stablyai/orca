@@ -1,21 +1,3 @@
-import { paneSleepTargetMatches, paneSleepStopMatches } from './pane-sleep-admission'
-import type {
-  PaneSleepTarget,
-  PaneSleepStopCondition
-} from '../../../../shared/agent-session/lifecycle/pane-sleep-target'
-import { hostSleepKey } from './worktree-terminal-sleep-key'
-import { readWorktreeSleepAgentStatus } from './worktree-sleep-agent-status'
-import { prepareWorktreeSleepRecords } from './worktree-sleep-record-transaction'
-import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
-import type { RuntimeAgentRowSnapshot } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
-import {
-  isPaneSleepRecord,
-  isResumablePaneRecord,
-  resumablePaneRecord,
-  agentProviderSessionsEqual,
-  type SleepingAgentSessionRecord
-} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import { sleepingRecordsEquivalentIgnoringCaptureTime } from '../../../../shared/agent-session/lifecycle/agent-resume-record-equivalence'
 import { OrcaRuntimeWithStopTerminalsForWorktree } from './worktree-terminal-stop'
 import { launchStatement } from '../launch/launch-evidence'
@@ -28,7 +10,6 @@ import {
 import {
   hookStatusResumeCommand,
   quitResumeRecords,
-  resumeStatusesFromHookRows,
   resumeStatusFromHookRow,
   type PaneLaunchConfigOf
 } from './hook-status-resume-records'
@@ -39,9 +20,14 @@ import type {
   AgentStatusIpcPayload,
   RefusedPaneResume
 } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import {
+  agentProviderSessionsEqual,
+  type SleepingAgentSessionRecord
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 import { type ExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
 export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRuntimeWithStopTerminalsForWorktree {
@@ -50,11 +36,10 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
     worktreeId: string,
     paneKey: string
   ): Promise<SleepingAgentSessionRecord | undefined> {
-    return this.inResumeRecordOrder(async () =>
-      resumablePaneRecord(
+    return this.inResumeRecordOrder(
+      async () =>
         this.store?.getWorkspaceSession?.(this.getWorkspaceSessionHostIdForWorktree(worktreeId))
           ?.sleepingAgentSessionsByPaneKey?.[paneKey]
-      )
     )
   }
 
@@ -73,8 +58,6 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
           const saved = session.sleepingAgentSessionsByPaneKey?.[paneKey]
           if (
             !source ||
-            !saved ||
-            !isResumablePaneRecord(saved) ||
             !refused.expectedSavedRecord ||
             saved?.paneKey !== refused.expectedSavedRecord.paneKey ||
             saved.capturedAt !== refused.expectedSavedRecord.capturedAt ||
@@ -109,19 +92,6 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
   }
 
   protected readonly sleepResumeRecords: WorktreeSleepResumeRecorder = {
-    prepare: (worktreeId, capture, isCurrent) =>
-      prepareWorktreeSleepRecords(worktreeId, capture, isCurrent, {
-        edit: (edit) =>
-          this.inResumeRecordOrder(() =>
-            this.commitWorkspaceSessionEdit(
-              this.getWorkspaceSessionHostIdForWorktree(worktreeId),
-              edit
-            )
-          ),
-        ptyById: (ptyId) => this.ptysById.get(ptyId),
-        ptyForPane: (paneKey) => this.getPtyRecordForPaneKey(paneKey),
-        publish: () => this.notifyMobileSessionTabsChanged(worktreeId)
-      }),
     capture: (worktreeId, ptyIds) =>
       captureWorktreeSleepResumeRecords({
         worktreeId,
@@ -131,7 +101,6 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
         launchByPtyId: new Map([...ptyIds].map((ptyId) => [ptyId, this.ptysById.get(ptyId)])),
         readRows: () => this.getAgentProviderSessionSnapshotFn?.() ?? [],
         checkAgentPresence: this.checkHookAgentPresenceFn,
-        readEntry: (ptyId, paneKey) => this.readLivePaneAgentStatus(ptyId, paneKey),
         capturedAt: Date.now()
       }),
     persist: async (worktreeId, capture, stoppedPtyIds) => {
@@ -141,7 +110,8 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
           (session) => applyWorktreeSleepResumeRecords(session, capture, stoppedPtyIds)
         )
       try {
-        await this.inResumeRecordOrder(commit)
+        // Switch point: a status accepted before the sleep is saved is written before it, as in the window.
+        await (ORCA_LAYOUT_OWNER_IS_MAIN ? this.inResumeRecordOrder(commit) : commit())
       } catch (error) {
         // Why: the PTYs already stopped; a lost record costs the resume, not the sleep.
         console.error('[runtime] could not record slept agent sessions', { worktreeId, error })
@@ -149,82 +119,12 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
     }
   }
 
-  paneSleepTargetIsCurrent(workspace: string, target: PaneSleepTarget): boolean {
-    return paneSleepTargetMatches(
-      workspace,
-      target,
-      this.getPtyRecordForPaneKey(target.paneKey),
-      this.readLivePaneAgentStatus(target.ptyId, target.paneKey)
-    )
-  }
-
-  paneSleepStopIsCurrent(condition: PaneSleepStopCondition): boolean {
-    return paneSleepStopMatches(
-      condition,
-      this.paneSleepTargetIsCurrent(condition.workspace, condition.target),
-      this.getWorkspaceSessionForWorktree(condition.workspace)?.sleepingAgentSessionsByPaneKey?.[
-        condition.target.paneKey
-      ]
-    )
-  }
-
-  private readLivePaneAgentStatus(ptyId: string, paneKey: string): AgentStatusEntry | null {
-    const pty = this.ptysById.get(ptyId)
-    return readWorktreeSleepAgentStatus({
-      paneKey,
-      pty,
-      processStartedAt: this.terminalRunFacts.readProcessStartedAt(ptyId),
-      session: pty ? this.getWorkspaceSessionForWorktree(pty.worktreeId) : null,
-      getRows: (key) =>
-        this.getAgentProviderSessionRowsForPaneFn?.(key) ??
-        (this.getAgentProviderSessionSnapshotFn?.() ?? []).filter((row) => row.paneKey === key),
-      build: (livePty, tab, rows) =>
-        this.buildPtyMobileAgentStatus(livePty, tab, null, null, rows).agentStatus
-    })
-  }
-
-  protected recordTerminalSleepSuccessor(ptyId: string): void {
-    const pty = this.ptysById.get(ptyId)
-    if (!pty) {
-      return
-    }
-    const records = this.getWorkspaceSessionForWorktree(
-      pty.worktreeId
-    )?.sleepingAgentSessionsByPaneKey
-    for (const paneKey of this.collectPaneKeysForPty(ptyId)) {
-      const saved = records?.[paneKey]
-      if (!saved || !isPaneSleepRecord(saved)) {
-        continue
-      }
-      const entry = this.readLivePaneAgentStatus(ptyId, paneKey)
-      if (!entry) {
-        continue
-      }
-      const observedAt = pty.lastOscTitleEpochMs ?? pty.lastAgentStatusStartedAtEpochMs
-      if (observedAt === null || observedAt === undefined) {
-        continue
-      }
-      this.inResumeRecordOrder(() =>
-        this.writeHookStatusResume({ ...entry, evidenceObservedAt: observedAt })
-      ).catch((error) => console.warn('[runtime] could not record a pane successor', error))
-    }
-  }
-
   /** Each pane's last hook status, which a status without a provider session inherits it from. */
-  private readonly previousHookStatusByPaneKey = new Map<string, ResumeRecordStatus>()
+  private readonly previousHookStatusByPaneKey = new Map<
+    string,
+    ResumeRecordStatus & { stateStartedAt?: number }
+  >()
   private hookStatusResumeWrites: Promise<void> = Promise.resolve()
-
-  protected abstract buildPtyMobileAgentStatus(
-    pty: RuntimePtyWorktreeRecord | null,
-    tab: RuntimeMobileSessionTerminalTab,
-    terminalHandle: string | null,
-    retained: RuntimeAgentRowSnapshot | null,
-    getRows: (paneKey: string) => AgentStatusIpcPayload[]
-  ):
-    | {
-        agentStatus: AgentStatusEntry
-      }
-    | Record<string, never>
 
   protected abstract getPtyRecordForPaneKey(paneKey: string): RuntimePtyWorktreeRecord | null
 
@@ -293,12 +193,6 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
     if (!hostId || parseExecutionHostId(hostId)?.kind === 'runtime') {
       return
     }
-    if (
-      this.terminalSleepStateByHostWorktree.get(hostSleepKey(hostId, worktreeId))?.phase ===
-      'stopping'
-    ) {
-      return
-    }
     const command = hookStatusResumeCommand({
       status,
       session: this.store.getWorkspaceSession(hostId),
@@ -313,11 +207,12 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
 
   /** A layout-owner build's quit capture of the agents of the panes one partition holds. */
   quitResumeRecordsFor(session: WorkspaceSessionState): SleepingAgentSessionRecord[] {
+    const statuses = (this.getAgentProviderSessionSnapshotFn?.() ?? []).flatMap((row) => {
+      const status = resumeStatusFromHookRow(row, this.previousHookStatusByPaneKey.get(row.paneKey))
+      return status ? [status] : []
+    })
     return quitResumeRecords({
-      statuses: resumeStatusesFromHookRows(
-        this.getAgentProviderSessionSnapshotFn?.() ?? [],
-        this.previousHookStatusByPaneKey
-      ),
+      statuses,
       session,
       worktreeIdOf: (paneKey) => this.getTerminalWorktreeIdForPaneKey(paneKey),
       launchConfigOf: this.getLaunchStatementForPaneKey,

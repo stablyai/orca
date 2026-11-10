@@ -1,8 +1,7 @@
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import type { OwnedPaneAgentRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { findLegacyNumericSleepingRecord } from '../../../../shared/sleeping-record-legacy-pane-key'
 import {
-  isTerminalLeafId,
   makePaneKey,
   parseLegacyNumericPaneKey
 } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -10,35 +9,15 @@ import { resolveRuntimePaneTitleLeafIdFromRoot } from '../../../../shared/runtim
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { collectPersistedTerminalLeafIds } from '../../terminal/surface/mobile-session-layout-projection'
-import { paneSleepAgentStatus } from '../../../../shared/agent-session/lifecycle/pane-sleep-agent-status'
-
-export function getPlacedPaneSleepAgentStatus(
-  session: WorkspaceSessionState | null | undefined,
-  worktreeId: string,
-  pane: { parentTabId: string; leafId: string }
-) {
-  if (!isTerminalLeafId(pane.leafId)) {
-    return null
-  }
-  const owned = findPaneSleepingRecord(session, worktreeId, pane, true)
-  return owned ? paneSleepAgentStatus(owned.record) : null
-}
 
 /** The pane's record and, for a numbered one, its tab's numbered keys: aliases, not other panes. */
 export function findPaneSleepingRecord(
   session: WorkspaceSessionState | null | undefined,
   worktreeId: string,
-  pane: { parentTabId: string; leafId: string },
-  requirePlacement = false
-): { record: OwnedPaneAgentRecord; aliases: readonly string[] } | null {
+  pane: { parentTabId: string; leafId: string }
+): { record: SleepingAgentSessionRecord; aliases: readonly string[] } | null {
   const records = session?.sleepingAgentSessionsByPaneKey
   const record = records?.[makePaneKey(pane.parentTabId, pane.leafId)]
-  const placed =
-    session?.tabsByWorktree[worktreeId]?.some((tab) => tab.id === pane.parentTabId) &&
-    collectPersistedTerminalLeafIds(layoutOf(session, pane)).includes(pane.leafId)
-  if (requirePlacement && !placed) {
-    return null
-  }
   if (record) {
     return worktreeIdsEqual(record.worktreeId, worktreeId) ? { record, aliases: [] } : null
   }
@@ -47,7 +26,7 @@ export function findPaneSleepingRecord(
   }
   // The pane numbers the tab's records name, mapped to panes as the window numbers a restored tab.
   const root = layoutOf(session, pane)?.root
-  const inWorkspace = (candidate: OwnedPaneAgentRecord) =>
+  const inWorkspace = (candidate: SleepingAgentSessionRecord) =>
     worktreeIdsEqual(candidate.worktreeId, worktreeId)
   const owned = Object.entries(records).flatMap(([paneKey, candidate]) => {
     const legacy = parseLegacyNumericPaneKey(paneKey)

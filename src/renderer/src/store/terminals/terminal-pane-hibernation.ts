@@ -1,4 +1,3 @@
-import { stageLocalPaneSleep } from './terminal-sleep-capture-intent'
 import { replaceRecordEntries, replaceTabBuckets } from '@/store/keyed-record-transitions'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -75,7 +74,7 @@ export function createTerminalPaneHibernationActions(
         }
       )
       if (!sleepingAgentSessionRecords[opts.paneKey]) {
-        // Why: killing the PTY with no persisted resume record strands the pane unwakeable; abort instead of hibernating unrecoverably.
+        // Killing without a persisted resume record would strand the pane.
         throw new Error('agent_hibernation_capture_missing')
       }
       const capture = shutdownBufferCaptures.get(opts.tabId)
@@ -86,17 +85,29 @@ export function createTerminalPaneHibernationActions(
           // Don't let one tab's capture failure block the pane hibernation.
         }
       }
-      const localCapture = !runtimeEnvironmentId
-        ? await stageLocalPaneSleep(get, set, worktreeId, sleepingAgentSessionRecords, state)
-        : undefined
       // Why: store sleeping records before kill, since pty:exit can arrive first.
+      const sleepingRecordKeys = Object.keys(sleepingAgentSessionRecords)
+      const replacedSleepingRecords: Record<string, (typeof sleepingAgentSessionRecords)[string]> =
+        {}
+      for (const key of sleepingRecordKeys) {
+        const existing = state.sleepingAgentSessionsByPaneKey[key]
+        if (existing) {
+          replacedSleepingRecords[key] = existing
+        }
+      }
       const rollbackTargetShutdownState = (): void => {
         set((s) => {
           const next = { ...s.suppressedPtyExitIds }
           for (const ptyId of exitGuardPtyIds) {
             delete next[ptyId]
           }
-          return { suppressedPtyExitIds: next }
+          return {
+            suppressedPtyExitIds: next,
+            sleepingAgentSessionsByPaneKey: replaceRecordEntries(
+              s.sleepingAgentSessionsByPaneKey,
+              sleepingRecordKeys.map((key) => [key, replacedSleepingRecords[key] ?? null] as const)
+            )
+          }
         })
       }
       set((s) => ({
@@ -104,14 +115,10 @@ export function createTerminalPaneHibernationActions(
           ...s.suppressedPtyExitIds,
           ...Object.fromEntries(exitGuardPtyIds.map((ptyId) => [ptyId, true] as const))
         },
-        ...(runtimeEnvironmentId
-          ? {
-              sleepingAgentSessionsByPaneKey: replaceRecordEntries(
-                s.sleepingAgentSessionsByPaneKey,
-                Object.entries(sleepingAgentSessionRecords)
-              )
-            }
-          : {})
+        sleepingAgentSessionsByPaneKey: replaceRecordEntries(
+          s.sleepingAgentSessionsByPaneKey,
+          Object.entries(sleepingAgentSessionRecords)
+        )
       }))
       if (expectedRuntimePtyIds.length > 0) {
         if (!runtimeEnvironmentId) {
@@ -143,7 +150,6 @@ export function createTerminalPaneHibernationActions(
           )
         } catch (err) {
           rollbackTargetShutdownState()
-          await localCapture?.settle()
           throw err
         }
         const stoppedPtyIds = sortedUniquePtyIds(stopResult.stoppedPtyIds)
@@ -164,25 +170,18 @@ export function createTerminalPaneHibernationActions(
         // Why: pty.kill can flush final data before exit; unregister first so stale handlers can't fire phantom notifications during hibernation.
         const handlerSnapshots = unregisterPtyDataHandlers(rendererShutdownPtyIds) ?? []
         try {
-          await window.api.pty.kill(opts.ptyId, {
-            keepHistory: true,
-            sleepCondition: localCapture?.conditionForPty(opts.ptyId)
-          })
+          await window.api.pty.kill(opts.ptyId, { keepHistory: true })
         } catch (err) {
           restorePtyDataHandlersAfterFailedShutdown(handlerSnapshots)
           rollbackTargetShutdownState()
-          await localCapture?.settle()
           throw err
         }
         for (const snapshot of handlerSnapshots) {
           snapshot.commit?.()
         }
       }
-      if (localCapture && !localCapture.canCommit()) {
-        return
-      }
       // Switch point: main records the sleep this window decided, once the stop settled.
-      if (ORCA_LAYOUT_OWNER_IS_MAIN && runtimeEnvironmentId) {
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         recordPaneSleepThroughLayoutOwner(get(), worktreeId, sleepingAgentSessionRecords)
       }
       settleAttentionRemovedBy(set, get, () =>

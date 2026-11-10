@@ -32,9 +32,6 @@ export function resolveAgentStatusLiveEntryStateHistory(
         prompt: existing.prompt,
         startedAt: existing.stateStartedAt,
         observedAt: existing.stateObservedAt,
-        turnStartedAt: existing.turnStartedAt,
-        turnEndedAt: existing.turnEndedAt,
-        turnEndDisposition: existing.turnEndDisposition,
         ...agentVerdictFields(existing)
       }
     ]

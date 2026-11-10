@@ -18,7 +18,7 @@ import {
   EMPTY_LIVE_ENTRIES,
   EMPTY_MIGRATION_UNSUPPORTED_ENTRIES,
   EMPTY_TERMINAL_LAYOUTS,
-  selectPlacedAgentStatusEntriesForWorktree,
+  selectLiveAgentStatusEntriesForWorktree,
   selectMigrationUnsupportedEntriesForWorktree,
   selectTerminalLayoutsForWorktree
 } from './worktree-agent-row-selectors'
@@ -45,7 +45,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     const readInputs = (state: AppState) =>
       [
         active ? state.tabsByWorktree[worktreeId] : EMPTY_TABS,
-        active ? selectPlacedAgentStatusEntriesForWorktree(state, worktreeId) : EMPTY_LIVE_ENTRIES,
+        active ? selectLiveAgentStatusEntriesForWorktree(state, worktreeId) : EMPTY_LIVE_ENTRIES,
         active
           ? selectMigrationUnsupportedEntriesForWorktree(state, worktreeId)
           : EMPTY_MIGRATION_UNSUPPORTED_ENTRIES,

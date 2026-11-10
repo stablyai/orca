@@ -98,14 +98,8 @@ export default function AgentListVerdictPublisher(): null {
     }
   }, [])
   const verdicts = useMemo(
-    () =>
-      buildAgentListVerdicts(allThreads, [
-        ...new Set([
-          ...Object.keys(storeData.agentStatusByPaneKey),
-          ...storeData.sleepingAgentStatusByPaneKey.keys()
-        ])
-      ]),
-    [allThreads, storeData.agentStatusByPaneKey, storeData.sleepingAgentStatusByPaneKey]
+    () => buildAgentListVerdicts(allThreads, Object.keys(storeData.agentStatusByPaneKey)),
+    [allThreads, storeData.agentStatusByPaneKey]
   )
   useEffect(() => {
     // Unhydrated read stamps would mark every agent unread.

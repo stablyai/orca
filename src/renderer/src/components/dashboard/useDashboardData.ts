@@ -12,7 +12,7 @@ export type DashboardAgentRow = {
   entry: AgentStatusEntry
   tab: TerminalTab
   agentType: AgentType
-  rowSource?: 'live' | 'sleeping' | 'subagent'
+  rowSource?: 'live' | 'subagent'
   state: AgentRowState
   /** Focus the parent pane for subagent rows, which have no pane of their own. */
   activationPaneKey?: string

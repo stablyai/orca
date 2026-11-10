@@ -1,4 +1,3 @@
-import { resumablePaneRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { OrcaRuntimeWithResolveWorktreeRemovalTarget } from '../../workspaces/workspace-removal-target'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -112,10 +111,7 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
     return resolveSavedRestoreLaunchRecipe({
       agent: request.agent,
       providerSession: request.providerSession,
-      record:
-        record && worktreeIdsEqual(record.worktreeId, worktreeId)
-          ? resumablePaneRecord(record)
-          : undefined,
+      record: record && worktreeIdsEqual(record.worktreeId, worktreeId) ? record : undefined,
       liveRow: sourcePaneKey
         ? this.getAgentProviderSessionSnapshotFn?.().find((row) => row.paneKey === sourcePaneKey)
         : undefined

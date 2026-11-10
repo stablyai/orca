@@ -1,7 +1,7 @@
 import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import { sleepingAgentRecordIndex } from '../../terminals/sleeping-agent-record-index'
 
-import type { OwnedPaneAgentRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import { collectSleepingAgentSessionRecordsForWorktree } from './agent-status-recovery-collection'
@@ -36,7 +36,7 @@ export function createAgentStatusRecoveryActions(
           paneKeys,
           records
         )
-        const updates = new Map<string, OwnedPaneAgentRecord>()
+        const updates = new Map<string, SleepingAgentSessionRecord>()
         let changed = replaced.changed
         for (const record of Object.values(records)) {
           if ((updates.get(record.paneKey) ?? replaced.records[record.paneKey]) !== record) {
@@ -55,7 +55,7 @@ export function createAgentStatusRecoveryActions(
     captureAllSleepingAgentSessions: (mode) => {
       set((s) => {
         const capturedAt = Date.now()
-        const updates = new Map<string, OwnedPaneAgentRecord>()
+        const updates = new Map<string, SleepingAgentSessionRecord>()
         let changed = false
         for (const entry of Object.values(s.agentStatusByPaneKey)) {
           const record = capturedResumeRecord({
@@ -121,7 +121,7 @@ export function createAgentStatusRecoveryActions(
           delete nextLaunch[paneKey]
         }
         return {
-          sleepingAgentSessionsByPaneKey: replaceRecordEntries<OwnedPaneAgentRecord>(
+          sleepingAgentSessionsByPaneKey: replaceRecordEntries<SleepingAgentSessionRecord>(
             s.sleepingAgentSessionsByPaneKey,
             removed.map((key) => [key, null] as const)
           ),
@@ -151,7 +151,7 @@ export function createAgentStatusRecoveryActions(
           delete nextLaunch[paneKey]
         }
         return {
-          sleepingAgentSessionsByPaneKey: replaceRecordEntries<OwnedPaneAgentRecord>(
+          sleepingAgentSessionsByPaneKey: replaceRecordEntries<SleepingAgentSessionRecord>(
             s.sleepingAgentSessionsByPaneKey,
             removed.map((key) => [key, null] as const)
           ),

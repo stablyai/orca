@@ -1,4 +1,3 @@
-import type { PaneAgentCompletion } from './pane-agent-completion'
 import { readAgentEffortLevel } from '../../agent-launch/choices/agent-effort-level'
 import { readClaudePermissionMode } from './provider-session-live-settings'
 import type { AgentHookSource } from '../../agent-hook-listener/transport/agent-hook-relay'
@@ -6,10 +5,7 @@ import type {
   AgentStatusCacheIdentity,
   RefusedPaneResume
 } from '../../agent-status/contracts/agent-status-ipc-payload'
-import type {
-  AgentStatusEntry,
-  AgentStatusState
-} from '../../agent-status/contracts/agent-status-types'
+import type { AgentStatusState } from '../../agent-status/contracts/agent-status-types'
 import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 
@@ -66,11 +62,7 @@ export type SleepingAgentLaunchConfig = {
   ompResumeFilePath?: string
 }
 
-export * from './pane-agent-record'
-
 export type SleepingAgentSessionRecord = {
-  kind?: never
-  completion?: PaneAgentCompletion
   paneKey: string
   tabId?: string
   worktreeId: string
@@ -80,14 +72,8 @@ export type SleepingAgentSessionRecord = {
   state: AgentStatusState
   capturedAt: number
   updatedAt: number
-  stateStartedAt?: number
-  firstStateStartedAt?: number
-  turnStartedAt?: number
-  turnEndedAt?: number
-  turnEndDisposition?: AgentStatusEntry['turnEndDisposition']
   terminalTitle?: string
   lastAssistantMessage?: string
-  lastAssistantMessageIsToolOutput?: boolean
   interrupted?: boolean
   /** The main agent's own status when captured, copied with `interrupted` by `agentVerdictFields`;
    *  read the verdict through `agentMainAgentVerdict`. */
@@ -98,6 +84,24 @@ export type SleepingAgentSessionRecord = {
   origin?: 'worktree-sleep' | 'quit' | 'live'
   /** Explicit-sleep finished panes resume only when their own tab opens; mobile wake must not mount/respawn every slept tab (#11598). */
   restoreOnTabOpenOnly?: boolean
+}
+
+/** A record of a slept pane (worktree sleep, or a legacy record); 'quit'/'live' resume a running agent. */
+export function isPaneSleepRecord(record: Pick<SleepingAgentSessionRecord, 'origin'>): boolean {
+  return record.origin === undefined || record.origin === 'worktree-sleep'
+}
+
+/** Only host-wake sleep records count: live/quit panes restore themselves, and tab-open-only panes wait for their tab. */
+export function hasSleptAgentToWake(
+  records: Record<string, SleepingAgentSessionRecord> | undefined,
+  worktreeId: string
+): boolean {
+  return Object.values(records ?? {}).some(
+    (record) =>
+      record.worktreeId === worktreeId &&
+      isPaneSleepRecord(record) &&
+      record.restoreOnTabOpenOnly !== true
+  )
 }
 
 const RESUMABLE_TUI_AGENT_SET: ReadonlySet<string> = new Set(RESUMABLE_TUI_AGENTS)

@@ -31,11 +31,6 @@ export function sameAgentStateHistory(
       entry.state === b[index]?.state &&
       entry.prompt === b[index]?.prompt &&
       entry.startedAt === b[index]?.startedAt &&
-      entry.observedAt === b[index]?.observedAt &&
-      entry.turnStartedAt === b[index]?.turnStartedAt &&
-      entry.turnEndedAt === b[index]?.turnEndedAt &&
-      entry.turnEndDisposition === b[index]?.turnEndDisposition &&
-      entry.turnCompletedAt === b[index]?.turnCompletedAt &&
       entry.interrupted === b[index]?.interrupted &&
       mainAgentStatusEqual(entry.mainAgent, b[index]?.mainAgent)
   )
@@ -50,7 +45,6 @@ export function agentStatusEntryEqual(
   }
   return (
     a.state === b.state &&
-    a.sessionBoundary === b.sessionBoundary &&
     a.workingMode === b.workingMode &&
     a.prompt === b.prompt &&
     a.updatedAt === b.updatedAt &&
@@ -67,7 +61,6 @@ export function agentStatusEntryEqual(
     a.toolInput === b.toolInput &&
     a.interactivePrompt === b.interactivePrompt &&
     a.lastAssistantMessage === b.lastAssistantMessage &&
-    a.lastCompletedAssistantMessage === b.lastCompletedAssistantMessage &&
     a.lastAssistantMessageIsToolOutput === b.lastAssistantMessageIsToolOutput &&
     a.interrupted === b.interrupted &&
     mainAgentStatusEqual(a.mainAgent, b.mainAgent) &&

@@ -29,7 +29,7 @@ const hibernation = record('tab-b:leaf', { origin: 'worktree-sleep' })
 const quit = record('tab-c:leaf', { origin: 'quit' })
 
 describe('windowSaveKeepingMainSleepRecords', () => {
-  it("keeps main's sleep records, ignores window-only sleeps and passes other recovery records", () => {
+  it("keeps main's workspace-sleep records over the window's copy and passes the rest", () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the merge reads only the records field.
     const stored = {
       sleepingAgentSessionsByPaneKey: { [mainClaimed.paneKey]: mainClaimed }
@@ -47,6 +47,7 @@ describe('windowSaveKeepingMainSleepRecords', () => {
     )
     expect(saved.sleepingAgentSessionsByPaneKey).toEqual({
       [mainClaimed.paneKey]: mainClaimed,
+      [hibernation.paneKey]: hibernation,
       [quit.paneKey]: quit
     })
   })

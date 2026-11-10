@@ -1,4 +1,3 @@
-import { resumablePaneRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from '../../testing/app-store-test-fixture'
 import { sleepingRecordFromEntry } from './agent-status-sleeping-records'
@@ -52,9 +51,7 @@ export function registerAgentStatusNestedResumeTests(): void {
           '--resume',
           'claude-parent'
         ])
-        expect(
-          resumablePaneRecord(store.getState().sleepingAgentSessionsByPaneKey[PANE])?.agent
-        ).not.toBe('codex')
+        expect(store.getState().sleepingAgentSessionsByPaneKey[PANE]?.agent).not.toBe('codex')
       }
     })
   })

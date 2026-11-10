@@ -139,10 +139,7 @@ export function buildWorktreeAgentRows(args: {
         entry: rowEntry,
         tab,
         agentType: resolveRowAgentType(rowEntry, tab),
-        rowSource:
-          parsePaneKey(rowEntry.paneKey) && !rowEntry.terminalHandle && !hasLivePty
-            ? 'sleeping'
-            : 'live',
+        rowSource: 'live',
         state: shouldDecay ? resolveDecayedAgentRowState(rowEntry, hasLivePty) : rowEntry.state,
         startedAt
       })

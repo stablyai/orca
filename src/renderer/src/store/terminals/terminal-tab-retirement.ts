@@ -2,7 +2,7 @@ import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId
 } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import type { OwnedPaneAgentRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AppState } from '../types'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import {
@@ -263,9 +263,9 @@ export function buildTerminalTabRetirementPlans(
 }
 
 export function removeSleepingAgentSessionsForTab(
-  records: Record<string, OwnedPaneAgentRecord>,
+  records: Record<string, SleepingAgentSessionRecord>,
   tabId: string
-): Record<string, OwnedPaneAgentRecord> {
+): Record<string, SleepingAgentSessionRecord> {
   let next = records
   for (const [paneKey, record] of Object.entries(records)) {
     if (!paneKey.startsWith(`${tabId}:`) && record.tabId !== tabId) {

@@ -1,4 +1,4 @@
-import type { OwnedPaneAgentRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   parseLegacyNumericPaneKey,
   parsePaneKey
@@ -9,7 +9,7 @@ import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-recor
 const EMPTY_TAB_IDS: ReadonlySet<string> = new Set()
 
 type SleepingRecordParkExemptionState = {
-  sleepingAgentSessionsByPaneKey?: Record<string, OwnedPaneAgentRecord>
+  sleepingAgentSessionsByPaneKey?: Record<string, SleepingAgentSessionRecord>
 }
 
 const exemptionsByEntries = new WeakMap<object, ReadonlySet<string>>()

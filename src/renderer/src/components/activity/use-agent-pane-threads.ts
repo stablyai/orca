@@ -1,10 +1,4 @@
-import {
-  selectWorktreesByRepo,
-  selectDetectedWorktreesByRepo,
-  selectFolderWorkspaces
-} from '@/store/workspaces/catalog/workspace-record-fields'
 import { useDeferredValue, useMemo, useRef } from 'react'
-import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import { buildActivityEvents } from './activity-event-builder'
@@ -40,8 +34,7 @@ const EMPTY_GROUPS: ActivityThreadGroup[] = []
 const EMPTY_ACTIVITY_BUILD: ReturnType<typeof buildActivityEvents> = {
   events: [],
   liveAgentByPaneKey: {},
-  paneEntryByPaneKey: {},
-  passiveAgentByPaneKey: {}
+  paneEntryByPaneKey: {}
 }
 
 /** Every Activity thread before any view filter: store data to events and threads. */
@@ -50,7 +43,6 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
   allThreads: AgentPaneThread[]
 } {
   const storeData = useAllAgentPaneThreadStoreData()
-  const t = useTranslate()
   // Why: agentStatusEpoch is a dep (not used in the body) so the memo recomputes when freshness boundaries expire even without new PTY data.
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   const chatNames = useStructuredChatTabNames()
@@ -64,8 +56,7 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
   const {
     events: allEvents,
     liveAgentByPaneKey,
-    paneEntryByPaneKey,
-    passiveAgentByPaneKey
+    paneEntryByPaneKey
   } = useMemo(
     () => {
       const now = Date.now()
@@ -78,8 +69,6 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
       ) {
         eventBuildCacheRef.current.panes.clear()
         eventBuildCacheRef.current.tabs = undefined
-        eventBuildCacheRef.current.sleep = undefined
-        eventBuildCacheRef.current.owners = undefined
         return EMPTY_ACTIVITY_BUILD
       }
       // Global history caps affect live-thread unread and search state.
@@ -87,7 +76,6 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
         {
           chatNames,
           agentStatusByPaneKey: storeData.agentStatusByPaneKey,
-          sleepingAgentStatusByPaneKey: storeData.sleepingAgentStatusByPaneKey,
           runtimeAgentOrchestrationByPaneKey: storeData.runtimeAgentOrchestrationByPaneKey,
           migrationUnsupportedByPtyId: storeData.migrationUnsupportedByPtyId,
           tabsByWorktree: storeData.tabsByWorktree,
@@ -96,24 +84,16 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
           repoMap: storeData.repoMap,
           repos: storeData.repos,
           resolveWorktree: storeData.getKnownWorktreeById,
-          ownerCatalog: [
-            selectWorktreesByRepo(storeData),
-            selectDetectedWorktreesByRepo(storeData),
-            selectFolderWorkspaces(storeData),
-            storeData.projectGroups,
-            storeData.floatingWorkspacePath
-          ],
           acknowledgedAgentsByPaneKey: storeData.acknowledgedAgentsByPaneKey,
           activityClearedAtByPaneKey: storeData.activityClearedAtByPaneKey,
           // Why: Date.now() is read in the memo body (not a dep) so stale-decay recomputes when agentStatusEpoch ticks, not on wall-clock time.
           now
         },
-        eventBuildCacheRef.current,
-        t
+        eventBuildCacheRef.current
       )
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [storeData, agentStatusEpoch, chatNames, badgeOnly, t]
+    [storeData, agentStatusEpoch, chatNames, badgeOnly]
   )
 
   const allThreads = useMemo(
@@ -125,19 +105,11 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
             : allEvents,
           liveAgentByPaneKey,
           paneEntryByPaneKey,
-          passiveAgentByPaneKey: badgeOnly ? undefined : passiveAgentByPaneKey,
           generatedTitlesEnabled: storeData.generatedTitlesEnabled
         },
         threadReuseCacheRef.current
       ),
-    [
-      allEvents,
-      liveAgentByPaneKey,
-      paneEntryByPaneKey,
-      passiveAgentByPaneKey,
-      storeData.generatedTitlesEnabled,
-      badgeOnly
-    ]
+    [allEvents, liveAgentByPaneKey, paneEntryByPaneKey, storeData.generatedTitlesEnabled, badgeOnly]
   )
 
   return { storeData, allThreads }

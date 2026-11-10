@@ -1,4 +1,3 @@
-import type { PreviousPaneCompletion } from '../agent-session/lifecycle/pane-agent-completion'
 import type { AgentProcessPresence } from '../agent-status/process/agent-process-presence'
 import type {
   ParsedAgentStatusPayload,
@@ -18,7 +17,6 @@ export type HostTurnRecord = {
 
 export type AgentHookEventPayload = {
   paneKey: string
-  previousCompletion?: PreviousPaneCompletion
   agentPresence?: AgentProcessPresence
   /** Authenticated hook route that produced this event. */
   source?: AgentHookSource

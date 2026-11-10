@@ -2,8 +2,7 @@
 
 import {
   isPaneSleepRecord,
-  isResumablePaneRecord,
-  type OwnedPaneAgentRecord
+  type SleepingAgentSessionRecord
 } from '../agent-session/lifecycle/agent-session-resume'
 import type { TerminalLayoutSnapshot } from './terminal-tab-types'
 import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
@@ -67,7 +66,7 @@ function remintRepeatedLeaves(
 }
 
 type PaneRecords = {
-  sleeping: Record<string, OwnedPaneAgentRecord>
+  sleeping: Record<string, SleepingAgentSessionRecord>
   incarnations: Record<string, string>
 }
 
@@ -92,12 +91,7 @@ function loadLeaf(
     ...(stored.lastGridsByLeafId?.[leafId] !== undefined
       ? { lastGrid: stored.lastGridsByLeafId[leafId] }
       : {}),
-    ...(record &&
-      (isPaneSleepRecord(record)
-        ? { sleeping: record }
-        : isResumablePaneRecord(record)
-          ? { resume: record }
-          : {}))
+    ...(record && (isPaneSleepRecord(record) ? { sleeping: record } : { resume: record }))
   }
   delete records.sleeping[paneKey]
   delete records.incarnations[paneKey]

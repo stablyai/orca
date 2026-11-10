@@ -1,6 +1,3 @@
-import { getTabIdToWorktreeId } from './tab-worktree-owner-index'
-export { getTabIdToWorktreeId } from './tab-worktree-owner-index'
-import { sleptAgentEntriesByWorktree } from './worktree-slept-agent-index'
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
@@ -12,7 +9,6 @@ import {
   agentRowEntriesEqual,
   patchLiveEntriesByWorktree
 } from './worktree-agent-live-index-patch'
-import './worktree-agent-orchestration-index'
 import { createWorktreeRecordSelector } from '@/store/terminals/worktree-terminal-record-selector'
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 
@@ -32,15 +28,7 @@ type WorktreeAgentRowsState = Pick<
   'agentStatusByPaneKey' | 'migrationUnsupportedByPtyId' | 'tabsByWorktree'
 > & {
   unifiedTabsByWorktree?: AppState['unifiedTabsByWorktree']
-} & Partial<
-    Pick<
-      AppState,
-      | 'sleepingAgentSessionsByPaneKey'
-      | 'terminalLayoutsByTabId'
-      | 'sshConnectionStates'
-      | 'transientClearedAgentStatusConnectionIds'
-    >
-  > & {}
+}
 
 type TabWorktreeIndexCache = {
   tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree']
@@ -57,6 +45,7 @@ type MigrationUnsupportedByWorktreeCache = {
   entriesByWorktree: Map<string, MigrationUnsupportedPtyEntry[]>
 }
 
+let tabWorktreeIndexCache: TabWorktreeIndexCache | null = null
 let liveTabWorktreeIndexCache: LiveTabWorktreeIndexCache | null = null
 let liveEntriesByWorktreeCache: LiveEntriesByWorktreeCache | null = null
 let migrationUnsupportedByWorktreeCache: MigrationUnsupportedByWorktreeCache | null = null
@@ -72,6 +61,23 @@ export function reuseArrayIfEqual<T>(previous: T[] | undefined, next: T[]): T[] 
     }
   }
   return previous
+}
+
+// Settings reuses this tab index to avoid rescanning every bucket on each store write.
+export function getTabIdToWorktreeId(
+  tabsByWorktree: WorktreeAgentRowsState['tabsByWorktree']
+): Map<string, string> {
+  if (tabWorktreeIndexCache?.tabsByWorktree === tabsByWorktree) {
+    return tabWorktreeIndexCache.tabIdToWorktreeId
+  }
+  const tabIdToWorktreeId = new Map<string, string>()
+  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+    for (const tab of tabs) {
+      tabIdToWorktreeId.set(tab.id, worktreeId)
+    }
+  }
+  tabWorktreeIndexCache = { tabsByWorktree, tabIdToWorktreeId }
+  return tabIdToWorktreeId
 }
 
 function getLiveTabIdToWorktreeId(
@@ -198,7 +204,15 @@ function getMigrationUnsupportedByWorktree(
     }
   }
   for (const [worktreeId, entries] of entriesByWorktree) {
-    entriesByWorktree.set(worktreeId, reuseArrayIfEqual(previous?.get(worktreeId), entries))
+    const old = previous?.get(worktreeId)
+    entriesByWorktree.set(
+      worktreeId,
+      old &&
+        old.length === entries.length &&
+        entries.every((entry, i) => agentRowEntriesEqual(old[i], entry))
+        ? old
+        : entries
+    )
   }
   migrationUnsupportedByWorktreeCache = {
     tabsByWorktree,
@@ -213,37 +227,6 @@ export function selectLiveAgentStatusEntriesForWorktree(
   worktreeId: string
 ): AgentStatusEntry[] {
   return getLiveEntriesByWorktree(state).get(worktreeId) ?? EMPTY_LIVE_ENTRIES
-}
-
-const selectedEntries = new WeakMap<
-  AgentStatusEntry[],
-  WeakMap<AgentStatusEntry[], AgentStatusEntry[]>
->()
-
-export function selectPlacedAgentStatusEntriesForWorktree(
-  state: WorktreeAgentRowsState,
-  worktreeId: string
-): AgentStatusEntry[] {
-  const liveIndex = getLiveEntriesByWorktree(state)
-  const live = liveIndex.get(worktreeId) ?? EMPTY_LIVE_ENTRIES
-  const index = sleptAgentEntriesByWorktree(state)
-  const slept = index.get(worktreeId) ?? EMPTY_LIVE_ENTRIES
-  const previous = selectedEntries.get(live)?.get(slept)
-  if (previous) {
-    return previous
-  }
-  const occupied = new Set(live.map((entry) => entry.paneKey))
-  const rows = reuseArrayIfEqual(
-    undefined,
-    slept.length ? [...live, ...slept.filter((entry) => !occupied.has(entry.paneKey))] : live
-  )
-  let forLive = selectedEntries.get(live)
-  if (!forLive) {
-    forLive = new WeakMap()
-    selectedEntries.set(live, forLive)
-  }
-  forLive.set(slept, rows)
-  return rows
 }
 
 export function selectMigrationUnsupportedEntriesForWorktree(

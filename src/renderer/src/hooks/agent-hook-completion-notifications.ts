@@ -157,7 +157,7 @@ function createCoordinator(paneKey: string, worktreeId: string): AgentCompletion
           hookLaneDispatchEnabled(paneKey) &&
           coordinatorsByPaneKey.has(paneKey) &&
           snapshot !== undefined &&
-          (snapshot.fromHistory === true || hookLaneOwnsTurnEnd(paneKey, snapshot)),
+          hookLaneOwnsTurnEnd(paneKey, snapshot),
         submit: (onDispatchResult) =>
           dispatchTerminalNotification(worktreeId, {
             source: 'agent-task-complete',
@@ -188,19 +188,13 @@ export function observeAgentHookCompletionForNotification({
   paneKey,
   worktreeId,
   payload,
-  seedOnly,
-  fromHistory
+  seedOnly
 }: {
   paneKey: string
   worktreeId: string
   payload: AgentCompletionStatusSnapshot
   seedOnly?: boolean
-  fromHistory?: true
 }): void {
-  // The canonical row already remembers passive history; do not replay it into the live completion lane.
-  if (seedOnly === true && fromHistory) {
-    return
-  }
   // Why: replay seeds already passed indexed snapshot ownership; re-resolving every row makes startup batches quadratic.
   if (seedOnly !== true) {
     pruneClosedPaneCoordinators()
@@ -239,11 +233,7 @@ export function observeAgentHookCompletionForNotification({
   // Why: on a legacy pane the host's end facts must not change main's done identity or replay guard.
   const { turnEndedAt: _turnEndedAt, turnEndDisposition: _disposition, ...legacyPayload } = payload
   const observed =
-    !fromHistory && hookTurnEndEvidence(completionPtyId(paneKey), payload) === 'legacy'
-      ? legacyPayload
-      : fromHistory
-        ? { ...payload, fromHistory }
-        : payload
+    hookTurnEndEvidence(completionPtyId(paneKey), payload) === 'legacy' ? legacyPayload : payload
   if (seedOnly === true) {
     entry.coordinator.seedHookStatus(observed)
   } else {

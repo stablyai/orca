@@ -1,19 +1,17 @@
 // Legacy renderer saves may author other resume state; workspace-sleep records remain main-owned.
 
-import type { OwnedPaneAgentRecord } from '../../shared/agent-session/lifecycle/agent-session-resume'
-import { isExplicitPaneSleepRecord } from '../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-resume'
+import { isWorkspaceSleepRecord } from '../../shared/workspace-sleep'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../shared/workspace-session/workspace-session-state-types'
 
-type Records = Record<string, OwnedPaneAgentRecord>
+type Records = Record<string, SleepingAgentSessionRecord>
 
 function withMainSleepRecords(stored: Records | undefined, saved: Records): Records {
-  const kept = Object.entries(saved).filter(([, record]) => !isExplicitPaneSleepRecord(record))
-  const main = Object.entries(stored ?? {}).filter(([, record]) =>
-    isExplicitPaneSleepRecord(record)
-  )
+  const kept = Object.entries(saved).filter(([, record]) => !isWorkspaceSleepRecord(record))
+  const main = Object.entries(stored ?? {}).filter(([, record]) => isWorkspaceSleepRecord(record))
   return Object.fromEntries([...kept, ...main])
 }
 

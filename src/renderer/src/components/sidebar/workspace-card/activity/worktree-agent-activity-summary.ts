@@ -1,6 +1,3 @@
-import { unoccupiedSleptAgentEntriesByWorktree } from './worktree-unoccupied-slept-agent-index'
-import type { SleepRowsState } from './worktree-slept-agent-index'
-import { getSleepSummaries } from './worktree-slept-activity-summary'
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import {
   selectVisibleAgentOrchestration,
@@ -19,13 +16,19 @@ import {
 } from '../../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 
 import type { AgentStatusOrchestrationContext } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import {
-  applyAgentPaneActivityFlags,
-  type AgentPaneActivityFlags
-} from '../../../../../../shared/worktree-status-rollup'
+import { applyAgentPaneActivityFlags } from '../../../../../../shared/worktree-status-rollup'
 
-export type WorktreeAgentActivitySummary = AgentPaneActivityFlags & {
-  hasSleptFailed: boolean
+export type WorktreeAgentActivitySummary = {
+  hasPermission: boolean
+  hasLiveWorking: boolean
+  hasLiveMonitoring: boolean
+  /** A fresh failed main agent, also while its subagents run; kept apart from clean done. */
+  hasFailed: boolean
+  /** Fresh interrupted completion, kept separate from clean done outcomes. */
+  hasInterrupted: boolean
+  /** A fresh end Orca cannot prove, likewise never a clean done. */
+  hasUnconfirmed: boolean
+  hasLiveDone: boolean
   agentStatusPaneIdsByTabId: Record<string, ReadonlySet<string>>
   /** Stale rows suppress generated permission labels while preserving native title fallback. */
   stalePaneIdsByTabId: Record<string, ReadonlySet<string>>
@@ -38,7 +41,6 @@ const EMPTY_SUMMARY: WorktreeAgentActivitySummary = {
   hasLiveWorking: false,
   hasLiveMonitoring: false,
   hasFailed: false,
-  hasSleptFailed: false,
   hasInterrupted: false,
   hasUnconfirmed: false,
   hasLiveDone: false,
@@ -52,8 +54,7 @@ export type AgentActivityInput = Pick<
   AppState,
   'agentStatusEpoch' | 'agentStatusByPaneKey' | 'migrationUnsupportedByPtyId'
 > &
-  VisibleOrchestrationState &
-  SleepRowsState & {
+  VisibleOrchestrationState & {
     tabsByWorktree: AgentActivityTabsByWorktree
     runtimeAgentOrchestrationByPaneKey?: AppState['runtimeAgentOrchestrationByPaneKey']
   }
@@ -69,67 +70,23 @@ type AgentActivityCache = {
 }
 
 let agentActivityCache: AgentActivityCache | null = null
-const placedSummaries = new WeakMap<
-  WorktreeAgentActivitySummary,
-  {
-    live: WorktreeAgentActivitySummary
-    result: WorktreeAgentActivitySummary
-  }
->()
 
 export function selectWorktreeAgentActivitySummary(
   state: AgentActivityInput,
   worktreeId: string
 ): WorktreeAgentActivitySummary {
-  const live = getWorktreeAgentActivitySummaries(state).get(worktreeId) ?? EMPTY_SUMMARY
-  const sleeping = unoccupiedSleptAgentEntriesByWorktree(state)
-  const slept =
-    getSleepSummaries(
-      sleeping,
-      EMPTY_SUMMARY,
-      state.tabsByWorktree,
-      selectVisibleAgentOrchestration(state)
-    ).get(worktreeId) ?? EMPTY_SUMMARY
-  if (slept === EMPTY_SUMMARY) {
-    return live
-  }
-  const previous = placedSummaries.get(slept)
-  if (previous?.live === live) {
-    return previous.result
-  }
-  const result = {
-    ...live,
-    hasPermission: live.hasPermission || slept.hasPermission,
-    hasLiveWorking: live.hasLiveWorking || slept.hasLiveWorking,
-    hasLiveMonitoring: live.hasLiveMonitoring || slept.hasLiveMonitoring,
-    hasFailed: live.hasFailed,
-    hasSleptFailed: slept.hasFailed,
-    hasInterrupted: live.hasInterrupted || slept.hasInterrupted,
-    hasUnconfirmed: live.hasUnconfirmed || slept.hasUnconfirmed,
-    hasLiveDone: live.hasLiveDone || slept.hasLiveDone,
-    agentStatusPaneIdsByTabId: { ...live.agentStatusPaneIdsByTabId }
-  }
-  for (const [tabId, ids] of Object.entries(slept.agentStatusPaneIdsByTabId)) {
-    result.agentStatusPaneIdsByTabId[tabId] = new Set([
-      ...(result.agentStatusPaneIdsByTabId[tabId] ?? []),
-      ...ids
-    ])
-  }
-  const equal = previous && summariesEqual(previous.result, result) ? previous.result : result
-  placedSummaries.set(slept, { live, result: equal })
-  return equal
+  return getWorktreeAgentActivitySummaries(state).get(worktreeId) ?? EMPTY_SUMMARY
 }
 
 function getWorktreeAgentActivitySummaries(
   state: AgentActivityInput
 ): Map<string, WorktreeAgentActivitySummary> {
   const runtimeAgentOrchestrationByPaneKey = selectVisibleAgentOrchestration(state)
-  const agentStatusByPaneKey = state.agentStatusByPaneKey
   if (
     agentActivityCache &&
     agentActivityCache.tabsByWorktree === state.tabsByWorktree &&
     agentActivityCache.unifiedTabsByWorktree === state.unifiedTabsByWorktree &&
-    agentActivityCache.agentStatusByPaneKey === agentStatusByPaneKey &&
+    agentActivityCache.agentStatusByPaneKey === state.agentStatusByPaneKey &&
     agentActivityCache.agentStatusEpoch === state.agentStatusEpoch &&
     agentActivityCache.migrationUnsupportedByPtyId === state.migrationUnsupportedByPtyId &&
     agentActivityCache.runtimeAgentOrchestrationByPaneKey === runtimeAgentOrchestrationByPaneKey
@@ -156,7 +113,7 @@ function getWorktreeAgentActivitySummaries(
   }
 
   const now = Date.now()
-  for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
+  for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
     const paneIdentity = parseAgentStatusPaneIdentity(
       paneKey,
       state.unifiedTabsByWorktree
@@ -179,7 +136,7 @@ function getWorktreeAgentActivitySummaries(
       addAgentStatusPaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
       continue
     }
-    if (!entry.sessionBoundary && !isAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+    if (!isAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
       // Retain stale pane identity to suppress generated permission titles after the row loses authority.
       addStalePaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
       continue
@@ -213,7 +170,7 @@ function getWorktreeAgentActivitySummaries(
   agentActivityCache = {
     tabsByWorktree: state.tabsByWorktree,
     unifiedTabsByWorktree: state.unifiedTabsByWorktree,
-    agentStatusByPaneKey,
+    agentStatusByPaneKey: state.agentStatusByPaneKey,
     agentStatusEpoch: state.agentStatusEpoch,
     migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
     runtimeAgentOrchestrationByPaneKey,
@@ -231,7 +188,6 @@ function summariesEqual(
     previous.hasLiveWorking === next.hasLiveWorking &&
     previous.hasLiveMonitoring === next.hasLiveMonitoring &&
     previous.hasFailed === next.hasFailed &&
-    previous.hasSleptFailed === next.hasSleptFailed &&
     previous.hasInterrupted === next.hasInterrupted &&
     previous.hasUnconfirmed === next.hasUnconfirmed &&
     previous.hasLiveDone === next.hasLiveDone &&

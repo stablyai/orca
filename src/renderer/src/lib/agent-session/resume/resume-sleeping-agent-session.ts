@@ -1,11 +1,10 @@
 import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
+import { useAppStore } from '@/store/index'
+import { isWorkspaceSleepRecord } from '../../../../../shared/workspace-sleep'
 import {
-  isResumablePaneRecord,
   agentProviderSessionsEqual,
   type SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { useAppStore } from '@/store/index'
-import { isWorkspaceSleepRecord } from '../../../../../shared/workspace-sleep'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { getProviderSessionClaimKey } from '../../../../../shared/sleeping-record-legacy-pane-key'
@@ -160,7 +159,6 @@ function providerSessionOwnedElsewhere(
     sleepingAgentRecordIndex.providerSessionCandidates(state.sleepingAgentSessionsByPaneKey, record)
   ).some(
     (other) =>
-      isResumablePaneRecord(other) &&
       other.worktreeId !== record.worktreeId &&
       other.agent === record.agent &&
       !isInvalidWorktreeActivationRecord(other) &&
@@ -180,9 +178,7 @@ function isInvalidWorktreeActivationRecord(record: SleepingAgentSessionRecord): 
     return true
   }
   return (
-    record.origin !== 'worktree-sleep' &&
-    record.state !== 'done' &&
-    record.capturedAt - record.updatedAt > AGENT_STATUS_STALE_AFTER_MS
+    record.state !== 'done' && record.capturedAt - record.updatedAt > AGENT_STATUS_STALE_AFTER_MS
   )
 }
 
@@ -231,9 +227,10 @@ export function resumeSleepingAgentSessionsForWorktree(
   const worktreeRecords = sleepingAgentRecordIndex
     .entries(state.sleepingAgentSessionsByPaneKey, worktreeId)
     .map(([, record]) => record)
-    .filter(isResumablePaneRecord)
     .filter(
-      (record) => !isWorkspaceSleepRecord(record) || isStrandedWorkspaceSleepRecord(record, state)
+      (record) =>
+        record.worktreeId === worktreeId &&
+        (!isWorkspaceSleepRecord(record) || isStrandedWorkspaceSleepRecord(record, state))
     )
     .sort((a, b) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)
   const validWorktreeRecords = worktreeRecords.filter(

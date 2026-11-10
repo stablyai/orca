@@ -1,5 +1,3 @@
-import type { PaneSleepStopCondition } from '../../../../shared/agent-session/lifecycle/pane-sleep-target'
-import { preparePaneSleepAdmission } from '../../../runtime/terminal/stop/pane-sleep-admission'
 import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
@@ -41,12 +39,8 @@ export type PtyKillIpcDeps = {
 }
 
 export function installPtyKillIpcHandler(deps: PtyKillIpcDeps): void {
-  getPtyIpc().handle(
-    'pty:kill',
-    (
-      _event,
-      args: { id: string; keepHistory?: boolean; sleepCondition?: PaneSleepStopCondition }
-    ) => stopRendererOwnedPty(deps, args)
+  getPtyIpc().handle('pty:kill', (_event, args: { id: string; keepHistory?: boolean }) =>
+    stopRendererOwnedPty(deps, args)
   )
   getPtyIpc().handle('pty:killFenced', (_event, args: PtyFencedTerminationRequest | undefined) =>
     stopFencedRendererPty(deps, args)
@@ -61,24 +55,15 @@ export async function stopReplacedPanePty(deps: PtyKillIpcDeps, id: string): Pro
 /** Settle only after shutdown is observed or synthesized. */
 export async function stopRendererOwnedPty(
   deps: PtyKillIpcDeps,
-  args: { id: string; keepHistory?: boolean; sleepCondition?: PaneSleepStopCondition }
+  args: { id: string; keepHistory?: boolean }
 ): Promise<void> {
   // Hibernation must retain the pane's wake binding.
-  const stop = () =>
-    stopRendererOwnedPtyAs(deps, args, args?.keepHistory === true ? 'reversible' : null)
-  if (args.sleepCondition) {
-    if (!deps.runtime) {
-      throw new Error('sleep_target_unverifiable')
-    }
-    await deps.runtime.runWorktreeTerminalMutation(args.sleepCondition.workspace, stop)
-  } else {
-    await stop()
-  }
+  await stopRendererOwnedPtyAs(deps, args, args?.keepHistory === true ? 'reversible' : null)
 }
 
 async function stopRendererOwnedPtyAs(
   deps: PtyKillIpcDeps,
-  args: { id: string; keepHistory?: boolean; sleepCondition?: PaneSleepStopCondition },
+  args: { id: string; keepHistory?: boolean },
   intentionalStop: TerminalIntentionalStopKind | null
 ): Promise<void> {
   if (typeof args?.id !== 'string' || !args.id || isRemoteRuntimePtyId(args.id)) {
@@ -107,19 +92,12 @@ async function stopRendererOwnedPtyAs(
 
 async function stopRendererOwnedPtyProcess(
   deps: PtyKillIpcDeps,
-  args: { id: string; keepHistory?: boolean; sleepCondition?: PaneSleepStopCondition }
+  args: { id: string; keepHistory?: boolean }
 ): Promise<void> {
   const { store, runtime, getLocalPtyProviderStartupPromise, shutdownProviderAndDetectExit } = deps
-  if (!args.sleepCondition) {
-    runtime?.markPtyStopRequested?.(args.id)
-  }
+  runtime?.markPtyStopRequested?.(args.id)
   const connectionId = getPtySshConnectionId(args.id)
-  if (args.sleepCondition && args.sleepCondition.target.ptyId !== args.id) {
-    throw new Error('sleep_target_changed')
-  }
-  const bridgedStop =
-    !args.sleepCondition &&
-    stopLegacyRelayBridgedPty(args.id, connectionId, args.keepHistory === true)
+  const bridgedStop = stopLegacyRelayBridgedPty(args.id, connectionId, args.keepHistory === true)
   if (bridgedStop) {
     await bridgedStop
     return
@@ -128,18 +106,6 @@ async function stopRendererOwnedPtyProcess(
   const startupPromise = getLocalPtyProviderStartupPromise(resolvePtyExecutionHost(args.id))
   if (startupPromise) {
     await startupPromise
-  }
-  const sleepAdmission = args.sleepCondition
-    ? await preparePaneSleepAdmission([args.sleepCondition.target])
-    : undefined
-  if (
-    args.sleepCondition &&
-    (!sleepAdmission?.() || !runtime?.paneSleepStopIsCurrent(args.sleepCondition))
-  ) {
-    throw new Error('sleep_target_changed')
-  }
-  if (args.sleepCondition) {
-    runtime?.markPtyStopRequested?.(args.id)
   }
   const provider = tryGetProviderForPty(args.id)
   if (!provider && connectionId) {

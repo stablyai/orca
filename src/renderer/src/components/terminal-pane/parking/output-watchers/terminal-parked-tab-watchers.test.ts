@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DisplayOnlyPaneSleep } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ParkedTerminalByteWatcherOptions } from './parked-terminal-byte-watcher'
 
 const WORKTREE_ID = 'repo::/worktree'
@@ -83,7 +82,7 @@ type MockStoreState = {
     }
   >
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
-  sleepingAgentSessionsByPaneKey: Record<string, { tabId?: string } | DisplayOnlyPaneSleep>
+  sleepingAgentSessionsByPaneKey: Record<string, { tabId?: string }>
   settings: { terminalSshViewParking?: boolean } | null
   runtimeStatusByEnvironmentId: Map<
     string,
@@ -181,29 +180,5 @@ describe('terminal-parked-tab-watchers', () => {
     capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
 
     expect(canWatcherCoverParkedTerminalTab(WORKTREE_ID, { id: TAB_ID, ptyId: PTY_ID })).toBe(false)
-  })
-  it('can park a gone terminal whose sleeping status cannot resume an agent', async () => {
-    await probeTerminalProviderGoneSessions([PTY_ID], async () => [PTY_ID])
-    const paneKey = `${TAB_ID}:${LEAF_ID}`
-    mockStoreState.sleepingAgentSessionsByPaneKey = {
-      [paneKey]: {
-        kind: 'display-only',
-        paneKey,
-        tabId: TAB_ID,
-        worktreeId: WORKTREE_ID,
-        origin: 'worktree-sleep',
-        capturedAt: 1000,
-        display: {
-          state: 'done',
-          agentType: 'codex',
-          prompt: 'finished',
-          updatedAt: 1000,
-          stateStartedAt: 1000
-        }
-      }
-    }
-    capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
-
-    expect(canWatcherCoverParkedTerminalTab(WORKTREE_ID, { id: TAB_ID, ptyId: PTY_ID })).toBe(true)
   })
 })

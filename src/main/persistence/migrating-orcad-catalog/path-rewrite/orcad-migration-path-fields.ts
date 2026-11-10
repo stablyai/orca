@@ -120,14 +120,6 @@ export const ORCAD_MIGRATION_PATH_FIELDS: readonly {
     kind: 'worktree-id'
   },
   {
-    at: 'dormantState.workspaceSession.sleepingAgentSessionsByPaneKey{}.display.providerSession.transcriptPath',
-    kind: 'absolute'
-  },
-  {
-    at: 'dormantState.workspaceSession.sleepingAgentSessionsByPaneKey{}.display.providerSession.cwd',
-    kind: 'absolute'
-  },
-  {
     at: 'dormantState.workspaceSession.sleepingAgentSessionsByPaneKey{}.providerSession.transcriptPath',
     kind: 'absolute'
   },

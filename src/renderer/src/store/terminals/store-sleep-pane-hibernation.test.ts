@@ -35,7 +35,7 @@ vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOri
 
 const mockApi = createStoreCascadesMockApi()
 
-// Sleep must clear live/retained status or mid-turn agents remain working until the 30-minute TTL.
+// Sleep must clear live status or mid-turn agents remain working until the 30-minute TTL.
 describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -106,6 +106,11 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
         { tabId: 'tab-1', worktreeId: wt },
         { providerSession: { key: 'session_id', id: 'sibling-session' } }
       )
+    store.setState({
+      acknowledgedAgentsByPaneKey: { [targetPaneKey]: 2000 },
+      activityClearedAtByPaneKey: { [targetPaneKey]: 2000 },
+      manuallyUnreadTurnsByPaneKey: { [targetPaneKey]: 1000 }
+    })
     const siblingSleepingRecordBefore =
       store.getState().sleepingAgentSessionsByPaneKey[siblingPaneKey]
 
@@ -117,15 +122,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
 
     const state = store.getState()
-    expect(mockApi.pty.kill).toHaveBeenCalledWith(
-      'pty-agent',
-      expect.objectContaining({
-        keepHistory: true,
-        sleepCondition: expect.objectContaining({
-          target: expect.objectContaining({ ptyId: 'pty-agent' })
-        })
-      })
-    )
+    expect(mockApi.pty.kill).toHaveBeenCalledWith('pty-agent', { keepHistory: true })
     expect(mockApi.pty.kill).not.toHaveBeenCalledWith('pty-shell', expect.anything())
     expect(mockUnregisterPtyDataHandlers).toHaveBeenCalledWith(['pty-agent'])
     expect(mockUnregisterPtyDataHandlers.mock.invocationCallOrder[0]).toBeLessThan(
@@ -143,6 +140,9 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
     expect(state.sleepingAgentSessionsByPaneKey[siblingPaneKey]).toBe(siblingSleepingRecordBefore)
     expect(state.agentStatusByPaneKey[targetPaneKey]).toBeUndefined()
+    expect(state.acknowledgedAgentsByPaneKey[targetPaneKey]).toBe(2000)
+    expect(state.activityClearedAtByPaneKey[targetPaneKey]).toBe(2000)
+    expect(state.manuallyUnreadTurnsByPaneKey[targetPaneKey]).toBe(1000)
     expect(state.agentStatusByPaneKey[siblingPaneKey]).toBeDefined()
     expect(state.unreadTerminalTabs['tab-1']).toBe(true)
     expect(state.unreadTerminalPanes[targetPaneKey]).toBe(true)
@@ -262,15 +262,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       ptyId: 'pty-agent'
     })
 
-    expect(mockApi.pty.kill).toHaveBeenCalledWith(
-      'pty-agent',
-      expect.objectContaining({
-        keepHistory: true,
-        sleepCondition: expect.objectContaining({
-          target: expect.objectContaining({ ptyId: 'pty-agent' })
-        })
-      })
-    )
+    expect(mockApi.pty.kill).toHaveBeenCalledWith('pty-agent', { keepHistory: true })
     expect(recordAtKillTime).toMatchObject({
       paneKey: targetPaneKey,
       providerSession: { key: 'session_id', id: 'sess-ordering-1' }
@@ -446,76 +438,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     expect(mockApi.pty.kill).not.toHaveBeenCalled()
   })
 
-  it('does not commit stale sleep capture when pane status changes during hibernation', async () => {
-    const clock = vi.spyOn(Date, 'now').mockReturnValue(2500)
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt1'
-    const targetLeaf = '11111111-1111-4111-8111-111111111111'
-    const targetPaneKey = `tab-1:${targetLeaf}`
-
-    mockApi.pty.kill.mockImplementationOnce(async () => {
-      clock.mockReturnValue(3000)
-      store
-        .getState()
-        .setAgentStatus(
-          targetPaneKey,
-          { state: 'working', prompt: 'still running', agentType: 'codex' },
-          'Codex',
-          { updatedAt: 3000, stateStartedAt: 3000 },
-          { tabId: 'tab-1', worktreeId: wt },
-          { providerSession: { key: 'session_id', id: 'target-session' } }
-        )
-    })
-    seedStore(store, {
-      worktreesByRepo: {
-        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
-      },
-      tabsByWorktree: {
-        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex', ptyId: 'pty-agent' })]
-      },
-      terminalLayoutsByTabId: {
-        'tab-1': {
-          root: { type: 'leaf', leafId: targetLeaf },
-          activeLeafId: targetLeaf,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [targetLeaf]: 'pty-agent' }
-        }
-      },
-      ptyIdsByTabId: { 'tab-1': ['pty-agent'] }
-    })
-    store.getState().setAgentStatus(
-      targetPaneKey,
-      {
-        state: 'done',
-        prompt: 'stale done',
-        agentType: 'codex',
-        lastAssistantMessage: 'old done'
-      },
-      'Codex',
-      { updatedAt: 2000, stateStartedAt: 1000 },
-      { tabId: 'tab-1', worktreeId: wt },
-      { providerSession: { key: 'session_id', id: 'target-session' } }
-    )
-
-    await store.getState().shutdownCompletedAgentPaneForHibernation(wt, {
-      paneKey: targetPaneKey,
-      tabId: 'tab-1',
-      leafId: targetLeaf,
-      ptyId: 'pty-agent'
-    })
-
-    expect(store.getState().agentStatusByPaneKey[targetPaneKey]).toMatchObject({
-      state: 'working',
-      prompt: 'still running'
-    })
-    expect(store.getState().sleepingAgentSessionsByPaneKey[targetPaneKey]).not.toMatchObject({
-      origin: 'worktree-sleep',
-      prompt: 'stale done'
-    })
-    clock.mockRestore()
-  })
-
-  it('rolls back target suppressions but keeps capture after an uncertain runtime stop', async () => {
+  it('rolls back target suppressions when target-only runtime stop fails', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
     const targetLeaf = '11111111-1111-4111-8111-111111111111'
@@ -598,7 +521,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     expect(state.suppressedPtyExitIds['terminal-1']).toBeUndefined()
     // Failed target stop restores the done agent’s live recovery anchor, never worktree-sleep (#9454).
     expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toMatchObject({
-      origin: 'worktree-sleep',
+      origin: 'live',
       agent: 'codex',
       providerSession: { key: 'session_id', id: 'target-session' }
     })

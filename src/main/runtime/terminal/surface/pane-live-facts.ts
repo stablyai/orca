@@ -59,8 +59,3 @@ export class PaneLiveFacts<T> {
     return entry.fact
   }
 }
-
-export type MainPaneFacts = { binding: string; sleeping: boolean; incarnationId?: string }
-
-/** The terminal a pane's binding names: same workspace and incarnation. */
-export type BoundTerminal = { worktreeId: string; incarnationId: string | null }

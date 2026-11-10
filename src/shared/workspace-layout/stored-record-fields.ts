@@ -15,13 +15,12 @@ export function pickStoredFields<T extends object, K extends keyof T>(
 export function omitStoredFields<T extends object, K extends keyof T>(
   record: T,
   keys: readonly K[]
-): T extends unknown ? Omit<T, K> : never {
+): Omit<T, K> {
   const omitted = { ...record }
   for (const key of keys) {
     delete omitted[key]
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: deleting exactly K preserves each union member’s remaining fields.
-  return omitted as unknown as T extends unknown ? Omit<T, K> : never
+  return omitted
 }
 
 export function withoutKey<T>(

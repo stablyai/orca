@@ -9,7 +9,7 @@ import { WorkspaceSleepCoordinator } from './workspace-sleep-runtime'
 import type { RecipeVmOpening, RecipeVmState } from './recipe-vm-operations'
 import { dropStrandedSleepRecord } from '../../terminal/stop/worktree-sleep-resume-records'
 import type { RestoredPane } from '../../terminal/recovery/restored-pane-start'
-import type { OwnedPaneAgentRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { EphemeralVmRuntimeRecord } from '../../../../shared/ephemeral-vm-runtimes'
 import { WorkspaceLifecycleQueue } from '../lifecycle/workspace-lifecycle-queue'
 import {
@@ -82,7 +82,7 @@ export abstract class RuntimeWorkspaceSleepOperations extends OrcaRuntimeWithRes
   }
 
   /** The wake records this host keeps for one of its workspaces. */
-  wakeRecordsForWorktree(worktreeId: string): OwnedPaneAgentRecord[] {
+  wakeRecordsForWorktree(worktreeId: string): SleepingAgentSessionRecord[] {
     const session = this.store?.getWorkspaceSession?.(
       this.getWorkspaceSessionHostIdForWorktree(worktreeId)
     )

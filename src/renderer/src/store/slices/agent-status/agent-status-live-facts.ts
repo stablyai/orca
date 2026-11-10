@@ -1,10 +1,7 @@
-import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import type { AgentStatusTiming } from './agent-status-contract'
 import type { AppState } from '../../types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type {
   SleepingAgentLaunchConfig,
-  OwnedPaneAgentRecord,
   SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isSmartSortRelevantAgentChange } from '../../../../../shared/sidebar-list/smart-sort-agent-change'
@@ -19,7 +16,7 @@ import { liveResumeRecord } from '../../../../../shared/agent-session/lifecycle/
 import { agentMainAgentVerdict } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 
 export type AgentStatusLiveFacts = {
-  existingSleepingRecord: OwnedPaneAgentRecord | undefined
+  existingSleepingRecord: SleepingAgentSessionRecord | undefined
   liveRecoveryRecord: SleepingAgentSessionRecord | null
   migrationUnsupported: ReturnType<typeof pruneMigrationUnsupportedEntries>
   completionRefreshWorktreeId: string | null
@@ -116,23 +113,5 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
     sortRelevantChange,
     aggregateRelevantChange,
     boundaryResolved
-  }
-}
-
-export function agentSleepSuccessorEvidence(
-  state: AppState,
-  entry: AgentStatusEntry,
-  timing: AgentStatusTiming | undefined
-) {
-  const pane = parsePaneKey(entry.paneKey)
-  const ptyId = pane
-    ? state.terminalLayoutsByTabId?.[pane.tabId]?.ptyIdsByLeafId?.[pane.leafId]
-    : undefined
-  return {
-    updatedAt: entry.updatedAt,
-    evidenceObservedAt: timing?.evidenceObservedAt,
-    isReplay: timing?.isReplay,
-    restoredUnconfirmed: entry.restoredUnconfirmed,
-    stopping: ptyId ? (state.pendingPtyShutdownIds?.[ptyId] ?? 0) > 0 : false
   }
 }

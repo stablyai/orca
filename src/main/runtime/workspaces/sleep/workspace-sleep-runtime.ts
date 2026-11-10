@@ -10,7 +10,7 @@ import {
 } from './recipe-vm-operations'
 import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/runtime-terminal-contracts'
 import type { EphemeralVmRuntimeRecord } from '../../../../shared/ephemeral-vm-runtimes'
-import type { OwnedPaneAgentRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type {
   WorkspaceSleepNotice,
@@ -52,7 +52,7 @@ export type WorkspaceSleepRuntime = {
   sleepTerminalsForWorktree: (selector: string) => Promise<RuntimeWorktreeTerminalSleepResult>
   ensureStructuredAgentSessionHost: () => Promise<void>
   notifyWorkspaceSleep: (notice: WorkspaceSleepNotice) => void
-  wakeRecordsForWorktree: (worktreeId: string) => OwnedPaneAgentRecord[]
+  wakeRecordsForWorktree: (worktreeId: string) => SleepingAgentSessionRecord[]
   resumeSleptWorkspaceAgents: (worktreeId: string) => Promise<void>
   ensureRestoredPaneStarted: (
     pane: RestoredPane,

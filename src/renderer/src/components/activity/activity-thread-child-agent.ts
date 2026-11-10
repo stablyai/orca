@@ -14,7 +14,6 @@ export type ChildAgentClassifiableThread = {
   /** Non-null while the pane's own turn is live (working, monitoring or waiting on the user). */
   currentAgentState?: ActivityLiveAgentState | null
   currentAgentEntry?: ChildAgentLineageEntry | null
-  paneEntry?: ChildAgentLineageEntry
   latestEvent?: { entry: ChildAgentLineageEntry } | null
   events?: readonly { entry: ChildAgentLineageEntry }[]
 }
@@ -24,9 +23,6 @@ function candidateEntries(thread: ChildAgentClassifiableThread): ChildAgentLinea
   const entries: ChildAgentLineageEntry[] = []
   if (thread.currentAgentEntry) {
     entries.push(thread.currentAgentEntry)
-  }
-  if (thread.paneEntry) {
-    entries.push(thread.paneEntry)
   }
   if (thread.latestEvent?.entry) {
     entries.push(thread.latestEvent.entry)

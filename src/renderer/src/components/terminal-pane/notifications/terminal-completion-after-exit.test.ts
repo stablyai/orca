@@ -96,13 +96,13 @@ describe('completion after the process exits with its pane still open', () => {
     { agent: 'codex', exitAfterDelivery: false },
     { agent: 'claude', exitAfterDelivery: true },
     { agent: 'codex', exitAfterDelivery: true },
-    { agent: 'claude', exitAfterDelivery: false, sleep: true },
-    { agent: 'codex', exitAfterDelivery: false, sleep: true }
+    { agent: 'claude', exitAfterDelivery: false, suppressedExit: true },
+    { agent: 'codex', exitAfterDelivery: false, suppressedExit: true }
   ] as const)(
     'delivers $agent completion and keeps the workspace unread (exitAfterDelivery=$exitAfterDelivery)',
     async (scenario) => {
       const { agent, exitAfterDelivery } = scenario
-      const sleeping = 'sleep' in scenario
+      const suppressedExit = 'suppressedExit' in scenario
       store.setState({
         tabsByWorktree: {
           [WORKSPACE]: [makeTab({ id: 'tab-1', worktreeId: WORKSPACE, ptyId: 'pty-1' })]
@@ -171,7 +171,7 @@ describe('completion after the process exits with its pane still open', () => {
           )
         store.setState({
           ptyIdsByTabId: {},
-          suppressedPtyExitIds: sleeping ? { 'pty-1': true } : {},
+          suppressedPtyExitIds: suppressedExit ? { 'pty-1': true } : {},
           terminalLayoutsByTabId: {
             'tab-1': { ...store.getState().terminalLayoutsByTabId['tab-1'], ptyIdsByLeafId: {} }
           }

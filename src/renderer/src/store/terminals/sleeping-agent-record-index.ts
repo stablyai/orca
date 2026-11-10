@@ -1,21 +1,17 @@
-import {
-  isResumablePaneRecord,
-  type OwnedPaneAgentRecord,
-  type SleepingAgentSessionRecord
-} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { readRecordChanges } from '@/store/keyed-record-change-reads'
 
-type Records = Readonly<Record<string, OwnedPaneAgentRecord | undefined>>
-type RecordEntry = readonly [string, OwnedPaneAgentRecord]
+type Records = Readonly<Record<string, SleepingAgentSessionRecord | undefined>>
+type RecordEntry = readonly [string, SleepingAgentSessionRecord]
 const EMPTY_ENTRIES: readonly RecordEntry[] = []
 
-function providerSessionKey(record: OwnedPaneAgentRecord): string | null {
-  return isResumablePaneRecord(record) && record.providerSession
+function providerSessionKey(record: SleepingAgentSessionRecord): string | null {
+  return record.providerSession
     ? JSON.stringify([record.agent, record.providerSession.key, record.providerSession.id])
     : null
 }
 
-function tabPrefixes(key: string, record: OwnedPaneAgentRecord | undefined): Set<string> {
+function tabPrefixes(key: string, record: SleepingAgentSessionRecord | undefined): Set<string> {
   const ids = new Set(record?.tabId === undefined ? [] : [record.tabId])
   for (let colon = key.indexOf(':'); colon !== -1; colon = key.indexOf(':', colon + 1)) {
     ids.add(key.slice(0, colon))
@@ -35,7 +31,7 @@ export function createSleepingAgentRecordIndex() {
   let source: Records | null = null
   const orderByKey = new Map<string, number>()
   let nextOrder = 0
-  const entriesByWorktree = new Map<string, Map<string, OwnedPaneAgentRecord>>()
+  const entriesByWorktree = new Map<string, Map<string, SleepingAgentSessionRecord>>()
   const snapshotsByWorktree = new Map<string, readonly RecordEntry[]>()
   const keysByTabPrefix = new Map<string, Set<string>>()
   const recordsByProviderSession = new Map<string, Map<string, SleepingAgentSessionRecord>>()
@@ -79,7 +75,7 @@ export function createSleepingAgentRecordIndex() {
       } else if (!orderByKey.has(key)) {
         orderByKey.set(key, nextOrder++)
       }
-      if (beforePresent && (!before || isResumablePaneRecord(before))) {
+      if (beforePresent) {
         for (const tabId of tabPrefixes(key, before)) {
           const owned = keysByTabPrefix.get(tabId)
           owned?.delete(key)
@@ -88,7 +84,7 @@ export function createSleepingAgentRecordIndex() {
           }
         }
       }
-      if (afterPresent && (!after || isResumablePaneRecord(after))) {
+      if (afterPresent) {
         for (const tabId of tabPrefixes(key, after)) {
           let owned = keysByTabPrefix.get(tabId)
           if (!owned) {
@@ -113,7 +109,7 @@ export function createSleepingAgentRecordIndex() {
       }
       if (after) {
         const sessionKey = providerSessionKey(after)
-        if (sessionKey && isResumablePaneRecord(after)) {
+        if (sessionKey) {
           let bucket = recordsByProviderSession.get(sessionKey)
           if (!bucket) {
             recordsByProviderSession.set(sessionKey, (bucket = new Map()))

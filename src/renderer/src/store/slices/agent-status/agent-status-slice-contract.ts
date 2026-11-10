@@ -27,7 +27,7 @@ import type {
   AgentProviderSessionMetadata,
   ResumableTuiAgent,
   SleepingAgentLaunchConfig,
-  OwnedPaneAgentRecord
+  SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentPaneConversationIdentity } from './agent-pane-conversation'
 import type { AgentStatusStateUpdate } from './agent-status-runtime'
@@ -57,7 +57,7 @@ export type AgentStatusSlice = {
   scheduleAgentStatusFreshness: () => void
 
   /** Durable agent sessions captured on sleep (not live rows); power the one-click CLI resume on wake. */
-  sleepingAgentSessionsByPaneKey: Record<string, OwnedPaneAgentRecord>
+  sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord>
 
   /** Ephemeral launch snapshots keyed by pane; hook payloads lack Orca launch settings, so the renderer supplies them from startup. */
   agentLaunchConfigByPaneKey: Record<string, AgentLaunchConfigRegistryEntry>
@@ -155,8 +155,8 @@ export type AgentStatusSlice = {
   clearSleepingAgentSession: (paneKey: string) => void
   /** Keeps a pane resume handle; replaces only the exact captured record, preserving newer work. */
   rememberSleepingAgentSession: (
-    record: OwnedPaneAgentRecord,
-    replaces?: OwnedPaneAgentRecord
+    record: SleepingAgentSessionRecord,
+    replaces?: SleepingAgentSessionRecord
   ) => void
   clearSleepingAgentSessionsByPaneKey: (paneKeys: readonly string[]) => void
   clearSleepingAgentSessionsByWorktree: (worktreeId: string) => void

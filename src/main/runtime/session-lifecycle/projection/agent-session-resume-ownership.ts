@@ -1,9 +1,3 @@
-import {
-  isResumablePaneRecord,
-  agentProviderSessionsEqual,
-  type OwnedPaneAgentRecord,
-  type SleepingAgentSessionRecord
-} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 // Share recorded-session ownership checks and in-flight claims between pane reopen and targeted resume.
 
 import { findPaneSleepingRecord } from './pane-sleeping-record'
@@ -11,6 +5,10 @@ import { hookRowPaneResumeRecord, isPaneLocalHookRow } from './hook-row-pane-res
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { OrcaRuntimeWithApplyMobileSessionTabNavigation } from './apply-mobile-session-tab-navigation'
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import {
+  agentProviderSessionsEqual,
+  type SleepingAgentSessionRecord
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   MobileTerminalResumeCommand,
   OrcaRuntimeWithResolveMobileSessionTerminalCommand as MobileTerminalStartup
@@ -74,9 +72,6 @@ export abstract class OrcaRuntimeWithAgentSessionResumeOwnership extends OrcaRun
     tab: RuntimeMobileSessionTerminalTab
   ): Promise<PaneResumeStartup | Record<string, never> | undefined> {
     const stored = this.getPaneSleepingAgentRecord(worktreeId, tab)
-    if (stored && !isResumablePaneRecord(stored)) {
-      return {}
-    }
     const record = stored
       ? this.isPaneOwnedResumeRecord(stored)
         ? stored
@@ -100,7 +95,6 @@ export abstract class OrcaRuntimeWithAgentSessionResumeOwnership extends OrcaRun
     const aliases = this.findPaneSleepingAgentRecord(worktreeId, tab)?.aliases ?? []
     const sharedWithAnotherPane = Object.entries(records ?? {}).some(
       ([paneKey, other]) =>
-        isResumablePaneRecord(other) &&
         other !== record &&
         !aliases.includes(paneKey) &&
         other.agent === record.agent &&
@@ -213,7 +207,7 @@ export abstract class OrcaRuntimeWithAgentSessionResumeOwnership extends OrcaRun
   private getPaneSleepingAgentRecord(
     worktreeId: string,
     tab: RuntimeMobileSessionTerminalTab
-  ): OwnedPaneAgentRecord | null {
+  ): SleepingAgentSessionRecord | null {
     return this.findPaneSleepingAgentRecord(worktreeId, tab)?.record ?? null
   }
 

@@ -4,8 +4,6 @@ type AnchorStatus = Pick<AgentStatusEntry, 'state' | 'agentType' | 'providerSess
 import {
   agentProviderSessionsEqual,
   isResumableTuiAgent,
-  isResumablePaneRecord,
-  type OwnedPaneAgentRecord,
   type SleepingAgentSessionRecord
 } from './agent-session-resume'
 import { getAgentResumeArgv } from '../../agent-launch/startup/agent-resume-argv'
@@ -15,12 +13,10 @@ import { isPiCompatibleAgentType } from '../../pi-agent-kind'
  * No vendor/automatic-resume gate: this checks record identity, not hibernation eligibility. */
 export function isLiveResumeAnchorForCompletedAgent(
   entry: AnchorStatus | undefined,
-  record: OwnedPaneAgentRecord | undefined,
+  record: SleepingAgentSessionRecord | undefined,
   worktreeId?: string
 ): record is SleepingAgentSessionRecord {
   if (
-    !record ||
-    !isResumablePaneRecord(record) ||
     entry?.state !== 'done' ||
     !isResumableTuiAgent(entry.agentType) ||
     !entry.providerSession ||
@@ -41,7 +37,7 @@ export function isLiveResumeAnchorForCompletedAgent(
 // Manual-sleep/quit retention preserves shipped Pi-only semantics; only automatic hibernation broadened.
 export function isCompletedPiCompatibleAgentWithLiveRecoveryRecord(
   entry: AnchorStatus | undefined,
-  record: OwnedPaneAgentRecord | undefined,
+  record: SleepingAgentSessionRecord | undefined,
   worktreeId?: string
 ): record is SleepingAgentSessionRecord {
   return (

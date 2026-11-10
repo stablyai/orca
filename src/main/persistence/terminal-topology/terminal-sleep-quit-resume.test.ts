@@ -1,4 +1,3 @@
-import { resumablePaneRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -94,7 +93,7 @@ async function storeWithAgentPane() {
 
 function heldForPane(store: Store) {
   const session = store.getWorkspaceSession()
-  const record = resumablePaneRecord(session.sleepingAgentSessionsByPaneKey?.[PANE_KEY])
+  const record = session.sleepingAgentSessionsByPaneKey?.[PANE_KEY]
   return {
     record,
     worktreeRecord: record?.worktreeId === WORKTREE ? record : undefined,

@@ -104,7 +104,7 @@ describe('OMP child lifecycle recovery boundaries', () => {
     const serialized = JSON.stringify(store.getState().sleepingAgentSessionsByPaneKey)
     const hydrated = sleepingAgentSessionsByPaneKeySchema.parse(JSON.parse(serialized))
     const record = hydrated?.[PANE]
-    if (!record || record.kind === 'display-only') {
+    if (!record) {
       throw new Error('Expected the root sleeping record to survive hydration')
     }
     expect(record).toMatchObject({ origin: 'quit', providerSession: { id: ROOT_SESSION } })

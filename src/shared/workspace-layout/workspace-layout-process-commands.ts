@@ -1,11 +1,6 @@
-import { structuralValuesEqualIgnoringUndefined } from '../structural-value-equality'
-import type { OwnedPaneAgentRecord } from '../agent-session/lifecycle/agent-session-resume'
 // Return terminal process effects separately from bindings/sleeping records; the runtime runs them after replying.
 
-import {
-  isPaneSleepRecord,
-  isResumablePaneRecord
-} from '../agent-session/lifecycle/agent-session-resume'
+import { isPaneSleepRecord } from '../agent-session/lifecycle/agent-session-resume'
 import { omitStoredFields } from './stored-record-fields'
 import {
   applied,
@@ -92,61 +87,19 @@ export function sleep(model: WorkspaceLayoutModel, command: CommandOf<'sleep'>):
   const stopPtyIds = command.recordOnly
     ? []
     : targets.flatMap((pane) => workspace.leaves?.[pane.leafId]?.ptyId ?? [])
-  const changedPaneKeys: string[] = []
-  const previousSleepRecords: OwnedPaneAgentRecord[] = []
   for (const { paneKey, leafId } of targets) {
-    const leaf = workspace.leaves?.[leafId]
-    const previous = leaf?.sleeping ?? leaf?.resume
-    const expected = command.expectedRecords?.find((entry) => entry.paneKey === paneKey)
-    const target = command.expectedTargets?.find((entry) => entry.paneKey === paneKey)
-    if (
-      command.expectedTargets &&
-      (!target ||
-        leaf?.ptyId !== target.ptyId ||
-        (leaf.incarnationId && leaf.incarnationId !== target.ptyIncarnationId))
-    ) {
-      continue
-    }
-    const absent = command.expectedAbsentPaneKeys?.includes(paneKey)
-    if (
-      command.expectedRecords &&
-      (absent
-        ? previous !== undefined
-        : !expected ||
-          !structuralValuesEqualIgnoringUndefined(
-            previous,
-            omitStoredFields(expected, ['paneKey', 'tabId', 'worktreeId'])
-          ))
-    ) {
-      continue
-    }
-    if (previous) {
-      previousSleepRecords.push({
-        ...previous,
-        paneKey,
-        tabId: paneKey.slice(0, paneKey.indexOf(':')),
-        worktreeId: command.workspace
-      })
-    }
-    changedPaneKeys.push(paneKey)
     const record = command.records.find((entry) => entry.paneKey === paneKey)
     if (record) {
       const kept = omitStoredFields(workspace.leaves?.[leafId] ?? {}, ['sleeping', 'resume'])
       const stored = omitStoredFields(record, ['paneKey', 'tabId', 'worktreeId'])
       // A recordOnly capture of a running agent ('live'/'quit') is a resume record, not a sleep.
-      const next = isPaneSleepRecord(stored)
-        ? { sleeping: stored }
-        : isResumablePaneRecord(stored)
-          ? { resume: stored }
-          : {}
+      const next = isPaneSleepRecord(stored) ? { sleeping: stored } : { resume: stored }
       workspace = setLeaf(workspace, leafId, { ...kept, ...next })
-    } else if (command.expectedRecords) {
-      workspace = setLeaf(workspace, leafId, omitStoredFields(leaf ?? {}, ['sleeping', 'resume']))
     }
   }
   return applied(
     withWorkspace(model, command.workspace, workspace),
-    { slept: changedPaneKeys, ...(command.recordOnly ? { previousSleepRecords } : {}) },
+    { slept: targets.map((pane) => pane.paneKey) },
     { stopPtyIds }
   )
 }
