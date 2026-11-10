@@ -58,6 +58,8 @@ export async function settleStructuredAgentSessionLateDispatch(
       session.journal,
       input.clientMessageId,
       async () => {
+        // Earlier provider facts take their writer position before this receipt.
+        context.sealEventSink(input.sessionId)
         await session.journal.settleLateDispatch(settlement)
       }
     )

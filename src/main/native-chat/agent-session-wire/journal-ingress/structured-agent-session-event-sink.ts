@@ -162,6 +162,7 @@ export type DeferredStructuredAgentSessionEventSink = {
   unbind(): void
   followSnapshots(source: StructuredAgentSessionSnapshotSource): Promise<void>
   liveText(): readonly AgentJournalRenderItem[]
+  seal(): void
   close(): void
   drained(): Promise<StructuredAgentSessionSinkBarrier>
   lifecycleBarrier(): Promise<StructuredAgentSessionSinkBarrier>
@@ -320,6 +321,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
     unbind: () => queue.unbind(),
     followSnapshots: (source) => queue.snapshots.follow(source),
     liveText: queue.liveText,
+    seal: () => queue.seal(),
     close: () => {
       queue.flushLiveText()
       queue.close()

@@ -69,6 +69,7 @@ export function createStructuredAgentSessionHostMutationContext(
         input.runtimeState.currentEventSink(sessionId)?.sink
       ),
     publishWorkChanged: (sessionId) => input.clientDelivery.publishGenerationEnded(sessionId),
+    sealEventSink: (sessionId) => input.runtimeState.sealEventSink(sessionId),
     captureChildWorkStops: input.clientDelivery.captureChildWorkStops,
     childWorkOpen: input.clientDelivery.childWorkOpen,
     childWorkIncomplete: input.clientDelivery.childWorkIncomplete,

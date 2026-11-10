@@ -239,7 +239,7 @@ export class StructuredAgentSessionSinkQueue {
     this.dispatch.push(operation)
   }
 
-  private seal(): void {
+  seal(): void {
     if (this.target) {
       const operation = this.dispatch.seal(this.target)
       if (operation) {

@@ -215,6 +215,8 @@ export class StructuredAgentSessionHostRuntimeState {
     return created
   }
 
+  sealEventSink = (sessionId: string): void => this.eventSinks.get(sessionId)?.seal()
+
   /** Failed sinks retain permanent barrier errors; discard instead of reusing them. */
   currentEventSink(sessionId: string): DeferredStructuredAgentSessionEventSink | undefined {
     const existing = this.eventSinks.get(sessionId)

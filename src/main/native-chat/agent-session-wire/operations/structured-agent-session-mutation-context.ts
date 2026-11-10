@@ -37,6 +37,7 @@ export type StructuredAgentSessionMutationContext = {
   publishChildWork: (sessionId: string, evidence: AgentChildWorkEvidence[]) => void
   /** Republish held-work changes without journal rows. */
   publishWorkChanged: (sessionId: string) => void
+  sealEventSink: (sessionId: string) => void
   captureChildWorkStops: (sessionId: string, handleIds: readonly string[]) => CapturedChildWorkStops
   /** Includes running child work without records. */
   childWorkOpen: (sessionId: string) => boolean
