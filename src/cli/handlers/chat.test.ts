@@ -137,7 +137,11 @@ describe('chat send', () => {
         }
       }),
       // The earlier turn ended, but the queued message has not been handed to the agent yet.
-      historyPage([], 7, { working: false, queuedMessages: [{ messageId: 'q-1' }] }),
+      historyPage([], 7, {
+        working: false,
+        queuedMessages: [{ messageId: 'q-1' }],
+        nextQueuedMessageId: 'q-1'
+      }),
       historyPage([], 7, { working: true, queuedMessages: [] }),
       historyPage([], 7, { working: false, queuedMessages: [], actionablePromptIds: [] }),
       historyPage([

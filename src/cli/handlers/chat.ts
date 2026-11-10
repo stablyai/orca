@@ -85,20 +85,23 @@ export const CHAT_HANDLERS: Record<string, CommandHandler> = {
   },
   'chat list': async ({ flags, client, cwd, json }) => {
     const selector = await getOptionalWorktreeSelector(flags, 'worktree', cwd, client)
-    const worktreeId = selector
+    const shown = selector
       ? (
           await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
             worktree: selector
           })
-        ).result.worktree.id
+        ).result.worktree
       : undefined
     const result = await client.call<RuntimeWorktreePsResult>('worktree.ps', {})
-    const state = getOptionalStringFlag(flags, 'state')
-    const chats = listChatSessions(result.result.worktrees).filter(
-      (chat) =>
-        (worktreeId === undefined || chat.worktreeId === worktreeId) &&
-        (!state || chat.state === state)
+    // A local and an SSH copy can share an id; the host tells them apart when both name one.
+    const worktrees = result.result.worktrees.filter(
+      (w) =>
+        !shown ||
+        (w.worktreeId === shown.id &&
+          (w.hostId === undefined || shown.hostId === undefined || w.hostId === shown.hostId))
     )
+    const state = getOptionalStringFlag(flags, 'state')
+    const chats = listChatSessions(worktrees).filter((chat) => !state || chat.state === state)
     printResult({ ...result, result: { chats } }, json, formatChatList)
   },
   'chat read': async ({ flags, client, json }) => {

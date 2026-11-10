@@ -1,3 +1,5 @@
+import { agentSessionPromptQuestions } from '../shared/agent-session/agent-session-question-answer'
+import { isActionableStructuredAgentSessionPrompt } from '../shared/agent-session/view/structured-agent-session-live-turn'
 import { isRootAgentJournalItem } from '../shared/agent-session/journal/agent-session-journal-producer'
 import type { AgentJournalRenderItem } from '../shared/agent-session/journal/agent-session-journal-types'
 import type {
@@ -85,7 +87,14 @@ function messageText(item: AgentJournalRenderItem): string {
 
 /** The conversation as a reader follows it: messages, the tools the agent ran, and the
  *  approvals and questions it raised. Provider status frames and turn markers are left out. */
-export function chatTranscript(items: readonly AgentJournalRenderItem[]): ChatTranscriptEntry[] {
+export function chatTranscript(
+  items: readonly AgentJournalRenderItem[],
+  actionablePromptIds?: readonly string[]
+): ChatTranscriptEntry[] {
+  // An ended agent's unanswered prompts stay pending in the journal but can no longer be answered.
+  const waiting = (item: AgentJournalRenderItem, state: string): boolean =>
+    state === 'pending' &&
+    isActionableStructuredAgentSessionPrompt(item.itemId, actionablePromptIds)
   const entries: ChatTranscriptEntry[] = []
   for (const item of items) {
     // Subagents share the journal; their rows belong to their own section, not the chat's turn.
@@ -108,13 +117,16 @@ export function chatTranscript(items: readonly AgentJournalRenderItem[]): ChatTr
       entries.push({
         kind: 'approval',
         text: body.title,
-        pending: body.resolution.state === 'pending'
+        pending: waiting(item, body.resolution.state)
       })
     } else if (body.kind === 'question') {
       entries.push({
         kind: 'question',
-        text: body.question,
-        pending: body.resolution.state === 'pending'
+        // Grouped prompts keep their real questions in `questions`; `question` is then a heading.
+        text: agentSessionPromptQuestions(body)
+          .map((q) => q.question)
+          .join('\n'),
+        pending: waiting(item, body.resolution.state)
       })
     }
   }

@@ -13,7 +13,6 @@ import type { RuntimeClient, RuntimeRpcSuccess } from './runtime-client'
 import { RuntimeClientError } from './runtime-client'
 
 export const DEFAULT_READ_LIMIT = 20
-// Status frames and turn markers share the journal, so read the most rows a page allows.
 const WAIT_POLL_MS = 1000
 
 export type ChatTranscript = {
@@ -45,9 +44,10 @@ export async function readTranscript(
   session: string,
   limit?: number
 ): Promise<RuntimeRpcSuccess<ChatTranscript>> {
+  // Status frames and turn markers share the journal, so read the most rows a page allows.
   const response = await readHistory(client, session, AGENT_SESSION_HISTORY_MAX_LIMIT)
   const { page } = response.result
-  const all = chatTranscript(page.items)
+  const all = chatTranscript(page.items, page.actionablePromptIds)
   const entries = limit === undefined ? all : all.slice(-limit)
   return { ...response, result: { session, entries, cursor: page.window.newest } }
 }
@@ -75,18 +75,15 @@ export async function waitForChat(
     if ((page.actionablePromptIds?.length ?? 0) > 0) {
       return 'waiting'
     }
-    const queued = page.queuedMessages?.find((m) => m.messageId === queuedMessageId)
     // Between turns the host names its next automatic send while working is briefly false.
     const sendsNext = structuredAgentSessionQueueSendsNext(
       page.nextQueuedMessageId,
       page.working === true
     )
-    if (!page.working && !queued && !sendsNext) {
-      return 'idle'
-    }
-    // A stopped queue or a failed card keeps the message until the user acts in Orca.
-    if (!page.working && (page.queuePause || queued?.paused || queued?.state === 'returned')) {
-      return 'held'
+    if (!page.working && !sendsNext) {
+      // Still queued with nothing running or about to send: stopped, failed or held across a reopen.
+      const held = page.queuedMessages?.some((m) => m.messageId === queuedMessageId) === true
+      return held ? 'held' : 'idle'
     }
     if (Date.now() >= deadline) {
       return 'timeout'
@@ -108,10 +105,9 @@ export async function readSettledTurn(
   const response = await readTranscript(client, session)
   const { entries } = response.result
   const lastUser = entries.findLastIndex((e) => e.kind === 'message' && e.role === 'user')
-  return {
-    ...response,
-    result: { ...response.result, entries: entries.slice(lastUser + 1), settled }
-  }
+  // A held message never ran, so the last turn on the page is not its reply.
+  const turn = settled === 'held' ? [] : entries.slice(lastUser + 1)
+  return { ...response, result: { ...response.result, entries: turn, settled } }
 }
 
 export function formatSettled(result: ChatTranscript & { settled: ChatSettled }): string {
