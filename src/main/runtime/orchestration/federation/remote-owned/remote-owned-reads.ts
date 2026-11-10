@@ -13,9 +13,9 @@ type ReadsRuntime = Pick<
 >
 
 /**
- * A remote worker's server as this Orca names it. `asOf` is when this Orca last recorded the
- * server's state or report for the worker; `repaired` means the pairing was re-made since, so the
- * server no longer reports this worker here.
+ * A remote worker's server as this Orca names it. `asOf` is when this Orca recorded the server's
+ * latest state for the worker; `repaired` means the pairing was re-made since, so the server no
+ * longer reports this worker here.
  */
 export type RemoteWorkerServer = {
   environmentId: string
@@ -85,7 +85,7 @@ export function offlineRemoteWorkerShow(runtime: ReadsRuntime, record: RemoteDis
     observation: {
       status: 'unverifiable' as const,
       exactWorker: false,
-      reason: `${why}, so this is this Orca's record of the worker as ${server.name} last reported it, at ${server.asOf}. Its output is kept only on ${server.name}.${owedStop}`
+      reason: `${why}, so this is this Orca's record of the worker: its state as of ${server.asOf}. Its output is kept only on ${server.name}.${owedStop}`
     },
     server: { ...server, reachable: false as const },
     lastReport: record.last_report,
@@ -120,7 +120,7 @@ type WorkerListPage = {
 
 /**
  * Workers paired servers run for the listed Runs join the first page after this Orca's own, newest
- * first and as each server last reported them; no server is asked. `total` counts every one of
+ * first and as each server last reported them; no server is asked. Every page's `total` counts
  * them. Later pages follow this Orca's own cursor, and a terminal-state filter leaves them out,
  * since only their server knows their terminals.
  */
@@ -130,13 +130,16 @@ export function withRemoteWorkerRows<Page extends WorkerListPage>(
   page: Page,
   maxRows: number
 ): Page {
-  if (params.cursor || params.terminalState) {
+  if (params.terminalState) {
     return page
   }
   const db = runtime.getOrchestrationDb()
   const total = countRemoteDispatches(db, params.run)
   if (total === 0) {
     return page
+  }
+  if (params.cursor) {
+    return { ...page, page: { ...page.page, total: page.page.total + total } }
   }
   const names = new Map<string, string>()
   const name = (id: string): string => {
