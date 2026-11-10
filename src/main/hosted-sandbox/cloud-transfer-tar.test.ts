@@ -105,7 +105,8 @@ describe('safe extraction of VM archives', () => {
     const result = await safeExtractTar(archive, dest, { maxBytes: 1024, noClobber: true })
     expect(existsSync(join(outside, 'pwned'))).toBe(false)
     expect(readFileSync(join(dest, 'keep.txt'), 'utf8')).toBe('mine')
-    expect(result.skipped).toEqual(['linked/pwned', 'keep.txt'])
+    expect(result.skipped).toEqual(['linked/pwned'])
+    expect(result.existing).toEqual(['keep.txt'])
   })
 
   it('inflates gzip only up to the cap (gzip bomb)', async () => {

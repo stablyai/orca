@@ -1,4 +1,5 @@
 // Window side of Orca Cloud's session lifecycle: cap warnings, rollovers and idle sleep from main.
+import { offerPendingCloudTransfers } from '@/lib/orca-cloud-transfer-reapply'
 import {
   armInterruptedTurnsForHostRestart,
   continueInterruptedTurns,
@@ -46,6 +47,8 @@ function restartNow(workspaceId: string): Promise<HostedSessionRestartResult> {
 }
 
 export function installOrcaCloudSessionEvents(): () => void {
+  // Moves left part-applied before a restart: offer "Apply changes again" once the window is up.
+  void offerPendingCloudTransfers().catch(() => 0)
   const api = window.api?.ephemeralVm
   if (!api?.onCloudSessionWarning || !api.onCloudIdleSleepRequested) {
     return () => {}

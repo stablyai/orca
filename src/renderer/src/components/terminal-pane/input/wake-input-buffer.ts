@@ -12,7 +12,11 @@ import { applyWakeInput } from './wake-input-text'
 import { noteUserInputForPane, pruneUserInput, resetPaneUserInputForTests } from './pane-user-input'
 
 export { WAKE_INPUT_CAP, applyWakeInput } from './wake-input-text'
-export { noteUserInputForPane, paneHadUserInputSince } from './pane-user-input'
+export {
+  noteUserInputForPane,
+  paneHadUserInputSince,
+  workspaceHadUserInputSince
+} from './pane-user-input'
 const FLUSH_POLL_MS = 100
 /** A wake nobody settles stops holding typing after this, and the typing is dropped. */
 export const WAKE_INPUT_MAX_HOLD_MS = 90_000
@@ -156,7 +160,7 @@ function pump(now = Date.now()): void {
       }
       try {
         pane.deliver(text)
-        noteUserInputForPane(paneId, now)
+        noteUserInputForPane(paneId, now, workspaceId)
         for (const listener of deliveryListeners) {
           listener({ workspaceId, paneId, submitted })
         }

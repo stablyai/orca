@@ -3,6 +3,7 @@
 // branch), apply the uncommitted work and chats, then open it. The cloud workspace is left as is.
 // Progress, success and failure render in CloudMoveToComputerDialog (orca-cloud-move-store).
 import { toast } from 'sonner'
+import { claimMoveRun, releaseMoveRun } from '@/lib/orca-cloud/orca-cloud-move-run'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
@@ -12,7 +13,10 @@ import {
   setCloudMoveState,
   type CloudMoveStep
 } from '@/lib/orca-cloud/orca-cloud-move-store'
-import type { CloudTransferProgressEvent } from '../../../shared/hosted-sandbox/cloud-transfer-api'
+import type {
+  CloudTransferPrepared,
+  CloudTransferProgressEvent
+} from '../../../shared/hosted-sandbox/cloud-transfer-api'
 
 const STEP_OF_PHASE: Partial<Record<CloudTransferProgressEvent['phase'], CloudMoveStep>> = {
   packing: 'packing',
@@ -25,9 +29,7 @@ const STEP_OF_PHASE: Partial<Record<CloudTransferProgressEvent['phase'], CloudMo
 /** A move that hasn't settled by now is reported as failed (the pack or download stalled). */
 export const MOVE_TIMEOUT_MS = 15 * 60_000
 
-/** The run that holds the one-move-at-a-time guard; a timed-out run releases it. */
-let inFlightRun: number | null = null
-let runCounter = 0
+
 
 export async function runOrcaCloudTransferToLocal(
   workspaceId: string,
@@ -36,11 +38,13 @@ export async function runOrcaCloudTransferToLocal(
 ): Promise<void> {
   const api = window.api?.orcaCloudWorkspace
   // One move at a time: a second click (or a retry racing the first) must not start another pack.
-  if (!api?.prepareTransferToLocal || inFlightRun !== null) {
+  if (!api?.prepareTransferToLocal) {
     return
   }
-  const run = ++runCounter
-  inFlightRun = run
+  const run = claimMoveRun()
+  if (run === null) {
+    return
+  }
   const archiveAfter = options.archiveAfter ?? false
   const startedAt = Date.now()
   let step: CloudMoveStep = 'packing'
@@ -49,6 +53,7 @@ export async function runOrcaCloudTransferToLocal(
   let totalBytes: number | null = null
   let timedOut = false
   let localWorktreeId: string | null = null
+  let retry: { prepared: CloudTransferPrepared; worktreePath: string } | null = null
   const isHidden = (): boolean => {
     const current = getCloudMoveState()
     return current.stage === 'running' && current.hidden
@@ -75,9 +80,7 @@ export async function runOrcaCloudTransferToLocal(
     // Stop waiting: release the guard so Try again works; this run's late results are ignored
     // except a late success, which still lands as a notice (the workspace really is here).
     timedOut = true
-    if (inFlightRun === run) {
-      inFlightRun = null
-    }
+    releaseMoveRun(run)
     setCloudMoveState({
       stage: 'failed',
       workspaceId,
@@ -149,6 +152,7 @@ export async function runOrcaCloudTransferToLocal(
         { branchIntent: 'open-existing-v2' }
       )
     localWorktreeId = worktree.id
+    retry = { prepared: prepared.value, worktreePath: worktree.path }
     step = 'applying'
     publish()
     const finished = await api.finishTransferToLocal({ transferId, worktreePath: worktree.path })
@@ -173,6 +177,8 @@ export async function runOrcaCloudTransferToLocal(
     }
     noteCloudWorkspaceMoved(workspaceId, Date.now(), worktree.id)
     const hidden = isHidden()
+    // Never archive while something is left to apply: the cloud copy is the other place it lives.
+    const archiveNow = archiveAfter && !finished.value.leftoverPatchDir
     setCloudMoveState({
       stage: 'done',
       workspaceId,
@@ -181,14 +187,14 @@ export async function runOrcaCloudTransferToLocal(
       prepared: prepared.value,
       finished: finished.value,
       elapsedMs: Date.now() - startedAt,
-      archivedAfter: archiveAfter,
+      archivedAfter: archiveNow,
       hidden
     })
     // Hidden: the user kept working elsewhere; the notice offers Open instead of jumping there.
     if (!hidden) {
       activateAndRevealWorktree(worktree.id)
     }
-    if (archiveAfter) {
+    if (archiveNow) {
       options.onArchive?.(workspaceId, name)
     }
   } catch (error) {
@@ -202,15 +208,14 @@ export async function runOrcaCloudTransferToLocal(
         step,
         timedOut: false,
         localWorktreeId,
+        retry,
         archiveAfter,
         hidden: isHidden()
       })
     }
   } finally {
     clearTimeout(timeout)
-    if (inFlightRun === run) {
-      inFlightRun = null
-    }
+    releaseMoveRun(run)
     dispose()
   }
 }

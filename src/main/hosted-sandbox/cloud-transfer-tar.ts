@@ -2,8 +2,20 @@
 // tar. Only regular files and directories are written; links, devices and any path that is absolute
 // or climbs out of the destination are skipped; total bytes and entry counts are capped, and gzip is
 // inflated with a byte cap (no gzip bombs).
-import { createReadStream, createWriteStream } from 'node:fs'
-import { lstat, mkdir, open, realpath, rm } from 'node:fs/promises'
+import { constants as fsConstants, createReadStream, createWriteStream } from 'node:fs'
+import {
+  copyFile,
+  link,
+  lstat,
+  mkdir,
+  open,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  unlink
+} from 'node:fs/promises'
+import { randomBytes } from 'node:crypto'
 import { dirname, isAbsolute, join, normalize, sep } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { Transform } from 'node:stream'
@@ -11,7 +23,17 @@ import { createGunzip } from 'node:zlib'
 
 const BLOCK = 512
 
-export type TarExtractResult = { files: number; dirs: number; bytes: number; skipped: string[] }
+export type TarExtractResult = {
+  files: number
+  dirs: number
+  bytes: number
+  /** Entries refused for safety (links, devices, escapes, symlinked ancestors). */
+  skipped: string[]
+  /** `noClobber`: a different file was already at the path; the transferred one was not written. */
+  existing: string[]
+  /** `noClobber`: the same content was already at the path (an earlier attempt wrote it). */
+  identical: number
+}
 
 /** True when any existing ancestor of `relative` under `root` (or the entry itself) is a symlink. */
 async function throughSymlink(root: string, relative: string): Promise<boolean> {
@@ -100,7 +122,14 @@ export async function safeExtractTar(
   await mkdir(destination, { recursive: true })
   const root = await realpath(destination)
   const handle = await open(tarPath, 'r')
-  const result: TarExtractResult = { files: 0, dirs: 0, bytes: 0, skipped: [] }
+  const result: TarExtractResult = {
+    files: 0,
+    dirs: 0,
+    bytes: 0,
+    skipped: [],
+    existing: [],
+    identical: 0
+  }
   const header = Buffer.alloc(BLOCK)
   let offset = 0
   let longName: string | null = null
@@ -173,14 +202,17 @@ export async function safeExtractTar(
       await mkdir(dirname(target), { recursive: true })
       // Never write through a symlink an earlier step (or the user) left at the path.
       const existing = await lstat(target).catch(() => null)
-      if (existing && (options.noClobber || !existing.isFile())) {
+      if (existing && !existing.isFile()) {
         result.skipped.push(rawName.slice(0, 200))
         offset += padded
         continue
       }
       // Keep the executable bit (scripts); never setuid/setgid or group/world-writable.
       const executable = (readOctal(header, 100, 8) & 0o111) !== 0
-      const out = await open(target, 'w', executable ? 0o755 : 0o644)
+      // Written to a fresh temp name first ('wx': never an existing path), then put in place, so a
+      // failure mid-write never leaves a partial file at the real path.
+      const temp = `${target}.orca-transfer-${randomBytes(6).toString('hex')}`
+      const out = await open(temp, 'wx', executable ? 0o755 : 0o644)
       try {
         let remaining = size
         let position = offset
@@ -195,11 +227,48 @@ export async function safeExtractTar(
           remaining -= read.bytesRead
           position += read.bytesRead
         }
-      } finally {
-        await out.close()
+      } catch (error) {
+        await out.close().catch(() => undefined)
+        await unlink(temp).catch(() => undefined)
+        throw error
+      }
+      await out.close()
+      offset += padded
+      if (existing && options.noClobber) {
+        if (existing.size === size && (await sameContent(temp, target))) {
+          result.identical++
+        } else {
+          result.existing.push(relative)
+        }
+        await unlink(temp)
+        continue
+      }
+      if (options.noClobber) {
+        // link() fails if something appeared at the path meanwhile: atomic no-clobber.
+        try {
+          await link(temp, target)
+        } catch (error) {
+          const code = error instanceof Error && 'code' in error ? error.code : null
+          // No hard links on this filesystem: an exclusive-create copy is just as no-clobber.
+          const copied =
+            code === 'EPERM' || code === 'ENOTSUP' || code === 'EXDEV'
+              ? await copyFile(temp, target, fsConstants.COPYFILE_EXCL).then(
+                  () => true,
+                  () => false
+                )
+              : false
+          if (!copied) {
+            result.existing.push(relative)
+            await unlink(temp)
+            continue
+          }
+        }
+        await unlink(temp)
+      } else {
+        await rename(temp, target)
       }
       result.files++
-      offset += padded
+      continue
     }
   } finally {
     await handle.close()
@@ -226,4 +295,10 @@ export async function gunzipCapped(
     throw error
   }
   return total
+}
+
+async function sameContent(a: string, b: string): Promise<boolean> {
+  // Only reached for files of equal size; transfers are capped, so reading both is bounded.
+  const [left, right] = await Promise.all([readFile(a), readFile(b)])
+  return left.equals(right)
 }

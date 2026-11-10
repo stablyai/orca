@@ -1,7 +1,7 @@
 // "Move to this computer" body: confirm what moves, the steps with elapsed time, then the result.
 // A plain view (fixtures render it inline); CloudMoveToComputerDialog wraps it in the app's Dialog.
 import React, { useRef } from 'react'
-import { AlertTriangle, Check, Circle, FolderOpen, Laptop, Loader2 } from 'lucide-react'
+import { AlertTriangle, Check, Circle, Laptop, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { InlineError } from '@/components/ui/inline-error'
@@ -14,7 +14,7 @@ import {
   type CloudMoveState
 } from '@/lib/orca-cloud/orca-cloud-move-store'
 import { cloudMoveFailureCause, cloudMoveStepLabel, formatMoveSize } from './cloud-move-copy'
-import { BulletList, useFocusOnStage } from './cloud-move-parts'
+import { BulletList, CloudMovePartialResult, useFocusOnStage } from './cloud-move-parts'
 
 export { cloudMoveStepLabel, cloudMoveTitle } from './cloud-move-copy'
 
@@ -38,7 +38,8 @@ export function CloudMoveToComputerView({
   onOpenLocal,
   onClose,
   onArchiveAfterChange,
-  onHide
+  onHide,
+  onReapply
 }: {
   state: OpenState
   conflicts: CloudMoveConflicts
@@ -53,6 +54,8 @@ export function CloudMoveToComputerView({
   onClose: () => void
   onArchiveAfterChange: (archiveAfter: boolean) => void
   onHide: () => void
+  /** "Apply changes again" on the same local worktree (failed apply, or partial result). */
+  onReapply?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const primary = useRef<HTMLButtonElement | null>(null)
@@ -80,7 +83,8 @@ export function CloudMoveToComputerView({
             },
             {
               key: 'changes',
-              node: known
+              node:
+                known && known.uncommittedChanges > 0
                 ? t(
                     'orcaCloudMove.confirm.changesCount',
                     '{{count}} uncommitted changes, plus untracked files',
@@ -246,7 +250,12 @@ export function CloudMoveToComputerView({
         <InlineError
           title={cloudMoveFailureCause(state.step, state.timedOut, t)}
           detail={
-            localStarted
+            localStarted && state.retry
+              ? t(
+                  'orcaCloudMove.failedLocalReapply',
+                  'Apply changes again to bring them over. Nothing you changed here is overwritten, and your files are safe in the cloud workspace.'
+                )
+              : localStarted
               ? t(
                   'orcaCloudMove.failedLocalNext',
                   'Use Move again from the sandbox panel to bring them over. Your files are safe in the cloud workspace.'
@@ -261,6 +270,11 @@ export function CloudMoveToComputerView({
           <Button variant="ghost" size="sm" onClick={onClose}>
             {t('orcaCloudMove.close', 'Close')}
           </Button>
+          {localStarted && state.retry && onReapply ? (
+            <Button variant="outline" size="sm" onClick={onReapply}>
+              {t('orcaCloudMove.reapply', 'Apply changes again')}
+            </Button>
+          ) : null}
           {state.localWorktreeId ? (
             <Button
               ref={primary}
@@ -342,27 +356,13 @@ export function CloudMoveToComputerView({
         ))}
       </ul>
       {partial ? (
-        <div className="flex flex-col gap-2 rounded-md border border-border p-3">
-          <p className="text-sm">
-            {t(
-              'orcaCloudMove.partialDetail',
-              'Some changes didn’t apply cleanly. They were saved here, so nothing is lost:'
-            )}
-          </p>
-          <Button
-            ref={primary}
-            size="xs"
-            variant="outline"
-            className="max-w-full justify-start self-start"
-            onClick={() => onOpenFolder(partial)}
-          >
-            <FolderOpen />
-            {t('orcaCloudMove.openFolder', 'Open folder')}
-          </Button>
-          <p className="break-all font-mono text-xs text-muted-foreground" title={partial}>
-            {partial}
-          </p>
-        </div>
+        <CloudMovePartialResult
+          folder={partial}
+          conflicts={finished.conflicts ?? []}
+          primary={primary}
+          onOpenFolder={onOpenFolder}
+          onReapply={onReapply}
+        />
       ) : null}
       <p className="text-xs text-muted-foreground">
         {state.archivedAfter

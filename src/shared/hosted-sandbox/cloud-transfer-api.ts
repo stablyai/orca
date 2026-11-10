@@ -46,6 +46,20 @@ export type CloudTransferFinished = {
   codexSessions: number
   /** Patches that did not apply cleanly were saved here instead of being dropped. */
   leftoverPatchDir: string | null
+  /** Files the saved patches touch that changed here since; the patch was not forced onto them. */
+  conflicts?: string[]
+  /** Untracked files not written because something is already at that path. */
+  skippedUntracked?: string[]
+}
+
+/** A move whose changes were not all applied; kept on disk so "Apply changes again" can retry. */
+export type CloudTransferPending = {
+  transferId: string
+  /** The cloud workspace it was moved from. */
+  workspaceId: string
+  /** The local worktree it was applied to. */
+  worktreePath: string
+  leftoverDir: string
 }
 
 export type CloudTransferResult<T> =
@@ -61,11 +75,23 @@ export type OrcaCloudTransferApi = {
     transferId: string
     worktreePath: string
   }) => Promise<CloudTransferResult<CloudTransferFinished>>
+  /** "Apply changes again" onto the same local worktree after a partial or failed apply. */
+  reapplyTransferToLocal: (args: {
+    transferId: string
+    worktreePath: string
+  }) => Promise<CloudTransferResult<CloudTransferFinished>>
+  /** Moves with changes still to apply, kept across app restarts. */
+  listPendingTransfers: () => Promise<CloudTransferPending[]>
+  /** Deletes a kept move's saved changes (the after-restart offer's "Discard"). */
+  discardPendingTransfer: (args: { transferId: string }) => Promise<boolean>
   onTransferProgress: (callback: (event: CloudTransferProgressEvent) => void) => () => void
 }
 
 export const ORCA_CLOUD_TRANSFER_CHANNELS = {
   prepare: 'orcaCloudWorkspace:prepareTransferToLocal',
   finish: 'orcaCloudWorkspace:finishTransferToLocal',
+  reapply: 'orcaCloudWorkspace:reapplyTransferToLocal',
+  listPending: 'orcaCloudWorkspace:listPendingTransfers',
+  discardPending: 'orcaCloudWorkspace:discardPendingTransfer',
   progress: 'orcaCloudWorkspace:transferProgress'
 } as const

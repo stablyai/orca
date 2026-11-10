@@ -11,6 +11,7 @@ import {
 import { useNow } from '@/hooks/use-now'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { runOrcaCloudTransferToLocal } from '@/lib/orca-cloud-transfer-flow'
+import { reapplyOrcaCloudTransfer } from '@/lib/orca-cloud-transfer-reapply'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import {
   closeMoveToThisComputer,
@@ -34,6 +35,34 @@ import {
 } from './CloudMoveToComputerView'
 
 export type { CloudMoveConflicts } from './CloudMoveToComputerView'
+
+/** "Apply changes again" for a failed apply or a partial result on an existing local worktree. */
+function reapplyFor(state: CloudMoveState): (() => void) | undefined {
+  if (state.stage === 'failed' && state.retry && state.localWorktreeId) {
+    const { retry, localWorktreeId } = state
+    return () =>
+      void reapplyOrcaCloudTransfer({
+        workspaceId: state.workspaceId,
+        name: state.name,
+        localWorktreeId,
+        prepared: retry.prepared,
+        worktreePath: retry.worktreePath,
+        archiveAfter: state.archiveAfter
+      })
+  }
+  if (state.stage === 'done' && state.finished.leftoverPatchDir) {
+    return () =>
+      void reapplyOrcaCloudTransfer({
+        workspaceId: state.workspaceId,
+        name: state.name,
+        localWorktreeId: state.localWorktreeId,
+        prepared: state.prepared,
+        worktreePath: state.finished.worktreePath,
+        archiveAfter: false
+      })
+  }
+  return undefined
+}
 
 /** A settled move that is still hidden ends when its notice goes away. */
 function closeHiddenResult(): void {
@@ -188,6 +217,7 @@ export function CloudMoveToComputerDialogHost({
             closeMoveToThisComputer()
             archive(state.workspaceId, state.name)
           }}
+          onReapply={reapplyFor(state)}
         />
       </DialogContent>
     </Dialog>
