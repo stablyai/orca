@@ -38,6 +38,10 @@ export type ProxiedRoute = {
   credential: () => Promise<string | null>
   /** Narrows where this credential may be used (member tokens: the workspace repository only). */
   pathAllowed?: (method: string, path: string) => boolean
+  /** Top-level fields dropped from a JSON reply (a refresh token the VM must not keep). */
+  omitResponseFields?: readonly string[]
+  /** Names the swapped credential in the proxy's log line (never its value). */
+  label?: string
 }
 
 export type EgressProxyDeps = {
@@ -148,6 +152,32 @@ export async function handleEgressProxy(request: Request, deps: EgressProxyDeps)
     body: hasBody ? await request.arrayBuffer() : undefined,
     redirect: 'manual'
   })
+  // Names only: which sandbox, host and credential were swapped, and what the provider answered.
+  console.log(
+    JSON.stringify({ event: 'egress_swap', sandboxId: row.id, host, credential: route.label ?? route.header, status: upstream.status })
+  )
+  if (route.omitResponseFields?.length && /^application\/json\b/i.test(upstream.headers.get('content-type') ?? '')) {
+    return withoutFields(upstream, route.omitResponseFields)
+  }
   // Re-wrapping lets the runtime frame the body (content-length or chunked) for the VM's client.
   return new Response(upstream.body, { status: upstream.status, headers: upstream.headers })
+}
+
+/** A JSON reply minus `fields`; a body that isn't a JSON object is refused rather than passed on. */
+async function withoutFields(upstream: Response, fields: readonly string[]): Promise<Response> {
+  let body: unknown
+  try {
+    body = await upstream.json()
+  } catch {
+    return deny('unreadable_reply')
+  }
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+    return deny('unreadable_reply')
+  }
+  const kept = Object.fromEntries(Object.entries(body).filter(([key]) => !fields.includes(key)))
+  const headers = new Headers(upstream.headers)
+  for (const name of ['content-length', 'content-encoding', 'etag']) {
+    headers.delete(name)
+  }
+  return new Response(JSON.stringify(kept), { status: upstream.status, headers })
 }

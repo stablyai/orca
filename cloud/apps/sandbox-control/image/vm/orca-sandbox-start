@@ -136,7 +136,7 @@ managed_env=(
   ORCA_WORKSPACE_NAME="$workspace_name" ORCA_PORT=3000
   CONDUCTOR_IS_CLOUD=1
   # Agent CLIs are pinned by the image (smoke-tested); a self-update mid-session can break a running agent.
-  DISABLE_AUTOUPDATER=1
+  DISABLE_AUTOUPDATER=1 OPENCODE_DISABLE_AUTOUPDATE=1 COPILOT_AUTO_UPDATE=false
   CONDUCTOR_ROOT_PATH="$PROJECT" CONDUCTOR_WORKSPACE_PATH="$PROJECT"
   CONDUCTOR_WORKSPACE_NAME="$workspace_name" CONDUCTOR_PORT=3000
 )

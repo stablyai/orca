@@ -266,9 +266,12 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
       return []
     }
     return entries.flatMap((entry) =>
-      Object.entries(entry.headers).map(([header, format]) => ({
+      Object.entries(entry.headers).map(([header, format]): ProxiedRoute => ({
         header,
         placeholders: [format(secretPlaceholder(row, entry.secret))],
+        label: entry.secret,
+        ...(entry.paths ? { pathAllowed: requestMatches(entry.paths) } : {}),
+        ...(entry.omitResponseFields ? { omitResponseFields: entry.omitResponseFields } : {}),
         credential: async () => {
           const current = await cachedProviderEnv(env.SANDBOX_DB, await keyring, row, (deps.now ?? Date.now)())
           // The key must still be meant for this host now (not only at boot): a later edit may
@@ -281,6 +284,14 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
         }
       }))
     )
+  }
+}
+
+/** Exact method and path (the query string is ignored). */
+function requestMatches(allowed: readonly { method: string; path: string }[]): (method: string, path: string) => boolean {
+  return (method, path) => {
+    const pathname = path.split('?')[0]
+    return allowed.some((entry) => entry.method === method.toUpperCase() && entry.path === pathname)
   }
 }
 

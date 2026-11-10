@@ -80,6 +80,21 @@ export const DEFAULT_EGRESS_ALLOWLIST: readonly string[] = [
   'accounts.google.com',
   // Vercel AI Gateway: Anthropic/OpenAI-compatible endpoint teams point agents at (ANTHROPIC_BASE_URL).
   'ai-gateway.vercel.sh',
+  // Gemini CLI signed in with Google: Code Assist API and the account lookup after OAuth.
+  'cloudcode-pa.googleapis.com',
+  'www.googleapis.com',
+  // Cursor agent: API (api2), metrics (api3), direct bridge and sign-in pages.
+  'api2.cursor.sh',
+  '*.cursor.sh',
+  'cursor.com',
+  '*.cursor.com',
+  // OpenCode: model catalog and its own sign-in/hosted providers.
+  'models.dev',
+  'opencode.ai',
+  '*.opencode.ai',
+  // GitHub Copilot CLI: Copilot API (per plan: api.individual., api.business., ...).
+  'api.githubcopilot.com',
+  '*.githubcopilot.com',
   '*.onorca.dev',
   ...EDITOR_REMOTE_SERVER_HOSTS
 ]
@@ -89,6 +104,8 @@ export type CredentialRoute = {
   /** Header the VM sends with a placeholder value, matched exactly (one claim rule per value). */
   header: string
   placeholders: readonly string[]
+  /** Requests without a placeholder still pass (the host is shared with the client's own tokens). */
+  allowUnclaimed?: boolean
 } & (
   | { via: 'transform'; value: string }
   | { via: 'forward'; forwardURL: string }
@@ -112,6 +129,7 @@ export function compileNetworkPolicy(input: EgressPolicyInput): NetworkPolicy {
   for (const host of input.allowlist ?? DEFAULT_EGRESS_ALLOWLIST) {
     allow[checkedHost(host)] = []
   }
+  const denied = new Set<string>()
   for (const route of input.credentials ?? []) {
     const host = checkedHost(route.host)
     if (host.startsWith('*.')) {
@@ -124,8 +142,14 @@ export function compileNetworkPolicy(input: EgressPolicyInput): NetworkPolicy {
         ? { match, transform: [{ headers: { [header]: route.value } }] }
         : { match, forwardURL: route.forwardURL }
     })
-    const rules = allow[host]?.filter((rule) => !('response' in rule)) ?? []
-    allow[host] = [...rules, ...claims, ...(input.denyUnclaimed === false ? [] : [denyRule()])]
+    allow[host] = [...(allow[host] ?? []), ...claims]
+    // One route that wants the deny is enough: a shared host fails closed.
+    if (input.denyUnclaimed !== false && !route.allowUnclaimed) {
+      denied.add(host)
+    }
+  }
+  for (const host of denied) {
+    allow[host] = [...(allow[host] ?? []), denyRule()]
   }
   if (input.mode === 'open') {
     allow['*'] = []

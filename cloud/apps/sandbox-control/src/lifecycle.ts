@@ -210,7 +210,8 @@ export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: st
           via: 'forward',
           forwardURL: proxyUrl
         },
-        // Model API keys swapped at egress (phase 2); each host also ends in the 403 deny rule.
+        // Model API keys swapped at egress (phase 2); each host also ends in the 403 deny rule, except a
+        // host whose client sends its own short-lived token on later calls (Cursor).
         ...egressSecretHosts(row).flatMap((entry) =>
           Object.entries(entry.headers).map(
             ([header, format]): CredentialRoute => ({
@@ -218,7 +219,8 @@ export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: st
               header,
               placeholders: [format(secretPlaceholder(row, entry.secret))],
               via: 'forward',
-              forwardURL: proxyUrl
+              forwardURL: proxyUrl,
+              ...(entry.allowUnclaimed ? { allowUnclaimed: true } : {})
             })
           )
         )

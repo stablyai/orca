@@ -1,10 +1,11 @@
 // Model API keys kept out of the VM: the session env carries a placeholder, and the egress proxy
 // swaps in the real key only on the host that credential is for (api.anthropic.com,
-// api.openai.com, ai-gateway.vercel.sh or a custom provider base URL). Node clients (Claude Code,
+// api.openai.com, ai-gateway.vercel.sh, generativelanguage.googleapis.com, api2.cursor.sh or a custom
+// provider base URL). Node clients (Claude Code,
 // Codex) hang under Vercel transform rules, so these hosts always take the forwardURL path through
 // /v1/egress/proxy, the same path api.github.com uses. Placeholders are not secrets: the proxy
 // authenticates the sandbox by Vercel's OIDC token, the placeholder only marks which header to swap.
-import { credentialTargets, type CredentialTarget, type ValueScopes } from './provider-env'
+import { SWAPPED_CREDENTIALS, credentialShape, credentialTargets, type CredentialTarget, type ValueScopes } from './provider-env'
 import type { SandboxRow } from './store'
 
 export type SecretEgressHost = CredentialTarget
@@ -31,17 +32,12 @@ export function egressSecretHosts(row: Pick<SandboxRow, 'egress_secret_hosts'>):
       recorded[secret] = host
     }
   }
-  // Header shapes come from the code, never from the row. The base URL value is only used to
-  // pick the default-vs-custom host, and the recorded host is what was allowlisted at boot.
-  const shapes = credentialTargets({
-    ANTHROPIC_API_KEY: 'x',
-    ANTHROPIC_AUTH_TOKEN: 'x',
-    AI_GATEWAY_API_KEY: 'x',
-    OPENAI_API_KEY: 'x'
-  })
-  return shapes.flatMap((shape) => {
-    const host = recorded[shape.secret]
-    return host ? [{ ...shape, host }] : []
+  // Header shapes and policies come from the code, never from the row. The base URL value is only
+  // used to pick the default-vs-custom host, and the recorded host is what was allowlisted at boot.
+  return SWAPPED_CREDENTIALS.flatMap((secret) => {
+    const host = recorded[secret]
+    const shape = host ? credentialShape(secret) : null
+    return host && shape ? [{ ...shape, host }] : []
   })
 }
 

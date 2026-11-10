@@ -2,10 +2,12 @@
 // $ORCA_USER_DATA/cli/bin/orca (same user, local socket, no pairing). The command line is fixed;
 // user text only ever travels as a separate argv entry, never through a shell.
 import { z } from 'zod'
+import { ORCA_CLOUD_IMAGE_AGENTS } from '../../../../../src/shared/hosted-sandbox/orca-cloud-image-agents'
 import type { SandboxProviderApi } from '../sandbox-provider'
 
 export const PROJECT_ROOT = '/vercel/sandbox/project'
-export const AGENTS = ['claude', 'codex'] as const
+/** The agent CLIs the golden image ships; the API launches exactly these. */
+export const AGENTS = ORCA_CLOUD_IMAGE_AGENTS
 export type AgentId = (typeof AGENTS)[number]
 
 /**
