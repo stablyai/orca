@@ -66,6 +66,7 @@ export function stageStructuredLaunchPrompt(
     attachments?: LaunchMessage['attachments']
     skills?: LaunchMessage['skills']
     prepare?: StructuredLaunchPromptOptions['preparePrompt']
+    delivery?: StructuredAgentSessionSendInput['delivery']
   } = {}
 ): StagedStructuredLaunchPrompt {
   let discard = (): void => {}
@@ -76,11 +77,13 @@ export function stageStructuredLaunchPrompt(
   const whenCreateSettled = new Promise<StagedDelivery>((resolve) => {
     settleCreate = resolve
   })
+  // The send's host delivery mode, not the prompt's own `delivery` promise.
+  const { delivery: _sendDelivery, ...promptOptions } = options
   const prompt: StagedStructuredLaunchPrompt = {
     sessionId,
     text,
     slot: reserveStructuredAgentSessionSend({ sessionId, text, ...options }),
-    ...options,
+    ...promptOptions,
     whenDiscarded,
     discard,
     whenCreateSettled,
