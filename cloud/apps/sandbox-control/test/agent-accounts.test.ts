@@ -210,3 +210,34 @@ describe('D13 fails closed', () => {
     }
   })
 })
+
+describe('secrets saved while a sandbox boots', () => {
+  it('reach the session once it is running (the build-sheet Secrets row saves mid-boot)', async () => {
+    const { h, as, lastEnv } = await setup()
+    const mia = await as('mia')
+    // Save a Personal secret after the boot resolved its env but before the sandbox is running: the
+    // secret's own refresh skips a sandbox that isn't running yet.
+    const original = h.vercel.runCommand.bind(h.vercel)
+    let saved = false
+    h.vercel.runCommand = async (sessionId, params) => {
+      const isStart = params.command === START_COMMAND || params.args?.[1]?.endsWith(`exec ${START_COMMAND}`)
+      if (isStart && !saved) {
+        saved = true
+        await h.call('PUT', '/v1/secrets/personal/W6_BOOT_SAVE', { bearer: mia, body: { value: 'boot-race-value' } })
+      }
+      return original(sessionId, params)
+    }
+    await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
+    expect(saved).toBe(true)
+    expect(lastEnv(START_COMMAND).W6_BOOT_SAVE).toBeUndefined()
+    await vi.waitFor(() => expect(lastEnv(ENV_COMMAND).W6_BOOT_SAVE).toBe('boot-race-value'))
+  })
+
+  it('leave an unchanged session alone', async () => {
+    const { h, as } = await setup()
+    const mia = await as('mia')
+    await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(h.vercel.commands.filter((c) => c.command === ENV_COMMAND)).toHaveLength(0)
+  })
+})

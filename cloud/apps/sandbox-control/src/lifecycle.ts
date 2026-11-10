@@ -391,6 +391,13 @@ async function boot(
     await syncMemberGit(deps, running, state.session.id)
   }
   await deps.hooks?.afterBoot?.(running, state.session.id).catch(() => undefined)
+  // Secrets saved while this VM booted missed prep's env; re-check once it is running (env-refresh.ts).
+  const catchUp = import('./env-refresh')
+    .then(({ refreshIfEnvChanged }) => refreshIfEnvChanged(deps, running, prep.secrets.env))
+    .catch(() => undefined)
+  if (deps.background) {
+    deps.background(catchUp)
+  }
   return { row: running, connection, timings: options.timer.timings }
 }
 
