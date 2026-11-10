@@ -27,7 +27,7 @@ import { wslHostsGateOpen } from '../host-lifecycle/wsl-host-gate'
 import { isWslDriveUncConversionComplete } from './wsl-drive-unc-conversion-renderer'
 import { getHistoryRoot, listWslHistoryRoots } from '../../pty/history/terminal-history-paths'
 import { orchestrationDbFile } from '../../runtime/orchestration/db/orchestration-db-file'
-import { initializeJournalDomainDatabase } from '../../native-chat/agent-session-journal/database/journal-domain-database'
+import { journalDomainDatabasePath } from '../../native-chat/agent-session-journal/database/journal-domain-database'
 import { rewriteWslDriveUncState } from './wsl-drive-unc-state-rewrite'
 import { WSL_DRIVE_UNC_STATE_DISPOSITIONS } from '../../../shared/wsl-drive-unc-state-dispositions'
 
@@ -48,21 +48,21 @@ export type WslDriveUncConversionOutcome =
   /** The profile is converted; `store` failed and retries at the next startup. */
   | { migrationId: string; outcome: 'resuming'; store: string; detail: string }
 
-export function runWslDriveUncConversionsAtStartup(
+export async function runWslDriveUncConversionsAtStartup(
   deps: WslDriveUncConversionStartupDeps
-): WslDriveUncConversionOutcome[] {
-  return (
-    // Another profile's conversion waits, journaled, until that profile starts.
-    listWslDriveUncConversionsForProfile(deps.userDataPath, deps.profileId).map((record) =>
-      runOne(deps, record)
-    )
-  )
+): Promise<WslDriveUncConversionOutcome[]> {
+  const outcomes: WslDriveUncConversionOutcome[] = []
+  // Another profile's conversion waits, journaled, until that profile starts.
+  for (const record of listWslDriveUncConversionsForProfile(deps.userDataPath, deps.profileId)) {
+    outcomes.push(await runOne(deps, record))
+  }
+  return outcomes
 }
 
-function runOne(
+async function runOne(
   deps: WslDriveUncConversionStartupDeps,
   initial: WslDriveUncConversion
-): WslDriveUncConversionOutcome {
+): Promise<WslDriveUncConversionOutcome> {
   const { migrationId } = initial
   let record = initial
   if (record.phase === 'prepared') {
@@ -86,7 +86,7 @@ function runOne(
       continue
     }
     try {
-      store.run(worktreeIds)
+      await store.run(worktreeIds)
     } catch (error) {
       return { migrationId, outcome: 'resuming', store: store.id, detail: describe(error) }
     }
@@ -189,14 +189,13 @@ export async function runPendingWslDriveUncConversions(paths: {
     if (listWslDriveUncConversionsForProfile(paths.userDataPath, paths.profileId).length === 0) {
       return
     }
-    const chatJournalDatabasePath = await initializeJournalDomainDatabase(paths.profileUserDataPath)
-    lastOutcomes = runWslDriveUncConversionsAtStartup({
+    lastOutcomes = await runWslDriveUncConversionsAtStartup({
       ...paths,
       stores: wslDriveUncConversionStores({
         daemonHistoryDir: getHistoryRoot(),
         shellHistoryRoots: [getHistoryRoot(), ...listWslHistoryRoots()],
         orchestrationDatabasePath: orchestrationDbFile(paths.userDataPath),
-        chatJournalDatabasePath
+        chatJournalDatabasePath: journalDomainDatabasePath(paths.profileUserDataPath)
       })
     })
   } catch (error) {

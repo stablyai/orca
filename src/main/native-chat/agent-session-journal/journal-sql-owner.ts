@@ -174,9 +174,23 @@ export class JournalSqlOwner {
   private async finishClose(): Promise<void> {
     this.closing = true
     if (this.failure && !this.didExit) {
-      await this.worker.terminate()
+      try {
+        await this.worker.terminate()
+      } finally {
+        await this.exited.promise
+      }
     } else if (!this.didExit) {
-      await this.request({ type: 'close' })
+      try {
+        await this.request({ type: 'close' })
+      } catch (error) {
+        this.fault(error instanceof Error ? error : new Error(String(error)))
+        try {
+          await this.worker.terminate()
+        } finally {
+          await this.exited.promise
+        }
+        throw error
+      }
     }
     await this.exited.promise
   }

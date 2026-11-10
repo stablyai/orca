@@ -1,3 +1,4 @@
+import { rekeyWslDriveUncChats } from '../../wsl/filesystem/wsl-drive-unc-chat-rekey'
 import type { JournalForkStageOperation, JournalForkStageResult } from './journal-fork-stages'
 import { saveJournalDomainOutlineCache, type JournalOutlineCache } from './journal-domain-outline'
 import type Database from '../../sqlite/sync-database'
@@ -26,6 +27,7 @@ import type { JournalSqlStoredRecords } from './journal-sql-database-read'
 
 export type JournalSqlMaintenance =
   | { kind: 'records-install' }
+  | { kind: 'wsl-workspace-rekey'; worktreeIds: readonly (readonly [string, string])[] }
   | JournalForkStageOperation
   | { kind: 'outline-cache'; cache: JournalOutlineCache }
   | { kind: 'projection-state'; sessionId: string }
@@ -57,6 +59,8 @@ export function applyJournalSqlMaintenance(
   operation: JournalSqlMaintenance
 ): JournalSqlMaintenanceResult {
   switch (operation.kind) {
+    case 'wsl-workspace-rekey':
+      return rekeyWslDriveUncChats(db, operation.worktreeIds)
     case 'records-install': {
       const records = installAgentSessionStoreRows(db)
       return {

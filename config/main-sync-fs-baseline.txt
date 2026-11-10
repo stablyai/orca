@@ -313,7 +313,10 @@
 1 src/main/muse/hook-config-json.ts
 4 src/main/muse/hook-service.ts
 2 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
+8 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
+1 src/main/native-chat/agent-session-journal/journal-sql-reader-entry.ts
+1 src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts
 1 src/main/native-chat/host-readable-transcript-path.ts
 2 src/main/native-chat/wsl-transcript-fs-process-spawn.ts
 1 src/main/node-runtime/appimage-bundled-node-runtime.ts
@@ -560,7 +563,7 @@
 1 src/main/wsl/execution/wsl-interop-spawn-directory.ts
 1 src/main/wsl/execution/wsl-node-runtime-prefetch.ts
 3 src/main/wsl/filesystem/wsl-drive-project-new-default.ts
-10 src/main/wsl/filesystem/wsl-drive-unc-conversion-stores.ts
+9 src/main/wsl/filesystem/wsl-drive-unc-conversion-stores.ts
 2 src/main/wsl/host-lifecycle/wsl-host-automation-wake-store.ts
 4 src/main/wsl/host-lifecycle/wsl-host-e2e-fake-connector.ts
 1 src/main/wsl/host-lifecycle/wsl-host-early-wake.ts
