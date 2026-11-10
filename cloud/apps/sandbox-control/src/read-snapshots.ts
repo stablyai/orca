@@ -236,6 +236,8 @@ const VmOutputSchema = z
           .strict()
       )
       .max(MAX_READ_RECIPIENTS),
+    // The VM's own signature over the body; relayed untouched (devices verify and pin the signer).
+    signature: z.object({ publicKeyB64: B64_32, signatureB64: z.string().regex(/^[A-Za-z0-9+/]{86}==$/) }).strict().optional(),
     // Timing only: nothing about the plaintext's shape is logged here.
     stats: z.object({ collectMs: z.number().int().min(0).max(600_000) }).strict().optional()
   })
@@ -308,11 +310,19 @@ export async function captureReadSnapshot(deps: LifecycleDeps, row: SandboxRow, 
     deps.db.prepare('DELETE FROM read_snapshot_keys WHERE sandbox_id = ?').bind(row.id),
     deps.db
       .prepare(
-        `INSERT INTO read_snapshots (sandbox_id, snapshot_id, stored_at, bytes, nonce, ciphertext) VALUES (?, ?, ?, ?, ?, ?)
+        `INSERT INTO read_snapshots (sandbox_id, snapshot_id, stored_at, bytes, nonce, ciphertext, signature) VALUES (?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(sandbox_id) DO UPDATE SET snapshot_id = excluded.snapshot_id, stored_at = excluded.stored_at,
-           bytes = excluded.bytes, nonce = excluded.nonce, ciphertext = excluded.ciphertext`
+           bytes = excluded.bytes, nonce = excluded.nonce, ciphertext = excluded.ciphertext, signature = excluded.signature`
       )
-      .bind(row.id, snapshotId, now, parsed.ciphertextB64.length, parsed.nonceB64, parsed.ciphertextB64),
+      .bind(
+        row.id,
+        snapshotId,
+        now,
+        parsed.ciphertextB64.length,
+        parsed.nonceB64,
+        parsed.ciphertextB64,
+        parsed.signature ? JSON.stringify(parsed.signature) : null
+      ),
     ...parsed.recipients.map((r) =>
       deps.db
         .prepare(
@@ -340,6 +350,20 @@ export async function captureReadSnapshot(deps: LifecycleDeps, row: SandboxRow, 
     bytes: parsed.ciphertextB64.length,
     ...(parsed.stats ? { stats: parsed.stats } : {})
   })
+}
+
+const StoredSignatureSchema = z.object({ publicKeyB64: z.string(), signatureB64: z.string() }).strict()
+
+function signatureOf(stored: string | null): { signature?: z.infer<typeof StoredSignatureSchema> } {
+  if (!stored) {
+    return {}
+  }
+  try {
+    const parsed = StoredSignatureSchema.safeParse(JSON.parse(stored))
+    return parsed.success ? { signature: parsed.data } : {}
+  } catch {
+    return {}
+  }
 }
 
 /** For workspace views: when each workspace's snapshot was stored (only rows the caller can open). */
@@ -381,7 +405,7 @@ export async function getReadSnapshot(db: D1Database, caller: SandboxCaller, row
   const snapshot = await db
     .prepare('SELECT * FROM read_snapshots WHERE sandbox_id = ?')
     .bind(row.id)
-    .first<{ snapshot_id: string; stored_at: number; nonce: string; ciphertext: string }>()
+    .first<{ snapshot_id: string; stored_at: number; nonce: string; ciphertext: string; signature: string | null }>()
   if (!snapshot) {
     throw new ReadSnapshotRouteError('no_snapshot', 404)
   }
@@ -408,7 +432,8 @@ export async function getReadSnapshot(db: D1Database, caller: SandboxCaller, row
         ephemeralPublicKeyB64: wrapped.ephemeral_public_key,
         nonceB64: wrapped.nonce,
         wrappedKeyB64: wrapped.wrapped_key
-      }
+      },
+      ...signatureOf(snapshot.signature)
     }
   }
 }

@@ -40,6 +40,42 @@ function gcmSeal(key, nonce, plain, aad) {
   return Buffer.concat([cipher.update(plain), cipher.final(), cipher.getAuthTag()])
 }
 
+const SIG_INFO = 'orca-cloud-read-sig-v1'
+
+/**
+ * This VM's snapshot signing key (Ed25519), created once and kept on the VM's own disk (0600, never
+ * printed). Devices pin its public half per workspace, so a snapshot the control plane forged or
+ * swapped doesn't verify. Same file for the grant script, which hands the public half to pairing devices.
+ */
+function signingKey(stateDir) {
+  const file = path.join(stateDir, 'read-signing-key.pem')
+  let pem = null
+  try {
+    pem = fs.readFileSync(file, 'utf8')
+  } catch {}
+  if (!pem) {
+    fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 })
+    const fresh = crypto.generateKeyPairSync('ed25519').privateKey.export({ format: 'pem', type: 'pkcs8' })
+    try {
+      // wx: a concurrent first run keeps whichever key landed first.
+      fs.writeFileSync(file, fresh, { mode: 0o600, flag: 'wx' })
+    } catch {}
+    pem = fs.readFileSync(file, 'utf8')
+  }
+  const privateKey = crypto.createPrivateKey(pem)
+  const publicKeyB64 = Buffer.from(crypto.createPublicKey(privateKey).export({ format: 'jwk' }).x, 'base64url').toString('base64')
+  return { privateKey, publicKeyB64 }
+}
+
+/** Signs the sealed body: "orca-cloud-read-sig-v1:<ws>:<snap>:<nonceB64>:" || ciphertext bytes. */
+function sign(out, key) {
+  const message = Buffer.concat([
+    Buffer.from(`${SIG_INFO}:${out.workspaceId}:${out.snapshotId}:${out.nonceB64}:`),
+    Buffer.from(out.ciphertextB64, 'base64')
+  ])
+  return { publicKeyB64: key.publicKeyB64, signatureB64: crypto.sign(null, message, key.privateKey).toString('base64') }
+}
+
 /** Seals `payload` (an object) to every recipient; a malformed key is skipped, not fatal. */
 function seal(payload, recipients, workspaceId, snapshotId) {
   const scope = `${workspaceId}:${snapshotId}`
@@ -357,9 +393,16 @@ function fitToBudget(payload, maxBytes = MAX_PLAIN_BYTES) {
   return payload
 }
 
+const stateDir = path.join(process.env.HOME || '', '.orca-sandbox')
+
 async function main() {
   const started = Date.now()
   const env = process.env
+  if (process.argv[2] === '--signer-public-key') {
+    // For orca-sandbox-grant: pairing devices learn (and pin) this workspace's signer.
+    process.stdout.write(`${signingKey(stateDir).publicKeyB64}\n`)
+    return
+  }
   const snapshotId = env.ORCA_READ_SNAPSHOT_ID || ''
   const workspaceId = env.ORCA_READ_WORKSPACE_ID || ''
   if (!/^rsn_[0-9a-f]{24}$/.test(snapshotId) || !/^sbx_[0-9a-f]{24}$/.test(workspaceId)) {
@@ -393,12 +436,13 @@ async function main() {
     await gather(call, { workspaceId, snapshotId, reason: (env.ORCA_READ_REASON || 'sleep').slice(0, 20), now: Date.now(), deadline, listSessions: () => storedSessions(dataDir) })
   )
   const out = seal(payload, recipients, workspaceId, snapshotId)
+  out.signature = sign(out, signingKey(stateDir))
   // Timing only: counts and sizes would describe the plaintext to the control plane's logs.
   out.stats = { collectMs: Date.now() - started }
   process.stdout.write(`${JSON.stringify(out)}\n`)
 }
 
-module.exports = { seal, gather, fitToBudget, messagesOf, gitOf, prOf, rpc, storedSessions, liveAgents }
+module.exports = { seal, sign, signingKey, gather, fitToBudget, messagesOf, gitOf, prOf, rpc, storedSessions, liveAgents }
 
 if (require.main === module) {
   // A fixed message: an error text could carry workspace content into the control plane's logs.
