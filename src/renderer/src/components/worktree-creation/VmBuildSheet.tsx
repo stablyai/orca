@@ -1,4 +1,5 @@
 import React from 'react'
+import { openCloudWorkspacesHome } from '../cloud-workspaces/cloud-workspaces-home-nav'
 import { AlertTriangle, ChevronRight, CircleAlert, CircleCheck, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
@@ -8,6 +9,7 @@ import { useAppStore } from '@/store'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { resolveVmEnvironmentCheckDecision } from '@/lib/ephemeral-vm-environment-check-decision'
 import { openPlansPage } from '@/components/billing/plans/plans-page-store'
+import { ORCA_BILLING_OVERAGE_SECTION_ID } from '@/components/new-workspace/orca-cloud-run-target-access'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import { toast } from 'sonner'
 import type { EnvironmentSetupFailureContext } from '../../../../shared/environment-setup-agent-prompt'
@@ -28,6 +30,8 @@ import {
 import { deriveVmBuildSteps, isOrcaCloudBuild, type VmBuildStep } from './vm-build-steps'
 import { useMinimumRunningSteps } from './use-minimum-running-steps'
 import { useRetryAfterCloudSignIn } from './use-retry-after-cloud-sign-in'
+import { typedComposerPrompt } from './vm-build-composer-return'
+import { requestOrcaCloudAfterCheckout } from '@/lib/orca-cloud-after-checkout'
 import {
   connectOrcaCloudGitHub,
   orcaCloudRepoName,
@@ -84,6 +88,7 @@ export function VmBuildSheet({
   onCancel,
   onRetry,
   onDismiss,
+  onReturnToComposer,
   onEditRecipe,
   agentSignInRow,
   cloudAgentStep,
@@ -98,6 +103,8 @@ export function VmBuildSheet({
   onRetry: () => void
   /** Leaves the build; when a VM is still up the caller confirms before it is deleted. */
   onDismiss: () => void
+  /** Leaves a refused build for the composer with its prompt; `local` runs it on this computer. */
+  onReturnToComposer: (options: { local: boolean }) => void
   onEditRecipe: () => void
   /** Fixtures only: a fixed sign-in row in place of the live one. */
   agentSignInRow?: React.ReactNode
@@ -269,15 +276,33 @@ export function VmBuildSheet({
                   : onRetry,
               onEditRecipe,
               onOpenAnyway: () => resolveVmEnvironmentCheckDecision(creationId, 'open-anyway'),
-              onDismiss,
-              onSeePlans: () => openPlansPage('sandbox'),
+              // Nothing was created, so leaving a billing refusal hands the typed prompt back.
+              onDismiss:
+                isBillingFailure(failure) && typedComposerPrompt(entry).trim()
+                  ? () => onReturnToComposer({ local: false })
+                  : onDismiss,
+              onSeePlans: () => {
+                // Once paid, the plans dialog closes and retries this create.
+                requestOrcaCloudAfterCheckout({ kind: 'retry', creationId })
+                openPlansPage('sandbox')
+              },
+              onCreateLocally: () => onReturnToComposer({ local: true }),
               onOpenBilling: () => {
                 const store = useAppStore.getState()
-                store.openSettingsTarget({ pane: 'cloud-billing', repoId: null })
+                store.openSettingsTarget({
+                  pane: 'cloud-billing',
+                  repoId: null,
+                  // "Turn on overage" / "Raise spend cap" land on the overage card itself; the
+                  // payment notice is at the top of the section already.
+                  ...(failure?.kind === 'payment'
+                    ? {}
+                    : { sectionId: ORCA_BILLING_OVERAGE_SECTION_ID })
+                })
                 store.openSettingsPage()
               },
               onSignIn: signIn,
-              onShowWorkspaces: () => useAppStore.getState().setSidebarOpen(true),
+              // Your workspaces on Home, where you can put one to sleep or delete it.
+              onShowWorkspaces: () => openCloudWorkspacesHome(),
               onContactSupport: () => openAppHttpLink(SUPPORT_URL),
               onConnectGitHub: connectGitHub,
               onPushToGitHub: () => openAppHttpLink(PUSH_TO_GITHUB_URL)

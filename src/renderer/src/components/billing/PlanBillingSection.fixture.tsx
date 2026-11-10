@@ -77,6 +77,27 @@ export const overageCapReached = defineFixture({
   )
 })
 
+// Overage is off by default: out of included hours, running sandboxes go to sleep.
+export const hoursUsedOverageOff = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      result={{
+        status: 'ok',
+        entitlement: {
+          ...sampleTeam,
+          usedSeconds: sampleTeam.includedSeconds,
+          remainingIncludedSeconds: 0,
+          usageWarningPercent: 100,
+          canStartSandbox: false,
+          reason: 'included_hours_exhausted'
+        }
+      }}
+    />
+  )
+})
+
 export const pastDueMember = defineFixture({
   width: 600,
   render: () => (
@@ -127,8 +148,76 @@ export const suspendedAdmin = defineFixture({
   )
 })
 
-/** First read in Settings › Orca Cloud › Plan & billing: a placeholder, not an empty pane. */
-export const loadingFirstRead = defineFixture({
+/** First open of Settings › Orca Cloud › Plan & billing: the section holds its shape while billing answers. */
+export const loading = defineFixture({
   width: 600,
   render: () => <PlanBillingView {...handlers} loading result={null} />
+})
+
+/** Billing's 75% level: the early warning under the bar (still the neutral tone below 90%). */
+export const usageWarning75 = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      result={{
+        status: 'ok',
+        entitlement: {
+          ...sampleTeam,
+          usedSeconds: 92 * HOUR,
+          remainingIncludedSeconds: 28 * HOUR,
+          usageWarningPercent: 75
+        }
+      }}
+    />
+  )
+})
+
+/** Billing's 90% level: the bar turns to the warning tone; one hour left reads singular. */
+export const usageWarning90 = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      result={{
+        status: 'ok',
+        entitlement: {
+          ...sampleTeam,
+          usedSeconds: 119 * HOUR,
+          remainingIncludedSeconds: 1 * HOUR,
+          usageWarningPercent: 90,
+          overage: { ...sampleTeam.overage, optedIn: true, active: false }
+        }
+      }}
+    />
+  )
+})
+
+/** An admin types a cap above billing's maximum: the field says what the maximum is. */
+export const capTooHigh = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      result={{
+        status: 'ok',
+        entitlement: {
+          ...sampleTeam,
+          overage: { ...sampleTeam.overage, optedIn: true, active: true, spentCents: 400 }
+        }
+      }}
+    />
+  ),
+  interact: async (frame) => {
+    const input = frame.querySelector<HTMLInputElement>('input[inputmode="numeric"]')
+    if (!input) {
+      return
+    }
+    input.focus()
+    // React listens for native input events.
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    setValue?.call(input, '6000')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    await new Promise((resolve) => setTimeout(resolve, 100))
+  }
 })

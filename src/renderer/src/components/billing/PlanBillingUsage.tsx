@@ -11,7 +11,14 @@ import type {
   OrcaBillingOverageArgs
 } from '../../../../shared/orca-billing'
 import { formatHours, includedUsagePercent } from './plan-billing-format'
-import { formatCents } from './plans/plans-pricing'
+import {
+  includedUsageTone,
+  sandboxHoursLeftLine,
+  sandboxHoursOverLine,
+  usageWarningLine
+} from './plan-billing-usage-copy'
+import { formatCents, formatRateCents } from './plans/plans-pricing'
+import { capTooHighCopy } from './plan-billing-copy'
 import { ORCA_BILLING_OVERAGE_SECTION_ID } from '../new-workspace/orca-cloud-run-target-access'
 
 /** "Resets and renews Dec 2" when both land the same day (monthly); separate parts otherwise. */
@@ -55,6 +62,8 @@ export function UsageSummary({
   const locale = useIntlLocale()
   const date = (ms: number): string =>
     new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(ms)
+  const overLine = sandboxHoursOverLine(entitlement, t)
+  const warning = usageWarningLine(entitlement, t)
   return (
     <div className="space-y-2">
       <div className="flex items-baseline justify-between gap-3 text-xs">
@@ -68,51 +77,15 @@ export function UsageSummary({
             }
           )}
         </span>
-        <span className="text-muted-foreground">
-          {t('auto.components.billing.sandboxHoursLeft', '{{value0}} sandbox hours left', {
-            value0: formatHours(entitlement.remainingIncludedSeconds)
-          })}
-        </span>
+        <span className="text-muted-foreground">{sandboxHoursLeftLine(entitlement, t)}</span>
       </div>
       <Progress
         value={includedUsagePercent(entitlement)}
-        tone={
-          includedUsagePercent(entitlement) >= 100 && !entitlement.overage.optedIn
-            ? 'warning'
-            : 'default'
-        }
+        tone={includedUsageTone(entitlement)}
         aria-label={t('auto.components.billing.sandboxHoursUsedLabel', 'Sandbox hours used')}
       />
-      {entitlement.overageSeconds === 0 &&
-      entitlement.usedSeconds > entitlement.includedSeconds &&
-      entitlement.includedSeconds > 0 ? (
-        <p className="text-xs text-muted-foreground tabular-nums">
-          {t('auto.components.billing.sandboxHoursOver', '{{count}} sandbox hours over', {
-            count: Math.round((entitlement.usedSeconds - entitlement.includedSeconds) / 360) / 10,
-            defaultValue_one: '{{count}} sandbox hour over'
-          })}
-        </p>
-      ) : null}
-      {entitlement.overageSeconds > 0 ? (
-        <p className="text-xs text-muted-foreground tabular-nums">
-          {t('auto.components.billing.overageHoursOnly', '{{value0}} overage hours this month', {
-            value0: formatHours(entitlement.overageSeconds)
-          })}
-        </p>
-      ) : null}
-      {entitlement.usageWarningPercent !== null && entitlement.usageWarningPercent < 100 ? (
-        <p className="text-xs font-medium">
-          {entitlement.usageWarningPercent >= 100
-            ? t('auto.components.billing.warn100b', 'All of this month’s sandbox hours are used.')
-            : t(
-                'auto.components.billing.warnPercent2',
-                'You’ve used {{value0}}% of this month’s sandbox hours.',
-                {
-                  value0: String(entitlement.usageWarningPercent)
-                }
-              )}
-        </p>
-      ) : null}
+      {overLine ? <p className="text-xs text-muted-foreground tabular-nums">{overLine}</p> : null}
+      {warning ? <p className="text-xs font-medium">{warning}</p> : null}
       <p className="text-xs text-muted-foreground">{resetLine(entitlement, date, t)}</p>
     </div>
   )
@@ -158,21 +131,24 @@ export function OverageControls({
   }
   const optedIn = optimisticOn ?? overage.optedIn
   const parsedCap = Number(capDollars)
-  const capValid = capDollars.trim() !== '' && Number.isInteger(parsedCap) && parsedCap >= 0
+  const maxCapCents = entitlement.offers?.team.maxSpendCapCents ?? null
+  const capWhole = capDollars.trim() !== '' && Number.isInteger(parsedCap) && parsedCap >= 0
+  const capTooHigh = capWhole && maxCapCents !== null && parsedCap * 100 > maxCapCents
+  const capValid = capWhole && !capTooHigh
   const changed = capValid && capDollars.trim() !== savedDollars
   const paymentFailed = entitlement.payment.pastDueSince !== null
   const description = t(
-    'auto.components.billing.overageDescription5',
-    'Optional overage at {{value0}}/hour, up to a monthly spend cap you set ({{value1}} by default).',
+    'auto.components.billing.overageDescription7',
+    'Optional overage at {{rate}} per sandbox hour, billed by the minute, up to a monthly spend cap you set ({{cap}} by default).',
     {
-      value0: formatCents(overage.centsPerHour, locale),
-      value1: formatCents(entitlement.offers?.team.defaultSpendCapCents ?? 2500, locale)
+      rate: formatRateCents(overage.centsPerHour, locale),
+      cap: formatCents(entitlement.offers?.team.defaultSpendCapCents ?? 2500, locale)
     }
   )
   const descriptionOn = t(
-    'auto.components.billing.overageDescriptionOn2',
-    'Optional overage at {{value0}}/hour, up to a monthly spend cap you set.',
-    { value0: formatCents(overage.centsPerHour, locale) }
+    'auto.components.billing.overageDescriptionOn4',
+    'Optional overage at {{rate}} per sandbox hour, billed by the minute, up to a monthly spend cap you set.',
+    { rate: formatRateCents(overage.centsPerHour, locale) }
   )
   const capPercent =
     overage.spendCapCents > 0
@@ -279,13 +255,17 @@ export function OverageControls({
                 {t('auto.components.billing.capLabel2', 'Monthly spend cap')}
               </label>
               <div className="space-y-1">
-                <div className="flex w-32 items-center gap-1.5">
-                  <span aria-hidden className="text-sm text-muted-foreground">
+                <div className="relative w-32">
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-sm text-muted-foreground"
+                  >
                     $
                   </span>
                   <Input
                     id={capId}
                     inputMode="numeric"
+                    adornment="leading"
                     value={capDollars}
                     aria-invalid={!capValid || undefined}
                     aria-describedby={capValid ? undefined : capErrorId}
@@ -297,7 +277,9 @@ export function OverageControls({
                 </div>
                 {capValid ? null : (
                   <p id={capErrorId} className="text-xs text-destructive">
-                    {t('auto.components.billing.capInvalid', 'Enter a whole dollar amount.')}
+                    {capTooHigh && maxCapCents !== null
+                      ? capTooHighCopy(maxCapCents, locale, t)
+                      : t('auto.components.billing.capInvalid', 'Enter a whole dollar amount.')}
                   </p>
                 )}
               </div>
@@ -321,8 +303,8 @@ export function OverageControls({
               {capValid && entitlement.reason === 'overage_cap_reached' ? (
                 <p className="basis-full text-xs text-muted-foreground">
                   {t(
-                    'auto.components.billing.capReachedHint',
-                    'Raise the cap to keep starting sandboxes. Your files are safe.'
+                    'auto.components.billing.capReachedHint2',
+                    'Raise the cap to start sandboxes again. Your sandboxes are asleep, and your files are safe.'
                   )}
                 </p>
               ) : null}

@@ -10,6 +10,7 @@ type MockState = {
     { id: string; entityId: string; contentType: string; groupId: string }[]
   >
   ptyIdsByTabId: Record<string, string[]>
+  terminalLayoutsByTabId: Record<string, unknown>
   createTab: ReturnType<typeof vi.fn>
   closeTab: ReturnType<typeof vi.fn>
   setTabCustomTitle: ReturnType<typeof vi.fn>
@@ -69,7 +70,8 @@ vi.stubGlobal('window', new EventTarget())
 const { mergeRunActions, loadWorktreeRunActions } = await import('./run-action-config')
 const { startRunAction, stopRunAction, relaunchInterruptedRunActions, armRunActionRelaunch } =
   await import('./run-action-controller')
-const { installRunActionEvents, armAutoRunAfterSetup } = await import('./run-action-events')
+const { installRunActionEvents, armAutoRunAfterSetup, autoRunProvisionedWorkspaceOnce } =
+  await import('./run-action-events')
 const { getRunActionRun, resetRunActionRunsForTests } = await import('./run-actions-store')
 const { dispatchTerminalCommandFinishedEvent } =
   await import('@/hooks/terminal-command-finished-event')
@@ -90,6 +92,7 @@ function makeState(): MockState {
     tabsByWorktree: {},
     unifiedTabsByWorktree: {},
     ptyIdsByTabId: {},
+    terminalLayoutsByTabId: {},
     createTab: vi.fn((worktreeId: string) => {
       const tab = { id: `tab-${++nextTab}` }
       state.tabsByWorktree[worktreeId] = [...(state.tabsByWorktree[worktreeId] ?? []), tab]
@@ -226,6 +229,25 @@ describe('run actions', () => {
     expect(getRunActionRun(WT_B, 'web')?.status).toBe('running')
   })
 
+  it('nonconcurrent leaves the project’s other actions running, here and elsewhere', async () => {
+    const worker: OrcaRunAction = { id: 'worker', name: 'Worker', command: 'pnpm worker' }
+    mocks.checkRuntimeHooks.mockResolvedValue({
+      status: 'ok',
+      hooks: { scripts: { run: [web, worker], runMode: 'nonconcurrent' } }
+    })
+    await startRunAction(WT_A, web, config([web, worker], 'nonconcurrent'))
+    await startRunAction(WT_B, worker, config([web, worker], 'nonconcurrent'))
+    const starting = startRunAction(WT_A, worker, config([web, worker], 'nonconcurrent'))
+    await vi.advanceTimersByTimeAsync(0)
+    // Only the same action in the other workspace is interrupted.
+    expect(mocks.sendRuntimePtyInput).toHaveBeenCalledTimes(1)
+    expect(getRunActionRun(WT_B, 'worker')?.status).toBe('stopping')
+    dispatchTerminalCommandFinishedEvent(WT_B, 130, getRunActionRun(WT_B, 'worker')!.tabId)
+    await starting
+    expect(getRunActionRun(WT_A, 'web')?.status).toBe('running')
+    expect(getRunActionRun(WT_A, 'worker')?.status).toBe('running')
+  })
+
   it('concurrent leaves other workspaces running', async () => {
     await startRunAction(WT_A, web, config([web]))
     await startRunAction(WT_B, web, config([web]))
@@ -303,6 +325,73 @@ describe('run actions', () => {
     expect(await startRunAction(WT_B, web, config([web]))).toBe(false)
   })
 
+  it('a command finishing in a split of the run tab does not end the run', async () => {
+    await startRunAction(WT_A, web, config([web]))
+    const { tabId } = getRunActionRun(WT_A, 'web')!
+    const L1 = '11111111-1111-4111-8111-111111111111'
+    const L2 = '22222222-2222-4222-8222-222222222222'
+    const notifyLayouts = (): void => {
+      for (const listener of mocks.subscribers) {
+        listener(state, { tabsByWorktree: state.tabsByWorktree, terminalLayoutsByTabId: {} })
+      }
+    }
+    state.terminalLayoutsByTabId = { [tabId]: { root: { type: 'leaf', leafId: L1 } } }
+    notifyLayouts()
+    expect(getRunActionRun(WT_A, 'web')?.leafId).toBe(L1)
+    state.terminalLayoutsByTabId = {
+      [tabId]: {
+        root: {
+          type: 'split',
+          direction: 'vertical',
+          first: { type: 'leaf', leafId: L1 },
+          second: { type: 'leaf', leafId: L2 }
+        }
+      }
+    }
+    notifyLayouts()
+    dispatchTerminalCommandFinishedEvent(WT_A, 0, tabId, L2)
+    expect(getRunActionRun(WT_A, 'web')?.status).toBe('running')
+    dispatchTerminalCommandFinishedEvent(WT_A, 1, tabId, L1)
+    expect(getRunActionRun(WT_A, 'web')).toMatchObject({ status: 'failed', exitCode: 1 })
+  })
+
+  it('ignores a pane it cannot attribute while the tab has several panes', async () => {
+    await startRunAction(WT_A, web, config([web]))
+    const { tabId } = getRunActionRun(WT_A, 'web')!
+    state.terminalLayoutsByTabId = {
+      [tabId]: {
+        root: {
+          type: 'split',
+          direction: 'vertical',
+          first: { type: 'leaf', leafId: '11111111-1111-4111-8111-111111111111' },
+          second: { type: 'leaf', leafId: '22222222-2222-4222-8222-222222222222' }
+        }
+      }
+    }
+    dispatchTerminalCommandFinishedEvent(WT_A, 0, tabId, '22222222-2222-4222-8222-222222222222')
+    expect(getRunActionRun(WT_A, 'web')?.status).toBe('running')
+  })
+
+  it('auto-runs once on first open when the host ran setup in the environment build', async () => {
+    const storage = new Map<string, string>()
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => void storage.set(key, value)
+    })
+    try {
+      const provisioned = { ...config([web]), setupProvisioned: true as const }
+      provisioned.scripts = { ...provisioned.scripts, autoRunAfterSetup: true }
+      expect(await autoRunProvisionedWorkspaceOnce(WT_A, provisioned)).toBe(true)
+      expect(getRunActionRun(WT_A, 'web')?.status).toBe('running')
+      dispatchTerminalCommandFinishedEvent(WT_A, 0, getRunActionRun(WT_A, 'web')!.tabId)
+      expect(await autoRunProvisionedWorkspaceOnce(WT_A, provisioned)).toBe(false)
+      const notProvisioned = { ...provisioned, setupProvisioned: undefined }
+      expect(await autoRunProvisionedWorkspaceOnce(WT_B, notProvisioned)).toBe(false)
+    } finally {
+      vi.stubGlobal('localStorage', undefined)
+    }
+  })
+
   it('auto-runs the default action once setup succeeds, not when it fails', async () => {
     mocks.checkRuntimeHooks.mockResolvedValue({
       status: 'ok',
@@ -318,14 +407,42 @@ describe('run actions', () => {
     expect(getRunActionRun(WT_A, 'web')?.status).toBe('running')
   })
 
-  it('forgets a run when its terminal is closed', async () => {
+  it('forgets a run only when its terminal is still gone after the tab list settles', async () => {
     await startRunAction(WT_A, web, config([web]))
-    const previous = { tabsByWorktree: { ...state.tabsByWorktree } }
-    state.tabsByWorktree = { [WT_A]: [] }
-    for (const listener of mocks.subscribers) {
-      listener(state, previous)
+    const { tabId } = getRunActionRun(WT_A, 'web')!
+    const notify = (): void => {
+      const previous = { tabsByWorktree: {} }
+      for (const listener of mocks.subscribers) {
+        listener(state, previous)
+      }
     }
+    // A window reload briefly shows an empty list, then the tab comes back: keep the run.
+    const kept = state.tabsByWorktree[WT_A]
+    state.tabsByWorktree = { [WT_A]: [] }
+    notify()
+    state.tabsByWorktree = { [WT_A]: kept }
+    await vi.advanceTimersByTimeAsync(16_000)
+    expect(getRunActionRun(WT_A, 'web')?.tabId).toBe(tabId)
+    // Really closed: gone after the settle delay.
+    state.tabsByWorktree = { [WT_A]: [] }
+    notify()
+    await vi.advanceTimersByTimeAsync(3_500)
     expect(getRunActionRun(WT_A, 'web')).toBeNull()
+  })
+
+  it('follows a run whose tab a remote host adopted under a web-terminal- id', async () => {
+    await startRunAction(WT_A, web, config([web]))
+    const { tabId } = getRunActionRun(WT_A, 'web')!
+    const adopted = `web-terminal-${tabId}`
+    state.tabsByWorktree = { [WT_A]: [{ id: adopted }] }
+    state.ptyIdsByTabId[adopted] = ['pty-adopted']
+    for (const listener of mocks.subscribers) {
+      listener(state, { tabsByWorktree: {} })
+    }
+    await vi.advanceTimersByTimeAsync(16_000)
+    expect(getRunActionRun(WT_A, 'web')?.status).toBe('running')
+    dispatchTerminalCommandFinishedEvent(WT_A, 2, adopted)
+    expect(getRunActionRun(WT_A, 'web')).toMatchObject({ status: 'failed', exitCode: 2 })
   })
 
   it('merges local actions over orca.yaml ones and filters by host', async () => {

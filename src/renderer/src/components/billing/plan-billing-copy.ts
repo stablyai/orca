@@ -5,6 +5,7 @@ import type {
   OrcaBillingOpenResult,
   OrcaBillingOverageResult
 } from '../../../../shared/orca-billing'
+import { formatCents } from './plans/plans-pricing'
 
 export function denyReasonCopy(
   reason: OrcaBillingDenyReason,
@@ -47,22 +48,22 @@ export function denyReasonCopy(
     case 'included_hours_exhausted':
       return canManage
         ? t(
-            'auto.components.billing.reasonExhausted3',
-            'Out of sandbox hours for this month. Turn on overage to keep starting sandboxes. Your files are safe.'
+            'auto.components.billing.reasonExhausted4',
+            'Out of sandbox hours for this month. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Turn on overage to start sandboxes again.'
           )
         : t(
-            'auto.components.billing.reasonExhaustedMember2',
-            'Out of sandbox hours for this month. Ask an owner or admin to add hours. Your files are safe.'
+            'auto.components.billing.reasonExhaustedMember3',
+            'Out of sandbox hours for this month. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Ask an owner or admin to add hours.'
           )
     case 'overage_cap_reached':
       return canManage
         ? t(
-            'auto.components.billing.reasonCapAdmin2',
-            'Spend cap reached. Raise the monthly spend cap to keep starting sandboxes. Your files are safe.'
+            'auto.components.billing.reasonCapAdmin3',
+            'Spend cap reached. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Raise the monthly spend cap to start sandboxes again.'
           )
         : t(
-            'auto.components.billing.reasonCapMember3',
-            'Spend cap reached. Ask an owner or admin to raise the spend cap. Your files are safe.'
+            'auto.components.billing.reasonCapMember4',
+            'Spend cap reached. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Ask an owner or admin to raise the spend cap.'
           )
   }
 }
@@ -113,12 +114,27 @@ export function openFailureCopy(result: OrcaBillingOpenResult, t: Translate): st
   }
 }
 
-export function overageFailureCopy(result: OrcaBillingOverageResult, t: Translate): string | null {
+/** "The spend cap can be at most $5,000." */
+export function capTooHighCopy(maxCents: number, locale: string, t: Translate): string {
+  return t('auto.components.billing.capAtMost', 'The spend cap can be at most {{max}}.', {
+    max: formatCents(maxCents, locale)
+  })
+}
+
+export function overageFailureCopy(
+  result: OrcaBillingOverageResult,
+  t: Translate,
+  /** The service's highest allowed cap; null from older services that don't send it. */
+  maxCapCents: number | null = null,
+  locale = 'en-US'
+): string | null {
   switch (result.status) {
     case 'ok':
       return null
     case 'cap-too-high':
-      return t('auto.components.billing.capTooHigh', 'That spend cap is above the allowed maximum.')
+      return maxCapCents === null
+        ? t('auto.components.billing.capTooHigh', 'That spend cap is above the allowed maximum.')
+        : capTooHighCopy(maxCapCents, locale, t)
     case 'no-subscription':
       return t('auto.components.billing.overageNoPlan', 'Overage needs an active plan.')
     case 'forbidden':

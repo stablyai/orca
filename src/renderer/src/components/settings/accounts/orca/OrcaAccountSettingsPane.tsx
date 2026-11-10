@@ -24,7 +24,7 @@ function accountStatusCopy(
   if (state === 'reconnect-required') {
     return t(
       'auto.components.settings.orcaAccount.reconnectRequired',
-      'Your session expired. Sign in again to use cloud features.'
+      'Your session expired. Sign in again to use Orca Cloud.'
     )
   }
   if (state === 'unconfigured') {
@@ -36,7 +36,7 @@ function accountStatusCopy(
   if (state === 'local') {
     return t(
       'auto.components.settings.orcaAccount.signedOut',
-      'Sign in to extend Orca with cloud features, including Artifacts and Orca Relay.'
+      'Sign in to use Orca Cloud, Artifacts and Orca Relay.'
     )
   }
   return t('auto.components.settings.orcaAccount.checking', 'Checking account status…')

@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import { checkRuntimeHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '@/store/types'
 import type { OrcaHooks, OrcaRunAction } from '../../../../shared/orca-yaml-hook-types'
 import {
@@ -20,6 +21,8 @@ export type WorktreeRunActions = {
   scripts: OrcaRunScripts
   /** Ids defined by the shared orca.yaml (they need the user's approval before running). */
   sharedIds: ReadonlySet<string>
+  /** The host prepared the checkout itself (setup ran in an environment build, not a Setup tab). */
+  setupProvisioned?: true
 }
 
 export type RunActionTarget = {
@@ -34,7 +37,12 @@ export function resolveRunActionTarget(
   state: AppState,
   worktreeId: string
 ): RunActionTarget | null {
-  const worktree = findWorktreeById(state, worktreeId)
+  // The active-host hint can disagree for remote workspaces; fall back to the catalog row itself.
+  const worktree =
+    findWorktreeById(state, worktreeId) ??
+    Object.values(selectWorktreesByRepo(state) ?? {})
+      .flat()
+      .find((candidate) => candidate.id === worktreeId)
   if (!worktree) {
     return null
   }
@@ -90,13 +98,20 @@ export async function loadWorktreeRunActions(
   }
   const repo = state.repos.find((candidate) => candidate.id === target.repoId)
   let shared: OrcaHooks['scripts'] | undefined
+  let setupProvisioned = false
   try {
     const result = await checkRuntimeHooks(target.hostId, target.repoId, options)
     shared = result.status === 'error' ? undefined : (result.hooks?.scripts ?? undefined)
+    setupProvisioned = result.environmentProvisioned === true
   } catch {
     shared = undefined
   }
-  return mergeRunActions(shared, repo?.hookSettings?.scripts, target.isLocal ? 'local' : 'remote')
+  const merged = mergeRunActions(
+    shared,
+    repo?.hookSettings?.scripts,
+    target.isLocal ? 'local' : 'remote'
+  )
+  return setupProvisioned ? { ...merged, setupProvisioned: true } : merged
 }
 
 /** The action the Run button and shortcut act on: the last one still running here, else the default. */
@@ -115,4 +130,27 @@ export function pickPrimaryRunAction(
     ? actions.find((action) => action.id === latestLive.actionId)
     : undefined
   return liveAction ?? pickDefaultRunAction(actions)
+}
+
+const RELAUNCH_RETRY_DELAYS_MS = [0, 3_000, 6_000, 12_000, 24_000, 48_000]
+const RELAUNCH_ATTEMPT_TIMEOUT_MS = 10_000
+
+/** A host that just restarted may not serve repo reads yet; give it a little while to answer. */
+export async function loadRunActionsOnceHostAnswers(
+  worktreeId: string
+): Promise<WorktreeRunActions | null> {
+  for (const delayMs of RELAUNCH_RETRY_DELAYS_MS) {
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+    // A read queued behind a reconnecting host can hang; bound each attempt and try again.
+    const config = await Promise.race([
+      loadWorktreeRunActions(worktreeId, { background: true }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), RELAUNCH_ATTEMPT_TIMEOUT_MS))
+    ])
+    if (config && config.actions.length > 0) {
+      return config
+    }
+  }
+  return null
 }

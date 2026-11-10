@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // DEV deployment of the environment build runner. Deploy it BEFORE the control plane:
+  //   wrangler deploy -c wrangler.build-runner.dev.jsonc
+  // It hosts the EnvironmentBuildRunner Durable Object, which the control plane (wrangler.dev.jsonc)
+  // binds with script_name. Cloudflare generates no preview URLs for a Worker that implements a Durable
+  // Object, so the class lives here and the control plane keeps its preview aliases. The runner only
+  // keeps alarms: every build step runs in the control plane over the CONTROL RPC binding (BuildTicker
+  // in src/index.ts), so it has no D1, no vars and no secrets. See src/build-runner.ts.
+  "name": "orca-sandbox-build-runner-dev",
+  "main": "src/build-runner.ts",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": false,
+  "preview_urls": false,
+  "services": [{ "binding": "CONTROL", "service": "orca-sandbox-control-dev", "entrypoint": "BuildTicker" }],
+  "migrations": [{ "tag": "env-build-runner-v1", "new_sqlite_classes": ["EnvironmentBuildRunner"] }]
+}

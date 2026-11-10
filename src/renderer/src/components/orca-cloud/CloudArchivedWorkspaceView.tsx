@@ -244,8 +244,12 @@ export function CloudArchivedWorkspaceView({
               'orcaCloudWorkspace.archived.loadFailed',
               'Couldn’t load the archive details.'
             )}
-            detail={load.message}
-            retryLabel={t('orcaCloudWorkspace.retry', 'Retry')}
+            // The raw reason stays out of the card; the plain line says what matters.
+            detail={t(
+              'orcaCloudWorkspace.archived.loadFailedDetail',
+              'Your files are safe in the archive.'
+            )}
+            retryLabel={t('orcaCloudWorkspace.tryAgain', 'Try again')}
             onRetry={onRetry}
           />
         ) : nothing ? (

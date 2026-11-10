@@ -1,11 +1,16 @@
 // User actions on an Orca Cloud workspace, with their toasts. Archive reuses the ordinary Sleep
 // flow (terminals and chats saved first) after a short undo window; unarchive and Wake reuse the
 // ordinary open-and-wake path, so every wake shows the same "Waking…" overlay.
+import { classifyEntitlementDenial } from '../../../../shared/orca-billing'
+import { getBillingSummary } from '../billing/billing-summary-store'
+import { describeError } from '../cloud-workspaces/cloud-workspace-errors'
 import { RotateCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow'
 import { openPlansPage } from '@/components/billing/plans/plans-page-store'
+import { signInAgainMessage } from '@/lib/orca-cloud/orca-sign-in-again'
+import { signInAgainToastAction } from '@/lib/orca-cloud/orca-sign-in-again-action'
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
 import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
 import {
@@ -25,16 +30,30 @@ function failureToast(title: string, result: CloudWorkspaceResult<null>): void {
     return
   }
   if (result.code === 'entitlement_denied') {
+    // The shared classifier: the actual reason (plan, hours, spend cap, payment, limits), and
+    // "See plans" only where buying fixes it and only for people who can (owner or admin).
+    const denial = classifyEntitlementDenial(result.reason)
+    const canFixWithPlans =
+      (denial === 'plan' || denial === 'hours') && getBillingSummary().canManageBilling
     toast.error(title, {
-      description: translate(
-        'orcaCloudWorkspace.error.noHours',
-        'You’re out of sandbox hours. Your files are safe.'
-      ),
-      action: {
-        label: translate('orcaCloudWorkspace.error.seePlans', 'See plans'),
-        onClick: () => openPlansPage('sandbox')
-      }
+      description: describeError('entitlement_denied', result.reason ?? undefined),
+      ...(canFixWithPlans
+        ? {
+            action: {
+              label: translate('orcaCloudWorkspace.error.seePlans', 'See plans'),
+              onClick: () => openPlansPage('sandbox')
+            }
+          }
+        : {})
     })
+    return
+  }
+  if (result.userMessage) {
+    toast.error(title, { description: result.userMessage })
+    return
+  }
+  if (result.code === 'unauthorized') {
+    toast.error(title, { description: signInAgainMessage(), action: signInAgainToastAction() })
     return
   }
   toast.error(title, {
@@ -44,9 +63,7 @@ function failureToast(title: string, result: CloudWorkspaceResult<null>): void {
             'orcaCloudWorkspace.error.unavailable',
             'Orca Cloud isn’t reachable right now. Try again in a moment.'
           )
-        : result.code === 'unauthorized'
-          ? translate('orcaCloudWorkspace.error.signIn', 'Sign in to Orca again, then try again.')
-          : translate('orcaCloudWorkspace.error.generic', 'Something went wrong. Try again.')
+        : translate('orcaCloudWorkspace.error.generic', 'Something went wrong. Try again.')
   })
 }
 
@@ -87,57 +104,61 @@ export async function runRestartCloudWorkspace(
 export const ARCHIVE_UNDO_MS = 5_000
 
 /**
- * Archive with a real undo: nothing happens for 5 s while the toast offers Undo; then the
- * workspace sleeps and is archived.
+ * Archive with a real undo: nothing happens for 5 s while the toast offers Undo; then `commit`
+ * runs. Used by the sidebar (sleep → archive) and the team list (control-plane archive).
  */
-export function runArchiveCloudWorkspace(
-  workspaceId: string,
-  options: { name?: string | null; undoMs?: number } = {}
-): Promise<void> {
+export function runArchiveWithUndo(
+  key: string,
+  options: {
+    name?: string | null
+    undoMs?: number
+    commit: () => Promise<CloudWorkspaceResult<null>>
+    /** False while the workspace is being deleted: its failure is not worth a toast. */
+    reportFailure?: () => boolean
+  }
+): Promise<boolean> {
   return new Promise((resolve) => {
     let undone = false
-    const toastId = `orca-cloud-archive:${workspaceId}`
+    const toastId = `orca-cloud-archive:${key}`
     const cancel = (): void => {
       undone = true
       clearTimeout(commit)
       toast.dismiss(toastId)
       unregister()
-      resolve()
+      resolve(false)
     }
     const commit = setTimeout(() => {
       unregister()
       toast.dismiss(toastId)
       if (undone) {
-        resolve()
+        resolve(false)
         return
       }
-      // A Delete that starts while this runs destroys the sandbox; its sleep and archive then fail
-      // for a workspace that is going away, which is not worth an error toast.
-      const sleep = (id: string): Promise<unknown> =>
-        isCloudWorkspaceDeleting(id) ? Promise.resolve() : runSleepWorktree(id)
-      void archiveCloudWorkspace(workspaceId, { sleep }).then((result) => {
-        if (!isCloudWorkspaceDeleting(workspaceId)) {
+      void options.commit().then((result) => {
+        if (options.reportFailure?.() ?? true) {
           failureToast(
-            translate('orcaCloudWorkspace.archiveFailed', 'Couldn’t archive the workspace'),
+            options.name
+              ? translate('orcaCloudWorkspace.archiveFailedNamed', 'Couldn’t archive {{name}}', {
+                  name: options.name
+                })
+              : translate('orcaCloudWorkspace.archiveFailed', 'Couldn’t archive the workspace'),
             result
           )
         }
-        resolve()
+        resolve(result.ok)
       })
     }, options.undoMs ?? ARCHIVE_UNDO_MS)
-    const unregister = registerQueuedCloudArchive(workspaceId, cancel)
+    const unregister = registerQueuedCloudArchive(key, cancel)
     toast(
       options.name
-        ? translate('orcaCloudWorkspace.archivingNamed', 'Archiving {{name}}…', {
-            name: options.name
-          })
-        : translate('orcaCloudWorkspace.archiving', 'Archiving workspace…'),
+        ? translate('orcaCloudWorkspace.archivedNamed', 'Archived {{name}}', { name: options.name })
+        : translate('orcaCloudWorkspace.archivedWorkspace', 'Archived the workspace'),
       {
         id: toastId,
         duration: options.undoMs ?? ARCHIVE_UNDO_MS,
         description: translate(
-          'orcaCloudWorkspace.archivingDetail',
-          'It stops and stays browsable: PRs, last changes and files.'
+          'orcaCloudWorkspace.archivedDetail',
+          'It goes to sleep and stays browsable: PRs, last changes and files.'
         ),
         action: {
           label: translate('orcaCloudWorkspace.undo', 'Undo'),
@@ -145,6 +166,22 @@ export function runArchiveCloudWorkspace(
         }
       }
     )
+  })
+}
+
+/** Sidebar archive: the ordinary Sleep, then the control-plane archive, behind the Undo toast. */
+export async function runArchiveCloudWorkspace(
+  workspaceId: string,
+  options: { name?: string | null; undoMs?: number } = {}
+): Promise<void> {
+  // A Delete that starts while this runs destroys the sandbox; its sleep and archive then fail
+  // for a workspace that is going away, which is not worth an error toast.
+  const sleep = (id: string): Promise<readonly { completed: boolean }[] | void> =>
+    isCloudWorkspaceDeleting(id) ? Promise.resolve() : runSleepWorktree(id)
+  await runArchiveWithUndo(workspaceId, {
+    ...options,
+    commit: () => archiveCloudWorkspace(workspaceId, { sleep }),
+    reportFailure: () => !isCloudWorkspaceDeleting(workspaceId)
   })
 }
 

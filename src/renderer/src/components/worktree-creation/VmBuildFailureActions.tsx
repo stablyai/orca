@@ -7,6 +7,7 @@ import {
   Loader2,
   LifeBuoy,
   LogIn,
+  Monitor,
   PanelLeft,
   Pencil,
   RotateCcw,
@@ -31,6 +32,8 @@ export type VmBuildFailureActions = {
   onDismiss: () => void
   onSeePlans: () => void
   onOpenBilling: () => void
+  /** Billing refusals: reopen the composer with the same prompt, on this computer. */
+  onCreateLocally: () => void
   onSignIn: () => void
   onShowWorkspaces: () => void
   onContactSupport: () => void
@@ -46,6 +49,8 @@ type Action = {
   disabled?: boolean
   /** In progress: stays focusable (aria-disabled + aria-busy) so keyboard focus isn't dropped. */
   pending?: boolean
+  /** Outline even when first: a way around the problem, not its fix. */
+  secondary?: boolean
 }
 
 /** At most two visible actions; the rest sit in a More menu so the way forward stays obvious. */
@@ -78,18 +83,34 @@ function failureActions(
     icon: <Pencil />,
     onClick: actions.onEditRecipe
   }
+  // Every billing refusal can still run the same prompt here instead of waiting on billing.
+  const createLocally: Action = {
+    key: 'local',
+    label: t(
+      'auto.components.worktree.creation.VmBuildFailureCard.useThisComputer',
+      'Use this computer instead'
+    ),
+    icon: <Monitor />,
+    onClick: actions.onCreateLocally,
+    secondary: true
+  }
   switch (failure.kind) {
     case 'plan':
-      return {
-        primary: [
-          {
-            key: 'plans',
-            label: t('auto.lib.orcaCloudSession.seePlans', 'See plans'),
-            onClick: actions.onSeePlans
+      // Members can't choose a plan; their card tells them who can.
+      return canManageBilling
+        ? {
+            primary: [
+              {
+                key: 'plans',
+                label: t('auto.lib.orcaCloudSession.seePlans', 'See plans'),
+                onClick: actions.onSeePlans
+              },
+              // Paying elsewhere (another device, the portal) is picked up by trying again.
+              tryAgain
+            ],
+            more: [createLocally]
           }
-        ],
-        more: []
-      }
+        : { primary: [createLocally], more: [] }
     case 'hoursUsed':
     case 'spendCap':
     case 'payment':
@@ -116,9 +137,10 @@ function failureActions(
                         ),
                 icon: <CreditCard />,
                 onClick: actions.onOpenBilling
-              }
+              },
+              createLocally
             ]
-          : [],
+          : [createLocally],
         more: []
       }
     case 'signIn':
@@ -139,7 +161,10 @@ function failureActions(
     case 'checks': {
       const retryChecks: Action = {
         key: 'retry',
-        label: t('auto.components.worktree.creation.VmBuildSheet.retryChecks', 'Retry checks'),
+        label: t(
+          'auto.components.worktree.creation.VmBuildSheet.runChecksAgain',
+          'Run checks again'
+        ),
         icon: <RotateCcw />,
         onClick: actions.onRetry
       }
@@ -158,16 +183,7 @@ function failureActions(
       return cloud
         ? { primary: [tryAgain], more: [] }
         : {
-            primary: [
-              fix,
-              {
-                ...tryAgain,
-                label: t(
-                  'auto.components.worktree.creation.WorktreeCreationPanel.34dd5ee38b',
-                  'Retry'
-                )
-              }
-            ],
+            primary: [fix, tryAgain],
             more: [editRecipe]
           }
     case 'concurrency':
@@ -288,7 +304,7 @@ export function FailureActionRow({
           key={action.key}
           type="button"
           size="xs"
-          variant={index === 0 ? 'default' : 'outline'}
+          variant={index === 0 && !action.secondary ? 'default' : 'outline'}
           onClick={action.pending ? undefined : action.onClick}
           disabled={action.disabled}
           aria-disabled={action.pending || undefined}

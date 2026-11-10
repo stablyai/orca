@@ -62,10 +62,15 @@ describe('orca cloud workspace store', () => {
     expect(bridge.getStatus).toHaveBeenCalledTimes(2)
   })
 
-  it('coalesces concurrent status reads and keeps the last good status on error', async () => {
+  it('coalesces concurrent status reads into one follow-up and keeps the last good status on error', async () => {
     const bridge = stubApi()
-    await Promise.all([refreshCloudWorkspaceStatus('a'), refreshCloudWorkspaceStatus('a')])
-    expect(bridge.getStatus).toHaveBeenCalledTimes(1)
+    // Three asks while one read is in flight: one follow-up read, not three.
+    await Promise.all([
+      refreshCloudWorkspaceStatus('a'),
+      refreshCloudWorkspaceStatus('a'),
+      refreshCloudWorkspaceStatus('a')
+    ])
+    expect(bridge.getStatus).toHaveBeenCalledTimes(2)
     bridge.getStatus = vi.fn(async () => ({
       ok: false as const,
       code: 'unavailable' as const,
@@ -91,6 +96,27 @@ describe('orca cloud workspace store', () => {
     expect(getCloudWorkspaceSnapshot().ids.has('a')).toBe(false)
   })
 
+  it('re-reads after an in-flight read that started before the wake finished (no stale Asleep)', async () => {
+    let release: () => void = () => {}
+    const states: HostedWorkspaceStatus['state'][] = ['sleeping', 'ready']
+    const bridge = stubApi({
+      getStatus: vi.fn(async () => {
+        const state = states.shift()!
+        if (state === 'sleeping') {
+          await new Promise<void>((resolve) => (release = resolve))
+        }
+        return ok({ ...ready, state })
+      })
+    })
+    const first = refreshCloudWorkspaceStatus('a')
+    // The wake becomes ready while the first (pre-wake) read is still out.
+    const afterWake = refreshCloudWorkspaceStatus('a')
+    release()
+    await Promise.all([first, afterWake])
+    expect(bridge.getStatus).toHaveBeenCalledTimes(2)
+    expect(getCloudWorkspaceSnapshot().status.a?.status?.state).toBe('ready')
+  })
+
   it('archives after the ordinary sleep, and marks pending while it runs', async () => {
     const bridge = stubApi()
     const order: string[] = []
@@ -101,6 +127,16 @@ describe('orca cloud workspace store', () => {
     bridge.archive = vi.fn(async () => (order.push('archive'), ok(null)))
     await archiveCloudWorkspace('a', { sleep })
     expect(order).toEqual(['sleep', 'archive'])
+    expect(getCloudWorkspaceSnapshot().pending.a).toBeUndefined()
+  })
+
+  it('does not archive when the sleep did not finish (the sandbox would keep running)', async () => {
+    const bridge = stubApi()
+    const result = await archiveCloudWorkspace('a', {
+      sleep: async () => [{ completed: false }]
+    })
+    expect(result).toMatchObject({ ok: false, code: 'failed' })
+    expect(bridge.archive).not.toHaveBeenCalled()
     expect(getCloudWorkspaceSnapshot().pending.a).toBeUndefined()
   })
 

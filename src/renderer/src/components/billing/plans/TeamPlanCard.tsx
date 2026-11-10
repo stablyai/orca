@@ -7,7 +7,12 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { OrcaBillingInterval, OrcaBillingOffers } from '../../../../../shared/orca-billing'
 import { PlanCardShell } from './PlanCardShell'
-import { formatCents, perSeatMonthlyCents, periodTotalCents } from './plans-pricing'
+import {
+  formatCents,
+  formatRateCents,
+  perSeatMonthlyCents,
+  periodTotalCents
+} from './plans-pricing'
 import { ORCA_CLOUD_SANDBOX_SPEC } from '../../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 
 export type TeamPlanCardMode = 'choose' | 'current' | 'locked'
@@ -65,11 +70,11 @@ export function TeamPlanCard({
     ),
     t('auto.components.billing.plans.featureReady', 'Ready in seconds, nothing to set up or host'),
     t(
-      'auto.components.billing.plans.featureOverage5',
-      'Optional overage at {{value0}}/hour, up to a monthly spend cap you set ({{value1}} by default)',
+      'auto.components.billing.plans.featureOverage7',
+      'Optional overage at {{rate}} per sandbox hour, billed by the minute, up to a monthly spend cap you set ({{cap}} by default)',
       {
-        value0: formatCents(team.overageCentsPerHour, locale),
-        value1: formatCents(team.defaultSpendCapCents, locale)
+        rate: formatRateCents(team.overageCentsPerHour, locale),
+        cap: formatCents(team.defaultSpendCapCents, locale)
       }
     )
   ]
@@ -130,11 +135,11 @@ export function TeamPlanCard({
         {total === null ? null : (
           <p className="text-sm font-medium tabular-nums" aria-live="polite">
             {interval === 'year'
-              ? t('auto.components.billing.plans.totalYear', '{{value0}} / year', {
-                  value0: formatCents(total, locale)
+              ? t('auto.components.billing.plans.totalPerYear', '{{total}} per year', {
+                  total: formatCents(total, locale)
                 })
-              : t('auto.components.billing.plans.totalMonth', '{{value0}} / month', {
-                  value0: formatCents(total, locale)
+              : t('auto.components.billing.plans.totalPerMonth', '{{total}} per month', {
+                  total: formatCents(total, locale)
                 })}
           </p>
         )}
@@ -150,7 +155,6 @@ export function TeamPlanCard({
           className="w-full"
           aria-disabled={busy || undefined}
           onClick={busy ? undefined : onCheckout}
-          data-plans-primary=""
         >
           {busy ? <LoadingSpinner /> : null}
           {busy
@@ -187,7 +191,6 @@ export function TeamPlanCard({
           className="w-full"
           aria-disabled={busy || undefined}
           onClick={busy ? undefined : onManage}
-          data-plans-primary=""
         >
           {t('auto.components.billing.manageBilling', 'Manage billing')}
           <ExternalLink />

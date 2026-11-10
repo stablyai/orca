@@ -12,9 +12,11 @@ import { InlineError } from '@/components/ui/inline-error'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useTranslate } from '@/i18n/use-translate'
+import { SignInAgainNotice } from '@/components/orca-cloud/SignInAgainButton'
 import { describeInlineError } from './cloud-workspace-errors'
+import { openCloudWorkspacesHome } from './cloud-workspaces-home-nav'
 
-/** The list failed to load. An expired session offers Sign in; anything else offers Retry. */
+/** The list failed to load. An expired session offers Sign in; anything else offers Try again. */
 export function ErrorState({
   error,
   reason,
@@ -29,18 +31,24 @@ export function ErrorState({
   onSignIn: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const signIn = error === 'unauthorized'
+  if (error === 'unauthorized') {
+    return <SignInAgainNotice className="m-1" onSignIn={onSignIn} />
+  }
+  // At the running-sandbox limit a retry can't help: show your workspaces so one can go to sleep.
+  const atLimit =
+    error === 'entitlement_denied' &&
+    (reason === 'concurrency_limit' || reason === 'member_concurrency_limit')
   return (
     <InlineError
       className="m-1"
       title={describeInlineError(error, reason, t)}
       retryLabel={
-        signIn
-          ? t('auto.components.cloudWorkspaces.signIn', 'Sign in')
-          : t('auto.components.cloudWorkspaces.retry', 'Retry')
+        atLimit
+          ? t('auto.components.cloudWorkspaces.showCloudWorkspaces', 'Show cloud workspaces')
+          : t('orcaCloudWorkspace.tryAgain', 'Try again')
       }
       retrying={retrying}
-      onRetry={signIn ? onSignIn : onRetry}
+      onRetry={atLimit ? () => openCloudWorkspacesHome() : onRetry}
     />
   )
 }

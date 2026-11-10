@@ -5,6 +5,7 @@ import { resolveHookCommandSourcePolicy } from '../../shared/hook-command-source
 import { getEffectiveHooksFromConfig } from './effective-hook-config'
 import { getHookRuntimeTarget, getHookWslContext } from './hook-runtime-target'
 import { getSetupEnvVars } from './setup-hook-env-vars'
+import { getWorkspacePortBlockForPath } from '../workspace-ports/workspace-port-block-registry'
 import { iterateLfScriptLines } from './setup-runner-script-text'
 import { promptGuardShellEnv } from '../git/command-runner/git-process-env'
 import { dropIncoherentCondaActivationEnv } from '../pty/shell-startup/conda-activation-env'
@@ -179,7 +180,15 @@ export function getSetupCommandSource(
   return null
 }
 
-export function runHook(
+export async function runHook(
+  ...args: Parameters<typeof runHookWithKnownPorts>
+): ReturnType<typeof runHookWithKnownPorts> {
+  // Hooks see the workspace's own port block, which may not exist yet if no terminal opened.
+  await getWorkspacePortBlockForPath(args[1]).catch(() => null)
+  return runHookWithKnownPorts(...args)
+}
+
+function runHookWithKnownPorts(
   hookName: 'setup' | 'archive',
   cwd: string,
   repo: Repo,

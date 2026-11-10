@@ -1,6 +1,8 @@
+import { Fragment } from 'react'
 import { CircleUserRound } from 'lucide-react'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useOrcaAccountKey } from '@/hooks/use-orca-account-key'
 import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
@@ -41,7 +43,7 @@ export function OrcaCloudSignedOutNotice(): React.JSX.Element {
           reconnect
             ? t(
                 'auto.components.settings.orcaAccount.reconnectRequired',
-                'Your session expired. Sign in again to use cloud features.'
+                'Your session expired. Sign in again to use Orca Cloud.'
               )
             : t(
                 'settings.orcaCloud.signedOut.body',
@@ -71,6 +73,8 @@ function OrcaCloudAccountGate({
 }): React.JSX.Element {
   const t = useTranslate()
   const authStatus = useAppStore((s) => s.orcaProfileAuthStatus)
+  // Team-scoped panes remount on a team switch so none of them shows the previous team's data.
+  const accountKey = useOrcaAccountKey()
   useOrcaProfileAuthStatusRefresh()
   if (!authStatus) {
     return (
@@ -87,7 +91,7 @@ function OrcaCloudAccountGate({
     return <OrcaCloudSignedOutNotice />
   }
   return (
-    <>
+    <Fragment key={accountKey}>
       {children({
         orgId: authStatus.cloud?.activeOrgId ?? null,
         orgName: authStatus.cloud?.activeOrgName ?? null,
@@ -95,7 +99,7 @@ function OrcaCloudAccountGate({
         billing: authStatus.capabilities?.flags?.billing === true,
         sandbox: authStatus.capabilities?.flags?.sandbox === true
       })}
-    </>
+    </Fragment>
   )
 }
 

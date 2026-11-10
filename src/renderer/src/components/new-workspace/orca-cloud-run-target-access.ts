@@ -5,6 +5,8 @@ import {
   cancelOrcaCloudSelectionAfterSignIn,
   requestOrcaCloudSelectionAfterSignIn
 } from '@/lib/orca-cloud-select-after-sign-in'
+import { requestOrcaCloudAfterCheckout } from '@/lib/orca-cloud-after-checkout'
+import { classifyEntitlementDenial } from '../../../../shared/orca-billing'
 
 /** Signing in from the row selects Orca Cloud once main offers it (the recipe list reloads). */
 function signInThenSelectOrcaCloud(): void {
@@ -20,23 +22,30 @@ function signInThenSelectOrcaCloud(): void {
     .catch(() => cancelOrcaCloudSelectionAfterSignIn(token))
 }
 
+/** Paying from the row returns to this composer with Orca Cloud picked (see PlansDialogHost). */
+function choosePlanThenSelectOrcaCloud(): void {
+  requestOrcaCloudAfterCheckout({ kind: 'composer' })
+  openPlansPage('sandbox')
+}
+
 /**
  * What the Run-on picker knows about the account's Orca Cloud access.
  * - `loading`: the first billing read is in flight; picking waits briefly for it.
  * - `unknown`: billing unreachable or not signed in to billing; picking proceeds and the build reports.
  * - `signed-out`: the build offers Orca Cloud but nobody is signed in; picking starts sign-in.
  * - `entitled`: can start a sandbox; `remainingSeconds` is the included time left this window.
- * - `no-plan`: no active Team subscription (`lapsed` when one existed); routes to the plans page.
+ * - `no-plan`: no active Team subscription (`lapsed` when one existed); routes owners/admins to the
+ *   plans page and, once paid, back to the composer with Orca Cloud picked.
  * - `out-of-hours`: included hours are spent (`cause: 'hours'`) or the overage cap is (`'cap'`).
  * - `payment-issue`: a failed payment blocks new starts.
- * Out-of-hours and payment issues are actionable only by owners/admins (`canManageBilling`).
+ * No plan, out-of-hours and payment issues are actionable only by owners/admins (`canManageBilling`).
  */
 export type OrcaCloudRunTargetAccess =
   | { state: 'loading' }
   | { state: 'unknown' }
   | { state: 'signed-out' }
   | { state: 'entitled'; remainingSeconds: number }
-  | { state: 'no-plan'; lapsed: boolean }
+  | { state: 'no-plan'; lapsed: boolean; canManageBilling: boolean }
   | { state: 'out-of-hours'; cause: 'hours' | 'cap'; canManageBilling: boolean }
   | { state: 'payment-issue'; canManageBilling: boolean }
 
@@ -54,19 +63,25 @@ export function toOrcaCloudRunTargetAccess(
     }
   }
   const { canManageBilling } = entitlement
-  switch (entitlement.reason) {
-    case 'included_hours_exhausted':
+  switch (classifyEntitlementDenial(entitlement.reason)) {
+    case 'hours':
       return { state: 'out-of-hours', cause: 'hours', canManageBilling }
-    case 'overage_cap_reached':
+    case 'spendCap':
       return { state: 'out-of-hours', cause: 'cap', canManageBilling }
-    case 'payment_past_due':
-    case 'payment_grace_expired':
+    case 'payment':
       return { state: 'payment-issue', canManageBilling }
-    case 'subscription_inactive':
-      return { state: 'no-plan', lapsed: true }
-    case 'no_subscription':
-    case null:
-      return { state: 'no-plan', lapsed: false }
+    // Billing's account answer never carries the start-gate reasons; anything else is no plan,
+    // which the plan fixes.
+    case 'plan':
+    case 'teamLimit':
+    case 'memberLimit':
+    case 'machineSize':
+    case 'other':
+      return {
+        state: 'no-plan',
+        lapsed: entitlement.reason === 'subscription_inactive',
+        canManageBilling
+      }
   }
 }
 
@@ -86,7 +101,9 @@ export function getOrcaCloudPick(access: OrcaCloudRunTargetAccess): OrcaCloudPic
     case 'signed-out':
       return { kind: 'act', run: signInThenSelectOrcaCloud }
     case 'no-plan':
-      return { kind: 'act', run: () => openPlansPage('sandbox') }
+      return access.canManageBilling
+        ? { kind: 'act', run: choosePlanThenSelectOrcaCloud }
+        : { kind: 'blocked' }
     case 'out-of-hours':
       return access.canManageBilling
         ? { kind: 'act', run: openOverageSettings }

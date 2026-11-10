@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Check, ClipboardPaste, KeyRound, Plus } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
+import { SignInAgainNotice } from '@/components/orca-cloud/SignInAgainButton'
+import { useAppStore } from '@/store/index'
 import type {
   CloudSecretView,
   CloudSecretsErrorCode
@@ -14,6 +16,7 @@ import { cloudSecretKindLabel, cloudSecretsErrorCopy } from './cloud-secrets-cop
 import { CloudSecretEditor, type CloudSecretEditorTarget } from './CloudSecretEditor'
 import { CloudApiEmptyState } from '../cloud-api/cloud-api-parts'
 import { CloudSecretsPasteEnv } from './CloudSecretsPasteEnv'
+import { CloudSecretVmBadge } from './CloudSecretVmBadge'
 import type { CloudSecretListModel } from './use-cloud-secrets'
 
 export type CloudSecretPeople = {
@@ -85,6 +88,7 @@ function SecretRow({
               {cloudSecretKindLabel(secret.name, t)}
             </Badge>
           ) : null}
+          <CloudSecretVmBadge name={secret.name} />
         </span>
         <span className="w-[9ch] shrink-0 font-mono text-xs whitespace-nowrap text-muted-foreground">
           <span aria-hidden>{maskedHint(secret.hint)}</span>
@@ -260,10 +264,15 @@ export function CloudSecretList({
   }
 
   if (model.list.status === 'failed') {
+    if (model.list.error === 'unauthorized') {
+      const signIn = (): void =>
+        void useAppStore.getState().connectCurrentOrcaProfile().then(model.reload)
+      return <SignInAgainNotice onSignIn={signIn} />
+    }
     return (
       <InlineError
         title={
-          model.list.error === 'unauthorized' || model.list.error === 'not_configured'
+          model.list.error === 'not_configured'
             ? cloudSecretsErrorCopy(model.list.error, t)
             : t('cloudSecrets.list.loadFailed', 'Couldn’t load secrets.')
         }

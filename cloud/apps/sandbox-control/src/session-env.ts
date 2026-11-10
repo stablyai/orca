@@ -2,8 +2,11 @@
 // presets filled in, and with egress placeholders on, model keys swapped for placeholders. The same
 // answer drives the egress allowlist and the proxy's credential routes, at boot and on refresh.
 import type { LifecycleDeps } from './lifecycle'
+import { agentModesFor, withoutSignInCredentials, type AgentMode } from './agent-sources'
+import { accountProvider } from './account-providers'
+import type { CredentialAgent } from './agent-credential-names'
 import { deriveProviderEnv, deriveProviderScopes, providerHosts } from './provider-env'
-import { applySecretPlaceholders, encodeEgressSecretHosts } from './secret-egress'
+import { applySecretPlaceholders, encodeAccountRoute, encodeEgressSecretHosts } from './secret-egress'
 import { resolveSandboxSecrets } from './secrets'
 import type { Keyring } from './secrets-crypto'
 import type { SandboxRow } from './store'
@@ -27,6 +30,8 @@ export async function resolvedProviderEnv(
   row: Pick<SandboxRow, 'id' | 'account_id' | 'user_id' | 'repo_url'>
 ): Promise<ProviderEnv> {
   const { env: stored, scopes } = await resolveSandboxSecrets(db, keyring, row)
+  // The proxy only needs the keys; dropping those of agents not on 'keep' happens at request time
+  // through the row's recorded routes (an 'account' agent has no key route left).
   const env = deriveProviderEnv(stored)
   return { env, scopes: deriveProviderScopes(stored, env, scopes) }
 }
@@ -62,6 +67,17 @@ export function forgetProviderEnv(sandboxId: string): void {
   }
 }
 
+function egressSwapOn(deps: Pick<LifecycleDeps, 'secrets' | 'config'>, row: Pick<SandboxRow, 'account_id'>): boolean {
+  const placeholders = deps.secrets?.egressPlaceholders
+  return (
+    !deps.secrets?.egressPlaceholdersOff?.has(row.account_id) &&
+    (placeholders === true || (placeholders instanceof Set && placeholders.has(row.account_id))) &&
+    Boolean(deps.config.egressProxyUrl)
+  )
+}
+
+export type { AgentMode }
+
 export async function sessionSecretEnv(
   deps: Pick<LifecycleDeps, 'db' | 'secrets' | 'config'>,
   row: SandboxRow
@@ -70,20 +86,40 @@ export async function sessionSecretEnv(
     return EMPTY
   }
   const { env: stored, scopes: storedScopes, skipped } = await resolveSandboxSecrets(deps.db, deps.secrets.keyring, row)
-  const env = deriveProviderEnv(stored)
+  const swap = egressSwapOn(deps, row)
+  const derived = deriveProviderEnv(stored)
+  // D10: per agent, the owner's account (placeholder), the kill-switch fallback, or the keys.
+  const modes = await agentModesFor(deps.db, row, derived, {
+    providerEnabled: deps.secrets.accountProviders ?? { claude: false, codex: false },
+    accountsUsable: swap,
+    now: Date.now(),
+    // Usable means decryptable now, not just stored: a token we can't open must not hold the session in account mode.
+    readable: async (agent) => {
+      const provider = accountProvider(agent)
+      return provider ? (await provider.credential(deps.db, deps.secrets!.keyring, row.user_id, Date.now())) !== null : false
+    }
+  })
+  const dropped = new Set((Object.keys(modes) as CredentialAgent[]).filter((agent) => modes[agent] !== 'keep'))
+  const env = withoutSignInCredentials(derived, dropped)
   const scopes = deriveProviderScopes(stored, env, storedScopes)
   const egressAllowHosts = providerHosts(env).join(',') || null
   // Counts only.
   console.log(JSON.stringify({ event: 'session_secrets', sandboxId: row.id, injected: Object.keys(env).length, skipped }))
-  const placeholders = deps.secrets.egressPlaceholders
-  const swap =
-    !deps.secrets.egressPlaceholdersOff?.has(row.account_id) &&
-    (placeholders === true || (placeholders instanceof Set && placeholders.has(row.account_id)))
-  if (!swap || !deps.config.egressProxyUrl) {
+  if (!swap) {
     return { env, egressSecretHosts: null, egressAllowHosts }
   }
   const swapped = applySecretPlaceholders(row, env, scopes)
-  return { env: swapped.env, egressSecretHosts: encodeEgressSecretHosts(swapped.targets), egressAllowHosts }
+  const accountEnv: Record<string, string> = {}
+  const accountRoutes: string[] = []
+  for (const agent of Object.keys(modes) as CredentialAgent[]) {
+    const provider = modes[agent] === 'account' ? accountProvider(agent) : undefined
+    if (provider) {
+      Object.assign(accountEnv, provider.sessionEnv(row))
+      accountRoutes.push(...provider.hosts.map((host) => encodeAccountRoute(agent, row.user_id, host)))
+    }
+  }
+  const secretHosts = [encodeEgressSecretHosts(swapped.targets), ...accountRoutes].filter(Boolean).join(',') || null
+  return { env: { ...swapped.env, ...accountEnv }, egressSecretHosts: secretHosts, egressAllowHosts }
 }
 
 /** Provider hosts from the session's secrets plus the workspace's declared tool hosts (MCP). */

@@ -55,7 +55,8 @@ const base: RunActionButtonViewProps = {
   onRun: noop,
   onStop: noop,
   onShowOutput: noop,
-  onOpenPorts: noop
+  onOpenPorts: noop,
+  onOpenPortInBrowser: noop
 }
 
 function Bar({ children }: { children: React.ReactNode }): React.JSX.Element {
@@ -67,7 +68,7 @@ function Bar({ children }: { children: React.ReactNode }): React.JSX.Element {
 }
 
 function openMenu(frame: HTMLElement): void {
-  const trigger = frame.querySelector<HTMLButtonElement>('button[aria-label="Run actions"]')
+  const trigger = frame.querySelector<HTMLButtonElement>('button[aria-label^="Run actions"]')
   trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
 }
 
@@ -120,4 +121,34 @@ export const singleLegacyAction = defineFixture({
       />
     </Bar>
   )
+})
+
+export const failed = defineFixture({
+  width: 420,
+  render: () => (
+    <Bar>
+      <RunActionButtonView
+        {...base}
+        runs={{ web: run(web, { status: 'failed', exitCode: 1 }) }}
+        announcement="Web failed"
+      />
+    </Bar>
+  ),
+  interact: openMenu
+})
+
+export const exited = defineFixture({
+  width: 420,
+  render: () => (
+    <Bar>
+      <RunActionButtonView
+        {...base}
+        runs={{
+          web: run(web, { status: 'exited', exitCode: 0 }),
+          worker: run(worker, { status: 'stopped' })
+        }}
+      />
+    </Bar>
+  ),
+  interact: openMenu
 })

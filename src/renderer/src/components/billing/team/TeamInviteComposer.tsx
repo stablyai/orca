@@ -77,8 +77,8 @@ function impactCopy(
       const price = formatCents(impact.perSeatPeriodCents, locale)
       const then =
         impact.interval === 'year'
-          ? t('auto.components.billing.team.perYear', '{{value0}}/year', { value0: price })
-          : t('auto.components.billing.team.perMonth', '{{value0}}/month', { value0: price })
+          ? t('auto.components.billing.team.totalPerYear', '{{total}} per year', { total: price })
+          : t('auto.components.billing.team.totalPerMonth', '{{total}} per month', { total: price })
       if (count === 1) {
         const first = candidates[0]!.email.split('@')[0] ?? candidates[0]!.email
         return t(

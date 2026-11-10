@@ -64,8 +64,8 @@ export type PlanCatalog = { team: TeamPlan; enterprise: EnterpriseOffer }
 export const DEFAULT_PLANS: PlanCatalog = {
   team: {
     label: 'Team',
-    monthlyPriceLabel: '$50/seat/mo',
-    annualPriceLabel: '$480/seat/yr',
+    monthlyPriceLabel: '$50 per seat per month',
+    annualPriceLabel: '$480 per seat, billed yearly',
     monthlyPriceCentsPerSeat: 5000,
     annualPriceCentsPerSeat: 48000,
     includedHoursPerSeat: 60,
@@ -74,11 +74,13 @@ export const DEFAULT_PLANS: PlanCatalog = {
     // Same constant the control plane enforces and serves (GET /v1/config); never a literal here.
     idleSleepMinutes: ORCA_CLOUD_IDLE_SLEEP_MINUTES,
     // Shared with the control plane's workspace cost; entitlements, the spend-cap math, the desktop and
-    // the e2e read it from here. STRIPE_PRICE_OVERAGE must be a metered price with this unit_amount.
+    // the e2e read it from here. STRIPE_PRICE_OVERAGE must be the metered per-minute price for this rate
+    // (unit_amount_decimal = overageUnitAmountDecimal(rate), transform_quantity divide_by 60, round up).
     overageCentsPerHour: ORCA_CLOUD_OVERAGE_CENTS_PER_HOUR,
     defaultSpendCapCents: 2500,
     maxSpendCapCents: 500_000,
-    warnAtPercent: [80, 100],
+    // Owners and admins are alerted at 75%, 90% and 100% of the team's sandbox hours.
+    warnAtPercent: [75, 90, 100],
     paymentGraceHours: 96,
     seatTrueDownHours: 6
   },
@@ -138,7 +140,8 @@ export function publicOffers(catalog: PlanCatalog) {
       concurrentSandboxesPerSeat: team.concurrentSandboxesPerSeat,
       idleSleepMinutes: team.idleSleepMinutes,
       overageCentsPerHour: team.overageCentsPerHour,
-      defaultSpendCapCents: team.defaultSpendCapCents
+      defaultSpendCapCents: team.defaultSpendCapCents,
+      maxSpendCapCents: team.maxSpendCapCents
     },
     enterprise: catalog.enterprise
   }
@@ -163,9 +166,31 @@ export function includedSeconds(team: TeamPlan, seats: number): number {
   return Math.round(team.includedHoursPerSeat * 3600) * Math.max(1, seats)
 }
 
-/** The spend cap expressed as overage seconds (what the meter counts). */
+// Overage is billed by the minute: the meter counts seconds, and the Stripe price divides the
+// period's total by 60 (rounding up) and charges overageCentsPerHour / 60 per minute. Metering in
+// seconds keeps every segment exact; only the invoice rounds, once per period, to a whole minute.
+export const OVERAGE_SECONDS_PER_BILLED_UNIT = 60
+/** Stripe allows at most 12 decimal places in unit_amount_decimal. */
+const STRIPE_DECIMAL_PLACES = 12
+
+/** The per-minute Stripe price (cents, as Stripe's unit_amount_decimal string) for an hourly rate. */
+export function overageUnitAmountDecimal(centsPerHour: number): string {
+  return (centsPerHour / (3600 / OVERAGE_SECONDS_PER_BILLED_UNIT)).toFixed(STRIPE_DECIMAL_PLACES)
+}
+
+/** What Stripe invoices for `seconds` of overage: whole minutes (rounded up) at the per-minute rate. */
+export function overageCents(team: TeamPlan, seconds: number): number {
+  const minutes = Math.ceil(Math.max(0, seconds) / OVERAGE_SECONDS_PER_BILLED_UNIT)
+  return Math.round(minutes * Number(overageUnitAmountDecimal(team.overageCentsPerHour)))
+}
+
+/**
+ * The spend cap expressed as overage seconds (what the meter counts): the whole minutes the cap
+ * pays for, so the invoice never goes over the cap after Stripe rounds up to the minute.
+ */
 export function capSeconds(team: TeamPlan, spendCapCents: number): number {
-  return Math.floor((spendCapCents / team.overageCentsPerHour) * 3600)
+  const minutes = Math.floor((spendCapCents * (3600 / OVERAGE_SECONDS_PER_BILLED_UNIT)) / team.overageCentsPerHour)
+  return minutes * OVERAGE_SECONDS_PER_BILLED_UNIT
 }
 
 function addUtcMonths(ms: number, months: number): number {

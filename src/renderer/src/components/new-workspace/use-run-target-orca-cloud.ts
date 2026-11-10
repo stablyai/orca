@@ -28,7 +28,8 @@ export function getRunTargetOrcaCloudOffer({
     case 'needs-sign-in':
       return override ?? { state: 'signed-out' }
     case 'needs-capability':
-      return override ?? { state: 'no-plan', lapsed: false }
+      // No billing read without the capability; unknown roles get the owner's way forward.
+      return override ?? { state: 'no-plan', lapsed: false, canManageBilling: true }
     case 'offered':
     case 'unavailable':
       return null
@@ -65,8 +66,15 @@ export function useRunTargetOrcaCloud({
   runBlockedAction: () => void
   select: (recipe: EphemeralVmRecipeOption | null) => void
 } {
-  const fetched = useOrcaCloudRunTargetAccess(!override && recipes.some(isOrcaCloudRecipe))
-  const access = offer ?? override ?? fetched
+  const fetched = useOrcaCloudRunTargetAccess(
+    !override && (recipes.some(isOrcaCloudRecipe) || offer?.state === 'no-plan')
+  )
+  // Without the capability the offer can't know the role; billing's answer can, so members are
+  // told to ask an owner or admin instead of being sent to plans they can't buy.
+  const access =
+    !override && offer?.state === 'no-plan' && fetched.state === 'no-plan'
+      ? fetched
+      : (offer ?? override ?? fetched)
   const [pending, setPending] = useState(false)
   const pickToken = useRef(0)
   const openRef = useRef(open)

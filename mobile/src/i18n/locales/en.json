@@ -1371,7 +1371,9 @@
       "child": "Child",
       "children_one": "{{count}} child",
       "children_other": "{{count}} children",
-      "unsavedName": "Unsaved name: {{name}}"
+      "unsavedName": "Unsaved name: {{name}}",
+      "cloudWorkspaceState": "Cloud workspace, {{state}}",
+      "cloudWorkspace": "Cloud workspace"
     },
     "accountsSnapshot": {
       "invalidSnapshot": "Invalid accounts snapshot from host"
@@ -4960,8 +4962,10 @@
       "otherPhones": "Other phones",
       "noOthers": "No other phones have access.",
       "lastUsed": "Last used {{date}}",
-      "removeLabel": "Remove {{device}}",
-      "disconnectThis": "Disconnect this phone"
+      "disconnectThis": "Disconnect this phone",
+      "deviceLabel": "{{device}}, last used {{date}}",
+      "removeHint": "Removes this phone’s access",
+      "deviceLabelConnected": "{{device}}, connected {{date}}"
     },
     "agent": {
       "label": "Agent"
@@ -5001,13 +5005,15 @@
     },
     "status": {
       "waking": "Waking",
-      "cantConnect": "Can’t connect",
       "archived": "Archived",
       "creating": "Starting",
       "running": "Running",
       "stopping": "Going to sleep",
       "sleeping": "Asleep",
-      "failed": "Couldn’t start"
+      "failed": "Couldn’t start",
+      "deleting": "Deleting",
+      "restarting": "Restarting",
+      "unresponsive": "Not responding"
     },
     "actions": {
       "sleep": "Sleep",
@@ -5039,17 +5045,23 @@
       "createUnknown": "Lost the connection while starting it. It may still appear in your list. Try again to pick it up.",
       "rateLimited": "Too many new workspaces at once. Wait a minute, then try again.",
       "create": "Couldn’t start your cloud workspace. Nothing was created, and you weren’t charged.",
-      "deliver": "The workspace is running, but a prompt didn’t start. Your files are safe."
+      "deliver": "The workspace is running, but a prompt didn’t start. Your files are safe.",
+      "restartOwner": "Only the workspace’s owner can restart it. Your files are safe."
     },
     "workspace": {
       "title": "Cloud workspace",
-      "missing": "This workspace is gone or you no longer have access."
+      "missing": "This workspace is gone or you no longer have access.",
+      "signIn": "Sign in to Orca Cloud on this phone",
+      "signInAction": "Sign in",
+      "unreachable": "Couldn’t reach Orca Cloud. Check your connection and try again."
     },
     "action": {
       "openSession": "Open session",
       "settingUp": "Starting…",
       "open": "Open workspace",
-      "wakeOpen": "Wake and open workspace"
+      "wakeOpen": "Wake and open workspace",
+      "wakeToContinue": "Wake to continue",
+      "restart": "Restart sandbox"
     },
     "phase": {
       "delivering": "Starting your agent",
@@ -5080,7 +5092,10 @@
       "promptPlaceholder": "Optional. What should the agent start on?",
       "creating": "Starting your cloud workspace",
       "createAndStart": "Start workspace and agent",
-      "create": "Start workspace"
+      "create": "Start workspace",
+      "repoOther": "Other repository…",
+      "repoNotePicker": "Private repos need the Orca Cloud GitHub app, connected once from Orca on your computer.",
+      "repoNone": "No repository (blank project)"
     },
     "line": {
       "runningFor": "Up {{elapsed}}. Agents keep working when you close the app.",
@@ -5090,7 +5105,9 @@
       "waking": "Starting up. This usually takes about 5 seconds.",
       "stopping": "Files are kept.",
       "archived": "Unarchive it on your computer to work in it again.",
-      "failed": "The sandbox couldn’t start. Your files are safe."
+      "failed": "The sandbox couldn’t start. Your files are safe.",
+      "unresponsive": "The sandbox isn’t responding. Your files are safe.",
+      "deleting": "This workspace is being deleted."
     },
     "home": {
       "heading": "Cloud",
@@ -5101,8 +5118,8 @@
       "emptyDetail": "Start one here. It keeps running while this phone and your computer sleep.",
       "new": "New cloud workspace",
       "createdAgo": "Created {{ago}} ago",
-      "openWorkspace": "Open {{title}}, {{detail}}",
-      "createdJustNow": "Created just now"
+      "createdJustNow": "Created just now",
+      "workspaceRowLabel": "Cloud workspace, {{title}}, {{detail}}"
     },
     "connect": {
       "signedOut": "Sign in to Orca on {{desktop}}, then try again.",
@@ -5113,8 +5130,6 @@
       "title": "Connect Orca Cloud"
     },
     "denied": {
-      "hours": "Out of sandbox hours.",
-      "cap": "Spend cap reached.",
       "payment": "Payment failed, so new sandboxes can’t start.",
       "plan": "Orca Cloud needs a Team plan.",
       "teamLimit": "Your team is at its limit of running sandboxes (3 per seat).",
@@ -5141,18 +5156,76 @@
       "message": "{{problem}} {{safety}} {{next}}",
       "safety": {
         "create": "Nothing was created, and you weren’t charged.",
-        "existing": "Your files are safe."
-      }
+        "existing": "Your files are safe.",
+        "asleep": "Nothing is deleted, and your files are safe."
+      },
+      "hours2": "Out of sandbox hours. Running sandboxes go to sleep and new ones can’t start.",
+      "cap2": "Spend cap reached. Running sandboxes go to sleep and new ones can’t start."
     },
     "wake": {
       "slowQueued": "Taking longer than usual. Your files are safe. Your prompt sends as soon as it’s awake.",
       "slow": "Taking longer than usual. Your files are safe."
     },
+    "snapshot": {
+      "heading": "Latest from this workspace",
+      "loading": "Loading the latest from this workspace…",
+      "empty": "Nothing saved yet. Orca saves a read-only copy each time this workspace goes to sleep.",
+      "notSealedForKey": "This device was added after the workspace went to sleep. Wake it once to read it here.",
+      "error": "Couldn’t load the latest from this workspace. Your files are safe.",
+      "rollback": "Orca Cloud sent an older copy than the one you last saw, so it isn’t shown. Wake the workspace to see it as it is now.",
+      "asOf": "As of {{ago}} ago",
+      "asOfJustNow": "As of just now",
+      "asOfExact": "As of {{time}}",
+      "quiet": "No agents, changes or pull request when it went to sleep.",
+      "agentFallback": "Agent",
+      "sessionHint": "Shows the end of this chat",
+      "truncated": "Earlier messages aren’t in this copy.",
+      "noMessages": "No messages in this chat yet.",
+      "status": {
+        "working": "Working",
+        "attention": "Needs you",
+        "done": "Done",
+        "idle": "Idle"
+      },
+      "role": {
+        "you": "You",
+        "system": "System"
+      },
+      "pr": {
+        "title": "#{{number}} {{title}}",
+        "hint": "Opens the pull request",
+        "open": "Open",
+        "merged": "Merged",
+        "closed": "Closed",
+        "draft": "Draft"
+      },
+      "checks": {
+        "passing": "Checks passing",
+        "failing": "Checks failing",
+        "pending": "Checks running"
+      },
+      "git": {
+        "files_one": "{{count}} changed file",
+        "files_other": "{{count}} changed files",
+        "clean": "No uncommitted changes",
+        "more_one": "and {{count}} more",
+        "more_other": "and {{count}} more"
+      }
+    },
     "usage": {
-      "asleep_one": "{{hours}} sandbox hour so far · no sandbox hours while asleep",
-      "asleep_other": "{{hours}} sandbox hours so far · no sandbox hours while asleep",
-      "running_one": "{{hours}} sandbox hour so far · uses sandbox hours while running",
-      "running_other": "{{hours}} sandbox hours so far · uses sandbox hours while running"
+      "asleep_one": "{{hours}} sandbox hour so far. Uses no sandbox hours while asleep.",
+      "asleep_other": "{{hours}} sandbox hours so far. Uses no sandbox hours while asleep.",
+      "running_one": "{{hours}} sandbox hour so far. Uses sandbox hours while running.",
+      "running_other": "{{hours}} sandbox hours so far. Uses sandbox hours while running."
+    },
+    "host": {
+      "asleep": "{{name}} is asleep",
+      "asleepDetail": "Files are kept. Wake it to keep working.",
+      "wake": "Wake"
+    },
+    "idle": {
+      "sleeps_one": "Sleeps after {{count}} minute idle.",
+      "sleeps_other": "Sleeps after {{count}} minutes idle."
     }
   }
 }

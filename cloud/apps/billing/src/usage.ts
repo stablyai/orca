@@ -1,8 +1,9 @@
 // Sandbox usage ingestion (control plane -> billing) and the Stripe meter outbox.
 // Only overage reaches Stripe, and only for accounts that opted in, up to their monthly spend cap:
 // included hours are tracked here (pooled across seats, monthly even on annual plans, which tiered
-// Stripe prices cannot express); the overage price is a flat per-hour metered price on a
-// "standard seconds" meter with transform_quantity divide_by=3600.
+// Stripe prices cannot express); the overage price is a flat per-hour rate billed by the minute: a
+// metered per-minute price on a "standard seconds" meter with transform_quantity divide_by=60.
+// Metering stays in seconds (exact per segment); Stripe rounds the period total up to a minute.
 import { z } from 'zod'
 import type { Env } from './env'
 import { MACHINE_SIZE_WEIGHT, MACHINE_SIZES, capSeconds, includedSeconds, planCatalog } from './plans'

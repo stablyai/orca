@@ -11,9 +11,14 @@ export type CloudDotState =
   | 'running'
   | 'sleeping'
   | 'waking'
+  /** A new sandbox being created (not a wake). */
+  | 'starting'
   | 'unresponsive'
   | 'archived'
+  /** Creating the sandbox failed. */
   | 'failed'
+  /** Waking an existing sandbox failed; the workspace itself is fine. */
+  | 'wakeFailed'
   | 'unknown'
 
 /** A wake event older than this without a terminal event is treated as stale (the step timed out). */
@@ -50,7 +55,10 @@ export function deriveCloudDotState(input: {
   if (status?.state === 'archived' || status?.archive) {
     return 'archived'
   }
-  if (isWakeFailedFresh(wake, now) || status?.state === 'failed') {
+  if (isWakeFailedFresh(wake, now)) {
+    return 'wakeFailed'
+  }
+  if (status?.state === 'failed') {
     return 'failed'
   }
   // The control plane is the truth for the VM; the desktop's own sleep record only fills in
@@ -67,8 +75,9 @@ export function deriveCloudDotState(input: {
     case 'stopping':
       return 'sleeping'
     case 'waking':
-    case 'provisioning':
       return 'waking'
+    case 'provisioning':
+      return 'starting'
   }
 }
 

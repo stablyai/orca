@@ -4,6 +4,7 @@ import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
 import { useWorktreeActivityStatus } from '@/components/sidebar/workspace-card/activity/use-worktree-activity-status'
 import { openMoveToThisComputer } from '@/lib/orca-cloud/orca-cloud-move-store'
+import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow'
 import type { CloudPanelActions } from './CloudWorkspaceStatusPanel'
 import {
   runArchiveCloudWorkspace,
@@ -34,6 +35,10 @@ export function useCloudPanelActions(workspaceId: string, close: () => void): Cl
       onUnarchive: () => {
         close()
         void runUnarchiveCloudWorkspace(workspaceId)
+      },
+      onSleep: () => {
+        close()
+        void runSleepWorktree(workspaceId)
       },
       onMoveToComputer: () => {
         close()

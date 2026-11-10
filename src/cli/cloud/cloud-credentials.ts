@@ -70,7 +70,7 @@ const LOGIN_HINT =
   'Run `orca cloud login --token <token> --api-url <control-plane-url>`, or set ORCA_CLOUD_TOKEN and ORCA_CLOUD_API_URL.'
 // Inside a VM the file only appears when the org allows it, so say why it may be missing.
 const IN_VM_HINT =
-  'Inside an Orca Cloud workspace the token is written at boot only when the organization has in-workspace CLI access turned on (Orca Cloud settings, vmCliEnabled).'
+  'Inside an Orca Cloud workspace the token is written at boot only when the team has in-workspace CLI access turned on in Orca Cloud settings.'
 
 /**
  * Only https may carry the bearer token; plain http is allowed for loopback dev servers.

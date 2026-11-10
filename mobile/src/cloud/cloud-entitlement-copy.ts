@@ -1,3 +1,7 @@
+import {
+  classifyEntitlementDenial,
+  type OrcaEntitlementDenialKind
+} from '../../../src/shared/orca-billing'
 import type { Translate } from '../i18n/mobile-i18n'
 import {
   readCloudRole,
@@ -13,25 +17,20 @@ import { CloudRequestError, type CloudControlPlane } from './cloud-control-plane
 
 type Denial = 'hours' | 'cap' | 'payment' | 'plan' | 'teamLimit' | 'memberLimit' | 'other'
 
+// The shared classifier names the category; the phone keeps its own wording per category.
+const DENIALS: Record<OrcaEntitlementDenialKind, Denial> = {
+  plan: 'plan',
+  hours: 'hours',
+  spendCap: 'cap',
+  payment: 'payment',
+  teamLimit: 'teamLimit',
+  memberLimit: 'memberLimit',
+  machineSize: 'other',
+  other: 'other'
+}
+
 function denialOf(reason: string | undefined): Denial {
-  switch (reason) {
-    case 'included_hours_exhausted':
-      return 'hours'
-    case 'overage_cap_reached':
-      return 'cap'
-    case 'payment_past_due':
-    case 'payment_grace_expired':
-      return 'payment'
-    case 'no_subscription':
-    case 'subscription_inactive':
-      return 'plan'
-    case 'concurrency_limit':
-      return 'teamLimit'
-    case 'member_concurrency_limit':
-      return 'memberLimit'
-    default:
-      return 'other'
-  }
+  return DENIALS[classifyEntitlementDenial(reason)]
 }
 
 export function isEntitlementDenied(error: unknown): error is CloudRequestError {
@@ -71,9 +70,15 @@ function problem(
 ): string {
   switch (denial) {
     case 'hours':
-      return t('cloud.denied.hours', 'Out of sandbox hours.')
+      return t(
+        'cloud.denied.hours2',
+        'Out of sandbox hours. Running sandboxes go to sleep and new ones can’t start.'
+      )
     case 'cap':
-      return t('cloud.denied.cap', 'Spend cap reached.')
+      return t(
+        'cloud.denied.cap2',
+        'Spend cap reached. Running sandboxes go to sleep and new ones can’t start.'
+      )
     case 'payment':
       return t('cloud.denied.payment', 'Payment failed, so new sandboxes can’t start.')
     case 'plan':
@@ -176,9 +181,12 @@ export function entitlementDeniedMessage(
   return t('cloud.denied.message', '{{problem}} {{safety}} {{next}}', {
     problem: problem(denial, when, owner, t),
     safety:
-      when === 'create'
-        ? t('cloud.denied.safety.create', 'Nothing was created, and you weren’t charged.')
-        : t('cloud.denied.safety.existing', 'Your files are safe.'),
+      // Out of hours or at the cap, running sandboxes go to sleep, so say what that keeps.
+      denial === 'hours' || denial === 'cap'
+        ? t('cloud.denied.safety.asleep', 'Nothing is deleted, and your files are safe.')
+        : when === 'create'
+          ? t('cloud.denied.safety.create', 'Nothing was created, and you weren’t charged.')
+          : t('cloud.denied.safety.existing', 'Your files are safe.'),
     next: nextStep(denial, manager, when, owner, t)
   })
 }

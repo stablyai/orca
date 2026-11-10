@@ -28,11 +28,20 @@ function useBlockCopy(access: OrcaCloudRunTargetAccess): BlockCopy | null {
               'auto.components.new.workspace.RunTargetCombobox.orcaCloudNeedsTeamPlan',
               'Orca Cloud needs a Team plan.'
             ),
-        detail: '',
+        detail: access.canManageBilling
+          ? ''
+          : t(
+              'auto.components.new.workspace.RunTargetCombobox.orcaCloudAskChoosePlan',
+              'Ask an owner or admin to choose one.'
+            ),
         tone: 'neutral',
-        action: access.lapsed
-          ? t('auto.components.new.workspace.RunTargetCombobox.orcaCloudRenew', 'Renew')
-          : t('auto.components.new.workspace.RunTargetCombobox.orcaCloudUpgrade', 'Upgrade')
+        ...(access.canManageBilling
+          ? {
+              action: access.lapsed
+                ? t('auto.components.new.workspace.RunTargetCombobox.orcaCloudRenew', 'Renew')
+                : t('auto.components.new.workspace.RunTargetCombobox.orcaCloudUpgrade', 'Upgrade')
+            }
+          : {})
       }
     case 'out-of-hours': {
       const cap = access.cause === 'cap'
@@ -49,10 +58,15 @@ function useBlockCopy(access: OrcaCloudRunTargetAccess): BlockCopy | null {
             ),
         detail: access.canManageBilling
           ? ''
-          : t(
-              'auto.components.new.workspace.RunTargetCombobox.orcaCloudAskAddHoursOnly',
-              'Ask an owner or admin to add hours.'
-            ),
+          : cap
+            ? t(
+                'auto.components.new.workspace.RunTargetCombobox.orcaCloudAskRaiseSpendCap',
+                'Ask an owner or admin to raise the spend cap.'
+              )
+            : t(
+                'auto.components.new.workspace.RunTargetCombobox.orcaCloudAskAddHoursOnly',
+                'Ask an owner or admin to add hours.'
+              ),
         tone: 'neutral',
         ...(access.canManageBilling
           ? {

@@ -13,9 +13,15 @@ import {
   findRunActionRunByTab,
   getRunActionRun,
   listRunActionRuns,
-  patchRunActionRun
+  patchRunActionRun,
+  type RunActionRun
 } from './run-actions-store'
-import { loadWorktreeRunActions, pickPrimaryRunAction } from './run-action-config'
+import {
+  loadWorktreeRunActions,
+  pickPrimaryRunAction,
+  type WorktreeRunActions
+} from './run-action-config'
+import { findLiveRunTabId, runPanePtyId, runTabLeafIds, sameRunTab } from './run-action-tabs'
 import {
   isRunActionRelaunchArmed,
   notifyRunActionStopped,
@@ -46,15 +52,20 @@ function handleCommandFinished(detail: TerminalCommandFinishedEventDetail): void
   if (!tabId) {
     return
   }
-  const setupWorktreeId = autoRunSetupTabs.get(tabId)
-  if (setupWorktreeId) {
-    autoRunSetupTabs.delete(tabId)
+  const setupTabId = [...autoRunSetupTabs.keys()].find((armed) => sameRunTab(armed, tabId))
+  const setupWorktreeId = setupTabId ? autoRunSetupTabs.get(setupTabId) : undefined
+  if (setupTabId && setupWorktreeId) {
+    autoRunSetupTabs.delete(setupTabId)
     if (exitCode === 0) {
       void autoRunAfterSetup(setupWorktreeId)
     }
   }
   const run = findRunActionRunByTab(tabId)
   if (!run || (run.status !== 'running' && run.status !== 'stopping')) {
+    return
+  }
+  if (!isRunPane(run, detail.leafId)) {
+    // A command finished in a split of the run's tab, not the action itself.
     return
   }
   // OSC 133;D may omit the exit code; without one the run is only known to have ended.
@@ -68,6 +79,31 @@ function handleCommandFinished(detail: TerminalCommandFinishedEventDetail): void
   notifyRunActionStopped(tabId)
 }
 
+function isRunPane(run: RunActionRun, leafId: string | undefined): boolean {
+  if (!leafId) {
+    return true
+  }
+  if (run.leafId) {
+    return run.leafId === leafId
+  }
+  // The run's pane isn't known yet: only a tab with one pane proves which pane finished.
+  const leaves = runTabLeafIds(useAppStore.getState(), run.worktreeId, run.tabId)
+  return leaves.length <= 1
+}
+
+/** A run learns its pane while its tab still has exactly one, before any split exists. */
+function learnRunPanes(state: AppState): void {
+  for (const run of listRunActionRuns()) {
+    if (run.leafId) {
+      continue
+    }
+    const leaves = runTabLeafIds(state, run.worktreeId, run.tabId)
+    if (leaves.length === 1) {
+      patchRunActionRun(run.worktreeId, run.actionId, { leafId: leaves[0] })
+    }
+  }
+}
+
 function pruneClosedRunTabs(state: AppState): void {
   for (const run of listRunActionRuns()) {
     // A restarting host rebuilds its tab list; the relaunch owns these runs until it settles.
@@ -76,17 +112,53 @@ function pruneClosedRunTabs(state: AppState): void {
     }
     const tabs = state.tabsByWorktree[run.worktreeId]
     // Unhydrated workspaces have no tab list yet; only a loaded list proves the tab is gone.
-    if (tabs && !tabs.some((tab) => tab.id === run.tabId)) {
+    if (tabs && !findLiveRunTabId(state, run.worktreeId, run.tabId)) {
       deleteRunActionRun(run.worktreeId, run.actionId)
       notifyRunActionStopped(run.tabId)
     }
   }
   for (const [tabId, worktreeId] of autoRunSetupTabs) {
     const tabs = state.tabsByWorktree[worktreeId]
-    if (tabs && !tabs.some((tab) => tab.id === tabId)) {
+    if (tabs && !findLiveRunTabId(state, worktreeId, tabId)) {
       autoRunSetupTabs.delete(tabId)
     }
   }
+}
+
+const AUTO_RAN_KEY = 'orca.runActions.autoRan.v1'
+
+function readAutoRan(): string[] {
+  try {
+    const parsed: unknown = JSON.parse(globalThis.localStorage?.getItem(AUTO_RAN_KEY) ?? '[]')
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * The host ran setup while building the environment, so no Setup tab will ever finish here:
+ * honor `autoRunAfterSetup` the first time the workspace is opened, once per workspace.
+ */
+export async function autoRunProvisionedWorkspaceOnce(
+  worktreeId: string,
+  config: WorktreeRunActions
+): Promise<boolean> {
+  const action = config.setupProvisioned ? pickAutoRunAction(config.scripts) : null
+  const autoRan = readAutoRan()
+  if (!action || autoRan.includes(worktreeId) || getRunActionRun(worktreeId, action.id)) {
+    return false
+  }
+  try {
+    // Recorded before starting, so a second open (or window) can't start it twice.
+    globalThis.localStorage?.setItem(
+      AUTO_RAN_KEY,
+      JSON.stringify([...autoRan, worktreeId].slice(-500))
+    )
+  } catch {
+    // Best effort: without storage this still runs once per window session.
+  }
+  return startRunAction(worktreeId, action, config, { activate: false })
 }
 
 /** Follows run terminals: their exits update status, and closing one forgets its run. */
@@ -97,10 +169,22 @@ export function installRunActionEvents(): () => void {
     }
   }
   window.addEventListener(ORCA_TERMINAL_COMMAND_FINISHED_EVENT, onFinished)
+  // Tab lists churn while a window hydrates or a host republishes its tabs: only a tab still
+  // missing after things settle was really closed.
+  let pruneTimer: ReturnType<typeof setTimeout> | null = null
+  const installedAt = Date.now()
   const unsubscribe = useAppStore.subscribe((state, previous) => {
-    if (state.tabsByWorktree !== previous.tabsByWorktree) {
-      pruneClosedRunTabs(state)
+    if (state.terminalLayoutsByTabId !== previous.terminalLayoutsByTabId) {
+      learnRunPanes(state)
     }
+    if (state.tabsByWorktree === previous.tabsByWorktree || pruneTimer) {
+      return
+    }
+    const delay = Math.max(PRUNE_SETTLE_MS, installedAt + STARTUP_PRUNE_GRACE_MS - Date.now())
+    pruneTimer = setTimeout(() => {
+      pruneTimer = null
+      pruneClosedRunTabs(useAppStore.getState())
+    }, delay)
   })
   // After a restart, a run recorded as running may have ended while nobody watched its terminal.
   const reconcileTimer = setTimeout(
@@ -111,16 +195,21 @@ export function installRunActionEvents(): () => void {
     window.removeEventListener(ORCA_TERMINAL_COMMAND_FINISHED_EVENT, onFinished)
     unsubscribe()
     clearTimeout(reconcileTimer)
+    if (pruneTimer) {
+      clearTimeout(pruneTimer)
+    }
   }
 }
 
 const STARTUP_RECONCILE_MS = 5_000
+const PRUNE_SETTLE_MS = 3_000
+const STARTUP_PRUNE_GRACE_MS = 15_000
 
 /** Local terminals can say whether anything still runs under the shell; remote ones are left as recorded. */
 async function reconcileLocalRunsAfterStartup(): Promise<void> {
   const state = useAppStore.getState()
   for (const run of listRunActionRuns()) {
-    const ptyId = state.ptyIdsByTabId[run.tabId]?.[0]
+    const ptyId = runPanePtyId(state, run.worktreeId, run.tabId, run.leafId)
     if (run.status !== 'running' || !ptyId || getRemoteRuntimePtyOwner(ptyId)) {
       continue
     }

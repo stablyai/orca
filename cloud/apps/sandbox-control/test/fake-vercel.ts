@@ -83,6 +83,10 @@ export type FakeVercel = SandboxProviderApi & GoldenImageProviderApi & {
   snapshotExpirations: Map<string, number>
   /** Simulates the provider ending a session at its timeout. */
   expire(name: string): void
+  /** activeCpuDurationMs per session, as GET session reports it once stopped (stop answers without it). */
+  sessionCpu: Map<string, number>
+  /** GET session fails (provider outage) when set. */
+  failSessionUsage: boolean
 }
 
 export function createFakeVercel(now: () => number): FakeVercel {
@@ -122,6 +126,8 @@ export function createFakeVercel(now: () => number): FakeVercel {
 
   const buildCommands = new Map<string, FakeBuildCommand>()
   const fake: FakeVercel = {
+    sessionCpu: new Map(),
+    failSessionUsage: false,
     boxes,
     snapshots,
     commands,
@@ -222,7 +228,19 @@ export function createFakeVercel(now: () => number): FakeVercel {
     },
     async stopSession(sessionId) {
       const box = bySession(sessionId)
-      return { snapshotId: box.status === 'running' ? stop(box) : null }
+      const startedAt = box.startedAt
+      const snapshotId = box.status === 'running' ? stop(box) : null
+      return {
+        snapshotId,
+        usage: { sessionId, status: 'stopped', activeCpuMs: null, durationMs: now() - startedAt, vcpus: box.params.vcpus, memoryMb: box.params.vcpus * 2048, stoppedAt: now() }
+      }
+    },
+    async getSessionUsage(sessionId) {
+      if (fake.failSessionUsage) {
+        throw new ProviderError(503, null)
+      }
+      const cpu = fake.sessionCpu.get(sessionId)
+      return cpu === undefined ? null : { sessionId, status: 'stopped', activeCpuMs: cpu, durationMs: null, vcpus: null, memoryMb: null, stoppedAt: null }
     },
     async extendTimeout(sessionId, durationMs) {
       const box = bySession(sessionId)

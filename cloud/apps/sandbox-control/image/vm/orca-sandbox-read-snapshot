@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Seals a read-only snapshot of this workspace (chats, agent status, git, PR) to the reader keys the
+# control plane passes, right before the drain. Only ciphertext is printed (one JSON line); see
+# orca-read-snapshot.cjs. Exit 3: orcad isn't running (nothing to read).
+set -euo pipefail
+umask 077
+ORCA_HOME=/opt/orca
+export ORCA_USER_DATA_PATH="${ORCA_USER_DATA_PATH:-$HOME/.orcad-data}"
+node="$(find "$ORCA_HOME/runtime/runtimes" -type f -name node | head -n 1)"
+[ -n "$node" ] || { echo 'node not found' >&2; exit 1; }
+exec timeout 35 "$node" "$ORCA_HOME/bin/orca-read-snapshot.cjs"
