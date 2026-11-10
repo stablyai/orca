@@ -35,7 +35,12 @@ function loadDesktopConnections(hosts, getDeviceToken = async () => 'test-token'
   }
   return loadArkts(
     'transport/DesktopConnections.ets',
-    ['retainDesktopConnection', 'refreshDesktopConnection', 'forgetDesktopConnection'],
+    [
+      'retainDesktopConnection',
+      'refreshDesktopConnection',
+      'forgetDesktopConnection',
+      'reconcileHomeDesktopConnections'
+    ],
     {
       HostSession,
       DesktopNotifications,
@@ -130,4 +135,62 @@ test('an unreadable device credential remains retryable while a missing credenti
   assert.equal(locked.connection.getCredentialStatus(), 'ready')
   locked.release()
   missing.release()
+})
+
+test('Home fills automatic slots with readable pairings and keeps a manual disconnect on reselection', async () => {
+  const hosts = [
+    ['unpaired', 50],
+    ['locked', 40],
+    ['alpha', 30],
+    ['beta', 20],
+    ['gamma', 10]
+  ].map(([id, lastConnected]) => ({
+    id,
+    lastConnected,
+    endpoint: `ws://${id}.invalid:6768`,
+    publicKeyB64: 'test-key'
+  }))
+  let unlocked = false
+  const { retainDesktopConnection, reconcileHomeDesktopConnections } = loadDesktopConnections(
+    hosts,
+    async (_context, id) => {
+      if (id === 'unpaired') {
+        return null
+      }
+      if (id === 'locked' && !unlocked) {
+        throw new Error('Credential store is locked')
+      }
+      return 'test-token'
+    }
+  )
+  const leases = hosts.map((host) => retainDesktopConnection({}, host.id))
+  const candidates = hosts.map((host, index) => ({ host, connection: leases[index].connection }))
+  const [, locked, alpha, beta, gamma] = leases.map((lease) => lease.connection)
+  const connectedIds = () =>
+    candidates.filter(({ connection }) => connection.getClient()).map(({ host }) => host.id)
+  const current = () => true
+  try {
+    await reconcileHomeDesktopConnections(candidates, current)
+    await Promise.all(
+      [alpha, beta, gamma].map((connection) => waitForPhase(connection, 'connected'))
+    )
+    assert.deepEqual(connectedIds(), ['alpha', 'beta', 'gamma'])
+    assert.equal(leases[0].connection.getCredentialStatus(), 'missing')
+    assert.equal(locked.getCredentialStatus(), 'temporarily-unavailable')
+
+    const previous = gamma.getClient()
+    unlocked = true
+    await reconcileHomeDesktopConnections(candidates, current)
+    await waitForPhase(locked, 'connected')
+    assert.deepEqual(connectedIds(), ['locked', 'alpha', 'beta'])
+    assert.equal(previous.closed, true)
+
+    const manual = alpha.getClient()
+    alpha.disconnect()
+    await reconcileHomeDesktopConnections(candidates, current)
+    assert.deepEqual(connectedIds(), ['locked', 'beta'])
+    assert.equal(manual.closed, true)
+  } finally {
+    leases.forEach((lease) => lease.release())
+  }
 })

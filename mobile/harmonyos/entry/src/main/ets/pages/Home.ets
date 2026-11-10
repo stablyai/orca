@@ -13,7 +13,8 @@ import { listHosts, HostMeta, updateHostMachine } from '../storage/HostStore';
 import { HostMachineDescriptor, hostMachineLine, readHostMachineDescriptor } from '../storage/HostMachine';
 import { SpikeRpcClient, RpcResponse, RpcSuccess } from '../transport/SpikeRpcClient';
 import { SessionPhase } from '../transport/HostSession';
-import { DesktopConnectionLease, retainDesktopConnection, refreshDesktopConnection } from '../transport/DesktopConnections';
+import { DesktopConnectionLease, HomeDesktopConnection, reconcileHomeDesktopConnections, retainDesktopConnection,
+  refreshDesktopConnection } from '../transport/DesktopConnections';
 import { HomeWorktree, readHomeCatalog } from '../home/HomeCatalog';
 import { AgentDesktop, AgentListRow, HomeAgentEntry, activeAgents, agentPreview, agentRowRevision, agentTimeAgo, agentsNeedingYou } from '../home/AgentListModel';
 import { AgentListRows } from '../home/AgentListRows';
@@ -200,6 +201,7 @@ struct Home {
   private visible: boolean = false;
   private appInForeground: boolean = true;
   private loadEpoch: number = 0;
+  private autoConnectionRevision: number = 0;
   private onboardingChecked: boolean = false;
   private onboardingSteps: string[] = [];
   private onboardingNavigating: boolean = false;
@@ -223,6 +225,7 @@ struct Home {
     this.updateTabClock();
     if (this.visible) {
       this.recoverPairings();
+      this.syncHomeAutoConnections();
       enterHomePrewarm(); this.schedulePrewarm();
       this.runtimes.forEach((rt: HostRuntime, id: string): void => {
         if (rt.client && rt.online) { this.fetchCatalog(rt.client, id, this.epoch); }
@@ -468,11 +471,25 @@ struct Home {
         this.fetchStats(client, host.id, this.epoch);
       }
     });
-    let recent = hosts.slice().sort((left: HostMeta, right: HostMeta): number =>
-      right.lastConnected - left.lastConnected || left.id.localeCompare(right.id)).slice(0, 3);
-    recent.forEach((host: HostMeta): void => this.runtimes.get(host.id)?.lease.connection.connect());
+    this.syncHomeAutoConnections();
     this.syncConnState();
     if (this.activeTab === 'automations') { this.refreshAutomations(this.tabDesktop(this.automationDesktopId)?.id ?? ''); }
+  }
+
+  private syncHomeAutoConnections(): void {
+    if (!this.visible || !this.appInForeground) { return; }
+    let revision = ++this.autoConnectionRevision;
+    let loadEpoch = this.loadEpoch;
+    let candidates: HomeDesktopConnection[] = [];
+    this.hosts.forEach((host: HostMeta): void => {
+      let connection = this.runtimes.get(host.id)?.lease.connection;
+      if (connection) { candidates.push({ host: host, connection: connection }); }
+    });
+    let current = (): boolean => this.visible && this.appInForeground && revision === this.autoConnectionRevision
+      && loadEpoch === this.loadEpoch;
+    reconcileHomeDesktopConnections(candidates, current).then((): void => {
+      if (current()) { this.syncConnState(); }
+    }).catch(() => {});
   }
 
   private releaseDesktop(hostId: string): void {
@@ -508,6 +525,7 @@ struct Home {
       usageRevision: 0, automationPending: null, automationFetchedAt: 0 };
     this.runtimes.set(hostId, runtime);
     let epoch = this.epoch;
+    let previousCredential = lease.connection.getCredentialStatus();
     runtime.unobserve = lease.connection.observe((phase: SessionPhase): void => {
       if (epoch !== this.epoch || this.runtimes.get(hostId) !== runtime) { return; }
       runtime.online = phase === 'connected';
@@ -529,6 +547,10 @@ struct Home {
         }
       }
       this.syncConnState();
+      let credential = lease.connection.getCredentialStatus();
+      let credentialChanged = credential !== previousCredential;
+      previousCredential = credential;
+      if (credentialChanged && !runtime.connecting) { this.syncHomeAutoConnections(); }
       if (this.visible && this.activeTab === 'automations' && this.tabDesktop(this.automationDesktopId)?.id === hostId) {
         this.refreshAutomations(hostId);
       }
@@ -1033,6 +1055,7 @@ struct Home {
         this.hosts = this.hosts.filter((item: HostMeta): boolean => item.id !== host.id);
         this.agentCatalogs.delete(host.id);
         this.releaseDesktop(host.id);
+        this.syncHomeAutoConnections();
       });
     } catch (e) {
       this.loadError = '移除失败，凭证或页面数据未能清理，请重试。';

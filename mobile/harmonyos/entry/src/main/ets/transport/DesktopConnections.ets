@@ -12,6 +12,9 @@ type RevivalReason = 'app-resume' | 'network-change';
 type DesktopListener = (phase: SessionPhase, detail: string) => void;
 export type DesktopCredentialStatus = 'ready' | 'missing' | 'temporarily-unavailable';
 
+interface DesktopCredentials { token: string | null; relay: RelayCredential | null; }
+export interface HomeDesktopConnection { host: HostMeta; connection: DesktopConnection; }
+
 export interface DesktopConnectionLease {
   connection: DesktopConnection;
   release: (keepForNavigation?: boolean) => void;
@@ -19,6 +22,7 @@ export interface DesktopConnectionLease {
 
 const desktops = new Map<string, DesktopConnection>();
 const idleTimers = new Map<string, number>();
+const HOME_AUTO_CONNECT_LIMIT = 3;
 
 function cancelIdle(hostId: string): void {
   let timer = idleTimers.get(hostId);
@@ -70,6 +74,23 @@ export function reviveDesktopConnections(reason?: RevivalReason): void {
   desktops.forEach((connection: DesktopConnection): void => connection.revive(reason));
 }
 
+export async function reconcileHomeDesktopConnections(candidates: HomeDesktopConnection[], current: () => boolean): Promise<void> {
+  let statuses = await Promise.all(candidates.map((candidate: HomeDesktopConnection): Promise<DesktopCredentialStatus> =>
+    candidate.connection.checkCredentialStatus()));
+  if (!current()) { return; }
+  let selected = new Set(candidates.filter((candidate: HomeDesktopConnection, index: number): boolean =>
+    statuses[index] === 'ready' && candidate.host.publicKeyB64.length > 0)
+    .sort((left: HomeDesktopConnection, right: HomeDesktopConnection): number =>
+      right.host.lastConnected - left.host.lastConnected || left.host.id.localeCompare(right.host.id))
+    .slice(0, HOME_AUTO_CONNECT_LIMIT).map((candidate: HomeDesktopConnection): string => candidate.host.id));
+  candidates.forEach((candidate: HomeDesktopConnection): void => {
+    if (!selected.has(candidate.host.id)) { candidate.connection.setHomeAutoConnect(false); }
+  });
+  candidates.forEach((candidate: HomeDesktopConnection): void => {
+    if (selected.has(candidate.host.id)) { candidate.connection.setHomeAutoConnect(true); }
+  });
+}
+
 export class DesktopConnection {
   private readonly context: common.UIAbilityContext;
   private readonly hostId: string;
@@ -87,8 +108,10 @@ export class DesktopConnection {
   private holders: number = 0;
   private generation: number = 0;
   private profileRevision: number = 0;
+  private credentialProbeRevision: number = 0;
   private opening: boolean = false;
   private wanted: boolean = false;
+  private homeAutoConnect: boolean = false;
   private paused: boolean = false;
   private removed: boolean = false;
 
@@ -118,6 +141,38 @@ export class DesktopConnection {
   getReconnectAttempt(): number { return this.session?.getReconnectAttempt() ?? 0; }
   getRelayHostReachability(): string { return this.session?.getRelayHostReachability() ?? 'connecting'; }
 
+  private async readCredentials(): Promise<DesktopCredentials> {
+    let token = await getDeviceToken(this.context, this.hostId);
+    let relay = token ? await getRelayCredential(this.context, this.hostId) : null;
+    return { token: token, relay: relay };
+  }
+
+  async checkCredentialStatus(): Promise<DesktopCredentialStatus> {
+    if (this.session || this.removed) { return this.credentialStatus; }
+    let generation = this.generation;
+    let revision = ++this.credentialProbeRevision;
+    let status: DesktopCredentialStatus;
+    try { status = (await this.readCredentials()).token ? 'ready' : 'missing'; }
+    catch (e) { status = 'temporarily-unavailable'; }
+    if (generation === this.generation && revision === this.credentialProbeRevision && !this.session && !this.opening) {
+      if (this.credentialStatus === 'missing' && status === 'ready' && this.phase === 'auth-failed') {
+        this.phase = 'idle'; this.detail = '';
+      }
+      this.credentialStatus = status;
+    }
+    return this.credentialStatus;
+  }
+
+  setHomeAutoConnect(selected: boolean): void {
+    if (this.removed) { return; }
+    let previous = this.homeAutoConnect;
+    this.homeAutoConnect = selected;
+    if (selected) { this.startConnection(false); }
+    else if (previous && !this.wanted && !this.paused) {
+      this.closeTransport(); this.publish('stopped', '已断开');
+    }
+  }
+
   setViewing(owner: Object, worktree: string, executionHost: string): void {
     this.notifications.setViewing(owner, this.hostId, worktree, executionHost);
   }
@@ -141,6 +196,11 @@ export class DesktopConnection {
     if (this.removed || this.holders === 0 || (this.paused && !explicit)) { return; }
     if (explicit) { this.paused = false; }
     this.wanted = true;
+    this.startConnection(explicit);
+  }
+
+  private startConnection(explicit: boolean): void {
+    if (this.removed || this.holders === 0 || this.paused) { return; }
     if (this.opening || this.session || (!explicit && this.phase === 'auth-failed')) { return; }
     let generation = ++this.generation;
     this.opening = true; this.publish('connecting', '正在连接');
@@ -158,24 +218,21 @@ export class DesktopConnection {
       this.opening = false; this.publish('stopped', '主机不存在'); return;
     }
     this.meta = meta;
-    let token: string | null;
-    let relay: RelayCredential | null;
+    let credentials: DesktopCredentials;
     try {
-      token = await getDeviceToken(this.context, this.hostId);
-      if (generation !== this.generation) { return; }
-      relay = token ? await getRelayCredential(this.context, this.hostId) : null;
+      credentials = await this.readCredentials();
     } catch (e) {
       if (generation !== this.generation) { return; }
       this.credentialStatus = 'temporarily-unavailable';
       this.opening = false; this.publish('stopped', '无法读取桌面凭证'); return;
     }
     if (generation !== this.generation) { return; }
-    if (!token) {
+    if (!credentials.token) {
       this.credentialStatus = 'missing';
       this.opening = false; this.publish('auth-failed', '凭证缺失 — 请重新配对'); return;
     }
     this.credentialStatus = 'ready';
-    let session = new HostSession(meta, token, relay ?? undefined, this.context);
+    let session = new HostSession(meta, credentials.token, credentials.relay ?? undefined, this.context);
     this.opening = false; this.session = session;
     this.unsubscribeSession = session.addListener((phase: SessionPhase, detail: string): void => {
       if (this.session !== session) { return; }
@@ -194,7 +251,7 @@ export class DesktopConnection {
 
   reconnect(): void {
     if (this.removed) { return; }
-    this.paused = false;
+    this.paused = false; this.wanted = true;
     // Keep a healthy Relay path while checking that it still answers.
     if (this.phase === 'connected' && this.activePath === 'relay') { this.session?.revive(); return; }
     this.closeTransport(); this.connect(true);
@@ -237,18 +294,18 @@ export class DesktopConnection {
 
   private replaceTransport(): void {
     this.closeTransport(); this.meta = null;
-    if (this.wanted && !this.paused) { this.connect(true); }
+    if ((this.wanted || this.homeAutoConnect) && !this.paused) { this.startConnection(true); }
     else { this.publish('stopped', '已断开'); }
   }
 
   revive(reason?: RevivalReason): void {
-    if (this.removed || this.paused || !this.wanted) { return; }
+    if (this.removed || this.paused || (!this.wanted && !this.homeAutoConnect)) { return; }
     if (reason) {
       let network = reason === 'network-change';
       appendLog(this.context, LOG_LEVEL_INFO, network ? 'Network changed' : 'App resumed', '', this.hostId,
         network ? 'network-changed' : 'app-resumed').catch(() => {});
     }
     if (this.session) { this.session.revive(reason === 'network-change'); }
-    else { this.connect(); }
+    else { this.startConnection(false); }
   }
 }
