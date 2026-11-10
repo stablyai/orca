@@ -129,6 +129,7 @@ export async function prepareStructuredAgentSessionFork(
         : {})
     },
     ...(record.launchArgs ? { launchArgs: record.launchArgs } : {}),
+    ...(record.sourceTerminalArgs ? { sourceTerminalArgs: record.sourceTerminalArgs } : {}),
     adopt: { providerHandle, conversationName: title }
   }
 }

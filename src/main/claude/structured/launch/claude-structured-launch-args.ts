@@ -32,6 +32,26 @@ const OWNED_FLAGS = new Set([
   'append-system-prompt-file'
 ])
 
+/** Boolean flags take no value, so tokens absorbed after them are positionals, not flag values. */
+const VALUELESS_FLAGS = new Set([
+  'ax-screen-reader',
+  'bare',
+  'bg',
+  'background',
+  'brief',
+  'chrome',
+  'desktop',
+  'disable-slash-commands',
+  'exclude-dynamic-system-prompt-sections',
+  'forward-subagent-text',
+  'ide',
+  'include-hook-events',
+  'no-chrome',
+  'restricted',
+  'safe-mode',
+  'strict-mcp-config'
+])
+
 const SHORT_FLAGS: Record<string, string> = {
   '-m': 'model',
   '-d': 'debug',
@@ -43,7 +63,10 @@ const SHORT_FLAGS: Record<string, string> = {
 }
 
 /** Keep variadic directory options in the SDK array; scalar extraArgs cannot retain repetitions. */
-export function claudeStructuredLaunchArgs(args: readonly string[]): {
+export function claudeStructuredLaunchArgs(
+  args: readonly string[],
+  options?: { skipUnexpressible?: boolean }
+): {
   extraArgs: Record<string, string | null>
   additionalDirectories: string[]
 } {
@@ -71,15 +94,43 @@ export function claudeStructuredLaunchArgs(args: readonly string[]): {
     }
     if (flag === 'add-dir') {
       if (values.length === 0 || values.some((value) => !value)) {
+        if (options?.skipUnexpressible) {
+          continue
+        }
         throw new StructuredAgentArgumentsError('Claude', '--add-dir', 'missingValue')
       }
       additionalDirectories.push(...values)
       continue
     }
-    if (Object.hasOwn(extraArgs, flag) || values.length > 1) {
+    // `--flag=value` cannot round-trip for a valueless flag: the SDK emits `--flag value`, which Claude reads as a positional.
+    if (options?.skipUnexpressible && VALUELESS_FLAGS.has(flag)) {
+      if (separator === -1) {
+        extraArgs[flag] = null
+      }
+      continue
+    }
+    // Skip mode resolves repetitions last-wins and keeps each flag's first value; absorbed tokens were positionals.
+    if (!options?.skipUnexpressible && (Object.hasOwn(extraArgs, flag) || values.length > 1)) {
       throw new StructuredAgentArgumentsError('Claude', `--${flag}`, 'multipleValues')
     }
     extraArgs[flag] = values[0] ?? null
   }
   return { extraArgs, additionalDirectories }
+}
+
+/** A flag both set keeps the terminal's value: the conversation ran with it. */
+export function withClaudeSourceTerminalArgs(
+  configured: ReturnType<typeof claudeStructuredLaunchArgs>,
+  sourceTerminalArgs: readonly string[] | undefined
+): ReturnType<typeof claudeStructuredLaunchArgs> {
+  if (!sourceTerminalArgs?.length) {
+    return configured
+  }
+  const source = claudeStructuredLaunchArgs(sourceTerminalArgs, { skipUnexpressible: true })
+  return {
+    extraArgs: { ...configured.extraArgs, ...source.extraArgs },
+    additionalDirectories: [
+      ...new Set([...configured.additionalDirectories, ...source.additionalDirectories])
+    ]
+  }
 }

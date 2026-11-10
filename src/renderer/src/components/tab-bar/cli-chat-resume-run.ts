@@ -18,6 +18,7 @@ import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import { toHostSessionPaneKey } from '../../../../shared/workspace-layout/terminal-surface-id'
 import { resolveCliChatResumeSource, type CliChatResumeSource } from './cli-chat-resume-source'
+import { cliChatResumeSourceAgentArgs } from './cli-chat-resume-source-agent-args'
 import {
   recoverMissingConversation,
   reportCliChatResumeFailure,
@@ -139,8 +140,11 @@ export async function runCliChatResume(
     return true
   }
   try {
-    const cliSourceSupported = await waitForPromiseWithSignal(
-      supportsStructuredAgentSessionCliSource(target),
+    const [cliSourceSupported, agentArgs] = await waitForPromiseWithSignal(
+      Promise.all([
+        supportsStructuredAgentSessionCliSource(target),
+        cliChatResumeSourceAgentArgs(target, source)
+      ]),
       controller.signal
     )
     if (!isCurrent()) {
@@ -173,6 +177,7 @@ export async function runCliChatResume(
       executionHostId: source.executionHostId,
       resumeFrom: {
         providerSessionId: source.providerSessionId,
+        ...(agentArgs ? { agentArgs } : {}),
         // The host matches its own pane keys, not this client's mirrored ones.
         ...(!closes && cliSourceSupported
           ? {
