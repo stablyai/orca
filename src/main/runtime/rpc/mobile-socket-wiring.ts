@@ -244,6 +244,9 @@ export class MobileSocketWiring {
           }
           this.authenticatedSockets.set(ws, socket)
           transport.setClientId(ws, device.deviceId)
+          console.log(
+            `[runtime] client connected: device=${device.deviceId} kind=${device.scope} transport=${metadata.transport}`
+          )
           // Do not delay e2ee_authenticated for the secure-file rewrite.
           this.deviceRegistry.updateLastSeenDeferred(
             device.deviceId,
@@ -298,6 +301,11 @@ export class MobileSocketWiring {
       Array.from(this.authenticatedSockets.values()).some(
         (candidate) => candidate.device.deviceId === socket.device.deviceId
       )
+    if (socket) {
+      console.log(
+        `[runtime] client disconnected: device=${socket.device.deviceId} kind=${socket.device.scope} transport=${socket.transport.transport} otherConnections=${hasOtherConnections}`
+      )
+    }
     // Session-only idle time starts at disconnect, not connection.
     if (socket && !hasOtherConnections && socket.device.deviceToken === undefined) {
       this.deviceRegistry.updateLastSeenDeferred(socket.device.deviceId)

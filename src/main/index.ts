@@ -1,5 +1,6 @@
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
 import { isRoutedOrcaDeepLink } from './startup/orca-deep-link-url'
+import { installMainConsoleTimestamps } from './observability/main-console-timestamps'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
 import { isBackgroundLaunch, isOrcadSidecarLaunch } from './window/foreground-activation-policy'
 import { createDesktopHandoff, desktopHandoffArguments } from './window/macos-desktop-handoff'
@@ -115,6 +116,7 @@ const handleMacAppActivation = createMacAppActivationHandler({
   requestActivation: requestDesktopActivation
 })
 
+installMainConsoleTimestamps()
 // Before anything spawns: no child may inherit Orca's std handles.
 clearWindowsStdHandleInheritance()
 installWindowsIsolatedSpawner()

@@ -40,6 +40,7 @@ import { queueWorkspaceDelete } from '../../../workspaces/lifecycle/workspace-li
 import { WORKTREE_SLEEP_METHOD } from './worktree-sleep-method'
 import { WORKTREE_SET_METHOD } from './worktree-set-method'
 import { runApprovedCreatedWorktreeSetup } from '../../../workspaces/creation/created-worktree-approved-setup'
+import { logWorktreeActivation } from './worktree-activation-log'
 
 export const WORKTREE_METHODS = [
   ...WORKTREE_CATALOG_METHODS,
@@ -101,9 +102,10 @@ export const WORKTREE_METHODS = [
     name: 'worktree.activate',
     permission: 'workspace',
     params: WorktreeActivate,
-    handler: async (params, { runtime, clientKind }) =>
+    handler: async (params, { runtime, clientKind, pairedDeviceId }) => {
+      logWorktreeActivation(params.worktree, { clientKind, pairedDeviceId })
       // Only mobile activation wakes host-renderer slept agents; preserve web/desktop behavior.
-      runtime.activateManagedWorktree(params.worktree, {
+      return runtime.activateManagedWorktree(params.worktree, {
         notifyClients: params.notifyClients !== false,
         clientKind,
         navigation: resolveRuntimeNavigationTarget({
@@ -113,6 +115,7 @@ export const WORKTREE_METHODS = [
           defaultTarget: 'host'
         })
       })
+    }
   }),
   defineMethod({
     name: 'worktree.create',
