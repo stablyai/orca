@@ -66,7 +66,8 @@ function abortIfDisconnected(ctx: RpcContext): void {
 
 /** Answer from the build's own catalog file, so the page reads the strings it was built with. */
 async function readLocaleCatalog(
-  params: MobileWebBundleLocaleCatalogParams
+  params: MobileWebBundleLocaleCatalogParams,
+  ctx: RpcContext
 ): Promise<MobileWebBundleLocaleCatalogResult> {
   const bundle = requireBundle()
   const entry = bundle.manifest.catalogs?.find((catalog) => catalog.locale === params.locale)
@@ -76,7 +77,13 @@ async function readLocaleCatalog(
   if (params.knownSha256 === entry.sha256) {
     return { locale: entry.locale, sha256: entry.sha256, catalog: null }
   }
+  // Its own budget, so a page's one catalog read never waits behind its shell's bundle download.
+  const release = acquireMobileWebBundleReadSlot(`catalog:${mobileWebBundleReadBucket(ctx)}`)
+  if (!release) {
+    throw bundleError('mobile_web_bundle_read_limited')
+  }
   try {
+    abortIfDisconnected(ctx)
     const bytes = await readFile(join(bundle.root, entry.path))
     if (createHash('sha256').update(bytes).digest('hex') !== entry.sha256) {
       throw bundleError('mobile_web_bundle_asset_changed')
@@ -88,6 +95,8 @@ async function readLocaleCatalog(
     return { locale: entry.locale, sha256: entry.sha256, catalog: { ...catalog } }
   } catch (error) {
     throw asContractError(error, entry.path)
+  } finally {
+    release()
   }
 }
 
