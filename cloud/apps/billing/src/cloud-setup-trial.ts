@@ -1,6 +1,7 @@
 // The setup session's view of the one-time trial (N11, owned by src/trial.ts). Kept behind this
 // port so the setup flow reads one shape whatever the trial module returns.
 import type { Env } from './env'
+import { TRIAL_INCLUDED_SECONDS, grantTrial, trialRow, trialState } from './trial'
 
 export type SetupTrial = { includedSeconds: number; usedSeconds: number; exhausted: boolean }
 
@@ -28,4 +29,37 @@ export const noTrialPort: TrialPort = {
   offeredSeconds: () => null,
   current: async () => null,
   grant: async () => ({ ok: false, reason: 'trial_unavailable' })
+}
+
+/** The trial module (N11) as the setup session sees it. */
+export const billingTrialPort: TrialPort = {
+  offeredSeconds: () => TRIAL_INCLUDED_SECONDS,
+  async current(env, accountId) {
+    const row = await trialRow(env.BILLING_DB, accountId)
+    if (!row || row.revoked_at !== null) {
+      return null
+    }
+    const state = trialState(row)
+    return { includedSeconds: state.includedSeconds, usedSeconds: state.usedSeconds, exhausted: state.exhausted }
+  },
+  async grant(env, input, now) {
+    const outcome = await grantTrial(
+      env,
+      {
+        accountId: input.accountId,
+        userId: input.userId,
+        ...(input.email ? { email: input.email } : {}),
+        ...(input.emailVerified !== undefined ? { emailVerified: input.emailVerified } : {}),
+        ...(input.githubUserId ? { githubUserId: String(input.githubUserId) } : {}),
+        ...(input.githubOwnerId ? { githubOwnerId: String(input.githubOwnerId) } : {}),
+        ...(input.ip ? { ip: input.ip } : {})
+      },
+      now
+    )
+    if (!outcome.ok) {
+      return { ok: false, reason: outcome.reason }
+    }
+    const state = outcome.trial
+    return { ok: true, trial: { includedSeconds: state.includedSeconds, usedSeconds: state.usedSeconds, exhausted: state.exhausted } }
+  }
 }
