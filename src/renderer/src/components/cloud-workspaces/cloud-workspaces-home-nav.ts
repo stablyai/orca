@@ -7,7 +7,7 @@ import type { CloudWorkspacesFilters } from './CloudWorkspacesToolbar'
 let pendingFilters: Partial<CloudWorkspacesFilters> | null = null
 const listeners = new Set<() => void>()
 
-/** Home reads (and clears) this when it mounts or is already showing. */
+/** Home reads (and clears) this when it mounts or is already showing. Limit errors ask for Mine + Running. */
 export function takePendingHomeFilters(): Partial<CloudWorkspacesFilters> | null {
   const next = pendingFilters
   pendingFilters = null

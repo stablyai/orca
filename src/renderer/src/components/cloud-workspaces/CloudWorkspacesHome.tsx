@@ -14,7 +14,12 @@ import type {
 import { useOrgRoster } from '../billing/team/use-org-roster'
 import { CloudWorkspaceRow } from './CloudWorkspaceRow'
 import { NEW_SECTION } from './CloudWorkspaceRowMenu'
-import { ANY, CloudWorkspacesToolbar, type CloudWorkspacesFilters } from './CloudWorkspacesToolbar'
+import {
+  ANY,
+  CloudWorkspacesToolbar,
+  INITIAL_CLOUD_WORKSPACE_FILTERS,
+  type CloudWorkspacesFilters
+} from './CloudWorkspacesToolbar'
 import { EmptyState, ErrorState, NewSectionDialog, SkeletonRows } from './CloudWorkspacesStates'
 import { CloudWorkspaceConfirmDialog, type PendingConfirm } from './CloudWorkspaceConfirmDialog'
 import { CloudReadSnapshotSheet } from './CloudReadSnapshotSheet'
@@ -32,13 +37,6 @@ import {
 } from './open-cloud-workspace'
 import { useCloudWorkspaces, useCloudWorkspacesAvailable } from './use-cloud-workspaces'
 import { useOrcaAccountKey } from '@/hooks/use-orca-account-key'
-
-const INITIAL_FILTERS: CloudWorkspacesFilters = {
-  scope: 'team',
-  by: ANY,
-  repo: ANY,
-  archived: false
-}
 
 function useMemberDirectory(orgId: string | undefined, workspaces: readonly CloudWorkspace[]) {
   const roster = useOrgRoster(orgId ?? '')
@@ -85,13 +83,13 @@ export function CloudWorkspacesHome({
   const orgId = cloud?.activeOrgId
   const selfId = cloud?.userId ?? null
   const account = useOrcaAccountKey()
-  const [filters, setFilters] = useState(INITIAL_FILTERS)
+  const [filters, setFilters] = useState(INITIAL_CLOUD_WORKSPACE_FILTERS)
   homeArchive.usePendingHomeFilters(setFilters)
   // Owner and repo filters name the previous team's people and repos; a team switch starts over.
   const [filtersAccount, setFiltersAccount] = useState(account)
   if (filtersAccount !== account) {
     setFiltersAccount(account)
-    setFilters(INITIAL_FILTERS)
+    setFilters(INITIAL_CLOUD_WORKSPACE_FILTERS)
   }
   const [opening, setOpening] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
@@ -150,9 +148,10 @@ export function CloudWorkspacesHome({
         (w) =>
           w.id === highlightId ||
           ((by === ANY || w.ownerUserId === by || w.createdBy === by) &&
-            (repo === ANY || w.repo?.url === repo))
+            (repo === ANY || w.repo?.url === repo) &&
+            (!filters.running || w.status === 'running'))
       ),
-    [all, by, repo, highlightId]
+    [all, by, repo, highlightId, filters.running]
   )
   const highlighted = highlightId ? visible.find((w) => w.id === highlightId) : undefined
   const groups = useMemo(() => {
@@ -407,9 +406,9 @@ export function CloudWorkspacesHome({
           canAdmin={canAdmin}
           onCancel={() => setConfirm(null)}
           onConfirm={() => {
-            if (confirm.kind === 'archive') {
+            if (confirm.kind === 'archive' || confirm.kind === 'delete') {
               setConfirm(null)
-              homeArchive.runHomeArchive(confirm.workspace, t, refresh)
+              homeArchive.runConfirmed(confirm, t, refresh)
               return
             }
             const change: CloudWorkspacePatch =
