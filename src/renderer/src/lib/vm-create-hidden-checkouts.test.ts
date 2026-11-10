@@ -1,13 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EMPTY_SIDEBAR_FEED_DOMAINS } from '../../../shared/sidebar-feed-client/sidebar-feed-snapshot'
 import type { SidebarFeedDomains } from '../../../shared/sidebar-list/sidebar-feed-domains'
+import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import {
   hideVmCreateCheckout,
   readHiddenVmCheckouts,
   releaseVmCreateCheckout,
   settleVmCreateCheckoutAfterCleanup,
+  withOrcaCloudPrimaryHosts,
   withoutHiddenVmCheckouts,
-  withoutHiddenVmWorktrees
+  withoutHiddenVmWorktrees,
+  withoutHiddenVmWorktreesByRepo
 } from './vm-create-hidden-checkouts'
 
 type Row = { repoId: string; path: string; isMainWorktree?: boolean }
@@ -76,5 +79,56 @@ describe('hidden VM checkout lifecycle', () => {
     expect(isListed('vm')).toBe(false)
     releaseVmCreateCheckout('c1')
     expect(isListed('vm')).toBe(true)
+  })
+})
+
+describe('Orca Cloud sandbox primaries', () => {
+  // Two cloud workspaces of one project: each sandbox lists its clone (master) as primary.
+  const hostA = 'runtime:sandbox-a'
+  const hostB = 'runtime:sandbox-b'
+  const cloudHosts = new Set([hostA, hostB])
+  const cloneA = {
+    repoId: 'r',
+    path: '/vercel/sandbox/project',
+    isMainWorktree: true,
+    hostId: hostA
+  }
+  const cloneB = { ...cloneA, hostId: hostB }
+  const sockeye = { repoId: 'r', path: '/w/sockeye', isMainWorktree: false, hostId: hostA }
+  const otter = { repoId: 'r', path: '/w/otter', isMainWorktree: false, hostId: hostB }
+  const local = { repoId: 'r', path: '/Users/me/repo', isMainWorktree: true, hostId: 'local' }
+
+  it('lists neither clone as a row, keeping the cloud workspaces and the local primary', () => {
+    const hidden = withOrcaCloudPrimaryHosts(readHiddenVmCheckouts(), cloudHosts)
+    const rows = [local, cloneA, cloneB, sockeye, otter]
+
+    expect(withoutHiddenVmWorktrees(rows, hidden)).toEqual([local, sockeye, otter])
+    expect(withoutHiddenVmWorktreesByRepo({ r: rows }, hidden)).toEqual({
+      r: [local, sockeye, otter]
+    })
+  })
+
+  it("reads a paired-server row's host from its host-qualified key", () => {
+    const { hostId: _a, ...rowA } = cloneA
+    const { hostId: _b, ...rowB } = cloneB
+    const { hostId: _s, ...rowS } = sockeye
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the filter reads only repoId, path, isMainWorktree and the key.
+    const domains = {
+      ...EMPTY_SIDEBAR_FEED_DOMAINS,
+      pairedServerRows: new Map([
+        [composeWorktreeHostIdentity(hostA, 'r::/vercel/sandbox/project'), rowA],
+        [composeWorktreeHostIdentity(hostB, 'r::/vercel/sandbox/project'), rowB],
+        [composeWorktreeHostIdentity(hostA, 'r::/w/sockeye'), rowS]
+      ])
+    } as unknown as SidebarFeedDomains
+    const hidden = withOrcaCloudPrimaryHosts(readHiddenVmCheckouts(), cloudHosts)
+
+    expect([...withoutHiddenVmCheckouts(domains, hidden).pairedServerRows.values()]).toEqual([rowS])
+  })
+
+  it('leaves lists untouched when no Orca Cloud host is known', () => {
+    const rows = [local, cloneA]
+    const hidden = withOrcaCloudPrimaryHosts(readHiddenVmCheckouts(), new Set())
+    expect(withoutHiddenVmWorktrees(rows, hidden)).toBe(rows)
   })
 })
