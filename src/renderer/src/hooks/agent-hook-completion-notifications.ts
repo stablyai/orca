@@ -1,8 +1,4 @@
-import {
-  buildTabIndex,
-  paneIsPlaced,
-  paneCanReceiveHookCompletion
-} from './agent-hook-completion-pane-lifetime'
+import { paneIsPlaced, paneCanReceiveHookCompletion } from './agent-hook-completion-pane-lifetime'
 import { useAppStore } from '@/store'
 import { createAgentCompletionCoordinator } from '@/components/terminal-pane/agent-completion/agent-completion-coordinator'
 import type {
@@ -65,15 +61,14 @@ function pruneClosedPaneCoordinators(): void {
     return
   }
   lastPrunedLivenessSnapshot = livenessSnapshot
-  const tabIndex = buildTabIndex(livenessSnapshot.tabsByWorktree)
   for (const [paneKey, entry] of coordinatorsByPaneKey) {
-    if (!paneIsPlaced(paneKey, tabIndex)) {
+    if (!paneIsPlaced(paneKey)) {
       finishDrops.recordPrunedPendingFinish(entry.worktreeId, paneKey, entry.coordinator)
       disposeCoordinatorForPaneKey(paneKey)
     }
   }
   for (const paneKey of paneKeysRequiringFreshWorking) {
-    if (!paneCanReceiveHookCompletion(paneKey, tabIndex)) {
+    if (!paneCanReceiveHookCompletion(paneKey)) {
       paneKeysRequiringFreshWorking.delete(paneKey)
     }
   }

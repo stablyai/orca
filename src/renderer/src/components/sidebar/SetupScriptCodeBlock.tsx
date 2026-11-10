@@ -1,7 +1,7 @@
 import React, { useId, useMemo, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { countScriptLines } from '@/lib/script-textarea-rows'
 

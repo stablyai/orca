@@ -35,7 +35,7 @@ import {
   type TerminalThemeOption
 } from '@/lib/terminal-theme'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 let lastEditedTerminalThemeTarget: TerminalThemeSlot | null = null
 

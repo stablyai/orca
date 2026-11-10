@@ -1,6 +1,6 @@
 import { applyProviderSessionOnlyUpdate } from '@/hooks/ipc-events/agent-status-partial-updates'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import {
   makeRepo,
@@ -40,7 +40,9 @@ vi.mock('@/runtime/native-chat/agent-catalogs/host-structured-agents', async (im
       capabilities: {}
     }))
 }))
-vi.mock('@/lib/renderer-app-platform', () => ({ getRendererAppPlatform: () => mocks.platform }))
+vi.mock('@/app-shell/platform/renderer-app-platform', () => ({
+  getRendererAppPlatform: () => mocks.platform
+}))
 
 vi.mock(
   '../right-sidebar/ai-vault/session-actions/ai-vault-session-resume-in-chat-workspace',

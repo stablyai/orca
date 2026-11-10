@@ -8,9 +8,6 @@ export type CoordinatorEntry = {
 }
 
 export type StoreSnapshot = ReturnType<typeof useAppStore.getState>
-export type WorktreeTab = NonNullable<StoreSnapshot['tabsByWorktree']>[string][number]
-// Index paneKey → tab once per prune instead of flattening all tabs per coordinator.
-export type TabIndex = ReadonlyMap<string, WorktreeTab>
 export type PaneCoordinatorLivenessSnapshot = Pick<
   StoreSnapshot,
   'tabsByWorktree' | 'ptyIdsByTabId' | 'terminalLayoutsByTabId' | 'suppressedPtyExitIds'

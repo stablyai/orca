@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
-import { useAppStore } from '../store'
-import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
-import { preventUnloadAndScheduleShutdownCheckpointReset } from '@/lib/shutdown-checkpoint-guard'
+import { useAppStore } from '../store/index'
+import { isIntentionalAppRestartInProgress } from '@/app-shell/updates/updater-beforeunload'
+import { preventUnloadAndScheduleShutdownCheckpointReset } from '@/app-shell/shutdown/shutdown-checkpoint-guard'
 import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
 import { runAfterEditorFramesFlush } from './editor/save/flush/editor-pending-flush'
 import {

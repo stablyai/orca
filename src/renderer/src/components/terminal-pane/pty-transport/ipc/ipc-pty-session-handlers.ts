@@ -1,3 +1,5 @@
+import { getTerminalNoticeLifetime } from '../../provider-notices/terminal-notice-lifetime'
+import { prepareTerminalNoticeExit } from '../delivery/pty-notice-exit'
 import { ptyWriteUnavailableHandlers } from '../delivery/pty-dispatcher'
 import {
   drainRolledBackPtyShutdownData,
@@ -135,6 +137,7 @@ export function createIpcPtySessionHandlers({
 
   function registerExit(id: string, incarnationId?: string): boolean {
     const hadBufferedExit = hasPreHandlerPtyExit(id, incarnationId)
+    const lifetime = getTerminalNoticeLifetime(id)
     const exit = (code: number): void => {
       const currentId = getPtyId()
       if (currentId !== null && currentId !== id) {
@@ -154,7 +157,18 @@ export function createIpcPtySessionHandlers({
     ptyTeardownHandlers.set(id, clearAccumulatedState)
     ptyShutdownLifecycleHandlers.set(id, shutdownLifecycle)
     try {
-      drainPreHandlerPtyExit(id, exit, incarnationId)
+      drainPreHandlerPtyExit(
+        id,
+        (code, exitIncarnationId) => {
+          const finishNotice = prepareTerminalNoticeExit(lifetime, code, exitIncarnationId)
+          try {
+            exit(code)
+          } finally {
+            finishNotice()
+          }
+        },
+        incarnationId
+      )
     } catch (error) {
       if (!hadBufferedExit) {
         throw error

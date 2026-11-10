@@ -23,6 +23,7 @@ import {
   resolveOrchestrationSessionCaller,
   type ResolvedOrchestrationRequest
 } from './orchestration-session-caller'
+import { admitOrchestrationPeerCall } from './orchestration-peer-caller'
 
 type RpcRequestAdmissionDeps = {
   runtime: OrcaRuntimeService
@@ -59,6 +60,13 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
     return reject(migrationFence)
   }
 
+  let peer: ReturnType<typeof admitOrchestrationPeerCall>
+  try {
+    peer = admitOrchestrationPeerCall(runtime, rawRequest, method, options)
+  } catch (error) {
+    return reject(mapDispatcherError(rawRequest, meta, error))
+  }
+
   const admitResolved = ({ request, caller }: ResolvedOrchestrationRequest) => {
     const parsedParams = parseRpcRequestParams(request, method, meta)
     if (parsedParams.error) {
@@ -75,6 +83,9 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
       )
     }
     return { method, request, caller, params: parsedParams.value }
+  }
+  if (peer) {
+    return admitResolved(peer)
   }
   // Resolve once before parse and unary/streaming branching so both see the same caller.
   const callerField = method.orchestrationAccess?.caller

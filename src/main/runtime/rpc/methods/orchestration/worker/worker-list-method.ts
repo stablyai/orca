@@ -251,6 +251,7 @@ async function projectWorkerListPageWithFilteredSnapshot(
       dispatchStatus: row.dispatchStatus,
       agentTerminalHandle: row.agentTerminalHandle,
       terminalState: row.terminalState,
+      coordinatedFrom: row.coordinatedFrom,
       resource: row.resource ? exposeWorkerTerminalResource(row.resource) : null,
       // Emit only derived ownership; resource identity/release fields already live on the row.
       projection: {

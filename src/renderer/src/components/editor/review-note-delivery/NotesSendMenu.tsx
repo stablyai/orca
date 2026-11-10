@@ -1,4 +1,4 @@
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { ReviewNotesSendMenuContent } from './ReviewNotesSendMenuContent'
 import type { DiffCommentDeliverySnapshot } from '@/store/slices/diff-comments/create-diff-comments-slice'
 import {

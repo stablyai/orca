@@ -1,4 +1,4 @@
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 
 /** Why a finished agent turn did not mark its workspace unread. */
 export type AgentFinishDropCause =

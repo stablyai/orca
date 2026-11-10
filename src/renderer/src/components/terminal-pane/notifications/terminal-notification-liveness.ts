@@ -4,8 +4,13 @@ import '@/store/index'
 
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalPaneLayoutNode } from '../../../../../shared/workspace-layout/terminal-tab-types'
+import {
+  getFirstTerminalTab,
+  terminalTabHasOwnerOutside
+} from '@/store/terminals/terminal-tab-owner-index'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
+const emptyTerminalTabs: StoreSnapshot['tabsByWorktree'] = {}
 
 export function getPaneKeyTabId(paneKey: string): string | null {
   const parsed = parsePaneKey(paneKey)
@@ -74,11 +79,9 @@ export function isCurrentLivePaneKey(
     return false
   }
 
-  const tabExistsInAnotherWorktree = Object.entries(state.tabsByWorktree).some(
-    ([candidateWorktreeId, tabs]) =>
-      candidateWorktreeId !== worktreeId && tabs.some((tab) => tab.id === parsed.tabId)
-  )
-  if (tabExistsInAnotherWorktree) {
+  if (
+    terminalTabHasOwnerOutside(state.tabsByWorktree ?? emptyTerminalTabs, parsed.tabId, worktreeId)
+  ) {
     return false
   }
 
@@ -113,17 +116,11 @@ export function isCurrentKnownPaneKey(
     return false
   }
 
-  let placed = false
-  for (const [candidateWorktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
-    if (!tabs.some((tab) => tab.id === parsed.tabId)) {
-      continue
-    }
-    if (candidateWorktreeId !== worktreeId) {
-      return false
-    }
-    placed = true
+  const tabsByWorktree = state.tabsByWorktree ?? emptyTerminalTabs
+  if (terminalTabHasOwnerOutside(tabsByWorktree, parsed.tabId, worktreeId)) {
+    return false
   }
-  if (!placed) {
+  if (!getFirstTerminalTab(tabsByWorktree, parsed.tabId)) {
     return false
   }
 

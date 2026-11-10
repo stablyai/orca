@@ -6,7 +6,7 @@ import React from 'react'
 import { ChevronDown } from 'lucide-react'
 import { ProjectHeaderHostLabel, ProjectHeaderHostTooltip } from './ProjectHeaderHostLabel'
 import type { VirtualItem } from '@tanstack/react-virtual'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
 

@@ -8,7 +8,7 @@ import {
   SSH_CONFIG_HOST_RESULT_LIMIT,
   type SshConfigHostSummary
 } from '../../../../../../shared/ssh-types'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 const EMPTY_CONFIG_HOSTS: SshConfigHostSummary[] = []
 

@@ -1,0 +1,117 @@
+id: claude-chat-entrypoint-owner
+language: typescript
+severity: error
+message: Keep the Claude identity literal in claude-chat-entrypoint.ts.
+files: ['src/**']
+ignores:
+  - '**/*.test.*'
+  - '**/*.test-fixtures.*'
+  - '**/__fixtures__/**'
+  - 'src/shared/agent-launch/startup/claude-chat-entrypoint.ts'
+rule:
+  all:
+    - any:
+        - kind: string_fragment
+        - kind: property_identifier
+        - kind: identifier
+    - regex: '(?i)^(CLAUDE_CODE_ENTRYPOINT|sdk-cli)$'
+---
+id: claude-chat-entrypoint-owner-tsx
+language: tsx
+severity: error
+message: Keep the Claude identity literal in claude-chat-entrypoint.ts.
+files: ['src/**']
+ignores:
+  - '**/*.test.*'
+  - '**/*.test-fixtures.*'
+  - '**/__fixtures__/**'
+  - 'src/shared/agent-launch/startup/claude-chat-entrypoint.ts'
+rule:
+  all:
+    - any:
+        - kind: string_fragment
+        - kind: property_identifier
+        - kind: identifier
+    - regex: '(?i)^(CLAUDE_CODE_ENTRYPOINT|sdk-cli)$'
+---
+id: claude-chat-entrypoint-callers
+language: typescript
+severity: error
+message: Only structured native chat and its own probes may apply the chat identity.
+files: ['src/**']
+ignores:
+  - '**/*.test.*'
+  - '**/*.test-fixtures.*'
+  - '**/__fixtures__/**'
+  - 'src/shared/agent-launch/startup/claude-chat-entrypoint.ts'
+  - 'src/main/claude/claude-stream-json-connection.ts'
+  - 'src/main/claude/claude-agent-sdk-process-spawn.ts'
+  - 'src/main/claude/structured/launch/claude-structured-child-env.ts'
+  - 'src/main/claude/claude-model-catalog-probe.ts'
+rule:
+  all:
+    - any:
+        - kind: string_fragment
+        - kind: property_identifier
+        - kind: identifier
+    - regex: '^withOrcaClaudeChatEntrypoint$'
+---
+id: claude-chat-entrypoint-callers-tsx
+language: tsx
+severity: error
+message: Only structured native chat and its own probes may apply the chat identity.
+files: ['src/**']
+ignores:
+  - '**/*.test.*'
+  - '**/*.test-fixtures.*'
+  - '**/__fixtures__/**'
+  - 'src/shared/agent-launch/startup/claude-chat-entrypoint.ts'
+  - 'src/main/claude/claude-stream-json-connection.ts'
+  - 'src/main/claude/claude-agent-sdk-process-spawn.ts'
+  - 'src/main/claude/structured/launch/claude-structured-child-env.ts'
+  - 'src/main/claude/claude-model-catalog-probe.ts'
+rule:
+  all:
+    - any:
+        - kind: string_fragment
+        - kind: property_identifier
+        - kind: identifier
+    - regex: '^withOrcaClaudeChatEntrypoint$'
+---
+id: claude-entrypoint-key-owner
+language: typescript
+severity: error
+message: Only the chat identity owner and inherited-session isolation may access this key directly.
+files: ['src/**']
+ignores:
+  - '**/*.test.*'
+  - '**/*.test-fixtures.*'
+  - '**/__fixtures__/**'
+  - 'src/shared/agent-launch/startup/claude-chat-entrypoint.ts'
+  - 'src/shared/agent-launch/startup/claude-parent-session-env.ts'
+rule:
+  all:
+    - any:
+        - kind: string_fragment
+        - kind: property_identifier
+        - kind: identifier
+    - regex: '^CLAUDE_ENTRYPOINT_ENV$'
+---
+id: claude-entrypoint-key-owner-tsx
+language: tsx
+severity: error
+message: Only the chat identity owner and inherited-session isolation may access this key directly.
+files: ['src/**']
+ignores:
+  - '**/*.test.*'
+  - '**/*.test-fixtures.*'
+  - '**/__fixtures__/**'
+  - 'src/shared/agent-launch/startup/claude-chat-entrypoint.ts'
+  - 'src/shared/agent-launch/startup/claude-parent-session-env.ts'
+rule:
+  all:
+    - any:
+        - kind: string_fragment
+        - kind: property_identifier
+        - kind: identifier
+    - regex: '^CLAUDE_ENTRYPOINT_ENV$'

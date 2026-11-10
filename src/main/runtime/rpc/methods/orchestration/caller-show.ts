@@ -75,9 +75,13 @@ export const ORCHESTRATION_CALLER_METHODS = [
       _params,
       { orchestrationCaller, orchestrationCompatibilityEvidence, runtime }
     ): OrchestrationCallerShowResult => ({
-      caller: orchestrationCaller
-        ? { orcaSessionId: formatOrcaSessionAddress(orchestrationCaller.orcaSessionId), live: true }
-        : null,
+      caller:
+        orchestrationCaller && orchestrationCaller.kind !== 'peer'
+          ? {
+              orcaSessionId: formatOrcaSessionAddress(orchestrationCaller.orcaSessionId),
+              live: true
+            }
+          : null,
       // An Orca-launched agent's own pane and launch secret prove it is one; no hook needs to have fired.
       terminal:
         !orchestrationCaller &&

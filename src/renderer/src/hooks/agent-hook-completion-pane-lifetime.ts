@@ -4,66 +4,31 @@ import '@/components/terminal-pane/layout/terminal-layout-leaf-traversal'
 import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/terminal-pane-tree'
 import { getPtyIdForPaneKey } from './pane-key-pty-id'
 
-import type {
-  StoreSnapshot,
-  WorktreeTab,
-  TabIndex
-} from './agent-hook-completion-notification-types'
+import { getFirstTerminalTab } from '@/store/terminals/terminal-tab-owner-index'
+import type { StoreSnapshot } from './agent-hook-completion-notification-types'
 
-export function buildTabIndex(tabsByWorktree: StoreSnapshot['tabsByWorktree']): TabIndex {
-  const index = new Map<string, WorktreeTab>()
-  for (const tabs of Object.values(tabsByWorktree ?? {})) {
-    for (const tab of tabs) {
-      // Preserve first-wins lookup when tab IDs collide across worktrees.
-      if (!index.has(tab.id)) {
-        index.set(tab.id, tab)
-      }
-    }
-  }
-  return index
-}
+const emptyTerminalTabs: StoreSnapshot['tabsByWorktree'] = {}
 
 function paneHasLivePty(paneKey: string): boolean {
   return getPtyIdForPaneKey(paneKey) !== null
 }
 
-function resolveTabById(
-  state: StoreSnapshot,
-  tabId: string,
-  tabIndex?: TabIndex
-): WorktreeTab | undefined {
-  if (tabIndex) {
-    return tabIndex.get(tabId)
-  }
-  for (const tabs of Object.values(state.tabsByWorktree ?? {})) {
-    const found = tabs.find((candidate) => candidate.id === tabId)
-    if (found) {
-      return found
-    }
-  }
-  return undefined
-}
-
-export function paneIsPlaced(paneKey: string, tabIndex?: TabIndex): boolean {
+export function paneIsPlaced(paneKey: string): boolean {
   const state = useAppStore.getState()
   const pane = parsePaneKey(paneKey)
-  if (!pane || !resolveTabById(state, pane.tabId, tabIndex)) {
+  if (!pane || !getFirstTerminalTab(state.tabsByWorktree ?? emptyTerminalTabs, pane.tabId)) {
     return false
   }
   const root = state.terminalLayoutsByTabId?.[pane.tabId]?.root
   return !root || collectLayoutLeafIdsInOrder(root).includes(pane.leafId)
 }
 
-function paneKeyHasUnsuppressedPtyHint(
-  state: StoreSnapshot,
-  paneKey: string,
-  tabIndex?: TabIndex
-): boolean {
+function paneKeyHasUnsuppressedPtyHint(state: StoreSnapshot, paneKey: string): boolean {
   const parsed = parsePaneKey(paneKey)
   if (!parsed) {
     return false
   }
-  const tab = resolveTabById(state, parsed.tabId, tabIndex)
+  const tab = getFirstTerminalTab(state.tabsByWorktree ?? emptyTerminalTabs, parsed.tabId)
   if (!tab) {
     return false
   }
@@ -77,8 +42,8 @@ function paneKeyHasUnsuppressedPtyHint(
   return ptyHints.length === 0 || ptyHints.some((ptyId) => !state.suppressedPtyExitIds?.[ptyId])
 }
 
-export function paneCanReceiveHookCompletion(paneKey: string, tabIndex?: TabIndex): boolean {
+export function paneCanReceiveHookCompletion(paneKey: string): boolean {
   const state = useAppStore.getState()
   // Native hooks prove live status even before inactive-worktree PTY maps hydrate.
-  return paneKeyHasUnsuppressedPtyHint(state, paneKey, tabIndex) || paneHasLivePty(paneKey)
+  return paneKeyHasUnsuppressedPtyHint(state, paneKey) || paneHasLivePty(paneKey)
 }
