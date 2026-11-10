@@ -17,6 +17,7 @@ import {
 
 /** Resume eligibility needs the recording host's catalog even when new agents default to terminals. */
 export function useAiVaultResumeCatalogs(scope: ExecutionHostScope): void {
+  // oxlint-disable-next-line react-doctor/effect-needs-cleanup -- Cleanup disposes both conditional subscriptions and blocks pending capability delivery.
   useEffect(() => {
     let disposed = false
     const host = parseRoutableExecutionHostId(scope)

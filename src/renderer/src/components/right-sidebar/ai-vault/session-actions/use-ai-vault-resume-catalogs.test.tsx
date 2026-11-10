@@ -16,7 +16,7 @@ import {
 } from '../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import { createGlobalSettingsFixture } from '../../../../../../shared/global-settings-test-fixture'
 import { AiVaultSessionSurfaceSwitchMenuItems } from '../session-list/AiVaultSessionSurfaceSwitchMenuItems'
 import { useAiVaultPanelSessionResume } from './use-ai-vault-panel-session-resume'
 import { useAiVaultResumeCatalogs } from './use-ai-vault-resume-catalogs'
@@ -31,17 +31,28 @@ const pairedWorkspace = makeWorktree('paired-workspace', 'Old server', {
   path: '/srv/remote',
   hostId: 'runtime:old-server'
 })
-const session = {
+const session: AiVaultSession = {
   id: 'local:opencode:session-1',
   executionHostId: 'local',
   agent: 'opencode',
   sessionId: 'session-1',
+  title: 'Task',
   cwd: '/repo/local',
+  branch: null,
+  model: null,
   filePath: '/home/test/.local/share/opencode/session/session-1.json',
+  codexHome: null,
+  createdAt: null,
+  updatedAt: null,
+  modifiedAt: '2026-11-09T12:00:00Z',
   messageCount: 2,
+  totalTokens: 0,
   previewMessages: [{ role: 'user', text: 'Continue this task' }],
+  queuedMessageCount: 0,
+  subagentTranscriptCount: 0,
+  resumeCommand: 'opencode --session session-1',
   subagent: null
-} as AiVaultSession
+}
 const sessions = [session]
 const worktrees = [localWorkspace, pairedWorkspace]
 
@@ -93,11 +104,10 @@ beforeEach(() => {
   ])
   useAppStore.setState({
     ...initial,
-    settings: {
-      ...initial.settings,
+    settings: createGlobalSettingsFixture({
       agentDefaultSurface: 'terminal',
       nativeChatProviders: {}
-    } as GlobalSettings,
+    }),
     repos: [
       { ...makeRepo(), path: '/repo', displayName: 'Local' },
       { ...makeRepo(), id: 'paired-repo', path: '/srv', executionHostId: 'runtime:old-server' }
