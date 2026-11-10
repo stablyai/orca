@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { config } from './env'
 
-export type Status = 'pass' | 'fail' | 'partial' | 'not_landed' | 'skipped'
+export type Status = 'pass' | 'fail' | 'partial' | 'not_landed' | 'skipped' | 'deferred'
 export type Evidence = { kind: 'log' | 'screenshot' | 'video' | 'timing' | 'json'; label: string; path?: string; text?: string }
 export type CheckResult = {
   id: string

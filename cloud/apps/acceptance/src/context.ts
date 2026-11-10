@@ -66,7 +66,7 @@ export async function runCheck(ctx: Ctx, id: string, check: Check): Promise<Chec
     durationMs: Math.round(performance.now() - started)
   }
   ctx.run.record(result)
-  const mark = { pass: 'PASS', fail: 'FAIL', partial: 'PART', not_landed: 'TODO', skipped: 'SKIP' }[result.status]
+  const mark = { pass: 'PASS', fail: 'FAIL', partial: 'PART', not_landed: 'TODO', skipped: 'SKIP', deferred: 'LATER' }[result.status]
   console.log(`${mark} ${id} (${result.durationMs}ms) ${result.detail.slice(0, 200)}`)
   return result
 }
