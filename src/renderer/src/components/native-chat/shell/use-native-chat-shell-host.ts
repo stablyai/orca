@@ -42,11 +42,7 @@ export function useNativeChatShellHost(args: {
     }
   }, [isWorking, lastMessageId, scope])
   useEffect(() => {
-    reanchorOrphanedNativeChatShellRuns(
-      scope,
-      new Set(messages.map(({ id }) => id)),
-      messages.at(-1)?.id ?? null
-    )
+    reanchorOrphanedNativeChatShellRuns(scope, messages, messages.at(-1)?.id ?? null)
   }, [messages, scope])
   const hasAddedShellResults =
     useNativeChatShellRuns((run) => isSendableNativeChatShellRun(run, scope)).length > 0

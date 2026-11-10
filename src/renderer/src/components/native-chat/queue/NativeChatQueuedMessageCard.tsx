@@ -28,6 +28,7 @@ import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../../shared/agent-s
 import { isMacPlatform } from '@/components/native-chat/pane/routing/native-chat-shortcut'
 import {
   queuedMessageCardLine,
+  queuedMessageCardPreview,
   queuedMessageCardNeedsAttention,
   queuedMessageCardSteers,
   queuedMessageReturnedNotice,
@@ -230,7 +231,7 @@ export function NativeChatQueuedMessageCard({
           {sender}
           {expanded ? null : (
             <p ref={measureLine} className="truncate text-sm" title={line}>
-              {line}
+              {queuedMessageCardPreview(line)}
             </p>
           )}
           {caption ? (

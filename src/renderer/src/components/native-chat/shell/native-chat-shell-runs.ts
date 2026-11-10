@@ -186,11 +186,15 @@ export function anchorNativeChatShellRunsAfterTurn(scope: string, anchorId: stri
 
 export function reanchorOrphanedNativeChatShellRuns(
   scope: string,
-  liveIds: ReadonlySet<string>,
+  liveMessages: readonly { id: string }[],
   anchorId: string | null
 ): void {
+  if (!runs.some((run) => run.scope === scope && run.anchorId !== null)) {
+    return
+  }
+  const live = new Set(liveMessages.map(({ id }) => id))
   const orphaned = (run: NativeChatShellRun): boolean =>
-    run.scope === scope && run.anchorId !== null && !liveIds.has(run.anchorId)
+    run.scope === scope && run.anchorId !== null && !live.has(run.anchorId)
   if (runs.some(orphaned)) {
     write(runs.map((run) => (orphaned(run) ? { ...run, anchorId } : run)))
   }

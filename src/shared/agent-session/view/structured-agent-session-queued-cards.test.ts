@@ -4,7 +4,7 @@ import type { AgentSessionQueuedMessage } from '../requests/agent-session-queued
 import {
   headSteerableQueuedMessageCard,
   projectQueuedMessageCards,
-  queuedMessageCardLine
+  queuedMessageCardPreview
 } from './structured-agent-session-queued-cards'
 
 function draft(
@@ -100,15 +100,15 @@ describe('queued message cards', () => {
   })
 })
 
-describe('queuedMessageCardLine', () => {
+describe('queuedMessageCardPreview', () => {
   it('drops fence lines that carry an info string', () => {
-    expect(queuedMessageCardLine({ text: 'see\n```ts title="a.ts"\nconst a = 1\n```  ' })).toBe(
+    expect(queuedMessageCardPreview('see\n```ts title="a.ts"\nconst a = 1\n```  ')).toBe(
       'see\n\nconst a = 1\n'
     )
   })
 
   it('previews a fenced block without its fence lines', () => {
-    expect(queuedMessageCardLine({ text: 'explain\n\n```console\n$ pwd\n/repo\n```' })).toBe(
+    expect(queuedMessageCardPreview('explain\n\n```console\n$ pwd\n/repo\n```')).toBe(
       'explain\n\n\n$ pwd\n/repo\n'
     )
   })

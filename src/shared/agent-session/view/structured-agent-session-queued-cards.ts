@@ -191,13 +191,17 @@ export function queuedMessageCardLine(
   copy: NativeChatImageLabelCopy = NATIVE_CHAT_IMAGE_LABEL_ENGLISH
 ): string {
   const images = card.images ?? []
-  const text = (card.displayText ?? card.text).replace(/^ {0,3}`{3,}[^`\n]*$/gm, '')
+  const text = card.displayText ?? card.text
   if (text.trim() || images.length === 0) {
     return text
   }
   return images.length === 1
     ? nativeChatImageLabel(images[0], copy)
     : copy.imageCount(images.length)
+}
+
+export function queuedMessageCardPreview(line: string): string {
+  return line.replace(/^ {0,3}`{3,}[^`\n]*$/gm, '')
 }
 
 /** A returned card's words: a Stop withdrawal is not a send failure; the card's own Send is the retry, so failure words leave sending again out. */
