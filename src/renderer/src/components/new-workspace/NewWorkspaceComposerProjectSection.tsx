@@ -19,6 +19,7 @@ import { OrcaCloudSelectionHint } from './OrcaCloudSelectionHint'
 import RunOnSegmentedControl from './run-on/RunOnSegmentedControl'
 import { RunOnHintLine } from './run-on/RunOnHintLine'
 import { OrcaCloudSetupPanel } from './run-on/OrcaCloudSetupPanel'
+import { CloudSetupBrowserTracker } from './cloud-setup/CloudSetupBrowserTracker'
 import { isOrcaCloudRecipe, isOrcaCloudSelection } from './run-target-options'
 import { useOrcaCloudRunTargetAccess } from './orca-cloud-billing-cache'
 import type { OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
@@ -256,7 +257,14 @@ export function NewWorkspaceComposerProjectSection({
           </div>
         ) : null}
       </div>
-      {cloudStart?.panelVisible && selectedEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID ? (
+      {cloudStart?.tracker && selectedEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID ? (
+        // A6: the browser trip is open; the same rows tick in place, with X1 errors.
+        <CloudSetupBrowserTracker
+          {...cloudStart.tracker}
+          steps={cloudStart.steps}
+          rowActions={cloudStart.rowActions}
+        />
+      ) : cloudStart?.panelVisible && selectedEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID ? (
         // The panel's own Agent row (G) comes from the same model as the standalone one below.
         <OrcaCloudSetupPanel
           steps={cloudStart.steps}
@@ -272,7 +280,7 @@ export function NewWorkspaceComposerProjectSection({
                     />
                   )
                 }
-              : undefined
+              : cloudStart.rowActions
           }
         />
       ) : // Agent row (cloud-start G) without the panel: links to the one-time setup; never blocks Start.

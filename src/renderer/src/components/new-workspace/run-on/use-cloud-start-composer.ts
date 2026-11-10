@@ -15,17 +15,14 @@ import {
   readCloudStartDraft,
   saveCloudStartDraft
 } from '@/lib/orca-cloud/cloud-start-draft'
-import {
-  CLOUD_SETUP_ALL_SET_HOLD_MS,
-  getCloudSetupStarter
-} from '@/lib/orca-cloud/cloud-setup-session-seam'
+import { getCloudSetupStarter } from '@/lib/orca-cloud/cloud-setup-session-seam'
 import { recordSuccessfulRunOn } from '@/lib/orca-cloud/run-on-memory'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 import type { OrcaCloudAvailability } from '../../../../../shared/orca-yaml-hook-types'
 import { useOrcaCloudRunTargetAccess } from '../orca-cloud-billing-cache'
 import type { OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
-import { getCloudPrimaryLabel, setupActionFor } from './cloud-start-actions'
+import { getCloudPrimaryLabel, setupActionFor, showGitHubGrantedToast } from './cloud-start-actions'
 import {
   getCloudPrimaryAction,
   getOpenSetupSteps,
@@ -34,9 +31,15 @@ import {
 } from './cloud-start-model'
 import { getOrcaCloudStartToast } from './orca-cloud-hours-copy'
 import { useCloudStartSteps } from './use-cloud-start-steps'
+import { useSetupAutoStart } from './use-setup-auto-start'
+import {
+  setupViewExtras,
+  useComposerSetupTracker,
+  useSwitchTeamSteps
+} from '../cloud-setup/use-cloud-setup-tracker'
 import { useRunOnDefault } from './use-run-on-default'
 import { useCloudOnlyCreate, useCloudOnlyRepo } from './use-cloud-only-repo'
-import { prefersReducedMotion, type CloudStartView } from './cloud-start-view'
+import type { CloudStartView } from './cloud-start-view'
 
 export type { CloudStartView } from './cloud-start-view'
 
@@ -120,7 +123,11 @@ export function useCloudStartComposer({
     setupStartedRef.current = setupStarted
     onCreateRef.current = onCreate
   }, [onCreate, setupStarted])
-  const { steps, session, openInstall } = useCloudStartSteps({
+  const {
+    steps: rowSteps,
+    session,
+    openInstall
+  } = useCloudStartSteps({
     availability,
     access,
     repoId,
@@ -133,23 +140,11 @@ export function useCloudStartComposer({
       if (setupStartedRef.current) {
         return
       }
-      toast.message(
-        translate(
-          'components.newWorkspace.cloudStart.githubGranted',
-          'GitHub access granted for {{repo}}',
-          {
-            repo: repoName
-          }
-        ),
-        {
-          action: {
-            label: getCloudPrimaryLabel('start'),
-            onClick: () => onCreateRef.current()
-          }
-        }
-      )
+      showGitHubGrantedToast(repoName, () => onCreateRef.current())
     }
   })
+  // B2: on the personal account while a team the user is on has a plan, switch instead of buying.
+  const { steps, held: switchTeam } = useSwitchTeamSteps(rowSteps, cloudSelected && !session)
   const action = getCloudPrimaryAction(steps)
   const panelVisible = cloudSelected && isCloudSetupPanelVisible(steps)
 
@@ -195,26 +190,18 @@ export function useCloudStartComposer({
     }
   }, [cloudSelected, createWorkspace])
 
-  // Setup started from this composer (or its restored draft): when every required row is done,
-  // hold "All set", then submit as if ⌘↵ had been pressed (O4).
-  const [allSet, setAllSet] = useState(false)
-  useEffect(() => {
-    const done = action === 'start' || session?.finished === true
-    if (!setupStarted || !cloudSelected || !done) {
-      return
-    }
-    setAllSet(true)
-    const timer = window.setTimeout(
-      () => {
-        setSetupStarted(false)
-        setRestoreDone(true)
-        setAllSet(false)
-        onCreate()
-      },
-      prefersReducedMotion() ? 0 : CLOUD_SETUP_ALL_SET_HOLD_MS
-    )
-    return () => window.clearTimeout(timer)
-  }, [action, cloudSelected, onCreate, session?.finished, setupStarted])
+  // O4: setup started here (or its restored draft) starts by itself once every row is done.
+  const startAfterSetup = useCallback(() => {
+    setSetupStarted(false)
+    setRestoreDone(true)
+    onCreate()
+  }, [onCreate])
+  const allSet = useSetupAutoStart({
+    armed: setupStarted && cloudSelected,
+    done: action === 'start' || session?.finished === true,
+    setupSessionId,
+    onStart: startAfterSetup
+  })
 
   // The draft survives the browser trip and a quit; it is cleared once a workspace starts.
   const runSetup = useCallback(() => {
@@ -264,6 +251,17 @@ export function useCloudStartComposer({
     })
   }, [runSetup])
 
+  const trip = { cloudSelected, setupStarted, allSet, session, steps, access, availability }
+  const tracker = useComposerSetupTracker({
+    ...trip,
+    profileId,
+    readyToStart: action === 'start',
+    sessionId: setupSessionId,
+    runSetup,
+    // Ends the trip here; the tracker hook also clears the draft's session id.
+    onCancel: () => [setSetupStarted(false), setRestoreDone(true), setSetupSessionId(null)]
+  })
+
   const recordCreated = useCallback(() => {
     if (!repoId) {
       return
@@ -299,6 +297,7 @@ export function useCloudStartComposer({
     onUserPick: markTouched,
     cloudOnly,
     folderProject: cloudOnly.folderProject,
+    ...setupViewExtras(switchTeam, tracker),
     ...(panelVisible && localOption && action !== 'useThisComputer' && !cloudOnly.picked
       ? { onUseThisComputer: useThisComputer }
       : {})
@@ -306,8 +305,9 @@ export function useCloudStartComposer({
   if (!cloudSelected) {
     return { view, ...plainCreate }
   }
-  const onPrimary =
-    action === 'start'
+  const onPrimary = switchTeam
+    ? () => undefined
+    : action === 'start'
       ? onCreate
       : action === 'useThisComputer'
         ? useThisComputer
@@ -318,7 +318,7 @@ export function useCloudStartComposer({
             : runSetup
   return {
     view,
-    primaryActionLabel: getCloudPrimaryLabel(allSet ? 'start' : action),
+    primaryActionLabel: getCloudPrimaryLabel(allSet || switchTeam ? 'start' : action),
     onPrimary,
     primaryDisabled:
       action === 'checking' || allSet || (action === 'useThisComputer' && !localOption),

@@ -35,6 +35,9 @@ export function NewWorkspaceComposerFooter({
   cloudStart
 }: NewWorkspaceComposerFooterProps): React.JSX.Element {
   const t = useTranslate()
+  const heldReasonId = React.useId()
+  // B2: Start stays focusable but aria-disabled, saying why ("Switch to acme first").
+  const heldReason = cloudStart?.primaryHeldReason
   return (
     <>
       {createError ? (
@@ -86,8 +89,12 @@ export function NewWorkspaceComposerFooter({
           </Button>
         ) : null}
         <Button
-          onClick={() => void onCreate()}
+          onClick={heldReason ? undefined : () => void onCreate()}
           disabled={createDisabled}
+          aria-disabled={heldReason ? true : undefined}
+          aria-describedby={heldReason ? heldReasonId : undefined}
+          title={heldReason}
+          variant={heldReason ? 'default-held' : 'default'}
           size="sm"
           className="text-xs"
         >
@@ -95,6 +102,11 @@ export function NewWorkspaceComposerFooter({
           {primaryActionLabel}
           <ButtonKeyHint modifierLabel={submitShortcutModifierLabel} />
         </Button>
+        {heldReason ? (
+          <span id={heldReasonId} className="sr-only">
+            {heldReason}
+          </span>
+        ) : null}
       </div>
     </>
   )

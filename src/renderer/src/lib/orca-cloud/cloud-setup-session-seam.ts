@@ -14,6 +14,24 @@ export type CloudSetupSessionSnapshot = {
   finished: boolean
   /** A step the browser couldn't finish (kinds agreed with the setup-session API). */
   error?: { kind: string; detail?: string }
+  /** The team setup is for, once known (names it in the wrong-account error). */
+  teamName?: string
+}
+
+/**
+ * A fresh one-time link back into an open setup session (the first one was spent by the browser
+ * that opened it). Null when the session is gone. Used by "Copy setup link" and "Reopen browser".
+ */
+type SessionLinkProvider = (sessionId: string) => Promise<string | null>
+let linkProvider: SessionLinkProvider | null = null
+
+/** np4-setup registers the session link minting here. Pass null to remove it. */
+export function setCloudSetupLinkProvider(next: SessionLinkProvider | null): void {
+  linkProvider = next
+}
+
+export function getCloudSetupLinkProvider(): SessionLinkProvider | null {
+  return linkProvider
 }
 
 type SessionSource = (sessionId: string) => CloudSetupSessionSnapshot | null
