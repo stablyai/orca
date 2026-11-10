@@ -1,13 +1,13 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { Popover, PopoverContent } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   getProjectHostSetupSelectionKey,
   type NeedsSetupProjectHostOption,
   type ProjectHostSetupOption,
   type ReadyProjectHostSetupOption
-} from '@/lib/project-host-setup-options'
+} from '@/lib/workspace/creation/project-host-setup-options'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { isWithinComboboxRoot, useTypeAheadCombobox } from './use-type-ahead-combobox'
 import { COMBOBOX_POPOVER_SURFACE } from './type-ahead-combobox-styles'

@@ -2,7 +2,7 @@ import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import * as Slot from 'radix-ui/slot'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 const outlineButtonClasses =
   'border border-border bg-background text-foreground shadow-xs hover:border-muted-foreground/35 hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50'

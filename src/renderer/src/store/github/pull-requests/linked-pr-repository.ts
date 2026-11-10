@@ -18,6 +18,8 @@ import {
   worktreeMatchesHost
 } from '../../slices/worktrees/listing/worktree-host-ownership'
 import { selectWorktreesByRepo } from '../../workspaces/catalog/workspace-record-fields'
+import { resolveReviewRepository } from '@/lib/review-owner'
+import type { HostedReviewClearUpdates } from '../../../../../shared/worktree/hosted-review-branch-ownership'
 
 /**
  * The repository of the row's selected GitHub PR when its stored URL points
@@ -53,6 +55,21 @@ export function getLinkedGitHubPRRepository(
   const isForkParent =
     repo?.upstream && githubRepoIdentityKey(repo.upstream) === githubRepoIdentityKey(linked)
   return isForkParent ? null : linked
+}
+
+/** A branch switch never unselects another repository's PR, whose branches never name this worktree. */
+export function keepOtherRepositoryPRLink(
+  clear: HostedReviewClearUpdates | null,
+  worktree: Worktree,
+  repos: readonly Repo[]
+): HostedReviewClearUpdates | null {
+  const repo = clear ? (resolveReviewRepository(repos, worktree) ?? undefined) : undefined
+  if (!clear || !getLinkedGitHubPRRepository(worktree, repo)) {
+    return clear
+  }
+  return 'pushTarget' in clear && worktree.pushTarget !== undefined
+    ? { pushTarget: undefined }
+    : null
 }
 
 /**

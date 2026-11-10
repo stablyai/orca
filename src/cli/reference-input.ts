@@ -130,15 +130,23 @@ export function getCreateReferenceInputs(
 }
 
 /**
- * `worktree set --pr <url>`: an add-only delta that keeps the PR's URL (and so
- * its repository). linkedPR selects the first linked PR with that number, so
- * another URL already linked under the same number would keep the selection.
+ * `worktree set --pr <url>`: the review links plus an add-only delta that keeps the PR's URL (and
+ * so its repository). linkedPR selects the first linked PR with that number, so another URL
+ * already linked under the same number would keep the selection.
  */
-export async function getLinkedPRReferenceUpdates(
+export async function withLinkedPRReference<T extends { linkedPRReference?: WorkspaceAttachment }>(
   client: RuntimeClient,
   worktree: string,
-  reference: WorkspaceAttachment
-): Promise<{ linkedItemsBase: WorkspaceAttachment[]; linkedItems: WorkspaceAttachment[] }> {
+  { linkedPRReference: reference, ...links }: T
+): Promise<
+  Omit<T, 'linkedPRReference'> & {
+    linkedItemsBase?: WorkspaceAttachment[]
+    linkedItems?: WorkspaceAttachment[]
+  }
+> {
+  if (!reference) {
+    return links
+  }
   await assertReferenceWritesSupported(client)
   const { result } = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
     worktree
@@ -158,5 +166,5 @@ export async function getLinkedPRReferenceUpdates(
       `PR #${reference.number} from ${clash.url} is already linked and would stay selected. Remove it with \`orca reference remove ${clash.url} --worktree <selector>\`, then retry.`
     )
   }
-  return { linkedItemsBase: [], linkedItems: [reference] }
+  return { ...links, linkedItemsBase: [], linkedItems: [reference] }
 }

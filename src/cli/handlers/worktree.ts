@@ -1,3 +1,4 @@
+import { withFolderSetupSupportWarning } from './folder-setup-support-warning'
 import { withWorktreeSelectorRecovery } from '../worktree-selector-recovery'
 import type {
   RuntimeWorktreeListResult,
@@ -59,7 +60,7 @@ import { assertGitLabLinkFlagProjectsMatch } from './worktree-gitlab-link-contex
 import {
   assertReferenceWritesSupported,
   getCreateReferenceInputs,
-  getLinkedPRReferenceUpdates,
+  withLinkedPRReference,
   resolveReferenceInputs
 } from '../reference-input'
 
@@ -208,9 +209,13 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     const result = await withSetupDecisionRecovery(
       callNamingParentEnvironment<RuntimeWorktreeCreateResult>(client, 'worktree.create', create)
     )
-    printHookWarning(result.result, json)
-    printLineageSummary(result.result, json)
-    printResult(result, json, formatWorktreeShow)
+    const created = {
+      ...result,
+      result: await withFolderSetupSupportWarning(client, result.result, create)
+    }
+    printHookWarning(created.result, json)
+    printLineageSummary(created.result, json)
+    printResult(created, json, formatWorktreeShow)
   },
   'worktree set': async ({ flags, client, cwd, json }) => {
     assertWorktreeParentFlagsCompatible(
@@ -219,9 +224,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     )
     const parentSelector = getOptionalStringFlag(flags, 'parent-worktree')
     const readFlags = getWorktreeReadFlags(flags)
-    const { linkedPRReference, ...reviewLinks } = getReviewTargetLinkFlags(flags, {
-      nullable: true
-    })
+    const reviewLinks = getReviewTargetLinkFlags(flags, { nullable: true })
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
       allowNull: true
     })
@@ -230,15 +233,12 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       return
     }
     await assertGitLabLinkFlagProjectsMatch(flags, client, { worktree })
-    const linkedPRUpdates = linkedPRReference
-      ? await getLinkedPRReferenceUpdates(client, worktree, linkedPRReference)
-      : {}
+    const links = await withLinkedPRReference(client, worktree, reviewLinks)
     const parentFields = await resolveSetParentFields(flags, cwd, client)
     const pending = callNamingParentEnvironment<RuntimeWorktreeSetResult>(client, 'worktree.set', {
       worktree,
       displayName: getOptionalStringFlag(flags, 'display-name'),
-      ...reviewLinks,
-      ...linkedPRUpdates,
+      ...links,
       ...linearIssueLink,
       // An explicit empty value clears the stored comment.
       comment: getOptionalStringFlagAllowingEmpty(flags, 'comment'),

@@ -1,5 +1,11 @@
 import { translate } from '../i18n/mobile-i18n'
-import type { MobileDictationEngineShown } from '../hooks/mobile-dictation-session-state'
+import type {
+  MobileDictationEngineShown,
+  MobileDictationKeptFailure
+} from '../hooks/mobile-dictation-session-state'
+import { MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE } from '../hooks/mobile-dictation-pending-audio-budget'
+import { phoneDictationFailedMessage } from '../hooks/mobile-dictation-device-engine'
+import { dictationFailureMessage, dictationSessionLostMessage } from './mobile-dictation-setup'
 
 // Active: starting or recording, so the mic is a Stop.
 export type MobileDictationMicState = { starting: boolean; active: boolean; processing: boolean }
@@ -11,6 +17,10 @@ export const dictationControlsCopy = {
   stop: () => translate('dictation.controls.stop', 'Stop and insert'),
   finishing: () => translate('dictation.controls.finishing', 'Finishing dictation'),
   cancel: () => translate('dictation.controls.cancel', 'Cancel dictation'),
+  discard: () => translate('dictation.controls.discard', 'Discard recording'),
+  retry: () => translate('dictation.controls.retry', 'Retry dictation'),
+  retryShort: () => translate('dictation.controls.retryShort', 'Retry'),
+  recordingKept: () => translate('dictation.failure.recordingKept', 'Recording kept'),
   mic: ({ starting, active, processing }: MobileDictationMicState) =>
     starting
       ? dictationControlsCopy.starting()
@@ -29,7 +39,7 @@ export const dictationControlsCopy = {
       : translate('dictation.status.movedToComputer', 'Moved to the computer')
 }
 
-function spokenDuration(elapsedSeconds: number): string {
+export function dictationSpokenDuration(elapsedSeconds: number): string {
   const minutes = Math.floor(elapsedSeconds / 60)
   const count = elapsedSeconds % 60
   const seconds =
@@ -57,7 +67,7 @@ export function dictationMeterLabel(
   engine: MobileDictationEngineShown['kind'] | null,
   computer: string | null
 ): string {
-  const duration = spokenDuration(elapsedSeconds)
+  const duration = dictationSpokenDuration(elapsedSeconds)
   if (engine === 'phone') {
     return translate('dictation.controls.meterOnPhone', 'Recording, {{duration}}, on this phone', {
       duration
@@ -78,4 +88,29 @@ export function dictationMeterLabel(
         )
   }
   return translate('dictation.controls.meter', 'Recording, {{duration}}', { duration })
+}
+
+// The few words a kept failure shows in the composer row; the full message is too long for it.
+export function dictationFailureReason(failure: MobileDictationKeptFailure): string {
+  return (
+    dictationKeptFailureCause(failure) ??
+    translate('dictation.failure.stopped', 'Dictation stopped')
+  )
+}
+
+// Why a kept failure stopped, when it is known; null for the generic stop.
+export function dictationKeptFailureCause({
+  message,
+  offline
+}: MobileDictationKeptFailure): string | null {
+  if (offline || dictationFailureMessage(message) === dictationSessionLostMessage()) {
+    return translate('dictation.failure.connectionLost', 'Connection lost')
+  }
+  if (message === MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE) {
+    return translate('dictation.failure.connectionSlow', 'Connection too slow')
+  }
+  if (message === phoneDictationFailedMessage()) {
+    return translate('dictation.failure.phoneStopped', 'Stopped on this phone')
+  }
+  return null
 }

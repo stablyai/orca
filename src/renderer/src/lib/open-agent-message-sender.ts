@@ -158,6 +158,47 @@ async function openSender(
   }
 }
 
+type TerminalFocusFeedback = Parameters<typeof focusTerminal>[2]
+
+/** Opens an orchestration party by address on its host; a terminal worker Orca closed reopens there. */
+export async function openOrchestrationDispatch(
+  address: string,
+  label: string,
+  host: RuntimeClientTarget,
+  feedback?: { open?: StructuredSessionOpenFeedback; terminal?: TerminalFocusFeedback }
+): Promise<void> {
+  const terminal = feedback?.terminal ?? {
+    lookupFailure: (failure: LookupFailure) => showLookupFailure(failure, label, feedback?.open)
+  }
+  try {
+    const result = await openDesktopStructuredSession(
+      {
+        kind: 'sender',
+        party: { address, terminalHandle: null, orcaSessionId: null },
+        messageIds: [],
+        displayName: label
+      },
+      host,
+      undefined,
+      undefined,
+      feedback?.open
+    )
+    if (result.kind === 'terminal') {
+      await focusTerminal(
+        result.handle,
+        host.kind === 'environment' ? host.environmentId : null,
+        terminal
+      )
+    }
+  } catch (error) {
+    showLookupFailure(
+      isRuntimeCompatBlockError(error) ? 'update' : 'unreachable',
+      label,
+      feedback?.open
+    )
+  }
+}
+
 /** Crew opens share the sender's host-aware navigation; mailbox identity is never a terminal handle. */
 export async function openOrchestrationCrewAgent(
   row: OrchestrationCrewRow,
@@ -200,12 +241,19 @@ export async function openOrchestrationCrewAgent(
     gone: terminalExited,
     lookupFailure: (failure: LookupFailure) => showLookupFailure(failure, row.label, feedback)
   }
+  if (target?.kind === 'dispatch') {
+    await openOrchestrationDispatch(target.address, row.label, host, {
+      open: feedback,
+      terminal: terminalFeedback
+    })
+    return
+  }
   try {
     if (target?.kind === 'terminal') {
       await focusTerminal(target.handle, environmentId, terminalFeedback)
       return
     }
-    if (target?.kind !== 'chat' && target?.kind !== 'dispatch') {
+    if (target?.kind !== 'chat') {
       unavailable(
         row.hostLabel
           ? translate('components.orchestrationCrew.openOnHost', 'Open this agent on {{host}}.', {
@@ -219,17 +267,10 @@ export async function openOrchestrationCrewAgent(
       return
     }
     const result = await openDesktopStructuredSession(
-      target.kind === 'chat'
-        ? {
-            kind: 'history',
-            structuredSession: { workspaceId: target.worktreeId, sessionId: target.sessionId }
-          }
-        : {
-            kind: 'sender',
-            party: { address: target.address, terminalHandle: null, orcaSessionId: null },
-            messageIds: [],
-            displayName: row.label
-          },
+      {
+        kind: 'history',
+        structuredSession: { workspaceId: target.worktreeId, sessionId: target.sessionId }
+      },
       host,
       undefined,
       undefined,

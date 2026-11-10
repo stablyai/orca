@@ -34,7 +34,7 @@ const mocks = vi.hoisted(() => ({
   }
 }))
 vi.mock('@/runtime/linear/runtime-linear-client', () => ({ linearStatus: mocks.readStatus }))
-vi.mock('@/lib/gitlab-work-item-source-lookup', () => ({
+vi.mock('@/lib/work-items/gitlab/gitlab-work-item-source-lookup', () => ({
   listGitLabWorkItemsForSource: mocks.listGitlabWorkItems,
   lookupGitLabWorkItemByPathForSource: vi.fn()
 }))

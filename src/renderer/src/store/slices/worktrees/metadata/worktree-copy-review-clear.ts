@@ -1,5 +1,4 @@
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -8,6 +7,7 @@ import {
 import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { CLEARED_HOSTED_REVIEW_LINK_UPDATES } from '../../../../../../shared/worktree/hosted-review-links'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
+import type { HostedReviewClearUpdates } from '../../../../../../shared/worktree/hosted-review-branch-ownership'
 
 // Why this module: worktree ids repeat across hosts (`repoId::path`), so branch-switch review
 // clears are keyed by id plus the copy's owner and never by the bare id.
@@ -42,7 +42,7 @@ export function clearCopyReviewLinks(
   byRepo: Record<string, Worktree[]>,
   worktreeId: string,
   copy: Pick<WorktreeCopyClear, 'owner' | 'rowOwner'>,
-  cleared: Partial<WorktreeMeta> = CLEARED_HOSTED_REVIEW_LINK_UPDATES
+  updates: HostedReviewClearUpdates = CLEARED_HOSTED_REVIEW_LINK_UPDATES
 ): Record<string, Worktree[]> {
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   let changed = false
@@ -54,7 +54,7 @@ export function clearCopyReviewLinks(
     changed = true
     return {
       ...row,
-      ...normalizeWorkspaceAttachmentUpdate(row, cleared)
+      ...normalizeWorkspaceAttachmentUpdate(row, updates)
     }
   })
   return changed && next ? { ...byRepo, [repoId]: next } : byRepo

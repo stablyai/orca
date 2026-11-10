@@ -81,7 +81,9 @@ describe('linked PR repositories at the GitHub IPC boundary', () => {
   it('hands the linked repository to the direct PR lookup', async () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only hasCountedPR and record.
     const stats = { hasCountedPR: () => false, record: vi.fn() } as unknown as StatsCollector
-    registerGitHubPRRefreshHandlers(store, stats)
+    registerGitHubPRRefreshHandlers(store, stats, {
+      notifyPullRequestChangedForRemoteClients: vi.fn()
+    })
 
     await handlers.get('gh:prForBranch')?.(null, {
       repoPath: repo.path,

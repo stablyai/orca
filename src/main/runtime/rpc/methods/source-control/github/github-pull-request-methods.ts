@@ -16,7 +16,7 @@ export const GITHUB_PULL_REQUEST_METHODS = [
     name: 'github.prForBranch',
     permission: 'workspace',
     params: PrForBranch,
-    handler: async (params, { runtime }) =>
+    handler: async (params, { runtime, clientKind }) =>
       runtime.getRepoPRForBranch(
         params.repo,
         params.branch,
@@ -26,6 +26,7 @@ export const GITHUB_PULL_REQUEST_METHODS = [
         params.currentHeadOid,
         params.reason,
         params.userRefresh,
+        clientKind,
         params.linkedPRRepository
       )
   }),

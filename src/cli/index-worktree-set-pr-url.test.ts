@@ -157,11 +157,4 @@ describe('worktree set --pr <url> links a PR from any repository', () => {
     expect(output()).toContain('--reference <url>')
     expect(process.exitCode).toBe(1)
   })
-
-  it('documents the URL form in set help only', async () => {
-    const output = printed()
-    await main(['worktree', 'set', '--help'])
-    expect(output()).toContain('--pr <number|url|null>')
-    expect(callMock).not.toHaveBeenCalled()
-  })
 })

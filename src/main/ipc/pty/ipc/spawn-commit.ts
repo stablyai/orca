@@ -42,7 +42,8 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
           hasStablePaneOwner: ctx.stablePaneOwner !== null,
           incarnationId: ctx.result.incarnationId
         }),
-        launchedAgent: freshSpawn ? resolveLaunchedAgent(args.command, args.launchAgent) : null
+        launchedAgent: freshSpawn ? resolveLaunchedAgent(args.command, args.launchAgent) : null,
+        freshSpawn
       },
       preAllocatedHandle: ctx.preAllocatedHandle,
       spawnTiming: ctx.spawnTiming,

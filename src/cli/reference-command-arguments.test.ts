@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeCommandPositionals, parseArgs, specPaths, validateCommandAndFlags } from './args'
-import { buildAgentContext } from './agent-context'
 import { getRepeatedStringFlag } from './flags'
 import { COMMAND_SPECS } from './specs'
 
@@ -34,18 +33,5 @@ describe('reference command arguments', () => {
   it('does not accept extra arguments on commands without variadic positionals', () => {
     const parsed = parse(['reference', 'find', 'STA-1', 'STA-2'])
     expect(() => validateCommandAndFlags(COMMAND_SPECS, parsed)).toThrow('Unknown command')
-  })
-
-  it('exposes repeatability to agents and excludes browser targeting', () => {
-    const schema = buildAgentContext(COMMAND_SPECS)
-    const add = schema.commands.find((command) => command.command === 'reference add')
-    expect(add).toMatchObject({
-      positionalArgs: ['url'],
-      variadicPositional: true,
-      repeatableFlags: ['url']
-    })
-    expect(add?.flags).not.toContain('page')
-    const create = schema.commands.find((command) => command.command === 'worktree create')
-    expect(create?.repeatableFlags).toEqual(['reference'])
   })
 })

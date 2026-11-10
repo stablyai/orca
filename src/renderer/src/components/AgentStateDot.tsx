@@ -1,6 +1,6 @@
 import React from 'react'
 import { Activity, CircleCheck, CircleDashed } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'

@@ -88,8 +88,7 @@ export function claudeNamingLaunchInputs(launch: ClaudeStructuredLaunch): Claude
       ...claudeConfigDirEnvPatch(launch.claudeConfigDir, { env: launch.env })
     },
     {
-      inheritedEnv: withoutInheritedClaudeConfigDir(process.env),
-      scrubConfiguredChildSessionStamps: true
+      inheritedEnv: withoutInheritedClaudeConfigDir(process.env)
     }
   )
   for (const key of launch.envToDelete ?? []) {

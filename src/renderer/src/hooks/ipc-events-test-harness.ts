@@ -3,11 +3,7 @@ import type * as ReactModule from 'react'
 import type { HarnessStoreState } from './ipc-events-harness-store-state'
 import type { ClientHostedBrowserRowsEvent } from '../../../shared/client-hosted-browser-rows'
 
-export {
-  createHarnessStoreState,
-  type HarnessStoreState,
-  type HarnessTab
-} from './ipc-events-harness-store-state'
+import './ipc-events-harness-store-state'
 
 export type CreateTerminalRequest = {
   requestId?: string
@@ -115,9 +111,11 @@ export async function loadIpcEventsHarness(
     getVisibleWorktreeShortcutTargets: () =>
       options.visibleWorktreeTargets ?? (options.visibleWorktreeIds ?? []).map((id) => ({ id }))
   }))
-  vi.doMock('@/lib/floating-workspace-terminal-actions', () => ({
-    createFloatingWorkspaceTerminalTab: vi.fn(),
+  vi.doMock('@/components/floating-terminal/floating-workspace-terminal-actions', () => ({
     isFloatingWorkspacePanelFocused: () => false
+  }))
+  vi.doMock('@/components/floating-terminal/floating-workspace-tab-creation', () => ({
+    createFloatingWorkspaceTerminalTab: vi.fn()
   }))
   vi.doMock('@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle', () => ({
     activateWebRuntimeSessionTab: vi.fn(),
@@ -132,7 +130,9 @@ export async function loadIpcEventsHarness(
   vi.doMock('@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
     isWebRuntimeSessionActive: vi.fn(() => false)
   }))
-  vi.doMock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
+  vi.doMock('@/components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
+    focusTerminalTabSurface: vi.fn()
+  }))
   vi.doMock('@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry', () => ({
     focusRuntimeTerminalSurface: vi.fn(() => false)
   }))
