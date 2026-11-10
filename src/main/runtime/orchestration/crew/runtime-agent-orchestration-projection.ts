@@ -71,6 +71,7 @@ export class RuntimeAgentOrchestrationProjection {
     const contexts: Record<string, AgentStatusOrchestrationContext> = {}
     const terminals = new Map<string, Iterable<string>>()
     const terminalCandidates = this.deps.captureTerminalCandidates?.()
+    const expanded = new Set<ReturnType<OrchestrationTerminalCandidates>>()
     for (const candidate of source?.rows() ?? []) {
       const handle =
         candidate.assignee_handle && this.deps.getWorktreeId(candidate.assignee_handle) !== null
@@ -86,6 +87,10 @@ export class RuntimeAgentOrchestrationProjection {
         const groups =
           terminalCandidates?.(address) ??
           (handle && paneKey ? [{ paneKey, handles: [handle] }] : [])
+        if (expanded.has(groups)) {
+          continue
+        }
+        expanded.add(groups)
         for (const group of groups) {
           if (!terminals.has(group.paneKey)) {
             terminals.set(group.paneKey, group.handles)

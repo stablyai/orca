@@ -5,6 +5,7 @@ import type {
 } from '../../terminal/records/runtime-terminal-state-records'
 import type { PtyPaneOf } from '../../terminal/surface/pty-pane-query'
 
+/** One capture returns an unchanged, complete array per stable leaf or exact legacy pane. */
 export type OrchestrationTerminalCandidates = (pane: string) => readonly {
   paneKey: string
   handles: Iterable<string>
