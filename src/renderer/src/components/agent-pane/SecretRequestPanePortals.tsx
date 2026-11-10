@@ -15,12 +15,17 @@ import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { TerminalPaneController } from '../terminal-pane/controller/use-terminal-pane-controller'
 import { SecretRequestCard, secretRequestTitle } from './SecretRequestCard'
+import { secretRequestDoneTitle } from './SecretRequestCardParts'
 import {
   registerSecretRequestCard,
   setSecretRequestSlot,
   useSecretRequestSlots
 } from './secret-request-focus'
 import { useSecretRequestCard } from './use-secret-request-card'
+
+const SAVED_DISMISS_MS = 6000
+/** Keys that don't type into the pane: F6 reaches the card, modifiers alone do nothing. */
+const NON_TYPING_KEYS = new Set(['F6', 'Shift', 'Control', 'Alt', 'Meta', 'CapsLock'])
 
 function SecretRequestPaneCardBody({
   entry,
@@ -43,19 +48,90 @@ function SecretRequestPaneCardBody({
   primary: boolean
   announcement: string
 }): React.JSX.Element {
-  const { model, actions } = useSecretRequestCard({ entry, more, worktreeId, ptyId, onAskingPane })
+  const t = useTranslate()
+  const { model, actions: cardActions } = useSecretRequestCard({
+    entry,
+    more,
+    worktreeId,
+    ptyId,
+    onAskingPane
+  })
   const cardRef = useRef<HTMLDivElement>(null)
-  // Filled after mount so screen readers hear it once; a live region's initial text isn't read.
+  const [hovered, setHovered] = useState(false)
+  const [focused, setFocused] = useState(false)
+  const actions = {
+    ...cardActions,
+    onFocusChange: (next: boolean) => {
+      setFocused(next)
+      cardActions.onFocusChange?.(next)
+    }
+  }
+  // The hook's actions are new every render; the timers below must not restart with them.
+  const latest = useRef(cardActions)
+  useLayoutEffect(() => {
+    latest.current = cardActions
+  })
+  const done = model.phase === 'saved' || model.phase === 'savedAfterExpiry'
+  const doneTitle = done
+    ? secretRequestDoneTitle(
+        {
+          agent: model.agent,
+          name: model.name,
+          scope: model.scope,
+          toldAgent: model.phase === 'saved'
+        },
+        t
+      )
+    : ''
+  // Filled after mount so screen readers hear it once; a live region's initial text isn't read. The
+  // saved state is announced here too, before it dismisses itself.
   const [spoken, setSpoken] = useState('')
   const open = model.phase === 'open'
+  const toSpeak = open ? announcement : doneTitle
   useEffect(() => {
-    if (!open) {
+    if (!toSpeak) {
       setSpoken('')
       return
     }
-    const timer = window.setTimeout(() => setSpoken(announcement), 150)
+    const timer = window.setTimeout(() => setSpoken(toSpeak), 150)
     return () => window.clearTimeout(timer)
-  }, [open, announcement])
+  }, [toSpeak])
+
+  // Saved is a done state: it goes away on its own after a few seconds, never while it's in use.
+  useEffect(() => {
+    if (!done || hovered || focused) {
+      return
+    }
+    const timer = window.setTimeout(() => latest.current.onDismiss(), SAVED_DISMISS_MS)
+    return () => window.clearTimeout(timer)
+  }, [done, hovered, focused])
+
+  // While it asks, scrolling or typing in the pane folds it to the pill instead of covering output.
+  const foldable = !done && !model.collapsed
+  useEffect(() => {
+    if (!foldable) {
+      return
+    }
+    const container = pane.container
+    const outsideCard = (target: EventTarget | null): boolean =>
+      !(target instanceof Node && cardRef.current?.contains(target))
+    const onWheel = (event: WheelEvent): void => {
+      if (outsideCard(event.target)) {
+        latest.current.onCollapse()
+      }
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (outsideCard(event.target) && !NON_TYPING_KEYS.has(event.key)) {
+        latest.current.onCollapse()
+      }
+    }
+    container.addEventListener('wheel', onWheel, { capture: true, passive: true })
+    container.addEventListener('keydown', onKeyDown, { capture: true })
+    return () => {
+      container.removeEventListener('wheel', onWheel, { capture: true })
+      container.removeEventListener('keydown', onKeyDown, { capture: true })
+    }
+  }, [foldable, pane.container])
 
   // F6 reaches this card from its pane (or from anywhere when it's on the active pane), and the card
   // hands focus back to where it came from when it goes away.
@@ -78,12 +154,13 @@ function SecretRequestPaneCardBody({
       <span role="status" className="sr-only">
         {spoken}
       </span>
-      <SecretRequestCard
-        model={model}
-        actions={actions}
-        rootRef={cardRef}
-        className="pointer-events-auto max-w-md"
-      />
+      <div
+        className="pointer-events-auto w-full max-w-md"
+        onPointerEnter={() => setHovered(true)}
+        onPointerLeave={() => setHovered(false)}
+      >
+        <SecretRequestCard model={model} actions={actions} rootRef={cardRef} />
+      </div>
     </div>
   )
 }
