@@ -79,7 +79,8 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
         terminal: observation.exact ? observation.terminal : null,
         observation: exposeObservation(observation),
         terminalResource: resource ? exposeWorkerTerminalResource(resource) : null,
-        autoReleaseAt: liveWorkerTerminalAutoReleaseAt(resource)
+        autoReleaseAt: liveWorkerTerminalAutoReleaseAt(resource),
+        coordinatedFrom: db.getPeerRun(dispatch.run_id)?.home_label ?? null
       }
     }
   }),

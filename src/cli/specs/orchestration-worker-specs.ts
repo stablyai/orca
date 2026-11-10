@@ -145,14 +145,23 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'worker-list'],
     summary: 'List supervised worker terminal resource accounting',
     usage:
-      'orca orchestration worker-list [--run <run_id>] [--terminal-state <active|reclaimable|retained|release_pending|release_unknown|released>] [--include-remote] [--cursor <cursor>] [--limit <1-100>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'run', 'terminal-state', 'include-remote', 'cursor', 'limit'],
+      'orca orchestration worker-list [--run <run_id>] [--terminal-state <active|reclaimable|retained|release_pending|release_unknown|released>] [--include-remote] [--on <server>] [--cursor <cursor>] [--limit <1-100>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'run',
+      'terminal-state',
+      'include-remote',
+      'on',
+      'cursor',
+      'limit'
+    ],
     notes: [
       'Terminal state is process accounting and is reported separately from Task status; a completed Task can still own a live terminal.',
       'A reclaimable worker with resource.autoReleaseAt is released automatically at that time unless it is reused with worker-start --terminal or kept open (worker-keep-open, worker-start --keep-open, or the user).',
       'Context-only Dispatches created by orchestration dispatch are included as unsupervised with terminal state retained.',
       'Returns at most 100 local rows, newest first, by default; --include-remote adds connected-server observations when the host supports fleet listing. Continue with the opaque nextCursor value unchanged.',
-      'Without --run the list is scoped to the Run bound to the calling terminal, and to every Run when there is no binding; the receipt reports which in scope.source (flag, bound, or all).'
+      'Without --run the list is scoped to the Run bound to the calling terminal, and to every Run when there is no binding; the receipt reports which in scope.source (flag, bound, or all).',
+      "--on <server> lists that paired server's own workers for your Run there (or all of them without a Run), paged with its own cursor."
     ]
   }
 ]

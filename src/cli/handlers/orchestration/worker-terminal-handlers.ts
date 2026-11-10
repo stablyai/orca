@@ -133,6 +133,7 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
       run: scope.run,
       terminalState,
       ...(flags.has('include-remote') ? { includeRemote: true } : {}),
+      on: getOptionalStringFlag(flags, 'on'),
       cursor: getOptionalStringFlag(flags, 'cursor'),
       limit: getOptionalPositiveIntegerFlag(flags, 'limit')
     })

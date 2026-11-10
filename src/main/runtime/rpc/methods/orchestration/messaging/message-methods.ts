@@ -12,6 +12,7 @@ import {
 } from '../../../../../../shared/rpc-contract/orchestration-params'
 import { TaskUpdateParams } from './task-update-params'
 import { forwardRemoteTaskUpdate } from '../../../../orchestration/federation/remote-owned/remote-owned-task-update'
+import { remoteForwardCallerNamespace } from '../../../../orchestration/federation/remote-owned/remote-forward-caller'
 
 export const ORCHESTRATION_MESSAGE_METHODS = [
   ORCHESTRATION_REPLY_METHOD,
@@ -126,19 +127,21 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
       targets: { id: 'task', run: 'run' },
       rule: taskUpdateAccess
     },
-    handler: async (params, { orchestrationCaller, orchestrationMutation, runtime }) => {
+    handler: async (params, ctx) => {
+      const { orchestrationMutation, runtime } = ctx
       const db = runtime.getOrchestrationDb()
-      // The server sees every caller here as one pairing; the caller's own identity scopes its retry key.
-      const callerNamespace =
-        orchestrationCaller?.orcaSessionId ??
-        (params.callerTerminalHandle
-          ? runtime.getTerminalPaneKey(params.callerTerminalHandle)
-          : null)
       const forwarded = await forwardRemoteTaskUpdate(
         runtime,
         params,
-        callerNamespace && orchestrationMutation
-          ? { callerNamespace, requestId: orchestrationMutation.requestId }
+        orchestrationMutation
+          ? {
+              callerNamespace: remoteForwardCallerNamespace(
+                runtime,
+                ctx,
+                params.callerTerminalHandle
+              ),
+              requestId: orchestrationMutation.requestId
+            }
           : undefined
       )
       if (forwarded) {

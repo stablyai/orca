@@ -8,7 +8,7 @@ import { RequestShowParams } from '../../../../../../shared/rpc-contract/orchest
 export const ORCHESTRATION_MUTATION_REQUEST_METHODS = [
   defineOrchestrationMethod({
     name: 'orchestration.requestShow',
-    access: { kind: 'reads', targets: { request: 'request' } },
+    access: { kind: 'reads', server: 'on', targets: { request: 'request' } },
     permission: 'workspace',
     params: RequestShowParams,
     // Read durable receipts without writing/mutating again; keep this recovery query outside ORCHESTRATION_MUTATION_METHODS.

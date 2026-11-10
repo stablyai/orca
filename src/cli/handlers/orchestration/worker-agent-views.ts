@@ -44,6 +44,8 @@ export type WorkerShowResult = {
   server?: RemoteWorkerServer & { reachable: false }
   lastReport?: string | null
   autoReleaseAt?: string | null
+  /** The paired Orca whose Run here coordinates this worker. */
+  coordinatedFrom?: string | null
 }
 
 /** A worker a paired server runs, as this Orca names that server and last heard from it. */
@@ -70,6 +72,7 @@ type WorkerShowFields = {
   waitingOnHuman?: string
   lastError?: string
   autoReleaseAt?: string
+  coordinatedFrom?: string
   next?: string
 }
 
@@ -108,6 +111,7 @@ export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerSh
             : undefined,
       lastError: value.worker.lastError ?? undefined,
       autoReleaseAt: value.autoReleaseAt ?? undefined,
+      coordinatedFrom: value.coordinatedFrom ?? undefined,
       next: value.projection ? renderOrchestrationArgv(value.projection.nextAction.argv) : undefined
     }
   }

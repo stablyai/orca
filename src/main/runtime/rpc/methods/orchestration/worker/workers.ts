@@ -60,15 +60,62 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
 
 /** worker-start, and a follow-up sent to a finished worker, which is worker-start run for the sender. */
 export async function startWorker(
+  startParams: z.infer<typeof WorkerStartParams>,
+  ctx: WorkerStartContext,
+  startFollowUp?: WorkerFollowUp
+): Promise<unknown> {
+  const { runtime, orchestrationMutation, orchestrationCaller } = ctx
+  const prepared = await prepareWorkerStart(startParams, ctx, startFollowUp)
+  const { params, followUp, coordinator, bindRun, helperCreator, taskDeps, existingTask, withRun } =
+    prepared
+  const db = runtime.getOrchestrationDb()
+  const mode = decideWorkerStartMode({
+    params,
+    settings: readWorkerStartModeSettings(runtime)
+  })
+  if (params.on) {
+    // Remote workers are terminal-only; carry the mode receipt to explain structured-preference fallback.
+    const receipt = await startFederatedWorker({
+      params,
+      runtime,
+      db,
+      bindRunId: () => bindRun().run.id,
+      task: existingTask,
+      taskDeps,
+      orchestrationMutation,
+      callerSession: orchestrationCaller
+    })
+    await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
+    return withRun(receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt)
+  }
+  const receipt = await startLocalWorker({
+    params: { ...params, timeoutMs: resolveWorkerStartReadinessTimeoutMs(params.timeoutMs) },
+    runtime,
+    db,
+    bindRun: () => bindRun().run,
+    taskDeps,
+    coordinator,
+    callerSession: orchestrationCaller,
+    existingTask,
+    orchestrationMutation,
+    mode,
+    helperCreator,
+    followUp
+  })
+  await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
+  return withRun(withWorkerStartNext(receipt))
+}
+
+/** What every start checks and binds before it is placed, here or on a paired server. */
+export async function prepareWorkerStart(
   params: z.infer<typeof WorkerStartParams>,
   {
     runtime,
-    orchestrationMutation,
     orchestrationCompatibilityEvidence,
     orchestrationCaller
-  }: WorkerStartContext,
+  }: Omit<WorkerStartContext, 'orchestrationMutation'>,
   followUp?: WorkerFollowUp
-): Promise<unknown> {
+) {
   if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
     throw new OrchestrationError(
       'invalid_argument',
@@ -103,7 +150,6 @@ export async function startWorker(
       { effectsApplied: false }
     )
   }
-  const readinessTimeoutMs = resolveWorkerStartReadinessTimeoutMs(params.timeoutMs)
   const db = runtime.getOrchestrationDb()
   const coordinator = resolveOrchestrationCaller(runtime, {
     callerTerminalHandle: params.from,
@@ -200,39 +246,14 @@ export async function startWorker(
     followUp = { ...followUp, reopen: placement.reopen, earlierWork: placement.earlierWork }
     await assertWorkerStartTaskSpecWithinPromptBudget(spec)
   }
-  const mode = decideWorkerStartMode({
+  return {
     params,
-    settings: readWorkerStartModeSettings(runtime)
-  })
-  if (params.on) {
-    // Remote workers are terminal-only; carry the mode receipt to explain structured-preference fallback.
-    const receipt = await startFederatedWorker({
-      params,
-      runtime,
-      db,
-      bindRunId: () => bindRun().run.id,
-      task: existingTask,
-      taskDeps,
-      orchestrationMutation,
-      callerSession: orchestrationCaller
-    })
-    await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
-    return withRun(receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt)
-  }
-  const receipt = await startLocalWorker({
-    params: { ...params, timeoutMs: readinessTimeoutMs },
-    runtime,
-    db,
-    bindRun: () => bindRun().run,
-    taskDeps,
+    followUp,
     coordinator,
-    callerSession: orchestrationCaller,
-    existingTask,
-    orchestrationMutation,
-    mode,
+    bindRun,
     helperCreator,
-    followUp
-  })
-  await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
-  return withRun(withWorkerStartNext(receipt))
+    taskDeps,
+    existingTask,
+    withRun
+  }
 }
