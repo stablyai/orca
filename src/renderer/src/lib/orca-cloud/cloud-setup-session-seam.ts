@@ -4,6 +4,7 @@
 // - a starter: "Set up and start" calls it and keeps the returned session id (also on the draft);
 // - a source: a synchronous read of the latest polled snapshot for a session id;
 // and calls notifyCloudSetupSessionChanged() after each poll so the panel re-renders.
+import { useCallback, useSyncExternalStore } from 'react'
 import type { CloudSetupStep } from '@/components/new-workspace/run-on/cloud-start-model'
 
 /** "All set" holds this long before the composer submits itself (O4; 0 with reduced motion). */
@@ -67,8 +68,17 @@ export function readCloudSetupSession(sessionId: string | null): CloudSetupSessi
   return sessionId && source ? source(sessionId) : null
 }
 
+// Bumped on every change, so a read is cached per (session, revision): useSyncExternalStore needs
+// the same object back until something changed.
+let revision = 0
+const cachedReads = new Map<
+  string,
+  { revision: number; value: CloudSetupSessionSnapshot | null }
+>()
+
 /** Call after each poll so open composers re-read their session. */
 export function notifyCloudSetupSessionChanged(): void {
+  revision += 1
   for (const listener of listeners) {
     listener()
   }
@@ -79,14 +89,28 @@ export function subscribeCloudSetupSession(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-let revision = 0
-/** useSyncExternalStore pair: each poll bumps the revision so composers re-read their session. */
-export function subscribeCloudSetupSessionRevision(listener: () => void): () => void {
-  return subscribeCloudSetupSession(() => {
-    revision += 1
-    listener()
-  })
+/** The latest snapshot for a session: the same object until the next poll or source change. */
+export function getCloudSetupSessionSnapshot(
+  sessionId: string | null
+): CloudSetupSessionSnapshot | null {
+  if (!sessionId) {
+    return null
+  }
+  const cached = cachedReads.get(sessionId)
+  if (cached?.revision === revision) {
+    return cached.value
+  }
+  const value = readCloudSetupSession(sessionId)
+  cachedReads.set(sessionId, { revision, value })
+  return value
 }
-export function getCloudSetupSessionRevision(): number {
-  return revision
+
+/**
+ * A setup session's snapshot that re-renders on every poll. Read it through this hook, never by
+ * calling readCloudSetupSession in a render: the React Compiler memoizes a bare call on its
+ * arguments, so the panel would keep the first (empty) read and never see the session move on.
+ */
+export function useCloudSetupSession(sessionId: string | null): CloudSetupSessionSnapshot | null {
+  const getSnapshot = useCallback(() => getCloudSetupSessionSnapshot(sessionId), [sessionId])
+  return useSyncExternalStore(subscribeCloudSetupSession, getSnapshot)
 }

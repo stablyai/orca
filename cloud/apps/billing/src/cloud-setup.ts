@@ -634,7 +634,12 @@ export async function setupGithubInstall(
     url.searchParams.set('githubLogin', body.githubLogin)
   }
   const token = (env.CONTROL_PLANE_TOKEN ?? '').split(',')[0]?.trim() ?? ''
-  const response = await fetchImpl(url, {
+  // Over the service binding when there is one: a plain fetch between same-account workers.dev
+  // Workers fails with error 1042, which surfaced as "setup is unavailable" on the GitHub step.
+  const send: typeof fetch = env.SANDBOX_CONTROL
+    ? (input, init) => env.SANDBOX_CONTROL!.fetch(input, init)
+    : fetchImpl
+  const response = await send(url, {
     headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
     signal: AbortSignal.timeout(8000)
   })

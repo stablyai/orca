@@ -1,15 +1,11 @@
 // The setup panel's rows for the composer: billing access (account, trial or plan), the GitHub
 // repository check (D1–D3) and the agent row, or the setup session's own rows once one is open.
-import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { translate } from '@/i18n/i18n'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { orcaCloudGitHubSetupRow } from '@/lib/orca-cloud/orca-cloud-github-setup-row'
 import { useOrcaCloudRepoAccess } from '@/lib/orca-cloud/use-orca-cloud-repo-access'
-import {
-  getCloudSetupSessionRevision,
-  readCloudSetupSession,
-  subscribeCloudSetupSessionRevision
-} from '@/lib/orca-cloud/cloud-setup-session-seam'
+import { useCloudSetupSession } from '@/lib/orca-cloud/cloud-setup-session-seam'
 import type { OrcaCloudAvailability } from '../../../../../shared/orca-yaml-hook-types'
 import type { OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
 import { deriveCloudSetupSteps, type CloudSetupStep } from './cloud-start-model'
@@ -92,9 +88,8 @@ export function useCloudStartSteps({
         : null,
     [cloudSelected, grant, loading, owner, repoName, state]
   )
-  // Subscribing re-renders on each poll; the read itself is a cheap synchronous lookup.
-  useSyncExternalStore(subscribeCloudSetupSessionRevision, getCloudSetupSessionRevision)
-  const session = readCloudSetupSession(setupSessionId)
+  // Re-renders on each poll with that poll's snapshot.
+  const session = useCloudSetupSession(setupSessionId)
   const signedOut = availability === 'needs-sign-in' || access.state === 'signed-out'
   const accounts = useOrcaCloudAgentAccounts(cloudSelected && !signedOut)
   const agentRow = useMemo(

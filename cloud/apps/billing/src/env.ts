@@ -67,4 +67,7 @@ export type Env = {
   CLOUD_SETUP_PAGES_URL?: string
   // Control plane origin billing asks for a repository's GitHub install URL (CONTROL_PLANE_TOKEN).
   SANDBOX_CONTROL_URL?: string
+  // Service binding to that control plane. Same-account Workers can't fetch each other over
+  // workers.dev (Cloudflare error 1042), so when bound the request goes through it instead.
+  SANDBOX_CONTROL?: Fetcher
 }
