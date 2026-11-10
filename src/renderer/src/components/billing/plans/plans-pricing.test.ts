@@ -4,6 +4,7 @@ import {
   annualSavingsPercent,
   clampSeats,
   formatCents,
+  formatRateCents,
   perSeatMonthlyCents,
   periodTotalCents
 } from './plans-pricing'
@@ -36,6 +37,11 @@ describe('plans pricing', () => {
     expect(formatCents(5000, 'en-US')).toBe('$50')
     expect(formatCents(75, 'en-US')).toBe('$0.75')
     expect(formatCents(144000, 'en-US')).toBe('$1,440')
+  })
+
+  it('always shows cents on a per-hour rate', () => {
+    expect(formatRateCents(100, 'en-US')).toBe('$1.00')
+    expect(formatRateCents(75, 'en-US')).toBe('$0.75')
   })
 
   it('clamps seats to 1..max', () => {

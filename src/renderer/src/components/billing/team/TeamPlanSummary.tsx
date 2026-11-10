@@ -246,9 +246,9 @@ export function TeamUpgradeCard({
                   'Hosted sandboxes for the whole team. Agents keep running when you close your laptop.'
                 )
               : t(
-                  'auto.components.billing.upgrade.body2',
-                  'Hosted sandboxes for the whole team. Agents keep running when you close your laptop. {{value0}}/seat/month.',
-                  { value0: formatCents(monthly, locale) }
+                  'auto.components.billing.upgrade.body3',
+                  'Hosted sandboxes for the whole team. Agents keep running when you close your laptop. {{price}} per seat per month.',
+                  { price: formatCents(monthly, locale) }
                 )}
           </p>
           {entitlement.canManageBilling ? null : (

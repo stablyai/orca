@@ -27,6 +27,18 @@ export type ProviderSession = {
   timeoutMs: number
 }
 
+/** A session's measured usage (internal fair-use review only; never metered or sent to billing). */
+export type ProviderSessionUsage = {
+  sessionId: string
+  status: ProviderSessionStatus
+  /** Vercel reports this only once the VM has stopped. */
+  activeCpuMs: number | null
+  durationMs: number | null
+  vcpus: number | null
+  memoryMb: number | null
+  stoppedAt: number | null
+}
+
 export type ProviderRoute = { port: number; url: string }
 
 export type ProviderSandboxState = {
@@ -87,7 +99,9 @@ export type SandboxProviderApi = {
   createSandbox(params: CreateSandboxParams): Promise<ProviderSandboxState>
   /** `resume: true` boots a stopped persistent sandbox from its latest snapshot. Null when absent. */
   getSandbox(name: string, options: { resume: boolean }): Promise<ProviderSandboxState | null>
-  stopSession(sessionId: string): Promise<{ snapshotId: string | null }>
+  stopSession(sessionId: string): Promise<{ snapshotId: string | null; usage?: ProviderSessionUsage | null }>
+  /** A session's usage, stopped or not. Null when the provider no longer knows it. Optional: CPU review is best-effort. */
+  getSessionUsage?(sessionId: string): Promise<ProviderSessionUsage | null>
   extendTimeout(sessionId: string, durationMs: number): Promise<ProviderSession>
   updateNetworkPolicy(sessionId: string, policy: NetworkPolicy): Promise<void>
   /** Sets the full exposed-port list on the sandbox (live on a running session); returns its routes. */

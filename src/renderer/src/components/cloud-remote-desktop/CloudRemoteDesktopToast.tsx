@@ -27,7 +27,7 @@ type FailureCopy = {
   action: CloudRemoteDesktopNextAction | null
   /** Overrides the action's usual label (a failed wake retries the wake: "Try again"). */
   actionLabel?: string
-  /** Asleep and starting are states, not errors. */
+  /** Asleep, starting, signed out and not-available-here are states, not errors. */
   tone?: 'neutral'
 }
 
@@ -43,7 +43,8 @@ function failureCopy(t: Translate, code: CloudRemoteDesktopToastFailure): Failur
           'components.cloudRemoteDesktop.notCloudDetail',
           'Create a cloud workspace to run apps with a screen.'
         ),
-        action: 'create_workspace'
+        action: 'create_workspace',
+        tone: 'neutral'
       }
     case 'not_running':
       return {
@@ -95,7 +96,8 @@ function failureCopy(t: Translate, code: CloudRemoteDesktopToastFailure): Failur
           'components.cloudRemoteDesktop.notInstalledDetail',
           'It was created before remote desktop was available. New cloud workspaces include it. Your files are safe.'
         ),
-        action: 'create_workspace'
+        action: 'create_workspace',
+        tone: 'neutral'
       }
     case 'signed_out':
       return {
@@ -107,7 +109,8 @@ function failureCopy(t: Translate, code: CloudRemoteDesktopToastFailure): Failur
           'components.cloudRemoteDesktop.signedOutDetail',
           'Sign in, then open the remote desktop again.'
         ),
-        action: 'sign_in'
+        action: 'sign_in',
+        tone: 'neutral'
       }
     case 'forward_failed':
       return {

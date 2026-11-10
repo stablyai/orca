@@ -136,7 +136,7 @@ export function CloudSshMenuItems({
             aria-describedby={status.hasAccess ? undefined : hintId}
           >
             <Copy className="size-3.5" />
-            {t('auto.components.sidebar.CloudSsh.copyCommand', 'Copy SSH Command')}
+            {t('auto.components.sidebar.CloudSsh.copySshCommand', 'Copy SSH command')}
           </DropdownMenuItem>
           {status.hasAccess ? (
             <>
@@ -147,7 +147,7 @@ export function CloudSshMenuItems({
                 disabled={disabled}
               >
                 <ShieldOff className="size-3.5" />
-                {t('auto.components.sidebar.CloudSsh.revoke', 'Revoke SSH Access')}
+                {t('auto.components.sidebar.CloudSsh.revokeSshAccess', 'Revoke SSH access')}
               </DropdownMenuItem>
               {status.includeInstalled ? (
                 <DropdownMenuItem

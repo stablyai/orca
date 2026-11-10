@@ -37,7 +37,9 @@ export function attachErrorMessage(
           'cloud.error.pairing',
           'The workspace is running, but this phone couldn’t connect to it. Your files are safe.'
         )
-      default:
+      case 'not_found':
+        return t('cloud.workspace.missing', 'This workspace is gone or you no longer have access.')
+      case 'failed':
         return t(
           'cloud.error.failed',
           'The workspace couldn’t start. Try again, or open it on your desktop.'
@@ -128,6 +130,9 @@ export function cloudPromptErrorMessage(code: string | undefined, t: Translate):
       return t('cloud.prompt.errorNotConnected', 'This phone couldn’t reach the workspace')
     case 'cloud_agent_unknown':
       return t('cloud.prompt.errorAgent', 'That agent isn’t installed in this workspace')
+    // An older queue entry may carry no code: it failed to launch all the same.
+    case undefined:
+    case 'launch_failed':
     default:
       return t('cloud.prompt.errorLaunch', 'The agent didn’t start')
   }

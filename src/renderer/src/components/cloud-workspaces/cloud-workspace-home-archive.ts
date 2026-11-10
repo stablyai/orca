@@ -11,6 +11,8 @@ import {
   runUnarchiveCloudWorkspace
 } from '../orca-cloud/cloud-workspace-actions'
 import { describeError } from './cloud-workspace-errors'
+import type { Translate } from '@/i18n/use-translate'
+import { cloudWorkspaceTitle } from './open-cloud-workspace'
 
 export type HomeArchiveDeps = {
   localWorktreeId: (sandboxId: string) => Promise<string | null>
@@ -37,13 +39,18 @@ const defaultDeps = (): HomeArchiveDeps => ({
 function asResult(
   result: Awaited<ReturnType<HomeArchiveDeps['patchArchived']>>
 ): CloudWorkspaceResult<null> {
-  return result.ok
-    ? { ok: true, value: null }
-    : {
-        ok: false,
-        code: 'failed',
-        message: describeError(result.error, result.reason, translate)
-      }
+  if (result.ok) {
+    return { ok: true, value: null }
+  }
+  const message =
+    // The control plane refuses while the sandbox is starting or mid-transition (409, nothing changed).
+    result.error === 'conflict'
+      ? translate(
+          'auto.components.cloudWorkspaces.archiveBusy',
+          'This workspace is still starting or going to sleep. Nothing was changed. Try again in a moment.'
+        )
+      : describeError(result.error, result.reason, translate)
+  return { ok: false, code: 'failed', message, userMessage: message }
 }
 
 export async function archiveFromHome(
@@ -89,4 +96,28 @@ export async function unarchiveFromHome(
       'It’s asleep. Opening it wakes it.'
     )
   })
+}
+
+export function runHomeArchive(w: CloudWorkspace, t: Translate, refresh: () => void): void {
+  void archiveFromHome(w, cloudWorkspaceTitle(w, t)).finally(refresh)
+}
+
+/** Row actions for the team list. A teammate's running workspace asks first (their agents stop). */
+export function homeArchiveActions(options: {
+  selfId: string | null
+  t: Translate
+  refresh: () => void
+  confirmArchive: (pending: { kind: 'archive'; workspace: CloudWorkspace }) => void
+}): { archive: (w: CloudWorkspace) => void; unarchive: (w: CloudWorkspace) => void } {
+  const { selfId, t, refresh } = options
+  return {
+    archive: (w) => {
+      if (w.ownerUserId !== selfId && w.status === 'running') {
+        options.confirmArchive({ kind: 'archive', workspace: w })
+        return
+      }
+      runHomeArchive(w, t, refresh)
+    },
+    unarchive: (w) => void unarchiveFromHome(w, cloudWorkspaceTitle(w, t)).finally(refresh)
+  }
 }

@@ -175,4 +175,50 @@ describe('rewind with file restore', () => {
     expect(toast.error.mock.calls[0]?.[0]).toContain('unresolved merge conflicts')
     expect(toast.success).not.toHaveBeenCalled()
   })
+
+  it('lists the changed files under the choice', async () => {
+    const shown: ConfirmationDialogOptions[] = []
+    const checkpoints = client({
+      available: true,
+      changedFiles: 5,
+      paths: ['a.ts', 'b.ts', 'c.ts', 'd.ts', 'e.ts'],
+      headMoved: false,
+      createdAt: 1
+    })
+    const view = renderHook(() => useNativeChatRewind(input(checkpoints)))
+    await act(() => view.result.current.request('user', answer(false, shown)))
+    expect(shown[0]?.itemList).toEqual({
+      label: 'Changed files',
+      items: ['a.ts', 'b.ts', 'c.ts', 'd.ts', 'e.ts'],
+      total: 5
+    })
+  })
+
+  it('restores files only, leaving the chat alone', async () => {
+    const checkpoints = client({
+      available: true,
+      changedFiles: 2,
+      paths: ['a', 'b'],
+      headMoved: false,
+      createdAt: 1
+    })
+    const props = input(checkpoints)
+    const view = renderHook(() => useNativeChatRewind(props))
+    const shown: ConfirmationDialogOptions[] = []
+    await act(() => view.result.current.surface!.restoreFiles!('user', answer(true, shown)))
+    expect(shown[0]).toMatchObject({
+      title: 'Restore files to here?',
+      confirmLabel: 'Restore files',
+      initialFocus: 'cancel'
+    })
+    expect(shown[0]?.description).toContain('The chat stays as it is.')
+    expect(props.send).not.toHaveBeenCalled()
+    expect(checkpoints.restore).toHaveBeenCalledWith('user')
+    expect(toast.success.mock.calls[0]?.[0]).toBe('Restored 3 files')
+    checkpoints.restore.mockRejectedValueOnce(new Error('agent_session_checkpoint_merge-conflicts'))
+    await act(() => view.result.current.surface!.restoreFiles!('user', answer(true, [])))
+    expect(toast.error.mock.calls.at(-1)?.[0]).toBe(
+      "Files weren't restored because this workspace has unresolved merge conflicts. Nothing on disk changed."
+    )
+  })
 })

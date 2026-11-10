@@ -32,7 +32,8 @@ export function CloudConnectedApps({
   onApprove,
   onRevoke,
   onRetry,
-  initialRevokeId
+  initialRevokeId,
+  blocked = false
 }: {
   grants: CloudLoadState<CloudApiGrant[]>
   viewer: CloudApiMe | null
@@ -41,6 +42,8 @@ export function CloudConnectedApps({
   onRevoke: (grant: CloudApiGrant) => Promise<string | null>
   onRetry: () => void
   initialRevokeId?: string
+  /** The page shows one load error; this section stays quiet instead of repeating it. */
+  blocked?: boolean
 }): React.JSX.Element | null {
   const t = useTranslate()
   const locale = useIntlLocale()
@@ -81,9 +84,18 @@ export function CloudConnectedApps({
             label={t('auto.components.settings.cloudApi.apps.loading', 'Loading connected apps')}
           />
         ) : grants.status === 'error' ? (
-          <div data-settings-row="" className="py-4">
-            <CloudApiErrorNotice message={grants.message} onRetry={onRetry} />
-          </div>
+          blocked ? (
+            <p data-settings-row="" className="py-4 text-xs text-muted-foreground">
+              {t(
+                'auto.components.settings.cloudApi.apps.unavailable',
+                'Connected apps appear here once Orca Cloud is reachable.'
+              )}
+            </p>
+          ) : (
+            <div data-settings-row="" className="py-4">
+              <CloudApiErrorNotice message={grants.message} onRetry={onRetry} />
+            </div>
+          )
         ) : grants.data.length === 0 ? (
           <CloudApiEmptyState
             icon={Plug}

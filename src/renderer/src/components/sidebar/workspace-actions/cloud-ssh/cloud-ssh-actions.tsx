@@ -100,7 +100,7 @@ function showFailure(
     ...(retry && failure.code !== 'unsupported_image'
       ? {
           action: {
-            label: translate('auto.components.sidebar.CloudSsh.retry', 'Retry'),
+            label: translate('auto.components.sidebar.CloudSsh.tryAgain', 'Try again'),
             onClick: retry
           }
         }

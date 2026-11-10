@@ -7,7 +7,8 @@ import { LocalPortRow } from './local-port-row'
 export type PortRowForwarding = {
   status: (port: WorkspacePort) => React.ReactNode
   menuItems: (port: WorkspacePort) => React.ReactNode
-  actions: (port: WorkspacePort) => React.ReactNode
+  /** Host row buttons after Open (Orca Cloud: Share…). */
+  hostActions?: (port: WorkspacePort) => React.ReactNode
   copyAddress: (port: WorkspacePort) => string | undefined
 }
 
@@ -71,7 +72,7 @@ export function LocalPortSection({
                   onOpenInBrowser={onOpenInBrowser}
                   forwardStatus={forwarding?.status(port)}
                   forwardMenuItems={forwarding?.menuItems(port)}
-                  forwardActions={forwarding?.actions(port)}
+                  shareAction={forwarding?.hostActions?.(port)}
                   copyAddress={forwarding?.copyAddress(port)}
                 />
               ))

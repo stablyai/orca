@@ -1,5 +1,9 @@
 import type { EnvironmentDoctorCheck } from '../../../../shared/environment-doctor-types'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
+import {
+  classifyEntitlementDenial,
+  type OrcaEntitlementDenialKind
+} from '../../../../shared/orca-billing'
 
 /** Account and service problems a plain-language card can name, each with one way forward. */
 export type VmBuildAccountFailureKind =
@@ -36,14 +40,14 @@ const ERROR_CODE_KINDS: Partial<Record<string, VmBuildAccountFailureKind>> = {
 
 // The hosted provider logs the control plane's deny reason as `Orca Cloud: <reason>`.
 const DENY_REASON = /^Orca Cloud: ([a-z_]+)$/m
-const DENY_REASON_KINDS: Partial<Record<string, VmBuildAccountFailureKind>> = {
-  included_hours_exhausted: 'hoursUsed',
-  overage_cap_reached: 'spendCap',
-  payment_past_due: 'payment',
-  payment_grace_expired: 'payment',
-  concurrency_limit: 'concurrency',
-  member_concurrency_limit: 'memberConcurrency'
-}
+const DENIAL_FAILURE_KINDS: Partial<Record<OrcaEntitlementDenialKind, VmBuildAccountFailureKind>> =
+  {
+    hours: 'hoursUsed',
+    spendCap: 'spendCap',
+    payment: 'payment',
+    teamLimit: 'concurrency',
+    memberLimit: 'memberConcurrency'
+  }
 
 const SNAPSHOT_MISSING = /\bsnapshot\b[^\n]*\bnot found\b/i
 const NETWORK_FAILURE =
@@ -69,7 +73,12 @@ export function classifyVmBuildFailure(args: {
   const coded = entry.errorCode ? ERROR_CODE_KINDS[entry.errorCode] : undefined
   if (coded === 'plan' || coded === 'concurrency') {
     const reason = DENY_REASON.exec(entry.provisioningLog ?? '')?.[1]
-    return { kind: (reason === undefined ? undefined : DENY_REASON_KINDS[reason]) ?? coded }
+    return {
+      kind:
+        (reason === undefined
+          ? undefined
+          : DENIAL_FAILURE_KINDS[classifyEntitlementDenial(reason)]) ?? coded
+    }
   }
   if (coded) {
     return { kind: coded }

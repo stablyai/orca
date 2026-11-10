@@ -105,3 +105,23 @@ export const loadFailed = defineFixture({
   width,
   render: () => <Page result={{ status: 'failed', error: 'timeout' }} />
 })
+
+/** Billing's 90% level on the plans page: the strip warns under the bar. */
+export const currentPlanUsageWarning = defineFixture({
+  width,
+  render: () => (
+    <Page
+      result={{
+        status: 'ok',
+        entitlement: {
+          ...sampleTeam,
+          seats: 4,
+          includedSeconds: 240 * HOUR,
+          usedSeconds: 220 * HOUR,
+          remainingIncludedSeconds: 20 * HOUR,
+          usageWarningPercent: 90
+        }
+      }}
+    />
+  )
+})

@@ -1,5 +1,6 @@
 // Orca Cloud routines: /v1/routines wire shapes and the editor's request bodies.
 import { z } from 'zod'
+import { ORCA_CLOUD_IMAGE_AGENTS } from '../hosted-sandbox/orca-cloud-image-agents'
 import { HttpsUrl, Id, Millis, PersonName, ShortText } from './cloud-api-primitives'
 
 // ── Routines ────────────────────────────────────────────────────────────────
@@ -14,7 +15,8 @@ export const ROUTINE_GITHUB_EVENTS = [
 ] as const
 export type RoutineGithubEvent = (typeof ROUTINE_GITHUB_EVENTS)[number]
 
-export const ROUTINE_AGENTS = ['claude', 'codex'] as const
+/** A routine runs any agent the Orca Cloud image ships, headless. */
+export const ROUTINE_AGENTS = ORCA_CLOUD_IMAGE_AGENTS
 export type RoutineAgent = (typeof ROUTINE_AGENTS)[number]
 export const ROUTINE_POST_RESULTS = ['none', 'comment', 'pr'] as const
 export type RoutinePostResults = (typeof ROUTINE_POST_RESULTS)[number]

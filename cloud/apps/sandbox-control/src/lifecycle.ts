@@ -1,5 +1,6 @@
 // Sandbox lifecycle: one persistent provider sandbox per Orca workspace, with an Orca-owned lease,
 // a forced stop before the provider's 24h cap, usage metering and write-ahead rows.
+import { deleteAgentSourcesForSandbox } from './agent-sources'
 import type { EntitlementClient, MachineSize } from './entitlements'
 import { parseGitHubRepo, type GitHubAppMinter } from './github-app'
 import {
@@ -17,9 +18,10 @@ import { memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
 import { connectedMembers, memberGitConfigs } from './member-git'
 import type { RetentionConfig } from './retention'
 import type { ProviderSandboxState, SandboxProviderApi } from './sandbox-provider'
-import { egressSecretHosts, secretPlaceholder } from './secret-egress'
+import { egressSecretHosts, placeholderValues, secretPlaceholder } from './secret-egress'
 import { egressAllowHosts, sessionSecretEnv, type SessionSecrets } from './session-env'
 import type { Keyring } from './secrets-crypto'
+import { captureReadSnapshot, deleteReadSnapshot } from './read-snapshots'
 import { ORCAD_PORT, SHARE_PROXY_PORT, drainOrcad, runningOrcad, startOrcad, type OrcadReady, type StartInputs } from './sandbox-vm-commands'
 import { WORKSPACE_PRELUDE_SCRIPT } from '../image/vm-scripts.generated'
 import { resolveEnvironmentBoot, type BootSource } from './environments'
@@ -41,6 +43,7 @@ import {
   type SandboxRow,
   type SessionFields
 } from './store'
+import { recordSessionEnd } from './session-cpu'
 import { flushUsage, queueUsage } from './usage'
 import { SANDBOX_VCPUS } from './machine-size'
 import { isRegionalFailure } from './regions'
@@ -232,11 +235,11 @@ export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: st
         // Model API keys swapped at egress (phase 2); each host also ends in the 403 deny rule, except a
         // host whose client sends its own short-lived token on later calls (Cursor).
         ...egressSecretHosts(row).flatMap((entry) =>
-          Object.entries(entry.headers).map(
-            ([header, format]): CredentialRoute => ({
+          Object.keys(entry.headers).map(
+            (header): CredentialRoute => ({
               host: entry.host,
               header,
-              placeholders: [format(secretPlaceholder(row, entry.secret))],
+              placeholders: placeholderValues(entry, header, secretPlaceholder(row, entry.secret)),
               via: 'forward',
               forwardURL: proxyUrl,
               ...(entry.allowUnclaimed ? { allowUnclaimed: true } : {})
@@ -659,23 +662,34 @@ export async function failAndRelease(deps: LifecycleDeps, row: SandboxRow): Prom
 export async function stopForSuspend(
   deps: LifecycleDeps,
   row: SandboxRow,
-  options: { drainSeconds?: number } = {}
+  options: { drainSeconds?: number; reason?: 'sleep' | 'rollover'; captureRead?: boolean } = {}
 ): Promise<SandboxRow> {
   if (row.session_id) {
+    // While orcad still serves: what a sleeping workspace shows to readers (sealed on the VM).
+    // Skipped for Restart (orcad isn't answering) and Archive (an archived workspace isn't readable).
+    if (options.captureRead !== false) {
+      await captureReadSnapshot(deps, row, options.reason ?? 'sleep').catch(() => undefined)
+    }
     await drainOrcad(deps.provider, row.session_id, options.drainSeconds)
     const stopped = await deps.provider.stopSession(row.session_id)
     if (stopped.snapshotId) {
       await recordSnapshots(deps.db, row.id, [stopped.snapshotId], deps.now())
     }
+    await queueUsage(deps.db, row, deps.now())
+    // Internal CPU review (U22): never throws, never touches the meter.
+    await recordSessionEnd(deps.db, row, deps.now(), stopped.usage, deps.now())
+  } else {
+    await queueUsage(deps.db, row, deps.now())
   }
-  await queueUsage(deps.db, row, deps.now())
   await deps.hooks?.afterStop?.(row).catch(() => undefined)
   return claim(deps, row, { status: 'suspended', ...NO_SESSION })
 }
 
 /** The provider ended the session on its own (lease lapsed): bill up to when it stopped. */
 export async function markProviderStopped(deps: LifecycleDeps, row: SandboxRow): Promise<SandboxRow> {
-  await queueUsage(deps.db, row, Math.min(deps.now(), row.lease_expires_at ?? deps.now()))
+  const endedAt = Math.min(deps.now(), row.lease_expires_at ?? deps.now())
+  await queueUsage(deps.db, row, endedAt)
+  await recordSessionEnd(deps.db, row, endedAt, null, deps.now())
   await deps.hooks?.afterStop?.(row).catch(() => undefined)
   return claim(deps, row, { status: 'suspended', ...NO_SESSION })
 }
@@ -778,7 +792,7 @@ export async function rolloverSandbox(deps: LifecycleDeps, row: SandboxRow): Pro
     throw new GuardrailError('maintenance')
   }
   const suspending = await claim(deps, row, { status: 'suspending' })
-  const stopped = await stopForSuspend(deps, suspending)
+  const stopped = await stopForSuspend(deps, suspending, { reason: 'rollover' })
   await flushUsage(deps.db, deps.entitlements, deps.now(), row.id)
   return wake(deps, await claim(deps, stopped, { status: 'resuming' }))
 }
@@ -802,6 +816,8 @@ export async function destroySandbox(deps: LifecycleDeps, row: SandboxRow): Prom
   }
   let destroying = row.status === 'destroying' ? row : await claim(deps, row, { status: 'destroying' })
   const settled = await queueUsage(deps.db, destroying, deps.now())
+  // A live session ends with the delete (no-op once suspended: the row has no session then).
+  await recordSessionEnd(deps.db, destroying, deps.now(), null, deps.now())
   if (settled !== destroying.usage_settled_at) {
     destroying = await claim(deps, destroying, { usage_settled_at: settled })
   }
@@ -825,6 +841,10 @@ export async function destroySandbox(deps: LifecycleDeps, row: SandboxRow): Prom
   await markSnapshotsDeleted(deps.db, row.id, deps.now())
   // Archive metadata (repo state, file tree) goes with the workspace.
   await deps.db.prepare('DELETE FROM sandbox_archives WHERE sandbox_id = ?').bind(row.id).run()
+  // So does its sealed read snapshot.
+  await deleteReadSnapshot(deps.db, row.id)
+  // And its per-workspace agent Source overrides.
+  await deleteAgentSourcesForSandbox(deps.db, row.id)
   const destroyed = await claim(deps, destroying, {
     status: 'destroyed',
     ...NO_SESSION,

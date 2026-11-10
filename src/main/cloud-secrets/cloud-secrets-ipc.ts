@@ -14,6 +14,16 @@ import { withCloudBuildDefaults } from '../cloud-build-defaults'
 import { getHostedSandboxConfig } from '../hosted-sandbox/hosted-sandbox-config'
 import { HOSTED_SANDBOX_DRIVER_ID } from '../hosted-sandbox/hosted-sandbox-driver'
 import { getOrcaCloudAvailability } from '../hosted-sandbox/hosted-sandbox-install'
+import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
+import {
+  cloudSecretNameError,
+  cloudSecretSwapped,
+  cloudSecretValueError
+} from '../../shared/cloud-secrets/cloud-secret-rules'
+import {
+  desktopKeyValueForCloud,
+  setCloudDesktopKeysUserDataPath
+} from '../hosted-sandbox/cloud-desktop-keys'
 import {
   cloudSecretsFailureCode,
   createCloudSecretsClient,
@@ -45,6 +55,10 @@ const BatchRequest = z
   )
 const EffectiveRequest = z.object({ repo: Repo.optional() })
 const RefreshRequest = z.object({ runtimeEnvironmentId: z.string().min(1).max(256) })
+const SaveDesktopKeyRequest = z.object({
+  agent: z.string().refine(isTuiAgent),
+  envName: Name
+})
 
 const CHANNELS = [
   'cloudSecrets:status',
@@ -53,7 +67,8 @@ const CHANNELS = [
   'cloudSecrets:remove',
   'cloudSecrets:batch',
   'cloudSecrets:effective',
-  'cloudSecrets:refreshEnv'
+  'cloudSecrets:refreshEnv',
+  'cloudSecrets:saveDesktopKey'
 ] as const
 
 async function attempt<T>(
@@ -85,6 +100,7 @@ function sandboxIdFor(userDataPath: string, runtimeEnvironmentId: string): strin
 }
 
 export function registerCloudSecretsHandlers(userDataPath: string): void {
+  setCloudDesktopKeysUserDataPath(userDataPath)
   // Packaged integration builds read no shell env; their control-plane URL is baked in.
   const config = getHostedSandboxConfig(
     userDataPath,
@@ -136,6 +152,32 @@ export function registerCloudSecretsHandlers(userDataPath: string): void {
   ipcMain.handle('cloudSecrets:effective', (_event, raw: unknown) => {
     const request = EffectiveRequest.safeParse(raw ?? {})
     return request.success ? attempt(client, (c) => c.effective(request.data.repo)) : invalid
+  })
+  // One desktop-sealed key, unsealed here and sent once to the user's personal Cloud secrets; the
+  // renderer names it (agent + variable) and never sees the value. Each call is one explicit click.
+  ipcMain.handle('cloudSecrets:saveDesktopKey', async (_event, raw: unknown) => {
+    const request = SaveDesktopKeyRequest.safeParse(raw)
+    if (!request.success || !isTuiAgent(request.data.agent)) {
+      return invalid
+    }
+    const { agent, envName } = request.data
+    const nameError = cloudSecretNameError(envName)
+    if (nameError) {
+      return { ok: false, error: nameError }
+    }
+    // Only keys the workspace gets as a stand-in: anything else would sit there in full.
+    if (!cloudSecretSwapped(envName)) {
+      return { ok: false, error: 'not_swappable' }
+    }
+    const value = await desktopKeyValueForCloud(agent, envName)
+    if (!value) {
+      return { ok: false, error: 'not_found' }
+    }
+    const valueError = cloudSecretValueError(envName, value)
+    if (valueError) {
+      return { ok: false, error: valueError }
+    }
+    return attempt(client, (c) => c.put({ scope: 'personal' }, envName, value))
   })
   ipcMain.handle('cloudSecrets:refreshEnv', (_event, raw: unknown) => {
     const request = RefreshRequest.safeParse(raw)

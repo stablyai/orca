@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { Loader2, LogIn } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog'
 import { InlineError } from '@/components/ui/inline-error'
 import { OrcaSignInButton } from '@/components/OrcaSignInProgress'
+import { signInAgainActionLabel } from '@/lib/orca-cloud/orca-sign-in-again'
 import { SettingsSegmentedControl } from '@/components/settings/form-controls/SettingsSegmentedControl'
 import { Switch } from '@/components/ui/switch'
 import { useTranslate } from '@/i18n/use-translate'
@@ -286,7 +287,19 @@ export function SharePortDialog({
                 aria-describedby={`${formId}-wake-hint`}
               />
             </div>
-            {error && (
+            {error?.signedOut ? (
+              // An expired session is a soft state, not a failure: neutral, with Sign in.
+              <InlineError
+                tone="neutral"
+                title={error.text}
+                action={
+                  <OrcaSignInButton variant="outline" size="xs">
+                    <LogIn aria-hidden />
+                    {signInAgainActionLabel(t)}
+                  </OrcaSignInButton>
+                }
+              />
+            ) : error ? (
               <InlineError
                 title={t(
                   'auto.components.right.sidebar.CloudShare.createFailed',
@@ -294,12 +307,7 @@ export function SharePortDialog({
                 )}
                 detail={error.text}
               />
-            )}
-            {error?.signedOut && (
-              <OrcaSignInButton variant="outline" size="xs">
-                {t('auto.components.right.sidebar.CloudShare.signIn', 'Sign in to Orca')}
-              </OrcaSignInButton>
-            )}
+            ) : null}
             {alreadyShared.length > 0 && (
               <div className="space-y-1">
                 <p className="text-3xs font-semibold uppercase tracking-wider text-muted-foreground">

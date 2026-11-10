@@ -71,9 +71,7 @@ function ServerRow({
             {row.name}
           </span>
           <span className="sr-only">{mcpSyncRowStateLabel(row, t)}</span>
-          <span className="shrink-0 text-2xs text-muted-foreground/70">
-            {AGENT_LABEL[row.agent]}
-          </span>
+          <span className="shrink-0 text-2xs text-muted-foreground">{AGENT_LABEL[row.agent]}</span>
           {row.target ? (
             <span className="min-w-0 truncate font-mono text-2xs text-muted-foreground">
               {row.target}

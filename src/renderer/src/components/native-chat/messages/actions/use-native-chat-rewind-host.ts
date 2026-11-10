@@ -9,6 +9,8 @@ export type NativeChatRewindSurface = {
   disabledReason: string | null
   eligibleItemIds?: ReadonlySet<string>
   request: (itemId: string, confirm: ConfirmationDialogContextValue) => Promise<void>
+  /** Restore this message's files without rewinding the chat; absent without host checkpoints. */
+  restoreFiles?: (itemId: string, confirm: ConfirmationDialogContextValue) => Promise<void>
 }
 
 export type NativeChatRewindHost = {

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Cloud, RefreshCw } from 'lucide-react'
+import { CalendarClock, Cloud, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -10,11 +10,19 @@ import {
 } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { SettingsSegmentedControl } from '@/components/settings/form-controls/SettingsFormControls'
+import { useOrcaCloudApiAvailable } from '@/hooks/useOrcaCloudApiAvailability'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { repoLabel, type MemberDirectory } from './cloud-workspace-format'
 
 export const ANY = '__any'
+
+function openRoutines(): void {
+  const state = useAppStore.getState()
+  state.openSettingsTarget({ pane: 'cloud-routines', repoId: null })
+  state.openSettingsPage()
+}
 
 export type CloudWorkspacesFilters = {
   scope: 'team' | 'mine'
@@ -51,6 +59,8 @@ export function CloudWorkspacesToolbar({
   onRefresh: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  // Routines start cloud workspaces on their own, so they sit next to the list they fill.
+  const routinesAvailable = useOrcaCloudApiAvailable()
   return (
     <div className="mb-2 flex flex-col gap-2">
       <div className="flex items-center gap-2">
@@ -68,7 +78,13 @@ export function CloudWorkspacesToolbar({
             {meta}
           </span>
         )}
-        <span className="ml-auto">
+        <span className="ml-auto flex items-center gap-1">
+          {routinesAvailable ? (
+            <Button size="xs" variant="ghost" onClick={openRoutines}>
+              <CalendarClock />
+              {t('auto.components.cloudWorkspaces.routines', 'Routines')}
+            </Button>
+          ) : null}
           <Button
             size="icon-xs"
             variant="ghost"

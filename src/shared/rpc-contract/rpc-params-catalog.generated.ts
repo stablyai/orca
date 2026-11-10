@@ -779,6 +779,11 @@ import {
   WorktreeTeardownMissingTerminalsParams
 } from './worktree-params'
 import { WorktreeAdoptProvisionedRoot } from './worktree-provisioned-root-params'
+import {
+  SecretsRequestIdParamsSchema,
+  SecretsRequestParamsSchema,
+  SecretsResolveRequestParamsSchema
+} from '../secret-request-contract'
 import { RepoIconDataUrlsParams } from '../sidebar-list/repo-icon-data-urls-contract'
 import { SidebarInputsReadParams } from '../sidebar-list/sidebar-inputs-feed-contract'
 import { SkillBundleInstallRequestSchema } from '../skill-bundle-install-contract'
@@ -1523,6 +1528,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'runtime.clientEvents.subscribe': ClientEventsSubscribeParams,
   'runtime.clientEvents.unsubscribe': ClientEventsUnsubscribeParams,
   'runtimeEnvironment.wakeRecipeVm': RecipeVmWakeParams,
+  'secrets.request': SecretsRequestParamsSchema,
+  'secrets.requestStatus': SecretsRequestIdParamsSchema,
+  'secrets.resolveRequest': SecretsResolveRequestParamsSchema,
+  'secrets.touchRequest': SecretsRequestIdParamsSchema,
   'session.readTerminalScrollback': SessionReadTerminalScrollbackParams,
   'session.tabs.activate': ActivateTab,
   'session.tabs.close': CloseTab,

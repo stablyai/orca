@@ -4,6 +4,7 @@ import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import type { AgentSessionCheckpointPreview } from '../../../../../../shared/agent-session/lifecycle/agent-session-checkpoint'
 import { nativeChatRewindPrompt } from './native-chat-rewind-files'
+import { restoreNativeChatFilesOnly } from './native-chat-restore-files-only'
 
 function OpenRewindPrompt({ preview }: { preview: AgentSessionCheckpointPreview | null }) {
   const confirm = useConfirmationDialog()
@@ -37,7 +38,15 @@ function prompt(preview: AgentSessionCheckpointPreview | null) {
 /** A: a snapshot exists and files differ. */
 export const restoreFiles = prompt({
   available: true,
-  changedFiles: 3,
+  changedFiles: 6,
+  paths: [
+    'src/app.ts',
+    'src/features/billing/invoice.ts',
+    'src/features/billing/invoice.test.ts',
+    'notes/todo.md',
+    'package.json',
+    'README.md'
+  ],
   headMoved: true,
   createdAt: 0
 })
@@ -65,3 +74,37 @@ export const filesMatch = prompt({
 })
 /** C: no snapshot (older message, older host, or not git). */
 export const noSnapshot = prompt({ available: false, reason: 'none' })
+
+/** Files only, from a user message's menu: the chat stays as it is. */
+export const restoreFilesOnly = defineFixture({
+  width: 560,
+  render: () => (
+    <div className="h-[340px]">
+      <ConfirmationDialogProvider>
+        <OpenFilesOnlyPrompt />
+      </ConfirmationDialogProvider>
+    </div>
+  )
+})
+
+function OpenFilesOnlyPrompt() {
+  const confirm = useConfirmationDialog()
+  useEffect(() => {
+    void restoreNativeChatFilesOnly(
+      {
+        preview: async () => ({
+          available: true,
+          changedFiles: 2,
+          paths: ['src/app.ts', 'notes/todo.md'],
+          headMoved: false,
+          createdAt: 0
+        }),
+        restore: async () => ({ changedFiles: 2, headMoved: false, undoId: '0-00000000' }),
+        undo: async () => ({ changedFiles: 2, headMoved: false, undoId: '0-00000001' })
+      },
+      'item',
+      confirm
+    )
+  }, [confirm])
+  return null
+}

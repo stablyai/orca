@@ -2,7 +2,10 @@
 // hosted sandbox driver: a short-lived Orca token (aud=orca-sandbox), never a provider credential.
 import { z } from 'zod'
 import { errorMessage } from '../../shared/error-message'
+import type { SealedReadSnapshot } from '../../shared/cloud-workspaces/read-snapshot'
 import {
+  CloudReadSnapshotResponseSchema,
+  CloudReaderKeyResponseSchema,
   CloudWorkspaceGrantIssuedSchema,
   CloudWorkspaceGrantListSchema,
   CloudWorkspaceLinkResponseSchema,
@@ -38,6 +41,15 @@ const CONTROL_TIMEOUT_MS = 20_000
 // Opening a sleeping teammate workspace includes a VM boot.
 const GRANT_TIMEOUT_MS = 120_000
 const MAX_RESPONSE_BYTES = 512 * 1024
+// A read snapshot carries chat tails (bounded by READ_SNAPSHOT_LIMITS), base64 over AES-GCM.
+const MAX_READ_SNAPSHOT_BYTES = 16 * 1024 * 1024
+
+/** The read-snapshot 404s are states, not failures: each has its own copy. */
+const READ_SNAPSHOT_MISSES = ['not_found', 'no_snapshot', 'not_sealed_for_key'] as const
+export type ReadSnapshotMiss = (typeof READ_SNAPSHOT_MISSES)[number]
+export type ReadSnapshotFetch =
+  | { kind: 'sealed'; sealed: SealedReadSnapshot }
+  | { kind: ReadSnapshotMiss }
 
 export function createCloudWorkspacesClient(options: CloudWorkspacesClientOptions) {
   const doFetch = options.fetch ?? fetch
@@ -48,7 +60,8 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
     path: string,
     schema: z.ZodType<T>,
     body?: unknown,
-    timeoutMs = CONTROL_TIMEOUT_MS
+    timeoutMs = CONTROL_TIMEOUT_MS,
+    maxBytes = MAX_RESPONSE_BYTES
   ): Promise<T> {
     const signal = AbortSignal.timeout(timeoutMs)
     let token: string
@@ -80,7 +93,7 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
       )
     }
     const text = await response.text()
-    if (text.length > MAX_RESPONSE_BYTES) {
+    if (text.length > maxBytes) {
       throw new CloudWorkspacesError(response.status, 'invalid_response')
     }
     let payload: unknown = null
@@ -176,6 +189,46 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
         params.set('c', chatId)
       }
       return call('GET', `/v1/team/links/resolve?${params}`, CloudWorkspaceLinkResponseSchema)
+    },
+    /** Idempotent per (user, account, public key): the same id comes back, lastSeenAt bumped. */
+    async registerReaderKey(body: {
+      publicKeyB64: string
+      deviceLabel: string
+      deviceKind: 'desktop' | 'mobile'
+    }) {
+      return (await call('PUT', '/v1/reader-keys', CloudReaderKeyResponseSchema, body)).readerKey
+    },
+    /** Server-side revoke: wrapped keys for it are pruned and it is never resurrected. */
+    async deleteReaderKey(keyId: string, timeoutMs = CONTROL_TIMEOUT_MS): Promise<void> {
+      await call(
+        'DELETE',
+        `/v1/reader-keys/${encodeURIComponent(keyId)}`,
+        NoteSentSchema.passthrough(),
+        undefined,
+        timeoutMs
+      )
+    },
+    async getReadSnapshot(id: string, keyId: string): Promise<ReadSnapshotFetch> {
+      try {
+        const { snapshot } = await call(
+          'GET',
+          `${ws(id)}/read-snapshot?${new URLSearchParams({ keyId })}`,
+          CloudReadSnapshotResponseSchema,
+          undefined,
+          CONTROL_TIMEOUT_MS,
+          MAX_READ_SNAPSHOT_BYTES
+        )
+        return { kind: 'sealed', sealed: snapshot }
+      } catch (error) {
+        const miss =
+          error instanceof CloudWorkspacesError && error.status === 404
+            ? READ_SNAPSHOT_MISSES.find((code) => code === error.code)
+            : undefined
+        if (miss) {
+          return { kind: miss }
+        }
+        throw error
+      }
     },
     getOrgPrompts(): Promise<OrgPrompts> {
       return call('GET', '/v1/team/prompts', OrgPromptsSchema)

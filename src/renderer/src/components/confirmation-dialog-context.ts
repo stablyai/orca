@@ -41,6 +41,9 @@ export type ConfirmationDialogOptions = {
     disabled?: boolean
     onConfirmed: (checked: boolean) => void
   }
+  /** Names what the action touches (file paths, say), under the option or the description;
+   *  the first three show, the rest behind "Show N more". `total` may exceed `items`. */
+  itemList?: { label: string; items: string[]; total: number }
   /** Runs when the cancel button settles the prompt, unlike Esc, an outside press or an abort. */
   onCancelClicked?: () => void
   /** Renders text inputs; Enter in one confirms. `onConfirmed` gets their values, only on confirm. */

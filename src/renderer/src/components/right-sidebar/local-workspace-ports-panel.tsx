@@ -36,6 +36,7 @@ export function LocalWorkspacePortsPanel({
   runtimeTarget,
   sshForwardTargetId = null,
   portMenuItems,
+  portActions,
   footer,
   isSandbox = false
 }: {
@@ -46,6 +47,8 @@ export function LocalWorkspacePortsPanel({
   sshForwardTargetId?: string | null
   /** Extra row actions for this host's ports (Orca Cloud: Share…); rides the forwarding menu. */
   portMenuItems?: (port: WorkspacePort) => React.ReactNode
+  /** The same host actions as hover/focus row buttons (Orca Cloud: Share…), after Open. */
+  portActions?: (port: WorkspacePort) => React.ReactNode
   /** Host-specific sections below the ports (Orca Cloud: shared links), given the listening ports. */
   footer?: (activePorts: readonly WorkspacePort[]) => React.ReactNode
   /** An Orca Cloud sandbox: copy says "sandbox" and offers Wake. */
@@ -69,7 +72,12 @@ export function LocalWorkspacePortsPanel({
   })
 
   const scanKey = runtimeTarget ? `${workspacePortRuntimeTargetKey(runtimeTarget)}:all` : null
-  const runtimeForwarding = useRuntimePortRowForwarding(runtimeTarget, portMenuItems, isSandbox)
+  const runtimeForwarding = useRuntimePortRowForwarding(
+    runtimeTarget,
+    portMenuItems,
+    isSandbox,
+    portActions
+  )
 
   const refresh = useCallback(() => {
     if (!activeRepoId || !runtimeTarget || !scanKey) {

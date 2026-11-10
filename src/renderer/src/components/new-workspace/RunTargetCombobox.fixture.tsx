@@ -121,7 +121,12 @@ export const orcaCloudEntitled = defineFixture({
 })
 export const orcaCloudNotEntitled = defineFixture({
   width: 420,
-  render: () => <Preview recipes={withCloud} access={{ state: 'no-plan', lapsed: false }} />,
+  render: () => (
+    <Preview
+      recipes={withCloud}
+      access={{ state: 'no-plan', lapsed: false, canManageBilling: true }}
+    />
+  ),
   interact: open
 })
 export const orcaCloudOutOfHours = defineFixture({
@@ -153,7 +158,12 @@ export const orcaCloudPaymentIssue = defineFixture({
 })
 export const orcaCloudLapsed = defineFixture({
   width: 420,
-  render: () => <Preview recipes={withCloud} access={{ state: 'no-plan', lapsed: true }} />,
+  render: () => (
+    <Preview
+      recipes={withCloud}
+      access={{ state: 'no-plan', lapsed: true, canManageBilling: true }}
+    />
+  ),
   interact: open
 })
 export const orcaCloudSelectedClosed = defineFixture({
@@ -188,7 +198,12 @@ export const orcaCloudSignedOut = defineFixture({
 })
 export const orcaCloudNoCapability = defineFixture({
   width: 420,
-  render: () => <Preview recipes={[devboxRecipe]} access={{ state: 'no-plan', lapsed: false }} />,
+  render: () => (
+    <Preview
+      recipes={[devboxRecipe]}
+      access={{ state: 'no-plan', lapsed: false, canManageBilling: true }}
+    />
+  ),
   interact: open
 })
 export const orcaCloudCapReached = defineFixture({
@@ -232,4 +247,25 @@ export const needsSetupArmed = defineFixture({
   width: 420,
   render: () => <Preview />,
   interact: pressKeys('ArrowDown', 'ArrowDown')
+})
+// DS-15: members see who can fix it, not Upgrade, and the row can't be picked.
+export const orcaCloudNoPlanMember = defineFixture({
+  width: 420,
+  render: () => (
+    <Preview
+      recipes={withCloud}
+      access={{ state: 'no-plan', lapsed: false, canManageBilling: false }}
+    />
+  ),
+  interact: open
+})
+export const orcaCloudCapReachedMember = defineFixture({
+  width: 420,
+  render: () => (
+    <Preview
+      recipes={withCloud}
+      access={{ state: 'out-of-hours', cause: 'cap', canManageBilling: false }}
+    />
+  ),
+  interact: open
 })

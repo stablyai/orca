@@ -16,6 +16,7 @@ import {
   patchRunActionRun
 } from './run-actions-store'
 import { loadWorktreeRunActions, pickPrimaryRunAction } from './run-action-config'
+import { findLiveRunTabId, sameRunTab } from './run-action-tabs'
 import {
   isRunActionRelaunchArmed,
   notifyRunActionStopped,
@@ -46,9 +47,10 @@ function handleCommandFinished(detail: TerminalCommandFinishedEventDetail): void
   if (!tabId) {
     return
   }
-  const setupWorktreeId = autoRunSetupTabs.get(tabId)
-  if (setupWorktreeId) {
-    autoRunSetupTabs.delete(tabId)
+  const setupTabId = [...autoRunSetupTabs.keys()].find((armed) => sameRunTab(armed, tabId))
+  const setupWorktreeId = setupTabId ? autoRunSetupTabs.get(setupTabId) : undefined
+  if (setupTabId && setupWorktreeId) {
+    autoRunSetupTabs.delete(setupTabId)
     if (exitCode === 0) {
       void autoRunAfterSetup(setupWorktreeId)
     }
@@ -76,14 +78,14 @@ function pruneClosedRunTabs(state: AppState): void {
     }
     const tabs = state.tabsByWorktree[run.worktreeId]
     // Unhydrated workspaces have no tab list yet; only a loaded list proves the tab is gone.
-    if (tabs && !tabs.some((tab) => tab.id === run.tabId)) {
+    if (tabs && !findLiveRunTabId(state, run.worktreeId, run.tabId)) {
       deleteRunActionRun(run.worktreeId, run.actionId)
       notifyRunActionStopped(run.tabId)
     }
   }
   for (const [tabId, worktreeId] of autoRunSetupTabs) {
     const tabs = state.tabsByWorktree[worktreeId]
-    if (tabs && !tabs.some((tab) => tab.id === tabId)) {
+    if (tabs && !findLiveRunTabId(state, worktreeId, tabId)) {
       autoRunSetupTabs.delete(tabId)
     }
   }
@@ -97,10 +99,19 @@ export function installRunActionEvents(): () => void {
     }
   }
   window.addEventListener(ORCA_TERMINAL_COMMAND_FINISHED_EVENT, onFinished)
+  // Tab lists churn while a window hydrates or a host republishes its tabs: only a tab still
+  // missing after things settle was really closed.
+  let pruneTimer: ReturnType<typeof setTimeout> | null = null
+  const installedAt = Date.now()
   const unsubscribe = useAppStore.subscribe((state, previous) => {
-    if (state.tabsByWorktree !== previous.tabsByWorktree) {
-      pruneClosedRunTabs(state)
+    if (state.tabsByWorktree === previous.tabsByWorktree || pruneTimer) {
+      return
     }
+    const delay = Math.max(PRUNE_SETTLE_MS, installedAt + STARTUP_PRUNE_GRACE_MS - Date.now())
+    pruneTimer = setTimeout(() => {
+      pruneTimer = null
+      pruneClosedRunTabs(useAppStore.getState())
+    }, delay)
   })
   // After a restart, a run recorded as running may have ended while nobody watched its terminal.
   const reconcileTimer = setTimeout(
@@ -111,16 +122,22 @@ export function installRunActionEvents(): () => void {
     window.removeEventListener(ORCA_TERMINAL_COMMAND_FINISHED_EVENT, onFinished)
     unsubscribe()
     clearTimeout(reconcileTimer)
+    if (pruneTimer) {
+      clearTimeout(pruneTimer)
+    }
   }
 }
 
 const STARTUP_RECONCILE_MS = 5_000
+const PRUNE_SETTLE_MS = 3_000
+const STARTUP_PRUNE_GRACE_MS = 15_000
 
 /** Local terminals can say whether anything still runs under the shell; remote ones are left as recorded. */
 async function reconcileLocalRunsAfterStartup(): Promise<void> {
   const state = useAppStore.getState()
   for (const run of listRunActionRuns()) {
-    const ptyId = state.ptyIdsByTabId[run.tabId]?.[0]
+    const liveTabId = findLiveRunTabId(state, run.worktreeId, run.tabId)
+    const ptyId = liveTabId ? state.ptyIdsByTabId[liveTabId]?.[0] : undefined
     if (run.status !== 'running' || !ptyId || getRemoteRuntimePtyOwner(ptyId)) {
       continue
     }

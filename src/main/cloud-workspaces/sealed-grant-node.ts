@@ -21,7 +21,8 @@ function privateKeyFor(secret: Uint8Array, publicKey: Uint8Array) {
   })
 }
 
-function publicKeyOf(secret: Uint8Array): Uint8Array {
+/** X25519 public key for a 32-byte secret (synchronous, unlike the primitives' contract). */
+export function x25519PublicKeyOf(secret: Uint8Array): Uint8Array {
   // Node derives the public half when only `d` is given via PKCS#8; JWK import needs `x`, so go through DER.
   const pkcs8 = Buffer.concat([
     Buffer.from('302e020100300506032b656e04220420', 'hex'),
@@ -33,10 +34,10 @@ function publicKeyOf(secret: Uint8Array): Uint8Array {
 }
 
 export const nodeSealedGrantPrimitives: SealedGrantPrimitives = {
-  x25519PublicKey: publicKeyOf,
+  x25519PublicKey: x25519PublicKeyOf,
   x25519(secret, peer) {
     const shared = diffieHellman({
-      privateKey: privateKeyFor(secret, publicKeyOf(secret)),
+      privateKey: privateKeyFor(secret, x25519PublicKeyOf(secret)),
       publicKey: createPublicKey({
         key: { kty: 'OKP', crv: 'X25519', x: b64url(peer) },
         format: 'jwk'

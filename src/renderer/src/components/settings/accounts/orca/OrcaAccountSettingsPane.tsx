@@ -4,6 +4,7 @@ import { BookOpen, Check, CircleUserRound, Files, Smartphone } from 'lucide-reac
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
+import { useOrcaAccountKey } from '@/hooks/use-orca-account-key'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -27,7 +28,7 @@ function accountStatusCopy(
   if (state === 'reconnect-required') {
     return t(
       'auto.components.settings.orcaAccount.reconnectRequired',
-      'Your session expired. Sign in again to use cloud features.'
+      'Your session expired. Sign in again to use Orca Cloud.'
     )
   }
   if (state === 'unconfigured') {
@@ -39,7 +40,7 @@ function accountStatusCopy(
   if (state === 'local') {
     return t(
       'auto.components.settings.orcaAccount.signedOut',
-      'Sign in to extend Orca with cloud features, including Artifacts and Orca Relay.'
+      'Sign in to use Orca Cloud, Artifacts and Orca Relay.'
     )
   }
   return t('auto.components.settings.orcaAccount.checking', 'Checking account status…')
@@ -75,6 +76,8 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
   const [signingOut, setSigningOut] = useState(false)
   const connected = authStatus?.state === 'connected'
   const canConnect = authStatus?.configured === true
+  // Team-scoped sections remount on a team switch so none of them shows the previous team's data.
+  const accountKey = useOrcaAccountKey()
 
   useOrcaProfileAuthStatusRefresh()
 
@@ -134,19 +137,22 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
           {connected ? null : <OrcaSignInWaitNotice className="basis-full" />}
         </div>
 
-        {connected ? <PlanBillingSection /> : null}
+        {connected ? <PlanBillingSection key={accountKey} /> : null}
         {connected && authStatus?.capabilities?.flags?.billing ? (
           <TeamSettingsLink
             orgId={authStatus.cloud?.activeOrgId ?? null}
             orgName={authStatus.cloud?.activeOrgName ?? null}
           />
         ) : null}
-        {connected ? <CloudSecretsSection orgId={authStatus?.cloud?.activeOrgId ?? null} /> : null}
+        {connected ? (
+          <CloudSecretsSection key={accountKey} orgId={authStatus?.cloud?.activeOrgId ?? null} />
+        ) : null}
         {connected && authStatus?.capabilities?.flags?.sandbox ? (
           <CloudPredictiveWakeSetting />
         ) : null}
         {connected ? (
           <CloudEnvironmentSection
+            key={accountKey}
             orgId={authStatus?.cloud?.activeOrgId ?? null}
             viewerUserId={authStatus?.cloud?.userId ?? null}
           />
