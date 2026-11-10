@@ -26,7 +26,7 @@ type ReferenceCache =
 
 // Keep long-lived readers out of the read closures' store-snapshot scope.
 function cacheEntryReader<K extends ReferenceCache>(cache: K, key: string) {
-  return (state: AppState): AppState[K][string] | undefined => state[cache]?.[key]
+  return <S extends Pick<AppState, K>>(state: S): S[K][string] | undefined => state[cache]?.[key]
 }
 
 function lookup<T>(
