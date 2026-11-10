@@ -1,3 +1,4 @@
+import { terminalChatTransportTimeoutMs } from './terminal-chat-call-deadline'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
 import {
@@ -87,6 +88,7 @@ export async function callRuntimeEnvironment(
       environment.id,
       method,
       async () => {
+        throwIfSignalAborted(options?.signal)
         const prepared = await prepareFencedRuntimeRequest(
           userDataPath,
           environment.id,
@@ -98,13 +100,14 @@ export async function callRuntimeEnvironment(
           },
           options?.signal
         )
+        throwIfSignalAborted(options?.signal)
         if (prepared.failure) {
           return prepared.failure
         }
         const { environment: currentEnvironment, expected } = prepared
         const pairedConnection = getPreferredPairedRuntimeConnection(currentEnvironment)
         endpoint = pairedConnection.endpoint
-        const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
+        const effectiveTimeoutMs = terminalChatTransportTimeoutMs(method, params, timeoutMs)
         const sharedControlEnvelope = shouldUseSharedControlEnvelope(method, params, envelope)
         const call = {
           method,
@@ -122,7 +125,7 @@ export async function callRuntimeEnvironment(
           markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
           return response
         }
-        if (shouldUseCachedRequestConnection(method)) {
+        if (method === 'terminal.send' || method === 'terminal.updateViewport') {
           const response = await sendRemoteRuntimeConnectionRequestAbortable(
             currentEnvironment.id,
             pairedConnection,
@@ -158,7 +161,8 @@ export async function callRuntimeEnvironment(
         markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
         return response
       },
-      options?.signal
+      options?.signal,
+      params
     )
   } catch (error) {
     if (error instanceof Error && error.name !== 'AbortError') {
@@ -300,8 +304,4 @@ function markEnvironmentUsedFromResponse(
       runtimeId: response._meta.runtimeId
     })
   }
-}
-
-function shouldUseCachedRequestConnection(method: string): boolean {
-  return method === 'terminal.send' || method === 'terminal.updateViewport'
 }

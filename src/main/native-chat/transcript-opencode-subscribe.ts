@@ -28,7 +28,7 @@ export function subscribeOpenCodeNativeChatTranscript(
   const readSignal = deps.readSignal ?? openCodeTranscriptDefaultDeps.readSignal
   const readPage = (page: Parameters<NonNullable<OpenCodeTranscriptDeps['readPage']>>[0]) =>
     (deps.readPage ?? openCodeTranscriptDefaultDeps.readPage)(
-      { ...page, ...(agent ? { agent } : {}) },
+      { ...page, inputEvidence: args.inputEvidence, ...(agent ? { agent } : {}) },
       controller.signal
     )
   const pollMs = args.resolvePollIntervalMs ?? OPENCODE_POLL_MS

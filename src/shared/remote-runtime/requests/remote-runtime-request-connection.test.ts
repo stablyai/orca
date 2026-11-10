@@ -35,6 +35,10 @@ vi.mock('node:child_process', async (original) => ({
   execFile: execFileMock
 }))
 import { getRemoteFileUrl } from '../../../main/git/repo'
+import {
+  terminalChatTransportTimeoutMs,
+  withTerminalChatCallDeadline
+} from '../../../main/ipc/runtime-environments/terminal-chat-call-deadline'
 
 type TestServer = {
   wss: WebSocketServer
@@ -195,32 +199,62 @@ describe('RemoteRuntimeRequestConnection', () => {
     reuseWithCancellation
   )
 
-  it('aborts one request without closing the cached connection', async () => {
-    const server = await createServer()
+  it('expires Chat input without interrupting concurrent raw input on the cached connection', async () => {
+    const release = Promise.withResolvers<void>()
+    const rawArrived = Promise.withResolvers<void>()
+    const chatArrived = Promise.withResolvers<void>()
+    const server = await createServer(async (method, params) => {
+      if (params && typeof params === 'object' && 'chatPrompt' in params && params.chatPrompt) {
+        chatArrived.resolve()
+      } else {
+        rawArrived.resolve()
+      }
+      await release.promise
+      return { method }
+    })
     const connection = new RemoteRuntimeRequestConnection(server.pairing)
-    const controller = new AbortController()
-    const pending = connection.request('test.hang', undefined, 60_000, controller.signal)
-    await vi.waitFor(() =>
-      expect(server.requests).toContainEqual(expect.objectContaining({ method: 'test.hang' }))
+    onTestFinished(() => {
+      release.resolve()
+      connection.close()
+    })
+    const raw = connection.request('terminal.send', { terminal: 't1', text: 'raw' }, 5_000)
+    const rawResult = expect(raw).resolves.toMatchObject({
+      ok: true,
+      result: { method: 'terminal.send' }
+    })
+    await rawArrived.promise
+    const params = { terminal: 't1', chatPrompt: { agent: 'claude', text: 'one shot' } }
+    const pending = withTerminalChatCallDeadline(
+      { method: 'terminal.send', params, timeoutMs: 100 },
+      (signal) =>
+        connection.request(
+          'terminal.send',
+          params,
+          terminalChatTransportTimeoutMs('terminal.send', params, 100),
+          signal
+        )
     )
-
-    controller.abort()
-    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
-    expect(
-      (connection as unknown as { pendingRequests: Map<string, unknown> }).pendingRequests.size
-    ).toBe(0)
+    const expired = expect(pending).rejects.toThrow('Chat input request expired')
+    await chatArrived.promise
+    await expired
+    release.resolve()
+    await rawResult
     await expect(connection.request('status.get', undefined, 1000)).resolves.toMatchObject({
       ok: true,
       result: { method: 'status.get' }
     })
     expect(server.connectionCount()).toBe(1)
 
-    connection.close()
+    expect(server.requests).toMatchObject([
+      { method: 'terminal.send', params: { terminal: 't1', text: 'raw' } },
+      { method: 'terminal.send', params },
+      { method: 'status.get' }
+    ])
   })
 })
 
 async function createServer(
-  reply?: () => Promise<unknown>,
+  reply?: (method: string, params: unknown) => Promise<unknown>,
   deviceToken = 'device-token'
 ): Promise<TestServer> {
   const serverKeyPair = generateKeyPair()
@@ -284,8 +318,8 @@ async function createServer(
         id: request.id,
         ok: true,
         result:
-          reply && request.method === 'git.remoteFileUrl'
-            ? await reply()
+          reply && (request.method === 'git.remoteFileUrl' || request.method === 'terminal.send')
+            ? await reply(request.method, request.params)
             : { method: request.method },
         _meta: { runtimeId: 'runtime-test' }
       })

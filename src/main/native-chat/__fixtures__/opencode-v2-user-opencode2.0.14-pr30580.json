@@ -1,0 +1,12 @@
+{
+  "row": {
+    "_rowid": 1,
+    "id": "msg_16c1181c20012xVnHx1quxJoX2",
+    "session_id": "ses_e93ee7e8affeRLZMwANCgfKoHE",
+    "type": "user",
+    "seq": 4,
+    "time_created": 1792814449135,
+    "time_updated": 1792814449135,
+    "data": "{\"time\":{\"created\":1792814449135},\"text\":\"Read README.md in this workspace and report its sentence. Then explain in two sentences why sea water is salty.\",\"files\":[]}"
+  }
+}

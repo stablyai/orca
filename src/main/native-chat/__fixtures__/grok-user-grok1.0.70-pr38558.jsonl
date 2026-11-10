@@ -1,0 +1,1 @@
+{"type":"user","content":[{"type":"text","text":"<user_query>\nRead the file /Users/brennanbenson/orca-qa/pr38558-grok-g1/fixture/context2.txt and tell me both codenames it mentions.\n</user_query>"}],"prompt_index":0}

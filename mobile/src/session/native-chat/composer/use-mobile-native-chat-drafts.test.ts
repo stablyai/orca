@@ -720,4 +720,58 @@ describe('useMobileNativeChatDrafts', () => {
     expect(state?.pending).toEqual([])
     expect(state?.imagePreviewsByMessageId).toEqual({ prompt: images })
   })
+  it('preserves the full waiting-image union across repeated session rebinding', async () => {
+    await mount('a')
+    act(() => {
+      for (let index = 0; index < 8; index++) {
+        const text = `phone-${index}`
+        const origin = state!.captureSendOrigin(text)
+        state!.acceptSend(origin!, text)
+      }
+    })
+    const captions = Array.from({ length: 8 }, (_, index) => `phone-${index}`)
+    for (const batch of [1, 8]) {
+      await act(async () =>
+        renderer?.update(createElement(Harness, { tabId: 'a', sessionId: null }))
+      )
+      act(() => {
+        for (let index = 0; index < batch; index++) {
+          const next = captions.length
+          const text = `photo-${next}`
+          const origin = state!.captureSendOrigin(text)
+          state!.acceptSend(origin!, text, [`file:///photo-${next}.png`])
+          captions.push(text)
+        }
+      })
+      await act(async () => renderer?.update(createElement(Harness, { tabId: 'a' })))
+      expect(state?.pending.map((entry) => entry.text)).toEqual(captions)
+    }
+    expect(state?.pending).toHaveLength(17)
+    expect(new Set(state?.pending.map((entry) => entry.id)).size).toBe(17)
+    const messages = captions.flatMap((text, index) =>
+      index < 8
+        ? [userTextMessage(`prompt-${index}`, text)]
+        : [
+            userTextMessage(`source-${index}`, `[Image: source: /tmp/photo-${index}.png]`),
+            userTextMessage(`prompt-${index}`, `[Image #1] ${text}`)
+          ]
+    )
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          messages: [...messages, assistantTextMessage('reply', 'finished')]
+        })
+      )
+    )
+    expect(state?.pending).toEqual([])
+    expect(state?.imagePreviewsByMessageId).toEqual(
+      Object.fromEntries(
+        Array.from({ length: 9 }, (_, index) => [
+          `prompt-${index + 8}`,
+          [`file:///photo-${index + 8}.png`]
+        ])
+      )
+    )
+  })
 })

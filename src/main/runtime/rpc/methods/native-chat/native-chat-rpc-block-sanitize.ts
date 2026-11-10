@@ -6,11 +6,36 @@ import { fitInteractivePrompt } from '../../../../../shared/agent-status/contrac
 import { parseAskFromToolInput } from '../../../../../shared/native-chat/input/native-chat-ask'
 import type {
   NativeChatBlock,
+  NativeChatMessage,
   NativeChatSubagentState
 } from '../../../../../shared/native-chat/native-chat-types'
 import { boundSubagentEntryId } from '../../../../native-chat/subagent-entry-id-bounds'
 import type { RpcContext } from '../../core'
 import { sanitizeNativeChatRpcImageBlock } from './native-chat-rpc-image-block'
+
+export function sanitizeNativeChatRpcMessage(
+  message: NativeChatMessage,
+  clientKind: RpcContext['clientKind']
+): NativeChatMessage {
+  const blocks = message.blocks.map((block) => sanitizeNativeChatRpcBlock(block, clientKind))
+  const shortened = message.blocks.some((before, index) => {
+    const after = blocks[index]
+    return (
+      (before.type === 'text' && after.type === 'text' && before.text !== after.text) ||
+      (before.type === 'image-ref' &&
+        after.type === 'image-ref' &&
+        (before.path !== after.path || before.url !== after.url))
+    )
+  })
+  const { inputContent, ...projection } = message
+  const invalid =
+    shortened || clientKind === 'mobile' || inputContent?.images.some((path) => path.length > 512)
+  return {
+    ...projection,
+    blocks,
+    ...(inputContent && !invalid ? { inputContent } : {})
+  }
+}
 
 // Mobile previews tool bodies; cap large results on the wire and mark clipped content.
 const MOBILE_BLOCK_CHAR_CAP = 4000

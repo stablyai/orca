@@ -32,6 +32,8 @@ import {
 
 /** Cancellation suppresses remaining scheduled writes and is safe after completion. */
 export type NativeChatSendHandle = {
+  /** Delivery callbacks retain/reject the echo themselves, including detached host requests. */
+  settlesOwnOutcome?: true
   cancel: (keepInput?: boolean) => void
   /** Time after which every scheduled write has fired and the handle can drop. */
   settleAfterMs: number
@@ -83,6 +85,7 @@ export function sendNativeChatMessage(
       )
     },
     {
+      dispatchScope: options?.dispatchScope,
       onCancelUnsubmitted: () => clearUnsubmittedAgentInput(ptyId, options)
     }
   )

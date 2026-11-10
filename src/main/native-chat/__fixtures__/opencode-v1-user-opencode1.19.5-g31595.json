@@ -1,0 +1,21 @@
+{
+  "message": {
+    "_rowid": 1,
+    "id": "msg_18505eb3e001rriOBWFDdUSEmq",
+    "session_id": "ses_e7afa14d9ffernpe5xoa3e21SL",
+    "time_created": 1793233120062,
+    "time_updated": 1793233128948,
+    "data": "{\"role\":\"user\",\"time\":{\"created\":1793233120062},\"agent\":\"build\",\"model\":{\"providerID\":\"openai\",\"modelID\":\"gpt-6.1-sol\",\"variant\":\"high\"},\"summary\":{\"diffs\":[]}}"
+  },
+  "parts": [
+    {
+      "_rowid": 1,
+      "id": "prt_18505eb40001FkQCoQiFDw6cv0",
+      "message_id": "msg_18505eb3e001rriOBWFDdUSEmq",
+      "session_id": "ses_e7afa14d9ffernpe5xoa3e21SL",
+      "time_created": 1793233120066,
+      "time_updated": 1793233120067,
+      "data": "{\"type\":\"text\",\"text\":\"\\\"Read planner.py in this owned disposable project using a real read tool, then run a read-only Python probe of schedule for an oversized high-priority task and a smaller ready task. Explain the actual observed result briefly. Do not edit files, read outside this project, inspect config/environment/login/secrets, start other agents or services, use Computer Use or OS input, kill by pattern, add model restrictions, or weaken models.\\\"\"}"
+    }
+  ]
+}

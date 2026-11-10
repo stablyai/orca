@@ -1,3 +1,7 @@
+import type { NativeChatPtyDispatchScope } from '../../session/terminal/send/native-chat-pty-send-queue'
+import { chatWorkspaceByTabId } from '@/lib/structured-chat-tab-index'
+import { sendNativeChatHostPrompt } from '../../session/terminal/send/native-chat-host-prompt'
+import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent-reference-send'
 import {
@@ -44,7 +48,12 @@ export function useNativeChatPtyComposerSend(args: {
   readTerminalDraft?: () => string | null
   resolveTarget: () => NativeChatResolvedTarget | null
   classifySend: NativeChatPickerState['classifySend']
-  onOptimisticSend?: (text: string, imagePaths?: string[], recovery?: boolean) => string | undefined
+  onOptimisticSend?: (
+    text: string,
+    imagePaths?: string[],
+    recovery?: boolean,
+    sourceAgent?: AgentType
+  ) => string | undefined
   optimisticSendOutcome?: NativeChatOptimisticSendOutcome
   onSlashCommand?: (command: string, output?: string) => void
   answerCommandLocally?: NativeChatLocalCommandAnswer
@@ -114,8 +123,32 @@ export function useNativeChatPtyComposerSend(args: {
             }
           : launchSendOptions
       let pendingHandle: NativeChatSendHandle | null = null
+      let sourceEvidence = classification === 'chat' && isTuiAgent(args.agent)
+      const legacySend = (dispatchScope: NativeChatPtyDispatchScope) =>
+        imagePaths.length > 0
+          ? sendNativeChatMessageWithImageAttachments(args.agent, target.ptyId, text, imagePaths, {
+              ...sendOptions,
+              dispatchScope
+            })
+          : sendNativeChatMessage(target.ptyId, text, { ...sendOptions, dispatchScope })
       // Why: slash-like text must not silently drop its attached images.
-      if (classification !== 'chat' && imagePaths.length === 0) {
+      if (sourceEvidence && isTuiAgent(args.agent)) {
+        pendingHandle = sendNativeChatHostPrompt({
+          ptyId: target.ptyId,
+          paneKey: target.paneKey ?? args.draftScopeKey,
+          worktreeId:
+            chatWorkspaceByTabId(useAppStore.getState().tabsByWorktree, args.terminalTabId) ??
+            undefined,
+          prompt: { agent: args.agent, text, imagePaths },
+          onLegacy: legacySend,
+          onEvidenceMode: (source) => {
+            sourceEvidence = source
+            if (pendingId) {
+              args.optimisticSendOutcome?.useSourceEvidence?.(pendingId, source)
+            }
+          }
+        })
+      } else if (classification !== 'chat' && imagePaths.length === 0) {
         pendingHandle =
           args.agent === 'codex' && isSlashCommandDraft(text)
             ? sendNativeChatTypedCommand(target.ptyId, text, launchSendOptions)
@@ -142,15 +175,26 @@ export function useNativeChatPtyComposerSend(args: {
           args.sessionOptionsSurface?.recordOutgoingCommand(text.trim())
         }
       } else {
-        pendingId = args.onOptimisticSend?.(text, imagePaths, retry !== undefined)
+        pendingId = args.onOptimisticSend?.(
+          text,
+          imagePaths,
+          retry !== undefined,
+          sourceEvidence ? args.agent : undefined
+        )
         if (pendingHandle) {
           args.trackPendingSend(pendingHandle, pendingId)
-          if (retry && pendingId) {
+          if (pendingId) {
             const id = pendingId
+            void pendingHandle.settled?.then(() =>
+              args.optimisticSendOutcome?.finishSourceEvidence?.(id)
+            )
             void pendingHandle.outcome?.then((outcome) => {
+              if (!sourceEvidence && !retry) {
+                return
+              }
               if (outcome === 'not-submitted') {
                 args.optimisticSendOutcome?.reject(id)
-              } else if (outcome === 'uncertain') {
+              } else if (sourceEvidence || outcome === 'uncertain') {
                 args.optimisticSendOutcome?.holdUnconfirmed(id)
               }
             })

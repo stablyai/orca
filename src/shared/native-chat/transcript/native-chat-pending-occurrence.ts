@@ -1,4 +1,4 @@
-import { nativeChatContinuationSendText } from './native-chat-continuation-send'
+import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import {
   normalizeNativeChatUserText,
   normalizedNativeChatUserMessageText
@@ -6,6 +6,7 @@ import {
 import { isImageRefBlock, type NativeChatMessage } from '../native-chat-types'
 
 export type NativeChatPendingOccurrence = {
+  sourceAgent?: AgentType
   text: string
   imagePaths?: readonly string[]
   sentAt: number
@@ -20,8 +21,11 @@ export function normalizeNativeChatPendingText(text: string): string {
 }
 
 export function nativeChatPendingContentKey(
-  pending: Pick<NativeChatPendingOccurrence, 'text' | 'imagePaths'>
+  pending: Pick<NativeChatPendingOccurrence, 'text' | 'imagePaths' | 'sourceAgent'>
 ): string {
+  if (pending.sourceAgent) {
+    return `request:${JSON.stringify([pending.sourceAgent, pending.text, pending.imagePaths ?? []])}`
+  }
   const text = normalizeNativeChatPendingText(pending.text)
   if (text) {
     return `text:${text}`
@@ -30,7 +34,7 @@ export function nativeChatPendingContentKey(
   return imagePaths.length > 0 ? `images:${JSON.stringify(imagePaths)}` : 'empty'
 }
 
-function nativeChatUserMessageContentKey(
+export function nativeChatUserMessageContentKey(
   message: NativeChatMessage,
   sentImagePaths?: readonly string[]
 ): string | null {
@@ -132,123 +136,6 @@ export function matchingNativeChatUserRows(
   return rows
 }
 
-/** Require the whole row with optional collapsed send-boundary spaces; normalized pieces make greedy matching exact. */
-export function countLeadingPendingTextsGluedToUserText(
-  pendingTexts: readonly string[],
-  userText: string
-): number {
-  if (pendingTexts.length === 0 || userText.length === 0) {
-    return 0
-  }
-  let cursor = 0
-  for (let index = 0; index < pendingTexts.length; index += 1) {
-    const piece = pendingTexts[index]
-    if (!piece) {
-      return 0
-    }
-    if (userText.startsWith(piece, cursor)) {
-      cursor += piece.length
-    } else if (index > 0 && userText.startsWith(` ${piece}`, cursor)) {
-      cursor += piece.length + 1
-    } else {
-      return 0
-    }
-    if (cursor === userText.length) {
-      return index + 1
-    }
-  }
-  return 0
-}
-
-// Continuations can finish outside this queue, so only their prefix must be represented.
-function countLeadingPendingTextsRepresentedByUserText(
-  pieces: readonly { text: string; literal: string; continuation: boolean }[],
-  userText: string
-): number {
-  let cursor = 0
-  let opened = 0
-  for (let index = 0; index < pieces.length; index += 1) {
-    const piece = pieces[index]
-    if (!piece?.text) {
-      return opened
-    }
-    const at = index > 0 && userText[cursor] === ' ' ? cursor + 1 : cursor
-    const literal = piece.continuation && userText.startsWith(piece.literal, at)
-    const text = literal ? piece.literal : piece.text
-    if (!userText.startsWith(text, at)) {
-      return opened
-    }
-    cursor = at + text.length
-    if (
-      piece.continuation &&
-      !literal &&
-      (cursor === userText.length || userText[cursor] === ' ')
-    ) {
-      opened = index + 1
-    }
-    if (cursor === userText.length) {
-      return index > 0 ? index + 1 : opened
-    }
-  }
-  return opened
-}
-
-/** Carry per-send boundaries from the caller; this matcher owns no clock. */
-export type NativeChatGluedUserRow = {
-  text: string
-  /** A row may represent only sends issued before it existed. */
-  representablePendingIndices: ReadonlySet<number>
-}
-
-/** Match multi-send glue and continuations here; exact single sends retain content-key/occurrence semantics. */
-export function selectPendingIndicesRepresentedByUserRows(
-  pending: readonly NativeChatPendingOccurrence[],
-  rows: readonly NativeChatGluedUserRow[]
-): Set<number> {
-  const represented = new Set<number>()
-  const remaining = pending.map((entry, index) => {
-    const continuation = nativeChatContinuationSendText(entry.text)
-    return {
-      index,
-      literal: normalizeNativeChatPendingText(entry.text),
-      text: continuation ?? normalizeNativeChatPendingText(entry.text),
-      continuation: continuation !== null
-    }
-  })
-  if (rows.length === 0 || (pending.length < 2 && !remaining.some((entry) => entry.continuation))) {
-    return represented
-  }
-  for (const row of rows) {
-    const open: typeof remaining = []
-    for (const entry of remaining) {
-      if (represented.has(entry.index) || entry.text.length === 0) {
-        continue
-      }
-      // A row predating a send ends the adjacent run; skipping it would glue across an invalid boundary.
-      if (!row.representablePendingIndices.has(entry.index)) {
-        break
-      }
-      open.push(entry)
-    }
-    const matched = countLeadingPendingTextsRepresentedByUserText(open, row.text)
-    if (matched === 0) {
-      continue
-    }
-    for (let i = 0; i < matched; i += 1) {
-      const entry = open[i]
-      if (!entry) {
-        continue
-      }
-      represented.add(entry.index)
-      const at = remaining.findIndex((candidate) => candidate.index === entry.index)
-      if (at !== -1) {
-        remaining.splice(at, 1)
-      }
-    }
-  }
-  return represented
-}
-
 export function nativeChatPendingMatchKey(pending: NativeChatPendingOccurrence): string {
   return `${String(pending.afterMessageId)}\0${nativeChatPendingContentKey(pending)}`
 }
@@ -285,3 +172,9 @@ export function nativeChatPendingOccurrence(
 ): number {
   return pending.matchingOccurrence ?? alreadyConsumed + 1
 }
+
+export {
+  countLeadingPendingTextsGluedToUserText,
+  selectPendingIndicesRepresentedByUserRows,
+  type NativeChatGluedUserRow
+} from './native-chat-pending-glue'

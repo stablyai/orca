@@ -1,3 +1,4 @@
+import { TERMINAL_INPUT_MAX_BYTES } from '../../../../../../../shared/terminal/input/terminal-input'
 export type NativeChatPtySubmissionOutcome = 'not-submitted' | 'uncertain' | 'submitted'
 // Per-PTY serialization for native-chat clear+body+Enter sequences.
 // Why: Enter is delayed (busy-agent safety). Without a queue, a second send's
@@ -20,21 +21,34 @@ export type NativeChatPtySendQueueHandle = {
 export type EnqueueNativeChatPtySendOptions = {
   /** Clear leftover TUI input only if cancellation follows start but precedes submission. */
   onCancelUnsubmitted?: () => void
+  dispatchScope?: NativeChatPtyDispatchScope
 }
 
 type PtyQueueState = {
   tail: Promise<void>
   freeAt: number
   depth: number
-  handles: Set<NativeChatPtySendQueueHandle>
+  pending: number
+  dispatches: Set<{ release: () => void }>
+  handles: Set<Pick<NativeChatPtySendQueueHandle, 'cancel' | 'settled'>>
 }
 
+export type NativeChatPtyDispatchScope = { readonly state: PtyQueueState }
+
+let dispatchBytes = 0
 const ptyQueues = new Map<string, PtyQueueState>()
 
 function getOrCreateState(ptyId: string): PtyQueueState {
   let state = ptyQueues.get(ptyId)
   if (!state) {
-    state = { tail: Promise.resolve(), freeAt: Date.now(), depth: 0, handles: new Set() }
+    state = {
+      tail: Promise.resolve(),
+      freeAt: Date.now(),
+      depth: 0,
+      pending: 0,
+      dispatches: new Set(),
+      handles: new Set()
+    }
     ptyQueues.set(ptyId, state)
   }
   return state
@@ -44,6 +58,9 @@ export function resetNativeChatPtySendQueuesForTests(): void {
   for (const state of ptyQueues.values()) {
     for (const handle of state.handles) {
       handle.cancel()
+    }
+    for (const entry of state.dispatches) {
+      entry.release()
     }
   }
   ptyQueues.clear()
@@ -64,7 +81,70 @@ export async function waitForNativeChatPtyIdle(ptyId: string): Promise<void> {
   if (!state) {
     return
   }
-  await state.tail
+  await Promise.all([state.tail, ...Array.from(state.handles, (handle) => handle.settled)])
+}
+
+/** Reserve one host dispatch in this PTY's existing queue owner, apart from its UI observer. */
+export function reserveNativeChatPtyDispatch(
+  ptyId: string,
+  bytes: number
+): {
+  previous: Promise<void>
+  scope: NativeChatPtyDispatchScope
+  releasePayload: () => void
+  track: (
+    handle: Pick<NativeChatPtySendQueueHandle, 'cancel' | 'settled'>,
+    barrier: Promise<void>
+  ) => void
+} | null {
+  if (bytes > TERMINAL_INPUT_MAX_BYTES - dispatchBytes) {
+    return null
+  }
+  const state = getOrCreateState(ptyId)
+  if (state.dispatches.size >= 8) {
+    return null
+  }
+  const entry = { release: () => releasePayload() }
+  state.dispatches.add(entry)
+  dispatchBytes += bytes
+  let released = false
+  const cleanup = (): void => {
+    if (
+      state.depth === 0 &&
+      state.handles.size === 0 &&
+      state.pending === 0 &&
+      state.dispatches.size === 0 &&
+      ptyQueues.get(ptyId) === state
+    ) {
+      ptyQueues.delete(ptyId)
+    }
+  }
+  const releasePayload = (): void => {
+    if (!released) {
+      released = true
+      dispatchBytes -= bytes
+      state.dispatches.delete(entry)
+      cleanup()
+    }
+  }
+  return {
+    previous: state.tail,
+    scope: { state },
+    releasePayload,
+    track: (handle, barrier) => {
+      state.pending += 1
+      state.tail = barrier
+      state.handles.add(handle)
+      void handle.settled.finally(() => {
+        state.handles.delete(handle)
+        cleanup()
+      })
+      void barrier.finally(() => {
+        state.pending -= 1
+        cleanup()
+      })
+    }
+  }
 }
 
 /** Wait for earlier sends; start synchronously when idle to avoid deferring the body write. */
@@ -82,9 +162,14 @@ export function enqueueNativeChatPtySend(
 ): NativeChatPtySendQueueHandle {
   const now = Date.now()
   const state = getOrCreateState(ptyId)
-  const waitMs = Math.max(0, state.freeAt - now)
+  const withinDispatch = options?.dispatchScope?.state === state
+  const wasIdle = state.pending === 0
+  const waitMs = withinDispatch ? 0 : Math.max(0, state.freeAt - now)
   const settleAfterMs = waitMs + Math.max(0, durationMs)
-  state.freeAt = Math.max(now, state.freeAt) + Math.max(0, durationMs)
+  if (!withinDispatch) {
+    state.freeAt = Math.max(now, state.freeAt) + Math.max(0, durationMs)
+    state.pending += 1
+  }
   state.depth += 1
 
   let cancelled = false
@@ -149,7 +234,7 @@ export function enqueueNativeChatPtySend(
     })
 
   const runPromise =
-    state.depth === 1 && waitMs === 0 ? execute() : state.tail.then(() => execute())
+    withinDispatch || (wasIdle && waitMs === 0) ? execute() : state.tail.then(() => execute())
 
   const dropHandle = (): void => {
     state.handles.delete(handle)
@@ -157,17 +242,28 @@ export function enqueueNativeChatPtySend(
 
   const settleQueueEntry = (): void => {
     state.depth = Math.max(0, state.depth - 1)
+    if (!withinDispatch) {
+      state.pending -= 1
+    }
     finished = true
     resolveOutcome(result ?? (writeStarted ? 'uncertain' : 'not-submitted'))
     dropHandle()
     // Release idle PTY keys so closed panes cannot accumulate permanent queue entries.
-    if (state.depth === 0 && state.handles.size === 0 && ptyQueues.get(ptyId) === state) {
+    if (
+      state.depth === 0 &&
+      state.handles.size === 0 &&
+      state.pending === 0 &&
+      state.dispatches.size === 0 &&
+      ptyQueues.get(ptyId) === state
+    ) {
       ptyQueues.delete(ptyId)
     }
   }
 
   const settled = runPromise.then(settleQueueEntry, settleQueueEntry)
-  state.tail = settled
+  if (!withinDispatch) {
+    state.tail = settled
+  }
 
   const handle: NativeChatPtySendQueueHandle = {
     cancel: (keepInput = false) => {
@@ -180,7 +276,9 @@ export function enqueueNativeChatPtySend(
       }
       const shouldClear = bodyStarted && !submitted
       // Refund only this sequence’s window; later queued Enters still hold the line and their cards.
-      state.freeAt = Math.max(Date.now(), state.freeAt - Math.max(0, durationMs))
+      if (!withinDispatch) {
+        state.freeAt = Math.max(Date.now(), state.freeAt - Math.max(0, durationMs))
+      }
       finishEntry()
       dropHandle()
       if (shouldClear && !keepInput) {

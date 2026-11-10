@@ -1,3 +1,4 @@
+import { grokInputContent } from './transcript-input-content'
 import type { NativeChatBlock, NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import {
   asRecord,
@@ -52,7 +53,14 @@ export function decodeGrokTranscriptLine(
         source: 'transcript'
       }
     }
-    return { id, role: 'user', blocks, timestamp, source: 'transcript' }
+    return {
+      id,
+      role: 'user',
+      blocks,
+      timestamp,
+      source: 'transcript',
+      inputContent: grokInputContent(record.content)
+    }
   }
 
   if (type === 'reasoning') {

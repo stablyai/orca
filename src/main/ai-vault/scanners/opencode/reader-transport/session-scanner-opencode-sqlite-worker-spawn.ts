@@ -262,6 +262,7 @@ export async function readOpenCodeTranscriptPageViaWorker(
     sessionId: string
     limit: number
     beforeMessageRowId?: number
+    inputEvidence?: boolean
     agent?: 'zcode'
   },
   signal?: AbortSignal

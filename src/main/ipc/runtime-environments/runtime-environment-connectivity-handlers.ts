@@ -1,3 +1,5 @@
+import { withTerminalChatCallDeadline } from './terminal-chat-call-deadline'
+import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
 import {
   manuallyDisconnectedResponse,
   runtimeEnvironmentCallFailure
@@ -249,60 +251,63 @@ function registerPassiveCallHandler(
         expectedEnvironmentRuntimeId?: string
       }
     ): Promise<RuntimeRpcResponse<unknown>> => {
-      const environment = resolveEnvironment(getUserDataPath(), args.selector)
-      if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
-        return manuallyDisconnectedResponse(environment)
-      }
-      if (isHostSpawnFencedForWslMoveUndo(environment.id, args.method)) {
-        return wslMoveUndoSpawnFencedResponse(environment, args.method)
-      }
-      void desktopChatCreationHistory(getUserDataPath()).recordCreate(
-        environment.id,
-        args.method,
-        args.params
-      )
-      // Every renderer request to a paired host passes this account environment boundary.
-      const accounts = await withWslOrcadAccountEnv({
-        environmentId: environment.id,
-        method: args.method,
-        params: args.params,
-        hostSupports: (capability) =>
-          wslOrcadHostSupports(environment.id, capability, () =>
-            callRuntimeEnvironment(getUserDataPath(), environment.id, 'status.get', undefined)
-          )
-      })
-      if (!accounts.ok) {
-        return {
-          id: args.method,
-          ok: false,
-          error: { code: 'account_preparation_failed', message: accounts.message },
-          _meta: { runtimeId: environment.runtimeId }
+      return withTerminalChatCallDeadline(args, async (signal) => {
+        const environment = resolveEnvironment(getUserDataPath(), args.selector)
+        if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
+          return manuallyDisconnectedResponse(environment)
         }
-      }
-      let response: RuntimeRpcResponse<unknown>
-      try {
-        response = await callRuntimeEnvironment(
-          getUserDataPath(),
+        if (isHostSpawnFencedForWslMoveUndo(environment.id, args.method)) {
+          return wslMoveUndoSpawnFencedResponse(environment, args.method)
+        }
+        void desktopChatCreationHistory(getUserDataPath()).recordCreate(
           environment.id,
           args.method,
-          accounts.params,
-          args.timeoutMs,
-          args.expectedEnvironmentPairingRevision,
-          undefined,
-          { expectedEnvironmentRuntimeId: args.expectedEnvironmentRuntimeId }
+          args.params
         )
-      } catch (error) {
-        const failure = runtimeEnvironmentCallFailure(environment, args.method, error)
-        if (failure) {
-          return failure
+        // Every renderer request to a paired host passes this account environment boundary.
+        const accounts = await withWslOrcadAccountEnv({
+          environmentId: environment.id,
+          method: args.method,
+          params: args.params,
+          hostSupports: (capability) =>
+            wslOrcadHostSupports(environment.id, capability, () =>
+              callRuntimeEnvironment(getUserDataPath(), environment.id, 'status.get', undefined)
+            )
+        })
+        throwIfSignalAborted(signal)
+        if (!accounts.ok) {
+          return {
+            id: args.method,
+            ok: false,
+            error: { code: 'account_preparation_failed', message: accounts.message },
+            _meta: { runtimeId: environment.runtimeId }
+          }
         }
-        throw error
-      }
-      observeWslOrcadHostResponse(environment.id, args.method, response)
-      recordAnswer?.(environment, args.method, response)
-      return isRuntimeEnvironmentManuallyDisconnected(environment.id)
-        ? manuallyDisconnectedResponse(environment)
-        : response
+        let response: RuntimeRpcResponse<unknown>
+        try {
+          response = await callRuntimeEnvironment(
+            getUserDataPath(),
+            environment.id,
+            args.method,
+            accounts.params,
+            args.timeoutMs,
+            args.expectedEnvironmentPairingRevision,
+            undefined,
+            { expectedEnvironmentRuntimeId: args.expectedEnvironmentRuntimeId, signal }
+          )
+        } catch (error) {
+          const failure = runtimeEnvironmentCallFailure(environment, args.method, error)
+          if (failure) {
+            return failure
+          }
+          throw error
+        }
+        observeWslOrcadHostResponse(environment.id, args.method, response)
+        recordAnswer?.(environment, args.method, response)
+        return isRuntimeEnvironmentManuallyDisconnected(environment.id)
+          ? manuallyDisconnectedResponse(environment)
+          : response
+      })
     }
   )
 }

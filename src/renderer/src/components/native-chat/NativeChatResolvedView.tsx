@@ -209,8 +209,14 @@ export function NativeChatResolvedView({
   })
 
   const pendingMessages = useMemo(
-    () => pendingSendsAsMessages(pending, sessionAfterCommandBoundaries.messages, sendWorkingEpoch),
-    [pending, sessionAfterCommandBoundaries.messages, sendWorkingEpoch]
+    () =>
+      pendingSendsAsMessages(
+        pending,
+        sessionAfterCommandBoundaries.messages,
+        sendWorkingEpoch,
+        session.sessionId ?? ''
+      ),
+    [pending, sessionAfterCommandBoundaries.messages, sendWorkingEpoch, session.sessionId]
   )
   const messagesWithPending = useMemo(
     () =>

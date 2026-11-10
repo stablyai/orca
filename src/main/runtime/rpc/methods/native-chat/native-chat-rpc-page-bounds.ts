@@ -7,6 +7,15 @@ import { agentSessionHostStatusBody } from '../../../../../shared/agent-session/
 import { boundJournalKeyComponent } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from '../../../../native-chat/agent-session-wire/publication/history/agent-session-history-page-bounds'
 
+export function nativeChatRpcPublicMessages(
+  messages: NativeChatMessage[],
+  keepCursor: boolean
+): NativeChatMessage[] {
+  return keepCursor
+    ? messages
+    : messages.map(({ transcriptOffset: _cursor, ...message }) => message)
+}
+
 function oversizedRow(message: NativeChatMessage): NativeChatMessage {
   const { text, presentation } = agentSessionHostStatusBody('history-item-too-large')
   return {
@@ -42,7 +51,8 @@ function rowGroups(messages: readonly NativeChatMessage[]): NativeChatMessage[][
 export function boundNativeChatRpcPageByBytes(
   messages: readonly NativeChatMessage[],
   hasMore: boolean,
-  beforeOffset: number
+  beforeOffset: number,
+  cursorKind: 'transcriptOffset' | 'transcriptOrder' = 'transcriptOffset'
 ): { messages: NativeChatMessage[]; hasMore: boolean; beforeOffset: number } {
   const groups = rowGroups(messages)
   const kept: NativeChatMessage[][] = []
@@ -64,7 +74,7 @@ export function boundNativeChatRpcPageByBytes(
   }
   const selected = kept.toReversed().flat()
   const dropped = retained < messages.length
-  const cursor = selected[0]?.transcriptOffset
+  const cursor = selected[0]?.[cursorKind]
   // A legacy projection has no row cursor: explicitly omit the page rather than skip unseen history.
   if (dropped && cursor === undefined) {
     return { messages: messages.length ? [oversizedRow(messages[0])] : [], hasMore, beforeOffset }
@@ -83,9 +93,10 @@ export function nativeChatRpcAppendBatches(
   let batch: NativeChatMessage[] = []
   let bytes = 2
   for (const group of rowGroups(messages)) {
+    const originalSize = groupBytes(group)
     const bounded =
-      groupBytes(group) > HISTORY_PAGE_CONTENT_BUDGET_BYTES ? [oversizedRow(group[0])] : group
-    const size = groupBytes(bounded)
+      originalSize > HISTORY_PAGE_CONTENT_BUDGET_BYTES ? [oversizedRow(group[0])] : group
+    const size = bounded === group ? originalSize : groupBytes(bounded)
     if (batch.length > 0 && bytes + size > HISTORY_PAGE_CONTENT_BUDGET_BYTES) {
       batches.push(batch)
       batch = []

@@ -94,6 +94,7 @@ export function sendNativeChatMessageWithImageAttachments(
       )
     },
     {
+      dispatchScope: options?.dispatchScope,
       onCancelUnsubmitted: () => clearUnsubmittedAgentInput(ptyId, options)
     }
   )

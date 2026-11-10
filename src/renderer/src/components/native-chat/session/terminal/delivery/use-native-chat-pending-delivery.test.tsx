@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { act, renderHook, cleanup } from '@testing-library/react'
+import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
 import { useNativeChatPendingDelivery } from './use-native-chat-pending-delivery'
@@ -34,6 +35,45 @@ afterEach(() => {
 })
 
 describe('terminal Chat pending delivery', () => {
+  it('keeps uncertain queued input pending until an authoritative session can observe its turn', () => {
+    const initialSession: Parameters<typeof useNativeChatPendingDelivery>[0]['session'] = {
+      messages: [],
+      readPhase: 'loading',
+      sessionId: null
+    }
+    const initialProps: { session: typeof initialSession; workingEpoch: number | null } = {
+      session: initialSession,
+      workingEpoch: 7
+    }
+    const { result, rerender } = renderHook(
+      ({ session, workingEpoch }) =>
+        useNativeChatPendingDelivery({ ...args, session, workingEpoch }),
+      { initialProps }
+    )
+    act(() => {
+      const id = result.current.record('queued content', undefined, false, 'claude')
+      result.current.holdUnconfirmed(id)
+    })
+    act(() => vi.advanceTimersByTime(60_000))
+    expect(result.current.pending[0].delivery).toBeUndefined()
+    rerender({
+      session: { messages: [], readPhase: 'ready', sessionId: 'session' },
+      workingEpoch: 7
+    })
+    act(() => vi.advanceTimersByTime(60_000))
+    expect(result.current.pending[0].delivery).toBeUndefined()
+    rerender({
+      session: { messages: [], readPhase: 'ready', sessionId: 'session' },
+      workingEpoch: null
+    })
+    act(() => vi.advanceTimersByTime(19_999))
+    expect(result.current.pending[0].delivery).toBeUndefined()
+    act(() => vi.advanceTimersByTime(1))
+    expect(result.current.pending.map((entry) => [entry.text, entry.delivery])).toEqual([
+      ['queued content', 'unconfirmed']
+    ])
+  })
+
   it('keeps a send, and its failure notice, when a different session with old history loads', () => {
     const old: NativeChatMessage[] = [
       { ...userRow('run tests'), id: 'old-user', timestamp: 10 },
@@ -67,3 +107,263 @@ describe('terminal Chat pending delivery', () => {
     ])
   })
 })
+
+it('retains spent receipts and the source frontier across hook remounts and an empty drain', () => {
+  const source = (id: string, order: number): NativeChatMessage => ({
+    ...userRow('repeat'),
+    id,
+    transcriptOrder: order,
+    inputContent: {
+      provider: 'opencode',
+      textDigest: createHash('sha256').update('repeat').digest('hex'),
+      images: []
+    }
+  })
+  const completed = (id: string, order: number): NativeChatMessage => ({
+    ...boundary,
+    id,
+    transcriptOrder: order
+  })
+  const mount = (messages: NativeChatMessage[]) =>
+    renderHook(
+      ({ messages }) =>
+        useNativeChatPendingDelivery({
+          ...args,
+          agent: 'opencode',
+          session: { messages, readPhase: 'ready', sessionId: 'session' }
+        }),
+      { initialProps: { messages } }
+    )
+  const first = mount([{ ...boundary, transcriptOrder: 0 }])
+  act(() => {
+    first.result.current.record('repeat', undefined, false, 'opencode')
+    first.result.current.record('repeat', undefined, false, 'opencode')
+  })
+  first.rerender({ messages: [source('receipt', 1), completed('answer', 2)] })
+  expect(first.result.current.pending).toHaveLength(1)
+  const survivor = first.result.current.pending[0].id
+  first.unmount()
+  const remounted = mount([])
+  act(() => {
+    remounted.result.current.record('repeat', undefined, false, 'opencode')
+  })
+  remounted.rerender({ messages: [source('receipt', 1), completed('answer', 2)] })
+  expect(remounted.result.current.pending).toHaveLength(2)
+  remounted.rerender({ messages: [source('next', 3), completed('next-answer', 4)] })
+  expect(remounted.result.current.pending).toHaveLength(1)
+  expect(remounted.result.current.pending[0].id).not.toBe(survivor)
+  act(() => {
+    remounted.result.current.cancel(remounted.result.current.pending[0].id, true)
+  })
+  remounted.rerender({ messages: [] })
+  act(() => {
+    remounted.result.current.record('repeat', undefined, false, 'opencode')
+  })
+  remounted.rerender({ messages: [source('next', 3), completed('next-answer', 4)] })
+  expect(remounted.result.current.pending).toHaveLength(1)
+  remounted.rerender({ messages: [source('last', 5), completed('last-answer', 6)] })
+  expect(remounted.result.current.pending).toEqual([])
+})
+
+function mountOwned(messages: NativeChatMessage[] = [boundary]) {
+  return renderHook(
+    ({ messages }) =>
+      useNativeChatPendingDelivery({
+        ...args,
+        agent: 'opencode',
+        session: { messages, readPhase: 'ready', sessionId: 'session' }
+      }),
+    { initialProps: { messages } }
+  )
+}
+function sourceRow(text: string, id = `source:${text}`): NativeChatMessage {
+  return {
+    ...userRow(text),
+    id,
+    inputContent: {
+      provider: 'opencode',
+      textDigest: createHash('sha256').update(text).digest('hex'),
+      images: []
+    }
+  }
+}
+
+it('assigns identical legacy occurrences at the real capability fallback and never double-charges a spent row', () => {
+  const first = mountOwned()
+  let one = '',
+    two = ''
+  act(() => {
+    one = first.result.current.record('repeat', undefined, false, 'opencode')
+    two = first.result.current.record('repeat', undefined, false, 'opencode')
+    first.result.current.useSourceEvidence(one, false)
+    first.result.current.useSourceEvidence(two, false)
+    first.result.current.useSourceEvidence(two, false)
+  })
+  const messages = [sourceRow('repeat', 'x'), { ...boundary, id: 'answer' }]
+  first.rerender({ messages })
+  expect(first.result.current.pending.map((entry) => entry.id)).toEqual([two])
+  first.rerender({ messages: [...messages] })
+  expect(first.result.current.pending.map((entry) => entry.id)).toEqual([two])
+  first.unmount()
+  const remounted = mountOwned(messages)
+  expect(remounted.result.current.pending.map((entry) => entry.id)).toEqual([two])
+  remounted.rerender({
+    messages: [...messages, sourceRow('repeat', 'y'), { ...boundary, id: 'answer-y' }]
+  })
+  expect(remounted.result.current.pending).toEqual([])
+})
+
+it('transfers spent ownership to a reachable fallback glue witness, then retires its live dependencies', () => {
+  const first = mountOwned()
+  let source = '',
+    one = '',
+    two = ''
+  act(() => {
+    source = first.result.current.record('first second', undefined, false, 'opencode')
+    first.result.current.useSourceEvidence(source, true)
+    one = first.result.current.record('first', undefined, false, 'opencode')
+    two = first.result.current.record('second', undefined, false, 'opencode')
+  })
+  const x = sourceRow('first second', 'x')
+  first.rerender({ messages: [x] })
+  act(() => {
+    first.result.current.useSourceEvidence(one, false)
+    first.result.current.useSourceEvidence(two, false)
+  })
+  const messages = [x, { ...boundary, id: 'answer' }]
+  first.rerender({ messages })
+  expect(first.result.current.pending.map((entry) => entry.id)).toEqual([one, two])
+  first.unmount()
+  const remounted = mountOwned(messages)
+  expect(remounted.result.current.pending.map((entry) => entry.id)).toEqual([one, two])
+  remounted.rerender({
+    messages: [...messages, sourceRow('first second', 'y'), { ...boundary, id: 'answer-y' }]
+  })
+  expect(remounted.result.current.pending).toEqual([])
+})
+
+it('releases dead fallback group dependencies and does not accumulate receipts behind an incompatible draft', () => {
+  const mounted = mountOwned()
+  let one = '',
+    two = ''
+  act(() => {
+    mounted.result.current.record('first second', undefined, false, 'opencode')
+    one = mounted.result.current.record('first', undefined, false, 'opencode')
+    two = mounted.result.current.record('second', undefined, false, 'opencode')
+  })
+  mounted.rerender({ messages: [sourceRow('first second', 'x'), { ...boundary, id: 'answer' }] })
+  expect(mounted.result.current.pending.some((entry) => entry.receiptDependencies?.length)).toBe(
+    true
+  )
+  act(() => mounted.result.current.cancel(two, true))
+  expect(mounted.result.current.pending[0].receiptDependencies).toBeUndefined()
+  act(() => mounted.result.current.finishSourceEvidence(one))
+  for (let index = 0; index < 20; index++) {
+    act(() => {
+      const id = mounted.result.current.record(`later-${index}`, undefined, false, 'opencode')
+      mounted.result.current.useSourceEvidence(id, true)
+    })
+    mounted.rerender({
+      messages: [sourceRow(`later-${index}`, `u${index}`), { ...boundary, id: `a${index}` }]
+    })
+  }
+  expect(mounted.result.current.pending.map((entry) => entry.id)).toEqual([one])
+  expect(mounted.result.current.pending[0].receiptDependencies).toBeUndefined()
+  act(() => mounted.result.current.reject(one))
+  act(() => mounted.result.current.record('first', undefined, false, 'opencode'))
+  expect(mounted.result.current.pending).toHaveLength(1)
+  expect(mounted.result.current.pending[0].id).not.toBe(one)
+})
+
+it('keeps a committed source lock through a late real fallback and prevents legacy continuation reuse', () => {
+  const mounted = mountOwned()
+  let owner = '',
+    continuation = ''
+  act(() => {
+    owner = mounted.result.current.record('first second', undefined, false, 'opencode')
+    continuation = mounted.result.current.record('first\\', undefined, false, 'opencode')
+  })
+  const x = sourceRow('first second', 'x')
+  mounted.rerender({ messages: [x] })
+  act(() => {
+    mounted.result.current.useSourceEvidence(owner, false)
+    mounted.result.current.useSourceEvidence(continuation, false)
+  })
+  mounted.rerender({ messages: [x, { ...boundary, id: 'answer' }] })
+  expect(mounted.result.current.pending.map((entry) => entry.id)).toEqual([continuation])
+  mounted.rerender({ messages: [x, { ...boundary, id: 'answer' }] })
+  expect(mounted.result.current.pending.map((entry) => entry.id)).toEqual([continuation])
+  mounted.rerender({
+    messages: [
+      x,
+      { ...boundary, id: 'answer' },
+      sourceRow('first next', 'y'),
+      { ...boundary, id: 'answer-y' }
+    ]
+  })
+  expect(mounted.result.current.pending).toEqual([])
+})
+
+it.each([false, true])(
+  'records a new loading-session Send without another session frontier, empty namespace first: %s',
+  (emptyFirst) => {
+    vi.setSystemTime(3000)
+    type Session = Parameters<typeof useNativeChatPendingDelivery>[0]['session']
+    const initial: Session = {
+      messages: [{ ...boundary, id: 'a-answer', timestamp: 1000, transcriptOrder: 9 }],
+      readPhase: 'ready',
+      sessionId: 'A'
+    }
+    const mounted = renderHook(
+      ({ session }) => useNativeChatPendingDelivery({ ...args, agent: 'opencode', session }),
+      { initialProps: { session: initial } }
+    )
+    if (emptyFirst) {
+      mounted.rerender({ session: { messages: [], readPhase: 'ready', sessionId: 'B' } })
+    }
+    mounted.rerender({ session: { messages: [], readPhase: 'loading', sessionId: 'B' } })
+    let id = ''
+    act(() => {
+      id = mounted.result.current.record('repeat', undefined, false, 'opencode')
+    })
+    const old = [
+      { ...sourceRow('repeat', 'b-old'), timestamp: 2000, transcriptOrder: 1 },
+      { ...boundary, id: 'b-old-answer', timestamp: 2500, transcriptOrder: 2 }
+    ]
+    mounted.rerender({ session: { messages: old, readPhase: 'ready', sessionId: 'B' } })
+    expect(mounted.result.current.pending.map((entry) => entry.id)).toEqual([id])
+    mounted.rerender({
+      session: {
+        messages: [
+          ...old,
+          { ...sourceRow('repeat', 'b-new'), timestamp: 3100, transcriptOrder: 3 },
+          { ...boundary, id: 'b-new-answer', timestamp: 3200, transcriptOrder: 4 }
+        ],
+        readPhase: 'ready',
+        sessionId: 'B'
+      }
+    })
+    expect(mounted.result.current.pending).toEqual([])
+  }
+)
+
+it.each(['repeat', 'repeat '])(
+  'replaces failed legacy %j before assigning the resend occurrence',
+  (failedText) => {
+    const mounted = mountOwned()
+    let rejected = '',
+      replacement = ''
+    act(() => {
+      rejected = mounted.result.current.record(failedText, undefined, false, 'opencode')
+      mounted.result.current.useSourceEvidence(rejected, false)
+      mounted.result.current.reject(rejected)
+    })
+    act(() => {
+      replacement = mounted.result.current.record('repeat', undefined, false, 'opencode')
+      mounted.result.current.useSourceEvidence(replacement, false)
+    })
+    expect(mounted.result.current.pending.map((entry) => entry.id)).toEqual([replacement])
+    mounted.rerender({ messages: [sourceRow('repeat', 'new'), { ...boundary, id: 'answer' }] })
+    expect(mounted.result.current.pending).toEqual([])
+  }
+)

@@ -86,18 +86,22 @@ export class RuntimeRpcCallQueuePool {
     method: string,
     run: () => Promise<T>,
     retainedBytes = 0,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    traffic?: 'chat-prompt'
   ): Promise<T> {
     if (signal?.aborted) {
       return Promise.reject(abortSignalReason(signal))
     }
     // Same concurrency bound, counted apart from the selector's other calls; global caps still apply.
     const bulkRead = isBulkReadRuntimeMethod(method)
-    const queueKey = isLongWaitRuntimeMethod(method)
-      ? `${selector}\u0000long-wait`
-      : bulkRead
-        ? `${selector}\u0000bulk-read`
-        : selector
+    const queueKey =
+      traffic === 'chat-prompt'
+        ? `${selector}\u0000chat-prompt`
+        : isLongWaitRuntimeMethod(method)
+          ? `${selector}\u0000long-wait`
+          : bulkRead
+            ? `${selector}\u0000bulk-read`
+            : selector
     if (this.queuedCallCount >= this.maxQueuedTotal) {
       return Promise.reject(new RuntimeRpcCallQueueOverloadError('global'))
     }
@@ -178,6 +182,9 @@ export class RuntimeRpcCallQueuePool {
       // Decorative status refreshes must not stampede capacity shared with streams and workspace actions.
       let runPromise: Promise<unknown>
       try {
+        if (call.signal?.aborted) {
+          throw abortSignalReason(call.signal)
+        }
         runPromise = call.run()
       } catch (error) {
         // Start queued work immediately but route synchronous validation failures through cleanup.

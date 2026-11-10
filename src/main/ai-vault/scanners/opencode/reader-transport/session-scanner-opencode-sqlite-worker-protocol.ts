@@ -46,6 +46,7 @@ export type OpenCodeNativeChatReadRequest = {
   sessionId: string
   limit?: number
   beforeMessageRowId?: number
+  inputEvidence?: boolean
   /** When 'zcode', reads apply ZCode's hidden-transcript filter. */
   agent?: 'zcode'
 }
