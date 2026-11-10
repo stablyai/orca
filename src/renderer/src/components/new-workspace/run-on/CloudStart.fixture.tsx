@@ -8,6 +8,9 @@ import { ComposerPreview } from './cloud-start-preview-fixture'
 const setup = (): void => {
   window.api.agentApiKeys = undefined
   window.api.cloudSecrets = undefined
+  // No agent-accounts bridge (as in builds without it): the Agent row reads "unavailable" instead
+  // of awaiting the fixture harness's catch-all mock, which resolves to undefined.
+  window.api.orcaCloudAgents = undefined
   window.api.cloudWorkspaces = { ...window.api.cloudWorkspaces, available: async () => true }
 }
 const entitled: OrcaCloudRunTargetAccess = { state: 'entitled', remainingSeconds: 41 * 3600 }
