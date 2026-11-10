@@ -34,7 +34,9 @@ vi.mock('@/lib/agent-session/launch/inventory/host-chat-program-acquisition', as
   acquireAgentLaunchChoices: async () => ({ detected: ['claude', 'codex'] })
 }))
 
-vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
+vi.mock('@/components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
+  focusTerminalTabSurface: vi.fn()
+}))
 
 vi.mock('@/lib/agent-session/launch/prompt/launch-agent-tab-prompt-paste', () => ({
   pasteAgentLaunchPromptOnceReady: async () => ({ delivered: true, failureNotified: false })

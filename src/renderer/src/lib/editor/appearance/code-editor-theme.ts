@@ -1,9 +1,12 @@
 import type { CodeEditorThemeChoice } from '../../../../../shared/plugin-appearance-settings-types'
 import type { PluginThemeRegistration } from '../../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import { pluginAppThemeCssFallback } from '../../../../../shared/plugins/artifacts/plugin-theme-css-fallbacks'
-import { derivePluginMonacoTheme, type PluginMonacoTheme } from '../../plugin-monaco-theme'
-import type { AppThemePaint } from '../../document-theme'
-import { safePluginThemeTokens, type ColorProbe } from '../../plugin-theme-tokens'
+import { derivePluginMonacoTheme, type PluginMonacoTheme } from './plugin-monaco-theme'
+import type { AppThemePaint } from '../../../app-shell/appearance/document-theme'
+import {
+  safePluginThemeTokens,
+  type ColorProbe
+} from '../../../app-shell/appearance/plugin-theme-tokens'
 
 type ThemeBase = 'light' | 'dark'
 

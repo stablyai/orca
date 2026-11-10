@@ -17,20 +17,22 @@ import {
   beginHostQualifiedRemoval,
   completeSameIdHostScopedRemoval,
   findWorktreeOnConfirmedHost,
-  prepareHostScopedRemovalCompletion,
   refuseUnprovableRemoteHostRouting
 } from './host-qualified-worktree-removal'
-import { resolveSameIdSurvivingHostId } from './host-qualified-worktree-row-removal'
+import {
+  resolveSameIdSurvivingHostId,
+  prepareHostScopedRemovalCompletion
+} from './host-qualified-worktree-row-removal'
 import {
   classifyWorktreeForceDeleteReason,
   getLockedWorktreeRemovalReason,
   isLockedWorktreeRemovalError
 } from '../../../../../../shared/worktree/removal'
-import { preservedBranchCleanupKey } from '../../../../../../shared/git/branches/preserved-branch-cleanup'
+import '../../../../../../shared/git/branches/preserved-branch-cleanup'
 import { getWorktreeDeleteStateKey } from './worktree-delete-state'
 import { pruneHostedReviewLinkMutationGenerations } from '../metadata/hosted-review-link-mutation'
 import { rememberAuthoritativelyRemovedWorktrees } from '../listing/authoritative-worktree-removal-memory'
-import { preservedBranchRuntimeTargetByCleanupKey } from './preserved-branch-cleanup-target'
+import { rememberPreservedBranchCleanup } from './preserved-branch-cleanup-target'
 import {
   isRuntimeRepoNotFoundError,
   isRuntimeSelectorNotFoundError
@@ -244,23 +246,13 @@ export function createRemoveWorktree(
         confirmedDiscards: options?.confirmedDiscards
       })
       const preservedBranch = removalResult?.preservedBranch
-      const cleanup = preservedBranch
-        ? {
-            worktreeId,
-            branchName: preservedBranch.branchName,
-            expectedHead: preservedBranch.head,
-            ...(hostId ? { hostId } : {}),
-            ...(removalRoute?.runtimeEnvironmentId
-              ? { runtimeEnvironmentId: removalRoute.runtimeEnvironmentId }
-              : {})
-          }
-        : null
-      if (preservedBranch) {
-        preservedBranchRuntimeTargetByCleanupKey.set(preservedBranchCleanupKey(cleanup!), {
-          cleanup: cleanup!,
-          target
-        })
-      }
+      const cleanup = rememberPreservedBranchCleanup(
+        worktreeId,
+        preservedBranch,
+        hostId,
+        removalRoute,
+        target
+      )
       const branchCleanupOptions = {
         ...(hostId ? { hostId } : {}),
         ...(removalRoute?.runtimeEnvironmentId

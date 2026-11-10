@@ -1,5 +1,6 @@
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
-import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
+import '@/store/slices/linear/linear-issue-read'
+import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
 import { useLinearIssuePublication } from '@/hooks/useLinearIssuePublication'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 

@@ -14,7 +14,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   isWindowsTerminalCapabilityHost,
   useLocalWindowsTerminalCapabilities
-} from '@/lib/windows-terminal-capabilities'
+} from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { useWindowsTerminalCapabilityOwnerKey } from '@/hooks/useWindowsTerminalCapabilityOwnerKey'
 import { resolveSettingsHostScope } from '@/components/settings/host-scope/settings-host-scope'

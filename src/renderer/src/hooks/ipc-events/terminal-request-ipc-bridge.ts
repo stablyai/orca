@@ -1,5 +1,5 @@
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
-import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
+import { resolveTerminalWorktreeRoute } from '@/lib/workspace/ownership/terminal-worktree-route'
 import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
 import { translate } from '@/i18n/i18n'
 import { revealWorkspaceSurface } from '@/lib/workspace/activation/workspace-surface-reveal'
