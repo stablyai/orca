@@ -13,7 +13,7 @@ import {
 import {
   type fileSearchClaimsTextKey,
   textFieldClaimsActionKey
-} from './file-search-shortcut-policy'
+} from './keyboard/text-field-shortcut-policy'
 import {
   isFloatingWorkspacePanelFocused,
   isFloatingWorkspaceTerminalInputTarget

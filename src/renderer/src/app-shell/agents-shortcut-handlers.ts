@@ -1,6 +1,6 @@
 import { AI_VAULT_SCOPE_STEP_EVENT } from '@/components/right-sidebar/ai-vault/scope/ai-vault-scope-state'
 import { focusActiveTabSurface } from '@/lib/focus-active-tab-surface'
-import { macOptionChordBelongsToField } from '@/lib/file-search-shortcut-policy'
+import { macOptionChordBelongsToField } from '@/lib/keyboard/text-field-shortcut-policy'
 import type { KeybindingActionId } from '../../../shared/keybindings'
 import { textInputOwnsComposition } from '../../../shared/text-input-shortcut-policy'
 
