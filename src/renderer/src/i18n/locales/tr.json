@@ -1,7 +1,7 @@
 {
   "agentLaunch": {
     "connectSsh": "Bu çalışma alanının SSH ana bilgisayarına bağlanıp tekrar deneyin.",
-    "sshUnavailable": "Bu SSH ana bilgisayarında terminalden başlatma kullanılamıyor. Çalışma alanında bir terminal açıp aracıyı orada başlatın.",
+    "sshUnavailable": "Bu SSH ana bilgisayarında terminal başlatılamıyor. Çalışma alanında bir terminal açıp aracıyı orada başlatın.",
     "reconnectServer": "Bu çalışma alanının Orca sunucusuna yeniden bağlanıp tekrar deneyin.",
     "updateServer": "Bu çalışma alanının sunucusunda Orca’yı güncelleyip tekrar deneyin.",
     "checkSettings": "Aracının başlatma ayarlarını kontrol edip tekrar deneyin.",
@@ -792,12 +792,12 @@
       "defaultOpensAsCli": "CLI",
       "save": "Kaydet",
       "clearDefault": "Varsayılan ajanı temizle",
-      "autoUnsupported": "Otomatik modu için bu ana makinede daha yeni bir Orca sürümü gerekir.",
+      "autoUnsupported": "“Benim yerime onayla” için bu ana makinede daha yeni bir Orca sürümü gerekir.",
       "permissionsDescription": "Ajanların size sormadan ne kadar işlem yapabileceği. Özel başlatma argümanları olan ajanlar bunları korur.",
       "permissionsAutoDescription": "<agents>Desteklenen ajanlar</agents> güvenli işlemleri kendileri onaylar.",
       "permissionsMixed": "Ajanların çoğu {{mode}} modunu kullanıyor. Bir mod seçmek, özel argümanlar dışındaki işaretli istisnaları sıfırlar.",
       "permissionsMixedNoMajority": "Ajanlar farklı ayarlar kullanıyor. Seçilen mod tümüne uygulanır.",
-      "permissionsSearchDescription": "Ajanları Manuel, Otomatik veya Yolo izinleriyle başlatın.",
+      "permissionsSearchDescription": "“Benim yerime onayla”, “Tam erişim” veya her ajanın kendi izin ayarlarını seçin.",
       "otherAgentsPermissions": "Diğer ajanlar",
       "otherAgentsPermissionsLabel": "Diğer ajanların izinleri",
       "customArgsBadge": "Özel",
@@ -820,6 +820,7 @@
       "permissionOwnDescription": "Terminaller ve sohbetler ajanın kendi izin ayarlarını kullanır.",
       "permissionOwnShort": "Kendi ayarları",
       "permissionWithoutAuto": "Benim için onayla seçeneği olmayan ajanlar",
+      "permissionMixed": "Karma",
       "permissionSurfaceDifference": "Terminaller ajanın kendi ayarlarını kullanır; yeni sohbetler {{mode}} ayarını kullanır.",
       "permissionSameAsAll": "Tüm ajanlarla aynı",
       "permissionChipRemove": "{{flag}} seçeneğini kaldır ve {{agent}} ajanının kendi ayarlarını kullan",
@@ -14148,6 +14149,10 @@
                     "title": "Repository arşivlendi",
                     "body": "Bu repository arşivlendiği için Orca {{reviewLabel}} durumunu yenilemiyor."
                   },
+                  "host_off": {
+                    "title": "WSL ana makinesi kapalı",
+                    "body": "Orca, {{reviewLabel}} durumunu bu projenin kapalı olan WSL ana makinesi üzerinden yeniler. Yenilemek için yeniden bağlayın."
+                  },
                   "not_git": {
                     "title": "Git repository'si değil",
                     "body": "Orca bu klasörü {{reviewLabel}} durumu için bir Git repository'si olarak ele alamadı."
@@ -21424,7 +21429,7 @@
       "dirty_other": "Dal değiştirmeden önce {{count}} değişmiş dosyayı commit edin veya atın.",
       "agentWorking": "Bu çalışma alanında bir ajan çalışıyor. Bitirdiğinde dal değiştirin veya durduysa sekmesini kapatın.",
       "listFailed": "Orca yerel dalları listeleyemedi. Seçiciyi yeniden açmayı deneyin.",
-      "discoveryFailed": "Orca uzak dal bulamadı. Yine de yerel dallara geçebilir veya bir dal oluşturabilirsiniz.",
+      "discoveryFailed": "Orca uzak dalları bulamadı. Yine de yerel dallara geçebilir veya bir dal oluşturabilirsiniz.",
       "switchFailed": "Orca dal değiştiremedi. Tekrar deneyin.",
       "switchFailedTitle": "Dal değiştirilemedi",
       "switchFailedIn": "{{workspace}} içinde dal değiştirilemedi",
@@ -23567,7 +23572,7 @@
     "argumentsTerminalHint": "Yalnızca terminal (CLI) başlatmaları için geçerlidir",
     "searchAgentModels": "{{agent}} modellerini ara…",
     "legacyModelCount": "{{total}} model",
-    "search": "Aracıları ve kurulumları ara…",
+    "search": "Ara, ör. Opus 5.5…",
     "configure": "{{agent}} yapılandır",
     "arguments": "Argümanlar",
     "argumentsHint": "Yalnızca CLI başlatmaları için geçerlidir.",
@@ -23599,7 +23604,7 @@
     "unsupportedDescription": "Apple bu Mac’te macOS {{macos}} sürümünü desteklemiyor.",
     "unknownDescription": "Bu Mac’in yükseltilebileceği doğrulanamadı. Apple’ın uyumluluk kılavuzu yardımcı olabilir.",
     "whyTitle": "Bu neden değişiyor?",
-    "whyIntro": "Orca’nın üzerinde çalıştığı Electron’u şu iyileştirmeler için güncelledik:",
+    "whyIntro": "Electron ve cihazdaki konuşma motoru gibi Orca’nın temel bileşenlerini şu iyileştirmeler için güncelledik:",
     "whySecurity": "Electron ve Chromium’dan sürekli güvenlik düzeltmeleri.",
     "whyPerformance": "Daha hızlı başlatma ve daha verimli yerel API çağrıları.",
     "whySystemApis": "Güncel macOS bildirim API’leri ve güvenli Anahtar Zinciri depolaması desteği.",
@@ -23674,29 +23679,23 @@
     "createBranchFailed": "Orca dalı oluşturamadı. Bu depoyu terminalde kontrol edip yeniden deneyin."
   },
   "speechModelUpdate": {
-    "updateTitle": "Konuşma modelinizi güncelleyin",
-    "updateDescription": "Dikte artık daha hızlı bir motorla çalışıyor. Yeniden dikte edebilmeniz için {{model}} modelinin bir kez indirilmesi gerekiyor ({{size}} MB).",
     "update": "Güncelle",
-    "replacedTitle": "Konuşma modeliniz değiştirildi",
-    "replacedDescription": "{{old}} yeni konuşma motorunda çalışamıyor. Yerine {{model}} kullanılacak ({{size}} MB).",
-    "downloadReplacement": "{{model}} indir",
-    "later": "Daha sonra",
-    "dismiss": "Kapat",
-    "updatingTitle": "{{model}} güncelleniyor",
-    "downloadingTitle": "{{model}} indiriliyor",
-    "downloadingDescription": "Çalışmaya devam edebilirsiniz. Bu bittiğinde dikte geri gelir.",
-    "progress": "{{done}} / {{total}} MB",
     "cancel": "İptal",
-    "doneTitle": "Dikte hazır",
-    "doneDescription": "{{model}} güncellendi. Eski dosyalar kaldırıldı.",
-    "doneRetiredDescription": "{{model}} kuruldu. Eski {{old}} dosyaları hâlâ diskte.",
-    "keep": "Sakla",
-    "deleteOld": "Eski modeli sil",
-    "deleteFailed": "{{model}} silinemedi.",
-    "updateFailedTitle": "{{model}} güncellenemedi",
-    "downloadFailedTitle": "{{model}} indirilemedi",
-    "failedAtDescription": "İndirme {{mb}} MB'de durdu. Bağlantınızı kontrol edip yeniden deneyin.",
-    "failedDescription": "İndirme durdu. Bağlantınızı kontrol edip yeniden deneyin.",
-    "tryAgain": "Yeniden dene"
+    "pill": {
+      "updateNotice": "Daha hızlı dikte kurulmaya hazır",
+      "retiredNotice": "Dikte daha hızlı bir konuşma modeline geçti",
+      "install": "Yükle",
+      "installTooltip": "Tek seferlik indirme · {{size}} MB",
+      "downloading": "Dikte ayarlanıyor",
+      "downloadingTooltip": "{{done}} / {{size}} MB",
+      "ready": "Dikte hazır. <kbd></kbd> tuşuna basın",
+      "readyNoShortcut": "Dikte hazır.",
+      "failed": "İndirme durdu. Bağlantınızı kontrol edin.",
+      "tryAgain": "Tekrar dene",
+      "deleteOld": "Eski modeli sil",
+      "deleteFailed": "{{model}} silinemedi.",
+      "dismiss": "Kapat",
+      "cancelDownload": "İndirmeyi iptal et"
+    }
   }
 }

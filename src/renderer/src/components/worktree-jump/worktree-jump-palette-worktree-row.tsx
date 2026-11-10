@@ -8,7 +8,7 @@ import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
 } from '@/lib/worktree-default-display-name'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   getRepoExecutionHostId,

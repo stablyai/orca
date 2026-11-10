@@ -16601,7 +16601,7 @@
       "id": "notifications-push-registered",
       "operation": "notifications.push-registration",
       "family": "notifications.push-registration",
-      "sites": ["mobile/src/notifications/push-registration.ts"],
+      "sites": ["mobile/src/notifications/mobile-push-registration-operations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16650,7 +16650,7 @@
       "id": "notifications-push-gateway-rejected",
       "operation": "notifications.push-registration",
       "family": "notifications.push-registration",
-      "sites": ["mobile/src/notifications/push-registration.ts"],
+      "sites": ["mobile/src/notifications/mobile-push-registration-operations.ts"],
       "schedules": [],
       "steps": [
         {

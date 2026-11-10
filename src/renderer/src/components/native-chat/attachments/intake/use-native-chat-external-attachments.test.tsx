@@ -8,7 +8,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import {
   holdBrowserAttachmentFiles,
   takeBrowserAttachmentFile
-} from '@/lib/browser-attachment-files'
+} from '@/lib/files/drop/browser-attachment-files'
 
 const mocks = vi.hoisted(() => ({
   storeState: { tabsByWorktree: { 'worktree-1': [{ id: 'tab-1' }] } },

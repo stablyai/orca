@@ -7,11 +7,9 @@ import {
 } from '@/store/slices/linear/linear-issue-read-lifecycle'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
-import {
-  getComposerEligibleRepos,
-  resolveComposerActiveRepoId
-} from '@/lib/new-workspace-composer-repo'
-import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-target'
+import { getNewWorkspaceDialogEligibleRepos } from '../../../../shared/new-workspace-dialog-repo'
+import { resolveComposerActiveRepoId } from '@/lib/workspace/creation/new-workspace-composer-repo'
+import { resolveWorkspaceCreationTarget } from '@/lib/workspace/creation/project-host-workspace-target'
 import { lookupCmdJGitHubUrlWorkItem } from '@/lib/cmd-j-github-url-lookup'
 import { lookupLinearIssueUrl } from '@/lib/work-items/linear/linear-issue-url-lookup'
 import {
@@ -43,7 +41,7 @@ export type CmdJGitHubWorkItemPreview = {
 
 /** The target New workspace would default to, used to scope task-link lookups to the same checkout. */
 function getComposerDefaultWorkspaceTarget(state: ReturnType<typeof useAppStore.getState>) {
-  const eligibleRepos = getComposerEligibleRepos(state.repos)
+  const eligibleRepos = getNewWorkspaceDialogEligibleRepos(state.repos)
   const activeRepoId = resolveComposerActiveRepoId(
     state.repos,
     eligibleRepos,

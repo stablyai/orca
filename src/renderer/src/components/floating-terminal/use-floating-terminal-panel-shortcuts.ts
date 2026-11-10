@@ -4,8 +4,8 @@ import { ensureClientCreationActionAllowed } from '@/lib/client-creation-action-
 import {
   matchFloatingWorkspacePanelOwnedAction,
   matchFloatingWorkspacePanelShortcut
-} from '@/lib/floating-workspace-shortcut-policy'
-import { isFloatingWorkspaceTerminalInputTarget } from '@/lib/floating-workspace-terminal-actions'
+} from '@/components/floating-terminal/floating-workspace-shortcut-policy'
+import { isFloatingWorkspaceTerminalInputTarget } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { requestTerminalTabRename } from '@/components/tab-bar/terminal-tab-rename-request'
 import { resolveTerminalAgentTabShortcut } from '@/components/terminal-agent-tab-shortcut'

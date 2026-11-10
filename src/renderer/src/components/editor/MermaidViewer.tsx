@@ -1,5 +1,8 @@
 import React, { useCallback, useLayoutEffect, useRef } from 'react'
-import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
+import {
+  scrollTopCache,
+  setWithLRU
+} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import MermaidBlock from './MermaidBlock'
 import { useMermaidDiagramExpand } from './use-mermaid-diagram-expand'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'

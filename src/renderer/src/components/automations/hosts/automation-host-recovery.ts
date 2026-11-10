@@ -1,6 +1,6 @@
 /** Use descriptor recovery verbs; reconnect the failed runtime or SSH target, and route Update server to version management. */
 
-import type { SettingsNavigationTarget } from '@/lib/settings-navigation-types'
+import type { SettingsNavigationTarget } from '@/components/settings/navigation/settings-navigation-types'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import type { AutomationHostRecoveryAction } from './automation-host-status-descriptors'
 

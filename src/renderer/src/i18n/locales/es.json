@@ -342,9 +342,9 @@
       "rowPermissions": "Permisos",
       "otherAgentsPermissions": "Otros agentes",
       "permissionsAutoDescription": "Los <agents>agentes compatibles</agents> aprueban las acciones seguras por su cuenta.",
-      "permissionsSearchDescription": "Inicia agentes con permisos Manual, Automático o Yolo.",
+      "permissionsSearchDescription": "Elige «Aprobar por mí», «Acceso total» o la configuración de permisos propia de cada agente.",
       "permissionsMixed": "La mayoría de los agentes utilizan {{mode}}. Al elegir un modo, se restablecen las excepciones marcadas, excepto los argumentos personalizados.",
-      "autoUnsupported": "El modo automático necesita una versión más reciente de Orca en este host.",
+      "autoUnsupported": "«Aprobar por mí» necesita una versión más reciente de Orca en este host.",
       "permissionsMixedNoMajority": "Los agentes utilizan diferentes configuraciones. La elección de un modo se aplica a todos.",
       "permissionsDescription": "Cuánto pueden hacer los agentes sin preguntarte. Los agentes con argumentos de lanzamiento personalizados los conservan.",
       "otherAgentsPermissionsLabel": "Permisos para otros agentes",
@@ -369,6 +369,7 @@
       "permissionOwnDescription": "Las terminales y los chats siguen la configuración de permisos propia del agente.",
       "permissionOwnShort": "Configuración propia",
       "permissionWithoutAuto": "Agentes sin Aprobar por mí",
+      "permissionMixed": "Mixto",
       "permissionSurfaceDifference": "Las terminales usan la configuración propia del agente; los chats nuevos usan {{mode}}.",
       "permissionSameAsAll": "Igual que todos los agentes",
       "permissionChipRemove": "Quitar {{flag}} y usar la configuración propia de {{agent}}",
@@ -10821,8 +10822,8 @@
               "micDefault": "valor predeterminado del sistema",
               "dictationLanguageDescription": "Indica al modelo de voz qué idioma hablas.",
               "dictationLanguageKeyword": "idioma",
-              "modelUnloadDescription": "Elige cuándo se descarga de la memoria el modelo de voz local.",
-              "modelUnloadKeyword": "descargar",
+              "modelUnloadDescription": "Elige cuándo se libera de la memoria el modelo de voz local.",
+              "modelUnloadKeyword": "liberar memoria",
               "modelMemoryKeyword": "memoria",
               "fillerWordsDescription": "Quita «ehm», «em» y sonidos parecidos del texto dictado.",
               "fillerWordsKeyword": "muletillas",
@@ -13843,6 +13844,10 @@
                     "title": "Repositorio archivado",
                     "body": "Este repositorio está archivado, por lo que Orca no está actualizando el estado de {{reviewLabel}}."
                   },
+                  "host_off": {
+                    "title": "El host WSL está apagado",
+                    "body": "Orca actualiza el estado de {{reviewLabel}} a través del host WSL de este proyecto, que está apagado. Vuelve a conectarlo para actualizar."
+                  },
                   "not_git": {
                     "title": "No es un repositorio Git",
                     "body": "Orca no pudo tratar esta carpeta como un repositorio Git para el estado de {{reviewLabel}}."
@@ -16681,8 +16686,8 @@
         },
         "DictationPillFailure": {
           "discard": "Descartar grabación",
-          "modelFailed": "El modelo no cargó.",
-          "transcribeFailed": "No se transcribió. Grabación guardada.",
+          "modelFailed": "No se pudo cargar el modelo de voz.",
+          "transcribeFailed": "No se pudo transcribir. Grabación conservada.",
           "openSettings": "Configuración",
           "retry": "Reintentar"
         }
@@ -23439,7 +23444,7 @@
     "catalogInstall": "Instala {{agent}} en este equipo para cargar sus modelos y vuelve a abrir el selector de agentes.",
     "catalogUnresolved": "Los modelos de {{agent}} no se han cargado. Cierra y vuelve a abrir el selector de agentes para intentarlo de nuevo.",
     "catalogEmpty": "{{agent}} no tiene modelos disponibles.",
-    "search": "Buscar agentes y configuraciones…",
+    "search": "Buscar, p. ej., Opus 5.5…",
     "configure": "Configurar {{agent}}",
     "arguments": "Argumentos",
     "argumentsHint": "Solo se aplica a los inicios de CLI.",
@@ -24025,7 +24030,7 @@
     "unsupportedDescription": "Apple no admite macOS {{macos}} en este Mac.",
     "unknownDescription": "No pudimos confirmar si este Mac puede actualizarse. La guía de compatibilidad de Apple puede ayudarte.",
     "whyTitle": "¿Por qué cambia esto?",
-    "whyIntro": "Hemos actualizado Electron, la base de Orca, para ofrecer:",
+    "whyIntro": "Hemos actualizado partes de la base de Orca, como Electron y el motor de voz local, para ofrecer:",
     "whySecurity": "Correcciones de seguridad continuas de Electron y Chromium.",
     "whyPerformance": "Un inicio más rápido y llamadas más eficientes a las API nativas.",
     "whySystemApis": "Compatibilidad con las API actuales de notificaciones de macOS y el almacenamiento seguro en el llavero.",
@@ -24100,29 +24105,23 @@
     "createBranchFailed": "Orca no pudo crear la rama. Revisa este repositorio en una terminal e inténtalo de nuevo."
   },
   "speechModelUpdate": {
-    "updateTitle": "Actualiza tu modelo de voz",
-    "updateDescription": "El dictado ahora usa un motor más rápido. {{model}} necesita una descarga única ({{size}} MB) antes de que puedas volver a dictar.",
     "update": "Actualizar",
-    "replacedTitle": "Tu modelo de voz se ha sustituido",
-    "replacedDescription": "{{old}} no funciona con el nuevo motor de voz. {{model}} lo sustituye ({{size}} MB).",
-    "downloadReplacement": "Descargar {{model}}",
-    "later": "Más tarde",
-    "dismiss": "Cerrar",
-    "updatingTitle": "Actualizando {{model}}",
-    "downloadingTitle": "Descargando {{model}}",
-    "downloadingDescription": "Puedes seguir trabajando. El dictado vuelve cuando termine.",
-    "progress": "{{done}} de {{total}} MB",
     "cancel": "Cancelar",
-    "doneTitle": "El dictado está listo",
-    "doneDescription": "{{model}} está actualizado. Se eliminaron los archivos antiguos.",
-    "doneRetiredDescription": "{{model}} está listo. Los archivos antiguos de {{old}} siguen en el disco.",
-    "keep": "Conservar",
-    "deleteOld": "Eliminar modelo antiguo",
-    "deleteFailed": "No se pudo eliminar {{model}}.",
-    "updateFailedTitle": "No se pudo actualizar {{model}}",
-    "downloadFailedTitle": "No se pudo descargar {{model}}",
-    "failedAtDescription": "La descarga se detuvo en {{mb}} MB. Comprueba tu conexión e inténtalo de nuevo.",
-    "failedDescription": "La descarga se detuvo. Comprueba tu conexión e inténtalo de nuevo.",
-    "tryAgain": "Reintentar"
+    "pill": {
+      "updateNotice": "El dictado más rápido está listo para instalarse",
+      "retiredNotice": "El dictado ahora usa un modelo de voz más rápido",
+      "install": "Instalar",
+      "installTooltip": "Descarga única · {{size}} MB",
+      "downloading": "Configurando el dictado",
+      "downloadingTooltip": "{{done}} de {{size}} MB",
+      "ready": "El dictado está listo. Pulsa <kbd></kbd>",
+      "readyNoShortcut": "El dictado está listo.",
+      "failed": "La descarga se detuvo. Revisa tu conexión.",
+      "tryAgain": "Reintentar",
+      "deleteOld": "Eliminar modelo anterior",
+      "deleteFailed": "No se pudo eliminar {{model}}.",
+      "dismiss": "Descartar",
+      "cancelDownload": "Cancelar descarga"
+    }
   }
 }

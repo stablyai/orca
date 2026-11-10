@@ -6,7 +6,7 @@ import {
   isResolvedWorkspaceFileDragExecutionHost,
   readWorkspaceFileDragPaths,
   readWorkspaceFileDragSource
-} from '@/lib/workspace-file-drag'
+} from '@/lib/files/drop/workspace-file-drag'
 import {
   resolveNativeChatAttachmentOwnerForWorktree,
   resolveNativeChatAttachmentHost
