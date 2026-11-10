@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { CLAUDE_INJECTED_CONFIG_DIR_ENV } from '../../shared/claude-profile-routing'
 import { isDirectory } from './claude-profile-homes'
 import { claudeProfileSetupFailed } from './claude-profile-launch-errors'
@@ -35,7 +35,11 @@ export async function prepareClaudePinnedAccountLaunch(
     executionHostId: 'local',
     runtime: 'host'
   })
-  if (!isDirectory(profile.home) || !existsSync(claudeProfileMarkerPath(profile))) {
+  const markerPresent = await access(claudeProfileMarkerPath(profile)).then(
+    () => true,
+    () => false
+  )
+  if (!isDirectory(profile.home) || !markerPresent) {
     await router.prepareAccount(accountId).catch(() => {
       throw claudeProfileSetupFailed()
     })

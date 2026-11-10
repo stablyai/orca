@@ -22,7 +22,6 @@ vi.mock('@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 vi.mock('@/store/index', () => ({ useAppStore: { getState: appStore.getState } }))
 
 describe('createRemoteRuntimePtyTransport Claude account', () => {
-  const originalWindow = (globalThis as { window?: typeof window }).window
   const fixture = createHostSessionLaunchRuntimeFixture()
   const { runtimeCall, runtimeSubscribe } = fixture
 
@@ -32,25 +31,21 @@ describe('createRemoteRuntimePtyTransport Claude account', () => {
     promptFailure.error.mockClear()
     promptFailure.copy.mockClear()
     fixture.reset()
-    ;(globalThis as { window: typeof window }).window = {
-      ...originalWindow,
+    vi.stubGlobal('window', {
+      ...globalThis.window,
       api: {
-        ...originalWindow?.api,
+        ...globalThis.window?.api,
         runtimeEnvironments: {
-          ...originalWindow?.api?.runtimeEnvironments,
+          ...globalThis.window?.api?.runtimeEnvironments,
           call: runtimeCall,
           subscribe: runtimeSubscribe
         }
       }
-    } as unknown as typeof window
+    })
   })
 
   afterEach(() => {
-    if (originalWindow) {
-      ;(globalThis as { window: typeof window }).window = originalWindow
-    } else {
-      delete (globalThis as { window?: typeof window }).window
-    }
+    vi.unstubAllGlobals()
   })
 
   async function connectClaudeLaunch(options: {

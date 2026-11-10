@@ -53,7 +53,7 @@ const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
 
 export async function initializeReadyRuntimeServices(): Promise<void> {
   // Why first: daemon reconciliation and pane labels read the restored `--account` pins.
-  seedClaudePinnedPtyRegistry(app.getPath('userData'))
+  await seedClaudePinnedPtyRegistry(app.getPath('userData'))
   const store = state.store
   if (!store) {
     throw new Error('Store must be initialized before ready services')

@@ -10,6 +10,7 @@ import { claudeAccountsTargetForRepo } from '@/lib/claude-launch-account'
 import { fetchProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { providerAccountMatchesView } from '../../provider-accounts/provider-account-visibility'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { searchKeywords } from '../search/settings-search-keywords'
 import {
   ASK_VALUE,
@@ -17,6 +18,49 @@ import {
   buildClaudeAccountOptions,
   claudeAccountPinningUnsupportedReasonInState
 } from '../repository-claude-account'
+
+type AccountVisibility = Parameters<typeof providerAccountMatchesView>[2]
+
+async function loadVisibleClaudeAccounts(
+  runtimeTarget: Parameters<typeof fetchProviderAccountsSnapshot>[0],
+  visibility: AccountVisibility
+): Promise<{ accounts: ClaudeManagedAccountSummary[] } | { error: string }> {
+  try {
+    const snapshot = await fetchProviderAccountsSnapshot(runtimeTarget)
+    return {
+      accounts: snapshot.claude.accounts.filter((account) =>
+        providerAccountMatchesView(account, { runtime: 'host' }, visibility)
+      )
+    }
+  } catch (err) {
+    return {
+      error:
+        err instanceof Error
+          ? err.message
+          : translate(
+              'auto.components.settings.RepositoryClaudeAccountSection.loadFailed',
+              'Could not load Claude accounts.'
+            )
+    }
+  }
+}
+
+async function saveClaudeAccountPreference(
+  updateRepo: RepositoryClaudeAccountSectionProps['updateRepo'],
+  repoId: string,
+  requested: RepoAgentAccounts | null
+): Promise<'saved' | 'not-enforced' | 'refused' | { error: string }> {
+  try {
+    const result = await Promise.resolve(updateRepo(repoId, { agentAccounts: requested }))
+    if (result === false) {
+      return 'refused'
+    }
+    const echoed = useAppStore.getState().repos.find((entry) => entry.id === repoId)?.agentAccounts
+    return repoAgentAccountsEqual(requested, echoed ?? null) ? 'saved' : 'not-enforced'
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+}
 
 type RepositoryClaudeAccountSectionProps = {
   repo: Repo
@@ -29,6 +73,7 @@ export function RepositoryClaudeAccountSection({
   updateRepo,
   forceVisible
 }: RepositoryClaudeAccountSectionProps): React.JSX.Element | null {
+  const t = useTranslate()
   const [accounts, setAccounts] = useState<ClaudeManagedAccountSummary[]>([])
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -63,34 +108,17 @@ export function RepositoryClaudeAccountSection({
     const generation = ++loadGenerationRef.current
     setLoading(true)
     setError(null)
-    try {
-      const snapshot = await fetchProviderAccountsSnapshot(runtimeTarget)
-      if (generation !== loadGenerationRef.current) {
-        return
-      }
-      setAccounts(
-        snapshot.claude.accounts.filter((account) =>
-          providerAccountMatchesView(account, { runtime: 'host' }, accountVisibilityOptions)
-        )
-      )
-    } catch (err) {
-      if (generation !== loadGenerationRef.current) {
-        return
-      }
-      setError(
-        err instanceof Error
-          ? err.message
-          : translate(
-              'auto.components.settings.RepositoryClaudeAccountSection.loadFailed',
-              'Could not load Claude accounts.'
-            )
-      )
-      setAccounts([])
-    } finally {
-      if (generation === loadGenerationRef.current) {
-        setLoading(false)
-      }
+    const loaded = await loadVisibleClaudeAccounts(runtimeTarget, accountVisibilityOptions)
+    if (generation !== loadGenerationRef.current) {
+      return
     }
+    if ('error' in loaded) {
+      setError(loaded.error)
+      setAccounts([])
+    } else {
+      setAccounts(loaded.accounts)
+    }
+    setLoading(false)
   }, [unsupportedReason, runtimeTarget, accountVisibilityOptions])
 
   useEffect(() => {
@@ -108,37 +136,26 @@ export function RepositoryClaudeAccountSection({
     setSaving(true)
     setError(null)
     setNotEnforced(false)
-    try {
-      const result = await Promise.resolve(updateRepo(repo.id, { agentAccounts: requested }))
-      if (result === false) {
-        setError(
-          translate(
-            'auto.components.settings.RepositoryClaudeAccountSection.saveFailed',
-            'Could not save the Claude account preference.'
-          )
+    const outcome = await saveClaudeAccountPreference(updateRepo, repo.id, requested)
+    setSaving(false)
+    if (outcome === 'refused') {
+      setError(
+        t(
+          'auto.components.settings.RepositoryClaudeAccountSection.saveFailed',
+          'Could not save the Claude account preference.'
         )
-        return
-      }
-      const echoed = useAppStore
-        .getState()
-        .repos.find((entry) => entry.id === repo.id)?.agentAccounts
-      if (!repoAgentAccountsEqual(requested, echoed ?? null)) {
-        setNotEnforced(true)
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setSaving(false)
+      )
+    } else if (outcome === 'not-enforced') {
+      setNotEnforced(true)
+    } else if (typeof outcome === 'object') {
+      setError(outcome.error)
     }
   }
 
   return (
     <SearchableSetting
-      title={translate(
-        'auto.components.settings.RepositoryClaudeAccountSection.title',
-        'Claude Account'
-      )}
-      description={translate(
+      title={t('auto.components.settings.RepositoryClaudeAccountSection.title', 'Claude Account')}
+      description={t(
         'auto.components.settings.RepositoryClaudeAccountSection.description',
         'Choose which Claude account starts in this project.'
       )}
@@ -162,13 +179,10 @@ export function RepositoryClaudeAccountSection({
     >
       <div className="min-w-0 space-y-1">
         <div className="text-sm font-semibold">
-          {translate(
-            'auto.components.settings.RepositoryClaudeAccountSection.title',
-            'Claude Account'
-          )}
+          {t('auto.components.settings.RepositoryClaudeAccountSection.title', 'Claude Account')}
         </div>
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.RepositoryClaudeAccountSection.description',
             'Choose which Claude account starts in this project.'
           )}
@@ -177,10 +191,7 @@ export function RepositoryClaudeAccountSection({
 
       <div className="space-y-1.5">
         <span id={selectLabelId} className="text-xs text-muted-foreground">
-          {translate(
-            'auto.components.settings.RepositoryClaudeAccountSection.selectLabel',
-            'Account'
-          )}
+          {t('auto.components.settings.RepositoryClaudeAccountSection.selectLabel', 'Account')}
         </span>
         <Select
           value={selectedValue}
@@ -226,7 +237,7 @@ export function RepositoryClaudeAccountSection({
 
       {unsupportedReason ? (
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.RepositoryClaudeAccountSection.unsupported',
             "Per-project Claude accounts aren't supported for this project's host yet."
           )}
@@ -234,7 +245,7 @@ export function RepositoryClaudeAccountSection({
       ) : null}
       {notEnforced ? (
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.RepositoryClaudeAccountSection.notEnforced',
             'Saved, but not enforced by this runtime (mixed-version host).'
           )}

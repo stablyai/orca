@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { claudeAccountLabel } from '../settings/repository-claude-account'
 import {
@@ -36,6 +36,7 @@ function initialAccountId(request: ClaudeAccountPromptRequest | null): string {
 }
 
 export default function ClaudeAccountPromptDialog(): React.JSX.Element {
+  const t = useTranslate()
   const request = useSyncExternalStore(
     subscribeClaudeAccountPrompt,
     getClaudeAccountPromptRequest,
@@ -79,13 +80,10 @@ export default function ClaudeAccountPromptDialog(): React.JSX.Element {
       <DialogContent className="sm:max-w-md" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>
-            {translate(
-              'auto.components.ClaudeAccountPromptDialog.title',
-              'Choose a Claude account'
-            )}
+            {t('auto.components.ClaudeAccountPromptDialog.title', 'Choose a Claude account')}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.ClaudeAccountPromptDialog.description',
               'Pick the Claude account to start in {{value0}}.',
               { value0: displayed?.projectName ?? '' }
@@ -95,7 +93,7 @@ export default function ClaudeAccountPromptDialog(): React.JSX.Element {
         <div className="space-y-4">
           <div className="space-y-1.5">
             <span id={selectLabelId} className="text-xs text-muted-foreground">
-              {translate('auto.components.ClaudeAccountPromptDialog.accountLabel', 'Account')}
+              {t('auto.components.ClaudeAccountPromptDialog.accountLabel', 'Account')}
             </span>
             <Select value={accountId} onValueChange={setAccountId}>
               <SelectTrigger size="sm" className="w-full" aria-labelledby={selectLabelId}>
@@ -118,14 +116,14 @@ export default function ClaudeAccountPromptDialog(): React.JSX.Element {
                 onCheckedChange={(checked) => setRemember(checked === true)}
               />
               <Label htmlFor={rememberId}>
-                {translate(
+                {t(
                   'auto.components.ClaudeAccountPromptDialog.remember',
                   'Remember for this project'
                 )}
               </Label>
             </div>
             <p className="pl-6 text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.ClaudeAccountPromptDialog.rememberHint',
                 'You can change this in Settings → Repository'
               )}
@@ -139,7 +137,7 @@ export default function ClaudeAccountPromptDialog(): React.JSX.Element {
             variant="outline"
             onClick={() => answerClaudeAccountPrompt({ kind: 'cancelled' })}
           >
-            {translate('auto.components.ClaudeAccountPromptDialog.cancel', 'Cancel')}
+            {t('auto.components.ClaudeAccountPromptDialog.cancel', 'Cancel')}
           </Button>
           <Button
             type="button"
@@ -148,7 +146,7 @@ export default function ClaudeAccountPromptDialog(): React.JSX.Element {
             disabled={!accountId}
             onClick={() => answerClaudeAccountPrompt({ kind: 'start', accountId, remember })}
           >
-            {translate('auto.components.ClaudeAccountPromptDialog.start', 'Start')}
+            {t('auto.components.ClaudeAccountPromptDialog.start', 'Start')}
           </Button>
         </DialogFooter>
       </DialogContent>

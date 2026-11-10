@@ -1,6 +1,6 @@
-import { mkdirSync, readFileSync } from 'node:fs'
+import { mkdir, readFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { writeFileAtomically } from '../filesystem/atomic-file-publication'
+import { writePluginFileAtomically } from '../plugins/installation/plugin-atomic-file-write'
 
 /**
  * Which `--account` Claude PTYs run on which managed account, for the tab and status labels.
@@ -11,7 +11,7 @@ const accountIdByPtyId = new Map<string, string>()
 const seededUnconfirmedPtyIds = new Set<string>()
 
 export type ClaudePinnedPtyPersistence = {
-  write(entries: Record<string, string>): void
+  write(entries: Record<string, string>): void | Promise<void>
 }
 
 let persistence: ClaudePinnedPtyPersistence | null = null
@@ -66,17 +66,25 @@ export function confirmSeededPinnedClaudePtys(aliveSessionIds: readonly string[]
 
 function persist(): void {
   try {
-    persistence?.write(Object.fromEntries(accountIdByPtyId))
+    void Promise.resolve(persistence?.write(Object.fromEntries(accountIdByPtyId))).catch(
+      warnPersistFailure
+    )
   } catch (error) {
-    // Why: the record only keeps labels across a restart; losing it must never fail a spawn or an exit.
-    console.warn('[claude-pinned-pty] Failed to persist pinned Claude PTYs:', error)
+    warnPersistFailure(error)
   }
 }
 
-export function readClaudePinnedPtyRegistryFile(filePath: string): Record<string, string> {
+// Why: the record only keeps labels across a restart; losing it must never fail a spawn or an exit.
+function warnPersistFailure(error: unknown): void {
+  console.warn('[claude-pinned-pty] Failed to persist pinned Claude PTYs:', error)
+}
+
+export async function readClaudePinnedPtyRegistryFile(
+  filePath: string
+): Promise<Record<string, string>> {
   let parsed: unknown
   try {
-    parsed = JSON.parse(readFileSync(filePath, 'utf-8'))
+    parsed = JSON.parse(await readFile(filePath, 'utf-8'))
   } catch {
     return {}
   }
@@ -94,12 +102,18 @@ export function readClaudePinnedPtyRegistryFile(filePath: string): Record<string
 }
 
 export function createClaudePinnedPtyFilePersistence(filePath: string): ClaudePinnedPtyPersistence {
+  // Why chained: a later write must never land before an earlier one.
+  let pending: Promise<void> = Promise.resolve()
   return {
     write(entries) {
-      mkdirSync(dirname(filePath), { recursive: true })
-      writeFileAtomically(filePath, `${JSON.stringify({ version: 1, panes: entries })}\n`, {
-        mode: 0o600
-      })
+      const contents = `${JSON.stringify({ version: 1, panes: entries })}\n`
+      pending = pending
+        .catch(() => undefined)
+        .then(async () => {
+          await mkdir(dirname(filePath), { recursive: true })
+          await writePluginFileAtomically(filePath, contents, { mode: 0o600 })
+        })
+      return pending
     }
   }
 }

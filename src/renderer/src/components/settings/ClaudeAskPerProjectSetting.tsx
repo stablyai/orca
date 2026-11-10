@@ -1,4 +1,4 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
@@ -12,13 +12,14 @@ export function ClaudeAskPerProjectSetting({
   settings: Pick<GlobalSettings, 'askClaudeAccountPerProject'>
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <SearchableSetting
-      title={translate(
+      title={t(
         'auto.components.settings.AccountsPane.askClaudeAccountPerProjectTitle',
         'Ask which Claude account to use for each project'
       )}
-      description={translate(
+      description={t(
         'auto.components.settings.AccountsPane.askClaudeAccountPerProjectDescription',
         'When on, projects without a saved Claude account ask before starting Claude.'
       )}
@@ -29,20 +30,20 @@ export function ClaudeAskPerProjectSetting({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 shrink space-y-1.5">
           <Label>
-            {translate(
+            {t(
               'auto.components.settings.AccountsPane.askClaudeAccountPerProjectTitle',
               'Ask which Claude account to use for each project'
             )}
           </Label>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.AccountsPane.askClaudeAccountPerProjectDescription',
               'When on, projects without a saved Claude account ask before starting Claude.'
             )}
           </p>
         </div>
         <Switch
-          aria-label={translate(
+          aria-label={t(
             'auto.components.settings.AccountsPane.askClaudeAccountPerProjectTitle',
             'Ask which Claude account to use for each project'
           )}

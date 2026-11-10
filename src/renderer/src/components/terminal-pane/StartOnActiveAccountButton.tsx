@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { describeClaudePinnedLaunchError } from './claude-pinned-launch-error-copy'
 
 /** Offered only for a refused pinned Claude launch whose account the active one can stand in for. */
@@ -10,12 +10,13 @@ export function StartOnActiveAccountButton({
   error: string
   onClick?: () => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!onClick || !describeClaudePinnedLaunchError(error)?.offerActiveAccount) {
     return null
   }
   return (
     <Button variant="outline" size="xs" onClick={onClick} className="ml-3">
-      {translate(
+      {t(
         'auto.components.terminal.pane.TerminalErrorToast.startOnActiveAccount',
         'Start on active account'
       )}

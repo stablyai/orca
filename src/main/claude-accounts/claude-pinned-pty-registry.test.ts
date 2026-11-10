@@ -47,14 +47,14 @@ describe('Claude pinned PTY registry', () => {
     expect(hasSeededUnconfirmedPinnedClaudePtys()).toBe(false)
   })
 
-  it('round-trips the registry file and ignores malformed entries', () => {
+  it('round-trips the registry file and ignores malformed entries', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-pinned-pty-'))
     try {
       const filePath = join(dir, 'claude-pinned-pane-accounts.json')
-      createClaudePinnedPtyFilePersistence(filePath).write({ 'pty-1': 'acct-1', 'pty-2': '' })
+      await createClaudePinnedPtyFilePersistence(filePath).write({ 'pty-1': 'acct-1', 'pty-2': '' })
 
-      expect(readClaudePinnedPtyRegistryFile(filePath)).toEqual({ 'pty-1': 'acct-1' })
-      expect(readClaudePinnedPtyRegistryFile(join(dir, 'missing.json'))).toEqual({})
+      expect(await readClaudePinnedPtyRegistryFile(filePath)).toEqual({ 'pty-1': 'acct-1' })
+      expect(await readClaudePinnedPtyRegistryFile(join(dir, 'missing.json'))).toEqual({})
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
