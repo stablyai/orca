@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import { focusTerminalTabSurface } from '../../../lib/focus-terminal-tab-surface'
+import { focusTerminalTabSurface } from '../input/focus/focus-terminal-tab-surface'
 import CodexRestartChip from '../../CodexRestartChip'
 import { CodexSharedServerBanner } from '../provider-notices/codex-server-isolation/CodexSharedServerBanner'
 import { ClaudeOldTerminalBanner } from '../provider-notices/claude-account-shell/ClaudeOldTerminalBanner'

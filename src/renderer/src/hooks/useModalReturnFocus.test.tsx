@@ -5,11 +5,11 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { useAppStore } from '../store'
-import { focusTerminalTabSurface } from '../lib/focus-terminal-tab-surface'
+import { focusTerminalTabSurface } from '../components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { ORCA_BROWSER_FOCUS_REQUEST_EVENT } from '../components/browser-pane/host-guest/browser-focus'
 import { useModalReturnFocus } from './useModalReturnFocus'
 
-vi.mock('../lib/focus-terminal-tab-surface', () => ({
+vi.mock('../components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: vi.fn()
 }))
 

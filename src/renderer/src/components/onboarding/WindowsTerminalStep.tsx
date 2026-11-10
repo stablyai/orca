@@ -4,7 +4,7 @@ import type { BuiltInWindowsTerminalShell } from '../../../../shared/windows-ter
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { cn } from '@/lib/utils'
-import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
+import { useWindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { SettingsSegmentedControl } from '../settings/form-controls/SettingsFormControls'
 import { ShellIcon } from '../tab-bar/shell-icons'
 import {

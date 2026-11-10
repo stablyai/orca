@@ -8,7 +8,7 @@ import {
   takeAllPendingManualTerminalWorktreeParks,
   takePendingManualTerminalWorktreePark,
   type ManualTerminalWorktreeParkDetail
-} from '@/lib/manual-terminal-worktree-parking'
+} from '@/components/terminal-pane/parking/lifecycle/manual-terminal-worktree-parking'
 import { canManuallyParkTerminalWorktreeRenderers } from '../retention/manual-terminal-worktree-park-eligibility'
 import { canWatcherCoverParkedTerminalTab } from '../output-watchers/terminal-parked-tab-watchers'
 

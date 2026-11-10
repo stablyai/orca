@@ -1643,13 +1643,13 @@
       "invariant": "Automatic hibernation must retain two stable confirmations and fresh execution-host evidence before shutdown. Skipping a workspace with no completed agent must not authorize a newly completed pane using stale client PTYs.",
       "oracle": "Audit2058 intentionally retires the standalone visibility subscription/callback-count alarm without replacement. Audit2310 additionally retires two pane-age getter-map expiry/pruning samples without equivalent replacement. The reduced five-source hibernation selector was freshly run on Linux:52 tests pass. The earlier 54-test receipt is archived verbatim in knownGaps and does not validate the reduced source. Its prior macOS execution receipt/current-command association is archived verbatim in knownGaps and is not current execution evidence for the reduced selector. Current covered platform is Linux; remote replies remain scripted, with no live SSH/WSL/native provider or p95 claim. Historical prior account (preserved verbatim): Working and waiting agents across remote workspaces must not be shut down. A skipped workspace completing while another inventory awaits remains ineligible until two later host-confirmed passes, and so does a workspace that only becomes runtime-owned while an inventory is outstanding — a pass carrying no host evidence for a workspace never counts as one of its two confirmations. Folder and git workspaces hibernate the exact host PTY; rejected/truncated inventories and intervening input/output or state changes block shutdown.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/agent-session/hibernation/agent-hibernation-coordinator.test.ts src/renderer/src/lib/agent-session/hibernation/agent-hibernation-planner.test.ts src/renderer/src/lib/agent-session/hibernation/agent-hibernation-pane-age.test.ts src/renderer/src/lib/foreground-terminal-tabs.test.ts src/renderer/src/lib/agent-session/hibernation/agent-hibernation-runtime-liveness-race.test.ts --maxWorkers=2"
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/agent-session/hibernation/agent-hibernation-coordinator.test.ts src/renderer/src/lib/agent-session/hibernation/agent-hibernation-planner.test.ts src/renderer/src/lib/agent-session/hibernation/agent-hibernation-pane-age.test.ts src/renderer/src/components/terminal-pane/parking/retention/foreground-terminal-tabs.test.ts src/renderer/src/lib/agent-session/hibernation/agent-hibernation-runtime-liveness-race.test.ts --maxWorkers=2"
       ],
       "testFiles": [
         "src/renderer/src/lib/agent-session/hibernation/agent-hibernation-coordinator.test.ts",
         "src/renderer/src/lib/agent-session/hibernation/agent-hibernation-planner.test.ts",
         "src/renderer/src/lib/agent-session/hibernation/agent-hibernation-pane-age.test.ts",
-        "src/renderer/src/lib/foreground-terminal-tabs.test.ts",
+        "src/renderer/src/components/terminal-pane/parking/retention/foreground-terminal-tabs.test.ts",
         "src/renderer/src/lib/agent-session/hibernation/agent-hibernation-runtime-liveness-race.test.ts"
       ],
       "assertionRefs": [
@@ -1676,6 +1676,7 @@
           "runner": "local",
           "platform": "linux",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/agent-session/hibernation/agent-hibernation-coordinator.test.ts src/renderer/src/lib/agent-session/hibernation/agent-hibernation-planner.test.ts src/renderer/src/lib/agent-session/hibernation/agent-hibernation-pane-age.test.ts src/renderer/src/lib/foreground-terminal-tabs.test.ts src/renderer/src/lib/agent-session/hibernation/agent-hibernation-runtime-liveness-race.test.ts --maxWorkers=2",
+          "currentCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/renderer/src/lib/agent-session/hibernation/agent-hibernation-coordinator.test.ts src/renderer/src/lib/agent-session/hibernation/agent-hibernation-planner.test.ts src/renderer/src/lib/agent-session/hibernation/agent-hibernation-pane-age.test.ts src/renderer/src/components/terminal-pane/parking/retention/foreground-terminal-tabs.test.ts src/renderer/src/lib/agent-session/hibernation/agent-hibernation-runtime-liveness-race.test.ts --maxWorkers=2",
           "result": "passed",
           "durationSeconds": 5.426,
           "summary": "52 tests across the five coordinator/planner/age/foreground/liveness-race files passed on public parent60aee85d9182f602af45cf5f6facae7257670061 plus the audit2310 test-removal candidate (source tree da2595af5391e9fa07a924ac69afede47ad31906). Includes the reduced two-case pane-age suite. Scripted runtime contracts; no live SSH/native WSL, soak or measured p95 claim."

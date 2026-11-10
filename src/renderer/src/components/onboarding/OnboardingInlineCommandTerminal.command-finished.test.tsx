@@ -46,7 +46,7 @@ vi.mock('@/components/terminal-pane/TerminalPane', () => ({
   )
 }))
 
-vi.mock('@/lib/focus-terminal-tab-surface', () => ({
+vi.mock('@/components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: vi.fn()
 }))
 
