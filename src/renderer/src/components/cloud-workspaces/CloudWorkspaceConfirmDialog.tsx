@@ -111,6 +111,8 @@ export function CloudWorkspaceConfirmDialog({
             name: memberName(directory, pending.ownerUserId, selfId, t)
           })
   const losesManagement = pending.kind === 'owner' && w.ownerUserId === selfId && !canAdmin
+  // Destructive for someone else (their agents stop, or you lose access): focus starts on Cancel.
+  const focusCancel = losesManagement || pending.kind === 'archive'
   return (
     <Dialog open onOpenChange={(next) => !next && onCancel()}>
       <DialogContent className="sm:max-w-md">
@@ -142,10 +144,10 @@ export function CloudWorkspaceConfirmDialog({
         </DialogHeader>
         <DialogFooter>
           {/* Giving away your own access starts on Cancel, so Enter cannot do it by accident. */}
-          <Button type="button" variant="ghost" onClick={onCancel} autoFocus={losesManagement}>
+          <Button type="button" variant="ghost" onClick={onCancel} autoFocus={focusCancel}>
             {t('auto.components.cloudWorkspaces.cancel', 'Cancel')}
           </Button>
-          <Button type="button" onClick={onConfirm} autoFocus={!losesManagement}>
+          <Button type="button" onClick={onConfirm} autoFocus={!focusCancel}>
             {pending.kind === 'private'
               ? t('auto.components.cloudWorkspaces.makePrivate', 'Make private')
               : pending.kind === 'archive'
