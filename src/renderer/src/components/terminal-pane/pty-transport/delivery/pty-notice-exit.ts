@@ -1,4 +1,3 @@
-import { useAppStore } from '@/store/index'
 import { isProvenProcessExit } from '../../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { isPtyDataHandlerShutdownPending } from '../shutdown/pty-shutdown-data-suspension'
 import { deferPtyShutdownExit } from '../shutdown/pty-shutdown-exit-deferral'
@@ -6,6 +5,12 @@ import {
   retireTerminalNoticeLifetime,
   type TerminalNoticeLifetime
 } from '../../provider-notices/terminal-notice-lifetime'
+
+let isStoreShutdownPending: (ptyId: string) => boolean = () => false
+
+export function registerTerminalNoticeShutdownReader(reader: (ptyId: string) => boolean): void {
+  isStoreShutdownPending = reader
+}
 
 /** Snapshot before primary callbacks can settle shutdown or replace the binding. */
 export function prepareTerminalNoticeExit(
@@ -33,8 +38,7 @@ export function prepareAcceptedTerminalNoticeExit(
     return () => {}
   }
   const pending =
-    isPtyDataHandlerShutdownPending(lifetime.ptyId) ||
-    (useAppStore.getState().pendingPtyShutdownIds?.[lifetime.ptyId] ?? 0) > 0
+    isPtyDataHandlerShutdownPending(lifetime.ptyId) || isStoreShutdownPending(lifetime.ptyId)
   if (pending) {
     deferPtyShutdownExit(lifetime.ptyId, (settlement) => {
       if (settlement === 'committed') {
