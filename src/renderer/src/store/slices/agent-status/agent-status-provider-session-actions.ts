@@ -162,7 +162,13 @@ export function createAgentStatusProviderSessionActions(
             nextLaunchConfigs = { ...nextLaunchConfigs }
             delete nextLaunchConfigs[paneKey]
           }
-          const nextConversations = projectConversation(s, { ...record, agentType: agent })
+          const nextConversations = projectConversation(
+            s,
+            { ...record, agentType: agent },
+            undefined,
+            undefined,
+            { identityOnly: true, providerSession }
+          )
           return {
             agentStatusByPaneKey: nextLive,
             ...(nextConversations !== s.agentConversationsByPaneKey

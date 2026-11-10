@@ -119,20 +119,29 @@ export function createAgentStatusRuntime(
   const get = (): AppState => batchedAgentStatusState ?? storeGet()
 
   let conversationDraft: AppState['agentConversationsByPaneKey'] | null = null
-  const projectConversation: typeof projectAgentPaneConversation = (state, entry) =>
-    projectAgentPaneConversation(state, entry, (entries) => {
-      if (!batchedAgentStatusState) {
-        return { ...entries }
-      }
-      const next =
-        entries === conversationDraft
-          ? entries
-          : Object.setPrototypeOf(Object.assign(Object.create(null), entries), Object.prototype)
-      conversationDraft = next
-      return next
-    })
+  const projectConversation: typeof projectAgentPaneConversation = (
+    state,
+    entry,
+    _copy,
+    ...sourceArgs
+  ) =>
+    projectAgentPaneConversation(
+      state,
+      entry,
+      (entries) => {
+        if (!batchedAgentStatusState) {
+          return { ...entries }
+        }
+        const next =
+          entries === conversationDraft
+            ? entries
+            : Object.setPrototypeOf(Object.assign(Object.create(null), entries), Object.prototype)
+        conversationDraft = next
+        return next
+      },
+      ...sourceArgs
+    )
 
-  // Omit replace from this write type so no slice call can request replacement the batch cannot express.
   const set = (update: AgentStatusStateUpdate): void => {
     const staged = batchedAgentStatusState
     const before = staged ?? storeGet()
@@ -152,7 +161,6 @@ export function createAgentStatusRuntime(
         touched.add(key as keyof AppState)
       }
     }
-    // The staged object is private until commit, so fold into it instead of cloning AppState per update.
     Object.assign(staged, nextState)
   }
 
@@ -275,12 +283,9 @@ export function createAgentStatusRuntime(
     const uniquePaneKeys = new Set(paneKeys)
     set((s) => {
       const nextSleeping = removePaneKeys(s.sleepingAgentSessionsByPaneKey, uniquePaneKeys)
-      if (nextSleeping === s.sleepingAgentSessionsByPaneKey) {
-        return s
-      }
-      return {
-        sleepingAgentSessionsByPaneKey: nextSleeping
-      }
+      return nextSleeping === s.sleepingAgentSessionsByPaneKey
+        ? s
+        : { sleepingAgentSessionsByPaneKey: nextSleeping }
     })
   }
 

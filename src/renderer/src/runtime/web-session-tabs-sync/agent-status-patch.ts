@@ -1,7 +1,7 @@
-import { resolveAgentSessionStartedAt } from '../../../../shared/agent-session/lifecycle/agent-session-start-time'
+import { conversationSessionStartedAt } from '../../store/slices/agent-status/agent-conversation-acceptance'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import {
-  agentPaneConversationForEntry,
+  classifyAgentPaneConversation,
   projectAgentPaneConversation
 } from '../../store/slices/agent-status/agent-pane-conversation'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
@@ -153,17 +153,16 @@ export function buildMirroredAgentStatusPatch(
             ...withHostProgramStatus(nextEntry, entry.programStatus),
             ...(entry.launchAttested !== undefined ? { launchAttested: entry.launchAttested } : {})
           }
-    const conversation = existing
-      ? undefined
-      : agentPaneConversationForEntry(state, accepted, toRuntimeExecutionHostId(environmentId))
+    const source = { ...accepted, isReplay: true }
+    const conversation = classifyAgentPaneConversation(
+      state,
+      accepted,
+      source,
+      toRuntimeExecutionHostId(environmentId)
+    )
     nextByPaneKey.set(entry.paneKey, {
       ...accepted,
-      firstStateStartedAt: resolveAgentSessionStartedAt({
-        entry: accepted,
-        previous:
-          existing ??
-          (conversation ? { ...conversation, agentType: conversation.agent } : undefined)
-      })
+      firstStateStartedAt: conversationSessionStartedAt(accepted, existing, conversation, source)
     })
   }
 
@@ -214,7 +213,8 @@ export function buildMirroredAgentStatusPatch(
       { tabsByWorktree: state.tabsByWorktree, agentConversationsByPaneKey: nextConversations },
       entry,
       (entries) => (entries === originalConversations ? { ...entries } : entries),
-      toRuntimeExecutionHostId(environmentId)
+      toRuntimeExecutionHostId(environmentId),
+      { ...entry, isReplay: true }
     )
     const existing = nextAgentStatusByPaneKey[paneKey]
     // The host's retirement of this pane's launch ends the client's copies of its note.

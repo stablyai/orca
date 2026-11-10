@@ -6,7 +6,6 @@ import {
   type SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { canonicalOrchestrationForRow } from '@/runtime/agent-orchestration/visible-agent-orchestration'
-import { resolveAgentSessionStartedAt } from '../../../../../shared/agent-session/lifecycle/agent-session-start-time'
 import { sameAgentStatusTerminalOwner } from '../../../../../shared/agent-status/identity/agent-status-terminal-owner'
 import { resolveAgentStatusLiveEntryTiming } from './agent-status-live-entry-timing'
 import type { AppState } from '../../types'
@@ -33,7 +32,10 @@ import {
 import { findAgentPaneWorktreeId, getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
 import { mergeCurrentOrchestrationContext } from './agent-status-orchestration-context'
 import { agentSleepSuccessorEvidence, deriveAgentStatusLiveFacts } from './agent-status-live-facts'
-import { agentPaneConversationForEntry } from './agent-pane-conversation'
+import {
+  localAgentConversationAcceptance,
+  conversationSessionStartedAt
+} from './agent-conversation-acceptance'
 import { liveEntryChildFields } from './agent-status-live-entry-children'
 import {
   canReuseStatusProviderSession,
@@ -42,6 +44,7 @@ import {
 
 export type AgentStatusLiveEntryBuild = {
   entry: AgentStatusEntry
+  conversationSource: ReturnType<typeof localAgentConversationAcceptance>['source']
   sleepSuccessorEvidence: ReturnType<typeof agentSleepSuccessorEvidence>
   existing: AgentStatusEntry | undefined
   existingSleepingRecord: OwnedPaneAgentRecord | undefined
@@ -151,10 +154,13 @@ export function buildAgentStatusLiveEntry(
     payloadMergedOrchestration ??
     runtimeMergedOrchestration ??
     (payload.state === 'done' ? existing?.orchestration : undefined)
-  const canReuseExistingProviderSession = canReuseStatusProviderSession(existing, {
-    agentType: identity.agentType,
-    state: payload.state
-  })
+  const conversation = localAgentConversationAcceptance(args, identity.agentType)
+  const canReuseExistingProviderSession =
+    !conversation.reset &&
+    canReuseStatusProviderSession(existing, {
+      agentType: identity.agentType,
+      state: payload.state
+    })
   const providerSession =
     metadata?.providerSession ??
     (canReuseExistingProviderSession ? existing.providerSession : undefined)
@@ -265,13 +271,12 @@ export function buildAgentStatusLiveEntry(
         ? existing.sessionBoundary
         : undefined)
   }
-  const conversation = existing ? undefined : agentPaneConversationForEntry(state, entry)
-  entry.firstStateStartedAt = resolveAgentSessionStartedAt({
+  entry.firstStateStartedAt = conversationSessionStartedAt(
     entry,
-    previous:
-      existing ?? (conversation ? { ...conversation, agentType: conversation.agent } : undefined),
-    identity: { ...identity, ...routing, providerSession: metadata?.providerSession }
-  })
+    existing,
+    conversation,
+    conversation.source
+  )
   const facts = deriveAgentStatusLiveFacts({
     state,
     paneKey,
@@ -284,6 +289,7 @@ export function buildAgentStatusLiveEntry(
   })
   return {
     entry,
+    conversationSource: conversation.source,
     sleepSuccessorEvidence: agentSleepSuccessorEvidence(state, entry, timing),
     existing,
     ...facts,

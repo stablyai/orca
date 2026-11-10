@@ -1,4 +1,10 @@
 import {
+  classifyConversationContinuity,
+  normalizedConversationPrompt,
+  type AgentConversationContinuity,
+  type AgentConversationSource
+} from './agent-conversation-continuity'
+import {
   type AgentProviderSessionMetadata,
   agentProviderSessionsEqual
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -23,6 +29,7 @@ export type AgentPaneConversationIdentity = {
   providerSession?: AgentProviderSessionMetadata
   firstStateStartedAt?: number
   promptCandidates?: readonly string[]
+  continuity?: AgentConversationContinuity
 }
 
 type ConversationState = WorktreeRuntimeOwnerState &
@@ -32,7 +39,18 @@ type ConversationEntry = Pick<
   AgentStatusEntry,
   'paneKey' | 'agentType' | 'providerSession' | 'worktreeId' | 'connectionId'
 > &
-  Partial<Pick<AgentStatusEntry, 'firstStateStartedAt' | 'prompt'>>
+  Partial<
+    Pick<
+      AgentStatusEntry,
+      | 'firstStateStartedAt'
+      | 'prompt'
+      | 'state'
+      | 'stateStartedAt'
+      | 'turnStartedAt'
+      | 'promptInteractionKey'
+      | 'observation'
+    >
+  >
 
 export function agentPaneConversationForEntry(
   state: ConversationState,
@@ -58,7 +76,8 @@ export function projectAgentPaneConversation(
   copy: (
     entries: AppState['agentConversationsByPaneKey']
   ) => AppState['agentConversationsByPaneKey'] = (entries) => ({ ...entries }),
-  executionHostId?: ExecutionHostId
+  executionHostId?: ExecutionHostId,
+  source?: AgentConversationSource
 ): AppState['agentConversationsByPaneKey'] {
   const current = state.agentConversationsByPaneKey ?? {}
   const agent = entry.agentType
@@ -68,32 +87,27 @@ export function projectAgentPaneConversation(
   }
   const ownerHostId = executionHostId ?? getExecutionHostIdForWorktree(state, worktreeId)
   const previous = agentPaneConversationForEntry(state, { ...entry, worktreeId }, ownerHostId)
-  const sameProvider =
-    !previous?.providerSession ||
-    !entry.providerSession ||
-    agentProviderSessionsEqual(
-      agent,
-      {
-        ...previous.providerSession,
-        transcriptPath:
-          previous.providerSession.transcriptPath ?? entry.providerSession.transcriptPath
-      },
-      {
-        ...entry.providerSession,
-        transcriptPath:
-          entry.providerSession.transcriptPath ?? previous.providerSession.transcriptPath
-      }
-    )
+  const acceptance = classifyAgentPaneConversation(
+    state,
+    { ...entry, worktreeId },
+    source ?? entry,
+    ownerHostId
+  )
+  if (acceptance.stale) {
+    return current
+  }
+  const sameProvider = !acceptance.reset
+  const carried = sameProvider ? previous : undefined
   const providerSession =
-    previous?.providerSession &&
-    (!entry.providerSession ||
-      agentProviderSessionsEqual(agent, previous.providerSession, entry.providerSession))
-      ? previous.providerSession
-      : entry.providerSession
+    carried?.providerSession &&
+    (!source?.providerSession ||
+      providersCompatible(agent, carried.providerSession, source.providerSession))
+      ? carried.providerSession
+      : (source?.providerSession ?? (acceptance.reset ? undefined : entry.providerSession))
   const firstStateStartedAt =
     (sameProvider ? previous?.firstStateStartedAt : undefined) ?? entry.firstStateStartedAt
-  const prompt = entry.prompt?.trim().replace(/\s+/g, ' ').toLowerCase().slice(0, 1024)
-  let promptCandidates = providerSession ? undefined : previous?.promptCandidates
+  const prompt = normalizedConversationPrompt(entry.prompt)
+  let promptCandidates = providerSession ? undefined : carried?.promptCandidates
   if (prompt && !providerSession && promptCandidates?.at(-1) !== prompt) {
     promptCandidates = [
       ...(promptCandidates ?? []).filter((value) => value !== prompt),
@@ -105,7 +119,8 @@ export function projectAgentPaneConversation(
     sameProvider &&
     previous.providerSession === providerSession &&
     previous.firstStateStartedAt === firstStateStartedAt &&
-    previous.promptCandidates === promptCandidates
+    previous.promptCandidates === promptCandidates &&
+    previous.continuity === acceptance.continuity
   ) {
     return current
   }
@@ -117,6 +132,7 @@ export function projectAgentPaneConversation(
       executionHostId: ownerHostId,
       connectionId: entry.connectionId ?? null,
       agent,
+      ...(acceptance.continuity ? { continuity: acceptance.continuity } : {}),
       ...(providerSession ? { providerSession } : {}),
       ...(firstStateStartedAt !== undefined ? { firstStateStartedAt } : {}),
       ...(promptCandidates ? { promptCandidates } : {})
@@ -126,4 +142,44 @@ export function projectAgentPaneConversation(
     configurable: true
   })
   return next
+}
+
+function providersCompatible(
+  agent: AgentType | undefined,
+  previous: AgentProviderSessionMetadata,
+  incoming: AgentProviderSessionMetadata
+): boolean {
+  return agentProviderSessionsEqual(
+    agent,
+    { ...previous, transcriptPath: previous.transcriptPath ?? incoming.transcriptPath },
+    { ...incoming, transcriptPath: incoming.transcriptPath ?? previous.transcriptPath }
+  )
+}
+
+export function classifyAgentPaneConversation(
+  state: ConversationState,
+  entry: ConversationEntry,
+  source: AgentConversationSource,
+  executionHostId?: ExecutionHostId
+) {
+  const previous = agentPaneConversationForEntry(state, entry, executionHostId)
+  const providerChanged = Boolean(
+    previous?.providerSession &&
+    source.providerSession &&
+    !providersCompatible(entry.agentType, previous.providerSession, source.providerSession)
+  )
+  const confirmedProvider = Boolean(
+    previous?.providerSession && source.providerSession && !providerChanged
+  )
+  const phase = classifyConversationContinuity(
+    providerChanged ? undefined : previous?.continuity,
+    source,
+    entry.agentType,
+    confirmedProvider
+  )
+  const reset =
+    providerChanged ||
+    phase.successor ||
+    Boolean(state.agentConversationsByPaneKey?.[entry.paneKey] && !previous)
+  return { previous, reset, continuity: phase.continuity, stale: phase.stale }
 }

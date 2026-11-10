@@ -115,7 +115,7 @@ describe('observed agent session row origin', () => {
     'keeps %s rows ordered after the recent-history cap',
     (agent) => {
       const { store, write, rows } = fixture(agent)
-      write(1000, 'working')
+      write(1000, 'working', 'same-session')
       store
         .getState()
         .setAgentStatus(
@@ -127,7 +127,7 @@ describe('observed agent session row origin', () => {
         )
       const before = rows().map((row) => row.paneKey)
       for (let i = 0; i < AGENT_STATE_HISTORY_MAX + 2; i++) {
-        write(3000 + i * 1000, i % 2 ? 'working' : 'done')
+        write(3000 + i * 1000, i % 2 ? 'working' : 'done', 'same-session')
       }
       expect(store.getState().agentStatusByPaneKey[pane].stateHistory[0].startedAt).toBeGreaterThan(
         2000
@@ -255,5 +255,125 @@ it('keeps an old paired host session clock across omission and provider-less rep
   publish(4, 7000, 'done', 'A')
   expect(client.agentConversationsByPaneKey).toBe(conversations)
   client = { ...client, agentStatusByPaneKey: {} }
-  expect(publish(5, 8000, 'working', 'B').firstStateStartedAt).toBe(8000)
+  expect(publish(5, 8000, 'working').firstStateStartedAt).toBe(8000)
+  expect(client.agentConversationsByPaneKey?.[initial.paneKey].providerSession).toBeUndefined()
+  expect(publish(6, 9000, 'working', 'B').firstStateStartedAt).toBe(8000)
+})
+
+it('does not give an unidentified successor the previous conversation clock or prompt', () => {
+  const { store, write } = fixture('codex')
+  write(1000, 'working', 'A', { stateStartedAt: 1000, turnStartedAt: 1000 })
+  write(5000, 'done', 'A', { stateStartedAt: 5000, turnStartedAt: 1000 })
+  store.getState().removeAgentStatus(pane)
+  store
+    .getState()
+    .setAgentStatus(
+      pane,
+      { state: 'working', prompt: 'next task', agentType: 'codex' },
+      undefined,
+      { updatedAt: 8000, stateStartedAt: 8000, turnStartedAt: 8000 },
+      { worktreeId: 'wt-order' }
+    )
+  expect(store.getState().agentStatusByPaneKey[pane].firstStateStartedAt).toBe(8000)
+  expect(store.getState().agentConversationsByPaneKey[pane].providerSession).toBeUndefined()
+  expect(store.getState().agentConversationsByPaneKey[pane].promptCandidates).toEqual(['next task'])
+})
+
+it('keeps identity through stale phase replay and equal pings, but follows explicit new turn evidence', () => {
+  const { store, write } = fixture('claude')
+  write(1000, 'working', 'A', { stateStartedAt: 1000, turnStartedAt: 1000 })
+  write(5000, 'done', 'A', { stateStartedAt: 5000, turnStartedAt: 1000 })
+  store.getState().removeAgentStatus(pane)
+  write(6000, 'working', undefined, { isReplay: true, stateStartedAt: 1000, turnStartedAt: 1000 })
+  expect(store.getState().agentConversationsByPaneKey[pane].providerSession?.id).toBe('A')
+  expect(store.getState().agentStatusByPaneKey[pane].firstStateStartedAt).toBe(1000)
+  const previous = store.getState().agentConversationsByPaneKey
+  write(6500, 'working', undefined, { isReplay: true, stateStartedAt: 1000, turnStartedAt: 1000 })
+  expect(store.getState().agentConversationsByPaneKey).toBe(previous)
+  store.getState().recordAgentProviderSession(pane, 'claude', { key: 'session_id', id: 'A' })
+  expect(store.getState().agentConversationsByPaneKey).toBe(previous)
+  write(8000, 'working', 'A', { stateStartedAt: 8000, turnStartedAt: 8000 })
+  expect(store.getState().agentStatusByPaneKey[pane].firstStateStartedAt).toBe(1000)
+  store.getState().removeAgentStatus(pane)
+  write(10000, 'working', undefined, { isReplay: true, stateStartedAt: 8000, turnStartedAt: 10000 })
+  expect(store.getState().agentConversationsByPaneKey[pane].providerSession).toBeUndefined()
+  expect(store.getState().agentStatusByPaneKey[pane].firstStateStartedAt).toBe(10000)
+})
+
+it('keeps displaced prompt candidates out when an older phase is replayed', () => {
+  const store = createTestStore()
+  const publish = (state: 'working' | 'done', prompt: string, at: number, phase: number) =>
+    store
+      .getState()
+      .setAgentStatus(
+        pane,
+        { state, prompt, agentType: 'codex' },
+        undefined,
+        { updatedAt: at, stateStartedAt: phase, isReplay: true },
+        { worktreeId: 'wt-order' }
+      )
+  publish('done', 'old task', 1000, 1000)
+  store.getState().removeAgentStatus(pane)
+  publish('working', 'current task', 2000, 2000)
+  publish('done', 'current task', 3000, 3000)
+  store.getState().removeAgentStatus(pane)
+  publish('working', 'old task', 4000, 1000)
+  store.getState().removeAgentStatus(pane)
+  expect(store.getState().agentConversationsByPaneKey[pane].promptCandidates).toEqual([
+    'current task'
+  ])
+})
+
+it('uses a newer incarnation even when it reuses the previous turn clock', () => {
+  const store = createTestStore()
+  const publish = (incarnation: number, session?: string) =>
+    store.getState().setAgentStatus(
+      pane,
+      {
+        state: 'working',
+        prompt: 'task',
+        agentType: 'codex',
+        observation: {
+          origin: 'hook',
+          authorityId: 'host',
+          incarnation,
+          revision: incarnation + 1,
+          observedAt: 1000 + incarnation
+        }
+      },
+      undefined,
+      { updatedAt: 1000 + incarnation, turnStartedAt: 1000 },
+      { worktreeId: 'wt-order' },
+      session ? { providerSession: { key: 'session_id', id: session } } : undefined
+    )
+  publish(0, 'A')
+  store.getState().removeAgentStatus(pane)
+  publish(1)
+  expect(store.getState().agentConversationsByPaneKey[pane].providerSession).toBeUndefined()
+})
+
+it('keeps Command Code prompt boundaries case-sensitive after live removal', () => {
+  const store = createTestStore()
+  store
+    .getState()
+    .setAgentStatus(
+      pane,
+      { state: 'working', prompt: 'Task', agentType: 'command-code' },
+      undefined,
+      { updatedAt: 1000 },
+      { worktreeId: 'wt-order' },
+      { providerSession: { key: 'session_id', id: 'A' } }
+    )
+  store.getState().removeAgentStatus(pane)
+  store
+    .getState()
+    .setAgentStatus(
+      pane,
+      { state: 'working', prompt: 'task', agentType: 'command-code' },
+      undefined,
+      { updatedAt: 2000 },
+      { worktreeId: 'wt-order' }
+    )
+  expect(store.getState().agentConversationsByPaneKey[pane].providerSession).toBeUndefined()
+  expect(store.getState().agentStatusByPaneKey[pane].firstStateStartedAt).toBe(2000)
 })

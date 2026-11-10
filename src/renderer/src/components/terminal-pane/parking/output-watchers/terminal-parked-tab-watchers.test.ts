@@ -263,7 +263,13 @@ describe('terminal-parked-tab-watchers', () => {
         worktreeId: WORKTREE_ID,
         origin: 'worktree-sleep',
         capturedAt: 1000,
-        display: { state: 'done', agentType: 'codex', prompt: 'finished', updatedAt: 1000 }
+        display: {
+          state: 'done',
+          agentType: 'codex',
+          prompt: 'finished',
+          updatedAt: 1000,
+          stateStartedAt: 1000
+        }
       }
     }
     capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])

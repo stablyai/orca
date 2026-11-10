@@ -108,7 +108,13 @@ export function reduceAgentStatusLiveUpdate(
     nextSleepingAgentSessions = removePaneKeys(nextSleepingAgentSessions, evicted)
     nextLaunchConfigs = removePaneKeys(nextLaunchConfigs, evicted)
   }
-  const nextConversations = projectConversation(state, entry)
+  const nextConversations = projectConversation(
+    state,
+    entry,
+    undefined,
+    undefined,
+    build.conversationSource
+  )
   const patch: Partial<AppState> = {
     agentStatusByPaneKey: nextLive,
     ...(nextConversations !== state.agentConversationsByPaneKey
