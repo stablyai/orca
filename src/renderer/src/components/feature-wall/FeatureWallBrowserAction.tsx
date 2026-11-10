@@ -1,10 +1,10 @@
-import { useBundledSkillInstallAction } from '@/hooks/use-bundled-skill-install-action'
+import { useBundledSkillInstallAction } from '@/hooks/skills/installation/use-bundled-skill-install-action'
 import { bundledSkillSetupActionLabel } from '../skills/setup/bundled-skill-setup-copy'
 import { ORCA_CLI_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
-import { useOnboardingSkillRuntime } from '@/hooks/use-onboarding-skill-runtime'
+import { useOnboardingSkillRuntime } from '@/hooks/skills/runtime/use-onboarding-skill-runtime'
 import { FeatureSetupInlineTerminal } from '../onboarding/FeatureSetupInlineTerminal'
 import { buildAgentFeatureSkillInstallCommand } from '@/lib/skills/installation/agent-feature-install-commands'
-import { buildSkillCommandForRuntime } from '../../lib/skill-runtime-command'
+import { buildSkillCommandForRuntime } from '../../lib/skills/runtime/skill-runtime-command'
 import type { OnboardingFeatureSetupRuntimeContext } from '../onboarding/onboarding-feature-setup-runtime'
 import { useCallback, useState } from 'react'
 import { ArrowUpRight, Download, Loader2 } from 'lucide-react'
@@ -12,13 +12,13 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   bundledSkillInstallNeedsAttention,
   useBundledSkillInstall
-} from '@/hooks/use-bundled-skill-install'
+} from '@/hooks/skills/installation/use-bundled-skill-install'
 import { BundledSkillInstallStatus } from '../skills/setup/BundledSkillInstallStatus'
 import {
   onboardingFeatureSetupRunTelemetry,

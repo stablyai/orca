@@ -29,6 +29,8 @@ export function mobileWebAppBundleMaxAssets(routeCount, imageCount, catalogChunk
 // fetched only for the active language, never before the first route. Code keeps its own fence.
 export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_CHUNKS = 10
 export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES = 3 * 1024 * 1024
+// The host sends a catalog's JSON in one reply, which must fit a 1 MiB relay frame once encrypted.
+export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 384 * 1024
 
 // Our own fence on the page's code, well inside the phone contract (32 MiB total, 10 MiB per asset in
 // manifest-contract.ts); it fails the build before the code weighs more than any one asset may.
@@ -183,6 +185,23 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
       `${String(first.catalogChunkCount)} locale catalog chunk(s) of ${String(first.catalogBytes)} bytes exceed ` +
         `the catalog allowance of ${String(MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_CHUNKS)} chunks and ` +
         `${String(MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES)} bytes`
+    )
+  }
+  // buildId leaves the host's JSON catalogs out, so a stale copy shows only here.
+  const hostCatalogsOf = (built) => JSON.stringify(built.catalogs ?? [])
+  if (hostCatalogsOf(first.manifest) !== hostCatalogsOf(second.manifest)) {
+    fail('host language catalogs are not reproducible')
+  }
+  if (hostCatalogsOf(first.manifest) !== hostCatalogsOf(manifest)) {
+    fail(`${bundleDir} is stale: its host language catalogs differ from a fresh build's`)
+  }
+  const oversized = (manifest.catalogs ?? []).find(
+    (catalog) => catalog.byteLength > MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES
+  )
+  if (oversized) {
+    fail(
+      `the ${oversized.locale} host catalog is ${String(oversized.byteLength)} bytes, over the ` +
+        `${String(MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES)} one reply carries`
     )
   }
   const budgetBytes = mobileWebAppBundleBudgetBytes(manifest) - first.catalogBytes

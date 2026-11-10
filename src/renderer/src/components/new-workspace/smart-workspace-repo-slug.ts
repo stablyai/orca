@@ -1,9 +1,9 @@
-import type { RepoSlug } from '@/lib/github-links'
+import type { RepoSlug } from '../../../../shared/github/links'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeTarget
-} from '@/lib/github-source-runtime-context'
+} from '@/lib/work-items/github/github-source-runtime-context'
 import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
 import {
   getTaskSourceCacheScope,

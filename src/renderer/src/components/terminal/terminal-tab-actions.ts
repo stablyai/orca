@@ -4,7 +4,7 @@ import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/ident
 import { toHostSessionTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import { getLatestWebSessionTabsPublicationEpoch } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
 import { resolveHostSessionTabIdForWebSessionTab } from '@/runtime/web-session-tabs-sync/tracking-mappings'
-import { resolveTerminalCloseRoute } from '@/lib/terminal-close-route'
+import { resolveTerminalCloseRoute } from '@/lib/workspace/ownership/terminal-close-route'
 import {
   guardPinnedTabClose,
   isUnifiedTabPinned,

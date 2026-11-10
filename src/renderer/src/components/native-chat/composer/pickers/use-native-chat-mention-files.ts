@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { useRuntimeFileListForWorktree } from '@/components/quick-open-file-list'
 import { rankQuickOpenFilesWithHistory } from '@/components/quick-open-history-ranking'
-import { useQuickOpenHistory } from '@/lib/quick-open-file-history'
+import { useQuickOpenHistory } from '@/lib/files/search/quick-open-file-history'
 import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '../../../../lib/structured-chat-tab-index'
 import { useFileListWorktree } from '@/store/workspaces/selection/use-selected-worktree'
 

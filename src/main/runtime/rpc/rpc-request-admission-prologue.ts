@@ -77,9 +77,11 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
     return { method, request, caller, params: parsedParams.value }
   }
   // Resolve once before parse and unary/streaming branching so both see the same caller.
-  return needsOrchestrationCallerResolution(rawRequest)
-    ? resolveOrchestrationSessionCaller(runtime, rawRequest, options).then(admitResolved, (error) =>
-        reject(mapDispatcherError(rawRequest, meta, error))
+  const callerField = method.orchestrationAccess?.caller
+  return needsOrchestrationCallerResolution(rawRequest, callerField)
+    ? resolveOrchestrationSessionCaller(runtime, rawRequest, options, callerField).then(
+        admitResolved,
+        (error) => reject(mapDispatcherError(rawRequest, meta, error))
       )
     : admitResolved({ request: rawRequest })
 }

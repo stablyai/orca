@@ -18,7 +18,7 @@ export function TerminalFontSizeSetting({
   const t = useTranslate()
   return (
     <SearchableSetting
-      title={t('auto.components.settings.TerminalFontSizeSetting.a4a352b1e9', 'Font Size')}
+      title={t('auto.components.settings.TerminalFontSizeSetting.a653570abf', 'Font size')}
       description={t(
         'auto.components.settings.TerminalFontSizeSetting.0f4c92e595',
         'Default terminal font size for new panes and live updates.'
@@ -27,7 +27,7 @@ export function TerminalFontSizeSetting({
       forceVisible={forceVisible}
     >
       <SettingsRow
-        label={t('auto.components.settings.TerminalFontSizeSetting.a4a352b1e9', 'Font Size')}
+        label={t('auto.components.settings.TerminalFontSizeSetting.a653570abf', 'Font size')}
         control={
           <div className="flex items-center gap-2">
             <Button

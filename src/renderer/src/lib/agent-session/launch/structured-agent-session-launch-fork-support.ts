@@ -15,10 +15,8 @@ import { nativeChatForkRequiresInheritedOriginal } from '../../../../../shared/n
 import { runtimeEnvironmentCapabilityProof } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { structuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
-import {
-  abandonStructuredAgentSessionLaunchIntent,
-  type StructuredAgentSessionLaunchIntent
-} from '../../launch-structured-agent-session'
+import type { StructuredAgentSessionLaunchIntent } from '../../launch-structured-agent-session'
+import { abandonStructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-abandon'
 import {
   StructuredAgentSessionCreateRefusalError,
   StructuredAgentSessionCreateUnknownOutcomeError

@@ -1,6 +1,7 @@
 import type { AppState } from '../../../store/types'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { collectLeafIdsInOrder } from '../../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import '../../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../../../shared/workspace-layout/terminal-pane-tree'
 import { getIndexedRepoMap } from '../../../store/repos/repository-catalog-index'
 import { getIndexedWorktreeMap } from '../../../store/slices/worktrees/listing/worktree-catalog-index'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
@@ -82,7 +83,7 @@ export function resolvePaneKey(
     }
   }
   // Why: an empty layout snapshot from a worktree switch (tab/PTY still live) counts as missing metadata; a non-empty layout lacking the leaf still means closed.
-  const leafExists = layout?.root ? collectLeafIdsInOrder(layout.root).includes(leafId) : true
+  const leafExists = layout?.root ? collectLayoutLeafIdsInOrder(layout.root).includes(leafId) : true
   if (!leafExists) {
     return {
       exists: false,

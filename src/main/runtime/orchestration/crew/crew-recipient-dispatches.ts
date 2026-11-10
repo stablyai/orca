@@ -3,7 +3,7 @@ import {
   dispatchAssigneeCoordinatorKey,
   selectRunBoundDispatchRecipient
 } from '../../rpc/methods/orchestration/messaging/recipient-routing'
-import { federatedControlMailRefusal } from '../../rpc/methods/orchestration/messaging/send-control-mail'
+import { federatedControlMailRefusal } from '../legacy-remote-home/legacy-remote-home'
 import type { createLineageRunningSessionResolver } from '../addressing/session-lineage/structured-session-lineage'
 import type { DispatchInput } from './crew-recipient-owner-queries'
 import type { CrewRecipientTerminal } from './crew-recipient-inputs'

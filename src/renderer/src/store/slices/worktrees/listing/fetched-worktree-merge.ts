@@ -6,9 +6,9 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import { routeListingBranchSwitchesThroughGitIdentity } from './worktree-listing-branch-switch'
 import {
   areDetectedWorktreeResultsEqual,
-  areWorktreesEqual,
   worktreesDifferOnlyInSortOrder
 } from './worktree-catalog-visibility'
+import { catalogRowsEqual } from '../../../../lib/catalog-reconciliation/catalog-row-reconciliation'
 import { mergeDetectedWorktreesForHost } from './detected-worktree-host-merge'
 import {
   getRemovedWorktreeIdsAfterAuthoritativeScan,
@@ -29,7 +29,7 @@ import { buildWorktreePurgeState } from '../teardown/worktree-purge-state'
 import { flushPurgedWorkspaceEdits } from '../teardown/removed-workspace-unsaved-files'
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import { isDisplayNamePersistencePending } from '../metadata/worktree-meta-persist'
-import { branchName } from '@/lib/git-utils'
+import { branchName } from '@/lib/source-control/branches/branch-name'
 import {
   forgetAuthoritativelyRemovedWorktrees,
   forgetPersistedWorktreeMetaForRemovals,
@@ -194,6 +194,7 @@ export function mergeFetchedWorktrees(
       requestStarted: args.requestStartedWorktrees,
       current: s.worktreesByRepo[args.repoId],
       incoming,
+      refreshHostId: args.hostId,
       matchesRefreshHost: (worktree) => worktreeMatchesHost(worktree, args.hostId, matchOptions),
       hasBranchScopedReviewContext: hasBranchScopedHostedReviewContext,
       updateWorktreeGitIdentity: s.updateWorktreeGitIdentity
@@ -243,7 +244,7 @@ export function mergeFetchedWorktrees(
     if (args.refresh.result.authoritative) {
       authoritativelySeenIds = args.refresh.result.worktrees.map((worktree) => worktree.id)
     }
-    const worktreesChanged = !areWorktreesEqual(s.worktreesByRepo[args.repoId], mergedWorktrees)
+    const worktreesChanged = !catalogRowsEqual(s.worktreesByRepo[args.repoId], mergedWorktrees)
     const detectedChanged = !areDetectedWorktreeResultsEqual(
       s.detectedWorktreesByRepo[args.repoId],
       mergedDetected

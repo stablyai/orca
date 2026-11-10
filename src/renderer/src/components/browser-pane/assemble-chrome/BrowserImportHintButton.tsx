@@ -17,8 +17,8 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { useAppStore } from '@/store'
-import { isLinuxUserAgent, isMacUserAgent } from '@/lib/user-agent-platform'
+import { useAppStore } from '@/store/index'
+import { isLinuxUserAgent, isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { getBrowserCookieImportSourceLabels } from '../../../../../shared/browser-cookie-import-sources'
 import { shouldShowBrowserImportHint } from './browser-import-hint-visibility'
 import { formatBrowserImportSummary } from './browser-detected-browsers-summary'
@@ -28,12 +28,10 @@ import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-co
 
 type BrowserImportHintButtonProps = {
   profileId: string | null
-  compact?: boolean
 }
 
 export function BrowserImportHintButton({
-  profileId,
-  compact = false
+  profileId
 }: BrowserImportHintButtonProps): React.JSX.Element | null {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
@@ -169,19 +167,15 @@ export function BrowserImportHintButton({
       <PopoverTrigger asChild>
         <Button
           type="button"
-          variant="secondary"
+          variant="outline"
           size="sm"
-          className="h-7 shrink-0 rounded-full px-2.5 text-xs"
-          aria-label={t(
+          data-contextual-tour-target="browser-import-hint"
+        >
+          <Import />
+          {t(
             'auto.components.browser.pane.BrowserImportHintButton.4f5ffaa6a1',
             'Import browser data'
           )}
-          data-contextual-tour-target="browser-import-hint"
-        >
-          <Import className="size-3.5" />
-          {compact
-            ? null
-            : t('auto.components.browser.pane.BrowserImportHintButton.b24fef25be', 'Import')}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" side="bottom" sideOffset={6} className="w-80 p-3">

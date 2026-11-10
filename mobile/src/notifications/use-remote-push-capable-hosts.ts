@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { loadHostCatalog } from '../transport/hosts/host-store'
+import { loadHostCatalog } from '../host-catalog/host-store'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { startRuntimeCapabilityProbe } from '../transport/connection/runtime-capability-probe'
 import { useAllHostClients } from '../transport/connection/use-all-host-clients'

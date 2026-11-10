@@ -3,7 +3,7 @@ import {
   hostDictationErrorMessage
 } from '../../../src/shared/host-dictation-error-messages'
 import { translate } from '../i18n/mobile-i18n'
-import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
 import '../transport/connection/stable-logical-rpc-client'
@@ -128,7 +128,7 @@ export function isDictationSetupRequiredError(message: string): boolean {
 
 /** `worktreeId` asks for that repo's dictionary terms too. */
 export async function fetchDictationSetup(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   worktreeId?: string
 ): Promise<MobileSpeechSetup> {
   const reply = await requestDictationSetupReply(client, worktreeId ? { worktreeId } : null)
@@ -150,7 +150,7 @@ export async function fetchDictationSetup(
 }
 
 async function requestDictationSetupReply(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   params: { worktreeId: string } | null
 ): Promise<RpcResponse> {
   try {
@@ -165,7 +165,7 @@ async function requestDictationSetupReply(
 }
 
 export async function downloadDictationModel(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   modelId: string
 ): Promise<void> {
   const reply = await dictationModelDownload.request(client, { modelId })
@@ -176,7 +176,7 @@ export async function downloadDictationModel(
 }
 
 export async function deleteDictationModel(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   modelId: string
 ): Promise<MobileSpeechSetup> {
   const reply = await dictationModelDelete.request(client, { modelId })
@@ -187,7 +187,7 @@ export async function deleteDictationModel(
 }
 
 export async function setDictationConfig(
-  client: RpcOperationSender,
+  client: UnvalidatedRpcRequestPort,
   params: {
     enabled?: boolean
     modelId?: string

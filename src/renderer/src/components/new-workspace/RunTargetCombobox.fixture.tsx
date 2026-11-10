@@ -1,5 +1,5 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
+import type { ProjectHostSetupOption } from '@/lib/workspace/creation/project-host-setup-options'
 import RunTargetCombobox from './RunTargetCombobox'
 
 // Shape produced by buildProjectHostSetupOptions with local + ephemeral VM setups and SSH hosts:

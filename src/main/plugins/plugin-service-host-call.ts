@@ -11,17 +11,14 @@ import { pluginHostCallRevoked, type PluginHostCallScope } from './workers/plugi
 import type { PluginPanelCaller } from '../../shared/plugins/workers/plugin-panel-bridge-protocol'
 import type { PluginPanelBridgeServices } from './workers/plugin-host-panel-method-bindings'
 import type { PluginPanelBridge } from './panels/plugin-panel-bridge'
-import {
-  pluginStatusBarRevision,
-  type PluginStatusBarState
-} from './status-bar/plugin-status-bar-state'
+import { pluginStatusBarRevision } from './status-bar/plugin-status-bar-state'
 import type {
   PluginHostCallOutcome,
   PluginSurface
 } from '../../shared/plugins/frames/plugin-protocol'
 import { executePluginHostCallRequest } from './workers/plugin-host-call-adapter'
 import { getPluginHostRendererActions } from './view/plugin-host-renderer-actions'
-import type { PluginAppearanceService } from './appearance/plugin-appearance-service'
+import type { PluginServiceOptions } from './plugin-service-options'
 
 /** Who made a call: the open panel (frames only), and its host window's WebContents for desktop
  *  IPC calls. */
@@ -73,8 +70,8 @@ export function resolvePluginServiceHostCallPolicy(input: {
   pluginsDataDir: string
   desktop: PluginDesktopFrameServices | null | undefined
   panels: PluginPanelBridgeServices | null
-  statusBar?: PluginStatusBarState | null
-  appearance?: PluginAppearanceService | null
+  /** The service's desktop sinks; each is absent where this Orca has none. */
+  sinks: Pick<PluginServiceOptions, 'statusBar' | 'appearance' | 'editorTypography'>
   audit: PluginAuditLog
   log?: (pluginKey: string) => (line: string) => void
 }): PluginHostCallPolicy {
@@ -89,8 +86,9 @@ export function resolvePluginServiceHostCallPolicy(input: {
           panels: input.panels,
           renderer: getPluginHostRendererActions(),
           declaredSettings: plugin?.manifest.contributes.settings,
-          statusBar: input.statusBar,
-          appearance: input.appearance,
+          statusBar: input.sinks.statusBar,
+          appearance: input.sinks.appearance,
+          editorTypography: input.sinks.editorTypography,
           declaredStatusBarItemIds: plugin?.manifest.contributes.statusBarItems.map(
             (item) => item.id
           ),

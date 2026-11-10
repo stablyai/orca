@@ -17,7 +17,7 @@ import {
 } from './worktree-runtime-owner-index'
 import { findIndexedRepoOwnerForHost, resolveIndexedRepoOwner } from './repo-owner-index'
 import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
-import { onPairedWebClientHost } from '../../paired-web-client-host'
+import { onPairedWebClientHost } from '../../../app-shell/platform/paired-web-client-host'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,

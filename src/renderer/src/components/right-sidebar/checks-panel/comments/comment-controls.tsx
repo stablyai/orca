@@ -17,12 +17,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'
 import { isReviewThreadResolutionInFlight } from '@/store/github/review-threads/review-thread-resolution-in-flight'
 import { basename } from '@/lib/path'
 import { isBotPRComment } from '../../../../../../shared/source-control/review-comments/pr-comment-audience'
-import { setPRBotAuthorOverride } from '@/lib/pr-bot-author-overrides'
+import { setPRBotAuthorOverride } from '@/lib/source-control/review/pr-bot-author-overrides'
 import { normalizePRCommentAuthorLogin } from '../../../../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import type { PRComment } from '../../../../../../shared/github/comment-types'
 import type { PRCommentGroupActionState } from '@/lib/source-control/review/comments/pr-comment-action-state'

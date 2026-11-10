@@ -150,6 +150,7 @@ describe('Claude profile refresh from the default home', () => {
       firstStartTime: 'source-start',
       firstStartVersion: '1.0.0',
       groveConfigCache: { a: 1 },
+      groveChoiceSeenAt: { 'account-a': 99, 'account-b': 10 },
       cachedArtifactRoster: [],
       clientDataCacheSlots: {},
       passesEligibilityCache: {},
@@ -163,7 +164,10 @@ describe('Claude profile refresh from the default home', () => {
       subscriptionNoticeCount: 2
     })
     expect((await provision(f)).surfaces['.claude.json']).toBe('synced')
-    expect(f.read(join(f.profileHome, '.claude.json'))).toEqual(shared)
+    expect(f.read(join(f.profileHome, '.claude.json'))).toEqual({
+      ...shared,
+      groveChoiceSeenAt: { 'account-a': 99, 'account-b': 10 }
+    })
     expect(fs.readdirSync(f.profileHome).filter((name) => name.endsWith('.tmp'))).toEqual([])
     expect(fs.existsSync(join(f.profileHome, '.credentials.json'))).toBe(false)
 
@@ -172,6 +176,7 @@ describe('Claude profile refresh from the default home', () => {
       oauthAccount: { emailAddress: 'profile@example.com' },
       userID: 'profile-id',
       groveConfigCache: { b: 2 },
+      groveChoiceSeenAt: { 'account-a': 120, 'account-b': 5 },
       theme: 'light',
       onlyHere: true
     })
@@ -180,6 +185,7 @@ describe('Claude profile refresh from the default home', () => {
       oauthAccount: { emailAddress: 'profile@example.com' },
       userID: 'profile-id',
       groveConfigCache: { b: 2 },
+      groveChoiceSeenAt: { 'account-a': 120, 'account-b': 10 },
       onlyHere: true,
       ...shared
     })

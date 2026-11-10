@@ -2,8 +2,11 @@ import type { MobileWebBundleAssetRead } from './mobile-web-bundle-reply-schemas
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
 import type { MobileWebBundleWindowHeader } from './mobile-web-bundle-window-reader'
 
+/** The file the windows are cut from: the asset, or its brotli copy. */
+export type MobileWebBundleWindowStream = Pick<MobileWebBundleAssetRead, 'path' | 'byteLength'>
+
 export function windowSlotBytes(
-  entry: MobileWebBundleAssetRead,
+  entry: MobileWebBundleWindowStream,
   offset: number,
   windowBytes: number
 ): number {
@@ -12,7 +15,7 @@ export function windowSlotBytes(
 
 /** Offsets are planned, so a reply is accepted only if it fills exactly its slot of the grid. */
 export function assertWindowFillsItsSlot(
-  entry: MobileWebBundleAssetRead,
+  entry: MobileWebBundleWindowStream,
   offset: number,
   byteLength: number,
   eof: boolean,

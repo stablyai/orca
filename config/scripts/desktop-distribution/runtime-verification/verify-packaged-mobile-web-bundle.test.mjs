@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { brotliCompressSync } from 'node:zlib'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { writeMobileWebBundleFixtureTree } from '../../build/mobile-web-app/mobile-web-bundle-fixture-tree.mjs'
 
@@ -10,11 +11,11 @@ const { assertMobileWebBundleBuilt } = require('./verify-packaged-mobile-web-bun
 const electronBuilderConfig = require('../../../electron-builder.config.cjs')
 const { darkBuildMarkers } = require('../../../dark-build-switches.cjs')
 
-async function withBundle(run) {
+async function withBundle(run, { brotli = false } = {}) {
   const scratch = await mkdtemp(join(tmpdir(), 'orca-mobile-web-guard-'))
   const bundleDir = join(scratch, 'mobile-web')
   try {
-    const { manifest } = await writeMobileWebBundleFixtureTree({ outDir: bundleDir })
+    const { manifest } = await writeMobileWebBundleFixtureTree({ outDir: bundleDir, brotli })
     await run({ bundleDir, manifest })
   } finally {
     await rm(scratch, { recursive: true, force: true })
@@ -63,6 +64,25 @@ describe('assertMobileWebBundleBuilt', () => {
       await rm(join(bundleDir, asset.path))
       expect(() => assertMobileWebBundleBuilt(bundleDir)).toThrow(/which is missing from/)
     })
+  })
+
+  it('accepts the brotli copies the manifest lists, and fails one that inflates to other bytes', async () => {
+    await withBundle(
+      async ({ bundleDir, manifest }) => {
+        const asset = manifest.assets.find((entry) => entry.brotliByteLength !== undefined)
+        expect(() => assertMobileWebBundleBuilt(bundleDir)).not.toThrow()
+        const forged = brotliCompressSync(Buffer.from('not the asset'))
+        await writeFile(join(bundleDir, `${asset.path}.br`), forged)
+        await rewriteManifest(bundleDir, (rewritten) => {
+          rewritten.assets.find((entry) => entry.path === asset.path).brotliByteLength =
+            forged.byteLength
+        })
+        expect(() => assertMobileWebBundleBuilt(bundleDir)).toThrow(
+          `${asset.path}.br does not inflate to ${asset.path}`
+        )
+      },
+      { brotli: true }
+    )
   })
 
   it('refuses an asset path that escapes the bundle directory', async () => {

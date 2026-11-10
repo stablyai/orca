@@ -4,7 +4,7 @@ import {
   getWorkspaceFileDragRejectionMessage,
   readWorkspaceFileDragPaths,
   WORKSPACE_FILE_PATH_MIME
-} from '@/lib/workspace-file-drag'
+} from '@/lib/files/drop/workspace-file-drag'
 
 const DRAG_EXPAND_DELAY_MS = 500
 
