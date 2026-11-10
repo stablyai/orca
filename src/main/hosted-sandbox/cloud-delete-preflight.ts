@@ -5,12 +5,16 @@ import { isEnvironmentProviderError } from '../environment-providers/environment
 import { cloudSandboxesByEnvironment } from './hosted-remote-desktop'
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 
-/** `asleep`: the sandbox has no running server to remove its checkout; destroying it is enough. */
+/**
+ * `asleep`: no running server to remove its checkout; destroying the sandbox takes the disk.
+ * `gone`: Orca Cloud already destroyed it (or it never started); only the row is left.
+ */
 export type CloudDeletePreflight =
-  | { ok: true; asleep?: boolean }
+  | { ok: true; asleep?: boolean; gone?: boolean }
   | ({ ok: false } & EphemeralVmFailure)
 
 const ASLEEP_STATUSES = new Set(['suspending', 'suspended', 'archived'])
+const GONE_STATUSES = new Set(['destroying', 'destroyed', 'failed'])
 
 export function cloudSandboxIdForEnvironment(
   userDataPath: string,
@@ -32,6 +36,9 @@ export async function preflightCloudWorkspaceDelete(
   }
   try {
     const view = await client.get(sandboxId)
+    if (GONE_STATUSES.has(view.status)) {
+      return { ok: true, gone: true }
+    }
     return ASLEEP_STATUSES.has(view.status) ? { ok: true, asleep: true } : { ok: true }
   } catch (error) {
     if (isEnvironmentProviderError(error, 'not_found')) {

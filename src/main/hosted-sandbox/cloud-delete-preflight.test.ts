@@ -57,5 +57,9 @@ describe('preflightCloudWorkspaceDelete', () => {
       asleep: true
     })
     expect(await preflightCloudWorkspaceDelete('sbx_1', answering('running'))).toEqual({ ok: true })
+    expect(await preflightCloudWorkspaceDelete('sbx_1', answering('destroyed'))).toEqual({
+      ok: true,
+      gone: true
+    })
   })
 })

@@ -26,11 +26,16 @@ export async function dispatchWorktreeRemoval(args: {
   assertCurrent: () => void
 }): Promise<RemoveWorktreeResult> {
   try {
-    const cloudDelete = await prepareCloudSandboxDelete(
-      { forgetLocalOnly: args.options?.mode === 'forget-local', options: args.options },
-      args.target
-    )
-    const result = await requestWorktreeRemoval({ ...args, options: cloudDelete.dispatchOptions })
+    const options = await prepareCloudSandboxDelete({
+      force: args.force,
+      options: args.options,
+      target: args.target,
+      assertBeforeDispatch: () => {
+        args.assertCurrent()
+        args.options?.assertBeforeDispatch?.()
+      }
+    })
+    const result = await requestWorktreeRemoval({ ...args, options })
     showNestedWorktreePreservedBranchesToast(result?.nestedPreservedBranches)
     return result
   } catch (error) {

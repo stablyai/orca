@@ -35,6 +35,7 @@ import { ORCA_CLOUD_IDLE_SLEEP_MINUTES } from '../../../../src/shared/hosted-san
 import { z } from 'zod'
 import { maintainPool, poolConfigFromEnv } from './pool'
 import { cachedCreateTiming } from './create-timing'
+import { creatorLeftAccount } from './member-changes'
 import { authenticateDesktop } from './auth'
 import { authenticateApi } from './api/caller'
 import { handleApi, handleApiAs, isApiPath, type ApiContext, type ApiExtension } from './api/router'
@@ -1085,7 +1086,12 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
     // The creator can always see and delete their own sandbox, whichever team is active now: a team
     // switch must never leave a billed VM that its owner's Delete can't reach. Nothing that bills
     // (resume, rollover) crosses accounts.
-    const creatorStop = (route === 'GET ' || route === 'DELETE ') && row !== null && row.user_id === caller.userId
+    // A creator removed from that team gets nothing cross-team: the sandbox is the team's now.
+    const creatorStop =
+      (route === 'GET ' || route === 'DELETE ') &&
+      row !== null &&
+      row.user_id === caller.userId &&
+      !(await creatorLeftAccount(env.SANDBOX_DB, row.account_id, caller.userId))
     // Another account's (or a teammate's) sandbox is indistinguishable from a missing one.
     if (!row || !(owner || adminAction || creatorStop)) {
       return fail('not_found', 404)

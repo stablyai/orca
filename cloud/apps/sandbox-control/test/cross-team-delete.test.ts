@@ -19,6 +19,20 @@ describe('deleting a sandbox after a team switch', () => {
     expect(h.vercel.boxes.size).toBe(0)
   })
 
+  it('a creator removed from the team cannot reach its sandbox from another account', async () => {
+    const h = await createHarness({ OPERATOR_TOKEN: 'o'.repeat(40) })
+    const acme = await h.token('alice', 'acme')
+    const { sandbox } = HostedSandboxReadyResponseSchema.parse(
+      (await h.call('POST', '/v1/sandboxes', { body: create, bearer: acme })).body
+    )
+    await h.call('POST', '/v1/internal/members/removed', {
+      bearer: 'o'.repeat(40),
+      body: { accountId: 'org:acme', userId: 'alice' }
+    })
+    expect((await h.call('DELETE', `/v1/sandboxes/${sandbox.id}`)).status).toBe(404)
+    expect(h.vercel.boxes.size).toBe(1)
+  })
+
   it('still hides the sandbox from other users, and the switched team cannot resume it', async () => {
     const h = await createHarness()
     const { sandbox } = HostedSandboxReadyResponseSchema.parse(

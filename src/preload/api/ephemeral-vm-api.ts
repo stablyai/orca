@@ -107,7 +107,10 @@ export type EphemeralVmApi = {
   /** Orca Cloud: before Delete drops the row, prove the signed-in identity can reach the sandbox. */
   preflightCloudDelete?: (args: {
     runtimeEnvironmentId: string
-  }) => Promise<{ ok: true; asleep?: boolean } | { ok: false; error: string; errorCode?: string }>
+  }) => Promise<
+    | { ok: true; asleep?: boolean; gone?: boolean }
+    | { ok: false; error: string; errorCode?: string }
+  >
   stopCleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>
   /** Drops an interrupted write-ahead record that never received a recipe result. */
   forgetRuntime: (args: { runtimeId: string }) => Promise<void>

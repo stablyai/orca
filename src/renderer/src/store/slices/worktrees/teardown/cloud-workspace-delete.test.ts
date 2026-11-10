@@ -87,11 +87,38 @@ describe('Orca Cloud workspace delete', () => {
       { id: 'runtime-cloud', workspaceId: wt.id, cleanupStatus: 'not_started' }
     ] as never)
 
-    const result = await store.getState().removeWorktree({ id: wt.id, executionHostId: null })
+    const result = await store.getState().removeWorktree({ id: wt.id, executionHostId: null }, true)
 
     expect(result).toEqual({ ok: true })
     expect(calledMethods()).not.toContain('worktree.rm')
     expect(mockApi.worktrees.forgetLocal).toHaveBeenCalled()
     expect(mockApi.ephemeralVm.cleanup).toHaveBeenCalledWith({ runtimeId: 'runtime-cloud' })
+  })
+
+  it('asks for Force delete before destroying an asleep sandbox it could not check', async () => {
+    const { store, wt } = seedCloudWorkspace()
+    Object.assign(mockApi.ephemeralVm, {
+      preflightCloudDelete: vi.fn().mockResolvedValue({ ok: true, asleep: true })
+    })
+
+    const result = await store.getState().removeWorktree({ id: wt.id, executionHostId: null })
+
+    expect(result.ok).toBe(false)
+    expect(mockApi.worktrees.forgetLocal).not.toHaveBeenCalled()
+    expect(mockApi.ephemeralVm.cleanup).not.toHaveBeenCalled()
+    expect(store.getState().deleteStateByWorktreeId[wt.id]?.canForceDelete).toBe(true)
+  })
+
+  it('forgets the row of a sandbox Orca Cloud already destroyed', async () => {
+    const { store, wt } = seedCloudWorkspace()
+    Object.assign(mockApi.ephemeralVm, {
+      preflightCloudDelete: vi.fn().mockResolvedValue({ ok: true, gone: true })
+    })
+
+    const result = await store.getState().removeWorktree({ id: wt.id, executionHostId: null })
+
+    expect(result).toEqual({ ok: true })
+    expect(calledMethods()).not.toContain('worktree.rm')
+    expect(mockApi.worktrees.forgetLocal).toHaveBeenCalled()
   })
 })
