@@ -129,7 +129,8 @@ export function reserveRemotePlacement(
 
 /**
  * The server said the start applied nothing, so the Task goes back to where it was and is free to
- * start again. A Task the start itself created goes away, as a refused local start creates none.
+ * start again. A Task the start itself created ends failed, as a local start that fails after
+ * creating its Task leaves it: others may already depend on it.
  */
 export function releaseRemotePlacement(
   db: OrchestrationDb,
@@ -140,15 +141,7 @@ export function releaseRemotePlacement(
   const transaction = beginLifecycleWriteTransaction(db.db, 'release_remote_placement')
   try {
     const placement = getRemotePlacement(db, taskId)
-    if (
-      createdByStart &&
-      placement?.state === 'reserved' &&
-      placement.request_key === requestKey &&
-      !placement.dispatch_id
-    ) {
-      db.db.prepare('DELETE FROM remote_placements WHERE task_id = ?').run(taskId)
-      db.db.prepare('DELETE FROM tasks WHERE id = ?').run(taskId)
-    } else if (placement?.state === 'reserved' && placement.request_key === requestKey) {
+    if (placement?.state === 'reserved' && placement.request_key === requestKey) {
       // A refused retry leaves the attempt it retried as the Task's current one.
       if (placement.dispatch_id) {
         db.db
@@ -159,11 +152,13 @@ export function releaseRemotePlacement(
       }
       const task = db.getTask(taskId)
       if (task?.status === 'dispatched') {
+        const failed = createdByStart
         transitionLifecycleWithDb(db.db, {
           entity: 'task',
           id: taskId,
           from: 'dispatched',
-          to: placement.prior_task_status
+          to: failed ? 'failed' : placement.prior_task_status,
+          ...(failed ? { projection: { completed_at: new Date().toISOString() } } : {})
         })
       }
     }
