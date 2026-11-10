@@ -35,7 +35,7 @@ type UsageSnapshot = {
   recentSessions: object[]
 }
 
-type UsageProviderTypes<
+export type UsageProviderTypes<
   Scope extends string,
   Range extends string,
   Snapshot extends UsageSnapshot
@@ -67,7 +67,7 @@ type UsageApi<T extends UsageProviderTypes<string, string, UsageSnapshot>> = {
   }) => Promise<T['snapshot']>
 }
 
-type ProviderUsageSlice<
+export type ProviderUsageSlice<
   Prefix extends string,
   Name extends string,
   T extends UsageProviderTypes<string, string, UsageSnapshot>
@@ -129,7 +129,7 @@ function createUsagePatch<T extends UsageProviderTypes<string, string, UsageSnap
   ) as Partial<AppState>
 }
 
-function createUsageProviderSlice<
+export function createUsageProviderSlice<
   Prefix extends string,
   Name extends string,
   T extends UsageProviderTypes<string, string, UsageSnapshot>

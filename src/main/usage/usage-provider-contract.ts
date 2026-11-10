@@ -8,6 +8,7 @@ export type UsageProviderId =
   | 'devin'
   | 'opencode'
   | 'muse'
+  | 'pi'
   | `plugin:${string}`
 
 /** Unlike UsageWorktreeRef, scan attribution also needs repoId. */

@@ -140,29 +140,6 @@ export function findOpenCodeStorageRoot(filePath: string): string | null {
   return dirname(sessionRoot)
 }
 
-// Accept Pi/OMP home, agent, or sessions paths.
-export function normalizeAgentSessionsDir(
-  rawValue: string,
-  agentHomeDirName: '.pi' | '.omp'
-): string {
-  const trimmed = rawValue.trim()
-  if (!trimmed) {
-    return join(homedir(), agentHomeDirName, 'agent', 'sessions')
-  }
-  const normalized = trimmed.replace(/[\\/]+$/, '')
-  const leaf = basename(normalized)
-  if (leaf === 'sessions') {
-    return normalized
-  }
-  if (leaf === 'agent') {
-    return join(normalized, 'sessions')
-  }
-  if (leaf === agentHomeDirName) {
-    return join(normalized, 'agent', 'sessions')
-  }
-  return normalized
-}
-
 function defaultPrimeAgentSessionsDir(): string {
   return join(homedir(), '.prime', 'agent', 'sessions')
 }

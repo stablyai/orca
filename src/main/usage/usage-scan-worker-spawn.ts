@@ -10,6 +10,7 @@ import type { ClaudeUsageDailyAggregate, ClaudeUsageSession } from '../claude-us
 import type { CodexUsageDailyAggregate, CodexUsageSession } from '../codex-usage/types'
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsageSession } from '../opencode-usage/types'
 import type { MuseUsageDailyAggregate, MuseUsageSession } from '../muse-usage/types'
+import type { PiUsageDailyAggregate, PiUsageSession } from '../pi-usage/types'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import type {
   UsageCacheSplitRequest,
@@ -21,6 +22,7 @@ import {
   scanCodexUsageOnWorker,
   scanMuseUsageOnWorker,
   scanOpenCodeUsageOnWorker,
+  scanPiUsageOnWorker,
   UsageScanWorkerClient
 } from './usage-scan-worker-client'
 
@@ -94,6 +96,16 @@ export function scanMuseUsageFilesViaWorker(
   dailyAggregates: MuseUsageDailyAggregate[]
 }> {
   return scanMuseUsageOnWorker((body) => getSharedClient().scan(body), worktrees, sourceCache)
+}
+
+export function scanPiUsageFilesViaWorker(
+  worktrees: UsageScanWorktreeRef[],
+  sourceCache: UsageSourceCacheRef
+): Promise<{
+  sessions: PiUsageSession[]
+  dailyAggregates: PiUsageDailyAggregate[]
+}> {
+  return scanPiUsageOnWorker((body) => getSharedClient().scan(body), worktrees, sourceCache)
 }
 
 /** Split source records on the worker; return only report JSON and whether migration occurred. */

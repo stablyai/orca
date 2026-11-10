@@ -48,18 +48,24 @@ export function UsageOverviewPane(): React.JSX.Element {
   const museScanState = useAppStore((state) => state.museUsageScanState)
   const museSummary = useAppStore((state) => state.museUsageSummary)
   const museDaily = useAppStore((state) => state.museUsageDaily)
+  const piScanState = useAppStore((state) => state.piUsageScanState)
+  const piSummary = useAppStore((state) => state.piUsageSummary)
+  const piDaily = useAppStore((state) => state.piUsageDaily)
   const fetchClaudeUsage = useAppStore((state) => state.fetchClaudeUsage)
   const fetchCodexUsage = useAppStore((state) => state.fetchCodexUsage)
   const fetchOpenCodeUsage = useAppStore((state) => state.fetchOpenCodeUsage)
   const fetchMuseUsage = useAppStore((state) => state.fetchMuseUsage)
+  const fetchPiUsage = useAppStore((state) => state.fetchPiUsage)
   const refreshClaudeUsage = useAppStore((state) => state.refreshClaudeUsage)
   const refreshCodexUsage = useAppStore((state) => state.refreshCodexUsage)
   const refreshOpenCodeUsage = useAppStore((state) => state.refreshOpenCodeUsage)
   const refreshMuseUsage = useAppStore((state) => state.refreshMuseUsage)
+  const refreshPiUsage = useAppStore((state) => state.refreshPiUsage)
   const enableClaudeUsage = useAppStore((state) => state.enableClaudeUsage)
   const enableCodexUsage = useAppStore((state) => state.enableCodexUsage)
   const enableOpenCodeUsage = useAppStore((state) => state.enableOpenCodeUsage)
   const enableMuseUsage = useAppStore((state) => state.enableMuseUsage)
+  const enablePiUsage = useAppStore((state) => state.enablePiUsage)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
   useEffect(() => {
@@ -67,7 +73,8 @@ export function UsageOverviewPane(): React.JSX.Element {
     void fetchCodexUsage()
     void fetchOpenCodeUsage()
     void fetchMuseUsage()
-  }, [fetchClaudeUsage, fetchCodexUsage, fetchOpenCodeUsage, fetchMuseUsage])
+    void fetchPiUsage()
+  }, [fetchClaudeUsage, fetchCodexUsage, fetchOpenCodeUsage, fetchMuseUsage, fetchPiUsage])
 
   const overview = useMemo(
     () =>
@@ -91,6 +98,11 @@ export function UsageOverviewPane(): React.JSX.Element {
           scanState: museScanState,
           summary: museSummary,
           daily: museDaily
+        },
+        pi: {
+          scanState: piScanState,
+          summary: piSummary,
+          daily: piDaily
         }
       }),
     [
@@ -105,7 +117,10 @@ export function UsageOverviewPane(): React.JSX.Element {
       museSummary,
       openCodeDaily,
       openCodeScanState,
-      openCodeSummary
+      openCodeSummary,
+      piDaily,
+      piScanState,
+      piSummary
     ]
   )
   const recentDays = useMemo(
@@ -119,7 +134,8 @@ export function UsageOverviewPane(): React.JSX.Element {
       claudeScanState?.enabled ? refreshClaudeUsage() : Promise.resolve(),
       codexScanState?.enabled ? refreshCodexUsage() : Promise.resolve(),
       openCodeScanState?.enabled ? refreshOpenCodeUsage() : Promise.resolve(),
-      museScanState?.enabled ? refreshMuseUsage() : Promise.resolve()
+      museScanState?.enabled ? refreshMuseUsage() : Promise.resolve(),
+      piScanState?.enabled ? refreshPiUsage() : Promise.resolve()
     ])
   }
 
@@ -216,6 +232,16 @@ export function UsageOverviewPane(): React.JSX.Element {
                 >
                   {t('auto.components.stats.UsageOverviewPane.enableMuse', 'Enable Muse')}
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    recordFeatureInteraction('usage-tracking')
+                    void enablePiUsage()
+                  }}
+                >
+                  {t('auto.components.stats.UsageOverviewPane.enablePi', 'Enable Pi')}
+                </Button>
               </div>
             </div>
           </div>
@@ -298,8 +324,10 @@ export function UsageOverviewPane(): React.JSX.Element {
                   void enableCodexUsage()
                 } else if (provider.id === 'opencode') {
                   void enableOpenCodeUsage()
-                } else {
+                } else if (provider.id === 'muse') {
                   void enableMuseUsage()
+                } else {
+                  void enablePiUsage()
                 }
               }}
             />

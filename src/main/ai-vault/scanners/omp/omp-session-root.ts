@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, normalize, parse, resolve, win32 } from 'node:path'
-import { normalizeAgentSessionsDir } from '../../session-scanner-values'
+import { normalizeAgentSessionsDir } from '../../agent-sessions-dir'
 
 function normalizedProfile(value: string | undefined): string | undefined | null {
   const profile = value?.trim()

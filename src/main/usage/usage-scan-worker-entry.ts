@@ -4,6 +4,8 @@ import { scanCodexUsageFiles } from '../codex-usage/scanner'
 import { scanOpenCodeUsageDatabases } from '../opencode-usage/scanner'
 import { scanMuseUsageFiles } from '../muse-usage/scanner'
 import { normalizeMuseUsagePersistedFiles } from '../muse-usage/persisted-file-normalization'
+import { scanPiUsageFiles } from '../pi-usage/scanner'
+import { normalizePiUsagePersistedFiles } from '../pi-usage/persisted-file-normalization'
 import { normalizeOpenCodeUsagePersistedDatabases } from '../opencode-usage/persisted-database-normalization'
 import {
   readClaudeUsageSourceCache,
@@ -13,6 +15,7 @@ import {
 import type { CodexUsagePersistedFile } from '../codex-usage/types'
 import type { OpenCodeUsagePersistedDatabase } from '../opencode-usage/types'
 import type { MuseUsagePersistedFile } from '../muse-usage/types'
+import type { PiUsagePersistedFile } from '../pi-usage/types'
 import type {
   UsageScanWorkerProgress,
   UsageScanWorkerRequest,
@@ -137,6 +140,22 @@ async function runScan(
       return {
         operation: 'scan',
         providerId: 'muse',
+        sessions: result.sessions,
+        dailyAggregates: result.dailyAggregates
+      }
+    }
+    case 'pi': {
+      const result = await scanPiUsageFiles(
+        request.worktrees,
+        normalizePiUsagePersistedFiles(
+          await readUsageSourceCache<PiUsagePersistedFile>(request.sourceCache)
+        ),
+        onFilesScanned
+      )
+      await persistSourceCache(request.sourceCache, result.processedFiles)
+      return {
+        operation: 'scan',
+        providerId: 'pi',
         sessions: result.sessions,
         dailyAggregates: result.dailyAggregates
       }
