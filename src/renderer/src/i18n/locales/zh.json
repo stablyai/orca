@@ -19051,6 +19051,8 @@
         "showAgent": "在对话中显示 {{value0}}"
       },
       "railLabel": "您的留言",
+      "railExpand": "展开消息目录",
+      "railCollapse": "收起消息目录",
       "railImageMessage": "图片附件",
       "railEmptyMessage": "信息",
       "ask": {

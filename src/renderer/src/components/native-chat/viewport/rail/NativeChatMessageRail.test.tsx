@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useEffect, useRef, useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { NativeChatMessageRail } from './NativeChatMessageRail'
 import { useNativeChatMessageRail } from './use-native-chat-message-rail'
 
@@ -52,7 +53,7 @@ function Rail({
     }
   }, [activeIndex, onActivate])
   return (
-    <>
+    <TooltipProvider>
       <input aria-label="Composer" />
       <NativeChatMessageRail
         rail={rail}
@@ -61,7 +62,7 @@ function Rail({
         onSelect={vi.fn()}
         {...rest}
       />
-    </>
+    </TooltipProvider>
   )
 }
 
@@ -70,6 +71,24 @@ const preview = (): HTMLElement | null =>
   document.querySelector<HTMLElement>('[data-slot="hover-card-content"]')
 
 describe('message rail interaction', () => {
+  it('keeps the complete message list open after a jump and restores the toggle on Escape', async () => {
+    const user = userEvent.setup()
+    const select = vi.fn()
+    render(<Rail count={60} activeIndex={59} onSelect={select} />)
+    expect(screen.queryByRole('button', { name: 'Prompt 1' })).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Expand message list' }))
+    expect(document.activeElement).toBe(tick('Prompt 59'))
+    await user.click(tick('Prompt 1'))
+    expect(select).toHaveBeenCalledWith(expect.objectContaining({ id: 'prompt-1' }))
+    expect(screen.getByRole('button', { name: 'Collapse message list' })).toBeVisible()
+    expect(tick('Prompt 1')).toHaveTextContent('Prompt 1')
+
+    await user.keyboard('{Escape}')
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Expand message list' }))
+    expect(screen.queryByRole('button', { name: 'Prompt 1' })).toBeNull()
+  })
+
   it('is one tab stop on the current tick, walked by arrow keys, each previewing itself', async () => {
     const user = userEvent.setup()
     const select = vi.fn()
