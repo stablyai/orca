@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -118,5 +118,40 @@ describe('syncHostMcpServers', () => {
     // Removing works through the adopted ledger.
     await syncHostMcpServers({ claude: {}, codex: {}, syncer: 'cccc' }, deps())
     expect(JSON.parse(readFileSync(paths.claudeConfig, 'utf8')).mcpServers ?? {}).toEqual({})
+  })
+
+  it('project-scope servers land under the workspace project, never in user scope', async () => {
+    const project = '/vercel/sandbox/project'
+    const withProject = { ...deps(), projectPath: project }
+    const result = await syncHostMcpServers(
+      {
+        claude: { shared: { command: 'npx' } },
+        claudeProject: { local: { command: 'npx' } },
+        codex: {}
+      },
+      withProject
+    )
+    expect(result.claude).toEqual({ shared: 'added', local: 'added' })
+    const config = JSON.parse(readFileSync(paths.claudeConfig, 'utf8'))
+    expect(Object.keys(config.mcpServers)).toEqual(['shared'])
+    expect(Object.keys(config.projects[project].mcpServers)).toEqual(['local'])
+    // Removed on the desktop (project scope omitted while user scope is named): leaves the project too.
+    await syncHostMcpServers({ claude: { shared: { command: 'npx' } }, codex: {} }, withProject)
+    expect(
+      JSON.parse(readFileSync(paths.claudeConfig, 'utf8')).projects[project].mcpServers
+    ).toEqual({})
+  })
+
+  it('without a workspace project, project-scope servers are refused rather than widened to user scope', async () => {
+    const result = await syncHostMcpServers(
+      { claude: {}, claudeProject: { local: { command: 'npx' } } },
+      { ...deps(), projectPath: null }
+    )
+    expect(result.claude).toEqual({ local: 'config-unreadable' })
+    expect(
+      existsSync(paths.claudeConfig)
+        ? (JSON.parse(readFileSync(paths.claudeConfig, 'utf8')).mcpServers ?? {})
+        : {}
+    ).toEqual({})
   })
 })

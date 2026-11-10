@@ -100,7 +100,8 @@ describe('planMcpSync', () => {
       ['c']
     )
     expect(result.params).toEqual({
-      claude: { a: { command: 'uvx' } },
+      claude: {},
+      claudeProject: { a: { command: 'uvx' } },
       codex: { c: { command: 'npx' } }
     })
     expect(result.rows.map((row) => [row.key, row.source, row.skipReason])).toEqual([
