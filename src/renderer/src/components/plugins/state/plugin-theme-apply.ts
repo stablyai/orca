@@ -9,13 +9,13 @@ import {
   hasTerminalColorOverrides,
   TERMINAL_COLOR_OVERRIDES_SETTING
 } from '../../../../../shared/terminal-themes/terminal-color-overrides'
-import { withTerminalPluginPalettes } from '@/lib/terminal-plugin-palettes'
+import { withTerminalPluginPalettes } from '@/lib/terminal/themes/terminal-plugin-palettes'
 import { BUILTIN_TERMINAL_THEME_NAMES } from '@/lib/terminal-theme'
 import {
   disambiguatedPluginContentLabels,
   type PluginContentLabelItem
 } from '../presentation/plugin-name-disambiguation'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { PLUGIN_ACTION_TOAST_DURATION_MS } from './plugin-action-toast'
 import { usePluginIconThemeStore } from '@/store/plugins/appearance/plugin-icon-themes'
 import {

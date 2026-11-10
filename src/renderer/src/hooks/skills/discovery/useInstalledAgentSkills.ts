@@ -10,7 +10,7 @@ import type {
   SkillSourceKind
 } from '../../../../../shared/skills'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
-import { markOrchestrationSetupComplete } from '@/lib/orchestration-setup-state'
+import { markOrchestrationSetupComplete } from '@/components/orchestration/setup/orchestration-setup-state'
 import {
   discoverInstalledAgentSkills,
   getCachedSkillDiscovery,

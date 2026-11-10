@@ -15,7 +15,7 @@ import { projectMatchesRepo } from '../../../shared/project-repo-match'
 import { getIndexedRepoMap, getIndexedReposById } from '@/store/repos/repository-catalog-index'
 import { defaultScopeHost } from '../runtime/hosts/selection/default-creation-host'
 import { getLocalProjectRuntimeWorkspace } from '../runtime/hosts/wsl/local-project-runtime-workspace'
-import { getActiveWorkspaceOwnerTarget } from './resolved-worktree-execution-host'
+import { getActiveWorkspaceOwnerTarget } from './workspace/ownership/resolved-worktree-execution-host'
 import { getEnvironmentRuntimeContextKey } from '../runtime/hosts/observations/provider-runtime-context'
 import { getRendererAppPlatform } from '../app-shell/platform/renderer-app-platform'
 import {

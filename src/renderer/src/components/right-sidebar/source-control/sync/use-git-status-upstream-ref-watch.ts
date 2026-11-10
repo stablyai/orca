@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react'
-import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
+import { resolveWorktreeGitCopyNow } from '@/lib/workspace/ownership/worktree-git-copy'
 import { setRuntimeGitStatusUpstreamRefWatch } from '@/runtime/source-control/git/runtime-git-status-client'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { GitStatusResult } from '../../../../../../shared/git/status/git-status-types'

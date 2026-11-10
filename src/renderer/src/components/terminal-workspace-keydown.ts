@@ -1,9 +1,9 @@
 import { toast } from 'sonner'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
-import type { KeybindingActionId } from '../../../shared/keybindings'
-import { keybindingMatchesAction } from '../../../shared/keybindings'
+
+import { type KeybindingActionId, keybindingMatchesAction } from '../../../shared/keybindings'
 import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
-import { useAppStore } from '../store'
+import { useAppStore } from '../store/index'
 import {
   handleEmptyFloatingWorkspacePanelCloseShortcut,
   isEventTargetInsideFloatingWorkspacePanel,
@@ -14,7 +14,7 @@ import {
   createFloatingWorkspaceMarkdownTab,
   createFloatingWorkspaceTerminalTab
 } from '@/components/floating-terminal/floating-workspace-tab-creation'
-import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
+import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
 import {
   ensureClientCreationActionAllowed,
   showClientCreationActionError
