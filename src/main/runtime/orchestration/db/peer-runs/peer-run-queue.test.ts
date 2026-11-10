@@ -247,6 +247,17 @@ describe("a paired Orca's Run: its queue home", () => {
     expect(renamed.home_label).toBe('devA2')
   })
 
+  it('leaves an adopted Task that still waits on its dependencies waiting', () => {
+    const dependency = db.createTask({ spec: 'first', runId: peerRun.run_id })
+    const task = db.createTask({
+      spec: 'second',
+      runId: peerRun.run_id,
+      deps: [dependency.id]
+    })
+    expect(() => start({ adoptTaskId: task.id })).toThrow(/only a ready Task can start/)
+    expect(db.getTask(task.id)?.status).toBe('pending')
+  })
+
   it('admits no start into a Run its coordinator cancelled', () => {
     db.closePeerRun(peerRun.run_id)
     expect(() => start()).toThrow(/cancelled by devA/)

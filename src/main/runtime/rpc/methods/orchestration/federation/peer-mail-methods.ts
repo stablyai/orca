@@ -44,7 +44,7 @@ function pendingReplies(db: OrchestrationDb, peerFingerprint: string): Federatio
   const pending = db
     .listPeerConversationIds(peerFingerprint)
     .filter((id) => db.listPendingFederationRelay(id, 'to_home', 1).length > 0)
-  const share = Math.max(1, Math.ceil(PULL_PAGE_SIZE / pending.length))
+  const share = Math.max(1, Math.floor(PULL_PAGE_SIZE / pending.length))
   const pullRotation = pullRotations.get(db.db) ?? new Map<string, number>()
   pullRotations.set(db.db, pullRotation)
   const start = pending.length > PULL_PAGE_SIZE ? (pullRotation.get(peerFingerprint) ?? 0) : 0

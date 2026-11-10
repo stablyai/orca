@@ -286,7 +286,8 @@ function reopenSettledAdoptedTask(
   const settled = worker
     ? ['succeeded', 'failed', 'stopped', 'abandoned'].includes(worker.state)
     : !latest || ['completed', 'failed', 'circuit_broken'].includes(latest.status)
-  if (settled && task.status !== 'ready') {
+  // A pending Task still waits on its dependencies; the ordinary promotion readies it.
+  if (settled && task.status !== 'ready' && task.status !== 'pending') {
     transitionLifecycleWithDb(db.db, {
       entity: 'task',
       id: task.id,

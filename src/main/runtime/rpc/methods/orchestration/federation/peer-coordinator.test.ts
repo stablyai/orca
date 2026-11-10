@@ -223,6 +223,29 @@ describe('a paired Orca coordinating its Run on this server', () => {
     )
   })
 
+  it('cannot reach its former worker once that terminal coordinates local work', async () => {
+    await twoRuns()
+    db.createRun({
+      objective: 'later local',
+      coordinatorHandle: 'term_w',
+      coordinatorPaneKey: WORKER_PANE
+    })
+    expect(refused(await peerCall('orchestration.send', { to: 'term_w', subject: 'hi' }))).toBe(
+      'forbidden'
+    )
+  })
+
+  it("never answers one Run's cancel with another Run's receipt", async () => {
+    const other = generateId('peerconv')
+    await peerCall('orchestration.peerRunCancel', {}, { requestId: 'cancel:1.1' })
+    const second = await peerCall(
+      'orchestration.peerRunCancel',
+      {},
+      { requestId: 'cancel:1.1', conversation: other }
+    )
+    expect(second.ok && second.result).not.toMatchObject({ mutation: { replayed: true } })
+  })
+
   it('stays the only coordinator of its Run: a local terminal cannot bind it', async () => {
     await twoRuns()
     const response = await localCall('orchestration.runUse', { id: peerRunId(), from: 'term_l' })
@@ -324,6 +347,19 @@ describe('a paired Orca coordinating its Run on this server', () => {
     expect(items.items.filter((item) => item.conversationId === other)).toEqual([
       expect.objectContaining({ kind: 'worker_mail' })
     ])
+  })
+
+  it('fits every pending conversation in one page when they number fewer than its size', async () => {
+    const conversations = Array.from({ length: 30 }, () => generateId('peerconv'))
+    for (const conversation of conversations) {
+      await peerCall('orchestration.runCurrent', {}, { conversation })
+      const runId = db.getPeerRunForConversation(conversation)!.run_id
+      for (const subject of ['one', 'two']) {
+        db.insertMessage({ from: 'term_w', to: `run:${runId}`, subject, runId })
+      }
+    }
+    const page = await pull('pull')
+    expect(new Set(page.items.map((item) => item.conversationId)).size).toBe(30)
   })
 
   it('rotates the page when more conversations are pending than it holds, so none starves', async () => {

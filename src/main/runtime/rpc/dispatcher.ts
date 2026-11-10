@@ -279,7 +279,7 @@ export class RpcDispatcher {
       effectiveParams,
       invoke,
       callerFingerprint,
-      context.orchestrationCaller?.orcaSessionId ?? undefined
+      context.orchestrationCaller
     )
     if (request.method.startsWith('orchestration.')) {
       queueMicrotask(() => {
