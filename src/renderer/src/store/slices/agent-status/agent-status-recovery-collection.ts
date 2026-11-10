@@ -1,7 +1,6 @@
 import { displayOnlyPaneSleepFromEntry } from '../../../../../shared/agent-session/lifecycle/pane-sleep-agent-status'
 import type { AppState } from '../../types'
 import { sleepingAgentRecordIndex } from '../../terminals/sleeping-agent-record-index'
-import '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getAgentResumeArgv } from '../../../../../shared/agent-launch/startup/agent-resume-argv'
 import {
   isResumablePaneRecord,

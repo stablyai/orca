@@ -1,11 +1,11 @@
 import {
   isResumablePaneRecord,
-  type OwnedPaneAgentRecord
+  type OwnedPaneAgentRecord,
+  type SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
 import { getFirstTerminalTabOwnerWorktreeId } from '@/store/terminals/terminal-tab-owner-index'
 import type { useAppStore } from '@/store/index'
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentTurnEndedUncleanly } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type {
   TerminalLayoutSnapshot,
