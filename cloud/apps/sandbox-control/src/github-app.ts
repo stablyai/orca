@@ -17,7 +17,11 @@ export type GitHubAppMinter = {
    * Null when the repo is not on github.com, the app is not installed on it, or the installation is
    * not bound to `accountId`. Deny by default.
    */
-  tokenForRepo(repoUrl: string, accountId: string): Promise<GitHubRepoToken | null>
+  /**
+   * Repo token (contents + pull requests). `issues: true` also asks for issues:write (routine comments on
+   * plain issues); an installation that has not accepted that permission yet gets the standard token.
+   */
+  tokenForRepo(repoUrl: string, accountId: string, options?: { issues?: boolean }): Promise<GitHubRepoToken | null>
   /** App-level installation lookup (operator binding). Null when absent. */
   getInstallation(installationId: number): Promise<GitHubInstallation | null>
   /** The installation covering a github.com repo URL, or null. */
@@ -133,12 +137,13 @@ export function createGitHubAppMinter(config: {
       return parsed ? installationFor(`/repos/${parsed.owner}/${parsed.repo}/installation`) : null
     },
 
-    async tokenForRepo(repoUrl, accountId) {
+    async tokenForRepo(repoUrl, accountId, options = {}) {
       const parsed = parseGitHubRepo(repoUrl)
       if (!parsed) {
         return null
       }
-      const key = `${parsed.owner}/${parsed.repo}`.toLowerCase()
+      // Separate cache entries: an issues token is never handed to the VM's git/gh path.
+      const key = `${parsed.owner}/${parsed.repo}${options.issues ? '#issues' : ''}`.toLowerCase()
       const cached = cache.get(key)
       if (cached && cached.expiresAt - now() > REFRESH_MARGIN_MS) {
         // The binding is re-checked on every use: a revoked binding stops a cached token too.
@@ -154,8 +159,13 @@ export function createGitHubAppMinter(config: {
       }
       const minted = await github('POST', `/app/installations/${installation.id}/access_tokens`, {
         repositories: [parsed.repo],
-        permissions: REPO_PERMISSIONS
+        permissions: options.issues ? { ...REPO_PERMISSIONS, issues: 'write' } : REPO_PERMISSIONS
       })
+      if (!minted.ok && options.issues && minted.status === 422) {
+        // The installation has not accepted issues:write: PR comments still work with the standard token.
+        log({ event: 'github_issues_permission_missing', installationId: installation.id })
+        return this.tokenForRepo(repoUrl, accountId)
+      }
       if (!minted.ok) {
         throw new Error(`github token mint failed (${minted.status})`)
       }

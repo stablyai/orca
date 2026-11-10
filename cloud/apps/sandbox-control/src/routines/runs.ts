@@ -394,7 +394,8 @@ async function githubRequest(deps: RoutineDeps, routine: RoutineRecord, method: 
     throw new GitHubPostError('github_not_configured')
   }
   // The App installation token for this one repo, only while the account's binding is live.
-  const minted = await deps.life.github.tokenForRepo(routine.repo_url, routine.account_id)
+  // Comments on plain issues need issues:write; the mint falls back to the standard token without it.
+  const minted = await deps.life.github.tokenForRepo(routine.repo_url, routine.account_id, { issues: true })
   if (!minted) {
     throw new GitHubPostError('github_not_connected')
   }

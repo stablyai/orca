@@ -153,6 +153,38 @@ describe('GitHub App installation tokens', () => {
     expect(await minter.tokenForRepo('https://x:y@github.com/alice-gh/private-repo', 'user:alice')).toBeNull()
   })
 
+  it('asks for issues:write only for routine comments, cached apart, and falls back when the installation lacks it', async () => {
+    const now = Date.parse('2026-11-09T00:00:00Z')
+    const github = fakeGitHub({ now: () => now })
+    let issuesAccepted = false
+    const fetchWithIssues = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const body = init?.body ? JSON.parse(String(init.body)) : undefined
+      if (String(input).endsWith('/access_tokens') && body?.permissions?.issues && !issuesAccepted) {
+        return Response.json({ message: 'The permissions requested are not granted to this installation.' }, { status: 422 })
+      }
+      return github.fetch(input, init)
+    }) satisfies typeof fetch
+    const minter = createGitHubAppMinter({
+      appId: '123',
+      privateKeyPkcs8: await appKey(),
+      now: () => now,
+      fetch: fetchWithIssues,
+      isBound: async () => true,
+      log: () => undefined
+    })
+    // Not accepted yet: the standard token comes back (PR comments still work).
+    expect(await minter.tokenForRepo(REPO, 'user:alice', { issues: true })).not.toBeNull()
+    issuesAccepted = true
+    const issues = await minter.tokenForRepo('https://github.com/alice-gh/other-repo', 'user:alice', { issues: true })
+    expect(issues).toBeNull() // other-repo is not installed in the fake
+    const plain = await minter.tokenForRepo(REPO, 'user:alice')
+    const withIssues = await minter.tokenForRepo(REPO, 'user:alice', { issues: true })
+    expect(withIssues).not.toBeNull()
+    expect(withIssues!.token).not.toBe(plain!.token)
+    const mints = github.calls.filter((c) => c.path.endsWith('/access_tokens')).map((c) => (c.body as { permissions: Record<string, string> }).permissions)
+    expect(mints.at(-1)).toEqual({ contents: 'write', pull_requests: 'write', metadata: 'read', issues: 'write' })
+  })
+
   it('refuses a minted token that covers more than the one repository', async () => {
     const minter = createGitHubAppMinter({
       appId: '123',
