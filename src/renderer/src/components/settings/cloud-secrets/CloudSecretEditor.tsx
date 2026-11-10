@@ -1,12 +1,11 @@
 import { useId, useState } from 'react'
-import { cloudSecretStoredOnVm } from '../../../../../shared/cloud-secrets/cloud-secret-rules'
-import { cloudSecretVmWarning } from './CloudSecretVmBadge'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   cloudSecretNameError,
-  cloudSecretValueError
+  cloudSecretValueError,
+  cloudSecretStoredOnVm
 } from '../../../../../shared/cloud-secrets/cloud-secret-rules'
 import type { CloudSecretsErrorCode } from '../../../../../shared/cloud-secrets/cloud-secrets-wire'
 import { Button } from '../../ui/button'
@@ -14,6 +13,7 @@ import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
 import { cloudSecretsErrorCopy } from './cloud-secrets-copy'
 import { SecretValueInput } from './SecretValueInput'
+import { cloudSecretVmWarning } from './CloudSecretVmBadge'
 
 const NAME_EXAMPLE = 'DATABASE_URL'
 
