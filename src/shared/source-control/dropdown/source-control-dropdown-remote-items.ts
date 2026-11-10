@@ -1,9 +1,10 @@
 import type { DropdownItem } from './source-control-dropdown-item-types'
 import type { DropdownActionContext } from './source-control-dropdown-action-context'
 import {
-  formatCountLabel,
+  formatAheadStatus,
+  formatBehindStatus,
   formatRebaseBaseRef,
-  formatSyncLabel
+  formatSyncStatus
 } from './source-control-dropdown-labels'
 import {
   ENGLISH_REMOTE_DROPDOWN_COPY,
@@ -45,10 +46,40 @@ export function buildRemoteDropdownItems(
     shouldForcePushWithLease,
     pushLabelCount
   } = ctx
+  const remoteBlockedStatus = publishBlockedByDetachedHead
+    ? copy.statusNoBranch
+    : !upstreamLoading && !hasUpstream
+      ? copy.statusNotPublished
+      : undefined
+  // Pull-side counts can be stale until a fetch, and these actions fetch first, so they stay clickable.
+  const incomingStatus = (incoming: string | undefined): Partial<DropdownItem> => {
+    if (remoteBlockedStatus || upstreamLoading) {
+      return { status: remoteBlockedStatus }
+    }
+    return incoming
+      ? { status: incoming, statusTone: 'active' }
+      : { status: copy.statusUpToDate, idle: true }
+  }
+  const pushIsLocalNoOp =
+    hasUpstream &&
+    !upstreamLoading &&
+    !shouldForcePushWithLease &&
+    !canPushUntrackedHostedReview &&
+    ahead === 0
+  const forcePushIsLocalNoOp = hasUpstream && !upstreamLoading && pushLabelCount === 0
 
   const push: DropdownItem = {
     kind: 'push',
-    label: formatCountLabel(copy.push, ahead),
+    label: copy.push,
+    ...(publishBlockedByDetachedHead
+      ? { status: copy.statusNoBranch }
+      : pushBlockedByOpenHostedReviewTarget || upstreamLoading || canPushUntrackedHostedReview
+        ? {}
+        : !hasUpstream
+          ? { status: copy.statusSetsUpstream }
+          : ahead > 0
+            ? { status: formatAheadStatus(ahead), statusTone: 'active' as const }
+            : { status: copy.statusUpToDate }),
     title: publishBlockedByDetachedHead
       ? copy.checkOutBranchToPush
       : pushBlockedByOpenHostedReviewTarget
@@ -69,12 +100,25 @@ export function buildRemoteDropdownItems(
                       : copy.nothingToPush
                     : copy.pushCount(ahead),
     // Push can set upstream and coexist with force-with-lease; detached HEAD and unknown review targets still block it.
-    disabled: globalBusy || publishBlockedByDetachedHead || pushBlockedByOpenHostedReviewTarget
+    disabled:
+      globalBusy ||
+      publishBlockedByDetachedHead ||
+      pushBlockedByOpenHostedReviewTarget ||
+      pushIsLocalNoOp
   }
 
   const forcePush: DropdownItem = {
     kind: 'force_push',
-    label: formatCountLabel(copy.forcePush, pushLabelCount),
+    label: copy.forcePush,
+    ...(publishBlockedByDetachedHead
+      ? { status: copy.statusNoBranch }
+      : pushBlockedByOpenHostedReviewTarget || upstreamLoading || !hasUpstream
+        ? {}
+        : pushLabelCount === 0
+          ? { status: copy.statusUpToDate }
+          : behind > 0 && !shouldForcePushWithLease
+            ? { status: copy.statusReplaces(behind), statusTone: 'warning' as const }
+            : { status: formatAheadStatus(pushLabelCount), statusTone: 'active' as const }),
     title: publishBlockedByDetachedHead
       ? copy.checkOutBranchToForcePush
       : pushBlockedByOpenHostedReviewTarget
@@ -91,12 +135,19 @@ export function buildRemoteDropdownItems(
                 ? copy.forcePushWithLease(branchCommitsAhead, upstreamStatus?.upstreamName)
                 : copy.manualForcePush(pushLabelCount, behind, upstreamStatus?.upstreamName),
     // Match Push target safety; force-with-lease must not push the wrong review head.
-    disabled: globalBusy || publishBlockedByDetachedHead || pushBlockedByOpenHostedReviewTarget
+    disabled:
+      globalBusy ||
+      publishBlockedByDetachedHead ||
+      pushBlockedByOpenHostedReviewTarget ||
+      forcePushIsLocalNoOp
   }
 
   const pull: DropdownItem = {
     kind: 'pull',
-    label: formatCountLabel(copy.pull, behind),
+    label: copy.pull,
+    ...incomingStatus(
+      behind > 0 && !shouldForcePushWithLease ? formatBehindStatus(behind) : undefined
+    ),
     title: upstreamLoading
       ? copy.checkingBranchStatus
       : publishBlockedByPRLoading
@@ -117,7 +168,16 @@ export function buildRemoteDropdownItems(
 
   const fastForward: DropdownItem = {
     kind: 'fast_forward',
-    label: formatCountLabel(copy.fastForward, behind),
+    label: copy.fastForward,
+    ...(behind > 0 &&
+    ahead > 0 &&
+    !shouldForcePushWithLease &&
+    !remoteBlockedStatus &&
+    !upstreamLoading
+      ? { status: copy.statusMayFail, statusTone: 'warning' as const }
+      : incomingStatus(
+          behind > 0 && !shouldForcePushWithLease ? formatBehindStatus(behind) : undefined
+        )),
     title: upstreamLoading
       ? copy.checkingBranchStatus
       : publishBlockedByPRLoading
@@ -140,7 +200,10 @@ export function buildRemoteDropdownItems(
 
   const sync: DropdownItem = {
     kind: 'sync',
-    label: formatSyncLabel(copy.sync, ahead, behind),
+    label: copy.sync,
+    ...(shouldForcePushWithLease
+      ? {}
+      : incomingStatus(ahead > 0 || behind > 0 ? formatSyncStatus(ahead, behind) : undefined)),
     title: upstreamLoading
       ? copy.checkingBranchStatus
       : publishBlockedByPRLoading
@@ -178,6 +241,10 @@ export function buildRemoteDropdownItems(
       }
       return copy.rebaseWithLatestFrom(rebaseBaseLabel)
     })(),
+    status:
+      rebaseBaseLabel && hasRemoteBaseRef && hasDirtyLocalChanges
+        ? copy.statusStashFirst
+        : undefined,
     disabled: globalBusy || !rebaseBaseRef || !hasRemoteBaseRef
   }
 
@@ -198,6 +265,8 @@ export function buildRemoteDropdownItems(
           : publishBlockedByDetachedHead
             ? copy.publishNoBranch
             : copy.publishBranch,
+    // Detached HEAD already reads "No Branch" in the label.
+    status: hasUpstream && !upstreamLoading ? copy.statusPublished : undefined,
     title: upstreamLoading
       ? copy.checkingBranchStatus
       : publishBlockedByPRLoading

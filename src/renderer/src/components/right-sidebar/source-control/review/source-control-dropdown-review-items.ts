@@ -101,6 +101,36 @@ export function buildHostedReviewDropdownItems(
     }
   })()
 
+  const createBlockedStatus = ((): string | undefined => {
+    switch (hostedReviewCreation?.blockedReason) {
+      case 'dirty':
+        return t(
+          'auto.components.right.sidebar.source.control.dropdown.items.statusCommitFirst',
+          'Commit first'
+        )
+      case 'detached_head':
+        return t(
+          'auto.components.right.sidebar.source.control.dropdown.items.statusNoBranch',
+          'No branch'
+        )
+      case 'existing_review':
+        return t(
+          'auto.components.right.sidebar.source.control.dropdown.items.statusReviewOpen',
+          '{{shortLabel}} open',
+          {
+            shortLabel: createReviewCopy.shortLabel
+          }
+        )
+      case 'no_upstream':
+        return t(
+          'auto.components.right.sidebar.source.control.dropdown.items.statusNotPublished',
+          'Not published'
+        )
+      default:
+        return undefined
+    }
+  })()
+
   const createPR: DropdownItem = {
     kind: 'create_pr',
     label: t(
@@ -116,6 +146,7 @@ export function buildHostedReviewDropdownItems(
         )
       : createBlockedHint,
     hint: hostedReviewCreation?.canCreate ? undefined : createBlockedHint,
+    status: hostedReviewCreation?.canCreate ? undefined : createBlockedStatus,
     disabled:
       globalBusy ||
       !supportsHostedReviewCreation(hostedReviewCreation?.provider) ||
@@ -160,6 +191,7 @@ export function buildHostedReviewDropdownItems(
           )
       : createBlockedHint,
     hint: canPushAndCreate ? undefined : createBlockedHint,
+    status: canPushAndCreate ? undefined : createBlockedStatus,
     disabled: !canPushAndCreate
   }
 
