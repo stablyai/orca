@@ -62,6 +62,22 @@ describe('openSessionSearchDatabase', () => {
     second.close()
   })
 
+  it('keeps a version 8 index that predates sidecar stats and adds the columns', async () => {
+    const path = await tempDatabasePath()
+    const first = openSessionSearchDatabase(path)
+    first.exec('ALTER TABLE files DROP COLUMN sidecar_size_bytes')
+    first.exec('ALTER TABLE files DROP COLUMN sidecar_mtime_ms')
+    first.prepare("INSERT INTO files(path,byte_offset,mtime_ms) VALUES ('a',1,1)").run()
+    first.close()
+
+    // A null stat reads back as "never persisted", so the next scan rereads that session once.
+    const second = openSessionSearchDatabase(path)
+    expect(
+      second.prepare('SELECT path, sidecar_mtime_ms, sidecar_size_bytes FROM files').all()
+    ).toEqual([{ path: 'a', sidecar_mtime_ms: null, sidecar_size_bytes: null }])
+    second.close()
+  })
+
   it('adds the prefix hash column once when another opener migrates under its lock', async () => {
     const path = await tempDatabasePath()
     const setup = openSessionSearchDatabase(path)
