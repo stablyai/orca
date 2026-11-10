@@ -36,13 +36,16 @@ export const ORCHESTRATION_WORKER_LIST_METHOD = defineOrchestrationMethod({
   access: { kind: 'reads', targets: { run: 'run' }, collection: true },
   permission: 'workspace',
   params: WorkerListParams,
-  handler: async (params, { runtime }) =>
-    withRemoteWorkerRows(
-      runtime,
-      params,
-      await listLocalWorkerPage(runtime, params),
-      ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS
-    )
+  handler: async (params, { runtime }) => {
+    const page = await listLocalWorkerPage(runtime, params)
+    const paged =
+      params.paginate === true || params.limit !== undefined || params.cursor !== undefined
+    // Remote rows share the page's limit, and an unpaged list's cap for older clients.
+    const remoteRows = paged
+      ? (params.limit ?? ORCHESTRATION_FLEET_PAGE_MAX)
+      : ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS - page.workers.length
+    return withRemoteWorkerRows(runtime, params, page, remoteRows)
+  }
 })
 
 async function listLocalWorkerPage(

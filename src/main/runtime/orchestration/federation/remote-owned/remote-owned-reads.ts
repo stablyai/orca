@@ -1,26 +1,39 @@
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { exposeUtcTimestamp } from '../../db/utc-timestamp'
 import {
+  countRemoteDispatches,
   listRemoteDispatches,
   type RemoteDispatchRow
 } from '../../db/remote-owned/remote-dispatch-records'
+import { getRemoteRunLink } from '../../db/remote-owned/remote-run-links'
 
 type ReadsRuntime = Pick<
   OrcaRuntimeService,
   'getOrchestrationDb' | 'resolveOrchestrationWorkerServer'
 >
 
-/** A remote worker's server as this Orca names it, and when that server last told it about the worker. */
-export type RemoteWorkerServer = { environmentId: string; name: string; lastSeenAt: string }
+/**
+ * A remote worker's server as this Orca names it. `asOf` is when this Orca last recorded the
+ * server's state or report for the worker; `repaired` means the pairing was re-made since, so the
+ * server no longer reports this worker here.
+ */
+export type RemoteWorkerServer = {
+  environmentId: string
+  name: string
+  asOf: string
+  repaired?: true
+}
 
 function remoteWorkerServer(
   record: RemoteDispatchRow,
+  linkState: string | null | undefined,
   name: (environmentId: string) => string
 ): RemoteWorkerServer {
   return {
     environmentId: record.environment_id,
     name: name(record.environment_id),
-    lastSeenAt: exposeUtcTimestamp(record.updated_at) ?? record.updated_at
+    asOf: exposeUtcTimestamp(record.updated_at) ?? record.updated_at,
+    ...(linkState === 'closed' ? { repaired: true as const } : {})
   }
 }
 
@@ -35,11 +48,15 @@ export function remoteServerName(runtime: ReadsRuntime, environmentId: string): 
 
 /**
  * worker-show for a remote worker whose server could not be reached: this Orca's record in the
- * ordinary show shape, labelled with the server and when it last heard. Metadata only; the
- * worker's output stays on its server.
+ * ordinary show shape, labelled with the server and the time of its last report. Metadata only;
+ * the worker's output stays on its server.
  */
 export function offlineRemoteWorkerShow(runtime: ReadsRuntime, record: RemoteDispatchRow) {
-  const server = remoteWorkerServer(record, (id) => remoteServerName(runtime, id))
+  const link = getRemoteRunLink(runtime.getOrchestrationDb(), record.conversation_id)
+  const server = remoteWorkerServer(record, link?.state, (id) => remoteServerName(runtime, id))
+  const why = server.repaired
+    ? `The pairing with ${server.name} was re-made, so it no longer reports this worker here`
+    : `${server.name} could not be reached`
   const owedStop = record.stop_owed
     ? ` A stop is owed; this Orca sends it when ${server.name} answers.`
     : ''
@@ -60,7 +77,7 @@ export function offlineRemoteWorkerShow(runtime: ReadsRuntime, record: RemoteDis
       agentTerminalHandle: null,
       worktreeId: null,
       lastError: record.last_failure,
-      updatedAt: server.lastSeenAt
+      updatedAt: server.asOf
     },
     projection: null,
     terminal: null,
@@ -68,7 +85,7 @@ export function offlineRemoteWorkerShow(runtime: ReadsRuntime, record: RemoteDis
     observation: {
       status: 'unverifiable' as const,
       exactWorker: false,
-      reason: `${server.name} could not be reached, so this is this Orca's record of the worker as ${server.name} last reported it at ${server.lastSeenAt}. Its output is kept only on ${server.name}.${owedStop}`
+      reason: `${why}, so this is this Orca's record of the worker as ${server.name} last reported it, at ${server.asOf}. Its output is kept only on ${server.name}.${owedStop}`
     },
     server: { ...server, reachable: false as const },
     lastReport: record.last_report,
@@ -78,7 +95,10 @@ export function offlineRemoteWorkerShow(runtime: ReadsRuntime, record: RemoteDis
 
 export type RemoteWorkerListRow = ReturnType<typeof remoteWorkerListRow>
 
-function remoteWorkerListRow(record: RemoteDispatchRow, name: (environmentId: string) => string) {
+function remoteWorkerListRow(
+  record: ReturnType<typeof listRemoteDispatches>[number],
+  name: (environmentId: string) => string
+) {
   return {
     dispatchId: record.dispatch_id,
     taskId: record.task_id,
@@ -88,38 +108,21 @@ function remoteWorkerListRow(record: RemoteDispatchRow, name: (environmentId: st
     agentTerminalHandle: null,
     terminalState: null,
     resource: null,
-    server: remoteWorkerServer(record, name)
+    server: remoteWorkerServer(record, record.link_state, name)
   }
 }
 
-/**
- * The workers paired servers run for the listed Runs, as each server last reported them; no server
- * is asked. Newest first, at most `limit`, and `more` when the records hold others.
- */
-function remoteWorkerListRows(
-  runtime: ReadsRuntime,
-  scope: { runId?: string; limit: number }
-): { rows: RemoteWorkerListRow[]; more: boolean } {
-  const records = listRemoteDispatches(runtime.getOrchestrationDb(), {
-    runId: scope.runId,
-    limit: scope.limit + 1
-  })
-  const names = new Map<string, string>()
-  const name = (id: string): string => {
-    const known = names.get(id) ?? remoteServerName(runtime, id)
-    names.set(id, known)
-    return known
-  }
-  return {
-    rows: records.slice(0, scope.limit).map((record) => remoteWorkerListRow(record, name)),
-    more: records.length > scope.limit
-  }
+type WorkerListPage = {
+  workers: readonly unknown[]
+  page: { total: number }
+  warnings?: string[]
 }
 
 /**
- * Workers paired servers run for this Orca's Runs join the first page, as each server last reported
- * them. Later pages follow this Orca's own cursor, and a terminal-state filter leaves them out, since
- * only their server knows their terminals.
+ * Workers paired servers run for the listed Runs join the first page after this Orca's own, newest
+ * first and as each server last reported them; no server is asked. `total` counts every one of
+ * them. Later pages follow this Orca's own cursor, and a terminal-state filter leaves them out,
+ * since only their server knows their terminals.
  */
 export function withRemoteWorkerRows<Page extends WorkerListPage>(
   runtime: ReadsRuntime,
@@ -130,29 +133,31 @@ export function withRemoteWorkerRows<Page extends WorkerListPage>(
   if (params.cursor || params.terminalState) {
     return page
   }
-  const remote = remoteWorkerListRows(runtime, {
-    runId: params.run,
-    limit: maxRows
-  })
-  if (remote.rows.length === 0) {
+  const db = runtime.getOrchestrationDb()
+  const total = countRemoteDispatches(db, params.run)
+  if (total === 0) {
     return page
   }
-  const warnings = remote.more
-    ? [
-        ...(page.warnings ?? []),
-        `Showing the newest ${remote.rows.length} workers on paired servers; scope the list with --run to see the others.`
-      ]
-    : page.warnings
+  const names = new Map<string, string>()
+  const name = (id: string): string => {
+    const known = names.get(id) ?? remoteServerName(runtime, id)
+    names.set(id, known)
+    return known
+  }
+  const rows = listRemoteDispatches(db, { runId: params.run, limit: Math.max(0, maxRows) }).map(
+    (record) => remoteWorkerListRow(record, name)
+  )
+  const warnings =
+    rows.length < total
+      ? [
+          ...(page.warnings ?? []),
+          `Showing the newest ${rows.length} of ${total} workers on paired servers.`
+        ]
+      : page.warnings
   return {
     ...page,
-    workers: [...page.workers, ...remote.rows],
-    page: { ...page.page, total: page.page.total + remote.rows.length },
+    workers: [...page.workers, ...rows],
+    page: { ...page.page, total: page.page.total + total },
     ...(warnings ? { warnings } : {})
   }
-}
-
-type WorkerListPage = {
-  workers: readonly unknown[]
-  page: { total: number }
-  warnings?: string[]
 }
