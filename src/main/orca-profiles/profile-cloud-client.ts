@@ -257,10 +257,8 @@ export async function createOrcaCloudProfile(
   return normalizeSessionResponse(
     await postJson(
       config.profileEndpoint,
-      {
-        orgId: args.orgId,
-        name: args.name
-      },
+      // The refresh token proves the long-lived sign-in, not just a short-lived access token.
+      { orgId: args.orgId, name: args.name, refreshToken: session.refreshToken },
       { accessToken: session.accessToken }
     )
   )
