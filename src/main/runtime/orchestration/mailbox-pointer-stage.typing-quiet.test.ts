@@ -1,16 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
-import { stageOrchestrationMailboxPointer } from './mailbox-pointer-stage'
-import type { OrchestrationMailboxLeaf } from './mailbox-owner'
-import type { OrchestrationMailboxPointerMessage } from './mailbox-pointer-delivery-contract'
+import type { OrchestrationMailboxPointerMessage } from './mailbox/terminal-pointer/mailbox-pointer-delivery-contract'
+import { stageOrchestrationMailboxPointer } from './mailbox/terminal-pointer/mailbox-pointer-stage'
+import type { OrchestrationMailboxTerminal } from './mailbox/routing/mailbox-owner'
 
-const leaf: OrchestrationMailboxLeaf = {
-  tabId: 'tab-1',
-  leafId: 'pane:1',
+const terminal: OrchestrationMailboxTerminal = {
   ptyId: 'pty-1',
-  writable: true,
+  handle: 'term-1',
+  paneKeys: ['tab-1:pane:1'],
   lastAgentStatus: 'idle',
-  lastAgentStatusObservedLive: true,
-  lastOscTitle: null
+  lastAgentStatusObservedLive: true
 }
 
 describe('mailbox pointer stage write failures (#11279)', () => {
@@ -27,8 +25,7 @@ describe('mailbox pointer stage write failures (#11279)', () => {
     stageOrchestrationMailboxPointer({
       deps: {
         resolveSubmitTarget: () => ({
-          leaf,
-          terminalHandle: 'term-1',
+          terminal,
           processIncarnation: 'inc-1'
         }),
         getDb: () => ({
@@ -48,12 +45,11 @@ describe('mailbox pointer stage write failures (#11279)', () => {
         setWatermark: vi.fn(),
         deactivateWatermark: vi.fn()
       } as never,
-      leaf,
+      terminal,
       mailboxHandle: 'run:run_1',
       messages: [message],
       newestSequence: 1,
       enterDelayMs: 500,
-      leafKey: 'tab-1:pane:1',
       settle,
       redrive: vi.fn()
     })
