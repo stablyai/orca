@@ -19,7 +19,11 @@ import {
   type HostedEnvironmentReady
 } from './hosted-environment-provider'
 import { createHostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
-import { createHostedSandboxDriver, HOSTED_SANDBOX_DRIVER_ID } from './hosted-sandbox-driver'
+import {
+  createHostedSandboxDriver,
+  HOSTED_SANDBOX_DELETE_NOT_CONFIRMED,
+  HOSTED_SANDBOX_DRIVER_ID
+} from './hosted-sandbox-driver'
 import type { HostedSandboxConfig } from './hosted-sandbox-config'
 
 import { ORCA_CLOUD_RECIPE_ID } from '../../shared/hosted-sandbox/orca-cloud-recipe-id'
@@ -104,6 +108,13 @@ function failed(error: unknown): RecipeStepProviderResult {
       ...base,
       stderr: `Orca Cloud: ${error.reason}\n`,
       failure: ephemeralVmFailure('cloudGithubNotConnected')
+    }
+  }
+  if (isEnvironmentProviderError(error) && error.reason === HOSTED_SANDBOX_DELETE_NOT_CONFIRMED) {
+    return {
+      ...base,
+      stderr: `Orca Cloud: ${error.message}\n`,
+      failure: ephemeralVmFailure('cloudDeleteNotConfirmed')
     }
   }
   if (isEnvironmentProviderError(error, 'unauthorized')) {

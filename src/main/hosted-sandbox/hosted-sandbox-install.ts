@@ -2,7 +2,10 @@ import { cloudDevSigningAllowed, withCloudBuildDefaults } from '../cloud-build-d
 // Wires Orca Cloud into the desktop when this build has a control plane configured (off by default).
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
-import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
+import {
+  getOrcaCloudAuthConfig,
+  isOrcaCloudDevAuthEnabled
+} from '../orca-profiles/profile-cloud-auth-config'
 import { readFreshOrcaCloudSession } from '../orca-profiles/profile-cloud-session-refresh'
 import type { OrcaCloudAvailability, OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
 import { getApprovedPluginVmRecipes } from '../plugins/plugin-approved-vm-recipes'
@@ -199,17 +202,21 @@ export async function getOrcaCloudAvailability(): Promise<OrcaCloudAvailability>
   if (!installed) {
     return 'unavailable'
   }
-  if (cloudDevSigningAllowed(app.isPackaged) && process.env.ORCA_CLOUD_SANDBOX_DEV_KEY_FILE) {
-    return 'offered'
-  }
+  const devSigning =
+    cloudDevSigningAllowed(app.isPackaged) && Boolean(process.env.ORCA_CLOUD_SANDBOX_DEV_KEY_FILE)
   const auth = getOrcaCloudAuthConfig(process.env, app.isPackaged)
-  if (!auth.configured) {
+  const canSignIn = auth.configured || isOrcaCloudDevAuthEnabled(process.env, app.isPackaged)
+  if (!devSigning && !auth.configured) {
     return 'unavailable'
   }
   const userDataPath = app.getPath('userData')
   const active = ensureActiveOrcaProfile(userDataPath)
+  // The dev key signs as the signed-in user, so it skips the capability check but not sign-in.
   if (!active.profile.cloud) {
-    return 'needs-sign-in'
+    return canSignIn ? 'needs-sign-in' : 'unavailable'
+  }
+  if (devSigning || !auth.configured) {
+    return devSigning ? 'offered' : 'unavailable'
   }
   const session = await readFreshOrcaCloudSession(auth.config, active, userDataPath).catch(
     () => null

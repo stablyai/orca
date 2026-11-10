@@ -33,6 +33,7 @@ import {
   getProfileUserDataPath
 } from './profile-storage-paths'
 import { copyLegacyStateToProfile } from './profile-legacy-state-import'
+import { bumpOrcaProfileIndexGeneration } from './profile-index-generation'
 import { profileStateJsonExportPaths } from '../persistence/profile-state/legacy-json/profile-state-export-path'
 import { hasProfileStateAuthorityMarker } from '../persistence/profile-state/profile-state-authority-marker'
 import { profileStateDatabaseBackups } from '../persistence/profile-state/profile-state-backup-path'
@@ -144,6 +145,7 @@ export function writeProfileIndex(indexPath: string, index: OrcaProfileIndex): v
   writeFileSync(tmpPath, JSON.stringify(index, null, 2), 'utf-8')
   fsyncFileSync(tmpPath)
   renameSync(tmpPath, indexPath)
+  bumpOrcaProfileIndexGeneration()
   bestEffortFsyncDirectorySync(dirname(indexPath))
 }
 

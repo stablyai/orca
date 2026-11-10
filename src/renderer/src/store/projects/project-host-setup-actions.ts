@@ -27,6 +27,7 @@ import {
   upsertProjectHostSetup
 } from './project-host-routing'
 import { toastProjectAddFailure } from './project-add-failure-toast'
+import { upsertHostSetupProject } from './host-setup-project-merge'
 
 export function createProjectHostSetupActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -70,7 +71,8 @@ export function createProjectHostSetupActions(
           kind: 'projectHostSetup',
           row: result.setup
         })
-        const project = normalizeProjectRow(result.project)
+        const fetchedProject = normalizeProjectRow(result.project)
+        let project = fetchedProject
         set((s) => {
           const nextRepos = s.repos.some((entry) =>
             repoMatchesHostIdentity(entry, repo.id, repoHostId)
@@ -79,9 +81,12 @@ export function createProjectHostSetupActions(
                 repoMatchesHostIdentity(entry, repo.id, repoHostId) ? repo : entry
               )
             : [...s.repos, repo]
-          const nextProjects = s.projects.some((entry) => entry.id === project.id)
-            ? s.projects.map((entry) => (entry.id === project.id ? project : entry))
-            : [...s.projects, project]
+          const nextProjects = upsertHostSetupProject(
+            s.projects,
+            fetchedProject,
+            target.kind !== 'local'
+          )
+          project = nextProjects.find((entry) => entry.id === fetchedProject.id) ?? fetchedProject
           const nextSetups = upsertProjectHostSetup(s.projectHostSetups, setup)
           return {
             repos: nextRepos,
@@ -90,7 +95,7 @@ export function createProjectHostSetupActions(
           }
         })
         toast.success(translate('auto.store.slices.repos.8bb3ad7935', 'Project added'), {
-          description: repo.displayName
+          description: project.displayName
         })
         return { ...result, project, repo, setup }
       } catch (err) {
@@ -121,9 +126,7 @@ export function createProjectHostSetupActions(
         })
         const project = normalizeProjectRow(result.project)
         set((s) => ({
-          projects: s.projects.some((entry) => entry.id === project.id)
-            ? s.projects.map((entry) => (entry.id === project.id ? project : entry))
-            : [...s.projects, project],
+          projects: upsertHostSetupProject(s.projects, project, target.kind !== 'local'),
           projectHostSetups: upsertProjectHostSetup(s.projectHostSetups, setup)
         }))
         return { project, setup }
@@ -172,9 +175,7 @@ export function createProjectHostSetupActions(
                 )
               : [...s.repos, repo]
             : s.repos,
-          projects: s.projects.some((entry) => entry.id === project.id)
-            ? s.projects.map((entry) => (entry.id === project.id ? project : entry))
-            : [...s.projects, project],
+          projects: upsertHostSetupProject(s.projects, project, target.kind !== 'local'),
           projectHostSetups: upsertProjectHostSetup(s.projectHostSetups, setup)
         }))
         return { ...result, project, repo, setup }

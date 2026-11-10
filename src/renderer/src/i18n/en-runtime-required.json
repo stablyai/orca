@@ -2155,6 +2155,7 @@
       "cleanupInterrupted": "Cleanup was interrupted. Retry cleanup to continue.",
       "cleanupStopped": "Cleanup stopped by user.",
       "cloudConcurrencyLimit": "You’re at your team’s limit of running sandboxes. Put one to sleep or delete it, then try again.",
+      "cloudDeleteNotConfirmed": "Orca Cloud couldn’t confirm this sandbox was deleted, so it may still be running. Sign in with the Orca account that started it, then try again.",
       "cloudGithubNotConnected": "Connect GitHub to your Orca account so Orca Cloud can clone this repository.",
       "cloudNoGithubRemote": "Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub, then try again.",
       "cloudPlanRequired": "Orca Cloud needs a Team plan. Open Plan & billing to choose one.",

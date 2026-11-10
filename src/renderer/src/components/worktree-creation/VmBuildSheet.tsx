@@ -27,6 +27,7 @@ import {
 } from './vm-build-failure'
 import { deriveVmBuildSteps, isOrcaCloudBuild, type VmBuildStep } from './vm-build-steps'
 import { useMinimumRunningSteps } from './use-minimum-running-steps'
+import { useRetryAfterCloudSignIn } from './use-retry-after-cloud-sign-in'
 import {
   connectOrcaCloudGitHub,
   orcaCloudRepoName,
@@ -152,13 +153,14 @@ export function VmBuildSheet({
     void connectOrcaCloudGitHub().finally(() => setConnectingGitHub(false))
   }
 
+  const retryAfterSignIn = useRetryAfterCloudSignIn(failure?.kind === 'signIn', onRetry)
   const signIn = (): void => {
     void useAppStore
       .getState()
       .connectCurrentOrcaProfile()
       .then((result) => {
         if (result?.status === 'connected') {
-          onRetry()
+          retryAfterSignIn()
         }
       })
       .catch((signInError: unknown) => {
