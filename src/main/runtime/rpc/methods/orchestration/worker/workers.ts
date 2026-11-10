@@ -93,6 +93,7 @@ export async function startWorker(
   const placement = params.worktree ?? 'current'
   if (
     orchestrationCaller?.kind === 'peer' &&
+    !followUp &&
     !params.terminal &&
     /^(current|new-child)$/.test(placement)
   ) {

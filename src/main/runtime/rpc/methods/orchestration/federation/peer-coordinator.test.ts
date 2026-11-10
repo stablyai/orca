@@ -10,6 +10,8 @@ import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-t
 import { RpcDispatcher } from '../../../dispatcher'
 import type { RpcResponse } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../orchestration'
+import { startWorker } from '../worker/workers'
+import { peerCoordinatorCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 
 const WORKER_PANE = 'tab_w:11111111-1111-4111-8111-111111111111'
 const OTHER_PANE = 'tab_o:22222222-2222-4222-8222-222222222222'
@@ -233,6 +235,28 @@ describe('a paired Orca coordinating its Run on this server', () => {
     expect(refused(await peerCall('orchestration.send', { to: 'term_w', subject: 'hi' }))).toBe(
       'forbidden'
     )
+  })
+
+  it('follows up with a finished worker where that worker ran, though it has no workspace here', async () => {
+    await peerCall('orchestration.runCurrent', {})
+    const peer = peerCoordinatorCaller(db.getPeerRunForConversation(conversationId)!)
+    const placed = startWorker(
+      { from: peer.address, run: peerRunId(), spec: 'One more thing' },
+      {
+        runtime,
+        orchestrationMutation: undefined,
+        orchestrationCompatibilityEvidence: undefined,
+        orchestrationCaller: peer
+      },
+      {
+        of: 'ctx_finished',
+        addressed: 'ctx_finished',
+        place: async () => {
+          throw new Error('placed where the worker ran')
+        }
+      }
+    )
+    await expect(placed).rejects.toThrow('placed where the worker ran')
   })
 
   it("never answers one Run's cancel with another Run's receipt", async () => {
