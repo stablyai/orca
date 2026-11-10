@@ -267,7 +267,12 @@ export function setWorktreeMetaForHost(
   }
   scheduleSave(scheduling, WORKTREE_METADATA_DOMAINS)
   for (const listener of runtime.worktreeMetaWriteListeners ?? []) {
-    listener({ worktreeId, hostId: executionHostId, previous: existing, next: updated })
+    try {
+      listener({ worktreeId, hostId: executionHostId, previous: existing, next: updated })
+    } catch (error) {
+      // The row is already written; an observer's failure must not report the write as failed.
+      console.error('[worktree-meta] write listener failed:', error)
+    }
   }
   return updated
 }

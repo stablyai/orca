@@ -24,6 +24,8 @@ export type GitHubIssueLinkTitleFillStore = {
   getRepos: () => Repo[]
 }
 
+const NOTIFY_WINDOW_MS = 2_000
+
 type Job = {
   worktreeId: string
   hostId: ExecutionHostId
@@ -53,31 +55,46 @@ export function installGitHubIssueLinkTitleFill(deps: {
   let draining = false
   let disposed = false
 
-  const apply = (job: Job, title: string): void => {
+  const pendingNotify = new Set<string>()
+  let lastNotifyAt = 0
+  const flushNotify = (): void => {
+    lastNotifyAt = Date.now()
+    for (const repoId of pendingNotify) {
+      deps.notifyChanged(repoId)
+    }
+    pendingNotify.clear()
+  }
+
+  // The job's link as it is now; null once removed, retitled or its workspace re-created.
+  const currentTarget = (job: Job) => {
     const meta = deps.store.getWorktreeMetaForHost(job.worktreeId, job.hostId)
     if (!meta || meta.instanceId !== job.instanceId) {
-      return
+      return null
     }
     const items = getWorkspaceAttachments(meta)
     const index = items.findIndex(
       (item) => getWorkspaceReferenceIdentity(item) === job.identity && !item.title?.trim()
     )
-    if (index === -1) {
+    return index === -1 ? null : { meta, items, index }
+  }
+
+  const apply = (job: Job, title: string): void => {
+    const target = currentTarget(job)
+    if (!target) {
       return
     }
-    // Restate the current review selection (null included) so the merge cannot re-pick one.
-    const reviewSelection = Object.fromEntries(
-      WORKSPACE_ATTACHMENT_NUMBER_SLOTS.filter(([, , type]) => type !== 'issue').map(([slot]) => [
-        slot,
-        meta[slot] ?? null
-      ])
-    )
+    const { meta, items, index } = target
+    const reviewSlots = WORKSPACE_ATTACHMENT_NUMBER_SLOTS.filter(([, , type]) => type !== 'issue')
+    // A cleared review selection must be restated or the merge re-picks one; a set one it keeps.
+    const keepClearedSelection = reviewSlots.every(([slot]) => (meta[slot] ?? null) === null)
+      ? Object.fromEntries(reviewSlots.map(([slot]) => [slot, null]))
+      : {}
     deps.store.setWorktreeMeta(hostWorktreeTarget({ id: job.worktreeId, hostId: job.hostId }), {
-      ...reviewSelection,
+      ...keepClearedSelection,
       linkedItemsBase: items,
       linkedItems: items.map((item, i) => (i === index ? { ...item, title } : item))
     })
-    deps.notifyChanged(getRepoIdFromWorktreeId(job.worktreeId))
+    pendingNotify.add(getRepoIdFromWorktreeId(job.worktreeId))
   }
 
   const drain = async (): Promise<void> => {
@@ -91,11 +108,13 @@ export function installGitHubIssueLinkTitleFill(deps: {
         if (disposed) {
           return
         }
-        const repo = findRepoRowForHostScopedWrite(
-          deps.store.getRepos(),
-          getRepoIdFromWorktreeId(job.worktreeId),
-          job.hostId
-        )
+        const repo = currentTarget(job)
+          ? findRepoRowForHostScopedWrite(
+              deps.store.getRepos(),
+              getRepoIdFromWorktreeId(job.worktreeId),
+              job.hostId
+            )
+          : undefined
         if (!repo) {
           continue
         }
@@ -103,13 +122,30 @@ export function installGitHubIssueLinkTitleFill(deps: {
         if (title?.trim() && !disposed) {
           apply(job, title.trim())
         }
+        // One client refresh per repo per window during a burst, not one per filled title.
+        if (Date.now() - lastNotifyAt >= NOTIFY_WINDOW_MS) {
+          flushNotify()
+        }
       }
     } finally {
       draining = false
+      if (!disposed) {
+        flushNotify()
+      }
     }
   }
 
   const unsubscribe = deps.store.onWorktreeMetaWritten(({ worktreeId, hostId, previous, next }) => {
+    // Most writes (stamps, flags, comments) leave links untouched; skip them without normalizing.
+    if (
+      previous &&
+      previous.instanceId === next.instanceId &&
+      previous.linkedItems === next.linkedItems &&
+      previous.linkedIssue === next.linkedIssue &&
+      previous.linkedWorkItem === next.linkedWorkItem
+    ) {
+      return
+    }
     const known = new Set(
       previous?.instanceId === next.instanceId
         ? untitledGitHubIssues(previous).map(getWorkspaceReferenceIdentity)

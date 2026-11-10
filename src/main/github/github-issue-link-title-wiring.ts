@@ -6,6 +6,7 @@ import { getLocalProjectGhExecOptions } from '../workspaces/execution-host/proje
 import { getIssue } from './issues'
 import { getWorkItemByOwnerRepo } from './client/fetch/get-work-item'
 import { installGitHubIssueLinkTitleFill } from './github-issue-link-title-fill'
+import { readGitHubRepoUnlessWslStopped } from '../ipc/source-control/github-repo-routing'
 
 const GITHUB_ISSUE_PATH = /^\/([^/]+)\/([^/]+)\/issues\/(\d+)$/
 
@@ -58,12 +59,27 @@ async function readGitHubIssueLinkTitle(
 
 export function wireGitHubIssueLinkTitleFill(
   store: Store,
-  notifyWorktreesChanged: (repoId: string, options: { invalidateGitScans: false }) => void
+  runtime: {
+    invalidateResolvedWorktreeCache: () => void
+    notifyWorktreesChanged: (repoId: string, options: { invalidateGitScans: false }) => void
+  }
 ): () => void {
   return installGitHubIssueLinkTitleFill({
     store,
-    readIssueTitle: (repo, link) => readGitHubIssueLinkTitle(store, repo, link),
-    // Metadata-only change: publish it without forcing Git rescans.
-    notifyChanged: (repoId) => notifyWorktreesChanged(repoId, { invalidateGitScans: false })
+    // Background reads never start a stopped WSL distro; the link just stays untitled.
+    readIssueTitle: (repo, link) =>
+      readGitHubRepoUnlessWslStopped(
+        store,
+        repo,
+        () => readGitHubIssueLinkTitle(store, repo, link),
+        {
+          wake: false
+        }
+      ),
+    notifyChanged: (repoId) => {
+      // Metadata-only change: refresh resolved rows for remote clients without forcing Git rescans.
+      runtime.invalidateResolvedWorktreeCache()
+      runtime.notifyWorktreesChanged(repoId, { invalidateGitScans: false })
+    }
   })
 }
