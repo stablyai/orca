@@ -125,7 +125,7 @@ describe('chat send', () => {
       return 0
     }) as never)
     const client = fakeClient([
-      historyPage([], 7),
+      historyPage([], 7, { working: true }),
       ok({
         ok: true,
         replayed: false,

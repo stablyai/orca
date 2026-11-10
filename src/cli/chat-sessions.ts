@@ -1,3 +1,4 @@
+import { isRootAgentJournalItem } from '../shared/agent-session/journal/agent-session-journal-producer'
 import type { AgentJournalRenderItem } from '../shared/agent-session/journal/agent-session-journal-types'
 import type {
   RuntimeWorktreeAgentRow,
@@ -84,6 +85,10 @@ function messageText(item: AgentJournalRenderItem): string {
 export function chatTranscript(items: readonly AgentJournalRenderItem[]): ChatTranscriptEntry[] {
   const entries: ChatTranscriptEntry[] = []
   for (const item of items) {
+    // Subagents share the journal; their rows belong to their own section, not the chat's turn.
+    if (!isRootAgentJournalItem(item)) {
+      continue
+    }
     const body = item.body
     if (body.kind === 'message') {
       const text = messageText(item)

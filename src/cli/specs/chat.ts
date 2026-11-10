@@ -48,7 +48,7 @@ export const CHAT_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Sends the text as your message, as if typed in the chat. --text-file - reads it from stdin.',
       'While the agent is working, hosts with a message queue hold the message until the turn ends; the result says "queued".',
-      '--wait returns once the chat finishes or waits for your answer, with what it did since your message. A wait that times out exits 1.',
+      '--wait returns once the chat finishes or waits for your answer, with what it did since your message. It exits 1 when the wait times out or the message is held in a stopped queue.',
       'A chat that restarted since it was read refuses the send; read it again and resend.'
     ],
     examples: [
