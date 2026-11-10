@@ -7,6 +7,7 @@ import { useClipboardWriter } from '../platform/clipboard'
 import { dictationFailureMessage, isDictationSetupRequiredError } from './mobile-dictation-setup'
 import { useMobileDictationHaptics } from './use-mobile-dictation-haptics'
 import { useMobileDictationSilenceStop } from './use-mobile-dictation-silence-stop'
+import { DEFAULT_STOP_AFTER_SILENCE_SECONDS } from '../../../src/shared/dictation-silence-stop'
 import { insertMobileDictationAway } from './mobile-dictation-away-insert'
 import { nativeChatDictationCopy } from './mobile-session-native-chat-dictation-copy'
 import { dictationAwayCopy } from './mobile-dictation-away-copy'
@@ -145,7 +146,14 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
     onAudioLimitReached: () => say(nativeChatDictationCopy.stoppedAtCloudLimit())
   })
   const stop = useMobileDictationHaptics(dictation)
-  useMobileDictationSilenceStop(dictation, owner?.dictationMode, stop, (message) => say(message))
+  useMobileDictationSilenceStop(
+    dictation,
+    owner?.dictationMode,
+    // Off is null, so only a missing owner takes the default.
+    owner ? owner.silenceSeconds : DEFAULT_STOP_AFTER_SILENCE_SECONDS,
+    stop,
+    (message) => say(message)
+  )
 
   // Screens subscribe to the live dictation; the host's context only changes when its owner or pill does.
   const liveRef = useRef<UseMobileDictationResult>(dictation)

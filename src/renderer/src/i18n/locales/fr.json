@@ -11217,7 +11217,10 @@
               "a5fb30e4da": "Activer la dictée vocale",
               "ffaa3efe7c": "Transcription OpenAI",
               "c7a7eaa0da": "Supprimer les hésitations",
-              "d0c230c061": "Mode de dictée"
+              "d0c230c061": "Mode de dictée",
+              "silenceStopTitle": "Arrêter après un silence",
+              "silenceStopDescription": "Choisissez combien de temps la dictée continue d’écouter quand vous ne parlez plus.",
+              "silenceStopKeyword": "silence"
             }
           }
         },
@@ -16979,7 +16982,6 @@
           "micFallback": "Micro sélectionné indisponible. Utilisation du micro par défaut du système.",
           "micDisconnected": "Micro déconnecté. Dictée arrêtée.",
           "cloudLimitReached": "Dictée arrêtée à la limite cloud de 10 minutes.",
-          "stoppedAfterSilence": "Arrêt après une minute de silence",
           "retryUnmatched": "La nouvelle tentative n'a pas pu repérer les mots déjà saisis, ils ont donc tous été insérés."
         },
         "dictation-transcript-delivery": {
@@ -20964,6 +20966,11 @@
           "heardLabel": "{{model}} a entendu",
           "heardNothing": "Aucun mot. Essayez de parler plus fort.",
           "heardFailed": "{{model}} n’a pas pu transcrire l’enregistrement."
+        },
+        "silenceStop": {
+          "title": "Arrêter après un silence",
+          "description": "Arrête l’écoute après ce temps de silence. Jamais tant que vous maintenez le raccourci.",
+          "off": "Désactivé"
         }
       },
       "repositoryHooks": {
@@ -21135,6 +21142,9 @@
           "action": "Diviser le volet"
         }
       }
+    },
+    "dictation": {
+      "stoppedAfterSilenceSeconds": "Arrêté après {{seconds}} secondes de silence"
     }
   },
   "dashboardPopout": {

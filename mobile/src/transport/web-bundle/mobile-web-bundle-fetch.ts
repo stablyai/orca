@@ -42,6 +42,7 @@ export const MOBILE_WEB_BUNDLE_WINDOW_STALL_MS = 30_000
 const WINDOW_READ_BACKSTOP_MS =
   (MAX_CONCURRENT_WINDOW_READS + 1) * MOBILE_WEB_BUNDLE_WINDOW_STALL_MS
 
+// Bytes are what the reader moves (a brotli copy where it reads one, else the asset); reused assets add none.
 export type MobileWebBundleFetchProgress = {
   readonly completedAssets: number
   readonly totalAssets: number
@@ -180,7 +181,7 @@ export async function fetchMobileWebBundle(args: {
       downloadedAssets += 1
     }
     // Per window, not per asset: the largest asset goes first, so asset completions bunch at the end.
-    receivedBytes += assetBytesCredited(asset, offset, bytes.byteLength)
+    receivedBytes += bytes.byteLength
     reportProgress()
   }
 
@@ -246,7 +247,7 @@ export async function fetchMobileWebBundle(args: {
 
   const countDownload = (entries: readonly MobileWebBundleAssetRead[]): void => {
     downloadAssets += entries.length
-    downloadBytes += entries.reduce((sum, entry) => sum + entry.byteLength, 0)
+    downloadBytes += entries.reduce((sum, entry) => sum + reader.streamLength(entry), 0)
   }
 
   try {
@@ -295,18 +296,6 @@ function planWindowReads(
     }
     return Array.from({ length: count }, (_, index) => ({ asset, offset: index * windowBytes }))
   })
-}
-
-// Progress stays in asset bytes, the unit of the session's total: a window of a brotli copy counts for its
-// share of the asset, and an asset's windows add up to exactly its byteLength.
-function assetBytesCredited(asset: AssetReassembly, offset: number, byteLength: number): number {
-  const streamBytes = asset.stream.byteLength
-  if (streamBytes === asset.entry.byteLength) {
-    return byteLength
-  }
-  const at = (position: number): number =>
-    Math.floor((asset.entry.byteLength * position) / streamBytes)
-  return at(offset + byteLength) - at(offset)
 }
 
 async function verifyReassembledAsset(

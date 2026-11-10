@@ -11323,7 +11323,10 @@
               "a5fb30e4da": "Sesli Yazmayı Etkinleştir",
               "ffaa3efe7c": "OpenAI Yazıya Dökme",
               "c7a7eaa0da": "Dolgu seslerini kaldır",
-              "d0c230c061": "Dikte Modu"
+              "d0c230c061": "Dikte Modu",
+              "silenceStopTitle": "Sessizlikten sonra durdur",
+              "silenceStopDescription": "Konuşmayı bıraktığınızda diktenin ne kadar dinlemeye devam edeceğini seçin.",
+              "silenceStopKeyword": "sessizlik"
             }
           }
         },
@@ -16998,7 +17001,6 @@
           "micFallback": "Seçili mikrofon kullanılamıyor. Sistem varsayılanı kullanılıyor.",
           "micDisconnected": "Mikrofon bağlantısı kesildi. Dikte durduruldu.",
           "cloudLimitReached": "Dikte, 10 dakikalık bulut sınırında durduruldu.",
-          "stoppedAfterSilence": "Bir dakika sessizlikten sonra durduruldu",
           "retryUnmatched": "Yeniden deneme hangi kelimelerin zaten yazıldığını anlayamadı, bu yüzden hepsini ekledi."
         },
         "dictation-transcript-delivery": {
@@ -20807,6 +20809,11 @@
           "heardLabel": "{{model}} şunu duydu",
           "heardNothing": "Hiç kelime yok. Daha yüksek sesle konuşmayı deneyin.",
           "heardFailed": "{{model}} kaydı yazıya dökemedi."
+        },
+        "silenceStop": {
+          "title": "Sessizlikten sonra durdur",
+          "description": "Bu kadar süre sessiz kaldığınızda dinlemeyi bırakır. Kısayolu basılı tuttuğunuz sürece asla.",
+          "off": "Kapalı"
         }
       },
       "repositoryHooks": {
@@ -20973,6 +20980,9 @@
           "action": "Bölmeyi böl"
         }
       }
+    },
+    "dictation": {
+      "stoppedAfterSilenceSeconds": "{{seconds}} saniyelik sessizlikten sonra durduruldu"
     }
   },
   "dashboardPopout": {

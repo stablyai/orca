@@ -10918,7 +10918,10 @@
               "a5fb30e4da": "Habilitar dictado de voz",
               "ffaa3efe7c": "Transcripción OpenAI",
               "c7a7eaa0da": "Quitar muletillas",
-              "d0c230c061": "Modo de dictado"
+              "d0c230c061": "Modo de dictado",
+              "silenceStopTitle": "Detener tras silencio",
+              "silenceStopDescription": "Elige cuánto sigue escuchando el dictado cuando dejas de hablar.",
+              "silenceStopKeyword": "silencio"
             }
           }
         },
@@ -16722,7 +16725,6 @@
           "micFallback": "Micrófono seleccionado no disponible. Se usará el predeterminado del sistema.",
           "micDisconnected": "Micrófono desconectado. Dictado detenido.",
           "cloudLimitReached": "Dictado detenido al llegar al límite de 10 minutos en la nube.",
-          "stoppedAfterSilence": "Se detuvo tras un minuto de silencio",
           "retryUnmatched": "Al reintentar no se pudo saber qué palabras ya estaban escritas, así que se insertaron todas."
         },
         "dictation-transcript-delivery": {
@@ -20633,6 +20635,11 @@
           "heardLabel": "{{model}} entendió",
           "heardNothing": "Ninguna palabra. Prueba a hablar más alto.",
           "heardFailed": "{{model}} no pudo transcribir la grabación."
+        },
+        "silenceStop": {
+          "title": "Detener tras silencio",
+          "description": "Deja de escuchar cuando llevas este tiempo en silencio. Nunca mientras mantienes pulsado el atajo.",
+          "off": "Desactivado"
         }
       },
       "repositoryHooks": {
@@ -20882,6 +20889,9 @@
           "action": "Dividir panel"
         }
       }
+    },
+    "dictation": {
+      "stoppedAfterSilenceSeconds": "Detenido tras {{seconds}} segundos de silencio"
     }
   },
   "dashboardPopout": {

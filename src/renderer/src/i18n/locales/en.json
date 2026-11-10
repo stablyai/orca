@@ -11994,7 +11994,10 @@
               "a5fb30e4da": "Enable voice dictation",
               "ffaa3efe7c": "OpenAI transcription",
               "c7a7eaa0da": "Remove filler words",
-              "d0c230c061": "Dictation mode"
+              "d0c230c061": "Dictation mode",
+              "silenceStopTitle": "Stop after silence",
+              "silenceStopDescription": "Choose how long dictation keeps listening when you stop talking.",
+              "silenceStopKeyword": "silence"
             }
           }
         },
@@ -17842,7 +17845,6 @@
           "micFallback": "Selected microphone unavailable. Using system default.",
           "micDisconnected": "Microphone disconnected. Dictation stopped.",
           "cloudLimitReached": "Dictation stopped at the 10-minute cloud limit.",
-          "stoppedAfterSilence": "Stopped after a minute of silence",
           "retryUnmatched": "Retry couldn't tell which words were already typed, so it inserted them all."
         },
         "dictation-transcript-delivery": {
@@ -21955,6 +21957,11 @@
           "heardLabel": "{{model}} heard",
           "heardNothing": "No words. Try speaking louder.",
           "heardFailed": "{{model}} couldn’t transcribe the recording."
+        },
+        "silenceStop": {
+          "off": "Off",
+          "title": "Stop After Silence",
+          "description": "Stops listening once you’ve been quiet this long. Never while you hold the shortcut."
         }
       },
       "repositoryHooks": {
@@ -22219,6 +22226,9 @@
       "selectedSubmitFailed": "The notes may already be pasted in the selected terminal, but Orca could not submit them.",
       "activeSubmitFailed": "The notes may already be pasted in the active terminal, but Orca could not submit them.",
       "notWritableSelection": "The {{target}} agent did not accept the selection."
+    },
+    "dictation": {
+      "stoppedAfterSilenceSeconds": "Stopped after {{seconds}} seconds of silence"
     }
   },
   "dashboardPopout": {
