@@ -1,6 +1,7 @@
-// The setup panel's GitHub row (cloud-start D1–D3): icon, label, detail + note, status word or
-// action. Rendered inside w2-lifecycle's Set up Orca Cloud panel; its model is
-// orcaCloudGitHubSetupRow (lib/orca-cloud/orca-cloud-github-setup-row.ts).
+// The setup panel's GitHub row (cloud-start D1–D3), stacked like the panel's tracker rows:
+// line 1 icon · label · status word or action; line 2 the detail with a muted note under it.
+// Rendered inside w2-lifecycle's Set up Orca Cloud panel; its model is orcaCloudGitHubSetupRow
+// (lib/orca-cloud/orca-cloud-github-setup-row.ts).
 import { CircleCheck, CircleDashed, Github, Loader2, SquareArrowOutUpRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -10,17 +11,20 @@ import type { OrcaCloudGitHubSetupRow as RowModel } from '@/lib/orca-cloud/orca-
 function RowIcon({ state }: { state: RowModel['step']['state'] }): React.JSX.Element {
   switch (state) {
     case 'done':
-      return <CircleCheck className="size-4 text-muted-foreground" aria-hidden />
+      return <CircleCheck className="size-4 shrink-0 text-muted-foreground" aria-hidden />
     case 'pending':
       // Reduced motion stops the spin; the "Requested" status word carries the state.
       return (
-        <Loader2 className="size-4 text-muted-foreground motion-safe:animate-spin" aria-hidden />
+        <Loader2
+          className="size-4 shrink-0 text-muted-foreground motion-safe:animate-spin"
+          aria-hidden
+        />
       )
     case 'failed':
-      return <Github className="size-4 text-muted-foreground" aria-hidden />
+      return <Github className="size-4 shrink-0 text-muted-foreground" aria-hidden />
     case 'needed':
     case 'active':
-      return <CircleDashed className="size-4 text-muted-foreground" aria-hidden />
+      return <CircleDashed className="size-4 shrink-0 text-muted-foreground" aria-hidden />
   }
 }
 
@@ -30,13 +34,28 @@ export function OrcaCloudGitHubSetupRow({ row }: { row: RowModel }): React.JSX.E
   const action = row.action
   return (
     <div
-      className="flex items-center gap-3 rounded-md border border-border px-3 py-2.5"
+      className="flex flex-col items-start gap-0.5 rounded-md border border-border px-3 py-2.5 text-sm"
       aria-label={[row.label, row.step.detail, row.status].filter(Boolean).join(', ')}
       role="group"
     >
-      <RowIcon state={row.step.state} />
-      <span className="w-36 shrink-0 text-sm text-foreground">{row.label}</span>
-      <div className="min-w-0 flex-1 text-sm">
+      <div className="flex min-h-8 w-full items-center gap-3">
+        <RowIcon state={row.step.state} />
+        <span className="min-w-0 flex-1 text-foreground">{row.label}</span>
+        {action ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void window.api.shell.openUrl(action.url).catch(() => {})}
+          >
+            {action.label}
+            <SquareArrowOutUpRight aria-hidden />
+          </Button>
+        ) : row.status ? (
+          <span className="shrink-0 text-muted-foreground">{row.status}</span>
+        ) : null}
+      </div>
+      {/* Indented to the label: icon (16px) + gap (12px). */}
+      <div className="flex w-full min-w-0 flex-col items-start pl-7">
         {checking ? (
           <Skeleton className="h-4 w-48" />
         ) : (
@@ -50,18 +69,6 @@ export function OrcaCloudGitHubSetupRow({ row }: { row: RowModel }): React.JSX.E
           </>
         )}
       </div>
-      {action ? (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void window.api.shell.openUrl(action.url).catch(() => {})}
-        >
-          {action.label}
-          <SquareArrowOutUpRight aria-hidden />
-        </Button>
-      ) : row.status ? (
-        <span className="shrink-0 text-sm text-muted-foreground">{row.status}</span>
-      ) : null}
     </div>
   )
 }
