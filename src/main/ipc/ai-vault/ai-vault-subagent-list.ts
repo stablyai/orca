@@ -1,8 +1,9 @@
 import { resolve } from 'node:path'
 import { getAiVaultWslHomeDirs } from '../../ai-vault/cached-session-list'
 import { listAiVaultSubagentSessionsInBackground } from '../../ai-vault/scan-service/session-scanner-background'
-import { claudeProjectsRootDirs } from '../../ai-vault/session-scanner-roots'
 import { sessionRowRootDirs } from '../../ai-vault/session-scanner-agent-sources'
+import { claudeProjectsRootDirs } from '../../ai-vault/session-scanner-roots'
+import { extraWslClaudeProjectsDirs } from '../../ai-vault/wsl-claude-projects-root'
 import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type {
@@ -30,9 +31,14 @@ export async function listAiVaultSubagentSessions(
   // Resolve .. before textual root checks so renderer paths cannot escape the agent's session roots.
   const parentFilePath = resolve(args.parentFilePath)
   const wslHomeDirs = await getAiVaultWslHomeDirs()
+  const resolvedClaude =
+    args.agent === 'claude' ? await extraWslClaudeProjectsDirs({ wslHomeDirs }) : null
   const roots =
     args.agent === 'claude'
-      ? claudeProjectsRootDirs({ wslHomeDirs })
+      ? claudeProjectsRootDirs({
+          wslHomeDirs,
+          extraClaudeProjectsDirs: resolvedClaude?.dirs
+        })
       : sessionRowRootDirs('omp', {}, wslHomeDirs)
   if (!roots.some((root) => isPathInsideOrEqual(resolve(root), parentFilePath))) {
     return { sessions: [], issues: [] }

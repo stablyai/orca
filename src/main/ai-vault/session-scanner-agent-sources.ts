@@ -92,7 +92,8 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
       claudeProjectsRootDirs({
         claudeProjectsDir: options.claudeProjectsDir,
         wslHomeDirs,
-        claudeProfileProjectsDirs: options.claudeProfileProjectsDirs
+        claudeProfileProjectsDirs: options.claudeProfileProjectsDirs,
+        extraClaudeProjectsDirs: options.extraClaudeProjectsDirs
       }),
     extensions: ['.jsonl'],
     // Subagent transcripts are read under their parent instead of duplicating History rows.
