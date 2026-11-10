@@ -71,11 +71,7 @@ it('also searches the bucket of a parent directory the CLI may have started in',
   const rig = await makeProjects()
   try {
     const childCwd = join(rig.workspaceCwd, 'packages', 'app')
-    const parentBucket = join(
-      rig.root,
-      'projects',
-      encodeClaudeProjectPaths(rig.workspaceCwd)[0]!
-    )
+    const parentBucket = join(rig.root, 'projects', encodeClaudeProjectPaths(rig.workspaceCwd)[0]!)
     await mkdir(parentBucket, { recursive: true })
     const file = join(parentBucket, 'started-in-parent.jsonl')
     await writeFile(file, JSON.stringify({ type: 'user', sessionId: 'session-parent' }))
