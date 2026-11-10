@@ -123,4 +123,68 @@ describe('dictation shortcut and the speech model update', () => {
     expect(startCapture).toHaveBeenCalledOnce()
     expect(startDictation).toHaveBeenCalledWith('parakeet', {}, expect.any(String))
   })
+
+  it('drops a press whose model check is still running when the press is taken back', async () => {
+    modelStates = [{ id: 'parakeet', status: 'ready' }]
+    let releaseStates = (): void => {}
+    getModelStates.mockImplementationOnce(
+      () => new Promise((resolve) => (releaseStates = () => resolve(modelStates)))
+    )
+    await mountAndPress()
+    // A second toggle cancels instead of launching another check.
+    await act(async () => pressShortcut())
+    await act(async () => releaseStates())
+
+    expect(getModelStates).toHaveBeenCalledOnce()
+    expect(startCapture).not.toHaveBeenCalled()
+  })
+
+  it('lets Escape cancel a press whose model check is still running', async () => {
+    modelStates = [{ id: 'parakeet', status: 'ready' }]
+    let releaseStates = (): void => {}
+    getModelStates.mockImplementationOnce(
+      () => new Promise((resolve) => (releaseStates = () => resolve(modelStates)))
+    )
+    await mountAndPress()
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    })
+    await act(async () => releaseStates())
+
+    expect(startCapture).not.toHaveBeenCalled()
+  })
+
+  it('never opens the mic when voice is turned off while the check runs', async () => {
+    modelStates = [{ id: 'parakeet', status: 'ready' }]
+    let releaseStates = (): void => {}
+    getModelStates.mockImplementationOnce(
+      () => new Promise((resolve) => (releaseStates = () => resolve(modelStates)))
+    )
+    await mountAndPress()
+    await act(async () => root.render(null))
+    await act(async () => releaseStates())
+
+    expect(startCapture).not.toHaveBeenCalled()
+    expect(startDictation).not.toHaveBeenCalled()
+  })
+
+  it('keeps the setup pill, not the mic, when pressed mid-download', async () => {
+    modelStates = [{ id: 'parakeet', status: 'downloading', progress: 0.4 }]
+    await mountAndPress()
+    await act(async () => pressShortcut())
+
+    expect(document.querySelector('[data-testid="dictation-setup-pill"]')).not.toBeNull()
+    expect(startCapture).not.toHaveBeenCalled()
+  })
+
+  it('offers the update again after a download was cancelled', async () => {
+    modelStates = [{ id: 'parakeet', status: 'not-downloaded', needsUpdate: true }]
+    await mountAndPress()
+    // The cancelled download's state lost its needsUpdate.
+    modelStates = [{ id: 'parakeet', status: 'not-downloaded' }]
+    await act(async () => pressShortcut())
+
+    expect(document.querySelector('[data-testid="dictation-setup-pill"]')).not.toBeNull()
+    expect(startCapture).not.toHaveBeenCalled()
+  })
 })

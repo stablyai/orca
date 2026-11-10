@@ -76,8 +76,8 @@ export function DictationController() {
   // A new recording gets a fresh pill (timer and all); a retry keeps the one it failed in.
   const [recordingKey, setRecordingKey] = useState(0)
   const isIdle = useCallback(() => sessionRef.current.phase === 'idle', [])
-  const { setupTarget, closeSetup, invalidatePendingStart, readyToRecord } =
-    useDictationSpeechModelSetup(isIdle, setPillAnchor)
+  const { setupTarget, closeSetup, hasPendingStart, invalidatePendingStart, readyToRecord } =
+    useDictationSpeechModelSetup(settings?.voice, isIdle, setPillAnchor)
   const queuedSend = useDictationQueuedSend(sessionRef, keptRef)
   const { clear: clearQueuedSend, release: releaseQueuedSend } = queuedSend
 
@@ -357,12 +357,17 @@ export function DictationController() {
   }, [settings, dispatch, finishDictationSession, showFailure])
 
   const toggleDictation = useCallback(() => {
+    // A second press while the model check runs takes the first one back.
+    if (hasPendingStart()) {
+      invalidatePendingStart()
+      return
+    }
     if (isDictationUnderway(sessionRef.current.phase)) {
       void stopDictation()
     } else {
       void startDictation()
     }
-  }, [startDictation, stopDictation])
+  }, [startDictation, stopDictation, hasPendingStart, invalidatePendingStart])
 
   useDictationControls(settings?.voice, dictationState, {
     start: () => void startDictation(),
@@ -373,7 +378,9 @@ export function DictationController() {
     enterQueues: (event) => queuedSend.queueTerminalEnter(event.target),
     // The error pill leaves Esc to Settings and dialogs; only its ✕ discards the recording.
     escCancels: () =>
-      isDictationUnderway(sessionRef.current.phase) || sessionRef.current.phase === 'stopping'
+      hasPendingStart() ||
+      isDictationUnderway(sessionRef.current.phase) ||
+      sessionRef.current.phase === 'stopping'
   })
 
   const { isHolding } = useHoldDictationGesture({
