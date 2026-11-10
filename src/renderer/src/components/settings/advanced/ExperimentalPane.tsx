@@ -36,18 +36,18 @@ export function ExperimentalPane({
 }: ExperimentalPaneProps): React.JSX.Element {
   const t = useTranslate()
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
-  const showPet = matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry(t).pet])
+  const showPet = matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().pet])
   const showAgentDashboard = matchesSettingsSearch(searchQuery, [
-    getExperimentalSearchEntry(t).agentDashboard
+    getExperimentalSearchEntry().agentDashboard
   ])
   const showTerminalAttention = matchesSettingsSearch(searchQuery, [
-    getExperimentalSearchEntry(t).terminalAttention
+    getExperimentalSearchEntry().terminalAttention
   ])
   const showAgentHibernation = matchesSettingsSearch(searchQuery, [
-    getExperimentalSearchEntry(t).agentHibernation
+    getExperimentalSearchEntry().agentHibernation
   ])
   const showNewWorktreeCardStyle = matchesSettingsSearch(searchQuery, [
-    getExperimentalSearchEntry(t).newWorktreeCardStyle
+    getExperimentalSearchEntry().newWorktreeCardStyle
   ])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
   const newWorktreeCardStyleEnabled = settings.experimentalNewWorktreeCardStyle === true
@@ -70,7 +70,7 @@ export function ExperimentalPane({
               'auto.components.settings.ExperimentalPane.0e89a574ae',
               'Floating animated pet in the bottom-right corner.'
             )}
-            keywords={getExperimentalSearchEntry(t).pet.keywords}
+            keywords={getExperimentalSearchEntry().pet.keywords}
             className="space-y-3 py-3"
             id="experimental-pet"
           >
@@ -102,7 +102,7 @@ export function ExperimentalPane({
               'auto.components.settings.ExperimentalPane.88b7613afb',
               'Persistent pane highlight for terminal bell and agent-completion events.'
             )}
-            keywords={getExperimentalSearchEntry(t).terminalAttention.keywords}
+            keywords={getExperimentalSearchEntry().terminalAttention.keywords}
             className="space-y-3 py-3"
           >
             <div className="flex items-start justify-between gap-4">
@@ -143,7 +143,7 @@ export function ExperimentalPane({
               'auto.components.settings.ExperimentalPane.agentHibernation.description',
               'Stops idle background agent terminals after the configured idle window and resumes supported sessions when you open them again.'
             )}
-            keywords={getExperimentalSearchEntry(t).agentHibernation.keywords}
+            keywords={getExperimentalSearchEntry().agentHibernation.keywords}
             className="space-y-3 py-3"
             id="experimental-agent-hibernation"
           >
@@ -216,7 +216,7 @@ export function ExperimentalPane({
               'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.description',
               'Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.'
             )}
-            keywords={getExperimentalSearchEntry(t).newWorktreeCardStyle.keywords}
+            keywords={getExperimentalSearchEntry().newWorktreeCardStyle.keywords}
             className="space-y-3 py-3"
             id="experimental-new-worktree-card-style"
           >
