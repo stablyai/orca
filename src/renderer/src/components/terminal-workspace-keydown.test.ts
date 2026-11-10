@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import type * as WorktreeActivation from '@/lib/workspace/activation/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -55,6 +57,11 @@ vi.mock('@/lib/agent-session/structured-agent-session-busy', async () => ({
   admitStructuredAgentSession: (
     await import('@/store/slices/agent-status/structured-session-admission.test-fixture')
   ).admissionFromBusy(mocks.structuredSessionBusy)
+}))
+
+vi.mock('@/lib/workspace/activation/worktree-activation', async (importOriginal) => ({
+  ...(await importOriginal<typeof WorktreeActivation>()),
+  activateAndRevealWorktree: vi.fn()
 }))
 
 vi.mock('../store', () => ({ useAppStore: { getState: () => mocks.state } }))
@@ -638,6 +645,71 @@ describe('agent shortcut delivery and deferred ownership', () => {
       detection.resolve('codex')
       await detection.promise
       expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
+    }
+  )
+})
+
+describe('reopen closed tab from the welcome screen', () => {
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+  })
+
+  it.each([
+    ['Mac', true],
+    ['Windows', true],
+    ['Linux', true],
+    ['Mac', false],
+    ['Windows', false],
+    ['Linux', false]
+  ] as const)('reopens from the welcome screen on %s (restored %s)', (platform, restored) => {
+    vi.clearAllMocks()
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(platform)
+    const reopenClosedTab = vi.fn(() => restored)
+    const worktreeId = 'repo-1::/repo/last-workspace'
+    mocks.state = {
+      worktreeNavHistory: ['repo-1::/repo/older', worktreeId, 'repo-1::/repo/forward'],
+      worktreeNavHistoryIndex: 1,
+      reopenClosedTab
+    }
+    renderHook(() => useTerminalKeyboardShortcuts({ ...controller, activeWorktreeId: null }))
+    const event = new KeyboardEvent('keydown', {
+      key: 'T',
+      code: 'KeyT',
+      shiftKey: true,
+      metaKey: platform === 'Mac',
+      ctrlKey: platform !== 'Mac',
+      cancelable: true
+    })
+    act(() => window.dispatchEvent(event))
+    expect(reopenClosedTab).toHaveBeenCalledExactlyOnceWith(worktreeId)
+    if (restored) {
+      expect(activateAndRevealWorktree).toHaveBeenCalledExactlyOnceWith(worktreeId)
+    } else {
+      expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+    }
+    expect(event.defaultPrevented).toBe(true)
+  })
+
+  it.each([{ history: [] }, { history: ['tasks'] }])(
+    'ignores a history without a workspace ($history)',
+    ({ history }) => {
+      vi.clearAllMocks()
+      vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Windows')
+      const reopenClosedTab = vi.fn(() => true)
+      mocks.state = {
+        worktreeNavHistory: history,
+        worktreeNavHistoryIndex: history.length - 1,
+        reopenClosedTab
+      }
+      renderHook(() => useTerminalKeyboardShortcuts({ ...controller, activeWorktreeId: null }))
+      act(() =>
+        window.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'T', code: 'KeyT', ctrlKey: true, shiftKey: true })
+        )
+      )
+      expect(reopenClosedTab).not.toHaveBeenCalled()
+      expect(activateAndRevealWorktree).not.toHaveBeenCalled()
     }
   )
 })
