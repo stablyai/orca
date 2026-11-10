@@ -18,8 +18,6 @@ import { captureWebSessionIntentOwner } from '../../web-session-tabs-sync/identi
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { retireStructuredAgentSessionTab } from './structured-agent-session-host-tab-retirement'
 
-export { retireStructuredAgentSessionTab }
-
 /** Re-reads one worktree from the host, including the version already applied, which the window's
  *  early removal left out of date. */
 function reacceptHostSessionTabs(

@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { GrabIntent } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { MarkupDrawHintPopover, useMarkupDrawHintState } from '../annotate/markup-draw-hint-popover'
 

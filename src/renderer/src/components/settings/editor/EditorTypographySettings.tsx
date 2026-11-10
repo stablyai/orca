@@ -14,7 +14,7 @@ import {
   resolveEditorFontFamily,
   resolveEditorLigaturesMode,
   type EditorLigaturesMode
-} from '@/lib/editor/appearance/editor-typography'
+} from '../../../../../shared/editor/editor-typography'
 import {
   supportsCodeFontSmoothing,
   type CodeFontSmoothing

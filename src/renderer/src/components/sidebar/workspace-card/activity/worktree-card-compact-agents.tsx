@@ -3,7 +3,7 @@ import { ChevronDown } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   buildSummaryAgentGroups,
   selectSummaryGroupIconAgents,

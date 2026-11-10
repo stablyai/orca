@@ -1,6 +1,6 @@
 import React, { type Dispatch, type SetStateAction } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { MemorySnapshot } from '../../../../shared/process-stats-types'

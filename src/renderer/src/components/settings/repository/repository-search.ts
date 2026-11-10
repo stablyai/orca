@@ -229,7 +229,7 @@ function getRepositorySearchParts(
     removeProject,
     sourceControlAi: isFolder ? undefined : getRepositoryGitAuthorSearchEntries(repo, t),
     mcp: isFolder ? undefined : getRepositoryMcpConfigSearchEntries(repo, t),
-    hooks: isFolder ? undefined : getRepositoryGitHooksSearchEntries(repo, t)
+    hooks: getRepositoryGitHooksSearchEntries(repo, t)
   }
 }
 

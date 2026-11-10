@@ -8,7 +8,8 @@ import {
   publishFederatedLifecycleSettlement,
   type FederatedLifecycleSettlement
 } from './federation-lifecycle-settlement'
-import { defineMethod, type RpcMethod } from '../../rpc/core'
+import type { RpcMethod } from '../../rpc/core'
+import { defineOrchestrationMethod } from '../../rpc/methods/orchestration/access/orchestration-method-access'
 import {
   FederationAckParams,
   FederationImportParams,
@@ -16,8 +17,9 @@ import {
 } from '../../../../shared/rpc-contract/orchestration-federation-relay-params'
 
 export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.federationPull',
+    access: { kind: 'localOnly', targets: { dispatchId: 'dispatch' } },
     permission: 'workspace',
     params: FederationPullParams,
     handler: (params, { runtime, authenticatedCallerFingerprint }) => {
@@ -39,8 +41,9 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
       }
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.federationAck',
+    access: { kind: 'localOnly', targets: { dispatchId: 'dispatch' } },
     permission: 'workspace',
     params: FederationAckParams,
     handler: (params, { runtime, authenticatedCallerFingerprint }) => {
@@ -105,8 +108,9 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
       return { dispatchId: params.dispatchId, acknowledgedThrough: params.throughSequence }
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.federationImport',
+    access: { kind: 'localOnly', targets: { dispatchId: 'dispatch' } },
     permission: 'workspace',
     params: FederationImportParams,
     handler: (params, { runtime, authenticatedCallerFingerprint }) => {

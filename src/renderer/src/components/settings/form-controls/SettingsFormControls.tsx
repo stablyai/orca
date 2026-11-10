@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 import { Switch } from '../../ui/switch'
 import { SettingsDisabledControlTooltip } from './SettingsDisabledControlTooltip'
 import { normalizeColor } from '@/lib/terminal-theme'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 
 type SettingsRowProps = {

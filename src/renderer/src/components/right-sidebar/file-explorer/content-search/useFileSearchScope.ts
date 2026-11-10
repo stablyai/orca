@@ -7,7 +7,7 @@ import {
 import {
   isFileSearchResultOwnerCurrent,
   type FileSearchResultOwner
-} from '@/lib/file-search-result-owner'
+} from '@/lib/files/search/file-search-result-owner'
 
 export function useFileSearchScope({
   activeWorktreeId,
