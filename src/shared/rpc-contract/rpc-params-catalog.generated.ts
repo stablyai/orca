@@ -759,6 +759,7 @@ import {
 } from './worktree-params'
 import { WorktreeAdoptProvisionedRoot } from './worktree-provisioned-root-params'
 import {
+  LinkAddParticipantsParams,
   LinkControlParams,
   LinkCreateParams,
   LinkListParams,
@@ -1375,6 +1376,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.gateList': GateListParams,
   'orchestration.gateResolve': GateResolveParams,
   'orchestration.inbox': InboxParams,
+  'orchestration.linkAddParticipants': LinkAddParticipantsParams,
   'orchestration.linkCandidates': LinkListParams,
   'orchestration.linkControl': LinkControlParams,
   'orchestration.linkCreate': LinkCreateParams,

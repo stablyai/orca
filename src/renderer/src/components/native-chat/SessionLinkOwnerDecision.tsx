@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { SessionLink, SessionLinkEvent } from '../../../../shared/session-link'
 import type { AskPrompt } from '../../../../shared/native-chat/input/native-chat-ask-types'
 import { formatAskAnswer } from '../../../../shared/native-chat/input/native-chat-ask-answer'
-import { AI_VAULT_AGENT_LABELS } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { translate as t } from '@/i18n/i18n'
 import { SecuritySurface } from '@/components/ui/security-surface'
 import { NativeChatQuestionCard } from './prompts/NativeChatQuestionCard'
@@ -28,7 +28,7 @@ export function SessionLinkOwnerDecision({
   const asker = link.participants.find((participant) => participant.sessionId === request.actor)
   const heading = asker
     ? t('components.sessionLink.agentAsksYou', '{{agent}} asks you', {
-        agent: AI_VAULT_AGENT_LABELS[asker.agent]
+        agent: tuiAgentDisplayName(asker.agent) ?? asker.agent
       })
     : t('components.sessionLink.ownerQuestion', 'Question for you')
   const prompt: AskPrompt = {
@@ -61,7 +61,7 @@ export function SessionLinkOwnerDecision({
                   {link.participants
                     .map(
                       (participant) =>
-                        `${AI_VAULT_AGENT_LABELS[participant.agent]} (${participant.role === 'reviewer' ? t('components.sessionLink.reviewerRole', 'reviewer') : t('components.sessionLink.implementerRole', 'implementer')})`
+                        `${tuiAgentDisplayName(participant.agent) ?? participant.agent} (${participant.role === 'reviewer' ? t('components.sessionLink.reviewerRole', 'reviewer') : t('components.sessionLink.implementerRole', 'implementer')})`
                     )
                     .join(' ↔ ')}
                 </p>
@@ -86,8 +86,8 @@ export function SessionLinkOwnerDecision({
             freeTextInputs={[
               {
                 placeholder: t(
-                  'components.sessionLink.ownerAnswer',
-                  'Your decision for both agents'
+                  'components.sessionLink.groupOwnerAnswer',
+                  'Your decision for all participants'
                 )
               }
             ]}
@@ -98,7 +98,7 @@ export function SessionLinkOwnerDecision({
             submitLabel={
               atomic
                 ? t('components.sessionLink.answerResume', 'Answer and continue')
-                : t('components.sessionLink.sendBoth', 'Send to both')
+                : t('components.sessionLink.sendAll', 'Send to all')
             }
             shouldFocus={!collapsed && shouldFocus}
             onAnswer={(selections) => {

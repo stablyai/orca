@@ -44,7 +44,11 @@ describe('SessionLinkCreate from two tabs', () => {
     expect(within(partnerCard).getByText('Implements')).toBeTruthy()
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Checkout slice 2' } })
     fireEvent.click(screen.getByRole('button', { name: 'Create link and introduce agents' }))
-    expect(create).toHaveBeenCalledExactlyOnceWith('codex-partner', 'Checkout slice 2', 'reviewer')
+    expect(create).toHaveBeenCalledExactlyOnceWith(
+      ['codex-partner'],
+      'Checkout slice 2',
+      'reviewer'
+    )
   })
   it('refuses a disappeared partner without falling back to a different chat', () => {
     const create = vi.fn()
@@ -65,5 +69,27 @@ describe('SessionLinkCreate from two tabs', () => {
         .hasAttribute('disabled')
     ).toBe(true)
     expect(create).not.toHaveBeenCalled()
+  })
+  it('keeps multiple selected chats when the host supports groups', () => {
+    const create = vi.fn()
+    const gemini = { ...participant('gemini-checks', 'Gemini checks'), agent: 'gemini' }
+    render(
+      <SessionLinkCreate
+        source={source}
+        candidates={[partner, gemini]}
+        busy={false}
+        groupSupported
+        onCreate={create}
+      />
+    )
+    fireEvent.click(screen.getByText(partner.name))
+    fireEvent.click(screen.getByText(gemini.name))
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Checkout checks' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create link and introduce agents' }))
+    expect(create).toHaveBeenCalledExactlyOnceWith(
+      [partner.sessionId, gemini.sessionId],
+      'Checkout checks',
+      'implementer'
+    )
   })
 })

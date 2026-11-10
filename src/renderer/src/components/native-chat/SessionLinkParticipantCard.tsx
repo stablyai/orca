@@ -1,4 +1,4 @@
-import { AI_VAULT_AGENT_LABELS } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import type { SessionLinkParticipant } from '../../../../shared/session-link'
 import { translate as t } from '@/i18n/i18n'
 
@@ -17,7 +17,7 @@ export function SessionLinkParticipantCard({
           : t('components.sessionLink.implementer', 'Implements')}
       </p>
       <p className="break-words text-sm font-medium">{participant.name}</p>
-      <p className="text-xs">{AI_VAULT_AGENT_LABELS[participant.agent]}</p>
+      <p className="text-xs">{tuiAgentDisplayName(participant.agent) ?? participant.agent}</p>
       <p className="break-all font-mono text-xs text-muted-foreground">{participant.directory}</p>
       {participant.branch ? (
         <p className="break-all font-mono text-xs text-muted-foreground">

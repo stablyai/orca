@@ -36,7 +36,7 @@ export async function sessionLinkCandidates(
       !visible.sessionIds.includes(record.sessionId) ||
       clearedInto(record) ||
       !isNativeLocalLocation(record.location) ||
-      !['claude', 'codex'].includes(record.provider)
+      !host.deps.agents.registration(record.provider)
     ) {
       continue
     }

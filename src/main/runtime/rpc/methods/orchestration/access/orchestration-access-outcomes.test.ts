@@ -1,3 +1,5 @@
+import { SessionLinkStore } from '../../../../orchestration/session-links/session-link-store'
+import { sessionLinkTestParticipants as participants } from '../../../../orchestration/session-links/session-link-test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -91,6 +93,10 @@ async function createFixture() {
   const foreignTask = db.createTask({ runId: foreign.id, spec: 'foreign work' })
   // A gate on the dispatched Task would settle its Dispatch.
   const gate = db.createGate({ taskId: readyTask.id, question: 'Proceed?' })
+  new SessionLinkStore(db).create('access-link', 'Checkout scope', [
+    participants[0],
+    participants[1]
+  ])
   const ids = {
     owned: owned.id,
     foreign: foreign.id,
@@ -209,6 +215,56 @@ const CASES = {
     params: (from, ids) => ({ id: ids.gate, resolution: 'yes', from })
   },
   inbox: { method: 'orchestration.inbox', params: (terminal) => ({ terminal }) },
+  linkSetPolicy: {
+    method: 'orchestration.linkSetPolicy',
+    params: () => ({
+      id: 'access-link',
+      operationId: 'policy',
+      version: 1,
+      policy: { turnLimit: 20 }
+    })
+  },
+  linkCandidates: {
+    method: 'orchestration.linkCandidates',
+    params: () => ({ sessionId: participants[0].sessionId })
+  },
+  linkAddParticipants: {
+    method: 'orchestration.linkAddParticipants',
+    params: () => ({
+      id: 'access-link',
+      operationId: 'join',
+      version: 1,
+      sessionIds: ['gemini-checkout'],
+      groupSupport: true
+    })
+  },
+  linkCreate: {
+    method: 'orchestration.linkCreate',
+    params: () => ({
+      id: 'new-access-link',
+      story: 'Checkout scope',
+      role: 'reviewer',
+      sessionId: participants[0].sessionId,
+      partnerSessionId: participants[1].sessionId
+    })
+  },
+  linkCurrent: {
+    method: 'orchestration.linkCurrent',
+    params: () => ({ sessionId: participants[0].sessionId })
+  },
+  linkShow: { method: 'orchestration.linkShow', params: () => ({ id: 'access-link' }) },
+  linkSend: {
+    method: 'orchestration.linkSend',
+    params: () => ({ id: 'access-link', operationId: 'send', kind: 'owner-note', body: 'Continue' })
+  },
+  linkResolve: {
+    method: 'orchestration.linkResolve',
+    params: () => ({ id: 'access-link', eventId: 'event', operationId: 'resolve', version: 1 })
+  },
+  linkControl: {
+    method: 'orchestration.linkControl',
+    params: () => ({ id: 'access-link', operationId: 'control', action: 'resume', version: 1 })
+  },
   partyLocation: { method: 'orchestration.partyLocation', params: (address) => ({ address }) },
   partyOpen: { method: 'orchestration.partyOpen', params: (address) => ({ address }) },
   peerMailAck: { method: 'orchestration.peerMailAck', params: () => ({ acknowledgments: [] }) },
@@ -368,6 +424,17 @@ const EXPECTED: Record<string, string> & Record<keyof typeof CASES, string> = {
   gateListRun: 'ok ok ok ok',
   gateResolve: 'ok runtime_error run_required run_required',
   inbox: 'ok ok ok ok',
+  linkSetPolicy: 'owner_required owner_required owner_required owner_required',
+  linkCandidates: 'owner_required owner_required owner_required owner_required',
+  linkAddParticipants: 'owner_required owner_required owner_required owner_required',
+  linkCreate: 'owner_required owner_required owner_required owner_required',
+  linkCurrent:
+    'session_link_refused session_link_refused session_link_refused session_link_refused',
+  linkShow: 'participant_required participant_required participant_required participant_required',
+  linkSend: 'participant_required participant_required participant_required participant_required',
+  linkResolve: 'owner_required owner_required owner_required owner_required',
+  linkControl:
+    'participant_required participant_required participant_required participant_required',
   partyLocation: 'ok ok ok ok',
   partyOpen: 'ok ok ok ok',
   peerMailAck:

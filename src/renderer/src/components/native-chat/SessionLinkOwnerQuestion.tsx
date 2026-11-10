@@ -147,7 +147,7 @@ export function sessionLinkOwnerQuestion(
     'sessionId' | 'target' | 'isVisible' | 'agent' | 'isFocusedGroup'
   >
 ): React.JSX.Element | null {
-  return view.isVisible && (view.agent === 'claude' || view.agent === 'codex') ? (
+  return view.isVisible ? (
     <SessionLinkOwnerQuestion
       sessionId={view.sessionId}
       target={view.target}

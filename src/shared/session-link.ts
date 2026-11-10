@@ -1,11 +1,13 @@
 import { z } from 'zod'
 import { isOrcaSessionId, type OrcaSessionId } from './orca-session-address'
+import { isStructuredAgentId } from './agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export {
   SESSION_LINK_CAPABILITY,
   SESSION_LINK_PAIRED_DESKTOP_CAPABILITY,
   SESSION_LINK_OWNER_CHOICES_CAPABILITY,
-  SESSION_LINK_POLICY_CAPABILITY
+  SESSION_LINK_POLICY_CAPABILITY,
+  SESSION_LINK_GROUP_CAPABILITY
 } from './orchestration/orchestration-runtime-capabilities'
 export const SESSION_LINK_TURN_LIMIT = 6
 export const SESSION_LINK_DEFAULT_TURN_LIMIT = 20
@@ -25,7 +27,7 @@ export const SessionLinkParticipant = z.object({
   sessionId,
   conversationId: sessionId,
   name: z.string().min(1).max(256),
-  agent: z.enum(['claude', 'codex']),
+  agent: z.string().refine(isStructuredAgentId),
   workspaceId: z.string().min(1).max(4096),
   directory: z.string().min(1).max(4096),
   branch: z.string().max(512),
@@ -38,7 +40,16 @@ export const SessionLink = z.object({
   id: identifier,
   story: z.string().trim().min(1).max(8192),
   policy: SessionLinkPolicy.optional(),
-  participants: z.tuple([SessionLinkParticipant, SessionLinkParticipant]),
+  initialParticipantSessionIds: z.array(sessionId).min(2).optional(),
+  participants: z
+    .array(SessionLinkParticipant)
+    .min(2)
+    .refine(
+      (items) =>
+        new Set(items.map((p) => p.conversationId)).size === items.length &&
+        new Set(items.map((p) => p.sessionId)).size === items.length,
+      'Choose distinct conversations.'
+    ),
   state: z.enum(['active', 'paused', 'ended']),
   reason: z.string().max(512),
   version: z.number().int().positive(),
@@ -96,6 +107,7 @@ export const SessionLinkEvent = z.object({
   state: z.enum(['recorded', 'queued', 'dispatching', 'accepted', 'blocked', 'cancelled']),
   operationId: z.string(),
   requestId: identifier.optional(),
+  participantSessionIds: z.array(sessionId).optional(),
   policy: SessionLinkPolicy.optional(),
   retryable: z.boolean().optional(),
   targetTurnId: identifier.optional(),
@@ -110,22 +122,39 @@ export const SessionLinkSnapshot = z.object({
 })
 export type SessionLinkSnapshot = z.infer<typeof SessionLinkSnapshot>
 
-export const LinkListParams = z.object({ sessionId }).strict()
-export const LinkShowParams = z.object({ id: identifier }).strict()
+const groupSupport = z.literal(true).optional()
+export const LinkListParams = z.object({ sessionId, groupSupport }).strict()
+export const LinkShowParams = z.object({ id: identifier, groupSupport }).strict()
 export const LinkCreateParams = z
   .object({
     id: identifier,
     sessionId,
-    partnerSessionId: sessionId,
+    partnerSessionId: sessionId.optional(),
+    partnerSessionIds: z.array(sessionId).min(1).optional(),
+    groupSupport,
     policy: SessionLinkPolicy.optional(),
     story: z.string().trim().min(1).max(8192),
     role: SessionLinkRole
+  })
+  .strict()
+  .refine(
+    (p) => Boolean(p.partnerSessionId) !== Boolean(p.partnerSessionIds),
+    'Choose the partner chats.'
+  )
+export const LinkAddParticipantsParams = z
+  .object({
+    id: identifier,
+    operationId: identifier,
+    version: z.number().int().positive(),
+    sessionIds: z.array(sessionId).min(1),
+    groupSupport: z.literal(true)
   })
   .strict()
 export const LinkControlParams = z
   .object({
     id: identifier,
     operationId: identifier,
+    groupSupport,
     action: z.enum(['pause', 'resume', 'stop', 'end']),
     callerOperationId: identifier.optional(),
     ownerMessage: z.string().trim().min(1).max(8192).optional(),
@@ -142,6 +171,7 @@ export const LinkSetPolicyParams = z
   .object({
     id: identifier,
     operationId: identifier,
+    groupSupport,
     version: z.number().int().positive(),
     policy: SessionLinkPolicy,
     resume: z.boolean().default(false)
@@ -152,6 +182,7 @@ export const LinkResolveParams = z
     id: identifier,
     eventId: identifier,
     operationId: identifier,
+    groupSupport,
     version: z.number().int().positive()
   })
   .strict()
@@ -161,6 +192,8 @@ export const LinkSendParams = z
   .object({
     id: identifier,
     operationId: identifier,
+    groupSupport,
+    to: sessionId.optional(),
     body: z.string().trim().min(1).max(8192),
     kind: SessionLinkMessageKind.exclude(['introduction']),
     replyTo: identifier.optional(),
@@ -182,11 +215,10 @@ export const LinkSendParams = z
     'A question without choices must allow a free-text answer.'
   )
 
-export function sessionLinkPartner(link: SessionLink, id: string): SessionLinkParticipant {
+export function sessionLinkPeers(link: SessionLink, id: string): SessionLinkParticipant[] {
   const own = link.participants.find((p) => p.sessionId === id)
-  const partner = link.participants.find((p) => p.sessionId !== id)
-  if (!own || !partner) {
+  if (!own) {
     throw new Error('This session is not a participant in this link.')
   }
-  return partner
+  return link.participants.filter((p) => p.sessionId !== id)
 }

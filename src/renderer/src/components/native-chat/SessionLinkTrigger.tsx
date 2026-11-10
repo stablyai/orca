@@ -1,5 +1,5 @@
 import { Link2 } from 'lucide-react'
-import { AI_VAULT_AGENT_LABELS } from '../../../../shared/ai-vault/contracts/ai-vault-types'
+import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import type { SessionLinkSnapshot } from '../../../../shared/session-link'
 import {
   sessionLinkOwnerRequest,
@@ -37,15 +37,23 @@ export function SessionLinkTrigger({
         : waiting
           ? t('components.sessionLink.waitingShort', 'Waiting')
           : null
-  const label = partner
-    ? t('components.sessionLink.linkedAgent', 'Linked with {{agent}} ({{role}})', {
-        agent: AI_VAULT_AGENT_LABELS[partner.agent],
-        role:
-          partner.role === 'reviewer'
-            ? t('components.sessionLink.roleReviewer', 'reviewer')
-            : t('components.sessionLink.roleImplementer', 'implementer')
-      }) + (status ? ` · ${status}` : '')
-    : t('components.sessionLink.title', 'Work together')
+  const label =
+    link && link.participants.length > 2
+      ? t('components.sessionLink.linkedGroup', 'Linked agents: {{agents}}', {
+          agents: link.participants
+            .filter((p) => p.sessionId !== sessionId)
+            .map((p) => tuiAgentDisplayName(p.agent) ?? p.agent)
+            .join(', ')
+        }) + (status ? ` · ${status}` : '')
+      : partner
+        ? t('components.sessionLink.linkedAgent', 'Linked with {{agent}} ({{role}})', {
+            agent: tuiAgentDisplayName(partner.agent) ?? partner.agent,
+            role:
+              partner.role === 'reviewer'
+                ? t('components.sessionLink.roleReviewer', 'reviewer')
+                : t('components.sessionLink.roleImplementer', 'implementer')
+          }) + (status ? ` · ${status}` : '')
+        : t('components.sessionLink.title', 'Work together')
   const dot = question
     ? 'bg-status-warning-text'
     : link?.state === 'paused'

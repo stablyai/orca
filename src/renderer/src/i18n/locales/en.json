@@ -21890,7 +21890,22 @@
       "ownerAnswered": "Answered by the owner",
       "optionalNote": "Optional note to both agents",
       "sendResume": "Send and continue",
-      "hostDescription": "Connect two existing chats on this host. You control the story, permissions and continuation."
+      "hostDescription": "Connect two existing chats on this host. You control the story, permissions and continuation.",
+      "addParticipants": "Add agents",
+      "addSelected": "Add selected agents",
+      "chooseParticipants": "Choose chats to connect.",
+      "chooseAgents": "Choose agents",
+      "groupSameWorkspace": "Some participants use the same workspace. Coordinate file writes before editing.",
+      "groupOptionalNote": "Optional note to all participants",
+      "groupOwnerMessage": "Your message to all participants",
+      "groupHostDescription": "Connect existing chats on this host. You control the story, permissions and continuation.",
+      "sendAll": "Send to all",
+      "linkedGroup": "Linked agents: {{agents}}",
+      "groupOwnerAnswer": "Your decision for all participants",
+      "participants": "Participants",
+      "availableEmpty": "No available chats on this host.",
+      "participantsAdded": "Agents added by the owner",
+      "reasonParticipants": "A chat closed or changed context. Verify the participant chats before continuing."
     },
     "wslHostMark": {
       "runsOn": "Runs on WSL: {{distro}} (Linux)"

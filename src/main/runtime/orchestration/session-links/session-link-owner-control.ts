@@ -31,12 +31,23 @@ export function writeSessionLinkControl(
     const id = sessionLinkEventId(params.id, actor, params.operationId)
     const replay = store.event(id)
     const link = store.get(params.id)
-    const notes = link.participants.map((p) => ({
-      id: sessionLinkEventId(params.id, actor, params.operationId, 'answer', p.sessionId),
-      recipient: p.sessionId
-    }))
+    const originalRecipients = replay
+      ? store
+          .events(params.id)
+          .filter((e) => e.requestId === params.operationId && e.kind === 'owner-note')
+          .map((e) => e.recipient)
+      : link.participants.map((p) => p.sessionId)
+    const notes = originalRecipients
+      .filter((id) => id !== null)
+      .map((sessionId) => ({
+        id: sessionLinkEventId(params.id, actor, params.operationId, 'answer', sessionId),
+        recipient: sessionId
+      }))
     if (replay) {
-      if (notes.some((note) => store.event(note.id)?.body !== params.ownerMessage)) {
+      if (
+        Boolean(notes.length) !== Boolean(params.ownerMessage) ||
+        notes.some((note) => store.event(note.id)?.body !== params.ownerMessage)
+      ) {
         throw new Error('Operation belongs to another owner answer.')
       }
     } else {

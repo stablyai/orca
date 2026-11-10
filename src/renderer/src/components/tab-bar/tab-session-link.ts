@@ -7,9 +7,7 @@ import {
 
 export function isLinkableChatTab(state: AppState, tab: Tab | undefined): tab is Tab {
   return Boolean(
-    tab?.contentType === 'agent-session' &&
-    (tab.agentSessionAgent === 'claude' || tab.agentSessionAgent === 'codex') &&
-    structuredAgentSessionTargetForTab(state, tab) !== null
+    tab?.contentType === 'agent-session' && structuredAgentSessionTargetForTab(state, tab) !== null
   )
 }
 

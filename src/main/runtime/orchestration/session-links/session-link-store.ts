@@ -117,9 +117,7 @@ export class SessionLinkStore {
         }
         return link
       }
-      if (participants[0].sessionId === participants[1].sessionId) {
-        throw new Error('Choose another session.')
-      }
+      SessionLink.shape.participants.parse(participants)
       if (participants.some((p) => this.forSession(p.conversationId))) {
         throw new Error('A participant already has an active session link.')
       }
@@ -128,6 +126,7 @@ export class SessionLinkStore {
         id,
         story,
         participants,
+        initialParticipantSessionIds: participants.map((p) => p.sessionId),
         ...(policy ? { policy } : {}),
         state: 'active',
         reason: '',

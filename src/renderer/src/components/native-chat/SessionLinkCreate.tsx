@@ -1,5 +1,3 @@
-import { AI_VAULT_AGENT_LABELS } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import { Check } from 'lucide-react'
 import { useState } from 'react'
 import {
   SESSION_LINK_DEFAULT_TURN_LIMIT,
@@ -12,13 +10,7 @@ import { SessionLinkParticipantCard } from './SessionLinkParticipantCard'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import {
-  Command,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandEmpty
-} from '@/components/ui/command'
+import { SessionLinkParticipantPicker } from './SessionLinkParticipantPicker'
 
 export function SessionLinkCreate({
   source,
@@ -26,6 +18,7 @@ export function SessionLinkCreate({
   initialPartnerSessionId,
   busy,
   policySupported = false,
+  groupSupported = false,
   onCreate
 }: {
   source: SessionLinkParticipant
@@ -33,14 +26,17 @@ export function SessionLinkCreate({
   initialPartnerSessionId?: string
   busy: boolean
   policySupported?: boolean
+  groupSupported?: boolean
   onCreate: (
-    partner: string,
+    partners: string[],
     story: string,
     role: 'reviewer' | 'implementer',
     policy?: SessionLinkPolicy
   ) => void
 }): React.JSX.Element {
-  const [partner, setPartner] = useState(initialPartnerSessionId ?? '')
+  const [partners, setPartners] = useState<string[]>(
+    initialPartnerSessionId ? [initialPartnerSessionId] : []
+  )
   const [choosingPartner, setChoosingPartner] = useState(!initialPartnerSessionId)
   const [story, setStory] = useState('')
   const [policy, setPolicy] = useState<SessionLinkPolicy>({
@@ -49,81 +45,57 @@ export function SessionLinkCreate({
   const [role, setRole] = useState<'reviewer' | 'implementer'>(
     source.agent === 'claude' ? 'reviewer' : 'implementer'
   )
-  const selected = candidates.find((p) => p.sessionId === partner)
+  const selected = candidates.filter((p) => partners.includes(p.sessionId))
+  const unavailable = partners.some((id) => !candidates.some((p) => p.sessionId === id))
   return (
     <div className="space-y-4">
       {choosingPartner ? (
-        <div className="space-y-1">
-          <Label>{t('components.sessionLink.partner', 'Partner session')}</Label>
-          <Command>
-            <CommandInput
-              placeholder={t(
-                'components.sessionLink.search',
-                'Search agent, chat, workspace or branch…'
-              )}
-            />
-            <CommandList className="max-h-48">
-              <CommandEmpty>
-                {t('components.sessionLink.empty', 'No available local Claude or Codex chats.')}
-              </CommandEmpty>
-              {candidates.map((p) => (
-                <CommandItem
-                  disabled={busy}
-                  key={p.sessionId}
-                  value={`${p.sessionId} ${p.agent} ${p.name} ${p.directory} ${p.branch}`}
-                  onSelect={() => {
-                    setPartner(p.sessionId)
-                    setChoosingPartner(false)
-                  }}
-                  data-current={partner === p.sessionId ? 'true' : undefined}
-                >
-                  <Check
-                    className={`size-3 shrink-0 ${partner === p.sessionId ? 'opacity-100' : 'opacity-0'}`}
-                    aria-hidden
-                  />
-                  <div className="min-w-0 space-y-1">
-                    <div className="text-sm">
-                      {p.name}
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        {AI_VAULT_AGENT_LABELS[p.agent]}
-                      </span>
-                    </div>
-                    <div className="break-all font-mono text-xs text-muted-foreground">
-                      {p.directory} · {p.branch}
-                    </div>
-                  </div>
-                </CommandItem>
-              ))}
-            </CommandList>
-          </Command>
-        </div>
+        <SessionLinkParticipantPicker
+          candidates={candidates}
+          selected={partners}
+          disabled={busy}
+          onSelect={(id) => {
+            setPartners((ids) =>
+              groupSupported
+                ? ids.includes(id)
+                  ? ids.filter((i) => i !== id)
+                  : [...ids, id]
+                : [id]
+            )
+            if (!groupSupported) {
+              setChoosingPartner(false)
+            }
+          }}
+        />
       ) : null}
       <div className="grid gap-3 sm:grid-cols-2">
         <SessionLinkParticipantCard participant={source} role={role} />
-        {selected ? (
+        {selected.map((participant) => (
           <SessionLinkParticipantCard
-            participant={selected}
+            key={participant.sessionId}
+            participant={participant}
             role={role === 'implementer' ? 'reviewer' : 'implementer'}
           />
-        ) : (
+        ))}
+        {unavailable || !selected.length ? (
           <p
-            role={partner ? 'alert' : undefined}
+            role={unavailable ? 'alert' : undefined}
             className="rounded-md border p-3 text-sm text-muted-foreground"
           >
-            {partner
+            {unavailable
               ? t(
                   'components.sessionLink.partnerUnavailable',
                   'The selected chat is no longer available. Choose another partner.'
                 )
-              : t('components.sessionLink.choosePartner', 'Choose the other chat to connect.')}
+              : t('components.sessionLink.chooseParticipants', 'Choose chats to connect.')}
           </p>
-        )}
+        ) : null}
       </div>
       <div className="flex flex-wrap gap-2">
         <Button
           variant="outline"
           size="sm"
-          disabled={busy || !selected}
+          disabled={busy || !selected.length}
           onClick={() => setRole(role === 'reviewer' ? 'implementer' : 'reviewer')}
         >
           {t('components.sessionLink.swap', 'Swap roles')}
@@ -135,7 +107,9 @@ export function SessionLinkCreate({
             disabled={busy}
             onClick={() => setChoosingPartner(true)}
           >
-            {t('components.sessionLink.changePartner', 'Change partner')}
+            {groupSupported
+              ? t('components.sessionLink.chooseAgents', 'Choose agents')
+              : t('components.sessionLink.changePartner', 'Change partner')}
           </Button>
         ) : null}
       </div>
@@ -175,23 +149,26 @@ export function SessionLinkCreate({
               'Up to 6 automatic turns, including introductions, or 12 agent messages before the owner continues. Agent messages do not grant permissions. Transport and journal stay on this host; model requests use each session’s provider and account.'
             )}
       </p>
-      {selected?.workspaceId === source.workspaceId ? (
+      {selected.some((p) => p.workspaceId === source.workspaceId) ? (
         <p className="text-xs text-chat-warning">
           {t(
-            'components.sessionLink.sameWorkspace',
-            'Both sessions use the same workspace. Coordinate file writes before editing.'
+            'components.sessionLink.groupSameWorkspace',
+            'Some participants use the same workspace. Coordinate file writes before editing.'
           )}
         </p>
       ) : null}
       <Button
         disabled={
           busy ||
-          !selected ||
+          !selected.length ||
+          unavailable ||
           !story.trim() ||
           (policySupported && !SessionLinkPolicy.safeParse(policy).success)
         }
         onClick={() =>
-          policySupported ? onCreate(partner, story, role, policy) : onCreate(partner, story, role)
+          policySupported
+            ? onCreate(partners, story, role, policy)
+            : onCreate(partners, story, role)
         }
       >
         {busy

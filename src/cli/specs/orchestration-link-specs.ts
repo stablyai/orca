@@ -12,20 +12,22 @@ export const ORCHESTRATION_LINK_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['orchestration', 'link-send'],
-    summary: 'Send a message to your linked partner',
+    summary: 'Send a message to a linked participant',
     usage:
-      'orca orchestration link-send --id <link_id> --body <text> [--kind <kind>] [--reply-to <message_id>] [--operation <id>] [--choices-json <json>] [--allow-other <true|false>] [--json]',
+      'orca orchestration link-send --id <link_id> --body <text> [--kind <kind>] [--to <session_id>] [--reply-to <message_id>] [--operation <id>] [--choices-json <json>] [--allow-other <true|false>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'id',
       'body',
       'kind',
       'reply-to',
+      'to',
       'operation',
       'choices-json',
       'allow-other'
     ],
     notes: [
+      'In a group, choose the recipient with --to <session_id>. Replies route to the original sender. Owner requests need no peer recipient.',
       'Kinds: message, question, checkpoint, reply, owner-request. After a question/checkpoint, finish your turn and wait for an answer; do not poll.',
       'For owner-request, --choices-json accepts 2–4 objects with label (up to 80 characters) and optional description (up to 200). Free text is allowed by default; --allow-other false requires choices. Older hosts receive the choices as text.',
       'Read the delivery receipt: queued or sending is not delivered. An owner-request is recorded for the owner and pauses the link.',

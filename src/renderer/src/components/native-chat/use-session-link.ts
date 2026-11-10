@@ -10,7 +10,8 @@ import {
   SessionLinkSnapshot,
   SESSION_LINK_POLICY_CAPABILITY,
   SESSION_LINK_CAPABILITY,
-  SESSION_LINK_PAIRED_DESKTOP_CAPABILITY
+  SESSION_LINK_PAIRED_DESKTOP_CAPABILITY,
+  SESSION_LINK_GROUP_CAPABILITY
 } from '../../../../shared/session-link'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useTranslate } from '@/i18n/use-translate'
@@ -28,6 +29,7 @@ export function useSessionLink(sessionId: string, target: RuntimeClientTarget, o
 
   const [supported, setSupported] = useState(false)
   const [policySupported, setPolicySupported] = useState(false)
+  const [groupSupported, setGroupSupported] = useState(false)
   const [snapshot, setSnapshot] = useState<SessionLinkSnapshot | null>(null)
   const [candidates, setCandidates] = useState<z.infer<typeof Candidates> | null>(null)
   const [error, setError] = useState('')
@@ -62,7 +64,7 @@ export function useSessionLink(sessionId: string, target: RuntimeClientTarget, o
     const result = await callStructuredAgentSession<unknown>(
       destination,
       id ? 'orchestration.linkShow' : 'orchestration.linkCurrent',
-      id ? { id } : { sessionId }
+      { ...(id ? { id } : { sessionId }), ...(groupSupported ? { groupSupport: true } : {}) }
     )
     if (issuedAt !== generation.current || sequence !== readSequence.current) {
       return
@@ -80,7 +82,7 @@ export function useSessionLink(sessionId: string, target: RuntimeClientTarget, o
       setError('')
     }
     setSnapshot(value)
-  }, [open, sessionId, destination])
+  }, [open, sessionId, destination, groupSupported])
 
   useEffect(() => {
     let cancelled = false
@@ -94,6 +96,7 @@ export function useSessionLink(sessionId: string, target: RuntimeClientTarget, o
     setCandidates(null)
     setSupported(false)
     setPolicySupported(false)
+    setGroupSupported(false)
     const probe = () =>
       void Promise.all([
         structuredAgentSessionHostSupports(
@@ -102,11 +105,13 @@ export function useSessionLink(sessionId: string, target: RuntimeClientTarget, o
             ? SESSION_LINK_CAPABILITY
             : SESSION_LINK_PAIRED_DESKTOP_CAPABILITY
         ),
-        structuredAgentSessionHostSupports(destination, SESSION_LINK_POLICY_CAPABILITY)
-      ]).then(([ok, policyOk]) => {
+        structuredAgentSessionHostSupports(destination, SESSION_LINK_POLICY_CAPABILITY),
+        structuredAgentSessionHostSupports(destination, SESSION_LINK_GROUP_CAPABILITY)
+      ]).then(([ok, policyOk, groupOk]) => {
         if (!cancelled) {
           setSupported(ok)
           setPolicySupported(policyOk)
+          setGroupSupported(groupOk)
         }
       })
     probe()
@@ -157,7 +162,8 @@ export function useSessionLink(sessionId: string, target: RuntimeClientTarget, o
     }
     let cancelled = false
     void callStructuredAgentSession<unknown>(destination, 'orchestration.linkCandidates', {
-      sessionId
+      sessionId,
+      ...(groupSupported ? { groupSupport: true } : {})
     })
       .then((result) => {
         if (!cancelled) {
@@ -172,7 +178,7 @@ export function useSessionLink(sessionId: string, target: RuntimeClientTarget, o
     return () => {
       cancelled = true
     }
-  }, [open, sessionId, supported, destination])
+  }, [open, sessionId, supported, destination, groupSupported, snapshot?.link.version])
 
   const execute = (operation: LinkMutation) =>
     executeSessionLinkMutation(operation, destination, {
@@ -197,7 +203,11 @@ export function useSessionLink(sessionId: string, target: RuntimeClientTarget, o
       )
       return Promise.resolve(false)
     }
-    return execute({ method, fields, operationId: createBrowserUuid() })
+    return execute({
+      method,
+      fields: { ...fields, ...(groupSupported ? { groupSupport: true } : {}) },
+      operationId: createBrowserUuid()
+    })
   }
   const retry = () => (request.current ? execute(request.current) : Promise.resolve(false))
   const show = async (id: string) => {
@@ -216,6 +226,7 @@ export function useSessionLink(sessionId: string, target: RuntimeClientTarget, o
   return {
     supported,
     policySupported,
+    groupSupported,
     snapshot,
     candidates,
     error,

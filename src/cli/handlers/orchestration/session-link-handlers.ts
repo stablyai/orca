@@ -7,7 +7,8 @@ import { sessionLinkSendReceipt } from '../../../shared/session-link-receipt'
 import {
   SessionLinkSnapshot,
   LinkSendParams,
-  SESSION_LINK_OWNER_CHOICES_CAPABILITY
+  SESSION_LINK_OWNER_CHOICES_CAPABILITY,
+  SESSION_LINK_GROUP_CAPABILITY
 } from '../../../shared/session-link'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 
@@ -24,10 +25,20 @@ function linkOperationError(error: unknown, guidance: string): Error {
     : new Error(message)
 }
 
+async function linkGroupSupport(
+  client: Parameters<CommandHandler>[0]['client']
+): Promise<{ groupSupport?: true }> {
+  const status = await client.call<RuntimeStatus>('status.get')
+  return status.result.capabilities?.includes(SESSION_LINK_GROUP_CAPABILITY)
+    ? { groupSupport: true }
+    : {}
+}
+
 export const ORCHESTRATION_LINK_HANDLERS: Record<string, CommandHandler> = {
   'orchestration link-show': async ({ flags, client, json }) => {
     const result = await client.call('orchestration.linkShow', {
-      id: getRequiredStringFlag(flags, 'id')
+      id: getRequiredStringFlag(flags, 'id'),
+      ...(await linkGroupSupport(client))
     })
     printResult(result, json, (value) => JSON.stringify(value, null, 2))
   },
@@ -44,6 +55,7 @@ export const ORCHESTRATION_LINK_HANDLERS: Record<string, CommandHandler> = {
         operationId,
         body: getRequiredStringFlag(flags, 'body'),
         kind: getOptionalStringFlag(flags, 'kind') ?? 'message',
+        ...(getOptionalStringFlag(flags, 'to') ? { to: getOptionalStringFlag(flags, 'to') } : {}),
         ...(choicesJson ? { choices: JSON.parse(choicesJson) } : {}),
         ...(allowOther !== undefined ? { allowOther: allowOther === 'true' } : {}),
         ...(getOptionalStringFlag(flags, 'reply-to')
@@ -64,7 +76,11 @@ export const ORCHESTRATION_LINK_HANDLERS: Record<string, CommandHandler> = {
           delete params.allowOther
         }
       }
-      const result = await client.call('orchestration.linkSend', params)
+      const group = await linkGroupSupport(client)
+      if (params.to && !group.groupSupport) {
+        throw new Error('Update the host to address participants in a group link.')
+      }
+      const result = await client.call('orchestration.linkSend', { ...params, ...group })
       const snapshot = SessionLinkSnapshot.parse(result.result)
       printResult(
         {
@@ -98,7 +114,8 @@ export const ORCHESTRATION_LINK_HANDLERS: Record<string, CommandHandler> = {
     const callerOperationId = getRequiredStringFlag(flags, 'turn-operation')
     const operationId = getOptionalStringFlag(flags, 'operation') ?? randomUUID()
     try {
-      const observed = await client.call('orchestration.linkShow', { id })
+      const group = await linkGroupSupport(client)
+      const observed = await client.call('orchestration.linkShow', { id, ...group })
       const current = SessionLinkSnapshot.parse(observed.result)
       const result = await client.call('orchestration.linkControl', {
         id,
@@ -106,6 +123,7 @@ export const ORCHESTRATION_LINK_HANDLERS: Record<string, CommandHandler> = {
         callerOperationId,
         ...(summary ? { summary } : {}),
         version: current.link.version,
+        ...group,
         operationId
       })
       printResult(

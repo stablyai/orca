@@ -1945,6 +1945,18 @@
       "workers_one": "{{count}} worker",
       "workers_other": "{{count}} workers"
     },
+    "sessionLink": {
+      "choosePartner": "Choose the other chat to connect.",
+      "empty": "No available local Claude or Codex chats.",
+      "hostDescription": "Connect two existing chats on this host. You control the story, permissions and continuation.",
+      "optionalNote": "Optional note to both agents",
+      "ownerAnswer": "Your decision for both agents",
+      "ownerMessage": "Your message to both agents",
+      "partner": "Partner session",
+      "reasonParticipant": "A chat closed or changed context. Verify both chats before continuing.",
+      "sameWorkspace": "Both sessions use the same workspace. Coordinate file writes before editing.",
+      "sendBoth": "Send to both"
+    },
     "tab": {
       "bar": {
         "bulkClose": {

@@ -48,7 +48,9 @@ export function SessionLinkJournal({
             {sessionLinkEventKind(event.kind)}
           </p>
           <p className="whitespace-pre-wrap break-words text-sm">
-            {event.body || sessionLinkReason(event.detail)}
+            {event.participantSessionIds
+              ? `${sessionLinkReason(event.detail)}: ${event.participantSessionIds.map(name).join(', ')}`
+              : event.body || sessionLinkReason(event.detail)}
             {event.policy
               ? ` · ${event.policy.turnLimit === null ? t('components.sessionLink.untilAccepted', 'Until the reviewer accepts the result') : event.policy.turnLimit}`
               : null}

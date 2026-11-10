@@ -1,27 +1,27 @@
+import { linkWrite, snapshot, verifyResumeParticipants } from './session-link-rpc-state'
 import {
   isSessionLinkOwner,
   requireSessionLinkOwner,
   sessionLinkActor,
   sessionLinkControlTurn
 } from './session-link-authority'
-import { sessionLinkIntroduction } from '../../../orchestration/session-links/session-link-message'
+import { appendSessionLinkIntroductions } from '../../../orchestration/session-links/session-link-message'
 import { resolveUnknownSessionLinkDelivery } from '../../../orchestration/session-links/session-link-resolution'
 import {
   sessionLinkEventId as eventId,
   writeSessionLinkControl,
   writeSessionLinkPolicy
 } from '../../../orchestration/session-links/session-link-owner-control'
-import type { RpcContext } from '../../core'
 import { defineOrchestrationMethod } from './access/orchestration-method-access'
 import {
   LinkCreateParams,
+  LinkAddParticipantsParams,
   LinkSetPolicyParams,
   LinkControlParams,
   LinkResolveParams,
   LinkSendParams,
   LinkListParams,
-  LinkShowParams,
-  sessionLinkPartner
+  LinkShowParams
 } from '../../../../../shared/session-link'
 import { SessionLinkStore } from '../../../orchestration/session-links/session-link-store'
 import { sessionLinkCandidates } from '../../../orchestration/session-links/session-link-participants'
@@ -29,51 +29,12 @@ import { redriveSessionLinks } from '../../../orchestration/session-links/sessio
 import { stopSessionLinkTurns } from '../../../orchestration/session-links/session-link-stop'
 import { canonicalOrcaSessionId } from '../../../orchestration/addressing/session-lineage/canonical-orca-session-id'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
-
-function linkWrite<T>(action: () => T): T {
-  try {
-    return action()
-  } catch (error) {
-    throw new OrchestrationError(
-      'session_link_refused',
-      error instanceof Error ? error.message : String(error),
-      { effectsApplied: false }
-    )
-  }
-}
-function snapshot(context: RpcContext, id: string) {
-  const store = new SessionLinkStore(context.runtime.getOrchestrationDb())
-  const link = store.get(id)
-  sessionLinkActor(context, link)
-  return { link, events: store.events(id) }
-}
-
-async function verifyResumeParticipants(
-  store: SessionLinkStore,
-  id: string,
-  context: RpcContext
-): Promise<void> {
-  const link = store.get(id)
-  const candidates = await sessionLinkCandidates(context.runtime)
-  linkWrite(() => {
-    if (
-      !link.participants.every((participant) =>
-        candidates.some(
-          (candidate) =>
-            candidate.sessionId === participant.sessionId &&
-            candidate.context === participant.context &&
-            candidate.workspaceId === participant.workspaceId
-        )
-      )
-    ) {
-      throw new OrchestrationError(
-        'session_link_refused',
-        'A participant closed or changed context. End this link and select the intended chats again.',
-        { effectsApplied: false }
-      )
-    }
-  })
-}
+import {
+  addSessionLinkParticipants,
+  requireSessionLinkGroupSupport,
+  sessionLinkNeedsGroupSupport,
+  sessionLinkRecipients
+} from '../../../orchestration/session-links/session-link-group'
 
 export const SESSION_LINK_METHODS = [
   defineOrchestrationMethod({
@@ -84,6 +45,7 @@ export const SESSION_LINK_METHODS = [
     handler: async (params, context) => {
       requireSessionLinkOwner(context)
       const store = new SessionLinkStore(context.runtime.getOrchestrationDb())
+      linkWrite(() => requireSessionLinkGroupSupport(store.get(params.id), params.groupSupport))
       const replay = store.event(eventId(params.id, 'owner', params.operationId))
       if (params.resume && !replay) {
         await verifyResumeParticipants(store, params.id, context)
@@ -92,7 +54,7 @@ export const SESSION_LINK_METHODS = [
       void redriveSessionLinks(store.orchestration).catch((error) =>
         console.warn('[session-link] redrive unavailable', error)
       )
-      return snapshot(context, params.id)
+      return snapshot(context, params.id, params.groupSupport)
     }
   }),
   defineOrchestrationMethod({
@@ -100,14 +62,16 @@ export const SESSION_LINK_METHODS = [
     access: { kind: 'reads', targets: { sessionId: 'session' }, collection: true },
     permission: 'workspace',
     params: LinkListParams,
-    handler: async ({ sessionId }, context) => {
+    handler: async ({ sessionId, groupSupport }, context) => {
       requireSessionLinkOwner(context)
-      const participants = await sessionLinkCandidates(context.runtime)
+      const participants = (await sessionLinkCandidates(context.runtime)).filter(
+        (p) => groupSupport || ['claude', 'codex'].includes(p.agent)
+      )
       const source = participants.find((p) => p.sessionId === sessionId)
       if (!source) {
         throw new OrchestrationError(
           'session_link_refused',
-          'This chat is not an available local Claude or Codex session.',
+          'This chat is not available for session links on this host.',
           { effectsApplied: false }
         )
       }
@@ -119,8 +83,10 @@ export const SESSION_LINK_METHODS = [
         ),
         history: store
           .list()
-          .filter((link) =>
-            link.participants.some((p) => p.conversationId === source.conversationId)
+          .filter(
+            (link) =>
+              (groupSupport || !sessionLinkNeedsGroupSupport(link)) &&
+              link.participants.some((p) => p.conversationId === source.conversationId)
           )
           .slice(-20)
           .toReversed()
@@ -128,24 +94,50 @@ export const SESSION_LINK_METHODS = [
     }
   }),
   defineOrchestrationMethod({
+    name: 'orchestration.linkAddParticipants',
+    access: { kind: 'writes', targets: { id: 'sessionLink', sessionIds: 'session' } },
+    permission: 'workspace',
+    params: LinkAddParticipantsParams,
+    handler: async (params, context) => {
+      requireSessionLinkOwner(context)
+      const store = new SessionLinkStore(context.runtime.getOrchestrationDb())
+      const replay = store.event(eventId(params.id, 'owner', params.operationId))
+      const candidates = replay ? [] : await sessionLinkCandidates(context.runtime)
+      linkWrite(() => addSessionLinkParticipants(store, params, candidates))
+      void redriveSessionLinks(store.orchestration).catch((error) =>
+        console.warn('[session-link] redrive unavailable', error)
+      )
+      return snapshot(context, params.id, true)
+    }
+  }),
+  defineOrchestrationMethod({
     name: 'orchestration.linkCreate',
     access: {
       kind: 'writes',
-      targets: { id: 'sessionLink', sessionId: 'session', partnerSessionId: 'session' }
+      targets: {
+        id: 'sessionLink',
+        sessionId: 'session',
+        partnerSessionId: 'session',
+        partnerSessionIds: 'session'
+      }
     },
     permission: 'workspace',
     params: LinkCreateParams,
     handler: async (params, context) => {
       requireSessionLinkOwner(context)
       const store = new SessionLinkStore(context.runtime.getOrchestrationDb())
+      const partnerIds =
+        params.partnerSessionIds ?? (params.partnerSessionId ? [params.partnerSessionId] : [])
       const existing = store.list().find((link) => link.id === params.id)
       if (existing) {
         linkWrite(() => {
           if (
             existing.story !== params.story ||
             JSON.stringify(existing.policy) !== JSON.stringify(params.policy) ||
-            existing.participants[0].sessionId !== params.sessionId ||
-            existing.participants[1].sessionId !== params.partnerSessionId ||
+            JSON.stringify(
+              existing.initialParticipantSessionIds ??
+                existing.participants.slice(0, 2).map((p) => p.sessionId)
+            ) !== JSON.stringify([params.sessionId, ...partnerIds]) ||
             existing.participants[0].role !== params.role
           ) {
             throw new OrchestrationError(
@@ -155,39 +147,39 @@ export const SESSION_LINK_METHODS = [
             )
           }
         })
-        return snapshot(context, params.id)
+        return snapshot(context, params.id, params.groupSupport)
       }
       const candidates = await sessionLinkCandidates(context.runtime)
       const source = candidates.find((p) => p.sessionId === params.sessionId)
-      const partner = candidates.find((p) => p.sessionId === params.partnerSessionId)
-      if (!source || !partner || source.conversationId === partner.conversationId) {
+      const partners = partnerIds.map((id) => candidates.find((p) => p.sessionId === id))
+      if (!source || partners.some((p) => !p)) {
         throw new OrchestrationError(
           'session_link_refused',
-          'Choose two different available local chats.',
+          'Choose different available chats on this host.',
           { effectsApplied: false }
         )
       }
       source.role = params.role
-      partner.role = params.role === 'reviewer' ? 'implementer' : 'reviewer'
+      const participants = [
+        source,
+        ...partners
+          .filter((p) => p !== undefined)
+          .map((p) => ({
+            ...p,
+            role: params.role === 'reviewer' ? ('implementer' as const) : ('reviewer' as const)
+          }))
+      ]
       linkWrite(() =>
         store.transaction(() => {
-          const link = store.create(params.id, params.story, [source, partner], params.policy)
-          for (const recipient of link.participants) {
-            store.append({
-              id: eventId(link.id, 'introduction', recipient.sessionId),
-              linkId: link.id,
-              actor: 'host',
-              recipient: recipient.sessionId,
-              kind: 'introduction',
-              body: sessionLinkIntroduction(link, recipient)
-            })
-          }
+          requireSessionLinkGroupSupport({ participants }, params.groupSupport)
+          const link = store.create(params.id, params.story, participants, params.policy)
+          appendSessionLinkIntroductions(store, link, 'introduction')
         })
       )
       void redriveSessionLinks(store.orchestration).catch((error) =>
         console.warn('[session-link] redrive unavailable', error)
       )
-      return snapshot(context, params.id)
+      return snapshot(context, params.id, params.groupSupport)
     }
   }),
   defineOrchestrationMethod({
@@ -195,7 +187,7 @@ export const SESSION_LINK_METHODS = [
     access: { kind: 'reads', targets: { sessionId: 'session' } },
     permission: 'workspace',
     params: LinkListParams,
-    handler: ({ sessionId }, context) => {
+    handler: ({ sessionId, groupSupport }, context) => {
       const root = canonicalOrcaSessionId(sessionId)
       if (!isSessionLinkOwner(context) && context.orchestrationCaller?.orcaSessionId !== root) {
         throw new OrchestrationError('session_link_refused', 'Read only your own session link.', {
@@ -204,7 +196,7 @@ export const SESSION_LINK_METHODS = [
       }
       const store = new SessionLinkStore(context.runtime.getOrchestrationDb())
       const link = store.forSession(root)
-      return link ? snapshot(context, link.id) : null
+      return link ? snapshot(context, link.id, groupSupport) : null
     }
   }),
   defineOrchestrationMethod({
@@ -212,7 +204,7 @@ export const SESSION_LINK_METHODS = [
     access: { kind: 'reads', targets: { id: 'sessionLink' } },
     permission: 'workspace',
     params: LinkShowParams,
-    handler: ({ id }, context) => snapshot(context, id)
+    handler: ({ id, groupSupport }, context) => snapshot(context, id, groupSupport)
   }),
   defineOrchestrationMethod({
     name: 'orchestration.linkSend',
@@ -230,7 +222,8 @@ export const SESSION_LINK_METHODS = [
           { effectsApplied: false }
         )
       }
-      const recipients = from === 'owner' ? link.participants : [sessionLinkPartner(link, from)]
+      linkWrite(() => requireSessionLinkGroupSupport(link, params.groupSupport))
+      const recipients = linkWrite(() => sessionLinkRecipients(store, link, from, params))
       linkWrite(() =>
         store.transaction(() => {
           for (const recipient of recipients) {
@@ -252,7 +245,7 @@ export const SESSION_LINK_METHODS = [
       void redriveSessionLinks(store.orchestration).catch((error) =>
         console.warn('[session-link] redrive unavailable', error)
       )
-      return snapshot(context, params.id)
+      return snapshot(context, params.id, params.groupSupport)
     }
   }),
   defineOrchestrationMethod({
@@ -263,8 +256,9 @@ export const SESSION_LINK_METHODS = [
     handler: (params, context) => {
       requireSessionLinkOwner(context)
       const store = new SessionLinkStore(context.runtime.getOrchestrationDb())
+      linkWrite(() => requireSessionLinkGroupSupport(store.get(params.id), params.groupSupport))
       linkWrite(() => resolveUnknownSessionLinkDelivery(store, params))
-      return snapshot(context, params.id)
+      return snapshot(context, params.id, params.groupSupport)
     }
   }),
   defineOrchestrationMethod({
@@ -279,6 +273,7 @@ export const SESSION_LINK_METHODS = [
       if (from !== 'owner' && params.action !== 'end' && params.action !== 'stop') {
         requireSessionLinkOwner(context)
       }
+      linkWrite(() => requireSessionLinkGroupSupport(link, params.groupSupport))
       const callingTurn = sessionLinkControlTurn(store, link, from, params.callerOperationId)
       const replay = store.event(eventId(link.id, from, params.operationId))
       if (params.action === 'resume' && !replay) {
@@ -291,7 +286,7 @@ export const SESSION_LINK_METHODS = [
       void redriveSessionLinks(store.orchestration).catch((error) =>
         console.warn('[session-link] redrive unavailable', error)
       )
-      return snapshot(context, params.id)
+      return snapshot(context, params.id, params.groupSupport)
     }
   })
 ]

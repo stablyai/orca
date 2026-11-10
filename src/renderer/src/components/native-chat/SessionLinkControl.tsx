@@ -10,6 +10,7 @@ import {
   DialogDescription
 } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
+import { SessionLinkAddParticipants } from './SessionLinkAddParticipants'
 import { SessionLinkCreate } from './SessionLinkCreate'
 import { SessionLinkJournal } from './SessionLinkJournal'
 import { sessionLinkStatus } from './session-link-presentation'
@@ -51,8 +52,8 @@ export function SessionLinkControl({
   const limitPause =
     link?.state === 'paused' && ['turn-limit', 'message-limit'].includes(link.reason)
   const ownerMessageLabel = limitPause
-    ? t('components.sessionLink.optionalNote', 'Optional note to both agents')
-    : t('components.sessionLink.ownerMessage', 'Your message to both agents')
+    ? t('components.sessionLink.groupOptionalNote', 'Optional note to all participants')
+    : t('components.sessionLink.groupOwnerMessage', 'Your message to all participants')
   const control = (action: 'pause' | 'resume' | 'stop' | 'end') => {
     if (link) {
       void state.mutate('orchestration.linkControl', { id: link.id, action, version: link.version })
@@ -81,8 +82,8 @@ export function SessionLinkControl({
             <DialogTitle>{t('components.sessionLink.title', 'Work together')}</DialogTitle>
             <DialogDescription>
               {t(
-                'components.sessionLink.hostDescription',
-                'Connect two existing chats on this host. You control the story, permissions and continuation.'
+                'components.sessionLink.groupHostDescription',
+                'Connect existing chats on this host. You control the story, permissions and continuation.'
               )}
             </DialogDescription>
           </DialogHeader>
@@ -103,7 +104,8 @@ export function SessionLinkControl({
           ) : null}
           {snapshot &&
           initialPartnerSessionId &&
-          !snapshot.link.participants.some((p) => p.sessionId === initialPartnerSessionId) ? (
+          !snapshot.link.participants.some((p) => p.sessionId === initialPartnerSessionId) &&
+          !state.groupSupported ? (
             <p role="alert" className="text-sm">
               {t(
                 'components.sessionLink.otherLink',
@@ -193,6 +195,31 @@ export function SessionLinkControl({
                   {t('components.sessionLink.end', 'End link')}
                 </Button>
               </div>
+              {state.groupSupported && state.candidates && link?.state !== 'ended' ? (
+                <SessionLinkAddParticipants
+                  key={snapshot.link.id}
+                  candidates={state.candidates.candidates.filter(
+                    (p) =>
+                      !snapshot.link.participants.some(
+                        (member) => member.conversationId === p.conversationId
+                      )
+                  )}
+                  busy={state.busy || state.uncertain}
+                  initialSessionId={
+                    initialPartnerSessionId &&
+                    !snapshot.link.participants.some((p) => p.sessionId === initialPartnerSessionId)
+                      ? initialPartnerSessionId
+                      : undefined
+                  }
+                  onAdd={(sessionIds) =>
+                    state.mutate('orchestration.linkAddParticipants', {
+                      id: snapshot.link.id,
+                      version: snapshot.link.version,
+                      sessionIds
+                    })
+                  }
+                />
+              ) : null}
               {state.policySupported && snapshot.link.state !== 'ended' ? (
                 <SessionLinkPolicySettings
                   key={`${snapshot.link.id}:${snapshot.link.version}`}
@@ -271,7 +298,7 @@ export function SessionLinkControl({
                   >
                     {link?.state === 'paused' && state.policySupported
                       ? t('components.sessionLink.sendResume', 'Send and continue')
-                      : t('components.sessionLink.sendBoth', 'Send to both')}
+                      : t('components.sessionLink.sendAll', 'Send to all')}
                   </Button>
                 </>
               ) : null}
@@ -291,10 +318,13 @@ export function SessionLinkControl({
                 )}
                 busy={state.busy || state.uncertain}
                 policySupported={state.policySupported}
-                onCreate={(partnerSessionId, story, role, policy) =>
+                groupSupported={state.groupSupported}
+                onCreate={(partnerSessionIds, story, role, policy) =>
                   void state.mutate('orchestration.linkCreate', {
                     sessionId,
-                    partnerSessionId,
+                    ...(state.groupSupported
+                      ? { partnerSessionIds }
+                      : { partnerSessionId: partnerSessionIds[0] }),
                     story,
                     role,
                     ...(policy ? { policy } : {})

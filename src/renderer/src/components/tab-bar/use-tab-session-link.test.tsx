@@ -129,7 +129,8 @@ it.each(['local', 'runtime:macbook'] as const)(
         rpc.mock.calls.find(([, method]) => method === 'orchestration.linkCreate')?.[2]
       ).toMatchObject({
         sessionId: 'codex-source',
-        partnerSessionId: 'codex-partner',
+        partnerSessionIds: ['codex-partner'],
+        groupSupport: true,
         story: 'Checkout slice 2',
         role: 'implementer'
       })

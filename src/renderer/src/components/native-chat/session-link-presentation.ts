@@ -9,6 +9,10 @@ import { translate as t } from '@/i18n/i18n'
 
 export function sessionLinkReason(reason: string): string {
   const labels: Record<string, string> = {
+    'participants-added': t(
+      'components.sessionLink.participantsAdded',
+      'Agents added by the owner'
+    ),
     policy: t('components.sessionLink.policyChanged', 'Collaboration limits changed by the owner'),
     'policy-resume': t(
       'components.sessionLink.policyResumed',
@@ -30,8 +34,8 @@ export function sessionLinkReason(reason: string): string {
       'Owner decision needed. Answer the question below to continue.'
     ),
     'participant-changed': t(
-      'components.sessionLink.reasonParticipant',
-      'A chat closed or changed context. Verify both chats before continuing.'
+      'components.sessionLink.reasonParticipants',
+      'A chat closed or changed context. Verify the participant chats before continuing.'
     ),
     'delivery-reviewed': t(
       'components.sessionLink.deliveryReviewed',
