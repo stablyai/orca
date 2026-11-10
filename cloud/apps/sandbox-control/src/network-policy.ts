@@ -88,10 +88,8 @@ export const DEFAULT_EGRESS_ALLOWLIST: readonly string[] = [
   '*.cursor.sh',
   'cursor.com',
   '*.cursor.com',
-  // OpenCode: model catalog and its own sign-in/hosted providers.
+  // OpenCode: its model catalog. (opencode.ai is left off: its share API takes anonymous uploads.)
   'models.dev',
-  'opencode.ai',
-  '*.opencode.ai',
   // GitHub Copilot CLI: Copilot API (per plan: api.individual., api.business., ...).
   'api.githubcopilot.com',
   '*.githubcopilot.com',

@@ -271,7 +271,7 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
         placeholders: [format(secretPlaceholder(row, entry.secret))],
         label: entry.secret,
         ...(entry.paths ? { pathAllowed: requestMatches(entry.paths) } : {}),
-        ...(entry.omitResponseFields ? { omitResponseFields: entry.omitResponseFields } : {}),
+        ...(entry.keepResponseFields ? { keepResponseFields: entry.keepResponseFields } : {}),
         credential: async () => {
           const current = await cachedProviderEnv(env.SANDBOX_DB, await keyring, row, (deps.now ?? Date.now)())
           // The key must still be meant for this host now (not only at boot): a later edit may

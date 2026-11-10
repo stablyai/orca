@@ -48,7 +48,7 @@ describe('credential routes for Gemini, Cursor and Copilot BYOK', () => {
     const cursor = targets.find((t) => t.secret === 'CURSOR_API_KEY')!
     expect(cursor.paths).toEqual([{ method: 'POST', path: '/auth/exchange_user_api_key' }])
     expect(cursor.allowUnclaimed).toBe(true)
-    expect(cursor.omitResponseFields).toEqual(['refreshToken'])
+    expect(cursor.keepResponseFields).toEqual(['accessToken'])
   })
 
   it('routes a Copilot BYOK key only together with its base URL, from the same scope', () => {
@@ -190,12 +190,37 @@ describe('egress swap on a sandbox with the new keys', () => {
     expect(upstream).toHaveLength(before)
   })
 
-  it('Cursor: a reply that is not a JSON object is refused, not passed through with a refresh token', async () => {
+  it('Cursor: whatever the reply looks like, nothing but the access token reaches the VM', async () => {
     const { id, send, setReply } = await setup()
-    setReply(() => new Response('[{"refreshToken":"rt"}]', { status: 200, headers: { 'content-type': 'application/json' } }))
-    expect(await send('api2.cursor.sh', 'POST', '/auth/exchange_user_api_key', { authorization: `Bearer orca-ph-cursor-api-key-${id}` })).toEqual({
-      status: 403,
-      body: 'unreadable_reply'
-    })
+    const placeholder = `Bearer orca-ph-cursor-api-key-${id}`
+    const replies: [string, string | null, number][] = [
+      ['{"accessToken":"at","refreshToken":"rt","nested":{"refreshToken":"rt2"},"refresh_token":"rt3"}', 'text/plain', 200],
+      ['{"accessToken":"at","refreshToken":"rt"}', null, 200],
+      ['{"accessToken":"at","refreshToken":"rt"}', 'application/problem+json; charset=utf-8', 200],
+      ['[{"refreshToken":"rt"}]', 'application/json', 200],
+      ['<html>refreshToken rt</html>', 'text/html', 502],
+      ['{"error":"invalid key","refreshToken":"rt"}', 'application/json', 401]
+    ]
+    for (const [body, type, status] of replies) {
+      setReply(() => new Response(body, { status, headers: { ...(type ? { 'content-type': type } : {}), 'set-cookie': 'session=rt' } }))
+      const res = await send('api2.cursor.sh', 'POST', '/auth/exchange_user_api_key', { authorization: placeholder })
+      expect(res.status).toBe(status)
+      expect(res.body).not.toContain('rt"')
+      expect(res.body).not.toContain('refresh')
+      expect(['{"accessToken":"at"}', '{}']).toContain(res.body)
+    }
+  })
+
+  it('a swappable key with no usable route reaches the VM as a placeholder, never as itself', async () => {
+    const { h, id } = await setup()
+    const mia = await h.token('mia', undefined, 'sandbox')
+    // A Copilot BYOK key without its base URL has no host to be swapped on.
+    expect((await h.call('PUT', '/v1/secrets/personal/COPILOT_PROVIDER_API_KEY', { body: { value: COPILOT_KEY }, bearer: mia })).status).toBe(200)
+    const last = h.vercel.commands.filter((c) => c.env.ORCA_SECRET_ENV).at(-1)!
+    const env = Object.fromEntries(
+      last.env.ORCA_SECRET_ENV!.split('\n').filter(Boolean).map((line) => [line.slice(0, line.indexOf('=')), Buffer.from(line.slice(line.indexOf('=') + 1), 'base64').toString('utf8')])
+    )
+    expect(env.COPILOT_PROVIDER_API_KEY).toBe(`orca-ph-copilot-provider-api-key-${id}`)
+    expect(JSON.stringify(env)).not.toContain(COPILOT_KEY)
   })
 })

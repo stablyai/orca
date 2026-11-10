@@ -38,8 +38,8 @@ export type ProxiedRoute = {
   credential: () => Promise<string | null>
   /** Narrows where this credential may be used (member tokens: the workspace repository only). */
   pathAllowed?: (method: string, path: string) => boolean
-  /** Top-level fields dropped from a JSON reply (a refresh token the VM must not keep). */
-  omitResponseFields?: readonly string[]
+  /** The reply must be a JSON object; only these top-level fields pass (no refresh token for the VM). */
+  keepResponseFields?: readonly string[]
   /** Names the swapped credential in the proxy's log line (never its value). */
   label?: string
 }
@@ -156,28 +156,25 @@ export async function handleEgressProxy(request: Request, deps: EgressProxyDeps)
   console.log(
     JSON.stringify({ event: 'egress_swap', sandboxId: row.id, host, credential: route.label ?? route.header, status: upstream.status })
   )
-  if (route.omitResponseFields?.length && /^application\/json\b/i.test(upstream.headers.get('content-type') ?? '')) {
-    return withoutFields(upstream, route.omitResponseFields)
+  if (route.keepResponseFields) {
+    return onlyFields(upstream, route.keepResponseFields)
   }
   // Re-wrapping lets the runtime frame the body (content-length or chunked) for the VM's client.
   return new Response(upstream.body, { status: upstream.status, headers: upstream.headers })
 }
 
-/** A JSON reply minus `fields`; a body that isn't a JSON object is refused rather than passed on. */
-async function withoutFields(upstream: Response, fields: readonly string[]): Promise<Response> {
-  let body: unknown
+/**
+ * The reply's JSON object cut down to `fields`, whatever its declared type. Anything else becomes an
+ * empty object with the same status: the client still sees success or failure, never the body.
+ */
+async function onlyFields(upstream: Response, fields: readonly string[]): Promise<Response> {
+  let body: unknown = null
   try {
-    body = await upstream.json()
+    body = JSON.parse(await upstream.text())
   } catch {
-    return deny('unreadable_reply')
+    // Not JSON: nothing of it is passed on.
   }
-  if (body === null || typeof body !== 'object' || Array.isArray(body)) {
-    return deny('unreadable_reply')
-  }
-  const kept = Object.fromEntries(Object.entries(body).filter(([key]) => !fields.includes(key)))
-  const headers = new Headers(upstream.headers)
-  for (const name of ['content-length', 'content-encoding', 'etag']) {
-    headers.delete(name)
-  }
-  return new Response(JSON.stringify(kept), { status: upstream.status, headers })
+  const object = body !== null && typeof body === 'object' && !Array.isArray(body) ? body : {}
+  const kept = Object.fromEntries(Object.entries(object).filter(([key]) => fields.includes(key)))
+  return new Response(JSON.stringify(kept), { status: upstream.status, headers: { 'content-type': 'application/json' } })
 }

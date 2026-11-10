@@ -52,8 +52,13 @@ export function applySecretPlaceholders(
 ): { env: Record<string, string>; targets: CredentialTarget[] } {
   const next = { ...env }
   const targets = credentialTargets(env, scopes)
-  for (const target of targets) {
-    next[target.secret] = secretPlaceholder(row, target.secret)
+  // Every swappable key becomes a placeholder, routed or not: a key with no usable route (a Copilot
+  // key without its base URL, a base URL from another scope, an unacceptable URL) must not reach
+  // the VM as itself. Unrouted, its placeholder is simply refused or rejected by the provider.
+  for (const secret of SWAPPED_CREDENTIALS) {
+    if (secret in next) {
+      next[secret] = secretPlaceholder(row, secret)
+    }
   }
   return { env: next, targets }
 }

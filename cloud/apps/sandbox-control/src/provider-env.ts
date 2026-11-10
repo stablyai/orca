@@ -88,8 +88,11 @@ export type CredentialPolicy = {
    * token and sends that on every later call, so a 403 for unclaimed requests would break it.
    */
   allowUnclaimed?: true
-  /** Fields the proxy removes from the provider's JSON reply before the VM sees it. */
-  omitResponseFields?: readonly string[]
+  /**
+   * The provider's reply must be a JSON object and only these top-level fields reach the VM (no
+   * headers that set state either); anything else is refused.
+   */
+  keepResponseFields?: readonly string[]
 }
 
 const bearer = (value: string) => `Bearer ${value}`
@@ -137,9 +140,9 @@ const CREDENTIALS: readonly CredentialSpec[] = [
     headers: { authorization: bearer },
     paths: [{ method: 'POST', path: '/auth/exchange_user_api_key' }],
     allowUnclaimed: true,
-    // Without a refresh token cursor-agent keeps the access token in memory only and exchanges the
-    // key again when it expires; with one it would persist a long-lived credential on the VM disk.
-    omitResponseFields: ['refreshToken']
+    // Only the access token: without a refresh token cursor-agent keeps the access token in memory
+    // and exchanges the key again when it expires; with one it would persist a long-lived credential.
+    keepResponseFields: ['accessToken']
   },
   {
     secret: 'COPILOT_PROVIDER_API_KEY',
