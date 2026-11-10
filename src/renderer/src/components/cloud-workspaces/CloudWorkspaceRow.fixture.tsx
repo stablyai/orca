@@ -16,7 +16,9 @@ const ACTIONS: RowActions = {
   copyLink: () => {},
   copyWorkspaceLink: () => {},
   goToChat: () => {},
-  patch: () => {}
+  patch: () => {},
+  archive: () => {},
+  unarchive: () => {}
 }
 const SECTIONS = ['Payments', 'Platform']
 const MEMBERS = [...DIRECTORY.entries()].map(([userId, m]) => ({ userId, name: m.name }))
