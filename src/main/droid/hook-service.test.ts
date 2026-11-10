@@ -21,8 +21,16 @@ function settingsPath(): string {
   return join(hoisted.home, '.factory', 'settings.json')
 }
 
+function isHookConfig(value: unknown): value is HookConfig {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 function readSettings(): HookConfig {
-  return JSON.parse(readFileSync(settingsPath(), 'utf8')) as HookConfig
+  const parsed: unknown = JSON.parse(readFileSync(settingsPath(), 'utf8'))
+  if (!isHookConfig(parsed)) {
+    throw new Error('Factory settings.json is not an object')
+  }
+  return parsed
 }
 
 describe('DroidHookService', () => {
