@@ -58,7 +58,7 @@ export function RepositoryRemoveProjectButton({
 
   return (
     <SearchableSetting
-      title={t('auto.components.settings.RepositoryPane.0909e5d650', 'Remove Project')}
+      title={t('auto.components.settings.RepositoryPane.04eebebbea', 'Remove project')}
       description={getRemoveProjectDescription(removalScope, t)}
       keywords={[repo.displayName, 'delete', 'project', 'repository']}
       className="w-auto"

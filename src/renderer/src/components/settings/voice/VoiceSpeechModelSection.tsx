@@ -80,7 +80,7 @@ export function VoiceSpeechModelSection({
   return (
     <div className="space-y-3">
       <SettingsSubsectionHeader
-        title={t('auto.components.settings.VoicePane.43fd4f454b', 'Speech Model')}
+        title={t('auto.components.settings.VoicePane.c5ea32143e', 'Speech model')}
         description={t(
           'components.settings.voice.models.description',
           'Quality is rated for {{language}}. Hover a rating to see the test behind it.',
@@ -112,7 +112,7 @@ export function VoiceSpeechModelSection({
       ) : null}
       <div
         role="list"
-        aria-label={t('auto.components.settings.VoicePane.43fd4f454b', 'Speech Model')}
+        aria-label={t('auto.components.settings.VoicePane.c5ea32143e', 'Speech model')}
         className="divide-y divide-border"
       >
         {rows.map((row) => (

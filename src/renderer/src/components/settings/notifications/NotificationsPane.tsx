@@ -121,7 +121,7 @@ export function NotificationsPane({
         </div>
       ) : null}
       <NotificationSettingToggle
-        label={t('auto.components.settings.NotificationsPane.841c8c549f', 'Enable Notifications')}
+        label={t('auto.components.settings.NotificationsPane.9c41a0d367', 'Enable notifications')}
         description={t(
           'auto.components.settings.NotificationsPane.deff6d30da',
           'Native system notifications for background events.'
@@ -139,7 +139,7 @@ export function NotificationsPane({
 
       <NotificationSettingToggle
         icon={<Bot className="size-4" />}
-        label={t('auto.components.settings.NotificationsPane.ca76d06fd2', 'Agent Task Complete')}
+        label={t('auto.components.settings.NotificationsPane.0acae1066d', 'Agent task complete')}
         description={t(
           'auto.components.settings.NotificationsPane.55f901a59b',
           'A coding agent finishes and becomes idle.'
@@ -155,7 +155,7 @@ export function NotificationsPane({
 
       <NotificationSettingToggle
         icon={<MessageCircleQuestion className="size-4" />}
-        label={t('auto.components.settings.NotificationsPane.63fc5ec9d2', 'Agent Needs Input')}
+        label={t('auto.components.settings.NotificationsPane.05f5c5ab50', 'Agent needs input')}
         description={t(
           'auto.components.settings.NotificationsPane.e1b1724793',
           'A coding agent asks for permission or has a question.'
@@ -171,7 +171,7 @@ export function NotificationsPane({
 
       <NotificationSettingToggle
         icon={<Siren className="size-4" />}
-        label={t('auto.components.settings.NotificationsPane.591fe605b9', 'Terminal Bell')}
+        label={t('auto.components.settings.NotificationsPane.6bc7bd7b6e', 'Terminal bell')}
         description={t(
           'auto.components.settings.NotificationsPane.b6fc369244',
           'A background terminal emits a bell character.'
@@ -207,8 +207,8 @@ export function NotificationsPane({
       <NotificationSettingToggle
         icon={<EyeOff className="size-4" />}
         label={t(
-          'auto.components.settings.NotificationsPane.ba07e60f38',
-          'Notify About Hidden Workspaces'
+          'auto.components.settings.NotificationsPane.3b77513cd0',
+          'Notify about hidden workspaces'
         )}
         description={t(
           'auto.components.settings.NotificationsPane.e4b5e909ff',
@@ -236,7 +236,7 @@ export function NotificationsPane({
       <Separator />
 
       <NotificationSettingToggle
-        label={t('auto.components.settings.NotificationsPane.00cd406dbb', 'Suppress While Focused')}
+        label={t('auto.components.settings.NotificationsPane.badd7ed4cf', 'Suppress while focused')}
         description={t(
           'auto.components.settings.NotificationsPane.2772d2f257',
           'Skip notifications when the triggering worktree is already visible.'
@@ -259,7 +259,7 @@ export function NotificationsPane({
           className="gap-2"
         >
           <BellRing className="size-3.5" />
-          {t('auto.components.settings.NotificationsPane.906b4afebf', 'Send Test Notification')}
+          {t('auto.components.settings.NotificationsPane.f5b0498e1f', 'Send test notification')}
         </Button>
       </div>
     </div>
