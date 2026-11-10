@@ -16,7 +16,11 @@ import * as commitSupport from '@/runtime/source-control/git/git-commit-actions-
 import { useGitGraphHistory } from './use-git-graph-history'
 import type { GitHistoryResult } from '../../../../../shared/git/history/git-history-types'
 
-const { getHistory, getRefs } = vi.hoisted(() => ({ getHistory: vi.fn(), getRefs: vi.fn() }))
+const { getHistory, getRefs, viewport } = vi.hoisted(() => ({
+  getHistory: vi.fn(),
+  getRefs: vi.fn(),
+  viewport: { rows: 20 }
+}))
 vi.mock('@/runtime/source-control/git/runtime-git-status-client', async (original) => ({
   ...(await original<object>()),
   getRuntimeGitHistory: getHistory,
@@ -31,6 +35,11 @@ vi.mock('@tanstack/react-virtual', () => ({
     getTotalSize: () => options.count * 28,
     getVirtualItems: () =>
       Array.from({ length: options.count }, (_, index) => ({ index, start: index * 28 })),
+    get range() {
+      return options.count
+        ? { startIndex: 0, endIndex: Math.min(options.count, viewport.rows) - 1 }
+        : null
+    },
     measureElement: () => {},
     scrollToIndex: (index: number) => {
       const element = options.getScrollElement()
@@ -56,6 +65,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount())
   root = createRoot(container)
+  viewport.rows = 20
   disposeGitGraphHistory(`${workspaceId}::git-graph`)
   useAppStore.setState(initialState, true)
   vi.restoreAllMocks()
@@ -651,4 +661,71 @@ it('canonicalizes selected refs before requesting history', async () => {
     await history!.controller.settledResult()
   })
   expect(getHistory.mock.calls[0]?.[1].refs).toEqual(['refs/heads/main', 'refs/heads/topic'])
+})
+
+const longHistory = Array.from({ length: 200 }, (_, index) => ({
+  id: `commit-${index}`,
+  subject: `Commit ${index}`,
+  message: `Commit ${index}`,
+  parentIds: []
+}))
+const longPage = (skip: number): GitHistoryResult => ({
+  ...result,
+  refs: 'all',
+  historyToken: 'long',
+  items: longHistory.slice(skip, skip + 50),
+  hasMore: skip + 50 < longHistory.length
+})
+const renderTab = () =>
+  act(async () =>
+    root.render(
+      <TooltipProvider>
+        <GitGraphTab worktreeId={workspaceId} />
+      </TooltipProvider>
+    )
+  )
+const loadedCount = () => gitGraphHistoryForTab(workspaceId).view.getState().result?.items.length
+
+it('pages a pane taller than the loaded commits until they overflow it, and again when it grows', async () => {
+  viewport.rows = 120
+  getHistory.mockReset().mockImplementation(async (_owner, options) => longPage(options.skip))
+  await renderTab()
+  expect(loadedCount()).toBe(150)
+  viewport.rows = 400
+  await renderTab()
+  expect(loadedCount()).toBe(200)
+  expect(container.textContent).not.toContain('Load more')
+})
+
+it('leaves a failed page to Load more instead of retrying it automatically', async () => {
+  viewport.rows = Infinity
+  getHistory
+    .mockReset()
+    .mockResolvedValueOnce(longPage(0))
+    .mockRejectedValueOnce(new Error('network down'))
+    .mockImplementation(async (_owner, options) => longPage(options.skip))
+  await renderTab()
+  await renderTab()
+  expect(loadedCount()).toBe(50)
+  expect(container.textContent).toContain('network down')
+  await act(async () => {
+    Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent === 'Load more')!
+      .click()
+  })
+  expect(loadedCount()).toBe(200)
+})
+
+it('stops paging on a page that adds no commits, and ends on an empty last page', async () => {
+  viewport.rows = Infinity
+  getHistory.mockReset().mockResolvedValue(longPage(0))
+  await renderTab()
+  await renderTab()
+  expect(loadedCount()).toBe(50)
+  expect(getHistory).toHaveBeenCalledTimes(2)
+  getHistory.mockResolvedValue({ ...longPage(0), items: [], hasMore: false })
+  await act(async () => {
+    await gitGraphHistoryForTab(workspaceId).loadMore()
+  })
+  expect(container.textContent).not.toContain('Load more')
 })
