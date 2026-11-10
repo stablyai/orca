@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaBillingEntitlement } from '../../../../shared/orca-billing'
-import { getOrcaCloudPick, toOrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
+import {
+  getOrcaCloudPick,
+  toOrcaCloudRunTargetAccess,
+  orcaCloudCanStart
+} from './orca-cloud-run-target-access'
 
 const openPlansPage = vi.fn()
 vi.mock('@/components/billing/plans/plans-page-store', () => ({
@@ -58,5 +62,21 @@ describe('Orca Cloud run-target access by role', () => {
     expect(getOrcaCloudPick(member)).toEqual({ kind: 'blocked' })
     const owner = toOrcaCloudRunTargetAccess(denied('overage_cap_reached', true))
     expect(getOrcaCloudPick(owner).kind).toBe('act')
+  })
+})
+
+describe('orcaCloudCanStart', () => {
+  it('is false only while something blocks a start', () => {
+    expect(orcaCloudCanStart(undefined)).toBe(true)
+    expect(orcaCloudCanStart({ state: 'entitled', remainingSeconds: 60 })).toBe(true)
+    expect(orcaCloudCanStart({ state: 'loading' })).toBe(true)
+    expect(orcaCloudCanStart({ state: 'no-plan', lapsed: false, canManageBilling: false })).toBe(
+      false
+    )
+    expect(orcaCloudCanStart({ state: 'out-of-hours', cause: 'cap', canManageBilling: true })).toBe(
+      false
+    )
+    expect(orcaCloudCanStart({ state: 'payment-issue', canManageBilling: false })).toBe(false)
+    expect(orcaCloudCanStart({ state: 'signed-out' })).toBe(false)
   })
 })

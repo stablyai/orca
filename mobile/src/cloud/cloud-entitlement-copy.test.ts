@@ -185,3 +185,14 @@ describe('roleForCloudError', () => {
     expect(await roleForCloudError(denied('included_hours_exhausted'), broken)).toBeNull()
   })
 })
+
+describe('trial denials', () => {
+  it('says the trial is used up (running sandboxes sleep) or was already used, then asks for a plan', () => {
+    expect(entitlementDeniedMessage(denied('trial_used_up'), 'owner', 'existing', t)).toBe(
+      'Your trial is used up. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Choose a plan in Orca on your computer.'
+    )
+    expect(entitlementDeniedMessage(denied('trial_unavailable'), 'member', 'create', t)).toBe(
+      'This account or team already used its trial. Nothing was created, and you weren’t charged. Ask an owner or admin to choose a plan.'
+    )
+  })
+})

@@ -1,10 +1,13 @@
 import { afterEach, expect, it, vi } from 'vitest'
 
-const handlers = new Map<string, () => unknown>()
+const handlers = new Map<string, (...args: unknown[]) => unknown>()
 const { openExternal } = vi.hoisted(() => ({ openExternal: vi.fn(async () => {}) }))
 
 vi.mock('electron', () => ({
-  ipcMain: { handle: (channel: string, handler: () => unknown) => handlers.set(channel, handler) },
+  ipcMain: {
+    handle: (channel: string, handler: (...args: unknown[]) => unknown) =>
+      handlers.set(channel, handler)
+  },
   shell: { openExternal }
 }))
 
@@ -17,12 +20,65 @@ afterEach(() => {
 })
 
 function register(installUrl: string, config = vi.fn(async () => ({ idleSleepMinutes: 15 }))) {
-  registerHostedAccountHandlers({
-    config,
-    connectGitHub: async () => ({ installUrl, authorizeUrl: installUrl })
-  })
+  registerHostedAccountHandlers(
+    {
+      config,
+      connectGitHub: async () => ({ installUrl, authorizeUrl: installUrl }),
+      githubRepoAccess: async () => ({ access: 'granted', owner: 'acme', repo: REPO }),
+      githubRepositories: async () => ({ repositories: [], nextCursor: null })
+    },
+    { repoIds: async () => null }
+  )
   return config
 }
+
+const REPO = 'https://github.com/acme/web'
+const SESSION = 'cs_abcdefghijklmnopqrstuv'
+
+it('asks again with the repo and owner ids when access is missing, so GitHub preselects the repo', async () => {
+  const githubRepoAccess = vi.fn(async (query: { repoId?: number }) => ({
+    access: 'missing' as const,
+    owner: 'acme',
+    repo: REPO,
+    installUrl: query.repoId
+      ? 'https://github.com/apps/x/installations/new/permissions?suggested_target_id=50&repository_ids[]=7&state=s'
+      : 'https://github.com/apps/x/installations/new?state=s'
+  }))
+  const connectGitHub = vi.fn(async () => ({
+    installUrl: 'https://github.com/apps/x/installations/new?state=s',
+    authorizeUrl: 'https://github.com/login/oauth/authorize'
+  }))
+  registerHostedAccountHandlers(
+    {
+      config: async () => ({ idleSleepMinutes: 15 }),
+      connectGitHub,
+      githubRepoAccess,
+      githubRepositories: async () => ({ repositories: [], nextCursor: null })
+    },
+    { repoIds: async () => ({ repoId: 7, ownerId: 50 }) }
+  )
+  const answer = await handlers.get(CH.getRepoAccess)?.(
+    {},
+    { repoUrl: `${REPO}.git`, setupSessionId: SESSION }
+  )
+  expect(answer).toMatchObject({
+    ok: true,
+    value: { access: 'missing', installUrl: expect.stringContaining('repository_ids[]=7') }
+  })
+  expect(githubRepoAccess).toHaveBeenLastCalledWith({
+    repo: REPO,
+    setupSessionId: SESSION,
+    repoId: 7,
+    ownerId: 50
+  })
+  // Not GitHub: refused without a network call.
+  expect(
+    await handlers.get(CH.getRepoAccess)?.({}, { repoUrl: 'https://gitlab.com/acme/web' })
+  ).toMatchObject({ ok: false })
+  // Connect with a repo carries the ids and the session; a malformed session id is dropped.
+  await handlers.get(CH.connectGitHub)?.({}, { repoUrl: REPO, setupSessionId: 'nope' })
+  expect(connectGitHub).toHaveBeenLastCalledWith(undefined, { repo: REPO, repoId: 7, ownerId: 50 })
+})
 
 it('opens only a github.com page for Connect GitHub', async () => {
   register('https://github.com/apps/orca-cloud-dev/installations/new?state=x')

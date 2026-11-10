@@ -32,6 +32,12 @@ import {
   type HostedSandboxReadyResponse,
   type HostedSandboxView
 } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
+import {
+  HostedGithubRepoAccessResponseSchema,
+  HostedGithubRepositoriesResponseSchema,
+  type HostedGithubRepoAccessResponse,
+  type HostedGithubRepositoriesResponse
+} from '../../shared/hosted-sandbox/hosted-github-wire'
 import type { z } from 'zod'
 
 type HostedGithubConnectResponse = z.infer<typeof HostedGithubConnectResponseSchema>
@@ -84,8 +90,31 @@ export type HostedSandboxControlPlaneClient = {
   startDesktop(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxDesktop>
   /** Product constants and measured timings (GET /v1/config). */
   config(signal?: AbortSignal): Promise<HostedSandboxConfigResponse>
-  /** Starts binding a GitHub App installation to the account; the browser finishes it. */
-  connectGitHub(signal?: AbortSignal): Promise<HostedGithubConnectResponse>
+  /**
+   * Starts binding a GitHub App installation to the account; the browser finishes it. With a repo,
+   * the install page preselects it (given its ids) and returns to the setup session afterwards.
+   */
+  connectGitHub(
+    signal?: AbortSignal,
+    target?: HostedGithubConnectTarget
+  ): Promise<HostedGithubConnectResponse>
+  /** Whether Orca Cloud can clone this https GitHub repository for the account. */
+  githubRepoAccess(
+    query: { repo: string; setupSessionId?: string; repoId?: number; ownerId?: number },
+    signal?: AbortSignal
+  ): Promise<HostedGithubRepoAccessResponse>
+  /** Repositories the account's GitHub installations reach (one page). */
+  githubRepositories(
+    cursor?: string | null,
+    signal?: AbortSignal
+  ): Promise<HostedGithubRepositoriesResponse>
+}
+
+export type HostedGithubConnectTarget = {
+  repo: string
+  setupSessionId?: string
+  repoId?: number
+  ownerId?: number
 }
 
 export function createHostedSandboxControlPlaneClient(
@@ -211,10 +240,36 @@ export function createHostedSandboxControlPlaneClient(
       ).desktop,
     config: (signal) =>
       call('GET', 'v1/config', HostedSandboxConfigResponseSchema, { kind: 'control', signal }),
-    connectGitHub: (signal) =>
+    connectGitHub: (signal, target) =>
       call('POST', 'v1/github/connect', HostedGithubConnectResponseSchema, {
+        ...(target ? { body: target } : {}),
+        kind: 'control',
+        signal
+      }),
+    githubRepoAccess: (query, signal) => {
+      const params = new URLSearchParams({ repo: query.repo })
+      if (query.setupSessionId) {
+        params.set('session', query.setupSessionId)
+      }
+      if (query.repoId) {
+        params.set('repoId', String(query.repoId))
+      }
+      if (query.ownerId) {
+        params.set('ownerId', String(query.ownerId))
+      }
+      return call('GET', `v1/github/repo-access?${params}`, HostedGithubRepoAccessResponseSchema, {
         kind: 'control',
         signal
       })
+    },
+    githubRepositories: (cursor, signal) =>
+      call(
+        'GET',
+        cursor
+          ? `v1/github/repositories?cursor=${encodeURIComponent(cursor)}`
+          : 'v1/github/repositories',
+        HostedGithubRepositoriesResponseSchema,
+        { kind: 'control', signal }
+      )
   }
 }

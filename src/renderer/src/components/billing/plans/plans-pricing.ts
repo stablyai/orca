@@ -35,16 +35,7 @@ export function annualSavingsPercent(team: TeamOffer): number | null {
   return percent > 0 ? percent : null
 }
 
-/** "$50", "$40", "$0.75", "$1,200" in the given locale. */
-export function formatCents(cents: number, locale: string): string {
-  const whole = cents % 100 === 0
-  return new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: whole ? 0 : 2,
-    maximumFractionDigits: whole ? 0 : 2
-  }).format(cents / 100)
-}
+export { formatCents } from '../../../../../shared/orca-billing-usage-alerts'
 
 /** A per-hour rate always shows cents ("$1.00", "$0.75"), unlike whole-dollar prices. */
 export function formatRateCents(cents: number, locale: string): string {

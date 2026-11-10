@@ -228,10 +228,7 @@ export function VmBuildCloudAgentStepView({
               </span>
             </>
           }
-          detail={t(
-            'cloudAgentSetup.subtitleBuild',
-            'Give Claude Code or Codex access in Orca Cloud.'
-          )}
+          detail={t('cloudAgentSetup.subtitleBuild', 'Give your agents access in Orca Cloud.')}
           actions={
             mode.kind === 'offer' ? (
               <>

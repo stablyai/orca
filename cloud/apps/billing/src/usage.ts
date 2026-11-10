@@ -18,6 +18,7 @@ import {
   pendingMeterReports,
   usageOverage
 } from './store'
+import { refreshTrialUsage } from './trial'
 
 // One segment is at most a day: the control plane settles running sandboxes periodically.
 const MAX_SEGMENT_MS = 24 * 3600 * 1000
@@ -91,6 +92,10 @@ export async function recordUsage(
     meterCustomer: customer,
     meterCapSeconds: capSeconds(team, settings.spend_cap_cents ?? team.defaultSpendCapCents)
   })
+  if (!subscription) {
+    // No plan: the segment counts against the one-time trial, if any (never overage).
+    await refreshTrialUsage(db, report.accountId, now)
+  }
   return { recorded, weightedSeconds, overageSeconds: await usageOverage(db, report.usageId) }
 }
 

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { seedCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import { CloudWorkspaceMarkSlot } from './CloudWorkspaceMarkSlot'
 import { CloudWakingOverlay } from './CloudWakingOverlay'
-import { CloudWorkspaceNotice } from './CloudWorkspaceNotice'
+import { CloudVersionSkewNotice, CloudWorkspaceNotice } from './CloudWorkspaceNotice'
 import { CloudWorkspaceStatusPanel } from './CloudWorkspaceStatusPanel'
 import { CloudGitChanges } from './CloudGitChanges'
 
@@ -107,7 +107,7 @@ describe('Orca Cloud surfaces', () => {
     expect(onRestart).not.toHaveBeenCalled()
   })
 
-  it('a status error gets its own header and Retry, not "Checking…"', () => {
+  it('a status error gets its own header and Try again, not "Checking…"', () => {
     const { container, getByRole } = render(
       <CloudWorkspaceStatusPanel
         workspaceId="ws"
@@ -119,7 +119,7 @@ describe('Orca Cloud surfaces', () => {
     )
     expect(container.textContent).toContain('Status unavailable')
     expect(container.textContent).not.toContain('Checking')
-    expect(getByRole('button', { name: /Retry/ })).not.toBeNull()
+    expect(getByRole('button', { name: 'Try again' })).not.toBeNull()
   })
 
   it('the waking overlay: counts seconds, says when slow, offers recovery when stuck', () => {
@@ -228,6 +228,45 @@ describe('Orca Cloud surfaces', () => {
     expect(getByRole('alert').textContent).toContain('It was stopped')
     fireEvent.click(getByRole('button', { name: 'Dismiss' }))
     expect(onDismiss).toHaveBeenCalled()
+  })
+
+  it('version skew: an older sandbox offers a new workspace, a newer one an update', () => {
+    const onCheckForUpdates = vi.fn()
+    const onCreateWorkspace = vi.fn()
+    const onDismiss = vi.fn()
+    const older = render(
+      <CloudVersionSkewNotice
+        direction="sandbox-older"
+        onCheckForUpdates={onCheckForUpdates}
+        onCreateWorkspace={onCreateWorkspace}
+        onDismiss={onDismiss}
+      />
+    )
+    expect(older.getByRole('status').textContent).toContain(
+      'This cloud workspace uses an older version of Orca'
+    )
+    expect(older.getByRole('status').textContent).toContain('Your files are safe.')
+    expect(older.queryByRole('button', { name: 'Check for updates' })).toBeNull()
+    fireEvent.click(older.getByRole('button', { name: 'Create workspace' }))
+    fireEvent.click(older.getByRole('button', { name: 'Dismiss' }))
+    expect(onCreateWorkspace).toHaveBeenCalledTimes(1)
+    expect(onDismiss).toHaveBeenCalledTimes(1)
+    older.unmount()
+
+    const newer = render(
+      <CloudVersionSkewNotice
+        direction="desktop-older"
+        onCheckForUpdates={onCheckForUpdates}
+        onCreateWorkspace={onCreateWorkspace}
+        onDismiss={onDismiss}
+      />
+    )
+    expect(newer.getByRole('status').textContent).toContain(
+      'This cloud workspace uses a newer version of Orca'
+    )
+    expect(newer.queryByRole('button', { name: 'Create workspace' })).toBeNull()
+    fireEvent.click(newer.getByRole('button', { name: 'Check for updates' }))
+    expect(onCheckForUpdates).toHaveBeenCalledTimes(1)
   })
 
   it('git changes read the same for porcelain letters and the cache’s words, with sr-only labels', () => {

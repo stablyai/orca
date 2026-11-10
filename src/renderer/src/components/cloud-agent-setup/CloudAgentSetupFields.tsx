@@ -213,7 +213,7 @@ export function CloudAgentSetupFields({
           </div>
           <Field
             {...ids('model')}
-            label={t('cloudAgentSetup.claudeModel', 'Claude Code model (optional)')}
+            label={t('cloudAgentSetup.claudeModel', 'Claude model (optional)')}
             help={t(
               'cloudAgentSetup.gatewayModelDefaultHint',
               'Leave empty to use the gateway’s default model.'
