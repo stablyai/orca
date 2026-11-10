@@ -24,6 +24,7 @@ import {
   clipboardImageThumbnailSize,
   type ClipboardImageThumbnail
 } from '../../../../shared/clipboard-image'
+import { withSniffedImageExtension } from '../../../../shared/image-file-signature'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard-text'
 import { blobToBase64, convertImageBlobToPng } from '@/lib/image-blob-png'
 import { copyClipboardTextViaExecCommand } from '../web-clipboard-copy-fallback'
@@ -290,10 +291,12 @@ export async function uploadBrowserFilesToWebRuntimeTempFiles(args: {
     }
     sentBytes += file.size
     try {
-      const path = await saveClipboardImageAsTempFileInRuntime(
-        encodeBase64Bytes(new Uint8Array(await file.arrayBuffer())),
-        { runtimeEnvironmentId: args.environmentId, fileName: file.name }
-      )
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      const path = await saveClipboardImageAsTempFileInRuntime(encodeBase64Bytes(bytes), {
+        runtimeEnvironmentId: args.environmentId,
+        // Like desktop staging: an extensionless image keeps an image name, so it lands as a chip.
+        fileName: withSniffedImageExtension(file.name, bytes)
+      })
       result.uploaded.push({ sourcePath, path })
     } catch (error) {
       result.failed.push({

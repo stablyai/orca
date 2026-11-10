@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { detectImageFileSignature, IMAGE_SIGNATURE_BYTES } from './image-file-signature'
+import {
+  detectImageFileSignature,
+  IMAGE_SIGNATURE_BYTES,
+  withSniffedImageExtension
+} from './image-file-signature'
 
 const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d]
 const JPEG = [0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1]
@@ -24,5 +28,14 @@ describe('detectImageFileSignature', () => {
     ['a truncated PNG header', Buffer.from(PNG.slice(0, 4))]
   ])('rejects %s', (_label, header) => {
     expect(detectImageFileSignature(header)).toBeNull()
+  })
+})
+
+describe('withSniffedImageExtension', () => {
+  const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])
+  it('adds the image suffix to an extensionless image and leaves other names alone', () => {
+    expect(withSniffedImageExtension('Screenshot', png)).toBe('Screenshot.png')
+    expect(withSniffedImageExtension('shot.jpeg', png)).toBe('shot.jpeg')
+    expect(withSniffedImageExtension('notes', Uint8Array.from([0x23, 0x20]))).toBe('notes')
   })
 })
