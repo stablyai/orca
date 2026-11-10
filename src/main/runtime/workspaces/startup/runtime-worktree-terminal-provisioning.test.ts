@@ -78,7 +78,6 @@ const DEFAULT_TABS = {
   ]
 }
 
-
 const setup = { runnerScriptPath: '/repo/.orca/setup.sh', envVars: {} }
 
 function createHost(settings: Record<string, unknown> = {}): {
@@ -123,7 +122,6 @@ function provisionWithSetup(
     setupCommandPlatform: 'posix'
   })
 }
-
 
 describe('provisionWorktreeTerminals setup auto-close', () => {
   it('makes host-created setup terminals exit their shell on success only when enabled', async () => {
