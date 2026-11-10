@@ -143,8 +143,8 @@ export function vmBuildFailureCopy(
         ),
         body: sandboxLimit
           ? t(
-              'auto.components.worktree.creation.VmBuildFailureCard.memberLimitBody',
-              'Each person can run {{value0}} sandboxes at once. Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.',
+              'auto.components.worktree.creation.VmBuildFailureCard.memberLimitBody2',
+              'You can run {{value0}} sandboxes at once. Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.',
               { value0: String(sandboxLimit.perSeat) }
             )
           : t(

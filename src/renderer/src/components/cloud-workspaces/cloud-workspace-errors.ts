@@ -16,8 +16,8 @@ export function describeError(error: string, reason?: string, t: Translate = tra
       const limit = sandboxLimitFromBilling(getLastBillingStatus())
       return limit
         ? t(
-            'auto.components.cloudWorkspaces.errorConcurrencyLimitCount',
-            "You're at your team's limit: your team can run {{value0}} sandboxes at once ({{value1}} per seat). Put one to sleep or delete it, then try again.",
+            'auto.components.cloudWorkspaces.errorConcurrencyLimitCount2',
+            'Your team can run {{value0}} sandboxes at once ({{value1}} per seat). Put one to sleep or delete it, then try again.',
             { value0: String(limit.team), value1: String(limit.perSeat) }
           )
         : t(

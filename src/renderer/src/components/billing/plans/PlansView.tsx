@@ -306,11 +306,8 @@ export function PlansView(props: PlansViewProps): React.JSX.Element {
       <div className="space-y-1 text-center text-xs text-muted-foreground text-pretty">
         <p>
           {t(
-            'auto.components.billing.plans.footHours4',
-            'Hours reset every month, including on annual plans. Each seat can run {{value0}} sandboxes at once.',
-            // The cap is enforced by the control plane; the fine print states it before anyone
-            // reaches the limit card, while the Team card keeps to the marketing bullets.
-            { value0: String(offers.team.concurrentSandboxesPerSeat) }
+            'auto.components.billing.plans.footHours3',
+            'Hours reset every month, including on annual plans.'
           )}
         </p>
         <p>

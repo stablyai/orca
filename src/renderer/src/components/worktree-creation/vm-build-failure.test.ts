@@ -115,7 +115,7 @@ describe('vmBuildFailureCopy', () => {
       'Your team can run 12 sandboxes at once (3 per seat). Put one to sleep or delete it'
     )
     expect(copy({ kind: 'memberConcurrency' }, { perSeat: 3, team: 12 })).toContain(
-      'Each person can run 3 sandboxes at once. Put one to sleep or delete it'
+      'You can run 3 sandboxes at once. Put one to sleep or delete it'
     )
     expect(copy({ kind: 'concurrency' }, null)).toMatch(/^Put one to sleep or delete it/)
   })
