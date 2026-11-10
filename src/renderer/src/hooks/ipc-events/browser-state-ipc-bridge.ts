@@ -6,6 +6,10 @@ import { rememberLiveBrowserUrl } from '@/components/browser-pane/describe-page/
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { findVisibleBrowserLinkTarget } from '@/lib/browser/navigation/visible-browser-link-target'
 import { openUrlInTabBesideBrowserPage } from '@/lib/browser/palette/browser-page-tab-opening'
+import {
+  isClientHostedBrowserSourcePage,
+  openClientHostedUrlBesideBrowserPage
+} from '@/lib/browser/palette/open-client-hosted-link-beside-page'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { useAppStore } from '../../store'
@@ -217,7 +221,20 @@ export function registerBrowserStateIpcBridge(
       const sourcePage = Object.values(store.browserPagesByWorkspace)
         .flat()
         .find((page) => page.id === browserPageId)
-      if (!sourcePage || runtimeEnvironmentIdOrLocalUnlessTwin(store, sourcePage.worktreeId)) {
+      if (!sourcePage) {
+        return
+      }
+      // Client-hosted guests live on this desktop, so a paired worktree must not drop their popups.
+      if (isClientHostedBrowserSourcePage(browserPageId)) {
+        openClientHostedUrlBesideBrowserPage({
+          sourcePageId: browserPageId,
+          worktreeId: sourcePage.worktreeId,
+          url,
+          activate: activate ?? true
+        })
+        return
+      }
+      if (runtimeEnvironmentIdOrLocalUnlessTwin(store, sourcePage.worktreeId)) {
         return
       }
       const placement = findVisibleBrowserLinkTarget(store, sourcePage.worktreeId)
