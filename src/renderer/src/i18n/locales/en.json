@@ -27291,6 +27291,7 @@
     "announce": "{{title}}. Press F6 to answer.",
     "unseenIn": "In {{workspace}}. The request waits up to 15 minutes.",
     "unseen": "Open that workspace to answer. The request waits up to 15 minutes.",
-    "openWorkspace": "Open"
+    "openWorkspace": "Open",
+    "helpBeforeSave": "Saves to your Cloud secrets. Commands in this workspace can read it as ${{name}}."
   }
 }

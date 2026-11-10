@@ -262,8 +262,8 @@ export function SecretRequestCard({
                 ) : null}
                 <p id={helpId} className="text-xs leading-5 text-muted-foreground">
                   {t(
-                    'secretRequest.help',
-                    'Saved to your Cloud secrets. Commands in this workspace can read it as ${{name}}.',
+                    'secretRequest.helpBeforeSave',
+                    'Saves to your Cloud secrets. Commands in this workspace can read it as ${{name}}.',
                     { name: model.name }
                   )}
                 </p>

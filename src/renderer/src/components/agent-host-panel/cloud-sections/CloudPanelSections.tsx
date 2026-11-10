@@ -367,7 +367,6 @@ export function CloudPanelSections({
   return (
     <div className={cn('flex flex-col divide-y divide-border', className)}>
       <CloudAgentKeysSection
-        number={2}
         load={load}
         onEdit={onEdit}
         onManage={onManage}
@@ -375,7 +374,6 @@ export function CloudPanelSections({
         extraRows={keysExtraRows}
       />
       <CloudEnvironmentPanelSection
-        number={3}
         load={load}
         onRetry={onRetry}
         onAdd={onAdd}
