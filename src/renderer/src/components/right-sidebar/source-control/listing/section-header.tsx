@@ -34,7 +34,10 @@ export function SectionHeader({
           type="button"
           variant="ghost"
           size={compact ? 'chip' : 'xs'}
-          className={cn('min-w-0 flex-1 justify-start text-left')}
+          className={cn(
+            'h-auto min-w-0 flex-1 justify-start text-left',
+            compact ? 'min-h-4' : 'min-h-6'
+          )}
           onClick={onToggle}
           aria-expanded={!isCollapsed}
         >

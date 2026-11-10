@@ -134,7 +134,7 @@ const WorktreeSection = memo(
           behind={remote?.behind}
           changeCount={entries.length}
           expanded={isExpanded}
-          showBranchInHeader={!bodyShown}
+          showBranchInHeader={!bodyShown || !bodyMounted}
           actions={
             isExpanded && (!bodyShown || !bodyMounted) ? (
               <SourceControlHeaderOverflowMenu worktree={owner.worktree} />
