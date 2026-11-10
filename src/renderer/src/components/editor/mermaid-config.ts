@@ -63,15 +63,19 @@ export function getMermaidConfig(
 }
 
 function darkThemeVariables(colors: MermaidThemeColors): Record<string, string | boolean> {
-  const primary = readableFill(colors.primary, colors.foreground, colors.background)
-  const secondary = readableFill(colors.secondary, colors.foreground, colors.background)
-  const tertiary = readableFill(colors.tertiary, colors.foreground, colors.background)
+  const surface = (fill: string): string => readableFill(fill, colors.foreground, colors.background)
+  const primarySurface = surface(colors.primary)
   return {
     darkMode: true,
     background: colors.background,
-    primaryColor: primary,
-    secondaryColor: secondary,
-    tertiaryColor: tertiary,
+    primaryColor: colors.primary,
+    secondaryColor: colors.secondary,
+    tertiaryColor: colors.tertiary,
+    // Seeds stay the theme's: git and venn pair them with their own label colours, not the foreground.
+    mainBkg: primarySurface,
+    requirementBackground: primarySurface,
+    taskBkgColor: primarySurface,
+    clusterBkg: surface(colors.tertiary),
     primaryTextColor: colors.foreground,
     secondaryTextColor: colors.foreground,
     tertiaryTextColor: colors.foreground,
@@ -86,6 +90,6 @@ function darkThemeVariables(colors: MermaidThemeColors): Record<string, string |
     excludeBkgColor: colors.background,
     doneTaskBkgColor: colors.background,
     doneTaskBorderColor: colors.border,
-    activeTaskBkgColor: secondary
+    activeTaskBkgColor: surface(colors.secondary)
   }
 }

@@ -74,8 +74,9 @@ describe('getMermaidConfig', () => {
     expectReadable(resolvedDarkTheme(pastelDarkColors), [
       ['actorTextColor', 'actorBkg'],
       ['nodeTextColor', 'mainBkg'],
-      ['secondaryTextColor', 'secondaryColor'],
-      ['tertiaryTextColor', 'tertiaryColor']
+      ['textColor', 'clusterBkg'],
+      ['taskTextColor', 'taskBkgColor'],
+      ['taskTextDarkColor', 'activeTaskBkgColor']
     ])
   })
 })
