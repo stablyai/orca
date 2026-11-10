@@ -35,7 +35,13 @@ export function applied(
     ok: true,
     model,
     result,
-    effects: { stopPtyIds: effects.stopPtyIds ?? [], startPaneKeys: effects.startPaneKeys ?? [] },
+    effects: {
+      stopPtyIds: effects.stopPtyIds ?? [],
+      startPaneKeys: effects.startPaneKeys ?? [],
+      ...(effects.affectedTerminalTabIds
+        ? { affectedTerminalTabIds: effects.affectedTerminalTabIds }
+        : {})
+    },
     ...(outcomes ? { outcomes } : {})
   }
 }

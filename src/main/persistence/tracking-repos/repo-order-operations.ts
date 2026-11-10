@@ -1,3 +1,4 @@
+import { notifyLegacyTerminalCatalogChanged } from '../loading-store/legacy-terminal-identity-claims'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
@@ -25,6 +26,7 @@ export class RepoOrderPersistenceOperations {
 
   addRepo(repo: Repo): void {
     this.state.repos.push(repo)
+    notifyLegacyTerminalCatalogChanged(this.state)
     this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
   }

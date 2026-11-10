@@ -1,3 +1,4 @@
+import { listDaemonSessions } from './daemon-session-inventory-request'
 import { parseDaemonLaunchNoteChange } from '../protocol/daemon-launch-note-protocol'
 import { handleDaemonTerminalKill } from './daemon-terminal-kill'
 import { handleDaemonFencedTermination } from './daemon-fenced-termination'
@@ -164,7 +165,7 @@ export class DaemonRequestRouter {
         this.options.host.reportFocusLost(request.payload.sessionId)
         return {}
       case 'listSessions':
-        return { sessions: this.options.host.listSessions() }
+        return listDaemonSessions(this.options, request.payload?.includeReservations === true)
       case 'shutdownIfIdle':
         return this.shutdownIfIdle(clientId, request.id)
       case 'getSnapshot':

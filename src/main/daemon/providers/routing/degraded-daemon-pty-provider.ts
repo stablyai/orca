@@ -1,3 +1,5 @@
+import { PendingTerminalHistoryRetirements } from '../../../pty/pending-terminal-history-retirement'
+import { admitProspectivePtySpawn } from '../../../pty/prospective-pty-spawn'
 import { shutdownRoutedDegradedSession } from './daemon-routed-session-shutdown'
 import { terminateResolvedDaemonSession } from '../../server/daemon-fenced-termination'
 import type { PtyFencedTerminationRequest } from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
@@ -26,6 +28,7 @@ import { DegradedDaemonOwnerRecovery } from './degraded-daemon-owner-recovery'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 export class DegradedDaemonPtyProvider implements IPtyProvider {
+  private readonly historyRetirements = new PendingTerminalHistoryRetirements()
   readonly isDegraded = true
 
   private current: DaemonPtyAdapter
@@ -51,7 +54,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
       opts.current,
       opts.fallback,
       this.sessionProviders,
-      opts.probeCurrentDaemonSpawn ?? null
+      opts.probeCurrentDaemonSpawn ?? null,
+      this
     )
     this.ownerRecovery = new DegradedDaemonOwnerRecovery(
       this.allProviders(),
@@ -72,6 +76,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     this.unsubscribers.push(...this.ownerRecovery.subscribeIdentityChanges())
   }
 
+  [admitProspectivePtySpawn](opts: PtySpawnOptions) {
+    return this.freshSpawns.admit(opts)
+  }
+
   async discoverDaemonSessions(): Promise<void> {
     await this.ownerRecovery.discoverRoutes()
   }
@@ -88,7 +96,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   canProvideAuthoritativeBufferSnapshot = (id: string): boolean =>
     this.freshSpawns.canProvideSnapshot(id)
 
-  spawn = (opts: PtySpawnOptions): Promise<PtySpawnResult> => this.ownerRecovery.spawn(opts)
+  spawn = async (opts: PtySpawnOptions): Promise<PtySpawnResult> =>
+    this.ownerRecovery.spawn(await this.freshSpawns.prepareSpawn(opts))
 
   attach = (id: string): ReturnType<IPtyProvider['attach']> =>
     attachDaemonOwnedSession(this.providerFor(id), this.fallback, id)
@@ -117,8 +126,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     this.ownerRecovery.getVerifiedRoute(id)?.supportsFencedTermination?.(id) === true
 
   killFenced = (request: PtyFencedTerminationRequest) =>
-    terminateResolvedDaemonSession(request, () =>
-      this.ownerRecovery.resolveFencedOwner(request.id, request.expectedIncarnationId)
+    terminateResolvedDaemonSession(
+      request,
+      () => this.ownerRecovery.resolveFencedOwner(request.id, request.expectedIncarnationId),
+      this.historyRetirements
     )
 
   write(id: string, data: string): boolean | void {
@@ -289,11 +300,9 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return await this.ownerRecovery.reconcileOnStartup(validWorktreeIds)
   }
 
-  dispose(): void {
+  async dispose(): Promise<void> {
     this.disposeProviderOnly()
-    for (const adapter of this.allDaemonAdapters()) {
-      adapter.dispose()
-    }
+    await Promise.all(this.allDaemonAdapters().map((adapter) => adapter.dispose()))
   }
 
   disposeProviderOnly(): void {

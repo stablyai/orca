@@ -1,3 +1,4 @@
+import { forgetSelectedTerminal } from '../../../pty/selected-terminal-retirement'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
 import { unregisterPty } from '../../../memory/pty-registry'
 import { forgetCodexPaneAccount } from '../../../codex/configuration/homes/codex-pane-account-registry'
@@ -40,6 +41,7 @@ export function clearProviderPtyState(
   openCodeHookService.clearPty(id)
   piTitlebarExtensionService.clearPty(id)
   ptySizes.delete(id)
+  forgetSelectedTerminal(id)
   ptyIncarnationById.delete(id)
   lastInputAtByPty.delete(id)
   interactiveOutputCharsByPty.delete(id)

@@ -1,3 +1,4 @@
+import { notifyLegacyTerminalCatalogChanged } from '../loading-store/legacy-terminal-identity-claims'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import {
   serializeOrcadMigrationValue,
@@ -98,6 +99,7 @@ export function applyPreparedOrcadMigrationCatalog(
   state.repos.push(...prepared.newRepositories)
   state.folderWorkspaces.push(...prepared.newFolderWorkspaces)
   applyPreparedOrcadMigrationDormantState(prepared.dormantState, state)
+  notifyLegacyTerminalCatalogChanged(state, true)
   if (prepared.newRepositories.length > 0) {
     syncProjectHostSetupCompatibilityState(repos)
   }

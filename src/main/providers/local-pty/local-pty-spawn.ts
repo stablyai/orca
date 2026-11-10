@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto'
+import { normalizeFreshPtySessionId } from '../../daemon/sessions/pty-session-id'
+import { peekDaemonHistoryRoot } from '../../daemon/launch/daemon-launch-paths'
 import { win32 as pathWin32 } from 'node:path'
 import { mkdir } from 'node:fs/promises'
 import { JCODE_RUNTIME_DIR_ENV_KEY } from '../../../shared/jcode-runtime-dir'
@@ -34,6 +36,25 @@ export async function spawnLocalPty(
   args: PtySpawnOptions,
   getOptions: () => LocalPtyProviderOptions
 ): Promise<PtySpawnResult> {
+  args = normalizeFreshPtySessionId(args)
+  const root = peekDaemonHistoryRoot()
+  const finish = root?.observeNumeric(args.sessionId ?? '', args.attachOnly !== true)
+  let missing = false
+  try {
+    const run = () => spawnAdmittedLocalPty(args, getOptions)
+    return await (root && args.sessionId ? root.observeWork(args.sessionId, run) : run())
+  } catch (error) {
+    missing = error instanceof SessionNotFoundError
+    throw error
+  } finally {
+    finish?.(missing)
+  }
+}
+
+async function spawnAdmittedLocalPty(
+  args: PtySpawnOptions,
+  getOptions: () => LocalPtyProviderOptions
+): Promise<PtySpawnResult> {
   const reattachId = normalizeLocalCallerSessionId(args.sessionId, args.attachOnly === true)
   if (reattachId) {
     const pendingShutdown = ptyShutdownOperations.get(reattachId)
@@ -57,7 +78,7 @@ export async function spawnLocalPty(
       delete args.env?.[JCODE_RUNTIME_DIR_ENV_KEY]
     }
   }
-  const id = allocatePtyId(reattachId ?? undefined)
+  const id = allocatePtyId(reattachId ?? undefined, args.worktreeId)
   return runCancelableLocalPtySpawn(id, async (throwIfCanceled, cancellation) => {
     const incarnationId = randomUUID()
     let plan = createLocalPtyLaunchPlan(args, getOptions)

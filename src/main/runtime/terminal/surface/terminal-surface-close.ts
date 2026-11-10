@@ -1,3 +1,5 @@
+import type { LegacyTerminalIdentityClaims } from '../../../persistence/loading-store/legacy-terminal-identity-claims'
+import { closeLegacyTerminalRestores } from '../../../pty/legacy-terminal-restore-ownership'
 import type { RuntimeSessionTabCloseReason } from '../../../../shared/runtime-session-contracts'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import {
@@ -184,6 +186,7 @@ export type TerminalSurfaceCloseCommit = {
   requestedHolders?: ReadonlyMap<ExecutionHostId, PersistedTerminalTabCopy>
   getSession: (hostId: ExecutionHostId) => WorkspaceSessionState | null | undefined
   setSession: (session: WorkspaceSessionState, hostId: ExecutionHostId) => void
+  identityAuthority?: LegacyTerminalIdentityClaims
   onClosed: (ptyIdsToKill: string[]) => void
 }
 
@@ -209,6 +212,11 @@ export function terminalSurfaceCloseMutation(
   commit: TerminalSurfaceCloseCommit
 ): () => DurableProfileStateMutation<Error | undefined> {
   const { target } = commit
+  const cancelRestore = () => {
+    if (commit.identityAuthority && commit.hostIds().includes('local')) {
+      closeLegacyTerminalRestores(commit.identityAuthority, commit.worktreeId, target)
+    }
+  }
   // Why: a pane is fenced by its own binding, so a sibling split during the write cannot refuse it.
   const paneIncarnationId =
     target.kind === 'pane'
@@ -269,6 +277,7 @@ export function terminalSurfaceCloseMutation(
         target.kind === 'tab' &&
         !hasClosedTerminalTabRecord(routed.session.closedTerminalTabTombstonesByTabId, target.tabId)
       ) {
+        cancelRestore()
         commit.setSession(routed.result.session, routed.hostId)
         return { value: undefined }
       }
@@ -277,6 +286,7 @@ export function terminalSurfaceCloseMutation(
         persist: false
       }
     }
+    cancelRestore()
     // Why every holder: a legacy relay reattach can leave one tab in two partitions.
     for (const { hostId, result } of closed) {
       commit.setSession(result.session, hostId)

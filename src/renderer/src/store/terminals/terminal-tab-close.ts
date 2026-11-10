@@ -41,6 +41,25 @@ export function createTerminalTabCloseActions(
       let closingWorktreeId: string | null = null
       // Why: a parked tab has no mounted TerminalPane cleanup, so revoke its observer/candidate state before provider exit races.
       retireParkedTerminalTab(tabId)
+      let recordedEarly = false
+      if (intentReason && retirementPlan.worktreeId && opts?.remoteCloseOwnedByHost !== true) {
+        if (
+          !ORCA_LAYOUT_OWNER_IS_MAIN ||
+          !recordTerminalTabCloseThroughLayoutOwner(
+            get(),
+            retirementPlan.worktreeId,
+            tabId,
+            intentReason
+          )
+        ) {
+          commitTerminalSurfaceClose(
+            retirementPlan.worktreeId,
+            { kind: 'tab', tabId },
+            intentReason
+          )
+        }
+        recordedEarly = true
+      }
       if (retiresSession) {
         startTerminalTabProviderRetirement({
           localPtyTeardownOwnedExternally: opts?.localPtyTeardownOwnedExternally === true,
@@ -60,15 +79,6 @@ export function createTerminalTabCloseActions(
           const closingTabIds = [tabId]
           const omitByTabId = <T>(record: Record<string, T>): Record<string, T> =>
             omitRecordKeys(record, closingTabIds)
-          // Partial test slices may lack a record; omitRecordKeys normalizes those to {}.
-          const omitAddressedByTabId = <T>(record: Record<string, T>): Record<string, T> => {
-            if (!record) {
-              return {}
-            }
-            const draft = recordDraft(record)
-            draft.delete(tabId)
-            return draft.finish()
-          }
           const tabsDraft = tabBucketDraft(s.tabsByWorktree)
           let closedTab: TerminalTab | null = null
           let closedWorktreeId: string | null = null
@@ -128,15 +138,13 @@ export function createTerminalTabCloseActions(
               : null
           const nextExpanded = omitByTabId(s.expandedPaneByTabId)
           const nextCanExpand = omitByTabId(s.canExpandPaneByTabId)
-          const nextLayouts = omitAddressedByTabId(s.terminalLayoutsByTabId)
+          const nextLayouts = omitByTabId(s.terminalLayoutsByTabId)
           const nextLocalOnlyScrollback = omitByTabId(s.localOnlyScrollbackByTabId)
-          const nextPtyIdsByTabId = omitAddressedByTabId(s.ptyIdsByTabId)
-          const nextLastKnownRelay = omitAddressedByTabId(s.lastKnownRelayPtyIdByTabId)
+          const nextPtyIdsByTabId = omitByTabId(s.ptyIdsByTabId)
+          const nextLastKnownRelay = omitByTabId(s.lastKnownRelayPtyIdByTabId)
           const nextDeferredSshSessionIdsByTabId = omitByTabId(s.deferredSshSessionIdsByTabId)
-          const nextPendingReconnectPtyIdByTabId = omitAddressedByTabId(
-            s.pendingReconnectPtyIdByTabId
-          )
-          const nextRuntimePaneTitlesByTabId = omitAddressedByTabId(s.runtimePaneTitlesByTabId)
+          const nextPendingReconnectPtyIdByTabId = omitByTabId(s.pendingReconnectPtyIdByTabId)
+          const nextRuntimePaneTitlesByTabId = omitByTabId(s.runtimePaneTitlesByTabId)
           const nextUnverifiedPtyLossTabIds = omitUnverifiedPtyLossTabIds(
             s.unverifiedPtyLossTabIds,
             [tabId]
@@ -157,7 +165,7 @@ export function createTerminalTabCloseActions(
             }
           }
           const nextSleepingAgentSessionsByPaneKey = sleepingDraft.finish()
-          const nextPendingStartupByTabId = omitAddressedByTabId(s.pendingStartupByTabId)
+          const nextPendingStartupByTabId = omitByTabId(s.pendingStartupByTabId)
           const nextAutomaticAgentResumeClaimsByTabId = omitByTabId(
             s.automaticAgentResumeClaimsByTabId
           )
@@ -260,7 +268,12 @@ export function createTerminalTabCloseActions(
           }
         })
       )
-      if (intentReason && closingWorktreeId && opts?.remoteCloseOwnedByHost !== true) {
+      if (
+        !recordedEarly &&
+        intentReason &&
+        closingWorktreeId &&
+        opts?.remoteCloseOwnedByHost !== true
+      ) {
         // Switch point: main records the close through layout.apply.
         if (
           !ORCA_LAYOUT_OWNER_IS_MAIN ||

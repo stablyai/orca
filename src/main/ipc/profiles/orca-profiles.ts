@@ -1,7 +1,6 @@
-import { ipcMain, type WebContents } from 'electron'
+import { runBeforeProfileRelaunch, scheduleProfileRelaunch } from './orca-profile-relaunch'
+import { ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
-import { relaunchApp, type AppRelaunchReason } from '../../startup/quit/app-relaunch'
-import { quitProcess } from '../../startup/process-quit-request'
 import type {
   CreateLocalOrcaProfileArgs,
   CreateLocalOrcaProfileResult,
@@ -122,32 +121,6 @@ function createCloudLinkedProfileArgsFromUnknown(args: unknown): CreateCloudLink
   }
 }
 
-async function runBeforeProfileRelaunch(
-  onBeforeRelaunch?: () => void | Promise<void>
-): Promise<void> {
-  try {
-    await onBeforeRelaunch?.()
-  } catch (error) {
-    console.warn(
-      '[orca-profiles] Pre-relaunch cleanup failed; continuing profile switch:',
-      error instanceof Error ? error.name : typeof error
-    )
-  }
-}
-
-type ProfileRelaunchReason = Extract<AppRelaunchReason, `profile-${string}`>
-
-function scheduleProfileRelaunch(reason: ProfileRelaunchReason, sender: WebContents): void {
-  if (!sender.isDestroyed()) {
-    sender.send('app:restart-committed')
-  }
-  setTimeout(() => {
-    relaunchApp(reason)
-    // Normal quit preserves renderer scrollback, PTY teardown, stats flush and final daemon checkpoints.
-    quitProcess()
-  }, 150)
-}
-
 export function registerOrcaProfileHandlers(
   store: Store,
   options: RegisterOrcaProfileHandlersOptions = {}
@@ -168,9 +141,15 @@ export function registerOrcaProfileHandlers(
   ipcMain.handle(
     'orcaProfiles:createLocal',
     (_event, args?: CreateLocalOrcaProfileArgs): CreateLocalOrcaProfileResult => {
-      const result = createLocalOrcaProfile(args)
-      initializeNewOrcaProfileState(result.profile.id, store.getSettings().telemetry)
-      return result
+      const finish = store.beginLegacyTerminalProfileChange()
+      try {
+        const result = createLocalOrcaProfile(args)
+        initializeNewOrcaProfileState(result.profile.id, store.getSettings().telemetry)
+        finish([result.profile.id])
+        return result
+      } finally {
+        finish()
+      }
     }
   )
 
@@ -183,6 +162,7 @@ export function registerOrcaProfileHandlers(
         return { status: 'already-active' }
       }
 
+      store.invalidateLegacyTerminalProfileCatalog()
       // Flush the source profile before switching the startup index; keep its writer alive through relaunch cleanup.
       await flushActiveProfileBeforeRelaunch(store)
       setActiveOrcaProfile(profileId)
@@ -205,38 +185,43 @@ export function registerOrcaProfileHandlers(
       if (args.targetProfileId === current.activeProfileId) {
         throw new Error('active_target_orca_profile_transfer_requires_relaunch')
       }
-      if (args.mode === 'move' && args.sourceProfileId === current.activeProfileId) {
-        // Finish transfer before relaunch side effects so validation failure cannot strand the app quitting.
-        const result = await transferActiveProfileProject(
-          args,
-          getProfileUserDataPath(),
-          store,
-          async () => {
-            await runBeforeProfileRelaunch(options.onBeforeRelaunch)
-            scheduleProfileRelaunch('profile-transfer', event.sender)
-          }
-        )
-        if (result.status === 'transferred') {
-          await runBeforeProfileRelaunch(options.onBeforeRelaunch)
-          try {
-            setActiveOrcaProfile(args.targetProfileId)
-          } finally {
-            // The source has already changed and its writer cannot resume.
-            scheduleProfileRelaunch('profile-transfer', event.sender)
-          }
-          return { ...result, willRelaunch: true }
-        }
-        return result
-      }
-      if (args.sourceProfileId !== current.activeProfileId) {
-        await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
-        return transferOrcaProfileProject(args, getProfileUserDataPath())
-      }
-      const maintenance = await flushActiveProfileBeforeFileMutation(store)
+      const finish = store.beginLegacyTerminalProfileChange()
       try {
-        return transferOrcaProfileProject(args, getProfileUserDataPath())
+        if (args.mode === 'move' && args.sourceProfileId === current.activeProfileId) {
+          // Finish transfer before relaunch side effects so validation failure cannot strand the app quitting.
+          const result = await transferActiveProfileProject(
+            args,
+            getProfileUserDataPath(),
+            store,
+            async () => {
+              await runBeforeProfileRelaunch(options.onBeforeRelaunch)
+              scheduleProfileRelaunch('profile-transfer', event.sender)
+            }
+          )
+          if (result.status === 'transferred') {
+            await runBeforeProfileRelaunch(options.onBeforeRelaunch)
+            try {
+              setActiveOrcaProfile(args.targetProfileId)
+            } finally {
+              // The source has already changed and its writer cannot resume.
+              scheduleProfileRelaunch('profile-transfer', event.sender)
+            }
+            return { ...result, willRelaunch: true }
+          }
+          return result
+        }
+        if (args.sourceProfileId !== current.activeProfileId) {
+          await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+          return transferOrcaProfileProject(args, getProfileUserDataPath())
+        }
+        const maintenance = await flushActiveProfileBeforeFileMutation(store)
+        try {
+          return transferOrcaProfileProject(args, getProfileUserDataPath())
+        } finally {
+          await maintenance.resume()
+        }
       } finally {
-        await maintenance.resume()
+        finish()
       }
     }
   )
@@ -273,15 +258,21 @@ export function registerOrcaProfileHandlers(
       _event,
       rawArgs?: CreateCloudLinkedOrcaProfileArgs
     ): Promise<CreateCloudLinkedOrcaProfileResult> => {
-      const result = await createCloudLinkedOrcaProfile(
-        getProfileUserDataPath(),
-        createCloudLinkedProfileArgsFromUnknown(rawArgs)
-      )
-      if (result.status === 'created') {
-        initializeNewOrcaProfileState(result.profile.id, store.getSettings().telemetry)
-        options.onAuthMutation?.()
+      const finish = store.beginLegacyTerminalProfileChange()
+      try {
+        const result = await createCloudLinkedOrcaProfile(
+          getProfileUserDataPath(),
+          createCloudLinkedProfileArgsFromUnknown(rawArgs)
+        )
+        if (result.status === 'created') {
+          initializeNewOrcaProfileState(result.profile.id, store.getSettings().telemetry)
+          options.onAuthMutation?.()
+          finish([result.profile.id])
+        }
+        return result
+      } finally {
+        finish()
       }
-      return result
     }
   )
 

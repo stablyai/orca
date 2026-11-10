@@ -132,6 +132,7 @@ export async function fixture(
   const authority = new DelayedAuthority(inner)
   const store = new Store({
     dataFile: join(directory, 'orca-data.json'),
+    userDataPath: directory,
     profileStateAuthority: authority
   })
   cleanups.push(async () => {

@@ -1,3 +1,5 @@
+import type { PendingTerminalHistoryRetirements } from '../../pty/pending-terminal-history-retirement'
+import { fencedTerminationHistoryPolicy } from '../../pty/pty-history-preserving-termination'
 import type { IPtyProvider } from '../../providers/pty-provider-contract'
 import type { DaemonSessionOwnerResolution } from '../providers/routing/daemon-session-owner-resolution'
 import type {
@@ -12,22 +14,45 @@ type FencedOwner<T extends IPtyProvider> = DaemonSessionOwnerResolution<T> | { k
 
 export async function terminateResolvedDaemonSession(
   request: PtyFencedTerminationRequest,
-  resolve: () => Promise<FencedOwner<IPtyProvider>>
+  resolve: () => Promise<FencedOwner<IPtyProvider>>,
+  retirements?: PendingTerminalHistoryRetirements
 ): Promise<PtyFencedTerminationOutcome> {
-  const resolution = await resolve()
-  if (resolution.kind === 'absent') {
-    return { outcome: 'already_exited' }
+  const captured = !fencedTerminationHistoryPolicy(request).keepHistory
+    ? retirements?.find(request)
+    : undefined
+  const release = captured?.hold()
+  try {
+    const resolution = await resolve()
+    if (resolution.kind === 'absent') {
+      if (captured) {
+        captured.removeHistory()
+        release?.()
+        await captured.finish(true)
+      }
+      return { outcome: 'already_exited' }
+    }
+    if (resolution.kind === 'replaced') {
+      return { outcome: 'refused', reason: 'replaced' }
+    }
+    if (resolution.kind !== 'owner') {
+      if (captured?.exited) {
+        captured.removeHistory()
+        release?.()
+        await captured.finish(true)
+        return { outcome: 'already_exited' }
+      }
+      return { outcome: 'refused', reason: 'unverifiable' }
+    }
+    if (!resolution.provider.supportsFencedTermination?.(request.id)) {
+      return { outcome: 'refused', reason: 'unsupported' }
+    }
+    release?.()
+    const completion = resolution.provider.killFenced?.(request)
+    retirements?.capture(resolution.provider, request)
+    return await (completion ?? { outcome: 'refused', reason: 'unsupported' })
+  } finally {
+    release?.()
   }
-  if (resolution.kind === 'replaced') {
-    return { outcome: 'refused', reason: 'replaced' }
-  }
-  if (resolution.kind !== 'owner') {
-    return { outcome: 'refused', reason: 'unverifiable' }
-  }
-  if (!resolution.provider.supportsFencedTermination?.(request.id)) {
-    return { outcome: 'refused', reason: 'unsupported' }
-  }
-  return resolution.provider.killFenced?.(request) ?? { outcome: 'refused', reason: 'unsupported' }
 }
 
 export async function handleDaemonFencedTermination(

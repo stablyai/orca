@@ -3,7 +3,11 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { IPtyProvider, PtySpawnResult } from '../../../providers/pty-provider-contract'
 import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
 import { TerminalIntentionalStops } from '../../../runtime/terminal/stop/terminal-intentional-stops'
-import { admitPtySpawnOwnership, discardUnpersistedPtySpawn } from './spawn-registration'
+import {
+  admitPtySpawnOwnership,
+  discardUnpersistedPtySpawn,
+  retireClosedPtySpawn
+} from './spawn-registration'
 
 type MarkUnverifiable = (ptyId: string, reason: string) => void
 const PTY_ID = 'unpersisted-spawn'
@@ -55,6 +59,36 @@ describe('discarding a spawn whose binding failed to save', () => {
     expect(ptyOwnership.has(PTY_ID)).toBe(false)
     expect(runtime.markPtyLivenessUnverifiable).not.toHaveBeenCalled()
     expect(intentionalPtyStops.claimExit(PTY_ID, 'inc-1')).toEqual(['replaced'])
+  })
+
+  it('does not stop an adopted agent result even for an exact selected close', async () => {
+    const adopted: PtySpawnResult = {
+      ...result,
+      agentSessionEnsure: {
+        disposition: 'adopted',
+        owner: {
+          claim: {
+            digestVersion: 1,
+            keyId: 'test-key',
+            identityDigest: 'test-identity',
+            worktreeScopeDigest: 'test-scope',
+            agent: 'claude'
+          },
+          generation: 'adopted-generation',
+          phase: 'live',
+          ptyId: PTY_ID,
+          surface: {
+            worktreeId: 'test-workspace',
+            tabId: 'test-tab',
+            leafId: 'test-leaf',
+            terminalHandle: 'test-handle'
+          }
+        }
+      }
+    }
+    const shutdown = vi.fn(async () => {})
+    await retireClosedPtySpawn(providerWhoseShutdown(shutdown), adopted, undefined, PTY_ID)
+    expect(shutdown).not.toHaveBeenCalled()
   })
 
   it('leaves a same-id replacement that arrived during the shutdown alone', async () => {

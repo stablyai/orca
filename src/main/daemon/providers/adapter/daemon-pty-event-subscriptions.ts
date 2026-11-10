@@ -47,36 +47,58 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     })
   }
 
-  dispose(): void {
-    this.respawnAdoptionClosed = true
-    this.sessionsAwaitingDaemonRecovery.clear()
-    this.writeRecoveryAttempted = false
-    this.releasePendingRespawnAdoptionLease()
-    this.stopCheckpointTimer()
-    this.dirtySessionVersions.clear()
-    this.lastFullCheckpointAt.clear()
-    this.sessionsNeedingFullCheckpoint.clear()
-    this.sessionsNeedingLiveCheckpoint.clear()
-    this.sessionsNeedingContinuityCheckpoint.clear()
-    this.overlayDeadlineWarnedSessionIds.clear()
-    this.periodicDeadlineWarnedSessionIds.clear()
-    this.nonFinalAdmissionDeniedSessionIds.clear()
-    this.coldRestoreCache.clear()
-    this.wslDistrosBySessionId.clear()
-    this.wslPaneKeysBySessionId.clear()
-    this.pausedProducerSessionIds.clear()
-    this.producerResumesOwedOnReconnect.clear()
-    this.auditObservationListeners.length = 0
-    this.identityChangeListeners.length = 0
-    this.removeEventListener?.()
-    this.removeEventListener = null
-    // Daemon-side teardown writes final checkpoints; adapter disposal marks history ended to prevent false restores.
-    if (this.historyManager) {
-      void this.historyManager
-        .dispose()
-        .catch((err) => console.warn('[history] dispose failed:', err))
+  dispose(): Promise<void> {
+    return this.retire('clean')
+  }
+
+  retire(disposition: 'clean' | 'detach' = 'detach'): Promise<void> {
+    if (!this.retirementCompletion) {
+      this.retired = true
+      this.idleRetirementAdmissionClosed = true
+      this.respawnAdoptionClosed = true
+      this.sessionsAwaitingDaemonRecovery.clear()
+      this.releasePendingRespawnAdoptionLease()
+      this.stopCheckpointTimer()
+      this.historyManager?.retireIdentity((id) =>
+        Promise.allSettled([this.historySpawnLocks.get(id), this.checkpointQueue.captureTail(id)])
+      )
+      this.historyIdentity.retire()
+      this.client.disconnect(true)
+      const settlements = Promise.allSettled(
+        [...this.historyRetirements.values()].map((retirement) => retirement.finish(true))
+      )
+      this.retirementCompletion = (async () => {
+        await Promise.allSettled([
+          ...this.historySpawnLocks.values(),
+          ...this.keepHistoryShutdowns,
+          this.respawnPromise,
+          this.staleBundleReplacementPromise,
+          this.writeRecoveryPromise,
+          this.checkpointInFlight
+        ])
+        const results = await settlements
+        await this.historyIdentity.release(
+          disposition,
+          new Set([...this.historyRetirements.values()].map((retirement) => retirement.writer))
+        )
+        this.removeEventListener?.()
+        this.removeEventListener = null
+        this.auditObservationListeners.length = 0
+        this.identityChangeListeners.length = 0
+        this.dataListeners.length = 0
+        this.exitListeners.length = 0
+        this.coldRestoreCache.clear()
+        const failed = results.find((result) => result.status === 'rejected')
+        if (failed?.status === 'rejected') {
+          throw failed.reason
+        }
+      })()
+      // Some teardown callers cannot await; the adapter retains and observes actual completion.
+      void this.retirementCompletion.catch((error: unknown) =>
+        console.warn('[history] retirement failed', error)
+      )
     }
-    this.client.disconnect()
+    return this.retirementCompletion
   }
 
   async establishLifecycleLease(): Promise<void> {
@@ -193,15 +215,19 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
       this.sessionsAwaitingDaemonRecovery.clear()
       this.writeRecoveryAttempted = false
       this.releasePendingRespawnAdoptionLease()
-      this.disconnectOnlyPromise = this.finishDisconnectOnly([...this.keepHistoryShutdowns])
+      this.disconnectOnlyPromise = this.finishDisconnectOnly([
+        ...this.keepHistoryShutdowns,
+        ...this.historySpawnLocks.values()
+      ])
     }
     await this.disconnectOnlyPromise
   }
 
-  protected async finishDisconnectOnly(keepHistoryShutdowns: Promise<void>[]): Promise<void> {
-    // Let admitted sleep shutdowns finish recovery and kill RPCs before disconnecting their client.
-    await Promise.allSettled(keepHistoryShutdowns)
+  protected async finishDisconnectOnly(pendingStops: Promise<void>[]): Promise<void> {
+    // Let admitted stops finish recovery and kill RPCs before disconnecting their client.
+    await Promise.allSettled(pendingStops)
     this.respawnAdoptionClosed = true
+    this.idleRetirementAdmissionClosed = true
     // Bridge bash reports no folder and the daemon outlives quit; a distro stopped before relaunch leaves only this read.
     const shellCwds = await readDaemonWslQuitCwds(
       this.wslBridgePanesForQuit(),
@@ -249,5 +275,6 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
       }
     }
     this.client.disconnect()
+    await this.retire('detach')
   }
 }

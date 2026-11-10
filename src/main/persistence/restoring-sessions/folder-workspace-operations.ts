@@ -1,3 +1,4 @@
+import { notifyLegacyTerminalCatalogChanged } from '../loading-store/legacy-terminal-identity-claims'
 import { randomUUID } from 'node:crypto'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -30,10 +31,6 @@ export class FolderWorkspacePersistenceOperations {
 
   private get state(): PersistedState {
     return this.operations.state
-  }
-
-  private scheduleSave(): void {
-    this.operations.scheduleSave()
   }
 
   private removeWorkspaceLineageForRemovedFolder(folderWorkspaceId: string): void {
@@ -121,7 +118,8 @@ export class FolderWorkspacePersistenceOperations {
       updatedAt: now
     }
     this.state.folderWorkspaces = [workspace, ...(this.state.folderWorkspaces ?? [])]
-    this.scheduleSave()
+    notifyLegacyTerminalCatalogChanged(this.state)
+    this.operations.scheduleSave()
     return workspace
   }
 
@@ -266,7 +264,10 @@ export class FolderWorkspacePersistenceOperations {
       workspace.externalConversations = updates.externalConversations
     }
     workspace.updatedAt = Date.now()
-    this.scheduleSave()
+    if ('folderPath' in updates) {
+      notifyLegacyTerminalCatalogChanged(this.state)
+    }
+    this.operations.scheduleSave()
     return workspace
   }
 
@@ -281,7 +282,8 @@ export class FolderWorkspacePersistenceOperations {
     removeWorkspaceSessionOwnerEverywhere(this.state, folderWorkspaceKey(id))
     this.removeWorkspaceLineageForRemovedFolder(id)
     this.pruneMobileClientTabSelections((worktreeId) => worktreeId === folderWorkspaceKey(id))
-    this.scheduleSave()
+    this.operations.scheduleSave()
+    notifyLegacyTerminalCatalogChanged(this.state)
     return true
   }
 
@@ -300,11 +302,12 @@ export class FolderWorkspacePersistenceOperations {
         : null
     const siblingRepos = this.state.repos.filter((entry) => entry !== repo)
     repo.projectGroupId = normalizedGroupId
+    notifyLegacyTerminalCatalogChanged(this.state)
     repo.projectGroupOrder =
       typeof order === 'number' && Number.isFinite(order)
         ? order
         : getNextProjectGroupOrder(siblingRepos, normalizedGroupId)
-    this.scheduleSave()
+    this.operations.scheduleSave()
     return this.hydrateRepo(repo)
   }
 }

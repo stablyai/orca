@@ -165,7 +165,7 @@ describe('terminal history file permissions', () => {
         // Match production order: fingerprint, sweep, then register the writer.
         const freeze = await mgr.freezeForRecovery('frozen')
         await expect(repairTerminalHistoryPermissions(base)).resolves.toBe(true)
-        mgr.registerWriter('frozen', freeze)
+        await mgr.registerWriter('frozen', freeze)
 
         expect(writeErrors.map((error) => error.message)).toEqual([])
         expect(mgr.isSessionDisabled('frozen')).toBe(false)

@@ -44,6 +44,7 @@ export class DaemonClient {
 
   private controlSocket: Socket | null = null
   private streamSocket: Socket | null = null
+  private retired = false
   private connected = false
   private disconnectArmed = false
   // Ignore old-socket close events after reconnect so they cannot tear down the new connection.
@@ -91,14 +92,16 @@ export class DaemonClient {
     return this.ensureConnectedWithTimeout(CONNECT_TIMEOUT_MS, false)
   }
 
-  async ensureConnectedWithin(timeoutMs: number): Promise<void> {
-    return this.ensureConnectedWithTimeout(timeoutMs, true)
-  }
+  ensureConnectedWithin = (timeoutMs: number): Promise<void> =>
+    this.ensureConnectedWithTimeout(timeoutMs, true)
 
   private async ensureConnectedWithTimeout(
     timeoutMs: number,
     sharedBudget: boolean
   ): Promise<void> {
+    if (this.retired) {
+      throw new DaemonProtocolError('Retired daemon connection')
+    }
     if (this.connected) {
       return
     }
@@ -273,7 +276,8 @@ export class DaemonClient {
     return this.disconnectedListeners.add(listener)
   }
 
-  disconnect(): void {
+  disconnect(retire = false): void {
+    this.retired ||= retire
     this.connectionAttemptGeneration++
     this.connected = false
     this.daemonIdentity = null

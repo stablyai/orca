@@ -162,7 +162,7 @@ describe('HistoryManager', () => {
       })
       const relaunched = new HistoryManager(dir)
 
-      relaunched.registerWriter(sessionId)
+      await relaunched.registerWriter(sessionId)
 
       expect(relaunched.isSessionDisabled(sessionId)).toBe(true)
       expect(relaunched.hasWriter(sessionId)).toBe(false)
@@ -182,7 +182,7 @@ describe('HistoryManager', () => {
       })
       const relaunched = new HistoryManager(dir)
       const verifiedFreeze = await relaunched.freezeForRecovery(sessionId)
-      relaunched.registerWriter(sessionId, verifiedFreeze)
+      await relaunched.registerWriter(sessionId, verifiedFreeze)
 
       await relaunched.checkpoint(sessionId, makeSnapshot({ snapshotAnsi: 'verified recovery' }))
 
@@ -203,7 +203,7 @@ describe('HistoryManager', () => {
       })
       mgr.suspendSession(sessionId)
 
-      mgr.registerWriter(sessionId, recoveryFreeze)
+      await mgr.registerWriter(sessionId, recoveryFreeze)
 
       expect(mgr.isSessionDisabled(sessionId)).toBe(true)
     })

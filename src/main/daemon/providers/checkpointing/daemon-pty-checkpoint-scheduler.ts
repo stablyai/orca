@@ -1,3 +1,4 @@
+import type { TerminalHistoryCheckpointReceipt } from '../../history/storage/terminal-history-root'
 import { awaitDaemonWorkWithinCallerDeadline } from '../../launch/daemon-request-deadline'
 import { DaemonPtyConnectionLifecycle } from '../adapter/daemon-pty-connection-lifecycle'
 
@@ -18,6 +19,7 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
 
   protected scheduleCheckpointTimer(): void {
     if (
+      this.retired ||
       this.checkpointTimer ||
       !this.historyManager ||
       !this.supportsCheckpoints ||
@@ -203,10 +205,13 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
     sessionId: string,
     opts: { final: boolean; teardown: boolean }
   ): Promise<'done' | 'deferred'> {
+    if (this.retired || this.historyRetirements.has(sessionId)) {
+      return 'deferred'
+    }
     // Final writes must persist the last screen; wait for queued compaction instead of deferring.
     if (opts.final) {
-      return await this.checkpointQueue.run(sessionId, () =>
-        this.writeSessionCheckpoint(sessionId, opts)
+      return await this.checkpointQueue.run(sessionId, (receipt) =>
+        this.writeSessionCheckpoint(sessionId, opts, receipt)
       )
     }
     // Deferral preserves dirty state and lets admitted writes commit before the next retry.
@@ -216,9 +221,11 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
     ) {
       return 'deferred'
     }
-    const run = async (): Promise<'done' | 'deferred'> => {
+    const run = async (
+      receipt?: TerminalHistoryCheckpointReceipt
+    ): Promise<'done' | 'deferred'> => {
       try {
-        return await this.writeSessionCheckpoint(sessionId, opts)
+        return await this.writeSessionCheckpoint(sessionId, opts, receipt)
       } finally {
         this.releaseNonFinalCheckpointAdmission(sessionId)
         this.periodicDeadlineWarnedSessionIds.delete(sessionId)

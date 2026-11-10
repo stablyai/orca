@@ -302,6 +302,11 @@ describe('TerminalHost', () => {
 
       const killing = host.kill('agent-natural-exit', { immediate: true })
       retiredSubprocess._onExitCb?.(0)
+      expect(host.listSessions()).toEqual([])
+      expect(host.listReservations([])).toMatchObject({
+        complete: true,
+        sessionIds: ['agent-natural-exit']
+      })
       let respawned = false
       const respawn = host
         .createOrAttach({

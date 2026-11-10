@@ -1,3 +1,5 @@
+import { validateProspectivePtySpawn } from '../../../pty/prospective-pty-spawn'
+import type { TerminalHistoryCheckpointReceipt } from '../../history/storage/terminal-history-root'
 import type { SpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type { ColdRestorePayload } from '../../history/restoration/cold-restore-payload-cache'
 import type { DaemonAuditObservation } from '../../observability/daemon-audit-classifier'
@@ -48,18 +50,27 @@ export type DaemonPtySpawnContext = {
 }
 
 export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
+  protected async retireReplacedHistoryWriter(id: string, incarnationId?: string): Promise<void> {
+    const retirement = this.historyRetirements.get(id)
+    if (retirement && retirement.incarnationId !== incarnationId) {
+      await retirement.finish(true)
+    }
+  }
+
   protected abstract takeSnapshotAndCheckpoint(
     sessionId: string,
     opts: {
       teardown: boolean
       forceLiveSnapshot?: boolean
       requireContinuityProof?: boolean
-    }
+    },
+    receipt?: TerminalHistoryCheckpointReceipt
   ): Promise<SnapshotCheckpointResult>
   protected abstract markSessionDirty(sessionId: string): void
   protected abstract writeSessionCheckpoint(
     sessionId: string,
-    opts: { final: boolean; teardown: boolean }
+    opts: { final: boolean; teardown: boolean },
+    receipt?: TerminalHistoryCheckpointReceipt
   ): Promise<'done' | 'deferred'>
   protected abstract releasePendingRespawnAdoptionLease(): void
   protected abstract setupEventRouting(): void
@@ -107,7 +118,7 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
     context: DaemonPtySpawnContext,
     historySeedSegments: readonly string[] | null
   ): Promise<CreateOrAttachResult> {
-    const requestCreateOrAttach = (
+    const requestCreateOrAttach = async (
       historySeed: string | undefined,
       historySeedTransferId: string | undefined
     ) => {
@@ -115,6 +126,7 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
       if (opts.signal?.aborted) {
         throw new Error('client_disconnected')
       }
+      await validateProspectivePtySpawn(this, opts)
       const payload = {
         sessionId: context.sessionId,
         cols: context.effectiveCols,

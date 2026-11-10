@@ -88,6 +88,19 @@ vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOri
       mockApi.worktrees.updateMeta.mockResolvedValue({})
     })
 
+    it.each(['user', 'cleanup'] as const)(
+      'commits a %s close once when another owner tears down the terminal',
+      (reason) => {
+        const store = storeWithSshTab()
+        store.getState().closeTab('ssh-tab', { reason, localPtyTeardownOwnedExternally: true })
+        expect(sentCloses(closeTerminalSurface)).toEqual([
+          { worktreeId: SSH_WORKTREE, tabId: 'ssh-tab', reason }
+        ])
+        expect(mockApi.pty.kill).not.toHaveBeenCalled()
+        expect(store.getState().tabsByWorktree[SSH_WORKTREE]).toEqual([])
+      }
+    )
+
     it('removes the tab and kills it without waiting for main to write the close', async () => {
       closeTerminalSurface.mockReturnValue(new Promise<void>(() => {}))
       layoutApplyTestTransport.answerWith('pending')

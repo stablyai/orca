@@ -30,8 +30,8 @@ export function retireExitedLegacyAdapter(args: {
   // The subscription fanout holds its own copy of the adapter list.
   args.subscriptions.dropAdapter(adapter)
   // Disconnect failure must not undo proven retirement.
-  void Promise.resolve()
-    .then(() => adapter.disconnectOnly())
-    .catch(() => undefined)
+  void adapter
+    .retire()
+    .catch((error: unknown) => console.warn('[daemon] retired legacy drain failed', error))
   return 'retired'
 }

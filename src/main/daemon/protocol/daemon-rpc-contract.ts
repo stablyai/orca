@@ -143,6 +143,7 @@ export type SignalRequest = {
 export type ListSessionsRequest = {
   id: string
   type: 'listSessions'
+  payload?: { includeReservations?: boolean }
 }
 
 export type ShutdownIfIdleRequest = {
@@ -294,6 +295,11 @@ export type GetSnapshotResult = {
 
 export type ListSessionsResult = {
   sessions: SessionInfo[]
+  reservations?: {
+    complete: true
+    authorityGeneration: string
+    sessionIds: string[]
+  }
 }
 
 export type ShutdownIfIdleResult = {

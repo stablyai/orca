@@ -1,4 +1,6 @@
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { legacyTerminalIdentityClaims } from '../loading-store/legacy-terminal-identity-claims'
+import { retireRemovedTerminalWorkspace } from '../../pty/legacy-terminal-topology-retirement'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { hasClosedTerminalTabRecord } from '../../../shared/workspace-layout/closed-terminal-tab-tombstones'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
@@ -29,7 +31,7 @@ import type {
   StoreRuntimeState
 } from '../loading-store/store-runtime-state'
 import type { SessionHostPartitionOperations } from '../loading-store/session-host-partitions'
-import { planTerminalLeafMove, writeMovedLeafProfileRecords } from './terminal-leaf-move'
+import { commitLeafMove } from './terminal-leaf-move-commit'
 import { writeRestorable } from './restorable-write'
 import { assignWorkspaceSessionPartition } from './terminal-topology-membership'
 import {
@@ -110,7 +112,8 @@ export function admitPane(
         return commitPaneChange(
           hostId,
           admitPaneToSession(hostId, context.getSession(hostId), admission),
-          context
+          context,
+          admission.workspace
         )
       }
     ),
@@ -133,7 +136,8 @@ export function withdrawPane(
         commitPaneChange(
           hostId,
           withdrawPaneFromSession(hostId, context.getSession(hostId), pane),
-          context
+          context,
+          pane.workspace
         )
     ),
     (code) => code ?? undefined
@@ -220,6 +224,12 @@ export type TerminalTopologyCommitContext = {
     domain: 'workspaceSession' | 'workspaceSessionsByHostId' | 'ui' | 'sshRemotePtyLeases'
   ) => void
   /** Omitted when commits do not change in-memory editor views. */
+  terminalWrite?: (
+    workspace: string,
+    prior: WorkspaceSessionState,
+    next: WorkspaceSessionState,
+    affectedTabIds?: readonly string[]
+  ) => (() => void) | undefined
   editorViews?: Pick<StoreRuntimeState, 'layoutEditorViews'>
 }
 
@@ -236,6 +246,12 @@ export function topologyCommitContext({
 }): TerminalTopologyCommitContext {
   return {
     state: runtime.state,
+    terminalWrite: (workspace, prior, next, affectedTabIds) => {
+      const claims = legacyTerminalIdentityClaims(runtime)
+      return claims
+        ? retireRemovedTerminalWorkspace(claims, workspace, prior, next, affectedTabIds)
+        : undefined
+    },
     hostIds: () => sessions.getWorkspaceSessionHostIds(),
     getSession: (hostId) => sessions.getWorkspaceSession(hostId),
     markDirty: (domain) => runtime.dirtyProfileStateDomains?.add(domain),
@@ -245,44 +261,34 @@ export function topologyCommitContext({
   }
 }
 
-function commitLeafMove(
-  request: TerminalLeafMoveRequest,
-  context: TerminalTopologyCommitContext
-): DurableProfileStateMutation<TerminalLeafMoveResult> {
-  const { state } = context
-  const planned = planTerminalLeafMove(
-    context.hostIds().map((hostId) => ({ hostId, session: context.getSession(hostId) })),
-    request
-  )
-  if (planned.sessions.length === 0) {
-    return { value: planned.result, persist: false }
-  }
-  const restores = planned.sessions.map(({ hostId, session }) =>
-    writeRestorable(
-      () => context.getSession(hostId),
-      (value) => context.markDirty(assignWorkspaceSessionPartition(state, hostId, value)),
-      keepFrozen(hostId, session, context)
-    )
-  )
-  restores.push(...writeMovedLeafProfileRecords(request, context))
-  return {
-    value: planned.result,
-    rollback: () => restores.forEach((restore) => restore())
-  }
-}
-
 function commitPaneChange<T>(
   hostId: ExecutionHostId,
   change: PaneLayoutChange<T>,
-  context: TerminalTopologyCommitContext
+  context: TerminalTopologyCommitContext,
+  workspace: string
 ): DurableProfileStateMutation<T> {
   if (!change.session) {
     return { value: change.value, persist: false }
+  }
+  let restoreHandoff: (() => void) | undefined
+  if (hostId === LOCAL_EXECUTION_HOST_ID) {
+    restoreHandoff = context.terminalWrite?.(
+      workspace,
+      context.getSession(hostId),
+      change.session,
+      change.terminalTabIds ?? []
+    )
   }
   const restore = writeRestorable(
     () => context.getSession(hostId),
     (value) => context.markDirty(assignWorkspaceSessionPartition(context.state, hostId, value)),
     keepFrozen(hostId, change.session, context)
   )
-  return { value: change.value, rollback: restore }
+  return {
+    value: change.value,
+    rollback: () => {
+      restore()
+      restoreHandoff?.()
+    }
+  }
 }

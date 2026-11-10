@@ -36,7 +36,8 @@ import {
 } from './unstopped-pty-verification'
 
 export type WorktreeTeardownRuntime = StructuredWorktreeSweepRuntime &
-  Pick<OrcaRuntimeService, 'stopTerminalsForWorktree' | 'getPtyLivenessVerdict'>
+  Pick<OrcaRuntimeService, 'stopTerminalsForWorktree' | 'getPtyLivenessVerdict'> &
+  Partial<Pick<OrcaRuntimeService, 'cancelPendingLegacyTerminalRestores'>>
 
 export type WorktreeTeardownDeps = {
   runtime?: WorktreeTeardownRuntime
@@ -79,6 +80,9 @@ export async function killAllProcessesForWorktree(
   const deadlineError = new Error(
     `${WORKTREE_TEARDOWN_TIMEOUT_PREFIX} ${worktreeId}. ${WORKTREE_TEARDOWN_FORCE_HINT}`
   )
+  if (deps.closeStructuredSessions || deps.requirePhysicalStop) {
+    deps.runtime?.cancelPendingLegacyTerminalRestores?.(deps.resolvedWorktreeId ?? worktreeId, deps)
+  }
   const sweeps = createWorktreeSweepTracker()
   // Start structured closure before PTYs so intentional stops are recorded; await alongside them so serial provider round trips cannot consume their budget. Structured refusal still precedes PTY verdict.
   const structuredSweep = sweepStructuredSessions(worktreeId, deps, deadline, sweeps)

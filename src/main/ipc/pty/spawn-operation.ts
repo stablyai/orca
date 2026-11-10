@@ -1,12 +1,22 @@
+import { completePtySpawn } from './spawn-operation-completion'
+import {
+  rebaseLegacyPtyRequest,
+  legacyPaneIdentitySelection,
+  applyLegacyPaneAcquisition
+} from './pane/legacy-pane-identity-selection'
+import {
+  admitLegacyTerminalRestore,
+  locateLegacyTerminalRestore
+} from '../../pty/legacy-terminal-restore-ownership'
+import { retireClosedPtySpawn } from './pane/spawn-registration'
 import type { PaneSpawnOperation } from './pane/pane-spawn-operation'
+import { normalizeFreshPtySessionId } from '../../daemon/sessions/pty-session-id'
 import type { AdoptStablePaneArgs } from './ipc/spawn-types'
 import { adoptedOutcome, type PtySpawnOutcome } from './spawn-outcome'
 import type { PtySpawnOperationState, PtySpawnExecutionFacts } from './spawn-operation-state'
 import { beginPtySpawn, reportPtyPaneAdoption } from './spawn-begin'
-import { executePtySpawn } from './spawn-execute'
-import { prepareSavedPtyResume } from './spawn-resume'
 import { resolveEarlyPaneKey, resolveEarlyPaneSpawnReservationKey } from './spawn-pane-coordinates'
-import { consumeExitedPaneOperation } from './pane/adopt-stable'
+import { carryLegacyPaneAcquisition, consumeExitedPaneOperation } from './pane/adopt-stable'
 import { attachOnlyViewOf } from './pane/attach-only-view'
 import {
   pendingRuntimePaneCreatesByOwnerKey,
@@ -14,19 +24,10 @@ import {
   reserveIdlePaneSpawn
 } from './pane/spawn-reservation'
 import { restoreProvisionalPtySize } from './spawn-options-assembly'
-import { spawnWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { releaseStoppedPaneBinding } from './pane/pane-owner-replacement'
-import {
-  admitColdRestoreReattach,
-  captureSavedResumeCleanup,
-  forgetRefusedResume,
-  resumeSpawnRefusal,
-  savedResumeRecord,
-  savedResumeResult
-} from './host-env/saved-resume-admission'
 
-type SpawnAdapter<State extends PtySpawnOperationState> = {
+export type SpawnAdapter<State extends PtySpawnOperationState> = {
   state: State
   prepare: () => Promise<void>
   commit: () => Promise<PtySpawnOutcome>
@@ -75,7 +76,43 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
   adapter: SpawnAdapter<State>
 ): Promise<PtySpawnOutcome> {
   const ctx = adapter.state
+  ctx.args = normalizeFreshPtySessionId(ctx.args)
+  rebaseLegacyPtyRequest(ctx)
   const args = ctx.args
+  const identityAuthority = !args.connectionId
+    ? ctx.deps.store?.legacyTerminalIdentityAuthority
+    : undefined
+  const savedSession = identityAuthority ? ctx.deps.store?.getWorkspaceSession() : undefined
+  const savedId =
+    args.tabId && args.leafId
+      ? savedSession?.terminalLayoutsByTabId?.[args.tabId]?.ptyIdsByLeafId?.[args.leafId]
+      : undefined
+  const legacyRequest =
+    /^\d+$/.test(args.sessionId ?? savedId ?? '') ||
+    (args.tabId &&
+      savedSession?.tabsByWorktree?.[args.worktreeId ?? '']?.some(
+        (row) => row.id === args.tabId && /^\d+$/.test(row.ptyId ?? '')
+      ))
+  const restoreAdmission =
+    !args.paneSpawnOperation?.legacyRestore &&
+    identityAuthority &&
+    legacyRequest &&
+    args.worktreeId &&
+    !args.isNewSession &&
+    !adapter.replace
+      ? admitLegacyTerminalRestore(
+          identityAuthority,
+          args.worktreeId,
+          args.tabId,
+          args.leafId,
+          ctx.deps.runtime?.markPtyLivenessUnverifiable?.bind(ctx.deps.runtime)
+        )
+      : undefined
+  if (restoreAdmission) {
+    args.signal = args.signal
+      ? AbortSignal.any([args.signal, restoreAdmission.attempt.close.signal])
+      : restoreAdmission.attempt.close.signal
+  }
   ctx.preAdoptedStablePane = args.adoptedStablePane ?? null
   ctx.paneSpawnOperation = args.paneSpawnOperation
   const replacementKey = adapter.replace ? resolveEarlyPaneSpawnReservationKey(args) : null
@@ -99,101 +136,62 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
     Object.assign(outcome.result, ctx.deps.runtime?.getTerminalLaunchResult?.(outcome.result.id))
     return finish(outcome)
   }
-  const complete = async (operation: PaneSpawnOperation): Promise<PtySpawnOutcome> => {
-    ctx.paneSpawnOperation = operation
-    ctx.args.paneSpawnOperation = operation
-    const runtime = ctx.deps.runtime
-    const acquire = runtime?.acquireWorktreeTerminalSpawn
-    ctx.releaseWorktreeSpawn = acquire
-      ? await acquire.call(runtime, spawnWorktreeTarget(args.worktreeId, args.connectionId), {
-          refuseSleptWorktree: args.refuseSleptWorktree,
-          reattachSessionId: ctx.preAdoptedStablePane?.owner.ptyId ?? args.sessionId,
-          requireAttachOnly: () => {
-            ctx.spawnOptions = { ...ctx.spawnOptions, attachOnly: true }
-          }
-        })
-      : undefined
-    const facts = adapter.facts()
-    const chooseFresh = await prepareSavedPtyResume(ctx, facts)
-    await executePtySpawn(ctx, facts, chooseFresh)
-    if (!ctx.resumeAdmission) {
-      ctx.resumeAdmission = await admitColdRestoreReattach(
-        runtime,
-        ctx.result,
-        {
-          paneKey: facts.savedResumePaneKey ?? null,
-          saved: savedResumeRecord(ctx.deps.store, facts.savedResumePaneKey ?? null)
-        },
-        ctx.expectedWslDistro
-      )
-      await captureSavedResumeCleanup(
-        runtime,
-        ctx.deps.store,
-        facts.savedResumePaneKey ?? null,
-        ctx.resumeAdmission,
-        args.worktreeId
-      )
-    }
-    if (!ctx.result.isReattach) {
-      Object.assign(ctx.result, savedResumeResult(ctx.resumeAdmission))
-    }
-    const outcome = await adapter.commit()
-    if (
-      outcome.kind === 'committed' ||
-      (outcome.kind === 'registration-exited' && adapter.drainsExitedStart)
-    ) {
-      const refusal = resumeSpawnRefusal(ctx.resumeAdmission)
-      forgetRefusedResume(facts.savedResumePaneKey ?? null, refusal)
-      if (
-        args.worktreeId &&
-        facts.savedResumePaneKey &&
-        refusal &&
-        refusal.verdict !== 'unverifiable'
-      ) {
-        void runtime
-          ?.forgetRefusedSavedResume?.(
-            args.worktreeId,
-            facts.savedResumePaneKey,
-            refusal.refused,
-            refusal.sourceRecord
-          )
-          .catch((error: unknown) => console.warn('[pty] refused resume cleanup failed', error))
-      }
-      if (!ctx.result.isReattach) {
-        runtime?.rememberSavedTerminalLaunchResult?.(outcome.result.id, outcome.result)
-      }
-    }
-    finish(outcome)
-    // Runtime hidden P2 follows the awaited prompt-intent wrapper and never an exited result.
-    if (outcome.kind !== 'registration-exited') {
-      adapter.onCommitted?.()
-    }
-    return outcome
-  }
+  const complete = (operation: PaneSpawnOperation) =>
+    completePtySpawn(
+      adapter,
+      operation,
+      operation.legacyRestore?.attempt ?? restoreAdmission?.attempt,
+      finish
+    )
   const acquire = async (
     paneKey: string,
     fresh: (operation: PaneSpawnOperation) => Promise<PtySpawnOutcome>
   ) => {
     const pane = parsePaneKey(paneKey)!
+    if (restoreAdmission && identityAuthority) {
+      locateLegacyTerminalRestore(
+        identityAuthority,
+        restoreAdmission.attempt,
+        pane.tabId,
+        pane.leafId
+      )
+    }
     let outcome: PtySpawnOutcome | undefined
-    const adopted = await ctx.deps.adoptStablePane({
-      ...adapter.adoption?.(),
-      cols: args.cols,
-      rows: args.rows,
-      cwd: ctx.cwd,
-      worktreeId: args.worktreeId,
-      connectionId: args.connectionId,
-      ...pane,
-      signal: args.signal,
-      preAllocatedHandle: adapter.facts().preAllocatedHandle ?? undefined,
-      reservation: ctx.paneSpawnReservation ?? undefined,
-      stoppedPtyId: adapter.facts().replacedPaneOwner?.ptyId,
-      attachOnlyView: attachOnlyViewOf(args),
-      spawnFresh: async (operation) => {
-        outcome = await fresh(operation)
-        return outcome.result
-      }
-    })
+    const selection = legacyPaneIdentitySelection(ctx, paneKey, restoreAdmission?.attempt)
+    const legacyRestore = restoreAdmission
+      ? { attempt: restoreAdmission.attempt, selection }
+      : undefined
+    const adopted = await ctx.deps.adoptStablePane(
+      carryLegacyPaneAcquisition(
+        {
+          ...adapter.adoption?.(),
+          cols: args.cols,
+          rows: args.rows,
+          cwd: ctx.cwd,
+          worktreeId: args.worktreeId,
+          connectionId: args.connectionId,
+          ...pane,
+          signal: args.signal,
+          preAllocatedHandle: adapter.facts().preAllocatedHandle ?? undefined,
+          reservation: ctx.paneSpawnReservation ?? undefined,
+          stoppedPtyId: adapter.facts().replacedPaneOwner?.ptyId,
+          attachOnlyView: attachOnlyViewOf(args),
+          spawnFresh: async (operation) => {
+            const identityChanged = applyLegacyPaneAcquisition(operation, ctx.args)
+            const paneChanged =
+              operation.legacyRestore && adapter.facts().paneKey !== resolveEarlyPaneKey(ctx.args)
+            if (prepared && (identityChanged || paneChanged)) {
+              retirePreparation(adapter)
+              prepared = true
+              await adapter.prepare()
+            }
+            outcome = await fresh(operation)
+            return outcome.result
+          }
+        },
+        legacyRestore ?? false
+      )
+    )
     if (!adopted) {
       return outcome!
     }
@@ -210,6 +208,10 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
     }
     ctx.paneSpawnOperation = operation
     ctx.args.paneSpawnOperation = operation
+    applyLegacyPaneAcquisition(operation, ctx.args)
+    if (operation.legacyRestore?.attempt.closed) {
+      throw new Error('terminal_pane_owner_changed')
+    }
     prepared = true
     await adapter.prepare()
     const latePane =
@@ -254,6 +256,13 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
       ? acquire(paneKey, fresh)
       : fresh(ctx.paneSpawnOperation ?? { mustExist: false }))
   } catch (caught) {
+    const attempt = ctx.paneSpawnOperation?.legacyRestore?.attempt ?? restoreAdmission?.attempt
+    if (attempt?.closed) {
+      const result = ctx.rejectedRegistrationCandidate ?? ctx.result
+      if (result && result.id === (attempt.selectedId ?? ctx.args.sessionId)) {
+        await retireClosedPtySpawn(ctx.provider, result, ctx.deps.runtime, attempt.selectedId)
+      }
+    }
     const error = adapter.onError?.(caught) ?? caught
     adapter.releasePreparation?.()
     adapter.releaseHiddenMark?.()
@@ -269,5 +278,6 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
     cancelRegistration(ctx)
     ctx.releaseWorktreeSpawn?.()
     ctx.finishTerminalInstall()
+    restoreAdmission?.release()
   }
 }

@@ -1,3 +1,4 @@
+import { forgetSelectedTerminal } from '../../../pty/selected-terminal-retirement'
 import { isPtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -29,6 +30,9 @@ export function setAdoptedPtyOwnership(id: string): void {
 export function restorePtyIncarnation(id: string, incarnationId: string): void {
   if (!isPtyIncarnationId(incarnationId)) {
     throw new Error('Invalid PTY incarnation')
+  }
+  if (ptyIncarnationById.has(id) && ptyIncarnationById.get(id) !== incarnationId) {
+    forgetSelectedTerminal(id)
   }
   ptyIncarnationById.set(id, incarnationId)
 }

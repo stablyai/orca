@@ -64,6 +64,47 @@ describe('registerPtyHandlers', () => {
 
       // Daemon spawns bypass LocalPtyProvider.buildSpawnEnv; main must inject host-local environment.
 
+      it.each(['renderer', 'headless'] as const)(
+        'replaces fresh numeric hints before %s dispatch without rewriting the command',
+        async (entry) => {
+          const daemonSpawn = setupDaemonAdapter()
+          let controller:
+            | { spawn: (args: Record<string, unknown>) => Promise<{ id: string }> }
+            | undefined
+          const runtime = {
+            setPtyController: vi.fn((next) => {
+              controller = next
+            }),
+            createPreAllocatedTerminalHandle: vi.fn(() => 'term-session-identity'),
+            registerPreAllocatedHandleForPty: vi.fn(),
+            registerPty: vi.fn()
+          }
+          handlers.clear()
+          registerPtyHandlers(mainWindow as never, runtime as never)
+          const args = {
+            cols: 80,
+            rows: 24,
+            worktreeId: 'project::/workspace',
+            sessionId: ' 9 ',
+            isNewSession: true,
+            command: 'echo original-command'
+          }
+          const result =
+            entry === 'headless'
+              ? await controller!.spawn(args)
+              : await handlers.get('pty:spawn')!(null, args)
+          expect(result).toMatchObject({
+            id: expect.stringMatching(/^project::\/workspace@@[a-f0-9]{8}$/)
+          })
+          expect(daemonSpawn).toHaveBeenCalledWith(
+            expect.objectContaining({
+              sessionId: expect.stringMatching(/^project::\/workspace@@[a-f0-9]{8}$/),
+              command: 'echo original-command'
+            })
+          )
+        }
+      )
+
       it('does not downgrade a structured claim after dispatch reaches an old daemon', async () => {
         const daemonSpawn = setupDaemonAdapter(true, undefined, false)
         let controller:

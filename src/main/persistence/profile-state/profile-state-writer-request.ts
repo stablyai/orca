@@ -19,6 +19,13 @@ export function isExpectedProfileStateWriterSuccess(
   response: SuccessfulProfileStateWriterResponse,
   previousRevision: number
 ): boolean {
+  if (
+    command === 'read-terminal-claims'
+      ? response.terminalClaims === undefined
+      : response.terminalClaims !== undefined
+  ) {
+    return false
+  }
   const mayWrite = command.startsWith('write-')
   if (
     response.revision < previousRevision ||

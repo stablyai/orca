@@ -8,7 +8,7 @@ function unexpectedPreflight(): never {
 }
 
 export function createPtySpawnCommitDependencies(
-  runtime: OrcaRuntimeService,
+  runtime: OrcaRuntimeService | undefined,
   store: Store
 ): PtySpawnIpcDeps & PtyRuntimeControllerDeps {
   return {

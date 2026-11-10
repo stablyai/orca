@@ -11,6 +11,8 @@ import { daemonRecoveryProbeTimeoutMs } from './daemon-recovery-budget'
 import { remainingDaemonRequestTimeoutMs } from './daemon-request-deadline'
 import { PROTOCOL_VERSION } from '../protocol/daemon-protocol-version'
 import type { ListSessionsResult } from '../protocol/daemon-rpc-contract'
+import { terminalHistoryRoot } from '../history/storage/terminal-history-root'
+import { localPtyReservedSessionIds } from '../../providers/local-pty/local-pty-provider-state'
 
 export function getDaemonRuntimeDir(): string {
   const dir = daemonRuntimeDirFor(getAppEnvironment().getPath('userData'))
@@ -22,8 +24,21 @@ export function getDaemonHistoryDir(): string {
   const dir = join(getAppEnvironment().getPath('userData'), 'terminal-history')
   ensurePrivateDir(dir)
   // Schedule one deferred permission sweep per host, including WSL and SSH servers.
+  terminalHistoryRoot(dir)?.bindProfile(
+    getAppEnvironment().getPath('userData'),
+    getDaemonRuntimeDir(),
+    localPtyReservedSessionIds
+  )
   void scheduleTerminalHistoryPermissionRepair(dir)
   return dir
+}
+
+export function peekDaemonHistoryRoot(): ReturnType<typeof terminalHistoryRoot> {
+  try {
+    return terminalHistoryRoot(join(getAppEnvironment().getPath('userData'), 'terminal-history'))
+  } catch {
+    return null
+  }
 }
 
 export function getDaemonEntryPath(): string {

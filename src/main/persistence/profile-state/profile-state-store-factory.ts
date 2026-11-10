@@ -39,6 +39,8 @@ export function createProfileStateStore(
       ...prepared,
       store: new Store({
         dataFile: options.dataFile,
+        userDataPath: options.userDataPath,
+        profileStateLocation: { profileId: options.profileId, databaseFile: options.databaseFile },
         storageAuthority: options.storageAuthority,
         initializeHomeWorkspace: options.initializeHomeWorkspace,
         profileStateAuthority: initialState.authority,

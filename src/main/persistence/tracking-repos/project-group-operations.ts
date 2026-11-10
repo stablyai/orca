@@ -1,3 +1,4 @@
+import { notifyLegacyTerminalCatalogChanged } from '../loading-store/legacy-terminal-identity-claims'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
   ProjectGroup,
@@ -68,6 +69,7 @@ export class ProjectGroupPersistenceOperations {
       group.rootProjectOrder = rootProjectOrder
     }
     this.state.projectGroups = [...(this.state.projectGroups ?? []), group]
+    notifyLegacyTerminalCatalogChanged(this.state)
     this.scheduleSave()
     return group
   }
@@ -150,6 +152,7 @@ export class ProjectGroupPersistenceOperations {
       (workspace) => !deletedGroupIds.has(workspace.projectGroupId)
     )
     this.pruneMobileClientTabSelections((worktreeId) => removedFolderWorkspaceKeys.has(worktreeId))
+    notifyLegacyTerminalCatalogChanged(this.state)
     this.scheduleSave()
     return true
   }

@@ -1,8 +1,13 @@
+import { legacyPaneRestoreAttempt } from './pane/legacy-pane-identity-selection'
 import type { Store } from '../../persistence/loading-store/store'
 import type { PersistPtyBindingArgs } from '../../persistence/loading-store/pty-binding-persistence'
 import { createTerminalSessionStateSaveFailureMessage } from '../../../shared/workspace-session/terminal-session-state-save-failure'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import type { IPtyProvider, PtySpawnResult } from '../../providers/pty-provider-contract'
+import type {
+  IPtyProvider,
+  PtySpawnResult,
+  PtySpawnOptions
+} from '../../providers/pty-provider-contract'
 import { PaneOwnerContentionError, type AbsentPaneBinding } from './pane/pane-spawn-operation'
 import { persistFreshPaneBinding } from './pane/fresh-pane-binding'
 import { swapReplacedPaneBinding } from './pane/pane-owner-replacement'
@@ -22,6 +27,7 @@ export type PtySpawnPaneBinding = {
 /** Saves the binding, or a swap over the replaced owner; a failed save discards the new process. */
 export async function savePtySpawnPaneBinding(
   state: {
+    args?: Pick<PtySpawnOptions, 'cols' | 'rows'>
     result: PtySpawnResult
     provider: IPtyProvider
     replacedPaneOwner?: ReplacedPaneOwner | null
@@ -34,8 +40,20 @@ export async function savePtySpawnPaneBinding(
   try {
     const persisted = replaced
       ? await store.persistPtyBinding(swapReplacedPaneBinding(store, binding, replaced))
-      : await persistFreshPaneBinding(store, binding, connectionId, absentOwner)
-    if (persisted === false) {
+      : await persistFreshPaneBinding(
+          store,
+          binding,
+          connectionId,
+          absentOwner,
+          () => !legacyPaneRestoreAttempt(state.args)?.closed,
+          () => {
+            const attempt = legacyPaneRestoreAttempt(state.args)
+            return attempt?.tabId && attempt.leafId
+              ? { ...binding, tabId: attempt.tabId, leafId: attempt.leafId }
+              : binding
+          }
+        )
+    if (persisted === false || legacyPaneRestoreAttempt(state.args)?.closed) {
       throw new Error(refusal)
     }
     if (replaced) {
@@ -44,7 +62,9 @@ export async function savePtySpawnPaneBinding(
     }
   } catch (err) {
     console.error(failureLog, err)
-    await discardUnpersistedPtySpawn(state.provider, state.result, state.deps.runtime)
+    if (!legacyPaneRestoreAttempt(state.args)?.closed) {
+      await discardUnpersistedPtySpawn(state.provider, state.result, state.deps.runtime)
+    }
     if (
       err instanceof PaneOwnerContentionError ||
       (err instanceof Error && err.message === refusal)

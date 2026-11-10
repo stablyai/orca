@@ -1,10 +1,23 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, linkSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { grantDirAcl } from '../windows/windows-directory-acl'
 import { isPermissionError } from './permission-errors'
 import { nodeFileContentsEqualSync } from '../../shared/file-content/node-file-content-equality'
+import { publishFileWithoutOverwrite as publishWithoutOverwrite } from './publish-file-without-overwrite'
 import { renameFileWithWindowsRetry } from '../../shared/windows-retry-file-operations'
+
+export function publishFileWithoutOverwrite(sourcePath: string, targetPath: string): boolean {
+  try {
+    return publishWithoutOverwrite(sourcePath, targetPath)
+  } catch (error) {
+    if (!isPermissionError(error) || process.platform !== 'win32') {
+      throw error
+    }
+    grantDirAcl(dirname(targetPath))
+    return publishWithoutOverwrite(sourcePath, targetPath)
+  }
+}
 
 export function writeFileAtomically(
   targetPath: string,
@@ -162,29 +175,5 @@ function assertHardLinkPublicationSupported(sourcePath: string, targetPath: stri
     }
   } finally {
     rmSync(probePath, { force: true })
-  }
-}
-
-export function publishFileWithoutOverwrite(sourcePath: string, targetPath: string): boolean {
-  try {
-    linkSync(sourcePath, targetPath)
-    return true
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
-      return false
-    }
-    if (isPermissionError(error) && process.platform === 'win32') {
-      grantDirAcl(dirname(targetPath))
-      try {
-        linkSync(sourcePath, targetPath)
-        return true
-      } catch (retryError) {
-        if ((retryError as NodeJS.ErrnoException).code === 'EEXIST') {
-          return false
-        }
-        throw retryError
-      }
-    }
-    throw error
   }
 }

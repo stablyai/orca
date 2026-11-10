@@ -1,3 +1,4 @@
+import type { LegacyTerminalProfileCatalog } from './legacy-terminal-profile-catalog'
 import { profileStateWriterFailureOutcome } from '../profile-state/profile-state-writer-errors'
 import type { ProfileStateMaintenance } from './profile-state-authority'
 import type { StoreDomains } from './store-domain-composition'
@@ -174,4 +175,25 @@ async function drainProfileFileWork(runtime: StoreRuntimeState): Promise<void> {
       runtime.profileMaintenancePending || runtime.quitFlushStarted
     )
   ])
+}
+
+export function beginCatalogProfileMaintenance(
+  runtime: StoreRuntimeState,
+  domains: StoreDomains,
+  catalog: LegacyTerminalProfileCatalog,
+  options?: ProfileStateMaintenanceOptions
+): Promise<ProfileStateMaintenance> {
+  const finish = catalog.beginChange()
+  return beginProfileStateMaintenance(runtime, domains, options).then(
+    (maintenance) => ({
+      resume: async () => {
+        await maintenance.resume()
+        finish([])
+      }
+    }),
+    (error: unknown) => {
+      finish([])
+      throw error
+    }
+  )
 }

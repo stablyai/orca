@@ -1,3 +1,4 @@
+import type { DaemonHistoryRetirement } from './daemon-history-retirement'
 import { DaemonClient } from '../../transport/client/daemon-client'
 import { DaemonPtyInputClosedIncarnations } from './daemon-pty-input-closed-incarnations'
 import { DaemonPtyInventoryObservation } from './daemon-pty-inventory-observation'
@@ -13,9 +14,6 @@ import type {
 import { CheckpointSessionQueue } from '../checkpointing/daemon-checkpoint-session-queue'
 import {
   SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION,
-  AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
-  AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
-  GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
   supportsMode2031UnsubscribeFact,
   supportsPtyStartupIngress
@@ -28,6 +26,7 @@ import { removeDaemonListener } from '../../observability/daemon-listener-regist
 import type { ParsedDaemonPid } from '../../endpoint/identity/daemon-pid-file-parse'
 
 import type { TakePendingOutputResult } from '../../protocol/daemon-rpc-contract'
+import { registerDaemonHistoryIdentity } from './daemon-pty-history-identity'
 import { ColdRestorePayloadCache } from '../../history/restoration/cold-restore-payload-cache'
 import { HistoryManager } from '../../history/storage/history-manager'
 import type { HistoryCheckpointResult } from '../../history/storage/terminal-history-manager-options'
@@ -141,11 +140,15 @@ export abstract class DaemonPtyRuntimeState {
   protected checkpointTimer: ReturnType<typeof setTimeout> | null = null
   protected checkpointInFlight: Promise<void> | null = null
   protected checkpointQueue = new CheckpointSessionQueue()
+  protected readonly historyIdentity: ReturnType<typeof registerDaemonHistoryIdentity>
+  protected retired = false
+  protected retirementCompletion: Promise<void> | null = null
   protected nonFinalCheckpointAdmissionSessionIds = new Set<string>()
   protected nonFinalAdmissionDeniedSessionIds = new Set<string>()
   protected nonFinalGlobalAdmissionWarningActive = false
   protected overlayDeadlineWarnedSessionIds = new Set<string>()
   protected periodicDeadlineWarnedSessionIds = new Set<string>()
+  protected readonly historyRetirements = new Map<string, DaemonHistoryRetirement>()
   protected keepHistoryShutdowns = new Set<Promise<void>>()
   protected disconnectOnlyPromise: Promise<void> | null = null
   protected supportsCheckpoints: boolean
@@ -199,6 +202,11 @@ export abstract class DaemonPtyRuntimeState {
     this.nonFinalAdmissionDeniedSessionIds.delete(sessionId)
     this.lastFullCheckpointAt.delete(sessionId)
     this.stopCheckpointTimerIfIdle()
+    const retirement = this.historyRetirements.get(sessionId)
+    if (retirement?.matches(expectedIncarnationId, this.lastAuthenticatedIdentity)) {
+      closeHistory = false
+      retirement.observeExit()
+    }
     if (this.historyManager && closeHistory) {
       void this.historyManager
         .closeSession(sessionId, exitCode)
@@ -235,6 +243,14 @@ export abstract class DaemonPtyRuntimeState {
       ? new HistoryManager(opts.historyPath, { resizeModel: () => client.getDaemonResizeModel() })
       : null
     this.historyReader = opts.historyPath ? new HistoryReader(opts.historyPath) : null
+    const root = this.historyManager?.identityRoot
+    this.checkpointQueue = new CheckpointSessionQueue(root)
+    this.historyIdentity = registerDaemonHistoryIdentity(
+      this.historyManager,
+      this.checkpointQueue,
+      client,
+      this.protocolVersion
+    )
     this.respawnFn = opts.respawn ?? null
     this.readRunningWslDistros = opts.readRunningWslDistros
     this.wslBridgeBootIdentity = opts.wslBridgeBootIdentity ?? new WslBridgeBootIdentity()
@@ -247,6 +263,7 @@ export abstract class DaemonPtyRuntimeState {
       this.protocolVersion >= SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION
     this.supportsStartupIngress = supportsPtyStartupIngress(this.protocolVersion)
     this.client.onDisconnected(() => {
+      root?.invalidate()
       this.ptyInventory.reset()
       if (!this.respawnAdoptionClosed) {
         this.writeRecoveryAttempted = false
@@ -260,10 +277,6 @@ export abstract class DaemonPtyRuntimeState {
       this.pausedProducerSessionIds.clear()
       this.observeAuditFailure('transport_closed')
     })
-  }
-
-  supportsGitCredentialGuardHost(): boolean {
-    return this.protocolVersion >= GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
   }
 
   // Snapshot authority requires this adapter to own the session, not just support its protocol.
@@ -300,17 +313,5 @@ export abstract class DaemonPtyRuntimeState {
   ): () => void {
     this.auditObservationListeners.push(listener)
     return () => removeDaemonListener(this.auditObservationListeners, listener)
-  }
-
-  supportsAgentSessionClaims(): boolean {
-    return this.protocolVersion >= AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION
-  }
-
-  providesAgentSessionOwnerListings(_ptyId: string): boolean {
-    return this.supportsAgentSessionClaims()
-  }
-
-  supportsAgentSessionCreateOperations(): boolean {
-    return this.protocolVersion >= AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION
   }
 }

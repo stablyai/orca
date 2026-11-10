@@ -20,6 +20,10 @@ export class DaemonPtySpawnPreparations {
 
   constructor(private readonly preparePtySpawn: () => Promise<void>) {}
 
+  reservedSessionIds(): IterableIterator<string> {
+    return this.pending.keys()
+  }
+
   register(
     sessionId: string,
     clientId: string,

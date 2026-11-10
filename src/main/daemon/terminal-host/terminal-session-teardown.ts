@@ -23,6 +23,10 @@ export class TerminalSessionTeardown {
     return this.operations.get(sessionId)?.promise
   }
 
+  reservedSessionIds(): IterableIterator<string> {
+    return this.operations.keys()
+  }
+
   /** Wait through rejected teardown work too; callers must recheck the Session’s actual liveness. */
   async settle(sessionId: string): Promise<void> {
     const operation = this.operations.get(sessionId)

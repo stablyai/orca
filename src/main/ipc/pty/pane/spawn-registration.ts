@@ -1,3 +1,9 @@
+import { publishSelectedTerminal } from '../../../pty/selected-terminal-retirement'
+import { retireScopedTerminal } from '../../../pty/legacy-terminal-retirement'
+import {
+  hasSelectedTerminalHistory,
+  preserveFencedTerminalHistory
+} from '../../../pty/pty-history-preserving-termination'
 import { classifyTerminalCreationFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type { PtyRegistrationClaim } from '../../../runtime/terminal/records/runtime-terminal-state-records'
 import { PaneOwnerContentionError } from './pane-spawn-operation'
@@ -6,10 +12,10 @@ import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { IPtyProvider, PtySpawnResult } from '../../../providers/pty-provider-contract'
 import {
   isCurrentPtyExit,
-  ptyIncarnationById,
   ptyOwnership,
   setAdoptedPtyOwnership,
-  setPtyOwnership
+  setPtyOwnership,
+  restorePtyIncarnation
 } from '../provider/ownership-state'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { finishPtyShutdown, isPtyAlreadyGoneError } from '../provider/liveness'
@@ -33,8 +39,9 @@ export function admitPtySpawnOwnership(
     setPtyOwnership(result.id, LOCAL_EXECUTION_HOST_ID)
   }
   if (result.incarnationId) {
-    ptyIncarnationById.set(result.id, result.incarnationId)
+    restorePtyIncarnation(result.id, result.incarnationId)
   }
+  publishSelectedTerminal(result)
 }
 
 /** Read incarnation-scoped early-exit proof without throwing; registration reports refusal itself. */
@@ -53,19 +60,39 @@ function exitedBeforeAdmission(
   }
 }
 
+type PtySpawnCleanupRuntime =
+  | (Pick<OrcaRuntimeService, 'markPtyLivenessUnverifiable'> &
+      Partial<Pick<OrcaRuntimeService, 'intentionalPtyStops'>>)
+  | undefined
+
 export async function discardUnpersistedPtySpawn(
   provider: IPtyProvider,
   result: PtySpawnResult,
-  runtime:
-    | (Pick<OrcaRuntimeService, 'markPtyLivenessUnverifiable'> &
-        Partial<Pick<OrcaRuntimeService, 'intentionalPtyStops'>>)
-    | undefined
+  runtime: PtySpawnCleanupRuntime
 ): Promise<void> {
-  if (
-    result.isReattach ||
-    result.agentSessionEnsure?.disposition === 'adopted' ||
-    !isCurrentPtyExit(result)
-  ) {
+  if (!result.isReattach) {
+    await stopUnpersistedPtySpawn(provider, result, runtime)
+  }
+}
+
+export async function retireClosedPtySpawn(
+  provider: IPtyProvider,
+  result: PtySpawnResult,
+  runtime: PtySpawnCleanupRuntime,
+  selectedId: string | undefined
+): Promise<void> {
+  if (!result.isReattach || result.id === selectedId) {
+    await stopUnpersistedPtySpawn(provider, result, runtime, 'preserve')
+  }
+}
+
+async function stopUnpersistedPtySpawn(
+  provider: IPtyProvider,
+  result: PtySpawnResult,
+  runtime: PtySpawnCleanupRuntime,
+  history: 'default' | 'preserve' = 'default'
+): Promise<void> {
+  if (result.agentSessionEnsure?.disposition === 'adopted' || !isCurrentPtyExit(result)) {
     return
   }
   // Discard cleanup is intentional stop, not agent completion; preserve the pane tab.
@@ -78,19 +105,38 @@ export async function discardUnpersistedPtySpawn(
   try {
     let proof: PtyExitProof
     try {
-      await provider.shutdown(result.id, {
-        immediate: true,
-        ...(result.incarnationId ? { expectedIncarnationId: result.incarnationId } : {})
-      })
+      if (history === 'preserve') {
+        stopped = await retireScopedTerminal(provider, result)
+        return
+      }
+      if (hasSelectedTerminalHistory(result) && result.incarnationId && provider.killFenced) {
+        const outcome = await provider.killFenced(
+          preserveFencedTerminalHistory({
+            id: result.id,
+            expectedIncarnationId: result.incarnationId,
+            requireNoAgentOwner: false,
+            requireUnattached: false
+          })
+        )
+        if (outcome.outcome === 'refused') {
+          if (outcome.reason === 'replaced') {
+            return
+          }
+          throw new Error(`Selected terminal stop is ${outcome.reason}`)
+        }
+      } else {
+        await provider.shutdown(result.id, {
+          immediate: true,
+          ...(hasSelectedTerminalHistory(result) ? { keepHistory: true } : {}),
+          ...(result.incarnationId ? { expectedIncarnationId: result.incarnationId } : {})
+        })
+      }
       proof = PtyExitProof.from('shutdown-acknowledged', result.incarnationId)
     } catch (error) {
       if (!isPtyAlreadyGoneError(error)) {
         console.warn('[pty] failed to clean up PTY after persistence failure:', error)
         // An observed exit, or a same-id replacement, outranks a lost control reply.
-        if (
-          !ptyOwnership.has(result.id) ||
-          ptyIncarnationById.get(result.id) !== result.incarnationId
-        ) {
+        if ((history === 'default' && !ptyOwnership.has(result.id)) || !isCurrentPtyExit(result)) {
           return
         }
         // Keep potentially live ownership as unverifiable until observed exit or successful cleanup.

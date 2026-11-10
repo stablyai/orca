@@ -5,6 +5,7 @@ import type { PtySpawnOutcome } from '../spawn-outcome'
 import type { PaneSpawnOperation } from './pane-spawn-operation'
 
 export type PaneSpawnReservation = {
+  ownerKey?: string
   promise: Promise<PaneSpawnReservationResult>
   resolve: (result: PaneSpawnReservationResult) => void
   reject: (error: unknown) => void
@@ -24,6 +25,7 @@ export type PaneSpawnReservationResult = {
 // Pane coordinates belong to independent owners across worktrees and execution hosts.
 export const paneSpawnReservationsByOwnerKey = new Map<string, PaneSpawnReservation>()
 export type PendingRuntimePaneCreate = {
+  ownerKey?: string
   count: number
   promise: Promise<PaneSpawnReservationResult | undefined>
   resolve: () => void
@@ -41,7 +43,7 @@ export function reservePaneSpawn(paneKey: string): PaneSpawnReservation {
     reject = promiseReject
   })
   promise.catch(() => {})
-  const reservation = { promise, resolve, reject }
+  const reservation = { promise, resolve, reject, ownerKey: paneKey }
   paneSpawnReservationsByOwnerKey.set(paneKey, reservation)
   return reservation
 }
@@ -83,6 +85,7 @@ export function clearPaneSpawnReservation(
   paneKey: string,
   reservation: PaneSpawnReservation
 ): void {
+  paneKey = reservation.ownerKey ?? paneKey
   if (paneSpawnReservationsByOwnerKey.get(paneKey) === reservation) {
     paneSpawnReservationsByOwnerKey.delete(paneKey)
   }
@@ -108,6 +111,7 @@ export function claimRuntimePaneCreate(ownerKey: string): RuntimePaneCreateClaim
   }
   let resolve!: (result: PaneSpawnReservationResult | undefined) => void
   const claim: PendingRuntimePaneCreate = {
+    ownerKey,
     count: 1,
     promise: new Promise((done) => {
       resolve = done
@@ -121,7 +125,10 @@ export function claimRuntimePaneCreate(ownerKey: string): RuntimePaneCreateClaim
 function runtimePaneCreateRelease(ownerKey: string, claim: PendingRuntimePaneCreate) {
   return Object.assign(() => releaseRuntimePaneCreate(ownerKey, claim), {
     acceptOutcome: (outcome: PtySpawnOutcome, operation: PaneSpawnOperation) => {
-      if (pendingRuntimePaneCreatesByOwnerKey.get(ownerKey) === claim && !claim.operation) {
+      if (
+        pendingRuntimePaneCreatesByOwnerKey.get(claim.ownerKey ?? ownerKey) === claim &&
+        !claim.operation
+      ) {
         claim.operation = operation
         claim.result = outcome.result
       }
@@ -130,6 +137,7 @@ function runtimePaneCreateRelease(ownerKey: string, claim: PendingRuntimePaneCre
 }
 
 export function releaseRuntimePaneCreate(ownerKey: string, claim: PendingRuntimePaneCreate): void {
+  ownerKey = claim.ownerKey ?? ownerKey
   if (pendingRuntimePaneCreatesByOwnerKey.get(ownerKey) !== claim) {
     return
   }
@@ -168,4 +176,29 @@ export function resolvePaneSpawnReservation<T extends PaneSpawnReservationResult
     clearPaneSpawnReservation(paneKey, reservation)
   }
   return response
+}
+
+/** Transfer only the admitted operation; old-address requests cannot discover the moved claim. */
+export function movePaneSpawnReservations(from: string, to: string): () => void {
+  const undo: (() => void)[] = []
+  const transfer = <T extends { ownerKey?: string }>(map: Map<string, T>) => {
+    const claim = map.get(from)
+    if (!claim || map.has(to)) {
+      return
+    }
+    map.delete(from)
+    map.set(to, claim)
+    claim.ownerKey = to
+    undo.push(() => {
+      if (map.get(to) !== claim || map.has(from)) {
+        return
+      }
+      map.delete(to)
+      map.set(from, claim)
+      claim.ownerKey = from
+    })
+  }
+  transfer(paneSpawnReservationsByOwnerKey)
+  transfer(pendingRuntimePaneCreatesByOwnerKey)
+  return () => undo.forEach((restore) => restore())
 }

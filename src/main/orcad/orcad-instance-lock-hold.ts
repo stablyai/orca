@@ -1,5 +1,6 @@
 // Holding the lock means re-proving it on every heartbeat, not only at acquisition.
-import { statSync, unlinkSync, utimesSync } from 'node:fs'
+import { realpathSync, statSync, unlinkSync, utimesSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { startOrcadLockHeartbeat } from './orcad-lock-clone-machine'
 import { readBoundedLockFile } from './orcad-instance-lock-reclaim'
 import {
@@ -19,6 +20,17 @@ export type OrcadInstanceLock = {
 }
 
 type OrcadLockBeat = 'held' | 'lost' | 'unproven'
+
+const heldRoots = new Map<string, () => boolean>()
+
+/** Optional terminal migration requires the actual unreleased profile receipt. */
+export function hasExclusiveOrcadInstanceLock(dataRoot: string): boolean {
+  try {
+    return heldRoots.get(dataRoot)?.() === true
+  } catch {
+    return false
+  }
+}
 
 function lockIsAbsent(lockPath: string): boolean {
   try {
@@ -90,6 +102,19 @@ export function holdOrcadInstanceLock(
   }
 ): OrcadInstanceLock {
   let released = false
+  let root: string | undefined
+  try {
+    // Match the native canonical root used by asynchronous profile ownership.
+    root = realpathSync.native(dirname(lockPath))
+  } catch {
+    // Optional migration proof must not prevent the published lock's normal lifecycle.
+  }
+  const ownsRoot = () =>
+    !released &&
+    parseOrcadInstanceLockRecord(readBoundedLockFile(lockPath) ?? '')?.nonce === record.nonce
+  if (root !== undefined) {
+    heldRoots.set(root, ownsRoot)
+  }
   const stopHeartbeat = startOrcadLockHeartbeat(() => {
     if (beatOrcadInstanceLock(lockPath, record, publish) === 'lost') {
       stopHeartbeat()
@@ -105,6 +130,9 @@ export function holdOrcadInstanceLock(
         return
       }
       released = true
+      if (root !== undefined && heldRoots.get(root) === ownsRoot) {
+        heldRoots.delete(root)
+      }
       stopHeartbeat()
       // Re-read ownership before unlinking so a successor’s live runtime cannot be unlocked.
       const current = parseOrcadInstanceLockRecord(readBoundedLockFile(lockPath) ?? '')

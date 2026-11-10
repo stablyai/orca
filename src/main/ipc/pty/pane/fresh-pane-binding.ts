@@ -14,11 +14,17 @@ export async function persistFreshPaneBinding(
   store: Store,
   binding: PersistPtyBindingArgs,
   connectionId?: string | null,
-  absentOwner?: AbsentPaneBinding
+  absentOwner?: AbsentPaneBinding,
+  canPublish: () => boolean = () => true,
+  resolveBinding: () => PersistPtyBindingArgs = () => binding
 ): Promise<boolean> {
   let targetChanged = false
   const hostId = connectionId ? toSshExecutionHostId(connectionId) : undefined
   const persisted = await store.persistPtyBinding(() => {
+    if (!canPublish()) {
+      return null
+    }
+    binding = resolveBinding()
     const session = store.getWorkspaceSession(hostId)
     const paneKey = makePaneKey(binding.tabId, binding.leafId)
     if (ptyBindingIsRefused(binding, session, binding.worktreeId, paneKey, [])) {

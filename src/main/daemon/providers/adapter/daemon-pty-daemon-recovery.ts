@@ -130,6 +130,15 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
     sessionId: string,
     operation: () => Promise<T>
   ): Promise<T> {
+    const root = this.historyManager?.identityRoot
+    const work = this.withAdapterHistorySpawnLock(sessionId, operation)
+    return root ? root.observeWork(sessionId, () => work) : work
+  }
+
+  private async withAdapterHistorySpawnLock<T>(
+    sessionId: string,
+    operation: () => Promise<T>
+  ): Promise<T> {
     if (!this.historyManager) {
       return await operation()
     }

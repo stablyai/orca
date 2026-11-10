@@ -76,6 +76,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     // Both ids: adoptSpawnResultSession may have rewritten sessionId to the claim owner.
     this.clearSessionAwaitingDaemonRecovery(requestedSessionId)
     this.clearSessionAwaitingDaemonRecovery(sessionId)
+    await this.retireReplacedHistoryWriter(sessionId, result.incarnationId)
     this.ptyInventory.spawned(sessionId, result.incarnationId)
     const exitedResult = this.resultForExitBeforeSpawnReply(sessionId, result, operation)
     if (exitedResult) {
@@ -116,7 +117,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         if (historyRecovery.unreadableSessionId === sessionId) {
           this.historyManager.suspendSession(sessionId, recoveryFreeze)
         } else {
-          this.historyManager.reopenSession(sessionId, recoveryFreeze)
+          await this.historyManager.reopenSession(sessionId, recoveryFreeze)
           if (result.isNew) {
             // A new process seeded with the fresh-shell padding: its output must not append to a
             // checkpoint that lacks that padding, or a later replay prints its prompt on the old one.
@@ -150,6 +151,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         effectiveRows = restoreInfo.rows
         result = await createOrAttach(historySeedSegments)
         await adoptSpawnResultSession(result)
+        await this.retireReplacedHistoryWriter(sessionId, result.incarnationId)
         this.ptyInventory.spawned(sessionId, result.incarnationId)
         const exitedRetryResult = this.resultForExitBeforeSpawnReply(sessionId, result, operation)
         if (exitedRetryResult) {
@@ -206,7 +208,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
             this.lastFullCheckpointAt.delete(sessionId)
           }
         } else if (canReanchorHistory) {
-          this.historyManager.registerWriter(sessionId, recoveryFreeze)
+          await this.historyManager.registerWriter(sessionId, recoveryFreeze)
           this.sessionsNeedingFullCheckpoint.add(sessionId)
           // The new generation has no checkpoint; discard any cooldown inherited from before the crash.
           this.lastFullCheckpointAt.delete(sessionId)
@@ -258,7 +260,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
       )
     } else if (this.historyManager && !historyRecovery.identityChanged) {
       // Register a writer without deleting the still-authoritative checkpoint on warm reattach.
-      this.historyManager.registerWriter(
+      await this.historyManager.registerWriter(
         sessionId,
         takeHistoryRecoveryFreeze(historyRecovery, sessionId)
       )

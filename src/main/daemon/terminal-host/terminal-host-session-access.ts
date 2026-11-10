@@ -1,4 +1,4 @@
-import { SessionNotFoundError } from '../protocol/daemon-errors'
+import { SessionNotFoundError, TerminalAttachCanceledError } from '../protocol/daemon-errors'
 import type { Session } from '../sessions/session'
 
 export function getAliveTerminalHostSession(
@@ -29,4 +29,16 @@ export function getInspectableTerminalHostSession(
     throw new SessionNotFoundError(sessionId)
   }
   return session ?? null
+}
+
+export function assertTerminalHostCreateAllowed(
+  creationFenced: boolean,
+  opts: { sessionId: string; isCanceled?: () => boolean }
+): void {
+  if (creationFenced) {
+    throw new Error('Terminal host is shutting down')
+  }
+  if (opts.isCanceled?.()) {
+    throw new TerminalAttachCanceledError(opts.sessionId)
+  }
 }

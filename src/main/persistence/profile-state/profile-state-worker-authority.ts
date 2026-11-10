@@ -1,15 +1,19 @@
+import { closedWriterError, ProfileStateWriterError } from './profile-state-writer-errors'
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
+import type {
+  ProfileTerminalClaims,
+  ProfileTerminalClaimsRequest
+} from './profile-state-terminal-claims-contract'
 import type {
   AsyncProfileStateAuthority,
   ProfileStateDomainReplacement,
   ProfileStateMaintenance
 } from '../loading-store/profile-state-authority'
-import { ProfileStateBackupRotation } from './profile-state-backup-rotation'
-import { runProfileStateBackupWorker } from './profile-state-backup-worker'
+import type { ProfileStateBackupRotation } from './profile-state-backup-rotation'
+import { createProfileStateWorkerBackups } from './profile-state-worker-backups'
 import { quarantineProfileStateDatabase } from './profile-state-database-quarantine'
 import {
   ProfileStateWriteWorkerClient,
-  ProfileStateWriterError,
   type ProfileStateWriterInitialization
 } from './profile-state-writer-worker-client'
 import {
@@ -46,12 +50,22 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     private readonly options: ProfileStateWorkerAuthorityOptions = {}
   ) {
     this.writer = new ProfileStateWriteWorkerClient(initialization, options)
-    this.backups = this.createBackups()
+    this.backups = createProfileStateWorkerBackups(
+      this.initialization,
+      this.options.backupWorkerPath
+    )
     this.scheduleIdleStopAfterReady()
   }
 
   get ready(): Promise<void> {
     return this.writer?.ready ?? Promise.resolve()
+  }
+
+  readTerminalClaims(request: ProfileTerminalClaimsRequest): Promise<ProfileTerminalClaims> {
+    if (!this.writer || this.stopping || this.closing || this.stoppedFailure) {
+      return Promise.resolve({ kind: 'unknown' })
+    }
+    return this.run((writer) => writer.readTerminalClaims(request))
   }
 
   readSerializedState(): never {
@@ -157,7 +171,10 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
           { ...this.initialization, revision },
           { ...this.options, reportInitializationFailure: true }
         )
-        this.backups = this.createBackups()
+        this.backups = createProfileStateWorkerBackups(
+          this.initialization,
+          this.options.backupWorkerPath
+        )
         this.closing = undefined
         this.scheduleIdleStopAfterReady()
         try {
@@ -193,16 +210,6 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
         throw result.reason
       }
     }
-  }
-
-  private createBackups(): ProfileStateBackupRotation {
-    return new ProfileStateBackupRotation(
-      this.initialization.databasePath,
-      this.initialization.profileId,
-      Date.now,
-      (job, signal) =>
-        runProfileStateBackupWorker(job, { workerPath: this.options.backupWorkerPath, signal })
-    )
   }
 
   /** A running writer dispatches synchronously, as before; only a stopped one is reopened first. */
@@ -334,12 +341,4 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     }
     return this.stoppedRevision
   }
-}
-
-function closedWriterError(): ProfileStateWriterError {
-  return new ProfileStateWriterError(
-    'profile-state-writer-closed',
-    'Profile state writer is closing',
-    'known-failure'
-  )
 }

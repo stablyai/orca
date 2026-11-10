@@ -160,6 +160,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
           hostIds,
           getSession: (hostId) => store.getWorkspaceSession!(hostId),
           setSession: (session, hostId) => store.setWorkspaceSession!(session, hostId),
+          identityAuthority: store.legacyTerminalIdentityAuthority,
           onClosed: (closedPtyIds) => {
             ptyIdsToKill = closedPtyIds
           }
