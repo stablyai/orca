@@ -315,6 +315,18 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     return this.store?.getRemoteLayoutSnapshots?.() ?? {}
   }
 
+  /** The agent a terminal runs and its worktree, from host records (never from request params). */
+  getTerminalHandleAgent(handle: string): { agent: string | null; worktreeId: string } | null {
+    const record = this.handles.get(handle)
+    if (!record) {
+      return null
+    }
+    return {
+      agent: record.ptyId ? this.getPtyAgent(record.ptyId) : null,
+      worktreeId: record.worktreeId
+    }
+  }
+
   /** Return the already-open record store without waiting. */
   openedAgentSessionRecordStore(): AgentSessionRecordStore | null {
     return peekOpenedAgentSessionRecordStore()

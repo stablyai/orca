@@ -47,6 +47,7 @@ import { MANAGED_SERVER_METHODS } from './host-management/managed-server'
 import { RECIPE_VM_WAKE_METHODS } from './host-management/recipe-vm-wake'
 import { ORCA_CLOUD_DEVICE_ENROLLMENT_METHODS } from './orca-cloud/orca-cloud-device-enrollment'
 import { CLOUD_SSH_METHODS } from './cloud-ssh/cloud-ssh-methods'
+import { SECRET_REQUEST_METHODS } from './secrets/secret-requests'
 import { ENVIRONMENT_DOCTOR_METHODS } from './host-management/environment-doctor'
 import { CLOUD_ENVIRONMENT_METHODS_RPC } from './cloud-environments/cloud-environments'
 import { SPEECH_METHODS } from './speech/speech'
@@ -150,6 +151,7 @@ export const ALL_RPC_METHODS = [
   ...MANAGED_SERVER_METHODS,
   ...RECIPE_VM_WAKE_METHODS,
   ...ORCA_CLOUD_DEVICE_ENROLLMENT_METHODS,
+  ...SECRET_REQUEST_METHODS,
   ...CLOUD_SSH_METHODS,
   ...ENVIRONMENT_DOCTOR_METHODS,
   ...CLOUD_ENVIRONMENT_METHODS_RPC,
