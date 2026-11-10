@@ -168,6 +168,22 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.on('browser:guestEscape', listener)
     return () => ipcRenderer.removeListener('browser:guestEscape', listener)
   },
+  onRemoteDesktopState: (
+    callback: (args: { browserPageId: string; desktop: boolean; captured: boolean }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: { browserPageId: string; desktop: boolean; captured: boolean }
+    ) => callback(data)
+    ipcRenderer.on('browser:remoteDesktopState', listener)
+    return () => ipcRenderer.removeListener('browser:remoteDesktopState', listener)
+  },
+  onRemoteDesktopRelease: (callback: (args: { browserPageId: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { browserPageId: string }) =>
+      callback(data)
+    ipcRenderer.on('browser:remoteDesktopRelease', listener)
+    return () => ipcRenderer.removeListener('browser:remoteDesktopRelease', listener)
+  },
   sessionListProfiles: () => ipcRenderer.invoke('browser:session:listProfiles'),
   onSessionProfilesChanged: (callback: () => void): (() => void) => {
     const listener = (): void => callback()

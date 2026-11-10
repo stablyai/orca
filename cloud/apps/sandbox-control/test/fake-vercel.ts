@@ -168,7 +168,7 @@ export function createFakeVercel(now: () => number): FakeVercel {
     failEnvRefresh: false,
     sshKeysExit: 0,
     authorizedKeys: new Map(),
-    desktop: { exitCode: 0, stdout: '{"schemaVersion":1,"port":6080,"display":":1","path":"vnc.html","password":"Ab3dE6gH"}\n' },
+    desktop: { exitCode: 0, stdout: `{"schemaVersion":2,"port":6080,"display":":1","path":"vnc.html","ticket":"${'t'.repeat(43)}","expiresInMs":60000}\n` },
     failCreate: false,
     snapshotExpirations: new Map(),
     expire(name) {

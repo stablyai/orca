@@ -18,6 +18,8 @@ export type FakeHostedControlPlane = {
   requests: { method: string; path: string; authorization: string | null }[]
   /** False models an image built before the remote desktop. */
   desktopInstalled: boolean
+  /** Desktop starts served (each mints one ticket). */
+  desktopTickets: number
 }
 
 export function createFakeHostedControlPlane(
@@ -143,8 +145,17 @@ export function createFakeHostedControlPlane(
         if (sandbox.status !== 'running') {
           return fail('conflict', 409, `sandbox_${sandbox.status}`)
         }
+        fake.desktopTickets += 1
         return fake.desktopInstalled
-          ? json({ desktop: { port: 6080, path: 'vnc.html', password: 'Ab3dE6gH' } })
+          ? json({
+              desktop: {
+                port: 6080,
+                path: 'vnc.html',
+                // A fresh single-use ticket per call, as orca-desktop-start mints them.
+                ticket: String(fake.desktopTickets).padStart(43, 't'),
+                expiresInMs: 60_000
+              }
+            })
           : fail('conflict', 409, 'desktop_not_installed')
       case 'POST /rollover':
         if (sandbox.status !== 'running') {
@@ -180,7 +191,8 @@ export function createFakeHostedControlPlane(
       pendingDeny = reason
     },
     requests,
-    desktopInstalled: true
+    desktopInstalled: true,
+    desktopTickets: 0
   }
   return fake
 }

@@ -196,12 +196,16 @@ const DESKTOP_NOT_INSTALLED_EXIT = 3
 
 const DesktopReadySchema = z
   .object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.literal(2),
     port: z.number().int().min(1024).max(65_535),
     display: z.string().regex(/^:\d{1,3}$/),
     path: z.string().regex(/^[A-Za-z0-9._-]{1,64}$/),
-    /** Per-boot VNC password: the desktop's localhost forward is reachable by any local process. */
-    password: z.string().regex(/^[A-Za-z0-9]{8}$/)
+    /**
+     * Single-use connection ticket (32 random bytes, base64url): the desktop's localhost forward is
+     * reachable by any local process, so the VM's proxy admits one WebSocket per unexpired ticket.
+     */
+    ticket: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+    expiresInMs: z.number().int().min(1_000).max(300_000)
   })
   .strict()
 
@@ -214,7 +218,7 @@ export class DesktopCommandError extends Error {
   }
 }
 
-/** Starts the VM's remote desktop (idempotent per boot): Xvnc + noVNC on the VM's loopback only. */
+/** Starts the VM's remote desktop (idempotent per boot) and mints one ticket: Xvnc + noVNC on the VM's loopback only. */
 export async function startDesktop(provider: SandboxProviderApi, sessionId: string): Promise<DesktopReady> {
   let result: Awaited<ReturnType<SandboxProviderApi['runCommand']>>
   try {

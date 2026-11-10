@@ -9,10 +9,16 @@ import { createHostedSandboxDriver } from './hosted-sandbox-driver'
 import { createHostedSandboxStepProvider } from './hosted-sandbox-recipe'
 import { createFakeHostedControlPlane } from './fake-hosted-control-plane.test-support'
 import { cloudSandboxIdForEnvironment, openCloudRemoteDesktop } from './hosted-remote-desktop'
+import {
+  remoteDesktopSessionForUrl,
+  resetRemoteDesktopSessionsForTest,
+  takeRemoteDesktopTicket
+} from './remote-desktop-sessions'
 
 const ENV = 'env-cloud-1'
 
 async function setup() {
+  resetRemoteDesktopSessionsForTest()
   const plane = createFakeHostedControlPlane()
   const client = createHostedSandboxControlPlaneClient({
     baseUrl: 'https://sandbox.cloud.test',
@@ -55,12 +61,31 @@ describe('Open Remote Desktop for an Orca Cloud workspace', () => {
     const { plane, client, userDataPath, openForward } = await setup()
     const sandboxId = cloudSandboxIdForEnvironment(userDataPath, ENV)
     expect(sandboxId).toBe([...plane.sandboxes.keys()][0])
-    const result = await openCloudRemoteDesktop({ userDataPath, client, openForward }, ENV)
+    const now = () => 1_000
+    const result = await openCloudRemoteDesktop({ userDataPath, client, openForward, now }, ENV)
+    // No secret in the URL: the page gets single-use tickets from main after it loads.
     expect(result).toEqual({
       ok: true,
       localPort: 6081,
-      url: 'http://localhost:6081/vnc.html?autoconnect=1&resize=remote&reconnect=1&reconnect_delay=1000#password=Ab3dE6gH'
+      url: 'http://localhost:6081/vnc.html?autoconnect=0&reconnect=0&resize=remote'
     })
+    const session = remoteDesktopSessionForUrl(result.ok ? result.url : '')
+    expect(session).toMatchObject({ environmentId: ENV, localPort: 6081, path: 'vnc.html' })
+    // The first ticket rides with the open; the next one is minted fresh (a reconnect).
+    expect(await takeRemoteDesktopTicket(session!, now)).toEqual({
+      ok: true,
+      ticket: '1'.padStart(43, 't'),
+      expiresAt: 61_000
+    })
+    expect(await takeRemoteDesktopTicket(session!, now)).toEqual({
+      ok: true,
+      ticket: '2'.padStart(43, 't'),
+      expiresAt: 61_000
+    })
+    expect(remoteDesktopSessionForUrl('http://localhost:6082/vnc.html')).toBeNull()
+    expect(remoteDesktopSessionForUrl('http://localhost:6081/other.html')).toBeNull()
+    expect(remoteDesktopSessionForUrl('https://localhost:6081/vnc.html')).toBeNull()
+    expect(remoteDesktopSessionForUrl('http://example.com:6081/vnc.html')).toBeNull()
     expect(plane.requests.at(-1)).toMatchObject({
       method: 'POST',
       path: `/v1/sandboxes/${sandboxId}/desktop`
@@ -102,6 +127,13 @@ describe('Open Remote Desktop for an Orca Cloud workspace', () => {
       ok: false,
       code: 'not_running'
     })
+    for (const sandbox of plane.sandboxes.values()) {
+      Object.assign(sandbox, { status: 'resuming' })
+    }
+    expect(await openCloudRemoteDesktop({ userDataPath, client, openForward }, ENV)).toEqual({
+      ok: false,
+      code: 'starting'
+    })
     expect(openForward).not.toHaveBeenCalled()
     for (const sandbox of plane.sandboxes.values()) {
       Object.assign(sandbox, { status: 'running' })
@@ -110,6 +142,17 @@ describe('Open Remote Desktop for an Orca Cloud workspace', () => {
     expect(
       await openCloudRemoteDesktop({ userDataPath, client, openForward: refused }, ENV)
     ).toEqual({ ok: false, code: 'forward_failed' })
+  })
+
+  it('says why a later ticket could not be minted (the sandbox went to sleep)', async () => {
+    const { plane, client, userDataPath, openForward } = await setup()
+    const result = await openCloudRemoteDesktop({ userDataPath, client, openForward }, ENV)
+    const session = remoteDesktopSessionForUrl(result.ok ? result.url : '')!
+    await takeRemoteDesktopTicket(session) // the open's own ticket
+    for (const sandbox of plane.sandboxes.values()) {
+      Object.assign(sandbox, { status: 'suspended', session: null })
+    }
+    expect(await takeRemoteDesktopTicket(session)).toEqual({ ok: false, reason: 'asleep' })
   })
 
   it('asks for sign-in when the control plane refuses the token', async () => {

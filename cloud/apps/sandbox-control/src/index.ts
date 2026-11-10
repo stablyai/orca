@@ -1149,14 +1149,18 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       }
       case 'POST desktop': {
         // Runs only the image's fixed entry point; the desktop listens on the VM's loopback and is
-        // reached through the paired runtime's port forward, never a public route.
+        // reached through the paired runtime's port forward, never a public route. Every call mints
+        // a fresh single-use ticket (each WebSocket, including a reconnect, needs its own); it is
+        // never logged here.
         if (row.status !== 'running' || !row.session_id) {
           return fail('conflict', 409, `sandbox_${row.status}`)
         }
         const started = Date.now()
         const desktop = await startDesktop(life.provider, row.session_id)
         console.log(JSON.stringify({ event: 'desktop_start', ms: Date.now() - started }))
-        return json({ desktop: { port: desktop.port, path: desktop.path, password: desktop.password } })
+        return json({
+          desktop: { port: desktop.port, path: desktop.path, ticket: desktop.ticket, expiresInMs: desktop.expiresInMs }
+        })
       }
       case 'POST lease': {
         const body = LeaseRequestSchema.safeParse(await readJson(request))

@@ -12,6 +12,7 @@ import {
   type CloudRemoteDesktopToastState
 } from './CloudRemoteDesktopToast'
 import { RemoteDesktopMenuEntry } from './RemoteDesktopMenuEntry'
+import { RemoteDesktopKeyboardHintView } from './RemoteDesktopKeyboardHint'
 
 const noop = (): void => {}
 
@@ -53,3 +54,23 @@ export const unavailable = toastFixture({ kind: 'failed', code: 'unavailable' })
 export const connectFailed = toastFixture({ kind: 'failed', code: 'forward_failed' })
 export const signedOut = toastFixture({ kind: 'failed', code: 'signed_out' })
 export const notCloud = toastFixture({ kind: 'failed', code: 'not_cloud' })
+export const sandboxStarting = toastFixture({ kind: 'failed', code: 'starting' })
+export const archived = toastFixture({ kind: 'failed', code: 'archived' })
+
+function keyboardHintFixture(kind: 'captured' | 'released', chord: string, width = 520) {
+  return defineFixture({
+    width,
+    render: () => (
+      // The hint floats over the desktop at the top of the tab's page area.
+      <div className="relative h-[120px] overflow-hidden bg-[#1e1f22]">
+        <RemoteDesktopKeyboardHintView kind={kind} visible chord={chord} />
+      </div>
+    )
+  })
+}
+
+export const keyboardCaptured = keyboardHintFixture('captured', '⌃⌘')
+export const keyboardCapturedWindows = keyboardHintFixture('captured', 'Ctrl+Alt')
+export const keyboardReleased = keyboardHintFixture('released', '⌃⌘')
+/** A narrow split pane: the hint wraps instead of clipping. */
+export const keyboardCapturedNarrow = keyboardHintFixture('captured', '⌃⌘', 320)
