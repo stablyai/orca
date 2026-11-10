@@ -3,7 +3,7 @@ import { ContextMenuItem } from '@/components/ui/context-menu'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { nativeChatWorktreeForkSourceBranch } from './native-chat-worktree-fork'
+import { useNativeChatWorktreeForkOffered } from './native-chat-worktree-fork'
 import { requestNativeChatWorktreeFork } from './native-chat-worktree-fork-requests'
 
 /** Shows the chat tab, then asks its pane to fork it into a new worktree. */
@@ -23,7 +23,8 @@ export function NativeChatWorktreeForkMenuItem({
   onComplete?: () => void
 }): React.JSX.Element | null {
   const t = useTranslate()
-  if (!nativeChatWorktreeForkSourceBranch(tab.worktreeId)) {
+  const offered = useNativeChatWorktreeForkOffered(tab.worktreeId)
+  if (!offered) {
     return null
   }
   const Item = menuKind === 'context' ? ContextMenuItem : DropdownMenuItem

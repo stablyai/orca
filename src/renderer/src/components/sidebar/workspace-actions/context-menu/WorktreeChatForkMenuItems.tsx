@@ -10,7 +10,7 @@ import { useAppStore } from '@/store'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { Tab } from '../../../../../../shared/tab-types'
 import { openNativeChatWorktreeFork } from '../../../native-chat/messages/actions/NativeChatWorktreeForkMenuItem'
-import { nativeChatWorktreeForkSourceBranch } from '../../../native-chat/messages/actions/native-chat-worktree-fork'
+import { useNativeChatWorktreeForkOffered } from '../../../native-chat/messages/actions/native-chat-worktree-fork'
 
 const NO_TABS: readonly Tab[] = []
 
@@ -31,8 +31,9 @@ export function WorktreeChatForkMenuItems({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const tabs = useAppStore((state) => state.unifiedTabsByWorktree[worktreeId] ?? NO_TABS)
+  const offered = useNativeChatWorktreeForkOffered(worktreeId)
   const chats = workspaceChats(tabs)
-  if (chats.length === 0 || !nativeChatWorktreeForkSourceBranch(worktreeId)) {
+  if (chats.length === 0 || !offered) {
     return null
   }
   const label = t('components.native-chat.fork.worktree.sidebarMenu', 'Fork Chat into New Worktree')

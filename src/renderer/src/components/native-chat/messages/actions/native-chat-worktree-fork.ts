@@ -5,6 +5,9 @@ import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-a
 import { createForkWorktree, forkableWorktreeBranch } from '@/lib/workspace/creation/fork-worktree'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { NativeChatForkRowAction } from './use-native-chat-fork'
+import { useWorktreeRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
+import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
+import { AGENT_SESSION_CREATE_FORK_WORKTREE_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-create-capabilities'
 
 /** Where a fork's new worktree branches from: the project's main branch, or the source's own branch. */
 export type NativeChatWorktreeForkBase = 'main' | 'current'
@@ -15,6 +18,16 @@ export function nativeChatWorktreeForkSourceBranch(sourceWorktreeId: string): st
   const worktree = state.getKnownWorktreeById(sourceWorktreeId)
   const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : undefined
   return forkableWorktreeBranch(worktree, repo, sourceWorktreeId)
+}
+
+/** Whether a menu should offer forking this worktree's chats: a git worktree whose host can fork into another. */
+export function useNativeChatWorktreeForkOffered(worktreeId: string): boolean {
+  const target = useWorktreeRuntimeTarget(worktreeId)
+  const host = useStructuredAgentSessionHostCapabilityState(
+    target,
+    AGENT_SESSION_CREATE_FORK_WORKTREE_RUNTIME_CAPABILITY
+  )
+  return host === 'supported' && nativeChatWorktreeForkSourceBranch(worktreeId) !== null
 }
 
 /** Creates the fork's worktree, then opens the copied chat there; the source chat is never touched. */
