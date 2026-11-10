@@ -1,3 +1,4 @@
+import { nativeChatSendFollowUp } from '../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
 import type { StructuredAgentSessionHostCapabilityState } from '../../../../../shared/agent-session/structured-agent-session-host-capability'
 import {
   structuredAgentSessionFollowUpsQueue,
@@ -45,4 +46,18 @@ export function structuredAgentSessionRequestedDelivery(
   alternate?: boolean
 ): 'immediate' | 'queue-if-active' | undefined {
   return requested ?? structuredAgentSessionQueueRequest({ ...queue, isWorking }, alternate)
+}
+
+export function structuredAgentSessionQueueControls(
+  queue: StructuredAgentSessionQueueDelivery,
+  steerCapability: StructuredAgentSessionHostCapabilityState
+) {
+  return {
+    sendsQueue: structuredAgentSessionSendQueues(queue),
+    queue,
+    steerCapability,
+    sendFollowUp: nativeChatSendFollowUp((alternate) =>
+      structuredAgentSessionSendQueues(queue, alternate)
+    )
+  }
 }

@@ -21,10 +21,15 @@ import {
   isStructuredAgentSessionGoalCommand,
   structuredAgentSessionCommandChangesConversation
 } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
-import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { dispatchNativeChatStructuredComposerText } from './native-chat-structured-composer-dispatch'
-import type { NativeChatStructuredComposerTransport } from './native-chat-structured-composer-transport'
-import type { NativeChatComposerImageAttachment } from '../../attachments/chips/native-chat-image-attachment'
+import type {
+  UseNativeChatStructuredComposerSendArgs,
+  NativeChatStructuredComposerSend
+} from './native-chat-structured-composer-transport'
+export type {
+  UseNativeChatStructuredComposerSendArgs,
+  NativeChatStructuredComposerSend
+} from './native-chat-structured-composer-transport'
 import { nativeChatAttachImagesAgainReason } from '../../attachments/chips/native-chat-image-reattach'
 import { nativeChatNoticeFromError } from '../controls/native-chat-composer-notice'
 import { agentSessionWriteNoticeText } from '../../messages/notices/agent-session-write-notice-text'
@@ -43,25 +48,7 @@ import {
   admitNativeChatPastedText,
   projectNativeChatPastedText
 } from '../../paste/native-chat-composer-pasted-text-references'
-import type { StructuredAgentSessionSendRequest } from '../../session/structured/delivery/structured-agent-session-send-slot'
 import { structuredAgentSessionRequestedDelivery } from '../../queue/structured-agent-session-queue-request'
-
-export type UseNativeChatStructuredComposerSendArgs = {
-  agent: AgentType
-  draftScopeKey: string
-  imageAttachments: readonly NativeChatComposerImageAttachment[]
-  structuredTransport?: NativeChatStructuredComposerTransport
-  isComposing: () => boolean
-  clearSkillOrigin: () => void
-  setDraft: (value: string) => void
-  setCaret: (caret: number) => void
-}
-
-export type NativeChatStructuredComposerSend = (
-  text: string,
-  attachments?: readonly NativeChatComposerImageAttachment[],
-  request?: StructuredAgentSessionSendRequest
-) => Promise<boolean>
 
 /** Clear submitted composer content only after structured transport acceptance. */
 export function useNativeChatStructuredComposerSend({

@@ -31,7 +31,10 @@ import {
   nativeChatSessionOptionLabel
 } from '../../../../../src/shared/native-chat/input/native-chat-session-option-labels'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
-import { mobileSessionOptionSummaryValue } from './mobile-native-chat-session-option-labels'
+import {
+  mobileSessionOptionSummaryValue,
+  mobileSessionOptionSelectedChoice
+} from './mobile-native-chat-session-option-labels'
 import {
   descriptorRowElements,
   ModelPill,
@@ -98,12 +101,6 @@ function permissionChoiceLeading(value: string): React.JSX.Element | null {
       strokeWidth={2.2}
     />
   ) : null
-}
-
-function selectedChoice(descriptor: SessionOptionDescriptor | undefined) {
-  return descriptor?.kind.type === 'select'
-    ? descriptor.kind.choices.find((choice) => choice.value === descriptor.kind.currentValue)
-    : undefined
 }
 
 export function MobileNativeChatSessionOptionPickers({
@@ -182,7 +179,7 @@ export function MobileNativeChatSessionOptionPickers({
   const locked = (descriptor: SessionOptionDescriptor): boolean =>
     busy || (isWorking && descriptor.transport !== 'agent-session' && descriptor !== permission)
   const reason = nativeChatSessionOptionDisabledReason(activeDescriptor?.disabledReason, say)
-  const permissionChoice = selectedChoice(permission)
+  const permissionChoice = mobileSessionOptionSelectedChoice(permission)
   const permissionColor = permissionChoiceColor(permissionChoice?.value)
   const permissionIcon =
     !model && permissionChoice ? permissionModeIcon(permissionChoice.value) : undefined

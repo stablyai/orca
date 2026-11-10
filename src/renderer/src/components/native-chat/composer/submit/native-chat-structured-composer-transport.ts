@@ -1,3 +1,4 @@
+import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { StructuredAgentSessionQueueDelivery } from '../../queue/structured-agent-session-queue-request'
 import type { StructuredAgentSessionHostCapabilityState } from '../../../../../../shared/agent-session/structured-agent-session-host-capability'
 import type { CaptureStructuredAgentSessionPresentation } from '../../session/structured/writes/use-structured-agent-session-mutate'
@@ -77,3 +78,20 @@ export type NativeChatStructuredComposerTransport = {
   sessionPending?: boolean
   sessionPendingNotice?: string
 }
+
+export type UseNativeChatStructuredComposerSendArgs = {
+  agent: AgentType
+  draftScopeKey: string
+  imageAttachments: readonly NativeChatComposerImageAttachment[]
+  structuredTransport?: NativeChatStructuredComposerTransport
+  isComposing: () => boolean
+  clearSkillOrigin: () => void
+  setDraft: (value: string) => void
+  setCaret: (caret: number) => void
+}
+
+export type NativeChatStructuredComposerSend = (
+  text: string,
+  attachments?: readonly NativeChatComposerImageAttachment[],
+  request?: StructuredAgentSessionSendRequest
+) => Promise<boolean>
