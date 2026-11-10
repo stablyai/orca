@@ -72,12 +72,15 @@ export async function initializeAcpStructuredSession(
     env: launch.env,
     antigravityChatAuth: launch.antigravityChatAuth
   })
-  const sessionMeta = await spec
-    .sessionMeta?.({
+  let sessionMeta: Record<string, unknown> | undefined
+  try {
+    sessionMeta = await spec.sessionMeta?.({
       cwd: launch.cwd,
       env: launch.env
     })
-    .catch(() => undefined)
+  } catch {
+    sessionMeta = undefined
+  }
   const setup = {
     authMethodId,
     authMethodUnavailableMessage: spec.authMethodUnavailableMessage,
