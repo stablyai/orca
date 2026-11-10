@@ -17,7 +17,7 @@ import { memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
 import { connectedMembers, memberGitConfigs } from './member-git'
 import type { RetentionConfig } from './retention'
 import type { ProviderSandboxState, SandboxProviderApi } from './sandbox-provider'
-import { egressSecretHosts, secretPlaceholder } from './secret-egress'
+import { egressSecretHosts, placeholderValues, secretPlaceholder } from './secret-egress'
 import { egressAllowHosts, sessionSecretEnv, type SessionSecrets } from './session-env'
 import type { Keyring } from './secrets-crypto'
 import { ORCAD_PORT, SHARE_PROXY_PORT, drainOrcad, runningOrcad, startOrcad, type OrcadReady, type StartInputs } from './sandbox-vm-commands'
@@ -232,11 +232,11 @@ export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: st
         // Model API keys swapped at egress (phase 2); each host also ends in the 403 deny rule, except a
         // host whose client sends its own short-lived token on later calls (Cursor).
         ...egressSecretHosts(row).flatMap((entry) =>
-          Object.entries(entry.headers).map(
-            ([header, format]): CredentialRoute => ({
+          Object.keys(entry.headers).map(
+            (header): CredentialRoute => ({
               host: entry.host,
               header,
-              placeholders: [format(secretPlaceholder(row, entry.secret))],
+              placeholders: placeholderValues(entry, header, secretPlaceholder(row, entry.secret)),
               via: 'forward',
               forwardURL: proxyUrl,
               ...(entry.allowUnclaimed ? { allowUnclaimed: true } : {})

@@ -14455,8 +14455,6 @@
         "cloudRoutines": {
           "queued": "Run queued. It shows up in the history below.",
           "pausedSr": "(paused)",
-          "agentCodex": "Codex",
-          "agentClaude": "Claude Code",
           "createdByPerson": "by <person></person>",
           "lastRun": "Last run:",
           "neverRun": "Never run",
@@ -26828,6 +26826,10 @@
       "unterminatedQuote": "The closing quote is missing.",
       "overridden": "Set again further down; the later line is used.",
       "unknown": "Something went wrong in Orca Cloud. Nothing was changed. Try again."
+    },
+    "vm": {
+      "badge": "Stored on workspace",
+      "warning": "Orca can’t swap this key at the network edge, so cloud workspaces get the real value. Anything running in the workspace can read it."
     }
   },
   "cloudMcpSync": {

@@ -14,6 +14,7 @@ import { cloudSecretKindLabel, cloudSecretsErrorCopy } from './cloud-secrets-cop
 import { CloudSecretEditor, type CloudSecretEditorTarget } from './CloudSecretEditor'
 import { CloudApiEmptyState } from '../cloud-api/cloud-api-parts'
 import { CloudSecretsPasteEnv } from './CloudSecretsPasteEnv'
+import { CloudSecretVmBadge } from './CloudSecretVmBadge'
 import type { CloudSecretListModel } from './use-cloud-secrets'
 
 export type CloudSecretPeople = {
@@ -85,6 +86,7 @@ function SecretRow({
               {cloudSecretKindLabel(secret.name, t)}
             </Badge>
           ) : null}
+          <CloudSecretVmBadge name={secret.name} />
         </span>
         <span className="w-[9ch] shrink-0 font-mono text-xs whitespace-nowrap text-muted-foreground">
           <span aria-hidden>{maskedHint(secret.hint)}</span>

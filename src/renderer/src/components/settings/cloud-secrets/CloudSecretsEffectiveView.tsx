@@ -5,6 +5,7 @@ import type {
   CloudSecretsEffective
 } from '../../../../../shared/cloud-secrets/cloud-secrets-wire'
 import { Badge } from '../../ui/badge'
+import { CloudSecretVmBadge } from './CloudSecretVmBadge'
 import { InlineError } from '../../ui/inline-error'
 import { Skeleton } from '../../ui/skeleton'
 import { CloudApiEmptyState } from '../cloud-api/cloud-api-parts'
@@ -132,6 +133,7 @@ export function CloudSecretsEffectiveView({
                           {cloudSecretKindLabel(secret.name, t)}
                         </Badge>
                       ) : null}
+                      <CloudSecretVmBadge name={secret.name} />
                     </span>
                   </td>
                   <td className="px-3 py-2">
