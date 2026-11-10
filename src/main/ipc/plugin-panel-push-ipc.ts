@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { panelSessionTokenSchema } from '../../shared/plugins/frames/plugin-frame-bridge'
 import type { PluginService } from '../plugins/plugin-service'
 import { rendererPanelOwner } from './plugin-frame-entry-ipc'
+import type { RemotePluginPanels } from './plugin-remote-panel-ipc'
 
 const panelPushArgsSchema = z.object({ sessionToken: panelSessionTokenSchema }).strict()
 
@@ -14,12 +15,18 @@ export const PLUGIN_PANEL_PUSH_CHANNEL = 'plugins:panelPush'
  * window navigates or reloads, the plugin goes away); the renderer closes it when its last frame
  * for that session unmounts.
  */
-export function registerPluginPanelPushHandlers(pluginService: PluginService): void {
+export function registerPluginPanelPushHandlers(
+  pluginService: PluginService,
+  remotePanels: RemotePluginPanels
+): void {
   const stops = new Map<string, () => void>()
   ipcMain.handle('plugins:openPanelPush', async (event, args: unknown): Promise<boolean> => {
     await pluginService.whenReady()
     const parsed = panelPushArgsSchema.safeParse(args)
     const { sender } = event
+    if (parsed.success && remotePanels.openPush(sender.id, parsed.data.sessionToken)) {
+      return true
+    }
     const session = parsed.success
       ? pluginService.panels.sessionCaller(rendererPanelOwner(sender.id), parsed.data.sessionToken)
       : null
@@ -45,6 +52,7 @@ export function registerPluginPanelPushHandlers(pluginService: PluginService): v
   ipcMain.handle('plugins:closePanelPush', (event, args: unknown): void => {
     const parsed = panelPushArgsSchema.safeParse(args)
     if (parsed.success) {
+      remotePanels.closePush(event.sender.id, parsed.data.sessionToken)
       const key = `${event.sender.id}\0${parsed.data.sessionToken}`
       stops.get(key)?.()
       stops.delete(key)

@@ -14,6 +14,7 @@ import { handlePluginPanelStateRequest } from '../plugins/panels/plugin-panel-st
 import type { PluginService } from '../plugins/plugin-service'
 import { registerPluginFrameEntryHandlers, rendererPanelOwner } from './plugin-frame-entry-ipc'
 import { registerPluginPanelPushHandlers } from './plugin-panel-push-ipc'
+import { registerPluginRemotePanelHandlers } from './plugin-remote-panel-ipc'
 import { registerPluginSettingsHandlers } from './plugin-settings-ipc'
 import { registerPluginStatusBarHandlers } from './plugin-status-bar-ipc'
 import { registerPluginEditorSaveHookHandler } from './plugin-editor-save-hook-ipc'
@@ -141,7 +142,8 @@ export function registerPluginHandlers(
 
   bindPluginFrameGuests(pluginService)
   registerPluginFrameEntryHandlers(store, pluginService)
-  registerPluginPanelPushHandlers(pluginService)
+  const remotePanels = registerPluginRemotePanelHandlers(pluginService)
+  registerPluginPanelPushHandlers(pluginService, remotePanels)
   registerPluginStatusBarHandlers(pluginService)
   registerPluginEditorSaveHookHandler()
   registerPluginSettingsHandlers(pluginService)
@@ -157,6 +159,10 @@ export function registerPluginHandlers(
     'plugins:panelAction',
     async (event, args: unknown): Promise<PluginHostCallOutcome> => {
       await pluginService.whenReady()
+      const forwarded = remotePanels.forward(event.sender.id, args)
+      if (forwarded) {
+        return forwarded
+      }
       return pluginService.panels.execute(rendererPanelOwner(event.sender.id), args, {
         desktop: true,
         callerWebContentsId: event.sender.id

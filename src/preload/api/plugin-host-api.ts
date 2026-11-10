@@ -20,6 +20,7 @@ import type {
   PluginFrameTheme
 } from '../../shared/plugins/frames/plugin-frame-bridge'
 import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
+import type { PluginRemotePanelBinding } from '../../shared/plugins/frames/plugin-remote-panel'
 import type {
   PluginPanelStateRequest,
   PluginPanelStateResult
@@ -193,6 +194,14 @@ export type PluginsApi = {
   panelState?: (args: PluginPanelStateRequest) => Promise<PluginPanelStateResult>
   /** One open panel's pushes (`PluginPanelPush`, unvalidated); desktop only. Returns unsubscribe. */
   subscribePanelPush?: (sessionToken: string, listener: (push: unknown) => void) => () => void
+  /** Send an open panel's calls and pushes to a paired host that has the same plugin; desktop only. */
+  bindRemotePanel?: (args: {
+    sessionToken: string
+    environmentId: string
+  }) => Promise<PluginRemotePanelBinding>
+  unbindRemotePanel?: (args: { sessionToken: string }) => Promise<void>
+  /** Hears the session token of a bound panel whose host went away. Returns unsubscribe. */
+  onRemotePanelClosed?: (listener: (sessionToken: string) => void) => () => void
   /** The settings a plugin declares and their current values; null when it declares none. */
   getSettings?: (args: { pluginKey: string }) => Promise<PluginDeclaredSettingsSnapshot | null>
   /** The person's edit; `null` restores the default. */

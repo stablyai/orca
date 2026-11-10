@@ -9,7 +9,10 @@ import {
 } from '../../plugins/frames/plugin-frame-element'
 import { PluginDeclarativePanel } from './declarative/PluginDeclarativePanel'
 import { usePluginFrameHost } from '../../plugins/frames/use-plugin-frame-host'
-import { usePluginFrameEntry } from '../../plugins/frames/use-plugin-frame-entry'
+import {
+  usePluginFrameEntry,
+  type PluginFrameHost
+} from '../../plugins/frames/use-plugin-frame-entry'
 import {
   reportPluginPanelFailure,
   useReportFramePanelDraw
@@ -19,6 +22,8 @@ import {
   usePluginPanelsStore
 } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { isWebClientLocation } from '@/lib/web-client-location'
 
 type PluginPanelProps = {
@@ -33,6 +38,29 @@ function PluginPanelMessage({ children }: { children: React.ReactNode }): React.
   )
 }
 
+/** Which Orca runs this panel's plugin when the focused workspace is on a paired host. */
+function PluginPanelHostNote({ host }: { host: PluginFrameHost }): React.JSX.Element {
+  const t = useTranslate()
+  const text =
+    host.kind === 'paired'
+      ? t('auto.components.right.sidebar.PluginPanel.onPairedHost', 'Running on {{value0}}', {
+          value0: host.name
+        })
+      : t(
+          'auto.components.right.sidebar.PluginPanel.onThisHost',
+          'Running on this computer: {{value0}}',
+          { value0: host.reason }
+        )
+  return (
+    <div
+      className="shrink-0 truncate border-b border-border px-3 py-1 text-xs text-muted-foreground"
+      title={text}
+    >
+      {text}
+    </div>
+  )
+}
+
 function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
   const t = useTranslate()
   const panels = usePluginPanels()
@@ -41,11 +69,16 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     ? (panels.find((entry) => entry.tabKey === tabKey) ?? null)
     : null
   const frameRef = useRef<PluginFrameElement | null>(null)
+  const pairedEnvironmentId = useAppStore((state) =>
+    runtimeEnvironmentIdOrLocalUnlessTwin(state, state.activeWorktreeId)
+  )
   const { entry, markUnresponsive, remountGone } = usePluginFrameEntry(
     'panel',
     panel?.pluginKey ?? null,
-    panel?.id ?? null
+    panel?.id ?? null,
+    pairedEnvironmentId
   )
+  const host = entry.status === 'ready' ? entry.host : undefined
   const guest = usablePluginFrameGuest(entry.status === 'ready' ? entry.guest : undefined)
   const declarative = entry.status === 'ready' && entry.ui === 'components'
   const panelShell = entry.status === 'ready' && !guest && !declarative ? entry.html : null
@@ -120,20 +153,32 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     )
   }
 
+  const withHostNote = (content: React.JSX.Element): React.JSX.Element =>
+    host ? (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <PluginPanelHostNote host={host} />
+        {content}
+      </div>
+    ) : (
+      content
+    )
+
   if (declarative) {
     return guest && panelFrameKey ? (
-      <PluginDeclarativePanel
-        // A dev save keeps the panel (last good tree, memory atoms) and swaps only its guest.
-        key={guest.dev ? `${tabKey}:dev` : panelFrameKey}
-        tabKey={tabKey}
-        hotReload={guest.dev === true}
-        panelId={panel.id}
-        title={panel.title}
-        guest={guest}
-        frameKey={panelFrameKey}
-        sessionToken={entry.sessionToken}
-        onUnresponsive={markUnresponsive}
-      />
+      withHostNote(
+        <PluginDeclarativePanel
+          // A dev save keeps the panel (last good tree, memory atoms) and swaps only its guest.
+          key={guest.dev ? `${tabKey}:dev` : panelFrameKey}
+          tabKey={tabKey}
+          hotReload={guest.dev === true}
+          panelId={panel.id}
+          title={panel.title}
+          guest={guest}
+          frameKey={panelFrameKey}
+          sessionToken={entry.sessionToken}
+          onUnresponsive={markUnresponsive}
+        />
+      )
     ) : (
       <PluginPanelMessage>
         {isWebClientLocation()
@@ -149,7 +194,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     )
   }
 
-  return (
+  return withHostNote(
     <PluginFrameView
       key={panelFrameKey}
       frameRef={frameRef}

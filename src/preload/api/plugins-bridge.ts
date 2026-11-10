@@ -5,6 +5,10 @@ import type {
   PluginFrameTheme
 } from '../../shared/plugins/frames/plugin-frame-bridge'
 import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
+import {
+  PLUGIN_REMOTE_PANEL_CLOSED_CHANNEL,
+  type PluginRemotePanelBinding
+} from '../../shared/plugins/frames/plugin-remote-panel'
 import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
 import type { PluginChangeEvent } from '../../shared/plugins/events/plugin-change-event'
 import {
@@ -63,6 +67,26 @@ export const pluginsApi = {
   }): Promise<PluginHostCallOutcome> => ipcRenderer.invoke('plugins:panelAction', args),
   panelState: (args) => ipcRenderer.invoke('plugins:panelState', args),
   subscribePanelPush: subscribePluginPanelPush,
+  bindRemotePanel: (args: {
+    sessionToken: string
+    environmentId: string
+  }): Promise<PluginRemotePanelBinding> => ipcRenderer.invoke('plugins:bindRemotePanel', args),
+  unbindRemotePanel: (args: { sessionToken: string }): Promise<void> =>
+    ipcRenderer.invoke('plugins:unbindRemotePanel', args),
+  onRemotePanelClosed: (listener) => {
+    const handler = (_event: Electron.IpcRendererEvent, closed: unknown): void => {
+      if (
+        typeof closed === 'object' &&
+        closed !== null &&
+        'sessionToken' in closed &&
+        typeof closed.sessionToken === 'string'
+      ) {
+        listener(closed.sessionToken)
+      }
+    }
+    ipcRenderer.on(PLUGIN_REMOTE_PANEL_CLOSED_CHANNEL, handler)
+    return () => ipcRenderer.removeListener(PLUGIN_REMOTE_PANEL_CLOSED_CHANNEL, handler)
+  },
   getSettings: (args) => ipcRenderer.invoke('plugins:getSettings', args),
   setSetting: (args) => ipcRenderer.invoke('plugins:setSetting', args),
   panelImage: (args) => ipcRenderer.invoke('plugins:panelImage', args),

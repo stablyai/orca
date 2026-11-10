@@ -91,7 +91,7 @@ function rpcPanelOwner(context: RpcContext): string {
   return `runtime:${context.connectionId ?? context.clientId ?? 'local'}`
 }
 
-function bindRpcPanelOwner(service: PluginService, context: RpcContext): string {
+export function bindRpcPanelOwner(service: PluginService, context: RpcContext): string {
   const ownerKey = rpcPanelOwner(context)
   service.panels.bindOwnerSignal(ownerKey, context.signal)
   return ownerKey
