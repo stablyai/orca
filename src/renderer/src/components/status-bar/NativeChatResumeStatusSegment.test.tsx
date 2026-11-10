@@ -7,15 +7,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { useAppStore } from '../../store'
 import { TooltipProvider } from '../ui/tooltip'
-import type { ResumeCandidate } from '../native-chat-resume-on-restart-grouping'
+import type { ResumeCandidate } from '../native-chat-recovery/tree/native-chat-resume-on-restart-grouping'
 import {
   consumeNativeChatResumeOnRestartDialogRequest,
   getNativeChatResumeOnRestartDialogRequest
-} from '../native-chat-resume-on-restart-dialog'
+} from '../native-chat-recovery/dialogs/native-chat-resume-on-restart-dialog'
 import {
   _resetNativeChatRestartOffer,
   localNativeChatRestartStore
-} from '../native-chat-resume-on-restart-store'
+} from '../native-chat-recovery/offers/native-chat-resume-on-restart-store'
 import { NativeChatResumeStatusSegment } from './NativeChatResumeStatusSegment'
 
 const rpc = vi.hoisted(() => vi.fn())
