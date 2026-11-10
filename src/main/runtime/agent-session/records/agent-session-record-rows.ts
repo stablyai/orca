@@ -109,9 +109,12 @@ export function loadAgentSessionStoreRecordRow(
   })
 }
 
-/** Loaded leases are unreconciled until this host proves ownership; persisted state alone grants no writer.
+/** Observers read writer state; read-only or failed installations conservatively invalidate authority.
  * Unreadable operation/key/tab rows are skipped; unreadable records are set aside intact. */
-export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionStoreState {
+export function loadAgentSessionStoreRows(
+  db: Database.Database,
+  unreconciled = false
+): AgentSessionStoreState {
   const state: AgentSessionStoreState = {
     records: new Map(),
     operations: new Map(),
@@ -134,7 +137,7 @@ export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionSt
     if (sessionId === null) {
       continue
     }
-    loadAgentSessionStoreRecordRow(state, sessionId, text(row, 'record_json'), true)
+    loadAgentSessionStoreRecordRow(state, sessionId, text(row, 'record_json'), unreconciled)
   }
   for (const row of db
     .prepare('SELECT operation_key, row_json FROM agent_session_operations ORDER BY rowid')
@@ -157,6 +160,25 @@ export function loadAgentSessionStoreRows(db: Database.Database): AgentSessionSt
   }
   state.sessionTabs = loadAgentSessionStoreTabs(db)
   return state
+}
+
+/** Installation invalidates prior authority without normalizing untouched saved records. */
+export function installAgentSessionStoreRows(db: Database.Database): AgentSessionStoreState {
+  const mark = db.prepare(`UPDATE agent_session_records
+    SET record_json=json_set(record_json,'$.lease.unreconciled',json('true')) WHERE session_id=?`)
+  for (const row of db.prepare('SELECT session_id,record_json FROM agent_session_records').all()) {
+    const id = text(row, 'session_id')
+    const saved = parseJson(text(row, 'record_json'))
+    if (
+      id !== null &&
+      saved.ok &&
+      isReadableAgentSessionStoreRecord(id, saved.value) &&
+      !saved.value.lease.unreconciled
+    ) {
+      mark.run(id)
+    }
+  }
+  return loadAgentSessionStoreRows(db)
 }
 
 export function loadAgentSessionStoreTabs(

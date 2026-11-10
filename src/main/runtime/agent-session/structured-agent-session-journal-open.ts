@@ -43,7 +43,7 @@ export async function openStructuredAgentSessionSqlJournalDatabase(
           error
         })
     })
-    const records = await journalDatabase.loadRecords()
+    const records = await journalDatabase.installRecords()
     recordStructuredAgentSessionHostInstallRefusal(null)
     lastLoggedOpenFailure = null
     return { journalDatabase, records }

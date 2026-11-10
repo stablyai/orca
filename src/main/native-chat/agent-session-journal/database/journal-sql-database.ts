@@ -14,6 +14,7 @@ import type { CommandReceiptScope } from '../writing/command-receipt-schema'
 import { AgentSessionJournalError } from '../writing/journal-write-guards'
 import { journalDatabasePath } from './journal-host-database'
 import { journalDomainDatabasePath } from './journal-domain-database'
+import type { JournalSqlStoredRecords } from '../journal-sql-database-read'
 
 /** The runtime owns workers, never a writable connection or a retained chat projection. */
 export class JournalSqlDatabase {
@@ -105,17 +106,40 @@ export class JournalSqlDatabase {
   }
 
   async loadRecords(): Promise<AgentSessionStoreState> {
+    return this.observeRecords(this.readOnly)
+  }
+
+  /** One installation transaction owns both invalidation and the rows exposed to this host. */
+  async installRecords(): Promise<AgentSessionStoreState> {
     this.assertOpen()
-    const result = await this.readers.database({ kind: 'records' })
+    if (this.readOnly) {
+      return this.observeRecords(true)
+    }
+    try {
+      return this.restoreRecordTabs(await this.writer.installRecords())
+    } catch {
+      // Saved chats remain readable; the writer retries installation before admitting any mutation.
+      return this.observeRecords(true)
+    }
+  }
+
+  private async observeRecords(unreconciled: boolean): Promise<AgentSessionStoreState> {
+    this.assertOpen()
+    const result = await this.readers.database({
+      kind: 'records',
+      ...(unreconciled ? { unreconciled: true } : {})
+    })
     if (result.kind !== 'records') {
       throw new Error('journal reader returned no records')
     }
+    return this.restoreRecordTabs(result.records)
+  }
+
+  private restoreRecordTabs(records: JournalSqlStoredRecords): AgentSessionStoreState {
     return {
-      ...result.records,
+      ...records,
       sessionTabs:
-        result.records.sessionTabs === null
-          ? null
-          : new AgentSessionTabTable(result.records.sessionTabs)
+        records.sessionTabs === null ? null : new AgentSessionTabTable(records.sessionTabs)
     }
   }
 
@@ -171,12 +195,18 @@ export class JournalSqlDatabase {
       }
       const target = { sessionId: identity.sessionId, epoch, ownerToken: randomUUID() }
       if (!this.readOnly) {
-        const commit = await this.writer.write({
-          target,
-          operation: { kind: 'open', recover },
-          savedAt
-        })
-        return { target, commit }
+        try {
+          const commit = await this.writer.write({
+            target,
+            operation: { kind: 'open', recover },
+            savedAt
+          })
+          return { target, commit }
+        } catch (error) {
+          if (!this.writer.recordsPending) {
+            throw error
+          }
+        }
       }
       const head = await this.readers.point({
         sessionId: identity.sessionId,

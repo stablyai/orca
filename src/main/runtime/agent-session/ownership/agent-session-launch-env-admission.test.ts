@@ -71,7 +71,7 @@ describe('agent session launch environment admission', () => {
     const raw = await readPersistedTestAgentSessionStoreText(directory)
     expect(raw).not.toContain('OPENAI_API_KEY')
     expect(raw).not.toContain('"PATH"')
-    const reopened = await openTestAgentSessionRecordStore(directory)
+    const reopened = await openTestAgentSessionRecordStore(directory, { mode: 'observe' })
     expect(reopened.getRecord(SESSION)).not.toHaveProperty('launchEnv')
   })
 

@@ -80,12 +80,7 @@ export function resolveJournalWriterStoreMutation(
       JSON.stringify(recordIds),
       ...(identity.adoptedNativeId !== undefined ? [identity.adoptedNativeId] : [])
     )) {
-    loadAgentSessionStoreRecordRow(
-      state,
-      String(row.session_id),
-      String(row.record_json),
-      mutation.kind === 'command' && mutation.command.kind === 'restart'
-    )
+    loadAgentSessionStoreRecordRow(state, String(row.session_id), String(row.record_json), false)
   }
   const loadRecord = (id: string) => {
     const row = db
@@ -94,12 +89,7 @@ export function resolveJournalWriterStoreMutation(
     if (!row) {
       return
     }
-    loadAgentSessionStoreRecordRow(
-      state,
-      id,
-      String(row.record_json),
-      mutation.kind === 'command' && mutation.command.kind === 'restart'
-    )
+    loadAgentSessionStoreRecordRow(state, id, String(row.record_json), false)
   }
   if (identity.pruneAt !== undefined) {
     touched.operations.remove.push(...pruneJournalWriterOperations(db, identity.pruneAt))

@@ -63,7 +63,7 @@ describe('AgentSessionRecordStore.setConversationName', () => {
 
     await store.setConversationName(SESSION, 'Fix the lease probe')
 
-    const reloaded = await openTestAgentSessionRecordStore(directory)
+    const reloaded = await openTestAgentSessionRecordStore(directory, { mode: 'observe' })
     expect(reloaded.getRecord(SESSION)?.conversationName).toBe('Fix the lease probe')
   })
 
@@ -76,7 +76,7 @@ describe('AgentSessionRecordStore.setConversationName', () => {
     expect(name).toHaveLength(200)
     expect(name.startsWith('Fix the ')).toBe(true)
     // Reload validates rows; oversized names must not make the record unreadable.
-    const reloaded = await openTestAgentSessionRecordStore(directory)
+    const reloaded = await openTestAgentSessionRecordStore(directory, { mode: 'observe' })
     expect(reloaded.getRecord(SESSION)?.conversationName).toBe(name)
   })
 
@@ -119,14 +119,16 @@ describe('AgentSessionRecordStore.setConversationName', () => {
   it('checks a stale generation against the saved user name before writing', async () => {
     const store = await reservedStore()
     await store.compareAndSetConversationName(SESSION, 'First prompt', null)
-    const stale = await openTestAgentSessionRecordStore(directory)
+    const stale = await openTestAgentSessionRecordStore(directory, { mode: 'observe' })
     await store.setUserConversationName(SESSION, 'First prompt', 'rename')
 
     expect(
       await stale.compareAndSetConversationName(SESSION, 'Late generated name', 'First prompt')
     ).toBeNull()
     await stale.pinLaunchDirectory(SESSION, '/workspace/current')
-    expect((await openTestAgentSessionRecordStore(directory)).getRecord(SESSION)).toMatchObject({
+    expect(
+      (await openTestAgentSessionRecordStore(directory, { mode: 'observe' })).getRecord(SESSION)
+    ).toMatchObject({
       conversationName: 'First prompt',
       conversationNameSource: 'user',
       launchDirectory: '/workspace/current'

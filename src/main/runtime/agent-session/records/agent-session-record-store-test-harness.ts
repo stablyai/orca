@@ -91,12 +91,18 @@ export async function closeTestAgentSessionRecordStores(): Promise<void> {
 
 export async function openTestAgentSessionRecordStore(
   stateDirectory: string,
-  options: { hostId?: string; legacySessionTabIds?: readonly string[] } = {}
+  options: {
+    hostId?: string
+    legacySessionTabIds?: readonly string[]
+    mode?: 'observe'
+  } = {}
 ): Promise<AgentSessionRecordStore> {
   const journalDatabase = await openTestAgentSessionDatabase(stateDirectory)
   return AgentSessionRecordStore.open({
     journalDatabase,
-    records: await journalDatabase.loadRecords(),
+    records: await (options.mode === 'observe'
+      ? journalDatabase.loadRecords()
+      : journalDatabase.installRecords()),
     hostId: options.hostId ?? TEST_HOST_ID,
     legacySessionTabIds: options.legacySessionTabIds ?? []
   })

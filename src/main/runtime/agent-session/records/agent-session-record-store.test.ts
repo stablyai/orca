@@ -12,6 +12,8 @@ import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-se
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import {
   closeTestAgentSessionRecordStores,
+  closeTestAgentSessionDatabase,
+  openTestAgentSessionDatabase,
   openTestAgentSessionRecordStore,
   readPersistedTestAgentSessionStore,
   withTestAgentSessionDatabase
@@ -307,6 +309,93 @@ describe('expiry is not eviction', () => {
 })
 
 describe('restart reconciliation', () => {
+  it('keeps recovery pending across receipts and real writer restarts, without invalidating observers', async () => {
+    await establishOwner(await open())
+    await closeTestAgentSessionDatabase(directory)
+    let store = await open()
+    await store.setConversationName('session-alpha', 'retained name')
+    expect(
+      (await readPersistedTestAgentSessionStore(directory)).records['session-alpha'].lease
+    ).toMatchObject({ runtimeFence: 1, unreconciled: true })
+    await expect(
+      store.renewLease({
+        sessionId: 'session-alpha',
+        fence: 1,
+        childProbe: MATCHED,
+        now: NOW + 100
+      })
+    ).rejects.toThrow('execution_owner_reconciling')
+
+    // A second real installation must retain debt that the first one did not complete.
+    await closeTestAgentSessionDatabase(directory)
+    store = await open()
+    await store.reconcileOnRestart({ probe: async () => MATCHED, now: NOW + 500 })
+    await expect(
+      store.renewLease({
+        sessionId: 'session-alpha',
+        fence: 1,
+        childProbe: MATCHED,
+        now: NOW + 600
+      })
+    ).resolves.toMatchObject({ lease: { runtimeFence: 1, ownerProcess: { pid: 4242 } } })
+    const database = await openTestAgentSessionDatabase(directory)
+    expect((await database.loadRecords()).records.get('session-alpha')?.lease.unreconciled).toBe(
+      false
+    )
+    expect(
+      (await readPersistedTestAgentSessionStore(directory)).records['session-alpha'].lease
+    ).toMatchObject({ runtimeFence: 1, unreconciled: false, ownerProcess: { pid: 4242 } })
+
+    await closeTestAgentSessionDatabase(directory)
+    store = await open()
+    await expect(
+      store.renewLease({
+        sessionId: 'session-alpha',
+        fence: 1,
+        childProbe: MATCHED,
+        now: NOW + 700
+      })
+    ).rejects.toThrow('execution_owner_reconciling')
+  })
+
+  it('rejects a held restart verdict after an ordinary record change', async () => {
+    await establishOwner(await open())
+    const store = await open()
+    const probe = Promise.withResolvers<AgentSessionOwnerProbe>()
+    const started = Promise.withResolvers<void>()
+    const stale = store.reconcileOnRestart({
+      probe: async () => {
+        started.resolve()
+        return probe.promise
+      },
+      now: NOW + 1_000
+    })
+    await started.promise
+    await store.setConversationName('session-alpha', 'new name')
+    probe.resolve({ outcome: 'pid-absent' })
+    expect(await stale).toEqual(new Map())
+    expect(
+      (await readPersistedTestAgentSessionStore(directory)).records['session-alpha']
+    ).toMatchObject({
+      conversationName: 'new name',
+      lease: {
+        runtimeFence: 1,
+        claimStatus: 'live',
+        unreconciled: true,
+        ownerProcess: { pid: 4242, spawnToken: 'spawn-a' }
+      }
+    })
+    await store.reconcileOnRestart({ probe: async () => MATCHED, now: NOW + 1_100 })
+    await expect(
+      store.renewLease({
+        sessionId: 'session-alpha',
+        fence: 1,
+        childProbe: MATCHED,
+        now: NOW + 1_200
+      })
+    ).resolves.toMatchObject({ lease: { runtimeFence: 1 } })
+  })
+
   it('never applies a stale restart probe to a lease another reconcile already settled', async () => {
     await establishOwner(await open())
     const store = await open()

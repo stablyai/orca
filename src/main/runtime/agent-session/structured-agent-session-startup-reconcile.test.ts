@@ -7,31 +7,16 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { journalDatabasePath } from '../../native-chat/agent-session-journal/database/journal-host-database'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import type * as AgentSessionRecordRows from './records/agent-session-record-rows'
 import {
   ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost,
   seedTestAgentSessionRecordStore,
-  seedTestAgentSessionStoreFromNewerBuild
+  seedTestAgentSessionStoreFromNewerBuild,
+  withTestAgentSessionDatabase
 } from './records/agent-session-record-store-test-harness'
 import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
 import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
-
-const writes = vi.hoisted(() => ({ failing: false }))
-
-vi.mock('./records/agent-session-record-rows', async (importOriginal) => {
-  const actual = await importOriginal<typeof AgentSessionRecordRows>()
-  return {
-    ...actual,
-    writeAgentSessionStoreRows: (...args: Parameters<typeof actual.writeAgentSessionStoreRows>) => {
-      if (writes.failing) {
-        throw new Error('disk I/O error')
-      }
-      return actual.writeAgentSessionStoreRows(...args)
-    }
-  }
-})
 
 let root: string
 
@@ -40,7 +25,6 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  writes.failing = false
   await stopStructuredAgentSessionRuntime().catch(() => undefined)
   await closeTestJournalHostDatabases()
   vi.restoreAllMocks()
@@ -103,7 +87,11 @@ it('finishes startup when the reconcile cannot write, and reports it', async () 
   const { sessionId } = await seedChat()
   const log = recordingStructuredAgentSessionLogger()
   const runtime = startupRuntime(log)
-  writes.failing = true
+  await withTestAgentSessionDatabase(root, (db) =>
+    db.exec(
+      "CREATE TRIGGER fail_record_write BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'disk I/O error'); END"
+    )
+  )
 
   await expect(runtime.prepareStructuredAgentSessionStartupRestoration()).resolves.toBeUndefined()
 

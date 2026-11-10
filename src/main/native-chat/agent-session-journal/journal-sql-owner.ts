@@ -11,6 +11,7 @@ import type { JournalWriterCommand } from './journal-writer-command'
 import type { JournalWriterCommit } from './journal-writer-changes'
 import type { JournalWriterEffect, JournalWriterEffectResult } from './journal-writer-effects'
 import type { JournalSqlMaintenance, JournalSqlMaintenanceResult } from './journal-sql-maintenance'
+import type { JournalSqlStoredRecords } from './journal-sql-database-read'
 
 export class JournalIndeterminateWriteError extends Error {
   override readonly name = 'JournalIndeterminateWriteError'
@@ -33,6 +34,8 @@ export class JournalSqlOwner {
   private failure: Error | undefined
   private closing = false
   private didExit = false
+  private recordInstallationRequired = false
+  private recordInstallation: Promise<JournalSqlStoredRecords> | undefined
   private closed: Promise<void> | undefined
   onFault: (error: Error) => void = () => {}
 
@@ -67,6 +70,42 @@ export class JournalSqlOwner {
     return this.ready.promise
   }
 
+  get recordsPending(): boolean {
+    return this.recordInstallationRequired
+  }
+
+  installRecords(): Promise<JournalSqlStoredRecords> {
+    this.recordInstallationRequired = true
+    return this.finishRecordInstallation()
+  }
+
+  private finishRecordInstallation(): Promise<JournalSqlStoredRecords> {
+    if (!this.recordInstallation) {
+      const installing = this.request({
+        type: 'maintenance',
+        operation: { kind: 'records-install' }
+      })
+        .then((response) => {
+          if (
+            response.type !== 'maintenance' ||
+            !response.result ||
+            typeof response.result !== 'object' ||
+            !('kind' in response.result) ||
+            response.result.kind !== 'records'
+          ) {
+            throw new Error('journal writer returned no installed records')
+          }
+          this.recordInstallationRequired = false
+          return response.result.records
+        })
+        .finally(() => {
+          this.recordInstallation = undefined
+        })
+      this.recordInstallation = installing
+    }
+    return this.recordInstallation
+  }
+
   async write(command: JournalWriterCommand): Promise<JournalWriterCommit> {
     const response = await this.request({ type: 'write', command })
     if (response.type !== 'committed') {
@@ -99,12 +138,20 @@ export class JournalSqlOwner {
     return this.closed
   }
 
-  private request(command: JournalSqlRequest['command']): Promise<JournalSqlResponse> {
+  private async request(command: JournalSqlRequest['command']): Promise<JournalSqlResponse> {
+    // A failed startup write preserves readers; every later writer request retries its prerequisite.
+    if (
+      this.recordInstallationRequired &&
+      command.type !== 'close' &&
+      !(command.type === 'maintenance' && command.operation.kind === 'records-install')
+    ) {
+      await this.finishRecordInstallation()
+    }
     if (this.closing && command.type !== 'close') {
-      return Promise.reject(new Error('journal SQL owner is closing'))
+      throw new Error('journal SQL owner is closing')
     }
     if (this.failure || this.didExit) {
-      return Promise.reject(this.failure ?? new Error('journal SQL owner exited'))
+      throw this.failure ?? new Error('journal SQL owner exited')
     }
     const id = ++this.nextId
     return new Promise((resolve, reject) => {

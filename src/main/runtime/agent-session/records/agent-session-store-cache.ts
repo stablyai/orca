@@ -11,7 +11,7 @@ import {
   isReadableAgentSessionStoreRecord
 } from './agent-session-store-row-rules'
 
-/** Live adoption preserves the saved lease; startup's unreconciled policy does not apply. */
+/** Acknowledgements preserve the writer's installed lease and explicit recovery verdicts. */
 export function applyAgentSessionStoreCacheRows(
   draft: AgentSessionStoreState,
   writes: AgentSessionStoreRowWrites

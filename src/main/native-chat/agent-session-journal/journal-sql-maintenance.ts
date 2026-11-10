@@ -20,8 +20,11 @@ import {
   discardJournalDomainImportPage,
   type JournalDomainImportDiscard
 } from './journal-domain-import-discard'
+import { installAgentSessionStoreRows } from '../../runtime/agent-session/records/agent-session-record-rows'
+import type { JournalSqlStoredRecords } from './journal-sql-database-read'
 
 export type JournalSqlMaintenance =
+  | { kind: 'records-install' }
   | { kind: 'outline-cache'; cache: JournalOutlineCache }
   | { kind: 'projection-state'; sessionId: string }
   | { kind: 'import-discard'; sessionId: string }
@@ -37,6 +40,7 @@ export type JournalSqlMaintenance =
 export type JournalSqlProjectionState = JournalDomainImportState
 
 export type JournalSqlMaintenanceResult =
+  | { kind: 'records'; records: JournalSqlStoredRecords }
   | JournalSqlProjectionState
   | JournalSqlEventTailResult
   | JournalDomainMaintenanceResult
@@ -50,6 +54,13 @@ export function applyJournalSqlMaintenance(
   operation: JournalSqlMaintenance
 ): JournalSqlMaintenanceResult {
   switch (operation.kind) {
+    case 'records-install': {
+      const records = installAgentSessionStoreRows(db)
+      return {
+        kind: 'records',
+        records: { ...records, sessionTabs: records.sessionTabs?.entries() ?? null }
+      }
+    }
     case 'outline-cache':
       return saveJournalDomainOutlineCache(db, operation.cache)
     case 'projection-state':

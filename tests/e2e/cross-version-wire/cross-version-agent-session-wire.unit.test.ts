@@ -12,6 +12,7 @@ import { startsWhenPublished } from '../../../src/main/native-chat/agent-session
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store'
 import {
+  closeTestAgentSessionDatabase,
   openTestAgentSessionDatabase,
   openTestAgentSessionRecordStore
 } from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
@@ -526,6 +527,8 @@ describe('cross-version structured agent sessions', () => {
 
     /** Holds a provider start open, so a reply's timing can be read against it. */
     let startGate: Promise<void> = Promise.resolve()
+    let ownerProbeGate: Promise<void> = Promise.resolve()
+    let runningHost: StructuredAgentSessionHost | undefined
     /** Holds a published child's handshake: it proves its start only once this settles. */
     let handshake: Promise<void> = Promise.resolve()
     let starts = 0
@@ -583,6 +586,8 @@ describe('cross-version structured agent sessions', () => {
 
     // Reopen disk state under a fresh host, preserving the journal root as a real process restart does.
     async function bootHost(generation: string, startupLimits?: { ceilingMs: number }) {
+      await runningHost?.flushAllStreamedEvents()
+      await closeTestAgentSessionDatabase(root)
       store = await openTestAgentSessionRecordStore(root)
       const host: StructuredAgentSessionHost = new StructuredAgentSessionHost({
         agents: NO_STRUCTURED_AGENTS,
@@ -594,11 +599,15 @@ describe('cross-version structured agent sessions', () => {
         mintSpawnToken: () => `spawn-${generation}`,
         // The provider died with the host that spawned it, which is what makes
         // the restarted host the legitimate next writer.
-        probeOwner: async () => ({ outcome: 'pid-absent' }),
+        probeOwner: async () => {
+          await ownerProbeGate
+          return { outcome: 'pid-absent' }
+        },
         now: () => NOW,
         ...(startupLimits ? { startupLimits } : {})
       })
       setStructuredAgentSessionHost(host)
+      runningHost = host
       return host
     }
 
@@ -654,6 +663,8 @@ describe('cross-version structured agent sessions', () => {
     beforeEach(async () => {
       resetOperationIds()
       startGate = Promise.resolve()
+      ownerProbeGate = Promise.resolve()
+      runningHost = undefined
       handshake = Promise.resolve()
       root = await mkdtemp(join(tmpdir(), 'orca-cross-version-agent-session-'))
       runtime = runtimeStub()
@@ -746,6 +757,8 @@ describe('cross-version structured agent sessions', () => {
       })
 
       const restarted = await bootHost('c')
+      const ownerProbe = Promise.withResolvers<void>()
+      ownerProbeGate = ownerProbe.promise
       startGate = new Promise((resolve) => (open = resolve))
       const currentReply = await call('agentSession.send', sendParams('current', created.fence), [
         ...released,
@@ -759,6 +772,7 @@ describe('cross-version structured agent sessions', () => {
           }
         }
       })
+      ownerProbe.resolve()
       open()
       await vi.waitFor(async () =>
         expect(

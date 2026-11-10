@@ -101,7 +101,9 @@ describe('actual acquired account receipt in the fenced record owner', () => {
         now: 40_003,
         accountAcquisition: { generation: 'new-generation', recipe }
       })
-      const reloaded = (await openTestAgentSessionRecordStore(f.rig.root)).getRecord(f.root)
+      const reloaded = (
+        await openTestAgentSessionRecordStore(f.rig.root, { mode: 'observe' })
+      ).getRecord(f.root)
       if (!reloaded) {
         throw new Error('durable proof missing')
       }

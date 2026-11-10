@@ -9,7 +9,7 @@ export type JournalSqlStoredRecords = Omit<AgentSessionStoreState, 'sessionTabs'
 }
 
 export type JournalSqlDatabaseRead =
-  | { kind: 'records' }
+  | { kind: 'records'; unreconciled?: true }
   | { kind: 'receipt'; scope: CommandReceiptScope; operationId: string }
   | { kind: 'epoch'; sessionId: string }
   | { kind: 'sessions'; after: string | null }
@@ -55,7 +55,7 @@ function read(
 ): JournalSqlDatabaseReadResult {
   switch (operation.kind) {
     case 'records': {
-      const records = loadAgentSessionStoreRows(db)
+      const records = loadAgentSessionStoreRows(db, operation.unreconciled)
       return {
         kind: 'records',
         records: { ...records, sessionTabs: records.sessionTabs?.entries() ?? null }

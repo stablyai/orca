@@ -111,7 +111,7 @@ describe('agent-session lease renewal batch', () => {
 
     expect(store.getRecord('session-a')).toEqual(beforeFirst)
     expect(await readPersistedTestAgentSessionStoreText(directory)).toBe(beforeDisk)
-    const reopened = await openTestAgentSessionRecordStore(directory)
+    const reopened = await openTestAgentSessionRecordStore(directory, { mode: 'observe' })
     expect(
       reopened
         .listRecords()

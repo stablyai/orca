@@ -116,7 +116,7 @@ describe('a receipt', () => {
   }
 
   async function persistedStatus(): Promise<string | undefined> {
-    const reopened = await openTestAgentSessionRecordStore(root)
+    const reopened = await openTestAgentSessionRecordStore(root, { mode: 'observe' })
     return reopened.getOperationRow('client-1', operationId)?.outcome.status
   }
 
@@ -143,7 +143,7 @@ describe('a receipt', () => {
     expect(await persistedStatus()).toBe(insert ? undefined : 'pending')
     expect(store.getRecord('chat-a-0001')?.usageLimitContinueCancel).toBeUndefined()
     expect(
-      (await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')
+      (await openTestAgentSessionRecordStore(root, { mode: 'observe' })).getRecord('chat-a-0001')
         ?.usageLimitContinueCancel
     ).toBeUndefined()
     // A discarded draft must not become the next diff baseline.
@@ -165,7 +165,7 @@ describe('a receipt', () => {
     await expect(
       store.commitOperationReceipt(cancellationReceipt(store, { ...args, fingerprint: 'other' }))
     ).rejects.toThrow()
-    const stale = await openTestAgentSessionRecordStore(root)
+    const stale = await openTestAgentSessionRecordStore(root, { mode: 'observe' })
     const otherId = `${NOW}-${'8'.repeat(32)}`
     await store.admitOperation({
       callerKey: 'client-1',
@@ -184,7 +184,7 @@ describe('a receipt', () => {
     ).rejects.toThrow()
     expect(stale.getRecord('chat-a-0001')?.usageLimitContinueCancel).toEqual(cancel)
     expect(
-      (await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')
+      (await openTestAgentSessionRecordStore(root, { mode: 'observe' })).getRecord('chat-a-0001')
         ?.usageLimitContinueCancel
     ).toEqual(cancel)
   })
@@ -226,9 +226,9 @@ describe('a receipt', () => {
     staged.settle(await database.effects(staged.effects))
     const both = { usageLimitContinueCancel: cancel, forkedFrom }
     expect(store.getRecord('chat-a-0001')).toMatchObject(both)
-    expect((await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')).toMatchObject(
-      both
-    )
+    expect(
+      (await openTestAgentSessionRecordStore(root, { mode: 'observe' })).getRecord('chat-a-0001')
+    ).toMatchObject(both)
     expect(await persistedStatus()).toBe('succeeded')
   })
   it('publishes actual writer rows before co-staged callbacks and the next store transaction', async () => {
@@ -258,7 +258,7 @@ describe('a receipt', () => {
       store.conversationReceipts.forkBoundary('chat-a-0001', forkedFrom)
     )
     const staged = await composed.stage!({ savedAt: NOW })
-    const other = await openTestAgentSessionRecordStore(root)
+    const other = await openTestAgentSessionRecordStore(root, { mode: 'observe' })
     await other.replaceSessionOptions({
       sessionId: 'chat-a-0001',
       fence: 1,
@@ -271,7 +271,9 @@ describe('a receipt', () => {
     staged.settle(results)
     await store.setConversationName('chat-a-0001', 'after')
     expect(store.getRecord('chat-a-0001')).toMatchObject({ ...actual, conversationName: 'after' })
-    expect((await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')).toMatchObject({
+    expect(
+      (await openTestAgentSessionRecordStore(root, { mode: 'observe' })).getRecord('chat-a-0001')
+    ).toMatchObject({
       ...actual,
       conversationName: 'after'
     })

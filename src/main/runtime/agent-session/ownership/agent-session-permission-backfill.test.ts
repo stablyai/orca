@@ -52,7 +52,7 @@ describe('existing chat permission backfill', () => {
     await expect(store.backfillChatPermissionModes(() => true)).rejects.toThrow('disk full')
     expect(store.listRecords().every((row) => row.permissionMode === undefined)).toBe(true)
     expect(
-      (await openTestAgentSessionRecordStore(root))
+      (await openTestAgentSessionRecordStore(root, { mode: 'observe' }))
         .listRecords()
         .every((row) => row.permissionMode === undefined)
     ).toBe(true)

@@ -16,6 +16,8 @@ import {
 import type { JournalWriterEffect } from '../journal-writer-effects'
 import { withTestAgentSessionDatabase } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { CommandReceiptExistsError } from '../writing/command-receipt-transaction'
+import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { storedTestAgentSessionRecord } from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 
 const roots: string[] = []
 const databases: JournalSqlDatabase[] = []
@@ -61,6 +63,108 @@ const identity = (sessionId: string) => ({
   providerHandle: codexProviderHandle('thread')
 })
 const history = (sessionId: string) => ({ sessionId, direction: 'tail' as const })
+
+it('marks only readable pending authority and preserves saved metadata without normalizing it', async () => {
+  const { root, database } = await fixture()
+  const saved = {
+    ...storedTestAgentSessionRecord(agentSessionRecordFixture()),
+    sleptAt: 'not-a-timestamp',
+    futureField: { keep: true }
+  }
+  const already = {
+    ...saved,
+    sessionId: 'already',
+    lease: {
+      ...saved.lease,
+      sessionId: 'already',
+      unreconciled: true
+    }
+  }
+  const alreadyJson = JSON.stringify(already, null, 2)
+  const unreadable = '{ "schemaVersion": 999 }'
+  await withTestAgentSessionDatabase(root, (db) => {
+    const insert = db.prepare(
+      'INSERT INTO agent_session_records(session_id,record_json) VALUES(?,?)'
+    )
+    insert.run(saved.sessionId, JSON.stringify(saved))
+    insert.run('already', alreadyJson)
+    insert.run('unreadable', unreadable)
+  })
+  await database.installRecords()
+  await withTestAgentSessionDatabase(root, (db) => {
+    const rows = db
+      .prepare('SELECT session_id,record_json FROM agent_session_records ORDER BY session_id')
+      .all()
+    expect(rows.find((row) => row.session_id === 'already')?.record_json).toBe(alreadyJson)
+    expect(rows.find((row) => row.session_id === 'unreadable')?.record_json).toBe(unreadable)
+    const marked = rows.find((row) => row.session_id === saved.sessionId)
+    expect(JSON.parse(String(marked?.record_json))).toEqual({
+      ...saved,
+      lease: { ...saved.lease, unreconciled: true }
+    })
+  })
+})
+
+it('keeps saved history readable after startup rollback and retries before the next writer command', async () => {
+  const record = storedTestAgentSessionRecord(agentSessionRecordFixture())
+  const sessionId = record.sessionId
+  const { root, database } = await fixture([sessionId])
+  await database.openSession(identity(sessionId))
+  await withTestAgentSessionDatabase(root, (db) => {
+    db.prepare('INSERT INTO agent_session_records(session_id,record_json) VALUES(?,?)').run(
+      sessionId,
+      JSON.stringify(record)
+    )
+    db.exec(
+      "CREATE TRIGGER fail_install BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'disk I/O error'); END"
+    )
+  })
+  expect((await database.installRecords()).records.get(sessionId)?.lease.unreconciled).toBe(true)
+  expect(await database.openSession(identity(sessionId))).toMatchObject({ target: { sessionId } })
+  expect(await database.readers.domainHistory(history(sessionId))).toMatchObject({ ok: true })
+  await expect(
+    database.effects([
+      {
+        kind: 'store',
+        mutation: {
+          input: {
+            kind: 'record',
+            sessionId,
+            command: { kind: 'name', name: 'after recovery', now: 3000 }
+          }
+        }
+      }
+    ])
+  ).rejects.toThrow('disk I/O error')
+  await withTestAgentSessionDatabase(root, (db) => {
+    expect(
+      JSON.parse(
+        String(
+          db
+            .prepare('SELECT record_json FROM agent_session_records WHERE session_id=?')
+            .get(sessionId)?.record_json
+        )
+      ).lease.unreconciled
+    ).toBe(false)
+    db.exec('DROP TRIGGER fail_install')
+  })
+  await database.effects([
+    {
+      kind: 'store',
+      mutation: {
+        input: {
+          kind: 'record',
+          sessionId,
+          command: { kind: 'name', name: 'after recovery', now: 3000 }
+        }
+      }
+    }
+  ])
+  expect((await database.loadRecords()).records.get(sessionId)).toMatchObject({
+    conversationName: 'after recovery',
+    lease: { unreconciled: true, runtimeFence: 7 }
+  })
+})
 
 it('opens an unconverted chat while background work waits for live activity, then converts the rest', async () => {
   const { database, errors } = await fixture(['a', 'b'])
