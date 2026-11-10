@@ -1,5 +1,5 @@
-import type { MobileWebBundleFetchResult } from '../transport/web-bundle/mobile-web-bundle-fetch'
-import { shellDownloadedAssets } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
+import type { MobileWebBundleFetchResult } from '../../transport/web-bundle/mobile-web-bundle-fetch'
+import { shellDownloadedAssets } from '../../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import { requireStorablePath } from './generation-asset-path'
 import { joinUri } from './generation-cache-uri'
 

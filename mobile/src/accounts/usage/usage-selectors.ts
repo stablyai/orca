@@ -1,29 +1,13 @@
 // Keep shapes aligned with shared types/rate-limit-types without pulling Electron-coupled desktop graph into mobile.
-// Pure RN-free selectors stay directly testable; AccountUsage re-exports them with UsageBar.
-import { formatResetCountdown } from '../../../src/shared/rate-limit-reset-format'
-import { hasUsageData } from '../../../src/shared/usage-provider-windows'
+import { formatResetCountdown } from '../../../../src/shared/rate-limit-reset-format'
+import { hasUsageData } from '../../../../src/shared/usage-provider-windows'
 import {
   ProviderRateLimitsSchema,
   type AccountsSnapshot,
   type InactiveAccountUsage,
   type ProviderRateLimits,
   type RateLimitWindow
-} from './accounts-snapshot'
-
-export {
-  AccountsSnapshotSchema,
-  decodeAccountsSnapshot,
-  ProviderRateLimitsSchema,
-  RateLimitRuntimeTargetSchema,
-  type AccountProviderRateLimits,
-  type AccountsSnapshot,
-  type ClaudeAccountSummary,
-  type CodexAccountSummary,
-  type InactiveAccountUsage,
-  type ProviderRateLimits,
-  type RateLimitRuntimeTarget,
-  type RateLimitWindow
-} from './accounts-snapshot'
+} from '../accounts-snapshot'
 
 export type ProviderKey = 'claude' | 'codex'
 

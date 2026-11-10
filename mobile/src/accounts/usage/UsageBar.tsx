@@ -1,29 +1,9 @@
 import { View, Text, ActivityIndicator, type StyleProp, type ViewStyle } from 'react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { colors, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
-// Re-export pure account-usage-state selectors/types to keep imports stable and tests free of RN.
-export type {
-  RateLimitWindow,
-  ProviderRateLimits,
-  InactiveAccountUsage,
-  ClaudeAccountSummary,
-  CodexAccountSummary,
-  AccountsSnapshot,
-  ProviderKey,
-  UsageBarState
-} from './account-usage-state'
-export {
-  decodeAccountsSnapshot,
-  getActiveProviderRateLimits,
-  getInactiveProviderUsage,
-  getOtherUsageProviders,
-  getUsageBarState,
-  getWindowResetLabel,
-  hasActiveProviderUsage,
-  hasRenderableUsage
-} from './account-usage-state'
+import './usage-selectors'
 
 /** A meter's fill: the rounded, clamped percent and its consumption colour, shared by every usage meter. */
 export function usageBarFill(
