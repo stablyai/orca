@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/store/index'
+import type { AppState } from '@/store/types'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   LOCAL_EXECUTION_HOST_ID,
@@ -42,10 +43,22 @@ export function useAiVaultResumeCatalogs(scope: ExecutionHostScope): void {
         )
       }
     }
-    const loadRuntimes = (): void => {
+    const loadRuntimes = (previous?: AppState): void => {
       if (all) {
-        for (const environment of useAppStore.getState().runtimeEnvironments) {
-          loadRuntime(environment.id)
+        const state = useAppStore.getState()
+        const previousIds =
+          previous && state.runtimeEnvironments !== previous.runtimeEnvironments
+            ? new Set(previous.runtimeEnvironments.map((environment) => environment.id))
+            : undefined
+        for (const environment of state.runtimeEnvironments) {
+          if (
+            !previous ||
+            (previousIds && !previousIds.has(environment.id)) ||
+            state.runtimeStatusByEnvironmentId.get(environment.id) !==
+              previous.runtimeStatusByEnvironmentId.get(environment.id)
+          ) {
+            loadRuntime(environment.id)
+          }
         }
       } else if (host?.kind === 'runtime') {
         loadRuntime(host.environmentId)
@@ -61,7 +74,7 @@ export function useAiVaultResumeCatalogs(scope: ExecutionHostScope): void {
                 state.runtimeStatusByEnvironmentId.get(host.environmentId) !==
                   previous.runtimeStatusByEnvironmentId.get(host.environmentId)
             if (changed) {
-              loadRuntimes()
+              loadRuntimes(previous)
             }
           })
         : undefined
