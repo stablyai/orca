@@ -16,7 +16,7 @@ export type FocusedFrameRoute =
   | { kind: 'session'; sessionId: string }
   | { kind: 'unknown' }
 
-// Deeper nesting uses the focus-borrowing fallback.
+// Refuse input if deeper nesting prevents a direct route.
 const MAX_FRAME_DEPTH = 6
 const PROBE_OBJECT_GROUP = 'orca-focused-frame-probe'
 const PROBE_WORLD_NAME = 'orca-focused-frame-probe'
@@ -91,7 +91,7 @@ function routeFor(at: ProbeSite): FocusedFrameRoute {
   return at.sessionId ? { kind: 'session', sessionId: at.sessionId } : { kind: 'widget' }
 }
 
-/** Follow focus through same-site contexts and cross-site sessions; unknown routes borrow focus. */
+/** Follow focus through same-site contexts and cross-site sessions. */
 export async function resolveFocusedFrameRoute(
   webContents: WebContents,
   send: GuestSessionCdpSender

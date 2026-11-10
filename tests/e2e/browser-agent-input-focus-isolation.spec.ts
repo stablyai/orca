@@ -3,14 +3,80 @@
  * Runs hidden; browser-agent-input-focus-isolation-native.spec.ts repeats it in a visible window.
  */
 
-import { test } from './helpers/orca-app'
+import { test, expect } from './helpers/orca-app'
 import {
+  evalInPage,
+  openBackgroundProbeTab,
+  readProperty,
+  rpc,
   runAgentClicksScenario,
   runAgentCrossSiteFrameScenario,
   runAgentKeysScenario,
-  runAgentShortcutsScenario
+  runAgentShortcutsScenario,
+  startProbeServer
 } from './helpers/browser-agent-focus-scenarios'
 import { runAgentClickDuringUserCompositionScenario } from './helpers/browser-agent-composition-scenario'
+import { getActiveTabId } from './helpers/store'
+
+test('page-bound input stays out of chat drafts across hidden tabs and stale targets', async ({
+  orcaPage
+}) => {
+  const server = await startProbeServer()
+  try {
+    const first = await openBackgroundProbeTab(orcaPage, server.url)
+    const second = await openBackgroundProbeTab(orcaPage, server.url)
+    await orcaPage.evaluate(() => {
+      const draft = document.createElement('textarea')
+      draft.id = 'browser-target-chat-draft'
+      draft.value = 'Unsent human draft'
+      document.body.append(draft)
+      draft.focus()
+    })
+    const draft = orcaPage.locator('#browser-target-chat-draft')
+    await rpc(orcaPage, 'browser.click', { page: first, element: '#notes' })
+    await draft.focus()
+    await rpc(orcaPage, 'browser.tabSwitch', { page: second })
+    await evalInPage(orcaPage, second, 'document.getElementById("notes").focus()')
+
+    await Promise.all([
+      rpc(orcaPage, 'browser.keyboardInsertText', { page: first, text: 'First line\nSecond 🙏' }),
+      rpc(orcaPage, 'browser.keyboardInsertText', { page: second, text: 'Other\ntab' }),
+      draft.focus()
+    ])
+    await rpc(orcaPage, 'browser.type', { page: first, input: '!' })
+    await rpc(orcaPage, 'browser.keypress', { page: second, key: 'End' })
+    await rpc(orcaPage, 'browser.type', { page: second, input: '?' })
+    expect(await evalInPage(orcaPage, first, 'document.getElementById("notes").value')).toBe(
+      'First line\nSecond 🙏!'
+    )
+    expect(await evalInPage(orcaPage, second, 'document.getElementById("notes").value')).toBe(
+      'Other\ntab?'
+    )
+    await expect(draft).toHaveValue('Unsent human draft')
+
+    await rpc(orcaPage, 'browser.tabClose', { page: first })
+    const terminalTab = await getActiveTabId(orcaPage)
+    for (const command of [
+      { method: 'browser.keyboardInsertText', params: { page: first, text: 'Stale insert' } },
+      { method: 'browser.type', params: { page: 'missing-browser-page', input: 'Missing type' } },
+      { method: 'browser.click', params: { page: terminalTab, element: 'textarea' } },
+      { method: 'browser.keypress', params: { page: first, key: 'Enter' } }
+    ]) {
+      const response = await orcaPage.evaluate(
+        (request) => window.api.runtime.call(request),
+        command
+      )
+      expect(readProperty(response, 'ok')).toBe(false)
+      expect(readProperty(readProperty(response, 'error'), 'code')).toBe('browser_tab_not_found')
+    }
+    await expect(draft).toHaveValue('Unsent human draft')
+    expect(await evalInPage(orcaPage, second, 'document.getElementById("notes").value')).toBe(
+      'Other\ntab?'
+    )
+  } finally {
+    await server.close()
+  }
+})
 
 test('agent keys and text reach the page without leaving the user’s terminal', async ({
   orcaPage
