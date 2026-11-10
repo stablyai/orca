@@ -31,6 +31,8 @@ type BannerProps = {
   onOpenReplacedServerSettings?: (() => void) | null
   /** Main refused because the SSH host is waiting for the user to sign in; it resumes after. */
   awaitingSignIn?: boolean
+  /** An Orca Cloud workspace's name: notices name it, never the sandbox. */
+  cloudWorkspaceName?: string | null
 }
 
 function reconnectAction(
@@ -55,7 +57,8 @@ export function TerminalRemoteRuntimeReconnectBanner({
   wslHostUnavailable = null,
   pairingRefused = false,
   onOpenReplacedServerSettings = null,
-  awaitingSignIn = false
+  awaitingSignIn = false,
+  cloudWorkspaceName = null
 }: BannerProps): React.JSX.Element {
   const t = useTranslate()
   if (wslHostUnavailable) {
@@ -143,7 +146,7 @@ export function TerminalRemoteRuntimeReconnectBanner({
     )
   }
   const cause = paneRecoveryCause(recovery)
-  const copy = remoteRuntimeRecoveryCopy(cause, serverName, t)
+  const copy = remoteRuntimeRecoveryCopy(cause, serverName, t, cloudWorkspaceName)
   return (
     <RemoteRuntimeRecoveryCard
       icon={copy.retrying ? 'retrying' : 'waiting'}

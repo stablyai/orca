@@ -43,7 +43,11 @@ import { wslHostPhoneRefusal } from '../../wsl/host-lifecycle/wsl-host-phone-rea
 import { broadcastSshState } from '../ssh/ssh-renderer-broadcast'
 import { restoreManagedHostPortForwards } from '../ssh/ssh-managed-port-forward-restore'
 import { recipeVmWakeIntentFor } from '../../../shared/remote-runtime/recipe-vm-wake'
-import { prepareRecipeVm } from './runtime-environment-recipe-vm-wake'
+import {
+  RECIPE_VM_IN_FLIGHT_WAKE_HOLD_MS,
+  awaitRecipeVmInFlightWake,
+  prepareRecipeVm
+} from './runtime-environment-recipe-vm-wake'
 
 /** `wslStart: 'never'` serves a WSL host only while it runs: a paired phone never boots a distro.
  *  `recipeVmHoldMs` bounds how long an open of a sleeping recipe VM workspace is held. */
@@ -59,6 +63,30 @@ export async function resolveManagedRuntimeEnvironment(
 ): Promise<ReturnType<typeof resolveEnvironment>> {
   return (await prepareManagedRuntimeRequest(userDataPath, selector, preparation, method, signal))
     .environment
+}
+
+/**
+ * A stream (tabs, statuses) opened while the VM is already waking waits for that wake, as a call
+ * does, instead of being refused and left to the renderer's backoff (which can outlast the wake
+ * and leave the woken pane dead). Bounded by the in-flight hold, not the setup timeout: a stream
+ * is long-lived and starts once the server answers.
+ */
+export async function resolveSubscribedRuntimeEnvironment(
+  userDataPath: string,
+  selector: string,
+  preparation: ManagedRuntimeCallPreparation | undefined,
+  method: string,
+  signal?: AbortSignal
+): Promise<ReturnType<typeof resolveEnvironment>> {
+  if (recipeVmWakeIntentFor(method) === 'none') {
+    await awaitRecipeVmInFlightWake(
+      userDataPath,
+      resolveEnvironment(userDataPath, selector),
+      Math.min(RECIPE_VM_IN_FLIGHT_WAKE_HOLD_MS, preparation?.recipeVmHoldMs ?? Infinity),
+      signal
+    )
+  }
+  return resolveManagedRuntimeEnvironment(userDataPath, selector, preparation, method, signal)
 }
 
 /** The server prepared for a request, with the record from before preparation. */
