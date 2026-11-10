@@ -189,6 +189,9 @@ export function collectAgentPaneConversations<Agent extends AgentType>(
 
   if (!options.runningAgentsOnly || options.includeLastReported) {
     for (const identity of records(state.agentConversationsByPaneKey)) {
+      if (!isAgent(identity.agent) || !identity.providerSession?.id) {
+        continue
+      }
       const candidate = lastReportedCandidate(state, identity, tabsById)
       if (candidate) {
         registerCandidate(state, tabsById, candidates, isAgent, candidate)

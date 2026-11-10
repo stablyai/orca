@@ -1,7 +1,16 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
+import * as worktreeCatalog from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import * as repoCatalog from '@/store/repos/repository-catalog-index'
+import * as worktreeOwner from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { aiVaultTitleSyncInputsChanged } from './ai-vault-tab-title-sync-inputs'
+import {
+  collectAgentPaneConversations,
+  collectAiVaultTitleRequests
+} from './ai-vault-tab-title-requests'
+
+afterEach(() => vi.restoreAllMocks())
 
 function makeState(count = 1): AppState {
   const live: AppState['agentStatusByPaneKey'] = {}
@@ -68,6 +77,83 @@ async function collectGarbage(): Promise<void> {
 }
 
 describe('AI Vault title subscription inputs', () => {
+  it.each([100, 1000])('does no ownership lookups for %i unusable title identities', (count) => {
+    const state = makeState(count)
+    state.agentStatusByPaneKey = {}
+    state.sleepingAgentSessionsByPaneKey = {}
+    for (const tab of state.tabsByWorktree['wt-title']) {
+      state.terminalLayoutsByTabId[tab.id] = {
+        root: { type: 'leaf', leafId: '00000000-0000-4000-8000-000000000001' },
+        activeLeafId: '00000000-0000-4000-8000-000000000001',
+        expandedLeafId: null
+      }
+    }
+    const identities: AppState['agentConversationsByPaneKey'] = {}
+    for (let index = 1; index <= count; index++) {
+      const paneKey = `tab-${index}:00000000-0000-4000-8000-000000000001`
+      identities[paneKey] = {
+        paneKey,
+        worktreeId: 'wt-title',
+        executionHostId: 'local',
+        connectionId: null,
+        agent: index % 3 === 2 ? 'pi' : 'codex',
+        ...(index % 3 === 0
+          ? {}
+          : { providerSession: { key: 'session_id', id: index % 3 === 1 ? '' : 'pi-session' } })
+      }
+    }
+    state.agentConversationsByPaneKey = identities
+    const lookups = [
+      vi.spyOn(worktreeCatalog, 'getIndexedWorktreeMap'),
+      vi.spyOn(repoCatalog, 'getIndexedRepoMap'),
+      vi.spyOn(worktreeOwner, 'getExecutionHostIdForWorktree')
+    ]
+    expect(collectAiVaultTitleRequests(state)).toEqual([])
+    for (const lookup of lookups) {
+      expect(lookup.mock.calls.length).toBe(0)
+    }
+
+    const paneKey = 'tab-0:00000000-0000-4000-8000-000000000001'
+    const qualified = {
+      paneKey,
+      worktreeId: 'wt-title',
+      executionHostId: 'local' as const,
+      connectionId: null,
+      agent: 'codex' as const,
+      providerSession: { key: 'session_id' as const, id: 'wanted-session' }
+    }
+    const expected = [
+      {
+        agent: 'codex',
+        executionHostId: 'local',
+        providerSession: { key: 'session_id', id: 'wanted-session' },
+        refresh: false,
+        tabId: 'tab-0',
+        paneKey,
+        worktreeId: 'wt-title'
+      }
+    ]
+    state.agentConversationsByPaneKey = { [paneKey]: qualified }
+    for (const lookup of lookups) {
+      lookup.mockClear()
+    }
+    expect(collectAiVaultTitleRequests(state)).toEqual(expected)
+    const fixedLookupCounts = lookups.map((lookup) => lookup.mock.calls.length)
+    state.agentConversationsByPaneKey = { ...identities, [paneKey]: qualified }
+    for (const lookup of lookups) {
+      lookup.mockClear()
+    }
+    expect(collectAiVaultTitleRequests(state)).toEqual(expected)
+    expect(
+      lookups.map((lookup, index) => lookup.mock.calls.length - fixedLookupCounts[index])
+    ).toEqual([0, 0, 0])
+
+    state.agentConversationsByPaneKey = { [paneKey]: { ...qualified, agent: 'pi' } }
+    expect(collectAgentPaneConversations(state, (agent): agent is 'pi' => agent === 'pi')).toEqual([
+      { ...expected[0], agent: 'pi' }
+    ])
+  })
+
   it('ignores rank and settings changes but reports a conversation workspace moving host', () => {
     // No active selection, so the row's host decides ownership.
     const state = {
