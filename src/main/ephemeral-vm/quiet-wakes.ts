@@ -5,12 +5,27 @@
 // sleep. Opening the workspace (any wake without `quiet`) claims it back to the normal window.
 const quiet = new Set<string>()
 const unopened = new Set<string>()
+// Quiet wakes whose VM actually resumed (not one that was already up, which wakes nothing).
+const resumed = new Set<string>()
 
 /** Idle window for a VM woken on intent and not opened. */
 export const UNOPENED_IDLE_STOP_MS = 3 * 60_000
 
 export function markQuietWake(workspaceId: string): void {
   quiet.add(workspaceId)
+  resumed.delete(workspaceId)
+}
+
+/** The wake path ran the VM's resume; only then did a quiet wake wake anything. */
+export function noteQuietWakeResumed(workspaceId: string): void {
+  if (quiet.has(workspaceId)) {
+    resumed.add(workspaceId)
+  }
+}
+
+/** Whether this quiet wake resumed the VM; consumes the answer. */
+export function takeQuietWakeResumed(workspaceId: string): boolean {
+  return resumed.delete(workspaceId)
 }
 
 /** The quiet wake woke the VM; it stays on the short idle window until claimed. */
@@ -22,6 +37,7 @@ export function noteQuietWakeWoke(workspaceId: string): void {
 
 export function claimQuietWake(workspaceId: string): void {
   quiet.delete(workspaceId)
+  resumed.delete(workspaceId)
   unopened.delete(workspaceId)
 }
 

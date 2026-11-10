@@ -62,6 +62,10 @@ export function installCloudPredictiveWake(): () => void {
           .resumeWorkspace({ workspaceId, quiet: true })
           .catch(() => null)
         await refreshCloudWorkspaceStatus(workspaceId)
+        if (result?.ok === true && result.resumed === false) {
+          // Already up (main found nothing to resume): no wake happened, so nothing to hold.
+          return 'skipped'
+        }
         if (result?.ok === true && useAppStore.getState().activeWorktreeId === workspaceId) {
           // Woken for the workspace the user is already in (window focus, or hover then open):
           // it is open, not a guess, so it keeps the normal idle window.

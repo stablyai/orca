@@ -15,6 +15,8 @@ function harness(
     enabled?: boolean
     candidates?: Set<string>
     refuse?: boolean
+    /** Main found nothing to resume (the VM was already up). */
+    alreadyUp?: boolean
     preflight?: (id: string) => Promise<boolean>
   } = {}
 ) {
@@ -32,8 +34,8 @@ function harness(
     ...(overrides.preflight ? { preflight: overrides.preflight } : {}),
     wake: (id) => {
       woken.push(id)
-      return new Promise<boolean>((resolve) => {
-        settle[id] = () => resolve(!overrides.refuse)
+      return new Promise<boolean | 'skipped'>((resolve) => {
+        settle[id] = () => resolve(overrides.alreadyUp ? 'skipped' : !overrides.refuse)
       })
     },
     setTimer: (run, ms) => {
@@ -243,5 +245,35 @@ describe('predictive wake', () => {
     h.controller.select('ws-a')
     await h.advance(SELECT_DEBOUNCE_MS)
     expect(h.woken).toEqual([])
+  })
+
+  it('a hover the server preflight skips gives the hover gap back, so the next hover asks again', async () => {
+    let allow = false
+    const h = harness({ preflight: async () => allow })
+    h.controller.hoverStart('ws-a')
+    await h.advance(HOVER_DWELL_MS)
+    h.controller.hoverEnd('ws-a')
+    expect(h.woken).toEqual([])
+    // The hold ended a moment later: well inside the 30 s gap, the next hover still wakes.
+    allow = true
+    await h.advance(1_000)
+    h.controller.hoverStart('ws-a')
+    await h.advance(HOVER_DWELL_MS)
+    expect(h.woken).toEqual(['ws-a'])
+    expect(WEAK_TRIGGER_MIN_GAP_MS).toBeGreaterThan(1_000 + HOVER_DWELL_MS)
+  })
+
+  it('a wake that found the VM already up counts as no wake: no hold, no backoff, gap given back', async () => {
+    const h = harness({ alreadyUp: true })
+    h.controller.hoverStart('ws-a')
+    await h.advance(HOVER_DWELL_MS)
+    await h.settleAll('ws-a')
+    expect(h.controller.awakeUnopened().size).toBe(0)
+    expect(h.controller.inFlight().size).toBe(0)
+    h.controller.hoverEnd('ws-a')
+    await h.advance(1_000)
+    h.controller.hoverStart('ws-a')
+    await h.advance(HOVER_DWELL_MS)
+    expect(h.woken).toEqual(['ws-a', 'ws-a'])
   })
 })

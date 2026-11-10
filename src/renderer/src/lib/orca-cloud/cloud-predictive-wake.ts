@@ -23,8 +23,11 @@ export type PredictiveWakeDeps = {
    * slept on purpose from another client moments ago, or its owner's seat is at or near its cap.
    */
   preflight?: (workspaceId: string) => Promise<boolean>
-  /** Starts the ordinary wake quietly; resolves true when the sandbox woke, false when refused. */
-  wake: (workspaceId: string) => Promise<boolean>
+  /**
+   * Starts the ordinary wake quietly; resolves true when the sandbox woke, false when refused, and
+   * 'skipped' when there was nothing to resume (it was already up): no wake, and no backoff.
+   */
+  wake: (workspaceId: string) => Promise<boolean | 'skipped'>
   /** Schedules `run`; returns a cancel function. */
   setTimer: (run: () => void, ms: number) => () => void
 }
@@ -117,12 +120,15 @@ export function createPredictiveWakeController(deps: PredictiveWakeDeps): Predic
     if (trigger === 'focus' && sleptNoFocus.has(workspaceId)) {
       return
     }
+    // A wake that turns out skipped never happened, so it gives the hover/focus gap back.
+    const previousWeakWakeAt = lastWeakWakeAt
     if (trigger !== 'select') {
       if (deps.now() - lastWeakWakeAt < WEAK_TRIGGER_MIN_GAP_MS) {
         return
       }
       lastWeakWakeAt = deps.now()
     }
+    const thisWeakWakeAt = lastWeakWakeAt
     running.add(workspaceId)
     silent.add(workspaceId)
     void Promise.resolve()
@@ -136,6 +142,10 @@ export function createPredictiveWakeController(deps: PredictiveWakeDeps): Predic
       .then((woke) => {
         const claimed = !silent.has(workspaceId)
         if (woke === 'skipped') {
+          // Unless a later wake took the gap since.
+          if (trigger !== 'select' && lastWeakWakeAt === thisWeakWakeAt) {
+            lastWeakWakeAt = previousWeakWakeAt
+          }
           return
         }
         if (!woke) {

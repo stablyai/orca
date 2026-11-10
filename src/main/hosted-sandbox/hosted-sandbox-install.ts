@@ -1,4 +1,10 @@
 import { cloudDevSigningAllowed, withCloudBuildDefaults } from '../cloud-build-defaults'
+import {
+  findCloudRuntimeBySandboxId,
+  isAsleepOnControlPlane,
+  noteCloudRuntimeRemoteState,
+  setCloudAsleepCheck
+} from './hosted-remote-sleep'
 // Wires Orca Cloud into the desktop when this build has a control plane configured (off by default).
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
@@ -114,9 +120,18 @@ export function installHostedSandbox(repos?: OrcaCloudEnvironmentRepoSource): vo
     client: {
       ...client,
       workspaceStatus: async (sandboxId, signal) => {
+        // Asleep there but recorded running here: slept from another client (hosted-remote-sleep).
+        const seen = findCloudRuntimeBySandboxId(userDataPath, sandboxId)
         const answer = await client.workspaceStatus(sandboxId, signal)
         if (answer.status.idleSleepMinutes) {
           noteIdleSleepMinutes(answer.status.idleSleepMinutes)
+        }
+        if (seen) {
+          noteCloudRuntimeRemoteState(
+            { userDataPath, syncSessions: () => void registry.sync() },
+            seen,
+            answer.status.state
+          )
         }
         return answer
       }
@@ -131,6 +146,7 @@ export function installHostedSandbox(repos?: OrcaCloudEnvironmentRepoSource): vo
     windows: () => BrowserWindow.getAllWindows()
   })
   setCloudArchiveCheck((workspaceId) => isArchivedOnControlPlane(userDataPath, client, workspaceId))
+  setCloudAsleepCheck((workspaceId) => isAsleepOnControlPlane(userDataPath, client, workspaceId))
   const offline = installCloudOfflineService({
     userDataPath,
     call: (environmentId, method, params, timeoutMs) =>
@@ -182,6 +198,7 @@ export function installHostedSandbox(repos?: OrcaCloudEnvironmentRepoSource): vo
     disposeTransfer()
     setHostedWorkspaceService(null)
     setCloudArchiveCheck(null)
+    setCloudAsleepCheck(null)
     offline.dispose()
     setCloudOfflineService(null)
   })

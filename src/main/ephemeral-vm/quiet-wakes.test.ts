@@ -5,7 +5,9 @@ import {
   endQuietWake,
   isQuietWake,
   markQuietWake,
+  noteQuietWakeResumed,
   noteQuietWakeWoke,
+  takeQuietWakeResumed,
   unopenedIdleStopMs
 } from './quiet-wakes'
 
@@ -27,5 +29,17 @@ describe('quiet wakes', () => {
     expect(isQuietWake('ws2')).toBe(false)
     noteQuietWakeWoke('ws2')
     expect(unopenedIdleStopMs('ws2')).toBeNull()
+  })
+
+  it('records whether a quiet wake actually resumed the VM, once', () => {
+    markQuietWake('ws3')
+    expect(takeQuietWakeResumed('ws3')).toBe(false)
+    noteQuietWakeResumed('ws3')
+    expect(takeQuietWakeResumed('ws3')).toBe(true)
+    expect(takeQuietWakeResumed('ws3')).toBe(false)
+    endQuietWake('ws3')
+    // An ordinary (not quiet) wake's resume is not recorded.
+    noteQuietWakeResumed('ws4')
+    expect(takeQuietWakeResumed('ws4')).toBe(false)
   })
 })

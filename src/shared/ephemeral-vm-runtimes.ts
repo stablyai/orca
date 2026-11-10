@@ -120,7 +120,12 @@ export type EphemeralVmRuntimeStatusPatch = {
 
 /** Suspend/resume over IPC: failures come back as values so the code reaches the renderer catalog. */
 export type EphemeralVmWorkspaceLifecycleResult =
-  | { ok: true; runtime: EphemeralVmRuntimeRecord | null }
+  | {
+      ok: true
+      runtime: EphemeralVmRuntimeRecord | null
+      /** Quiet (intent) wakes only: whether the VM actually resumed; false when it was already up. */
+      resumed?: boolean
+    }
   | ({ ok: false } & EphemeralVmFailure)
 
 export const EphemeralVmRuntimeStoreSchema = z.object({
