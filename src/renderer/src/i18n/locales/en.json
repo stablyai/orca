@@ -11071,6 +11071,7 @@
             "8ad175042b": "Rich Markdown spellcheck",
             "da5c42780e": "Open in apps",
             "tab_width": "width",
+            "tab_size": "size",
             "tab_sizing": "sizing",
             "tab_fit": "fit",
             "tab_shrink": "shrink",
