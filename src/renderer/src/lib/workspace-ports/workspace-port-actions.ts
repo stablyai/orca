@@ -1,11 +1,9 @@
 import { translate } from '@/i18n/i18n'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import type { useAppStore } from '@/store/index'
-import { assertRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import type {
   WorkspacePort,
   WorkspacePortKillResult,
@@ -14,9 +12,7 @@ import type {
 import type { LocalhostWorktreeLabelRoute } from '../../../../shared/localhost-worktree-labels'
 import { runWorkspacePortScanForTarget } from './workspace-port-scan-client'
 import { browserUrlForPort } from './workspace-port-urls'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
-import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../shared/browser/runtime/browser-runtime-capabilities'
-import { RUNTIME_BROWSER_UNAVAILABLE_MESSAGE } from '../client-creation-action-policy'
+import { openEnvironmentWorkspacePortInBrowser } from './workspace-port-environment-browser'
 
 const WORKSPACE_PORT_STOP_SETTLE_MS = 500
 const WORKSPACE_PORT_TARGET_UNAVAILABLE_REASON =
@@ -148,33 +144,13 @@ export async function openWorkspacePortInBrowser(args: {
   // The browser is this navigation’s surface; never add an unrequested shell after the last terminal was closed.
   activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
   if (args.runtimeTarget.kind === 'environment') {
-    try {
-      await assertRuntimeEnvironmentCapability(
-        args.runtimeTarget.environmentId,
-        BROWSER_SCREENCAST_RUNTIME_CAPABILITY,
-        RUNTIME_BROWSER_UNAVAILABLE_MESSAGE
-      )
-      const remotePage = await callRuntimeRpc<{ browserPageId: string }>(
-        args.runtimeTarget,
-        'browser.tabCreate',
-        { worktree: toRuntimeWorktreeSelector(worktreeId), url },
-        { timeoutMs: 30_000 }
-      )
-      const browserPageId = createBrowserUuid()
-      args.createBrowserTab(worktreeId, url, {
-        activate: true,
-        browserRuntimeEnvironmentId: args.runtimeTarget.environmentId,
-        browserPageId
-      })
-      args.setRemoteBrowserPageHandle(browserPageId, {
-        environmentId: args.runtimeTarget.environmentId,
-        remotePageId: remotePage.browserPageId
-      })
-      return { ok: true }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      return { ok: false, reason: message || 'Failed to open remote browser.' }
-    }
+    return openEnvironmentWorkspacePortInBrowser({
+      worktreeId,
+      url,
+      runtimeTarget: args.runtimeTarget,
+      createBrowserTab: args.createBrowserTab,
+      setRemoteBrowserPageHandle: args.setRemoteBrowserPageHandle
+    })
   }
   try {
     args.createBrowserTab(worktreeId, url, { activate: true })
