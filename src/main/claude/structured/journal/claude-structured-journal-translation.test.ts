@@ -15,6 +15,7 @@ import type { ClaudePendingPrompt } from '../../claude-prompt-registry'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
+import { StructuredAgentSessionSnapshotRoutes } from '../../../native-chat/agent-session-wire/host/structured-agent-session-snapshot-routes'
 import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 // Claude Code 2.1.258 / SDK 0.3.251 capture: only message.id links partial and final frames.
@@ -147,6 +148,8 @@ describe('Claude structured journal translation', () => {
       mintEpoch: () => 'epoch-1'
     })
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+    const routes = new StructuredAgentSessionSnapshotRoutes(testEventSinkLogging().logger)
+    await deferred.followSnapshots(routes.observe(JOURNAL_IDENTITY.sessionId, journal))
     deferred.bind({ journal, fence: 1, publish: vi.fn() })
     let scheduled: (() => void) | null = null
     const translator = createClaudeJournalTranslator({
@@ -198,6 +201,9 @@ describe('Claude structured journal translation', () => {
       blocks: [{ type: 'text', text: numbers.join('\n') }]
     })
     expect(providerFrameKinds(items)).toEqual([])
+    translator.dispose()
+    deferred.close()
+    await journal.close()
   })
 
   it('restores a cancelled prompt as terminal history after reopening the journal', async () => {
@@ -208,6 +214,8 @@ describe('Claude structured journal translation', () => {
       mintEpoch: () => 'epoch-1'
     })
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+    const routes = new StructuredAgentSessionSnapshotRoutes(testEventSinkLogging().logger)
+    await deferred.followSnapshots(routes.observe(JOURNAL_IDENTITY.sessionId, journal))
     deferred.bind({ journal, fence: 1, publish: vi.fn() })
     const translator = createClaudeJournalTranslator({ sink: deferred.sink })
     const approval = prompt({
@@ -227,6 +235,7 @@ describe('Claude structured journal translation', () => {
       promptKey: approval.promptKey
     })
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
+    translator.dispose()
     deferred.close()
     await journal.close()
 
