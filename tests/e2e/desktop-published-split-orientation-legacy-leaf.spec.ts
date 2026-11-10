@@ -134,7 +134,7 @@ test('publishes an unmounted split with its real orientation when a legacy leaf 
     })
 
     // The drift under test: the saved tree keeps a leaf the stable-id leaf set cannot carry.
-    await orcaPage.evaluate(
+    const seededLayout = await orcaPage.evaluate(
       ({ tabId, firstLeafId, secondLeafId, legacyLeafId }) => {
         const state = window.__store?.getState()
         const saved = state?.terminalLayoutsByTabId[tabId]
@@ -155,13 +155,12 @@ test('publishes an unmounted split with its real orientation when a legacy leaf 
             second: { type: 'leaf', leafId: legacyLeafId }
           }
         })
+        return window.__store?.getState().terminalLayoutsByTabId[tabId] ?? null
       },
       { tabId: hostTabId, firstLeafId, secondLeafId, legacyLeafId: LEGACY_LEAF_ID }
     )
-    // Require a lingering leaf or the publisher never reaches the mismatch fallback.
-    expect(collectLeafIds((await readSavedLayout(orcaPage, hostTabId))?.root)).toContain(
-      LEGACY_LEAF_ID
-    )
+    // Check the seed before a later renderer turn can adopt the host's normalized snapshot.
+    expect(collectLeafIds(seededLayout?.root)).toContain(LEGACY_LEAF_ID)
 
     const offer = await createRuntimeDesktopPairingOffer(orcaPage)
     // Give the observer the same parking override to preserve its original lifecycle behavior.
