@@ -87,6 +87,6 @@ describe('mergeCodexMcpServers', () => {
     // Still one marked block, not an unmarked copy plus a new block.
     const text = again.text ?? reformatted
     expect(text.split(CODEX_MCP_BLOCK_START)).toHaveLength(2)
-    expect(Object.keys(parse(text).mcp_servers as object)).toEqual(['fs'])
+    expect(parse(text).mcp_servers).toEqual({ fs: { command: 'npx', args: ['-y', 'server-fs'] } })
   })
 })
