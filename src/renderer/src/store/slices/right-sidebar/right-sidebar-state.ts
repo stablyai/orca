@@ -1,3 +1,4 @@
+import { selectVmBuildSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
 import type { EditorGet, EditorSet } from '../editor/types/editor-set-get'
 import type { ActivityBarPosition } from '../editor/types/open-file'
 import type {
@@ -35,7 +36,7 @@ export type RightSidebarState = {
   setActivityBarPosition: (position: ActivityBarPosition) => void
 }
 
-export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightSidebarState {
+export function createRightSidebarState(set: EditorSet, get: EditorGet): RightSidebarState {
   return {
     rightSidebarOpen: false,
     rightSidebarWidth: 280,
@@ -47,7 +48,13 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
     rightSidebarExplorerViewByWorktree: {},
     rightSidebarEffectiveTab: null,
     activityBarPosition: 'top',
-    toggleRightSidebar: () => set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen })),
+    toggleRightSidebar: () => {
+      // A build sheet keeps the sidebar closed; flipping the hidden preference would surprise later.
+      if (selectVmBuildSurfaceShown(get())) {
+        return
+      }
+      set((s) => ({ rightSidebarOpen: !s.rightSidebarOpen }))
+    },
     setRightSidebarOpen: (open) => set({ rightSidebarOpen: open }),
     setRightSidebarWidth: (width) => set({ rightSidebarWidth: width }),
     setRightSidebarTab: (tab) =>

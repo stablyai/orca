@@ -20,7 +20,7 @@ function loadMeasuredTimings(): Promise<VmBuildStepTimings> {
       if (!config) {
         // Unreachable now says nothing about later: the next sheet asks again.
         pending = null
-        return NONE
+        return measured ?? NONE
       }
       // Only "Start sandbox" is measured. Without a measurement there is no hint, never a guess.
       measured = config.createTiming ? { provision: config.createTiming } : NONE
@@ -29,7 +29,7 @@ function loadMeasuredTimings(): Promise<VmBuildStepTimings> {
     })
     .catch(() => {
       pending = null
-      return NONE
+      return measured ?? NONE
     })
   return pending
 }
