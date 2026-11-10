@@ -5,7 +5,7 @@ import { ProjectOptionDetail } from '@/components/new-workspace/ProjectComboboxR
 import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/host/WorktreeHostContextBadge'
 import { useSidebarHostScopeOptions } from '@/components/sidebar/worktree-list/controls/use-sidebar-host-scope-options'
 import { useTranslate } from '@/i18n/use-translate'
-import { resolveWorktreeBranchLabel } from '@/lib/worktree-default-display-name'
+import { resolveWorktreeBranchLabel } from '@/lib/workspace/display/worktree-default-display-name'
 import { getHostContextLabel } from '../../../../../shared/worktree/host-context-labels'
 import {
   LOCAL_EXECUTION_HOST_ID,

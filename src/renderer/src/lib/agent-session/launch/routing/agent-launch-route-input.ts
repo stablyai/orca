@@ -33,7 +33,7 @@ import {
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import { readHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
 
 export type ProspectiveWorkspaceKind = NonNullable<AgentLaunchRoutingInput['workspaceKind']>
 

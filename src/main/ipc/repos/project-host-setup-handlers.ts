@@ -13,7 +13,10 @@ import type {
   ProjectHostSetupUpdateResult
 } from '../../../shared/project-types'
 import { getProjectHostSetupForRepo } from '../../../shared/project-host-setup-lookup'
-import { resolveImportedFolderProjectLink } from '../../../shared/imported-folder-project-identity'
+import {
+  linkImportedFolderToProject,
+  type RepositoryMetadataOwner
+} from '../../workspaces/catalog/imported-folder-project-link'
 import { readCurrentGitRemoteIdentity } from '../../workspaces/catalog/repo-git-remote-identity'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
@@ -45,48 +48,11 @@ function buildProjectHostSetupResult(store: Store, repo: Repo): ProjectHostSetup
   return { project, setup, repo }
 }
 
-function alignRepoWithRequestedProject(
+export function registerProjectHostSetupHandlers(
+  mainWindow: BrowserWindow,
   store: Store,
-  repo: Repo,
-  folderRemote: Pick<Repo, 'gitRemoteIdentity'>,
-  projectId: string,
-  setupMethod: ProjectHostSetupExistingFolderArgs['setupMethod'] = 'imported-existing-folder',
-  requestedProviderIdentity?: ProjectHostSetupExistingFolderArgs['projectProviderIdentity']
-): ProjectHostSetupResult {
-  assertWslMoveHostSetupWritable(store, {
-    projectId,
-    hostId: getRepoExecutionHostId(repo),
-    repoId: repo.id
-  })
-  let setup = getProjectHostSetupForRepo(store.getProjectHostSetups(), repo)
-  if (setup.projectId !== projectId) {
-    const project = store.getProjects().find((entry) => entry.id === projectId)
-    // Project identity must travel with the request when it exists only on the source host.
-    const updated = store.updateRepo(
-      repo,
-      resolveImportedFolderProjectLink(
-        { ...repo, ...folderRemote },
-        projectId,
-        project?.providerIdentity ?? requestedProviderIdentity
-      )
-    )
-    if (!updated) {
-      throw new Error(`Project setup repo disappeared before it could be linked: ${repo.id}`)
-    }
-    repo = updated
-    setup = getProjectHostSetupForRepo(store.getProjectHostSetups(), repo)
-  }
-  const updated = store.updateRepo(repo, { projectHostSetupMethod: setupMethod })
-  if (!updated) {
-    throw new Error(
-      `Project setup repo disappeared before setup metadata could be linked: ${repo.id}`
-    )
-  }
-  repo = updated
-  return buildProjectHostSetupResult(store, repo)
-}
-
-export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, store: Store): void {
+  metadata: RepositoryMetadataOwner
+): void {
   ipcMain.handle(
     'projectHostSetups:create',
     (_event, rawArgs: ProjectHostSetupCreateArgs): ProjectHostSetupCreateResult => {
@@ -191,20 +157,21 @@ export function registerProjectHostSetupHandlers(mainWindow: BrowserWindow, stor
           : result.repo
       let aligned: ProjectHostSetupResult
       try {
-        aligned = alignRepoWithRequestedProject(
-          store,
+        const repo = await linkImportedFolderToProject(
+          () => store,
           result.repo,
           folderRemote,
-          args.projectId,
-          args.setupMethod,
-          args.projectProviderIdentity
+          { ...args, hostId: getRepoExecutionHostId(result.repo) },
+          metadata
         )
+        aligned = buildProjectHostSetupResult(store, repo)
       } catch (err) {
         // Failed linking must not leave a newly registered repo or authorization root.
         if (!result.alreadyExisted) {
           store.removeProjectForHost(result.repo)
           invalidateAuthorizedRootsCache()
         }
+        notifyReposChanged(mainWindow)
         throw err
       }
       invalidateAuthorizedRootsCache()

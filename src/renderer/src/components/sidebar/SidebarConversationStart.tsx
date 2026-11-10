@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAppStore } from '@/store'
-import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { useTranslation } from 'react-i18next'
 import { SquarePen } from 'lucide-react'

@@ -10,7 +10,7 @@ import {
 } from '../../git/repo'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { findProjectAtSameRealPath } from '../../workspaces/catalog/project-realpath-identity'
-import { detectRepoIconAndUpstream } from '../../repository-icons/repo-icon-autodetect'
+import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { describeWslUncAccessDenied } from '../../wsl/filesystem/wsl-unc-access-denied'
 import { createLocalProjectRecord } from '../../workspaces/catalog/local-project-record'
@@ -86,7 +86,7 @@ export async function addLocalRepoFromPath(
     }
   }
 
-  const detected = await detectRepoIconAndUpstream({
+  const detected = await detectRepoLocalMetadata({
     repoPath: resolvedPath,
     kind: repoKind,
     executionHostId: LOCAL_EXECUTION_HOST_ID

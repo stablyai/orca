@@ -37,6 +37,7 @@ import { useAiVaultSessionDeleteAction } from '../session-actions/ai-vault-sessi
 import { useAiVaultPanelSearch } from '../search/use-ai-vault-search'
 import { useAiVaultPanelSearchSessions } from '../search/ai-vault-search-session'
 import { AiVaultPanelSearch } from '../search/AiVaultPanelSearch'
+import { useAiVaultResumeCatalogs } from '../session-actions/use-ai-vault-resume-catalogs'
 import { useAiVaultPanelSessionResume } from '../session-actions/use-ai-vault-panel-session-resume'
 import { AiVaultScanProgressStrip } from '../scanning/AiVaultScanProgressStrip'
 import { useAiVaultScanProgress } from '../scanning/ai-vault-scan-progress-store'
@@ -111,6 +112,7 @@ export default function AiVaultPanel({
   const agents = conversationNavigation ? AI_VAULT_AGENTS : historyAgents
   const { executionHostScope, onExecutionHostScopeChange, hostScopeOptions } =
     useAiVaultPanelHostScope(activeWorktreeId ?? null, resumeTargetState)
+  useAiVaultResumeCatalogs(executionHostScope)
   const activeWorktreePath = activeWorktree?.path ?? null
   const { activeWorktreePaths, activeProjectKey, projectLabelByKey } =
     useAiVaultPanelProjectContext({

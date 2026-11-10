@@ -32,7 +32,7 @@ import {
 } from './hosted-review-push-target'
 import { persistWorktreeMeta } from './worktree-meta-persist'
 import { buildWorktreeMetaStateUpdate } from './worktree-meta-state-update'
-import { withPendingSidebarRowWrites } from '@/lib/sidebar-pending-layer'
+import { withPendingSidebarRowWrites } from '@/components/sidebar/sidebar-feed/sidebar-pending-layer'
 import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
 import { runtimeTargetForWorktreeOwner } from '../listing/worktree-owner-target'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'

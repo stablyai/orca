@@ -11,7 +11,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useAppStore } from '@/store/index'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { searchRepos } from '@/lib/repo-search'
+import { searchRepos } from '@/lib/workspace/catalog/repo-search'
 import { cn } from '@/lib/class-names'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { Repo } from '../../../../shared/repo-types'
