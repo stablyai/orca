@@ -57,6 +57,19 @@ function requestWithComments(): LinearIssueRequest {
   }
 }
 
+function requestWithActivity(): LinearIssueRequest {
+  return {
+    include: {
+      comments: false,
+      children: false,
+      attachments: false,
+      relations: false,
+      activity: true
+    },
+    depth: 2
+  }
+}
+
 function result(): LinearIssueContextResult {
   return {
     issue: resolvedIssue().issue,
@@ -126,5 +139,65 @@ describe('Linear issue context includes', () => {
         linearUpload: true
       }
     ])
+  })
+
+  it('does not treat an activity page without pageInfo as a complete history', async () => {
+    plainRawRequest
+      .mockResolvedValueOnce({
+        data: {
+          issue: {
+            history: {
+              nodes: [{ id: 'life-1' }, { id: 'life-2' }],
+              pageInfo: { hasNextPage: true, endCursor: 'next' }
+            }
+          }
+        }
+      })
+      .mockResolvedValueOnce({
+        data: { issue: { history: { nodes: [] } } }
+      })
+    const { readOptionalIncludes } = await import('./includes')
+    const output = result()
+
+    await readOptionalIncludes(
+      resolvedIssue(),
+      requestWithActivity(),
+      output,
+      output.meta.includeErrors,
+      output.meta.sections
+    )
+
+    expect(output.activity).toBeUndefined()
+    expect(output.meta.sections.activity).toBeUndefined()
+    expect(output.meta.includeErrors).toEqual([
+      expect.objectContaining({
+        include: 'activity',
+        code: 'linear_include_failed'
+      })
+    ])
+    expect(plainRawRequest).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a null activity connection as an empty complete read', async () => {
+    plainRawRequest.mockResolvedValueOnce({ data: { issue: { history: null } } })
+    const { readOptionalIncludes } = await import('./includes')
+    const output = result()
+
+    await readOptionalIncludes(
+      resolvedIssue(),
+      requestWithActivity(),
+      output,
+      output.meta.includeErrors,
+      output.meta.sections
+    )
+
+    expect(output.meta.includeErrors).toEqual([])
+    expect(output.activity).toEqual([])
+    expect(output.meta.sections.activity).toMatchObject({
+      returned: 0,
+      cap: 250,
+      capReached: false,
+      hasMore: false
+    })
   })
 })
