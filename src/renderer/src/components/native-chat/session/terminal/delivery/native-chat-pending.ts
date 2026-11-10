@@ -27,6 +27,7 @@ type PendingOwner = {
   pending: NativeChatPendingSend[]
   boundary?: NativeChatSourceBoundary
   sessionId?: string
+  search?: { generation: object; length: number; found: boolean }
 }
 const pendingSendCache = new Map<string, PendingOwner>()
 let pendingSendCounter = 0
@@ -54,7 +55,8 @@ export function writePendingSendCache(
 export function observePendingSendCache(
   scope: NativeChatPendingSendScope,
   messages: readonly NativeChatMessage[],
-  sessionId: string
+  sessionId: string,
+  generation?: object
 ): void {
   const key = pendingSendScopeKey(scope)
   const owner = pendingSendCache.get(key) ?? { pending: [] }
@@ -63,7 +65,12 @@ export function observePendingSendCache(
   const message = last?.source === 'transcript' ? last : undefined
   if (!message) {
     if (owner.sessionId !== sessionId) {
-      setBoundedScopeCacheEntry(pendingSendCache, key, { ...owner, sessionId, boundary: undefined })
+      setBoundedScopeCacheEntry(pendingSendCache, key, {
+        ...owner,
+        sessionId,
+        boundary: undefined,
+        search: undefined
+      })
     }
     return
   }
@@ -73,14 +80,28 @@ export function observePendingSendCache(
     previous.position?.kind === position?.kind &&
     previous.position?.value === position?.value
   ) {
+    if (
+      generation &&
+      (owner.search?.generation !== generation || owner.search.length !== messages.length)
+    ) {
+      setBoundedScopeCacheEntry(pendingSendCache, key, {
+        ...owner,
+        search: { generation, length: messages.length, found: true }
+      })
+    }
     return
   }
   let advances = !previous
+  const search = owner.sessionId === sessionId ? owner.search : undefined
+  const extension =
+    generation && search?.generation === generation && search.length <= messages.length
   if (previous) {
     if (position && previous.position?.kind === position.kind) {
       advances = position.value > previous.position.value
     } else {
-      for (let index = messages.length - 2; index >= 0; index--) {
+      advances = extension ? search.found : false
+      const start = extension ? search.length : 0
+      for (let index = messages.length - 2; !advances && index >= start; index--) {
         if (messages[index].id === previous.id) {
           advances = true
           break
@@ -88,10 +109,11 @@ export function observePendingSendCache(
       }
     }
   }
-  if (owner.sessionId !== sessionId || (message && advances)) {
+  if (generation || owner.sessionId !== sessionId || advances) {
     setBoundedScopeCacheEntry(pendingSendCache, key, {
       ...owner,
       sessionId,
+      search: generation ? { generation, length: messages.length, found: advances } : undefined,
       boundary:
         message && advances
           ? { sessionId, id: message.id, timestamp: message.timestamp, position }
@@ -122,10 +144,7 @@ export function appendPendingSendCache(
       entry.afterEmptyTranscriptSessionId === boundary.sessionId)
       ? {
           ...entry,
-          sourceBoundary: boundary,
-          afterMessageId: boundary.id,
-          afterMessageTimestamp: boundary.timestamp,
-          afterEmptyTranscriptSessionId: undefined
+          sourceBoundary: boundary
         }
       : entry
   const next = entry.sourceAgent ? captured : assignNativeChatPendingOccurrence(existing, captured)

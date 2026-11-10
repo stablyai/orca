@@ -287,12 +287,13 @@ export function useNativeChatLiveSession(
 
   // Keep status-only hook updates from rerunning the assembler.
   const baseMessages = read.phase === 'ready' ? read.messages : EMPTY_MESSAGES
-  const { assembledMessages, normalizedMessages } = useNativeChatAssembledMessages({
-    agent,
-    sessionId,
-    baseMessages,
-    appended
-  })
+  const { assembledMessages, normalizedMessages, sourceObservation } =
+    useNativeChatAssembledMessages({
+      agent,
+      sessionId,
+      baseMessages,
+      appended
+    })
 
   return useMemo<NativeChatLiveSession>(() => {
     const session = mergeNativeChatLiveSession({
@@ -310,6 +311,7 @@ export function useNativeChatLiveSession(
     })
     return {
       ...session,
+      sourceObservation,
       hasMore,
       loadingEarlier,
       olderHistoryGeneration,
@@ -319,6 +321,7 @@ export function useNativeChatLiveSession(
     }
   }, [
     normalizedMessages,
+    sourceObservation,
     assembledMessages,
     read,
     sessionId,

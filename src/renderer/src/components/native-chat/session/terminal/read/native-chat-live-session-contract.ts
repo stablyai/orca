@@ -19,6 +19,8 @@ export function isNativeChatTranscriptUnsettled(phase: ReadState['phase']): bool
 }
 
 export type NativeChatLiveSession = NativeChatSession & {
+  /** Canonical source publication paired with its append/reset provenance, before display folding. */
+  sourceObservation?: { messages: readonly NativeChatMessage[]; generation: object }
   /** Latest provider turn boundary, used to settle orphaned running tool rows. */
   transcriptLifecycle?: NativeChatTurnLifecycle
   /** Hook-reported human wait not yet ended by the transcript; absent on hookless lanes. */

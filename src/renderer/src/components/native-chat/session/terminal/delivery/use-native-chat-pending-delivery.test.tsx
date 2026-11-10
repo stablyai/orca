@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
 import { useNativeChatPendingDelivery } from './use-native-chat-pending-delivery'
 import { clearPendingSendCacheForTests } from './native-chat-pending'
+import * as pendingOwner from './native-chat-pending'
+import { useNativeChatAssembledMessages } from '../assembly/use-native-chat-assembled-messages'
 
 const boundary: NativeChatMessage = {
   id: 'boundary',
@@ -31,7 +33,112 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   vi.useRealTimers()
+})
+
+it.each([200, 2000])(
+  'searches only the source suffix after a disjoint %i-row reconnect publication',
+  (size) => {
+    let observing = false
+    let reads = 0
+    const originalObserve = pendingOwner.observePendingSendCache
+    vi.spyOn(pendingOwner, 'observePendingSendCache').mockImplementation((...input) => {
+      observing = true
+      try {
+        return originalObserve(...input)
+      } finally {
+        observing = false
+      }
+    })
+    const initial = { ...boundary, id: 'original-frontier', timestamp: 1 }
+    const first = { ...boundary, id: 'append-one', timestamp: 10_000 }
+    const second = { ...boundary, id: 'append-two', timestamp: 10_001 }
+    const disjoint = Array.from({ length: size }, (_, index) => ({
+      ...boundary,
+      timestamp: index + 100,
+      get id() {
+        if (observing) {
+          reads++
+        }
+        return `disjoint-${index}`
+      }
+    }))
+    const empty: NativeChatMessage[] = []
+    const mounted = renderHook(
+      ({ baseMessages, appended }) => {
+        const assembly = useNativeChatAssembledMessages({
+          agent: 'claude',
+          sessionId: 'session',
+          baseMessages,
+          appended
+        })
+        return useNativeChatPendingDelivery({
+          ...args,
+          session: {
+            messages: assembly.normalizedMessages,
+            sourceObservation: assembly.sourceObservation,
+            readPhase: 'ready',
+            sessionId: 'session'
+          }
+        })
+      },
+      { initialProps: { baseMessages: [initial], appended: empty } }
+    )
+    mounted.rerender({ baseMessages: disjoint, appended: empty })
+    expect(reads).toBeLessThanOrEqual(size + 2)
+    reads = 0
+    mounted.rerender({ baseMessages: disjoint, appended: [first] })
+    expect(reads).toBeLessThanOrEqual(2)
+    reads = 0
+    mounted.rerender({ baseMessages: disjoint, appended: [first, second] })
+    expect(reads).toBeLessThanOrEqual(2)
+    act(() => mounted.result.current.record('waiting', undefined, false, 'claude'))
+    expect(mounted.result.current.pending[0].sourceBoundary?.id).toBe('original-frontier')
+    // A newly paged base can restore overlap; a miss never promotes an unfamiliar tail.
+    mounted.rerender({ baseMessages: [initial, ...disjoint], appended: [first, second] })
+    act(() => mounted.result.current.record('later', undefined, false, 'claude'))
+    expect(mounted.result.current.pending.at(-1)?.sourceBoundary?.id).toBe('append-two')
+  }
+)
+
+it('keeps a new old-host Send behind its visible window after a disjoint reconnect', () => {
+  vi.setSystemTime(4000)
+  type Session = Parameters<typeof useNativeChatPendingDelivery>[0]['session']
+  const initial: Session = {
+    messages: [{ ...boundary, id: 'A', timestamp: 1000 }],
+    readPhase: 'ready',
+    sessionId: 'session'
+  }
+  const mounted = renderHook(({ session }) => useNativeChatPendingDelivery({ ...args, session }), {
+    initialProps: { session: initial }
+  })
+  const old = [
+    { ...userRow('repeat'), id: 'old-user', timestamp: 2000 },
+    { ...boundary, id: 'B', timestamp: 3000 }
+  ]
+  mounted.rerender({ session: { ...initial, messages: old } })
+  let id = ''
+  act(() => {
+    id = mounted.result.current.record('repeat', undefined, false, 'claude')
+    mounted.result.current.useSourceEvidence(id, false)
+  })
+  expect(mounted.result.current.pending.map((entry) => entry.id)).toEqual([id])
+  const unrelated = { ...userRow('other'), id: 'unrelated', timestamp: 4100 }
+  mounted.rerender({ session: { ...initial, messages: [...old, unrelated] } })
+  expect(mounted.result.current.pending.map((entry) => entry.id)).toEqual([id])
+  mounted.rerender({
+    session: {
+      ...initial,
+      messages: [
+        ...old,
+        unrelated,
+        { ...userRow('repeat'), id: 'genuine-user', timestamp: 4200 },
+        { ...boundary, id: 'genuine-answer', timestamp: 4300 }
+      ]
+    }
+  })
+  expect(mounted.result.current.pending).toEqual([])
 })
 
 describe('terminal Chat pending delivery', () => {
@@ -187,6 +294,46 @@ function sourceRow(text: string, id = `source:${text}`): NativeChatMessage {
     }
   }
 }
+
+it.each([true, false])(
+  'keeps a source=%s survivor behind its timestamp after the session changes',
+  (source) => {
+    vi.setSystemTime(4000)
+    type Session = Parameters<typeof useNativeChatPendingDelivery>[0]['session']
+    const initial: Session = {
+      messages: [{ ...boundary, id: 'reused-boundary', timestamp: 1000 }],
+      readPhase: 'ready',
+      sessionId: 'A'
+    }
+    const mounted = renderHook(
+      ({ session }) => useNativeChatPendingDelivery({ ...args, agent: 'opencode', session }),
+      { initialProps: { session: initial } }
+    )
+    let id = ''
+    act(() => {
+      id = mounted.result.current.record('repeat', undefined, false, 'opencode')
+      mounted.result.current.useSourceEvidence(id, source)
+    })
+    const old = [
+      { ...sourceRow('repeat', 'old-user'), timestamp: 500 },
+      { ...boundary, id: 'reused-boundary', timestamp: 600 }
+    ]
+    mounted.rerender({ session: { ...initial, sessionId: 'B', messages: old } })
+    expect(mounted.result.current.pending.map((entry) => entry.id)).toEqual([id])
+    mounted.rerender({
+      session: {
+        ...initial,
+        sessionId: 'B',
+        messages: [
+          ...old,
+          { ...sourceRow('repeat', 'new-user'), timestamp: 4100 },
+          { ...boundary, id: 'new-answer', timestamp: 4200 }
+        ]
+      }
+    })
+    expect(mounted.result.current.pending).toEqual([])
+  }
+)
 
 it('assigns identical legacy occurrences at the real capability fallback and never double-charges a spent row', () => {
   const first = mountOwned()

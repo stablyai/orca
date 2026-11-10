@@ -20,7 +20,7 @@ import {
   writePendingSendCache
 } from './native-chat-pending'
 import type { NativeChatDeliveryNotice } from '../../../messages/rows/NativeChatMessageRow'
-import type { ReadState } from '../read/native-chat-live-session-contract'
+import type { NativeChatLiveSession, ReadState } from '../read/native-chat-live-session-contract'
 
 /** Wait for transcript evidence after lost write acknowledgment; mobile uses the same hold. */
 export const NATIVE_CHAT_UNCONFIRMED_SEND_HOLD_MS = 20_000
@@ -38,12 +38,14 @@ export function useNativeChatPendingDelivery(args: {
     messages: NativeChatMessage[]
     readPhase?: ReadState['phase']
     sessionId?: string | null
+    sourceObservation?: NativeChatLiveSession['sourceObservation']
   }
 }) {
   const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const { paneKey, agent, composerRef, workingEpoch } = args
   const { messages } = args.session
+  const sourceObservation = args.session.sourceObservation
   const sessionId = args.session.sessionId ?? null
   // Without a sessionId, ready is an unread placeholder.
   const readEmptySessionId =
@@ -72,12 +74,17 @@ export function useNativeChatPendingDelivery(args: {
   )
   useEffect(() => {
     if (args.session.readPhase === 'ready' && sessionId) {
-      observePendingSendCache(scope, messages, sessionId)
+      observePendingSendCache(
+        scope,
+        sourceObservation?.messages ?? messages,
+        sessionId,
+        sourceObservation?.generation
+      )
     }
     save((entries) =>
       prunePendingSends(releaseEmptyTranscriptClaims(entries, sessionId), messages, sessionId ?? '')
     )
-  }, [messages, save, sessionId, scope, args.session.readPhase])
+  }, [messages, sourceObservation, save, sessionId, scope, args.session.readPhase])
   const record = useCallback(
     (text: string, imagePaths?: string[], recovery = false, sourceAgent?: AgentType) => {
       const sentAt = Date.now()

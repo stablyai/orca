@@ -171,9 +171,14 @@ it.each([1000, 10000])('does no glue work on %i rows preceding live legacy bound
   }
 })
 
-it.each([8, 80])(
-  'bounds allocation work for eight identical legacy sends across %i eligible rows',
-  (rows) => {
+it.each([
+  [8, 'continue'],
+  [80, 'continue'],
+  [8, 'continue continue'],
+  [80, 'continue continue']
+] as const)(
+  'bounds allocation work for eight identical legacy sends across %i eligible rows of %s',
+  (rows, text) => {
     const count = 8
     const pending: NativeChatPendingSend[] = Array.from({ length: count }, (_, index) => ({
       id: `same-${index}`,
@@ -181,12 +186,17 @@ it.each([8, 80])(
       sentAt: 1
     }))
     const messages = [
-      ...Array.from({ length: rows }, (_, index) => user('continue', `same-row-${index}`)),
+      ...Array.from({ length: rows }, (_, index) => user(text, `same-row-${index}`)),
       { ...user('', 'reply'), role: 'assistant' as const }
     ]
     const BaseMap = globalThis.Map
     let writes = 0
+    let lookups = 0
     class CountingMap<K, V> extends BaseMap<K, V> {
+      override get(key: K): V | undefined {
+        lookups++
+        return super.get(key)
+      }
       override set(key: K, value: V): this {
         writes++
         return super.set(key, value)
@@ -194,13 +204,26 @@ it.each([8, 80])(
     }
     vi.stubGlobal('Map', CountingMap)
     try {
-      expect(prunePendingSends(pending, messages)).toEqual([])
+      const startedAt = performance.now()
+      const remaining = prunePendingSends(pending, messages)
+      const elapsedMs = performance.now() - startedAt
+      const allocationLookups = lookups
+      expect(remaining).toEqual([])
       // Eight legal row alternatives per signature; each state assigns, requires or omits each send.
       const states = 3 ** count
       const witnessesPerRow = 2 ** count - 1 + count
       const maxAllocationWrites = count * states * (witnessesPerRow + 1)
       expect(writes).toBeLessThanOrEqual(maxAllocationWrites + rows + 2 ** count)
-      console.info('legacy allocation count', { rows, pending: count, mapWrites: writes })
+      // Every candidate allocates before its next-state lookup, including candidates never written.
+      expect(allocationLookups).toBeLessThanOrEqual(maxAllocationWrites + rows * count + 2 ** count)
+      console.info('legacy allocation count', {
+        rows,
+        text,
+        pending: count,
+        mapWrites: writes,
+        candidateAllocationUpperBound: allocationLookups,
+        elapsedMs
+      })
     } finally {
       vi.stubGlobal('Map', BaseMap)
     }

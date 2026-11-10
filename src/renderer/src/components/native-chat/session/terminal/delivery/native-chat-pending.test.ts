@@ -275,7 +275,7 @@ it.each([5000, 50000])(
     observePendingSendCache(scope, [history[0]], session)
     observePendingSendCache(scope, [{ ...next, id: 'disjoint' }], session)
     const [entry] = appendPendingSendCache(scope, send('new-send', 'old'))
-    expect(entry.afterMessageId).toBe('frontier')
+    expect(entry.sourceBoundary?.id).toBe('frontier')
   }
 )
 

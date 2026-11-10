@@ -65,21 +65,55 @@ export function nativeChatReceiptWindow(
 ): (row: NativeChatReceiptRow) => boolean {
   const boundary = entry.sourceBoundary
   const sameSession = boundary?.sessionId === sessionId
-  const boundaryId = boundary && !sameSession ? undefined : entry.afterMessageId
-  const boundaryIndex = sameSession
-    ? snapshot.boundaries.get(boundary.id)
-    : boundaryId
-      ? snapshot.boundaries.get(boundaryId)
-      : undefined
-  return ({ message, index }) => {
-    const position = nativeChatSourcePosition(message)
-    if (sameSession && boundary.position && position?.kind === boundary.position.kind) {
-      return position.value > boundary.position.value
+  const original = receiptWindowAfter(
+    boundary && !sameSession ? { ...entry, afterMessageId: null } : entry,
+    snapshot,
+    sessionId,
+    glue
+  )
+  if (!sameSession) {
+    return original
+  }
+  const frontier = receiptWindowAfter(
+    {
+      ...entry,
+      afterMessageId: boundary.id,
+      afterMessageTimestamp: boundary.timestamp,
+      matchingAfterTimestamp: undefined,
+      afterEmptyTranscriptSessionId: undefined
+    },
+    snapshot,
+    sessionId,
+    glue
+  )
+  return (row) => {
+    const position = nativeChatSourcePosition(row.message)
+    if (boundary.position && position?.kind === boundary.position.kind) {
+      return (
+        position.value > boundary.position.value &&
+        (boundary.id === entry.afterMessageId || original(row))
+      )
     }
+    if (!original(row)) {
+      return false
+    }
+    return frontier(row)
+  }
+}
+
+function receiptWindowAfter(
+  entry: NativeChatPendingSend,
+  snapshot: NativeChatReceiptSnapshot,
+  sessionId: string,
+  glue: boolean
+): (row: NativeChatReceiptRow) => boolean {
+  const boundaryId = entry.afterMessageId
+  const boundaryIndex = boundaryId ? snapshot.boundaries.get(boundaryId) : undefined
+  return ({ message, index }) => {
     if (boundaryIndex !== undefined) {
       return index > boundaryIndex
     }
-    if (!boundary && boundaryId === undefined && !glue) {
+    if (boundaryId === undefined && !glue) {
       return true
     }
     if (
