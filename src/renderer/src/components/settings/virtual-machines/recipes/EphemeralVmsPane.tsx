@@ -13,8 +13,8 @@ import { EPHEMERAL_VMS_SKILL_NAME } from '@/lib/skills/installation/agent-featur
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
 import {
   launchEnvironmentSetupAgent,
   pickEnvironmentSetupRepo

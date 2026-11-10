@@ -8,8 +8,8 @@ import {
   getGitHubRepoRoutingTarget,
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost
-} from '@/lib/github-source-runtime-context'
-import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
+} from '@/lib/work-items/github/github-source-runtime-context'
+import { taskSourceRuntimeTarget } from '@/lib/work-items/task-source-runtime-target'
 import {
   resolvePullRequestRepo,
   type GitHubWorkItemProjectOrigin
@@ -19,7 +19,7 @@ import { githubProjectHost } from '../../../../shared/github/project-identity'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 export async function runIssueUpdate(args: {
   repoPath: string | null

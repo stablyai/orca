@@ -260,18 +260,22 @@ let processStore: DeviceStore | null = null
 let started = false
 
 export function processDeviceStore(): DeviceStore {
-  processStore ??= createDeviceStore({
-    fileSystem: createExpoGenerationFileSystem(),
-    roots: {
+  if (processStore === null) {
+    const roots = {
       cache: new Directory(Paths.cache, 'orca-store', 'v1').uri,
       draft: new Directory(Paths.document, 'orca-drafts', 'v1').uri
-    },
-    keychain: {
-      read: () => readPairingKeychainItem(DEVICE_STORE_KEY_ITEM),
-      write: (hexKey) => writePairingKeychainItem(DEVICE_STORE_KEY_ITEM, hexKey)
-    },
-    loadPairedHostIds: async () => (await loadStoredHostProfiles())?.map((host) => host.id) ?? null
-  })
+    }
+    processStore = createDeviceStore({
+      fileSystem: createExpoGenerationFileSystem(roots.cache),
+      roots,
+      keychain: {
+        read: () => readPairingKeychainItem(DEVICE_STORE_KEY_ITEM),
+        write: (hexKey) => writePairingKeychainItem(DEVICE_STORE_KEY_ITEM, hexKey)
+      },
+      loadPairedHostIds: async () =>
+        (await loadStoredHostProfiles())?.map((host) => host.id) ?? null
+    })
+  }
   return processStore
 }
 

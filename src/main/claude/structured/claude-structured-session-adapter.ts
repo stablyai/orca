@@ -30,6 +30,7 @@ import { claudeStoppedRequestEndWait } from '../claude-request-end-wait'
 import {
   finishClaudeCloseAfterExit,
   drainClaudeObservedExits,
+  liveClaudeSession,
   observeClaudeSessionExit,
   settleClaudeUnexpectedExit,
   type ClaudeExitLifecycle
@@ -296,15 +297,6 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   }
 
   private session(sessionId: string): ClaudeSession {
-    const session = this.sessions.get(sessionId)
-    if (!session) {
-      // A child that just exited is named by its own diagnostic, not by its absence.
-      throw (
-        this.exits.get(sessionId)?.error ??
-        this.settledExitErrors.get(sessionId) ??
-        new Error(`no live claude stream-json session for ${sessionId}`)
-      )
-    }
-    return session
+    return liveClaudeSession(this.exitLifecycle, sessionId)
   }
 }

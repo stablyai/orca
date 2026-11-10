@@ -21,7 +21,8 @@ import {
 import { buildWorktreePurgeSurfacePatch } from './worktree-purge-surface-patch'
 import { noticeRemovedUnsavedFiles } from './removed-workspace-unsaved-files'
 import { mergeEditorBufferKeepRequests } from '../../editor/buffers/editor-buffer-kept'
-import { buildHostTwinPurgeState, collectHostTwinPurgeScopes } from './host-twin-worktree-purge'
+import { buildHostTwinPurgeState } from './host-twin-worktree-purge'
+import { collectHostTwinPurgeScopes } from './host-twin-purge-scopes'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 
 /**

@@ -316,7 +316,11 @@ describe('a pane that starts its own agent launch', () => {
     const env = providerSpawn.mock.calls[0]?.[0]?.env ?? {}
     expect(env.ORCA_AGENT_LAUNCH_TOKEN).toMatch(/.+/)
     expect(JSON.stringify(runtime.registerPty.mock.calls)).toContain(
-      JSON.stringify({ launchToken: env.ORCA_AGENT_LAUNCH_TOKEN, launchAgent: 'claude' })
+      JSON.stringify({
+        launchToken: env.ORCA_AGENT_LAUNCH_TOKEN,
+        launchAgent: 'claude',
+        launchConfig: { agentArgs: '', agentEnv: {} }
+      })
     )
   })
 

@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/telemetry', () => ({ track: mocks.track }))
-vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
+vi.mock('@/hooks/skills/runtime/useActiveProjectSkillRuntime', () => ({
   useActiveProjectSkillRuntime: () => ({
     agentRuntime: { runtime: 'wsl', wslDistro: 'Ubuntu', label: 'WSL Ubuntu' },
     installDisabledReason: null,

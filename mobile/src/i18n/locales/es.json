@@ -1380,7 +1380,18 @@
     },
     "announce": {
       "typedInto": "Escrito en {{target}}",
-      "insertedIn": "Insertado en {{target}}"
+      "insertedIn": "Insertado en {{target}}",
+      "listeningOnPhone": "Escuchando. Transcribiendo en este teléfono.",
+      "listeningOn": "Escuchando. Transcribiendo en {{computer}}.",
+      "listeningOnComputer": "Escuchando. Transcribiendo en el ordenador.",
+      "finishing": "Terminando.",
+      "inserted": "Insertado.",
+      "cancelled": "Dictado cancelado.",
+      "movedTo": "Este teléfono dejó de transcribir. Continúa en {{computer}}.",
+      "movedToComputer": "Este teléfono dejó de transcribir. Continúa en el ordenador.",
+      "stoppedKept": "Dictado detenido. {{reason}}. Tu grabación se conserva.",
+      "stoppedKeptGeneric": "Dictado detenido. Tu grabación se conserva.",
+      "stillListening": "Sigue escuchando."
     },
     "pill": {
       "open": "Abrir",
@@ -2627,8 +2638,8 @@
       "insertFailed": "No se pudo insertar el dictado",
       "insertFailedCopied": "No se pudo insertar el dictado, así que se copió al portapapeles.",
       "inserted": "Dictado insertado",
-      "stoppedAfterSilence": "Se detuvo tras un minuto de silencio",
-      "stoppedAtCloudLimit": "Dictado detenido al llegar al límite de 10 minutos en la nube."
+      "stoppedAtCloudLimit": "Dictado detenido al llegar al límite de 10 minutos en la nube.",
+      "stoppedAfterSilenceSeconds": "Detenido tras {{seconds}} segundos de silencio"
     },
     "useNativeChatStop": {
       "stopNotSent": "No se envió la orden de detener",
