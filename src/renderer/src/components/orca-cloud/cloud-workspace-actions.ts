@@ -37,6 +37,10 @@ function failureToast(title: string, result: CloudWorkspaceResult<null>): void {
     })
     return
   }
+  if (result.userMessage) {
+    toast.error(title, { description: result.userMessage })
+    return
+  }
   toast.error(title, {
     description:
       result.code === 'unavailable'

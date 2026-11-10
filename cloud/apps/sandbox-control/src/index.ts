@@ -150,6 +150,7 @@ import {
   isOrgAdmin,
   listWorkspaces,
   patchWorkspace,
+  assertCanManageWorkspace,
   reportPresence,
   requireVisible,
   resolveLink,
@@ -1374,15 +1375,33 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
         return fail('invalid_request', 400)
       }
       const { archived, ...rest } = body.data
-      // Archive/unarchive are lifecycle changes, not labels: the sandbox really stops (snapshot kept
-      // with a TTL) or comes back asleep. Permissions are checked by patchWorkspace first.
-      let patched = await patchWorkspace(db, caller, row, archived === undefined ? body.data : { ...rest, archived }, now)
-      if (archived === true && (patched.row.status === 'running' || patched.row.status === 'suspended')) {
-        const stopped = await archiveSandbox(life, patched.row, {}, workspaceConfig(env, deps))
-        patched = { ...patched, row: (await getSandbox(env.SANDBOX_DB, stopped.id)) ?? patched.row }
-      } else if (archived === false && patched.row.status === 'archived') {
-        const restored = await restoreArchivedToSleeping(life, patched.row)
-        patched = { ...patched, row: (await getSandbox(env.SANDBOX_DB, restored.id)) ?? patched.row }
+      // Archive/unarchive are lifecycle changes, not labels. The lifecycle runs FIRST and is what
+      // sets archived_at, so a failed or refused archive never labels a running sandbox archived.
+      let archivedNow = false
+      if (archived !== undefined) {
+        assertCanManageWorkspace(caller, row)
+        if (archived && row.archived_at === null) {
+          if (row.status !== 'running' && row.status !== 'suspended') {
+            // Starting, waking or going to sleep: nothing changes; the client asks to try again.
+            return fail('conflict', 409, `sandbox_${row.status}`)
+          }
+          await archiveSandbox(life, row, {}, workspaceConfig(env, deps))
+          archivedNow = true
+        } else if (!archived && row.status === 'archived') {
+          await restoreArchivedToSleeping(life, row)
+        } else if (!archived && row.archived_at !== null) {
+          // A label-only archive from before archive stopped the sandbox: clear the label.
+          await patchWorkspace(db, caller, row, { archived: false }, now)
+        }
+      }
+      const current = (await getSandbox(env.SANDBOX_DB, row.id)) ?? row
+      let patched: Awaited<ReturnType<typeof patchWorkspace>> =
+        Object.keys(rest).length > 0
+          ? await patchWorkspace(db, caller, current, rest, now)
+          : { row: current, revoke: 'none' }
+      if (archivedNow && patched.revoke === 'none') {
+        // Archiving disconnects teammates' devices, as before.
+        patched = { ...patched, revoke: 'non_owner' }
       }
       const revoked =
         patched.revoke === 'none' ? null : await revokeForAccessChange(life, patched.row, patched.revoke, caller.userId)

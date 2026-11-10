@@ -37,13 +37,18 @@ const defaultDeps = (): HomeArchiveDeps => ({
 function asResult(
   result: Awaited<ReturnType<HomeArchiveDeps['patchArchived']>>
 ): CloudWorkspaceResult<null> {
-  return result.ok
-    ? { ok: true, value: null }
-    : {
-        ok: false,
-        code: 'failed',
-        message: describeError(result.error, result.reason, translate)
-      }
+  if (result.ok) {
+    return { ok: true, value: null }
+  }
+  const message =
+    // The control plane refuses while the sandbox is starting or mid-transition (409, nothing changed).
+    result.error === 'conflict'
+      ? translate(
+          'auto.components.cloudWorkspaces.archiveBusy',
+          'This workspace is still starting or going to sleep. Nothing was changed. Try again in a moment.'
+        )
+      : describeError(result.error, result.reason, translate)
+  return { ok: false, code: 'failed', message, userMessage: message }
 }
 
 export async function archiveFromHome(

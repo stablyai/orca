@@ -68,6 +68,13 @@ function canManage(caller: SandboxCaller, row: SandboxRow): boolean {
   return row.account_id === caller.accountId && (row.user_id === caller.userId || isOrgAdmin(caller))
 }
 
+/** Owner or a team admin; anyone else gets forbidden (or not_found when they can't see it). */
+export function assertCanManageWorkspace(caller: SandboxCaller, row: SandboxRow): void {
+  if (!canManage(caller, row)) {
+    throw new WorkspaceError(canSee(caller, row) ? 'forbidden' : 'not_found', 'owner_or_admin_only')
+  }
+}
+
 /** A row the caller may address by id; anything else is indistinguishable from a missing one. */
 export async function requireVisible(db: D1Database, caller: SandboxCaller, id: string): Promise<SandboxRow> {
   const row = await getSandbox(db, id)

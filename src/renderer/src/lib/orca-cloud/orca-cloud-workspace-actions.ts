@@ -71,14 +71,11 @@ export function archiveCloudWorkspace(
     const slept = await deps.sleep(workspaceId)
     if (slept && !slept.every((result) => result.completed)) {
       // Never archive a sandbox that is still running: it would keep using hours behind an "Archived" label.
-      return {
-        ok: false,
-        code: 'failed',
-        message: translate(
-          'auto.lib.orcaCloud.workspaceActions.archiveSleepFailed',
-          'It’s still running. Your files are safe.'
-        )
-      }
+      const message = translate(
+        'auto.lib.orcaCloud.workspaceActions.archiveSleepFailed',
+        'It’s still running. Your files are safe.'
+      )
+      return { ok: false, code: 'failed', message, userMessage: message }
     }
     return bridge.archive({
       workspaceId,

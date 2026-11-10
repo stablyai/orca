@@ -1,5 +1,6 @@
-// Confirmation for the two row actions that take something away from people: making a shared
-// workspace private (teammates' computers are disconnected) and handing ownership to someone else.
+// Confirmation for row actions that take something away from people: making a shared workspace
+// private (teammates' computers are disconnected), handing ownership to someone else, and archiving
+// a teammate's running workspace (their agents stop).
 import React, { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
@@ -18,6 +19,8 @@ import { cloudWorkspaceTitle } from './open-cloud-workspace'
 export type PendingConfirm =
   | { kind: 'private'; workspace: CloudWorkspace }
   | { kind: 'owner'; workspace: CloudWorkspace; ownerUserId: string }
+  /** Archiving a teammate's running workspace stops their agents. */
+  | { kind: 'archive'; workspace: CloudWorkspace }
 
 /** Teammates who would lose access: here now, or holding an active device grant. */
 function useConnectedTeammates(workspace: CloudWorkspace, selfId: string | null): string[] {
@@ -100,9 +103,13 @@ export function CloudWorkspaceConfirmDialog({
       ? t('auto.components.cloudWorkspaces.makePrivateTitle', 'Make {{title}} private?', {
           title: cloudWorkspaceTitle(w, t)
         })
-      : t('auto.components.cloudWorkspaces.reassignTitle', 'Make {{name}} the owner?', {
-          name: memberName(directory, pending.ownerUserId, selfId, t)
-        })
+      : pending.kind === 'archive'
+        ? t('auto.components.cloudWorkspaces.archiveConfirmTitle', 'Archive {{name}}?', {
+            name: cloudWorkspaceTitle(w, t)
+          })
+        : t('auto.components.cloudWorkspaces.reassignTitle', 'Make {{name}} the owner?', {
+            name: memberName(directory, pending.ownerUserId, selfId, t)
+          })
   const losesManagement = pending.kind === 'owner' && w.ownerUserId === selfId && !canAdmin
   return (
     <Dialog open onOpenChange={(next) => !next && onCancel()}>
@@ -111,6 +118,14 @@ export function CloudWorkspaceConfirmDialog({
           <DialogTitle>{title}</DialogTitle>
           {pending.kind === 'private' ? (
             <MakePrivateBody workspace={w} directory={directory} selfId={selfId} />
+          ) : pending.kind === 'archive' ? (
+            <DialogDescription>
+              {t(
+                'auto.components.cloudWorkspaces.archiveConfirmBody',
+                "{{owner}}'s agents in this workspace will stop. Files are kept and it can be unarchived.",
+                { owner: memberName(directory, w.ownerUserId, selfId, t) }
+              )}
+            </DialogDescription>
           ) : (
             <DialogDescription>
               {losesManagement
@@ -133,7 +148,9 @@ export function CloudWorkspaceConfirmDialog({
           <Button type="button" onClick={onConfirm} autoFocus={!losesManagement}>
             {pending.kind === 'private'
               ? t('auto.components.cloudWorkspaces.makePrivate', 'Make private')
-              : t('auto.components.cloudWorkspaces.makeOwner', 'Make owner')}
+              : pending.kind === 'archive'
+                ? t('auto.components.cloudWorkspaces.archive', 'Archive')
+                : t('auto.components.cloudWorkspaces.makeOwner', 'Make owner')}
           </Button>
         </DialogFooter>
       </DialogContent>

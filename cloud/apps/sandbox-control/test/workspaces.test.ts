@@ -101,6 +101,35 @@ describe('workspace registry', () => {
     expect(t.h.vercel.snapshotExpirations.get(name)).toBe(104 * 24 * 60 * MIN)
   })
 
+  it('refuses to archive a sandbox that is starting or mid-transition, and leaves the row unchanged', async () => {
+    const t = await team()
+    t.h.raw.prepare(`UPDATE sandboxes SET status = 'resuming' WHERE id = ?`).run(t.id)
+    const res = await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { archived: true })
+    expect(res).toMatchObject({ status: 409, body: { error: 'conflict', reason: 'sandbox_resuming' } })
+    expect(t.h.raw.prepare('SELECT status, archived_at FROM sandboxes WHERE id = ?').get(t.id)).toEqual({
+      status: 'resuming',
+      archived_at: null
+    })
+  })
+
+  it('never labels a running sandbox archived when the archive itself fails', async () => {
+    const t = await team()
+    const { ProviderError } = await import('../src/sandbox-provider')
+    t.h.vercel.stopSession = async () => {
+      throw new ProviderError(500, 'internal_error')
+    }
+    const res = await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { archived: true })
+    expect(res.status).toBeGreaterThanOrEqual(500)
+    expect((t.h.raw.prepare('SELECT archived_at FROM sandboxes WHERE id = ?').get(t.id) as { archived_at: number | null }).archived_at).toBeNull()
+  })
+
+  it('only the owner or a team admin can archive', async () => {
+    const t = await team()
+    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { visibility: 'team' })
+    expect((await t.req(t.bob, 'PATCH', `/v1/team/workspaces/${t.id}`, { archived: true })).status).toBe(403)
+    expect(t.h.vercel.boxes.get(`orca-test-${t.id}`)!.status).toBe('running')
+  })
+
   it('reports cost from metered compute at the billing rate, plus reported token spend', async () => {
     const t = await team()
     t.h.advance(90 * MIN)

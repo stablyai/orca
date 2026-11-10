@@ -234,12 +234,18 @@ export function CloudWorkspacesHome({
       copyWorkspaceLink: (w: CloudWorkspace) => void copyCloudWorkspaceLink(w.id),
       goToChat: (w: CloudWorkspace, member: CloudWorkspacePresence) => void open(w, member.chatId),
       patch: (w: CloudWorkspace, change: CloudWorkspacePatch) => void patch(w, change),
-      archive: (w: CloudWorkspace) =>
-        void archiveFromHome(w, cloudWorkspaceTitle(w, t)).finally(refresh),
+      archive: (w: CloudWorkspace) => {
+        // A teammate's running workspace: their agents stop, so ask first. Your own gets Undo only.
+        if (w.ownerUserId !== selfId && w.status === 'running') {
+          setConfirm({ kind: 'archive', workspace: w })
+          return
+        }
+        void archiveFromHome(w, cloudWorkspaceTitle(w, t)).finally(refresh)
+      },
       unarchive: (w: CloudWorkspace) =>
         void unarchiveFromHome(w, cloudWorkspaceTitle(w, t)).finally(refresh)
     }),
-    [open, patch, refresh, t]
+    [open, patch, refresh, selfId, t]
   )
 
   // Nothing (not even a skeleton) until we know this build has a control plane and you are in.
@@ -372,6 +378,12 @@ export function CloudWorkspacesHome({
           canAdmin={canAdmin}
           onCancel={() => setConfirm(null)}
           onConfirm={() => {
+            if (confirm.kind === 'archive') {
+              const w = confirm.workspace
+              setConfirm(null)
+              void archiveFromHome(w, cloudWorkspaceTitle(w, t)).finally(refresh)
+              return
+            }
             const change: CloudWorkspacePatch =
               confirm.kind === 'private'
                 ? { visibility: 'private' }
