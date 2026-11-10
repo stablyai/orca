@@ -1,6 +1,7 @@
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
 import { buildImageDataUri } from '../../../../shared/file-preview/image-data-uri'
+import { generatedImageBlocks } from '../../../../shared/native-chat/native-chat-generated-image'
 import { readString } from '../../app-server/codex-item-field-readers'
 import type { CodexThreadItem } from './codex-thread-item-identity'
 
@@ -56,9 +57,10 @@ export function codexImageItemBody(item: CodexThreadItem): AgentJournalMessageIt
       text = image ? 'Generated image' : 'Image generated: preview unavailable'
     }
   }
+  const blocks: NativeChatBlock[] = [{ type: 'text', text }, ...(image ? [image] : [])]
   return {
     kind: 'message',
     role: 'assistant',
-    blocks: [{ type: 'text', text }, ...(image ? [image] : [])]
+    blocks: item.type === 'imageView' ? blocks : generatedImageBlocks(blocks)
   }
 }

@@ -9,11 +9,9 @@ import {
   type Components,
   type Options as MarkdownOptions
 } from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import remarkBreaks from 'remark-breaks'
+import { commentMarkdownRemarkPlugins as remarkPlugins } from './comment-markdown-remark-plugins'
 import { remarkChatMath } from './chat-markdown-math'
 import { copyChatMathSelection } from './chat-markdown-math-selection'
-import remarkCjkFriendly from 'remark-cjk-friendly/parseOnly'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema, type Options as SanitizeSchema } from 'rehype-sanitize'
 import remend from 'remend'
@@ -37,8 +35,6 @@ import {
   markdownBlockContent
 } from './comment-markdown-block-pipeline'
 import { GITHUB_CALLOUT_SANITIZE_ATTRIBUTE } from '../../../../shared/github/github-callouts'
-import { remarkGitHubCallouts } from '@/lib/markdown/remark-github-callouts'
-import { remarkAutolinkLiteralProseBoundary } from '@/lib/markdown/remark-autolink-literal-prose-boundary'
 import {
   linkGitHubReferences,
   type GitHubRepoReference
@@ -63,15 +59,6 @@ const commentMarkdownFileUriUrlTransform: UrlTransform = (value, key, node) => {
   }
   return commentMarkdownUrlTransform(value, key, node)
 }
-
-// remark-breaks preserves newlines expected by existing plain-text comments; CommonMark otherwise collapses them.
-const remarkPlugins = [
-  remarkGfm,
-  remarkCjkFriendly,
-  remarkAutolinkLiteralProseBoundary,
-  remarkGitHubCallouts,
-  remarkBreaks
-]
 
 function remarkNativeChatFileLinks(
   exists: FileLinkExists

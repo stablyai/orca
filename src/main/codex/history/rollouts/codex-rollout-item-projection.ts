@@ -173,6 +173,8 @@ export function codexRolloutItem(value: unknown): CodexThreadItem | null {
   } else if (type === 'reasoning') {
     item.summary = raw.summary_text ?? raw.summary
     item.content = raw.raw_content ?? raw.content
+  } else if (type === 'imageGeneration') {
+    item.savedPath = raw.savedPath ?? raw.saved_path
   }
   return item
 }
