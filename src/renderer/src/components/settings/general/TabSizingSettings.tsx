@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { NumberField, SettingsRow } from '../form-controls/SettingsFormControls'
 import { useTranslate } from '@/i18n/use-translate'
+import { getTabSizingSearchEntryMap } from './tab-sizing-search'
 
 type TabSizingSettingsUpdate = Partial<
   Pick<GlobalSettings, 'tabSizing' | 'tabSizingMinWidth' | 'tabSizingMaxWidth'>
@@ -55,16 +56,11 @@ export function TabSizingSettings({
   }
   const minWidthLabel = t('auto.components.settings.TabSizingSettings.min_width', 'Tab Min Width')
   const maxWidthLabel = t('auto.components.settings.TabSizingSettings.max_width', 'Tab Max Width')
-  const keywords = ['tab', 'width', 'size', 'sizing', 'fit', 'shrink', 'fixed', 'compact', 'narrow']
+  const searchEntries = getTabSizingSearchEntryMap()
 
   return (
     <>
-      <SearchableSetting
-        title={t('auto.components.settings.TabSizingSettings.title', 'Tab Sizing')}
-        description={modeDescriptions[tabSizing.mode]}
-        keywords={keywords}
-        className="max-w-none"
-      >
+      <SearchableSetting {...searchEntries.mode} className="max-w-none">
         <SettingsRow
           label={t('auto.components.settings.TabSizingSettings.title', 'Tab Sizing')}
           description={modeDescriptions[tabSizing.mode]}
@@ -89,14 +85,7 @@ export function TabSizingSettings({
           }
         />
       </SearchableSetting>
-      <SearchableSetting
-        title={minWidthLabel}
-        description={t(
-          'auto.components.settings.TabSizingSettings.min_width_description',
-          'Tabs never get narrower than this; the tab bar scrolls instead.'
-        )}
-        keywords={keywords}
-      >
+      <SearchableSetting {...searchEntries.minWidth}>
         <NumberField
           label={minWidthLabel}
           description={t(
@@ -117,14 +106,7 @@ export function TabSizingSettings({
           }
         />
       </SearchableSetting>
-      <SearchableSetting
-        title={maxWidthLabel}
-        description={t(
-          'auto.components.settings.TabSizingSettings.max_width_description',
-          'Tabs never get wider than this.'
-        )}
-        keywords={keywords}
-      >
+      <SearchableSetting {...searchEntries.maxWidth}>
         <NumberField
           label={maxWidthLabel}
           description={t(
