@@ -177,7 +177,7 @@ it.each(['success', 'budget'] as const)(
       }
     })
     const { callAgentSession } = released(
-      'mobile/src/session/native-chat/agent-session/mobile-structured-agent-session-rpc.ts',
+      'mobile/src/session/mobile-structured-agent-session-rpc.ts',
       ['callAgentSession']
     )
     let cleanup: (() => void) | undefined
@@ -185,7 +185,7 @@ it.each(['success', 'budget'] as const)(
     let landed = 0
     const record = {}
     const { useMobileHostModelCatalogUpgrade } = released(
-      'mobile/src/session/native-chat/input/use-mobile-host-model-catalog-upgrade.ts',
+      'mobile/src/session/use-mobile-host-model-catalog-upgrade.ts',
       ['useMobileHostModelCatalogUpgrade'],
       {
         callAgentSession,
