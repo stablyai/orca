@@ -1,4 +1,5 @@
 import type { ManagedPaneInternal } from './pane-manager-types'
+import { hasPaneWebglAtlasVersionDesync } from './pane-webgl-atlas-version-desync'
 import { reattachWebglIfNeeded } from './pane-webgl-reattach'
 import { presentPaneViewport } from './pane-webgl-renderer'
 import { resetAndRefreshAllTerminalWebglAtlases } from './pane-manager-registry'
@@ -44,21 +45,6 @@ function scheduleSettledFrame(callback: () => void): void {
   // Repaint after reveal layout settles; WebGL drops redraws before the pane is attached/measured.
   globalThis.requestAnimationFrame(() => {
     globalThis.requestAnimationFrame(callback)
-  })
-}
-
-function forEachPaneOnSettledFrame(
-  getPanes: () => Iterable<ManagedPaneInternal>,
-  visit: (pane: ManagedPaneInternal) => void
-): void {
-  scheduleSettledFrame(() => {
-    for (const pane of getPanes()) {
-      try {
-        visit(pane)
-      } catch {
-        /* ignore — one pane's failure must not block repaint of the rest */
-      }
-    }
   })
 }
 
@@ -118,8 +104,22 @@ export function schedulePaneRevealPresent(
   ownerOrGetter: PaneRevealOwner | PaneGetter,
   panes?: ReadonlyMap<number, ManagedPaneInternal>
 ): void {
-  forEachPaneOnSettledFrame(resolvePaneGetter(ownerOrGetter, panes), (pane) => {
-    reattachWebglIfNeeded(pane)
-    presentPaneViewport(pane)
+  const getPanes = resolvePaneGetter(ownerOrGetter, panes)
+  scheduleSettledFrame(() => {
+    let needsAtlasRecovery = false
+    for (const pane of getPanes()) {
+      try {
+        reattachWebglIfNeeded(pane)
+        presentPaneViewport(pane)
+        if (!needsAtlasRecovery && hasPaneWebglAtlasVersionDesync(pane)) {
+          needsAtlasRecovery = true
+        }
+      } catch {
+        /* ignore — one pane's failure must not block repaint of the rest */
+      }
+    }
+    if (needsAtlasRecovery) {
+      resetAndRefreshAllTerminalWebglAtlases('reveal-atlas-version-desync')
+    }
   })
 }
