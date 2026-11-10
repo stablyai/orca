@@ -91,24 +91,20 @@ export class SessionSearchDiscoveryInventory implements SessionDiscoveryContext 
     return map
   }
 
-  private physicalInventory(
-    candidate: SessionFileCandidate,
-    logicalRoot: string,
-    roots: SessionSearchScanRoots
-  ) {
+  private fileOwner(candidate: SessionFileCandidate, root: string, roots: SessionSearchScanRoots) {
     const {
       agent,
       file: { path }
     } = candidate
-    const rootDir = sessionSearchPhysicalRoot(roots, { agent, rootDir: logicalRoot }, path)
+    const rootDir = sessionSearchPhysicalRoot(roots, { agent, rootDir: root }, path)
     if (rootDir === null) {
       return null
     }
-    const root = rootDir === undefined ? undefined : this.roots.get(`${agent}:${rootDir}`)
-    if (!root?.inventory.files.has(path)) {
+    const owner = rootDir === undefined ? undefined : this.roots.get(`${agent}:${rootDir}`)
+    if (!owner?.inventory.files.has(path)) {
       throw new Error('Session search read has no physical inventory owner')
     }
-    return root
+    return owner
   }
 
   hasPublicationDebt(
@@ -117,7 +113,7 @@ export class SessionSearchDiscoveryInventory implements SessionDiscoveryContext 
     roots: SessionSearchScanRoots
   ): boolean {
     return (
-      this.physicalInventory(candidate, logicalRoot, roots)?.inventory.hasPublicationDebt(
+      this.fileOwner(candidate, logicalRoot, roots)?.inventory.hasPublicationDebt(
         candidate.file.path
       ) ?? false
     )
@@ -128,7 +124,7 @@ export class SessionSearchDiscoveryInventory implements SessionDiscoveryContext 
     logicalRoot: string,
     roots: SessionSearchScanRoots
   ) {
-    const root = this.physicalInventory(candidate, logicalRoot, roots)
+    const root = this.fileOwner(candidate, logicalRoot, roots)
     if (!root) {
       return null
     }
