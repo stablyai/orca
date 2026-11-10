@@ -13,9 +13,7 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
 import {
   getRemoteDispatch,
-  getRemoteOwnedQuestion,
-  oweRemoteDispatchStop,
-  remoteStopKey
+  getRemoteOwnedQuestion
 } from '../../db/remote-owned/remote-dispatch-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { adoptRemoteAttempt } from '../../db/remote-owned/remote-placements'
@@ -26,11 +24,11 @@ import {
 } from '../../db/remote-owned/remote-run-links'
 import { callRemoteOwnedServer } from './remote-owned-calls'
 import { remoteForwardKey, type RemoteForwardKey } from './remote-forward-caller'
-import { inServerTerms, serverNeverAnswered } from './remote-owned-answers'
-import { sendOwedRemoteStop } from './remote-owed-actions'
+import { inServerTerms } from './remote-owned-answers'
 import { offlineRemoteWorkerShow, remoteServerName } from './remote-owned-reads'
 import { explainRemoteServerFailure, isRemoteServerUnreachable } from './remote-server-unreachable'
 import { serverOwnsPlacedWorkers, startRemoteOwnedWorker } from './remote-owned-start'
+import { stopRemoteWorker } from './remote-owned-stop'
 
 type Routed = { handled: false } | { handled: true; result: unknown }
 
@@ -80,7 +78,10 @@ export async function routeRemoteOwnedCall(
     request.orchestrationRequestId
   )
   if (request.method === 'orchestration.workerStop' && subject.dispatchId) {
-    return { handled: true, result: await stopRemoteWorker(runtime, subject, forward) }
+    return {
+      handled: true,
+      result: await stopRemoteWorker(runtime, subject.link, subject.dispatchId, forward)
+    }
   }
   return {
     handled: true,
@@ -232,8 +233,11 @@ async function forwardToLink(
     return inServerTerms(answer, { server, forward, link })
   } catch (error) {
     const record = dispatchId ? getRemoteDispatch(db, dispatchId) : undefined
-    if (record && method === 'orchestration.workerShow' && isRemoteServerUnreachable(error)) {
-      // The server is off: what this Orca last heard about the worker, never its output.
+    const unanswerable =
+      isRemoteServerUnreachable(error) ||
+      (error instanceof OrchestrationError && error.code === 'remote_link_closed')
+    if (record && method === 'orchestration.workerShow' && unanswerable) {
+      // The server is off, or no longer answers for this link: what this Orca last heard, never output.
       return offlineRemoteWorkerShow(runtime, record)
     }
     throw inServerTerms(explainRemoteServerFailure(error, { server, method, params, dispatchId }), {
@@ -241,44 +245,6 @@ async function forwardToLink(
       forward,
       link
     })
-  }
-}
-
-/** A stop is owed until the server proves it; the ordinary stop answers when it can, and the pull loop resends otherwise. */
-async function stopRemoteWorker(
-  runtime: OrcaRuntimeService,
-  subject: RemoteSubject,
-  forward: RemoteForwardKey | undefined
-): Promise<unknown> {
-  const db = runtime.getOrchestrationDb()
-  const dispatchId = subject.dispatchId!
-  const server = remoteServerName(runtime, subject.link.environment_id)
-  const owed = oweRemoteDispatchStop(db, dispatchId, forward?.key ?? `stop:${randomUUID()}`)
-  if (!owed) {
-    throw new OrchestrationError(
-      'dispatch_not_found',
-      `Worker Dispatch ${dispatchId} was not found.`
-    )
-  }
-  runtime.ensureOrchestrationFederationRelay(subject.link.run_id)
-  // The server knows this attempt by its stop key; the caller knows only its own request ID.
-  const stopKey = forward && { key: remoteStopKey(owed.record), requestId: forward.requestId }
-  try {
-    return inServerTerms(await sendOwedRemoteStop(runtime, owed.record), {
-      server,
-      forward: stopKey,
-      link: subject.link
-    })
-  } catch (error) {
-    if (!serverNeverAnswered(error) || !getOpenRemoteRunLink(db, subject.link.conversation_id)) {
-      throw inServerTerms(error, { server, forward: stopKey, link: subject.link })
-    }
-    return {
-      dispatchId,
-      state: 'stop_requested',
-      server,
-      next: `${server} did not answer, so the stop is owed: this Orca sends it again until ${server} confirms the worker stopped.`
-    }
   }
 }
 
