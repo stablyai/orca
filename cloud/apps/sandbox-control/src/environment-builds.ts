@@ -34,6 +34,8 @@ const SNAPSHOTTING_STUCK_MS = 3 * 60_000
 const MIN_REDACTED_SECRET = 6
 /** Event-stream keepalive; desktop watchers treat ~90 s of silence as a dead connection. */
 const HEARTBEAT_MS = 20_000
+/** How long one advance waits for a running command's exit before calling it still running. */
+const EXIT_PROBE_MS = 4_000
 /** Succeeded builds whose snapshot is kept (rollback window); older ones keep their record and log. */
 export const KEPT_BUILDS = 5
 const MAX_LOG_BYTES = 2 * 1024 * 1024
@@ -371,7 +373,14 @@ export async function advanceBuild(deps: BuildDeps, row: BuildRow, options: { wa
   }
   let exitCode: number | null
   try {
-    exitCode = (await deps.provider.getCommand(row.session_id, row.command_id, { wait: options.waitForExit })).exitCode
+    // Always a (bounded) wait: the provider reports an exit code only to waiting readers, so a plain
+    // poll would keep a finished build "running" until a log stream happened to ask (W9 stall).
+    exitCode = (
+      await deps.provider.getCommand(row.session_id, row.command_id, {
+        wait: true,
+        waitMs: options.waitForExit ? 30_000 : EXIT_PROBE_MS
+      })
+    ).exitCode
   } catch (error) {
     if (error instanceof ProviderError && (error.status === 404 || error.status === 410)) {
       return (await failBuild(deps, row, 'install', 'vm_lost')) ?? row

@@ -145,12 +145,13 @@ export function createFakeVercel(now: () => number): FakeVercel {
       buildCommands.set(id, { sessionId, env: params.env ?? {}, args: params.args ?? [], exitCode: null, logs: '' })
       return id
     },
-    async getCommand(_sessionId, commandId) {
+    async getCommand(_sessionId, commandId, options) {
       const command = buildCommands.get(commandId)
       if (!command) {
         throw new ProviderError(404, 'not_found')
       }
-      return { exitCode: command.exitCode }
+      // As Vercel (found live): a detached command's exit code is reported only to `wait=true` reads.
+      return { exitCode: options?.wait ? command.exitCode : null }
     },
     async streamCommandLogs(_sessionId, commandId) {
       const command = buildCommands.get(commandId)

@@ -64,7 +64,7 @@ export function createVercelSandboxApi(
   async function request(
     method: string,
     path: string,
-    options: { query?: Record<string, string | undefined>; body?: unknown } = {}
+    options: { query?: Record<string, string | undefined>; body?: unknown; signal?: AbortSignal } = {}
   ): Promise<Response> {
     const url = new URL(`${base}${path}`)
     url.searchParams.set('teamId', config.teamId)
@@ -80,7 +80,8 @@ export function createVercelSandboxApi(
         'content-type': 'application/json'
       },
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
-      redirect: 'manual'
+      redirect: 'manual',
+      signal: options.signal
     })
     if (!response.ok) {
       const parsed = ErrorBody.safeParse(await response.json().catch(() => null))
@@ -280,11 +281,22 @@ export function createVercelSandboxApi(
     },
 
     async getCommand(sessionId, commandId, options) {
-      const response = await request(
-        'GET',
-        `/v2/sandboxes/sessions/${encodeURIComponent(sessionId)}/cmd/${encodeURIComponent(commandId)}`,
-        { query: { wait: options?.wait ? 'true' : undefined } }
-      )
+      // Found live: a detached command's exitCode stays null on plain GETs even after it exited;
+      // only `wait=true` reports it. `waitMs` bounds that wait so a running command reads as null.
+      const signal = options?.wait && options.waitMs ? AbortSignal.timeout(options.waitMs) : undefined
+      let response: Response
+      try {
+        response = await request(
+          'GET',
+          `/v2/sandboxes/sessions/${encodeURIComponent(sessionId)}/cmd/${encodeURIComponent(commandId)}`,
+          { query: { wait: options?.wait ? 'true' : undefined }, signal }
+        )
+      } catch (error) {
+        if (signal?.aborted) {
+          return { exitCode: null }
+        }
+        throw error
+      }
       const body = await json(z.looseObject({ command: z.looseObject({ exitCode: z.number().nullable().optional() }) }), response)
       return { exitCode: body.command.exitCode ?? null }
     },
