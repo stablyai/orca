@@ -104,7 +104,8 @@ describe('orca cloud via main()', () => {
     expect(process.exitCode).toBe(1)
     const body = JSON.parse(out.join(''))
     expect(body).toMatchObject({ ok: false, error: { code: 'cloud_vm_cli_disabled' } })
-    expect(body.error.data.nextSteps[0]).toContain('vmCliEnabled')
+    expect(body.error.data).toMatchObject({ setting: 'vmCliEnabled' })
+    expect(body.error.data.nextSteps[0]).toContain('Ask a team owner or admin')
   })
 
   it('prints a readable error without --json', async () => {
@@ -125,5 +126,140 @@ describe('orca cloud via main()', () => {
   it('shows help for the cloud group', async () => {
     await main(['cloud', '--help'], home)
     expect(out.join('')).toMatch(/workspace create +Create an Orca Cloud workspace/)
+    expect(out.join('')).toMatch(
+      /workspace delete +Delete an Orca Cloud workspace and its sandbox for good/
+    )
+    expect(out.join('')).toMatch(/routine run +Run an Orca Cloud routine now/)
+    // `destroy` still works but is hidden from help.
+    expect(out.join('')).not.toContain('workspace destroy')
+  })
+
+  it('deletes with `workspace delete` and the hidden `destroy` alias', async () => {
+    fetchMock.mockImplementation(async () =>
+      Response.json({ workspace: { id: 'sbx_d1', name: 'old', status: 'destroyed' } })
+    )
+    await main(['cloud', 'workspace', 'delete', 'sbx_d1'], home)
+    expect(process.exitCode).toBeUndefined()
+    expect(out.join('\n')).toContain(
+      'Deleted old (sbx_d1). Its sandbox and files are gone for good.'
+    )
+    await main(['cloud', 'workspace', 'destroy', 'sbx_d1', '--json'], home)
+    expect(process.exitCode).toBeUndefined()
+    expect(fetchMock.mock.calls.map(([url, init]) => `${init?.method} ${url}`)).toEqual([
+      'DELETE https://cloud.test/v1/workspaces/sbx_d1',
+      'DELETE https://cloud.test/v1/workspaces/sbx_d1'
+    ])
+  })
+
+  it('rejects --size on workspace create before any request', async () => {
+    await main(['cloud', 'workspace', 'create', '--size', 'large', '--json'], home)
+    expect(process.exitCode).toBe(1)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('lists workspaces with glossary states and keeps raw statuses for --json', async () => {
+    const listed = {
+      workspaces: [
+        {
+          id: 'sbx_l1',
+          name: 'api',
+          status: 'sleeping',
+          archived: true,
+          repoUrl: 'https://github.com/acme/api.git',
+          repoBranch: 'main',
+          lastActivityAt: Date.now() - 120_000,
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ]
+    }
+    fetchMock.mockImplementation(async () => Response.json(listed))
+    await main(['cloud', 'workspace', 'list'], home)
+    const text = out.join('\n')
+    expect(text).toMatch(/^ID +NAME +STATE +REPO +BRANCH +LAST ACTIVE$/m)
+    expect(text).toMatch(/sbx_l1 +api +Archived +acme\/api +main +2m ago/)
+    expect(text).not.toContain('sleeping')
+    out = []
+    await main(['cloud', 'workspace', 'list', '--json'], home)
+    expect(JSON.parse(out.join(''))).toMatchObject({
+      result: { workspaces: [{ status: 'sleeping', archived: true }] }
+    })
+  })
+
+  it('prints glossary error copy for admin-only, rate-limited and out-of-hours errors', async () => {
+    fetchMock.mockResolvedValueOnce(
+      Response.json({ error: 'forbidden', reason: 'admin_required' }, { status: 403 })
+    )
+    await main(['cloud', 'workspace', 'list'], home)
+    expect(err.join('\n')).toContain('Only a team owner or admin can do this.')
+    err = []
+    fetchMock.mockResolvedValueOnce(
+      Response.json({ error: 'rate_limited' }, { status: 429, headers: { 'retry-after': '7' } })
+    )
+    await main(['cloud', 'workspace', 'list'], home)
+    expect(err.join('\n')).toContain('Try again in 7 seconds.')
+    err = []
+    fetchMock.mockResolvedValueOnce(
+      Response.json(
+        { error: 'entitlement_denied', reason: 'included_hours_exhausted' },
+        { status: 403 }
+      )
+    )
+    await main(['cloud', 'workspace', 'create', '--name', 'x'], home)
+    expect(err.join('\n')).toContain(
+      "Your team is out of sandbox hours. Nothing was created, and you weren't charged."
+    )
+    expect(err.join('\n')).toContain('Ask an owner or admin to add hours.')
+    expect(err.join('\n')).not.toMatch(/entitlement_denied|included_hours_exhausted|files are safe/)
+  })
+
+  it('runs a routine by name and follows it with --wait', async () => {
+    const routine = {
+      id: 'rtn_r1',
+      name: 'Triage',
+      enabled: true,
+      trigger: { kind: 'webhook' },
+      maxRuntimeMinutes: 30
+    }
+    const statuses = ['running', 'posting', 'succeeded']
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input)
+      if (url.endsWith('/v1/routines')) {
+        return Response.json({ routines: [routine] })
+      }
+      if (url.endsWith('/v1/routines/rtn_r1/run') && init?.method === 'POST') {
+        return Response.json(
+          { run: { id: 'run_1', status: 'queued', result: null, durationMs: null } },
+          { status: 202 }
+        )
+      }
+      const status = statuses.shift() ?? 'succeeded'
+      return Response.json({
+        run: {
+          id: 'run_1',
+          status,
+          durationMs: status === 'succeeded' ? 102_000 : null,
+          result: status === 'succeeded' ? { prUrl: 'https://github.com/acme/api/pull/7' } : null
+        }
+      })
+    })
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    try {
+      const done = main(['cloud', 'routine', 'run', 'Triage', '--wait'], home)
+      await vi.runAllTimersAsync()
+      await done
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(process.exitCode).toBeUndefined()
+    expect(err).toEqual([
+      '- Triage: Queued',
+      '- Triage: Running',
+      '- Triage: Posting results',
+      '- Triage: Succeeded'
+    ])
+    expect(out.join('\n')).toContain('Triage: Succeeded (run_1)')
+    expect(out.join('\n')).toContain('Took 1m 42s')
+    expect(out.join('\n')).toContain('Pull request: https://github.com/acme/api/pull/7')
   })
 })

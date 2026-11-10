@@ -32,7 +32,7 @@ export function isCloudAgent(value: string): value is CloudAgent {
 const WORKSPACE_ID = /^sbx_[A-Za-z0-9]+$/
 const PROJECT_ID = /^prj_[A-Za-z0-9]+$/
 const SESSION_HANDLE = /^term_[A-Za-z0-9-]{1,80}$/
-/** A create waits for the VM to boot; the control plane bounds that, this only stops a hang. */
+/** A create waits for the sandbox to boot; the control plane bounds that, this only stops a hang. */
 export const CREATE_TIMEOUT_MS = 6 * 60_000
 export const MUTATE_TIMEOUT_MS = 3 * 60_000
 const MESSAGE_POLL_MS = 1500
@@ -89,7 +89,7 @@ export function getAgentFlag(
 }
 
 /**
- * `sbx_…` ids pass through; `self` is the workspace this token was minted for (inside a VM);
+ * `sbx_…` ids pass through; `self` is the workspace this token was minted for (inside a sandbox);
  * anything else is matched against workspace names this token can see.
  */
 export async function resolveCloudWorkspaceId(
@@ -154,7 +154,6 @@ export type CloudWorkspaceCreateInput = {
   repo?: { url: string; ref?: string }
   /** Team environment: `env_…` (its active build) or a build `bld_…`. */
   environment?: string
-  machineSize?: 'standard' | 'large'
   region?: string
   message?: { text: string; agent?: (typeof CLOUD_AGENTS)[number] }
 }
@@ -168,7 +167,7 @@ export async function createCloudWorkspace(
   const created = await api.request<{ workspace: CloudWorkspace; message?: CloudMessage }>(
     'POST',
     '/v1/workspaces',
-    { body: input, timeoutMs: CREATE_TIMEOUT_MS }
+    { body: input, timeoutMs: CREATE_TIMEOUT_MS, intent: 'create' }
   )
   return { ...created, elapsedMs: now() - started }
 }
@@ -197,18 +196,6 @@ export function normalizeCloudRepoUrl(raw: string): string {
   url.username = ''
   url.password = ''
   return url.toString()
-}
-
-export function getSizeFlag(
-  flags: Map<string, string | boolean>
-): 'standard' | 'large' | undefined {
-  const size = getOptionalStringFlag(flags, 'size')
-  if (size === undefined || size === 'standard' || size === 'large') {
-    return size
-  }
-  throw new RuntimeClientError('invalid_argument', '--size must be standard or large', {
-    field: 'size'
-  })
 }
 
 /** Reads `--text` (required) / `--agent` / `--session` for `cloud message`. */
@@ -256,7 +243,7 @@ export async function waitForCloudMessage(
   if (current.status === 'failed') {
     throw new RuntimeClientError(
       'cloud_message_failed',
-      `Message ${current.id} could not be delivered: ${current.error ?? 'unknown error'}.`,
+      `Message ${current.id} couldn't be delivered to the agent.`,
       { message: current }
     )
   }

@@ -2,11 +2,12 @@
 // becomes a RuntimeClientError with a stable `cloud_*` code and next steps, so `--json` callers
 // (agents) and people both get an actionable message.
 import { RuntimeClientError } from '../runtime/types'
+import { cloudApiError, type CloudRequestIntent } from './cloud-api-errors'
 import { jsonFields, type CloudCredentials } from './cloud-credentials'
 
-export type CloudFetch = (input: string, init: RequestInit) => Promise<Response>
+export { cloudApiError, type CloudApiErrorBody } from './cloud-api-errors'
 
-export type CloudApiErrorBody = { error?: unknown; reason?: unknown }
+export type CloudFetch = (input: string, init: RequestInit) => Promise<Response>
 
 const DEFAULT_TIMEOUT_MS = 60_000
 
@@ -19,7 +20,13 @@ export class CloudApiClient {
   async request<T>(
     method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
     path: string,
-    options: { body?: unknown; timeoutMs?: number; query?: Record<string, string | undefined> } = {}
+    options: {
+      body?: unknown
+      timeoutMs?: number
+      query?: Record<string, string | undefined>
+      /** Picks create-time error copy ("Nothing was created") over "Your files are safe". */
+      intent?: CloudRequestIntent
+    } = {}
   ): Promise<T> {
     const url = new URL(`${this.credentials.apiUrl}${path}`)
     for (const [key, value] of Object.entries(options.query ?? {})) {
@@ -46,15 +53,17 @@ export class CloudApiClient {
       throw new RuntimeClientError(
         'cloud_unreachable',
         timedOut
-          ? `Orca Cloud did not answer ${method} ${path} within ${Math.round((options.timeoutMs ?? DEFAULT_TIMEOUT_MS) / 1000)}s.`
-          : `Could not reach Orca Cloud at ${this.credentials.apiUrl}: ${error instanceof Error ? error.message : String(error)}`,
+          ? `Orca Cloud didn't answer within ${Math.round((options.timeoutMs ?? DEFAULT_TIMEOUT_MS) / 1000)} seconds.`
+          : `Couldn't reach Orca Cloud at ${this.credentials.apiUrl}.`,
         {
           apiUrl: this.credentials.apiUrl,
+          request: `${method} ${path}`,
+          cause: error instanceof Error ? error.message : String(error),
           nextSteps: this.credentials.token.startsWith('orca_ws_')
             ? [
-                "Inside an Orca Cloud workspace the control plane must be on the VM's egress allowlist; restart the workspace after a control-plane update."
+                "Inside a cloud workspace, Orca Cloud must be on the sandbox's egress allowlist. Restart the workspace, then try again."
               ]
-            : ['Check the network and the control-plane URL, then retry.']
+            : ['Check your network and ORCA_CLOUD_API_URL, then try again.']
         }
       )
     }
@@ -70,176 +79,11 @@ export class CloudApiClient {
     if (!response.ok) {
       throw cloudApiError(response.status, jsonFields(body), {
         credentials: this.credentials,
-        retryAfter: response.headers.get('retry-after')
+        retryAfter: response.headers.get('retry-after'),
+        intent: options.intent
       })
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the client's typed boundary; each caller names the control-plane response shape it reads
     return body as T
   }
-}
-
-/** Maps a control-plane error response to the CLI's error. Exported for tests. */
-export function cloudApiError(
-  status: number,
-  body: CloudApiErrorBody,
-  context: {
-    credentials: Pick<CloudCredentials, 'source' | 'token' | 'path'>
-    retryAfter?: string | null
-  }
-): RuntimeClientError {
-  const code = typeof body.error === 'string' ? body.error : `http_${status}`
-  const reason = typeof body.reason === 'string' ? body.reason : null
-  const data = (nextSteps: string[], extra: Record<string, unknown> = {}) => ({
-    status,
-    apiError: code,
-    ...(reason ? { reason } : {}),
-    ...extra,
-    ...(nextSteps.length > 0 ? { nextSteps } : {})
-  })
-  const inVm = context.credentials.token.startsWith('orca_ws_')
-  if (status === 401) {
-    return new RuntimeClientError(
-      'cloud_unauthorized',
-      inVm
-        ? 'Orca Cloud rejected this workspace token. In-workspace CLI access may be turned off for the organization (that revokes every workspace token at once), or the token was replaced at boot or revoked on sleep.'
-        : 'Orca Cloud rejected the token: it is expired, revoked or for another control plane.',
-      data(
-        inVm
-          ? [
-              'Ask an organization owner or admin to check in-workspace CLI access in Orca Cloud settings (vmCliEnabled); once it is on, restart the workspace for a fresh token.',
-              'Or set ORCA_CLOUD_TOKEN to an API key.'
-            ]
-          : context.credentials.source === 'env'
-            ? ['Set ORCA_CLOUD_TOKEN to a valid API key or session token.']
-            : ['Run `orca cloud login --token <token>` with a fresh API key or session token.']
-      )
-    )
-  }
-  if (status === 403 && reason === 'vm_cli_disabled') {
-    return new RuntimeClientError(
-      'cloud_vm_cli_disabled',
-      'In-workspace CLI access is turned off for this Orca Cloud organization, so this workspace cannot call Orca Cloud.',
-      data([
-        'Ask an organization owner or admin to turn on in-workspace CLI access in Orca Cloud settings (PUT /v1/settings {"vmCliEnabled": true}).'
-      ])
-    )
-  }
-  if (status === 403 && reason === 'own_workspace') {
-    return new RuntimeClientError(
-      'cloud_forbidden',
-      'A workspace cannot sleep, archive or destroy itself; pick another workspace.',
-      data([])
-    )
-  }
-  if (
-    code === 'entitlement_denied' &&
-    (reason === 'concurrency_limit' || reason === 'member_concurrency_limit')
-  ) {
-    return new RuntimeClientError(
-      'cloud_at_capacity',
-      reason === 'member_concurrency_limit'
-        ? "You're at your limit of running sandboxes. Nothing was created."
-        : "You're at your team's limit of running sandboxes. Nothing was created.",
-      data([
-        'Put one to sleep or delete it, then try again: `orca cloud workspace list`, then `orca cloud workspace sleep <id>`.'
-      ])
-    )
-  }
-  if (code === 'entitlement_denied' || code === 'billing_required' || status === 402) {
-    const outOfHours = reason === 'included_hours_exhausted' || reason === 'overage_cap_reached'
-    const payment = reason === 'payment_past_due' || reason === 'payment_grace_expired'
-    if (payment) {
-      return new RuntimeClientError(
-        'cloud_payment_failed',
-        "Payment failed, so new sandboxes can't start. Nothing was created.",
-        data(['Ask an owner or admin to update the payment method.'])
-      )
-    }
-    if (reason === 'machine_size_not_in_plan') {
-      return new RuntimeClientError(
-        'cloud_plan_required',
-        "That sandbox size isn't in your team's plan. Nothing was created.",
-        data(['Use --size standard.'])
-      )
-    }
-    return new RuntimeClientError(
-      outOfHours ? 'cloud_out_of_hours' : 'cloud_plan_required',
-      outOfHours
-        ? 'Your team is out of sandbox hours (or at its monthly spend cap). Nothing was created, and your files are safe.'
-        : 'Orca Cloud needs a Team plan. Nothing was created, and you weren’t charged.',
-      data([
-        outOfHours
-          ? 'Ask an owner or admin to turn on overage or raise the spend cap.'
-          : 'Ask an owner or admin to start a Team plan in Orca → Settings → Plan & billing.'
-      ])
-    )
-  }
-  if (status === 403 && code === 'insufficient_scope') {
-    return new RuntimeClientError(
-      'cloud_forbidden',
-      `This token lacks the ${reason ?? 'required'} scope.`,
-      data(['Create an API key with that scope in Orca Cloud settings and log in with it.'])
-    )
-  }
-  if (status === 403) {
-    const why: Record<string, string> = {
-      session_required: 'This needs a signed-in Orca session, not an API key or workspace token.',
-      admin_required: 'Only an organization owner or admin can do this.'
-    }
-    return new RuntimeClientError(
-      'cloud_forbidden',
-      (reason && why[reason]) || `Orca Cloud refused the request (${reason ?? code}).`,
-      data([])
-    )
-  }
-  if (status === 404) {
-    return new RuntimeClientError(
-      'cloud_not_found',
-      inVm
-        ? 'Not found. A workspace token sees only its own workspace and the workspaces it created.'
-        : 'Not found in this Orca Cloud account.',
-      data(['Run `orca cloud workspace list` to see the workspaces this token can use.'])
-    )
-  }
-  if (status === 429) {
-    const seconds = Number(context.retryAfter)
-    return new RuntimeClientError(
-      'cloud_rate_limited',
-      reason === 'workspace_creates'
-        ? 'Too many workspace creates for this account right now.'
-        : 'Too many requests to Orca Cloud right now.',
-      data([`Retry in ${Number.isFinite(seconds) && seconds > 0 ? seconds : 60}s.`], {
-        retryAfterSeconds: Number.isFinite(seconds) ? seconds : null
-      })
-    )
-  }
-  if (status === 400) {
-    return new RuntimeClientError(
-      'invalid_argument',
-      `Orca Cloud rejected the request: ${reason ?? code}.`,
-      data([])
-    )
-  }
-  if (status === 409) {
-    return new RuntimeClientError('cloud_conflict', `Conflict: ${reason ?? code}.`, data([]))
-  }
-  if (status === 402 || code === 'entitlement_denied' || code === 'billing_required') {
-    return new RuntimeClientError(
-      'cloud_billing',
-      `Orca Cloud billing refused this (${reason ?? code}).`,
-      data(['Check the plan and usage limits in Orca Cloud billing settings.'])
-    )
-  }
-  if (status === 503 && code === 'not_configured') {
-    return new RuntimeClientError(
-      'cloud_unavailable',
-      'This Orca Cloud control plane cannot run workspaces right now (not configured).',
-      data([])
-    )
-  }
-  return new RuntimeClientError(
-    status >= 500 ? 'cloud_unavailable' : 'cloud_api_error',
-    `Orca Cloud returned ${status} ${code}${reason ? ` (${reason})` : ''}.`,
-    data(status >= 500 ? ['Retry shortly; the workspace provider may be busy.'] : [])
-  )
 }

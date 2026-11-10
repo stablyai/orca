@@ -1,5 +1,7 @@
 // Private build only: text output for `orca cloud …`. JSON output is the API view wrapped as
-// { ok, schemaVersion, result } (see printCloudResult).
+// { ok, schemaVersion, result } (see printCloudResult). Human output follows the product glossary:
+// states and problems in words; raw API statuses and codes appear only under --json.
+import { ORCA_CLOUD_SANDBOX_SPEC } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
 
 export const CLOUD_CLI_SCHEMA_VERSION = 1
 
@@ -14,6 +16,9 @@ export type CloudWorkspace = {
   machineSize: string
   region: string | null
   repoUrl: string | null
+  /** Older control planes omit these two. */
+  repoBranch?: string | null
+  lastActivityAt?: number | null
   session: { startedAt: number; leaseExpiresAt: number; deadlineAt: number | null } | null
   lastError: string | null
   createdAt: number
@@ -69,7 +74,7 @@ export function printCloudResult<T>(result: T, json: boolean, format: (value: T)
   console.log(format(result))
 }
 
-function ago(at: number | null | undefined, now: number): string {
+export function ago(at: number | null | undefined, now: number): string {
   if (!at) {
     return '-'
   }
@@ -86,7 +91,19 @@ function ago(at: number | null | undefined, now: number): string {
   return `${Math.round(seconds / 86_400)}d ago`
 }
 
-function table(header: string[], rows: string[][]): string {
+/** "42s", "1m 42s", "1h 5m" (the desktop's formatElapsedTime style). */
+export function formatElapsed(ms: number): string {
+  const seconds = Math.max(0, Math.round(ms / 1000))
+  if (seconds < 60) {
+    return `${seconds}s`
+  }
+  if (seconds < 3600) {
+    return `${Math.floor(seconds / 60)}m ${seconds % 60}s`
+  }
+  return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`
+}
+
+export function table(header: string[], rows: string[][]): string {
   const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => (r[i] ?? '').length)))
   const line = (cells: string[]) =>
     cells
@@ -96,23 +113,81 @@ function table(header: string[], rows: string[][]): string {
   return [line(header), ...rows.map(line)].join('\n')
 }
 
+/** "Sandbox size: 8 vCPU · 16 GB". There is one size; it always comes from ORCA_CLOUD_SANDBOX_SPEC. */
+export const CLOUD_SANDBOX_SIZE_LINE = `Sandbox size: ${ORCA_CLOUD_SANDBOX_SPEC.vcpus} vCPU · ${ORCA_CLOUD_SANDBOX_SPEC.memoryGb} GB`
+
+/** The API's workspace status in glossary words (Starting, Running, Asleep, Waking, …). */
+export function cloudWorkspaceStateLabel(w: Pick<CloudWorkspace, 'status' | 'archived'>): string {
+  switch (w.status) {
+    case 'starting':
+      return 'Starting'
+    case 'running':
+      return 'Running'
+    case 'sleeping':
+      return w.archived ? 'Archived' : 'Asleep'
+    case 'waking':
+      return 'Waking'
+    case 'destroying':
+      return 'Deleting'
+    case 'destroyed':
+      return 'Deleted'
+    case 'failed':
+      return "Couldn't start"
+    default:
+      return w.archived ? 'Archived' : 'Unknown'
+  }
+}
+
+/** `https://github.com/acme/app(.git)` → `acme/app`; other hosts keep the full URL. */
+function shortRepo(url: string | null): string {
+  if (!url) {
+    return '-'
+  }
+  const github = /^https:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?\/?$/.exec(url)
+  return github ? github[1] : url
+}
+
+function lastActive(w: CloudWorkspace): number {
+  return w.lastActivityAt ?? w.updatedAt
+}
+
 export function formatCloudWorkspaceList(
   value: { workspaces: CloudWorkspace[] },
   now = Date.now()
 ): string {
   if (value.workspaces.length === 0) {
-    return 'No workspaces.'
+    return 'No cloud workspaces yet. Create one with: orca cloud workspace create'
   }
   return table(
-    ['ID', 'NAME', 'STATUS', 'ORIGIN', 'CREATED'],
+    ['ID', 'NAME', 'STATE', 'REPO', 'BRANCH', 'LAST ACTIVE'],
     value.workspaces.map((w) => [
       w.id,
       w.name,
-      w.archived ? `${w.status} (archived)` : w.status,
-      w.origin,
-      ago(w.createdAt, now)
+      cloudWorkspaceStateLabel(w),
+      shortRepo(w.repoUrl),
+      w.repoBranch || '-',
+      ago(lastActive(w), now)
     ])
   )
+}
+
+const ORIGIN_LABELS: Record<string, string> = {
+  desktop: 'the Orca app',
+  api: 'the Orca Cloud API',
+  mcp: 'an MCP client',
+  routine: 'a routine',
+  vm: 'another cloud workspace'
+}
+
+/** One plain sentence for the workspace's last problem, or null when there is nothing to say. */
+function workspaceProblem(w: CloudWorkspace): string | null {
+  if (w.status === 'failed') {
+    return `This workspace couldn't start. Delete it and create a new one: orca cloud workspace delete ${w.id}`
+  }
+  if (w.status === 'sleeping' && w.lastError === 'resume_failed') {
+    return `The last wake didn't finish. Your files are safe. Run: orca cloud workspace wake ${w.id}`
+  }
+  return null
 }
 
 export function formatCloudWorkspace(
@@ -120,24 +195,26 @@ export function formatCloudWorkspace(
   now = Date.now()
 ): string {
   const w = value.workspace
+  const problem = workspaceProblem(w)
+  const origin = ORIGIN_LABELS[w.origin]
   const lines = [
     `${w.name} (${w.id})`,
-    `status: ${w.status}${w.archived ? ' (archived)' : ''}`,
-    `origin: ${w.origin}`,
-    `size: ${w.machineSize}${w.region ? ` in ${w.region}` : ''}`,
-    ...(w.repoUrl ? [`repo: ${w.repoUrl}`] : []),
-    ...(w.projectId ? [`project: ${w.projectId}`] : []),
-    ...(w.session
-      ? [`session lease expires: ${new Date(w.session.leaseExpiresAt).toISOString()}`]
-      : []),
-    ...(w.lastError ? [`last error: ${w.lastError}`] : []),
-    `created: ${ago(w.createdAt, now)}`
+    `State: ${cloudWorkspaceStateLabel(w)}`,
+    ...(problem ? [problem] : []),
+    CLOUD_SANDBOX_SIZE_LINE,
+    ...(w.repoUrl ? [`Repo: ${w.repoUrl}${w.repoBranch ? ` (${w.repoBranch})` : ''}`] : []),
+    ...(w.projectId ? [`Project: ${w.projectId}`] : []),
+    ...(origin ? [`Created from: ${origin}`] : []),
+    `Last active: ${ago(lastActive(w), now)}`,
+    `Created: ${ago(w.createdAt, now)}`
   ]
   if (value.message) {
-    lines.push(`message: ${value.message.id} (${value.message.status}, ${value.message.agent})`)
+    lines.push(
+      `First message: ${value.message.status} for ${value.message.agent} (${value.message.id})`
+    )
   }
   if (value.elapsedMs !== undefined) {
-    lines.push(`took ${(value.elapsedMs / 1000).toFixed(1)}s`)
+    lines.push(`Took ${formatElapsed(value.elapsedMs)}`)
   }
   return lines.join('\n')
 }
@@ -172,7 +249,7 @@ export function formatCloudSessions(
   if (value.sessions.length === 0) {
     return value.workspaceStatus === 'running'
       ? 'No agent sessions.'
-      : `No agent sessions (workspace is ${value.workspaceStatus}; wake it to see live sessions).`
+      : `No agent sessions. The workspace is ${cloudWorkspaceStateLabel({ status: value.workspaceStatus, archived: false }).toLowerCase()}; wake it to see live sessions.`
   }
   return value.sessions
     .map((s) =>
@@ -189,12 +266,11 @@ export function formatCloudProjects(value: { projects: CloudProject[] }): string
     return 'No projects.'
   }
   return table(
-    ['ID', 'NAME', 'REPO', 'SIZE'],
+    ['ID', 'NAME', 'REPO'],
     value.projects.map((p) => [
       p.id,
       p.name,
-      p.repo ? `${p.repo.url}${p.repo.ref ? `#${p.repo.ref}` : ''}` : '-',
-      p.environment.machineSize
+      p.repo ? `${p.repo.url}${p.repo.ref ? `#${p.repo.ref}` : ''}` : '-'
     ])
   )
 }
@@ -209,7 +285,7 @@ export function formatCloudWhoami(value: {
   return [
     `account: ${me.accountId}`,
     `user: ${me.userId}`,
-    ...(me.orgId ? [`org: ${me.orgId} (${me.role})`] : [`role: ${me.role}`]),
+    ...(me.orgId ? [`team: ${me.orgId} (${me.role})`] : [`role: ${me.role}`]),
     `via: ${me.via} (${value.tokenKind} from ${value.credentialSource})`,
     ...(me.workspaceId ? [`workspace: ${me.workspaceId}`] : []),
     `scopes: ${me.scopes.join(', ') || '-'}`,
