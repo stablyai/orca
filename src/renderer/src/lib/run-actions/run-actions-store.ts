@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import { sameRunTab } from './run-action-tabs'
 
 /** `stopping` waits for the process to leave after an interrupt; `stopped` was the user's doing. */
 export type RunActionStatus = 'running' | 'stopping' | 'stopped' | 'exited' | 'failed'
@@ -18,6 +19,8 @@ export type RunActionRun = {
 type RunsByWorktree = Record<string, Record<string, RunActionRun>>
 
 const STORAGE_KEY = 'orca.runActions.v1'
+// Declared before `runs`: reading persisted runs at module load needs it (no temporal dead zone).
+const STATUSES: readonly RunActionStatus[] = ['running', 'stopping', 'stopped', 'exited', 'failed']
 
 let runs: RunsByWorktree = readPersisted()
 const listeners = new Set<() => void>()
@@ -31,8 +34,6 @@ function readPersisted(): RunsByWorktree {
     return {}
   }
 }
-
-const STATUSES: readonly RunActionStatus[] = ['running', 'stopping', 'stopped', 'exited', 'failed']
 
 function readRun(value: unknown): RunActionRun | null {
   if (typeof value !== 'object' || value === null) {
@@ -112,7 +113,7 @@ export function listRunActionRuns(): RunActionRun[] {
 }
 
 export function findRunActionRunByTab(tabId: string): RunActionRun | null {
-  return listRunActionRuns().find((run) => run.tabId === tabId) ?? null
+  return listRunActionRuns().find((run) => sameRunTab(run.tabId, tabId)) ?? null
 }
 
 export function setRunActionRun(run: RunActionRun): void {

@@ -12,6 +12,7 @@ import { InlineError } from '@/components/ui/inline-error'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useTranslate } from '@/i18n/use-translate'
+import { SignInAgainNotice } from '@/components/orca-cloud/SignInAgainButton'
 import { describeInlineError } from './cloud-workspace-errors'
 
 /** The list failed to load. An expired session offers Sign in; anything else offers Retry. */
@@ -29,18 +30,16 @@ export function ErrorState({
   onSignIn: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const signIn = error === 'unauthorized'
+  if (error === 'unauthorized') {
+    return <SignInAgainNotice className="m-1" onSignIn={onSignIn} />
+  }
   return (
     <InlineError
       className="m-1"
       title={describeInlineError(error, reason, t)}
-      retryLabel={
-        signIn
-          ? t('auto.components.cloudWorkspaces.signIn', 'Sign in')
-          : t('auto.components.cloudWorkspaces.retry', 'Retry')
-      }
+      retryLabel={t('auto.components.cloudWorkspaces.retry', 'Retry')}
       retrying={retrying}
-      onRetry={signIn ? onSignIn : onRetry}
+      onRetry={onRetry}
     />
   )
 }

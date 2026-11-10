@@ -93,6 +93,15 @@ import { reconcile } from './reconcile'
 import { egressSecretHosts, placeholderValues, secretPlaceholder } from './secret-egress'
 import { SecretError, handleSecretsRoute, keyringFor, type SecretChange } from './secrets'
 import { refreshAfterSecretChange, refreshSandboxEnv } from './env-refresh'
+import {
+  AgentSourceError,
+  PutOfferSchema,
+  PutSourceSchema,
+  agentSourcesView,
+  putAgentSource,
+  putOfferAnswer,
+  runningSandboxesForDefault
+} from './agent-sources'
 import { EgressHostsSchema, egressUserHosts, normalizeUserHosts, setEgressUserHosts } from './egress-hosts'
 import { cachedProviderEnv } from './session-env'
 import { credentialTargets, type CredentialTarget } from './provider-env'
@@ -1073,6 +1082,16 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       }
       return response
     }
+    if (url.pathname === '/v1/agent-sources' || url.pathname === '/v1/agent-sources/offer') {
+      const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
+      if (!caller) {
+        return fail('unauthorized', 401)
+      }
+      if (caller.deviceSessionId) {
+        return fail('forbidden', 403, 'device_session')
+      }
+      return await agentSourcesRoute(request, url, env, deps, caller)
+    }
     if (isEnvironmentRoute(url.pathname)) {
       const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
       if (!caller) {
@@ -1691,5 +1710,56 @@ export class EnvironmentBuildRunner implements DurableObject {
       return
     }
     await this.state.storage.setAlarm(Date.now() + next)
+  }
+}
+
+async function agentSourcesRoute(request: Request, url: URL, env: Env, deps: Deps, caller: SandboxCaller): Promise<Response> {
+  const db = env.SANDBOX_DB
+  const now = (deps.now ?? Date.now)()
+  // Labels for the owner block on teammates' views; a failure here must never fail the request.
+  await rememberCallerName(db, caller, now).catch(() => undefined)
+  const noStore = (body: unknown) => Response.json(body, { headers: { 'cache-control': 'no-store' } })
+  try {
+    if (request.method === 'GET' && url.pathname === '/v1/agent-sources') {
+      return noStore(await agentSourcesView(db, caller, url.searchParams.get('workspaceId')))
+    }
+    if (request.method === 'PUT' && url.pathname === '/v1/agent-sources/offer') {
+      const body = PutOfferSchema.safeParse(await readJson(request))
+      if (!body.success) {
+        return fail('invalid_request', 400)
+      }
+      await putOfferAnswer(db, caller, body.data, now)
+      return noStore(await agentSourcesView(db, caller, null))
+    }
+    if (request.method === 'PUT' && url.pathname === '/v1/agent-sources') {
+      const body = PutSourceSchema.safeParse(await readJson(request))
+      if (!body.success) {
+        return fail('invalid_request', 400)
+      }
+      const row = await putAgentSource(db, caller, body.data, now)
+      // A running sandbox picks the change up in new shells within seconds (same path as a secret edit).
+      const targets = row ? (row.status === 'running' ? [row] : []) : await runningSandboxesForDefault(db, caller.userId, body.data.agent)
+      if (targets.length > 0) {
+        const work = lifecycleDeps(env, deps).then(async (life) => {
+          if (life) {
+            for (const target of targets) {
+              await refreshSandboxEnv(life, target).catch(() => false)
+            }
+          }
+        })
+        if (deps.waitUntil) {
+          deps.waitUntil(work.catch(() => undefined))
+        } else {
+          await work
+        }
+      }
+      return noStore(await agentSourcesView(db, caller, body.data.workspaceId ?? null))
+    }
+    return fail('not_found', 404)
+  } catch (error) {
+    if (error instanceof AgentSourceError) {
+      return fail(error.code, error.status, error.reason)
+    }
+    throw error
   }
 }

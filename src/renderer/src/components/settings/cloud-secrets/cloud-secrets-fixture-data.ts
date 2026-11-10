@@ -151,6 +151,15 @@ export function fixtureCloudSecretsApi(options: {
             },
             secrets: options.effective ?? FIXTURE_EFFECTIVE_SECRETS
           }),
-    refreshEnv: () => ok(true)
+    refreshEnv: () => ok(true),
+    saveDesktopKey: ({ envName }) =>
+      ok({
+        scope: 'personal' as const,
+        name: envName,
+        kind: 'agent_key' as const,
+        hint: 'x4Qa',
+        updatedAt: 0,
+        updatedBy: caller.userId
+      })
   }
 }

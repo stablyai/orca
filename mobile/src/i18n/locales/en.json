@@ -5196,10 +5196,10 @@
       }
     },
     "usage": {
-      "asleep_one": "{{hours}} sandbox hour so far · no sandbox hours while asleep",
-      "asleep_other": "{{hours}} sandbox hours so far · no sandbox hours while asleep",
-      "running_one": "{{hours}} sandbox hour so far · uses sandbox hours while running",
-      "running_other": "{{hours}} sandbox hours so far · uses sandbox hours while running"
+      "asleep_one": "{{hours}} sandbox hour so far. Uses no sandbox hours while asleep.",
+      "asleep_other": "{{hours}} sandbox hours so far. Uses no sandbox hours while asleep.",
+      "running_one": "{{hours}} sandbox hour so far. Uses sandbox hours while running.",
+      "running_other": "{{hours}} sandbox hours so far. Uses sandbox hours while running."
     }
   }
 }

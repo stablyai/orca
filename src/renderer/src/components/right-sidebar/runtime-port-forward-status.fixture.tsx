@@ -90,7 +90,6 @@ function Panel({ empty = false }: { empty?: boolean }): React.JSX.Element {
             />
           ),
           menuItems: () => null,
-          actions: () => null,
           copyAddress: (row) => {
             const state = states[row.port]
             return state?.kind === 'forwarded' ? `localhost:${state.forward.localPort}` : undefined

@@ -35,10 +35,13 @@ function TeamPageBody({ arrival }: { arrival: ReturnType<typeof useTeamPageState
   const [switchingOrgId, setSwitchingOrgId] = useState<string | null>(null)
   const [now] = useState(() => Date.now())
 
+  const refreshRoster = roster.refresh
+  const refreshBilling = billing.refresh
+  // Both refreshes are stable callbacks; depending on the hook results would rebuild this each render.
   const quietRefresh = useCallback(() => {
-    roster.refresh()
-    billing.refresh()
-  }, [roster, billing])
+    refreshRoster()
+    refreshBilling()
+  }, [refreshRoster, refreshBilling])
   const actions = useTeamActions({ orgId: orgId ?? '', onChanged: quietRefresh })
 
   const rosterResult =

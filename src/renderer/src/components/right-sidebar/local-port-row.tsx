@@ -1,5 +1,14 @@
 import React, { useCallback, useRef } from 'react'
-import { Box, Copy, Ellipsis, ExternalLink, Info, Server, Trash2 } from 'lucide-react'
+import {
+  Box,
+  ClipboardList,
+  Copy,
+  Ellipsis,
+  ExternalLink,
+  Info,
+  Server,
+  Trash2
+} from 'lucide-react'
 import { getPortOpenBrowserTooltipLabel } from '@/lib/workspace-ports/workspace-port-actions'
 import { addressForPort } from '@/lib/workspace-ports/workspace-port-urls'
 import { Button } from '@/components/ui/button'
@@ -28,7 +37,6 @@ export function LocalPortRow({
   onOpenInBrowser,
   forwardStatus,
   forwardMenuItems,
-  forwardActions,
   shareAction,
   copyAddress
 }: {
@@ -40,8 +48,6 @@ export function LocalPortRow({
   /** A remote host's port: where it is forwarded on this computer, or how to forward it. */
   forwardStatus?: React.ReactNode
   forwardMenuItems?: React.ReactNode
-  /** Hover actions for the forward (Stop Forwarding), next to Open/Copy. */
-  forwardActions?: React.ReactNode
   /** Orca Cloud: a "Share…" hover button after Open (the same action as the menu's Share…). */
   shareAction?: React.ReactNode
   /** Overrides the copied address, e.g. with the forwarded localhost one. */
@@ -60,16 +66,6 @@ export function LocalPortRow({
     [onOpenInBrowser, port]
   )
 
-  const handleCopyButtonClick = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
-      handleCopy()
-      if (event.detail > 0) {
-        event.currentTarget.blur()
-      }
-    },
-    [handleCopy]
-  )
-
   const handleOpenBrowserButtonClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       // Keyboard clicks have detail=0; only pointer clicks carry the system-browser modifier intent.
@@ -79,16 +75,6 @@ export function LocalPortRow({
       }
     },
     [handleOpenBrowser]
-  )
-
-  const handleStopButtonClick = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
-      onStop(port)
-      if (event.detail > 0) {
-        event.currentTarget.blur()
-      }
-    },
-    [onStop, port]
   )
 
   // The row menu is a context menu; this opens it under the button so keyboard and trackpad users reach Share… and the rest.
@@ -173,7 +159,6 @@ export function LocalPortRow({
         </ContextMenuTrigger>
         <TooltipProvider>
           <div className="flex items-center gap-0.5 can-hover:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-            {forwardActions}
             {onOpenInBrowser && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -194,48 +179,6 @@ export function LocalPortRow({
               </Tooltip>
             )}
             {shareAction}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  className="text-muted-foreground hover:text-foreground"
-                  onClick={handleCopyButtonClick}
-                  aria-label={t(
-                    'auto.components.right.sidebar.PortsPanel.fe2730d050',
-                    'Copy {{value0}}',
-                    { value0: address }
-                  )}
-                >
-                  <Copy size={13} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {t('auto.components.right.sidebar.PortsPanel.1004af16ab', 'Copy {{value0}}', {
-                  value0: address
-                })}
-              </TooltipContent>
-            </Tooltip>
-            {canStopProcess && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    className="text-muted-foreground hover:text-destructive"
-                    onClick={handleStopButtonClick}
-                    aria-label={stopProcessLabel}
-                  >
-                    <Trash2 size={13} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top" sideOffset={4}>
-                  {stopProcessLabel}
-                </TooltipContent>
-              </Tooltip>
-            )}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -281,7 +224,7 @@ export function LocalPortRow({
             void window.api.ui.writeClipboardText(JSON.stringify(port, null, 2))
           }}
         >
-          <Copy size={13} />
+          <ClipboardList size={13} />
           {t('auto.components.right.sidebar.PortsPanel.copyDetails', 'Copy details')}
         </ContextMenuItem>
         <ContextMenuItem

@@ -1,4 +1,8 @@
+import { mkdtempSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { SignJWT, exportJWK, generateKeyPair } from 'jose'
 import { describe, expect, it, vi } from 'vitest'
 import { generateGrantRecipientKey, nodeSealedGrantPrimitives } from '../../../../src/main/cloud-workspaces/sealed-grant-node'
@@ -13,25 +17,20 @@ const vm = require('../image/vm/orca-read-snapshot.cjs') as {
   seal: (payload: unknown, recipients: unknown[], workspaceId: string, snapshotId: string) => Record<string, unknown>
   gather: (call: (method: string, params: unknown) => Promise<unknown>, opts: Record<string, unknown>) => Promise<Record<string, unknown>>
   fitToBudget: <T>(payload: T, maxBytes?: number) => T
+  storedSessions: (dataDir: string) => Record<string, unknown>[]
 }
 
 const SECRET_LINE = 'the deploy key is in 1password, not in the repo'
 
-function fakeOrcad(method: string): unknown {
+function fakeOrcad(method: string, params?: unknown): unknown {
   switch (method) {
-    case 'agentSession.subscribeStatus':
-      return {
-        type: 'snapshot',
-        sessions: [
-          { sessionId: 'chat-1', agent: 'claude', status: 'idle', conversationName: 'Fix login', turnOutcome: 'completed', updatedAt: 2 },
-          { sessionId: 'chat-2', agent: 'codex', status: 'working', conversationName: 'Add tests', updatedAt: 1 }
-        ]
-      }
     case 'worktree.ps':
       return {
         worktrees: [
           {
             path: '/vercel/sandbox/project',
+            // Live right now: its status wins over the stored one.
+            agents: [{ paneKey: 'structured-agent-session-chat-2:leaf-1', agentType: 'codex', state: 'working', conversationName: 'Add tests', updatedAt: 1 }],
             linkedPR: { number: 42, title: 'Fix login', state: 'open', url: 'https://github.com/acme/app/pull/42', checksStatus: 'success', checksSummary: '3/3 passed' }
           }
         ]
@@ -41,6 +40,10 @@ function fakeOrcad(method: string): unknown {
     case 'git.history':
       return { items: [{ id: 'abc1234', subject: 'Fix the login redirect', author: 'Alice', timestamp: 1 }] }
     case 'agentSession.history':
+      // chat-2 has no readable history yet: its stored last turn stands in.
+      if ((params as { sessionId?: string })?.sessionId === 'chat-2') {
+        return null
+      }
       return {
         page: {
           hasOlder: false,
@@ -60,12 +63,17 @@ function fakeOrcad(method: string): unknown {
 async function runVmSealer(params: RunCommandParams): Promise<string> {
   const env = params.env ?? {}
   const payload = vm.fitToBudget(
-    await vm.gather(async (method) => fakeOrcad(method), {
+    await vm.gather(async (method, params) => fakeOrcad(method, params), {
       workspaceId: env.ORCA_READ_WORKSPACE_ID,
       snapshotId: env.ORCA_READ_SNAPSHOT_ID,
       reason: env.ORCA_READ_REASON,
       now: 1_800_000_000_000,
-      deadline: Date.now() + 10_000
+      deadline: Date.now() + 10_000,
+      // What orcad's session store holds (agent-session-journal.db on the VM).
+      listSessions: () => [
+        { sessionId: 'chat-1', agent: 'claude', title: 'Fix login', status: 'idle', turnOutcome: 'success', updatedAt: 2, open: true },
+        { sessionId: 'chat-2', agent: 'codex', title: 'Add tests', status: 'idle', updatedAt: 1, open: true, lastPrompt: 'Add tests', lastReply: null, lastAt: 1 }
+      ]
     })
   )
   const out = vm.seal(payload, JSON.parse(env.ORCA_READ_RECIPIENTS ?? '[]'), env.ORCA_READ_WORKSPACE_ID!, env.ORCA_READ_SNAPSHOT_ID!)
@@ -296,5 +304,20 @@ describe('read snapshots of sleeping workspaces (E2EE)', () => {
     // A malformed recipient is skipped, not fatal.
     const out = vm.seal({ v: 1 }, [{ keyId: 'rk_bad', publicKeyB64: 'x' }, { keyId: 'rk_000000000000000000000000', publicKeyB64: generateGrantRecipientKey().publicKeyB64 }], 'sbx_0', 'rsn_0') as { recipients: unknown[] }
     expect(out.recipients).toHaveLength(1)
+  })
+
+  it('lists chats from orcad’s session store (read-only), open tabs and last turns included', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orcad-'))
+    const db = new DatabaseSync(join(dir, 'agent-session-journal.db'))
+    db.exec('CREATE TABLE agent_session_records (session_id TEXT PRIMARY KEY, record_json TEXT NOT NULL); CREATE TABLE agent_session_tabs (tab_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, position INTEGER NOT NULL)')
+    const record = { provider: 'claude', conversationName: 'Gap5 live check', updatedAt: 5, lastTurn: { state: 'settled', outcome: 'success', prompt: 'What is this repo?', reply: 'Hello World!', at: 4 } }
+    db.prepare('INSERT INTO agent_session_records VALUES (?, ?)').run('claude_1', JSON.stringify(record))
+    db.prepare('INSERT INTO agent_session_records VALUES (?, ?)').run('broken', '{not json')
+    db.prepare('INSERT INTO agent_session_tabs VALUES (?, ?, 0)').run('structured-agent-session-claude_1', 'claude_1')
+    db.close()
+    expect(vm.storedSessions(dir)).toEqual([
+      expect.objectContaining({ sessionId: 'claude_1', agent: 'claude', title: 'Gap5 live check', status: 'idle', turnOutcome: 'success', open: true, lastPrompt: 'What is this repo?', lastReply: 'Hello World!' })
+    ])
+    expect(vm.storedSessions(join(dir, 'missing'))).toEqual([])
   })
 })

@@ -12978,9 +12978,9 @@
         },
         "orcaAccount": {
           "connected": "Connected",
-          "reconnectRequired": "Your session expired. Sign in again to use cloud features.",
+          "reconnectRequired": "Your session expired. Sign in again to use Orca Cloud.",
           "unavailable": "Orca sign-in is unavailable in this build.",
-          "signedOut": "Sign in to extend Orca with cloud features, including Artifacts and Orca Relay.",
+          "signedOut": "Sign in to use Orca Cloud, Artifacts and Orca Relay.",
           "checking": "Checking account status…",
           "account": "Orca account",
           "signOut": "Sign out",
@@ -14816,7 +14816,6 @@
             "c7e920aa7c": "advertised as {{value0}}",
             "e740075063": "Remove",
             "b3548e59f4": "Edit",
-            "fe2730d050": "Copy {{value0}}",
             "75aeea592f": "Open {{value0}} in Browser",
             "de349d4560": "opens {{value0}}",
             "907eb53ed2": "Forward a Port",
@@ -16256,7 +16255,6 @@
             "errorInvalid": "That port can’t be shared: 2222, 6768 and 6769 are used by Orca in the workspace.",
             "errorLimit": "This workspace has as many links as it can. Turn one off first.",
             "errorNotFound": "That link is no longer active.",
-            "errorUnauthorized": "Sign in to Orca again, then try again.",
             "errorUnavailable": "Couldn’t reach Orca Cloud. Try again.",
             "expired": "Expired",
             "expiredAt": "Expired {{value0}}",
@@ -16283,7 +16281,6 @@
             "revokedAt": "Turned off {{value0}}",
             "section": "Shared links",
             "shareButton": "Share…",
-            "signIn": "Sign in to Orca",
             "statusWithWake": "{{value0}} · Can wake",
             "teamNote": "Teammates open it from Orca, signed in to your team.",
             "timeLeft": "{{value0}} left",
@@ -20785,8 +20782,6 @@
         "errorForbidden": "Only the workspace owner or a team admin can do that. Ask an owner or admin to make the change.",
         "errorNotFound": "This workspace is private, archived or no longer exists.",
         "errorTooManyDevices": "Too many of your computers are connected to this workspace. Disconnect one, then try again.",
-        "errorUnauthorized": "Your Orca Cloud session expired. Sign in again.",
-        "errorUnauthorizedInline": "Your Orca Cloud session expired.",
         "errorUnknown": "Something went wrong. Nothing was changed. Try again.",
         "errorUnknownInline": "Something went wrong. Nothing was changed.",
         "errorUnreachable": "Orca Cloud isn't reachable right now. Nothing was changed. Try again.",
@@ -20857,7 +20852,6 @@
         "sharedWithTeam": "Shared with team",
         "sharedWithYourTeam": "Shared with your team",
         "showArchived": "Show archived",
-        "signIn": "Sign in",
         "statusArchived": "Archived",
         "statusAsleep": "Asleep",
         "statusCouldntStart": "Couldn't start",
@@ -26645,7 +26639,6 @@
       "noHours": "You’re out of sandbox hours. Your files are safe.",
       "seePlans": "See plans",
       "unavailable": "Orca Cloud isn’t reachable right now. Try again in a moment.",
-      "signIn": "Sign in to Orca again, then try again.",
       "generic": "Something went wrong. Try again."
     },
     "restartConfirmTitle": "Restart sandbox?",
@@ -26718,13 +26711,11 @@
     "shareDetail": "Every teammate’s cloud agents use it.",
     "status": {
       "team": "provided by your team",
-      "desktopKey": "API key from Orca on this computer",
       "cloudSecret": "your cloud secret",
       "none": "not set up"
     },
     "source": {
       "both": "Claude and Codex",
-      "desktopKey": "{{agent}} uses the API key from Orca on this computer",
       "team": "Your team provides {{agent}} access",
       "cloudSecret": "{{agent}} uses your cloud secret"
     },
@@ -26768,7 +26759,15 @@
     "discardQuestion": "Discard the key you typed?",
     "discard": "Discard",
     "keepEditing": "Keep editing",
-    "signInHandedOff": "Continues in the Agent sign-in row below."
+    "signInHandedOff": "Continues in the Agent sign-in row below.",
+    "desktopKeys": {
+      "title": "Keys on this computer",
+      "detail": "Cloud workspaces don’t get the API keys saved in Orca on this computer. Save one as a personal Cloud secret and the workspace only ever sees a stand-in for it.",
+      "saved": "Saved as a Cloud secret",
+      "saveLabel": "Save {{name}} as a personal Cloud secret",
+      "save": "Save as personal Cloud secret",
+      "retry": "Try again"
+    }
   },
   "cloudSecrets": {
     "editor": {
@@ -26909,13 +26908,13 @@
       "adminRequired": "Ask an owner or admin to change this.",
       "noOrg": "Join or create a team to share secrets.",
       "limit": "This scope already holds 100 secrets. Delete one first.",
-      "unauthorized": "Sign in to Orca again to manage cloud secrets.",
       "notConfigured": "Orca Cloud is not available in this build.",
       "unavailable": "Couldn’t reach Orca Cloud. Nothing was changed. Try again.",
       "syntax": "Not a NAME=value line.",
       "unterminatedQuote": "The closing quote is missing.",
       "overridden": "Set again further down; the later line is used.",
-      "unknown": "Something went wrong in Orca Cloud. Nothing was changed. Try again."
+      "unknown": "Something went wrong in Orca Cloud. Nothing was changed. Try again.",
+      "notSwappable": "A workspace would get this key in full, so Orca doesn’t save it from here. Add it in Cloud secrets if you accept that."
     },
     "vm": {
       "badge": "Stored on workspace",
@@ -27074,6 +27073,10 @@
     "continueOffer": {
       "title": "An agent was interrupted by the restart",
       "action": "Continue"
+    },
+    "signInAgain": {
+      "message": "Sign in to Orca again to continue.",
+      "action": "Sign in"
     }
   },
   "runActions": {

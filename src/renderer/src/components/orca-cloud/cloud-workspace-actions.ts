@@ -6,6 +6,8 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow'
 import { openPlansPage } from '@/components/billing/plans/plans-page-store'
+import { signInAgainMessage } from '@/lib/orca-cloud/orca-sign-in-again'
+import { signInAgainToastAction } from '@/lib/orca-cloud/orca-sign-in-again-action'
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
 import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
 import {
@@ -41,6 +43,10 @@ function failureToast(title: string, result: CloudWorkspaceResult<null>): void {
     toast.error(title, { description: result.userMessage })
     return
   }
+  if (result.code === 'unauthorized') {
+    toast.error(title, { description: signInAgainMessage(), action: signInAgainToastAction() })
+    return
+  }
   toast.error(title, {
     description:
       result.code === 'unavailable'
@@ -48,9 +54,7 @@ function failureToast(title: string, result: CloudWorkspaceResult<null>): void {
             'orcaCloudWorkspace.error.unavailable',
             'Orca Cloud isn’t reachable right now. Try again in a moment.'
           )
-        : result.code === 'unauthorized'
-          ? translate('orcaCloudWorkspace.error.signIn', 'Sign in to Orca again, then try again.')
-          : translate('orcaCloudWorkspace.error.generic', 'Something went wrong. Try again.')
+        : translate('orcaCloudWorkspace.error.generic', 'Something went wrong. Try again.')
   })
 }
 

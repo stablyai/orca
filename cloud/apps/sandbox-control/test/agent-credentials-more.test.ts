@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { compileNetworkPolicy } from '../src/network-policy'
 import { SWAPPED_CREDENTIALS, credentialTargets } from '../src/provider-env'
 import { AGENT_KEY_NAMES } from '../src/secrets'
-import { cloudSecretStoredOnVm } from '../../../../src/shared/cloud-secrets/cloud-secret-rules'
+import { CLOUD_SWAPPED_CREDENTIALS, cloudSecretStoredOnVm } from '../../../../src/shared/cloud-secrets/cloud-secret-rules'
 import { egressSecretHosts, encodeEgressSecretHosts } from '../src/secret-egress'
 import { ENV_COMMAND } from '../src/sandbox-vm-commands'
 import { createHarness } from './harness'
@@ -286,5 +286,7 @@ describe('every agent credential is either swapped or marked "stored on workspac
       expect(swapped !== cloudSecretStoredOnVm(name), `${name}: swapped=${swapped}`).toBe(true)
     }
     expect(SWAPPED_CREDENTIALS.includes('COPILOT_GITHUB_TOKEN')).toBe(true)
+    // The desktop's mirror (what it offers to save from this computer) matches the proxy exactly.
+    expect([...CLOUD_SWAPPED_CREDENTIALS].sort()).toEqual([...SWAPPED_CREDENTIALS].sort())
   })
 })

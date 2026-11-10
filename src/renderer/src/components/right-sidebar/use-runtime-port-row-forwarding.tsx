@@ -21,7 +21,6 @@ import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import type { PortRowForwarding } from './local-port-section'
 import {
   RuntimePortForwardStatus,
-  RuntimePortForwardStopButton,
   type RuntimePortForwardRowState
 } from './runtime-port-forward-status'
 
@@ -140,15 +139,6 @@ export function useRuntimePortRowForwarding(
           }
         />
       ),
-      actions: (port) => {
-        const existing = forwardFor(port)
-        return existing ? (
-          <RuntimePortForwardStopButton
-            remotePort={port.port}
-            onStop={() => void closeRuntimePortForward(existing)}
-          />
-        ) : null
-      },
       menuItems: (port) => {
         const existing = forwardFor(port)
         const forwardItems = existing ? (
