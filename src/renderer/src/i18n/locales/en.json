@@ -20739,7 +20739,21 @@
         "teamUsedAllOverageOff": "Your team has used all of this month’s sandbox hours. Running sandboxes go to sleep and new ones can’t start. Turn on overage to keep going.",
         "teamUsedAllOverageOn": "Your team has used all of this month’s sandbox hours. Overage is on, up to your {{cap}} spend cap.",
         "teamUsedPercent": "Your team has used {{percent}}% of this month’s sandbox hours.",
-        "usageAlertsNote": "Owners and admins are alerted in Orca at 75%, 90% and 100% of your team’s sandbox hours."
+        "usageAlertsNote": "Owners and admins are alerted in Orca at 75%, 90% and 100% of your team’s sandbox hours.",
+        "choosePlan": "Choose plan",
+        "reasonTrialUnavailable": "This account or team already used its trial. Choose a plan to use Orca Cloud.",
+        "reasonTrialUnavailableMember": "This account or team already used its trial. Ask an owner or admin to choose a plan.",
+        "reasonTrialUsedUp2": "Your trial is used up. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Choose a plan to keep using Orca Cloud.",
+        "reasonTrialUsedUpMember2": "Your team’s trial is used up. Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe. Ask an owner or admin to choose a plan.",
+        "trialHoursLeft_one": "Trial · {{count}} sandbox hour left",
+        "trialHoursLeft_other": "Trial · {{count}} sandbox hours left",
+        "trialHoursUsed_one": "{{used}} of {{count}} sandbox hour used",
+        "trialHoursUsed_other": "{{used}} of {{count}} sandbox hours used",
+        "trialHoursUsedLabel": "Trial sandbox hours used",
+        "trialOneTime": "Trial hours are a one-time allowance and don’t reset. When they’re used up, choose a plan to keep going. No card needed until then.",
+        "trialProduct": "Orca Cloud",
+        "trialRowChoosePlan": "{{trial}}. Choose plan",
+        "trialUsedUpTitle": "Your trial is used up"
       },
       "ports": {
         "RuntimePortAutoForwarder": {

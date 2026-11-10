@@ -1,6 +1,6 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { OrcaBillingEntitlement } from '../../../../../shared/orca-billing'
-import { sampleTeam } from '../plan-billing-fixtures'
+import { sampleTeam, sampleTrial, sampleTrialUsedUp } from '../plan-billing-fixtures'
 import { Dialog } from '@/components/ui/dialog'
 import { PlansDialogContent } from './PlansDialogContent'
 import type { PlansViewProps } from './PlansView'
@@ -124,4 +124,15 @@ export const currentPlanUsageWarning = defineFixture({
       }}
     />
   )
+})
+
+/** Spec T1: the plans page during the trial; the strip replaces the value props. */
+export const trialStrip = defineFixture({
+  width,
+  render: () => <Page result={{ status: 'ok', entitlement: sampleTrial }} />
+})
+
+export const trialUsedUpStrip = defineFixture({
+  width,
+  render: () => <Page result={{ status: 'ok', entitlement: sampleTrialUsedUp }} />
 })

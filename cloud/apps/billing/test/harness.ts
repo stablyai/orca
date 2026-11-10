@@ -79,7 +79,7 @@ export async function createHarness(overrides: Partial<Env> = {}) {
     setFetch(impl: typeof fetch) {
       outboundFetch = impl
     },
-    async desktopToken(claims: { sub: string; org?: string; orgRole?: string; email?: string; orgMembers?: number }, options: { audience?: string; purpose?: string; ageSeconds?: number } = {}) {
+    async desktopToken(claims: { sub: string; org?: string; orgRole?: string; email?: string; orgMembers?: number; emailVerified?: boolean; githubUserId?: string }, options: { audience?: string; purpose?: string; ageSeconds?: number } = {}) {
       const iat = Math.floor(now / 1000) - (options.ageSeconds ?? 0)
       return new SignJWT({ ...claims, purpose: options.purpose ?? 'billing' })
         .setProtectedHeader({ alg: 'ES256', kid: jwk.kid })

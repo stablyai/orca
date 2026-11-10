@@ -15,7 +15,16 @@ import { CloudRequestError, type CloudControlPlane } from './cloud-control-plane
 // happened, whether anything was lost or charged, and one next step chosen by role. Owners and
 // admins fix billing in Orca on their computer; members are sent to them.
 
-type Denial = 'hours' | 'cap' | 'payment' | 'plan' | 'teamLimit' | 'memberLimit' | 'other'
+type Denial =
+  | 'hours'
+  | 'cap'
+  | 'payment'
+  | 'plan'
+  | 'trialUsedUp'
+  | 'trialUnavailable'
+  | 'teamLimit'
+  | 'memberLimit'
+  | 'other'
 
 // The shared classifier names the category; the phone keeps its own wording per category.
 const DENIALS: Record<OrcaEntitlementDenialKind, Denial> = {
@@ -30,6 +39,13 @@ const DENIALS: Record<OrcaEntitlementDenialKind, Denial> = {
 }
 
 function denialOf(reason: string | undefined): Denial {
+  // Both trial reasons classify as 'plan' (a plan fixes them) but say what happened to the trial.
+  if (reason === 'trial_used_up') {
+    return 'trialUsedUp'
+  }
+  if (reason === 'trial_unavailable') {
+    return 'trialUnavailable'
+  }
   return DENIALS[classifyEntitlementDenial(reason)]
 }
 
@@ -83,6 +99,13 @@ function problem(
       return t('cloud.denied.payment', 'Payment failed, so new sandboxes can’t start.')
     case 'plan':
       return t('cloud.denied.plan', 'Orca Cloud needs a Team plan.')
+    case 'trialUsedUp':
+      return t(
+        'cloud.denied.trialUsedUp',
+        'Your trial is used up. Running sandboxes go to sleep and new ones can’t start.'
+      )
+    case 'trialUnavailable':
+      return t('cloud.denied.trialUnavailable', 'This account or team already used its trial.')
     case 'teamLimit':
       return t(
         'cloud.denied.teamLimit',
@@ -158,6 +181,8 @@ function nextStep(
             'Ask an owner or admin to update the payment method.'
           )
     case 'plan':
+    case 'trialUsedUp':
+    case 'trialUnavailable':
       return manager
         ? t('cloud.denied.next.planAdmin', 'Choose a plan in Orca on your computer.')
         : t('cloud.denied.next.planMember', 'Ask an owner or admin to choose a plan.')
@@ -182,7 +207,7 @@ export function entitlementDeniedMessage(
     problem: problem(denial, when, owner, t),
     safety:
       // Out of hours or at the cap, running sandboxes go to sleep, so say what that keeps.
-      denial === 'hours' || denial === 'cap'
+      denial === 'hours' || denial === 'cap' || denial === 'trialUsedUp'
         ? t('cloud.denied.safety.asleep', 'Nothing is deleted, and your files are safe.')
         : when === 'create'
           ? t('cloud.denied.safety.create', 'Nothing was created, and you weren’t charged.')

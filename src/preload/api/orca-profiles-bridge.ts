@@ -8,7 +8,11 @@ import {
   type SwitchOrcaProfileResult,
   type TransferOrcaProfileProjectResult
 } from '../../shared/orca-profiles'
-import { ORCA_BILLING_RETURN_CHANNEL, type OrcaBillingReturn } from '../../shared/orca-billing'
+import {
+  ORCA_BILLING_REFRESH_CHANNEL,
+  ORCA_BILLING_RETURN_CHANNEL,
+  type OrcaBillingReturn
+} from '../../shared/orca-billing'
 import {
   ORCA_CLOUD_SETUP_RETURN_CHANNEL,
   type OrcaCloudSetupReturn
@@ -78,6 +82,11 @@ export const orcaProfilesApi = {
     ipcRenderer.on(ORCA_BILLING_RETURN_CHANNEL, listener)
     return () => ipcRenderer.removeListener(ORCA_BILLING_RETURN_CHANNEL, listener)
   },
+  onBillingRefreshRequested: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on(ORCA_BILLING_REFRESH_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(ORCA_BILLING_REFRESH_CHANNEL, listener)
+  },
   onCloudSetupReturn: (callback: (event: OrcaCloudSetupReturn) => void): (() => void) => {
     const listener = (_event: unknown, payload: OrcaCloudSetupReturn): void => callback(payload)
     ipcRenderer.on(ORCA_CLOUD_SETUP_RETURN_CHANNEL, listener)
@@ -90,5 +99,6 @@ export const orcaProfilesApi = {
   cloudSetupStart: (args) => ipcRenderer.invoke('orcaProfiles:cloudSetupStart', args),
   cloudSetupGet: (args) => ipcRenderer.invoke('orcaProfiles:cloudSetupGet', args),
   cloudSetupLink: (args) => ipcRenderer.invoke('orcaProfiles:cloudSetupLink', args),
-  billingSetOverage: (args) => ipcRenderer.invoke('orcaProfiles:billingSetOverage', args)
+  billingSetOverage: (args) => ipcRenderer.invoke('orcaProfiles:billingSetOverage', args),
+  billingClaimTrial: () => ipcRenderer.invoke('orcaProfiles:billingClaimTrial')
 } satisfies PreloadApi['orcaProfiles']
