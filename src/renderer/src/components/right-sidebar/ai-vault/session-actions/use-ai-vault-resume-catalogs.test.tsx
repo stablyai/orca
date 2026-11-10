@@ -47,7 +47,7 @@ const session: AiVaultSession = {
   modifiedAt: '2026-11-09T12:00:00Z',
   messageCount: 2,
   totalTokens: 0,
-  previewMessages: [{ role: 'user', text: 'Continue this task' }],
+  previewMessages: [{ role: 'user', text: 'Continue this task', timestamp: null }],
   queuedMessageCount: 0,
   subagentTranscriptCount: 0,
   resumeCommand: 'opencode --session session-1',
