@@ -44,7 +44,10 @@ export const FIXTURE_SECRETS: Record<CloudSecretScope, CloudSecretView[]> = {
   personal: [
     view('personal', 'ANTHROPIC_API_KEY', 'agent_key', 'x7Qa', 2),
     view('personal', 'GITHUB_PACKAGES_TOKEN', 'env', '9fd2', 50),
-    view('personal', 'SENTRY_ENV', 'env', null, 400)
+    view('personal', 'SENTRY_ENV', 'env', null, 400),
+    // Not swappable at egress: shows "Real value in sandbox".
+    view('personal', 'AWS_ACCESS_KEY_ID', 'agent_key', 'Q7MP', 6),
+    view('personal', 'AWS_SECRET_ACCESS_KEY', 'agent_key', 'k2Vd', 6)
   ],
   org: [
     view('org', 'AI_GATEWAY_API_KEY', 'agent_key', 'M3kz', 30, 'u_dana'),
@@ -74,6 +77,14 @@ export const FIXTURE_EFFECTIVE_SECRETS: CloudSecretsEffective['secrets'] = [
     hint: 'p0Zz',
     updatedAt: NOW,
     shadowed: [{ scope: 'personal', hint: 'x7Qa' }]
+  },
+  {
+    name: 'AWS_SECRET_ACCESS_KEY',
+    kind: 'agent_key',
+    scope: 'personal',
+    hint: 'k2Vd',
+    updatedAt: NOW,
+    shadowed: []
   },
   {
     name: 'DATABASE_URL',

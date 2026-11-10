@@ -5,6 +5,7 @@ import type {
   CloudSecretsEffective
 } from '../../../../../shared/cloud-secrets/cloud-secrets-wire'
 import { Badge } from '../../ui/badge'
+import { cloudSecretStoredOnVm } from '../../../../../shared/cloud-secrets/cloud-secret-rules'
 import { CloudSecretVmBadge } from './CloudSecretVmBadge'
 import { InlineError } from '../../ui/inline-error'
 import { Skeleton } from '../../ui/skeleton'
@@ -127,7 +128,7 @@ export function CloudSecretsEffectiveView({
                   <td className="px-3 py-2">
                     <span className="flex min-w-0 items-center gap-2">
                       <code className="truncate font-mono">{secret.name}</code>
-                      {secret.kind === 'agent_key' ? (
+                      {secret.kind === 'agent_key' && !cloudSecretStoredOnVm(secret.name) ? (
                         <Badge variant="referenceLabel">
                           <KeyRound />
                           {cloudSecretKindLabel(secret.name, t)}
