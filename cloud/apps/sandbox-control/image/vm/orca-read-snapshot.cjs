@@ -310,20 +310,17 @@ async function main() {
   const call = (method, params) => rpc(metadata, method, params, Math.max(250, Math.min(CALL_TIMEOUT_MS, deadline - Date.now())))
   const payload = fitToBudget(await gather(call, { workspaceId, snapshotId, reason: (env.ORCA_READ_REASON || 'sleep').slice(0, 20), now: Date.now(), deadline }))
   const out = seal(payload, recipients, workspaceId, snapshotId)
-  out.stats = {
-    sessions: payload.sessions.length,
-    messages: payload.sessions.reduce((n, s) => n + s.messages.length, 0),
-    plainBytes: Buffer.byteLength(JSON.stringify(payload)),
-    collectMs: Date.now() - started
-  }
+  // Timing only: counts and sizes would describe the plaintext to the control plane's logs.
+  out.stats = { collectMs: Date.now() - started }
   process.stdout.write(`${JSON.stringify(out)}\n`)
 }
 
 module.exports = { seal, gather, fitToBudget, messagesOf, gitOf, prOf, rpc }
 
 if (require.main === module) {
-  main().catch((error) => {
-    process.stderr.write(`read snapshot failed: ${String(error && error.message ? error.message : error).slice(0, 200)}\n`)
+  // A fixed message: an error text could carry workspace content into the control plane's logs.
+  main().catch(() => {
+    process.stderr.write('read snapshot failed\n')
     process.exit(1)
   })
 }

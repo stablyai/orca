@@ -4,9 +4,11 @@
 //   DELETE /v1/reader-keys/:id
 //   GET    /v1/team/workspaces/:id/read-snapshot?keyId=rk_…        the body + only that key's wrapped key
 // At every drain the control plane asks the VM (image/vm/orca-sandbox-read-snapshot) to seal a
-// compact snapshot to the reader keys allowed to open the workspace, and stores the ciphertext. It
-// never holds a reader secret, so it can't read a snapshot. Access mirrors canOpen at read time, and
-// pruning (removal, private, revoke) deletes wrapped keys at once, without the VM.
+// compact snapshot to the reader keys allowed to open the workspace, and stores the ciphertext.
+// D1, backups and logs hold only ciphertext and never a reader secret. Trust model: like W4 grants,
+// the control plane at runtime chooses the recipient keys and drives the VM, so it is trusted not to
+// add its own key (same as relaying grant keys). Access mirrors canOpen at read time, and pruning
+// (removal, private, revoke) deletes wrapped keys at once, without the VM.
 import { z } from 'zod'
 import type { SandboxCaller } from './auth'
 import { ensureEntryPoints } from './golden-images'
@@ -106,7 +108,8 @@ export async function registerReaderKey(
     account_id: caller.accountId,
     dev: caller.dev ? 1 : 0,
     public_key: body.publicKeyB64,
-    device_kind: body.deviceKind,
+    // A phone token is a phone, whatever it claims.
+    device_kind: caller.deviceSessionId ? 'mobile' : body.deviceKind,
     device_label: body.deviceLabel,
     device_session_id: caller.deviceSessionId ?? null,
     created_at: now,
@@ -114,13 +117,17 @@ export async function registerReaderKey(
     revoked_at: null,
     revoked_by: null
   }
-  await db
+  const inserted = await db
     .prepare(
       `INSERT INTO reader_keys (id, user_id, account_id, dev, public_key, device_kind, device_label, device_session_id, created_at, last_seen_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`
     )
     .bind(row.id, row.user_id, row.account_id, row.dev, row.public_key, row.device_kind, row.device_label, row.device_session_id, now, now)
     .run()
+  if (inserted.meta.changes === 0) {
+    // A concurrent PUT of the same key won the race: answer with its row.
+    return registerReaderKey(db, caller, body, now)
+  }
   // Bounded per member: the least recently seen keys beyond the cap are retired.
   const { results: stale } = await db
     .prepare(
@@ -191,18 +198,21 @@ export async function deleteReadSnapshot(db: D1Database, sandboxId: string): Pro
 }
 
 /** The live keys allowed to open this workspace right now (owner; every member when team-visible). */
-export async function readerKeysFor(db: D1Database, row: SandboxRow): Promise<{ id: string; public_key: string }[]> {
+export async function readerKeysFor(db: D1Database, row: SandboxRow, now: number): Promise<{ id: string; public_key: string }[]> {
   if (row.archived_at !== null) {
     return []
   }
   const team = row.visibility === 'team'
   const { results } = await db
     .prepare(
-      `SELECT id, public_key FROM reader_keys
-       WHERE account_id = ? AND revoked_at IS NULL ${team ? '' : 'AND user_id = ?'}
-       ORDER BY (user_id = ?) DESC, last_seen_at DESC LIMIT ?`
+      `SELECT k.id, k.public_key FROM reader_keys k
+       LEFT JOIN device_sessions d ON d.id = k.device_session_id
+       WHERE k.account_id = ? AND k.revoked_at IS NULL ${team ? '' : 'AND k.user_id = ?'}
+         -- A phone key counts only while its device session is live (not revoked, not expired).
+         AND (k.device_session_id IS NULL OR (d.revoked_at IS NULL AND d.expires_at > ?))
+       ORDER BY (k.user_id = ?) DESC, k.last_seen_at DESC LIMIT ?`
     )
-    .bind(...(team ? [row.account_id] : [row.account_id, row.user_id]), row.user_id, MAX_READ_RECIPIENTS)
+    .bind(...(team ? [row.account_id] : [row.account_id, row.user_id]), now, row.user_id, MAX_READ_RECIPIENTS)
     .all<{ id: string; public_key: string }>()
   return results
 }
@@ -226,12 +236,13 @@ const VmOutputSchema = z
           .strict()
       )
       .max(MAX_READ_RECIPIENTS),
-    stats: z.record(z.string(), z.number()).optional()
+    // Timing only: nothing about the plaintext's shape is logged here.
+    stats: z.object({ collectMs: z.number().int().min(0).max(600_000) }).strict().optional()
   })
   .strict()
 
 type CaptureOutcome =
-  | { captured: true; snapshotId: string; recipients: number; bytes: number; stats?: Record<string, number> }
+  | { captured: true; snapshotId: string; recipients: number; bytes: number; stats?: { collectMs: number } }
   | { captured: false; reason: string }
 export type CaptureResult = CaptureOutcome & { ms: number }
 
@@ -250,7 +261,7 @@ export async function captureReadSnapshot(deps: LifecycleDeps, row: SandboxRow, 
   if (!row.session_id) {
     return done({ captured: false, reason: 'no_session' })
   }
-  const keys = await readerKeysFor(deps.db, row)
+  const keys = await readerKeysFor(deps.db, row, deps.now())
   if (keys.length === 0) {
     return done({ captured: false, reason: 'no_reader_keys' })
   }
@@ -363,7 +374,8 @@ export async function getReadSnapshot(db: D1Database, caller: SandboxCaller, row
     .prepare('SELECT * FROM reader_keys WHERE id = ? AND account_id = ? AND user_id = ? AND revoked_at IS NULL')
     .bind(keyId, caller.accountId, caller.userId)
     .first<ReaderKeyRow>()
-  if (!key) {
+  // A phone reads only with its own key (least privilege; desktop tokens have no device session).
+  if (!key || (caller.deviceSessionId && key.device_session_id !== caller.deviceSessionId)) {
     throw new ReadSnapshotRouteError('invalid_request', 400)
   }
   const snapshot = await db

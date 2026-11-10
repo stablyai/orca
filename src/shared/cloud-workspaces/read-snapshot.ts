@@ -153,8 +153,14 @@ export async function openReadSnapshot(
     throw new ReadSnapshotError('malformed')
   }
   const encoder = new TextEncoder()
-  const readerPublic = await primitives.x25519PublicKey(readerSecretKey)
-  const shared = await primitives.x25519(readerSecretKey, ephemeral)
+  let readerPublic: Uint8Array
+  let shared: Uint8Array
+  try {
+    readerPublic = await primitives.x25519PublicKey(readerSecretKey)
+    shared = await primitives.x25519(readerSecretKey, ephemeral)
+  } catch {
+    throw new ReadSnapshotError('decrypt_failed')
+  }
   // A low-order ephemeral key yields an all-zero secret anyone can compute.
   if (shared.every((byte) => byte === 0)) {
     throw new ReadSnapshotError('decrypt_failed')

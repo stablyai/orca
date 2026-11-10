@@ -860,8 +860,10 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         onRevoked:
           deps.onDeviceSessionRevoked ??
           (async (deviceSessionId) => {
-            // Its reader key first: no VM involved, so this can't be held up by a sleeping workspace.
-            await revokeDeviceSessionReaderKeys(env.SANDBOX_DB, deviceSessionId, now)
+            // Its reader key: independent of the grant cleanup below, so neither failure blocks the other.
+            await revokeDeviceSessionReaderKeys(env.SANDBOX_DB, deviceSessionId, now).catch((error: unknown) =>
+              console.log(JSON.stringify({ event: 'device_reader_key_revoke_failed', id: deviceSessionId, error: String(error).slice(0, 120) }))
+            )
             const life = await lifecycleDeps(env, deps)
             if (life) {
               await revokeGrantsForDeviceSession(life, deviceSessionId)
