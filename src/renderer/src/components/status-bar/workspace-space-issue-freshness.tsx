@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { findWorktreeReviewOwner } from '@/store/github/refresh/worktree-refresh'
@@ -28,18 +28,22 @@ export function WorkspaceSpaceIssueFreshness({
   const demandKey = useAppStore((state) => {
     const owner = findWorktreeReviewOwner(state, worktreeId, executionHostId)
     const issueNumber = owner?.worktree.linkedIssue
-    return owner && issueNumber ? `${owner.repo.id}::${issueNumber}` : null
+    return owner && issueNumber
+      ? `${getRepoExecutionHostId(owner.repo)}::${owner.repo.id}::${issueNumber}`
+      : null
   })
   useEffect(() => {
     if (!demandKey) {
       return
     }
-    // Why: the desktop Space window shows the main window's published issueCache, so the main window does the read.
-    const requestIssueRefresh = window.api?.workspaceSpace?.requestIssueRefresh
+    // Why: the separate Space window shows the main window's published issueCache, so the main window does the read.
+    const isSpaceWindow = window.location.pathname.endsWith('/space.html')
     return installWindowVisibilityInterval({
       run: () =>
-        requestIssueRefresh
-          ? void requestIssueRefresh(worktreeId, executionHostId).catch(() => {})
+        isSpaceWindow
+          ? void window.api.workspaceSpace
+              .requestIssueRefresh?.(worktreeId, executionHostId)
+              .catch(() => {})
           : refreshLinkedIssueForWorktree(worktreeId, executionHostId),
       intervalMs: 5 * 60_000
     })

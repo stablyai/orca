@@ -33,9 +33,12 @@ afterEach(() => {
   act(() => root.unmount())
   container.remove()
   Reflect.deleteProperty(window, 'api')
+  window.history.replaceState(null, '', '/')
 })
 
 it('reads the live linked issue while open, following a late and a changed link', () => {
+  const requestIssueRefresh = vi.fn(async () => {})
+  Object.assign(window, { api: { workspaceSpace: { requestIssueRefresh } } })
   linkIssue(null)
   act(() => root.render(<WorkspaceSpaceIssueFreshness worktreeId="repo-1::/wt/a" />))
   expect(fetchIssue).not.toHaveBeenCalled()
@@ -45,11 +48,13 @@ it('reads the live linked issue while open, following a late and a changed link'
 
   act(() => linkIssue(92))
   expect(fetchIssue).toHaveBeenLastCalledWith('/repos/one', 92, { repoId: 'repo-1' })
+  expect(requestIssueRefresh).not.toHaveBeenCalled()
 })
 
 it('asks the main window, which owns the issue cache, from the desktop Space window', () => {
   const requestIssueRefresh = vi.fn(async () => {})
   Object.assign(window, { api: { workspaceSpace: { requestIssueRefresh } } })
+  window.history.replaceState(null, '', '/space.html')
   linkIssue(91)
   act(() => root.render(<WorkspaceSpaceIssueFreshness worktreeId="repo-1::/wt/a" />))
 
