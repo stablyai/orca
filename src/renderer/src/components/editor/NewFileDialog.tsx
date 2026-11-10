@@ -118,7 +118,8 @@ export function NewFileDialog({
   }, [folder, mountedRef, name, onCreate, submitting, worktreePath])
 
   const submitOnEnter = (event: React.KeyboardEvent): void => {
-    if (event.key === 'Enter') {
+    // Why: Enter confirms an IME candidate while composing and must not submit a half-typed name.
+    if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
       event.preventDefault()
       void handleSubmit()
     }
