@@ -85,7 +85,8 @@ export function chatWorkerTurnStopReporter(
       }
       closeEach(approval, approvalId, prompt.body)
     }
-    if (open?.size === 0) {
+    // An overlapping call may have replaced this session's map; remove only the one this call read.
+    if (open?.size === 0 && reported.get(sessionId) === open) {
       reported.delete(sessionId)
     }
   }

@@ -250,11 +250,6 @@ export const ORCHESTRATION_SEND_METHODS = [
           }
           if (federatedTarget) {
             sendWarnings.push(relayedDeliveryUnknownWarning(to))
-          } else if (params.type !== 'worker_done' && params.type !== 'heartbeat') {
-            const held = await sendDeliveryHoldWarning(runtime, db, to)
-            if (held) {
-              sendWarnings.push(held)
-            }
           }
           const federatedControl = sendFederatedControlMail({
             params,
@@ -292,7 +287,16 @@ export const ORCHESTRATION_SEND_METHODS = [
             db,
             params.type === 'worker_done' ? settledDispatchId(sent) : undefined
           )
-          return sent
+          // Read only once the mail is stored: an await before it could let the worker settle and miss it.
+          const held =
+            federatedTarget || params.type === 'worker_done' || params.type === 'heartbeat'
+              ? null
+              : await sendDeliveryHoldWarning(runtime, db, to)
+          if (!held || typeof sent !== 'object' || sent === null) {
+            return sent
+          }
+          const prior = 'warnings' in sent && Array.isArray(sent.warnings) ? sent.warnings : []
+          return { ...sent, warnings: [...prior, held] }
         }
         return sendGroupMessage({
           params,
