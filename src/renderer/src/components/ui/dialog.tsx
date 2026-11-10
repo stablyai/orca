@@ -70,10 +70,11 @@ function DialogContentCloseButton({ variant }: { variant: 'close' | 'minimize' }
     variant === 'minimize'
       ? t('auto.components.ui.dialog.minimize', 'Minimize')
       : t('auto.components.ui.dialog.f26c4baeda', 'Close')
+  // A 24px hit area around the 16px glyph, centered where the glyph always sat (top/right 16px).
   const button = (
     <DialogPrimitive.Close
       data-slot="dialog-close"
-      className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+      className="absolute top-3 right-3 flex size-6 items-center justify-center rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
     >
       {variant === 'minimize' ? <Minus className="size-3.5" /> : <XIcon />}
       <span className="sr-only">{label}</span>
@@ -193,7 +194,8 @@ function DialogTitle({
       data-slot="dialog-title"
       data-size={size}
       className={cn(
-        'text-lg leading-snug font-semibold break-words data-[size=compact]:text-sm data-[size=display]:text-2xl data-[size=display]:leading-tight data-[size=display]:tracking-tight md:data-[size=display]:text-[1.75rem]',
+        // outline-none: a title is never a control, but dialogs focus it (tabIndex -1) on open.
+        'text-lg leading-snug font-semibold break-words outline-none data-[size=compact]:text-sm data-[size=display]:text-2xl data-[size=display]:leading-tight data-[size=display]:tracking-tight md:data-[size=display]:text-[1.75rem]',
         className
       )}
       {...props}

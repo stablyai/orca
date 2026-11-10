@@ -3,9 +3,7 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaBillingStatusResult } from '../../../../shared/orca-billing'
 
-let accountKey = 'user-1:team-a'
-vi.mock('@/hooks/use-orca-account-key', () => ({ useOrcaAccountKey: () => accountKey }))
-
+import { useAppStore } from '@/store'
 import { getLastBillingStatus, resetBillingSummary } from './billing-summary-store'
 import { sampleTeam } from './plan-billing-fixtures'
 import { useOrcaBillingStatus } from './use-orca-billing-status'
@@ -19,8 +17,27 @@ const teamB: OrcaBillingStatusResult = {
 type Pending = { resolve: (result: OrcaBillingStatusResult) => void }
 let pending: Pending[] = []
 
+/** Signs in as `user-1` acting for `orgId`, as the auth status would after a team pick. */
+function setAccount(orgId: string): void {
+  useAppStore.setState({
+    orcaProfileAuthStatus: {
+      activeProfileId: 'local-default',
+      configured: true,
+      state: 'connected',
+      persistence: 'encrypted',
+      cloud: {
+        cloudProfileId: 'cloud-1',
+        userId: 'user-1',
+        email: 'ada@example.com',
+        linkedAt: 0,
+        activeOrgId: orgId
+      }
+    }
+  })
+}
+
 beforeEach(() => {
-  accountKey = 'user-1:team-a'
+  setAccount('team-a')
   pending = []
   resetBillingSummary()
   vi.stubGlobal('api', {
@@ -43,8 +60,8 @@ afterEach(() => {
 /** What the auth subscriber does on a team switch: bump the generation, then re-render. */
 function switchTeam(rerender: () => void, next: string): void {
   act(() => {
+    setAccount(next)
     resetBillingSummary()
-    accountKey = next
     rerender()
   })
 }
@@ -55,7 +72,7 @@ describe('useOrcaBillingStatus on a team switch', () => {
     await act(async () => pending[0].resolve(teamA))
     expect(result.current.result).toEqual(teamA)
 
-    switchTeam(rerender, 'user-1:team-b')
+    switchTeam(rerender, 'team-b')
     expect(result.current).toMatchObject({ loading: true, result: null })
     expect(pending).toHaveLength(2)
 
@@ -68,7 +85,7 @@ describe('useOrcaBillingStatus on a team switch', () => {
     const { result, rerender } = renderHook(() => useOrcaBillingStatus(true))
     expect(pending).toHaveLength(1)
 
-    switchTeam(rerender, 'user-1:team-b')
+    switchTeam(rerender, 'team-b')
     await act(async () => pending[0].resolve(teamA))
     expect(result.current).toMatchObject({ loading: true, result: null })
     expect(getLastBillingStatus()).toBeNull()
@@ -88,5 +105,26 @@ describe('useOrcaBillingStatus on a team switch', () => {
 
     await act(async () => pending[1].resolve(teamB))
     expect(result.current).toMatchObject({ loading: false, result: teamB })
+  })
+})
+
+describe('useOrcaBillingStatus on a failed re-read', () => {
+  it('keeps the last good plan when a focus re-read fails', async () => {
+    const { result } = renderHook(() => useOrcaBillingStatus(true))
+    await act(async () => pending[0].resolve(teamA))
+
+    act(() => {
+      window.dispatchEvent(new Event('focus'))
+    })
+    expect(pending).toHaveLength(2)
+    await act(async () => pending[1].resolve({ status: 'failed', error: 'offline' }))
+
+    expect(result.current).toMatchObject({ loading: false, result: teamA })
+  })
+
+  it('shows the failure when nothing was read yet', async () => {
+    const { result } = renderHook(() => useOrcaBillingStatus(true))
+    await act(async () => pending[0].resolve({ status: 'failed', error: 'offline' }))
+    expect(result.current.result).toEqual({ status: 'failed', error: 'offline' })
   })
 })

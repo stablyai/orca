@@ -42,7 +42,8 @@ describe('config: tax and plan catalog', () => {
         concurrentSandboxesPerSeat: 3,
         idleSleepMinutes: 15,
         overageCentsPerHour: 100,
-        defaultSpendCapCents: 5000
+        defaultSpendCapCents: 5000,
+        maxSpendCapCents: 500_000
       },
       enterprise: { label: 'Enterprise', priceLabel: 'Custom', contactUrl: 'https://example.test/sales' }
     })

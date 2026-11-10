@@ -138,7 +138,8 @@ export function publicOffers(catalog: PlanCatalog) {
       concurrentSandboxesPerSeat: team.concurrentSandboxesPerSeat,
       idleSleepMinutes: team.idleSleepMinutes,
       overageCentsPerHour: team.overageCentsPerHour,
-      defaultSpendCapCents: team.defaultSpendCapCents
+      defaultSpendCapCents: team.defaultSpendCapCents,
+      maxSpendCapCents: team.maxSpendCapCents
     },
     enterprise: catalog.enterprise
   }
