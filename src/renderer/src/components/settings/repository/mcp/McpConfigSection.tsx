@@ -297,7 +297,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
 
   return (
     <SettingsGroup
-      title={t('auto.components.settings.McpConfigSection.55eea3ef47', 'MCP Configs')}
+      title={t('auto.components.settings.McpConfigSection.283bebb198', 'MCP configs')}
       description={
         <>
           {t(

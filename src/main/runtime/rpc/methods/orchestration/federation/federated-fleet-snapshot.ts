@@ -12,7 +12,7 @@ import { liveFederatedHomeAutoReleaseAt } from '../../../../orchestration/termin
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { resolvePinnedFederatedServer } from '../worker/worker-observation'
+import { resolvePinnedFederatedServer } from '../worker/pinned-federated-server'
 import { applyConfirmedFederatedReleaseHomeProjection } from './federated-worker-release'
 
 const FLEET_HOST_CONCURRENCY = 4

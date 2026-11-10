@@ -222,8 +222,8 @@ export function AppearanceThemeSlotSelect({
               {
                 value: MATCH_TERMINAL_APP_THEME,
                 label: t(
-                  'auto.components.settings.AppearanceThemeControl.matchTerminal',
-                  'Match Terminal'
+                  'auto.components.settings.AppearanceThemeControl.7ad388ec82',
+                  'Match terminal'
                 ),
                 detail: (
                   <>

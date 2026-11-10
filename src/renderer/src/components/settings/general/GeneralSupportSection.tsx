@@ -21,11 +21,13 @@ type SupportState =
   | 'hidden'
 
 type GeneralSupportSectionProps = {
+  inline?: boolean
   hasPrecedingSections: boolean
 }
 
 export function GeneralSupportSection({
-  hasPrecedingSections
+  hasPrecedingSections,
+  inline
 }: GeneralSupportSectionProps): React.JSX.Element {
   const mountedRef = useMountedRef()
   // Keep gh-derived state local; use a same-size placeholder that collapses with its divider when the section is hidden.
@@ -77,6 +79,7 @@ export function GeneralSupportSection({
 
   return (
     <SupportSection
+      inline={inline}
       state={starState}
       hasPrecedingSections={hasPrecedingSections}
       onStarClick={handleStarClick}
@@ -86,18 +89,30 @@ export function GeneralSupportSection({
 
 type SupportSectionProps = {
   state: SupportState
+  inline?: boolean
   hasPrecedingSections: boolean
   onStarClick: () => void | Promise<void>
 }
 
 function SupportSection({
   state,
+  inline,
   hasPrecedingSections,
   onStarClick
-}: SupportSectionProps): React.JSX.Element {
+}: SupportSectionProps): React.JSX.Element | null {
   const t = useTranslate()
   // Collapse the leading gap too when gh is unavailable or the repo was already starred.
   const collapsed = state === 'hidden'
+  if (inline) {
+    if (state === 'hidden') {
+      return null
+    }
+    return state === 'loading' ? (
+      <SupportRowSkeleton />
+    ) : (
+      <SupportRow state={state} onStarClick={onStarClick} />
+    )
+  }
 
   return (
     <section
@@ -147,7 +162,7 @@ function SupportRow({
         'auto.components.settings.GeneralSupportSection.511782265b',
         'Support the project with a GitHub star.'
       )}
-      keywords={['star', 'github', 'support', 'feedback', 'like']}
+      keywords={['about', 'star', 'github', 'support', 'feedback', 'like']}
       className="flex items-center justify-between gap-4 py-2"
     >
       <Label>
@@ -157,7 +172,7 @@ function SupportRow({
         <SupportRowThanks />
       ) : (
         <Button
-          variant="default"
+          variant="outline"
           size="sm"
           onClick={() => void onStarClick()}
           disabled={state === 'starring' || state === 'opening-github'}

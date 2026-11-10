@@ -4,7 +4,7 @@ import type { ComponentProps, ReactNode } from 'react'
 import type { LocalAgentRuntime } from '../../../lib/skill-runtime-command'
 import type { Button } from '../../ui/button'
 
-type AgentSkillSetupPanelVariant = 'card' | 'inline'
+type AgentSkillSetupPanelVariant = 'card' | 'inline' | 'row'
 
 export type AgentSkillSetupPanelProps = {
   title: string
