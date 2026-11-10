@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import type {
   DocPreviewFileFailure,
@@ -61,7 +61,9 @@ export function HtmlDocPreview({
   const containerRef = useRef<HTMLDivElement | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const isActiveRef = useRef(isActive)
-  isActiveRef.current = isActive
+  useLayoutEffect(() => {
+    isActiveRef.current = isActive
+  }, [isActive])
   const reloadRef = useRef<(() => void) | null>(null)
   const [state, setState] = useState<PreviewState>('loading')
   const [failureReason, setFailureReason] = useState<DocPreviewFileFailureReason | null>(null)
