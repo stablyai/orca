@@ -16,8 +16,7 @@ import { encodeRawMarkdownHtmlForRichEditor } from '../raw-source/raw-markdown-h
 import { notifyStaleViewEditRejected } from '../../save/flush/editor-stale-view-edit'
 
 vi.mock('../../save/flush/editor-stale-view-edit', () => ({
-  notifyStaleViewEditRejected: vi.fn(),
-  staleViewEditEpoch: vi.fn(() => 0)
+  notifyStaleViewEditRejected: vi.fn()
 }))
 
 function buildEditor(
@@ -54,7 +53,7 @@ describe('useRichMarkdownProgrammaticSync stale pending edit', () => {
     const lastCommittedMarkdownRef = { current: 'base' }
     const originalSourceRef = { current: 'base' }
     const baseCanonicalRef = { current: 'base' }
-    const pendingEditEpochRef = { current: 0 }
+    const pendingEditGenerationRef = { current: { discarded: false } }
     const onContentChangeRef = { current: vi.fn<(content: string) => void>() }
     const serializeTimerRef = {
       current: pendingCommit ? window.setTimeout(pendingCommit, 300) : null
@@ -77,7 +76,7 @@ describe('useRichMarkdownProgrammaticSync stale pending edit', () => {
           rootRef: { current: null },
           runtimeTarget: { kind: 'local' },
           serializeTimerRef,
-          pendingEditEpochRef,
+          pendingEditGenerationRef,
           slashMenuSetter: vi.fn(),
           worktreeId: 'w1',
           worktreeRoot: null
@@ -147,7 +146,7 @@ describe('useRichMarkdownProgrammaticSync undo history', () => {
           rootRef: { current: null },
           runtimeTarget: { kind: 'local' },
           serializeTimerRef: { current: null },
-          pendingEditEpochRef: { current: 0 },
+          pendingEditGenerationRef: { current: { discarded: false } },
           slashMenuSetter: vi.fn(),
           worktreeId: 'w1',
           worktreeRoot: null

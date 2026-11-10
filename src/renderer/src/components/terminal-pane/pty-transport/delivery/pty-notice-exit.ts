@@ -1,0 +1,37 @@
+import { useAppStore } from '@/store/index'
+import { isProvenProcessExit } from '../../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
+import { isPtyDataHandlerShutdownPending } from '../shutdown/pty-shutdown-data-suspension'
+import { deferPtyShutdownExit } from '../shutdown/pty-shutdown-exit-deferral'
+import {
+  retireTerminalNoticeLifetime,
+  type TerminalNoticeLifetime
+} from '../../provider-notices/terminal-notice-lifetime'
+
+/** Snapshot before primary callbacks can settle shutdown or replace the binding. */
+export function prepareTerminalNoticeExit(
+  lifetime: TerminalNoticeLifetime | undefined,
+  code: number,
+  incarnationId?: string
+): () => void {
+  // Unstamped transport loss needs canonical final-removal evidence, not a current-ID guess.
+  if (
+    !lifetime ||
+    !incarnationId ||
+    lifetime.incarnationId !== incarnationId ||
+    !isProvenProcessExit(code)
+  ) {
+    return () => {}
+  }
+  const pending =
+    isPtyDataHandlerShutdownPending(lifetime.ptyId) ||
+    (useAppStore.getState().pendingPtyShutdownIds?.[lifetime.ptyId] ?? 0) > 0
+  if (pending) {
+    deferPtyShutdownExit(lifetime.ptyId, (settlement) => {
+      if (settlement === 'committed') {
+        retireTerminalNoticeLifetime(lifetime)
+      }
+    })
+    return () => {}
+  }
+  return () => retireTerminalNoticeLifetime(lifetime)
+}

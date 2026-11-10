@@ -8,6 +8,17 @@ import type { GlobalSettings } from '../../../../../../shared/global-settings-ty
 import { getDefaultSettings } from '../../../../../../shared/constants'
 import { CodexSharedServerBanner } from './CodexSharedServerBanner'
 import type { CodexSharedServerStatus } from '../../../../../../shared/codex-shared-server-command'
+import {
+  admitTerminalNoticeLifetime,
+  getTerminalNoticeLifetime,
+  retireTerminalNoticeLifetime
+} from '../terminal-notice-lifetime'
+import {
+  installIpcPtyWindow,
+  type PtyExitPayload
+} from '../../pty-transport/ipc/pty-transport-test-harness'
+import { closeTerminalTab } from '../../../terminal/terminal-tab-actions'
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 
 const routing = vi.hoisted(() => ({
@@ -45,6 +56,7 @@ let writeClipboardText: ReturnType<typeof vi.fn<(text: string) => Promise<void>>
 let updateSettings: ReturnType<typeof vi.fn<(updates: Partial<GlobalSettings>) => Promise<void>>>
 let nextPtyId = 0
 let ptyId: string
+let admitted: ReturnType<typeof admitTerminalNoticeLifetime>
 
 class ResizeObserverStub {
   observe(): void {}
@@ -90,6 +102,7 @@ beforeEach(() => {
   vi.stubGlobal('ResizeObserver', ResizeObserverStub)
   useAppStore.setState(useAppStore.getInitialState(), true)
   ptyId = `pty-${(nextPtyId += 1)}`
+  admitted = admitTerminalNoticeLifetime(ptyId, { fresh: true })
   paneElement = document.createElement('div')
   paneElement.className = 'pane'
   document.body.appendChild(paneElement)
@@ -112,6 +125,10 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  const current = getTerminalNoticeLifetime(ptyId)
+  if (current) {
+    retireTerminalNoticeLifetime(current)
+  }
   act(() => root.unmount())
   paneElement.remove()
   vi.unstubAllGlobals()
@@ -160,20 +177,152 @@ describe('CodexSharedServerBanner', () => {
     expect(paneElement.textContent).toBe('')
   })
 
-  it('dismisses for this pane only, and stays dismissed after a remount', async () => {
+  it('keeps a live dismissal through detach and loss, then shows for a later attached lifetime', async () => {
+    retireTerminalNoticeLifetime(admitted)
+    let exit: ((payload: PtyExitPayload) => void) | undefined
+    installIpcPtyWindow(window, {
+      exit: (callback) => {
+        exit = callback
+      }
+    })
+    const { createIpcPtyTransport } = await import('../../pty-transport/ipc/pty-transport')
+    const { ensurePtyDispatcher, reattachPtyDispatcherPushListeners } =
+      await import('../../pty-transport/delivery/pty-dispatcher')
+    ensurePtyDispatcher()
+    reattachPtyDispatcherPushListeners()
     setState({})
+    let transport = createIpcPtyTransport({})
+    const attach = () => {
+      useAppStore.setState({
+        tabsByWorktree: { 'wt-1': [makeTab({ id: TAB_ID, worktreeId: 'wt-1', ptyId: null })] }
+      })
+      transport.attach({
+        existingPtyId: ptyId,
+        callbacks: {
+          onExit: (code) => {
+            if (code >= 0) {
+              closeTerminalTab(TAB_ID, { hostCloseReason: 'pty-exit', lifecyclePtyId: ptyId })
+            }
+          }
+        }
+      })
+    }
+    attach()
     await renderBanner()
     await advance(1_000)
     await act(async () => button('Dismiss').click())
     expect(paneElement.textContent).toBe('')
-    expect(paneElement.style.getPropertyValue('--orca-pane-top-banner-height')).toBe('')
-    expect(updateSettings).not.toHaveBeenCalled()
-
+    transport.detach?.()
+    // The move path removes a tab with pty-exit while its process survives.
+    act(() => useAppStore.getState().closeTab(TAB_ID, { reason: 'pty-exit' }))
     act(() => root.unmount())
     root = createRoot(paneElement)
+    transport = createIpcPtyTransport({})
+    attach()
     await renderBanner()
     await advance(20_000)
     expect(paneElement.textContent).toBe('')
+    await act(async () => exit?.({ id: ptyId, code: -1 }))
+    transport = createIpcPtyTransport({})
+    attach()
+    await renderBanner()
+    await advance(20_000)
+    expect(paneElement.textContent).toBe('')
+    await act(async () => exit?.({ id: ptyId, code: 0 }))
+    transport = createIpcPtyTransport({})
+    attach()
+    await renderBanner()
+    await advance(1_000)
+    expect(paneElement.querySelector('button')).not.toBeNull()
+    transport.detach?.()
+  })
+
+  it('keeps dismissal after an unstamped buffered exit, then accepts a stamped death', async () => {
+    retireTerminalNoticeLifetime(admitted)
+    let exit: ((payload: PtyExitPayload) => void) | undefined
+    installIpcPtyWindow(window, {
+      exit: (callback) => {
+        exit = callback
+      }
+    })
+    const { createIpcPtyTransport } = await import('../../pty-transport/ipc/pty-transport')
+    const { ensurePtyDispatcher, reattachPtyDispatcherPushListeners } =
+      await import('../../pty-transport/delivery/pty-dispatcher')
+    ensurePtyDispatcher()
+    reattachPtyDispatcherPushListeners()
+    const spawn = vi.mocked(window.api.pty.spawn)
+    spawn.mockResolvedValueOnce({ id: ptyId, incarnationId: 'current-incarnation' })
+    let transport = createIpcPtyTransport({})
+    await transport.connect({ url: '', callbacks: {} })
+    setState({})
+    await renderBanner()
+    await advance(1_000)
+    await act(async () => button('Dismiss').click())
+    transport.detach?.({ preserveExitObserver: false })
+    spawn.mockImplementationOnce(async () => {
+      exit?.({ id: ptyId, code: 0 })
+      return { id: ptyId, incarnationId: 'current-incarnation', isReattach: true }
+    })
+    transport = createIpcPtyTransport({})
+    await transport.connect({ url: '', callbacks: {} })
+    transport = createIpcPtyTransport({})
+    transport.attach({ existingPtyId: ptyId, callbacks: {} })
+    await renderBanner()
+    await advance(20_000)
+    expect(paneElement.textContent).toBe('')
+    await act(async () => exit?.({ id: ptyId, code: 0, incarnationId: 'current-incarnation' }))
+    transport = createIpcPtyTransport({})
+    transport.attach({ existingPtyId: ptyId, callbacks: {} })
+    await renderBanner()
+    await advance(1_000)
+    expect(paneElement.querySelector('button')).not.toBeNull()
+    transport.detach?.({ preserveExitObserver: false })
+  })
+
+  it('keeps dismissal on shutdown rollback and resets it on committed retirement', async () => {
+    retireTerminalNoticeLifetime(admitted)
+    let exit: ((payload: PtyExitPayload) => void) | undefined
+    installIpcPtyWindow(window, {
+      exit: (callback) => {
+        exit = callback
+      }
+    })
+    const { createIpcPtyTransport } = await import('../../pty-transport/ipc/pty-transport')
+    const { ensurePtyDispatcher, reattachPtyDispatcherPushListeners } =
+      await import('../../pty-transport/delivery/pty-dispatcher')
+    ensurePtyDispatcher()
+    reattachPtyDispatcherPushListeners()
+    const { settleDeferredPtyShutdownExits } =
+      await import('../../pty-transport/shutdown/pty-shutdown-exit-deferral')
+    vi.mocked(window.api.pty.spawn).mockResolvedValueOnce({
+      id: ptyId,
+      incarnationId: 'current-incarnation'
+    })
+    let transport = createIpcPtyTransport({})
+    await transport.connect({ url: '', callbacks: {} })
+    setState({})
+    await renderBanner()
+    await advance(1_000)
+    await act(async () => button('Dismiss').click())
+    useAppStore.setState({ pendingPtyShutdownIds: { [ptyId]: 1 } })
+    await act(async () => exit?.({ id: ptyId, code: 0, incarnationId: 'current-incarnation' }))
+    settleDeferredPtyShutdownExits([ptyId], 'rolled-back')
+    useAppStore.setState({ pendingPtyShutdownIds: {} })
+    transport = createIpcPtyTransport({})
+    transport.attach({ existingPtyId: ptyId, callbacks: {} })
+    await renderBanner()
+    await advance(20_000)
+    expect(paneElement.textContent).toBe('')
+    useAppStore.setState({ pendingPtyShutdownIds: { [ptyId]: 1 } })
+    await act(async () => exit?.({ id: ptyId, code: 0, incarnationId: 'current-incarnation' }))
+    settleDeferredPtyShutdownExits([ptyId], 'committed')
+    useAppStore.setState({ pendingPtyShutdownIds: {} })
+    transport = createIpcPtyTransport({})
+    transport.attach({ existingPtyId: ptyId, callbacks: {} })
+    await renderBanner()
+    await advance(1_000)
+    expect(paneElement.querySelector('button')).not.toBeNull()
+    transport.detach?.()
   })
 
   describe('returning focus when a dialog closes', () => {

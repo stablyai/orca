@@ -1,3 +1,5 @@
+import { getTerminalNoticeLifetime } from '../../provider-notices/terminal-notice-lifetime'
+import { prepareTerminalNoticeExit } from './pty-notice-exit'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../../../shared/terminal/replay/terminal-scrollback-limits'
 import {
   clearProcessedPtyCharTotal,
@@ -321,10 +323,22 @@ export function registerEagerPtyBuffer(
 
   eagerPtyHandles.set(ptyId, handle)
   drainPreHandlerPtyData(ptyId, dataHandler)
+  const noticeLifetime = getTerminalNoticeLifetime(ptyId)
   // Why: defer the pre-handler exit one microtask so the caller receives the returned handle before onExit fires.
   queueMicrotask(() => {
     if (ptyExitHandlers.get(ptyId) === exitHandler) {
-      drainPreHandlerPtyExit(ptyId, exitHandler, incarnationId)
+      drainPreHandlerPtyExit(
+        ptyId,
+        (code, exitIncarnationId) => {
+          const finishNotice = prepareTerminalNoticeExit(noticeLifetime, code, exitIncarnationId)
+          try {
+            exitHandler(code)
+          } finally {
+            finishNotice()
+          }
+        },
+        incarnationId
+      )
     } else {
       clearPreHandlerPtyState(ptyId)
     }
