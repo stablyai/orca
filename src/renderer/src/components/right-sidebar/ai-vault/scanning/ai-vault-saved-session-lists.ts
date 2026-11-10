@@ -6,7 +6,7 @@ import type {
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { latestSessionConversationTurn } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-display'
 import { useAppStore } from '@/store/index'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
   committedTransaction,
   indexedDbConnection,

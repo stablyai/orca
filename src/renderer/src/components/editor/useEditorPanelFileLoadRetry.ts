@@ -1,7 +1,7 @@
 import { useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { useWorktreeHostConnection } from '@/lib/workspace/ownership/worktree-host-connection-phase'
-import { displayIpcErrorMessage } from '@/lib/ipc-error'
+import { displayIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
 import { isFileTooLargeMessage } from '../../../../shared/file-write/file-write-disk-precondition'
 import {

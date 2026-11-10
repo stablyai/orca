@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
-import { scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
-import { lazyWithPreload } from '@/lib/lazy-with-retry'
+import { scheduleAfterInputQuiet } from '@/lib/window-activity/input-quiet-scheduler'
+import { lazyWithPreload } from '@/app-shell/startup/lazy-with-retry'
 
 export const WorktreeJumpPalette = lazyWithPreload(
   () => import('../components/worktree-jump/WorktreeJumpPalette')

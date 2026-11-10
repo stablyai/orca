@@ -1,6 +1,6 @@
 import React from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   EMPTY_PROJECT_GROUP_KEY,
   isIterationCurrent,
