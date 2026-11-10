@@ -20267,7 +20267,8 @@
           "workspaceDisconnected": "Can’t run “{{action}}” — workspace is disconnected.",
           "noTabGroup": "Can’t run “{{action}}” — no tab group is available.",
           "noMovableChat": "Can’t run “{{action}}” — no movable chat is active.",
-          "clientUnsupported": "Can’t run “{{action}}” — this client and runtime do not support it."
+          "clientUnsupported": "Can’t run “{{action}}” — this client and runtime do not support it.",
+          "notCloudWorkspace": "Can’t run “{{action}}” — the active workspace isn’t a cloud workspace."
         }
       },
       "plugins": {
@@ -22883,7 +22884,7 @@
       "notCloudTitle": "Remote desktop is only available in cloud workspaces.",
       "notCloudDetail": "Create a cloud workspace to run apps with a screen.",
       "asleepTitle": "This sandbox is asleep.",
-      "asleepDetail": "Wake it, then open the remote desktop again. Your files are safe.",
+      "asleepDetail": "Wake it and the remote desktop opens. Your files are safe.",
       "notInstalledTitle": "This sandbox doesn’t have a remote desktop yet.",
       "notInstalledDetail": "It was created before remote desktop was available. New cloud workspaces include it. Your files are safe.",
       "signedOutTitle": "You’re signed out of Orca Cloud.",
@@ -22899,18 +22900,30 @@
       "dismiss": "Dismiss",
       "openMenuItem": "Open remote desktop",
       "startingTitle": "The sandbox is still starting or waking.",
-      "archivedTitle": "This sandbox is archived.",
-      "archivedDetail": "Unarchive the workspace to use the remote desktop again. Your files are safe.",
+      "archivedTitle": "This workspace is archived.",
+      "archivedDetail": "Unarchive it and the remote desktop opens. Your files are safe.",
       "startingDetail": "Try again in a moment. Your files are safe.",
       "keyboardCaptured": "Keys go to the remote desktop. Press <kbd>{{chord}}</kbd> to use Orca shortcuts.",
       "keyboardReleased": "Orca shortcuts are back. Click the desktop to type in it.",
       "pageAsleep": "This sandbox is asleep. Wake it in Orca, then reconnect.",
-      "pageArchived": "This sandbox is archived. Unarchive the workspace in Orca, then reconnect.",
+      "pageArchived": "This workspace is archived. Unarchive it in Orca, then reconnect.",
       "pageStarting": "The sandbox is starting or waking. Reconnect in a moment.",
       "pageSignedOut": "You’re signed out of Orca Cloud. Sign in, then reconnect.",
       "pageDisconnected": "The remote desktop disconnected. Your files are safe.",
       "reconnect": "Reconnect",
-      "beta": "Beta"
+      "beta": "Beta",
+      "wakeFailedTitle": "Couldn’t wake the sandbox.",
+      "wakeFailedDetail": "Your files are safe.",
+      "unarchive": "Unarchive",
+      "waking": "Waking sandbox…",
+      "wakingDetail": "The remote desktop opens when it’s awake.",
+      "paletteDescription": "Open the sandbox’s desktop in a browser tab.",
+      "verbs": {
+        "remoteDesktop": "remote desktop",
+        "openDesktop": "open desktop",
+        "vnc": "vnc",
+        "screen": "screen"
+      }
     },
     "orcaCloud": {
       "offline": {

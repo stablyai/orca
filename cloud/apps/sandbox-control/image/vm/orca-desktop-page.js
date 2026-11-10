@@ -32,17 +32,35 @@ let pointerStart = null;
 const style = document.createElement('style');
 // Orca owns connecting and the chrome: noVNC's Connect button would only try without a ticket,
 // and its control bar duplicates what the Orca tab does (fit, clipboard, keyboard release).
+// The pause card follows Orca's theme: Orca sets Electron's theme source from its own setting, so
+// prefers-color-scheme here is Orca's light or dark, and it follows a switch while paused. The
+// page cannot read Orca's tokens, so these mirror them (popover, border, focus ring).
 style.textContent = `
 #noVNC_connect_dlg, #noVNC_control_bar_anchor { display: none !important; }
-#orca_pause { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
-  background: rgba(30, 31, 34, 0.92); z-index: 1000; font: 13px/1.5 system-ui, sans-serif; }
+#orca_pause { --orca-scrim: rgb(10 10 10 / 0.88); --orca-card: #171717; --orca-text: #f0f0f0;
+  --orca-border: rgb(255 255 255 / 0.1); --orca-control: rgb(255 255 255 / 0.15);
+  --orca-control-hover: rgb(255 255 255 / 0.08); --orca-focus: color-mix(in oklab, #f0f0f0 65%, #0a0a0a);
+  color-scheme: dark; position: fixed; inset: 0; display: none; align-items: center;
+  justify-content: center; padding: 16px; background: var(--orca-scrim); z-index: 1000;
+  font: 13px/1.5 system-ui, sans-serif; }
+@media (prefers-color-scheme: light) {
+  #orca_pause { --orca-scrim: rgb(255 255 255 / 0.88); --orca-card: #fff; --orca-text: #0a0a0a;
+    --orca-border: #e5e5e5; --orca-control: #d4d4d4; --orca-control-hover: #f5f5f5;
+    --orca-focus: color-mix(in oklab, #0a0a0a 55%, #fff); color-scheme: light; }
+}
 #orca_pause.open { display: flex; }
-#orca_pause > div { max-width: 360px; padding: 16px; border: 1px solid #3a3b3f; border-radius: 8px;
-  background: #26272b; color: #d4d4d4; text-align: center; }
-#orca_pause button { margin-top: 12px; padding: 4px 12px; border: 1px solid #4a4b50; border-radius: 6px;
-  background: transparent; color: #f2f2f2; font: inherit; cursor: pointer; }
-#orca_pause button:focus-visible { outline: 2px solid #6ea8fe; outline-offset: 2px; }
-/* The VM page cannot read Orca's --focus-ring token; this matches its dark value. */
+#orca_pause > div { max-width: 360px; padding: 16px; border: 1px solid var(--orca-border);
+  border-radius: 8px; background: var(--orca-card); color: var(--orca-text); text-align: center;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.16); }
+#orca_pause p { margin: 0; }
+#orca_pause button { margin-top: 12px; padding: 4px 12px; border: 1px solid var(--orca-control);
+  border-radius: 6px; background: transparent; color: var(--orca-text); font: inherit; cursor: pointer; }
+#orca_pause button:hover { background: var(--orca-control-hover); }
+#orca_pause button:focus-visible { outline: 2px solid var(--orca-focus); outline-offset: 2px; }
+@media (prefers-reduced-motion: no-preference) {
+  #orca_pause.open > div { animation: orca-pause-in 120ms ease-out; }
+}
+@keyframes orca-pause-in { from { opacity: 0; transform: translateY(4px); } }
 `;
 document.head.appendChild(style);
 

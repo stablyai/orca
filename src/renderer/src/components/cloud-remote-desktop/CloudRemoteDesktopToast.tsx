@@ -5,21 +5,33 @@ import { InlineError } from '@/components/ui/inline-error'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { CloudRemoteDesktopFailureCode } from '../../../../shared/hosted-sandbox/cloud-remote-desktop'
 
-export type CloudRemoteDesktopNextAction = 'wake' | 'sign_in' | 'create_workspace' | 'retry'
+export type CloudRemoteDesktopNextAction =
+  | 'wake'
+  | 'unarchive'
+  | 'sign_in'
+  | 'create_workspace'
+  | 'retry'
+
+/** What main reports, plus the renderer's own: a Wake from this toast that didn't wake it. */
+export type CloudRemoteDesktopToastFailure = CloudRemoteDesktopFailureCode | 'wake_failed'
 
 export type CloudRemoteDesktopToastState =
   | { kind: 'starting'; slow: boolean }
-  | { kind: 'failed'; code: CloudRemoteDesktopFailureCode }
+  /** Wake (or Unarchive) from this toast: the desktop opens by itself once the sandbox is awake. */
+  | { kind: 'waking' }
+  | { kind: 'failed'; code: CloudRemoteDesktopToastFailure }
 
 type FailureCopy = {
   title: string
   detail: string
   action: CloudRemoteDesktopNextAction | null
+  /** Overrides the action's usual label (a failed wake retries the wake: "Try again"). */
+  actionLabel?: string
   /** Asleep and starting are states, not errors. */
   tone?: 'neutral'
 }
 
-function failureCopy(t: Translate, code: CloudRemoteDesktopFailureCode): FailureCopy {
+function failureCopy(t: Translate, code: CloudRemoteDesktopToastFailure): FailureCopy {
   switch (code) {
     case 'not_cloud':
       return {
@@ -38,19 +50,26 @@ function failureCopy(t: Translate, code: CloudRemoteDesktopFailureCode): Failure
         title: t('components.cloudRemoteDesktop.asleepTitle', 'This sandbox is asleep.'),
         detail: t(
           'components.cloudRemoteDesktop.asleepDetail',
-          'Wake it, then open the remote desktop again. Your files are safe.'
+          'Wake it and the remote desktop opens. Your files are safe.'
         ),
         action: 'wake',
         tone: 'neutral'
       }
+    case 'wake_failed':
+      return {
+        title: t('components.cloudRemoteDesktop.wakeFailedTitle', 'Couldn’t wake the sandbox.'),
+        detail: t('components.cloudRemoteDesktop.wakeFailedDetail', 'Your files are safe.'),
+        action: 'wake',
+        actionLabel: t('components.cloudRemoteDesktop.retry', 'Try again')
+      }
     case 'archived':
       return {
-        title: t('components.cloudRemoteDesktop.archivedTitle', 'This sandbox is archived.'),
+        title: t('components.cloudRemoteDesktop.archivedTitle', 'This workspace is archived.'),
         detail: t(
           'components.cloudRemoteDesktop.archivedDetail',
-          'Unarchive the workspace to use the remote desktop again. Your files are safe.'
+          'Unarchive it and the remote desktop opens. Your files are safe.'
         ),
-        action: null,
+        action: 'unarchive',
         tone: 'neutral'
       }
     case 'starting':
@@ -121,6 +140,8 @@ function actionLabel(t: Translate, action: CloudRemoteDesktopNextAction): string
   switch (action) {
     case 'wake':
       return t('components.cloudRemoteDesktop.wake', 'Wake sandbox')
+    case 'unarchive':
+      return t('components.cloudRemoteDesktop.unarchive', 'Unarchive')
     case 'sign_in':
       return t('components.cloudRemoteDesktop.signIn', 'Sign in')
     case 'create_workspace':
@@ -141,7 +162,8 @@ export function CloudRemoteDesktopToast({
   onDismiss: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  if (state.kind === 'starting') {
+  if (state.kind === 'starting' || state.kind === 'waking') {
+    const slow = state.kind === 'starting' && state.slow
     return (
       <div
         role="status"
@@ -153,11 +175,20 @@ export function CloudRemoteDesktopToast({
         />
         <div className="min-w-0 space-y-0.5">
           <p className="font-medium">
-            {state.slow
-              ? t('components.cloudRemoteDesktop.stillStarting', 'Still starting…')
-              : t('components.cloudRemoteDesktop.starting', 'Starting remote desktop…')}
+            {state.kind === 'waking'
+              ? t('components.cloudRemoteDesktop.waking', 'Waking sandbox…')
+              : slow
+                ? t('components.cloudRemoteDesktop.stillStarting', 'Still starting…')
+                : t('components.cloudRemoteDesktop.starting', 'Starting remote desktop…')}
           </p>
-          {state.slow ? (
+          {state.kind === 'waking' ? (
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'components.cloudRemoteDesktop.wakingDetail',
+                'The remote desktop opens when it’s awake.'
+              )}
+            </p>
+          ) : slow ? (
             <p className="text-xs text-muted-foreground">
               {t(
                 'components.cloudRemoteDesktop.slowDetail',
@@ -186,7 +217,7 @@ export function CloudRemoteDesktopToast({
               size="xs"
               onClick={() => onAction(copy.action!)}
             >
-              {actionLabel(t, copy.action)}
+              {copy.actionLabel ?? actionLabel(t, copy.action)}
             </Button>
           ) : undefined
         }
