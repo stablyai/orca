@@ -310,7 +310,7 @@ describe('createSystemTray', () => {
               'Open Orca',
               undefined,
               'Settings',
-              'Check for Updates...',
+              'Check for Updates... (⇧ RC · ⌘ Perf)',
               undefined,
               'Quit Completely...',
               'Quit'
@@ -643,7 +643,7 @@ describe('language changes', () => {
       expect(options.onQuit).toHaveBeenCalledOnce()
       if (platform === 'darwin') {
         expect(builtMenuItems()[2].label).toBe('設定')
-        expect(builtMenuItems()[3].label).toBe('アップデートを確認…')
+        expect(builtMenuItems()[3].label).toBe('アップデートを確認… (⇧ RC · ⌘ Perf)')
         builtMenuItems()[2].click?.()
         builtMenuItems()[3].click?.()
         expect(options.onOpenSettings).toHaveBeenCalledOnce()
