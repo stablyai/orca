@@ -39,7 +39,6 @@ export const WORKTREE_CREATE_COMMAND_SPEC: CommandSpec = {
     // Private build: `--on cloud` creates an Orca Cloud workspace (src/cli/cloud/worktree-create-on-cloud.ts).
     'on',
     'env',
-    'size',
     'progress'
   ],
   notes: [

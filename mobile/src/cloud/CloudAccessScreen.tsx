@@ -178,9 +178,19 @@ export function CloudAccessScreen() {
                       })
                 }
                 onPress={() => setConfirm({ id: session.id, label: session.label, self: false })}
-                accessibilityLabel={t('cloud.access.removeLabel', 'Remove {{device}}', {
-                  device: session.label
-                })}
+                // Who it is and when it was last used; what a tap does goes in the hint.
+                accessibilityLabel={
+                  session.lastUsedAt
+                    ? t('cloud.access.deviceLabel', '{{device}}, last used {{date}}', {
+                        device: session.label,
+                        date: formatDay(session.lastUsedAt)
+                      })
+                    : t('cloud.access.deviceLabelConnected', '{{device}}, connected {{date}}', {
+                        device: session.label,
+                        date: formatDay(session.createdAt)
+                      })
+                }
+                accessibilityHint={t('cloud.access.removeHint', 'Removes this phone’s access')}
               />
             ))
           )}

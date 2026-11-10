@@ -9,6 +9,7 @@ export const VM_SCRIPTS = [
   'orca-sandbox-drain',
   'orca-sandbox-env',
   'orca-session-env.sh',
+  'orca-env',
   'orca-egress-probe',
   'orca-image-wipe',
   'orca-share-proxy',

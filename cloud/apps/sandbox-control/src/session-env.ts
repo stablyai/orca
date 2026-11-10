@@ -2,6 +2,7 @@
 // presets filled in, and with egress placeholders on, model keys swapped for placeholders. The same
 // answer drives the egress allowlist and the proxy's credential routes, at boot and on refresh.
 import type { LifecycleDeps } from './lifecycle'
+import { signInAgentsFor, withoutSignInCredentials } from './agent-sources'
 import { deriveProviderEnv, deriveProviderScopes, providerHosts } from './provider-env'
 import { applySecretPlaceholders, encodeEgressSecretHosts } from './secret-egress'
 import { resolveSandboxSecrets } from './secrets'
@@ -26,8 +27,11 @@ export async function resolvedProviderEnv(
   keyring: Keyring,
   row: Pick<SandboxRow, 'id' | 'account_id' | 'user_id' | 'repo_url'>
 ): Promise<ProviderEnv> {
-  const { env: stored, scopes } = await resolveSandboxSecrets(db, keyring, row)
-  const env = deriveProviderEnv(stored)
+  const [{ env: stored, scopes }, signIn] = await Promise.all([
+    resolveSandboxSecrets(db, keyring, row),
+    signInAgentsFor(db, row)
+  ])
+  const env = withoutSignInCredentials(deriveProviderEnv(stored), signIn)
   return { env, scopes: deriveProviderScopes(stored, env, scopes) }
 }
 
@@ -70,7 +74,9 @@ export async function sessionSecretEnv(
     return EMPTY
   }
   const { env: stored, scopes: storedScopes, skipped } = await resolveSandboxSecrets(deps.db, deps.secrets.keyring, row)
-  const env = deriveProviderEnv(stored)
+  // Agents on "Your sign-in" (owner's choice): their credentials never reach this session.
+  const signIn = await signInAgentsFor(deps.db, row)
+  const env = withoutSignInCredentials(deriveProviderEnv(stored), signIn)
   const scopes = deriveProviderScopes(stored, env, storedScopes)
   const egressAllowHosts = providerHosts(env).join(',') || null
   // Counts only.

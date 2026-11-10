@@ -5,6 +5,7 @@ import type {
   OrcaBillingOpenResult,
   OrcaBillingOverageResult
 } from '../../../../shared/orca-billing'
+import { formatCents } from './plans/plans-pricing'
 
 export function denyReasonCopy(
   reason: OrcaBillingDenyReason,
@@ -113,12 +114,27 @@ export function openFailureCopy(result: OrcaBillingOpenResult, t: Translate): st
   }
 }
 
-export function overageFailureCopy(result: OrcaBillingOverageResult, t: Translate): string | null {
+/** "The spend cap can be at most $5,000." */
+export function capTooHighCopy(maxCents: number, locale: string, t: Translate): string {
+  return t('auto.components.billing.capAtMost', 'The spend cap can be at most {{max}}.', {
+    max: formatCents(maxCents, locale)
+  })
+}
+
+export function overageFailureCopy(
+  result: OrcaBillingOverageResult,
+  t: Translate,
+  /** The service's highest allowed cap; null from older services that don't send it. */
+  maxCapCents: number | null = null,
+  locale = 'en-US'
+): string | null {
   switch (result.status) {
     case 'ok':
       return null
     case 'cap-too-high':
-      return t('auto.components.billing.capTooHigh', 'That spend cap is above the allowed maximum.')
+      return maxCapCents === null
+        ? t('auto.components.billing.capTooHigh', 'That spend cap is above the allowed maximum.')
+        : capTooHighCopy(maxCapCents, locale, t)
     case 'no-subscription':
       return t('auto.components.billing.overageNoPlan', 'Overage needs an active plan.')
     case 'forbidden':

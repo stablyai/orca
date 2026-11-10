@@ -51,6 +51,8 @@ export function workspaceView(row: WorkspaceRow) {
     machineSize: row.machine_size,
     region: row.region,
     repoUrl: row.repo_url,
+    repoBranch: row.repo_branch ?? null,
+    lastActivityAt: row.last_activity_at ?? row.updated_at,
     session,
     lastError: row.last_error,
     createdAt: row.created_at,

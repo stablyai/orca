@@ -28,6 +28,8 @@ export function createAgentLaunchCallerEvidence(
 }
 
 const AGENT_LAUNCH_METHODS: ReadonlySet<string> = new Set(['agent.launch', 'agent.launchReplay'])
+/** Methods where orcad names the calling terminal (and its agent) from the shell's launch evidence. */
+const TERMINAL_CALLER_METHODS: ReadonlySet<string> = new Set(['secrets.request'])
 
 /** The caller evidence one request carries, read from this process's environment once. */
 export class OrchestrationRequestEvidence {
@@ -57,6 +59,11 @@ export class OrchestrationRequestEvidence {
         ...base,
         compatibilityInvocationId: request.requestId ?? base.compatibilityInvocationId
       }
+    }
+    if (TERMINAL_CALLER_METHODS.has(method)) {
+      // Terminal evidence only: it identifies a caller on this host, never on a remote server.
+      const shell = this.remoteRead.orchestrationCompatibilityEvidence
+      return request.remote || !shell ? {} : { orchestrationCompatibilityEvidence: shell }
     }
     return AGENT_LAUNCH_METHODS.has(method) && !request.remote && this.agentLaunchCaller
       ? { orchestrationCompatibilityEvidence: this.agentLaunchCaller }

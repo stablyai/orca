@@ -104,6 +104,16 @@ describe('orca cloud workspace store', () => {
     expect(getCloudWorkspaceSnapshot().pending.a).toBeUndefined()
   })
 
+  it('does not archive when the sleep did not finish (the sandbox would keep running)', async () => {
+    const bridge = stubApi()
+    const result = await archiveCloudWorkspace('a', {
+      sleep: async () => [{ completed: false }]
+    })
+    expect(result).toMatchObject({ ok: false, code: 'failed' })
+    expect(bridge.archive).not.toHaveBeenCalled()
+    expect(getCloudWorkspaceSnapshot().pending.a).toBeUndefined()
+  })
+
   it('unarchives, clears the archived status, then runs the wake path', async () => {
     stubApi()
     seedCloudWorkspaceSnapshot({

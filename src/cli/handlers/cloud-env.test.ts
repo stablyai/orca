@@ -89,7 +89,9 @@ describe('orca cloud env build --wait', () => {
     await CLOUD_ENV_HANDLERS['cloud env build'](ctx)
     expect(stdout).toContain('::orca-step:: install')
     expect(stderr).toContain('npm ERR! missing')
-    expect(stderr).toContain('Build #7 failed at the install step: install_failed.')
+    expect(stderr).toContain(
+      'Build #7 failed at the install step. The install script stopped at a failing command.'
+    )
     expect(process.exitCode).toBe(1)
   })
 

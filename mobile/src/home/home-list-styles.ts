@@ -102,5 +102,10 @@ export const homeListStyles = themedStyleSheet(() => ({
     justifyContent: 'center',
     backgroundColor: colors.statusAmber
   },
-  countPillText: { fontSize: 12, fontWeight: '700', color: '#000', fontVariant: ['tabular-nums'] }
+  countPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.onStatusAmber,
+    fontVariant: ['tabular-nums']
+  }
 }))

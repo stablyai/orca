@@ -39,6 +39,10 @@ function failureToast(title: string, result: CloudWorkspaceResult<null>): void {
     })
     return
   }
+  if (result.userMessage) {
+    toast.error(title, { description: result.userMessage })
+    return
+  }
   if (result.code === 'unauthorized') {
     toast.error(title, { description: signInAgainMessage(), action: signInAgainToastAction() })
     return
@@ -91,57 +95,61 @@ export async function runRestartCloudWorkspace(
 export const ARCHIVE_UNDO_MS = 5_000
 
 /**
- * Archive with a real undo: nothing happens for 5 s while the toast offers Undo; then the
- * workspace sleeps and is archived.
+ * Archive with a real undo: nothing happens for 5 s while the toast offers Undo; then `commit`
+ * runs. Used by the sidebar (sleep → archive) and the team list (control-plane archive).
  */
-export function runArchiveCloudWorkspace(
-  workspaceId: string,
-  options: { name?: string | null; undoMs?: number } = {}
-): Promise<void> {
+export function runArchiveWithUndo(
+  key: string,
+  options: {
+    name?: string | null
+    undoMs?: number
+    commit: () => Promise<CloudWorkspaceResult<null>>
+    /** False while the workspace is being deleted: its failure is not worth a toast. */
+    reportFailure?: () => boolean
+  }
+): Promise<boolean> {
   return new Promise((resolve) => {
     let undone = false
-    const toastId = `orca-cloud-archive:${workspaceId}`
+    const toastId = `orca-cloud-archive:${key}`
     const cancel = (): void => {
       undone = true
       clearTimeout(commit)
       toast.dismiss(toastId)
       unregister()
-      resolve()
+      resolve(false)
     }
     const commit = setTimeout(() => {
       unregister()
       toast.dismiss(toastId)
       if (undone) {
-        resolve()
+        resolve(false)
         return
       }
-      // A Delete that starts while this runs destroys the sandbox; its sleep and archive then fail
-      // for a workspace that is going away, which is not worth an error toast.
-      const sleep = (id: string): Promise<unknown> =>
-        isCloudWorkspaceDeleting(id) ? Promise.resolve() : runSleepWorktree(id)
-      void archiveCloudWorkspace(workspaceId, { sleep }).then((result) => {
-        if (!isCloudWorkspaceDeleting(workspaceId)) {
+      void options.commit().then((result) => {
+        if (options.reportFailure?.() ?? true) {
           failureToast(
-            translate('orcaCloudWorkspace.archiveFailed', 'Couldn’t archive the workspace'),
+            options.name
+              ? translate('orcaCloudWorkspace.archiveFailedNamed', 'Couldn’t archive {{name}}', {
+                  name: options.name
+                })
+              : translate('orcaCloudWorkspace.archiveFailed', 'Couldn’t archive the workspace'),
             result
           )
         }
-        resolve()
+        resolve(result.ok)
       })
     }, options.undoMs ?? ARCHIVE_UNDO_MS)
-    const unregister = registerQueuedCloudArchive(workspaceId, cancel)
+    const unregister = registerQueuedCloudArchive(key, cancel)
     toast(
       options.name
-        ? translate('orcaCloudWorkspace.archivingNamed', 'Archiving {{name}}…', {
-            name: options.name
-          })
-        : translate('orcaCloudWorkspace.archiving', 'Archiving workspace…'),
+        ? translate('orcaCloudWorkspace.archivedNamed', 'Archived {{name}}', { name: options.name })
+        : translate('orcaCloudWorkspace.archivedWorkspace', 'Archived the workspace'),
       {
         id: toastId,
         duration: options.undoMs ?? ARCHIVE_UNDO_MS,
         description: translate(
-          'orcaCloudWorkspace.archivingDetail',
-          'It stops and stays browsable: PRs, last changes and files.'
+          'orcaCloudWorkspace.archivedDetail',
+          'It goes to sleep and stays browsable: PRs, last changes and files.'
         ),
         action: {
           label: translate('orcaCloudWorkspace.undo', 'Undo'),
@@ -149,6 +157,22 @@ export function runArchiveCloudWorkspace(
         }
       }
     )
+  })
+}
+
+/** Sidebar archive: the ordinary Sleep, then the control-plane archive, behind the Undo toast. */
+export async function runArchiveCloudWorkspace(
+  workspaceId: string,
+  options: { name?: string | null; undoMs?: number } = {}
+): Promise<void> {
+  // A Delete that starts while this runs destroys the sandbox; its sleep and archive then fail
+  // for a workspace that is going away, which is not worth an error toast.
+  const sleep = (id: string): Promise<readonly { completed: boolean }[] | void> =>
+    isCloudWorkspaceDeleting(id) ? Promise.resolve() : runSleepWorktree(id)
+  await runArchiveWithUndo(workspaceId, {
+    ...options,
+    commit: () => archiveCloudWorkspace(workspaceId, { sleep }),
+    reportFailure: () => !isCloudWorkspaceDeleting(workspaceId)
   })
 }
 

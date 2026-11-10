@@ -16,7 +16,8 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
-import { useBillingSummary } from '../../billing/billing-summary-store'
+import { useBillingState } from '../../billing/billing-summary-store'
+import { accountMenuUsageLines } from '../../billing/plan-billing-usage-copy'
 import { SidebarTeamSubmenu } from './SidebarTeamSubmenu'
 import { useSetupGuideProgress } from '../../setup-guide/use-setup-guide-progress'
 import { getAccountMenuIdentity, type AccountMenuIdentity } from './account-menu-identity'
@@ -68,21 +69,8 @@ export function SidebarAccountMenu(): React.JSX.Element {
   const mountedRef = useMountedRef()
 
   const identity = getAccountMenuIdentity(authStatus)
-  const billingSummary = useBillingSummary()
-  const orgName = authStatus?.state === 'connected' ? authStatus.cloud?.activeOrgName : undefined
-  // "Acme · Team plan": which team this account acts for, and its plan once billing has answered.
-  const orgLine = orgName
-    ? billingSummary.planLabel
-      ? t(
-          'auto.components.sidebar.SidebarAccountMenu.teamPlanLine',
-          '{{value0}} · {{value1}} plan',
-          {
-            value0: orgName,
-            value1: billingSummary.planLabel
-          }
-        )
-      : orgName
-    : null
+  // The team is named once, on the switcher below; the header carries the plan's hours instead.
+  const usage = accountMenuUsageLines(useBillingState().result, t)
   const visibleItems = selectVisibleAccountMenuItems(registeredItems, authStatus)
   // Freeze the item list while the menu is open: a billing answer arriving mid-read must not
   // swap rows under the pointer (e.g. Upgrade replacing Plan & billing).
@@ -196,8 +184,13 @@ export function SidebarAccountMenu(): React.JSX.Element {
                           {identity.email}
                         </span>
                       ) : null}
-                      {orgLine ? (
-                        <span className="truncate text-xs text-muted-foreground">{orgLine}</span>
+                      {usage ? (
+                        <span className="truncate text-xs text-muted-foreground tabular-nums">
+                          {usage.hoursLeft}
+                        </span>
+                      ) : null}
+                      {usage?.warning ? (
+                        <span className="text-xs text-foreground text-pretty">{usage.warning}</span>
                       ) : null}
                     </>
                   ) : (

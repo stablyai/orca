@@ -77,6 +77,8 @@ export type OrcaBillingOffers = {
     idleSleepMinutes: number
     overageCentsPerHour: number
     defaultSpendCapCents: number
+    /** Highest monthly spend cap billing accepts; null from older services. */
+    maxSpendCapCents: number | null
   }
   enterprise: { label: string; priceLabel: string; contactUrl: string }
 }

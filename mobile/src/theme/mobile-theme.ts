@@ -11,6 +11,8 @@ const darkColors = {
   editorSurface: '#1e1e1e',
   // Sheets sit a step above the screen, their groups a step above the sheet (the desktop's sidebar and secondary).
   sheetSurface: '#171717',
+  // Grouped-list screens: the backdrop the groups sit on (dark already differs from the groups).
+  settingsSurface: '#0a0a0a',
   sheetGroup: '#262626',
   // A translucent grey that reads on any surface: off switches, and chips or picked segments on a sheet group.
   translucentFill: 'rgba(120, 120, 128, 0.36)',
@@ -45,6 +47,8 @@ const darkColors = {
   // --status-success, --status-warning, --destructive
   statusGreen: '#86efac',
   statusAmber: '#eab308',
+  // Text on a statusAmber fill (count pills, badges).
+  onStatusAmber: '#000000',
   statusRed: '#ff6568',
   // Desktop's --destructive-foreground: dark ink on the light-red dark fill.
   onStatusRed: '#450a0a',
@@ -88,6 +92,8 @@ const lightColors: MobilePalette = {
   editorSurface: '#ffffff',
   // Light inverts it: a grey sheet under white groups, as iOS does.
   sheetSurface: '#f5f5f5',
+  // White groups need a grey backdrop to read as groups (iOS grouped style).
+  settingsSurface: '#f5f5f5',
   sheetGroup: '#ffffff',
   translucentFill: 'rgba(120, 120, 128, 0.16)',
   composerSurface: '#ffffff',
@@ -113,7 +119,10 @@ const lightColors: MobilePalette = {
   onAccent: '#ffffff',
 
   statusGreen: '#147638',
-  statusAmber: '#ca8a04',
+  // Amber 700: at least 3:1 on white for the warning dot, and readable as text.
+  statusAmber: '#b45309',
+  // White on amber 700 reads at 5:1; black would drop to 4.2:1.
+  onStatusAmber: '#ffffff',
   statusRed: '#e40014',
   onStatusRed: '#ffffff',
   mergeGreen: '#16a34a',

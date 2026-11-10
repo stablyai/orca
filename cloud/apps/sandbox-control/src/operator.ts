@@ -7,6 +7,8 @@
 //   DELETE /v1/internal/github/bindings {installationId, accountId?}
 //   POST   /v1/internal/members/role-changed {accountId, userId, role}   re-cap their keys and MCP grants (auth calls this)
 //   POST   /v1/internal/members/removed {accountId, userId}   revoke a departed member's keys, phones and workspace grants, disable their routines (auth calls this)
+//   GET    /v1/internal/fair-use?days=30                 per-account CPU utilisation + fair-use flag (U22; internal only, never billed)
+//   POST   /v1/internal/session-cpu/sweep               fetch CPU for recently stopped sessions now (the cron does this every 5 min)
 import { z } from 'zod'
 import { audit } from './api/audit'
 import { syncMemberRole } from './api/member-role-sync'
@@ -18,6 +20,7 @@ import { guardrails, type LifecycleDeps } from './lifecycle'
 import { drainAll, housekeeping } from './retention'
 import { memberChangeTime, recordMemberChange } from './member-changes'
 import { removeMember } from './member-removal'
+import { fairUseReport, FAIR_USE_WINDOW_DAYS, sweepSessionCpu } from './session-cpu'
 import { listByStatus } from './store'
 
 const KillSwitchBody = z.object({ enabled: z.boolean(), drain: z.boolean().optional() }).strict()
@@ -141,6 +144,15 @@ export async function handleOperator(
       const removal = await removeMember(life, body.data.accountId, body.data.userId, now, body.data.changedAt)
       return Response.json({ revoked: removal.keysRevoked, ...removal })
     }
+    case 'GET /v1/internal/fair-use': {
+      const days = Number(new URL(request.url).searchParams.get('days') ?? FAIR_USE_WINDOW_DAYS)
+      if (!Number.isInteger(days) || days < 1 || days > 90) {
+        return Response.json({ error: 'invalid_request' }, { status: 400 })
+      }
+      return Response.json(await fairUseReport(life.db, now, days), { headers: { 'cache-control': 'no-store' } })
+    }
+    case 'POST /v1/internal/session-cpu/sweep':
+      return Response.json({ sweep: await sweepSessionCpu(life.db, life.provider, now) })
     default:
       return null
   }

@@ -209,7 +209,7 @@ if [ -n "${NOVNC_VERSION:-}" ]; then
 fi
 
 log 'Orca entry points'
-for name in orca-sandbox-start orca-sandbox-drain orca-sandbox-env orca-session-env.sh orca-egress-probe orca-image-wipe orca-share-proxy orca-sshd orca-ssh-keys orca-desktop-start orca-desktop-proxy orca-desktop-page.js orca-sandbox-grant orca-sandbox-revoke orca-sandbox-members orca-sandbox-read-snapshot orca-read-snapshot.cjs orca-git-as orca-git-identity orcad-boot git; do
+for name in orca-sandbox-start orca-sandbox-drain orca-sandbox-env orca-session-env.sh orca-env orca-egress-probe orca-image-wipe orca-share-proxy orca-sshd orca-ssh-keys orca-desktop-start orca-desktop-proxy orca-desktop-page.js orca-sandbox-grant orca-sandbox-revoke orca-sandbox-members orca-sandbox-read-snapshot orca-read-snapshot.cjs orca-git-as orca-git-identity orcad-boot git; do
   var="ORCA_VM_SCRIPT_${name//[-.]/_}"
   printf '%s' "${!var}" | base64 -d >"$ORCA_HOME/bin/$name"
   chmod 0755 "$ORCA_HOME/bin/$name"
@@ -237,6 +237,14 @@ if [ -f /etc/bash.bashrc ]; then
   # Ubuntu's bash.bashrc does not source profile.d for non-login interactive shells (AL2023's bashrc does).
   grep -q zz-orca-session-env /etc/bash.bashrc ||
     echo '[ -r /etc/profile.d/zz-orca-session-env.sh ] && . /etc/profile.d/zz-orca-session-env.sh' | sudo tee -a /etc/bash.bashrc >/dev/null
+fi
+if [ -f /etc/bash.bashrc ]; then
+  # Ubuntu: zsh reads /etc/zsh/zshenv for every shell, so new zsh shells match bash (`orca-env` covers
+  # shells that were already open).
+  sudo install -d -m 0755 /etc/zsh
+  sudo touch /etc/zsh/zshenv
+  grep -q zz-orca-session-env /etc/zsh/zshenv ||
+    echo '[ -r /etc/profile.d/zz-orca-session-env.sh ] && . /etc/profile.d/zz-orca-session-env.sh' | sudo tee -a /etc/zsh/zshenv >/dev/null
 fi
 sudo chown -R root:root "$ORCA_HOME"
 

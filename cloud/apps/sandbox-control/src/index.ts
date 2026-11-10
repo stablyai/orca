@@ -36,6 +36,8 @@ import { ReadSnapshotRouteError, getReadSnapshot, handleReaderKeysRoute, pruneRe
 import { refreshStaleEnvironments } from './environment-golden-refresh'
 import { ORCA_CLOUD_IDLE_SLEEP_MINUTES } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 import { z } from 'zod'
+import { WorkerEntrypoint } from 'cloudflare:workers'
+import type { RunnerBuild } from './build-runner'
 import { maintainPool, poolConfigFromEnv } from './pool'
 import { cachedCreateTiming } from './create-timing'
 import { creatorLeftAccount } from './member-changes'
@@ -93,6 +95,15 @@ import { reconcile } from './reconcile'
 import { egressSecretHosts, placeholderValues, secretPlaceholder } from './secret-egress'
 import { SecretError, handleSecretsRoute, keyringFor, type SecretChange } from './secrets'
 import { refreshAfterSecretChange, refreshSandboxEnv } from './env-refresh'
+import {
+  AgentSourceError,
+  PutOfferSchema,
+  PutSourceSchema,
+  agentSourcesView,
+  putAgentSource,
+  putOfferAnswer,
+  runningSandboxesForDefault
+} from './agent-sources'
 import { EgressHostsSchema, egressUserHosts, normalizeUserHosts, setEgressUserHosts } from './egress-hosts'
 import { cachedProviderEnv } from './session-env'
 import { credentialTargets, type CredentialTarget } from './provider-env'
@@ -112,6 +123,7 @@ import type { GoldenImageProviderApi } from './golden-image-provider'
 import { CreateRequestSchema, LeaseRequestSchema, parseWakeWait, readyView, sandboxView } from './wire'
 import { ArchiveRequestSchema } from './sandbox-vm-inspect'
 import {
+  restoreArchivedToSleeping,
   archiveSandbox,
   readArchive,
   restartSandbox,
@@ -150,12 +162,14 @@ import {
   isOrgAdmin,
   listWorkspaces,
   patchWorkspace,
+  assertCanManageWorkspace,
   reportPresence,
   requireVisible,
   resolveLink,
   workspaceViews
 } from './workspaces'
 import { rememberCallerName } from './member-names'
+import { sweepSessionCpu } from './session-cpu'
 import type { SandboxCaller } from './auth'
 
 const MAX_JSON_BYTES = 16 * 1024
@@ -581,7 +595,10 @@ async function goldenRegions(
   return { goldenSnapshotId: goldens[defaultRegion]!, goldenSnapshots: goldens, defaultRegion, fallbackRegions: usable.slice(1) }
 }
 
-/** Arms the build's runner (one Durable Object per build); a no-op where the binding is absent. */
+/**
+ * Arms the build's runner: one Durable Object per build, hosted by the build runner Worker
+ * (src/build-runner.ts). A no-op where the binding is absent.
+ */
 function buildScheduler(env: Env): BuildDeps['schedule'] {
   const runners = env.ENV_BUILD_RUNNER
   if (!runners) {
@@ -1071,6 +1088,16 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       }
       return response
     }
+    if (url.pathname === '/v1/agent-sources' || url.pathname === '/v1/agent-sources/offer') {
+      const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
+      if (!caller) {
+        return fail('unauthorized', 401)
+      }
+      if (caller.deviceSessionId) {
+        return fail('forbidden', 403, 'device_session')
+      }
+      return await agentSourcesRoute(request, url, env, deps, caller)
+    }
     if (isEnvironmentRoute(url.pathname)) {
       const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
       if (!caller) {
@@ -1406,7 +1433,35 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
       if (!body.success) {
         return fail('invalid_request', 400)
       }
-      const patched = await patchWorkspace(db, caller, row, body.data, now)
+      const { archived, ...rest } = body.data
+      // Archive/unarchive are lifecycle changes, not labels. The lifecycle runs FIRST and is what
+      // sets archived_at, so a failed or refused archive never labels a running sandbox archived.
+      let archivedNow = false
+      if (archived !== undefined) {
+        assertCanManageWorkspace(caller, row)
+        if (archived && row.archived_at === null) {
+          if (row.status !== 'running' && row.status !== 'suspended') {
+            // Starting, waking or going to sleep: nothing changes; the client asks to try again.
+            return fail('conflict', 409, `sandbox_${row.status}`)
+          }
+          await archiveSandbox(life, row, {}, workspaceConfig(env, deps))
+          archivedNow = true
+        } else if (!archived && row.status === 'archived') {
+          await restoreArchivedToSleeping(life, row)
+        } else if (!archived && row.archived_at !== null) {
+          // A label-only archive from before archive stopped the sandbox: clear the label.
+          await patchWorkspace(db, caller, row, { archived: false }, now)
+        }
+      }
+      const current = (await getSandbox(env.SANDBOX_DB, row.id)) ?? row
+      let patched: Awaited<ReturnType<typeof patchWorkspace>> =
+        Object.keys(rest).length > 0
+          ? await patchWorkspace(db, caller, current, rest, now)
+          : { row: current, revoke: 'none' }
+      if (archivedNow && patched.revoke === 'none') {
+        // Archiving disconnects teammates' devices, as before.
+        patched = { ...patched, revoke: 'non_owner' }
+      }
       if (patched.revoke !== 'none') {
         // Readers lose the sleeping copy at once, before (and regardless of) the VM-side revokes.
         await pruneReadSnapshotToOwner(db, patched.row)
@@ -1582,6 +1637,11 @@ export default {
           // Counts only; no ids, tokens or pairing material.
           const summary = await reconcile(life)
           console.log(JSON.stringify({ event: 'reconcile', ...summary }))
+          // Internal fair-use review (U22): retry sessions whose CPU the stop couldn't read yet.
+          const cpu = await sweepSessionCpu(life.db, life.provider, life.now())
+          if (cpu.checked > 0) {
+            console.log(JSON.stringify({ event: 'session_cpu_sweep', ...cpu }))
+          }
           const retried = await retryPendingMessages(life).catch(() => -1)
           if (retried !== 0) {
             console.log(JSON.stringify({ event: 'message_retry', retried }))
@@ -1620,46 +1680,78 @@ export async function refreshEnvironmentsOnGolden(env: Env, life: LifecycleDeps,
 }
 
 /**
- * One per environment build: wakes on an alarm, advances the build one step (finalize, snapshot,
- * smoke boot, billing all run here) and re-arms until the build is final. Builds therefore finish
- * with no client watching, at most a few seconds after their VM command ends.
+ * RPC entrypoint for the build runner Worker (src/build-runner.ts), bound there as its CONTROL service.
+ * Each runner alarm lands here: the step runs in this Worker, with its D1, provider and secrets, and
+ * answers the delay until the next step (null: final, the runner stops). A failure throws back to the
+ * runner, which retries. Not reachable from the internet: only a service binding can name an entrypoint.
  */
-export class EnvironmentBuildRunner implements DurableObject {
-  constructor(
-    private readonly state: DurableObjectState,
-    private readonly env: Env
-  ) {}
-
-  async fetch(request: Request): Promise<Response> {
-    const body = (await request.json().catch(() => null)) as { id?: string; environmentId?: string } | null
-    if (!body?.id || !body.environmentId) {
-      return new Response('bad request', { status: 400 })
-    }
-    await this.state.storage.put('build', { id: body.id, environmentId: body.environmentId })
-    if ((await this.state.storage.getAlarm()) === null) {
-      await this.state.storage.setAlarm(Date.now() + 2_000)
-    }
-    return new Response(null, { status: 204 })
+export class BuildTicker extends WorkerEntrypoint<Env> {
+  tickBuild(build: RunnerBuild): Promise<number | null> {
+    return runBuildTick(this.env, build)
   }
+}
 
-  async alarm(): Promise<void> {
-    const build = await this.state.storage.get<{ id: string; environmentId: string }>('build')
-    const life = build ? await lifecycleDeps(this.env, {}) : null
-    if (!build || !life) {
-      await this.state.storage.deleteAll()
-      return
+/** One runner step; null when the control plane is unconfigured (the cron re-arms the runner later). */
+export async function runBuildTick(env: Env, build: RunnerBuild, deps: Deps = {}): Promise<number | null> {
+  const life = await lifecycleDeps(env, deps)
+  if (!life) {
+    return null
+  }
+  try {
+    return await tickBuild(buildDeps(life, deps, env), build.environmentId, build.id)
+  } catch (error) {
+    console.log(JSON.stringify({ event: 'environment_build_tick_failed', buildId: build.id, error: String(error).slice(0, 200) }))
+    throw error
+  }
+}
+
+async function agentSourcesRoute(request: Request, url: URL, env: Env, deps: Deps, caller: SandboxCaller): Promise<Response> {
+  const db = env.SANDBOX_DB
+  const now = (deps.now ?? Date.now)()
+  // Labels for the owner block on teammates' views; a failure here must never fail the request.
+  await rememberCallerName(db, caller, now).catch(() => undefined)
+  const noStore = (body: unknown) => Response.json(body, { headers: { 'cache-control': 'no-store' } })
+  try {
+    if (request.method === 'GET' && url.pathname === '/v1/agent-sources') {
+      return noStore(await agentSourcesView(db, caller, url.searchParams.get('workspaceId')))
     }
-    let next: number | null
-    try {
-      next = await tickBuild(buildDeps(life, {}, this.env), build.environmentId, build.id)
-    } catch (error) {
-      console.log(JSON.stringify({ event: 'environment_build_tick_failed', buildId: build.id, error: String(error).slice(0, 200) }))
-      next = 15_000
+    if (request.method === 'PUT' && url.pathname === '/v1/agent-sources/offer') {
+      const body = PutOfferSchema.safeParse(await readJson(request))
+      if (!body.success) {
+        return fail('invalid_request', 400)
+      }
+      await putOfferAnswer(db, caller, body.data, now)
+      return noStore(await agentSourcesView(db, caller, null))
     }
-    if (next === null) {
-      await this.state.storage.deleteAll()
-      return
+    if (request.method === 'PUT' && url.pathname === '/v1/agent-sources') {
+      const body = PutSourceSchema.safeParse(await readJson(request))
+      if (!body.success) {
+        return fail('invalid_request', 400)
+      }
+      const row = await putAgentSource(db, caller, body.data, now)
+      // A running sandbox picks the change up in new shells within seconds (same path as a secret edit).
+      const targets = row ? (row.status === 'running' ? [row] : []) : await runningSandboxesForDefault(db, caller.userId, body.data.agent)
+      if (targets.length > 0) {
+        const work = lifecycleDeps(env, deps).then(async (life) => {
+          if (life) {
+            for (const target of targets) {
+              await refreshSandboxEnv(life, target).catch(() => false)
+            }
+          }
+        })
+        if (deps.waitUntil) {
+          deps.waitUntil(work.catch(() => undefined))
+        } else {
+          await work
+        }
+      }
+      return noStore(await agentSourcesView(db, caller, body.data.workspaceId ?? null))
     }
-    await this.state.storage.setAlarm(Date.now() + next)
+    return fail('not_found', 404)
+  } catch (error) {
+    if (error instanceof AgentSourceError) {
+      return fail(error.code, error.status, error.reason)
+    }
+    throw error
   }
 }
