@@ -18,7 +18,7 @@ import { isTwinWorkspace } from '@/lib/workspace/ownership/resolve-owner'
 import {
   remoteFileBrowserUnsupportedMessage,
   twinFileBrowserUnsupportedMessage
-} from '@/lib/workspace-file-browser-open-target'
+} from '@/lib/browser/documents/workspace-file-browser-open-target'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { findSiblingGroupId } from '../../../../../shared/workspace-layout/tab-group-layout-tree'

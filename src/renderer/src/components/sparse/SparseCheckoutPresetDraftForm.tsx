@@ -7,7 +7,7 @@ import { SparseDirectoryPicker } from './SparseDirectoryPicker'
 import { SparseSelectedDirectoryList } from './SparseSelectedDirectoryList'
 import { addSparseDirectoryEntries } from './sparse-directory-entry-input'
 import { useTranslate } from '@/i18n/use-translate'
-import { normalizeSparseDirectoryLines } from '@/lib/sparse-paths'
+import { normalizeSparseDirectoryLines } from '@/lib/directory-input/sparse-paths'
 import type { SparsePresetDirectoryParseResult } from '@/components/sparse/sparse-preset-draft'
 
 export type SparsePresetDraft = {

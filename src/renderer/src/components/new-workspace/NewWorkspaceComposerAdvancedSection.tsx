@@ -7,7 +7,7 @@ import {
 } from './workspace-setup-composer-copy'
 import { toast } from 'sonner'
 import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPresetSelect'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES } from '@/lib/text-input/paste/text-control-paste-model'
 import {
   measureTextControlPasteByteLength,

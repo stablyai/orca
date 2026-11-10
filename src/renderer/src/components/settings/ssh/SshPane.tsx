@@ -35,7 +35,7 @@ import {
   isManagedServerSshHost,
   SshManagedHostRemoveDialog
 } from './targets/SshManagedHostRemoveDialog'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { resolveSshHostRemoval } from '../../sidebar/ssh-host-remove-resolution'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { toSshExecutionHostId } from '../../../../../shared/execution-host'

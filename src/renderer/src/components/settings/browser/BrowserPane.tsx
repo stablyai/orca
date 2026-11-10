@@ -36,8 +36,8 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
-import { isMacUserAgent } from '@/lib/user-agent-platform'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useTranslate } from '@/i18n/use-translate'
 import { translateExecutionHostLabel } from '../../sidebar/execution-host-label'
 import { translateBrowserSessionProfileLabel } from '@/lib/browser-session-profile-label'

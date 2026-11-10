@@ -3,7 +3,7 @@ import {
   encodeTerminalStreamJson
 } from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import { TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 import { RemoteRuntimeTerminalMultiplexerBase } from '../streams/transport/remote-runtime-terminal-multiplexer-base'
 import {
   REMOTE_TERMINAL_RESYNC_MAX_UNANSWERED_TIMEOUTS,

@@ -8,7 +8,7 @@ import {
 import type { AgentsStep, AgentsStepId } from '../../../../shared/agents-orchestration-steps'
 import type { WorkbenchStep, WorkbenchStepId } from '../../../../shared/workbench-steps'
 import type { ReviewStep, ReviewStepId } from '../../../../shared/review-steps'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   getLocalizedFeatureWallStepCopy,

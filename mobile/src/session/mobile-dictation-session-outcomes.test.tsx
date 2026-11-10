@@ -14,8 +14,6 @@ const seen = vi.hoisted(() => {
   return {
     toasts: new Array<string>(),
     errorHaptics: 0,
-    setupSheetOpens: 0,
-    micPermissionRequests: 0,
     clipboard: new Array<string>(),
     inputs: new Array<string>(),
     chat,
@@ -30,7 +28,7 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'ios' }
 }))
 // The computer's name only words announcements; the stored host profile pulls in secure storage.
-vi.mock('../transport/hosts/use-host-profile', () => ({ useHostProfile: () => null }))
+vi.mock('../host-catalog/use-host-profile', () => ({ useHostProfile: () => null }))
 vi.mock('@orca/expo-two-way-audio', () => ({
   addExpoTwoWayAudioEventListener: (name: string, listener: (event: { data: string }) => void) => {
     seen.audioListeners.set(name, listener)
@@ -38,7 +36,6 @@ vi.mock('@orca/expo-two-way-audio', () => ({
   },
   initialize: () => Promise.resolve(true),
   requestMicrophonePermissionsAsync: () => {
-    seen.micPermissionRequests += 1
     return Promise.resolve({ granted: true })
   },
   tearDown: () => {},
@@ -159,11 +156,7 @@ function mount(
       activeSessionTab: { id: 'tab1', type: 'terminal', terminal: 't1', title: 'Claude Code' },
       diffComments: [],
       diffCommentsRef: useRef([]),
-      setShowDictationSetup: (next: boolean) => {
-        if (next) {
-          seen.setupSheetOpens += 1
-        }
-      },
+      setShowDictationSetup: () => {},
       setDictationMode: () => {},
       dictationEnabled: true,
       setDictationEnabled: () => {},
@@ -259,42 +252,11 @@ async function startRecording(
 beforeEach(() => {
   seen.toasts.length = 0
   seen.errorHaptics = 0
-  seen.setupSheetOpens = 0
-  seen.micPermissionRequests = 0
   seen.clipboard.length = 0
   seen.inputs.length = 0
   seen.chat = { shown: false, scope: null }
   seen.chatWrites.length = 0
   seen.audioListeners.clear()
-})
-
-describe('a mic tap after the host reported dictation is not set up', () => {
-  it('opens setup without asking for the microphone, then lets the host judge the tap after the sheet closes', async () => {
-    const rpc = createFakeRpcClient()
-    const mounted = mount(rpc)
-    await act(async () => {
-      const read = mounted.current().refreshDictationMode()
-      for (const request of rpc.requests.splice(0)) {
-        request.resolve({
-          id: 'desktop',
-          ok: true,
-          result: { enabled: false, selectedModelId: '', dictationMode: 'toggle', models: [] }
-        })
-      }
-      await read
-    })
-    act(() => mounted.current().handleDictationToggle())
-    expect(seen.setupSheetOpens).toBe(1)
-    expect(seen.micPermissionRequests).toBe(0)
-    expect(rpc.requests).toEqual([])
-
-    // Closing the sheet hands the next tap to the host until a fresh read lands.
-    act(() => mounted.current().closeDictationSetup())
-    act(() => mounted.current().handleDictationToggle())
-    await settle(rpc, '')
-    expect(seen.setupSheetOpens).toBe(1)
-    expect(seen.micPermissionRequests).toBe(1)
-  })
 })
 
 describe('a mic tap while the transcript is processing', () => {

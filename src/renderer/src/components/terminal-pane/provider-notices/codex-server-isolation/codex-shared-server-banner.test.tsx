@@ -18,10 +18,10 @@ const routing = vi.hoisted(() => ({
 vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorkspace: routing.activateAndRevealWorkspace
 }))
-vi.mock('@/lib/floating-workspace-panel-reveal', () => ({
+vi.mock('@/components/floating-terminal/floating-workspace-panel-reveal', () => ({
   revealFloatingWorkspacePanel: routing.revealFloatingWorkspacePanel
 }))
-vi.mock('@/lib/floating-workspace-tab-creation', () => ({
+vi.mock('@/components/floating-terminal/floating-workspace-tab-creation', () => ({
   createFloatingWorkspaceTerminalTab: routing.createFloatingWorkspaceTerminalTab
 }))
 

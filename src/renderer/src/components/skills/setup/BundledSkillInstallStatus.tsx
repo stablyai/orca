@@ -6,7 +6,7 @@ import {
   bundledSkillInstallNeedsAttention,
   type BundledSkillInstall
 } from '@/hooks/skills/installation/use-bundled-skill-install'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function BundledSkillInstallStatus(props: {

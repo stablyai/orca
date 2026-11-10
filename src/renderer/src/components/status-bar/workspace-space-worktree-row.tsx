@@ -2,11 +2,14 @@ import { AlertTriangle, GitBranch, Server, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '../ui/context-menu'
-import { isPortaledRowMenuClick, isRowActivationKey } from '@/lib/list-row-interaction'
+import {
+  isPortaledRowMenuClick,
+  isRowActivationKey
+} from '@/lib/list-interaction/list-row-interaction'
 import { HoverCard, HoverCardTrigger } from '../ui/hover-card'
 import {
   formatBytes,

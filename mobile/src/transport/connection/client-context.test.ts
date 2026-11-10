@@ -23,7 +23,7 @@ vi.mock('./runtime-status-probe', () => ({
   startRuntimeStatusProbe: (client: unknown, onStatus: (status: unknown) => void) =>
     descriptorProbe.start(client, onStatus)
 }))
-vi.mock('../hosts/host-descriptor-recorder', () => ({
+vi.mock('../../host-descriptors/host-descriptor-recorder', () => ({
   recordHostDescriptorFromStatus: (...args: unknown[]) => descriptorProbe.record(...args)
 }))
 
@@ -36,7 +36,7 @@ vi.mock('../rpc/direct-rpc-connect', () => ({
 vi.mock('./host-logical-client', () => ({
   openHostLogicalClient: (...args: unknown[]) => connectMock(...args)
 }))
-vi.mock('../hosts/host-store', () => ({
+vi.mock('../../host-catalog/host-store', () => ({
   loadHosts: () => loadHostsMock()
 }))
 vi.mock('../../diagnostics/connection/connection-revival-triggers', () => ({

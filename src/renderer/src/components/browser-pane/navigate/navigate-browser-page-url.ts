@@ -25,8 +25,8 @@ import type {
   BrowserTabPageState
 } from '../describe-page/browser-page-types'
 import type { MutableRefObject } from 'react'
-import { statUserOpenedPath } from '@/lib/user-opened-local-path'
-import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
+import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
+import { requireRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 
 export type NavigateBrowserPageToUrlArgs = {
   url: string

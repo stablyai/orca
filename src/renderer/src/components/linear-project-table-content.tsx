@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { translateUnassignedLabel } from '@/i18n/unassigned-label'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { LinearProjectSummary } from '../../../shared/linear/project-types'
 import {
   linearProjectBacklogLabel,

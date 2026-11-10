@@ -11,7 +11,7 @@ import { Switch } from '../../../ui/switch'
 import { ColorField, NumberField } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { clampNumber } from '@/lib/terminal-theme'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { WindowMaterialSetting } from '../../appearance/WindowMaterialSetting'
 import { useTranslate } from '@/i18n/use-translate'
 
