@@ -44,7 +44,7 @@ export function SectionHeader({
           <ChevronDown
             className={cn('size-3.5 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
           />
-          <span className="min-w-0 flex-1 text-2xs font-semibold uppercase tracking-wider text-foreground/70 group-hover/section:text-accent-foreground">
+          <span className="min-w-0 flex-1 text-xs font-semibold uppercase tracking-wider text-foreground/70 group-hover/section:text-accent-foreground">
             <span className="flex min-w-0 items-center gap-1">
               <span className="min-w-0 truncate" title={label}>
                 {label}

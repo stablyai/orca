@@ -103,7 +103,7 @@ export function FolderWorktreeSectionHeader({
               onClick={onOpen}
               aria-label={openLabel}
             >
-              <ArrowUpRight className="size-3.5 text-muted-foreground" />
+              <ArrowUpRight className="size-3.5 text-muted-foreground group-hover/card-header:text-foreground" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>{openLabel}</TooltipContent>
