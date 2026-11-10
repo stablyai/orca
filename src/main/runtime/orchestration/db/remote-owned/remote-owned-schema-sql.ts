@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS remote_dispatches (
   stop_retry_at      INTEGER,
   stop_last_error    TEXT,
   created_at         TEXT NOT NULL DEFAULT (datetime('now')),
+  -- When the server last told this Orca about the Dispatch; this Orca's own stop bookkeeping leaves it.
   updated_at         TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_remote_dispatches_run ON remote_dispatches(run_id);

@@ -275,7 +275,7 @@ describe('remote-owned records on the coordinating Orca', () => {
           )
         ).toBeUndefined()
         expect(getRemoteDispatch(db, 'ctx_late')).toBeUndefined()
-        expect(listRemoteDispatches(db, run.id)).toEqual([])
+        expect(listRemoteDispatches(db, { runId: run.id, limit: 10 })).toEqual([])
         expect(getRemotePlacement(db, 'task_t')).toBeUndefined()
       })
     }
