@@ -56,6 +56,10 @@ export const signedOut = toastFixture({ kind: 'failed', code: 'signed_out' })
 export const notCloud = toastFixture({ kind: 'failed', code: 'not_cloud' })
 export const sandboxStarting = toastFixture({ kind: 'failed', code: 'starting' })
 export const archived = toastFixture({ kind: 'failed', code: 'archived' })
+/** After Wake sandbox or Unarchive: the desktop opens by itself once the sandbox is awake. */
+export const waking = toastFixture({ kind: 'waking', via: 'wake' })
+export const unarchiving = toastFixture({ kind: 'waking', via: 'unarchive' })
+export const wakeFailed = toastFixture({ kind: 'failed', code: 'wake_failed' })
 
 function keyboardHintFixture(kind: 'captured' | 'released', chord: string, width = 520) {
   return defineFixture({

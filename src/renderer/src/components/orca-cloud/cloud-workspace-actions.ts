@@ -133,7 +133,8 @@ export function runArchiveCloudWorkspace(
   })
 }
 
-export async function runUnarchiveCloudWorkspace(workspaceId: string): Promise<void> {
+/** Resolves true once unarchived and woken; a failure has already shown its toast. */
+export async function runUnarchiveCloudWorkspace(workspaceId: string): Promise<boolean> {
   const result = await unarchiveCloudWorkspace(workspaceId, {
     wake: (id) => activateWorktreeFromSidebar(id)
   })
@@ -141,8 +142,9 @@ export async function runUnarchiveCloudWorkspace(workspaceId: string): Promise<v
     translate('orcaCloudWorkspace.unarchiveFailed', 'Couldn’t unarchive the workspace'),
     result
   )
+  return result.ok
 }
 
-export function wakeCloudWorkspace(workspaceId: string): Promise<void> {
-  return activateWorktreeFromSidebar(workspaceId)
+export async function wakeCloudWorkspace(workspaceId: string): Promise<void> {
+  await activateWorktreeFromSidebar(workspaceId)
 }

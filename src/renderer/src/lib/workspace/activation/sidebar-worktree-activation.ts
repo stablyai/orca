@@ -37,16 +37,22 @@ async function settleLifecycleCall(
 export async function activateWorktreeFromSidebar(
   worktreeId: string,
   executionHostId?: ExecutionHostId,
-  options?: { revealInSidebar?: boolean }
-): Promise<void> {
+  options?: {
+    revealInSidebar?: boolean
+    /** False when the caller reports a failed wake itself (one failure message, not two). */
+    reportWakeFailure?: boolean
+  }
+): Promise<EphemeralVmWakeOutcome> {
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
     activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId, {
       navigationIntent: 'user-open',
-      ...options,
+      ...(options?.revealInSidebar !== undefined
+        ? { revealInSidebar: options.revealInSidebar }
+        : {}),
       ...(executionHostId ? { executionHostId } : {})
     })
-    return
+    return { ok: true }
   }
   // Keep navigation independent from an optional runtime wake IPC.
   activateAndRevealWorktree(worktreeId, {
@@ -55,13 +61,21 @@ export async function activateWorktreeFromSidebar(
     ...(executionHostId ? { executionHostId } : {})
   })
 
-  await resumeEphemeralVmWorkspace(worktreeId)
+  return resumeEphemeralVmWorkspace(worktreeId, {
+    reportFailure: options?.reportWakeFailure ?? true
+  })
 }
 
+/** How a wake went: ok also when there was nothing to wake (or it is archived: never woken). */
+export type EphemeralVmWakeOutcome = { ok: true } | { ok: false; reason: string }
+
 /** Wakes the per-workspace VM behind a worktree, if it has one; host health reads Waking meanwhile. */
-export async function resumeEphemeralVmWorkspace(worktreeId: string): Promise<void> {
+export async function resumeEphemeralVmWorkspace(
+  worktreeId: string,
+  options: { reportFailure?: boolean } = {}
+): Promise<EphemeralVmWakeOutcome> {
   if (typeof window === 'undefined' || !window.api?.ephemeralVm?.resumeWorkspace) {
-    return
+    return { ok: true }
   }
   // An archived Orca Cloud workspace opens its read-only archive view; only Unarchive wakes it.
   // A cold start or a stale read must not wake it, so a cloud workspace re-reads its status first.
@@ -70,7 +84,7 @@ export async function resumeEphemeralVmWorkspace(worktreeId: string): Promise<vo
   // Known archived: never wake. Otherwise don't wait on a status round trip before waking: main
   // and the control plane both refuse to resume an archive, and that refusal shows the archive.
   if (maybeCloud && isCloudWorkspaceArchived(worktreeId)) {
-    return
+    return { ok: true }
   }
   if (maybeCloud) {
     void refreshCloudWorkspaceStatusIfStale(worktreeId, 30_000)
@@ -119,12 +133,15 @@ export async function resumeEphemeralVmWorkspace(worktreeId: string): Promise<vo
       if (JSON.stringify(result).includes(CLOUD_WORKSPACE_ARCHIVED_ERROR)) {
         // Archived elsewhere since this window last looked: show the archive instead of failing.
         void refreshCloudWorkspaceStatus(worktreeId)
-        return
+        return { ok: true }
       }
       if (getCloudWorkspaceSnapshot().ids.has(worktreeId)) {
         // The cloud waking overlay turns into its own failure card; no second toast.
         failCloudWake(worktreeId, reason)
-        return
+        return { ok: false, reason }
+      }
+      if (options.reportFailure === false) {
+        return { ok: false, reason }
       }
       toast.error(
         translate(
@@ -134,7 +151,7 @@ export async function resumeEphemeralVmWorkspace(worktreeId: string): Promise<vo
         // The row's Resume failed tooltip says how to retry; not every failed wake leaves one.
         { description: reason }
       )
-      return
+      return { ok: false, reason }
     }
     const runtime = result.runtime
     if (runtime?.runtimeEnvironmentId) {
@@ -153,6 +170,7 @@ export async function resumeEphemeralVmWorkspace(worktreeId: string): Promise<vo
       store.getState().setEphemeralVmWorkspaceWaking(worktreeId, false)
     }
   }
+  return { ok: true }
 }
 
 /** Suspends a workspace's VM without closing panels (callers sleep panels first when open). */

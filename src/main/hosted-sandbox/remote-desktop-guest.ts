@@ -74,7 +74,7 @@ function pauseMessage(reason: RemoteDesktopMintFailure | 'failed'): string {
     case 'archived':
       return translateMain(
         'components.cloudRemoteDesktop.pageArchived',
-        'This sandbox is archived. Unarchive the workspace in Orca, then reconnect.'
+        'This workspace is archived. Unarchive it in Orca, then reconnect.'
       )
     case 'starting':
       return translateMain(
