@@ -184,6 +184,8 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
       return null
     }
     hold.reported = true
+    // The escalation usually goes out before the first poll, so read the countdown here too.
+    hold.expiresAt ??= claudeDialogExpiresAt(this.deps.readScreen(paneKey), this.deps.now())
     return this.payload(hold)
   }
 

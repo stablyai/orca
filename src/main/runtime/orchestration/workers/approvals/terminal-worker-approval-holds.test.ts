@@ -227,10 +227,10 @@ describe('terminal worker approval holds', () => {
     expect(asked.replies).toEqual([])
   })
 
-  it("carries Claude's on-screen countdown as the time the prompt decides itself", async () => {
-    const { holds, tick, dispatch } = setup()
+  it("carries Claude's on-screen countdown as the time the prompt decides itself", () => {
+    const { holds, dispatch, screen } = setup()
+    screen.lines = [...DIALOG, ...Array.from({ length: 30 }, () => '')]
     holds.admit(hook('tool-1').request)
-    await tick()
     expect(holds.takeOpenApproval(PANE, dispatch.id)?.expiresAt).toBe('2026-11-10T12:01:42.000Z')
   })
 

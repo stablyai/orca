@@ -52,7 +52,7 @@ export function claudeDialogExpiresAt(
   lines: readonly string[] | null,
   now: number
 ): string | undefined {
-  for (const line of lines?.slice(-DIALOG_REGION_LINES * 2) ?? []) {
+  for (const line of (lines ?? []).filter((row) => row.trim() !== '').slice(-DIALOG_REGION_LINES)) {
     const match = AUTO_BLOCK_COUNTDOWN_RE.exec(line)
     if (match) {
       return new Date(now + (Number(match[1]) * 60 + Number(match[2])) * 1_000).toISOString()
