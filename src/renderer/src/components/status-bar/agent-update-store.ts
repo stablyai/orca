@@ -156,15 +156,13 @@ export function refreshAgentUpdates(owner: RuntimeClientTarget): void {
   pull(owner, (transport) => transport.refresh())
 }
 
-export function requestAgentUpdates(owner: RuntimeClientTarget, agents: TuiAgent[]): void {
-  const transport = transportFor(owner)
-  const key = ownerKey(owner)
-  void transport?.update(agents).then(
-    (next) => {
-      if (next) {
-        setState(key, next)
-      }
-    },
-    () => {}
-  )
+/** Rejects when the host refuses or cannot be reached so the caller can tell the user. */
+export async function requestAgentUpdates(
+  owner: RuntimeClientTarget,
+  agents: TuiAgent[]
+): Promise<void> {
+  const next = await transportFor(owner)?.update(agents)
+  if (next) {
+    setState(ownerKey(owner), next)
+  }
 }

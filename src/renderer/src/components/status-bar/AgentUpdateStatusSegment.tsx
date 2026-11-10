@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AlertCircle, ArrowUpCircle, CheckCircle2, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -66,7 +67,17 @@ export function AgentUpdateStatusSegment({
   if (!owner || rows.length === 0) {
     return null
   }
-  const update = (agents: TuiAgent[]): void => requestAgentUpdates(owner, agents)
+  const update = (agents: TuiAgent[]): void => {
+    requestAgentUpdates(owner, agents).catch((error: unknown) =>
+      toast.error(
+        t(
+          'auto.components.status.bar.AgentUpdateStatusSegment.updateRequestFailed',
+          'Could not start the update'
+        ),
+        { description: error instanceof Error ? error.message : undefined }
+      )
+    )
+  }
 
   const count = rows.filter((row) => row.updateAvailable || row.run?.state === 'failed').length
   const runnable = rows.filter((row) => row.action.kind === 'run' && row.updateAvailable)

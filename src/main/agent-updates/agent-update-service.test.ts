@@ -91,6 +91,36 @@ describe('agent-update-service', () => {
     expect(rechecked.rows).toEqual([])
   })
 
+  it('does not revive an updated agent from a check that read the old version', async () => {
+    const service = await loadService()
+    checkAgentUpdates.mockResolvedValueOnce(checked([row('claude', '2.1.319', '2.1.320')]))
+    runAgentUpdate.mockResolvedValue({ status: 'done', version: '2.1.320' })
+    await service.refreshAgentUpdates(SETTINGS)
+    vi.setSystemTime(new Date('2026-11-09T13:00:01Z'))
+    let finishCheck: (result: ReturnType<typeof checked>) => void = () => {}
+    checkAgentUpdates.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishCheck = resolve
+      })
+    )
+
+    const overlappingCheck = service.refreshAgentUpdates(SETTINGS)
+    await service.startAgentUpdates(['claude'], SETTINGS)
+    finishCheck(checked([row('claude', '2.1.319', '2.1.320')]))
+    await overlappingCheck
+
+    expect(service.getAgentUpdatesState().rows).toEqual([
+      {
+        agent: 'claude',
+        current: '2.1.320',
+        latest: '2.1.320',
+        updateAvailable: false,
+        action: { kind: 'run' },
+        run: { state: 'done' }
+      }
+    ])
+  })
+
   it('keeps working when a listener throws on every notification', async () => {
     const service = await loadService()
     vi.spyOn(console, 'error').mockImplementation(() => {})

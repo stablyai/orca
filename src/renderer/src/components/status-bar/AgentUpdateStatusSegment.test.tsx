@@ -30,6 +30,9 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: ({ children }: { children?: ReactNode }) => <div data-tooltip>{children}</div>
 }))
 
+const toastError = vi.hoisted(() => vi.fn())
+vi.mock('sonner', () => ({ toast: { error: toastError, success: vi.fn() } }))
+
 vi.mock('@/components/ui/popover', () => ({
   Popover: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   PopoverTrigger: ({ children }: { children?: ReactNode }) => <>{children}</>,
@@ -136,6 +139,7 @@ describe('AgentUpdateStatusSegment', () => {
     agentUpdates.refresh.mockReset()
     agentUpdates.refresh.mockResolvedValue(EMPTY)
     agentUpdates.update.mockClear()
+    toastError.mockClear()
     Object.defineProperty(window, 'api', { configurable: true, value: { agentUpdates } })
   })
 
@@ -184,6 +188,18 @@ describe('AgentUpdateStatusSegment', () => {
     })
 
     expect(agentUpdates.update).toHaveBeenCalledWith({ agents: ['codex'] })
+  })
+
+  it('tells the user when the update request is refused', async () => {
+    agentUpdates.update.mockRejectedValueOnce(new Error('host-admin required'))
+    await render()
+    await push(TWO_UPDATES)
+
+    await act(async () => {
+      updateAllButton()?.click()
+    })
+
+    expect(toastError).toHaveBeenCalledTimes(1)
   })
 
   it('disables every update button while any agent is updating', async () => {

@@ -55,9 +55,13 @@ function withoutDoneRows(current: readonly AgentUpdateRow[]): AgentUpdateRow[] {
 // a running row stays because its outcome has not arrived yet.
 function mergeCheckedRows(checked: readonly AgentUpdateRow[]): AgentUpdateRow[] {
   const previous = new Map(rows.map((entry) => [entry.agent, entry]))
-  const merged = checked.map((entry) => {
-    const run = previous.get(entry.agent)?.run
-    return run && run.state !== 'done' ? { ...entry, run } : entry
+  const merged = checked.flatMap((entry) => {
+    const before = previous.get(entry.agent)
+    // Why: a check that overlapped a finished update may still carry the pre-update version.
+    if (before?.run?.state === 'done' && before.current !== entry.current) {
+      return [before]
+    }
+    return before?.run && before.run.state !== 'done' ? [{ ...entry, run: before.run }] : [entry]
   })
   const checkedAgents = new Set(checked.map((entry) => entry.agent))
   const stillRunning = rows.filter(
