@@ -42,35 +42,46 @@ export function createCloudMcpEgress(deps: {
     }
   }
 
+  // One ledger file for every sandbox: applies run one at a time so concurrent syncs (several
+  // workspaces connecting, a toggle during a sync) never write over each other's read.
+  let queue: Promise<unknown> = Promise.resolve()
+  const serialized = <T>(work: () => Promise<T>): Promise<T> => {
+    const run = queue.then(work, work)
+    queue = run.catch(() => undefined)
+    return run
+  }
+
   return {
-    async apply(sandboxId, wanted) {
-      const path = `v1/sandboxes/${encodeURIComponent(sandboxId)}/egress/hosts`
-      const ledger = await readLedger()
-      const owned = ledger[sandboxId] ?? []
-      if (wanted.length === 0 && owned.length === 0) {
-        return { hosts: [], dropped: [] }
-      }
-      const current = (await call('GET', path, EgressHostsResponse, { kind: 'control' })).hosts
-      const merge = mergeMcpEgressHosts({ current, owned, wanted })
-      const sorted = [...current].sort()
-      const unchanged =
-        merge.hosts.length === sorted.length && merge.hosts.every((host, i) => host === sorted[i])
-      const hosts = unchanged
-        ? current
-        : (
-            await call('PUT', path, EgressHostsResponse, {
-              body: { hosts: merge.hosts },
-              kind: 'control'
-            })
-          ).hosts
-      const next = { ...ledger }
-      if (merge.owned.length > 0) {
-        next[sandboxId] = merge.owned
-      } else {
-        delete next[sandboxId]
-      }
-      writeFileAtomically(ledgerPath, `${JSON.stringify(next, null, 2)}\n`)
-      return { hosts, dropped: merge.dropped }
+    apply: (sandboxId, wanted) => serialized(() => applyOne(sandboxId, wanted))
+  }
+
+  async function applyOne(sandboxId: string, wanted: readonly string[]): Promise<McpEgressResult> {
+    const path = `v1/sandboxes/${encodeURIComponent(sandboxId)}/egress/hosts`
+    const ledger = await readLedger()
+    const owned = ledger[sandboxId] ?? []
+    if (wanted.length === 0 && owned.length === 0) {
+      return { hosts: [], dropped: [] }
     }
+    const current = (await call('GET', path, EgressHostsResponse, { kind: 'control' })).hosts
+    const merge = mergeMcpEgressHosts({ current, owned, wanted })
+    const sorted = [...current].sort()
+    const unchanged =
+      merge.hosts.length === sorted.length && merge.hosts.every((host, i) => host === sorted[i])
+    const hosts = unchanged
+      ? current
+      : (
+          await call('PUT', path, EgressHostsResponse, {
+            body: { hosts: merge.hosts },
+            kind: 'control'
+          })
+        ).hosts
+    const next = { ...ledger }
+    if (merge.owned.length > 0) {
+      next[sandboxId] = merge.owned
+    } else {
+      delete next[sandboxId]
+    }
+    writeFileAtomically(ledgerPath, `${JSON.stringify(next, null, 2)}\n`)
+    return { hosts, dropped: merge.dropped }
   }
 }

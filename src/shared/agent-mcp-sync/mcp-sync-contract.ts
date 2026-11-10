@@ -47,6 +47,8 @@ const ServerSet = z
 export const AgentMcpSyncParams = z
   .object({
     claude: ServerSet.optional(),
+    /** Claude project (local) scope servers: written under the host workspace's project, never user scope. */
+    claudeProject: ServerSet.optional(),
     codex: ServerSet.optional(),
     /** Stable id of the syncing computer: each one owns (and only removes) its own entries. */
     syncer: z

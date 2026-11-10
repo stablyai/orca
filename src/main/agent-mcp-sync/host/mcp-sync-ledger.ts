@@ -6,6 +6,8 @@ export type McpSyncLedger = {
   version: 1
   /** Claude server name -> fingerprint of the entry written. */
   claude: Record<string, string>
+  /** Same, for Claude project scope under the host workspace. */
+  claudeProject?: Record<string, string>
   /** Fingerprint of the managed Codex block body as last written. */
   codexBlock: string | null
 }
@@ -50,9 +52,18 @@ export function parseMcpSyncLedger(text: string | null): McpSyncLedger {
         }
       }
     }
+    const claudeProject: Record<string, string> = {}
+    if (isMcpRecord(parsed.claudeProject)) {
+      for (const [name, print] of Object.entries(parsed.claudeProject)) {
+        if (typeof print === 'string') {
+          claudeProject[name] = print
+        }
+      }
+    }
     return {
       version: 1,
       claude,
+      claudeProject,
       codexBlock: typeof parsed.codexBlock === 'string' ? parsed.codexBlock : null
     }
   } catch {

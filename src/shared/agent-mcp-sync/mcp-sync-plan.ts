@@ -44,6 +44,7 @@ function dedupe(servers: readonly LocalMcpServer[]): LocalMcpServer[] {
 
 export function planMcpSync(input: McpSyncPlanInput): McpSyncPlan {
   const claude: Record<string, Record<string, unknown>> = {}
+  const claudeProject: Record<string, Record<string, unknown>> = {}
   const codex: Record<string, Record<string, unknown>> = {}
   const rows: McpSyncServerRow[] = []
   for (const server of dedupe(input.servers)) {
@@ -68,7 +69,8 @@ export function planMcpSync(input: McpSyncPlanInput): McpSyncPlan {
           : !included
             ? 'turned-off'
             : null
-    const bucket = server.agent === 'claude' ? claude : codex
+    const bucket =
+      server.agent === 'codex' ? codex : server.source === 'claude-project' ? claudeProject : claude
     if (
       skipReason === null &&
       ported.ok &&
@@ -81,8 +83,12 @@ export function planMcpSync(input: McpSyncPlanInput): McpSyncPlan {
     }
   }
   rows.sort((a, b) => a.agent.localeCompare(b.agent) || a.name.localeCompare(b.name))
-  // Both agents are always named so servers turned off or removed here leave the host too.
-  return { params: { claude, codex }, rows }
+  // Both agents are always named so servers turned off or removed here leave the host too. Project
+  // scope rides along only when used, so a host that predates it keeps syncing user-scope servers.
+  return {
+    params: { claude, codex, ...(Object.keys(claudeProject).length > 0 ? { claudeProject } : {}) },
+    rows
+  }
 }
 
 function hostnameOf(origin: string | null): string | null {

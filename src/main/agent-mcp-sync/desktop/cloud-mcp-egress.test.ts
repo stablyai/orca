@@ -63,4 +63,15 @@ describe('createCloudMcpEgress', () => {
     expect(await egress.apply('sbx_2', [])).toEqual({ hosts: [], dropped: [] })
     expect(cp.calls).toEqual([])
   })
+
+  it('concurrent applies for different sandboxes keep both in the shared ledger', async () => {
+    const cp = fakeControlPlane([])
+    const egress = createCloudMcpEgress({ userDataPath: dir, controlPlane, request: cp.request })
+    await Promise.all([
+      egress.apply('sbx_a', ['a.example.com']),
+      egress.apply('sbx_b', ['b.example.com'])
+    ])
+    const ledger = JSON.parse(readFileSync(join(dir, 'cloud-mcp-egress.json'), 'utf8'))
+    expect(ledger).toEqual({ sbx_a: ['a.example.com'], sbx_b: ['b.example.com'] })
+  })
 })
