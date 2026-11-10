@@ -33,9 +33,10 @@ export function buildAiVaultResumeCommand(args: {
   const baseCommand = commandOverride?.trim() || defaultAiVaultResumeCommandBase(agent)
   // OMP/Prime/Pi accept absolute transcript paths across custom roots/WSL; default-store ID lookup
   // would miss them. Fall back to the ID without a path.
+  const resumeFileTarget = normalizeAiVaultResumeFilePath(resumeFilePath?.trim(), platform)
   const resumeTarget =
-    (agent === 'omp' || agent === 'prime-agent' || agent === 'pi') && resumeFilePath?.trim()
-      ? resumeFilePath.trim()
+    (agent === 'omp' || agent === 'prime-agent' || agent === 'pi') && resumeFileTarget
+      ? resumeFileTarget
       : sessionId
   const sessionArg =
     shell === 'cmd'

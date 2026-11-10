@@ -116,3 +116,18 @@ describe('buildAiVaultResumeCommand transcript targets', () => {
     )
   })
 })
+
+describe('buildAiVaultResumeCommand transcript path platforms', () => {
+  // A WSL host reports Windows UNC paths; the shell that resumes it is Linux.
+  it('converts a WSL UNC transcript path for a Linux host', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'pi',
+        sessionId: 'sid',
+        cwd: '/home/u/repo',
+        platform: 'linux',
+        resumeFilePath: '\\\\wsl.localhost\\Ubuntu\\home\\u\\sessions\\s.jsonl'
+      })
+    ).toBe("cd '/home/u/repo' && pi --session '/home/u/sessions/s.jsonl'")
+  })
+})
