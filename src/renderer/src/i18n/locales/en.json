@@ -15179,6 +15179,9 @@
             "sessionDeleted": "Session deleted",
             "sessionDeleteFailed": "Couldn't delete the session",
             "sessionDeleteCheckingHost": "Checking {{value0}}…",
+            "codexDeleteUnsupported": "This Codex version does not support session deletion. Update Codex and try again.",
+            "codexDeleteActive": "This session is still owned by a Codex terminal or native chat. Close its terminal, or delete it from its chat.",
+            "codexDeleteIncomplete": "Deletion incomplete. Some Codex session data may remain. Try Delete again to finish cleanup.",
             "resumeInChatConflict": "Another chat is already holding this conversation.",
             "resumeInChatTranscriptMissing": "This conversation's history could not be loaded, so it cannot be resumed in chat.",
             "resumeInChatFailed": "Could not resume this session in a new chat.",
@@ -15293,6 +15296,7 @@
             "resumeInNewCliTooltipChat": "This chat stays unchanged."
           },
           "AiVaultSessionDeleteDialog": {
+            "codexDescription": "\"{{value0}}\" will be permanently deleted from Codex history on this device. Your workspace files will be kept. Close any Codex session using it outside Orca before deleting; Orca cannot detect those sessions.",
             "title": "Delete this session?",
             "description": "\"{{value0}}\" will be deleted. Once deleted, it will no longer be resumable from {{value1}}'s own command line either.",
             "remoteDescription": "\"{{value0}}\" will be deleted from {{value2}}. Once deleted, it will no longer be resumable from {{value1}}'s own command line either.",

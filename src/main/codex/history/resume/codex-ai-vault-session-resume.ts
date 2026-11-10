@@ -2,6 +2,7 @@ import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
+import { isCodexSessionDeletionRecorded } from '../deletion/codex-session-deletion-record'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
@@ -50,6 +51,13 @@ export async function prepareCodexAiVaultSessionResume(
   args: AiVaultPrepareSessionResumeArgs,
   options: CodexAiVaultResumeOptions
 ): Promise<AiVaultPrepareSessionResumeResult> {
+  if (
+    args.executionHostId === LOCAL_EXECUTION_HOST_ID &&
+    parseWslUncPath(args.filePath) === null &&
+    (await isCodexSessionDeletionRecorded(args.sessionId))
+  ) {
+    throw new Error('This Codex session was deleted or has an incomplete deletion')
+  }
   const result = await prepareLegacySharedCodexSessionResume(args, {
     isHostSystemDefaultRealHomeSelected: () =>
       options.runtimeHome?.isHostSystemDefaultRealHomeSelected() === true,

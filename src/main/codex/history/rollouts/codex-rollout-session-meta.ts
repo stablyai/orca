@@ -1,5 +1,6 @@
 import { readTranscriptSlice } from '../../../native-chat/wsl-transcript-fs-access'
 import type { WslTranscriptFsTaskPriority } from '../../../native-chat/wsl-transcript-fs-gate'
+import { readCodexCompressedRolloutHead } from './codex-compressed-rollout-head'
 
 const ROLLOUT_READ_LIMIT = 64 * 1024
 
@@ -12,7 +13,9 @@ export async function readCodexRolloutSessionMetaId(
   let head: Buffer
   try {
     // The transcript gate bounds stalled WSL reads; missing or pruned rollouts cannot abort a scan (#15453).
-    head = await readTranscriptSlice(filePath, 0, ROLLOUT_READ_LIMIT, priority, signal)
+    head = filePath.endsWith('.jsonl.zst')
+      ? await readCodexCompressedRolloutHead(filePath, ROLLOUT_READ_LIMIT, priority, signal)
+      : await readTranscriptSlice(filePath, 0, ROLLOUT_READ_LIMIT, priority, signal)
   } catch (error) {
     // Preserve cancellation instead of treating it as an unreadable rollout.
     if (signal?.aborted) {

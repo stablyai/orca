@@ -98,17 +98,24 @@ export function useAiVaultSessionDeleteAction({
           'auto.components.right.sidebar.AiVaultSessionDeleteDialog.title',
           'Delete this session?'
         ),
-        description: environmentId
-          ? translate(
-              'auto.components.right.sidebar.AiVaultSessionDeleteDialog.remoteDescription',
-              '"{{value0}}" will be deleted from {{value2}}. Once deleted, it will no longer be resumable from {{value1}}\'s own command line either.',
-              { value0: session.title, value1: agentLabel(session.agent), value2: hostLabel }
-            )
-          : translate(
-              'auto.components.right.sidebar.AiVaultSessionDeleteDialog.description',
-              '"{{value0}}" will be deleted. Once deleted, it will no longer be resumable from {{value1}}\'s own command line either.',
-              { value0: session.title, value1: agentLabel(session.agent) }
-            ),
+        description:
+          session.agent === 'codex'
+            ? translate(
+                'auto.components.right.sidebar.AiVaultSessionDeleteDialog.codexDescription',
+                '"{{value0}}" will be permanently deleted from Codex history on this device. Your workspace files will be kept. Close any Codex session using it outside Orca before deleting; Orca cannot detect those sessions.',
+                { value0: session.title }
+              )
+            : environmentId
+              ? translate(
+                  'auto.components.right.sidebar.AiVaultSessionDeleteDialog.remoteDescription',
+                  '"{{value0}}" will be deleted from {{value2}}. Once deleted, it will no longer be resumable from {{value1}}\'s own command line either.',
+                  { value0: session.title, value1: agentLabel(session.agent), value2: hostLabel }
+                )
+              : translate(
+                  'auto.components.right.sidebar.AiVaultSessionDeleteDialog.description',
+                  '"{{value0}}" will be deleted. Once deleted, it will no longer be resumable from {{value1}}\'s own command line either.',
+                  { value0: session.title, value1: agentLabel(session.agent) }
+                ),
         confirmLabel: translate(
           'auto.components.right.sidebar.AiVaultSessionDeleteDialog.confirm',
           'Delete'
@@ -133,6 +140,25 @@ export function useAiVaultSessionDeleteAction({
           return
         }
         if (result.outcome !== 'deleted') {
+          if (result.outcome === 'failed' && result.detail) {
+            toast.error(
+              result.detail === 'unsupported'
+                ? translate(
+                    'auto.components.right.sidebar.AiVaultPanel.codexDeleteUnsupported',
+                    'This Codex version does not support session deletion. Update Codex and try again.'
+                  )
+                : result.detail === 'active'
+                  ? translate(
+                      'auto.components.right.sidebar.AiVaultPanel.codexDeleteActive',
+                      'This session is still owned by a Codex terminal or native chat. Close its terminal, or delete it from its chat.'
+                    )
+                  : translate(
+                      'auto.components.right.sidebar.AiVaultPanel.codexDeleteIncomplete',
+                      'Deletion incomplete. Some Codex session data may remain. Try Delete again to finish cleanup.'
+                    )
+            )
+            return
+          }
           // Use one failure message rather than exposing raw main-side reasons.
           throw new Error(result.outcome)
         }

@@ -4,7 +4,11 @@ import { dirname, join } from 'node:path'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
-import { parseCodexRolloutThreadId } from '../index/codex-session-index-heal-state'
+import {
+  createCodexRolloutVisibilityPredicate,
+  withCodexRolloutPublication
+} from '../deletion/codex-session-deletion-record'
+import { parseCodexRolloutThreadId } from './codex-rollout-identity'
 import { isCodexSessionRolloutFileName } from './codex-session-file-listing'
 import { linkCodexSessionFileAsync } from './codex-session-link'
 
@@ -48,6 +52,7 @@ export async function linkMissingCodexSessionRollouts(args: {
       join(args.targetCodexHomePath, 'sessions'),
       args.hardlinkOnly === true,
       args.shouldStop ?? (() => false),
+      await createCodexRolloutVisibilityPredicate({ includePending: true }),
       pass
     ).visit([])
   }
@@ -64,6 +69,7 @@ class RolloutLinkWalk {
     private readonly targetRoot: string,
     private readonly hardlinkOnly: boolean,
     private readonly shouldStop: () => boolean,
+    private readonly canPublish: (rolloutName: string) => boolean,
     private readonly pass: CodexSessionLinkPass
   ) {}
 
@@ -79,7 +85,11 @@ class RolloutLinkWalk {
       for (const entry of (await readSourceDirectory(sourceDir)) ?? []) {
         if (entry.isDirectory()) {
           subdirectories.add(entry.name)
-        } else if (entry.isFile() && isCodexSessionRolloutFileName(entry.name)) {
+        } else if (
+          entry.isFile() &&
+          isCodexSessionRolloutFileName(entry.name) &&
+          this.canPublish(entry.name)
+        ) {
           const holders = rollouts.get(entry.name)
           if (holders) {
             holders.push(sourceDir)
@@ -167,9 +177,12 @@ class RolloutLinkWalk {
   ): Promise<'linked' | 'existing' | 'skipped' | 'failed'> {
     let outcome: 'linked' | 'existing' | 'skipped' | 'failed' = 'failed'
     for (const sourceDir of sourceDirs) {
-      outcome = await linkCodexSessionFileAsync(join(sourceDir, name), join(targetDir, name), {
-        hardlinkOnly: this.hardlinkOnly
-      })
+      const sourcePath = join(sourceDir, name)
+      outcome = await withCodexRolloutPublication(sourcePath, 'failed' as const, () =>
+        linkCodexSessionFileAsync(sourcePath, join(targetDir, name), {
+          hardlinkOnly: this.hardlinkOnly
+        })
+      )
       if (outcome === 'existing' && !(await isTargetPresent(join(targetDir, name)))) {
         // A dangling link another writer made after the listing is not readable history.
         return 'failed'

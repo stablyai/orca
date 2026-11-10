@@ -13969,6 +13969,9 @@
             "sessionHostMismatchUnsupported": "此会话属于其他主机。请打开同一主机上的工作区以恢复它。",
             "prepareSessionResumeFailed": "无法为恢复准备此会话。",
             "sessionDeleted": "会话已删除",
+            "codexDeleteUnsupported": "此 Codex 版本不支持删除会话。请更新 Codex 后重试。",
+            "codexDeleteActive": "此会话仍在 Codex 终端或原生聊天中使用。请关闭其终端，或从其聊天中删除。",
+            "codexDeleteIncomplete": "删除未完成。可能仍有部分 Codex 会话数据。请再次点击“删除”以完成清理。",
             "sessionDeleteFailed": "无法删除会话",
             "sessionDeleteCheckingHost": "正在检查 {{value0}}…",
             "resumeInChatConflict": "另一个聊天室已经在进行此对话。",
@@ -14082,6 +14085,7 @@
           },
           "AiVaultSessionDeleteDialog": {
             "title": "要删除此会话吗？",
+            "codexDescription": "“{{value0}}”将从此设备的 Codex 历史记录中永久删除。工作区文件将保留。删除前，请关闭在 Orca 外使用此会话的 Codex；Orca 无法检测这些会话。",
             "description": "“{{value0}}”将被删除。删除后，也将无法通过 {{value1}} 自身的命令行恢复。",
             "remoteDescription": "“{{value0}}”将从 {{value2}} 删除。删除后，也无法再从 {{value1}} 自己的命令行恢复。",
             "confirm": "删除"

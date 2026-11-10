@@ -19,6 +19,15 @@ export async function deleteAiVaultSessionFile(
   args: ValidateAiVaultSessionDeleteTargetArgs & { sessionId?: string },
   removePath: AiVaultSessionPathRemover
 ): Promise<AiVaultDeleteSessionResult> {
+  if (args.agent === 'codex') {
+    const { deleteCodexSession } = await import('../codex/history/deletion/codex-session-delete')
+    return deleteCodexSession({
+      agent: 'codex',
+      sessionId: args.sessionId,
+      filePath: args.filePath,
+      executionHostId: args.executionHostId ?? undefined
+    })
+  }
   const validation = validateAiVaultSessionDeleteTarget(args)
   if (!validation.allowed) {
     return { outcome: 'rejected', agent: validation.agent, reason: validation.reason }

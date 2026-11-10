@@ -7,17 +7,21 @@ import {
   renameSync,
   rmSync
 } from 'node:fs'
+import type { Stats } from 'node:fs'
+import { lstat } from 'node:fs/promises'
+import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
 import { dirname, isAbsolute, join, relative, sep } from 'node:path'
 import {
   getOrcaManagedCodexHomePath,
   getSystemCodexHomePath
 } from '../../configuration/homes/codex-home-paths'
-import {
-  listCodexSessionJsonlFiles,
-  listCodexSessionJsonlFilesIncrementally
-} from '../rollouts/codex-session-file-listing'
+import { listCodexSessionJsonlFilesIncrementally } from '../rollouts/codex-session-file-listing'
 import { linkCodexSessionFile, tryHardlinkCodexSessionFile } from '../rollouts/codex-session-link'
 import type { CodexSessionBridgeIncrementalOptions } from '../rollouts/codex-session-file-listing'
+import {
+  withCodexRolloutPublication,
+  createCodexRolloutVisibilityPredicate
+} from '../deletion/codex-session-deletion-record'
 
 type LegacyCopiedSessionMarker = {
   sourcePath: string
@@ -41,16 +45,10 @@ export type CodexSessionBridgeSummary = {
 let backgroundSessionBridgeTask: Promise<void> | null = null
 
 /** Custom CODEX_HOME changes history discovery only. */
-export function syncSystemCodexSessionsIntoManagedHome(sourceCodexHomePath?: string): void {
-  const systemSessionsRoot = join(sourceCodexHomePath || getSystemCodexHomePath(), 'sessions')
-  if (!existsSync(systemSessionsRoot)) {
-    return
-  }
-
-  const managedSessionsRoot = join(getOrcaManagedCodexHomePath(), 'sessions')
-  for (const systemSessionFilePath of listCodexSessionJsonlFiles(systemSessionsRoot)) {
-    bridgeSystemCodexSessionFile(systemSessionsRoot, managedSessionsRoot, systemSessionFilePath)
-  }
+export async function syncSystemCodexSessionsIntoManagedHome(
+  sourceCodexHomePath?: string
+): Promise<void> {
+  await syncSystemCodexSessionsIntoManagedHomeIncrementally({ yieldMs: 0 }, sourceCodexHomePath)
 }
 
 export function startSystemCodexSessionBridgeInBackground(
@@ -85,13 +83,21 @@ export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
 
   const managedSessionsRoot = join(getOrcaManagedCodexHomePath(), 'sessions')
   const summary: CodexSessionBridgeSummary = { scannedFiles: 0, linkedFiles: 0 }
+  const canPublish = await createCodexRolloutVisibilityPredicate({ includePending: true })
   for await (const systemSessionFilePath of listCodexSessionJsonlFilesIncrementally(
     systemSessionsRoot,
     options
   )) {
     summary.scannedFiles += 1
+    if (!canPublish(systemSessionFilePath)) {
+      continue
+    }
     if (
-      bridgeSystemCodexSessionFile(systemSessionsRoot, managedSessionsRoot, systemSessionFilePath)
+      await bridgeSystemCodexSessionFile(
+        systemSessionsRoot,
+        managedSessionsRoot,
+        systemSessionFilePath
+      )
     ) {
       summary.linkedFiles += 1
     }
@@ -99,28 +105,49 @@ export async function syncSystemCodexSessionsIntoManagedHomeIncrementally(
   return summary
 }
 
-function bridgeSystemCodexSessionFile(
+async function bridgeSystemCodexSessionFile(
   systemSessionsRoot: string,
   managedSessionsRoot: string,
   systemSessionFilePath: string
-): boolean {
+): Promise<boolean> {
   const relativePath = relative(systemSessionsRoot, systemSessionFilePath)
   const managedSessionFilePath = join(managedSessionsRoot, relativePath)
-  if (existsSync(managedSessionFilePath)) {
-    if (
-      replaceSymlinkSessionBridgeWithHardlink(
-        systemSessionFilePath,
-        managedSessionFilePath,
-        relativePath
-      )
-    ) {
-      return true
+  let existing: Stats | null
+  try {
+    existing = await lstat(managedSessionFilePath)
+  } catch (error) {
+    if (!isDefinitiveAbsence(error)) {
+      return false
     }
-    migrateLegacyCopiedSessionBridge(systemSessionFilePath, managedSessionFilePath, relativePath)
-    return false
+    existing = null
   }
-  mkdirSync(dirname(managedSessionFilePath), { recursive: true })
-  return linkSystemCodexSessionFile(systemSessionFilePath, managedSessionFilePath, relativePath)
+  if (existing && !existing.isSymbolicLink()) {
+    const marker = readLegacyCopiedSessionMarker(relativePath)
+    if (
+      !marker ||
+      marker.sourcePath !== systemSessionFilePath ||
+      !fileStatsMatchMarker(existing, marker, 'target')
+    ) {
+      return false
+    }
+  }
+  return withCodexRolloutPublication(systemSessionFilePath, false, async () => {
+    if (existsSync(managedSessionFilePath)) {
+      if (
+        replaceSymlinkSessionBridgeWithHardlink(
+          systemSessionFilePath,
+          managedSessionFilePath,
+          relativePath
+        )
+      ) {
+        return true
+      }
+      migrateLegacyCopiedSessionBridge(systemSessionFilePath, managedSessionFilePath, relativePath)
+      return false
+    }
+    mkdirSync(dirname(managedSessionFilePath), { recursive: true })
+    return linkSystemCodexSessionFile(systemSessionFilePath, managedSessionFilePath, relativePath)
+  })
 }
 
 function linkSystemCodexSessionFile(

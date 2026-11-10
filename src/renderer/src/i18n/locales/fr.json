@@ -14571,6 +14571,9 @@
             "sessionHostMismatchUnsupported": "Cette session appartient à un autre hôte. Ouvrez un espace de travail sur le même hôte pour la reprendre.",
             "prepareSessionResumeFailed": "Impossible de préparer cette session pour la reprise.",
             "sessionDeleted": "Session supprimée",
+            "codexDeleteUnsupported": "Cette version de Codex ne prend pas en charge la suppression des sessions. Mettez Codex à jour et réessayez.",
+            "codexDeleteActive": "Cette session est toujours utilisée par un terminal Codex ou une conversation native. Fermez son terminal ou supprimez-la depuis sa conversation.",
+            "codexDeleteIncomplete": "Suppression incomplète. Des données de la session Codex peuvent subsister. Cliquez à nouveau sur Supprimer pour terminer le nettoyage.",
             "sessionDeleteFailed": "Impossible de supprimer la session",
             "sessionDeleteCheckingHost": "Vérification de {{value0}}…",
             "resumeInChatConflict": "Un autre chat tient déjà cette conversation.",
@@ -14692,6 +14695,7 @@
           },
           "AiVaultSessionDeleteDialog": {
             "title": "Supprimer cette session ?",
+            "codexDescription": "« {{value0}} » sera définitivement supprimée de l’historique Codex sur cet appareil. Les fichiers de votre espace de travail seront conservés. Avant la suppression, fermez toute session Codex qui l’utilise en dehors d’Orca ; Orca ne peut pas détecter ces sessions.",
             "description": "« {{value0}} » sera supprimée. Une fois supprimée, elle ne pourra plus être reprise depuis la ligne de commande de {{value1}} non plus.",
             "remoteDescription": "« {{value0}} » sera supprimée de {{value2}}. Une fois supprimée, elle ne pourra plus être reprise depuis la ligne de commande de {{value1}} non plus.",
             "confirm": "Supprimer"

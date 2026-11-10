@@ -44,11 +44,13 @@ const ROLLOUT_B = join(
 
 beforeEach(() => {
   workspaceRoot = mkdtempSync(join(tmpdir(), 'codex-account-session-bridge-'))
+  vi.stubEnv('ORCA_USER_DATA_PATH', join(workspaceRoot, 'orca'))
   _internals.resetBackgroundBridgeTasks()
   healIndexStub.mockClear()
 })
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   rmSync(workspaceRoot, { recursive: true, force: true })
 })
 

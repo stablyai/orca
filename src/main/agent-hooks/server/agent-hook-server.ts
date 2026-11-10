@@ -124,10 +124,16 @@ export class AgentHookServer extends AgentHookServerLifecycle {
     return exit !== undefined && exit.at >= exitedSince ? 'exited' : null
   }
 
-  checkAgentPresence(paneKey: string): Promise<AgentProcessVerdict | null> {
+  checkAgentPresence(
+    paneKey: string,
+    options: { includeEnded?: boolean } = {}
+  ): Promise<AgentProcessVerdict | null> {
     const resolved = this.resolvePaneKeyAlias(paneKey)
     this.followClaudeSessionContinuation(resolved)
     const row = this.state.lastStatusByPaneKey.get(resolved)
+    if (options.includeEnded && row?.agentPresence?.ended) {
+      return Promise.resolve('exited')
+    }
     if (!row?.agentPresence?.process || row.agentPresence.ended) {
       return Promise.resolve(null)
     }

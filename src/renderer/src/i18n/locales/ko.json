@@ -13969,6 +13969,9 @@
             "sessionHostMismatchUnsupported": "이 세션은 다른 호스트에 속합니다. 재개하려면 같은 호스트의 워크스페이스를 여세요.",
             "prepareSessionResumeFailed": "재개를 위해 이 세션을 준비할 수 없습니다.",
             "sessionDeleted": "세션이 삭제되었습니다",
+            "codexDeleteUnsupported": "이 Codex 버전은 세션 삭제를 지원하지 않습니다. Codex를 업데이트하고 다시 시도하세요.",
+            "codexDeleteActive": "이 세션은 아직 Codex 터미널 또는 네이티브 채팅에서 사용 중입니다. 터미널을 닫거나 해당 채팅에서 삭제하세요.",
+            "codexDeleteIncomplete": "삭제가 완료되지 않았습니다. 일부 Codex 세션 데이터가 남아 있을 수 있습니다. 삭제를 다시 눌러 정리를 완료하세요.",
             "sessionDeleteFailed": "세션을 삭제하지 못했습니다",
             "sessionDeleteCheckingHost": "{{value0}} 확인 중…",
             "resumeInChatConflict": "다른 채팅에서 이미 이 대화를 진행 중입니다.",
@@ -14082,6 +14085,7 @@
           },
           "AiVaultSessionDeleteDialog": {
             "title": "이 세션을 삭제할까요?",
+            "codexDescription": "\"{{value0}}\" 세션이 이 기기의 Codex 기록에서 영구적으로 삭제됩니다. 작업 공간 파일은 유지됩니다. 삭제하기 전에 Orca 밖에서 이 세션을 사용하는 Codex를 닫으세요. Orca는 이러한 세션을 감지할 수 없습니다.",
             "description": "\"{{value0}}\"이(가) 삭제됩니다. 삭제하면 {{value1}}의 자체 명령줄에서도 더 이상 재개할 수 없습니다.",
             "remoteDescription": "\"{{value0}}\"이(가) {{value2}}에서 삭제됩니다. 삭제하면 {{value1}}의 자체 명령줄에서도 더 이상 재개할 수 없습니다.",
             "confirm": "삭제"

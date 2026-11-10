@@ -14635,6 +14635,9 @@
             "sessionHostMismatchUnsupported": "Diese Sitzung gehört zu einem anderen Host. Zum Fortsetzen einen Arbeitsbereich auf demselben Host öffnen.",
             "prepareSessionResumeFailed": "Diese Sitzung konnte nicht zum Fortsetzen vorbereitet werden.",
             "sessionDeleted": "Sitzung gelöscht",
+            "codexDeleteUnsupported": "Diese Codex-Version unterstützt das Löschen von Sitzungen nicht. Aktualisiere Codex und versuche es erneut.",
+            "codexDeleteActive": "Diese Sitzung wird noch von einem Codex-Terminal oder nativen Chat verwendet. Schließe das Terminal oder lösche sie aus dem Chat.",
+            "codexDeleteIncomplete": "Löschen unvollständig. Möglicherweise sind noch Codex-Sitzungsdaten vorhanden. Klicke erneut auf Löschen, um die Bereinigung abzuschließen.",
             "sessionDeleteFailed": "Sitzung konnte nicht gelöscht werden",
             "sessionDeleteCheckingHost": "{{value0}} wird geprüft…",
             "resumeInChatConflict": "Diese Unterhaltung ist bereits in einem anderen Chat geöffnet.",
@@ -14753,6 +14756,7 @@
           "AiVaultSessionDeleteDialog": {
             "title": "Diese Sitzung löschen?",
             "description": "„{{value0}}“ wird gelöscht. Danach kann die Sitzung auch über die eigene Befehlszeile von {{value1}} nicht mehr fortgesetzt werden.",
+            "codexDescription": "„{{value0}}“ wird dauerhaft aus dem Codex-Verlauf auf diesem Gerät gelöscht. Deine Arbeitsbereichsdateien bleiben erhalten. Schließe vor dem Löschen alle Codex-Sitzungen außerhalb von Orca, die sie verwenden; Orca kann diese Sitzungen nicht erkennen.",
             "remoteDescription": "„{{value0}}“ wird von {{value2}} gelöscht. Danach kann die Sitzung auch über die eigene Befehlszeile von {{value1}} nicht mehr fortgesetzt werden.",
             "confirm": "Löschen"
           },

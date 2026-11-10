@@ -152,7 +152,7 @@ afterEach(() => {
 })
 
 describe('syncSystemCodexSessionsIntoManagedHome', () => {
-  it('does not overwrite runtime-owned session files', () => {
+  it('does not overwrite runtime-owned session files', async () => {
     const relativeSessionPath = join('sessions', '2026', '05', '26', 'rollout-conflict.jsonl')
     const systemSessionPath = join(getSystemCodexHomePath(), relativeSessionPath)
     const runtimeSessionPath = join(getRuntimeCodexHomePath(), relativeSessionPath)
@@ -161,12 +161,12 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
     writeFileSync(systemSessionPath, '{"id":"system"}\n', 'utf-8')
     writeFileSync(runtimeSessionPath, '{"id":"runtime"}\n', 'utf-8')
 
-    syncSystemCodexSessionsIntoManagedHome()
+    await syncSystemCodexSessionsIntoManagedHome()
 
     expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"runtime"}\n')
   })
 
-  it('preserves unchanged legacy copied sessions when relinking fails', () => {
+  it('preserves unchanged legacy copied sessions when relinking fails', async () => {
     const relativeSessionPath = join('2026', '05', '26', 'rollout-legacy-unlinked.jsonl')
     const systemSessionPath = join(getSystemCodexHomePath(), 'sessions', relativeSessionPath)
     const runtimeSessionPath = join(getRuntimeCodexHomePath(), 'sessions', relativeSessionPath)
@@ -178,7 +178,7 @@ describe('syncSystemCodexSessionsIntoManagedHome', () => {
     fsMockState.failLink = true
     fsMockState.failSymlink = true
 
-    syncSystemCodexSessionsIntoManagedHome()
+    await syncSystemCodexSessionsIntoManagedHome()
 
     expect(lstatSync(runtimeSessionPath).isSymbolicLink()).toBe(false)
     expect(readFileSync(runtimeSessionPath, 'utf-8')).toBe('{"id":"legacy"}\n')

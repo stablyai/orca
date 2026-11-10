@@ -15,7 +15,7 @@ import {
   buildWslHealInvocation,
   type CodexSettledThreadRead
 } from '../index/codex-session-index-heal'
-import { parseCodexRolloutThreadId } from '../index/codex-session-index-heal-state'
+import { parseCodexRolloutThreadId } from '../rollouts/codex-rollout-identity'
 import {
   buildWslCodexSessionBridgeShellCommand,
   WSL_SESSION_BRIDGE_TIMEOUT_MS
