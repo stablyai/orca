@@ -1,5 +1,5 @@
 import { taskProviderErrorText } from '@/lib/task-provider-error-copy'
-import { ImeTextarea } from '@/lib/ime-text-field'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import React, { useCallback, useRef, useState } from 'react'
 import { LoaderCircle, Send } from 'lucide-react'
 import { toast } from 'sonner'

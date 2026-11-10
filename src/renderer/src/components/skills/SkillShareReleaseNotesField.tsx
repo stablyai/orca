@@ -1,4 +1,4 @@
-import { ImeTextarea } from '@/lib/ime-text-field'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { Label } from '@/components/ui/label'
 import { useTranslate } from '@/i18n/use-translate'

@@ -12,7 +12,7 @@ import { translate } from '@/i18n/i18n'
 import type { GitHubTaskKind } from '@/components/task-page/task-page-localized-options'
 import { getTaskPresetQuery } from '../../../../shared/work-items/task-preset-query'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel) {
   const {
     setTaskResumeState,

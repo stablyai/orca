@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, type RefObject } from 'react'
-import { isEditableTarget } from '@/lib/editable-target'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import { isInNativeChatPaneOf } from './use-native-chat-prompt-card-focus'
 
 /** Keep question shortcuts scoped to its pane, including when a replaced row drops focus. */

@@ -6,7 +6,7 @@ import { keybindingMatchesAction } from '../../../../../shared/keybindings/match
 import { resolveAppearanceAccordionDeepLink } from '../appearance/appearance-usage-percentage-search'
 import { registerWindowCloseGuard } from '../../window-close-request-coordinator'
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import { translate } from '@/i18n/i18n'
 import {
