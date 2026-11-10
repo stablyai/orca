@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { FolderPlus, LoaderCircle, PlugZap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -22,6 +22,7 @@ import { OrcaCloudSetupPanel } from './run-on/OrcaCloudSetupPanel'
 import { isOrcaCloudRecipe, isOrcaCloudSelection } from './run-target-options'
 import { useOrcaCloudRunTargetAccess } from './orca-cloud-billing-cache'
 import type { OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
+import { FolderGitHubActions } from './run-on/FolderGitHubActions'
 
 type NewWorkspaceComposerProjectSectionProps = Pick<
   NewWorkspaceComposerCardProps,
@@ -103,8 +104,12 @@ export function NewWorkspaceComposerProjectSection({
   quickAgent = null,
   cloudStart = null
 }: NewWorkspaceComposerProjectSectionProps): React.JSX.Element {
+  // D4 rows: while Orca Cloud is picked, and for a folder, which can only start from GitHub.
   const cloudOnly =
-    selectedEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID ? cloudStart?.cloudOnly : undefined
+    selectedEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID || cloudStart?.folderProject
+      ? cloudStart?.cloudOnly
+      : undefined
+  const [pickerSignal, setPickerSignal] = useState(0)
   const t = useTranslate()
   const orcaCloudOffered = shouldShowRunTargetPicker && ephemeralVmRecipes.some(isOrcaCloudRecipe)
   // Shared with the picker; mounting the composer prefetches it so the row rarely shows a skeleton.
@@ -159,7 +164,11 @@ export function NewWorkspaceComposerProjectSection({
               // D4: while Orca Cloud is picked, GitHub repositories with no clone here.
               cloudRepos={cloudOnly?.repos ?? null}
               cloudRepoValue={cloudOnly?.picked?.fullName ?? null}
-              onCloudRepoSelected={cloudOnly?.pick}
+              onCloudRepoSelected={(fullName) => {
+                cloudOnly?.pick(fullName)
+                cloudStart?.onSelectOrcaCloud()
+              }}
+              openSignal={pickerSignal}
               onMoreCloudAccess={cloudOnly?.moreAccess}
               onShowMoreCloudRepos={cloudOnly?.showMore ?? null}
               placeholder={
@@ -249,7 +258,23 @@ export function NewWorkspaceComposerProjectSection({
       </div>
       {cloudStart?.panelVisible && selectedEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID ? (
         // The panel's own Agent row (G) comes from the same model as the standalone one below.
-        <OrcaCloudSetupPanel steps={cloudStart.steps} allSet={cloudStart.allSet} />
+        <OrcaCloudSetupPanel
+          steps={cloudStart.steps}
+          allSet={cloudStart.allSet}
+          rowActions={
+            cloudStart.folderProject && !cloudOnly?.picked
+              ? {
+                  github: (
+                    <FolderGitHubActions
+                      canChoose={Boolean(cloudOnly?.repos?.length)}
+                      onChooseRepository={() => setPickerSignal((n) => n + 1)}
+                      onAddProject={onAddProject}
+                    />
+                  )
+                }
+              : undefined
+          }
+        />
       ) : // Agent row (cloud-start G) without the panel: links to the one-time setup; never blocks Start.
       selectedEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID ? (
         <OrcaCloudAgentSetupRow

@@ -23123,7 +23123,8 @@
         "trialUsedUpChoose": "Choose a plan to keep using Orca Cloud.",
         "trialOffer_one": "{{hours}} sandbox hour to try Orca Cloud",
         "trialOffer_other": "{{hours}} sandbox hours to try Orca Cloud",
-        "subtitleChoosePlan": "One visit to your browser to choose a plan. Your prompt stays here and starts when you’re done."
+        "subtitleChoosePlan": "One visit to your browser to choose a plan. Your prompt stays here and starts when you’re done.",
+        "subtitleNeedsRepository": "Orca Cloud needs a GitHub repository. Your prompt stays here."
       },
       "runOn": {
         "thisComputer": "This computer",
@@ -23164,7 +23165,10 @@
         "openLater": "Your cloud workspace started, but this computer couldn’t open it yet. Open it from Cloud workspaces.",
         "private": "{{owner}} · Private",
         "public": "{{owner}} · Public",
-        "showMore": "Show more repositories…"
+        "showMore": "Show more repositories…",
+        "chooseRepository": "Choose a GitHub repository",
+        "addGitHubProject": "Add a GitHub project…",
+        "folderDetail": "Orca Cloud starts from a GitHub repository. This project is a folder on this computer."
       },
       "orcaCloudAgentFallback": "{{agent}} isn’t available on Orca Cloud yet, so {{fallback}} is selected."
     },

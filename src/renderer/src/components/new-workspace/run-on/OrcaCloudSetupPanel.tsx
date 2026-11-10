@@ -220,15 +220,21 @@ export function OrcaCloudSetupPanel({
         {allSet
           ? t('components.newWorkspace.cloudSetup.starting', 'Starting your cloud workspace…')
           : (subtitle ??
-            (cloudSetupNeedsPlan(steps)
+            // No browser trip fixes a project without a GitHub repository (D3): say what holds.
+            (steps.some((step) => step.blocksStart && step.state === 'failed')
               ? t(
-                  'components.newWorkspace.cloudSetup.subtitleChoosePlan',
-                  'One visit to your browser to choose a plan. Your prompt stays here and starts when you’re done.'
+                  'components.newWorkspace.cloudSetup.subtitleNeedsRepository',
+                  'Orca Cloud needs a GitHub repository. Your prompt stays here.'
                 )
-              : t(
-                  'components.newWorkspace.cloudSetup.subtitleNoCard',
-                  'One visit to your browser, no card. Your prompt stays here and starts when you’re done.'
-                )))}
+              : cloudSetupNeedsPlan(steps)
+                ? t(
+                    'components.newWorkspace.cloudSetup.subtitleChoosePlan',
+                    'One visit to your browser to choose a plan. Your prompt stays here and starts when you’re done.'
+                  )
+                : t(
+                    'components.newWorkspace.cloudSetup.subtitleNoCard',
+                    'One visit to your browser, no card. Your prompt stays here and starts when you’re done.'
+                  )))}
       </p>
       {/* One polite announcement per row change ("Team plan, done"). */}
       <ul aria-live="polite" className="mt-2 space-y-1.5">

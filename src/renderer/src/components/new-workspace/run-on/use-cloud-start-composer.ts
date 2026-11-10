@@ -88,7 +88,9 @@ export function useCloudStartComposer({
   const fetched = useOrcaCloudRunTargetAccess(segment === 'enabled' && !accessOverride)
   const access = accessOverride ?? fetched
   const cloudOnly = useCloudOnlyRepo({
-    enabled: cloudSelected && segment === 'enabled',
+    repoId,
+    cloudSelected,
+    cloudOffered: segment === 'enabled',
     signedIn: availability !== 'needs-sign-in' && access.state !== 'signed-out'
   })
   const onCreate = useCloudOnlyCreate({
@@ -278,15 +280,16 @@ export function useCloudStartComposer({
     }
   }, [access, cloudSelected, profileId, repoId])
 
+  // Orca Cloud isn't the target (or this build has none): the composer's own create runs.
+  const plainCreate = {
+    primaryActionLabel: null,
+    onPrimary: null,
+    primaryDisabled: false,
+    primaryIsCreate: true,
+    recordCreated
+  }
   if (segment === 'hidden') {
-    return {
-      view: null,
-      primaryActionLabel: null,
-      onPrimary: null,
-      primaryDisabled: false,
-      primaryIsCreate: true,
-      recordCreated
-    }
+    return { view: null, ...plainCreate }
   }
   const view: CloudStartView = {
     steps,
@@ -295,19 +298,13 @@ export function useCloudStartComposer({
     onSelectOrcaCloud,
     onUserPick: markTouched,
     cloudOnly,
+    folderProject: cloudOnly.folderProject,
     ...(panelVisible && localOption && action !== 'useThisComputer' && !cloudOnly.picked
       ? { onUseThisComputer: useThisComputer }
       : {})
   }
   if (!cloudSelected) {
-    return {
-      view,
-      primaryActionLabel: null,
-      onPrimary: null,
-      primaryDisabled: false,
-      primaryIsCreate: true,
-      recordCreated
-    }
+    return { view, ...plainCreate }
   }
   const onPrimary =
     action === 'start'
