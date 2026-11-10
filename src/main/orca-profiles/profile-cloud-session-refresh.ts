@@ -37,10 +37,23 @@ function shouldRefreshCloudSession(session: OrcaCloudSession, now = Date.now()):
   return session.expiresAt <= now + CLOUD_SESSION_REFRESH_SKEW_MS
 }
 
-export function isOrcaCloudAuthFailure(error: unknown): boolean {
-  return (
-    error instanceof OrcaCloudRequestError && (error.statusCode === 401 || error.statusCode === 403)
-  )
+// A 403 is a permission answer, never an expired token, so only a 401 may force a refresh.
+function isAccessTokenRejected(error: unknown): boolean {
+  return error instanceof OrcaCloudRequestError && error.statusCode === 401
+}
+
+// An operation that keeps answering 401 must not rotate the token on every call.
+const FORCED_REFRESH_BACKOFF_MS = 5 * 60_000
+const lastForcedRefreshAt = new Map<string, number>()
+
+function takeForcedRefreshSlot(key: string, now = Date.now()): boolean {
+  const last = lastForcedRefreshAt.get(key)
+  // A clock rollback must not stretch the backoff.
+  if (last !== undefined && now >= last && now - last < FORCED_REFRESH_BACKOFF_MS) {
+    return false
+  }
+  lastForcedRefreshAt.set(key, now)
+  return true
 }
 
 // Only the auth server's own verdict may discard a sign-in; proxies, outages and limits never do.
@@ -247,7 +260,15 @@ export async function runWithFreshOrcaCloudSession<T>(
   try {
     return { status: 'ok', value: await operation(session.session) }
   } catch (error) {
-    if (!isOrcaCloudAuthFailure(error)) {
+    if (!isAccessTokenRejected(error)) {
+      throw error
+    }
+    // Reuse a rotation that already happened or is in flight; start a new one only once per backoff.
+    const key = orcaCloudSessionKey(active.profile.id, userDataPath)
+    const stored = readCloudSession(active.profile.id, userDataPath)
+    const rotatedSince =
+      stored.status === 'found' && stored.session.refreshToken !== session.session.refreshToken
+    if (!rotatedSince && !inflightCloudSessionRefreshes.has(key) && !takeForcedRefreshSlot(key)) {
       throw error
     }
     const refreshed = await forceRefreshOrcaCloudSession(

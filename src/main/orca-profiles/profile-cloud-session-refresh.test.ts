@@ -240,4 +240,36 @@ describe('operations wrapped in a fresh session', () => {
     expect(store.signedOut).toBe(0)
     expect(store.session?.refreshToken).toBe('refresh-next')
   })
+
+  it('does not rotate the token when the operation answers 403', async () => {
+    const active = signedIn(false)
+    answerRefresh = async () => sessionReply('refresh-next')
+
+    const result = runWithFreshOrcaCloudSession(config, active, '/user-data', async () => {
+      throw new OrcaCloudRequestError(403)
+    })
+
+    await expect(result).rejects.toMatchObject({ statusCode: 403 })
+    expect(refreshCalls).toBe(0)
+  })
+
+  it('rotates once for concurrent and repeated 401s within the backoff window', async () => {
+    const active = signedIn(false)
+    let rotation = 0
+    answerRefresh = async () => sessionReply(`refresh-next-${++rotation}`)
+    const rejectedCall = (): Promise<unknown> =>
+      runWithFreshOrcaCloudSession(config, active, '/user-data', async () => {
+        throw new OrcaCloudRequestError(401)
+      }).catch((error: unknown) => error)
+
+    const concurrent = await Promise.all([rejectedCall(), rejectedCall(), rejectedCall()])
+    await vi.advanceTimersByTimeAsync(60_000)
+    const repeated = [await rejectedCall(), await rejectedCall()]
+
+    for (const error of [...concurrent, ...repeated]) {
+      expect(error).toMatchObject({ statusCode: 401 })
+    }
+    expect(refreshCalls).toBe(1)
+    expect(store.signedOut).toBe(0)
+  })
 })
