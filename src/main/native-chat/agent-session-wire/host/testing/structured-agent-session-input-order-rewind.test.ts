@@ -28,7 +28,7 @@ it('preserves queued command placement across two rewinds and later send settlem
     )
     await rig.settleAccepted(second.id, 'second')
     const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
-    const epoch1 = journal.physicalCursor().epoch
+    const epoch1 = (await journal.reads.cursor()).epoch
     const original = journal.completeRewind.bind(journal)
     let repeated = false
     let command: Promise<unknown> | undefined, rewindAgain: Promise<unknown> | undefined
@@ -49,7 +49,7 @@ it('preserves queued command placement across two rewinds and later send settlem
             item.body.kind === 'message' &&
             item.body.blocks.some((block) => block.type === 'text' && block.text === 'work on this')
         )!
-        const next = { itemId: target.itemId, expectedEpoch: journal.physicalCursor().epoch }
+        const next = { itemId: target.itemId, expectedEpoch: (await journal.reads.cursor()).epoch }
         rewindAgain = rig.host.rewind(CALLER, {
           ...next,
           envelope: rig.envelope(next, 'agentSession.rewind', hostTestOperationId())
