@@ -1,3 +1,7 @@
+import {
+  classifyEntitlementDenial,
+  type OrcaEntitlementDenialKind
+} from '../../../src/shared/orca-billing'
 import type { Translate } from '../i18n/mobile-i18n'
 import {
   readCloudRole,
@@ -13,25 +17,20 @@ import { CloudRequestError, type CloudControlPlane } from './cloud-control-plane
 
 type Denial = 'hours' | 'cap' | 'payment' | 'plan' | 'teamLimit' | 'memberLimit' | 'other'
 
+// The shared classifier names the category; the phone keeps its own wording per category.
+const DENIALS: Record<OrcaEntitlementDenialKind, Denial> = {
+  plan: 'plan',
+  hours: 'hours',
+  spendCap: 'cap',
+  payment: 'payment',
+  teamLimit: 'teamLimit',
+  memberLimit: 'memberLimit',
+  machineSize: 'other',
+  other: 'other'
+}
+
 function denialOf(reason: string | undefined): Denial {
-  switch (reason) {
-    case 'included_hours_exhausted':
-      return 'hours'
-    case 'overage_cap_reached':
-      return 'cap'
-    case 'payment_past_due':
-    case 'payment_grace_expired':
-      return 'payment'
-    case 'no_subscription':
-    case 'subscription_inactive':
-      return 'plan'
-    case 'concurrency_limit':
-      return 'teamLimit'
-    case 'member_concurrency_limit':
-      return 'memberLimit'
-    default:
-      return 'other'
-  }
+  return DENIALS[classifyEntitlementDenial(reason)]
 }
 
 export function isEntitlementDenied(error: unknown): error is CloudRequestError {

@@ -5,6 +5,7 @@ import {
   cancelOrcaCloudSelectionAfterSignIn,
   requestOrcaCloudSelectionAfterSignIn
 } from '@/lib/orca-cloud-select-after-sign-in'
+import { classifyEntitlementDenial } from '../../../../shared/orca-billing'
 
 /** Signing in from the row selects Orca Cloud once main offers it (the recipe list reloads). */
 function signInThenSelectOrcaCloud(): void {
@@ -54,19 +55,16 @@ export function toOrcaCloudRunTargetAccess(
     }
   }
   const { canManageBilling } = entitlement
-  switch (entitlement.reason) {
-    case 'included_hours_exhausted':
+  switch (classifyEntitlementDenial(entitlement.reason)) {
+    case 'hours':
       return { state: 'out-of-hours', cause: 'hours', canManageBilling }
-    case 'overage_cap_reached':
+    case 'spendCap':
       return { state: 'out-of-hours', cause: 'cap', canManageBilling }
-    case 'payment_past_due':
-    case 'payment_grace_expired':
+    case 'payment':
       return { state: 'payment-issue', canManageBilling }
-    case 'subscription_inactive':
-      return { state: 'no-plan', lapsed: true }
-    case 'no_subscription':
-    case null:
-      return { state: 'no-plan', lapsed: false }
+    default:
+      // No plan (or a reason this build doesn't know): the plan is what fixes it.
+      return { state: 'no-plan', lapsed: entitlement.reason === 'subscription_inactive' }
   }
 }
 

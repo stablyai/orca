@@ -1,4 +1,5 @@
 import type { Translate } from '@/i18n/use-translate'
+import { classifyEntitlementDenial } from '../../../../shared/orca-billing'
 
 // The hosted provider writes `[orca-cloud] <phase>` progress, `Orca Cloud: <deny reason>` and a few
 // fixed transport messages. Everything else is provider internals that the plain view hides.
@@ -59,51 +60,50 @@ function phaseLabel(phase: string, t: Translate): string | null {
 }
 
 function denyLabel(reason: string, t: Translate): string | null {
-  switch (reason) {
-    case 'no plan':
-    case 'no_subscription':
-    case 'subscription_inactive':
+  // Not a plan refusal, so not in the shared classifier.
+  if (reason === 'github_not_connected') {
+    return t(
+      'auto.components.worktree.creation.orcaCloudBuildLog.denyGithub',
+      'GitHub isn’t connected to your Orca account.'
+    )
+  }
+  switch (classifyEntitlementDenial(reason)) {
+    case 'plan':
       return t(
         'auto.components.worktree.creation.orcaCloudBuildLog.denyNoPlan',
         'Your account has no active Team plan.'
       )
-    case 'included_hours_exhausted':
+    case 'hours':
       return t(
         'auto.components.worktree.creation.orcaCloudBuildLog.denyHours2',
         'Your team is out of sandbox hours this month.'
       )
-    case 'overage_cap_reached':
+    case 'spendCap':
       return t(
         'auto.components.worktree.creation.orcaCloudBuildLog.denySpendCap',
         'This month’s spend cap is reached.'
       )
-    case 'payment_past_due':
-    case 'payment_grace_expired':
+    case 'payment':
       return t(
         'auto.components.worktree.creation.orcaCloudBuildLog.denyPayment2',
         'Payment failed.'
       )
-    case 'concurrency_limit':
+    case 'teamLimit':
       return t(
         'auto.components.worktree.creation.orcaCloudBuildLog.denyConcurrency2',
         'You’re at your team’s limit of running sandboxes.'
       )
-    case 'member_concurrency_limit':
+    case 'memberLimit':
       return t(
         'auto.components.worktree.creation.orcaCloudBuildLog.denyMemberConcurrency2',
         'You’re at your limit of running sandboxes.'
       )
-    case 'github_not_connected':
-      return t(
-        'auto.components.worktree.creation.orcaCloudBuildLog.denyGithub',
-        'GitHub isn’t connected to your Orca account.'
-      )
-    case 'machine_size_not_in_plan':
+    case 'machineSize':
       return t(
         'auto.components.worktree.creation.orcaCloudBuildLog.denyMachineSize2',
         'This sandbox size isn’t part of your plan.'
       )
-    default:
+    case 'other':
       return null
   }
 }
