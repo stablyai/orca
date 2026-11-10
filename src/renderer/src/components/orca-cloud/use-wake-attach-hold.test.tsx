@@ -6,7 +6,8 @@ import type { CloudWakeProgressEvent } from '../../../../shared/hosted-sandbox/c
 import {
   isActiveWakePaneAttached,
   registerWakePane,
-  resetWakePanesForTests
+  resetWakePanesForTests,
+  retryActiveWakePane
 } from '@/components/terminal-pane/input/wake-pane-attach'
 import {
   WAKE_ATTACH_HOLD_MAX_MS,
@@ -47,6 +48,8 @@ describe('wake pane registry', () => {
     expect(isActiveWakePaneAttached('ws')).toBe(false)
     frontReady = true
     expect(isActiveWakePaneAttached('ws')).toBe(true)
+    // Try again reaches the pane in front only.
+    expect(retryActiveWakePane('ws')).toBe(false)
     // A remount registers again under the same leaf; the old session's removal leaves it alone.
     registerWakePane('ws', 'front', { isReady: () => false, isActive: () => true })
     offFront()
@@ -56,53 +59,70 @@ describe('wake pane registry', () => {
 })
 
 describe('useWakeAttachHold', () => {
-  it('holds a ready wake as Connecting… until the pane in front re-attaches, keeping its start', () => {
-    let attached: boolean | null = false
-    const { result, rerender } = renderHook(
+  const hook = (read: () => boolean | null, retry = vi.fn(() => true)) => {
+    const isAttached = (): boolean | null => read()
+    return renderHook(
       ({ wake }: { wake: CloudWakeProgressEvent | undefined }) =>
-        useWakeAttachHold('ws', wake, () => attached),
+        useWakeAttachHold('ws', wake, isAttached, retry),
       { initialProps: start }
     )
-    expect(result.current).toBeUndefined()
+  }
+
+  it('holds a ready wake as Connecting… until the pane in front takes input, keeping its start', () => {
+    let attached: boolean | null = false
+    const { result, rerender } = hook(() => attached)
+    expect(result.current.wake).toBeUndefined()
     rerender({ wake: { ...waking, phase: 'ready', at: T0 + 1_000 } })
-    expect(result.current).toMatchObject({ phase: 'connecting', startedAt: waking.startedAt })
+    expect(result.current.wake).toMatchObject({ phase: 'connecting', startedAt: waking.startedAt })
     // The store drops the settled wake; the hold stays.
     rerender({ wake: undefined })
     act(() => vi.advanceTimersByTime(WAKE_ATTACH_POLL_MS * 5))
-    expect(result.current?.phase).toBe('connecting')
+    expect(result.current.wake?.phase).toBe('connecting')
     attached = true
     act(() => vi.advanceTimersByTime(WAKE_ATTACH_POLL_MS))
-    expect(result.current).toBeUndefined()
+    expect(result.current.wake).toBeUndefined()
+    expect(result.current.terminalStalled).toBe(false)
   })
 
   it('does not hold when the pane is already attached or none is known, nor after a failure', () => {
     let attached: boolean | null = true
-    const { result, rerender } = renderHook(
-      ({ wake }: { wake: CloudWakeProgressEvent | undefined }) =>
-        useWakeAttachHold('ws', wake, () => attached),
-      { initialProps: start }
-    )
+    const { result, rerender } = hook(() => attached)
     rerender({ wake: { ...waking, phase: 'ready' } })
-    expect(result.current).toBeUndefined()
+    expect(result.current.wake).toBeUndefined()
     attached = null
     rerender({ wake: { ...waking, startedAt: T0 } })
     rerender({ wake: { ...waking, startedAt: T0, phase: 'ready' } })
-    expect(result.current).toBeUndefined()
+    expect(result.current.wake).toBeUndefined()
     attached = false
     rerender({ wake: { ...waking, startedAt: T0 + 1 } })
     rerender({ wake: { ...waking, startedAt: T0 + 1, phase: 'failed' } })
-    expect(result.current).toBeUndefined()
+    expect(result.current.wake).toBeUndefined()
   })
 
-  it('gives up on a pane that never re-attaches', () => {
-    const { result, rerender } = renderHook(
-      ({ wake }: { wake: CloudWakeProgressEvent | undefined }) =>
-        useWakeAttachHold('ws', wake, () => false),
-      { initialProps: start }
-    )
+  it('a pane that never takes input becomes "Couldn’t reconnect the terminal"; Try again reconnects it', () => {
+    let attached: boolean | null = false
+    const retry = vi.fn(() => true)
+    const { result, rerender } = hook(() => attached, retry)
     rerender({ wake: { ...waking, phase: 'ready' } })
-    expect(result.current?.phase).toBe('connecting')
+    expect(result.current.wake?.phase).toBe('connecting')
     act(() => vi.advanceTimersByTime(WAKE_ATTACH_HOLD_MAX_MS + WAKE_ATTACH_POLL_MS))
-    expect(result.current).toBeUndefined()
+    expect(result.current.terminalStalled).toBe(true)
+    expect(result.current.wake?.phase).toBe('failed')
+    // Try again: the pane reconnects and the pill waits for it once more.
+    act(() => result.current.retry())
+    expect(retry).toHaveBeenCalledWith('ws')
+    expect(result.current.terminalStalled).toBe(false)
+    expect(result.current.wake?.phase).toBe('connecting')
+    attached = true
+    act(() => vi.advanceTimersByTime(WAKE_ATTACH_POLL_MS))
+    expect(result.current.wake).toBeUndefined()
+  })
+
+  it('Dismiss clears the reconnect card', () => {
+    const { result, rerender } = hook(() => false)
+    rerender({ wake: { ...waking, phase: 'ready' } })
+    act(() => vi.advanceTimersByTime(WAKE_ATTACH_HOLD_MAX_MS + WAKE_ATTACH_POLL_MS))
+    act(() => result.current.dismiss())
+    expect(result.current.wake).toBeUndefined()
   })
 })

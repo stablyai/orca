@@ -12,10 +12,13 @@ import { useTranslate } from '@/i18n/use-translate'
 /** Show one shared server-outage notice; its reveal state keeps pane recovery banners quiet. */
 export function RemoteServerOutageNotice({
   environmentId,
-  reveal
+  reveal,
+  cloudWorkspaceName = null
 }: {
   environmentId: string
   reveal: CalmStatusView
+  /** An Orca Cloud workspace's name: the notice names it, never the sandbox. */
+  cloudWorkspaceName?: string | null
 }): React.JSX.Element | null {
   const t = useTranslate()
   const serverName = useAppStore((state) => selectRuntimeServerName(state, environmentId))
@@ -26,7 +29,7 @@ export function RemoteServerOutageNotice({
   if (!reveal.visible) {
     return null
   }
-  const copy = remoteRuntimeRecoveryCopy(cause, serverName, t)
+  const copy = remoteRuntimeRecoveryCopy(cause, serverName, t, cloudWorkspaceName)
   return (
     <RemoteRuntimeRecoveryCard
       icon="retrying"

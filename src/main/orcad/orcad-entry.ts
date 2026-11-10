@@ -75,7 +75,8 @@ async function startOrcadRuntime(
   registerCleanup(() => eventLoopWatchdog?.stop())
   // Overlap login-shell probing with imports and store startup.
   const loginEnvironment = adoptWslHostLoginEnvironmentLogged()
-  const { startOrcadDaemon, stopOrcadDaemon } = await import('./orcad-daemon-supervision')
+  const { startOrcadDaemon, stopOrcadDaemon, daemonLaunchHeadStart } =
+    await import('./orcad-daemon-supervision')
   // The daemon and its PTYs inherit the adopted login env and nothing later startup writes, so it
   // spawns as soon as that lands, alongside imports, stores and hooks. Rejects only when supervised.
   const daemonStartup = loginEnvironment.then(() => timed('daemon', () => startOrcadDaemon()))
@@ -85,6 +86,8 @@ async function startOrcadRuntime(
   // mid-spawn. It disconnects without killing daemon PTYs that must survive restart, after an
   // in-flight spawn settles; a failed one leaves only the disconnect to do.
   registerCleanup(() => daemonStartup.catch(() => {}).then(() => stopOrcadDaemon()))
+  // The imports below hold the event loop ~100 ms; let the daemon fork first and boot alongside.
+  await daemonLaunchHeadStart(daemonStartup)
   const { OrcaRuntimeService } = await import('../runtime/orca-runtime')
   const { OrcaRuntimeRpcServer } = await import('../runtime/rpc/server/runtime-rpc')
   const { registerHeadlessPtyRuntime } = await import('../ipc/pty/register-headless-runtime')

@@ -27,9 +27,8 @@ function spendLine(
   if (!awake) {
     return t('cloud.spend.asleep', '{{cost}} so far · no sandbox hours while asleep', { cost })
   }
-  return workspace.machineSize === 'large'
-    ? t('cloud.spend.runningLarge', '{{cost}} so far · uses sandbox hours at 2× the rate', { cost })
-    : t('cloud.spend.running', '{{cost}} so far · uses sandbox hours while running', { cost })
+  // One sandbox size, so every awake hour counts the same.
+  return t('cloud.spend.running', '{{cost}} so far · uses sandbox hours while running', { cost })
 }
 
 export function CloudStatusCard(props: {

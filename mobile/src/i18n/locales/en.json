@@ -5001,7 +5001,6 @@
     },
     "spend": {
       "asleep": "{{cost}} so far · no sandbox hours while asleep",
-      "runningLarge": "{{cost}} so far · uses sandbox hours at 2× the rate",
       "running": "{{cost}} so far · uses sandbox hours while running"
     },
     "status": {
@@ -5069,13 +5068,8 @@
       "machine": "Sandbox size"
     },
     "size": {
-      "large": "Large (8 vCPU · 16 GB)",
-      "standard": "Standard (4 vCPU · 8 GB)",
-      "standardShort": "Standard",
-      "largeShort": "Large",
-      "standardSpec": "4 vCPU · 8 GB",
-      "largeSpec": "8 vCPU · 16 GB",
-      "largeNote": "Large uses sandbox hours at 2× the rate."
+      "spec": "{{vcpus}} vCPU · {{memoryGb}} GB",
+      "note": "Every sandbox gets {{vcpus}} vCPU · {{memoryGb}} GB."
     },
     "new": {
       "title": "Create workspace",
@@ -5088,7 +5082,6 @@
       "branchPlaceholder": "Default branch",
       "agentHeading": "First task",
       "promptPlaceholder": "Optional. What should the agent start on?",
-      "sizeHeading": "Sandbox size",
       "creating": "Starting your cloud workspace",
       "createAndStart": "Start workspace and agent",
       "create": "Start workspace"

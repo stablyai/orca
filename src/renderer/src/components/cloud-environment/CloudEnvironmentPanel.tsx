@@ -115,10 +115,6 @@ export function CloudEnvironmentPanel(props: CloudEnvironmentPanelProps): React.
           </p>
           <p className="truncate text-xs text-muted-foreground">
             {environment.repos.map((repo) => repoDisplayName(repo.url)).join(', ')}
-            {' · '}
-            {environment.machineSize === 'large'
-              ? t('cloudEnvironment.header.large', 'Large')
-              : t('cloudEnvironment.header.standard', 'Standard')}
           </p>
         </div>
         {canAdmin ? (

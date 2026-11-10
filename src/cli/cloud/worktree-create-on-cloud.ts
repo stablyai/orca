@@ -1,6 +1,6 @@
 // Private build only: the `cloud` target for `orca worktree create --on <target>`.
 //   orca worktree create --on cloud [--name <n>] [--repo <url-or-path>] [--base-branch <ref>]
-//                        [--size standard|large] [--agent claude|codex --prompt <text>] [--json]
+//                        [--agent claude|codex --prompt <text>] [--json]
 //   --on cloud:<project>  uses an Orca Cloud project's repo and environment defaults.
 // It creates an Orca Cloud workspace through the public API with the same credentials as
 // `orca cloud …`, so it works on a desktop and inside a VM (no Orca runtime involved).

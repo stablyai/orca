@@ -1,6 +1,8 @@
 // OpenAPI 3.1 contract for the public API and the /docs page that renders it. Kept next to the
 // router; test/api-openapi.test.ts checks every documented operation is routed and vice versa.
+import { ROUTINE_AGENTS } from '../../../../../src/shared/cloud-api/cloud-api-routine-types'
 import { API_SCOPES } from './keys'
+import { AGENTS } from './vm-agent'
 
 type Op = {
   summary: string
@@ -76,7 +78,7 @@ const schemas: Record<string, object> = {
     properties: {
       id: { type: 'string' },
       workspaceId: { type: 'string' },
-      agent: { type: 'string', enum: ['claude', 'codex'] },
+      agent: { type: 'string', enum: [...AGENTS] },
       status: { type: 'string', enum: ['queued', 'delivering', 'delivered', 'failed'] },
       session: { type: ['string', 'null'], description: 'Agent session that received it; pass as `session` to continue it' },
       error: { type: ['string', 'null'] },
@@ -125,7 +127,7 @@ const schemas: Record<string, object> = {
           }
         ]
       },
-      agent: { type: 'string', enum: ['claude', 'codex'] },
+      agent: { type: 'string', enum: [...ROUTINE_AGENTS] },
       prompt: { type: 'string' },
       postResults: { type: 'string', enum: ['none', 'comment', 'pr'] },
       machineSize: { type: 'string', enum: ['standard', 'large'] },
@@ -195,7 +197,7 @@ const ROUTINE_BODY = obj(
         obj({ kind: { const: 'webhook' } }, ['kind'])
       ]
     },
-    agent: { type: 'string', enum: ['claude', 'codex'] },
+    agent: { type: 'string', enum: [...ROUTINE_AGENTS] },
     prompt: { type: 'string', maxLength: 20000 },
     postResults: { type: 'string', enum: ['none', 'comment', 'pr'] },
     enabled: { type: 'boolean', default: true },
@@ -319,7 +321,7 @@ export const OPERATIONS: Record<string, Record<string, Op>> = {
         repo: obj({ url: { type: 'string' }, ref: { type: 'string' } }, ['url']),
         machineSize: { type: 'string', enum: ['standard', 'large'] },
         region: { type: 'string' },
-        message: obj({ text: { type: 'string' }, agent: { type: 'string', enum: ['claude', 'codex'] } }, ['text'])
+        message: obj({ text: { type: 'string' }, agent: { type: 'string', enum: [...AGENTS] } }, ['text'])
       }),
       responses: { 201: { description: 'Running workspace', schema: obj({ workspace: ref('Workspace'), message: ref('Message') }) } }
     }
@@ -345,7 +347,7 @@ export const OPERATIONS: Record<string, Record<string, Op>> = {
       summary: 'Send a message to an agent',
       description: 'Queues the message and returns 202 at once. A sleeping workspace is woken first. Without `session` a new agent session starts with the text as its prompt; with `session` the text is typed into that session. Poll the message for `delivered`.',
       params: [WS],
-      body: obj({ text: { type: 'string', maxLength: 32000 }, agent: { type: 'string', enum: ['claude', 'codex'] }, session: { type: 'string' } }, ['text']),
+      body: obj({ text: { type: 'string', maxLength: 32000 }, agent: { type: 'string', enum: [...AGENTS] }, session: { type: 'string' } }, ['text']),
       responses: { 202: { description: 'Queued', schema: one('message', 'Message') } }
     }
   },

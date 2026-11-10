@@ -21,6 +21,10 @@ export function commitProvisionEnv(imageDir) {
     env.CHROME_VERSION = manifest.chrome.version
     env.CHROME_SHA256 = manifest.chrome.sha256
   }
+  if (manifest.cursorAgent) {
+    env.CURSOR_AGENT_VERSION = manifest.cursorAgent.version
+    env.CURSOR_AGENT_SHA256 = manifest.cursorAgent.sha256
+  }
   if (manifest.desktop) {
     env.NOVNC_VERSION = manifest.desktop.novnc.version
     env.NOVNC_SHA256 = manifest.desktop.novnc.sha256

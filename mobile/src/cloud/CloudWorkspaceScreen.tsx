@@ -48,6 +48,7 @@ import {
   useCloudWorkspaceLiveStatus,
   useInvalidateCloudWorkspaces
 } from './use-cloud-workspaces'
+import { ORCA_CLOUD_SANDBOX_SPEC } from '../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 
 export function CloudWorkspaceScreen({
   sandboxId,
@@ -263,11 +264,10 @@ export function CloudWorkspaceScreen({
               <ListRow
                 key="machine"
                 title={t('cloud.details.machine', 'Sandbox size')}
-                value={
-                  workspace.machineSize === 'large'
-                    ? t('cloud.size.large', 'Large (8 vCPU · 16 GB)')
-                    : t('cloud.size.standard', 'Standard (4 vCPU · 8 GB)')
-                }
+                value={t('cloud.size.spec', '{{vcpus}} vCPU · {{memoryGb}} GB', {
+                  vcpus: String(ORCA_CLOUD_SANDBOX_SPEC.vcpus),
+                  memoryGb: String(ORCA_CLOUD_SANDBOX_SPEC.memoryGb)
+                })}
               />
             </View>
           </View>

@@ -42,6 +42,12 @@ export const ManifestSchema = z
     /** Google Chrome .deb (headless browser for agents and Orca browser automation); null skips it. */
     chrome: z.object({ version: z.string().regex(/^\d+\.\d+\.\d+\.\d+-\d+$/), sha256: Sha256 }).strict().nullable(),
     agentCliPackages: z.array(Package).min(1),
+    /** Cursor's agent CLI (cursor-agent) ships as a tarball, not on npm; null/absent skips it. */
+    cursorAgent: z
+      .object({ version: z.string().regex(/^\d{4}\.\d{2}\.\d{2}-[a-f0-9]{7,40}$/), sha256: Sha256 })
+      .strict()
+      .nullable()
+      .optional(),
     /** Optional remote desktop (noVNC + websockify tarballs); absent = an image without it. */
     desktop: z
       .object({
@@ -116,6 +122,10 @@ export function provisionEnv(inputs: BuildInputs): Record<string, string> {
   if (manifest.chrome) {
     env.CHROME_VERSION = manifest.chrome.version
     env.CHROME_SHA256 = manifest.chrome.sha256
+  }
+  if (manifest.cursorAgent) {
+    env.CURSOR_AGENT_VERSION = manifest.cursorAgent.version
+    env.CURSOR_AGENT_SHA256 = manifest.cursorAgent.sha256
   }
   if (manifest.desktop) {
     env.NOVNC_VERSION = manifest.desktop.novnc.version

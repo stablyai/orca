@@ -81,7 +81,7 @@ const meter = await post<StripeObject & { event_name: string }>(
   'meter'
 )
 const overageProduct = await post('/v1/products', { name: 'Orca sandbox overage', unit_label: 'std hour' }, 'product:overage')
-// Per Standard hour (Large burns 2x through the meter weight); the meter counts seconds and the
+// Per sandbox hour (one size, 1x; see MACHINE_SIZE_WEIGHT); the meter counts seconds and the
 // invoice divides by 3600, rounding up.
 const overage = await post(
   '/v1/prices',

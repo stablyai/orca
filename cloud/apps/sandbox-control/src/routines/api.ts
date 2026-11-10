@@ -15,7 +15,7 @@ import { z } from 'zod'
 import { auditCaller, consumeRate } from '../api/audit'
 import { ApiError, isAdmin, requireScope, type ApiCaller } from '../api/caller'
 import type { ApiContext, ApiExtension } from '../api/router'
-import { AGENTS } from '../api/vm-agent'
+import { ROUTINE_AGENTS } from '../../../../../src/shared/cloud-api/cloud-api-routine-types'
 import { getProject, insertProject, type ProjectRow } from '../api/workspaces'
 import { parseGitHubRepo } from '../github-app'
 import { RunRefusedError, cancelRoutineRuns, enqueueRun, type RoutineDeps } from './runs'
@@ -66,7 +66,8 @@ const RoutineFields = {
   projectId: z.string().max(64).optional(),
   repo: z.object({ url: RepoUrl, ref: Ref.optional() }).strict().optional(),
   trigger: Trigger,
-  agent: z.enum(AGENTS),
+  // Routines post results through a headless run; they stay on the agents that path was proven with.
+  agent: z.enum(ROUTINE_AGENTS),
   prompt: z.string().trim().min(1).max(MAX_PROMPT_CHARS),
   postResults: z.enum(['none', 'comment', 'pr']),
   enabled: z.boolean().optional(),

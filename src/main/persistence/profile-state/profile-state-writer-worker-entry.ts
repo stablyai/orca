@@ -8,6 +8,7 @@ import {
 import {
   isProfileStateWriterInitialization,
   isProfileStateWriterRequest,
+  PROFILE_STATE_WRITER_AWAIT_INITIALIZATION,
   type ProfileStateWriterRequest,
   type ProfileStateWriterResponse
 } from './profile-state-writer-protocol'
@@ -122,22 +123,33 @@ async function accept(value: unknown): Promise<void> {
   }
 }
 
-try {
-  const initialization: unknown = workerData
-  if (!isProfileStateWriterInitialization(initialization)) {
-    throw new ProfileStateWriterError(
-      'profile-state-writer-initialization',
-      'Invalid profile state writer initialization',
-      'known-failure'
+function initialize(initialization: unknown): void {
+  try {
+    if (!isProfileStateWriterInitialization(initialization)) {
+      throw new ProfileStateWriterError(
+        'profile-state-writer-initialization',
+        'Invalid profile state writer initialization',
+        'known-failure'
+      )
+    }
+    authority = new ProfileStateSqliteAuthority(
+      initialization.databasePath,
+      initialization.profileId
     )
+    authority.initializeFromRevision(initialization.revision)
+    reply({ id: 0, ok: true, revision: authority.revision })
+    port.on('message', (value: unknown) => {
+      void accept(value)
+    })
+  } catch (error) {
+    reply({ id: 0, ok: false, error: encodeProfileStateWriterError(error) })
+    close()
   }
-  authority = new ProfileStateSqliteAuthority(initialization.databasePath, initialization.profileId)
-  authority.initializeFromRevision(initialization.revision)
-  reply({ id: 0, ok: true, revision: authority.revision })
-  port.on('message', (value: unknown) => {
-    void accept(value)
-  })
-} catch (error) {
-  reply({ id: 0, ok: false, error: encodeProfileStateWriterError(error) })
-  close()
+}
+
+// A thread started ahead of its database (prewarmed) is initialized by its first message.
+if (workerData === PROFILE_STATE_WRITER_AWAIT_INITIALIZATION) {
+  port.once('message', initialize)
+} else {
+  initialize(workerData)
 }

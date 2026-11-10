@@ -24,7 +24,10 @@ const MAP: Record<string, string> = {
   'life.delete-asleep': 'cli.desktop-delete-asleep',
   'life.delete-asleep-after-move': 'cli.desktop-delete-asleep-moved',
   'life.move-then-delete': 'cli.desktop-move-then-delete',
-  'life.auto-resume': 'life.auto-resume'
+  'life.auto-resume': 'life.auto-resume',
+  'acc.download': 'acc.download',
+  'acc.remote-desktop': 'acc.remote-desktop',
+  'local.core-workflow': 'local.core-workflow'
 }
 const checks: CheckResult[] = []
 const benchmarks: RunFile['benchmarks'] = []

@@ -7,6 +7,9 @@ export type ProfileStateWriterInitialization = {
   revision: number
 }
 
+/** workerData for a thread started before its database is known: its first message initializes it. */
+export const PROFILE_STATE_WRITER_AWAIT_INITIALIZATION = 'await-initialization'
+
 export type ProfileStateWriterCommand =
   | { command: 'write-state'; payload: Uint8Array }
   | {

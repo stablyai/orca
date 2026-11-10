@@ -175,7 +175,21 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
   rebindWakeInputTarget(session.deps.worktreeId, wakeInputKey, forwardUserInput, wakeInputReady)
   // The waking pill stays until the pane in front is attached again (it can take keys then).
   const unregisterWakePane = registerWakePane(session.deps.worktreeId, wakeInputKey, {
-    isReady: wakeInputReady,
+    // Input reaches the terminal: attached to one, and nothing typed into it still unsent (a pane
+    // that looks connected but drops input stays "Connecting…" and then fails visibly).
+    isReady: () => {
+      const transport = session.deps.paneTransportsRef.current.get(session.pane.id)
+      return (
+        wakeInputReady() &&
+        Boolean(transport?.getPtyId()) &&
+        transport?.isConnectPending?.() !== true &&
+        transport?.hasUndeliveredInput?.() !== true
+      )
+    },
+    retry: () => {
+      const transport = session.deps.paneTransportsRef.current.get(session.pane.id)
+      return Boolean(transport?.retryRecovery?.() || transport?.reopenAfterHostReturned?.())
+    },
     isActive: () =>
       !session.disposed &&
       Boolean(session.deps.isActiveRef.current) &&

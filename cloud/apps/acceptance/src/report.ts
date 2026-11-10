@@ -69,10 +69,22 @@ function evidenceHtml(result: CheckResult, run: RunFile): string {
   return parts.join('<br>')
 }
 
+/** Independent-audit caps (findings.json auditCaps): a check that passes on a weaker bar than the
+ * Conductor column is shown as partial, with the reason, until the stronger proof exists. */
+function auditCap(id: string): string | null {
+  return (loadFindings() as { auditCaps?: Record<string, string> }).auditCaps?.[id] ?? null
+}
+
+export function effectiveStatus(id: string, raw: string | undefined): string {
+  const status = raw ?? 'not_landed'
+  return status === 'pass' && auditCap(id) ? 'partial' : status
+}
+
 function featureRow(f: Feature, hit: { result: CheckResult; run: RunFile } | undefined): string {
-  const status = hit?.result.status ?? 'not_landed'
+  const status = effectiveStatus(f.id, hit?.result.status)
   const s = STATUS[status]!
-  const detail = hit ? esc(hit.result.detail) : `No check result yet; waiting on <b>${esc(f.owner)}</b>.`
+  const cap = hit?.result.status === 'pass' ? auditCap(f.id) : null
+  const detail = (cap ? `<b>Audit cap (partial):</b> ${esc(cap)}<br>` : '') + (hit ? esc(hit.result.detail) : `No check result yet; waiting on <b>${esc(f.owner)}</b>.`)
   return `<tr><th>${esc(f.feature)}<div class="small muted"><code>${esc(f.id)}</code> · ${esc(f.priority)} · ${esc(f.owner)}</div></th>
 <td class="${s.cls} c">${s.label}</td><td>${detail}</td><td>${hit ? evidenceHtml(hit.result, hit.run) : ''}</td>
 <td>${esc(f.conductor)}</td><td>${f.better ? esc(f.better) : ''}</td></tr>`
@@ -120,7 +132,7 @@ export function renderReport(): string {
   const latest = latestResults(runs)
   const counts = { pass: 0, partial: 0, fail: 0, not_landed: 0, skipped: 0, deferred: 0 }
   for (const f of CATALOG) {
-    counts[(latest.get(f.id)?.result.status ?? 'not_landed') as keyof typeof counts]++
+    counts[effectiveStatus(f.id, latest.get(f.id)?.result.status) as keyof typeof counts]++
   }
   const allResources = runs.flatMap((r) => r.resources)
   const cost = resourceCost(allResources)

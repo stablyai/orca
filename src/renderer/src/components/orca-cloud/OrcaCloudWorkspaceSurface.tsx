@@ -128,9 +128,10 @@ function useWakeOverlay(
         setShown({ wake: effective, at: shown.at })
         return undefined
       }
-      // Failures show at once (and wakes the person is already typing into); others only if they
+      // Failures show at once (and wakes the person is already typing into, and a wake that
+      // started earlier, e.g. on hover, and has already outlasted the delay); others only if they
       // outlast the show delay.
-      if (failed || immediate) {
+      if (failed || immediate || Date.now() - effective.startedAt >= SHOW_DELAY_MS) {
         setShown({ wake: effective, at: Date.now() })
         return undefined
       }
@@ -227,7 +228,7 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
   // Ready means the server answers; the pill stays ("Connecting…") until the pane in front has
   // re-attached and can take keys.
   const attachHold = useWakeAttachHold(workspaceId, view.wake)
-  const shownWake = attachHold ?? view.wake
+  const shownWake = attachHold.wake ?? view.wake
   const now = useNow(1_000, shownWake !== undefined)
   // Typing is accepted while a wake is in flight, so the terminal stays visible and typeable.
   const wakeInput = useWakeInput(workspaceId)
@@ -382,9 +383,14 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
               typeThrough={typeThrough}
               pendingInput={wakeInput.pending}
               onClearPending={() => clearWakeInput(workspaceId)}
-              onRetry={wake}
+              terminalStalled={attachHold.terminalStalled}
+              onRetry={attachHold.terminalStalled ? attachHold.retry : wake}
               onRestart={restart}
-              onDismiss={() => dismissCloudWake(workspaceId)}
+              onDismiss={
+                attachHold.terminalStalled
+                  ? attachHold.dismiss
+                  : () => dismissCloudWake(workspaceId)
+              }
             />
           ) : layer === 'asleep' && offline.snapshot ? (
             <div className="absolute inset-0 flex justify-center overflow-hidden bg-background">

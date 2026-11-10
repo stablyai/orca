@@ -34,6 +34,7 @@ export const HostedGithubConnectResponseSchema = z.object({
 // Billing sells exactly these; larger boxes need a Vercel Enterprise plan.
 export const HOSTED_SANDBOX_MACHINE_SIZES = ['standard', 'large'] as const
 export type HostedSandboxMachineSize = (typeof HOSTED_SANDBOX_MACHINE_SIZES)[number]
+export const ORCA_CLOUD_SANDBOX_SPEC = { vcpus: 8, memoryGb: 16 } as const
 
 export const HOSTED_SANDBOX_STATUSES = [
   'creating',
