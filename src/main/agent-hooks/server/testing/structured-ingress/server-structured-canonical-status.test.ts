@@ -59,7 +59,7 @@ describe('structured canonical production slice', () => {
       paneKey: PANE,
       agentType: 'codex',
       providerSession: { key: 'session_id', id: 'resume-only' },
-      launchedAt: Date.now()
+      launchedAt: 100
     })
     expect(deps.getAgentStatusSnapshotForPane(PANE)).toEqual([])
     expect(deps.getAgentProviderSessionRowsForPane(PANE)).toEqual([
