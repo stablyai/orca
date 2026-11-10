@@ -193,7 +193,7 @@ function hasAgentIdentityCredential(value: unknown): boolean {
     : true
 }
 
-function hasBedrockApiKey(value: unknown): boolean {
+export function hasBedrockApiKey(value: unknown): boolean {
   return isRecord(value) && isNonEmptyString(value.api_key)
 }
 

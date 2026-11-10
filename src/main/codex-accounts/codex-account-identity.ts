@@ -3,8 +3,10 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import type { CodexSystemDefaultIdentity } from '../../shared/managed-account-types'
+import { readCodexTopLevelModelProvider } from '../codex/structured/launch/codex-model-provider-config'
 import { readCodexAuthIdentity, type CodexAuthIdentity } from './codex-auth-identity'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
+import { hasBedrockApiKey } from './managed-codex-auth-readiness'
 
 export type ResolvedCodexIdentity = CodexAuthIdentity
 
@@ -13,8 +15,12 @@ function declaresApiKeyCredential(parsed: unknown): boolean {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     return false
   }
-  const apiKey = (parsed as Record<string, unknown>).OPENAI_API_KEY
-  return typeof apiKey === 'string' && apiKey.trim() !== ''
+  const auth = parsed as Record<string, unknown>
+  const apiKey = auth.OPENAI_API_KEY
+  const bedrock =
+    (auth.auth_mode == null || auth.auth_mode === 'bedrockApiKey') &&
+    hasBedrockApiKey(auth.bedrock_api_key)
+  return (typeof apiKey === 'string' && apiKey.trim() !== '') || bedrock
 }
 
 export class CodexAccountIdentity {
@@ -75,7 +81,10 @@ export class CodexAccountIdentity {
   }
 
   // Resolve the system default live from ~/.codex rather than stored managed-account identity.
-  resolveSystemDefault(): CodexSystemDefaultIdentity {
+  resolveSystemDefault(config: string | undefined): CodexSystemDefaultIdentity {
+    const provider = config ? readCodexTopLevelModelProvider(config) : null
+    // Bedrock uses AWS auth, including profiles and roles with no Codex credential file.
+    const bedrock = provider === 'amazon-bedrock' || provider === 'amazon-bedrock-runtime'
     let contents: string
     try {
       contents = readFileSync(join(homedir(), '.codex', 'auth.json'), 'utf-8')
@@ -83,13 +92,20 @@ export class CodexAccountIdentity {
       const code = (error as NodeJS.ErrnoException | null)?.code
       if (code === 'ENOENT' || code === 'ENOTDIR') {
         // Environment API keys can authenticate without an auth.json file.
-        return this.systemDefaultIdentity(false, this.hasEnvApiKey() ? 'api-key' : 'none')
+        return this.systemDefaultIdentity(
+          false,
+          bedrock || this.hasEnvApiKey() ? 'api-key' : 'none'
+        )
       }
       console.warn(
         '[codex-accounts] Failed to read system-default Codex identity',
         code ?? 'unknown-error'
       )
-      return this.systemDefaultIdentity(true, 'none')
+      return this.systemDefaultIdentity(true, bedrock ? 'api-key' : 'none')
+    }
+
+    if (bedrock) {
+      return this.systemDefaultIdentity(true, 'api-key')
     }
 
     let parsed: unknown

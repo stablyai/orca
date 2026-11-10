@@ -76,6 +76,69 @@ describe('CodexAccountService config sync', () => {
       })
     })
 
+    it('recognizes Bedrock Runtime without an auth.json file', async () => {
+      writeFileSync(
+        join(systemCodexHomeDir(), 'config.toml'),
+        'model_provider = "amazon-bedrock-runtime"\n',
+        'utf-8'
+      )
+      const service = await newService()
+
+      expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault).toEqual({
+        hasAuth: false,
+        authKind: 'api-key',
+        email: null,
+        providerAccountId: null,
+        workspaceLabel: null
+      })
+    })
+
+    it('does not attribute Bedrock Mantle to a saved ChatGPT login', async () => {
+      writeFileSync(
+        join(systemCodexHomeDir(), 'config.toml'),
+        'model_provider = "amazon-bedrock"\n',
+        'utf-8'
+      )
+      writeFileSync(systemAuthPath(), createCodexAuthJson('old@home.dev', 'old', 'refresh'))
+      const service = await newService()
+
+      expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault).toEqual({
+        hasAuth: true,
+        authKind: 'api-key',
+        email: null,
+        providerAccountId: null,
+        workspaceLabel: null
+      })
+
+      writeFileSync(join(systemCodexHomeDir(), 'config.toml'), 'model_provider = "openai"\n')
+      expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault).toEqual({
+        hasAuth: true,
+        authKind: 'oauth',
+        email: 'old@home.dev',
+        providerAccountId: 'old',
+        workspaceLabel: null
+      })
+    })
+
+    it('recognizes a saved Bedrock API key instead of reporting OAuth', async () => {
+      writeFileSync(
+        systemAuthPath(),
+        JSON.stringify({
+          auth_mode: 'bedrockApiKey',
+          bedrock_api_key: { api_key: 'bedrock-test-key', region: 'us-east-2' }
+        })
+      )
+      const service = await newService()
+
+      expect(withoutEnvApiKey(() => service.listAccounts()).systemDefault).toEqual({
+        hasAuth: true,
+        authKind: 'api-key',
+        email: null,
+        providerAccountId: null,
+        workspaceLabel: null
+      })
+    })
+
     it('degrades safely when auth.json contains valid JSON with the wrong shape', async () => {
       writeFileSync(systemAuthPath(), 'null', 'utf-8')
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
