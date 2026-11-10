@@ -231,7 +231,7 @@ export function MobileSessionTabBar({
       <Pressable
         style={({ pressed }) => [
           styles.sideCell,
-          actionsCollapsed && styles.lastCell,
+          actionsCollapsed && !inTopBar && styles.lastCell,
           pressed && styles.cellPressed
         ]}
         onPress={() => setSheetOpen(true)}
@@ -249,7 +249,7 @@ export function MobileSessionTabBar({
         <Pressable
           style={({ pressed }) => [
             styles.sideCell,
-            styles.lastCell,
+            !inTopBar && styles.lastCell,
             pressed && styles.cellPressed,
             createDisabled && styles.cellDisabled
           ]}
@@ -326,6 +326,7 @@ const styles = themedStyleSheet(() => ({
     borderRightWidth: 1,
     borderRightColor: colors.borderSubtle
   },
+  // At the screen edge; in the top bar the hairline stays to part the cells from the round buttons.
   lastCell: { borderRightWidth: 0 },
   cellPressed: { backgroundColor: colors.translucentFill },
   cellDisabled: { opacity: feedback.disabledOpacity },
