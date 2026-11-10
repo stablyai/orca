@@ -12,6 +12,7 @@ export function CloudWorkspaceHeader({
   title,
   state,
   stateLine,
+  stateTitle,
   note,
   action,
   headingRef
@@ -20,6 +21,8 @@ export function CloudWorkspaceHeader({
   title: string
   state: CloudDotState
   stateLine: string
+  /** Hover text for the state line (e.g. the absolute time behind "As of 5 minutes ago"). */
+  stateTitle?: string
   /** One quieter sentence under the state line. */
   note?: string
   action?: React.ReactNode
@@ -40,7 +43,9 @@ export function CloudWorkspaceHeader({
           </h2>
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <CloudStateDot state={state} size="md" />
-            <span className="truncate">{stateLine}</span>
+            <span className="truncate" title={stateTitle}>
+              {stateLine}
+            </span>
           </p>
           {note ? <p className="max-w-[60ch] text-xs text-muted-foreground">{note}</p> : null}
         </div>

@@ -20,6 +20,7 @@ import type { ProviderSandboxState, SandboxProviderApi } from './sandbox-provide
 import { egressSecretHosts, placeholderValues, secretPlaceholder } from './secret-egress'
 import { egressAllowHosts, sessionSecretEnv, type SessionSecrets } from './session-env'
 import type { Keyring } from './secrets-crypto'
+import { captureReadSnapshot, deleteReadSnapshot } from './read-snapshots'
 import { ORCAD_PORT, SHARE_PROXY_PORT, drainOrcad, runningOrcad, startOrcad, type OrcadReady, type StartInputs } from './sandbox-vm-commands'
 import { WORKSPACE_PRELUDE_SCRIPT } from '../image/vm-scripts.generated'
 import { resolveEnvironmentBoot, type BootSource } from './environments'
@@ -659,9 +660,14 @@ export async function failAndRelease(deps: LifecycleDeps, row: SandboxRow): Prom
 export async function stopForSuspend(
   deps: LifecycleDeps,
   row: SandboxRow,
-  options: { drainSeconds?: number } = {}
+  options: { drainSeconds?: number; reason?: 'sleep' | 'rollover'; captureRead?: boolean } = {}
 ): Promise<SandboxRow> {
   if (row.session_id) {
+    // While orcad still serves: what a sleeping workspace shows to readers (sealed on the VM).
+    // Skipped for Restart (orcad isn't answering) and Archive (an archived workspace isn't readable).
+    if (options.captureRead !== false) {
+      await captureReadSnapshot(deps, row, options.reason ?? 'sleep').catch(() => undefined)
+    }
     await drainOrcad(deps.provider, row.session_id, options.drainSeconds)
     const stopped = await deps.provider.stopSession(row.session_id)
     if (stopped.snapshotId) {
@@ -778,7 +784,7 @@ export async function rolloverSandbox(deps: LifecycleDeps, row: SandboxRow): Pro
     throw new GuardrailError('maintenance')
   }
   const suspending = await claim(deps, row, { status: 'suspending' })
-  const stopped = await stopForSuspend(deps, suspending)
+  const stopped = await stopForSuspend(deps, suspending, { reason: 'rollover' })
   await flushUsage(deps.db, deps.entitlements, deps.now(), row.id)
   return wake(deps, await claim(deps, stopped, { status: 'resuming' }))
 }
@@ -825,6 +831,8 @@ export async function destroySandbox(deps: LifecycleDeps, row: SandboxRow): Prom
   await markSnapshotsDeleted(deps.db, row.id, deps.now())
   // Archive metadata (repo state, file tree) goes with the workspace.
   await deps.db.prepare('DELETE FROM sandbox_archives WHERE sandbox_id = ?').bind(row.id).run()
+  // So does its sealed read snapshot.
+  await deleteReadSnapshot(deps.db, row.id)
   const destroyed = await claim(deps, destroying, {
     status: 'destroyed',
     ...NO_SESSION,

@@ -20873,6 +20873,8 @@
         "you": "You",
         "youAreTyping": "You are typing",
         "youAreViewing": "You are viewing",
+        "view": "View",
+        "viewAsleep": "View read-only copy",
         "routines": "Routines"
       },
       "orcaCloud": {
@@ -23195,7 +23197,6 @@
         "composerLabel": "Message to queue",
         "sendAndWake": "Send and wake",
         "region": "Asleep workspace (read-only)",
-        "wake": "Wake",
         "emptyBody": "Orca keeps a copy of chats, terminals and changes once you have used this workspace while it was awake.",
         "tabChat": "Chat",
         "tabTerminals": "Terminals",
@@ -23204,6 +23205,48 @@
         "readOnly": "Read-only",
         "terminalOutput": "Saved output of {{title}}",
         "noGit": "No source control state was saved."
+      },
+      "read": {
+        "wakeToContinue": "Wake to continue",
+        "unreadable": "Couldn't open the saved copy on this computer. Your files are safe.",
+        "asOf": "Asleep · As of {{when}}",
+        "note": "Read-only copy saved when it went to sleep.",
+        "prTitle": "#{{number}} {{title}}",
+        "untitledChat": "Untitled chat",
+        "noMessages": "No messages were saved for this chat.",
+        "roleUser": "Person:",
+        "roleAgent": "Agent:",
+        "showLess": "Show less",
+        "showMore_one": "Show {{count}} earlier message",
+        "showMore_other": "Show {{count}} earlier messages",
+        "truncated": "Older messages are in the workspace. Wake it to read them.",
+        "noSessions": "No agent chats were open.",
+        "loading": "Loading the saved copy",
+        "agents": "Agents",
+        "changes": "Changes",
+        "region": "Asleep workspace (read-only)",
+        "asleep": "Asleep",
+        "empty": "Nothing saved yet. Orca saves a read-only copy each time this workspace goes to sleep.",
+        "notSealedForKey": "This device was added after the workspace went to sleep. Wake it once to read it here.",
+        "tryAgain": "Try again",
+        "checksPassed": "Checks passed",
+        "checksFailed": "Checks failed",
+        "checksPending": "Checks running",
+        "checksNone": "No checks",
+        "agentWorking": "Was working",
+        "agentAttention": "Needs input",
+        "agentDone": "Done",
+        "agentIdle": "Idle",
+        "agentUnknown": "Status unknown",
+        "prOpen": "Open",
+        "prDraft": "Draft",
+        "prMerged": "Merged",
+        "prClosed": "Closed",
+        "stateAsOf": "{{state}} · As of {{when}}",
+        "wakingElapsed": "Waking… {{elapsed}}",
+        "staleCopy": "Orca Cloud sent an older copy than the one you last saw, so it isn’t shown. Wake the workspace to see it as it is now.",
+        "keychainUnavailable": "Orca can’t open the saved copy because this computer’s keychain isn’t available. Wake the workspace to see it.",
+        "keychainLinux": "Or set up a keyring (like GNOME Keyring) and reopen Orca."
       }
     },
     "runtimeDownload": {
@@ -26508,7 +26551,9 @@
       "files": "{{count}} files",
       "uncommitted": "Uncommitted changes",
       "moreChanges": "{{count}} more",
-      "noCommits": "No commits on this branch yet."
+      "noCommits": "No commits on this branch yet.",
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files"
     },
     "state": {
       "archived": "Archived",
@@ -26613,7 +26658,6 @@
     "unarchiveFailed": "Couldn’t unarchive the workspace",
     "asleep": {
       "noCopy": "Asleep · nothing cached yet",
-      "copyFrom": "Asleep · copy from {{when}}",
       "readOnly": "Read-only copy kept on this computer."
     },
     "bytes": {

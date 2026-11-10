@@ -13,6 +13,7 @@ import {
 const WIDTH = 760
 const ACTIONS: RowActions = {
   open: () => {},
+  read: () => {},
   copyLink: () => {},
   copyWorkspaceLink: () => {},
   goToChat: () => {},

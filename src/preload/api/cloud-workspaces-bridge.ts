@@ -9,6 +9,7 @@ export const cloudWorkspacesApi = {
   resolveLink: (workspaceId, chatId) =>
     ipcRenderer.invoke('cloudWorkspaces:resolveLink', { workspaceId, chatId }),
   openGrant: (id) => ipcRenderer.invoke('cloudWorkspaces:openGrant', { id }),
+  readSnapshot: (id) => ipcRenderer.invoke('cloudWorkspaces:readSnapshot', { id }),
   listGrants: (id) => ipcRenderer.invoke('cloudWorkspaces:listGrants', { id }),
   revokeGrant: (id, grantId) => ipcRenderer.invoke('cloudWorkspaces:revokeGrant', { id, grantId }),
   localWorkspaces: () => ipcRenderer.invoke('cloudWorkspaces:localWorkspaces'),
