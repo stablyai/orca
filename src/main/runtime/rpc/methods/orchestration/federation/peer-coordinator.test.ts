@@ -237,6 +237,16 @@ describe('a paired Orca coordinating its Run on this server', () => {
     )
   })
 
+  it('refuses a start that would place in its workspace, which it has none of here', async () => {
+    for (const worktree of ['current', 'new-child']) {
+      const response = await peerCall('orchestration.workerStart', { spec: 'work', worktree })
+      expect(response.ok ? undefined : response.error).toMatchObject({
+        code: 'invalid_argument',
+        message: expect.stringContaining('--on requires an exact remote worktree selector')
+      })
+    }
+  })
+
   it('follows up with a finished worker where that worker ran, though it has no workspace here', async () => {
     await peerCall('orchestration.runCurrent', {})
     const peer = peerCoordinatorCaller(db.getPeerRunForConversation(conversationId)!)

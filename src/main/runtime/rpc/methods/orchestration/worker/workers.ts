@@ -99,7 +99,7 @@ export async function startWorker(
   ) {
     throw new OrchestrationError(
       'invalid_argument',
-      `${orchestrationCaller.peerRun.home_label} has no workspace on this server, so --worktree ${placement} cannot place here. Use --worktree new-top-level --repo <repo>, or id:<worktree>. No effects were applied.`,
+      `--on requires an exact remote worktree selector or new-top-level: ${orchestrationCaller.peerRun.home_label} has no workspace on this server for --worktree ${placement}. No effects were applied.`,
       { effectsApplied: false }
     )
   }
