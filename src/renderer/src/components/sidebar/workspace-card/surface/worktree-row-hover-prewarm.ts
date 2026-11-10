@@ -1,4 +1,9 @@
 import { setTerminalPrewarmWorktrees } from '../../../terminal/terminal-worktree-prewarm'
+import {
+  notePredictiveWakeHoverEnd,
+  notePredictiveWakeHoverStart,
+  notePredictiveWakeSelect
+} from '@/lib/orca-cloud/cloud-predictive-wake'
 
 // Long enough that sweeping or scrolling past rows never mounts them; short enough to finish before a typical press.
 export const HOVER_PREWARM_DWELL_MS = 120
@@ -10,6 +15,8 @@ let dwellWorktreeId: string | null = null
 let graceTimer: ReturnType<typeof setTimeout> | null = null
 let prewarmedWorktreeId: string | null = null
 let wheelListenerInstalled = false
+// The row a predictive-wake dwell is armed for (outlives the shorter prewarm dwell).
+let predictiveHoverId: string | null = null
 
 function clearDwell(): void {
   if (dwellTimer !== null) {
@@ -51,12 +58,19 @@ function installWheelListener(): void {
       if (dwellWorktreeId !== null) {
         armDwell(dwellWorktreeId)
       }
+      // Scrolling under a resting pointer is not intent either: restart the wake dwell too.
+      if (predictiveHoverId !== null) {
+        notePredictiveWakeHoverStart(predictiveHoverId)
+      }
     },
     { capture: true, passive: true }
   )
 }
 
 export function noteWorktreeRowHoverStart(worktreeId: string): void {
+  // A sleeping cloud workspace starts waking on a longer dwell (no-op for everything else).
+  predictiveHoverId = worktreeId
+  notePredictiveWakeHoverStart(worktreeId)
   installWheelListener()
   if (prewarmedWorktreeId === worktreeId) {
     clearDwell()
@@ -68,12 +82,17 @@ export function noteWorktreeRowHoverStart(worktreeId: string): void {
 
 /** A press is intent enough to skip the hover dwell; the mount still waits a task so it can't delay the press's focus move or drag start. */
 export function noteWorktreeRowPress(worktreeId: string): void {
+  notePredictiveWakeSelect(worktreeId)
   if (prewarmedWorktreeId !== worktreeId) {
     armDwell(worktreeId, 0)
   }
 }
 
 export function noteWorktreeRowHoverEnd(worktreeId: string): void {
+  if (predictiveHoverId === worktreeId) {
+    predictiveHoverId = null
+  }
+  notePredictiveWakeHoverEnd(worktreeId)
   if (dwellWorktreeId === worktreeId) {
     clearDwell()
   }

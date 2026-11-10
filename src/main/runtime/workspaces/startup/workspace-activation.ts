@@ -1,4 +1,5 @@
 import { OrcaRuntimeWithForegroundInspection } from './workspace-foreground-inspection'
+import { claimQuietWake } from '../../../ephemeral-vm/quiet-wakes'
 import {
   type RuntimeNavigationTarget,
   navigationTargetsClients,
@@ -72,7 +73,9 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       throw new Error('repo_not_found')
     }
     // A workspace this host runs on a recipe VM (over its SSH target) wakes with its opening;
-    // the wake can outlast activation, so it runs on its own and records its failure.
+    // the wake can outlast activation, so it runs on its own and records its failure. Opening it
+    // claims any wake started on intent (no failure is hidden, no short idle window).
+    claimQuietWake(worktree.id)
     void this.wakeWorkspaceVm(worktree.id).catch((error: unknown) =>
       console.warn('[runtime] workspace VM wake failed', error)
     )

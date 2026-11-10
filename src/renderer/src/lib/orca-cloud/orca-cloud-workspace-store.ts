@@ -21,6 +21,7 @@ import type {
 } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 import type { HostedWorkspaceStatus } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import { WAKE_FAILED_STALE_MS, WAKE_STALE_MS } from './orca-cloud-workspace-state'
+import { isSilentPredictiveWake } from './cloud-predictive-wake'
 
 export type CloudStatusEntry = {
   status: HostedWorkspaceStatus | null
@@ -258,6 +259,14 @@ export function dismissCloudWake(workspaceId: string): void {
 }
 
 export function noteCloudWakeProgress(event: CloudWakeProgressEvent): void {
+  // A wake started on intent that nobody opened yet fails quietly (seat cap, plan): no card, no
+  // failed dot; the workspace just stays asleep until it is opened.
+  if (event.phase === 'failed' && isSilentPredictiveWake(event.workspaceId)) {
+    dropWake(event.workspaceId)
+    endWorkspaceWake(event.workspaceId, 'failed')
+    void refreshCloudWorkspaceStatus(event.workspaceId)
+    return
+  }
   // Keep the source the wake started with (later phases may not repeat it).
   const started = snapshot.wake[event.workspaceId]
   const next =

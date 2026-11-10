@@ -16,6 +16,8 @@ import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/s
 import { openPlansPage } from '@/components/billing/plans/plans-page-store'
 import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
 import { installOrcaCloudWorkspaceStore } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { installCloudPredictiveWake } from '@/lib/orca-cloud/install-cloud-predictive-wake'
+import { notePredictiveWakeIdleSlept } from '@/lib/orca-cloud/cloud-predictive-wake'
 import type { HostedSessionRestartResult } from '../../../shared/hosted-sandbox/hosted-session-events'
 import {
   dismissOrcaCloudRestartWarning,
@@ -81,17 +83,20 @@ export function installOrcaCloudSessionEvents(): () => void {
     }
     void runSleepWorktree(workspaceId).then((results) => {
       if (results.some((result) => result.workspaceId === workspaceId && result.completed)) {
+        notePredictiveWakeIdleSlept(workspaceId)
         dismissOrcaCloudRestartWarning(workspaceId)
         showIdleSleepNotice(workspaceId, worktree.displayName, idleMs ?? null)
       }
     })
   })
   const disposeStore = installOrcaCloudWorkspaceStore()
+  const disposePredictive = installCloudPredictiveWake()
   return () => {
     disposeWarning()
     disposeState()
     disposeIdle()
     disposeStore()
+    disposePredictive()
   }
 }
 

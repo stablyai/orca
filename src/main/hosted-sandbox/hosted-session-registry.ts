@@ -1,6 +1,7 @@
 // One lease scheduler per running Orca Cloud workspace: renews Orca's lease, warns before the 24h
 // cap, asks the window to sleep an idle workspace, and rolls the session over with agent auto-resume.
 import type { BrowserWindow } from 'electron'
+import { unopenedIdleStopMs } from '../ephemeral-vm/quiet-wakes'
 import { z } from 'zod'
 import {
   listEphemeralVmRuntimes,
@@ -86,6 +87,7 @@ export function createHostedSessionRegistry(deps: {
     const call = createHostedRuntimeEnvironmentCall(deps.userDataPath, runtimeEnvironmentId)
     const scheduler = new HostedSessionLeaseScheduler({
       driver: deps.driver,
+      idleStopMs: () => unopenedIdleStopMs(runtime.workspaceId),
       handle,
       session: status.session,
       log,

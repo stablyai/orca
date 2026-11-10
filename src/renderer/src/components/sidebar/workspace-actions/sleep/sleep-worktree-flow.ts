@@ -5,6 +5,7 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorkspaceSleepOutcome } from '../../../../../../shared/workspace-sleep'
 import { workspaceSleepTarget } from './workspace-sleep-target'
 import { dismissOrcaCloudRestartWarning } from '@/lib/orca-cloud-session-toasts'
+import { notePredictiveWakeSlept } from '@/lib/orca-cloud/cloud-predictive-wake'
 
 /** One per host asked to stop the workspace's chats. */
 export type WorkspaceSleepResult = {
@@ -69,6 +70,10 @@ function describeChatStopFailure(): string {
 export async function runSleepWorktrees(
   worktreeIds: readonly string[]
 ): Promise<WorkspaceSleepResult[]> {
+  // Intent (hover, focus) must not wake what was just put to sleep.
+  for (const id of worktreeIds) {
+    notePredictiveWakeSlept(id)
+  }
   const { errors, results, vmStillRunningIds } = await sleepWorktreesReportingFailures(
     worktreeIds,
     { markChatsAsleep: true }

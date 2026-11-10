@@ -22,6 +22,7 @@ import {
 } from '@/components/terminal-pane/input/wake-input-buffer'
 import { CLOUD_WORKSPACE_ARCHIVED_ERROR } from '../../../../../shared/hosted-sandbox/cloud-workspace-api'
 import { isWakeActive } from '@/lib/orca-cloud/orca-cloud-workspace-state'
+import { claimPredictiveWake } from '@/lib/orca-cloud/cloud-predictive-wake'
 
 /** Coded failures render through the catalog; a thrown IPC error only has its message. */
 async function settleLifecycleCall(
@@ -77,6 +78,8 @@ export async function resumeEphemeralVmWorkspace(
   if (typeof window === 'undefined' || !window.api?.ephemeralVm?.resumeWorkspace) {
     return { ok: true }
   }
+  // Opening takes over a wake started on intent: its progress and any failure now show.
+  claimPredictiveWake(worktreeId)
   // An archived Orca Cloud workspace opens its read-only archive view; only Unarchive wakes it.
   // A cold start or a stale read must not wake it, so a cloud workspace re-reads its status first.
   const cloud = getCloudWorkspaceSnapshot()
