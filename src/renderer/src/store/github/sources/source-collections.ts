@@ -1,7 +1,7 @@
 import type { Repo } from '../../../../../shared/repo-types'
 import type { ListWorkItemsResult } from '../../../../../shared/github/work-item-types'
 import type { WorkItemsCacheSources } from '../cache/cache-model'
-import { githubTaskBinding } from '@/lib/github-task-observation'
+import { githubTaskBinding } from '@/lib/work-items/github/github-task-observation'
 import { structuralValuesEqual } from '../../../../../shared/structural-value-equality'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
 import { bindingKey } from '../task-records/task-record-model'

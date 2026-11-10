@@ -11,7 +11,7 @@ import {
   getLinkedWorkItemSuggestedName,
   type LinkedWorkItemSummary
 } from '@/lib/new-workspace'
-import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
+import { buildLinearIssueLinkedWorkItem } from '@/lib/work-items/linear/linear-linked-work-item'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   haveConflictingTaskSourceAccounts,
