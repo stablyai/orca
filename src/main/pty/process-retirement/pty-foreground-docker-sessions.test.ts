@@ -66,7 +66,8 @@ describe('observePtyForeground with a Docker container sharing the pts (#39488)'
     try {
       // ptsName comes from the readPtsName mock; only pid and the group reader are read off proc.
       const proc = { pid: 58824, getForegroundProcessGroup: () => 58826 }
-      const sample = await observePtyForeground(proc, () => true, Date.now() + 1_000)
+      // Fixed 2100-01-01 deadline: satisfies Date.now() < deadlineMs without wall-clock use.
+      const sample = await observePtyForeground(proc, () => true, 4_102_444_800_000)
 
       // With every pts row checked, the container's TPGID fails both coherence attempts.
       expect(sample).toMatchObject({
