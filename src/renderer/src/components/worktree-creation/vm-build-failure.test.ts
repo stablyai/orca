@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { classifyVmBuildFailure, isAccountGate, type VmBuildFailure } from './vm-build-failure'
-import { sandboxLimitFromBilling, vmBuildFailureCopy } from './vm-build-failure-copy'
+import {
+  sandboxLimitFromBilling,
+  vmBuildFailureCopy,
+  type SandboxLimitBillingStatus
+} from './vm-build-failure-copy'
 import { orcaCloudRepoName } from './vm-build-repo-actions'
 import type { Translate } from '@/i18n/use-translate'
 
@@ -121,14 +125,13 @@ describe('vmBuildFailureCopy', () => {
   })
 
   it('derives the caps the way billing enforces them', () => {
-    const status = (seats: number, perSeat: number | null) =>
-      ({
-        status: 'ok',
-        entitlement: {
-          seats,
-          offers: perSeat === null ? null : { team: { concurrentSandboxesPerSeat: perSeat } }
-        }
-      }) as unknown as Parameters<typeof sandboxLimitFromBilling>[0]
+    const status = (seats: number, perSeat: number | null): SandboxLimitBillingStatus => ({
+      status: 'ok',
+      entitlement: {
+        seats,
+        offers: perSeat === null ? null : { team: { concurrentSandboxesPerSeat: perSeat } }
+      }
+    })
     expect(sandboxLimitFromBilling(status(4, 3))).toEqual({ perSeat: 3, team: 12 })
     // Billing counts at least one seat.
     expect(sandboxLimitFromBilling(status(0, 3))).toEqual({ perSeat: 3, team: 3 })
