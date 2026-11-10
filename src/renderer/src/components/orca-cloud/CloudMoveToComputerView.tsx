@@ -248,8 +248,8 @@ export function CloudMoveToComputerView({
           detail={
             localStarted
               ? t(
-                  'orcaCloudMove.failedLocalDetail',
-                  'The local workspace was created, but the changes didn’t apply. Your files are safe in the cloud workspace.'
+                  'orcaCloudMove.failedLocalNext',
+                  'Use Move again from the sandbox panel to bring them over. Your files are safe in the cloud workspace.'
                 )
               : t(
                   'orcaCloudMove.failedDetail',
