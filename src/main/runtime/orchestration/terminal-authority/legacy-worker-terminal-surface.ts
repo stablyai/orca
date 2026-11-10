@@ -78,6 +78,8 @@ export abstract class LegacyWorkerTerminalSurface extends OrcaRuntimeWithRestore
     if (pty && this.paneOfPty(pty).tabId === candidate.tabId) {
       forgetPtySurface(this.terminalIdentity, pty)
     }
+    // Why: an exit this run never saw leaves the pane's restored hook row holding the conversation.
+    this.reconcileAgentStatusForEndedProcessFn?.([candidate.paneKey])
     this.notifier?.resolveLegacyWorkerTerminalRecovery?.(
       candidate.paneKey,
       'rolled_back',
