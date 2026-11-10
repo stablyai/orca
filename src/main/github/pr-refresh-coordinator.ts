@@ -98,6 +98,12 @@ export function clearVisiblePRRefreshWindow(windowId: number): void {
   }
 }
 
+/** A cadence change moves queued visible follow-ups to the new interval; "off" drops them. */
+export function retimePRRefreshesForCadence(): void {
+  queue.retimeVisible((key, candidate) => visibility.candidate(key, candidate))
+  drainer.schedule()
+}
+
 export function pruneWorktreePRRefreshAliases(worktreeId: string): void {
   queue.pruneWorktreeAliases(worktreeId)
 }

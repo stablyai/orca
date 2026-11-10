@@ -8904,7 +8904,14 @@
           "f2765fbbf6": "GitLab API budget",
           "8cdbaf4b03": "Jira key casing",
           "fdbcd676b0": "GitHub API budget",
-          "074f7aa0d6": "Default compare base"
+          "074f7aa0d6": "Default compare base",
+          "prAutoRefreshUpdateFailed": "Could not update PR auto-refresh on this host.",
+          "prAutoRefreshDefault": "Default",
+          "prAutoRefreshReduced": "Reduced",
+          "prAutoRefreshMinimal": "Minimal",
+          "prAutoRefreshOff": "Off",
+          "prAutoRefreshTitle": "PR Auto-Refresh",
+          "prAutoRefreshDescription": "How often this host re-reads pull request and checks status on a timer. Default refreshes the selected workspace every minute and other visible ones every 2 minutes; Reduced uses 5 and 10 minutes; Minimal uses 10 and 20 minutes; Off only refreshes when you select a workspace, push, return to the window, or refresh manually. On a server, this also limits how often connected clients can make it refresh."
         },
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "Arms the bold-glitch capture gestures on this machine: {{samplingShortcut}} starts a sampling burst; {{captureShortcut}} captures pane evidence to disk.",

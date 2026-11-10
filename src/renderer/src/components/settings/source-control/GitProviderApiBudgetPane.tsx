@@ -6,22 +6,37 @@ import { GitHubRateLimitPanel } from '../../github/github-rate-limit-display'
 import { GitLabRateLimitPanel } from '../../gitlab/gitlab-rate-limit-display'
 import { useTranslate } from '@/i18n/use-translate'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import { PRAutoRefreshSetting } from './PRAutoRefreshSetting'
+import { prAutoRefreshMatchesSearch } from './pr-auto-refresh-search'
 
 type GitProviderApiBudgetPaneProps = {
   settingsSearchQuery?: string
   /** The host chosen at the top of Settings; budgets come from that host's CLI. */
   target: RuntimeClientTarget
+  settings: GlobalSettings
+  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
 }
 
 export function GitProviderApiBudgetPane({
   settingsSearchQuery,
-  target
+  target,
+  settings,
+  updateSettings
 }: GitProviderApiBudgetPaneProps): React.JSX.Element | null {
   const t = useTranslate()
   const storeSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const searchQuery = settingsSearchQuery ?? storeSearchQuery
 
   const visibleSections = [
+    prAutoRefreshMatchesSearch(searchQuery, t) ? (
+      <PRAutoRefreshSetting
+        key="pr-auto-refresh"
+        target={target}
+        settings={settings}
+        updateSettings={updateSettings}
+      />
+    ) : null,
     matchesSettingsSearch(searchQuery, {
       title: t('auto.components.settings.GitPane.fdbcd676b0', 'GitHub API budget'),
       description: t(

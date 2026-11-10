@@ -172,6 +172,7 @@ export function buildDefaultSettings(args: {
     sourceControlViewMode: 'list',
     sourceControlGroupOrder: DEFAULT_SOURCE_CONTROL_GROUP_ORDER,
     sourceControlCompareAgainstUpstream: false,
+    prAutoRefresh: 'default',
     showTitlebarAppName: true,
     showTasksButton: true,
     showAutomationsButton: true,

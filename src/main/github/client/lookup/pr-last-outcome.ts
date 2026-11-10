@@ -1,4 +1,8 @@
 import type { PRRefreshOutcome } from '../../../../shared/github/pull-request-refresh-types'
+import {
+  reviewRefreshIntervalMs,
+  type PRAutoRefreshCadence
+} from '../../../../shared/review-refresh-policy'
 
 // A phone's re-read right after the desktop's own lookup reuses it instead of asking GitHub again.
 const PHONE_REUSE_MAX_AGE_MS = 30_000
@@ -10,6 +14,8 @@ type PRLastOutcome = {
   start: PRLookupStart
   linkedPRNumber: number | null
   fallbackPRNumber: number | null
+  /** The checkout HEAD the lookup was asked about; a new commit may have opened or moved a PR. */
+  headOid: string | null
   // null: the last lookup was narrowed (CI-line watch), so nothing is reusable until a full one.
   outcome: PRRefreshOutcome | null
 }
@@ -31,13 +37,56 @@ export function recordPRLastOutcome(key: string, entry: PRLastOutcome): void {
   }
   lastOutcomes.delete(key)
   lastOutcomes.set(key, entry)
-  const now = Date.now()
-  for (const [oldestKey, oldest] of lastOutcomes) {
-    if (lastOutcomes.size <= MAX_ENTRIES && now - oldest.start.startedAt < PHONE_REUSE_MAX_AGE_MS) {
+  // Size-bounded only: a slower host cadence reuses answers far older than the phone window.
+  for (const oldestKey of lastOutcomes.keys()) {
+    if (lastOutcomes.size <= MAX_ENTRIES) {
       break
     }
     lastOutcomes.delete(oldestKey)
   }
+}
+
+/** With a slower host cadence, a client's timed read reuses the last full answer for the same
+ *  request until this host's own interval for that answer has passed ("off": until an explicit read). */
+export function readPacedPROutcome(
+  key: string,
+  request: {
+    linkedPRNumber: number | null
+    fallbackPRNumber: number | null
+    currentHeadOid: string | null
+  },
+  cadence: PRAutoRefreshCadence
+): PRRefreshOutcome | null {
+  if (cadence === 'default') {
+    return null
+  }
+  const entry = lastOutcomes.get(key)
+  const outcome = entry?.outcome
+  if (
+    !entry ||
+    !outcome ||
+    outcome.kind === 'upstream-error' ||
+    entry.linkedPRNumber !== request.linkedPRNumber ||
+    entry.fallbackPRNumber !== request.fallbackPRNumber ||
+    entry.headOid !== request.currentHeadOid
+  ) {
+    return null
+  }
+  const pr = outcome.kind === 'found' ? outcome.pr : null
+  // Selected pacing is the shortest timed interval, so the host never outpaces a selected client.
+  const interval = reviewRefreshIntervalMs(
+    {
+      state: pr?.state ?? null,
+      checksStatus: pr?.checksStatus ?? null,
+      hasReview: pr !== null,
+      selected: true
+    },
+    cadence
+  )
+  if (interval !== null && Date.now() - entry.start.startedAt >= interval) {
+    return null
+  }
+  return outcome
 }
 
 /** Only an open PR whose own head is the request's head: a push can't have moved it, and merged or

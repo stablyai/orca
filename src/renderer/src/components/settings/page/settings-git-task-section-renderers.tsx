@@ -47,6 +47,8 @@ export function renderGitSettingsSection(
           <GitProviderApiBudgetPane
             settingsSearchQuery={model.settingsSearchQuery}
             target={model.settingsHostScope.target}
+            settings={model.settings}
+            updateSettings={model.updateSettings}
           />
         </>
       ) : null}

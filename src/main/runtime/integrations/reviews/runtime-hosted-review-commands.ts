@@ -16,11 +16,16 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
 import {
   getPRForBranchOutcome,
+  readPacedClientPROutcome,
   readRecentPhonePROutcome
 } from '../../../github/client/lookup/pr-for-branch-outcome'
 import { getRepoSlug, getRepoUpstream } from '../../../github/client/fetch/repo-slug-upstream'
 import type { GitHubPRBranchLookupOptions } from '../../../github/client/lookup/pull-request-lookup-data'
-import { admissionTierForRefreshReason } from '../../../github/pr-refresh-candidate-policy'
+import {
+  admissionTierForRefreshReason,
+  isBudgetedBackground
+} from '../../../github/pr-refresh-candidate-policy'
+import { getPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
 import { runHostedPRRead } from '../../../github/pr-refresh-coordinator'
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
 import { hostedReviewForBranchReply } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
@@ -110,6 +115,21 @@ export class RuntimeHostedReviewCommands {
       )
       if (recent) {
         return recent
+      }
+    }
+    // This host's cadence caps every client's timed reads, so more clients add no GitHub calls.
+    if (reason !== undefined && isBudgetedBackground(reason)) {
+      const paced = await readPacedClientPROutcome(
+        repo.path,
+        branch,
+        linkedPRNumber ?? null,
+        connectionId,
+        fallbackPRNumber ?? null,
+        lookupOptions,
+        getPRAutoRefreshCadence()
+      )
+      if (paced) {
+        return paced
       }
     }
     // Through the coordinator, so a client's read also serves this server's CI-line watches.

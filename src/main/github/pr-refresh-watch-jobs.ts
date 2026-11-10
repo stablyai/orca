@@ -3,7 +3,10 @@ import type {
   PRRefreshOutcome
 } from '../../shared/github/pull-request-refresh-types'
 import type { PRInfo } from '../../shared/github/pull-request-types'
-import { reviewRefreshIntervalMs } from '../../shared/review-refresh-policy'
+import {
+  getPRAutoRefreshCadence,
+  reviewRefreshIntervalMs
+} from '../../shared/review-refresh-policy'
 import type { PRRefreshQueue, PRRefreshQueueEntry } from './pr-refresh-queue'
 import type { PRRefreshRetryState } from './pr-refresh-retry-state'
 
@@ -47,12 +50,17 @@ export function prWatchNextDueAt(outcome: PRRefreshOutcome): number | null {
     return null
   }
   const pr = outcome.kind === 'found' ? outcome.pr : null
-  const interval = reviewRefreshIntervalMs({
-    state: pr?.state ?? null,
-    checksStatus: pr && !prChecksDone(pr) ? 'pending' : (pr?.checksStatus ?? null),
-    hasReview: pr !== null,
-    selected: false
-  })
+  const cadence = getPRAutoRefreshCadence()
+  // A chat asked for this PR's CI result, so "off" slows the watch rather than ending it unanswered.
+  const interval = reviewRefreshIntervalMs(
+    {
+      state: pr?.state ?? null,
+      checksStatus: pr && !prChecksDone(pr) ? 'pending' : (pr?.checksStatus ?? null),
+      hasReview: pr !== null,
+      selected: false
+    },
+    cadence === 'off' ? 'minimal' : cadence
+  )
   return interval === null ? null : outcome.fetchedAt + interval
 }
 

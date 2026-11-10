@@ -46,6 +46,7 @@ import {
   noteFailure
 } from './hosted-review-lookup-backoff'
 import { observeProviderRead } from './hosted-review-provider-read'
+import { scaleReviewRefreshInterval } from '../../shared/review-refresh-policy'
 import {
   ACTIVE_REFRESH_INTERVAL_MS,
   HOSTED_REVIEW_LOOKUP_DEADLINE_MS,
@@ -84,10 +85,14 @@ function isHeadSensitive(entry: CacheEntry): boolean {
 }
 
 function refreshIntervalMs(entry: CacheEntry, active: boolean): number {
-  if (entry.review !== null) {
-    return FOUND_REVIEW_TTL_MS
-  }
-  return active ? ACTIVE_REFRESH_INTERVAL_MS : NO_REVIEW_REFRESH_INTERVAL_MS
+  const base =
+    entry.review !== null
+      ? FOUND_REVIEW_TTL_MS
+      : active
+        ? ACTIVE_REFRESH_INTERVAL_MS
+        : NO_REVIEW_REFRESH_INTERVAL_MS
+  // A slower host cadence keeps answers longer; forced, user and newly selected reads still ask.
+  return scaleReviewRefreshInterval(base) ?? Number.POSITIVE_INFINITY
 }
 
 function isFresh(entry: CacheEntry, headOid: string | null, active: boolean): boolean {

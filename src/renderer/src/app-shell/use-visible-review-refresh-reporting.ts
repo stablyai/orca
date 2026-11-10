@@ -8,6 +8,7 @@ import { getVisibleHostedReviewWorkspaces } from '../store/slices/hosted-review/
 import { shouldCoordinateVisibleGitHubReview } from '../store/slices/hosted-review/refresh/visible-hosted-review-refresh-ownership'
 import { getPRRefreshRuntimeRepoTarget } from '../store/github/repositories/repository-routing'
 import {
+  getPRAutoRefreshCadence,
   reviewRefreshIntervalMs,
   REVIEW_REFRESH_COOLDOWN_MS
 } from '../../../shared/review-refresh-policy'
@@ -32,6 +33,8 @@ export function visibleReviewWorktreeIdsForState(state: AppState): string[] {
 
 function reportIdentity(state: AppState): string {
   return JSON.stringify([
+    // A new cadence re-reports, so main re-plans each visible PR's next read at the new interval.
+    getPRAutoRefreshCadence(),
     state.activeWorktreeId,
     rightSidebarShowsPullRequestData(state),
     state.sshConnectedGeneration,

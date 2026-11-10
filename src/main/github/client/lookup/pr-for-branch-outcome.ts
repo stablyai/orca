@@ -12,7 +12,13 @@ import { hostedReviewLocalGitOptionArgs, githubPRStackExecutionScope } from './.
 import type { GitHubPRBranchLookupOptions } from './pull-request-lookup-data'
 import { prRefreshUpstreamError } from './../gh-error-predicates'
 import { resolvePRForBranchOutcome } from './branch-lookup-resolution'
-import { readRecentOpenPROutcome, recordPRLastOutcome, startPRLookup } from './pr-last-outcome'
+import {
+  readPacedPROutcome,
+  readRecentOpenPROutcome,
+  recordPRLastOutcome,
+  startPRLookup
+} from './pr-last-outcome'
+import type { PRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
 const reads: CoalescedProbes<PRRefreshOutcome> = new Map()
 
 function prLookupScope(
@@ -75,6 +81,40 @@ export async function readRecentPhonePROutcome(
           fallbackPRNumber: linkedPRNumber === null ? fallbackPRNumber : null,
           currentHeadOid: options.currentHeadOid ?? null
         }
+      )
+  )
+}
+
+/** A paired client's timed read on a host with a slower cadence: the last answer, while still due. */
+export async function readPacedClientPROutcome(
+  repoPath: string,
+  branch: string,
+  linkedPRNumber: number | null,
+  connectionId: string | null,
+  fallbackPRNumber: number | null,
+  options: GitHubPRBranchLookupOptions,
+  cadence: PRAutoRefreshCadence
+): Promise<PRRefreshOutcome | null> {
+  if (cadence === 'default' || options.userRefresh === true) {
+    return null
+  }
+  return withGitHubRepoExecution(
+    repoPath,
+    connectionId,
+    hostedReviewLocalGitOptionArgs(options)[0] ?? {},
+    async () =>
+      readPacedPROutcome(
+        lastOutcomeKey(
+          repoPath,
+          branch.replace(/^refs\/heads\//, ''),
+          prLookupScope(repoPath, connectionId, options)
+        ),
+        {
+          linkedPRNumber,
+          fallbackPRNumber: linkedPRNumber === null ? fallbackPRNumber : null,
+          currentHeadOid: options.currentHeadOid ?? null
+        },
+        cadence
       )
   )
 }
@@ -149,6 +189,7 @@ export async function getPRForBranchOutcome(
             start,
             linkedPRNumber: linkedPRNumber ?? null,
             fallbackPRNumber: fallbackPRNumber ?? null,
+            headOid: options.currentHeadOid ?? null,
             outcome: narrowed ? null : outcome
           })
           return outcome

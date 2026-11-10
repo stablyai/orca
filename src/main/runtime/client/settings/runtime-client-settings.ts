@@ -26,6 +26,7 @@ import { applyAgentStatusHooksEnabled } from '../../../agent-hooks/installation/
 import { isWslHostOrcadProcess } from '../../../ipc/wsl-guest-windows-drive-path'
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import { normalizePRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
 import {
   agentLaunchSettingsMutationUpdates,
   projectAgentLaunchSettings,
@@ -100,6 +101,7 @@ export class RuntimeClientSettingsController {
       // Paired clients order their Source Control lists the way this desktop does.
       sourceControlGroupOrder: normalizeSourceControlGroupOrder(settings.sourceControlGroupOrder),
       sourceControlCompareAgainstUpstream: settings.sourceControlCompareAgainstUpstream === true,
+      prAutoRefresh: normalizePRAutoRefreshCadence(settings.prAutoRefresh),
       diffShowWhitespace: settings.diffShowWhitespace === true,
       // Omitted without a service: clients treat absence as "ask the host", which names the real cause.
       ...(this.sharingServices?.artifacts() === false
