@@ -33,7 +33,7 @@ it.each([40, 400])(
     const records = ids.map((id) => `${JSON.stringify({ id, thread_name: 'Original title' })}\n`)
     const subject = new SessionSearchIndexer({
       databasePath: harness.databasePath,
-      roots: harness.roots,
+      roots: { ...harness.roots, kimiSessionsDir: join(harness.root, 'kimi-home', 'sessions') },
       historyDays: null,
       clock
     })

@@ -26,7 +26,7 @@ it('does not add a database-only Devin search wake and still enriches an admitte
   await mkdir(root, { recursive: true })
   const db = new SyncDatabase(dbPath)
   db.exec(
-    "CREATE TABLE sessions (id TEXT PRIMARY KEY, title TEXT, hidden INTEGER); INSERT INTO sessions VALUES ('shown', 'Original title', 0)"
+    "CREATE TABLE sessions (id TEXT PRIMARY KEY, title TEXT, hidden INTEGER, working_directory TEXT); INSERT INTO sessions VALUES ('shown', 'Original title', 0, '/repo/original')"
   )
   const write = (text: string) =>
     writeFile(
@@ -46,7 +46,7 @@ it('does not add a database-only Devin search wake and still enriches an admitte
     await subject.start()
     reads.mockClear()
     accessor.mockClear()
-    db.exec("UPDATE sessions SET title='Changed title'")
+    db.exec("UPDATE sessions SET title='Changed title', working_directory='/repo/changed'")
     const previous = await stat(dbPath)
     await utimes(dbPath, new Date(previous.mtimeMs + 1000), new Date(previous.mtimeMs + 1000))
     notifySessionSearchFileChange(dbPath)
@@ -55,15 +55,15 @@ it('does not add a database-only Devin search wake and still enriches an admitte
     expect(reads).not.toHaveBeenCalled()
     expect(accessor).not.toHaveBeenCalled()
     expect(
-      harness.read((db) => db.prepare("SELECT title FROM sessions WHERE session_id='shown'").get())
-    ).toEqual({ title: 'Original title' })
+      harness.read((db) => db.prepare("SELECT cwd FROM sessions WHERE session_id='shown'").get())
+    ).toEqual({ cwd: '/repo/original' })
     await write('changeddevinneedle')
     notifySessionSearchFileChange(path)
     clock.advance(20000)
     await subject.settled()
     expect(
-      harness.read((db) => db.prepare("SELECT title FROM sessions WHERE session_id='shown'").get())
-    ).toEqual({ title: 'Changed title' })
+      harness.read((db) => db.prepare("SELECT cwd FROM sessions WHERE session_id='shown'").get())
+    ).toEqual({ cwd: '/repo/changed' })
     expect(
       harness.read((db) =>
         db
