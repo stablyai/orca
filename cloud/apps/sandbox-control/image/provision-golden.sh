@@ -99,6 +99,11 @@ if [ -x "$opencode_pkg/bin/opencode.exe" ]; then
   "$opencode_pkg/bin/opencode.exe" --version >/dev/null
 fi
 
+# The agents' first run on a VM must not be where a broken pin shows up.
+for bin in gemini copilot; do
+  if [ -e "$ORCA_HOME/tools/bin/$bin" ]; then "$ORCA_HOME/tools/bin/$bin" --version >/dev/null; fi
+done
+
 if [ -n "${CURSOR_AGENT_VERSION:-}" ]; then
   # Cursor's agent CLI is a pinned tarball (its own node + bundle), not an npm package. The image
   # copy lives under /opt/orca (root-owned) and its release channel is set to "static" at boot

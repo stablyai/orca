@@ -168,7 +168,9 @@ async function smoke(api: ReturnType<typeof createVercelSandboxApi>, snapshotId:
       command: 'bash',
       args: ['-lc', [
         `test "$(cat /opt/orca/runtime/orcad/SOURCE_COMMIT)" = "${sha}"`,
-        'for b in orca rg tmux vim git-lfs gh claude codex; do command -v $b >/dev/null || { echo "missing $b"; exit 1; }; done',
+        'for b in orca rg tmux vim git-lfs gh claude codex opencode gemini cursor-agent copilot; do command -v $b >/dev/null || { echo "missing $b"; exit 1; }; done',
+        // Each agent CLI starts (catches a broken pin or a pruned file it needed).
+        'for b in opencode gemini cursor-agent copilot; do timeout 60 $b --version >/dev/null 2>&1 || { echo "$b --version failed"; exit 1; }; done',
         'orca status 2>&1 | grep -q "runtimeReachable: true"',
         'df -h / | awk \'NR==2{print "disk", $2}\''
       ].join(' && ')],
