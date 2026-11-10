@@ -15,8 +15,8 @@ import {
   type StructuredAgentSessionOptionState
 } from '../../../src/shared/agent-session/options/structured-agent-session-options'
 import { structuredAgentSessionShownSnapshot } from '../../../src/shared/agent-session/options/structured-agent-session-option-view'
-import type { StructuredAgentSessionMutate } from './mobile-structured-agent-session-rpc'
-import type { useMobileStructuredOptionState } from './use-mobile-structured-option-state'
+import type { StructuredAgentSessionMutate } from './native-chat/agent-session/mobile-structured-agent-session-rpc'
+import type { useMobileStructuredOptionState } from './native-chat/input/use-mobile-structured-option-state'
 import { nativeChatSessionOptionsWrite } from './native-chat/input/mobile-native-chat-options-operations'
 import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
 

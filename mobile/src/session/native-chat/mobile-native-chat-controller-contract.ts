@@ -1,7 +1,12 @@
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import type { MobileNativeChatTab } from './mobile-native-chat-eligibility'
+import type { StructuredAgentSessionHostSupport } from './agent-session/mobile-structured-agent-session-host-support'
+import type { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../src/shared/native-chat/input/native-chat-picker-items'
 import type { AgentSessionRewindSurface } from '../../../../src/shared/agent-session/lifecycle/agent-session-rewind-request'
 import type { NativeChatSendFollowUp } from '../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
-import type { StructuredMobileSendAttachment } from '../use-mobile-structured-send-with-outcome'
+import type { StructuredMobileSendAttachment } from './composer/use-mobile-structured-send-with-outcome'
 import type { MobileSessionView } from '../../storage/session-view-preferences'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
@@ -22,18 +27,18 @@ import type { NativeChatResolvedPrompt } from '../../../../src/shared/native-cha
 import type {
   MobileNativeChatSendIntent,
   MobileNativeChatSendOutcome
-} from './mobile-native-chat-send'
-import type { MobileNativeChatCommandRefusalCauses } from './use-mobile-native-chat-send-error'
-import type { MobileStructuredQueuedMessageControls } from '../use-mobile-structured-queued-message-controls'
-import type { MobileStructuredThreadGoal } from '../use-mobile-structured-thread-goal'
-import type { MobileStructuredBackgroundTasks } from '../use-mobile-structured-background-tasks'
-import type { MobileStructuredInterruptedContinue } from '../use-mobile-structured-interrupted-continue'
-import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
+} from './composer/mobile-native-chat-send'
+import type { MobileNativeChatCommandRefusalCauses } from './composer/use-mobile-native-chat-send-error'
+import type { MobileStructuredQueuedMessageControls } from './input/use-mobile-structured-queued-message-controls'
+import type { MobileStructuredThreadGoal } from './input/use-mobile-structured-thread-goal'
+import type { MobileStructuredBackgroundTasks } from './input/use-mobile-structured-background-tasks'
+import type { MobileStructuredInterruptedContinue } from './composer/use-mobile-structured-interrupted-continue'
+import type { MobileNativeChatPendingMessage } from './transcript/mobile-native-chat-pending-echo'
 import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { MobileNativeChatSessionOptionPickersProps } from './input/MobileNativeChatSessionOptionPickers'
 import type { MobileNativeChatVisualSource } from './visual/mobile-native-chat-visual-read'
 import type { NativeChatContextUsageSummary } from '../../../../src/shared/native-chat/native-chat-context-usage-summary'
-import type { useMobileStructuredSessionCommands } from '../use-mobile-structured-session-commands'
+import type { useMobileStructuredSessionCommands } from './composer/use-mobile-structured-session-commands'
 import type { MobileNativeChatUsageLimit } from './use-mobile-native-chat-usage-limit'
 
 export type MobileNativeChatController = {
@@ -132,4 +137,25 @@ export type MobileNativeChatController = {
   /** The structured chat's options read on whether its agent forks; absent until it answers. */
   nativeChatForkSupport?: AgentSessionOptionsResult['forkSupport']
   nativeChatUsageLimit: MobileNativeChatUsageLimit | null
+}
+
+export type MobileNativeChatControllerArgs = {
+  client: RpcClient | null
+  /** The route's paired host; differs from `client` only when a server executes the workspace. */
+  pairedHostClient: RpcClient | null
+  hostId: string
+  worktreeId: string
+  activeSessionTab: MobileNativeChatTab | null
+  activeSessionTabId: string | null
+  activeHandleRef: MutableRefObject<string | null>
+  deviceTokenRef: MutableRefObject<string | null>
+  nativeChatTranscriptIsLocalReadable: boolean
+  nativeChatInputLeaseReady: boolean
+  /** Live socket state; the lease collapses on disconnect but one render later. */
+  connState: ConnectionState
+  agentSessionHostSupport?: StructuredAgentSessionHostSupport | null
+  onSendError: Parameters<typeof useMobileNativeChatSessionLane>[0]['onSendError']
+  // Any accepted chat write clears the held failure banner, including answers and permission replies.
+  onQueuedEditNotice?: (message: string) => void
+  onSendResolved: () => void
 }

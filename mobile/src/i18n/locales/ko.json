@@ -2564,8 +2564,8 @@
       "insertFailed": "받아쓰기 내용을 삽입하지 못했습니다.",
       "insertFailedCopied": "받아쓰기 내용을 삽입하지 못해 클립보드에 복사했습니다.",
       "inserted": "받아쓰기 내용 삽입됨",
-      "stoppedAfterSilence": "1분 동안 말소리가 없어 중지했습니다.",
-      "stoppedAtCloudLimit": "클라우드 10분 제한에 도달해 받아쓰기가 중지되었습니다."
+      "stoppedAtCloudLimit": "클라우드 10분 제한에 도달해 받아쓰기가 중지되었습니다.",
+      "stoppedAfterSilenceSeconds": "{{seconds}}초 동안 조용해서 중지했습니다"
     },
     "useNativeChatStop": {
       "stopNotSent": "중지 요청 전송 안 됨",

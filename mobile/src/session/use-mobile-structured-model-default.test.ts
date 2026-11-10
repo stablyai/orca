@@ -3,7 +3,7 @@ import { act } from 'react-test-renderer'
 import { describe, expect, it } from 'vitest'
 
 import type { PersistedNativeChatSessionOptions } from '../../../src/shared/native-chat/input/native-chat-session-options'
-import type { StructuredAgentSessionMutationResult } from './mobile-structured-agent-session-rpc'
+import type { StructuredAgentSessionMutationResult } from './native-chat/agent-session/mobile-structured-agent-session-rpc'
 import {
   accepted,
   BASE,
@@ -13,7 +13,7 @@ import {
   mountOptions,
   optionsClient,
   recordingMutate
-} from './use-mobile-structured-agent-options.test-fixture'
+} from './native-chat/input/use-mobile-structured-agent-options.test-fixture'
 import {
   applyNativeChatSessionOptionSettingsMutation,
   resolveStructuredLaunchSeedOptions

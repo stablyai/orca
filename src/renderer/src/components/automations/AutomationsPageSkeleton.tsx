@@ -1,6 +1,6 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
-import { AUTOMATIONS_TABLE_GRID_CLASS } from './automations-table-layout'
+import { AUTOMATIONS_TABLE_GRID_CLASS } from './listing/automations-table-layout'
 import {
   LIST_TABLE_CONTAINER_CLASS,
   LIST_TABLE_HEADER_CLASS,

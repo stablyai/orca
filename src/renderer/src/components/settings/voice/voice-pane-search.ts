@@ -158,6 +158,27 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
+      'auto.components.settings.voice.pane.search.silenceStopTitle',
+      'Stop after silence'
+    ),
+    description: translate(
+      'auto.components.settings.voice.pane.search.silenceStopDescription',
+      'Choose how long dictation keeps listening when you stop talking.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.089d31a45b',
+        'dictation'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.silenceStopKeyword',
+        'silence'
+      )
+    ]
+  },
+  {
+    title: translate(
       'auto.components.settings.voice.pane.search.b3920972d4',
       'Unload speech model'
     ),

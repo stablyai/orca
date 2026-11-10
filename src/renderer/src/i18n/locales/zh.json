@@ -4459,8 +4459,15 @@
             "readAgo": "读取于 {{time}}",
             "notRead": "用量未知：尚未读取"
           },
+          "AccountSwitchList": {
+            "used": "已用",
+            "left": "剩余",
+            "reset": "重置"
+          },
           "InlineUsageBars": {
-            "resetsAt": "将在 {{when}} 重置"
+            "now": "现在",
+            "resetsNow": "现在重置",
+            "resetsIn": "{{duration}}后重置"
           }
         }
       },
@@ -10554,7 +10561,10 @@
               "a5fb30e4da": "启用语音听写",
               "ffaa3efe7c": "OpenAI 转录",
               "c7a7eaa0da": "移除语气词",
-              "d0c230c061": "听写模式"
+              "d0c230c061": "听写模式",
+              "silenceStopTitle": "静音后停止",
+              "silenceStopDescription": "选择你停止说话后听写还会继续听多久。",
+              "silenceStopKeyword": "静音"
             }
           }
         },
@@ -16251,7 +16261,6 @@
           "micFallback": "所选麦克风不可用。使用系统默认值。",
           "micDisconnected": "麦克风已断开。听写停止了。",
           "cloudLimitReached": "已达 10 分钟云端上限。听写已停止。",
-          "stoppedAfterSilence": "静音一分钟后已停止",
           "retryUnmatched": "重试时无法判断哪些字词已输入，因此已全部插入。"
         },
         "dictation-transcript-delivery": {
@@ -20019,6 +20028,27 @@
           "repoNameHint": "将仓库名用作提示",
           "repoNameHintDescription": "帮助识别仓库名称。",
           "repoSaveFailed": "无法保存仓库的术语。运行此仓库的主机可能需要更新 Orca。"
+        },
+        "micTest": {
+          "test": "测试",
+          "recording": "正在录音 {{elapsed}} / {{limit}}",
+          "stop": "停止",
+          "hint": "像平时听写那样说一句话。",
+          "playing": "正在回放 {{elapsed}}",
+          "skip": "跳过",
+          "levelGood": "音量正常",
+          "levelQuiet": "声音很小。请检查麦克风或靠近一些。",
+          "playAgain": "再听一遍",
+          "testAgain": "重新测试",
+          "listening": "{{model}} 也在听…",
+          "heardLabel": "{{model}} 听到的内容",
+          "heardNothing": "没有听到任何词。请大声一点。",
+          "heardFailed": "{{model}} 无法转写这段录音。"
+        },
+        "silenceStop": {
+          "title": "静音后停止",
+          "description": "安静这么久后停止听写。按住快捷键时从不停止。",
+          "off": "关闭"
         }
       },
       "repositoryHooks": {
@@ -20190,6 +20220,9 @@
           "action": "拆分窗格"
         }
       }
+    },
+    "dictation": {
+      "stoppedAfterSilenceSeconds": "静音 {{seconds}} 秒后已停止"
     }
   },
   "dashboardPopout": {

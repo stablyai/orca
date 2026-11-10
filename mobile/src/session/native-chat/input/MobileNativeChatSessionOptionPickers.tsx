@@ -1,3 +1,8 @@
+import type {
+  MobileNativeChatSessionOptionPickersProps,
+  PresentationProps
+} from './mobile-native-chat-session-option-picker-contract'
+export type * from './mobile-native-chat-session-option-picker-contract'
 import { useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Keyboard, Platform, Text, View } from 'react-native'
 import {
@@ -36,7 +41,8 @@ import {
   descriptorRowElements,
   ModelPill,
   SessionOptionCaption,
-  SessionOptionSummaryRow
+  SessionOptionSummaryRow,
+  showsSessionOptionAsSwitch
 } from './MobileNativeChatSessionOptionRows'
 import {
   SessionOptionSegments,
@@ -48,25 +54,7 @@ import {
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
   isAgentChatPermissionMode
 } from '../../../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
-import type { MobileNativeChatSessionOptionsController } from './use-mobile-native-chat-session-options'
 import { sessionOptionPickerStyles as styles } from './mobile-native-chat-session-option-picker-styles'
-
-export type MobileNativeChatPickerPresentation = { page: string | null; refocus: boolean }
-
-export type MobileNativeChatSessionOptionPickersProps = {
-  controller: MobileNativeChatSessionOptionsController
-  // Mid-turn terminal model commands would interleave with agent output.
-  isWorking: boolean
-  // Block applies during composer send: the host’s body/Enter delay could submit the setting as prompt text.
-  sendInFlight?: boolean
-}
-
-type PresentationProps = {
-  presentation: MobileNativeChatPickerPresentation | null
-  onNavigate: (page: string | null) => void
-  onDrawerOpen: (page: string) => void
-  onDrawerAfterClose?: () => void
-}
 
 function permissionChoiceColor(value: string | undefined): string | undefined {
   return value === 'full-access' ? colors.statusAmber : undefined
@@ -389,7 +377,7 @@ function OptionRows({
         {descriptors.flatMap((descriptor) => {
           const isPermission = descriptor === permission
           const disabled = locked(descriptor) || !descriptor.settable
-          if (descriptor.kind.type === 'boolean' && !descriptor.action) {
+          if (showsSessionOptionAsSwitch(descriptor)) {
             return descriptorRowElements(
               {
                 descriptor,

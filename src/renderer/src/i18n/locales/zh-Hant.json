@@ -4932,8 +4932,15 @@
             "readAgo": "讀取於 {{time}}",
             "notRead": "用量未知：尚未讀取"
           },
+          "AccountSwitchList": {
+            "used": "已用",
+            "left": "剩餘",
+            "reset": "重設"
+          },
           "InlineUsageBars": {
-            "resetsAt": "將於 {{when}} 重設"
+            "now": "現在",
+            "resetsNow": "現在重設",
+            "resetsIn": "{{duration}}後重設"
           }
         }
       },
@@ -11070,7 +11077,10 @@
               "a5fb30e4da": "啟用語音聽寫",
               "ffaa3efe7c": "OpenAI 轉錄",
               "c7a7eaa0da": "移除語氣詞",
-              "d0c230c061": "聽寫模式"
+              "d0c230c061": "聽寫模式",
+              "silenceStopTitle": "靜音後停止",
+              "silenceStopDescription": "選擇你停止說話後聽寫還會繼續聽多久。",
+              "silenceStopKeyword": "靜音"
             }
           }
         },
@@ -16718,7 +16728,6 @@
           "micFallback": "所選麥克風不可用。使用系統預設值。",
           "micDisconnected": "麥克風已中斷連線。聽寫已停止。",
           "cloudLimitReached": "已達 10 分鐘雲端上限。聽寫已停止。",
-          "stoppedAfterSilence": "靜音一分鐘後已停止",
           "retryUnmatched": "重試時無法判斷哪些字詞已輸入，因此已全部插入。"
         },
         "dictation-transcript-delivery": {
@@ -20422,6 +20431,27 @@
           "repoNameHint": "將儲存庫名稱用作提示",
           "repoNameHintDescription": "幫助辨識儲存庫名稱。",
           "repoSaveFailed": "無法儲存儲存庫的術語。執行此儲存庫的主機可能需要更新 Orca。"
+        },
+        "micTest": {
+          "test": "測試",
+          "recording": "正在錄音 {{elapsed}} / {{limit}}",
+          "stop": "停止",
+          "hint": "像平常聽寫那樣說一句話。",
+          "playing": "正在播放 {{elapsed}}",
+          "skip": "略過",
+          "levelGood": "音量正常",
+          "levelQuiet": "聲音很小。請檢查麥克風或靠近一點。",
+          "playAgain": "再聽一次",
+          "testAgain": "重新測試",
+          "listening": "{{model}} 也在聽…",
+          "heardLabel": "{{model}} 聽到的內容",
+          "heardNothing": "沒有聽到任何字詞。請大聲一點。",
+          "heardFailed": "{{model}} 無法轉寫這段錄音。"
+        },
+        "silenceStop": {
+          "title": "靜音後停止",
+          "description": "安靜這麼久後停止聽寫。按住快捷鍵時從不停止。",
+          "off": "關閉"
         }
       },
       "repositoryHooks": {
@@ -20588,6 +20618,9 @@
           "action": "分割窗格"
         }
       }
+    },
+    "dictation": {
+      "stoppedAfterSilenceSeconds": "靜音 {{seconds}} 秒後已停止"
     }
   },
   "dashboardPopout": {
