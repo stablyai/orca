@@ -2320,12 +2320,6 @@
       "localOwnedCount_other": "{{count}} Orca PTYs on this computer"
     }
   },
-  "runActions": {
-    "showRunning": "Show {{name}}",
-    "status": {
-      "exited": "Exited"
-    }
-  },
   "runtime": {
     "remoteServerPairingErrors": {
       "alreadyPairedAddAgain": "This server is already paired as \"{{name}}\". To update its connection, add it again under Settings > Remote Orca Servers.",
