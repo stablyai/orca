@@ -11,12 +11,12 @@ import {
   installRendererCrashDiagnostics,
   recordRendererCrashBreadcrumb
 } from './lib/crash-diagnostics'
-import { installAutomationHostDiagnostic } from './components/automations/automation-host-diagnostics'
+import { installAutomationHostDiagnostic } from './components/automations/hosts/automation-host-diagnostics'
 import {
   applyCachedPluginAppTheme,
   applyDocumentTheme,
   readCachedPluginAppTheme
-} from './lib/document-theme'
+} from './app-shell/appearance/document-theme'
 import { installTypingLatencyDiagnostic } from './lib/typing-latency/diagnostic'
 import { installAppKeyboardRouter } from './lib/keyboard/app-keyboard-router'
 import { shouldEnableReactGrab } from './lib/react-grab-dev-gate'
@@ -24,13 +24,13 @@ import { I18nProvider } from './i18n/I18nProvider'
 import { useTranslate } from './i18n/use-translate'
 import { getOrCreateRendererRoot } from './lib/react-renderer-root'
 import { primeTerminalWebglAddon } from './lib/pane-manager/pane-webgl-renderer'
-import { SkillWarningPreviewLauncher } from './components/skills/SkillWarningPreviewLauncher'
+import { SkillWarningPreviewLauncher } from './components/skills/installation/preview/SkillWarningPreviewLauncher'
 import { installBrowserClientPageRenderer } from './components/browser-pane/browser-client-page-renderer-installation'
 import { registerBrowserClientPageGuestMessageHandler } from './components/browser-pane/browser-client-page-retained-elements'
 import { handleGuestWindowCloseMessage } from './components/browser-pane/host-guest/browser-page-window-close'
-import { installOsFileDropCancellationGuard } from './lib/os-file-drop-cancellation-guard'
+import { installOsFileDropCancellationGuard } from './lib/files/drop/os-file-drop-cancellation-guard'
 import { installBodyOverlayAttributes } from './lib/body-overlay-attributes'
-import { applyWindowMaterialToDocument } from './lib/window-material-runtime'
+import { applyWindowMaterialToDocument } from './app-shell/appearance/window-material-runtime'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)

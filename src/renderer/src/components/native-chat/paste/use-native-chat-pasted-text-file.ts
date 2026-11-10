@@ -1,5 +1,5 @@
 import { createNonSecureContextUuid as createUuidV4 } from '../../../../../shared/non-secure-context-uuid'
-import { releaseBrowserAttachmentFiles } from '@/lib/browser-attachment-files'
+import { releaseBrowserAttachmentFiles } from '@/lib/files/drop/browser-attachment-files'
 import { stageNativeChatDraftFile } from '../drafts/native-chat-draft-attachment-staging'
 import {
   nativeChatPastedTextLabel,

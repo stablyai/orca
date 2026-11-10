@@ -10,7 +10,7 @@ import {
   getDetectedSetupPreviewContent,
   isSetupScriptPromptDismissed,
   isSilentSetupScriptPromptState
-} from '@/lib/setup-script-prompt'
+} from '@/runtime/repo-hooks/setup-script-prompt'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { SetupScriptImportCandidate } from '../../../../shared/workspace-setup/setup-script-imports'
 import { buildSetupScriptPromptActionTelemetry } from '../../../../shared/workspace-setup/setup-script-telemetry'

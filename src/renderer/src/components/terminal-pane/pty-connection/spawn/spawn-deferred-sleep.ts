@@ -15,11 +15,11 @@ import {
   clearPaneSpawnDeferral,
   getPaneSpawnDeferral,
   setPaneSpawnDeferral
-} from '@/lib/pane-spawn-deferral-registry'
+} from '@/components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry'
 import {
   cancelDeferredRestoreRetry,
   queueDeferredRestoreRetry
-} from '@/lib/pane-spawn-deferral-drain'
+} from '@/components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-drain'
 import {
   canResumeHostAutomaticRestores,
   resumeHostAutomaticRestores

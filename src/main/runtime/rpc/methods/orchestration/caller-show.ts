@@ -18,7 +18,8 @@ import { locateOrchestrationParty } from '../../../orchestration/addressing/orch
 import { readAgentSessionRecordStore } from '../../../orchestration/addressing/session-lineage/structured-session-lineage'
 import type { z } from 'zod'
 import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
-import { defineMethod, type RpcContext } from '../../core'
+import type { RpcContext } from '../../core'
+import { defineOrchestrationMethod } from './access/orchestration-method-access'
 import { openClosedWorkerTerminal } from './worker/closed-worker-terminal'
 import { ensureStructuredHostInstalled } from '../structured-sessions/creation/structured-agent-session-gate'
 
@@ -64,8 +65,9 @@ function closedWorkerHandle(
 }
 
 export const ORCHESTRATION_CALLER_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.callerShow',
+    access: { kind: 'reads', targets: {} },
     permission: 'workspace',
     params: null,
     // Dispatch already admitted the environment's session; do not resolve another caller from params.
@@ -84,8 +86,9 @@ export const ORCHESTRATION_CALLER_METHODS = [
         }) !== null
     })
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.sessionAddress',
+    access: { kind: 'reads', targets: { sessionId: 'session' } },
     permission: 'workspace',
     params: SessionAddressParams,
     // Only host records know the chat's /clear root.
@@ -101,15 +104,17 @@ export const ORCHESTRATION_CALLER_METHODS = [
       return { orcaSessionId: formatOrcaSessionAddress(party.orcaSessionId) }
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.partyLocation',
+    access: { kind: 'reads', targets: { address: 'party', messageIds: 'message' } },
     permission: 'workspace',
     params: PartyLocationParams,
     // Resolve the chat sender's live /clear successor on its owning host.
     handler: (params, ctx): Promise<OrchestrationPartyLocationResult> => locateParty(params, ctx)
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.partyOpen',
+    access: { kind: 'localOnly', targets: { address: 'party', messageIds: 'message' } },
     permission: 'workspace',
     params: PartyLocationParams,
     // The lookup, except that a terminal worker Orca closed resumes its conversation in a new terminal.

@@ -25,7 +25,7 @@ vi.mock('@/store/slices/browser/tabs/paired-browser-tab-creator', () => ({
   loadPairedBrowserTabCreator: async () => createWebRuntimeSessionBrowserTabMock
 }))
 
-vi.mock('@/lib/focus-terminal-tab-surface', () => ({
+vi.mock('@/components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: vi.fn()
 }))
 
