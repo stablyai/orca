@@ -19,12 +19,15 @@ type Entry<T> = { data: T | null; fetchedAt: number; stale?: boolean }
 const reads = new PrioritySemaphore(3)
 
 function lookup<T>(
-  entry: Entry<T> | undefined,
+  state: AppState,
+  getRawEntry: (state: AppState) => Entry<T> | undefined,
   read: (signal?: AbortSignal) => Promise<T | null>,
   project: (value: T) => WorkspaceReferenceDetails | null
 ) {
+  const entry = getRawEntry(state)
   return {
     rawEntry: entry,
+    getRawEntry,
     getEntry: () => entry && { ...entry, data: entry.data && project(entry.data) },
     read: async (signal?: AbortSignal) => {
       const value = await read(signal)
@@ -40,7 +43,8 @@ export function getWorkspaceReferenceLookup(request: WorkspaceReferenceRequest, 
       return null
     }
     return lookup(
-      state.hostedReviewCache?.[request.key],
+      state,
+      (state) => state.hostedReviewCache?.[request.key],
       () =>
         state.fetchHostedReviewForBranch(repo.path, workspace.branch ?? '', {
           exactReviewKey: request.key,
@@ -69,8 +73,10 @@ export function getWorkspaceReferenceLookup(request: WorkspaceReferenceRequest, 
       item.linearWorkspaceId,
       sourceContext
     )
+    const cacheKey = `${scope}::${workspaceId}::${identifier}`
     return lookup(
-      state.linearIssueCache?.[`${scope}::${workspaceId}::${identifier}`],
+      state,
+      (state) => state.linearIssueCache?.[cacheKey],
       async (signal) => {
         let issue: LinearIssue | null = null
         await consumeLinearIssueRead(
@@ -102,8 +108,10 @@ export function getWorkspaceReferenceLookup(request: WorkspaceReferenceRequest, 
     if (!siteId) {
       return null
     }
+    const cacheKey = `${scope}::${siteId}::${identifier.toUpperCase()}`
     return lookup(
-      state.jiraIssueSummaryCache?.[`${scope}::${siteId}::${identifier.toUpperCase()}`],
+      state,
+      (state) => state.jiraIssueSummaryCache?.[cacheKey],
       () => state.lookupJiraIssueSummary(sourceContext, identifier, siteId),
       (issue) =>
         issue.key.toLowerCase() === identifier.toLowerCase() &&
@@ -131,8 +139,10 @@ export function getWorkspaceReferenceLookup(request: WorkspaceReferenceRequest, 
     sourceContext.provider === 'github' &&
     isWorkspaceRepositoryAttachment(item, repo)
   ) {
+    const cacheKey = `${scope}::${repo.id}::${item.number}`
     return lookup(
-      state.issueCache?.[`${scope}::${repo.id}::${item.number}`],
+      state,
+      (state) => state.issueCache?.[cacheKey],
       () => state.fetchIssue(repo.path, item.number, { repoId: repo.id, sourceContext }),
       (issue) =>
         issue.number === item.number && matchesWorkspaceReferenceUrl(item, issue.url)

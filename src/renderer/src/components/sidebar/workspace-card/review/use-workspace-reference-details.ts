@@ -36,11 +36,14 @@ export function useWorkspaceReferenceDetails(
       })),
     [workspace, repo, runtimeVersion, review?.state, review?.provider]
   )
-  useAppStore(
-    useShallow((state) =>
-      requests.map((request) => getWorkspaceReferenceLookup(request, state)?.rawEntry)
-    )
+  const cacheReads = useMemo(
+    () =>
+      requests.map(
+        (request) => getWorkspaceReferenceLookup(request, useAppStore.getState())?.getRawEntry
+      ),
+    [requests]
   )
+  useAppStore(useShallow((state) => cacheReads.map((read) => read?.(state))))
   useEffect(() => {
     if (!hoverOpen || hostOff) {
       return
