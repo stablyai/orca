@@ -5,15 +5,18 @@ import type {
   OrcaBillingOpenResult,
   OrcaBillingOverageArgs,
   OrcaBillingOverageResult,
-  OrcaBillingStatusResult
+  OrcaBillingStatusResult,
+  OrcaBillingTeamPlansResult
 } from '../../../shared/orca-billing'
 import {
   ORCA_BILLING_INTERVALS,
   ORCA_BILLING_MAX_SEATS,
-  ORCA_BILLING_PLAN_IDS
+  ORCA_BILLING_PLAN_IDS,
+  ORCA_BILLING_TEAM_PLANS_MAX_ORGS
 } from '../../../shared/orca-billing'
 import {
   getOrcaBillingStatus,
+  getOrcaBillingTeamPlans,
   openOrcaBillingCheckout,
   openOrcaBillingPortal,
   setOrcaBillingOverage
@@ -35,6 +38,28 @@ const OverageArgs = z
     spendCapCents: z.number().int().min(0).max(100_000_000).optional()
   })
   .strict()
+
+const TeamPlansArgs = z
+  .object({
+    orgIds: z
+      .array(
+        z
+          .string()
+          .min(1)
+          .max(128)
+          .regex(/^[A-Za-z0-9_.:-]+$/)
+      )
+      .max(ORCA_BILLING_TEAM_PLANS_MAX_ORGS)
+  })
+  .strict()
+
+export function billingTeamPlansArgsFromUnknown(args: unknown): { orgIds: string[] } {
+  const parsed = TeamPlansArgs.safeParse(args)
+  if (!parsed.success) {
+    throw new Error('invalid_orca_billing_team_plans')
+  }
+  return { orgIds: [...new Set(parsed.data.orgIds)] }
+}
 
 export function billingCheckoutArgsFromUnknown(args: unknown): OrcaBillingCheckoutArgs {
   const parsed = CheckoutArgs.safeParse(args)
@@ -65,6 +90,14 @@ export function registerOrcaProfileBillingHandlers(): void {
     'orcaProfiles:billingSetOverage',
     async (_event, rawArgs: unknown): Promise<OrcaBillingOverageResult> =>
       setOrcaBillingOverage(getProfileUserDataPath(), billingOverageArgsFromUnknown(rawArgs))
+  )
+  ipcMain.handle(
+    'orcaProfiles:billingTeamPlans',
+    async (_event, rawArgs: unknown): Promise<OrcaBillingTeamPlansResult> =>
+      getOrcaBillingTeamPlans(
+        getProfileUserDataPath(),
+        billingTeamPlansArgsFromUnknown(rawArgs).orgIds
+      )
   )
   ipcMain.handle('orcaProfiles:billingOpenPortal', async (): Promise<OrcaBillingOpenResult> =>
     openOrcaBillingPortal(getProfileUserDataPath())

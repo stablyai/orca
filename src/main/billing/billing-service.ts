@@ -9,7 +9,8 @@ import type {
   OrcaBillingOpenResult,
   OrcaBillingOverageArgs,
   OrcaBillingOverageResult,
-  OrcaBillingStatusResult
+  OrcaBillingStatusResult,
+  OrcaBillingTeamPlansResult
 } from '../../shared/orca-billing'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
 import { runWithFreshOrcaCloudSession } from '../orca-profiles/profile-cloud-session-refresh'
@@ -19,6 +20,7 @@ import {
   createCheckoutUrl,
   createPortalUrl,
   fetchEntitlement,
+  fetchTeamPlans,
   mintBillingToken,
   updateOverage,
   type BillingEndpoints
@@ -114,6 +116,26 @@ export async function getOrcaBillingStatus(userDataPath: string): Promise<OrcaBi
   try {
     const entitlement = await ready.run((token, endpoints) => fetchEntitlement(endpoints, token))
     return entitlement === 'signed-out' ? { status: 'signed-out' } : { status: 'ok', entitlement }
+  } catch (error) {
+    return { status: 'failed', error: message(error) }
+  }
+}
+
+/** Plan state for other teams the signed-in user is on (cloud start B2); never switches teams. */
+export async function getOrcaBillingTeamPlans(
+  userDataPath: string,
+  orgIds: readonly string[]
+): Promise<OrcaBillingTeamPlansResult> {
+  const ready = prepare(userDataPath)
+  if (!ready.ok) {
+    return { status: ready.status }
+  }
+  if (orgIds.length === 0) {
+    return { status: 'ok', teams: [] }
+  }
+  try {
+    const teams = await ready.run((token, endpoints) => fetchTeamPlans(endpoints, token, orgIds))
+    return teams === 'signed-out' ? { status: 'signed-out' } : { status: 'ok', teams }
   } catch (error) {
     return { status: 'failed', error: message(error) }
   }

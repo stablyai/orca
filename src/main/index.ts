@@ -1,6 +1,10 @@
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
 import { isRoutedOrcaDeepLink } from './startup/orca-deep-link-url'
 import { findOrcaBillingReturnLink, ORCA_BILLING_RETURN_CHANNEL } from '../shared/orca-billing'
+import {
+  findOrcaCloudSetupReturnLink,
+  ORCA_CLOUD_SETUP_RETURN_CHANNEL
+} from '../shared/orca-cloud-setup-link'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
 import { isBackgroundLaunch, isOrcadSidecarLaunch } from './window/foreground-activation-policy'
 import { createDesktopHandoff, desktopHandoffArguments } from './window/macos-desktop-handoff'
@@ -84,6 +88,11 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
   const billingReturn = findOrcaBillingReturnLink(argv)
   if (billingReturn) {
     state.mainWindow?.webContents.send(ORCA_BILLING_RETURN_CHANNEL, billingReturn)
+  }
+  // Back from the one-trip setup (N9): focus Orca and let the tracker re-read the session now.
+  const setupReturn = findOrcaCloudSetupReturnLink(argv)
+  if (setupReturn) {
+    state.mainWindow?.webContents.send(ORCA_CLOUD_SETUP_RETURN_CHANNEL, setupReturn)
   }
   // Duplicate serve launches must not activate a desktop on a headless server (#11935).
   if (!shouldActivateDesktopForSecondInstance(argv)) {

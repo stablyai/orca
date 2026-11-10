@@ -129,6 +129,14 @@ import {
   wslMoveSchema
 } from './telemetry-wsl-move-event-schemas'
 
+import {
+  cloudSetupFirstSandboxSchema,
+  cloudSetupPlanChosenSchema,
+  cloudSetupStepDoneSchema,
+  cloudSetupStepFailedSchema,
+  cloudSetupStepStartedSchema
+} from './telemetry-cloud-setup-event-schemas'
+
 // Breaking payload changes require a new event name to keep historical rows distinguishable; optional additions are safe.
 export const eventSchemas = {
   agent_dashboard_active: agentDashboardActiveSchema,
@@ -257,5 +265,11 @@ export const eventSchemas = {
 
   wsl_usage_snapshot: wslUsageSnapshotSchema,
 
-  plugin_installed: pluginInstalledSchema
+  plugin_installed: pluginInstalledSchema,
+
+  cloud_setup_step_started: cloudSetupStepStartedSchema,
+  cloud_setup_step_done: cloudSetupStepDoneSchema,
+  cloud_setup_step_failed: cloudSetupStepFailedSchema,
+  cloud_setup_first_sandbox: cloudSetupFirstSandboxSchema,
+  cloud_setup_plan_chosen: cloudSetupPlanChosenSchema
 } as const
