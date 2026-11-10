@@ -26936,7 +26936,8 @@
       "unterminatedQuote": "The closing quote is missing.",
       "overridden": "Set again further down; the later line is used.",
       "unknown": "Something went wrong in Orca Cloud. Nothing was changed. Try again.",
-      "notSwappable": "A workspace would get this key in full, so Orca doesn’t save it from here. Add it in Cloud secrets if you accept that."
+      "notSwappable": "A workspace would get this key in full, so Orca doesn’t save it from here. Add it in Cloud secrets if you accept that.",
+      "desktopKeyConflict": "Another agent’s key is saved in your Orca account under this name. Save this one to replace it."
     },
     "vm": {
       "badge": "Stored on workspace",
@@ -27156,5 +27157,52 @@
     "showOutputTooltip": "Show {{name}} output",
     "shortcutRestarts": "{{shortcut}} restarts it",
     "menuRunning": "Run actions, {{count}} running"
+  },
+  "agentApiKeys": {
+    "cloud": {
+      "synced": "Saved in your Orca account · cached on this computer",
+      "notSwappable": "Only on this computer · not used in Orca Cloud",
+      "local": "Only on this computer",
+      "saveLabel": "Save {{name}} to your Orca account",
+      "save": "Save to your Orca account",
+      "saveFailed": "Saved on this computer, but not in your Orca account.",
+      "stale": "Your Orca account has an earlier copy · cloud workspaces still use it",
+      "saveFailedRetry": "Couldn’t reach Orca Cloud. Try again."
+    },
+    "remove": {
+      "confirmLabel": "Remove {{name}}",
+      "fromAccountQuestion": "Also remove it from your Orca account? Cloud workspaces will stop using it.",
+      "thisComputerOnly": "Remove from this computer only",
+      "both": "Remove from both",
+      "kept": "Removed from this computer. {{name}} is still in your Orca account.",
+      "keptDetail": "Manage it in Settings › Cloud secrets."
+    },
+    "import": {
+      "title": "Keys found on {{place}}",
+      "detailSignedIn": "Orca shows names only. Imported keys are sealed on this computer, used on every host, and saved in your Orca account.",
+      "detailSignedOut": "Orca shows names only. Imported keys are sealed on this computer and used on every host.",
+      "scanning": "Looking for keys…",
+      "scanFailed": "Couldn’t look for keys on {{place}}.",
+      "retry": "Try again",
+      "empty": "No agent API keys found in your shell environment, OpenCode or ~/.gemini/.env.",
+      "alreadySaved": "Already saved for {{agent}}",
+      "signIn": "{{agent}} is signed in with {{provider}}. Sign in once in Settings › Agent accounts.",
+      "failed": "Couldn’t import. Nothing was changed.",
+      "cancel": "Cancel",
+      "submitOne": "Import 1 key",
+      "submit": "Import {{count}} keys",
+      "thisMac": "this Mac",
+      "thisComputer": "this computer",
+      "doneOne": "Imported 1 key.",
+      "done": "Imported {{count}} keys.",
+      "cloudFailed": "{{name}} is saved on this computer, but not in your Orca account.",
+      "open": "Import from this Mac",
+      "openComputer": "Import from this computer",
+      "source": {
+        "opencode": "OpenCode sign-in file",
+        "geminiEnv": "~/.gemini/.env",
+        "shell": "Shell environment"
+      }
+    }
   }
 }

@@ -88,6 +88,8 @@ export type CloudSecretsErrorCode =
   | 'not_found'
   /** Desktop only: a key the workspace would get in full (no egress stand-in), so not saved from here. */
   | 'not_swappable'
+  /** Desktop only: another saved key wrote this variable to the Orca account; replacing it takes a click. */
+  | 'desktop_key_conflict'
   | 'unavailable'
   | 'timeout'
   | 'not_configured'

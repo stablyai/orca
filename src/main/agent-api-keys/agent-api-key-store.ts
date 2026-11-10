@@ -204,6 +204,22 @@ export class AgentApiKeyStore {
     }
   }
 
+  /** Main only: one key's value, unsealed for a single write to the user's Orca account. */
+  async valueOf(id: string): Promise<string | null> {
+    const key = ((await this.read())?.keys ?? []).find((entry) => entry.id === id)
+    const store = getSecretStore()
+    if (!key || !store.isEncryptionAvailable()) {
+      return null
+    }
+    try {
+      const value = store.decryptString(Buffer.from(key.ciphertext, 'base64'))
+      registerRedactedSecretValue(value)
+      return value
+    } catch {
+      return null
+    }
+  }
+
   /** The env one launch of `agent` on `hostId` gets. Keys that fail to unseal are skipped, never sent half-read. */
   async launchEnv(agent: TuiAgent, hostId: ExecutionHostId): Promise<Record<string, string>> {
     const keys = (await this.read())?.keys ?? []

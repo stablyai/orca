@@ -29,6 +29,10 @@ import {
   createCloudSecretsClient,
   type CloudSecretsClient
 } from './cloud-secrets-client'
+import {
+  recordAgentApiKeyCloudWrite,
+  setAgentApiKeyCloudClient
+} from '../agent-api-keys/agent-api-key-cloud-connection'
 
 const Repo = z.string().trim().min(3).max(256)
 const Target = z.object({ scope: z.enum(CLOUD_SECRET_SCOPES), repo: Repo.optional() })
@@ -113,6 +117,8 @@ export function registerCloudSecretsHandlers(userDataPath: string): void {
         getAccessToken: config.getAccessToken
       })
     : null
+  // Agent API keys saved while signed in are written to personal secrets through the same client.
+  setAgentApiKeyCloudClient(client)
   for (const channel of CHANNELS) {
     ipcMain.removeHandler(channel)
   }
@@ -177,7 +183,12 @@ export function registerCloudSecretsHandlers(userDataPath: string): void {
     if (valueError) {
       return { ok: false, error: valueError }
     }
-    return attempt(client, (c) => c.put({ scope: 'personal' }, envName, value))
+    const result = await attempt(client, (c) => c.put({ scope: 'personal' }, envName, value))
+    if (result.ok) {
+      // So Settings › Agent API keys shows it as saved in the Orca account.
+      await recordAgentApiKeyCloudWrite(agent, envName)
+    }
+    return result
   })
   ipcMain.handle('cloudSecrets:refreshEnv', (_event, raw: unknown) => {
     const request = RefreshRequest.safeParse(raw)
