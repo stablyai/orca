@@ -70,7 +70,9 @@ export const DEFAULT_PLANS: PlanCatalog = {
     machineSizes: ['standard', 'large'],
     // Same constant the control plane enforces and serves (GET /v1/config); never a literal here.
     idleSleepMinutes: ORCA_CLOUD_IDLE_SLEEP_MINUTES,
-    overageCentsPerHour: 75,
+    // The one overage rate: entitlements, the spend-cap math, the desktop and the e2e all read it from
+    // here. STRIPE_PRICE_OVERAGE must be a metered price with this unit_amount (stripe-test-setup.ts).
+    overageCentsPerHour: 100,
     defaultSpendCapCents: 2500,
     maxSpendCapCents: 500_000,
     warnAtPercent: [80, 100],

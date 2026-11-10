@@ -67,7 +67,7 @@ export const overageCapReached = defineFixture({
             active: true,
             spendCapCents: 2500,
             spentCents: 2500,
-            centsPerHour: 75
+            centsPerHour: 100
           },
           canStartSandbox: false,
           reason: 'overage_cap_reached'

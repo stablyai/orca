@@ -41,7 +41,7 @@ describe('config: tax and plan catalog', () => {
         includedHoursPerSeat: 40,
         concurrentSandboxesPerSeat: 3,
         idleSleepMinutes: 15,
-        overageCentsPerHour: 75,
+        overageCentsPerHour: 100,
         defaultSpendCapCents: 5000
       },
       enterprise: { label: 'Enterprise', priceLabel: 'Custom', contactUrl: 'https://example.test/sales' }
@@ -80,7 +80,8 @@ describe('allowance windows and caps', () => {
     expect(allowanceWindow(period, period.end - day)).toEqual({ start: Date.UTC(2026, 11, 31), end: period.end })
   })
 
-  it('converts the $25 default cap to 33.3 overage hours at $0.75', () => {
-    expect(capSeconds(DEFAULT_PLANS.team, 2500)).toBe(Math.floor((2500 / 75) * HOUR))
+  it('converts the $25 default cap to 25 overage hours at $1.00', () => {
+    expect(DEFAULT_PLANS.team.overageCentsPerHour).toBe(100)
+    expect(capSeconds(DEFAULT_PLANS.team, 2500)).toBe(25 * HOUR)
   })
 })
