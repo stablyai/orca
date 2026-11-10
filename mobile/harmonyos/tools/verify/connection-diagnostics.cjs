@@ -101,6 +101,60 @@ test('desktop reports use the selected host history and exclude credentials and 
   assert.equal(reportableIncident({ ...evidence, state: 'connected' }), null)
 })
 
+test('a failed diagnostics read keeps disk history and merges live events after storage recovers', async () => {
+  const stored = JSON.stringify([
+    { id: 'old-alpha', ts: 1000, level: 'warn', message: 'Alpha prior outage', hostId: 'alpha' },
+    { id: 'old-beta', ts: 2000, level: 'info', message: 'Beta prior event', hostId: 'beta' }
+  ])
+  let saved = stored
+  let unavailable = true
+  let markPersisted
+  const persisted = new Promise((resolve) => {
+    markPersisted = resolve
+  })
+  const { appendLog, listLogs } = loadArkts(
+    'diagnostics/ConnectionLogStore.ets',
+    ['appendLog', 'listLogs'],
+    {
+      redactDiagnosticText,
+      preferences: {
+        getPreferences: async () => ({
+          get: async () => {
+            if (unavailable) {
+              throw new Error('storage unavailable')
+            }
+            return saved
+          },
+          put: async (_key, value) => {
+            saved = value
+          },
+          flush: async () => {
+            markPersisted()
+          }
+        })
+      }
+    }
+  )
+  const context = {}
+  await appendLog(context, 'success', 'Alpha restored', '', 'alpha').catch(() => {})
+  assert.equal(saved, stored)
+  const messages = (entries) => Array.from(entries, (entry) => entry.message)
+  assert.deepEqual(messages(await listLogs(context, 'alpha')), ['Alpha restored'])
+
+  unavailable = false
+  assert.deepEqual(messages(await listLogs(context, 'alpha')), [
+    'Alpha prior outage',
+    'Alpha restored'
+  ])
+  assert.deepEqual(messages(await listLogs(context, 'beta')), ['Beta prior event'])
+  await persisted
+  assert.deepEqual(messages(JSON.parse(saved)), [
+    'Alpha prior outage',
+    'Beta prior event',
+    'Alpha restored'
+  ])
+})
+
 test('editing a bare desktop address preserves the saved port and WebSocket route', () => {
   const edit = resolveDesktopEndpoint(
     'wss://alpha.example.invalid:7443/orca',
