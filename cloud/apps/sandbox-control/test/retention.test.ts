@@ -30,6 +30,30 @@ async function setup() {
 }
 
 describe('orphan sweep', () => {
+  it('never stops a warm-pool VM: its record is the pool row, not a sandboxes row', async () => {
+    const { h, deps, sweep } = await setup()
+    const name = 'orca-test-sbx_pooled'
+    await h.vercel.createSandbox({
+      name,
+      snapshotId: GOLDEN,
+      vcpus: 4,
+      region: 'iad1',
+      timeoutMs: 30 * 60_000,
+      ports: [],
+      networkPolicy: { allow: {} },
+      tags: { orcaSandbox: 'sbx_pooled', orcaEnv: 'test', orcaPool: '1' },
+      snapshotExpirationMs: 0
+    })
+    await deps.db
+      .prepare(
+        `INSERT INTO sandbox_pool (id, provider_name, machine_size, region, snapshot_id, status, created_at, updated_at) VALUES ('sbx_pooled', ?, 'standard', 'iad1', ?, 'ready', 1, 1)`
+      )
+      .bind(name, GOLDEN)
+      .run()
+    expect((await sweep()).orphanSandboxesSuspended).toBe(0)
+    expect(h.vercel.boxes.get(name)!.status).toBe('running')
+  })
+
   it('suspends a provider sandbox with no live D1 row, deletes it after the grace period, leaves tracked ones alone', async () => {
     const { h, sweep } = await setup()
     const tracked = await h.call('POST', '/v1/sandboxes', create('ws-1'))
