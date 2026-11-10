@@ -5,7 +5,7 @@ import { selectFloatingWorkspacePanelVisible } from '@/store/workspaces/floating
 import {
   isEventTargetInsideFloatingWorkspacePanel,
   isFloatingWorkspacePanelFocused
-} from '@/lib/floating-workspace-terminal-actions'
+} from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import { useAppStore } from '../../store'
 import type { AppState } from '../../store/types'
 

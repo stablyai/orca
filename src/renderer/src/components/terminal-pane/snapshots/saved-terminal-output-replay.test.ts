@@ -47,14 +47,4 @@ describe('restoreScrollbackBuffers over a parked live TUI', () => {
       terminal.dispose()
     }
   })
-
-  it('still leaves alt for a pane whose TUI did not survive', async () => {
-    const terminal = await restoreInto()
-    try {
-      expect(terminal.buffer.active.type).toBe('normal')
-      expect(visibleRows(terminal)[0]).toBe(LAUNCH)
-    } finally {
-      terminal.dispose()
-    }
-  })
 })

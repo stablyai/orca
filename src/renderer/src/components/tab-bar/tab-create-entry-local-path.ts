@@ -1,6 +1,9 @@
 import { getEditorFileOperationContext } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import { getFolderWorkspaceConnectionId } from '@/lib/workspace/ownership/folder-workspace-connection'
-import { getLocalPathOpenOwnerForRoute, isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
+import {
+  getLocalPathOpenOwnerForRoute,
+  isLocalPathOpenBlocked
+} from '@/lib/files/os-open/local-path-open-guard'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { useAppStore } from '@/store'

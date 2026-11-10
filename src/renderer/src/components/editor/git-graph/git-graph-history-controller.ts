@@ -4,7 +4,8 @@ import { gitGraphOwnerKey, switchGitGraphWorkspace } from './git-graph-workspace
 import { createStore } from 'zustand/vanilla'
 import { shallow } from 'zustand/shallow'
 import { useAppStore } from '@/store'
-import { gitGraphScope, gitGraphScopeInputs, GIT_GRAPH_REFRESH_EVENT } from '@/lib/git-graph-tab'
+import { gitGraphScope, gitGraphScopeInputs } from '@/lib/source-control/graph/git-graph-tab'
+import { GIT_GRAPH_REFRESH_EVENT } from '@/lib/source-control/graph/git-graph-refresh-event'
 import { getRuntimeGitHistory } from '@/runtime/source-control/git/runtime-git-status-client'
 import { translate } from '@/i18n/i18n'
 import type {
@@ -271,15 +272,13 @@ export class GitGraphHistoryController {
       const stalled =
         append && !recovered && accumulated?.hasMore && items.length === previous?.items.length
       const result = error !== undefined || stalled ? previous : (accumulated ?? previous)
-      const selection = this.view.getState().selectedId
-      const selectedId =
-        result?.items.find((item) => item.id === selection)?.id ?? result?.items[0]?.id
-      const selectionGone = selection !== undefined && selection !== selectedId
+      const selected = this.view.getState().selectedId
+      const selectedId = result?.items.find(({ id }) => id === selected)?.id ?? result?.items[0]?.id
+      const selectionGone = selected !== undefined && selected !== selectedId
       if (selectionGone) {
         this.actions.cancel()
         this.scrollOffset = 0
       }
-      // Settle before publishing: a render reacting to loading:false may request the next page.
       this.pending = undefined
       this.view.setState({
         result,

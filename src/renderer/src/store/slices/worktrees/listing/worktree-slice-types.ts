@@ -85,8 +85,6 @@ export type WorktreeLineageUpdateResult = {
   updatedRemoteWorktree?: WorktreeWithLineage
 }
 
-export type { HostedReviewLinkKey } from '../../../../../../shared/worktree/hosted-review-links'
-
 export type RuntimeWorktreeMetaUpdates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
   pushTarget?: GitPushTarget | null
 }

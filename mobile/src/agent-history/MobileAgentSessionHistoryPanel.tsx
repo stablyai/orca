@@ -1,5 +1,5 @@
 import { openMobileAgentHistoryChat } from './open-mobile-agent-history-chat'
-import { mobileStructuredSessionOpenMessage } from '../session/mobile-structured-session-open-message'
+import { mobileStructuredSessionOpenMessage } from '../session/native-chat/agent-session/mobile-structured-session-open-message'
 import { prepareMobileHistoryResumeTarget } from './mobile-history-resume-target-preparation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View } from 'react-native'

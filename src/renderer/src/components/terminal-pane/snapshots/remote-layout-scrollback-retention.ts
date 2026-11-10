@@ -1,5 +1,6 @@
 import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-layout/terminal-tab-types'
-import { collectLeafIdsInOrder } from '../layout/terminal-layout-leaf-traversal'
+import '../layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../../../shared/workspace-layout/terminal-pane-tree'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
 
 /** Host owns layout structure; preserve local captured bytes only for its surviving leaves. Park does not bump generation, so wholesale pulls otherwise erase newer local tails and propagate stale uploads. */
@@ -10,7 +11,7 @@ export function retainLocalScrollbackInRemoteLayout(
   if (!local?.buffersByLeafId && !local?.scrollbackRefsByLeafId) {
     return remote
   }
-  const currentLeafIds = new Set(collectLeafIdsInOrder(remote.root))
+  const currentLeafIds = new Set(collectLayoutLeafIdsInOrder(remote.root))
   if (currentLeafIds.size === 0) {
     return remote
   }

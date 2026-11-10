@@ -1,7 +1,7 @@
 import {
   getCachedWindowsTerminalCapabilities,
   hasCachedWindowsTerminalCapabilities
-} from './windows-terminal-capabilities'
+} from '../runtime/hosts/capabilities/windows-terminal-capabilities'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
 
 export type LocalPreflightContext =

@@ -1,3 +1,9 @@
+import {
+  admitTerminalNoticeStart,
+  getTerminalNoticeLifetime,
+  isTerminalNoticeLifetimeCurrent
+} from '../../provider-notices/terminal-notice-lifetime'
+import type { TerminalNoticeStart } from '../../provider-notices/terminal-notice-lifetime'
 // Main owns agent resume; show its published restored/unavailable outcome once per terminal start.
 
 import { useAppStore } from '@/store/index'
@@ -11,8 +17,6 @@ type Outcomes = Record<string, TerminalPaneResumeOutcome>
 
 // Why session storage: a reload reattaches the same start, which showed its banner already.
 const SHOWN_STARTS_KEY = 'orca.mainPaneResumeBannersShown'
-/** This document's shown starts, for when session storage is unavailable. */
-const shownHere = new Set<string>()
 
 const startOf = ({ ptyId, ptyGeneration }: TerminalPaneResumeOutcome): string =>
   `${ptyId}#${ptyGeneration ?? ''}`
@@ -27,12 +31,13 @@ function readShownStarts(): string[] {
 }
 
 /** Notes `start` as shown, keeping only starts main still publishes; false if it was already. */
-function noteShown(start: string, outcomes: Outcomes): boolean {
+function noteShown(start: string, accepted: TerminalNoticeStart, outcomes: Outcomes): boolean {
   const shown = readShownStarts()
-  if (shownHere.has(start) || shown.includes(start)) {
+  if (accepted.shown || shown.includes(start)) {
+    accepted.shown = true
     return false
   }
-  shownHere.add(start)
+  accepted.shown = true
   const live = new Set(Object.values(outcomes).map(startOf))
   try {
     globalThis.sessionStorage.setItem(
@@ -69,6 +74,18 @@ export function attachResumeCheck(
   }
 }
 
+/** The current attach owner accepts start facts before any presentation reads them. */
+export function acceptMainPaneResumeStart(session: ConnectPanePtySession, ptyId: string): void {
+  if (!mainStartsPane(session)) {
+    return
+  }
+  const lifetime = getTerminalNoticeLifetime(ptyId)
+  const found = useAppStore.getState().terminalPaneResumeOutcomesByPaneKey[session.cacheKey]
+  if (lifetime && found?.ptyId === ptyId) {
+    admitTerminalNoticeStart(lifetime, session.cacheKey, found.ptyGeneration)
+  }
+}
+
 /** Show main’s start outcome once after attach; its binding frame precedes the reply on ordered IPC and applies before the reply settles. */
 export function showMainPaneResumeOutcome(session: ConnectPanePtySession, ptyId: string): void {
   if (!mainStartsPane(session)) {
@@ -76,7 +93,18 @@ export function showMainPaneResumeOutcome(session: ConnectPanePtySession, ptyId:
   }
   const outcomes = useAppStore.getState().terminalPaneResumeOutcomesByPaneKey
   const found = outcomes[session.cacheKey]
-  if (found?.ptyId === ptyId && noteShown(startOf(found), outcomes)) {
+  const lifetime = getTerminalNoticeLifetime(ptyId)
+  const accepted = lifetime?.start
+  if (
+    lifetime &&
+    isTerminalNoticeLifetimeCurrent(lifetime) &&
+    accepted &&
+    found?.ptyId === ptyId &&
+    (accepted.paneKey !== session.cacheKey ||
+      found.ptyGeneration === undefined ||
+      found.ptyGeneration === accepted.generation) &&
+    noteShown(startOf(found), accepted, outcomes)
+  ) {
     session.showSessionRestoredBanner(found.outcome)
   }
 }

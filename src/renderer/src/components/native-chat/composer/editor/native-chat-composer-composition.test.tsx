@@ -1,4 +1,4 @@
-import { endComposition } from '@/lib/ime-composition-event.test-support'
+import { endComposition } from '@/lib/text-input/ime/ime-composition-event.test-support'
 import { changePrompt, promptValue } from './native-chat-prompt-editor.test-support'
 // @vitest-environment happy-dom
 
@@ -22,7 +22,7 @@ import {
   NativeChatComposerField,
   type NativeChatComposerFieldProps
 } from './NativeChatComposerField'
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
+import { useImeEnterGestureOwnership } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useNativeChatDraft } from '../../drafts/use-native-chat-draft'
 import { useNativeChatDraftEvents } from './use-native-chat-draft-events'

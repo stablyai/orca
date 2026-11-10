@@ -20,7 +20,7 @@ export function MobilePairedDevicesSection({
   return (
     <div>
       <h3 className="mb-2 text-sm font-medium">
-        {t('auto.components.settings.MobilePane.d7ce676270', 'Paired Devices')}
+        {t('auto.components.settings.MobilePane.5f539ff331', 'Paired devices')}
       </h3>
       {devices.length === 0 ? (
         <p className="text-muted-foreground text-sm">

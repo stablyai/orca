@@ -1,11 +1,11 @@
 import type React from 'react'
 import { useEffect, useRef, type RefObject } from 'react'
 import { ChevronRight, LoaderCircle } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
 import './remote-file-browser-entry-actions'
 import type { DirEntry } from './remote-file-browser-entry-actions'
-import { shouldHandleTextControlPaste as isRemoteFileBrowserPathResolveTextTooLarge } from '../../../lib/text-control-paste'
+import { shouldHandleTextControlPaste as isRemoteFileBrowserPathResolveTextTooLarge } from '../../../lib/text-input/paste/text-control-paste'
 import type { PreviewState } from './remote-file-browser-path-preview-resolver'
 import { useTranslate } from '@/i18n/use-translate'
 

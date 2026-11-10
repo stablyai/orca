@@ -1,10 +1,10 @@
-import { ImeInput } from '@/lib/ime-text-field'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import { useCallback, useEffect, useState } from 'react'
 import { ChevronUp, ChevronDown, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { EventBus } from 'pdfjs-dist/web/pdf_viewer.mjs'
 import { useTranslate } from '@/i18n/use-translate'
-import { getFindRequestQuery } from '@/lib/find-query-bounds'
+import { getFindRequestQuery } from '@/lib/text-search/find-query-bounds'
 
 type PdfFindProps = {
   isOpen: boolean

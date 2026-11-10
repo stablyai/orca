@@ -1,9 +1,7 @@
 import { useEffect } from 'react'
 import { projectStatus } from './structured-agent-session-status-projection'
-import {
-  getStructuredAgentSessionLaunchLifecycle,
-  subscribeStructuredAgentLaunchStatus
-} from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { getStructuredAgentSessionLaunchLifecycle } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
+import { subscribeStructuredAgentLaunchStatus } from '@/lib/agent-session/launch/structured-agent-session-launch-state-store'
 import { getStructuredAgentSessionLaunchFailedAt } from '@/lib/agent-session/launch/structured-agent-session-launch-failed-at'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'

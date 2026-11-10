@@ -5,7 +5,7 @@ import {
 import type { DirectWorkItemLaunchResult } from '@/lib/workspace/creation/work-item/direct-work-item-setup'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
+import { startFixChecksAgent } from '@/lib/source-control/checks/fix-checks-agent-launch'
 import { launchWorkItemDirect } from '@/lib/workspace/creation/work-item/launch-work-item-direct'
 import { buildFixBrokenChecksPrompt } from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
 import type { SourceControlAiWriteTarget } from '../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
