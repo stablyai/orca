@@ -57,7 +57,9 @@ export function VoiceSpeechModelSection({
   const t = useTranslate()
   const selectedModel = catalog.find((m) => m.id === voiceSettings.sttModel)
   const [chosenTab, setTab] = useState<VoiceSpeechModelTab | null>(null)
-  const tab = chosenTab ?? (selectedModel ? speechModelTab(selectedModel) : 'local')
+  // While a model is recommended, open on the tab that shows it.
+  const tab =
+    chosenTab ?? (selectedModel && !setUpModelId ? speechModelTab(selectedModel) : 'local')
   const [pendingDeleteModelIds, setPendingDeleteModelIds] = useState<ReadonlySet<string>>(
     () => new Set()
   )

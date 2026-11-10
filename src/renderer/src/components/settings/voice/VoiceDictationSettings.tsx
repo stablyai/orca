@@ -19,6 +19,8 @@ import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 type VoiceDictationSettingsProps = {
   voiceSettings: VoiceSettings
+  /** False until main sends the catalog; the status waits so it never claims there is no model. */
+  catalogLoaded: boolean
   selectedModel: SpeechModelManifest | undefined
   selectedState: SpeechModelState | undefined
   permissionPending: boolean
@@ -97,7 +99,7 @@ export function VoiceDictationSettings(props: VoiceDictationSettingsProps): Reac
     <SettingsGroup>
       <SettingsRow
         label={dictationLabel}
-        description={dictationStatus(props, shortcut, t)}
+        description={props.catalogLoaded ? dictationStatus(props, shortcut, t) : undefined}
         control={
           <Switch
             checked={voiceSettings.enabled}

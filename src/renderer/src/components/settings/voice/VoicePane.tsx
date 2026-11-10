@@ -42,7 +42,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   const refreshModelStates = useAppStore((s) => s.refreshModelStates)
   const markFeatureTipsSeen = useAppStore((s) => s.markFeatureTipsSeen)
   const systemLanguageTag = useLanguageReadiness((s) => s.detection?.detectedTag)
-  // null until main answers, so the list never shows a state the catalog would contradict.
+  // null until main answers, so the status and list never show a state the catalog would contradict.
   const [loadedCatalog, setCatalog] = useState<SpeechModelManifest[] | null>(null)
   const catalog = loadedCatalog ?? []
   const [permissionPending, setPermissionPending] = useState(false)
@@ -269,6 +269,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     <div ref={handlePaneRef} className="flex flex-col gap-8">
       <VoiceDictationSettings
         voiceSettings={voiceSettings}
+        catalogLoaded={loadedCatalog !== null}
         selectedModel={selectedModel}
         selectedState={selectedState}
         permissionPending={permissionPending}
