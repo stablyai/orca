@@ -9,6 +9,7 @@ import { emptyWorkerListPage } from '../../../rpc/methods/orchestration/worker/w
 import { ORCHESTRATION_FLEET_PAGE_MAX } from '../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
 import { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration-worker-start-params'
+import { isOrchestrationMutation } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
 import {
@@ -35,6 +36,8 @@ type Routed = { handled: false } | { handled: true; result: unknown }
 const LOCAL: Routed = { handled: false }
 // Long enough for a send that starts a follow-up worker there and waits for it to be ready.
 const FORWARD_TIMEOUT_MS = 180_000
+// A read gives up soon on a sleeping server, whose socket stays open; show then answers from this Orca's record.
+const READ_TIMEOUT_MS = 5_000
 // What `--on <server>` sends there; send and reply --on stay peer mail.
 const SERVER_CALLS: ReadonlySet<string> = new Set([
   'orchestration.workerStart',
@@ -142,7 +145,7 @@ async function routeServerCall(
             server.environmentId,
             request.method,
             forwarded,
-            FORWARD_TIMEOUT_MS,
+            READ_TIMEOUT_MS,
             undefined,
             { expectedEnvironmentPairingRevision: server.pairingRevision }
           )
@@ -160,7 +163,7 @@ async function routeServerCall(
       server.environmentId,
       request.method,
       { request: forward.key },
-      FORWARD_TIMEOUT_MS,
+      READ_TIMEOUT_MS,
       undefined,
       { expectedEnvironmentPairingRevision: server.pairingRevision }
     )
@@ -225,7 +228,7 @@ async function forwardToLink(
     const answer = await callRemoteOwnedServer(runtime, link, {
       method,
       params,
-      timeoutMs: FORWARD_TIMEOUT_MS,
+      timeoutMs: isOrchestrationMutation(method, params) ? FORWARD_TIMEOUT_MS : READ_TIMEOUT_MS,
       ...(forward ? { requestId: forward.key } : {}),
       whileLink: ['open']
     })
