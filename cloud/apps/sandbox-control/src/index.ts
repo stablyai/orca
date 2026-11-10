@@ -1124,7 +1124,10 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         const body = (await readJson(request).catch(() => ({}))) as { reason?: unknown } | null
         const suspended = await suspendSandbox(life, row)
         if (body?.reason !== 'idle') {
-          await markUserSlept(life.db, row.id, life.now())
+          // A hint only: the sleep itself already happened, so a failed write never fails it.
+          await markUserSlept(life.db, row.id, life.now()).catch((error: unknown) =>
+            console.log(JSON.stringify({ event: 'user_slept_write_failed', error: String(error) }))
+          )
         }
         return json({ sandbox: view(suspended) })
       }
