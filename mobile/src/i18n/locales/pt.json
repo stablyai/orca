@@ -3463,8 +3463,8 @@
       "unknown": "Desconhecido"
     },
     "pagination": {
-      "pageUnreachable": "A página {{page}} está além do alcance da pesquisa do GitHub.",
-      "loadPageFailed": "Não foi possível carregar a página {{page}} do GitHub.",
+      "pageUnreachable": "A página {{page}} está além do que a pesquisa do GitHub pode retornar.",
+      "loadPageFailed": "A página {{page}} não pôde ser carregada do GitHub.",
       "noMoreResults": "Não há mais resultados na página {{page}}."
     },
     "composerSource": {
