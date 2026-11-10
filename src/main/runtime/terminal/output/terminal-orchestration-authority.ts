@@ -24,7 +24,7 @@ import {
 } from '../../orchestration/addressing/orchestration-fleet-agent-status-snapshot'
 import { resolveStructuredWorkerAuthority } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { matchesProcessIncarnation } from '../../orchestration/terminal-authority/release/worker-terminal-process-liveness'
-import { claimIdleShellPrompt } from '../input/idle-shell-prompt-claim'
+import { claimIdleShellPrompt, idleShellForegroundProof } from '../input/idle-shell-prompt-claim'
 
 export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller {
   protected abstract issueHandle(
@@ -83,7 +83,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
   }
 
   protected claimIdleShellPromptForPty(ptyId: string): Promise<boolean> {
-    const confirm = this.ptyController?.confirmShellForeground?.bind(this.ptyController)
+    const confirm = idleShellForegroundProof(this.ptyController, ptyId)
     const readPane = this.getAgentStatusSnapshotForPaneFn
     return claimIdleShellPrompt({
       hasPaneAgent: () => {
@@ -98,7 +98,7 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
       },
       claimPromptMarker: () =>
         this.headlessTerminals.get(ptyId)?.ownership.claimIdlePrompt() === true,
-      confirmShellForeground: confirm ? () => confirm(ptyId) : null
+      confirmShellForeground: confirm
     })
   }
 
