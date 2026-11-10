@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { control } from '../clients'
 import { config } from '../env'
 import { log, type Check, type Ctx } from '../context'
-import { orca, openTerminal } from '../orca-cli'
+import { orca, openTerminal, typeAndSee } from '../orca-cli'
 import { sandboxToken } from '../tokens'
 
 const ARCHIVE = { 'x-orca-sandbox-features': 'archive' }
@@ -318,6 +318,55 @@ export const lifecycleChecks: Record<string, Check> = {
     }
   },
 
+
+  'run.ports': async (ctx) => {
+    // Cloud half of per-workspace ports (#216/#233), headless over the pairing: the VM's first workspace
+    // gets the launcher block (3000), a second worktree on the same VM gets its own registry block, both
+    // are persisted and survive sleep/wake. The local half (distinct blocks, stable across app restart)
+    // was proven in the real app on m4air (desktop-20261110-033734).
+    const box = await ctx.sandboxes.create(ctx.solo, { workspaceId: `w9-ports-${ctx.run.file.runId}`, repo: { url: config.testRepo }, ...(process.env.ORCA_ACCEPTANCE_REGION ? { region: process.env.ORCA_ACCEPTANCE_REGION } : {}) })
+    if (box.status !== 200) {
+      return { status: 'fail', detail: `create ${box.status}` }
+    }
+    const id = box.body.sandbox.id
+    let code = box.body.connection.pairingCode as string
+    const root = box.body.connection.projectRoot as string
+    try {
+      const first = await openTerminal(code, root)
+      const worktree: string | undefined = first.term.json?.result?.terminal?.worktreeId
+      const repoId = worktree?.split('::')[0]
+      const second = await orca(code, ['worktree', 'create', '--repo', `id:${repoId}`, '--name', 'w9-second'])
+      const secondPath: string | undefined = second.json?.result?.worktree?.path
+      const portsIn = async (path: string, label: string) => {
+        const t = await orca(code, ['terminal', 'create', '--worktree', `path:${path}`, '--title', label])
+        const handle = t.json?.result?.terminal?.handle
+        if (!handle) {
+          return `no-terminal(${t.stderr.slice(0, 80)})`
+        }
+        const seen = await typeAndSee(code, handle, `echo PORTS_\${ORCA_PORT}_\${ORCA_PORT_COUNT}_\${CONDUCTOR_PORT}_END`, '_END')
+        return /PORTS_(\d+)_(\d+)_(\d+)_END/.exec(seen.output)?.slice(1).join('/') ?? `unseen(${seen.error})`
+      }
+      const a1 = await portsIn(root, 'first')
+      const b1 = secondPath ? await portsIn(secondPath, 'second') : `no second worktree (${second.stderr.slice(0, 120) || JSON.stringify(second.json?.error ?? '').slice(0, 120)})`
+      const registry = (await ctx.exec((await ctx.sandboxes.get(id)).body.sandbox.session!.id, 'cat /vercel/.orcad-data/workspace-port-blocks.json 2>/dev/null')).stdout.trim()
+      await ctx.sandboxes.suspend(id)
+      const w = await ctx.sandboxes.resume(id)
+      code = w.body.connection.pairingCode
+      const a2 = await portsIn(root, 'first-after')
+      const b2 = secondPath ? await portsIn(secondPath, 'second-after') : 'n/a'
+      const aPort = Number(a1.split('/')[0])
+      const bPort = Number(b1.split('/')[0])
+      const ok =
+        aPort === 3000 && a1.endsWith('/10/3000') && bPort >= 20000 && bPort <= 31999 && bPort !== aPort && a1 === a2 && b1 === b2
+      return {
+        status: ok ? 'pass' : 'fail',
+        detail: `cloud VM ports (ORCA_PORT/COUNT/CONDUCTOR_PORT): first workspace ${a1}, second worktree ${b1}; after sleep/wake ${a2} and ${b2}; registry ${registry.slice(0, 200)}. Local blocks (distinct, stable across restart) proven on m4air desktop-20261110-033734.`,
+        evidence: [log('port registry', registry)]
+      }
+    } finally {
+      await ctx.sandboxes.destroy(id)
+    }
+  },
   'acc.ssh': async (ctx) => {
     const b = await refresh(ctx)
     const { publicKey } = generateKeyPairSync('ed25519')
