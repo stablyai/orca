@@ -36,10 +36,9 @@ import { applyManagedDataAccountEnvironment } from '../../../managed-data-accoun
 import { applyOpenCodeStatusPluginEnv, captureOpenCodeSourceConfig } from './opencode-config'
 import { applyRemoteViewerClipboardEnv } from './remote-viewer-clipboard-env'
 
+/** Pane, then app, values win; copying the app value keeps it when a reused daemon's env lacks it. */
 function defaultUnsetEnv(env: Record<string, string>, key: string, value: string): void {
-  if (env[key] === undefined && process.env[key] === undefined) {
-    env[key] = value
-  }
+  env[key] ??= process.env[key] ?? value
 }
 
 /** Mutate host-local PTY environment only for local execution; SSH cannot use these loopback endpoints or filesystem paths. */
