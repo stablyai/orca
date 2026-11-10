@@ -162,21 +162,33 @@ describe('worktree-palette-search', () => {
     ])
   })
 
-  it("finds a linked issue by its saved title before the issue's card has rendered", () => {
-    const results = searchWorktrees(
-      [
-        makeWorktree({
-          id: 'wt-issue',
-          linkedIssue: 11704,
-          linkedItems: [
-            { provider: 'github', type: 'issue', number: 11704, title: 'verificacion de permisos' }
-          ]
-        })
-      ],
-      'verificacion',
-      repoMap
-    )
+  it("finds each linked issue by its saved title before the issue's card has rendered", () => {
+    const issue = (number: number, title: string, url?: string) => ({
+      provider: 'github' as const,
+      type: 'issue' as const,
+      number,
+      title,
+      ...(url ? { url } : {})
+    })
+    const worktrees = [
+      makeWorktree({
+        id: 'wt-cli',
+        linkedIssue: 11704,
+        linkedItems: [issue(11704, 'verificacion de permisos')]
+      }),
+      makeWorktree({
+        id: 'wt-two-repos',
+        linkedIssue: 42,
+        linkedItems: [
+          issue(42, 'alpha release', 'https://github.com/stablyai/orca/issues/42'),
+          issue(42, 'zebra crossing', 'https://github.com/other/repo/issues/42')
+        ]
+      })
+    ]
+    const search = (query: string) =>
+      searchWorktrees(worktrees, query, repoMap).map((result) => result.worktreeId)
 
-    expect(results.map((result) => result.worktreeId)).toEqual(['wt-issue'])
+    expect(search('verificacion')).toEqual(['wt-cli'])
+    expect(search('zebra')).toEqual(['wt-two-repos'])
   })
 })

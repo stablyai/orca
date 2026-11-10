@@ -26,7 +26,7 @@ import type { HostedReviewInfo } from '../../../../../../shared/source-control/h
 import type { Repo } from '../../../../../../shared/repo-types'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
-import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
+import type { Worktree } from '../../../../../../shared/worktree/types'
 import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
 import {
   getPaletteWorktreeIdentity,
@@ -99,35 +99,33 @@ function resolveReviewSource(
 
 function resolveIssueTitle(
   worktree: Worktree,
-  attachments: readonly WorkspaceAttachment[],
   repo: Repo | undefined,
   sources: WorktreePaletteDocumentSources
 ): string {
-  if (worktree.linkedIssue == null) {
+  if (worktree.linkedIssue == null || !repo || !sources.issueCache) {
     return ''
   }
-  const cached =
-    repo && sources.issueCache
-      ? sources.issueCache[
-          getIssueCacheKey(
-            repo.path,
-            repo.id,
-            worktree.linkedIssue,
-            undefined,
-            repo.connectionId,
-            repo.executionHostId
-          )
-        ]?.data?.title
-      : undefined
-  // The link's saved title covers an issue whose card never rendered to fill the cache.
-  return (
-    cached ||
-    attachments.find(
-      (item) =>
-        item.provider === 'github' && item.type === 'issue' && item.number === worktree.linkedIssue
-    )?.title ||
-    ''
+  const key = getIssueCacheKey(
+    repo.path,
+    repo.id,
+    worktree.linkedIssue,
+    undefined,
+    repo.connectionId,
+    repo.executionHostId
   )
+  return sources.issueCache[key]?.data?.title ?? ''
+}
+
+// Each saved link is its own unit: same-number links (another repo, or the legacy issue field) must not
+// shadow each other's saved titles.
+function withEvidenceId(evidence: PaletteComposedEvidence, id: string): PaletteComposedEvidence {
+  const prefix = evidence.unit.id.length
+  return {
+    unit: { ...evidence.unit, id },
+    fields: evidence.fields.map(
+      (field) => field && { ...field, id: `${id}${field.id.slice(prefix)}`, evidenceId: id }
+    )
+  }
 }
 
 function buildEvidence(
@@ -141,7 +139,6 @@ function buildEvidence(
   }
 
   const ports = sources.workspacePortsByWorktreeId?.get(worktree.id) ?? []
-  const attachments = getWorkspaceAttachments({ linkedItems: worktree.linkedItems })
   const units = [
     comment,
     buildWorktreeAutomationEvidence(worktree),
@@ -149,11 +146,11 @@ function buildEvidence(
     buildWorktreeReviewEvidence(resolveReviewSource(worktree, repo, sources)),
     buildWorktreeIssueEvidence({
       number: worktree.linkedIssue,
-      title: resolveIssueTitle(worktree, attachments, repo, sources)
+      title: resolveIssueTitle(worktree, repo, sources)
     }),
-    ...attachments.map((item) => {
+    ...getWorkspaceAttachments({ linkedItems: worktree.linkedItems }).map((item) => {
       const evidence = buildWorktreeAttachmentEvidence(item)
-      return evidence ? { ...evidence, id: `attachment:${getWorkspaceAttachmentKey(item)}` } : null
+      return evidence && withEvidenceId(evidence, `attachment:${getWorkspaceAttachmentKey(item)}`)
     }),
     ...ports.map((port) => buildWorktreePortEvidence(port))
   ]
