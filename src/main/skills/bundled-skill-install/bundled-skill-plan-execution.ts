@@ -120,7 +120,12 @@ async function applyContent(run: SkillRun, op: BundledSkillOp): Promise<string |
   }
   switch (op.kind) {
     case 'keep':
+      return undefined
     case 'leave':
+      // Agent links may depend on another build's shared copy; skip them if it changed since planning.
+      if (op.reason === 'other-build') {
+        await requireUnchanged(run, op.path, op.observed)
+      }
       return undefined
     case 'write':
     case 'copy':

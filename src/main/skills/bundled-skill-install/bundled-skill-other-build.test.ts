@@ -57,6 +57,18 @@ const hasMarker = (home: SkillHome, text: string) =>
   )
 
 describe("another Orca build's copy on the same host", () => {
+  it('links a newly selected agent to a recognized shared copy', async () => {
+    const home = await makeSkillHome()
+    await writeCopy(home.shared, NEWER_TEXT)
+    await autoUpdateAs(home, NEWER_SOURCE)
+
+    const input = { ...serviceInput(home, { agents: ['cursor'] }), sources: [NEW_SOURCE] }
+    await previewAndInstall(input)
+
+    expect((await lstat(home.cursor)).isSymbolicLink()).toBe(true)
+    expect(await readFile(join(home.cursor, 'SKILL.md'), 'utf8')).toBe(NEWER_TEXT)
+  })
+
   it('is not reported out of date or downgraded by an older build, until the user edits it', async () => {
     const home = await makeSkillHome()
     await writeCopy(home.shared, OLD_TEXT)

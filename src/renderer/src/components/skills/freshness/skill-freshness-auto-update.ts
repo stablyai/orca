@@ -15,6 +15,10 @@ import {
 } from '@/lib/skills/runtime/bundled-skill-target'
 import { translate } from '@/i18n/i18n'
 import { autoUpdateBundledSkillsOnTarget } from '@/runtime/skills/bundled/runtime-bundled-skills-client'
+import {
+  RuntimeConnectionChangedBeforeSendError,
+  RuntimeRpcCallError
+} from '@/runtime/rpc/calls/runtime-rpc-result'
 import { useAppStore } from '@/store/index'
 import { getSkillUpdateRun, runAutomaticSkillUpdate } from './skill-update-run-store'
 
@@ -124,6 +128,18 @@ function reportUncertainOutcome(target: BundledSkillTarget, plan: BundledSkillPl
 }
 
 /**
+ * A rejection after the request left for the host, other than the host's own error reply, may
+ * hide a committed update. Refused before sending, or answered with an error, nothing was written.
+ */
+function mayHaveWritten(sent: boolean, error: unknown): boolean {
+  return (
+    sent &&
+    !(error instanceof RuntimeRpcCallError) &&
+    !(error instanceof RuntimeConnectionChangedBeforeSendError)
+  )
+}
+
+/**
  * Lets the next plan refresh ask again when the host did not run the recording: the call failed,
  * another update held the target, or the host reported the skill busy or changed. A host that
  * predates silent update (null value) cannot record, so its marks stay to avoid a call per scan.
@@ -188,12 +204,17 @@ export function autoUpdateUnmodifiedSkills(
   for (const { mark } of marking) {
     markedCopies.add(mark)
   }
-  // Marking-only names are not owned: the host records them and changes nothing on disk.
+  // Marking-only names are not owned; the host re-plans and may still update a copy that became released.
   const names = [...started, ...marking.map(({ name }) => name)]
   if (names.length > 0) {
+    let sent = false
     // The host re-plans under its locks and re-checks each location right before writing.
     void runAutomaticSkillUpdate(target, names, () =>
-      autoUpdateBundledSkillsOnTarget(target, names)
+      autoUpdateBundledSkillsOnTarget(target, names, {
+        onSent: () => {
+          sent = true
+        }
+      })
     )
       .then(
         (ran) => {
@@ -201,10 +222,12 @@ export function autoUpdateUnmodifiedSkills(
           reportPreservedEdits(ran?.value ?? null)
         },
         // Settling the keys below means the same state is never retried; the nudge takes over.
-        // A marking-only call writes no skill, so its failure has nothing to report.
-        () => {
+        (error: unknown) => {
           releaseUnrecordedMarks(marking, null)
-          return started.length > 0 ? reportUncertainOutcome(target, plan) : undefined
+          // A marking-only call can write only if it reached the host and its reply was lost.
+          if (started.length > 0 || mayHaveWritten(sent, error)) {
+            reportUncertainOutcome(target, plan)
+          }
         }
       )
       .catch(() => undefined)
@@ -214,9 +237,7 @@ export function autoUpdateUnmodifiedSkills(
         for (const key of keys) {
           settled.set(key, 'settled')
         }
-        if (started.length > 0) {
-          notifyInstalledAgentSkillsChanged()
-        }
+        notifyInstalledAgentSkillsChanged()
       })
   }
   return owned

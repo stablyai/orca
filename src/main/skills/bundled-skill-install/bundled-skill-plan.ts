@@ -162,11 +162,8 @@ async function planTarget(
         if (!shared) {
           return files('write')
         }
-        if (!shared.current && former.installed) {
-          return files('write')
-        }
-        if (!shared.current) {
-          return leave('shared-not-current', false)
+        if (!shared.current && !(shared.otherBuild && filesystem.supportsLinks)) {
+          return former.installed ? files('write') : leave('shared-not-current', false)
         }
         return filesystem.supportsLinks ? linkToShared('link', shared) : files('copy')
       case 'edited':

@@ -94,10 +94,14 @@ export async function executeBundledSkillsOnTarget(
   )
 }
 
-/** Silently updates hash-verified copies of `names`; null when the host predates it, so the caller asks instead. */
+/**
+ * Silently updates hash-verified copies of `names`; null when the host predates it, so the caller asks instead.
+ * `onSent` fires once the request leaves for a paired host, so a later lost reply may follow a write.
+ */
 export async function autoUpdateBundledSkillsOnTarget(
   target: BundledSkillTarget,
-  names: string[]
+  names: string[],
+  options: { onSent?: () => void } = {}
 ): Promise<BundledSkillInstallResult | null> {
   if (target.kind === 'ssh') {
     return null
@@ -118,6 +122,9 @@ export async function autoUpdateBundledSkillsOnTarget(
     { kind: 'environment', environmentId: target.environmentId },
     'skills.autoUpdateBundledOrca',
     { names },
-    { timeoutMs: BUNDLED_SKILL_EXECUTE_TIMEOUT_MS }
+    {
+      timeoutMs: BUNDLED_SKILL_EXECUTE_TIMEOUT_MS,
+      ...(options.onSent ? { beforeSend: options.onSent } : {})
+    }
   )
 }
