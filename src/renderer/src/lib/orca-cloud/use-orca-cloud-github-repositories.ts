@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import type { HostedGithubRepositoriesResponse } from '../../../../shared/hosted-sandbox/hosted-github-wire'
 import { orcaCloudGitHubRepoUrl } from './use-orca-cloud-repo-access'
+import { useOrcaCloudIdentityKey } from './orca-cloud-identity'
 
 export type OrcaCloudGitHubRepository = {
   /** owner/name, as GitHub spells it. */
@@ -19,7 +20,8 @@ const CACHE_MS = 5 * 60_000
 
 type Listing = { repos: OrcaCloudGitHubRepository[]; nextCursor: string | null }
 
-let cache: { at: number; value: Promise<Listing> } | null = null
+/** One listing at a time, for the identity (account and team) that asked for it. */
+let cache: { at: number; identity: string; value: Promise<Listing> } | null = null
 
 async function fetchPages(after: Listing): Promise<Listing> {
   const repos = [...after.repos]
@@ -41,14 +43,16 @@ async function fetchPages(after: Listing): Promise<Listing> {
   return { repos, nextCursor: cursor }
 }
 
-function loadRepositories(more = false): Promise<Listing> {
+function loadRepositories(identity: string, more = false): Promise<Listing> {
   const now = Date.now()
-  if (!cache || now - cache.at >= CACHE_MS) {
-    cache = { at: now, value: fetchPages({ repos: [], nextCursor: null }) }
+  // Another account's or team's repositories are never this one's (sign-out, team switch).
+  if (!cache || cache.identity !== identity || now - cache.at >= CACHE_MS) {
+    cache = { at: now, identity, value: fetchPages({ repos: [], nextCursor: null }) }
   } else if (more) {
     const previous = cache.value
     cache = {
       at: cache.at,
+      identity,
       value: previous.then((listing) => (listing.nextCursor ? fetchPages(listing) : listing))
     }
   }
@@ -95,22 +99,24 @@ export function useOrcaCloudGitHubRepositories(enabled: boolean): {
   showMore: (() => void) | null
 } {
   const repos = useAppStore((s) => s.repos)
-  const [listing, setListing] = useState<Listing | null>(null)
+  const identity = useOrcaCloudIdentityKey()
+  const [answer, setAnswer] = useState<{ identity: string; listing: Listing } | null>(null)
   const [moreRequests, setMoreRequests] = useState(0)
+  const listing = answer?.identity === identity ? answer.listing : null
   useEffect(() => {
     if (!enabled) {
       return
     }
     let cancelled = false
-    void loadRepositories(moreRequests > 0).then((value) => {
+    void loadRepositories(identity, moreRequests > 0).then((value) => {
       if (!cancelled) {
-        setListing(value)
+        setAnswer({ identity, listing: value })
       }
     })
     return () => {
       cancelled = true
     }
-  }, [enabled, moreRequests])
+  }, [enabled, identity, moreRequests])
   const visible = useMemo(
     () =>
       enabled && listing

@@ -120,3 +120,28 @@ describe('CloudWorkspaceSchema.readSnapshotAt', () => {
     expect(CloudWorkspaceSchema.parse({ ...base, readSnapshotAt: 9 }).readSnapshotAt).toBe(9)
   })
 })
+
+describe('cloud workspaces client: sleep and delete', () => {
+  // The control plane answers both with the sandbox's new state; reading `{ok}` turned a finished
+  // delete into "invalid_response" (np4-e2e).
+  it('reads a delete answered with the destroyed sandbox as done', async () => {
+    const { client, fetch } = clientAnswering(200, { sandbox: { id: SBX, status: 'destroyed' } })
+    await expect(client.destroy(SBX)).resolves.toBeUndefined()
+    const [url, init] = fetch.mock.calls[0]!
+    expect(String(url)).toBe(`https://cp.example.test/v1/sandboxes/${SBX}`)
+    expect(init?.method).toBe('DELETE')
+  })
+
+  it('never calls a delete done unless the sandbox is destroyed', async () => {
+    const { client } = clientAnswering(200, { sandbox: { id: SBX, status: 'running' } })
+    await expect(client.destroy(SBX)).rejects.toMatchObject({ code: 'not_destroyed' })
+  })
+
+  it('reads a sleep answered with the suspended sandbox as done', async () => {
+    const { client, fetch } = clientAnswering(200, { sandbox: { id: SBX, status: 'suspended' } })
+    await expect(client.sleep(SBX)).resolves.toBeUndefined()
+    expect(String(fetch.mock.calls[0]![0])).toBe(
+      `https://cp.example.test/v1/sandboxes/${SBX}/suspend`
+    )
+  })
+})
