@@ -11,7 +11,13 @@ export type CloudRemoteDesktopToastState =
   | { kind: 'starting'; slow: boolean }
   | { kind: 'failed'; code: CloudRemoteDesktopFailureCode }
 
-type FailureCopy = { title: string; detail: string; action: CloudRemoteDesktopNextAction | null }
+type FailureCopy = {
+  title: string
+  detail: string
+  action: CloudRemoteDesktopNextAction | null
+  /** Asleep and starting are states, not errors. */
+  tone?: 'neutral'
+}
 
 function failureCopy(t: Translate, code: CloudRemoteDesktopFailureCode): FailureCopy {
   switch (code) {
@@ -29,12 +35,36 @@ function failureCopy(t: Translate, code: CloudRemoteDesktopFailureCode): Failure
       }
     case 'not_running':
       return {
-        title: t('components.cloudRemoteDesktop.asleepTitle', 'This workspace is asleep.'),
+        title: t('components.cloudRemoteDesktop.asleepTitle', 'This sandbox is asleep.'),
         detail: t(
           'components.cloudRemoteDesktop.asleepDetail',
           'Wake it, then open the remote desktop again. Your files are safe.'
         ),
-        action: 'wake'
+        action: 'wake',
+        tone: 'neutral'
+      }
+    case 'archived':
+      return {
+        title: t('components.cloudRemoteDesktop.archivedTitle', 'This sandbox is archived.'),
+        detail: t(
+          'components.cloudRemoteDesktop.archivedDetail',
+          'Unarchive the workspace to use the remote desktop again. Your files are safe.'
+        ),
+        action: null,
+        tone: 'neutral'
+      }
+    case 'starting':
+      return {
+        title: t(
+          'components.cloudRemoteDesktop.startingTitle',
+          'The sandbox is still starting or waking.'
+        ),
+        detail: t(
+          'components.cloudRemoteDesktop.startingDetail',
+          'Try again in a moment. Your files are safe.'
+        ),
+        action: 'retry',
+        tone: 'neutral'
       }
     case 'not_installed':
       return {
@@ -90,7 +120,7 @@ function failureCopy(t: Translate, code: CloudRemoteDesktopFailureCode): Failure
 function actionLabel(t: Translate, action: CloudRemoteDesktopNextAction): string {
   switch (action) {
     case 'wake':
-      return t('components.cloudRemoteDesktop.wake', 'Wake workspace')
+      return t('components.cloudRemoteDesktop.wake', 'Wake sandbox')
     case 'sign_in':
       return t('components.cloudRemoteDesktop.signIn', 'Sign in')
     case 'create_workspace':
@@ -146,6 +176,7 @@ export function CloudRemoteDesktopToast({
       <InlineError
         title={copy.title}
         detail={copy.detail}
+        tone={copy.tone}
         layout="toast"
         action={
           copy.action ? (

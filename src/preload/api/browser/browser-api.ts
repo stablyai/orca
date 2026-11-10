@@ -212,6 +212,12 @@ export type BrowserApi = {
   ) => () => void
   /** Escape pressed in a focused page; the page also receives it unless a grab pick is running. */
   onGuestEscape: (callback: (args: { browserPageId: string }) => void) => () => void
+  /** A browser page became (or stopped being) a remote desktop, or gained or lost the keyboard. */
+  onRemoteDesktopState: (
+    callback: (args: { browserPageId: string; desktop: boolean; captured: boolean }) => void
+  ) => () => void
+  /** The release chord was pressed in a remote desktop: give the keyboard back to Orca. */
+  onRemoteDesktopRelease: (callback: (args: { browserPageId: string }) => void) => () => void
   sessionListProfiles: () => Promise<BrowserSessionProfile[]>
   onSessionProfilesChanged: (callback: () => void) => () => void
   /** Resolves once the SSH workspace's partition is bound and proxy-verified; the webview must wait for it. */

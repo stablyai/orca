@@ -182,6 +182,9 @@ export type WorktreeSlice = {
       provisioningLog?: string
       provisioningLogStamps?: PendingWorktreeCreation['provisioningLogStamps']
       environmentCheck?: PendingWorktreeCreation['environmentCheck']
+      waitingSince?: number
+      pausedMs?: number
+      resumedAt?: number
       vmEnvironmentId?: string
       checkoutProgress?: PendingWorktreeCreation['checkoutProgress']
       worktreeId?: string

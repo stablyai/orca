@@ -152,12 +152,16 @@ export const HostedSandboxListResponseSchema = z
   .object({ sandboxes: z.array(HostedSandboxViewSchema).max(1000) })
   .strict()
 
-/** `POST /v1/sandboxes/:id/desktop`: the remote desktop's port on the VM's loopback, never a public route. */
+/**
+ * `POST /v1/sandboxes/:id/desktop`: the remote desktop's port on the VM's loopback (never a public
+ * route) and a fresh single-use ticket for one WebSocket to it. Each call mints a new ticket.
+ */
 export const HostedSandboxDesktopResponseSchema = z.object({
   desktop: z.object({
     port: z.number().int().min(1024).max(65_535),
     path: z.string().regex(/^[A-Za-z0-9._-]{1,64}$/),
-    password: z.string().regex(/^[A-Za-z0-9]{8}$/)
+    ticket: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+    expiresInMs: z.number().int().min(1_000).max(300_000)
   })
 })
 

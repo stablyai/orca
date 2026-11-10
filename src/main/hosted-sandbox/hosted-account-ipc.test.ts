@@ -35,6 +35,22 @@ it('opens only a github.com page for Connect GitHub', async () => {
   expect(openExternal).toHaveBeenCalledOnce()
 })
 
+it('re-reads the config after 5 minutes so a new build sheet sees a fresh median', async () => {
+  vi.useFakeTimers({ now: 0 })
+  try {
+    const config = register('https://github.com/x')
+    await handlers.get(CH.getConfig)?.()
+    vi.setSystemTime(4 * 60_000)
+    await handlers.get(CH.getConfig)?.()
+    expect(config).toHaveBeenCalledTimes(1)
+    vi.setSystemTime(5 * 60_000)
+    await handlers.get(CH.getConfig)?.()
+    expect(config).toHaveBeenCalledTimes(2)
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
 it('reads the config once, and again after a failed read', async () => {
   let fail = true
   const config = vi.fn(async () => {

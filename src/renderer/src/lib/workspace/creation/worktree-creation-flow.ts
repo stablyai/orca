@@ -198,6 +198,9 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
     provisioningLog: undefined,
     provisioningLogStamps: undefined,
     environmentCheck: undefined,
+    waitingSince: undefined,
+    pausedMs: undefined,
+    resumedAt: undefined,
     checkoutProgress: undefined,
     worktreeId: undefined
   })

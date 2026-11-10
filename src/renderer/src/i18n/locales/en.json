@@ -4095,7 +4095,6 @@
             "outOfHoursBodyMember": "Your team has used this month’s sandbox hours. Ask an owner or admin to add hours. Nothing was created, and you weren’t charged.",
             "spendCapReachedTitle": "Spend cap reached",
             "spendCapReachedBody": "Your team has reached this month’s spend cap. Raise it to keep starting sandboxes. Nothing was created, and you weren’t charged.",
-            "spendCapReachedBodyMember": "Your team has reached this month’s spend cap. Ask an owner or admin to add hours. Nothing was created, and you weren’t charged.",
             "paymentFailedTitle": "Payment failed",
             "paymentFailedBody": "New sandboxes can’t start until the payment goes through. Nothing was created, and you weren’t charged.",
             "paymentFailedBodyMember": "New sandboxes can’t start until the payment goes through. Ask an owner or admin to update the payment method. Nothing was created, and you weren’t charged.",
@@ -4113,7 +4112,8 @@
             "snapshotBody3": "The sandbox starts from a saved copy of your environment, and that copy couldn’t be found. Nothing was created, and you weren’t charged. Try again, or contact support if it keeps happening.",
             "connectGitHubFailed": "Couldn’t open GitHub. Try again in a moment.",
             "noGithubRemoteBody2": "Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub, then try again. Nothing was created, and you weren’t charged.",
-            "howToPushToGitHub": "How to push to GitHub"
+            "howToPushToGitHub": "How to push to GitHub",
+            "spendCapReachedBodyMember2": "Your team has reached this month’s spend cap. Ask an owner or admin to raise the spend cap. Nothing was created, and you weren’t charged."
           },
           "VmBuildLog": {
             "jumpToError": "Jump to first error",
@@ -4132,7 +4132,6 @@
             "connecting": "Connecting to the sandbox…",
             "resuming": "Waking the sandbox…",
             "suspending": "Putting the sandbox to sleep…",
-            "rollingOver": "Starting a fresh session…",
             "destroying": "Deleting the sandbox…",
             "denyNoPlan": "Your account has no active Team plan.",
             "denySpendCap": "This month’s spend cap is reached.",
@@ -4150,7 +4149,8 @@
             "denyConcurrency2": "You’re at your team’s limit of running sandboxes.",
             "denyMemberConcurrency2": "You’re at your limit of running sandboxes.",
             "denyMachineSize2": "This sandbox size isn’t part of your plan.",
-            "refusedProvider2": "Orca Cloud is unavailable right now."
+            "refusedProvider2": "Orca Cloud is unavailable right now.",
+            "rollingOver2": "Restarting the sandbox…"
           },
           "environmentCheckCopy": {
             "gitMissing": "git isn’t installed.",
@@ -20907,6 +20907,13 @@
         "title": "Orca refused this browser",
         "retry": "Try again"
       }
+    },
+    "app": {
+      "shell": {
+        "TitlebarMainStrip": {
+          "sidebarAfterBuild": "Available when the workspace is ready"
+        }
+      }
     }
   },
   "components": {
@@ -22873,7 +22880,7 @@
       "retry": "Try again",
       "notCloudTitle": "Remote desktop is only available in cloud workspaces.",
       "notCloudDetail": "Create a cloud workspace to run apps with a screen.",
-      "asleepTitle": "This workspace is asleep.",
+      "asleepTitle": "This sandbox is asleep.",
       "asleepDetail": "Wake it, then open the remote desktop again. Your files are safe.",
       "notInstalledTitle": "This sandbox doesn’t have a remote desktop yet.",
       "notInstalledDetail": "It was created before remote desktop was available. New cloud workspaces include it. Your files are safe.",
@@ -22883,12 +22890,25 @@
       "forwardFailedDetail": "The desktop is running in the sandbox. Your files are safe.",
       "unavailableTitle": "Couldn’t start the remote desktop.",
       "unavailableDetail": "Orca Cloud didn’t respond in time. Your files are safe.",
-      "wake": "Wake workspace",
+      "wake": "Wake sandbox",
       "signIn": "Sign in",
       "createWorkspace": "Create workspace",
       "slowDetail": "The first start in a sandbox can take up to a minute.",
       "dismiss": "Dismiss",
-      "openMenuItem": "Open remote desktop"
+      "openMenuItem": "Open remote desktop",
+      "startingTitle": "The sandbox is still starting or waking.",
+      "archivedTitle": "This sandbox is archived.",
+      "archivedDetail": "Unarchive the workspace to use the remote desktop again. Your files are safe.",
+      "startingDetail": "Try again in a moment. Your files are safe.",
+      "keyboardCaptured": "Keys go to the remote desktop. Press <kbd>{{chord}}</kbd> to use Orca shortcuts.",
+      "keyboardReleased": "Orca shortcuts are back. Click the desktop to type in it.",
+      "pageAsleep": "This sandbox is asleep. Wake it in Orca, then reconnect.",
+      "pageArchived": "This sandbox is archived. Unarchive the workspace in Orca, then reconnect.",
+      "pageStarting": "The sandbox is starting or waking. Reconnect in a moment.",
+      "pageSignedOut": "You’re signed out of Orca Cloud. Sign in, then reconnect.",
+      "pageDisconnected": "The remote desktop disconnected. Your files are safe.",
+      "reconnect": "Reconnect",
+      "beta": "Beta"
     },
     "orcaCloud": {
       "offline": {

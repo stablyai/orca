@@ -14,7 +14,10 @@ describe('POST /v1/sandboxes/:id/desktop', () => {
   it("runs only the image's desktop entry point and returns its loopback port", async () => {
     const { h, id } = await running()
     const response = await h.call('POST', `/v1/sandboxes/${id}/desktop`)
-    expect(response).toEqual({ status: 200, body: { desktop: { port: 6080, path: 'vnc.html', password: 'Ab3dE6gH' } } })
+    expect(response).toEqual({
+      status: 200,
+      body: { desktop: { port: 6080, path: 'vnc.html', ticket: 't'.repeat(43), expiresInMs: 60000 } }
+    })
     const ran = h.vercel.commands.filter((c) => c.command === DESKTOP_COMMAND)
     expect(ran).toHaveLength(1)
     expect(ran[0]!.env).toEqual({})
@@ -36,11 +39,24 @@ describe('POST /v1/sandboxes/:id/desktop', () => {
       status: 502,
       body: { error: 'provider_unavailable', reason: 'desktop_start_failed' }
     })
-    h.vercel.desktop = { exitCode: 0, stdout: '{"schemaVersion":1,"port":6080,"display":":1","path":"vnc.html","password":"short"}' }
+    h.vercel.desktop = { exitCode: 0, stdout: '{"schemaVersion":2,"port":6080,"display":":1","path":"vnc.html","ticket":"short","expiresInMs":60000}' }
     expect(await h.call('POST', `/v1/sandboxes/${id}/desktop`)).toEqual({
       status: 502,
       body: { error: 'provider_unavailable', reason: 'desktop_ready_invalid' }
     })
+    // An older entry point (VNC password, no ticket) is never passed through.
+    h.vercel.desktop = { exitCode: 0, stdout: '{"schemaVersion":1,"port":6080,"display":":1","path":"vnc.html","password":"Ab3dE6gH"}' }
+    expect((await h.call('POST', `/v1/sandboxes/${id}/desktop`)).body).toEqual({
+      error: 'provider_unavailable',
+      reason: 'desktop_ready_invalid'
+    })
+  })
+
+  it('mints a fresh ticket on every call (a reconnect needs its own)', async () => {
+    const { h, id } = await running()
+    await h.call('POST', `/v1/sandboxes/${id}/desktop`)
+    await h.call('POST', `/v1/sandboxes/${id}/desktop`)
+    expect(h.vercel.commands.filter((c) => c.command === DESKTOP_COMMAND)).toHaveLength(2)
   })
 
   it('refuses a suspended sandbox and hides other accounts\' sandboxes', async () => {
