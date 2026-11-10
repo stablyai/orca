@@ -45,7 +45,7 @@ export async function roleForCloudError(
   return readCloudRole(plane, signal).catch(() => null)
 }
 
-function problem(denial: Denial, t: Translate): string {
+function problem(denial: Denial, when: 'create' | 'existing', t: Translate): string {
   switch (denial) {
     case 'hours':
       return t('cloud.denied.hours', 'Out of sandbox hours.')
@@ -61,16 +61,35 @@ function problem(denial: Denial, t: Translate): string {
         'Your team is at its limit of running sandboxes (3 per seat).'
       )
     case 'memberLimit':
-      return t('cloud.denied.memberLimit', 'You’re at your limit of running sandboxes.')
+      // The per-seat cap counts the workspace owner's seat, not the seat of whoever wakes it, and
+      // the phone can't always tell whose workspace this is, so an existing one names the owner.
+      return when === 'create'
+        ? t('cloud.denied.memberLimit', 'You’re at your limit of running sandboxes.')
+        : t(
+            'cloud.denied.ownerSeatLimit',
+            'The workspace owner is at their limit of running sandboxes, and this workspace runs on their seat.'
+          )
     case 'other':
       return t('cloud.denied.other', 'Your team’s plan doesn’t allow this right now.')
   }
 }
 
-function nextStep(denial: Denial, manager: boolean, t: Translate): string {
+function nextStep(
+  denial: Denial,
+  manager: boolean,
+  when: 'create' | 'existing',
+  t: Translate
+): string {
   switch (denial) {
-    case 'teamLimit':
     case 'memberLimit':
+      if (when === 'existing') {
+        return t(
+          'cloud.denied.next.ownerSeatLimit',
+          'Ask them to put one to sleep (or put one to sleep yourself if it’s your workspace), then try again.'
+        )
+      }
+      return t('cloud.denied.next.limit', 'Put one to sleep or delete it, then try again.')
+    case 'teamLimit':
       return t('cloud.denied.next.limit', 'Put one to sleep or delete it, then try again.')
     case 'hours':
       return manager
@@ -114,11 +133,11 @@ export function entitlementDeniedMessage(
   const denial = denialOf(error.reason)
   const manager = role === 'owner' || role === 'admin'
   return t('cloud.denied.message', '{{problem}} {{safety}} {{next}}', {
-    problem: problem(denial, t),
+    problem: problem(denial, when, t),
     safety:
       when === 'create'
         ? t('cloud.denied.safety.create', 'Nothing was created, and you weren’t charged.')
         : t('cloud.denied.safety.existing', 'Your files are safe.'),
-    next: nextStep(denial, manager, t)
+    next: nextStep(denial, manager, when, t)
   })
 }
