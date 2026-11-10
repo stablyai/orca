@@ -101,7 +101,7 @@ import { forgetShareLink, handleShareGateway } from './share-gateway'
 import { handleShareRoute, revokeSandboxShares, sharePathMode, shareSecret, shareSecrets } from './share-links'
 import { SshKeyRequestSchema, updateSshKey } from './ssh-access'
 import { audit } from './api/audit'
-import { getSandbox, getSandboxByProviderName, listAccountSandboxes, type SandboxRow } from './store'
+import { getSandbox, getSandboxByProviderName, listAccountSandboxes, markUserSlept, type SandboxRow } from './store'
 import { createVercelSandboxApi } from './vercel-sandbox-api'
 import { advanceAllBuilds, tickBuild, unfinishedBuilds, type BuildDeps } from './environment-builds'
 import { environmentErrorResponse, handleEnvironmentRoute, isEnvironmentRoute } from './environment-routes'
@@ -114,6 +114,7 @@ import {
   readArchive,
   restartSandbox,
   unarchiveSandbox,
+  wakeHints,
   wakeSandbox,
   workspaceStatus,
   type WorkspaceConfig
@@ -1059,6 +1060,8 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
     const archivedAware = features.includes('archive')
     // Older desktops parse status strictly: the new field only goes to clients that ask for it.
     const idleMinutesAware = features.includes('idle-minutes')
+    // Predictive wake: the last deliberate sleep and the seat's running count, for clients that ask.
+    const wakeHintsAware = features.includes('wake-hints')
     const view = (row: SandboxRow) => sandboxView(row, archivedAware)
     if (!id) {
       if (request.method === 'GET') {
@@ -1115,8 +1118,19 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         ])
         return json({ sandbox: view(destroyed) })
       }
-      case 'POST suspend':
-        return json({ sandbox: view(await suspendSandbox(life, row)) })
+      case 'POST suspend': {
+        // `{ reason: 'idle' }` is the desktop's idle timer; anything else (no body: CLI, phone,
+        // older desktops) is someone choosing to sleep it, which predictive wake must respect.
+        const body = (await readJson(request).catch(() => ({}))) as { reason?: unknown } | null
+        const suspended = await suspendSandbox(life, row)
+        if (body?.reason !== 'idle') {
+          // A hint only: the sleep itself already happened, so a failed write never fails it.
+          await markUserSlept(life.db, row.id, life.now()).catch((error: unknown) =>
+            console.log(JSON.stringify({ event: 'user_slept_write_failed', error: String(error) }))
+          )
+        }
+        return json({ sandbox: view(suspended) })
+      }
       case 'POST resume': {
         const ready = await resumeSandbox(life, row)
         await recordOwnerDeviceAndSync(life, ready.row, ready.connection.pairingCode)
@@ -1138,8 +1152,14 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       }
       case 'GET status':
       {
-        const { idleSleepMinutes, ...status } = await workspaceStatus(life, row, workspaceConfig(env, deps))
-        return json({ sandbox: view(row), status: idleMinutesAware ? { ...status, idleSleepMinutes } : status })
+        const [{ idleSleepMinutes, ...status }, hints] = await Promise.all([
+          workspaceStatus(life, row, workspaceConfig(env, deps)),
+          wakeHintsAware ? wakeHints(life.db, row) : null
+        ])
+        return json({
+          sandbox: view(row),
+          status: { ...status, ...(idleMinutesAware ? { idleSleepMinutes } : {}), ...(hints ?? {}) }
+        })
       }
       case 'POST archive': {
         const body = ArchiveRequestSchema.safeParse(await readJson(request, MAX_ARCHIVE_JSON_BYTES))

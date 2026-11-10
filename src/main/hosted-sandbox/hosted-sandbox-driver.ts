@@ -22,6 +22,7 @@ import type {
   HostedStatusSnapshot
 } from './hosted-environment-provider'
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
+import { takeSuspendReason } from './idle-sleep-requests'
 
 export const HOSTED_SANDBOX_DRIVER_ID = 'orca-cloud'
 
@@ -83,7 +84,8 @@ export function createHostedSandboxDriver(
 
     async suspend(handle, ctx) {
       ctx?.onProgress?.({ phase: 'suspending' })
-      return toSnapshot(await client.suspend(sandboxIdOf(handle), ctx?.signal))
+      const sandboxId = sandboxIdOf(handle)
+      return toSnapshot(await client.suspend(sandboxId, ctx?.signal, takeSuspendReason(sandboxId)))
     },
 
     async destroy(handle, ctx) {

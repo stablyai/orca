@@ -27,6 +27,7 @@ import { HOSTED_SANDBOX_DRIVER_ID } from './hosted-sandbox-driver'
 import { createHostedRuntimeEnvironmentCall } from './hosted-runtime-environment-call'
 import type { HostedActivitySample } from './hosted-session-lease-policy'
 import { HostedSessionLeaseScheduler } from './hosted-session-lease-scheduler'
+import { noteIdleSleepRequested } from './idle-sleep-requests'
 import { cloudSshActiveAt } from '../cloud-ssh/cloud-ssh-activity'
 import { getRuntimePortForwardManager } from '../runtime-port-forward/runtime-port-forward-manager'
 
@@ -160,6 +161,11 @@ export function createHostedSessionRegistry(deps: {
       onSuspended: () =>
         log(`[orca-cloud] idle sleep requested for ${runtime.workspaceName ?? runtime.id}`),
       suspend: async () => {
+        // The window's Sleep that follows reaches the control plane as the idle timer's.
+        const sandboxId = handle.driverState.sandboxId
+        if (typeof sandboxId === 'string' && sandboxId) {
+          noteIdleSleepRequested(sandboxId)
+        }
         const event: HostedSessionIdleSleepEvent = {
           workspaceId: runtime.workspaceId ?? null,
           idleMs: deps.driver.capabilities.idleStopMs ?? null

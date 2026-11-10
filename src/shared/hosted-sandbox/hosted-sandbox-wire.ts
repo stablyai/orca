@@ -231,6 +231,13 @@ export const HostedWorkspaceStatusSchema = z
     archive: z.object({ archivedAt: Millis, expiresAt: Millis.nullable() }).strict().nullable(),
     // Optional: older control planes omit it; the desktop then uses its 15 min fallback.
     idleSleepMinutes: z.number().int().positive().max(1440).optional(),
+    // Optional (feature `wake-hints`): predictive wake's inputs. The last sleep someone chose, from
+    // any client (not the idle timer), and sandboxes running against the owner's seat and account.
+    lastUserSleepAt: Millis.nullable().optional(),
+    running: z
+      .object({ owner: z.number().int().nonnegative(), account: z.number().int().nonnegative() })
+      .strip()
+      .optional(),
     checkedAt: Millis
   })
   // Strip, not strict: a newer control plane may add fields; this desktop ignores them.

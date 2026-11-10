@@ -43,7 +43,12 @@ export type HostedSandboxControlPlaneClient = {
   ): Promise<HostedSandboxReadyResponse>
   get(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxView>
   list(signal?: AbortSignal): Promise<HostedSandboxView[]>
-  suspend(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxView>
+  /** `reason` 'idle' is the idle timer; 'user' (or none) is a sleep someone chose. */
+  suspend(
+    sandboxId: string,
+    signal?: AbortSignal,
+    reason?: 'idle' | 'user'
+  ): Promise<HostedSandboxView>
   resume(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxReadyResponse>
   renewLease(sandboxId: string, extendMs: number, signal?: AbortSignal): Promise<HostedSandboxView>
   rollover(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxReadyResponse>
@@ -111,9 +116,10 @@ export function createHostedSandboxControlPlaneClient(
           signal
         })
       ).sandboxes,
-    suspend: async (id, signal) =>
+    suspend: async (id, signal, reason) =>
       (
         await call('POST', sandboxPath(id, '/suspend'), HostedSandboxStatusResponseSchema, {
+          ...(reason ? { body: { reason } } : {}),
           kind: 'control',
           signal
         })

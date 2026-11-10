@@ -11,7 +11,12 @@ import {
 } from './cloud-predictive-wake'
 
 function harness(
-  overrides: { enabled?: boolean; candidates?: Set<string>; refuse?: boolean } = {}
+  overrides: {
+    enabled?: boolean
+    candidates?: Set<string>
+    refuse?: boolean
+    preflight?: (id: string) => Promise<boolean>
+  } = {}
 ) {
   let now = 1_000_000
   const timers: { at: number; run: () => void; id: number }[] = []
@@ -24,6 +29,7 @@ function harness(
     now: () => now,
     isEnabled: () => overrides.enabled ?? true,
     isWakeCandidate: (id) => candidates.has(id),
+    ...(overrides.preflight ? { preflight: overrides.preflight } : {}),
     wake: (id) => {
       woken.push(id)
       return new Promise<boolean>((resolve) => {
@@ -191,6 +197,51 @@ describe('predictive wake', () => {
     h.controller.hoverStart('ws-a')
     h.controller.select('ws-b')
     await h.advance(HOVER_DWELL_MS)
+    expect(h.woken).toEqual([])
+  })
+
+  it('a drag cancels a pending hover wake and arms nothing until it ends', async () => {
+    const h = harness()
+    h.controller.hoverStart('ws-a')
+    await h.advance(HOVER_DWELL_MS - 100)
+    h.controller.dragStart()
+    await h.advance(HOVER_DWELL_MS)
+    h.controller.hoverStart('ws-b')
+    h.controller.select('ws-c')
+    await h.advance(HOVER_DWELL_MS + SELECT_DEBOUNCE_MS)
+    expect(h.woken).toEqual([])
+    h.controller.dragEnd()
+    h.controller.hoverStart('ws-b')
+    await h.advance(HOVER_DWELL_MS)
+    expect(h.woken).toEqual(['ws-b'])
+  })
+
+  it('a server preflight that says no skips the wake quietly, with no backoff and no held slot', async () => {
+    let allow = false
+    const checked: string[] = []
+    const h = harness({
+      preflight: async (id) => {
+        checked.push(id)
+        return allow
+      }
+    })
+    h.controller.select('ws-a')
+    await h.advance(SELECT_DEBOUNCE_MS)
+    expect(checked).toEqual(['ws-a'])
+    expect(h.woken).toEqual([])
+    expect(h.controller.inFlight().size).toBe(0)
+    expect(h.controller.awakeUnopened().size).toBe(0)
+    // Not a refusal: the next intent asks the server again rather than waiting out a backoff.
+    allow = true
+    h.controller.select('ws-a')
+    await h.advance(SELECT_DEBOUNCE_MS)
+    expect(h.woken).toEqual(['ws-a'])
+  })
+
+  it('a preflight that throws counts as no', async () => {
+    const h = harness({ preflight: () => Promise.reject(new Error('offline')) })
+    h.controller.select('ws-a')
+    await h.advance(SELECT_DEBOUNCE_MS)
     expect(h.woken).toEqual([])
   })
 })

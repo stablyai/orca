@@ -25,7 +25,15 @@ import {
   type ArchiveMetadata,
   type VmMetrics
 } from './sandbox-vm-inspect'
-import { NO_SESSION, getSandbox, sandboxUsageMs, transition, type SandboxRow } from './store'
+import {
+  NO_SESSION,
+  countActiveSandboxes,
+  countActiveSandboxesForUser,
+  getSandbox,
+  sandboxUsageMs,
+  transition,
+  type SandboxRow
+} from './store'
 import { flushUsage } from './usage'
 
 const DAY_MS = 86_400_000
@@ -377,6 +385,24 @@ export async function workspaceStatus(deps: LifecycleDeps, input: SandboxRow, co
     idleSleepMinutes: config.idleSleepMinutes ?? DEFAULT_IDLE_SLEEP_MINUTES,
     checkedAt: now
   }
+}
+
+/**
+ * What a desktop needs before waking a sandbox on a guess (predictive wake): when someone last put
+ * it to sleep on purpose, from any client, and how many sandboxes already run against the owner's
+ * seat (the per-member cap counts `row.user_id`, not the caller) and the account.
+ */
+export type WakeHints = {
+  lastUserSleepAt: number | null
+  running: { owner: number; account: number }
+}
+
+export async function wakeHints(db: D1Database, row: SandboxRow): Promise<WakeHints> {
+  const [owner, account] = await Promise.all([
+    countActiveSandboxesForUser(db, row.account_id, row.user_id),
+    countActiveSandboxes(db, row.account_id)
+  ])
+  return { lastUserSleepAt: row.user_slept_at ?? null, running: { owner, account } }
 }
 
 export { getSandbox }

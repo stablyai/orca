@@ -352,3 +352,38 @@ describe('idle sleep minutes', () => {
     expect((await statusOf(custom, made.sandbox.id, 'idle-minutes')).idleSleepMinutes).toBe(7)
   })
 })
+
+describe('wake hints', () => {
+  const statusOf = async (h: Awaited<ReturnType<typeof createHarness>>, id: string, features?: string) => {
+    const response = await h.send(
+      new Request(`https://sandbox.test/v1/sandboxes/${id}/status`, {
+        headers: {
+          authorization: `Bearer ${await h.token('alice')}`,
+          ...(features ? { 'x-orca-sandbox-features': features } : {})
+        }
+      })
+    )
+    return ((await response.json()) as any).status
+  }
+
+  it('records a chosen sleep (no body: CLI, phone, older desktops) but not the idle timer, and counts running sandboxes for the seat', async () => {
+    const { h, id } = await running()
+    // Only clients that ask see the hints.
+    expect((await statusOf(h, id)).running).toBeUndefined()
+    const awake = HostedWorkspaceStatusResponseSchema.parse({
+      sandbox: (await h.call('GET', `/v1/sandboxes/${id}`)).body.sandbox,
+      status: await statusOf(h, id, 'archive,idle-minutes,wake-hints')
+    }).status
+    expect(awake).toMatchObject({ lastUserSleepAt: null, running: { owner: 1, account: 1 } })
+
+    expect((await h.call('POST', `/v1/sandboxes/${id}/suspend`, { body: { reason: 'idle' } })).status).toBe(200)
+    const idle = await statusOf(h, id, 'wake-hints')
+    expect(idle).toMatchObject({ state: 'sleeping', lastUserSleepAt: null, running: { owner: 0, account: 0 } })
+
+    await h.call('POST', `/v1/sandboxes/${id}/resume`)
+    h.advance(60_000)
+    const sleptAt = h.now()
+    expect((await h.call('POST', `/v1/sandboxes/${id}/suspend`)).status).toBe(200)
+    expect((await statusOf(h, id, 'wake-hints')).lastUserSleepAt).toBe(sleptAt)
+  })
+})
