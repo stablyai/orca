@@ -13,7 +13,7 @@ const HOST = deriveHostCacheKey('host-a')
 
 function buildResult(options: {
   buildId?: string
-  assets?: readonly { path: string; byteLength: number }[]
+  assets?: readonly { path: string; byteLength: number; kind?: string }[]
   bytes?: ReadonlyMap<string, Uint8Array>
 }): MobileWebBundleFetchResult {
   const listed = options.assets ?? [
@@ -24,7 +24,8 @@ function buildResult(options: {
     path: asset.path,
     sha256: String(index).repeat(64).slice(0, 64),
     byteLength: asset.byteLength,
-    contentType: 'text/html; charset=utf-8'
+    contentType: 'text/html; charset=utf-8',
+    ...(asset.kind === undefined ? {} : { kind: asset.kind })
   }))
   const totalBytes = assets.reduce((sum, asset) => sum + asset.byteLength, 0)
   return {
@@ -74,5 +75,26 @@ describe('an update staged behind a live page', () => {
     release()
     expect((await store.readActiveGeneration(HOST))?.buildId).toBe(SECOND_BUILD)
     expect(await fs.fileExists(`${ROOT}/${HOST}/generations/${BUILD}/index.html`)).toBe(false)
+  })
+
+  it('stages a build without its language-catalog chunks and still commits it at the next launch', async () => {
+    const fs = createFakeFileSystem()
+    const first = createGenerationStore({ fileSystem: fs })
+    await activate(first, HOST)
+    first.holdGeneration(HOST)
+    const withCatalog = buildResult({
+      assets: [
+        { path: 'index.html', byteLength: 8 },
+        { path: 'assets/de.js', byteLength: 3, kind: 'catalog' }
+      ],
+      bytes: new Map([['index.html', new Uint8Array(8)]])
+    })
+    first.deferCommit(await first.stageGeneration(HOST, withCatalog))
+
+    const relaunched = createGenerationStore({ fileSystem: fs })
+
+    const build = withCatalog.manifest.buildId
+    expect((await relaunched.readActiveGeneration(HOST))?.buildId).toBe(build)
+    expect(await fs.fileExists(`${ROOT}/${HOST}/generations/${build}/assets/de.js`)).toBe(false)
   })
 })

@@ -17,6 +17,7 @@ import { CREATE_WORKSPACE_QUICK_ACTION_ID } from '@/components/cmd-j/quick-actio
 import type { CREATE_WORKTREE_ITEM_ID } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
 
 import type { CmdJTaskSearchResult } from '../cmd-j/task-search-results'
+import type { PaletteExtraResult } from '../cmd-j/palette-extra-results'
 
 export type TaskPaletteItem = { id: string; type: 'task'; result: CmdJTaskSearchResult }
 
@@ -63,6 +64,13 @@ export type ProjectTargetPaletteItem = {
   result: CmdJProjectSearchResult & Pick<CmdJRankedProjectSearchResult, 'qualityClass'>
 }
 
+export type ExtraPaletteItem = {
+  id: string
+  type: 'extra'
+  sourceId: string
+  result: PaletteExtraResult
+}
+
 export type SectionHeader = { id: string; type: 'section-header'; label: string }
 export type HintRow = {
   id: string
@@ -84,6 +92,7 @@ export type PaletteItem =
   | BrowserPaletteItem
   | SimulatorPaletteItem
   | WorkspaceTabPaletteItem
+  | ExtraPaletteItem
 
 export type PaletteListEntry = PaletteItem | CreateWorktreePaletteItem | SectionHeader | HintRow
 export type OpenTabPaletteItem = BrowserPaletteItem | SimulatorPaletteItem | WorkspaceTabPaletteItem

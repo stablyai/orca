@@ -208,6 +208,6 @@ describe('MobileNativeChatView', () => {
   })
 })
 
-vi.mock('../MobileQueuedMessageComposer', () => ({
+vi.mock('./input/MobileQueuedMessageComposer', () => ({
   MobileQueuedMessageComposer: 'QueuedMessageComposer'
 }))

@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
+import type { MobileNativeChatSendIntent } from './mobile-native-chat-send'
 import type { MobileNativeChatInputLockReason } from '../MobileNativeChatView'
 import { resetMobileNativeChatDraftStoreForTests } from './mobile-native-chat-draft-store'
 import {
