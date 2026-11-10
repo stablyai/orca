@@ -5,6 +5,14 @@ import { CloudAgentSetupView } from './CloudAgentSetupView'
 import { VmBuildCloudAgentStepView } from './VmBuildCloudAgentStep'
 
 const NONE = { claude: null, codex: null }
+
+function keyInput(): HTMLInputElement {
+  const input = document.querySelector<HTMLInputElement>('input[type="password"]')
+  if (!input) {
+    throw new Error('no key field')
+  }
+  return input
+}
 const actions = {
   onSave: async () => null,
   onDone: vi.fn(),
@@ -56,7 +64,10 @@ describe('VmBuildCloudAgentStepView', () => {
     expect(document.querySelector('[data-vm-build-cloud-agent]')).toBe(row)
     expect(document.activeElement).toBe(row)
     const next = screen.getByRole('button', { name: 'next row' })
-    fireEvent.blur(row as HTMLElement, { relatedTarget: next })
+    if (!row) {
+      throw new Error('no row')
+    }
+    fireEvent.blur(row, { relatedTarget: next })
     await waitFor(() => expect(document.querySelector('[data-vm-build-cloud-agent]')).toBeNull())
   })
 
@@ -85,7 +96,7 @@ describe('CloudAgentSetupView Escape', () => {
 
   it('closes at once when nothing was typed', () => {
     const onCancel = renderView()
-    fireEvent.keyDown(document.querySelector('input[type="password"]') as Element, {
+    fireEvent.keyDown(keyInput(), {
       key: 'Escape'
     })
     expect(onCancel).toHaveBeenCalledTimes(1)
@@ -93,7 +104,7 @@ describe('CloudAgentSetupView Escape', () => {
 
   it('asks before discarding a typed key, and a second Escape discards', () => {
     const onCancel = renderView()
-    const key = document.querySelector('input[type="password"]') as HTMLInputElement
+    const key = keyInput()
     fireEvent.change(key, { target: { value: 'sk-ant-api03-abc' } })
     fireEvent.keyDown(key, { key: 'Escape' })
     expect(onCancel).not.toHaveBeenCalled()
@@ -104,7 +115,7 @@ describe('CloudAgentSetupView Escape', () => {
 
   it('drops the question once the key is cleared', () => {
     const onCancel = renderView()
-    const key = document.querySelector('input[type="password"]') as HTMLInputElement
+    const key = keyInput()
     fireEvent.change(key, { target: { value: 'sk-ant-api03-abc' } })
     fireEvent.keyDown(key, { key: 'Escape' })
     fireEvent.change(key, { target: { value: '' } })
@@ -115,14 +126,12 @@ describe('CloudAgentSetupView Escape', () => {
 
   it('Keep editing keeps the draft', () => {
     const onCancel = renderView()
-    const key = document.querySelector('input[type="password"]') as HTMLInputElement
+    const key = keyInput()
     fireEvent.change(key, { target: { value: 'sk-ant-api03-abc' } })
     fireEvent.keyDown(key, { key: 'Escape' })
     fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }))
     expect(screen.queryByText('Discard the key you typed?')).toBeNull()
-    expect((document.querySelector('input[type="password"]') as HTMLInputElement).value).toBe(
-      'sk-ant-api03-abc'
-    )
+    expect(keyInput().value).toBe('sk-ant-api03-abc')
     expect(onCancel).not.toHaveBeenCalled()
   })
 })

@@ -77,8 +77,8 @@ export function CloudSecretsPasteEnv({
   // A row that leaves the list takes focus with it; land on the given row's first control instead.
   // 'fix' is the first editable row, which is the first one needing a fix since those sort first.
   // Applied after the commit that removes the row, so the target is read from the new list.
-  const pendingFocus = useRef<string | 'fix' | null | undefined>(undefined)
-  const focusRow = (id: string | 'fix' | null): void => {
+  const pendingFocus = useRef<string | null | undefined>(undefined)
+  const focusRow = (id: string | null): void => {
     pendingFocus.current = id
   }
   useEffect(() => {
