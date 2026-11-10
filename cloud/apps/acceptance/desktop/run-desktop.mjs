@@ -152,7 +152,8 @@ async function launchApp(userData, label) {
   const t0 = Date.now()
   // Mock keychain: a fresh dev app identity otherwise blocks Electron's main thread on a macOS
   // Keychain prompt (safeStorage) that nobody can answer on an unattended or locked test Mac.
-  const child = spawn(process.execPath, ['config/scripts/development/launch/run-electron-vite-dev.mjs', '--', '--use-mock-keychain', '--password-store=basic'], {
+  const inspect = process.env.W9D_MAIN_INSPECT ? ['--inspect', process.env.W9D_MAIN_INSPECT] : []
+  const child = spawn(process.execPath, ['config/scripts/development/launch/run-electron-vite-dev.mjs', ...inspect, '--', '--use-mock-keychain', '--password-store=basic'], {
     cwd: repoRoot,
     env: appEnv(userData),
     stdio: ['ignore', 'pipe', 'pipe']
@@ -275,7 +276,8 @@ async function rowOf(name, kind = 'cloud') {
       }
       return null
     }).catch(() => null)
-    if (k === kind) return all.nth(i)
+    // With no cloud workspace in the sidebar, local rows carry no host badge at all.
+    if (k === kind || (kind === 'local' && k === null)) return all.nth(i)
   }
   return null
 }
@@ -559,9 +561,352 @@ async function asleepDeleteCheck(step, name, id) {
   }
 }
 
+/** Composer Agent -> "Blank Terminal" (no agent CLI is launched). True when it sticks. */
+async function selectBlankAgent(d) {
+  const text = async () => (await d.innerText().catch(() => '')).replace(/\s+/g, ' ')
+  if (/Blank Terminal/.test(await text())) return true
+  await d.getByText(/\(CLI\)|Claude|Codex/).first().click({ timeout: 5000 }).catch(() => {})
+  await sleep(500)
+  await page.getByText('Blank Terminal', { exact: true }).last().click({ timeout: 5000 }).catch(() => {})
+  await sleep(500)
+  return /Blank Terminal/.test(await text())
+}
+
+/** One CDP call on a raw target websocket (main-process inspector or a webview guest). */
+async function rawCdp(wsUrl, method, params = {}) {
+  const ws = new WebSocket(wsUrl)
+  await new Promise((resolve, reject) => {
+    ws.onopen = resolve
+    ws.onerror = () => reject(new Error(`cdp connect failed ${wsUrl}`))
+  })
+  try {
+    const res = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`cdp ${method} timed out`)), 30_000)
+      ws.onmessage = (m) => {
+        const d = JSON.parse(typeof m.data === 'string' ? m.data : m.data.toString())
+        if (d.id === 1) {
+          clearTimeout(timer)
+          resolve(d)
+        }
+      }
+      ws.send(JSON.stringify({ id: 1, method, params }))
+    })
+    if (res.error) throw new Error(`${method}: ${res.error.message}`)
+    return res.result
+  } finally {
+    ws.close()
+  }
+}
+async function cdpEval(wsUrl, expression) {
+  const r = await rawCdp(wsUrl, 'Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true, includeCommandLineAPI: true })
+  if (r.exceptionDetails) throw new Error(`eval: ${r.exceptionDetails.exception?.description ?? r.exceptionDetails.text}`)
+  return r.result?.value
+}
+
+/**
+ * The cloud "Download…" always asks where to save with a native macOS Save panel, which CDP can't
+ * drive. Stub only that answer in main (inspector), so the rest of the real flow runs unchanged.
+ */
+async function stubSaveDialog(dir) {
+  const port = process.env.W9D_MAIN_INSPECT
+  if (!port) throw new Error('W9D_MAIN_INSPECT not set')
+  const list = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()
+  const ws = list[0]?.webSocketDebuggerUrl
+  if (!ws) throw new Error('no main-process inspector target')
+  return cdpEval(ws, `(() => {
+    const { dialog } = require('electron')
+    const path = require('path')
+    const dir = ${JSON.stringify(dir)}
+    dialog.showSaveDialog = async (...args) => {
+      const o = args.find((x) => x && typeof x === 'object' && !('webContents' in x)) ?? {}
+      const filePath = path.join(dir, path.basename(o.defaultPath ?? 'download'))
+      globalThis.__w9dSaves = [...(globalThis.__w9dSaves ?? []), { defaultPath: o.defaultPath ?? null, filePath }]
+      return { canceled: false, filePath }
+    }
+    return 'stubbed'
+  })()`)
+}
+
+const sha256File = (f) => spawnSync('shasum', ['-a', '256', f], { encoding: 'utf8' }).stdout.split(/\s+/)[0] || null
+
+/** The shell terminal's sha256sum lines -> {relativePath: sha}. */
+async function vmShas(paths) {
+  await focusTerminal()
+  await page.keyboard.press('Control+U')
+  await page.keyboard.type(`clear; sha256sum ${paths.join(' ')}\n`)
+  const t0 = Date.now()
+  while (Date.now() - t0 < 30_000) {
+    const text = (await visibleTerminals()).join('\n')
+    const out = {}
+    for (const m of text.matchAll(/\b([0-9a-f]{64})\s+(\S+)/g)) out[m[2]] = m[1]
+    if (paths.every((x) => out[x])) return out
+    await sleep(500)
+  }
+  throw new Error('sha256sum output not seen in the terminal')
+}
+
+async function waitShellPrompt(timeoutMs = 60_000) {
+  await page.waitForFunction(() => [...document.querySelectorAll('.xterm-rows')].some((r) => r.getBoundingClientRect().width > 0 && /[$%#]\s*$/.test(r.innerText.trim())), null, { timeout: timeoutMs })
+}
+
+/** Right-click a row in the Explorer tree by its visible name. */
+async function explorerRow(name) {
+  const tree = page.locator('[role="tree"], [data-file-explorer], .file-explorer').first()
+  const scoped = tree.getByText(name, { exact: true }).first()
+  return (await scoped.isVisible().catch(() => false)) ? scoped : page.getByText(name, { exact: true }).first()
+}
+
+/**
+ * W9D_ONLY=ui-audit: local.core-workflow (no cloud), then acc.download and acc.remote-desktop in
+ * one Orca Cloud workspace, all through the real UI.
+ */
+async function uiAuditFlow() {
+  // ---- local.core-workflow: local worktree from the composer, edit, Source Control diff, commit.
+  await runStep('local.core-workflow', 'Local: create a worktree from the composer, edit a file in its terminal, see the diff in Source Control, commit', async (step) => {
+    const name = `${wsName}-local`
+    const sub = {}
+    step.substeps = sub
+    const d = await openComposer(step, 'composer')
+    await d.getByRole('combobox', { name: 'Run on' }).click()
+    const targets = page.getByRole('listbox', { name: 'Run targets' })
+    await targets.waitFor()
+    await targets.getByRole('option', { name: /^Local Mac/ }).first().click()
+    await sleep(500)
+    sub.runOnLocal = /Local Mac/.test((await runOnValue(d)) ?? '')
+    sub.blankAgent = await selectBlankAgent(d)
+    if (!sub.blankAgent) throw new Error('could not choose Blank Terminal; refusing to launch an agent CLI on the test Mac')
+    await fillName(d, name)
+    await shot(step, 'composer-local')
+    const t0 = Date.now()
+    await d.getByRole('button', { name: /^Create worktree/ }).click()
+    while (Date.now() - t0 < 60_000 && !(await rowShown(name, 'local'))) await sleep(250)
+    sub.created = await rowShown(name, 'local')
+    step.timings.createMs = Date.now() - t0
+    const wt = await store((n) => Object.values(window.__store.getState().worktreesByRepo ?? {}).flat().find((w) => w.displayName === n && !w.path.startsWith('/vercel')), name)
+    if (!wt) throw new Error('no local worktree in the store after create')
+    created.localPaths.push(wt.path)
+    step.worktree = { path: wt.path, branch: wt.branch }
+    await waitShellPrompt()
+    step.timings.createToPromptMs = Date.now() - t0
+    await focusTerminal()
+    await page.keyboard.type('echo w9-local-edit >> README.md\n')
+    await sleep(1000)
+    sub.edited = /w9-local-edit/.test(readFileSync(path.join(wt.path, 'README.md'), 'utf8'))
+    await shot(step, 'edited')
+    // Source Control.
+    await page.getByRole('button', { name: /^Source Control/ }).first().click()
+    const t1 = Date.now()
+    const changeRow = page.getByRole('button', { name: /^Stage$/ }).first()
+    let diffShown = false
+    while (Date.now() - t1 < 30_000) {
+      const txt = await page.evaluate(() => document.body.innerText)
+      if (/changes/i.test(txt) && /README\.md/.test(txt) && ((await changeRow.isVisible().catch(() => false)) || (await page.getByRole('button', { name: /^Stage All$/ }).first().isVisible().catch(() => false)))) {
+        diffShown = true
+        break
+      }
+      await sleep(500)
+    }
+    sub.diffInSourceControl = diffShown
+    step.timings.editToSourceControlRowMs = Date.now() - t1
+    await shot(step, 'source-control-changes')
+    // Open the file's diff (click the row), then stage and commit.
+    await page.getByText('README.md', { exact: true }).last().click().catch(() => {})
+    // The diff tab's editor loads lazily ("Loading editor…").
+    const tDiff = Date.now()
+    sub.diffView = false
+    while (Date.now() - tDiff < 20_000 && !(sub.diffView = /w9-local-edit/.test(await page.evaluate(() => document.body.innerText)))) await sleep(500)
+    step.timings.diffViewMs = sub.diffView ? Date.now() - tDiff : null
+    await shot(step, 'diff')
+    const stageAll = page.getByRole('button', { name: /^Stage All$/ }).first()
+    if (await stageAll.isVisible().catch(() => false)) await stageAll.click()
+    else await page.getByRole('button', { name: /^Stage all$/ }).first().click()
+    await sleep(1000)
+    const msg = `w9 local commit ${wsName}`
+    await page.getByRole('textbox', { name: 'Commit message' }).fill(msg)
+    await page.getByRole('button', { name: /^Commit$/ }).first().click()
+    const t2 = Date.now()
+    let subject = null
+    while (Date.now() - t2 < 30_000) {
+      subject = spawnSync('git', ['-C', wt.path, 'log', '-1', '--format=%s'], { encoding: 'utf8' }).stdout.trim()
+      if (subject === msg) break
+      await sleep(500)
+    }
+    step.timings.commitMs = Date.now() - t2
+    sub.committed = subject === msg
+    sub.cleanAfter = spawnSync('git', ['-C', wt.path, 'status', '--porcelain'], { encoding: 'utf8' }).stdout.trim() === ''
+    await shot(step, 'committed')
+    step.status = Object.values(sub).every(Boolean) ? 'pass' : 'fail'
+    step.detail = `steps ${JSON.stringify(sub)}; create ${step.timings.createMs}ms (prompt ${step.timings.createToPromptMs}ms); Source Control row ${step.timings.editToSourceControlRowMs}ms after edit; commit landed in ${step.timings.commitMs}ms ("${subject}")`
+    // Remove the local worktree through the UI.
+    await page.keyboard.press('Escape').catch(() => {})
+    if (await rowShown(name, 'local')) {
+      await openRowMenu(name, 'local')
+      await page.getByRole('menuitem', { name: /^Delete/ }).click()
+      await page.getByRole('dialog').getByRole('button', { name: /^(Force )?Delete( Workspace)?$/ }).first().click()
+      await waitRowGone(name, 'local', 60_000).catch(() => {})
+    }
+  })
+
+  // ---- cloud workspace for download + remote desktop
+  await store(() => window.__store.getState().connectCurrentOrcaProfile())
+  await sleep(1500)
+  let ws = null
+  await runStep('acc.download', 'Explorer Download… on a ~20 MiB file and Download as ZIP… on a folder in a cloud workspace: progress, success toast, matching sha256', async (step) => {
+    ws = await createExtraWorkspace(step, `${wsName}-dl`, { blankAgent: true })
+    step.sandboxId = ws.sandboxId
+    await openNewTerminalTab()
+    await waitShellPrompt(90_000)
+    await focusTerminal()
+    await page.keyboard.type('head -c 20971520 /dev/urandom > big.bin && mkdir -p dl-dir/sub && head -c 1048576 /dev/urandom > dl-dir/a.bin && echo w9 > dl-dir/sub/b.txt && echo MADE\n')
+    await page.waitForFunction(() => [...document.querySelectorAll('.xterm-rows')].some((r) => /^MADE$/m.test(r.innerText)), null, { timeout: 60_000 })
+    const vm = await vmShas(['big.bin', 'dl-dir/a.bin', 'dl-dir/sub/b.txt'])
+    step.vmSha = vm
+    const saveDir = path.join(created.tmp, 'downloads')
+    mkdirSync(saveDir, { recursive: true })
+    step.dialogStub = await stubSaveDialog(saveDir)
+    await page.getByRole('button', { name: /^Explorer/ }).first().click()
+    await sleep(1500)
+    for (let i = 0; i < 20 && !(await (await explorerRow('big.bin')).isVisible().catch(() => false)); i++) {
+      if (i === 5) await page.getByRole('button', { name: /Refresh/i }).first().click().catch(() => {})
+      await sleep(1000)
+    }
+    await shot(step, 'explorer')
+    const one = async (name, item, done) => {
+      await clearToasts()
+      await (await explorerRow(name)).click({ button: 'right' })
+      step.menu ??= (await menuItems()).map((x) => x.split('\n')[0])
+      const t0 = Date.now()
+      await page.getByRole('menuitem', { name: item }).click()
+      let progress = null
+      let ok = null
+      while (Date.now() - t0 < 180_000) {
+        const ts = await toasts()
+        progress ??= ts.find((x) => /^Downloading /.test(x)) ? Date.now() - t0 : null
+        ok = ts.find((x) => done.test(x))
+        if (ok) break
+        if (ts.some((x) => /Couldn.t|failed/i.test(x))) break
+        await sleep(100)
+      }
+      const r = { ms: Date.now() - t0, progressSeenMs: progress, toast: (ok ?? null)?.replace(/\s+/g, ' ') ?? null, toasts: (await toasts()).map(redact) }
+      await shot(step, `${name.replace(/[^a-z0-9]/gi, '_')}-done`)
+      return r
+    }
+    const f = await one('big.bin', /^Download…$/, /Downloaded big\.bin/)
+    const fLocal = path.join(saveDir, 'big.bin')
+    f.localSha = existsSync(fLocal) ? sha256File(fLocal) : null
+    f.bytes = existsSync(fLocal) ? readFileSync(fLocal).length : null
+    f.shaMatch = f.localSha === vm['big.bin']
+    step.file = f
+    step.timings.fileDownloadMs = f.ms
+    const z = await one('dl-dir', /^Download as ZIP…$/, /Downloaded dl-dir/)
+    const zLocal = path.join(saveDir, 'dl-dir.zip')
+    const unz = path.join(saveDir, 'unz')
+    z.zipOk = existsSync(zLocal) && spawnSync('unzip', ['-tq', zLocal]).status === 0
+    if (z.zipOk) spawnSync('unzip', ['-oq', zLocal, '-d', unz])
+    const find = (base) => spawnSync('find', [unz, '-path', `*${base}`, '-type', 'f'], { encoding: 'utf8' }).stdout.trim().split('\n')[0]
+    z.entries = Object.fromEntries(['dl-dir/a.bin', 'dl-dir/sub/b.txt'].map((rel) => {
+      const tail = rel.replace(/^dl-dir\//, '')
+      const fp = z.zipOk ? find(tail) : ''
+      const sha = fp ? sha256File(fp) : null
+      return [rel, { sha, match: sha === vm[rel] }]
+    }))
+    z.shaMatch = Object.values(z.entries).every((e) => e.match)
+    step.folder = z
+    step.timings.folderDownloadMs = z.ms
+    step.saves = await cdpEval((await (await fetch(`http://127.0.0.1:${process.env.W9D_MAIN_INSPECT}/json/list`)).json())[0].webSocketDebuggerUrl, 'globalThis.__w9dSaves ?? []')
+    step.status = f.toast && f.shaMatch && z.toast && z.zipOk && z.shaMatch ? 'pass' : 'fail'
+    step.detail = `menu ${JSON.stringify(step.menu)}; file big.bin (${f.bytes} bytes): toast "${f.toast}" in ${f.ms}ms (progress toast at ${f.progressSeenMs}ms), sha256 match ${f.shaMatch}; folder dl-dir: toast "${z.toast}" in ${z.ms}ms, zip complete ${z.zipOk}, entries ${JSON.stringify(z.entries)}. Native Save panel answered by a main-process stub (CDP can't drive it): ${JSON.stringify(step.saves)}`
+  })
+
+  await runStep('acc.remote-desktop', 'Open remote desktop from the workspace menu: connects, the noVNC canvas renders, and a window launched in the VM appears', async (step) => {
+    if (!ws) throw new Error('no cloud workspace (acc.download create failed)')
+    step.sandboxId = ws.sandboxId
+    const cdpBase = results.app.main.cdpUrl
+    const guestTarget = async () => (await (await fetch(`${cdpBase}/json/list`)).json()).find((t) => /\/vnc\.html/.test(t.url))
+    await clearToasts()
+    await openRowMenu(ws.name)
+    step.menu = (await menuItems()).map((x) => x.split('\n')[0])
+    const t0 = Date.now()
+    await page.getByRole('menuitem', { name: /Open remote desktop/ }).click()
+    let target = null
+    let state = null
+    while (Date.now() - t0 < 120_000) {
+      target ??= await guestTarget()
+      if (target) {
+        state = await cdpEval(target.webSocketDebuggerUrl, 'window.orcaDesktop?.state?.() ?? null').catch(() => state)
+        if (state === 'connected') break
+      }
+      await sleep(500)
+    }
+    step.timings.connectMs = state === 'connected' ? Date.now() - t0 : null
+    step.toasts = (await toasts()).map(redact)
+    step.state = state
+    await sleep(3000)
+    await shot(step, 'host')
+    const canvasExpr = `(() => { const c = document.querySelector('#noVNC_container canvas') || document.querySelector('canvas'); if (!c) return null; const ctx = c.getContext('2d'); const d = ctx.getImageData(0, 0, c.width, c.height).data; let nonBlack = 0, red = 0, n = 0; const colors = new Set(); for (let i = 0; i < d.length; i += 4 * 61) { n++; const r = d[i], g = d[i + 1], b = d[i + 2]; if (r + g + b > 30) nonBlack++; if (r > 180 && g < 80 && b < 80) red++; if (colors.size < 1000) colors.add(((r >> 4) << 8) | ((g >> 4) << 4) | (b >> 4)) } return { w: c.width, h: c.height, n, nonBlack, red, colors: colors.size, status: document.querySelector('#noVNC_status')?.textContent ?? null } })()`
+    const guestShot = async (label) => {
+      try {
+        const r = await rawCdp(target.webSocketDebuggerUrl, 'Page.captureScreenshot', { format: 'png' })
+        const file = path.join(shotsDir, `${step.id}-${label}.png`)
+        writeFileSync(file, Buffer.from(r.data, 'base64'))
+        step.screenshots.push(path.relative(artifactsDir, file))
+      } catch (e) {
+        step.screenshots.push(`(guest screenshot ${label} failed: ${e.message})`)
+      }
+    }
+    if (!target || state !== 'connected') {
+      step.status = 'fail'
+      step.detail = `remote desktop did not connect within 120s (guest target ${Boolean(target)}, state ${state}); toasts ${JSON.stringify(step.toasts)}; menu ${JSON.stringify(step.menu)}`
+      return
+    }
+    step.canvasBefore = await cdpEval(target.webSocketDebuggerUrl, canvasExpr)
+    await guestShot('desktop')
+    // Launch a red xterm on the VM's display from the workspace shell.
+    await page.bringToFront().catch(() => {})
+    await (await rowOf(ws.name)).click()
+    await sleep(1500)
+    // The Remote desktop browser tab is in front: open a shell tab next to it.
+    await openNewTerminalTab()
+    await waitShellPrompt(60_000)
+    await focusTerminal()
+    await page.keyboard.type('DISPLAY=:1 xterm -bg red -fg white -geometry 70x20+40+40 -title W9RED -e sleep 600 >/tmp/w9x.log 2>&1 & sleep 2; cat /tmp/w9x.log; echo XLAUNCHED\n')
+    await page.waitForFunction(() => [...document.querySelectorAll('.xterm-rows')].some((r) => /^XLAUNCHED$/m.test(r.innerText)), null, { timeout: 30_000 }).catch(() => {})
+    step.xtermLaunchOutput = redact(((await visibleTerminals()).join('\n').match(/cat \/tmp\/w9x\.log[\s\S]*?XLAUNCHED/)?.[0] ?? '').slice(0, 400))
+    // Back to the Remote desktop tab so the guest paints and can be captured.
+    await page.getByText('Remote desktop', { exact: true }).first().click().catch(() => {})
+    await sleep(1000)
+    let after = null
+    const t1 = Date.now()
+    while (Date.now() - t1 < 30_000) {
+      after = await cdpEval(target.webSocketDebuggerUrl, canvasExpr)
+      if (after && after.red > (step.canvasBefore?.red ?? 0) + 20) break
+      await sleep(1000)
+    }
+    step.canvasAfter = after
+    step.timings.launchToVisibleMs = after && after.red > (step.canvasBefore?.red ?? 0) + 20 ? Date.now() - t1 : null
+    await guestShot('with-red-xterm')
+    const rendered = (step.canvasBefore?.nonBlack ?? 0) > 50 && (step.canvasBefore?.colors ?? 0) > 3
+    const shows = step.timings.launchToVisibleMs !== null
+    step.status = rendered && shows ? 'pass' : 'fail'
+    step.detail = `connected in ${step.timings.connectMs}ms (noVNC status "${step.canvasBefore?.status}"); canvas ${step.canvasBefore?.w}x${step.canvasBefore?.h}: ${step.canvasBefore?.nonBlack}/${step.canvasBefore?.n} sampled pixels non-black, ${step.canvasBefore?.colors} colors; red xterm launched with DISPLAY=:1 -> red samples ${step.canvasBefore?.red} -> ${after?.red} (${shows ? `visible ${step.timings.launchToVisibleMs}ms after launch` : 'NOT seen'}); launch output ${JSON.stringify(step.xtermLaunchOutput)}`
+  })
+
+  if (ws) {
+    await runStep('life.destroy', 'Delete the download/remote-desktop workspace', async (step) => {
+      step.sandboxId = ws.sandboxId
+      await page.bringToFront().catch(() => {})
+      const o = await uiDelete(step, ws.name, 'delete', 120_000)
+      const w = await waitSandboxStatus(ws.sandboxId, ['destroyed'], 120_000)
+      step.status = o.kind === 'removed' && w.status === 'destroyed' ? 'pass' : 'fail'
+      step.detail = `UI Delete -> ${o.kind} in ${o.ms}ms; sandbox -> ${w.status}`
+    })
+  }
+}
+
 /** A plain signed-in Orca Cloud create for checks that consume a workspace. */
-async function createExtraWorkspace(step, name) {
+async function createExtraWorkspace(step, name, { blankAgent = false } = {}) {
   const d = await openComposer(step, `${name}-composer`)
+  if (blankAgent) step.blankAgent = await selectBlankAgent(d)
   for (let i = 0; i < 3; i++) {
     await pickOrcaCloud(step, d)
     await sleep(1200)
@@ -1575,6 +1920,10 @@ async function asleepMovedStep() {
  * and a normal Delete.
  */
 async function targetedFlow() {
+  if (process.env.W9D_ONLY === 'ui-audit') {
+    await uiAuditFlow()
+    return
+  }
   if (process.env.W9D_ONLY === 'asleep-moved') {
     await store(() => window.__store.getState().connectCurrentOrcaProfile())
     await sleep(1500)
