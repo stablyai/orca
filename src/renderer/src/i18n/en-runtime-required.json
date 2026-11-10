@@ -17,6 +17,14 @@
       }
     }
   },
+  "agentHostPanel": {
+    "recipeEnvDetailNoKeys_one": "{{count}} variable, none that look like keys. The recipe decides what reaches the VM.",
+    "recipeEnvDetailNoKeys_other": "{{count}} variables, none that look like keys. The recipe decides what reaches the VM.",
+    "recipeEnvDetailOneKey_one": "{{count}} variable, including 1 that looks like a key ({{names}}). The recipe decides what reaches the VM.",
+    "recipeEnvDetailOneKey_other": "{{count}} variables, including 1 that looks like a key ({{names}}). The recipe decides what reaches the VM.",
+    "recipeEnvDetail_one": "{{count}} variable, including {{keys}} that look like keys ({{names}}). The recipe decides what reaches the VM.",
+    "recipeEnvDetail_other": "{{count}} variables, including {{keys}} that look like keys ({{names}}). The recipe decides what reaches the VM."
+  },
   "agentLaunch": {
     "opencode": {
       "invalidConfig": "OpenCode could not apply this model choice to the launch configuration. Check the OpenCode launch configuration and try again, or omit the model choice.",

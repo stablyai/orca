@@ -31,18 +31,33 @@ export function RecipeEnvForwardingWarning({
       ? t(
           'agentHostPanel.recipeEnvDetailNoKeys',
           '{{count}} variables, none that look like keys. The recipe decides what reaches the VM.',
-          { count: summary.count }
+          {
+            count: summary.count,
+            defaultValue_one:
+              '{{count}} variable, none that look like keys. The recipe decides what reaches the VM.'
+          }
         )
       : keyLike.length === 1
         ? t(
             'agentHostPanel.recipeEnvDetailOneKey',
             '{{count}} variables, including 1 that looks like a key ({{names}}). The recipe decides what reaches the VM.',
-            { count: summary.count, names }
+            {
+              count: summary.count,
+              names,
+              defaultValue_one:
+                '{{count}} variable, including 1 that looks like a key ({{names}}). The recipe decides what reaches the VM.'
+            }
           )
         : t(
             'agentHostPanel.recipeEnvDetail',
             '{{count}} variables, including {{keys}} that look like keys ({{names}}). The recipe decides what reaches the VM.',
-            { count: summary.count, keys: keyLike.length, names }
+            {
+              count: summary.count,
+              keys: keyLike.length,
+              names,
+              defaultValue_one:
+                '{{count}} variable, including {{keys}} that look like keys ({{names}}). The recipe decides what reaches the VM.'
+            }
           )
 
   return (
