@@ -1,3 +1,4 @@
+import { recordDraft } from '@/store/keyed-record-transitions'
 import { conversationSessionStartedAt } from '../../store/slices/agent-status/agent-conversation-acceptance'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import {
@@ -208,11 +209,15 @@ export function buildMirroredAgentStatusPatch(
   let retirement: ReturnType<typeof retirePaneLaunchNote> = {}
   let nextConversations = state.agentConversationsByPaneKey ?? {}
   const originalConversations = nextConversations
+  const conversationDraft = recordDraft(nextConversations)
   for (const [paneKey, entry] of nextByPaneKey) {
     nextConversations = projectAgentPaneConversation(
       { tabsByWorktree: state.tabsByWorktree, agentConversationsByPaneKey: nextConversations },
       entry,
-      (entries) => (entries === originalConversations ? { ...entries } : entries),
+      (_entries, key, value) => {
+        conversationDraft.set(key, value)
+        return conversationDraft.finish()
+      },
       toRuntimeExecutionHostId(environmentId),
       { ...entry, isReplay: true }
     )

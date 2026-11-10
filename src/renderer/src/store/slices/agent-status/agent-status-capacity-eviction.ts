@@ -10,31 +10,47 @@ export const MAX_LIVE_AGENT_STATUSES = 500
 
 type PaneLiveness = 'live' | 'dead' | 'unprovable'
 
-// Why: only a rooted tab proves which leaves are mounted; rootless and headless rows may still be live (#2962).
-export function classifyPaneKeyLiveness(state: AppState): (paneKey: string) => PaneLiveness {
-  const rootedLeafKeys = new Set<string>()
-  const rootedTabIds = new Set<string>()
-  for (const [tabId, layout] of Object.entries(state.terminalLayoutsByTabId)) {
-    if (!layout?.root) {
-      continue
-    }
-    rootedTabIds.add(tabId)
-    const stack: TerminalPaneLayoutNode[] = [layout.root]
+const leavesByRoot = new WeakMap<TerminalPaneLayoutNode, ReadonlySet<string>>()
+
+export function paneKeyCandidateTabIds(paneKey: string): string[] {
+  const ids: string[] = []
+  for (let colon = paneKey.indexOf(':'); colon !== -1; colon = paneKey.indexOf(':', colon + 1)) {
+    ids.push(paneKey.slice(0, colon))
+  }
+  return ids
+}
+
+function rootHasLeaf(root: TerminalPaneLayoutNode, leafId: string): boolean {
+  let leaves = leavesByRoot.get(root)
+  if (!leaves) {
+    const found = new Set<string>()
+    const stack = [root]
     while (stack.length > 0) {
       const node = stack.pop()!
       if (node.type === 'leaf') {
-        rootedLeafKeys.add(`${tabId}:${node.leafId}`)
+        found.add(node.leafId)
       } else {
         stack.push(node.first, node.second)
       }
     }
+    leavesByRoot.set(root, (leaves = found))
   }
+  return leaves.has(leafId)
+}
+
+// Only exact rooted leaves prove placement; legacy colon-containing owners still match full keys.
+export function classifyPaneKeyLiveness(
+  state: Pick<AppState, 'terminalLayoutsByTabId'>
+): (paneKey: string) => PaneLiveness {
   return (paneKey) => {
-    if (rootedLeafKeys.has(paneKey)) {
-      return 'live'
+    for (const tabId of paneKeyCandidateTabIds(paneKey)) {
+      const root = state.terminalLayoutsByTabId[tabId]?.root
+      if (root && rootHasLeaf(root, paneKey.slice(tabId.length + 1))) {
+        return 'live'
+      }
     }
     const tabId = getTabIdFromPaneKey(paneKey)
-    return tabId !== null && rootedTabIds.has(tabId) ? 'dead' : 'unprovable'
+    return tabId !== null && state.terminalLayoutsByTabId[tabId]?.root ? 'dead' : 'unprovable'
   }
 }
 

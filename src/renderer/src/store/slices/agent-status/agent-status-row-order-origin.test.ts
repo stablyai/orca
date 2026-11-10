@@ -5,7 +5,7 @@ import { createTestStore } from '../../testing/app-store-test-fixture'
 import { buildWorktreeAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-agent-rows'
 import { AGENT_STATE_HISTORY_MAX } from '../../../../../shared/agent-status/lifecycle/agent-state-history'
 import { makePaneKey, parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import type { AgentStatusTiming, AgentStatusBatchUpdate } from './agent-status-contract'
+import type { AgentStatusTiming, AgentStatusUpdate } from './agent-status-contract'
 import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
 import {
   ENV,
@@ -406,11 +406,7 @@ it('keeps Command Code prompt boundaries case-sensitive after live removal', () 
 
 it.each([100, 1000])('keeps conversation updates atomic with %s unplaced conversations', (size) => {
   const store = createTestStore()
-  const update = (
-    index: number,
-    state: 'working' | 'done',
-    at: number
-  ): AgentStatusBatchUpdate => ({
+  const update = (index: number, state: 'working' | 'done', at: number): AgentStatusUpdate => ({
     paneKey: `conversation-tab:${index}`,
     payload: { state, prompt: 'task', agentType: 'codex' },
     timing: { updatedAt: at, stateStartedAt: at, turnStartedAt: 1000 },

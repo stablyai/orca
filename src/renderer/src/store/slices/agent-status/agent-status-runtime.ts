@@ -1,5 +1,10 @@
+import { recordDraft, replaceRecordEntries, type RecordDraft } from '../../keyed-record-transitions'
+import type { AgentPaneConversationIdentity } from './agent-pane-conversation'
 import { removePaneKeys } from './agent-status-pane-keyed-records'
-import { applyAgentStatusBatchUpdate } from './agent-status-batch-update'
+import {
+  applyAgentStatusBatchUpdate,
+  buildAgentStatusBatchPatch
+} from './agent-status-batch-update'
 import { projectAgentPaneConversation } from './agent-pane-conversation'
 import { structuralValuesEqualIgnoringUndefined } from '../../../../../shared/structural-value-equality'
 import type { StateCreator } from 'zustand'
@@ -118,26 +123,27 @@ export function createAgentStatusRuntime(
   let batchedAgentStatusFreshnessRequested = false
   const get = (): AppState => batchedAgentStatusState ?? storeGet()
 
-  let conversationDraft: AppState['agentConversationsByPaneKey'] | null = null
+  let conversationDraft: RecordDraft<AgentPaneConversationIdentity> | null = null
+  let conversationBuilt: AppState['agentConversationsByPaneKey'] | null = null
   const projectConversation: typeof projectAgentPaneConversation = (
     state,
     entry,
-    _copy,
+    _write,
     ...sourceArgs
   ) =>
     projectAgentPaneConversation(
       state,
       entry,
-      (entries) => {
+      (entries, key, value) => {
         if (!batchedAgentStatusState) {
-          return { ...entries }
+          return replaceRecordEntries(entries, [[key, value]])
         }
-        const next =
-          entries === conversationDraft
-            ? entries
-            : Object.setPrototypeOf(Object.assign(Object.create(null), entries), Object.prototype)
-        conversationDraft = next
-        return next
+        if (!conversationDraft || entries !== conversationBuilt) {
+          conversationDraft = recordDraft(entries)
+        }
+        conversationDraft.set(key, value)
+        conversationBuilt = conversationDraft.finish()
+        return conversationBuilt
       },
       ...sourceArgs
     )
@@ -230,6 +236,7 @@ export function createAgentStatusRuntime(
       const freshnessRequested = batchedAgentStatusFreshnessRequested
       const hasStagedWrites = batchedAgentStatusRevision !== revisionAtStart
       conversationDraft = null
+      conversationBuilt = null
       batchedPaneKeys = null
       batchedAgentStatusState = null
       batchedAgentStatusTouchedKeys = null
@@ -255,6 +262,7 @@ export function createAgentStatusRuntime(
       return result
     } finally {
       conversationDraft = null
+      conversationBuilt = null
       batchedPaneKeys = null
       batchedAgentStatusState = null
       batchedAgentStatusTouchedKeys = null
@@ -301,19 +309,4 @@ export function createAgentStatusRuntime(
     transactAgentStatuses,
     clearSleepingAgentSessionsByPaneKey
   }
-}
-
-function buildAgentStatusBatchPatch(
-  initialState: AppState,
-  nextState: AppState,
-  touchedKeys: ReadonlySet<keyof AppState>
-): Partial<AppState> {
-  const patch: Record<string, unknown> = {}
-  // Untouched slices cannot differ, so the patch stays proportional to what the fold actually wrote.
-  for (const key of touchedKeys) {
-    if (!Object.is(nextState[key], initialState[key])) {
-      patch[key as string] = nextState[key]
-    }
-  }
-  return patch as Partial<AppState>
 }

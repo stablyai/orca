@@ -1,36 +1,28 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { StoreSetArgs } from '../../diagnostics/react-commit-cascade-write-probe'
-import { classifyPaneKeyLiveness, MAX_LIVE_AGENT_STATUSES } from './agent-status-capacity-eviction'
-
-type Conversations = AppState['agentConversationsByPaneKey']
-
-function cappedConversations(state: AppState, previous: Conversations): Conversations {
-  const entries = state.agentConversationsByPaneKey
-  const incoming = Object.keys(entries)
-  const keys = [
-    ...Object.keys(previous).filter((key) => Object.hasOwn(entries, key)),
-    ...incoming.filter((key) => !Object.hasOwn(previous, key))
-  ]
-  let evicted: string[] = []
-  if (keys.length > MAX_LIVE_AGENT_STATUSES) {
-    const classify = classifyPaneKeyLiveness(state)
-    const eligible = keys.filter((key) => classify(key) !== 'live')
-    evicted = eligible.slice(0, Math.max(0, eligible.length - MAX_LIVE_AGENT_STATUSES))
-  }
-  if (evicted.length === 0 && keys.every((key, index) => key === incoming[index])) {
-    return entries
-  }
-  const removed = new Set(evicted)
-  return Object.fromEntries(
-    keys.filter((key) => !removed.has(key)).map((key) => [key, entries[key]])
-  )
-}
+import { createAgentConversationCapacityIndex } from './agent-conversation-capacity-index'
 
 export function withAgentConversationRetention(
   createState: StateCreator<AppState, [], []>
 ): StateCreator<AppState, [], []> {
   return (set, get, api) => {
+    let index = createAgentConversationCapacityIndex()
+    const cap = (
+      candidate: AppState,
+      current: AppState
+    ): AppState['agentConversationsByPaneKey'] => {
+      try {
+        if (!index.matches(current)) {
+          index = createAgentConversationCapacityIndex()
+          index.cap(current.agentConversationsByPaneKey, current.terminalLayoutsByTabId)
+        }
+        return index.cap(candidate.agentConversationsByPaneKey, candidate.terminalLayoutsByTabId)
+      } catch (error) {
+        index = createAgentConversationCapacityIndex()
+        throw error
+      }
+    }
     const wrap =
       (write: typeof set): typeof set =>
       (...args: StoreSetArgs<AppState>): void => {
@@ -38,7 +30,7 @@ export function withAgentConversationRetention(
           const [partial] = args
           write((state) => {
             const requested = typeof partial === 'function' ? partial(state) : partial
-            const entries = cappedConversations(requested, get().agentConversationsByPaneKey)
+            const entries = cap(requested, state)
             return entries === requested.agentConversationsByPaneKey
               ? requested
               : { ...requested, agentConversationsByPaneKey: entries }
@@ -56,7 +48,7 @@ export function withAgentConversationRetention(
             }
             const current = get()
             const candidate = { ...current, ...requested }
-            const entries = cappedConversations(candidate, current.agentConversationsByPaneKey)
+            const entries = cap(candidate, current)
             return entries === candidate.agentConversationsByPaneKey
               ? requested
               : { ...requested, agentConversationsByPaneKey: entries }
@@ -65,7 +57,7 @@ export function withAgentConversationRetention(
       }
     api.setState = wrap(api.setState)
     const initial = createState(wrap(set), get, api)
-    const entries = cappedConversations(initial, {})
+    const entries = index.cap(initial.agentConversationsByPaneKey, initial.terminalLayoutsByTabId)
     return entries === initial.agentConversationsByPaneKey
       ? initial
       : { ...initial, agentConversationsByPaneKey: entries }

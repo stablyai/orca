@@ -1,3 +1,4 @@
+import { replaceRecordEntries } from '../../keyed-record-transitions'
 import {
   classifyConversationContinuity,
   normalizedConversationPrompt,
@@ -73,9 +74,12 @@ export function agentPaneConversationForEntry(
 export function projectAgentPaneConversation(
   state: ConversationState,
   entry: ConversationEntry,
-  copy: (
-    entries: AppState['agentConversationsByPaneKey']
-  ) => AppState['agentConversationsByPaneKey'] = (entries) => ({ ...entries }),
+  write: (
+    entries: AppState['agentConversationsByPaneKey'],
+    key: string,
+    value: AgentPaneConversationIdentity
+  ) => AppState['agentConversationsByPaneKey'] = (entries, key, value) =>
+    replaceRecordEntries(entries, [[key, value]]),
   executionHostId?: ExecutionHostId,
   source?: AgentConversationSource
 ): AppState['agentConversationsByPaneKey'] {
@@ -124,24 +128,17 @@ export function projectAgentPaneConversation(
   ) {
     return current
   }
-  const next = copy(current)
-  Object.defineProperty(next, entry.paneKey, {
-    value: {
-      paneKey: entry.paneKey,
-      worktreeId,
-      executionHostId: ownerHostId,
-      connectionId: entry.connectionId ?? null,
-      agent,
-      ...(acceptance.continuity ? { continuity: acceptance.continuity } : {}),
-      ...(providerSession ? { providerSession } : {}),
-      ...(firstStateStartedAt !== undefined ? { firstStateStartedAt } : {}),
-      ...(promptCandidates ? { promptCandidates } : {})
-    },
-    writable: true,
-    enumerable: true,
-    configurable: true
+  return write(current, entry.paneKey, {
+    paneKey: entry.paneKey,
+    worktreeId,
+    executionHostId: ownerHostId,
+    connectionId: entry.connectionId ?? null,
+    agent,
+    ...(acceptance.continuity ? { continuity: acceptance.continuity } : {}),
+    ...(providerSession ? { providerSession } : {}),
+    ...(firstStateStartedAt !== undefined ? { firstStateStartedAt } : {}),
+    ...(promptCandidates ? { promptCandidates } : {})
   })
-  return next
 }
 
 function providersCompatible(
