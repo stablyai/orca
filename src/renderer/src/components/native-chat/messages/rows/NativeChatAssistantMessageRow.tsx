@@ -52,6 +52,7 @@ export function NativeChatAssistantMessageRow({
     trailingRun,
     continuesTurn = false,
     endsResponse,
+    actionsHang = false,
     inSubagentSection = false,
     runtimeContext,
     fork
@@ -122,8 +123,9 @@ export function NativeChatAssistantMessageRow({
           }
           className={cn(
             'mt-1 w-fit select-none',
-            // They hang into the gap below; a section keeps them inside its border instead.
-            !inSubagentSection && '-mb-5'
+            // They hang into the gap below only when nothing left-side starts there. Never in a
+            // section, which keeps them inside its border.
+            actionsHang && '-mb-5'
           )}
         />
       ) : null}
