@@ -1,4 +1,7 @@
-import type { ProfileStateDomainReplacement } from '../loading-store/profile-state-authority'
+import type {
+  ProfileStateDomainReplacement,
+  ProfileStateDomainPartsUpdate
+} from '../loading-store/profile-state-authority'
 import { isRecord } from './profile-state-document-validation'
 
 export type ProfileStateWriterInitialization = {
@@ -8,6 +11,12 @@ export type ProfileStateWriterInitialization = {
 }
 
 export type ProfileStateWriterCommand =
+  | {
+      command: 'write-parts'
+      replacements: readonly ProfileStateDomainReplacement[]
+      update: ProfileStateDomainPartsUpdate
+      runPayloads?: readonly string[]
+    }
   | { command: 'write-state'; payload: Uint8Array }
   | {
       command: 'write-complete' | 'write-domains'
@@ -70,6 +79,23 @@ export function isProfileStateWriterRequest(value: unknown): value is ProfileSta
     return false
   }
   switch (value.command) {
+    case 'write-parts':
+      return (
+        Array.isArray(value.replacements) &&
+        value.replacements.every(isReplacement) &&
+        isRecord(value.update) &&
+        value.update.domain === 'remoteLayoutSnapshots' &&
+        Array.isArray(value.update.order) &&
+        value.update.order.every((key) => typeof key === 'string') &&
+        Array.isArray(value.update.parts) &&
+        value.update.parts.every(
+          (part) =>
+            isRecord(part) && typeof part.key === 'string' && typeof part.payload === 'string'
+        ) &&
+        (value.runPayloads === undefined ||
+          (Array.isArray(value.runPayloads) &&
+            value.runPayloads.every((payload) => typeof payload === 'string')))
+      )
     case 'write-state':
       return value.payload instanceof Uint8Array
     case 'assert-revision':

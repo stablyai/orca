@@ -17,14 +17,11 @@ import {
   reportTerminalReopenFailure
 } from './profile-state-writer-reopen-policy'
 
-export type ProfileStateWorkerAuthorityOptions = {
-  workerPath?: string
-  backupWorkerPath?: string
-  onFailure?: (error: Error) => void
-  onSaveDelayChanged?: (delayed: boolean) => void
-  /** Close the writer thread after this long without a command; the next one reopens it (~22 ms). */
-  writerIdleStopMs?: number
-}
+export type { ProfileStateWorkerAuthorityOptions } from './profile-state-worker-lifecycle'
+import {
+  closedWriterError,
+  type ProfileStateWorkerAuthorityOptions
+} from './profile-state-worker-lifecycle'
 
 /** Main owns backup scheduling; the worker owns every live SQL command while it runs. */
 export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
@@ -90,6 +87,13 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   writeSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]): Promise<void> {
     return this.run((writer) => writer.writeSerializedDomains(replacements)).then(() => {})
   }
+
+  writeSerializedDomainParts: NonNullable<
+    AsyncProfileStateAuthority['writeSerializedDomainParts']
+  > = (replacements, update, runs) =>
+    this.run((writer) => writer.writeSerializedDomainParts(replacements, update, runs)).then(
+      () => {}
+    )
 
   writeSerializedAutomationRuns(
     replacements: readonly ProfileStateDomainReplacement[],
@@ -334,12 +338,4 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     }
     return this.stoppedRevision
   }
-}
-
-function closedWriterError(): ProfileStateWriterError {
-  return new ProfileStateWriterError(
-    'profile-state-writer-closed',
-    'Profile state writer is closing',
-    'known-failure'
-  )
 }

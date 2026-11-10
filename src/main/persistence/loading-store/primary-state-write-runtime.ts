@@ -14,6 +14,7 @@ export type PrimaryStateWriteOperationsRuntime = Pick<
   | 'lastWrittenStateHash'
   | 'pendingSnapshotFileWork'
   | 'pendingAutomationRunsAfter'
+  | 'pendingRemoteLayoutWorkspaces'
   | 'pendingWrite'
   | 'profileMaintenancePending'
   | 'profileStateAuthority'

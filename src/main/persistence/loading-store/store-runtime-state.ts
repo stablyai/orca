@@ -29,6 +29,7 @@ import type {
 } from '../scheduling-automations/automation-owner-projection'
 import type { ProfileStatePersistenceAuthority } from './profile-state-authority'
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
+import type { PendingRemoteLayoutWorkspaces } from './remote-layout-snapshot-serialization'
 import { resolveNewPaneShellPath } from '../migrating-orcad-catalog/orcad-shell-history-installer'
 import { OrcadTerminalRestoreHintStore } from '../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
 
@@ -82,6 +83,7 @@ export class StoreRuntimeState {
   /** Null requests complete-document fallback. */
   dirtyProfileStateDomains: Set<string> | null = new Set()
   pendingAutomationRunsAfter: readonly AutomationRun[] | undefined
+  pendingRemoteLayoutWorkspaces: PendingRemoteLayoutWorkspaces = new Map()
   githubCacheDirty = false
   githubCachePersistedAt = Date.now()
   githubCachePersistTimer: ReturnType<typeof setTimeout> | null = null

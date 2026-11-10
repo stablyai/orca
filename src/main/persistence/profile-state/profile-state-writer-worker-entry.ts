@@ -40,6 +40,13 @@ async function execute(request: ProfileStateWriterRequest): Promise<ProfileState
   }
   let exportedRevision: number | null | undefined
   switch (request.command) {
+    case 'write-parts':
+      authority.writeSerializedDomainParts(
+        request.replacements,
+        request.update,
+        request.runPayloads?.map((payload): unknown => JSON.parse(payload))
+      )
+      break
     case 'write-state':
       authority.writeSerializedState(Buffer.from(request.payload))
       break

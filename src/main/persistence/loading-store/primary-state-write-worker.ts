@@ -2,6 +2,10 @@ import type { AsyncProfileStateAuthority } from './profile-state-authority'
 import type { PrimaryStateWriteOperationsContext } from './primary-state-write-context'
 import { markPrimaryStateWriteDurable } from './primary-state-write-runtime'
 import { prepareSelectiveProfileStateWrite } from './profile-state-selective-write'
+import {
+  restoreRemoteLayoutWorkspaces,
+  type PendingRemoteLayoutWorkspaces
+} from './remote-layout-snapshot-serialization'
 
 // Capture intent now; edits made while this operation waits belong to the next write.
 export async function writeProfileStateInWorker(
@@ -12,8 +16,10 @@ export async function writeProfileStateInWorker(
   const generation = runtime.writeGeneration
   const dirtyDomains = runtime.dirtyProfileStateDomains
   const automationRuns = runtime.pendingAutomationRunsAfter
+  const remoteWorkspaces = runtime.pendingRemoteLayoutWorkspaces
   runtime.dirtyProfileStateDomains = new Set()
   runtime.pendingAutomationRunsAfter = undefined
+  runtime.pendingRemoteLayoutWorkspaces = new Map()
 
   const restoreIntent = (): void => {
     if (dirtyDomains === null) {
@@ -24,6 +30,7 @@ export async function writeProfileStateInWorker(
       }
     }
     runtime.pendingAutomationRunsAfter ??= automationRuns
+    restoreRemoteLayoutWorkspaces(runtime.pendingRemoteLayoutWorkspaces, remoteWorkspaces)
   }
 
   try {
@@ -32,6 +39,7 @@ export async function writeProfileStateInWorker(
       serialization,
       dirtyDomains,
       automationRuns,
+      remoteWorkspaces,
       runtime.lastWrittenStateHash,
       () => runtime.writeGeneration === generation
     )
@@ -69,6 +77,7 @@ function beginWrite(
   serialization: PrimaryStateWriteOperationsContext['serialization'],
   dirtyDomains: ReadonlySet<string> | null,
   automationRuns: PrimaryStateWriteOperationsContext['runtime']['pendingAutomationRunsAfter'],
+  remoteWorkspaces: PendingRemoteLayoutWorkspaces,
   lastWrittenStateHash: string | null,
   isCurrent: () => boolean
 ) {
@@ -76,14 +85,20 @@ function beginWrite(
     authority,
     serialization,
     dirtyDomains,
-    automationRuns
+    automationRuns,
+    remoteWorkspaces
   )
   if (selective) {
     if (!isCurrent()) {
       return undefined
     }
-    const completion =
-      selective.automationRuns !== undefined
+    const completion = selective.partsUpdate
+      ? authority.writeSerializedDomainParts!(
+          selective.replacements,
+          selective.partsUpdate,
+          selective.automationRuns
+        )
+      : selective.automationRuns !== undefined
         ? authority.writeSerializedAutomationRuns(selective.replacements, selective.automationRuns)
         : authority.writeSerializedDomains(selective.replacements)
     return { completion, stateHash: null, protectedSecretUpdates: selective.protectedSecretUpdates }

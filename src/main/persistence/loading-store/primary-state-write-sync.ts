@@ -42,6 +42,7 @@ export function writeToDiskSync(
       runtime.pendingAutomationRunsAfter = undefined
     }
     runtime.lastWrittenStateHash = null
+    runtime.pendingRemoteLayoutWorkspaces.clear()
     runtime.protectedSecrets.commitRetentionUpdates(selective.protectedSecretUpdates)
     markPrimaryStateWriteDurable(runtime, opts.expectedGeneration ?? runtime.writeGeneration)
     authority.scheduleBackup?.()
@@ -58,6 +59,7 @@ export function writeToDiskSync(
   if (canReuseDurableProfileState(runtime, stateHash)) {
     runtime.dirtyProfileStateDomains = new Set()
     runtime.pendingAutomationRunsAfter = undefined
+    runtime.pendingRemoteLayoutWorkspaces.clear()
     markPrimaryStateWriteDurable(runtime, opts.expectedGeneration ?? runtime.writeGeneration)
     return true
   }
@@ -68,6 +70,7 @@ export function writeToDiskSync(
   }
   runtime.dirtyProfileStateDomains = new Set()
   runtime.pendingAutomationRunsAfter = undefined
+  runtime.pendingRemoteLayoutWorkspaces.clear()
   if (!isCurrent || isCurrent()) {
     runtime.lastWrittenStateHash = stateHash
     runtime.protectedSecrets.commitRetentionUpdates(protectedSecretUpdates)

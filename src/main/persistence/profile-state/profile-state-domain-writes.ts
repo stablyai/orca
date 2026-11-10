@@ -1,5 +1,7 @@
 import { withProfileStateWriteTransaction } from './profile-state-write-transaction'
 import type Database from '../../sqlite/sync-database'
+import type { ProfileStateDomainPartsUpdate } from '../loading-store/profile-state-authority'
+import { prepareProfileStateDomainPartsUpdate } from './profile-state-domain-parts-update'
 import { readCurrentAutomationRunsState } from './profile-state-automation-runs-storage'
 import {
   PROFILE_STATE_DOCUMENT_VERSION,
@@ -49,6 +51,7 @@ export type ProfileStateDomainTransaction = {
   replacements: readonly ProfileStateDomainMutation[]
   /** Enable selective run-row updates from Store's changed projection. */
   automationRunsAfter?: readonly unknown[]
+  partsUpdate?: ProfileStateDomainPartsUpdate
 }
 
 export type ProfileStateDomainWriteResult = {
@@ -96,6 +99,11 @@ export function writeProfileStateDomains(
     const currentAutomationRuns = readCurrentAutomationRunsState(db, actualRevision)
 
     const updates: PreparedProfileStateMutation[] = []
+    if (transaction.partsUpdate) {
+      prepared.push(
+        prepareProfileStateDomainPartsUpdate(db, transaction.partsUpdate, actualRevision)
+      )
+    }
     const splitStates = new Map<string, ReturnType<typeof readSplitDomainWriteState>>()
     for (const mutation of prepared) {
       const splitState = readSplitDomainWriteState(db, mutation.domain)
@@ -202,6 +210,8 @@ export function writeProfileStateDomains(
             domain: mutation.domain,
             payload: mutation.payload,
             value: mutation.splitDomainValue,
+            parts: mutation.serializedParts,
+            changedPartKeys: mutation.changedPartKeys,
             payloadHash: mutation.payloadHash!,
             domainVersion: mutation.domainVersion,
             revision: nextRevision,
@@ -236,6 +246,7 @@ export function writeProfileStateDomains(
             domain: mutation.domain,
             payload: mutation.payload,
             value: mutation.splitDomainValue,
+            parts: mutation.serializedParts,
             payloadHash: mutation.payloadHash!,
             domainVersion: mutation.domainVersion,
             revision: nextRevision,

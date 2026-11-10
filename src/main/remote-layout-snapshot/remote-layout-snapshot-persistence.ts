@@ -3,7 +3,10 @@ import type { StoreRuntimeState } from '../persistence/loading-store/store-runti
 import type { WriteSchedulingOperations } from '../persistence/loading-store/write-scheduling'
 import { scheduleSave } from '../persistence/loading-store/write-scheduling'
 
-type RemoteLayoutSnapshotRuntime = Pick<StoreRuntimeState, 'state' | 'dirtyProfileStateDomains'>
+type RemoteLayoutSnapshotRuntime = Pick<
+  StoreRuntimeState,
+  'state' | 'dirtyProfileStateDomains' | 'pendingRemoteLayoutWorkspaces'
+>
 
 const remoteLayoutSnapshotPersistenceContext = Symbol('RemoteLayoutSnapshotPersistence')
 type RemoteLayoutSnapshotPersistenceContext = {
@@ -40,7 +43,8 @@ export class RemoteLayoutSnapshotPersistence {
   setRemoteLayoutSnapshot(
     environmentId: string,
     snapshot: RemoteLayoutSnapshot | null,
-    save: 'now' | 'later'
+    save: 'now' | 'later',
+    changedWorkspaces?: readonly string[]
   ): void {
     const { runtime, scheduling } = this[remoteLayoutSnapshotPersistenceContext]
     const { [environmentId]: previous, ...others } = runtime.state.remoteLayoutSnapshots ?? {}
@@ -50,6 +54,14 @@ export class RemoteLayoutSnapshotPersistence {
     runtime.state.remoteLayoutSnapshots = snapshot
       ? { ...others, [environmentId]: snapshot }
       : others
+    const pending = runtime.pendingRemoteLayoutWorkspaces
+    const current = pending.get(environmentId)
+    pending.set(
+      environmentId,
+      changedWorkspaces === undefined || current === null
+        ? null
+        : new Set([...(current ?? []), ...changedWorkspaces])
+    )
     if (save === 'later') {
       runtime.dirtyProfileStateDomains?.add('remoteLayoutSnapshots')
       return

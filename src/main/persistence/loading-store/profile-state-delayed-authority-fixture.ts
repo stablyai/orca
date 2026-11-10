@@ -8,6 +8,7 @@ import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqli
 import { writeVersionedProfileStateExport } from '../profile-state/legacy-json/profile-state-versioned-export'
 import type {
   AsyncProfileStateAuthority,
+  ProfileStateDomainPartsUpdate,
   ProfileStateDomainReplacement
 } from './profile-state-authority'
 import { Store } from './store'
@@ -62,6 +63,22 @@ export class DelayedAuthority implements AsyncProfileStateAuthority {
     const captured = structuredClone(replacements)
     this.captures.push([...captured])
     await this.dispatch(() => this.inner.writeSerializedDomains(captured), true)
+  }
+  async writeSerializedDomainParts(
+    replacements: readonly ProfileStateDomainReplacement[],
+    update: ProfileStateDomainPartsUpdate,
+    runs?: readonly AutomationRun[]
+  ) {
+    const captured = structuredClone({ replacements, update, runs })
+    await this.dispatch(
+      () =>
+        this.inner.writeSerializedDomainParts(
+          captured.replacements,
+          captured.update,
+          captured.runs
+        ),
+      true
+    )
   }
   async writeCompleteSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]) {
     const captured = structuredClone(replacements)

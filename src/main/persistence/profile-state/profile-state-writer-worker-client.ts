@@ -1,4 +1,7 @@
-import type { ProfileStateDomainReplacement } from '../loading-store/profile-state-authority'
+import type {
+  ProfileStateDomainReplacement,
+  ProfileStateDomainPartsUpdate
+} from '../loading-store/profile-state-authority'
 import { ProfileStateWriterConnection } from './profile-state-writer-connection'
 export { resolveProfileStateWriterWorkerPath } from './profile-state-writer-worker-path'
 export {
@@ -8,6 +11,21 @@ export {
 export type { ProfileStateWriterInitialization } from './profile-state-writer-protocol'
 
 export class ProfileStateWriteWorkerClient extends ProfileStateWriterConnection {
+  writeSerializedDomainParts(
+    replacements: readonly ProfileStateDomainReplacement[],
+    update: ProfileStateDomainPartsUpdate,
+    runs?: readonly unknown[]
+  ): Promise<number> {
+    try {
+      this.assertDispatchable()
+      const runPayloads = runs === undefined ? undefined : serializeAutomationRunPayloads(runs)
+      return this.dispatch({ command: 'write-parts', replacements, update, runPayloads }).then(
+        (response) => response.revision
+      )
+    } catch (error) {
+      return Promise.reject(error)
+    }
+  }
   assertWritable(): void {
     this.assertDispatchable()
   }
@@ -36,13 +54,7 @@ export class ProfileStateWriteWorkerClient extends ProfileStateWriterConnection 
   ): Promise<number> {
     try {
       this.assertDispatchable()
-      const runPayloads = runs.map((run) => {
-        const payload = JSON.stringify(run)
-        if (payload === undefined) {
-          throw new Error('Automation run is not serializable')
-        }
-        return payload
-      })
+      const runPayloads = serializeAutomationRunPayloads(runs)
       return this.dispatch({ command: 'write-automation', replacements, runPayloads }).then(
         (response) => response.revision
       )
@@ -66,4 +78,14 @@ export class ProfileStateWriteWorkerClient extends ProfileStateWriterConnection 
       (response) => response.exportedRevision ?? undefined
     )
   }
+}
+
+function serializeAutomationRunPayloads(runs: readonly unknown[]): string[] {
+  return runs.map((run) => {
+    const payload = JSON.stringify(run)
+    if (payload === undefined) {
+      throw new Error('Automation run is not serializable')
+    }
+    return payload
+  })
 }
