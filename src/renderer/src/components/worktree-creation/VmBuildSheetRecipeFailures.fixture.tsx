@@ -50,7 +50,7 @@ const LONG_ERROR = [
   'Recipe aborted after 3 of 5 steps.'
 ].join('\n')
 
-/** Truncated: more than 20 lines, so the note says Copy takes the rest. */
+/** Truncated: more than 20 lines, so only the last 20 show, under a note on the earlier ones. */
 export const recipeDetailsTruncated = expanded(
   frame(entry({ status: 'error', provisioningLog: LOG, errorAt: T0 + 98_000 }), LONG_ERROR)
 )

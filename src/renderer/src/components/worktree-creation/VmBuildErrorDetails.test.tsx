@@ -74,17 +74,23 @@ it('shows a plain summary and keeps the raw recipe error collapsed behind Detail
   expect(toggle.getAttribute('aria-expanded')).toBe('true')
   const text = screen.getByTestId('vm-build-error-details-text').textContent
   expect(text).toBe('Recipe exited with code 1.\n\nError: snapshot snap_7f2c not found')
-  expect(screen.queryByText(/Showing the first/)).toBeNull()
+  expect(screen.queryByText(/earlier line/)).toBeNull()
 })
 
-it('truncates long errors to 20 lines but copies all of them, then confirms', async () => {
+it('notes a single hidden earlier line in the singular', () => {
+  const error = Array.from({ length: 21 }, (_, index) => `line ${index + 1}`).join('\n')
+  render(<Card failure={{ kind: 'create', error }} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Details' }))
+  expect(screen.getByText('…1 earlier line. Copy details includes it.')).toBeTruthy()
+})
+
+it('shows the last 20 lines of a long error but copies all of them, then confirms', async () => {
   const error = Array.from({ length: 30 }, (_, index) => `line ${index + 1}`).join('\n')
   render(<Card failure={{ kind: 'create', error }} />)
   fireEvent.click(screen.getByRole('button', { name: 'Details' }))
   const text = screen.getByTestId('vm-build-error-details-text').textContent ?? ''
-  expect(text.split('\n')).toHaveLength(20)
-  expect(text).not.toContain('line 21')
-  expect(screen.getByText(/Showing the first 20 of 30 lines/)).toBeTruthy()
+  expect(text.split('\n')).toEqual(Array.from({ length: 20 }, (_, index) => `line ${index + 11}`))
+  expect(screen.getByText('…10 earlier lines. Copy details includes them.')).toBeTruthy()
 
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Copy details' }))

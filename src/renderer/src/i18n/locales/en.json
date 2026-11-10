@@ -4356,12 +4356,11 @@
           "VmBuildErrorDetails": {
             "copyFailed": "Couldn’t copy the details.",
             "toggle": "Details",
-            "truncated": "Showing the first {{shown}} of {{count}} lines. Copy includes all of them.",
             "copied": "Copied",
             "copy": "Copy details",
             "copiedStatus": "Details copied",
-            "truncated_one": "Showing the first {{shown}} of {{count}} line. Copy includes all of it.",
-            "truncated_other": "Showing the first {{shown}} of {{count}} lines. Copy includes all of them."
+            "earlierLines_one": "…{{count}} earlier line. Copy details includes it.",
+            "earlierLines_other": "…{{count}} earlier lines. Copy details includes them."
           }
         }
       },

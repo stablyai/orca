@@ -6,20 +6,16 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 
-/** Raw error lines shown before the rest is left to Copy. */
+/** Raw error lines shown; earlier ones are left to Copy. */
 export const ERROR_DETAILS_VISIBLE_LINES = 20
 
-export function truncateErrorDetails(text: string): {
-  visible: string
-  totalLines: number
-  truncated: boolean
-} {
+/** Keeps the last lines, since recipes and their tools usually print the cause at the end. */
+export function truncateErrorDetails(text: string): { visible: string; hiddenLines: number } {
   const lines = text.split('\n')
-  const truncated = lines.length > ERROR_DETAILS_VISIBLE_LINES
+  const hiddenLines = Math.max(0, lines.length - ERROR_DETAILS_VISIBLE_LINES)
   return {
-    visible: truncated ? lines.slice(0, ERROR_DETAILS_VISIBLE_LINES).join('\n') : text,
-    totalLines: lines.length,
-    truncated
+    visible: hiddenLines > 0 ? lines.slice(hiddenLines).join('\n') : text,
+    hiddenLines
   }
 }
 
@@ -31,7 +27,13 @@ export function VmBuildErrorDetails({ text }: { text: string }): React.JSX.Eleme
   const t = useTranslate()
   const [open, setOpen] = React.useState(false)
   const [copied, setCopied] = React.useState(false)
-  const { visible, totalLines, truncated } = React.useMemo(() => truncateErrorDetails(text), [text])
+  const { visible, hiddenLines } = React.useMemo(() => truncateErrorDetails(text), [text])
+
+  const scrollToEnd = React.useCallback((node: HTMLPreElement | null): void => {
+    if (node) {
+      node.scrollTop = node.scrollHeight
+    }
+  }, [])
 
   React.useEffect(() => {
     if (!copied) {
@@ -77,29 +79,29 @@ export function VmBuildErrorDetails({ text }: { text: string }): React.JSX.Eleme
       </CollapsibleTrigger>
       <CollapsibleContent animation="height">
         <div className="flex flex-col gap-1.5 pt-1.5">
+          {hiddenLines > 0 ? (
+            <span className="text-xs text-muted-foreground">
+              {t(
+                'auto.components.worktree.creation.VmBuildErrorDetails.earlierLines',
+                '…{{count}} earlier lines. Copy details includes them.',
+                {
+                  count: hiddenLines,
+                  defaultValue_one: '…{{count}} earlier line. Copy details includes it.'
+                }
+              )}
+            </span>
+          ) : null}
           {/* Capped and scrollable too, so one very long wrapped line can't bury the actions. */}
           <pre
+            // Starts scrolled to the end, where the cause usually is, like the visible window.
+            ref={scrollToEnd}
             data-testid="vm-build-error-details-text"
             tabIndex={0}
             className="scrollbar-sleek max-h-80 max-w-full overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/40 px-3 py-2 font-mono text-xs leading-5 text-muted-foreground outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
           >
             {visible}
           </pre>
-          <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
-            {truncated ? (
-              <span className="mr-auto text-xs text-muted-foreground">
-                {t(
-                  'auto.components.worktree.creation.VmBuildErrorDetails.truncated',
-                  'Showing the first {{shown}} of {{count}} lines. Copy includes all of them.',
-                  {
-                    shown: ERROR_DETAILS_VISIBLE_LINES,
-                    count: totalLines,
-                    defaultValue_one:
-                      'Showing the first {{shown}} of {{count}} line. Copy includes all of it.'
-                  }
-                )}
-              </span>
-            ) : null}
+          <div className="flex items-center justify-end">
             <Button type="button" variant="ghost" size="xs" onClick={copy}>
               {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
               {copied
