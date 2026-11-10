@@ -15,19 +15,27 @@ export function errorData(error: unknown): Record<string, unknown> | undefined {
     : undefined
 }
 
+/** What the server's answer says that this Orca says otherwise. */
+export type ServerTerms = {
+  server: string
+  forward?: RemoteForwardKey
+  /** The link the call went under: the server's Run for it is this Orca's Run here. */
+  link?: { peer_run_id: string | null; run_id: string }
+}
+
 /**
  * The server's answer, or its error, in the caller's own terms: the caller knows its request ID,
- * not the scoped key the server saw, and an error names the server it came from so recovery
- * (`request-show --on`) asks there.
+ * not the scoped key the server saw, and its own Run, not the server's; an error names the server
+ * it came from so recovery (`request-show --on`) asks there.
  */
-export function inServerTerms<T>(
-  value: T,
-  forward: RemoteForwardKey | undefined,
-  server: string
-): T {
+export function inServerTerms<T>(value: T, { server, forward, link }: ServerTerms): T {
+  const pairs: [string, string][] = [
+    ...(forward ? [[forward.key, forward.requestId] as [string, string]] : []),
+    ...(link?.peer_run_id ? [[link.peer_run_id, link.run_id] as [string, string]] : [])
+  ]
   const swap = (item: unknown): unknown => {
     if (typeof item === 'string') {
-      return forward ? item.split(forward.key).join(forward.requestId) : item
+      return pairs.reduce((text, [from, to]) => text.split(from).join(to), item)
     }
     if (Array.isArray(item)) {
       return item.map(swap)
