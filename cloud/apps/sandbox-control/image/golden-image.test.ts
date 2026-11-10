@@ -197,3 +197,12 @@ describe('agents the image ships', () => {
     expect(provision).toMatch(/for bin in claude codex opencode gemini cursor-agent copilot gh; do/)
   })
 })
+
+describe('orcad env', () => {
+  it("passes the provider's CA settings to orcad, so Node agents trust the egress proxy's certificate", () => {
+    const start = readFileSync(fileURLToPath(new URL('./vm/orca-sandbox-start', import.meta.url).href), 'utf8')
+    expect(start).toMatch(/ca_env=\(NODE_USE_SYSTEM_CA="\$\{NODE_USE_SYSTEM_CA:-1\}"\)/)
+    expect(start).toMatch(/for name in NODE_EXTRA_CA_CERTS SSL_CERT_FILE; do/)
+    expect(start).toMatch(/env -i HOME="\$HOME" USER="\$\(id -un\)" LANG=C\.UTF-8 TERM=xterm-256color "\$\{ca_env\[@\]\}"/)
+  })
+})
