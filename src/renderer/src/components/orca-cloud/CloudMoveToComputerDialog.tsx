@@ -14,6 +14,7 @@ import { runOrcaCloudTransferToLocal } from '@/lib/orca-cloud-transfer-flow'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import {
   closeMoveToThisComputer,
+  getCloudMoveState,
   hideRunningMove,
   effectiveArchiveAfter,
   setMoveArchiveAfter,
@@ -33,6 +34,14 @@ import {
 } from './CloudMoveToComputerView'
 
 export type { CloudMoveConflicts } from './CloudMoveToComputerView'
+
+/** A settled move that is still hidden ends when its notice goes away. */
+function closeHiddenResult(): void {
+  const current = getCloudMoveState()
+  if ((current.stage === 'done' || current.stage === 'failed') && current.hidden) {
+    closeMoveToThisComputer()
+  }
+}
 
 /** Hide unmounts the dialog; give focus back to the workspace instead of leaving it on <body>. */
 function hideAndReturnFocus(): void {
@@ -78,6 +87,10 @@ function useHiddenMoveToast(state: CloudMoveState, t: Translate): void {
         {
           id,
           duration: 12_000,
+          // The notice is the only way back to a hidden result: once it goes, the move is over.
+          // (Show also dismisses it, but the result is visible again by then, so it stays.)
+          onAutoClose: closeHiddenResult,
+          onDismiss: closeHiddenResult,
           action: {
             label: t('orcaCloudMove.done.open', 'Open workspace'),
             onClick: () => {
@@ -130,7 +143,7 @@ export function CloudMoveToComputerDialogHost({
       onOpenChange={(open) => {
         if (!open) {
           if (running) {
-            hideRunningMove(true)
+            hideAndReturnFocus()
           } else {
             closeMoveToThisComputer()
           }

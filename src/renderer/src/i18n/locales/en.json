@@ -26672,7 +26672,6 @@
     },
     "description": "Copy this cloud workspace to a local workspace.",
     "hide": "Hide",
-    "failedLocalDetail": "The local workspace was created, but the changes didn’t apply. Your files are safe in the cloud workspace.",
     "show": "Show",
     "stepState": {
       "active": "in progress",
@@ -26699,6 +26698,7 @@
       "creating": "Creating the local workspace is taking too long, so Orca stopped waiting.",
       "applying": "Applying the changes is taking too long, so Orca stopped waiting."
     },
-    "openFolder": "Open folder"
+    "openFolder": "Open folder",
+    "failedLocalNext": "Use Move again from the sandbox panel to bring them over. Your files are safe in the cloud workspace."
   }
 }
