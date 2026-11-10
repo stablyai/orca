@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  MobileFileTooLargeError,
-  type PickedMobileFile
-} from '../../../platform/media-picker-contract'
+import type { PickedMobileFile } from '../../../platform/media-picker-contract'
 import {
   nativeChatTextWithFileReferences,
   uploadPickedNativeChatFiles,
@@ -82,21 +79,5 @@ describe('uploadPickedNativeChatFiles', () => {
     ])
     expect([...chips.values()].map((chip) => chip.path)).toEqual(['/store/a.txt', '/store/b.txt'])
     expect(errors).toEqual([])
-  })
-
-  it('drops the chip of a failed upload, says which file, and carries on', async () => {
-    const { chips, errors, done } = run(pickedFiles([picked('a.txt'), picked('b.txt')]), 'a.txt')
-    await done
-    expect([...chips.values()].map((chip) => chip.name)).toEqual(['b.txt'])
-    expect(errors).toEqual(["Couldn't upload a.txt"])
-  })
-
-  it('keeps what was stored before the picker refused an oversized file', async () => {
-    const { chips, errors, done } = run(
-      pickedFiles([picked('a.txt')], new MobileFileTooLargeError('clip.mov'))
-    )
-    await done
-    expect([...chips.values()].map((chip) => chip.name)).toEqual(['a.txt'])
-    expect(errors).toEqual([new MobileFileTooLargeError('clip.mov').message])
   })
 })

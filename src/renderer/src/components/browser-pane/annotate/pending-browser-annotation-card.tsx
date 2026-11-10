@@ -1,4 +1,4 @@
-import { ImeTextarea } from '@/lib/ime-text-field'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import { useEffect, useState } from 'react'
 import { CornerDownLeft, MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,7 @@ import {
   GRAB_BUDGET,
   type BrowserAnnotationIntent,
   type BrowserGrabPayload
-} from '../../../../../shared/browser-grab-types'
+} from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   BROWSER_ANNOTATION_INTENT_OPTIONS,

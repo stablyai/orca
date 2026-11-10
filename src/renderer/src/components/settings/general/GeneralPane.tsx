@@ -1,31 +1,34 @@
 import type React from 'react'
+import { useEffect, useRef } from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { useAppStore } from '../../../store/index'
 import { CliSection } from '../cli/install/CliSection'
 import { GeneralEditorSettingsSection } from '../editor/GeneralEditorSettingsSection'
+import { GeneralAutoSaveSetting } from '../editor/GeneralAutoSaveSetting'
 import { GeneralSupportSection } from './GeneralSupportSection'
 import { GeneralUpdateSettingsSection } from '../updates/GeneralUpdateSettingsSection'
 import { GeneralWorkspaceSettingsSection } from './GeneralWorkspaceSettingsSection'
 import {
   getGeneralCliSearchEntries,
   getGeneralNavigationSearchEntries,
-  getGeneralUpdateSearchEntries,
-  getGeneralWorkspaceSearchEntries
+  getGeneralUpdateSearchEntries
 } from './general-search'
-import { getGeneralEditorSearchEntries } from '../editor/general-editor-search'
+import { getGeneralEditorSearchDescriptors } from '../editor/general-editor-search'
 import { getGeneralSupportSearchEntries } from './general-support-search'
 import { getGeneralProjectRuntimeSearchEntries } from './project-runtime/general-project-runtime-search'
 import { RecentTabOrderControl } from '../appearance/RecentTabOrderControl'
-import { SettingsSectionStack } from '../section-layout/SettingsSectionStack'
 import { matchesSettingsSearch, type SettingsSearchEntry } from '../search/settings-search'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
+import { SettingsNavigationRow } from '../form-controls/SettingsNavigationRow'
 import { useTranslate } from '@/i18n/use-translate'
 import { DefaultWindowsProjectRuntimeSetting } from './project-runtime/DefaultWindowsProjectRuntimeSetting'
-import { defaultScopeHost } from '@/lib/default-creation-host'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
-
-type GeneralSearchEntry = ReturnType<typeof getGeneralNavigationSearchEntries>[number]
+import { GeneralConfirmationsSection } from './GeneralConfirmationsSection'
+import { GeneralSearchResults } from './GeneralSearchResults'
+import { getGeneralSubPageTitle, type GeneralSubPage } from './general-sub-pages'
+import { useOpenInMenuDraft } from './OpenInMenuSetting'
 
 export function getDesktopPlatformFromUserAgent(userAgent: string): 'darwin' | 'win32' | 'other' {
   if (userAgent.includes('Mac')) {
@@ -37,28 +40,19 @@ export function getDesktopPlatformFromUserAgent(userAgent: string): 'darwin' | '
   return 'other'
 }
 
-/** Gate Windows directly: empty search matches empty entries and would leave an orphan header after the inner control self-hides. */
 export function shouldShowProjectRuntimeSection(
   wslSupportedPlatform: boolean | undefined,
   searchQuery: string,
-  projectRuntimeSearchEntries: SettingsSearchEntry[]
+  entries: SettingsSearchEntry[]
 ): boolean {
-  return (
-    Boolean(wslSupportedPlatform) && matchesSettingsSearch(searchQuery, projectRuntimeSearchEntries)
-  )
+  return Boolean(wslSupportedPlatform) && matchesSettingsSearch(searchQuery, entries)
 }
 
 export function getTabOrderControlSearchKeywords(
-  navigationEntries: GeneralSearchEntry[] = getGeneralNavigationSearchEntries()
+  entries = getGeneralNavigationSearchEntries()
 ): string[] {
-  const tabOrderSearchEntry = navigationEntries[0]
-  return tabOrderSearchEntry
-    ? [
-        tabOrderSearchEntry.title,
-        tabOrderSearchEntry.description ?? '',
-        ...(tabOrderSearchEntry.keywords ?? [])
-      ]
-    : []
+  const entry = entries[0]
+  return entry ? [entry.title, entry.description ?? '', ...(entry.keywords ?? [])] : []
 }
 
 const EMPTY_WSL_DISTROS: string[] = []
@@ -73,204 +67,235 @@ type GeneralPaneProps = {
   wslAvailable?: boolean
   wslDistros?: string[]
   wslCapabilitiesLoading?: boolean
+  subPage?: GeneralSubPage | null
+  onSelectSubPage: (page: GeneralSubPage, sectionId?: string) => void
 }
 
-export function GeneralPane({
-  settings,
-  updateSettings,
-  updateSettingsOrThrow,
-  fontSuggestions,
-  onRequestFontSuggestions,
-  wslSupportedPlatform,
-  wslAvailable,
-  wslDistros = EMPTY_WSL_DISTROS,
-  wslCapabilitiesLoading
-}: GeneralPaneProps): React.JSX.Element {
-  const t = useTranslate()
-  const searchQuery = useAppStore((s) => s.settingsSearchQuery)
-  const sourceDefaultsSupportedRuntimeEnvironmentId = useAppStore(
-    (s) => s.worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId
-  )
-  const defaultsSupportedRuntimeEnvironmentId = useAppStore(
-    (s) => s.worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId
-  )
-  // Until Settings chooses a host, the store mirrors visibility defaults from the default scope host.
-  const activeRuntimeTarget = defaultScopeHost(settings)
-  const defaultsSupported =
-    activeRuntimeTarget.kind === 'local' ||
-    activeRuntimeTarget.environmentId === defaultsSupportedRuntimeEnvironmentId
-  const sourceDefaultsSupported =
-    defaultsSupported &&
-    (activeRuntimeTarget.kind === 'local' ||
-      activeRuntimeTarget.environmentId === sourceDefaultsSupportedRuntimeEnvironmentId)
-  const generalNavigationSearchEntries = getGeneralNavigationSearchEntries()
-  const tabOrderKeywords = getTabOrderControlSearchKeywords(generalNavigationSearchEntries)
-  const projectRuntimeSearchEntries = wslSupportedPlatform
-    ? getGeneralProjectRuntimeSearchEntries()
-    : []
+export function GeneralPane(props: GeneralPaneProps): React.JSX.Element {
+  const query = useAppStore((state) => state.settingsSearchQuery)
+  const refreshRemoteUpdates = useAppStore((state) => state.refreshRemoteServerUpdates)
+  const remoteUpdatesRequested = useRef(false)
+  const showAbout =
+    !props.subPage &&
+    matchesSettingsSearch(query, [
+      ...getGeneralUpdateSearchEntries(),
+      ...getGeneralSupportSearchEntries()
+    ])
+  useEffect(() => {
+    if (showAbout && !remoteUpdatesRequested.current) {
+      remoteUpdatesRequested.current = true
+      void refreshRemoteUpdates()
+    }
+  }, [showAbout, refreshRemoteUpdates])
+  return <GeneralPaneView key={props.subPage ?? 'root'} {...props} query={query} />
+}
 
-  const visibleSections = [
-    matchesSettingsSearch(searchQuery, generalNavigationSearchEntries) ? (
-      <SettingsGroup
-        key="navigation"
-        title={t('auto.components.settings.GeneralPane.d58fccfd84', 'Navigation')}
-      >
-        <RecentTabOrderControl
-          ctrlTabOrderMode={settings.ctrlTabOrderMode ?? 'mru'}
-          keywords={tabOrderKeywords}
-          updateSettings={updateSettings}
-        />
-        <SearchableSetting
-          title={t(
-            'auto.components.settings.GeneralPane.editor_preview_tabs',
-            'Reuse a preview tab when browsing files'
-          )}
-          description={t(
-            'auto.components.settings.GeneralPane.editor_preview_tabs_description',
-            'Single-clicking a file in the Explorer, or following a link in Markdown source, reuses one italic preview tab per group instead of opening a new one. Editing, double-clicking, or pinning keeps that tab open. Turn this off to give every file its own tab.'
-          )}
-          keywords={['preview', 'tab', 'editor', 'explorer', 'reuse', 'replace', 'italic']}
-        >
-          <SettingsSwitchRow
-            label={t(
-              'auto.components.settings.GeneralPane.editor_preview_tabs',
-              'Reuse a preview tab when browsing files'
-            )}
-            description={t(
-              'auto.components.settings.GeneralPane.editor_preview_tabs_description',
-              'Single-clicking a file in the Explorer, or following a link in Markdown source, reuses one italic preview tab per group instead of opening a new one. Editing, double-clicking, or pinning keeps that tab open. Turn this off to give every file its own tab.'
-            )}
-            checked={settings.editorPreviewTabsEnabled ?? true}
-            onChange={() =>
-              updateSettings({
-                editorPreviewTabsEnabled: !(settings.editorPreviewTabsEnabled ?? true)
-              })
-            }
-          />
-        </SearchableSetting>
-        <SearchableSetting
-          title={t(
-            'auto.components.settings.GeneralPane.5cb5475664',
-            'Confirm before closing pinned tabs'
-          )}
-          description={t(
-            'auto.components.settings.GeneralPane.36b2a5dc6d',
-            'Show a confirmation dialog before a pinned tab is closed.'
-          )}
-          keywords={['pinned', 'tab', 'confirm', 'close']}
-        >
-          <SettingsSwitchRow
-            label={t(
-              'auto.components.settings.GeneralPane.5cb5475664',
-              'Confirm before closing pinned tabs'
-            )}
-            description={t(
-              'auto.components.settings.GeneralPane.36b2a5dc6d',
-              'Show a confirmation dialog before a pinned tab is closed.'
-            )}
-            checked={settings.confirmClosePinnedTab ?? true}
-            onChange={() =>
-              updateSettings({ confirmClosePinnedTab: !(settings.confirmClosePinnedTab ?? true) })
-            }
-          />
-        </SearchableSetting>
-        <SearchableSetting
-          title={t(
-            'auto.components.settings.GeneralPane.confirm_running_work_close',
-            'Confirm before closing active chats or terminals'
-          )}
-          description={t(
-            'auto.components.settings.GeneralPane.confirm_running_work_close_description',
-            'Ask before stopping an active agent or command when closing its chat or terminal.'
-          )}
-          keywords={['chat', 'terminal', 'agent', 'command', 'confirm', 'close', 'OMP']}
-        >
-          <SettingsSwitchRow
-            label={t(
-              'auto.components.settings.GeneralPane.confirm_running_work_close',
-              'Confirm before closing active chats or terminals'
-            )}
-            description={t(
-              'auto.components.settings.GeneralPane.confirm_running_work_close_description',
-              'Ask before stopping an active agent or command when closing its chat or terminal.'
-            )}
-            checked={!settings.skipCloseTerminalWithRunningProcessConfirm}
-            onChange={() =>
-              updateSettings({
-                skipCloseTerminalWithRunningProcessConfirm:
-                  !settings.skipCloseTerminalWithRunningProcessConfirm
-              })
-            }
-          />
-        </SearchableSetting>
-      </SettingsGroup>
-    ) : null,
-    matchesSettingsSearch(searchQuery, getGeneralWorkspaceSearchEntries()) ? (
+function GeneralPaneView({
+  subPage = null,
+  query,
+  ...props
+}: GeneralPaneProps & { query: string }): React.JSX.Element {
+  const t = useTranslate()
+  // This owner survives search presentation changes, but ends when its selected page is left.
+  const openInDraft = useOpenInMenuDraft(props.settings.openInApplications)
+  const sourceRuntimeId = useAppStore(
+    (state) => state.worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId
+  )
+  const defaultsRuntimeId = useAppStore(
+    (state) => state.worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId
+  )
+  const target = defaultScopeHost(props.settings)
+  const defaultsSupported = target.kind === 'local' || target.environmentId === defaultsRuntimeId
+  const sourceDefaultsSupported =
+    defaultsSupported && (target.kind === 'local' || target.environmentId === sourceRuntimeId)
+  if (query.trim() === '' && subPage) {
+    return subPage === 'editor' ? (
+      <GeneralEditorSettingsSection {...props} />
+    ) : (
       <GeneralWorkspaceSettingsSection
-        key="workspace"
-        settings={settings}
-        updateSettings={updateSettings}
-        updateSettingsOrThrow={updateSettingsOrThrow}
+        {...props}
+        page={subPage}
+        openInDraft={openInDraft}
         defaultsSupported={defaultsSupported}
         sourceDefaultsSupported={sourceDefaultsSupported}
       />
-    ) : null,
-    shouldShowProjectRuntimeSection(
-      wslSupportedPlatform,
-      searchQuery,
-      projectRuntimeSearchEntries
-    ) ? (
-      <SettingsGroup
-        key="project-runtime"
-        title={t('auto.components.settings.GeneralPane.projectRuntime', 'Project Runtime')}
-        description={t(
-          'auto.components.settings.GeneralPane.projectRuntimeDescription',
-          'Default runtime for local Windows projects that do not override it.'
-        )}
-      >
-        <DefaultWindowsProjectRuntimeSetting
-          settings={settings}
-          updateSettings={updateSettings}
-          wslSupportedPlatform={Boolean(wslSupportedPlatform)}
-          wslAvailable={Boolean(wslAvailable)}
-          wslDistros={wslDistros}
-          wslCapabilitiesLoading={Boolean(wslCapabilitiesLoading)}
-        />
-      </SettingsGroup>
-    ) : null,
-    matchesSettingsSearch(searchQuery, getGeneralEditorSearchEntries()) ? (
-      <GeneralEditorSettingsSection
-        key="editor"
-        settings={settings}
-        updateSettings={updateSettings}
-        fontSuggestions={fontSuggestions}
-        onRequestFontSuggestions={onRequestFontSuggestions}
-      />
-    ) : null,
-    matchesSettingsSearch(searchQuery, getGeneralCliSearchEntries()) ? (
-      <CliSection
-        key="cli"
-        currentPlatform={getDesktopPlatformFromUserAgent(navigator.userAgent)}
-        settings={settings}
-        wslSupportedPlatform={wslSupportedPlatform}
-        wslAvailable={wslAvailable}
-        wslCapabilitiesLoading={wslCapabilitiesLoading}
-      />
-    ) : null,
-    matchesSettingsSearch(searchQuery, getGeneralUpdateSearchEntries()) ? (
-      <GeneralUpdateSettingsSection key="updates" />
-    ) : null
-    // Render Support separately so its placeholder/divider can collapse without leaving a dangling separator.
-  ]
-
+    )
+  }
+  const showNavigation = matchesSettingsSearch(query, {
+    title: t('auto.components.settings.Settings.7807c11c4d', 'General')
+  })
   return (
     <div className="space-y-6">
-      <SettingsSectionStack sections={visibleSections} />
-      {matchesSettingsSearch(searchQuery, getGeneralSupportSearchEntries()) ? (
-        <GeneralSupportSection
-          hasPrecedingSections={visibleSections.some((section) => section !== null)}
-        />
+      <GeneralRootSettings {...props} query={query} showNavigation={showNavigation} />
+      {query.trim() && !showNavigation ? (
+        <GeneralSearchResults query={query} onSelect={props.onSelectSubPage} />
       ) : null}
     </div>
+  )
+}
+
+function GeneralRootSettings({
+  query,
+  showNavigation,
+  settings,
+  updateSettings,
+  onSelectSubPage,
+  wslSupportedPlatform,
+  wslAvailable,
+  wslCapabilitiesLoading,
+  wslDistros = EMPTY_WSL_DISTROS
+}: GeneralPaneProps & { query: string; showNavigation: boolean }): React.JSX.Element {
+  const t = useTranslate()
+  const tabsEntries = getGeneralNavigationSearchEntries()
+  const runtimeEntries = getGeneralProjectRuntimeSearchEntries()
+  const showRuntime = shouldShowProjectRuntimeSection(wslSupportedPlatform, query, runtimeEntries)
+  const autoSaveEntries = getGeneralEditorSearchDescriptors()
+    .filter((descriptor) => descriptor.page === null)
+    .map(({ entry }) => entry)
+  const aboutMatches = matchesSettingsSearch(query, [
+    ...getGeneralUpdateSearchEntries(),
+    ...getGeneralSupportSearchEntries()
+  ])
+  const worktreeDefaults = settings.worktreeVisibilityDefaults
+  const visibilitySummary =
+    Object.keys(worktreeDefaults?.sourcePreferences?.builtIn ?? {}).length ||
+    Object.keys(worktreeDefaults?.sourcePreferences?.custom ?? {}).length ||
+    worktreeDefaults?.customSources?.length
+      ? t('settings.general.worktrees.customRules', 'Custom rules')
+      : worktreeDefaults?.external === 'show'
+        ? t('settings.general.worktrees.shown', 'Shown by default')
+        : t('settings.general.worktrees.hidden', 'All hidden')
+  return (
+    <>
+      {matchesSettingsSearch(query, tabsEntries) ? (
+        <SettingsGroup title={t('settings.general.tabs.title', 'Tabs')}>
+          <RecentTabOrderControl
+            ctrlTabOrderMode={settings.ctrlTabOrderMode ?? 'mru'}
+            keywords={getTabOrderControlSearchKeywords(tabsEntries)}
+            updateSettings={updateSettings}
+          />
+          <SearchableSetting
+            title={t('settings.general.previewTabs.title', 'Preview tabs')}
+            description={t(
+              'settings.general.previewTabs.description',
+              'Single-clicking a file reuses one preview tab until you edit or pin it.'
+            )}
+            keywords={[
+              'preview',
+              'tab',
+              'editor',
+              'explorer',
+              'reuse',
+              'replace',
+              'italic',
+              t(
+                'auto.components.settings.GeneralPane.editor_preview_tabs',
+                'Reuse a preview tab when browsing files'
+              )
+            ]}
+          >
+            <SettingsSwitchRow
+              label={t('settings.general.previewTabs.title', 'Preview tabs')}
+              description={t(
+                'settings.general.previewTabs.description',
+                'Single-clicking a file reuses one preview tab until you edit or pin it.'
+              )}
+              checked={settings.editorPreviewTabsEnabled ?? true}
+              onChange={() =>
+                updateSettings({
+                  editorPreviewTabsEnabled: !(settings.editorPreviewTabsEnabled ?? true)
+                })
+              }
+            />
+          </SearchableSetting>
+        </SettingsGroup>
+      ) : null}
+      {showNavigation || showRuntime ? (
+        <SettingsGroup title={t('settings.general.workspaces.title', 'Workspaces')}>
+          {showNavigation ? (
+            <>
+              <SettingsNavigationRow
+                title={getGeneralSubPageTitle('folder', t)}
+                description={settings.workspaceDir}
+                value={
+                  settings.nestWorkspaces
+                    ? t('settings.general.folder.perProject', 'Folder per project')
+                    : t('settings.general.folder.oneFolder', 'One folder')
+                }
+                onClick={() => onSelectSubPage('folder')}
+              />
+              <SettingsNavigationRow
+                title={getGeneralSubPageTitle('worktrees', t)}
+                description={t(
+                  'settings.general.worktrees.description',
+                  'Claude Code, GSD and other locations'
+                )}
+                value={visibilitySummary}
+                onClick={() => onSelectSubPage('worktrees')}
+              />
+              <SettingsNavigationRow
+                title={getGeneralSubPageTitle('open-in', t)}
+                description={t(
+                  'settings.general.openIn.description',
+                  'Apps in a workspace’s Open in menu'
+                )}
+                value={
+                  settings.openInApplications?.map((application) => application.label).join(', ') ||
+                  t('settings.general.openIn.none', 'No apps added')
+                }
+                onClick={() => onSelectSubPage('open-in')}
+              />
+            </>
+          ) : null}
+          {showRuntime ? (
+            <DefaultWindowsProjectRuntimeSetting
+              settings={settings}
+              updateSettings={updateSettings}
+              wslSupportedPlatform={Boolean(wslSupportedPlatform)}
+              wslAvailable={Boolean(wslAvailable)}
+              wslDistros={wslDistros}
+              wslCapabilitiesLoading={Boolean(wslCapabilitiesLoading)}
+            />
+          ) : null}
+        </SettingsGroup>
+      ) : null}
+      <GeneralConfirmationsSection settings={settings} updateSettings={updateSettings} />
+      {showNavigation || matchesSettingsSearch(query, autoSaveEntries) ? (
+        <SettingsGroup
+          title={t('auto.components.settings.GeneralEditorSettingsSection.45c6e85c4d', 'Editor')}
+        >
+          <GeneralAutoSaveSetting settings={settings} updateSettings={updateSettings} />
+          {showNavigation ? (
+            <SettingsNavigationRow
+              title={getGeneralSubPageTitle('editor', t)}
+              description={t(
+                'settings.general.editor.description',
+                'Saving, editor, diff and Markdown options'
+              )}
+              value={
+                settings.diffDefaultView === 'side-by-side'
+                  ? t('settings.general.editor.sideBySide', 'Side-by-side diffs')
+                  : t('settings.general.editor.inline', 'Inline diffs')
+              }
+              onClick={() => onSelectSubPage('editor')}
+            />
+          ) : null}
+        </SettingsGroup>
+      ) : null}
+      {matchesSettingsSearch(query, getGeneralCliSearchEntries()) ? (
+        <CliSection
+          currentPlatform={getDesktopPlatformFromUserAgent(navigator.userAgent)}
+          settings={settings}
+          wslSupportedPlatform={wslSupportedPlatform}
+          wslAvailable={wslAvailable}
+          wslCapabilitiesLoading={wslCapabilitiesLoading}
+        />
+      ) : null}
+      {aboutMatches ? (
+        <GeneralUpdateSettingsSection>
+          <GeneralSupportSection hasPrecedingSections={false} inline />
+        </GeneralUpdateSettingsSection>
+      ) : null}
+    </>
   )
 }

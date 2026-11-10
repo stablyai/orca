@@ -4,12 +4,12 @@ import { useMemo } from 'react'
 import { normalizeSparseDirectoryLines, sparseDirectoriesMatch } from '@/lib/sparse-paths'
 import {
   parseGitHubIssueOrPRNumber,
-  parseGitHubIssueOrPRLink,
-  normalizeGitHubLinkQuery
-} from '@/lib/github-links'
+  parseGitHubIssueOrPRLink
+} from '../../../../shared/github/links'
+import { normalizeGitHubLinkQuery } from '../../../../shared/new-workspace/github-links'
 import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+import { getWorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
 import {
-  getLinkedWorkItemProvider,
   canUseIssueCommandForLinkedItemProvider,
   getWorkspaceSeedName,
   DEFAULT_ISSUE_COMMAND_TEMPLATE,
@@ -139,7 +139,7 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     selectedRepoIsGit,
     isSetupCheckPending
   )
-  const linkedWorkItemProvider = linkedWorkItem ? getLinkedWorkItemProvider(linkedWorkItem) : null
+  const linkedWorkItemProvider = linkedWorkItem ? getWorkspaceSourceProvider(linkedWorkItem) : null
 
   // Blank unseeded names need globally unique creature names; exclude retired paths too.
   const retiredNamesRefreshKey = useMemo(

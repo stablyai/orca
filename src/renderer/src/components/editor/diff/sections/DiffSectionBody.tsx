@@ -28,7 +28,10 @@ import {
 } from '@/lib/monaco-languages/plugin-syntax-editor-options'
 import { useMonacoTheme } from '@/hooks/use-monaco-theme'
 import { wholeFileDiffTintClass } from '../monaco-view/whole-file-diff-tint'
-import { monacoTypographyOptions, type EditorTypography } from '@/lib/editor-typography'
+import {
+  monacoTypographyOptions,
+  type EditorTypography
+} from '@/lib/editor/appearance/editor-typography'
 
 const ImageDiffViewer = lazy(() => import('../large-files/ImageDiffViewer'))
 

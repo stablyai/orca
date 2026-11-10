@@ -1,6 +1,6 @@
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
-import { agentRowStoppingLabel } from '@/lib/agent-row-stopping-label'
-import type { agentRowDisplayDotState as getAgentDotState } from '../../../../lib/agent-row-dot-state'
+import { agentRowStoppingLabel } from '@/lib/agent-status/presentation/agent-row-stopping-label'
+import type { agentRowDisplayDotState as getAgentDotState } from '../../../../lib/agent-status/presentation/agent-row-dot-state'
 import type { Translate } from '@/i18n/use-translate'
 
 /** Lead with statuses the dot cannot express so truncation cuts the prompt instead. */

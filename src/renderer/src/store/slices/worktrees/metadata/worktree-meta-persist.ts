@@ -18,7 +18,7 @@ import { translate } from '@/i18n/i18n'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { encodePushTargetClearForRuntimeRpc } from './hosted-review-link-mutation'
+import { encodePushTargetClearForRuntimeRpc } from './hosted-review-link-update-encoding'
 
 type PendingDisplayNameWrite = {
   worktreeId: string

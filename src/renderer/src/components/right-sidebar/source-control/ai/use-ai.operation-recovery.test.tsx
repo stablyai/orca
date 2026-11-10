@@ -38,7 +38,7 @@ vi.mock('@/runtime/source-control/git/runtime-git-status-client', async (importO
 }))
 
 const navigate = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/workspace-navigation-toast-action', () => ({
+vi.mock('@/lib/workspace/activation/workspace-navigation-toast-action', () => ({
   workspaceNavigationToastAction: ({
     workspaceId,
     executionHostId

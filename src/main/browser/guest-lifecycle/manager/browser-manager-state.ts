@@ -16,8 +16,8 @@ import type { PopupOwnerContext } from '../popups/browser-popup-ownership'
 import type {
   BrowserDownloadFinishedEvent,
   BrowserDownloadProgressEvent
-} from '../../../../shared/browser-guest-events'
-import type { BrowserGrabCancelReason } from '../../../../shared/browser-grab-types'
+} from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
+import type { BrowserGrabCancelReason } from '../../../../shared/browser/element-grab/browser-grab-types'
 import { BrowserManagerViewportScrollState } from './viewport/browser-manager-viewport-scroll-state'
 import { BrowserGuestDevToolsDock } from '../devtools/browser-guest-devtools-dock'
 

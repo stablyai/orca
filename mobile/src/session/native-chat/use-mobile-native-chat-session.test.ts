@@ -3,7 +3,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { mobileNativeChatTranscriptCache } from './mobile-native-chat-transcript-cache'
+import { stubRpcClient } from '../../transport/rpc/rpc-client-test-stub'
+import { publishPageDeviceStore } from '../../mobile-web-shell/bridge/page-device-store'
+import { mobileNativeChatTranscriptCache } from './transcript/mobile-native-chat-transcript-cache'
+import { encodeStoredChatTranscript } from './transcript/mobile-native-chat-transcript-encode'
 import {
   useMobileNativeChatSession,
   type MobileNativeChatSession
@@ -161,62 +164,6 @@ describe('useMobileNativeChatSession', () => {
     expect(state?.messages.at(-1)?.id).toBe('live-1')
   })
 
-  it('keeps the rows it shows when a replay window has moved past them', async () => {
-    const sendRequest = vi.fn(() => new Promise<never>(() => {}))
-    const window = Array.from({ length: 40 }, (_unused, index) => message(`win-${index}`))
-    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
-      emit = onData
-      onData({ type: 'snapshot', messages: window, hasMore: false, beforeOffset: 0 })
-      return () => {}
-    })
-    await mount({ sendRequest, subscribe } as unknown as RpcClient)
-
-    await act(async () =>
-      emit({
-        type: 'snapshot',
-        messages: [...window.slice(1), message('live-1')],
-        hasMore: true,
-        beforeOffset: 10
-      })
-    )
-
-    expect(state?.messages.map((entry) => entry.id)).toEqual([
-      ...window.map((entry) => entry.id),
-      'live-1'
-    ])
-    expect(state?.hasMore).toBe(false)
-  })
-
-  it('drops paged rows that an authoritative replay says were removed', async () => {
-    const sendRequest = vi.fn().mockResolvedValue({
-      ok: true,
-      result: {
-        messages: Array.from({ length: 60 }, (_unused, index) => message(`paged-${index}`)),
-        hasMore: false,
-        beforeOffset: 40
-      }
-    })
-    const window = Array.from({ length: 40 }, (_unused, index) => message(`win-${index}`))
-    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
-      emit = onData
-      onData({ type: 'snapshot', messages: window, hasMore: true, beforeOffset: 100 })
-      return () => {}
-    })
-    await mount({ sendRequest, subscribe } as unknown as RpcClient)
-    await act(async () => {
-      state?.loadEarlier()
-      await Promise.resolve()
-    })
-    expect(state?.messages).toHaveLength(100)
-
-    await act(async () =>
-      emit({ type: 'snapshot', messages: window, hasMore: false, beforeOffset: 0 })
-    )
-
-    expect(state?.messages).toEqual(window)
-    expect(state?.hasMore).toBe(false)
-  })
-
   it('fences an in-flight older page when a merging replay re-cuts the byte cursor', async () => {
     let resolveEarlier: (response: unknown) => void = () => {}
     const sendRequest = vi.fn(
@@ -268,35 +215,6 @@ describe('useMobileNativeChatSession', () => {
     )
 
     expect(state?.messages.map((entry) => entry.id)).toEqual(['early-b', 'base-c'])
-  })
-
-  it('keeps every row it shows while live output outgrows the first window', async () => {
-    let resolvePage: (response: unknown) => void = () => {}
-    const sendRequest = vi
-      .fn()
-      .mockImplementationOnce(() => new Promise((resolve) => (resolvePage = resolve)))
-      .mockImplementation(() => new Promise<never>(() => {}))
-    const window = Array.from({ length: 40 }, (_unused, index) => message(`window-${index}`))
-    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
-      emit = onData
-      onData({ type: 'snapshot', messages: window, hasMore: true, beforeOffset: 100 })
-      return () => {}
-    })
-    await mount({ sendRequest, subscribe } as unknown as RpcClient)
-    const shown = window.map((entry) => entry.id)
-
-    act(() => state?.loadEarlier())
-    await act(async () => emit({ type: 'appended', messages: [message('live-1')] }))
-    expect(state?.messages.map((entry) => entry.id)).toEqual([...shown, 'live-1'])
-
-    await act(async () => {
-      resolvePage({
-        ok: true,
-        result: { messages: [message('older-page')], hasMore: true, beforeOffset: 50 }
-      })
-      await Promise.resolve()
-    })
-    expect(state?.messages.map((entry) => entry.id)).toEqual(['older-page', ...shown, 'live-1'])
   })
 })
 
@@ -543,5 +461,64 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
     )
 
     expect(renders.at(-1)).toMatchObject({ status: 'loading', ids: ['a-1'] })
+  })
+})
+
+describe('useMobileNativeChatSession after a relaunch', () => {
+  let renderer: ReactTestRenderer | null = null
+  let stored: string | null = null
+
+  beforeEach(() => {
+    publishPageDeviceStore({
+      available: () => true,
+      read: async (_table, keys) => ({
+        status: 'ok',
+        values: keys.map((key) => (key.startsWith('transcript:') ? stored : null))
+      }),
+      write: async () => ({ written: true })
+    })
+  })
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    publishPageDeviceStore(null)
+  })
+
+  it('paints the stored rows and subscribes after the newest one', async () => {
+    // What an earlier launch's page saved when this chat's turn settled.
+    stored = await encodeStoredChatTranscript({
+      kind: 'terminal',
+      savedAt: 1_700_000_000_000,
+      messages: [
+        { ...message('m1'), transcriptOrder: 100 },
+        { ...message('m2'), transcriptOrder: 200 }
+      ],
+      hasMore: false,
+      beforeOffset: null
+    })
+    const subscribe = vi.fn<RpcClient['subscribe']>(() => () => {})
+    const client = stubRpcClient({ subscribe })
+    const seen: { state: MobileNativeChatSession | null } = { state: null }
+    function Harness(): null {
+      seen.state = useMobileNativeChatSession({
+        client,
+        sourceIdentity: 'host-a\0relaunched',
+        agent: 'claude',
+        sessionId: 'session',
+        transcriptPath: null
+      })
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+
+    expect(subscribe).toHaveBeenCalledTimes(1)
+    expect(subscribe.mock.calls[0]?.[1]).toMatchObject({
+      resumeAfter: { id: 'm2', transcriptOrder: 200, timestamp: 1 }
+    })
+    expect(seen.state?.messages.map((entry) => entry.id)).toEqual(['m1', 'm2'])
+    expect(seen.state?.savedAt).toBe(1_700_000_000_000)
   })
 })

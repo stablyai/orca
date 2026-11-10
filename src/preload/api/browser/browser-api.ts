@@ -1,8 +1,8 @@
 import type { BrowserSessionCookieApi } from './browser-session-cookie-api'
-import type { BrowserDevToolsDockBounds } from '../../../shared/browser-devtools-dock'
-import type { BrowserSetAnnotationViewportBridgeArgs } from '../../../shared/browser-annotation-viewport-bridge'
+import type { BrowserDevToolsDockBounds } from '../../../shared/browser/devtools/browser-devtools-dock'
+import type { BrowserSetAnnotationViewportBridgeArgs } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 import type { BrowserAgentPresenceApi } from './browser-agent-presence-api'
-import type { ManagedBrowserProfileOwner } from '../../../shared/browser-profile-scope'
+import type { ManagedBrowserProfileOwner } from '../../../shared/browser/profiles/browser-profile-scope'
 import type { BrowserExtensionToolbarApi } from './browser-extension-toolbar-api'
 import type { BrowserExtensionContextMenuApi } from './browser-extension-context-menu-api'
 import type { BrowserExtensionWebStoreApi } from './browser-extension-webstore-api'
@@ -32,7 +32,7 @@ import type {
   BrowserPagePromptRequest,
   BrowserPagePromptResponse,
   BrowserPagePromptResult
-} from '../../../shared/browser-page-prompt'
+} from '../../../shared/browser/prompts/browser-page-prompt'
 import type {
   BrowserSitePermission,
   BrowserSitePermissionDecision,
@@ -49,7 +49,7 @@ import type {
   BrowserExtractHoverArgs,
   BrowserExtractHoverResult,
   GrabIntent
-} from '../../../shared/browser-grab-types'
+} from '../../../shared/browser/element-grab/browser-grab-types'
 import type {
   BrowserContextMenuDismissedEvent,
   BrowserContextMenuRequestedEvent,
@@ -59,7 +59,7 @@ import type {
   BrowserPermissionDeniedEvent,
   BrowserPopupEvent,
   BrowserTargetUrlChangedEvent
-} from '../../../shared/browser-guest-events'
+} from '../../../shared/browser/guest-lifecycle/browser-guest-events'
 import type {
   BrowserCertificateFailure,
   BrowserCertificateProceedResult,
@@ -130,6 +130,8 @@ export type BrowserApi = {
     browserPageId: string
     point: { x: number; y: number }
   }) => Promise<boolean>
+  /** Types dictated text into the page's focused field; false when no field is focused. */
+  insertDictationText: (args: { browserPageId: string; text: string }) => Promise<boolean>
   setViewportOverride: (args: {
     browserPageId: string
     override: BrowserViewportOverride | null

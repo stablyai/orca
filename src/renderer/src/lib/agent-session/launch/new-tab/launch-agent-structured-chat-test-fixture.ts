@@ -11,8 +11,8 @@ import { createGlobalSettingsFixture } from '../../../../../../shared/global-set
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { registerStructuredSelectionCatalogStore } from '../../options/structured-agent-session-selection-controller'
 import type { AppState } from '@/store/types'
-import type { pasteDraftWhenAgentReady } from '../../../agent-paste-draft'
-import type { waitForAgentReady } from '../../../agent-ready-wait'
+import type { pasteDraftWhenAgentReady } from '../../messaging/paste/agent-paste-draft'
+import type { waitForAgentReady } from '../../messaging/paste/agent-ready-wait'
 import type { createStructuredAgentSessionLaunchIntent as create } from '../../../launch-structured-agent-session'
 import type { launchStructuredAgentSession as launch } from '../structured-agent-session-launch-create-call'
 import type { refreshLocalStructuredSessionTabs as refreshTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
@@ -95,10 +95,12 @@ vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (origin
 )
 vi.mock('sonner', () => ({ toast: { message: vi.fn(), error: mockToastError } }))
 vi.mock('@/components/tab-bar/reconcile-order', () => ({ reconcileTabOrder: vi.fn(() => []) }))
-vi.mock('@/lib/agent-paste-draft', () => ({
+vi.mock('@/lib/agent-session/messaging/paste/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: mockPasteDraftWhenAgentReady
 }))
-vi.mock('@/lib/agent-ready-wait', () => ({ waitForAgentReady: mockWaitForAgentReady }))
+vi.mock('@/lib/agent-session/messaging/paste/agent-ready-wait', () => ({
+  waitForAgentReady: mockWaitForAgentReady
+}))
 vi.mock('@/lib/telemetry', () => ({
   track: vi.fn(),
   tuiAgentToAgentKind: mockLaunchAgentKind

@@ -271,6 +271,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
         preModeChatGetsFullAccess(agent, this.requireStore().getSettings(), process.platform),
       launchAccountHome: (record, purpose) =>
         this.resolveStructuredAgentLaunchAccountHome(record, purpose),
+      prepareLaunchAccountHome: (record, launchDirectory) =>
+        this.prepareStructuredAgentLaunchAccountHome(record, launchDirectory),
       onRequestFailure: (failure) => this.onStructuredRequestFailureForErrorMail(failure),
       // Structured chat has no CLI hooks; this projection drives first-work renaming.
       onSessionStatusChanged: (summary, options) => {

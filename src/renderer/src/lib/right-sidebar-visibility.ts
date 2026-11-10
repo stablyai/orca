@@ -21,6 +21,25 @@ export function canShowRightSidebarForView(activeView: ActiveView): boolean {
   return !RIGHT_SIDEBAR_SUPPRESSED_VIEWS.has(activeView)
 }
 
+/** The toggle button, its shortcut and the menu item share this rule, so none hides what another opens. */
+export function canToggleRightSidebar(activeView: ActiveView): boolean {
+  return canShowRightSidebarForView(activeView)
+}
+
+/** Workspace and creation surfaces have no titlebar strip, so the closed sidebar needs its own toggle there. */
+export function showsFloatingRightSidebarToggle(layout: {
+  activeView: ActiveView
+  workspaceChromeActive: boolean
+  creationLayoutActive: boolean
+  rightSidebarOpen: boolean
+}): boolean {
+  return (
+    (layout.workspaceChromeActive || layout.creationLayoutActive) &&
+    !layout.rightSidebarOpen &&
+    canToggleRightSidebar(layout.activeView)
+  )
+}
+
 export function rightSidebarShowsPullRequestData(
   state: Pick<
     AppState,

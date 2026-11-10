@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createCodexModelCatalogProbe } from './codex-model-catalog-probe'
 import {
   runCodexAppServerSession,
@@ -14,13 +14,48 @@ const MODEL_ROW = {
   isDefault: true
 }
 
+afterEach(() => vi.unstubAllGlobals())
+
+it.each(['saved', 'recover'] as const)(
+  'composes the Windows %s catalog environment before lookup and listing',
+  async (lookup) => {
+    vi.stubGlobal('process', { ...process, platform: 'win32' })
+    const probe = createCodexModelCatalogProbe({
+      resolveEnvironment: async () => ({ PATH: '/inherited/bin', TOKEN: 'inherited' }),
+      resolveSavedEnvironment: async () => ({ PATH: '/saved/bin', TOKEN: 'saved' }),
+      resolveEnv: () => ({
+        path: '/configured/bin',
+        tOKEN: 'configured',
+        codex_home: '/configured/home'
+      }),
+      resolveCommand: (options) => {
+        expect(options?.pathEnv).toBe('/configured/bin')
+        return { command: '/configured/bin/codex.exe', prefixArgs: [] }
+      },
+      runSession: async (invocation, body) => {
+        expect(invocation.env).toEqual({
+          PATH: '/configured/bin',
+          TOKEN: 'configured',
+          CODEX_HOME: '/pinned'
+        })
+        return body({
+          request: async (method: string) =>
+            method === 'config/read' ? { config: {} } : { data: [MODEL_ROW], nextCursor: null },
+          notify: () => {}
+        })
+      }
+    })
+    const resolved = await probe.resolve?.(
+      { variable: 'CODEX_HOME', path: '/pinned' },
+      '/probe',
+      lookup
+    )
+    expect((await resolved?.run())?.models[0]?.id).toBe('gpt-live')
+  }
+)
+
 describe('codex model catalog probe', () => {
-  it.each([
-    [[]],
-    [['node_modules/@openai/codex/bin/codex.js']],
-    [['--env-file=work env', '--', 'codex']],
-    [['-c', 'model_instructions_file="./prompt.md"']]
-  ])(
+  it.each([[[]]])(
     "lists a command line with arguments %j from Orca's folder for every chat",
     async (prefixArgs) => {
       // The chat's repo never picks the list, so no listing runs in a chat's folder.

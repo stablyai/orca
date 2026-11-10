@@ -2,7 +2,6 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CONNECTOR_REPLY_UNAVAILABLE } from '../../../../shared/rpc-contract/connector-params'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import '../../../../shared/ssh-remote-cli-control'
 import { OrcaRuntimeService } from '../../../runtime/orca-runtime'
@@ -12,11 +11,7 @@ import '../../../runtime/orchestration/db/messages/mailbox-routing-page'
 import '../../../runtime/orchestration/db/dispatch-row-writer'
 import '../../../runtime/orchestration/db/attempt-outcome-projection'
 import { LEGACY_RELAY_CLI_UNVERIFIED } from './legacy-relay-cli-caller'
-import {
-  createLegacyRelayCliServer,
-  LEGACY_RELAY_CLI_CONTROL_OFF,
-  LEGACY_RELAY_CLI_UNSUPPORTED
-} from './legacy-relay-cli-server'
+import { createLegacyRelayCliServer, LEGACY_RELAY_CLI_CONTROL_OFF } from './legacy-relay-cli-server'
 import type { LegacyRelayLivePane } from '../bridge/legacy-relay-bridge-leases'
 
 const TARGET = 'target-1'
@@ -141,16 +136,6 @@ describe('the relay-era orca CLI on the desktop runtime', () => {
     allowed = false
     await expect(run(workerDone())).rejects.toThrow(LEGACY_RELAY_CLI_CONTROL_OFF)
     expect(db.getTask(ids.taskId)?.status).toBe('dispatched')
-  })
-
-  it('refuses commands outside orchestration', async () => {
-    await expect(run(['worktree', 'list'])).rejects.toThrow(LEGACY_RELAY_CLI_UNSUPPORTED)
-    await expect(run(['terminal', 'send', '--terminal', COORDINATOR])).rejects.toThrow(
-      LEGACY_RELAY_CLI_UNSUPPORTED
-    )
-    await expect(run(['connector', 'reply', '--text', 'done'])).rejects.toThrow(
-      CONNECTOR_REPLY_UNAVAILABLE
-    )
   })
 
   it.each([

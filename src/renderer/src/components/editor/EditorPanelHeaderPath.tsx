@@ -1,4 +1,4 @@
-import { ImeInput } from '@/lib/ime-text-field'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import { useEffect, useRef, useState } from 'react'
 import { Eye, Pencil } from 'lucide-react'
 import {
@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { useTranslate } from '@/i18n/use-translate'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'

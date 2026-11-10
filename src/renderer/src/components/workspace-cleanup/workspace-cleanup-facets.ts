@@ -23,7 +23,7 @@ import type {
 import type { WorkspaceCleanupReviewInfo } from './workspace-cleanup-presentation'
 import type { WorkspaceCleanupWorktreeFacts } from './workspace-cleanup-host-identity'
 
-import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
+import { getWorktreeVisitTimestamp } from '@/lib/workspace/activation/worktree-visit-recency'
 import { getWorkspaceCleanupGitChipLabel } from './workspace-cleanup-candidate-labels'
 import type { Translate } from '@/i18n/use-translate'
 export type { WorkspaceCleanupWorktreeFacts } from './workspace-cleanup-host-identity'

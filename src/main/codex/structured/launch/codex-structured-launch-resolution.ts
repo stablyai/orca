@@ -8,15 +8,23 @@ import {
 } from '../../../native-chat/structured-agent-command-resolution'
 // How a durable session record becomes a Codex process launch.
 //
-// Every input is read back from the record the store already made durable, not
-// from the call that triggered spawn. A client that attaches twice must
-// land in the same working directory under the same account home, and a resume
-// must name the thread this session actually proved — never one a caller asks
-// for, which is how a resume becomes a fork wearing a resume's name.
+// Every input except the account is read back from the record the store already made durable,
+// not from the call that triggered spawn. A client that attaches twice must land in the same
+// working directory, and a resume must name the thread this session actually proved — never one
+// a caller asks for, which is how a resume becomes a fork wearing a resume's name. The account
+// follows the selection, as Claude chats do.
 
-import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import {
+  agentSessionAccountHome,
+  agentSessionAccountHomesEqual,
+  requireLegacyAgentSessionAccountHome,
+  type AgentSessionAccountHome
+} from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { moveCodexThreadIntoAccountHome } from '../../history/resume/codex-thread-account-move'
 import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import { resolveCodexCommand } from '../../../codex-cli/command'
+import { CODEX_STRUCTURED_AGENT } from './codex-structured-agent-definition'
 import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import type { CodexStructuredLaunch } from '../session-lifecycle/codex-structured-session-state'
 import { codexStructuredPermissionPolicy } from '../../../../shared/codex-permission-policy'
@@ -29,6 +37,11 @@ import {
 
 export type CodexStructuredLaunchPartDeps = {
   resolveLaunchArgs: () => Promise<string[]> | string[]
+  /** The selected account's home, prepared for this start in `launchDirectory`; null keeps the record's. */
+  prepareLaunchAccountHome?: (
+    record: AgentSessionRecord,
+    launchDirectory: string
+  ) => Promise<AgentSessionAccountHome | null>
   resolveCommand?: (options?: {
     pathEnv?: string | null
     homePath?: string
@@ -98,13 +111,22 @@ async function readCodexStructuredInvocation(
   return { ...invocation, environment }
 }
 
-/** Derive resume identity and account home from the durable record. */
+/** The host compares this with the selection to move an idle chat to a newly picked account. */
+export function codexLaunchedAccountHome(launch: Pick<CodexStructuredLaunch, 'codexHome'>): {
+  accountHome?: AgentSessionAccountHome
+} {
+  return launch.codexHome
+    ? { accountHome: agentSessionAccountHome(CODEX_STRUCTURED_AGENT, launch.codexHome) }
+    : {}
+}
+
+/** Derive resume identity from the durable record and the account from the selection. */
 export function codexStructuredLaunchPart(
   deps: CodexStructuredLaunchPartDeps
 ): StructuredAgentLaunchPartResolver<CodexStructuredLaunch> {
   return async (basis) => {
     const { record } = basis
-    const accountHome = requireLegacyAgentSessionAccountHome(record.accountHome)
+    const recordHome = requireLegacyAgentSessionAccountHome(record.accountHome)
     const { command, prefixArgs } = await resolveCodexStructuredInvocation({
       ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),
       refreshEnvironmentAfterMiss: basis.refreshAfterMissingProgram,
@@ -118,7 +140,22 @@ export function codexStructuredLaunchPart(
     // Match the first turn's model to avoid duplicate prompt injection on a model switch.
     const model = record.options?.model
     const visuals = await basis.visuals()
-    await basis.launchDirectory()
+    const launchDirectory = await basis.launchDirectory()
+    const selectedHome = await deps.prepareLaunchAccountHome?.(record, launchDirectory)
+    const accountHome = selectedHome
+      ? requireLegacyAgentSessionAccountHome(selectedHome)
+      : recordHome
+    if (
+      resumeThreadId &&
+      selectedHome &&
+      !agentSessionAccountHomesEqual(selectedHome, record.accountHome)
+    ) {
+      await moveCodexThreadIntoAccountHome({
+        threadId: resumeThreadId,
+        fromHome: recordHome.path,
+        toHome: accountHome.path
+      })
+    }
     return {
       launch: {
         command,

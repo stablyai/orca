@@ -3,7 +3,7 @@
 import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { AGENT_CATALOG } from '@/lib/agent-catalog/agent-catalog'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 
