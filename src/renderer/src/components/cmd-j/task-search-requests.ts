@@ -37,6 +37,7 @@ const RESULT_LIMIT = 12
 export type CmdJTaskSearchRequest = {
   id: string
   provider: TaskProvider
+  hostId: ExecutionHostId
   hostLabel: string
   run: () => Promise<CmdJTaskSearchResult[]>
 }
@@ -82,6 +83,7 @@ export function createCmdJTaskSearchRequests(args: {
       requests.push({
         id: `${provider}:${source.hostId}:${repo.id}`,
         provider,
+        hostId: source.hostId,
         hostLabel,
         run: async () => {
           if (signal.aborted) {
@@ -198,6 +200,7 @@ export function createCmdJTaskSearchRequests(args: {
       requests.push({
         id: requestId,
         provider,
+        hostId,
         hostLabel,
         run: async () => {
           if (signal.aborted) {
