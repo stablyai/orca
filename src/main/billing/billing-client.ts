@@ -106,7 +106,7 @@ const OffersSchema = z
       annualPriceLabel: z.string().max(40),
       monthlyPriceCentsPerSeat: z.number().int().nonnegative().nullable().catch(null),
       annualPriceCentsPerSeat: z.number().int().nonnegative().nullable().catch(null),
-      largeMachineWeight: z.number().positive().catch(2),
+      largeMachineWeight: z.number().positive().catch(1),
       includedHoursPerSeat: z.number().nonnegative(),
       concurrentSandboxesPerSeat: z.number().int().nonnegative(),
       idleSleepMinutes: z.number().int().positive(),

@@ -40,8 +40,7 @@ import {
 import { nextCloudWorkspaceTitle } from './cloud-workspace-display'
 import { roleForCloudError } from './cloud-entitlement-copy'
 import { createErrorMessage } from './cloud-workspace-copy'
-
-type Size = 'standard' | 'large'
+import { ORCA_CLOUD_SANDBOX_SPEC } from '../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 
 export function NewCloudWorkspaceScreen() {
   useMobileColorScheme()
@@ -54,7 +53,6 @@ export function NewCloudWorkspaceScreen() {
   const [branch, setBranch] = useState('')
   const [agent, setAgent] = useState(CLOUD_DEFAULT_AGENT)
   const [prompt, setPrompt] = useState('')
-  const [size, setSize] = useState<Size>('standard')
   const [startedAt, setStartedAt] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const removal = useCloudHostRemoval()
@@ -76,7 +74,7 @@ export function NewCloudWorkspaceScreen() {
   // A different repo or branch is a different workspace, so it gets its own id.
   useEffect(() => {
     workspaceIdRef.current = null
-  }, [repoUrl, branch, size])
+  }, [repoUrl, branch])
   const repoInvalid = repo.trim() !== '' && repoUrl === null
   const creating = startedAt !== null
 
@@ -102,7 +100,7 @@ export function NewCloudWorkspaceScreen() {
         plane,
         {
           workspaceId: (workspaceIdRef.current ??= cloudWorkspaceIdFor(repoUrl)),
-          machineSize: size,
+          machineSize: 'standard',
           ...(repoUrl
             ? { repo: { url: repoUrl, ...(branch.trim() ? { ref: branch.trim() } : {}) } }
             : {})
@@ -215,7 +213,13 @@ export function NewCloudWorkspaceScreen() {
             </View>
           </SettingsSection>
 
-          <SettingsSection title={t('cloud.new.agentHeading', 'First task')}>
+          <SettingsSection
+            title={t('cloud.new.agentHeading', 'First task')}
+            footer={t('cloud.size.note', 'Every sandbox gets {{vcpus}} vCPU · {{memoryGb}} GB.', {
+              vcpus: String(ORCA_CLOUD_SANDBOX_SPEC.vcpus),
+              memoryGb: String(ORCA_CLOUD_SANDBOX_SPEC.memoryGb)
+            })}
+          >
             <View key="task" style={styles.field}>
               <CloudAgentPicker value={agent} onChange={setAgent} disabled={creating} />
               <TextInput
@@ -234,37 +238,6 @@ export function NewCloudWorkspaceScreen() {
               />
             </View>
           </SettingsSection>
-
-          <SettingsSection title={t('cloud.new.sizeHeading', 'Sandbox size')} radioGroup>
-            <View key="size" style={styles.segmented}>
-              {(['standard', 'large'] as const).map((option) => (
-                <Pressable
-                  key={option}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: size === option, disabled: creating }}
-                  disabled={creating}
-                  onPress={() => setSize(option)}
-                  style={[styles.segment, size === option && styles.segmentSelected]}
-                >
-                  <Text
-                    style={[styles.segmentTitle, size === option && styles.segmentTitleSelected]}
-                  >
-                    {option === 'standard'
-                      ? t('cloud.size.standardShort', 'Standard')
-                      : t('cloud.size.largeShort', 'Large')}
-                  </Text>
-                  <Text style={styles.segmentDetail}>
-                    {option === 'standard'
-                      ? t('cloud.size.standardSpec', '4 vCPU · 8 GB')
-                      : t('cloud.size.largeSpec', '8 vCPU · 16 GB')}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </SettingsSection>
-          <Text style={styles.sizeNote}>
-            {t('cloud.size.largeNote', 'Large uses sandbox hours at 2× the rate.')}
-          </Text>
 
           {creating ? (
             <View style={styles.progress}>
@@ -328,28 +301,6 @@ const styles = themedStyleSheet(() => ({
     paddingVertical: 10
   },
   multiline: { minHeight: 96, maxHeight: 200, textAlignVertical: 'top', lineHeight: 21 },
-  segmented: { flexDirection: 'row', gap: spacing.sm, padding: spacing.md },
-  segment: {
-    flex: 1,
-    borderRadius: radii.control,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgRaised,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.md,
-    gap: 2
-  },
-  segmentSelected: { borderColor: colors.textPrimary },
-  segmentTitle: { fontSize: 15, color: colors.textSecondary, fontWeight: '500' },
-  segmentTitleSelected: { color: colors.textPrimary, fontWeight: '600' },
-  sizeNote: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.textMuted,
-    marginTop: 6,
-    paddingHorizontal: spacing.lg
-  },
-  segmentDetail: { fontSize: 13, color: colors.textMuted },
   progress: {
     marginTop: spacing.lg,
     backgroundColor: colors.bgPanel,

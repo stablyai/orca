@@ -1,11 +1,10 @@
 import { useId, useState } from 'react'
 import { X } from 'lucide-react'
-import { SettingsSegmentedControl } from '@/components/settings/form-controls/SettingsFormControls'
 import { cn } from '@/lib/utils'
 import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { useTranslate } from '@/i18n/use-translate'
 import { MAX_ENV_VAR_NAMES, parseEnvVarNames } from './environment-draft'
-import type { EnvironmentMachineSize } from './cloud-environment-types'
+import { ORCA_CLOUD_SANDBOX_SPEC } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import { FieldLabel } from './EnvironmentFormFields'
 import { FOCUS_RING } from '../orca-cloud/cloud-focus'
 
@@ -154,43 +153,18 @@ export function EnvVarChipEditor({
   )
 }
 
-export function MachineSizeControl({
-  value,
-  onChange,
-  disabled = false
-}: {
-  value: EnvironmentMachineSize
-  onChange: (value: EnvironmentMachineSize) => void
-  disabled?: boolean
-}): React.JSX.Element {
+/** There is one sandbox size, so this is a fact about the environment, not a setting. */
+export function SandboxSizeInfo(): React.JSX.Element {
   const t = useTranslate()
-  const labelId = useId()
   return (
-    <div className="space-y-2">
-      <FieldLabel
-        id={labelId}
-        hint={t(
-          'cloudEnvironment.size.hint',
-          'Used for builds and for cloud workspaces started from this environment. Large uses sandbox hours at 2× the rate.'
-        )}
-      >
-        {t('cloudEnvironment.size.label', 'Sandbox size')}
-      </FieldLabel>
-      <div className={cn('max-w-md', disabled && 'pointer-events-none opacity-50')}>
-        <SettingsSegmentedControl
-          value={value}
-          onChange={onChange}
-          ariaLabelledBy={labelId}
-          equalWidth
-          options={[
-            {
-              value: 'standard',
-              label: t('cloudEnvironment.size.standard', 'Standard (4 vCPU · 8 GB)')
-            },
-            { value: 'large', label: t('cloudEnvironment.size.large', 'Large (8 vCPU · 16 GB)') }
-          ]}
-        />
-      </div>
-    </div>
+    <dl className="space-y-1">
+      <dt className="text-sm font-medium">{t('cloudEnvironment.size.label', 'Sandbox size')}</dt>
+      <dd className="text-sm text-muted-foreground tabular-nums">
+        {t('cloudEnvironment.size.spec', '{{value0}} vCPU · {{value1}} GB', {
+          value0: String(ORCA_CLOUD_SANDBOX_SPEC.vcpus),
+          value1: String(ORCA_CLOUD_SANDBOX_SPEC.memoryGb)
+        })}
+      </dd>
+    </dl>
   )
 }

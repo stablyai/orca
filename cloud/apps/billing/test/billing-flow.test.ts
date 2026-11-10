@@ -230,12 +230,14 @@ describe('entitlements, overage and usage', () => {
     expect((await h.call('GET', '/v1/billing/entitlements', { headers: auth })).body.usageWarningPercent).toBe(80)
   })
 
-  it('is idempotent per usageId and burns Large at 2x', async () => {
+  it('is idempotent per usageId and counts every size 1x (legacy large is the same 8 vCPU / 16 GB box)', async () => {
     const { h } = await subscribedTeam()
     const first = await h.controlPlane('/v1/internal/usage', usage('u-1', 1, { machineSize: 'large' }))
     const again = await h.controlPlane('/v1/internal/usage', usage('u-1', 1, { machineSize: 'large' }))
-    expect(first.body).toMatchObject({ recorded: true, weightedSeconds: 2 * HOUR })
+    const standard = await h.controlPlane('/v1/internal/usage', usage('u-2', 1))
+    expect(first.body).toMatchObject({ recorded: true, weightedSeconds: HOUR })
     expect(again.body).toMatchObject({ recorded: false })
+    expect(standard.body).toMatchObject({ recorded: true, weightedSeconds: HOUR })
     expect(h.raw.prepare('SELECT SUM(weighted_seconds) AS s FROM usage_events').get()).toEqual({ s: 2 * HOUR })
   })
 

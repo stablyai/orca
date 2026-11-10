@@ -11,7 +11,7 @@ export const sampleOffers: OrcaBillingOffers = {
     annualPriceLabel: '$480/seat/yr',
     monthlyPriceCentsPerSeat: 5000,
     annualPriceCentsPerSeat: 48000,
-    largeMachineWeight: 2,
+    largeMachineWeight: 1,
     includedHoursPerSeat: 60,
     concurrentSandboxesPerSeat: 3,
     idleSleepMinutes: ORCA_CLOUD_IDLE_SLEEP_MINUTES,

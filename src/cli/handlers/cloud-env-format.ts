@@ -4,6 +4,7 @@ import type {
   CloudEnvironmentShowData
 } from '../../shared/hosted-sandbox/hosted-environment-cli-contract'
 import type { HostedEnvironmentBuildView } from '../../shared/hosted-sandbox/hosted-environment-wire'
+import { ORCA_CLOUD_SANDBOX_SPEC } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
 
 export function formatOutcome(build: HostedEnvironmentBuildView): string {
   if (build.status === 'succeeded') {
@@ -23,7 +24,7 @@ export function formatShow(data: CloudEnvironmentShowData): string {
   const env = data.environment
   const lines = [
     `Environment: ${env.name} (${env.id})`,
-    `Sandbox size: ${env.machineSize === 'large' ? 'Large (8 vCPU · 16 GB)' : 'Standard (4 vCPU · 8 GB)'}   Revision: ${env.revision}${data.canAdmin ? '' : '   (read-only: ask an owner or admin to change it)'}`,
+    `Sandbox size: ${ORCA_CLOUD_SANDBOX_SPEC.vcpus} vCPU · ${ORCA_CLOUD_SANDBOX_SPEC.memoryGb} GB   Revision: ${env.revision}${data.canAdmin ? '' : '   (read-only: ask an owner or admin to change it)'}`,
     'Repos:',
     ...(env.repos.length > 0
       ? env.repos.map(
