@@ -41,8 +41,6 @@ export function buildBrowserPageInventory(
       if (
         page.docLocation ||
         isDocPreviewUrl(page.url) ||
-        (page.browserRuntimeEnvironmentId === undefined &&
-          inputs.browserRuntimeEnvironmentId === undefined) ||
         getBrowserPageRuntimeEnvironmentId(page, inputs.browserRuntimeEnvironmentId)
       ) {
         continue

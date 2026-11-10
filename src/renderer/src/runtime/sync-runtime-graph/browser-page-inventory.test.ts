@@ -1,3 +1,6 @@
+import { buildMobileSessionTabSnapshots } from './mobile-session-snapshots'
+import { makeState } from './testing/sync-runtime-graph-test-harness'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { describe, expect, it } from 'vitest'
 import { buildBrowserPageInventory } from './browser-page-inventory'
 import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
@@ -32,7 +35,7 @@ function page(id: string, updates: Partial<BrowserPage> = {}): BrowserPage {
   }
 }
 describe('saved browser inventory ownership', () => {
-  it.each(['server', undefined])('keeps explicit local pages with inferred owner %s', (owner) => {
+  it.each(['server', null])('keeps explicit local pages with inferred owner %s', (owner) => {
     const result = buildBrowserPageInventory({
       browserWorkspaces: [workspace],
       browserRuntimeEnvironmentId: owner,
@@ -56,7 +59,55 @@ describe('saved browser inventory ownership', () => {
       ]),
       certificateFailureByBrowserPageId: new Map()
     })
-    expect(result.map((entry) => entry.browserPageId)).toEqual(['local'])
+    expect(result.map((entry) => entry.browserPageId)).toEqual(
+      owner === null ? ['inherited', 'local'] : ['local']
+    )
+  })
+
+  it('matches the pane local fallback for inherited pages in a non-active twin folder', () => {
+    const folder = {
+      id: 'twinned',
+      projectGroupId: 'group',
+      name: 'Twin',
+      folderPath: '/tmp/twin',
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 1,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const state = makeState({
+      folderWorkspaces: [
+        { ...folder, executionHostId: 'local' },
+        { ...folder, executionHostId: 'runtime:other' }
+      ],
+      browserTabsByWorktree: {
+        'folder:twinned': [
+          {
+            ...workspace,
+            worktreeId: 'folder:twinned',
+            activePageId: 'C',
+            pageIds: ['A', 'B', 'C']
+          }
+        ]
+      },
+      browserPagesByWorkspace: {
+        [workspace.id]: ['A', 'B', 'C'].map((id) => page(id, { worktreeId: 'folder:twinned' }))
+      }
+    })
+    expect(
+      runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: 'folder:twinned' }).kind
+    ).toBe('ambiguous')
+    const snapshots = buildMobileSessionTabSnapshots(state, false)
+    expect(snapshots[0]?.browserPageInventory?.map((entry) => entry.browserPageId)).toEqual([
+      'A',
+      'B',
+      'C'
+    ])
   })
 
   it('retains the existing legacy identity without inventing modern membership', () => {

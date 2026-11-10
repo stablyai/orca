@@ -1,3 +1,4 @@
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import {
   pendingTabRevision,
   pendingEntityWorkspaceIds
@@ -197,7 +198,7 @@ export function buildMobileSessionWorktreeInputs(
     worktreeInstanceId: resolveWorktreeInstanceId(state, worktreeId),
     terminalTabs,
     browserWorkspaces,
-    browserRuntimeEnvironmentId: owner.kind === 'resolved' ? owner.environmentId : undefined,
+    browserRuntimeEnvironmentId: runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId),
     unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_WORKTREE_UNIFIED_TABS,
     groups: state.groupsByWorktree[worktreeId] ?? EMPTY_WORKTREE_TAB_GROUPS,
     tabBarOrder: state.tabBarOrderByWorktree[worktreeId],

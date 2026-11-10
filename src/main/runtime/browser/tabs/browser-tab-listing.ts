@@ -26,6 +26,7 @@ export function readBrowserTabBar(
     ? [snapshots.get(worktreeId)].filter((snapshot) => snapshot !== undefined)
     : [...snapshots.values()]
   const result: BrowserTabBarEntry[] = []
+  const remaining: BrowserTabBarEntry[] = []
   for (const snapshot of selected) {
     // Mirrored workspaces belong to their server, which alone can recover their pages.
     if (!ownsWorkspace(snapshot.worktree)) {
@@ -55,7 +56,7 @@ export function readBrowserTabBar(
     }
     for (const page of inventory ?? []) {
       if (!listed.has(page.browserPageId)) {
-        result.push({
+        remaining.push({
           browserPageId: page.browserPageId,
           worktreeId: snapshot.worktree,
           title: page.title,
@@ -67,7 +68,7 @@ export function readBrowserTabBar(
       }
     }
   }
-  return result
+  return [...result, ...remaining]
 }
 
 /**
