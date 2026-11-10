@@ -6,6 +6,7 @@ import type { PointerEvent } from 'react'
 
 import {
   getProjectHeaderDragBucketKey,
+  getProjectHeaderDragSectionHeight,
   measureProjectHeaderDragRects,
   type ProjectHeaderDragBucketKey
 } from './project-header-drop'
@@ -52,27 +53,30 @@ export function createProjectHeaderDragSession(args: {
     return null
   }
   const handleEl = args.event.currentTarget
+  const headerRects = rootProjectHeaderKeys
+    ? measureRootProjectHeaderDragRects(
+        container,
+        rootProjectHeaderKeys,
+        rootProjectHeaderHostId
+      ).map((rect) => ({
+        ...rect,
+        repoId: rect.key
+      }))
+    : measureProjectHeaderDragRects(container, bucketKey)
   // Delay pointer capture until promotion so ordinary clicks can still toggle collapse.
   return {
     repo: args.repo,
     bucketKey,
+    draggedSectionHeight: getProjectHeaderDragSectionHeight(headerRects, args.repo.id),
     sidebarRepoHeaderIds,
     pointerId: args.event.pointerId,
     rootProjectHeaderKeys,
     rootProjectHeaderHostId,
-    headerRects: rootProjectHeaderKeys
-      ? measureRootProjectHeaderDragRects(
-          container,
-          rootProjectHeaderKeys,
-          rootProjectHeaderHostId
-        ).map((rect) => ({
-          ...rect,
-          repoId: rect.key
-        }))
-      : measureProjectHeaderDragRects(container, bucketKey),
+    headerRects,
     handleEl,
     startX: args.event.clientX,
     startY: args.event.clientY,
+    startScrollTop: container.scrollTop,
     latestPointerY: args.event.clientY,
     promoted: false
   }
