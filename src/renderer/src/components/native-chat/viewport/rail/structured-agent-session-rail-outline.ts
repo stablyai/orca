@@ -37,15 +37,15 @@ export function selectStructuredRailOutline(
   if (!hasOlder || epoch === null || oldestLoadedSequence === null) {
     return COMPLETE
   }
-  if (
-    !outline ||
-    outline.cursor.epoch !== epoch ||
-    outline.cursor.sequence < oldestLoadedSequence - 1
-  ) {
+  if (!outline || outline.cursor.epoch !== epoch) {
     return STALE
   }
+  // Before coverage: refetching an older host's outline as the window moves would only return another unusable one.
   if (outline.humanMessagesOnly !== true) {
     return UNATTRIBUTED
+  }
+  if (outline.cursor.sequence < oldestLoadedSequence - 1) {
+    return STALE
   }
   // Reuse view identity until covered entries change; streaming often moves the edge without crossing a prompt.
   const prior = views.get(outline)

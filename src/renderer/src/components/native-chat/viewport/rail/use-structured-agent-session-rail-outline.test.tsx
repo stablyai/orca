@@ -92,13 +92,13 @@ describe('structured rail outline fetch', () => {
     expect(mocks.read).toHaveBeenCalledTimes(2)
   })
 
-  it('keeps old-host history out of the rail without refetching on every live row', async () => {
+  it('keeps old-host history out of the rail without refetching as the window moves', async () => {
     const { humanMessagesOnly: _marker, ...legacy } = outline(120)
     mocks.read.mockResolvedValue(legacy)
     const { result, rerender } = renderOutline(VISIBLE)
     await waitFor(() => expect(mocks.read).toHaveBeenCalledTimes(1))
     expect(result.current).toBeNull()
-    for (const oldest of [51, 70, 100]) {
+    for (const oldest of [51, 70, 100, 130]) {
       rerender({ ...VISIBLE, oldest })
     }
     expect(result.current).toBeNull()
