@@ -105,9 +105,7 @@ async function readLeadingSessionId(file: string): Promise<LeadingRead> {
         sawRow = true
         // Rows carry their own top-level session; nested message payloads can name another one.
         const sessionId =
-          row && typeof row === 'object' && 'sessionId' in row
-            ? (row as { sessionId?: unknown }).sessionId
-            : undefined
+          row && typeof row === 'object' && 'sessionId' in row ? row.sessionId : undefined
         if (typeof sessionId === 'string') {
           return { kind: 'session', id: sessionId }
         }
