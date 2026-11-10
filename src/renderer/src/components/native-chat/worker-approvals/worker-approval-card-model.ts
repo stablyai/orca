@@ -76,7 +76,8 @@ export function workerApprovalReceiptText(approval: WorkerApprovalPayload, t: Tr
         'components.native-chat.approval.answerInTerminal',
         "Answer it in the worker's terminal"
       )
-    default:
+    case 'unknown':
+    case undefined:
       return t('components.native-chat.approval.noLongerOpen', 'No longer open')
   }
 }
