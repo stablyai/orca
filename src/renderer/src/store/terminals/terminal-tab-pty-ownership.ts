@@ -1,7 +1,10 @@
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { AppState } from '../types'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
-import { resolveTerminalPtyOwner, type TerminalPtyOwner } from '@/lib/terminal-worktree-route'
+import {
+  resolveTerminalPtyOwner,
+  type TerminalPtyOwner
+} from '@/lib/workspace/ownership/terminal-worktree-route'
 
 export type TerminalTabRetirementState = WorktreeRuntimeOwnerState &
   Pick<

@@ -8,7 +8,10 @@ import {
   findIndexedWorktrees,
   findIndexedDetectedWorktrees
 } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
-import { resolveTerminalPtyOwner, type TerminalPtyOwner } from '@/lib/terminal-worktree-route'
+import {
+  resolveTerminalPtyOwner,
+  type TerminalPtyOwner
+} from '@/lib/workspace/ownership/terminal-worktree-route'
 import { getSingleFocusedRuntimeEnvironmentId } from '@/lib/workspace/ownership/single-runtime-legacy-owner'
 import { getPairedWebClientEnvironmentId } from '@/lib/paired-web-client-host'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
