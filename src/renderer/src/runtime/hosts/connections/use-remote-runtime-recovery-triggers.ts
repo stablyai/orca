@@ -24,11 +24,6 @@ export function useRemoteRuntimeRecoveryTriggers(): void {
               readyByEnvironment.set(environmentId, ready)
               if (ready && !wasReady) {
                 reviveRemoteRuntimePtyRecoveriesForEnvironment(environmentId)
-                // A host that just came back (e.g. a woken VM) would otherwise wait out a pane's
-                // backoff step (up to seconds) before re-attaching. Pending pane backoffs are not
-                // keyed by host, so advance them all, as the online/resume triggers do; panes of
-                // hosts that are still down simply fail once more and back off again.
-                retryAllRemoteRuntimePtyRecoveriesNow()
               }
             }
           )

@@ -228,6 +228,43 @@ describe('resuming a recipe VM server', () => {
     expect(invalidateTransport).toHaveBeenCalledTimes(2)
   })
 
+  it('does not let a stale background re-pair overwrite a newer resume', async () => {
+    const environmentId = provision()
+    rmSync(serverDataPath, { recursive: true, force: true })
+    serverDataPath = mkdtempSync(join(tmpdir(), 'orca-resume-server-'))
+    let releaseFirst!: () => void
+    const firstGate = new Promise<void>((resolve) => (releaseFirst = resolve))
+    const auth = serverAuth(serverDataPath)
+    const repairedA = vi.fn()
+    // Resume A: its probe is held, so its re-pair would land late.
+    await applyResumedRuntimePairing({
+      userDataPath: desktopDataPath,
+      environmentId,
+      pairingCode: bootVm(serverDataPath, 'wss://vm-a.example/runtime', unpaddedHostKey),
+      invalidateTransport: vi.fn(),
+      probeSavedPairing: async (connection) => {
+        await firstGate
+        return auth(connection)
+      },
+      confirmInBackground: true,
+      onRepairedInBackground: repairedA
+    })
+    // Resume B lands first and re-pairs synchronously (probe answers at once).
+    const outcomeB = await applyResumedRuntimePairing({
+      userDataPath: desktopDataPath,
+      environmentId,
+      pairingCode: bootVm(serverDataPath, 'wss://vm-b.example/runtime', unpaddedHostKey),
+      invalidateTransport: vi.fn(),
+      probeSavedPairing: auth
+    })
+    const afterB = resolveEnvironmentPairingOffer(desktopDataPath, environmentId)
+    releaseFirst()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(repairedA).not.toHaveBeenCalled()
+    expect(resolveEnvironmentPairingOffer(desktopDataPath, environmentId)).toEqual(afterB)
+    expect(outcomeB.environment.id).toBe(environmentId)
+  })
+
   it('keeps the saved pairing when the server cannot be reached to check it', async () => {
     const environmentId = provision()
     const original = resolveEnvironmentPairingOffer(desktopDataPath, environmentId)

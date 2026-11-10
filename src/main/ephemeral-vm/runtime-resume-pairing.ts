@@ -10,6 +10,11 @@ import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electr
 
 const SAVED_PAIRING_PROBE_TIMEOUT_MS = 10_000
 
+// The newest resume per environment. A background confirmation may only re-pair for the resume that
+// started it: a later resume (Restart right after a wake) owns the environment's pairing now.
+const latestResume = new Map<string, number>()
+let resumeSequence = 0
+
 export type ResumedRuntimePairingOutcome = {
   environment: KnownRuntimeEnvironment
   reusedPairing: boolean
@@ -36,6 +41,8 @@ export async function applyResumedRuntimePairing(args: {
   onRepairedInBackground?: (environment: KnownRuntimeEnvironment) => void
   now?: number
 }): Promise<ResumedRuntimePairingOutcome> {
+  const resume = ++resumeSequence
+  latestResume.set(args.environmentId, resume)
   const { repairFromFreshOffer, ...refreshed } = refreshEnvironmentFromResumePairingCode(
     args.userDataPath,
     args.environmentId,
@@ -50,16 +57,20 @@ export async function applyResumedRuntimePairing(args: {
   // while the probe confirms it instead of after (one connection setup off the wake path). In the
   // rare case the server lost the device, the re-pair below drops that socket and dials again.
   void args.invalidateTransport(args.environmentId)
-  const confirmed = confirmSavedPairing(
-    refreshed,
-    repairFromFreshOffer,
-    args.probeSavedPairing
-  ).then((outcome) => {
-    if (!outcome.reusedPairing) {
+  const isCurrent = (): boolean => latestResume.get(args.environmentId) === resume
+  // A stale confirmation must not overwrite the pairing a newer resume wrote.
+  const guardedRepair = (): KnownRuntimeEnvironment =>
+    isCurrent() ? repairFromFreshOffer() : refreshed.environment
+  const confirmed = confirmSavedPairing(refreshed, guardedRepair, args.probeSavedPairing).then(
+    (outcome) => {
+      if (outcome.environment === refreshed.environment) {
+        // Kept, or superseded by a newer resume before the re-pair: nothing changed here.
+        return { ...outcome, reusedPairing: true }
+      }
       void args.invalidateTransport(args.environmentId)
+      return outcome
     }
-    return outcome
-  })
+  )
   if (!args.confirmInBackground) {
     return confirmed
   }

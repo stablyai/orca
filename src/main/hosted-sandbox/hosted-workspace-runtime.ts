@@ -214,6 +214,7 @@ export async function announceWakeUsable(
     const runtime = findCloudRuntime(userDataPath, workspaceId)?.runtime
     return runtime?.status === 'running' ? runtime : null
   }
+  let beat = 0
   while (Date.now() < deadline && hooks.isCurrent()) {
     const runtime = running()
     if (runtime) {
@@ -240,8 +241,10 @@ export async function announceWakeUsable(
       }
       return
     }
-    // Short beat: this sits on the wake's critical path until the runtime record flips to running.
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    // Short first beats: this sits on the wake's critical path until the runtime record flips to
+    // running, but each check reads the runtime store, so later beats back off.
+    beat += 1
+    await new Promise((resolve) => setTimeout(resolve, beat <= 4 ? 50 : beat <= 8 ? 100 : 250))
   }
 }
 

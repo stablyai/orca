@@ -29,6 +29,7 @@ import {
 import type { VmWakeRequest } from '../runtime/workspaces/sleep/workspace-sleep-platform'
 import { getRuntimeRecipeContext } from '../ipc/ephemeral-vm-recipe-context'
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
+import { reconnectSharedControlIfIdle } from '../ipc/runtime-environments/runtime-environment-shared-control-reconnect'
 import {
   getRemoteRuntimeSharedControlDiagnostics,
   ensureRemoteRuntimeSharedControlConnection,
@@ -228,7 +229,10 @@ function reestablishWokenServer(
           getPreferredPairedRuntimeConnection(resolveEnvironment(userDataPath, environmentId))
         )
       }
-      reconnectRemoteRuntimeSharedControlConnection(environmentId)
+      reconnectSharedControlIfIdle({
+        getDiagnostics: () => getRemoteRuntimeSharedControlDiagnostics(environmentId),
+        reconnectNow: () => reconnectRemoteRuntimeSharedControlConnection(environmentId)
+      })
       void getRuntimeEnvironmentStatusOwner(userDataPath, environmentId)
         .refresh({ reconnect: true })
         .catch(() => {})
