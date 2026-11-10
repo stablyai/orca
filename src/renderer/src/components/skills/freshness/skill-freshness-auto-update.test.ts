@@ -12,6 +12,7 @@ vi.mock('@/hooks/skills/discovery/installed-agent-skill-discovery', () => ({
 
 const { _resetSkillFreshnessAutoUpdate, autoUpdateUnmodifiedSkills } =
   await import('./skill-freshness-auto-update')
+const { getSkillUpdateRun } = await import('./skill-update-run-store')
 
 const DIGEST = 'a'.repeat(64)
 
@@ -54,5 +55,36 @@ describe('startup scan of an already-current host', () => {
     await vi.waitFor(() => expect(autoUpdate).toHaveBeenCalledWith(target, ['orca-cli']))
     autoUpdateUnmodifiedSkills(target, currentPlan)
     expect(autoUpdate).toHaveBeenCalledTimes(1)
+  })
+
+  it('asks again on the next scan when the marking call fails, and not after it succeeds', async () => {
+    const target: BundledSkillTarget = { kind: 'local' }
+    autoUpdate.mockRejectedValueOnce(new Error('offline'))
+    autoUpdate.mockResolvedValue({ scope: 'global', skills: [] })
+
+    autoUpdateUnmodifiedSkills(target, currentPlan)
+    await vi.waitFor(() => expect(autoUpdate).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => {
+      autoUpdateUnmodifiedSkills(target, currentPlan)
+      expect(autoUpdate).toHaveBeenCalledTimes(2)
+    })
+    await vi.waitFor(() => expect(getSkillUpdateRun('local').state).toBe('idle'))
+    autoUpdateUnmodifiedSkills(target, currentPlan)
+    expect(autoUpdate).toHaveBeenCalledTimes(2)
+  })
+
+  it('asks again when the host reports the skill busy', async () => {
+    const target: BundledSkillTarget = { kind: 'local' }
+    autoUpdate.mockResolvedValueOnce({
+      scope: 'global',
+      skills: [{ name: 'orca-cli', status: 'busy', ops: [] }]
+    })
+    autoUpdate.mockResolvedValue({ scope: 'global', skills: [] })
+
+    autoUpdateUnmodifiedSkills(target, currentPlan)
+    await vi.waitFor(() => {
+      autoUpdateUnmodifiedSkills(target, currentPlan)
+      expect(autoUpdate).toHaveBeenCalledTimes(2)
+    })
   })
 })

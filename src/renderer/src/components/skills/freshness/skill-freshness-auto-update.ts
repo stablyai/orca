@@ -124,6 +124,23 @@ function reportUncertainOutcome(target: BundledSkillTarget, plan: BundledSkillPl
 }
 
 /**
+ * Lets the next plan refresh ask again when the host did not run the recording: the call failed,
+ * another update held the target, or the host reported the skill busy or changed. A host that
+ * predates silent update (null value) cannot record, so its marks stay to avoid a call per scan.
+ */
+function releaseUnrecordedMarks(
+  marking: readonly { name: string; mark: string }[],
+  ran: { value: BundledSkillInstallResult | null } | null
+): void {
+  for (const { name, mark } of marking) {
+    const outcome = ran?.value?.skills.find((skill) => skill.name === name)
+    if (!ran || (outcome && outcome.status !== 'ran')) {
+      markedCopies.delete(mark)
+    }
+  }
+}
+
+/**
  * Silently updates each skill's hash-verified Orca copies, at most once per observed state.
  * Returns the skills a running update owns, so the nudge asks only about the rest.
  */
@@ -179,10 +196,16 @@ export function autoUpdateUnmodifiedSkills(
       autoUpdateBundledSkillsOnTarget(target, names)
     )
       .then(
-        (ran) => reportPreservedEdits(ran?.value ?? null),
+        (ran) => {
+          releaseUnrecordedMarks(marking, ran)
+          reportPreservedEdits(ran?.value ?? null)
+        },
         // Settling the keys below means the same state is never retried; the nudge takes over.
         // A marking-only call writes no skill, so its failure has nothing to report.
-        () => (started.length > 0 ? reportUncertainOutcome(target, plan) : undefined)
+        () => {
+          releaseUnrecordedMarks(marking, null)
+          return started.length > 0 ? reportUncertainOutcome(target, plan) : undefined
+        }
       )
       .catch(() => undefined)
       .finally(() => {
