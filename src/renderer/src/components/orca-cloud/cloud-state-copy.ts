@@ -10,12 +10,16 @@ export function cloudStateLabel(state: CloudDotState, t: Translate = translate):
       return t('orcaCloudWorkspace.state.asleep', 'Asleep')
     case 'waking':
       return t('orcaCloudWorkspace.state.waking', 'Waking')
+    case 'starting':
+      return t('orcaCloudWorkspace.state.starting', 'Starting')
     case 'unresponsive':
       return t('orcaCloudWorkspace.state.notResponding', 'Not responding')
     case 'archived':
       return t('orcaCloudWorkspace.state.archived', 'Archived')
     case 'failed':
       return t('orcaCloudWorkspace.state.failed', 'Couldn’t start')
+    case 'wakeFailed':
+      return t('orcaCloudWorkspace.state.wakeFailed', 'Couldn’t wake')
     case 'unknown':
       return t('orcaCloudWorkspace.state.unknown', 'Checking…')
   }
@@ -26,20 +30,33 @@ export function cloudStateDetail(state: CloudDotState, t: Translate = translate)
   switch (state) {
     case 'sleeping':
       return t(
-        'orcaCloudWorkspace.detail.asleep',
-        'Files and chats are saved. Opening it wakes it.'
+        'orcaCloudWorkspace.detail.asleepSafe',
+        'Your files and chats are safe. Opening it wakes it.'
       )
     case 'waking':
       return t('orcaCloudWorkspace.detail.waking', 'Waking…')
+    case 'starting':
+      return t('orcaCloudWorkspace.detail.starting', 'Starting the sandbox…')
     case 'unresponsive':
-      return t('orcaCloudWorkspace.detail.restartKeeps', 'Restart keeps your files; agents resume.')
+      return t(
+        'orcaCloudWorkspace.detail.restartToRecover',
+        'Restart to recover. Files are kept and Orca resumes your agents after the restart.'
+      )
     case 'archived':
       return t(
         'orcaCloudWorkspace.detail.archived',
         'Kept as a snapshot. Unarchive to work in it again.'
       )
     case 'failed':
-      return t('orcaCloudWorkspace.detail.failed', 'The last start failed. Your files are saved.')
+      return t(
+        'orcaCloudWorkspace.detail.startFailed',
+        'The sandbox couldn’t start. Nothing was lost.'
+      )
+    case 'wakeFailed':
+      return t(
+        'orcaCloudWorkspace.detail.wakeFailed',
+        'Couldn’t wake the sandbox. Your files and chats are safe.'
+      )
     case 'running':
     case 'unknown':
       return null

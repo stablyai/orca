@@ -92,9 +92,20 @@ import { GuardrailError, consumeCreateToken, guardrailsFromEnv } from './guardra
 import { handleOperator, isOperator } from './operator'
 import { DEFAULT_RETENTION, type RetentionConfig } from './retention'
 import { reconcile } from './reconcile'
-import { egressSecretHosts, placeholderValues, secretPlaceholder } from './secret-egress'
+import { egressAccountRoutes, egressSecretHosts, placeholderValues, secretPlaceholder } from './secret-egress'
 import { SecretError, handleSecretsRoute, keyringFor, type SecretChange } from './secrets'
 import { refreshAfterSecretChange, refreshSandboxEnv } from './env-refresh'
+import { accountProvider, isSharedWorkspace } from './account-providers'
+import {
+  AgentCredentialError,
+  PutClaudeSchema,
+  agentCredentialsView,
+  deleteAgentCredential,
+  providerEnabled,
+  putClaudeCredential,
+  markAgentCredentialRevoked,
+  readUsableAgentCredential
+} from './agent-credentials'
 import {
   AgentSourceError,
   PutOfferSchema,
@@ -291,6 +302,69 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
       }))
     )
   }
+  // D10/D13: re-decided per request, so a Source change, renewal, revocation, kill switch or the workspace
+  // becoming shared applies to the next request with no restart.
+  const accountRoutes = (row: SandboxRow, host: string): ProxiedRoute[] =>
+    egressAccountRoutes(row)
+      .filter((route) => route.host === host)
+      .flatMap(({ agent, owner }) => {
+        const provider = accountProvider(agent)
+        const keyring = keyringFor(env)
+        if (!provider || !keyring) {
+          return []
+        }
+        let real: string | null = null
+        return [
+          {
+            header: provider.header,
+            placeholders: [provider.format(provider.placeholder(row))],
+            label: `account:${agent}`,
+            credential: async () => {
+              const now = (deps.now ?? Date.now)()
+              // The session was set up for this owner; a workspace handed to someone else never uses
+              // the new owner's account until its env is rebuilt for them.
+              if (owner !== row.user_id) {
+                scheduleEnvRefresh(env, deps, row)
+                return { deny: 'account_owner_changed' }
+              }
+              if (isSharedWorkspace(row)) {
+                scheduleEnvRefresh(env, deps, row)
+                return { deny: 'account_not_shared' }
+              }
+              if (!providerEnabled(env)[agent]) {
+                scheduleEnvRefresh(env, deps, row)
+                return { deny: 'account_disabled' }
+              }
+              real = await cachedAccountCredential(env.SANDBOX_DB, await keyring, row.user_id, agent, now)
+              if (!real) {
+                scheduleEnvRefresh(env, deps, row)
+                return { deny: 'no_agent_credential' }
+              }
+              return provider.format(real)
+            },
+            ...(provider.extraHeaders ? { extraHeaders: () => (real ? provider.extraHeaders!(real) : {}) } : {}),
+            onUpstreamStatus: (status) => {
+              if (status === 401) {
+                // The provider no longer accepts it (revoked at the source): stop using it until renewed.
+                const now = (deps.now ?? Date.now)()
+                const waitUntil = (work: Promise<unknown>) => (deps.waitUntil ? deps.waitUntil(work.catch(() => undefined)) : void work.catch(() => undefined))
+                const handled = provider.onUnauthorized
+                  ? keyring.then((ring) => provider.onUnauthorized!({ db: env.SANDBOX_DB, keyring: ring, userId: row.user_id, now, waitUntil }))
+                  : markAgentCredentialRevoked(env.SANDBOX_DB, row.user_id, agent, now)
+                const work = handled.then(() => {
+                  forgetAccountCredential(row.user_id, agent)
+                  scheduleEnvRefresh(env, deps, row)
+                })
+                if (deps.waitUntil) {
+                  deps.waitUntil(work.catch(() => undefined))
+                } else {
+                  void work.catch(() => undefined)
+                }
+              }
+            }
+          }
+        ]
+      })
   return async (row, host) => {
     if (host === 'github.com') {
       return members.routes(row, host)
@@ -304,7 +378,110 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
         ...secretRoutes(row, host)
       ]
     }
-    return secretRoutes(row, host)
+    return [...accountRoutes(row, host), ...secretRoutes(row, host)]
+  }
+}
+
+// Account credentials per person, decrypted at most once a minute per isolate; an edit or delete drops it.
+const ACCOUNT_CACHE_MS = 10_000
+const accountCache = new Map<string, { at: number; value: Promise<string | null> }>()
+function cachedAccountCredential(db: D1Database, keyring: Keyring, userId: string, agent: 'claude' | 'codex', now: number): Promise<string | null> {
+  const key = `${userId}:${agent}`
+  const hit = accountCache.get(key)
+  if (hit && now - hit.at < ACCOUNT_CACHE_MS) {
+    return hit.value
+  }
+  const value = readUsableAgentCredential(db, keyring, userId, agent, now)
+  accountCache.set(key, { at: now, value })
+  value.catch(() => accountCache.delete(key))
+  return value
+}
+export function forgetAccountCredential(userId: string, agent: 'claude' | 'codex'): void {
+  accountCache.delete(`${userId}:${agent}`)
+}
+
+/** Background env refresh for one sandbox (proxy-side self-healing when its account route stops applying). */
+const lastHealRefresh = new Map<string, number>()
+function scheduleEnvRefresh(env: Env, deps: Deps, row: SandboxRow): void {
+  const now = (deps.now ?? Date.now)()
+  if (now - (lastHealRefresh.get(row.id) ?? 0) < 60_000) {
+    return
+  }
+  lastHealRefresh.set(row.id, now)
+  if (lastHealRefresh.size > 1000) {
+    for (const [id, at] of lastHealRefresh) {
+      if (now - at >= 60_000) {
+        lastHealRefresh.delete(id)
+      }
+    }
+  }
+  const work = lifecycleDeps(env, deps).then((life) => (life ? refreshSandboxEnv(life, row) : false))
+  if (deps.waitUntil) {
+    deps.waitUntil(work.catch(() => undefined))
+  } else {
+    void work.catch(() => undefined)
+  }
+}
+
+/** Running sandboxes of this person whose session env depends on their account credential. */
+async function refreshOwnersSandboxes(env: Env, deps: Deps, userId: string): Promise<void> {
+  const { results } = await env.SANDBOX_DB.prepare(`SELECT * FROM sandboxes WHERE user_id = ? AND status = 'running' LIMIT 200`).bind(userId).all<SandboxRow>()
+  if (results.length === 0) {
+    return
+  }
+  const work = lifecycleDeps(env, deps).then(async (life) => {
+    if (life) {
+      for (const row of results) {
+        await refreshSandboxEnv(life, row).catch(() => false)
+      }
+    }
+  })
+  if (deps.waitUntil) {
+    deps.waitUntil(work.catch(() => undefined))
+  } else {
+    await work
+  }
+}
+
+async function agentCredentialsRoute(request: Request, url: URL, env: Env, deps: Deps, caller: SandboxCaller): Promise<Response> {
+  const db = env.SANDBOX_DB
+  const now = (deps.now ?? Date.now)()
+  const noStore = (body: unknown) => Response.json(body, { headers: { 'cache-control': 'no-store' } })
+  const keyring = keyringFor(env)
+  if (!keyring) {
+    return fail('not_configured', 503)
+  }
+  try {
+    if (request.method === 'GET' && url.pathname === '/v1/agent-credentials') {
+      return noStore(await agentCredentialsView(db, env, caller.userId, now))
+    }
+    if (request.method === 'PUT' && url.pathname === '/v1/agent-credentials/claude') {
+      const body = PutClaudeSchema.safeParse(await readJson(request))
+      if (!body.success) {
+        return fail('invalid_request', 400)
+      }
+      await putClaudeCredential(db, await keyring, env, caller, body.data, now)
+      forgetAccountCredential(caller.userId, 'claude')
+      await refreshOwnersSandboxes(env, deps, caller.userId)
+      return noStore(await agentCredentialsView(db, env, caller.userId, now))
+    }
+    const del = /^\/v1\/agent-credentials\/(claude|codex)$/.exec(url.pathname)
+    if (request.method === 'DELETE' && del) {
+      const agent = del[1] as 'claude' | 'codex'
+      if (!(await deleteAgentCredential(db, caller.userId, agent))) {
+        return fail('not_found', 404)
+      }
+      forgetAccountCredential(caller.userId, agent)
+      console.log(JSON.stringify({ event: 'agent_credential_deleted', agent, by: caller.userId }))
+      await refreshOwnersSandboxes(env, deps, caller.userId)
+      return noStore(await agentCredentialsView(db, env, caller.userId, now))
+    }
+    return fail('not_found', 404)
+  } catch (error) {
+    if (error instanceof AgentCredentialError) {
+      return fail(error.code, error.status, error.reason)
+    }
+    throw error
   }
 }
 
@@ -765,7 +942,7 @@ async function secretsDeps(env: Env): Promise<LifecycleDeps['secrets']> {
     return undefined
   }
   try {
-    return { keyring: await keyring, ...secretsEgressMode(env) }
+    return { keyring: await keyring, ...secretsEgressMode(env), accountProviders: providerEnabled(env) }
   } catch {
     // A malformed KEK must not block sandbox starts; the secrets routes surface it as 503.
     console.log(JSON.stringify({ event: 'secrets_kek_invalid' }))
@@ -1087,6 +1264,17 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         }
       }
       return response
+    }
+    if (url.pathname === '/v1/agent-credentials' || url.pathname.startsWith('/v1/agent-credentials/')) {
+      const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
+      if (!caller) {
+        return fail('unauthorized', 401)
+      }
+      // Desktop main only: never a phone's device session (and the renderer never holds the token).
+      if (caller.deviceSessionId) {
+        return fail('forbidden', 403, 'device_session')
+      }
+      return await agentCredentialsRoute(request, url, env, deps, caller)
     }
     if (url.pathname === '/v1/agent-sources' || url.pathname === '/v1/agent-sources/offer') {
       const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
@@ -1468,6 +1656,18 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
       }
       const revoked =
         patched.revoke === 'none' ? null : await revokeForAccessChange(life, patched.row, patched.revoke, caller.userId)
+      if (
+        patched.row.status === 'running' &&
+        (patched.row.user_id !== current.user_id || patched.row.visibility !== current.visibility)
+      ) {
+        // A new owner or a share changes which account (if any) the agents use (D10/D13): rebuild the env now.
+        const work = refreshSandboxEnv(life, patched.row).catch(() => false)
+        if (deps.waitUntil) {
+          deps.waitUntil(work)
+        } else {
+          await work
+        }
+      }
       return json({ workspace: await view(patched.row), ...(revoked ? { revoked } : {}) })
     }
     case 'POST wake': {
@@ -1713,7 +1913,7 @@ async function agentSourcesRoute(request: Request, url: URL, env: Env, deps: Dep
   const noStore = (body: unknown) => Response.json(body, { headers: { 'cache-control': 'no-store' } })
   try {
     if (request.method === 'GET' && url.pathname === '/v1/agent-sources') {
-      return noStore(await agentSourcesView(db, caller, url.searchParams.get('workspaceId')))
+      return noStore(await agentSourcesView(db, caller, url.searchParams.get('workspaceId'), providerEnabled(env), now))
     }
     if (request.method === 'PUT' && url.pathname === '/v1/agent-sources/offer') {
       const body = PutOfferSchema.safeParse(await readJson(request))
@@ -1721,7 +1921,7 @@ async function agentSourcesRoute(request: Request, url: URL, env: Env, deps: Dep
         return fail('invalid_request', 400)
       }
       await putOfferAnswer(db, caller, body.data, now)
-      return noStore(await agentSourcesView(db, caller, null))
+      return noStore(await agentSourcesView(db, caller, null, providerEnabled(env), now))
     }
     if (request.method === 'PUT' && url.pathname === '/v1/agent-sources') {
       const body = PutSourceSchema.safeParse(await readJson(request))
@@ -1745,7 +1945,7 @@ async function agentSourcesRoute(request: Request, url: URL, env: Env, deps: Dep
           await work
         }
       }
-      return noStore(await agentSourcesView(db, caller, body.data.workspaceId ?? null))
+      return noStore(await agentSourcesView(db, caller, body.data.workspaceId ?? null, providerEnabled(env), now))
     }
     return fail('not_found', 404)
   } catch (error) {

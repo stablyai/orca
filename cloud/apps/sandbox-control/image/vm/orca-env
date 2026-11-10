@@ -48,7 +48,9 @@ skip_name() {
       CURL_CA_BUNDLE | REQUESTS_CA_BUNDLE | HTTP_PROXY | HTTPS_PROXY | ALL_PROXY | NO_PROXY | \
       PYTHONPATH | PYTHONSTARTUP | PERL5OPT | RUBYOPT | JAVA_TOOL_OPTIONS | GIT_SSH | \
       GIT_SSH_COMMAND | GIT_ASKPASS | GIT_EXEC_PATH | GIT_PROXY_COMMAND | SSH_AUTH_SOCK | \
-      GH_TOKEN | GITHUB_TOKEN | CLAUDE_CODE_OAUTH_TOKEN) return 0 ;;
+      GH_TOKEN | GITHUB_TOKEN) return 0 ;;
+    # CLAUDE_CODE_OAUTH_TOKEN is reserved for users but set by the control plane itself: only ever the
+    # Orca-account placeholder (contract D10), never a stored value.
   esac
   return 1
 }

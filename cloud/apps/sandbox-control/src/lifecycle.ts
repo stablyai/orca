@@ -1,5 +1,6 @@
 // Sandbox lifecycle: one persistent provider sandbox per Orca workspace, with an Orca-owned lease,
 // a forced stop before the provider's 24h cap, usage metering and write-ahead rows.
+import { accountProvider } from './account-providers'
 import { deleteAgentSourcesForSandbox } from './agent-sources'
 import { signOutAgentsBeforeDelete } from './agent-signout'
 import type { EntitlementClient, MachineSize } from './entitlements'
@@ -19,7 +20,7 @@ import { memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
 import { connectedMembers, memberGitConfigs } from './member-git'
 import type { RetentionConfig } from './retention'
 import type { ProviderSandboxState, SandboxProviderApi } from './sandbox-provider'
-import { egressSecretHosts, placeholderValues, secretPlaceholder } from './secret-egress'
+import { egressAccountRoutes, egressSecretHosts, placeholderValues, secretPlaceholder } from './secret-egress'
 import { egressAllowHosts, sessionSecretEnv, type SessionSecrets } from './session-env'
 import type { Keyring } from './secrets-crypto'
 import { captureReadSnapshot, deleteReadSnapshot } from './read-snapshots'
@@ -72,6 +73,8 @@ export type LifecycleDeps = {
     keyring: Keyring
     egressPlaceholders: boolean | ReadonlySet<string>
     egressPlaceholdersOff?: ReadonlySet<string>
+    /** Flags S1/S2 minus the kill switch: which agents may use an Orca-account credential (D11). */
+    accountProviders?: Record<'claude' | 'codex', boolean>
   }
   now: () => number
   /** A member's GitHub identity (user token) for git-as-sender; absent = app identity only. */
@@ -235,6 +238,13 @@ export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: st
         },
         // Model API keys swapped at egress (phase 2); each host also ends in the 403 deny rule, except a
         // host whose client sends its own short-lived token on later calls (Cursor).
+        // An agent's Orca-account placeholder (D10): forwarded, claimed only by that exact Bearer value.
+        ...egressAccountRoutes(row).flatMap(({ agent, host }): CredentialRoute[] => {
+          const provider = accountProvider(agent)
+          return provider
+            ? [{ host, header: provider.header, placeholders: [provider.format(provider.placeholder(row))], via: 'forward', forwardURL: proxyUrl }]
+            : []
+        }),
         ...egressSecretHosts(row).flatMap((entry) =>
           Object.keys(entry.headers).map(
             (header): CredentialRoute => ({

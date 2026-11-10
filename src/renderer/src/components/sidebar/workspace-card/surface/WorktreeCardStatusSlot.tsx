@@ -1,4 +1,5 @@
 import { getProviderChecksOutcome } from '../../../../../../shared/source-control/checks/provider-check-summary'
+import { useIsCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import React from 'react'
 import { Bell, GitBranch, Moon } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -144,7 +145,9 @@ export function WorktreeCardStatusSlot({
       vmWaking: selectEphemeralVmWorkspaceWaking(state, worktreeId)
     }))
   )
-  const vmState = vmRuntime ? getEphemeralVmHostState(vmRuntime.status, vmWaking) : null
+  // Orca Cloud workspaces show their state on the cloud mark; the VM badge would be a second indicator.
+  const isCloud = useIsCloudWorkspace(worktreeId)
+  const vmState = vmRuntime && !isCloud ? getEphemeralVmHostState(vmRuntime.status, vmWaking) : null
   const vmFailure = vmRuntime?.failure ?? null
   const statusLabel = getWorktreeStatusLabel(status) || status
   // Sleeping remains distinct from quiet done/branch/review states; attention keeps its own glyph.
