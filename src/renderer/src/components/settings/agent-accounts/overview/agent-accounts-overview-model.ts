@@ -32,8 +32,6 @@ export type OverviewCell =
   | { kind: 'notConnected' }
   | { kind: 'checking' }
   | { kind: 'couldntCheck' }
-  /** Classic SSH: no status probe yet. */
-  | { kind: 'notChecked' }
   | { kind: 'cloudAccount' }
   | { kind: 'cloudKey'; keyKind: AgentKeyKind; member: boolean }
   | { kind: 'cloudNotSetUp' }
@@ -90,9 +88,6 @@ function hostCell(
   probe: OverviewProbe | undefined,
   agent: OverviewAgent
 ): OverviewCell {
-  if (host.kind === 'sshClassic') {
-    return host.availability === 'available' ? { kind: 'notChecked' } : { kind: 'notConnected' }
-  }
   if (probe?.expired.includes(agent)) {
     return { kind: 'expired' }
   }

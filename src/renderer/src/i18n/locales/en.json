@@ -27547,6 +27547,23 @@
       "checking": "Checking…",
       "lastChecked": "last checked {{date}}",
       "signInHint": "Start {{agent}} in a workspace on {{host}} to sign in."
+    },
+    "ssh": {
+      "signIn": "Sign in",
+      "signInTo": "Sign in to {{agent}} on {{host}}",
+      "errorDisconnected": "{{host}} disconnected during sign-in.",
+      "errorNotInstalled": "{{agent}} isn’t installed on {{host}}.",
+      "errorTimeout": "Sign-in timed out. Nothing was changed.",
+      "errorRejected": "{{agent}} didn’t accept that code. Start again.",
+      "errorFailed": "{{agent}} couldn’t finish signing in. Nothing was changed.",
+      "cancel": "Cancel",
+      "starting": "Starting the {{agent}} sign-in on {{host}}…",
+      "submitting": "Checking the code on {{host}}…",
+      "pasteLabel": "Sign in to {{agent}} on {{host}}",
+      "pasteStep": "Approve on claude.ai, then paste the code it shows. The sign-in is saved on {{host}}.",
+      "openClaude": "Open claude.ai",
+      "codeLabel": "Code from claude.ai",
+      "deviceStep": "Enter this code on auth.openai.com. The sign-in is saved on {{host}}."
     }
   },
   "cloudSecretsAsk": {
@@ -27889,7 +27906,6 @@
       "notConnected": "Not connected",
       "checking": "Checking…",
       "couldntCheck": "Couldn’t check",
-      "notChecked": "Not checked",
       "cloudAccount": "Your Orca account",
       "cloudKeyMember": "{{key}} · set by your team",
       "cloudNotSetUp": "Not set up",

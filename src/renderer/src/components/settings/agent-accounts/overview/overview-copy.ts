@@ -40,8 +40,6 @@ export function overviewCellText(
         text: t('agentAccountsOverview.cell.couldntCheck', 'Couldn’t check'),
         tone: 'warning'
       }
-    case 'notChecked':
-      return { text: t('agentAccountsOverview.cell.notChecked', 'Not checked'), tone: 'muted' }
     case 'cloudAccount':
       return {
         text: t('agentAccountsOverview.cell.cloudAccount', 'Your Orca account'),

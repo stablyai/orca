@@ -43,7 +43,8 @@ describe('S3 probes', () => {
   it('asks only awake, connected hosts; never a stopped, suspended, unreachable or disconnected one', async () => {
     expect(overviewProbeTargets(HOSTS).map((entry) => entry.hostId)).toEqual([
       'local',
-      'runtime:awake'
+      'runtime:awake',
+      'ssh:classic'
     ])
     const { result } = renderHook(() => useOverviewProbes(HOSTS))
     await waitFor(() => expect(result.current.firstPassDone).toBe(true))

@@ -17,6 +17,8 @@ import {
 import { AgentHostPanelView } from './AgentHostPanelView'
 import { useCloudHostPanelBody } from './CloudHostPanelBody'
 import { useHostPanelBody } from './HostPanelBody'
+import { sshTargetIdOf } from './ssh-classic/use-ssh-classic-agents'
+import { useSshAgentState } from '@/lib/ssh-agent-sign-in/ssh-agent-sign-in-store'
 import { openAgentHostSettings } from './open-agent-host-settings'
 import { useResolvedAgentHost, type ResolvedAgentHost } from './use-agent-host'
 
@@ -63,10 +65,14 @@ export function HostPanel({
   const cached = useSyncExternalStore(subscribeHostAgentSignInReports, () =>
     readHostAgentSignInReport(host.environmentId ?? NO_ENVIRONMENT)
   )
+  const sshReport = useSshAgentState(
+    host.kind === 'sshClassic' ? sshTargetIdOf(host.hostId) : null
+  ).report
+  const lastReport = cached ?? sshReport
   const capabilities = hostCapabilities(
     host.kind,
     host.availability,
-    { host: host.label, date: cached ? formatDate(cached.checkedAt) : null },
+    { host: host.label, date: lastReport ? formatDate(lastReport.checkedAt) : null },
     t
   )
   const body = useHostPanelBody(host, capabilities, generation, () =>
