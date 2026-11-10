@@ -11,7 +11,7 @@ import {
   ensureDetectedAgentsForRepo,
   loadProjectLaunchContext
 } from '../../../agent-session/launch/inventory/agent-detection-target-inventory'
-import { CLIENT_PLATFORM } from '../../../new-workspace'
+import { CLIENT_PLATFORM } from '../new-workspace'
 import { getLocalRepoProjectExecutionRuntimeContext } from '../../../local-preflight-context'
 import {
   refineLocalLaunchPlatform,

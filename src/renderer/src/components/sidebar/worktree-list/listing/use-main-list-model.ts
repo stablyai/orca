@@ -13,7 +13,7 @@ import {
   readHiddenVmCheckouts,
   subscribeHiddenVmCheckouts,
   withoutHiddenVmCheckouts
-} from '@/lib/vm-create-hidden-checkouts'
+} from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
 import '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspaces/folder-workspace-host-id'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
