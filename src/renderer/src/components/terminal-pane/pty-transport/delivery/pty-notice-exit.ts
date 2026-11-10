@@ -22,6 +22,16 @@ export function prepareTerminalNoticeExit(
   ) {
     return () => {}
   }
+  return prepareAcceptedTerminalNoticeExit(lifetime)
+}
+
+/** The canonical owner already accepted process death; shutdown still owns settlement. */
+export function prepareAcceptedTerminalNoticeExit(
+  lifetime: TerminalNoticeLifetime | undefined
+): () => void {
+  if (!lifetime || lifetime.retired) {
+    return () => {}
+  }
   const pending =
     isPtyDataHandlerShutdownPending(lifetime.ptyId) ||
     (useAppStore.getState().pendingPtyShutdownIds?.[lifetime.ptyId] ?? 0) > 0

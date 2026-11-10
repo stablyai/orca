@@ -1,3 +1,4 @@
+import { isTerminalNoticeLifetimeCurrent } from '../../provider-notices/terminal-notice-lifetime'
 import { useAppStore } from '@/store/index'
 import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
 import { isTerminalLeafId } from '../../../../../../shared/workspace-layout/stable-pane-id'
@@ -181,6 +182,10 @@ function resolveParkedTerminalPaneCandidates(
       ? {
           ...pane,
           paneId: prior.paneId,
+          ...(prior.noticeLifetime?.ptyId === pane.ptyId &&
+          isTerminalNoticeLifetimeCurrent(prior.noticeLifetime)
+            ? { noticeLifetime: prior.noticeLifetime }
+            : {}),
           ...(prior.ptyId === pane.ptyId && prior.workspaceOwner
             ? { workspaceOwner: prior.workspaceOwner }
             : {}),

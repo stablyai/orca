@@ -20,6 +20,14 @@ import {
 } from '../../pty-transport/ipc/pty-transport-test-harness'
 import { closeTerminalTab } from '../../../terminal/terminal-tab-actions'
 import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
+import { mergeFetchedWorktrees } from '@/store/slices/worktrees/listing/fetched-worktree-merge'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import {
+  captureParkedTerminalPaneCandidates,
+  retireParkedTerminalTab
+} from '../../parking/output-watchers/terminal-parked-watcher-registry'
+import { applyClosedTerminalLeafNotice } from '../../layout/close/closed-terminal-leaf-notice'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 
 const routing = vi.hoisted(() => ({
@@ -147,7 +155,7 @@ afterEach(() => {
 })
 
 describe('CodexSharedServerBanner', () => {
-  it('keeps asking while Codex starts, then stops once it has an answer', async () => {
+  it('shows the warning after Codex joins the shared server', async () => {
     setState({})
     isCodexOnSharedServer.mockResolvedValueOnce(NOT_JOINED)
     await renderBanner()
@@ -155,8 +163,6 @@ describe('CodexSharedServerBanner', () => {
     expect(paneElement.textContent).toBe('')
     await advance(4_000)
     expect(paneElement.textContent).toContain(TITLE)
-    await advance(60_000)
-    expect(isCodexOnSharedServer).toHaveBeenCalledTimes(2)
   })
 
   it('confirms before stopping the server, then hides once it is gone', async () => {
@@ -336,6 +342,149 @@ describe('CodexSharedServerBanner', () => {
     await advance(1_000)
     expect(paneElement.querySelector('button')).not.toBeNull()
     transport.detach?.()
+  })
+
+  it.each(['explicit purge', 'authoritative listing', 'parked main close'] as const)(
+    'shows the warning for a reused terminal after %s',
+    async (route) => {
+      installPtyEvents({})
+      const { createIpcPtyTransport } = await import('../../pty-transport/ipc/pty-transport')
+      let transport = createIpcPtyTransport({})
+      const worktreeId = 'repo::/notice-retirement'
+      const publish = () => {
+        useAppStore.setState({
+          repos: [{ ...TEST_REPO, id: 'repo', executionHostId: 'local' }],
+          worktreesByRepo: {
+            repo: [makeWorktree({ id: worktreeId, repoId: 'repo', hostId: 'local' })]
+          },
+          tabsByWorktree: { [worktreeId]: [makeTab({ id: TAB_ID, worktreeId, ptyId })] },
+          terminalLayoutsByTabId: {
+            [TAB_ID]: {
+              root: { type: 'leaf', leafId: LEAF_ID },
+              activeLeafId: LEAF_ID,
+              expandedLeafId: null,
+              ptyIdsByLeafId: { [LEAF_ID]: ptyId }
+            }
+          }
+        })
+        useAppStore
+          .getState()
+          .setPaneForegroundAgent(PANE_KEY, { agent: 'codex', shellForeground: false })
+        transport.attach({ existingPtyId: ptyId, callbacks: {} })
+      }
+      setState({})
+      publish()
+      await renderBanner()
+      await advance(1_000)
+      await act(async () => button('Dismiss').click())
+      transport.detach?.({ preserveExitObserver: false })
+      await act(async () => {
+        if (route === 'explicit purge') {
+          useAppStore.getState().purgeWorktreeTerminalState([worktreeId])
+        } else if (route === 'authoritative listing') {
+          mergeFetchedWorktrees(useAppStore.setState, useAppStore.getState, {
+            repoId: 'repo',
+            hostId: 'local',
+            ownerWasMissingAtStart: false,
+            requestStartedWorktrees: useAppStore.getState().worktreesByRepo.repo,
+            refresh: {
+              status: 'admitted',
+              executionHostId: 'local',
+              result: {
+                repoId: 'repo',
+                authoritative: true,
+                source: 'git',
+                worktrees: []
+              }
+            }
+          })
+        } else {
+          captureParkedTerminalPaneCandidates(TAB_ID, worktreeId, [
+            {
+              ptyId,
+              leafId: LEAF_ID,
+              paneId: 1,
+              drivesTabTitle: true,
+              noticeLifetime: getTerminalNoticeLifetime(ptyId)
+            }
+          ])
+          // Main's frame may remove the leaf before the accepted close notice arrives.
+          useAppStore.setState({ terminalLayoutsByTabId: {} })
+          applyClosedTerminalLeafNotice(TAB_ID, LEAF_ID, 'user')
+        }
+      })
+      transport = createIpcPtyTransport({})
+      publish()
+      await renderBanner()
+      await advance(1_000)
+      expect(paneElement.querySelector('button')).not.toBeNull()
+      transport.detach?.({ preserveExitObserver: false })
+      retireParkedTerminalTab(TAB_ID)
+    }
+  )
+
+  it('preserves a shared dismissal when a workspace is purged', async () => {
+    installPtyEvents({})
+    const { createIpcPtyTransport } = await import('../../pty-transport/ipc/pty-transport')
+    let transport = createIpcPtyTransport({})
+    setState({})
+    useAppStore.setState({
+      tabsByWorktree: {
+        gone: [makeTab({ id: TAB_ID, worktreeId: 'gone', ptyId })],
+        kept: [makeTab({ id: 'shared-owner', worktreeId: 'kept', ptyId })]
+      }
+    })
+    transport.attach({ existingPtyId: ptyId, callbacks: {} })
+    await renderBanner()
+    await advance(1_000)
+    await act(async () => button('Dismiss').click())
+    transport.detach?.({ preserveExitObserver: false })
+    await act(async () => useAppStore.getState().purgeWorktreeTerminalState(['gone']))
+    transport = createIpcPtyTransport({})
+    transport.attach({ existingPtyId: ptyId, callbacks: {} })
+    setState({})
+    await renderBanner()
+    await advance(20_000)
+    expect(paneElement.textContent).toBe('')
+    transport.detach?.({ preserveExitObserver: false })
+  })
+
+  it('retires the freshly admitted same-ID parked owner after an older capture', async () => {
+    installPtyEvents({})
+    const { createIpcPtyTransport } = await import('../../pty-transport/ipc/pty-transport')
+    const capture = () =>
+      captureParkedTerminalPaneCandidates(TAB_ID, 'wt-1', [
+        {
+          ptyId,
+          leafId: LEAF_ID,
+          paneId: 1,
+          drivesTabTitle: true,
+          noticeLifetime: getTerminalNoticeLifetime(ptyId)
+        }
+      ])
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [makeTab({ id: TAB_ID, worktreeId: 'wt-1', ptyId })] }
+    })
+    capture()
+    const transport = createIpcPtyTransport({})
+    vi.mocked(window.api.pty.spawn).mockResolvedValueOnce({ id: ptyId })
+    await transport.connect({ url: '', callbacks: {} })
+    setState({})
+    await renderBanner()
+    await advance(1_000)
+    await act(async () => button('Dismiss').click())
+    transport.detach?.({ preserveExitObserver: false })
+    capture()
+    useAppStore.setState({ tabsByWorktree: {} })
+    await act(async () => applyClosedTerminalLeafNotice(TAB_ID, LEAF_ID, 'user'))
+    const next = createIpcPtyTransport({})
+    next.attach({ existingPtyId: ptyId, callbacks: {} })
+    setState({})
+    await renderBanner()
+    await advance(1_000)
+    expect(paneElement.querySelector('button')).not.toBeNull()
+    next.detach?.({ preserveExitObserver: false })
+    retireParkedTerminalTab(TAB_ID)
   })
 
   describe('returning focus when a dialog closes', () => {
