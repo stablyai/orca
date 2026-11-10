@@ -5661,8 +5661,15 @@
             "readAgo": "Read {{time}}",
             "notRead": "Usage unknown: not read yet"
           },
+          "AccountSwitchList": {
+            "used": "Used",
+            "left": "Left",
+            "reset": "Reset"
+          },
           "InlineUsageBars": {
-            "resetsAt": "Resets {{when}}"
+            "now": "now",
+            "resetsNow": "resets now",
+            "resetsIn": "resets in {{duration}}"
           }
         }
       },
@@ -22183,15 +22190,19 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
+        "agents": "Agents",
         "browser": "Browser",
         "chooseAgent": "Choose agent",
         "closePane": "Close pane",
-        "goToFile": "Go to file",
-        "heading": "Open in this pane",
+        "files": "Files",
+        "keyboardHint": "↑↓ Enter to open · → agents · / to search",
         "markdown": "Markdown",
         "mobileEmulator": "Mobile emulator",
+        "new": "New",
         "newAgent": "New Agent",
-        "reopenClosedTab": "Reopen closed tab",
+        "newNamedAgent": "New {{agent}} agent",
+        "noMatches": "No matches",
+        "searchPlaceholder": "Open agent, terminal, or file…",
         "terminal": "Terminal"
       }
     },

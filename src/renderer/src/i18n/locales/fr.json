@@ -4896,8 +4896,15 @@
             "readAgo": "Relevé {{time}}",
             "notRead": "Utilisation inconnue : pas encore relevée"
           },
+          "AccountSwitchList": {
+            "used": "Utilisé",
+            "left": "Restant",
+            "reset": "Réinitialisation"
+          },
           "InlineUsageBars": {
-            "resetsAt": "Réinitialisation à {{when}}"
+            "now": "maintenant",
+            "resetsNow": "réinitialisation maintenant",
+            "resetsIn": "réinitialisation dans {{duration}}"
           }
         }
       },

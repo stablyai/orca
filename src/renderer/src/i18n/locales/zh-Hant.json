@@ -4988,8 +4988,15 @@
             "readAgo": "讀取於 {{time}}",
             "notRead": "用量未知：尚未讀取"
           },
+          "AccountSwitchList": {
+            "used": "已用",
+            "left": "剩餘",
+            "reset": "重設"
+          },
           "InlineUsageBars": {
-            "resetsAt": "將於 {{when}} 重設"
+            "now": "現在",
+            "resetsNow": "現在重設",
+            "resetsIn": "{{duration}}後重設"
           }
         }
       },

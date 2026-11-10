@@ -4639,8 +4639,15 @@
             "readAgo": "Consultado {{time}}",
             "notRead": "Uso desconocido: aún no consultado"
           },
+          "AccountSwitchList": {
+            "used": "Usado",
+            "left": "Restante",
+            "reset": "Restablecimiento"
+          },
           "InlineUsageBars": {
-            "resetsAt": "Se restablece a las {{when}}"
+            "now": "ahora",
+            "resetsNow": "se restablece ahora",
+            "resetsIn": "se restablece en {{duration}}"
           }
         }
       },

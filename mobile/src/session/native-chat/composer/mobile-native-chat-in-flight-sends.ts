@@ -5,8 +5,8 @@ import {
   updateMobileNativeChatDraftInputs
 } from './mobile-native-chat-draft-inputs'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
-import type { MobileNativeChatSendOrigin } from '../mobile-native-chat-pending-echo'
-import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
+import type { MobileNativeChatSendOrigin } from '../transcript/mobile-native-chat-pending-echo'
+import type { MobileNativeChatSendIntent } from './mobile-native-chat-send'
 import { saveMobileNativeChatDraft } from './mobile-native-chat-draft-persistence'
 import type {
   MobileNativeChatInFlightSend,
