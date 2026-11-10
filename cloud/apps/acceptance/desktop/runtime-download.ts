@@ -1,13 +1,16 @@
 // Headless file + folder download from a cloud workspace over the E2EE pairing, using the desktop's
-// own download transfer code (src/main/runtime-downloads) and the CLI's runtime client. No window.
+// own download transfer code (src/main/runtime-downloads) over ONE persistent paired connection
+// (RemoteRuntimeRequestConnection, what the desktop caches per environment). No window.
 //   ORCA_PAIRING_CODE=<code> <repo>/node_modules/.bin/tsx desktop/runtime-download.ts <worktreeId> <file> <folder> <outDir>
 // Prints one JSON line: {file:{bytes,ms,sha256}, folder:{bytes,ms,zipOk}} or {error}.
 import { createHash } from 'node:crypto'
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { open } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { RuntimeClient } from '../../../../src/cli/runtime/client'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../src/shared/electron-remote-runtime-client-capabilities'
+import { pairedRuntimeConnectionFromOffer } from '../../../../src/shared/remote-runtime/pairing/paired-runtime-connection'
+import { parsePairingCode } from '../../../../src/shared/remote-runtime/pairing/pairing'
+import { RemoteRuntimeRequestConnection } from '../../../../src/shared/remote-runtime/requests/remote-runtime-request-connection'
 import { transferRuntimeFile, transferRuntimeFolder, type RuntimeDownloadCall } from '../../../../src/main/runtime-downloads/runtime-download-transfer'
 
 const [worktree, file, folder, outDir] = process.argv.slice(2) as [string, string, string, string]
@@ -15,9 +18,17 @@ const pairing = process.env.ORCA_PAIRING_CODE
 if (!pairing) {
   throw new Error('ORCA_PAIRING_CODE required')
 }
-const client = new RuntimeClient(mkdtempSync(join(tmpdir(), 'orca-dl-')), 120_000, pairing, null)
-const call: RuntimeDownloadCall = async <T,>(method: string, params: unknown, options: { timeoutMs: number }) =>
-  (await client.call<T>(method, params, { timeoutMs: options.timeoutMs })).result as T
+const connection = new RemoteRuntimeRequestConnection(
+  pairedRuntimeConnectionFromOffer(parsePairingCode(pairing)!),
+  ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+)
+const call: RuntimeDownloadCall = async <T,>(method: string, params: unknown, options: { timeoutMs: number; signal: AbortSignal }) => {
+  const response = (await connection.request(method, params, options.timeoutMs, options.signal)) as { ok: boolean; result?: T; error?: { message?: string } }
+  if (!response.ok) {
+    throw new Error(response.error?.message ?? `${method} failed`)
+  }
+  return response.result as T
+}
 
 async function run(kind: 'file' | 'folder', relativePath: string, path: string) {
   const sink = await open(path, 'w')

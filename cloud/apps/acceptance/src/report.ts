@@ -87,7 +87,7 @@ function benchTable(runs: RunFile[]): string {
     }
   }
   const names = ['create.api', 'create.usable', 'create.firstEcho', 'desktop.createToTerminal', 'keystroke.echo', 'wake.api', 'wake.firstEcho', 'wake.firstKeystroke', 'suspend.api', 'rollover.gap', 'port.forward', 'share.coldLoad']
-  const rows = names.map((name) => {
+  const rows = [...names, ...[...latest.keys()].filter((k) => !names.includes(k)).sort()].map((name) => {
     const b = latest.get(name)
     const n = b?.samples.length ?? 0
     return `<tr><th><code>${esc(name)}</code></th><td class="c">${n}</td><td class="c ${n >= 10 ? '' : 'w'}">${b ? sec(percentile(b.samples, 50)) : 'pending'}</td>

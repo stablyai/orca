@@ -13,7 +13,13 @@ const MAP: Record<string, string> = {
   'cli.desktop': 'cli.desktop',
   'acc.port-forward': 'acc.port-forward',
   'acc.ssh': 'acc.ssh',
-  'life.transfer-local': 'life.transfer-local'
+  'life.transfer-local': 'life.transfer-local',
+  // #127 desktop fixes and the delete paths: desktop-only catalog rows.
+  'auth.signed-out-create': 'cli.desktop-signin',
+  'proj.cloud-name': 'cli.desktop-project-name',
+  'life.destroy': 'cli.desktop-delete',
+  'life.delete-unconfirmed': 'cli.desktop-delete-unconfirmed',
+  'life.delete-after-oob-destroy': 'cli.desktop-delete-gone'
 }
 const checks: CheckResult[] = []
 const benchmarks: RunFile['benchmarks'] = []
@@ -64,7 +70,7 @@ const run: RunFile = {
   checks,
   benchmarks,
   resources: [],
-  notes: [`desktop account ${d.account}; cleanup: ${JSON.stringify(d.cleanup).slice(0, 300)}`]
+  notes: [`desktop account ${d.account}; cleanup: ${JSON.stringify(d.cleanup).slice(0, 300)}`, ...(d.notes ?? []), ...(d.bugs ?? []).map((b: any) => `bug (${b.step}): ${b.title}`)]
 }
 writeFileSync(join(config.runsDir, `${runId}.json`), JSON.stringify(run, null, 2))
 console.log(`imported ${checks.length} checks, ${benchmarks.length} benchmarks -> ${runId}.json`)

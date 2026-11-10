@@ -78,6 +78,7 @@ export const CATALOG: Feature[] = [
   { id: 'acc.share-link', section: S.acc, feature: 'Share link to a cloud app (public preview URL)', conductor: '0.84.1', owner: 'w3-networking', priority: 'P1' },
   { id: 'acc.ssh', section: S.acc, feature: 'SSH / open in VS Code or Cursor', conductor: '0.83/0.89', owner: 'w3-networking', priority: 'P1' },
   { id: 'acc.download', section: S.acc, feature: 'Download a file from the VM', conductor: '0.82', owner: 'w3-networking', priority: 'P1' },
+  { id: 'acc.remote-desktop', section: S.acc, feature: 'Remote desktop (full GUI tab) streamed from the VM', conductor: '0.84 experimental; desktop tabs 0.89', owner: 'w3-networking', priority: 'P2', better: 'Reached only through the E2EE pairing (no public route), single-use tickets' },
   { id: 'acc.search', section: S.acc, feature: 'File-content search over the runtime', conductor: '0.85/0.87', owner: 'core', priority: 'P0' },
   // 6. Multiplayer
   { id: 'mp.registry', section: S.mp, feature: 'Org workspaces visible to the team', conductor: '0.77 alpha, 0.78 GA', owner: 'w4-multiplayer', priority: 'P1' },
@@ -95,6 +96,12 @@ export const CATALOG: Feature[] = [
   { id: 'cli.mobile', section: S.cli, feature: 'Mobile reaches a cloud workspace (stable endpoint, wake from phone)', conductor: 'iOS app 0.90', owner: 'w8-mobile', priority: 'P0', better: 'iOS + Android, E2EE' },
   { id: 'cli.web', section: S.cli, feature: 'Web client reaches a cloud workspace', conductor: 'Mac only', owner: 'w8-mobile', priority: 'P1', better: 'Web, Windows, Linux too' },
   { id: 'cli.desktop', section: S.cli, feature: 'Desktop app: pick Orca Cloud, create, shell, sleep/wake (Playwright/Electron)', conductor: 'Mac desktop', owner: 'core', priority: 'P0' },
+  // Desktop-only checks (desktop/run-desktop.mjs, folded in by import-desktop.ts); D-n are the #127 fixes.
+  { id: 'cli.desktop-signin', section: S.cli, feature: 'Desktop: signed-out Orca Cloud create shows the sign-in card and creates nothing; signing in from the card carries the create through as that user (D-1, D-4)', conductor: 'Sign-in required', owner: 'core-desktop-fixes', priority: 'P0' },
+  { id: 'cli.desktop-project-name', section: S.cli, feature: 'Desktop: a cloud create files the workspace under the real project, never a new "project" project (D-3)', conductor: 'n/a', owner: 'core-desktop-fixes', priority: 'P1' },
+  { id: 'cli.desktop-delete', section: S.cli, feature: 'Desktop: Delete on a cloud workspace removes the row and the sandbox reaches destroyed', conductor: 'Delete workspace', owner: 'core', priority: 'P0' },
+  { id: 'cli.desktop-delete-unconfirmed', section: S.cli, feature: 'Desktop: a delete the control plane answers not_found says it couldn’t confirm and keeps the row (D-2)', conductor: 'not documented', owner: 'core-desktop-fixes', priority: 'P0', better: 'Never reports a possibly-running sandbox as deleted' },
+  { id: 'cli.desktop-delete-gone', section: S.cli, feature: 'Desktop: deleting a workspace whose sandbox was already destroyed elsewhere removes the row', conductor: 'not documented', owner: 'core', priority: 'P1' },
   // 9. Ops
   { id: 'ops.kill-switch', section: S.ops, feature: 'Operator kill switch refuses creates/resumes', conductor: 'n/a', owner: 'core', priority: 'ops' },
   { id: 'ops.caps', section: S.ops, feature: 'Per-account concurrency cap and create rate limit', conductor: 'n/a', owner: 'core', priority: 'ops' },
