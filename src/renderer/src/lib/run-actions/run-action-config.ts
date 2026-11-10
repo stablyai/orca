@@ -99,14 +99,20 @@ export async function loadWorktreeRunActions(
   return mergeRunActions(shared, repo?.hookSettings?.scripts, target.isLocal ? 'local' : 'remote')
 }
 
-/** The action the Run button and shortcut act on: the last one started here, else the default. */
+/** The action the Run button and shortcut act on: the last one still running here, else the default. */
 export function pickPrimaryRunAction(
   worktreeId: string,
   actions: readonly OrcaRunAction[]
 ): OrcaRunAction | null {
-  const latest = listRunActionRuns()
-    .filter((run) => run.worktreeId === worktreeId)
+  // A one-shot action that already finished must not take the button from the dev server.
+  const latestLive = listRunActionRuns()
+    .filter(
+      (run) =>
+        run.worktreeId === worktreeId && (run.status === 'running' || run.status === 'stopping')
+    )
     .sort((a, b) => b.startedAt - a.startedAt)[0]
-  const latestAction = latest ? actions.find((action) => action.id === latest.actionId) : undefined
-  return latestAction ?? pickDefaultRunAction(actions)
+  const liveAction = latestLive
+    ? actions.find((action) => action.id === latestLive.actionId)
+    : undefined
+  return liveAction ?? pickDefaultRunAction(actions)
 }
