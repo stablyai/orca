@@ -90,3 +90,14 @@ export function workerApprovalTimeLeft(expiresAt: string | undefined, now: numbe
   }
   return `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
 }
+
+// Why 15 s: the agent's own timeout sends its closing message within moments of the countdown.
+const LAPSE_GRACE_MS = 15_000
+
+/** When an open card stops being shown: its agent decided on its own and no closing message came,
+ *  as when the app restarted while the prompt was open. Never for a closed one or one with no countdown. */
+export function workerApprovalLapsesAt(approval: WorkerApprovalPayload): number {
+  const expiresAt =
+    approval.state === 'open' && approval.expiresAt ? Date.parse(approval.expiresAt) : Number.NaN
+  return Number.isFinite(expiresAt) ? expiresAt + LAPSE_GRACE_MS : Number.POSITIVE_INFINITY
+}

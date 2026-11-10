@@ -117,3 +117,17 @@ describe('worker approval strip', () => {
     expect(container).toBeEmptyDOMElement()
   })
 })
+
+describe('when an open card stops being shown', () => {
+  it('lapses only an open card whose countdown passed, after a grace for its closing message', async () => {
+    const { workerApprovalLapsesAt } = await import('./worker-approval-card-model')
+    const expiresAt = '2026-11-10T20:43:00.000Z'
+    expect(workerApprovalLapsesAt(entry('a', { expiresAt }).approval)).toBe(
+      Date.parse('2026-11-10T20:43:15.000Z')
+    )
+    expect(workerApprovalLapsesAt(entry('b').approval)).toBe(Number.POSITIVE_INFINITY)
+    expect(workerApprovalLapsesAt(entry('c', { expiresAt, state: 'answered' }).approval)).toBe(
+      Number.POSITIVE_INFINITY
+    )
+  })
+})

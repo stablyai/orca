@@ -12,6 +12,7 @@ import {
   workerApprovalCard,
   workerApprovalReceiptBody,
   workerApprovalReceiptText,
+  workerApprovalLapsesAt,
   workerApprovalTimeLeft
 } from './worker-approval-card-model'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
@@ -40,12 +41,27 @@ export function useNativeChatWorkerApprovals(
   party: string | null
 ): NativeChatWorkerApproval[] {
   const crew = useOrchestrationCrew(target?.kind === 'local' ? target : null, party)
-  return useMemo(
+  const all = useMemo(
     () =>
       crew.sections.managing
         .flatMap((worker) => (worker.approvals ?? []).map((entry) => ({ ...entry, worker })))
         .sort((a, b) => a.at.localeCompare(b.at)),
     [crew]
+  )
+  const [now, setNow] = useState(Date.now)
+  const nextLapse = Math.min(
+    ...all.map(({ approval }) => workerApprovalLapsesAt(approval)).filter((at) => at > now)
+  )
+  useEffect(() => {
+    if (!Number.isFinite(nextLapse)) {
+      return
+    }
+    const timer = setTimeout(() => setNow(Date.now()), nextLapse - Date.now())
+    return () => clearTimeout(timer)
+  }, [nextLapse])
+  return useMemo(
+    () => all.filter(({ approval }) => workerApprovalLapsesAt(approval) > now),
+    [all, now]
   )
 }
 
