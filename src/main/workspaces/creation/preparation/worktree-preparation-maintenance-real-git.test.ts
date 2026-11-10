@@ -151,8 +151,10 @@ it('keeps original pause acquisition as its wake and never releases the successo
     await attemptMaintenance(other.repoPath)
     expect(existsSync(join(other.repoPath, '.git', 'packed-refs'))).toBe(false)
     successor.resolve()
-    await vi.waitFor(() => expect(existsSync(entry.preparedPath)).toBe(false))
-    expect(preparationCapacityUsed()).toBe(0)
+    await vi.waitFor(() => {
+      expect(existsSync(entry.preparedPath)).toBe(false)
+      expect(preparationCapacityUsed()).toBe(0)
+    })
     await attemptMaintenance(other.repoPath)
     expect(existsSync(join(other.repoPath, '.git', 'packed-refs'))).toBe(true)
   } finally {
@@ -189,7 +191,10 @@ it('holds cleanup maintenance through a rejected writer until its actual termina
     await attemptMaintenance(other.repoPath)
     expect(existsSync(join(other.repoPath, '.git', 'packed-refs'))).toBe(false)
     terminated.resolve()
-    await vi.waitFor(() => expect(existsSync(entry.preparedPath)).toBe(false))
+    await vi.waitFor(() => {
+      expect(existsSync(entry.preparedPath)).toBe(false)
+      expect(preparationCapacityUsed()).toBe(0)
+    })
     await attemptMaintenance(other.repoPath)
     expect(existsSync(join(other.repoPath, '.git', 'packed-refs'))).toBe(true)
   } finally {
