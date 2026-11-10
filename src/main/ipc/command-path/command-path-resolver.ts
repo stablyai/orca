@@ -5,7 +5,7 @@ import path from 'node:path'
 import { getExecutableNames } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { forEachWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import { runInWindowsBulkFsSlot } from '../../filesystem/windows-bulk-fs-slot'
-import { directoryNameKey } from './command-path-directory'
+import { directoryNameKey, readDetectionDirectoryNames } from './command-path-directory'
 import { readDetectionDirectoryViaWorker } from './command-path-directory-worker-client'
 
 export type ResolveCommandOptions = {
@@ -233,10 +233,15 @@ export async function findCommandsOnLocalPath(
     if (bareCommands.size === 0) {
       return
     }
-    const names =
+    const workerNames =
       !isWin && bareCommands.size <= DIRECT_DETECTION_COMMAND_LIMIT
         ? null
         : await readDetectionDirectoryViaWorker(dir)
+    // A missing worker (dev, tests, DLP-blocked spawn) must not degrade into a per-candidate
+    // stat storm: list names in-process instead, one slotted op per directory (#40636).
+    const names =
+      workerNames ??
+      (isWin ? await runInWindowsBulkFsSlot(() => readDetectionDirectoryNames(dir)) : null)
     await Promise.all(
       [...bareCommands].map(async (command) => {
         const seenCandidates = new Set<string>()
