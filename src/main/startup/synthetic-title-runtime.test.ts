@@ -25,16 +25,23 @@ import {
 const PANE = 'tab-1:leaf-1'
 const QUESTION = JSON.stringify({ questions: [{ title: 'Which database?' }] })
 
-function codexStatus(state: 'working' | 'waiting' | 'done', interactivePrompt?: string) {
+function codexStatus(
+  state: 'working' | 'waiting' | 'done',
+  interactivePrompt?: string,
+  toolName = 'request_user_input_async'
+) {
   driveSyntheticTitleFromHookStatus({
     paneKey: PANE,
     payload: {
       state,
       agentType: 'codex',
-      ...(interactivePrompt ? { toolName: 'request_user_input_async', interactivePrompt } : {})
+      ...(interactivePrompt ? { toolName, interactivePrompt } : {})
     }
   })
 }
+
+// Codex's PermissionRequest hook carries no request id; two approvals can look identical.
+const APPROVAL = JSON.stringify({ approval: { command: 'pnpm tc' } })
 
 function bellCount(): number {
   return ingestSyntheticTitleFrame.mock.calls.filter(([, data]) => data.endsWith('\x07\x07')).length
@@ -69,5 +76,13 @@ describe('synthetic title BEL', () => {
     codexStatus('working')
     codexStatus('waiting', QUESTION)
     expect(bellCount()).toBe(4)
+  })
+  it('rings for each approval during an open question, but not for the question again', () => {
+    codexStatus('waiting', QUESTION)
+    codexStatus('waiting', APPROVAL, 'Bash')
+    // Approved: Codex keeps working and restates the still-open question.
+    codexStatus('waiting', QUESTION)
+    codexStatus('waiting', APPROVAL, 'Bash')
+    expect(bellCount()).toBe(3)
   })
 })

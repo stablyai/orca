@@ -15,6 +15,7 @@ import {
 import { shouldSendSyntheticTitleFrame } from '../runtime/terminal/title/synthetic-title-visibility'
 import { shouldCopySyntheticTitleFrameToPtyData } from '../runtime/terminal/title/synthetic-title-frame-routing'
 import { mainProcessState as state } from './main-process-state'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../shared/codex-async-question-input'
 
 // Cursor redraws overwrite one-shot OSC titles; reassert at Pi's 80ms cadence and share the animation with OpenCode.
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
@@ -24,10 +25,16 @@ const syntheticTitleSpinnerByPaneKey = new Map<
   SyntheticTitleSpinnerEntry<SyntheticAgentTitleProfile>
 >()
 let syntheticTitleSpinnerTimer: ReturnType<typeof setInterval> | null = null
+/** What one pane's current needs-input stretch has already rung for. */
+type NeedsInputBellState = {
+  /** The prompt the last needs-input frame showed; restating it is not a new request. */
+  lastPromptKey: string
+  /** Async questions stay open across the turn, so one that resurfaces after an approval stays rung. */
+  rungAsyncQuestionKeys: Set<string>
+}
 // Why: hooks restate a held wait on every event (Codex re-sends one per tool call while an async
-// question stays open), so ring BEL once per prompt per needs-input stretch or each restatement
-// becomes another OS notification.
-const rungNeedsInputPromptsByPaneKey = new Map<string, Set<string>>()
+// question stays open), so ringing on each restatement becomes an OS notification every few seconds.
+const needsInputBellByPaneKey = new Map<string, NeedsInputBellState>()
 
 function isSyntheticTitleWindowVisible(): boolean {
   const window = state.mainWindow
@@ -68,7 +75,7 @@ function canSendDecorativeSyntheticTitle(): boolean {
 }
 
 export function stopSyntheticTitleSpinner(paneKey: string): void {
-  rungNeedsInputPromptsByPaneKey.delete(paneKey)
+  needsInputBellByPaneKey.delete(paneKey)
   if (syntheticTitleSpinnerByPaneKey.delete(paneKey)) {
     stopSyntheticTitleSpinnerTimerIfIdle()
   }
@@ -131,7 +138,10 @@ export function driveSyntheticTitleFromHook(
   agentState: AgentStatusState,
   profile: SyntheticAgentTitleProfile,
   /** Identifies what the agent is waiting on; a new prompt in the same wait rings again. */
-  needsInputPromptKey = ''
+  needsInput: { promptKey: string; asyncQuestion: boolean } = {
+    promptKey: '',
+    asyncQuestion: false
+  }
 ): void {
   const ptyId = getPtyIdForPaneKey(paneKey)
   if (!ptyId) {
@@ -139,7 +149,7 @@ export function driveSyntheticTitleFromHook(
   }
   const needsUserInput = isNeedsInputState(agentState)
   if (!needsUserInput) {
-    rungNeedsInputPromptsByPaneKey.delete(paneKey)
+    needsInputBellByPaneKey.delete(paneKey)
   }
   if (agentState === 'working') {
     // Emit immediately so visible startup does not wait for the next 80ms tick.
@@ -158,15 +168,20 @@ export function driveSyntheticTitleFromHook(
     return
   }
   // Stop before the next tick can restore working; only permission frames ring BEL, completion owns its own notifications.
-  const rungPrompts = rungNeedsInputPromptsByPaneKey.get(paneKey)
+  const bell = needsInputBellByPaneKey.get(paneKey)
   stopSyntheticTitleSpinner(paneKey)
   const label = needsUserInput ? profile.permissionLabel : profile.idleLabel
   let ringsBell = false
   if (needsUserInput) {
-    const prompts = rungPrompts ?? new Set<string>()
-    ringsBell = !prompts.has(needsInputPromptKey)
-    prompts.add(needsInputPromptKey)
-    rungNeedsInputPromptsByPaneKey.set(paneKey, prompts)
+    const next = bell ?? { lastPromptKey: '', rungAsyncQuestionKeys: new Set<string>() }
+    // Approvals carry no request id (Codex PermissionRequest), so a repeat after another prompt is new.
+    ringsBell = bell === undefined || next.lastPromptKey !== needsInput.promptKey
+    if (needsInput.asyncQuestion) {
+      ringsBell &&= !next.rungAsyncQuestionKeys.has(needsInput.promptKey)
+      next.rungAsyncQuestionKeys.add(needsInput.promptKey)
+    }
+    next.lastPromptKey = needsInput.promptKey
+    needsInputBellByPaneKey.set(paneKey, next)
   }
   sendSyntheticTitle(ptyId, `\x1b]0;${label}\x07${ringsBell ? '\x07' : ''}`, { force: true })
 }
@@ -230,16 +245,14 @@ export function driveSyntheticTitleFromHookStatus(event: {
   }
   // Profiles that leave working titles to the agent never reach the drive below on working.
   if (!isNeedsInputState(event.payload.state)) {
-    rungNeedsInputPromptsByPaneKey.delete(event.paneKey)
+    needsInputBellByPaneKey.delete(event.paneKey)
   }
   if (shouldDriveSyntheticAgentTitleFromHook(event.payload.agentType, event.payload.state)) {
     const { toolName, toolInput, interactivePrompt } = event.payload
-    driveSyntheticTitleFromHook(
-      event.paneKey,
-      event.payload.state,
-      profile,
-      JSON.stringify([toolName ?? null, interactivePrompt ?? toolInput ?? null])
-    )
+    driveSyntheticTitleFromHook(event.paneKey, event.payload.state, profile, {
+      promptKey: JSON.stringify([toolName ?? null, interactivePrompt ?? toolInput ?? null]),
+      asyncQuestion: toolName === CODEX_ASYNC_QUESTION_TOOL
+    })
   } else if (event.payload.state === 'working' && profile.synthesizeTerminalTitle !== false) {
     retractSyntheticRestTitle(event.paneKey, profile)
   }
