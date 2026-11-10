@@ -11,7 +11,8 @@ import '../orchestration/db/contract-constants'
 import '../orchestration/db/messages/mailbox-routing-page'
 import '../orchestration/db/dispatch-row-writer'
 import '../orchestration/db/attempt-outcome-projection'
-import { defineMethod, type RpcRequest } from './core'
+import type { RpcRequest } from './core'
+import { defineOrchestrationMethod } from './methods/orchestration/access/orchestration-method-access'
 import { RpcDispatcher } from './dispatcher'
 import { ORCHESTRATION_METHODS } from './methods/orchestration/orchestration'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
@@ -53,9 +54,10 @@ describe('durable orchestration mutation ledger', () => {
     const dispatcher = new RpcDispatcher({
       runtime,
       methods: [
-        defineMethod({
+        defineOrchestrationMethod({
           name: 'orchestration.workerStart',
           permission: 'workspace',
+          access: { kind: 'writes', targets: {} },
           params: z.object({ from: z.string(), task: z.string() }),
           handler: effect
         })

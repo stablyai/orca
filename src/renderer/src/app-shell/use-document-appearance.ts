@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { buildAppFontFamily } from '@/lib/app-font-family'
+import { buildAppFontFamily } from '@/app-shell/appearance/app-font-family'
 import { applyCodeFontSmoothing } from '@/lib/editor/appearance/code-font-smoothing'
 import { applyMarkdownCodeFontFamily } from '@/lib/editor/appearance/markdown-code-font'
 import { useSplitDividerSetting } from '@/hooks/use-split-divider-setting'
 import { rebuildAllTerminalWebglRenderers } from '@/lib/pane-manager/pane-manager-registry'
-import { applyDocumentTheme, applyPluginAppTheme } from '../lib/document-theme'
-import { applyThemeBackground } from '../lib/theme-background'
-import { syncThemeBackgroundVideo } from '../lib/theme-background-video'
+import { applyDocumentTheme, applyPluginAppTheme } from './appearance/document-theme'
+import { applyThemeBackground } from './appearance/theme-background'
+import { syncThemeBackgroundVideo } from './appearance/theme-background-video'
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion'
 import { useWindowActive } from '../hooks/use-window-active'
 import { tolerantPluginThemeBackgroundRegistration } from '../../../shared/plugins/artifacts/plugin-theme-background'
@@ -16,13 +16,13 @@ import {
   paintCodeEditorColors,
   resolveCodeEditorTheme
 } from '../lib/editor/appearance/code-editor-theme'
-import { browserColorProbe } from '../lib/plugin-theme-tokens'
+import { browserColorProbe } from './appearance/plugin-theme-tokens'
 import {
   TINTED_HOST_PILL_OUTLINE_MIX_TOKEN,
   tintedSidebarHostPillOutlineMix
-} from '../lib/left-sidebar-appearance'
+} from './appearance/left-sidebar-appearance'
 import { useCodeEditorThemeStore } from '../store/appearance/code-editor-theme'
-import { synthesizeTerminalAppTheme, type TerminalAppTheme } from '../lib/terminal-app-theme'
+import { synthesizeTerminalAppTheme, type TerminalAppTheme } from './appearance/terminal-app-theme'
 import { MATCH_TERMINAL_APP_THEME } from '../../../shared/plugin-theme-settings'
 import {
   usePluginAppThemeSync,

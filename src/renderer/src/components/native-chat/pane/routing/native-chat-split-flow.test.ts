@@ -23,7 +23,9 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: createRemote
 }))
-vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
+vi.mock('@/components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
+  focusTerminalTabSurface: vi.fn()
+}))
 vi.mock('@/components/tab-bar/request-active-terminal-pane-split', () => ({
   requestActiveTerminalPaneSplit: requestSplit
 }))

@@ -7,11 +7,11 @@ import type { AESEncryptionKey } from 'expo-crypto'
 import { Directory, Paths } from 'expo-file-system'
 import { AppState } from 'react-native'
 import { createExpoGenerationFileSystem } from '../mobile-web-shell/generation-store-file-system'
-import { loadStoredHostProfiles } from '../transport/hosts/host-metadata-store'
+import { loadStoredHostProfiles } from '../host-catalog/host-metadata-store'
 import {
   readPairingKeychainItem,
   writePairingKeychainItem
-} from '../transport/hosts/pairing-keychain'
+} from '../host-credentials/pairing-keychain'
 import {
   createRootIndex,
   DEVICE_STORE_CAPS,

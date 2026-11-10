@@ -225,13 +225,6 @@ export function captureMobileNativeChatTextDestination():
   return focusedScope ? textDestinations.get(focusedScope)?.() : undefined
 }
 
-export function resetMobileNativeChatDraftInputsForTests(): void {
-  drafts.clear()
-  destinations.clear()
-  textDestinations.clear()
-  focusedScope = null
-}
-
 export function pruneMobileNativeChatDraftSkills(
   scope: string,
   text: string,

@@ -4,7 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
-import { CODEX_TERMINAL_SERVER_ISOLATION_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
+import { CODEX_TERMINAL_SERVER_ISOLATION_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
 import { isCodexTerminalServerIsolationEnabled } from '../../../../../../shared/codex-terminal-server-isolation'
 import { whenAgentTerminalAppears } from '../agent-presence/agent-terminal-presence'
 

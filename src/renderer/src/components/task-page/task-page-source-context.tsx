@@ -1,9 +1,9 @@
 import { githubCandidateOwner } from '@/store/github/sources/source-preference-ownership'
-import { getTaskPageRepoSourceContext } from '@/lib/task-repo-source-context'
+import { getTaskPageRepoSourceContext } from '@/lib/work-items/task-repo-source-context'
 export {
   getTaskPageRepoSourceContext,
   buildGitLabProviderIdentity
-} from '@/lib/task-repo-source-context'
+} from '@/lib/work-items/task-repo-source-context'
 import type {
   GitLabTaskFilter,
   GitLabIssueFilter
@@ -17,7 +17,7 @@ import {
   getLinkedWorkItemWorkspaceName,
   getLinkedWorkItemSuggestedName
 } from '../../../../shared/workspace-name'
-import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
+import { getJiraIssueKeyCasingSeedOptions } from '@/lib/work-items/jira/jira-issue-key-casing'
 import {
   type TaskSourceContext,
   getTaskSourceCacheScope
@@ -29,7 +29,7 @@ import {
   type TaskSourceHostAvailability
 } from '../task-source-context-summary'
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/work-items/task-source-runtime-capabilities'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 import type { Translate } from '@/i18n/use-translate'
 export function isGitLabMRFilter(

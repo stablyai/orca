@@ -22,7 +22,7 @@ import type {
   GitHubProjectRow
 } from '../../../../shared/github/project-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
+import { taskSourceRuntimeTarget } from '@/lib/work-items/task-source-runtime-target'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type Props = {

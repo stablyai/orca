@@ -107,6 +107,7 @@ export async function useIpcEventsForCloseRouting({
         activeBrowserTabIdByWorktree: { 'wt-1': 'workspace-1' },
         browserTabsByWorktree: { 'wt-1': [{ id: 'workspace-1' }] },
         browserPagesByWorkspace: {},
+        browserAnnotationsByPageId: {},
         openFiles: [],
         unifiedTabsByWorktree: {},
         closeBrowserTab: vi.fn(),
@@ -129,10 +130,6 @@ export async function useIpcEventsForCloseRouting({
   }))
   vi.doMock('@/components/sidebar/worktree-list/listing/visible-worktrees', () => ({
     getVisibleWorktreeIds: () => []
-  }))
-  vi.doMock('@/lib/editor/appearance/editor-font-zoom', () => ({
-    nextEditorFontZoomLevel: vi.fn(() => 0),
-    computeEditorFontSize: vi.fn(() => 13)
   }))
   vi.doMock('../../../shared/ui-zoom-level', async (importOriginal) => ({
     ...(await importOriginal<typeof UIZoomLevelModule>()),
