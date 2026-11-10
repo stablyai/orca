@@ -6,9 +6,12 @@ afterEach(() => {
 })
 
 describe('orcad post-ready work', () => {
-  it('starts the terminal warm-up before the other post-ready work', async () => {
+  it('loads the RPC methods, then warms terminals, before the other post-ready work', async () => {
     const order: string[] = []
     await startOrcadPostReadyWork({
+      warmRpcMethods: async () => {
+        order.push('methods')
+      },
       warmTerminalList: async () => {
         order.push('terminals')
       },
@@ -20,7 +23,7 @@ describe('orcad post-ready work', () => {
       }
     })
 
-    expect(order).toEqual(['terminals', 'rules', 'speech'])
+    expect(order).toEqual(['methods', 'terminals', 'rules', 'speech'])
   })
 
   it('never rejects, and one failure does not stop the rest', async () => {
@@ -29,6 +32,7 @@ describe('orcad post-ready work', () => {
 
     await expect(
       startOrcadPostReadyWork({
+        warmRpcMethods: () => Promise.reject(new Error('import failed')),
         warmTerminalList: () => Promise.reject(new Error('daemon gone')),
         startAgentStateRules: () => Promise.reject(new Error('no rules')),
         startSpeechWarmup
@@ -36,6 +40,7 @@ describe('orcad post-ready work', () => {
     ).resolves.toBeUndefined()
 
     expect(startSpeechWarmup).toHaveBeenCalledOnce()
+    expect(warn).toHaveBeenCalledWith('[orcad] RPC method preload failed: import failed')
     expect(warn).toHaveBeenCalledWith('[orcad] terminal warm-up failed: daemon gone')
     expect(warn).toHaveBeenCalledWith('[orcad] agent state rules did not start: no rules')
   })

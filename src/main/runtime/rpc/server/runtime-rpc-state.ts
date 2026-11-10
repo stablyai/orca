@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import type { RuntimeTransportMetadata } from '../../../../shared/runtime-bootstrap'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
-import { ALL_RPC_METHODS } from '../methods/rpc-method-registry'
+import type { RpcMethodLoader } from '../rpc-method-source'
 import type { RpcTransport } from '../transport'
 import type { WebSocket } from 'ws'
 import type { DeviceRegistry } from './pairing/device-registry'
@@ -39,6 +39,10 @@ import { DeclaredDesktopClients } from './pairing/declared-desktop-clients'
 import { AuthenticatedSourceRecorder } from './network-source-policy-store'
 import type { ServeNetworkSourceOptions } from './serve-network-source-policy'
 import type { WebSocketSourceGuard } from '../ws-network-source-guard'
+
+// Handler modules load on the first call (or preloadRpcMethods), not before the server is ready.
+const loadAllRpcMethods: RpcMethodLoader = async () =>
+  (await import('../methods/rpc-method-registry')).ALL_RPC_METHODS
 
 export class RuntimeRpcState {
   protected readonly runtime: OrcaRuntimeService
@@ -134,7 +138,7 @@ export class RuntimeRpcState {
     methods
   }: OrcaRuntimeRpcServerOptions) {
     this.runtime = runtime
-    this.dispatcher = new RpcDispatcher({ runtime, methods: methods ?? ALL_RPC_METHODS })
+    this.dispatcher = new RpcDispatcher({ runtime, methods: methods ?? loadAllRpcMethods })
     this.userDataPath = userDataPath
     this.pid = pid
     this.platform = platform
@@ -161,6 +165,11 @@ export class RuntimeRpcState {
     this.pushUnregisterOutbox = new PushUnregisterOutbox(userDataPath)
     this.authenticatedSourceRecorder = new AuthenticatedSourceRecorder(userDataPath)
     this.runtime.configureNotificationDismissalStore(userDataPath)
+  }
+
+  /** Loads the RPC handlers ahead of the first call. Never rejects; that call retries. */
+  preloadRpcMethods(): Promise<void> {
+    return this.dispatcher.preloadMethods()
   }
 
   /** Counts a client message for idle exit, from receipt until its dispatch settles. */

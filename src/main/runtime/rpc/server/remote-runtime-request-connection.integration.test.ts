@@ -134,6 +134,8 @@ describe('remote runtime request connection integration', () => {
       })
 
       await server.start()
+      // Handlers load on first call; unbundled under vitest that takes longer than these waits.
+      await server.preloadRpcMethods()
       try {
         const offer = server.createPairingOffer({ name: 'remote-sleep', scope: 'runtime' })
         if (!offer.available) {
@@ -404,6 +406,8 @@ describe('remote runtime request connection integration', () => {
       })
 
       await server.start()
+      // Handlers load on first call; unbundled under vitest that takes longer than these waits.
+      await server.preloadRpcMethods()
       try {
         const offer = server.createPairingOffer({ name: 'integration', scope: 'runtime' })
         if (!offer.available) {

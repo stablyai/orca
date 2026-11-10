@@ -4,6 +4,8 @@ import type { startAgentStateRulesLiveUpdates } from '../runtime/agent-state-rul
 import type { startSpeechModelWarmup } from '../speech/speech-model-warmup'
 
 type OrcadPostReadyDeps = {
+  /** RPC handlers load on first use; load them before the reconnecting client's first call. */
+  warmRpcMethods: () => Promise<void>
   /** First terminal RPCs after a wake list the workspace; warm that path before a client asks. */
   warmTerminalList: () => Promise<unknown>
   /** Agent state rules: cached file, then a network refresh. Clients connect well after it lands. */
@@ -12,12 +14,16 @@ type OrcadPostReadyDeps = {
   startSpeechWarmup: () => Promise<void>
 }
 
-/** Terminal warm-up goes first: it is what the reconnecting desktop asks for. Never rejects. */
+/** RPC handlers, then terminals: what the reconnecting desktop asks for first. Never rejects. */
 export async function startOrcadPostReadyWork(deps: OrcadPostReadyDeps): Promise<void> {
+  const methods = deps.warmRpcMethods().catch((error: unknown) => {
+    console.warn(`[orcad] RPC method preload failed: ${errorMessage(error)}`)
+  })
   const warmup = deps.warmTerminalList().catch((error: unknown) => {
     console.warn(`[orcad] terminal warm-up failed: ${errorMessage(error)}`)
   })
   await Promise.all([
+    methods,
     warmup,
     deps.startAgentStateRules().catch((error: unknown) => {
       console.warn(`[orcad] agent state rules did not start: ${errorMessage(error)}`)
@@ -33,9 +39,11 @@ type PostReadyStore = Parameters<typeof startAgentStateRulesLiveUpdates>[0] &
 
 export function orcadPostReadyDeps(
   runtime: { listTerminals(): Promise<unknown> },
-  store: PostReadyStore
+  store: PostReadyStore,
+  rpc: { preloadRpcMethods(): Promise<void> }
 ): OrcadPostReadyDeps {
   return {
+    warmRpcMethods: () => rpc.preloadRpcMethods(),
     warmTerminalList: () => runtime.listTerminals(),
     startAgentStateRules: async () => {
       const { startAgentStateRulesLiveUpdates } =

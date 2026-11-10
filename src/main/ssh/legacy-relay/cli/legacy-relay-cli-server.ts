@@ -12,8 +12,6 @@ import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/orchestration
 import { DESKTOP_BROWSER_BRIDGE_SETTING_LABEL } from '../../../../shared/desktop-browser-bridge-protocol'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { RpcResponse } from '../../../runtime/rpc/core'
-import { RpcDispatcher } from '../../../runtime/rpc/dispatcher'
-import { ALL_RPC_METHODS } from '../../../runtime/rpc/methods/rpc-method-registry'
 import {
   assertLegacyRelayCliScope,
   resolveLegacyRelayCliCaller,
@@ -36,6 +34,11 @@ import {
   runLegacyRelayCliCall
 } from './legacy-relay-cli-call-limits'
 import { formatLegacyRelayCliResult, isRecord } from './legacy-relay-cli-output'
+import {
+  legacyRelayCliDispatcher,
+  loadRpcMethods,
+  type RpcMethods
+} from './legacy-relay-cli-dispatcher'
 import type { LegacyRelayLivePane } from '../bridge/legacy-relay-bridge-leases'
 
 const METHODS: ReadonlySet<string> = new Set([
@@ -69,22 +72,6 @@ type LegacyRelayCliServerDeps = {
   /** The per-host switch, read on every call so turning it off applies to the next command. */
   remoteCliControl: () => boolean
   livePane: (paneKey: string) => LegacyRelayLivePane | null
-}
-
-const dispatchers = new WeakMap<OrcaRuntimeService, RpcDispatcher>()
-
-function dispatcherFor(runtime: OrcaRuntimeService): RpcDispatcher {
-  let dispatcher = dispatchers.get(runtime)
-  if (!dispatcher) {
-    dispatcher = new RpcDispatcher({
-      runtime,
-      // Restrict registration too, so upstream scope bugs cannot invoke unrelated methods.
-      methods: ALL_RPC_METHODS.filter((method) => METHODS.has(method.name)),
-      callerScope: { kind: 'runtime-paired', grants: [] }
-    })
-    dispatchers.set(runtime, dispatcher)
-  }
-  return dispatcher
 }
 
 function stringRecord(value: unknown): Record<string, string> {
@@ -194,7 +181,8 @@ async function dispatchAsCaller(
   deps: LegacyRelayCliServerDeps,
   { runtime, caller, env, fingerprint, signal }: Invocation,
   call: LegacyRelayCliCall,
-  requestId: string
+  requestId: string,
+  methods: RpcMethods
 ): Promise<RpcResponse> {
   // Attach verified identity because the runtime no longer hosts this legacy terminal.
   const authority = runtime.registerOrchestrationCompatibilitySshAttachment(
@@ -208,11 +196,11 @@ async function dispatchAsCaller(
   )
   try {
     // Only exact committed mutations replay after assignment changes; all other calls remain scoped.
-    const exactReplay = isExactLegacyRelayCliReplay(runtime, fingerprint, requestId, call)
+    const exactReplay = isExactLegacyRelayCliReplay(runtime, fingerprint, requestId, call, methods)
     const db = runtime.getOrchestrationDb()
     assertLegacyRelayCliScope(db, caller, call, deps.livePane, exactReplay)
     const launchToken = env.ORCA_AGENT_LAUNCH_TOKEN?.trim()
-    return await dispatcherFor(runtime).dispatch(
+    return await legacyRelayCliDispatcher(runtime, methods, METHODS).dispatch(
       {
         id: `legacy-relay-cli-${requestId}`,
         authToken: 'legacy-relay-cli',
@@ -284,10 +272,12 @@ async function serveCli(
     )
   }
   const retryRequestId = retryRequestFlag(flags)
+  // Before admit, so no wait separates the caller's admission from its dispatch.
+  const methods = await loadRpcMethods()
   const invocation = admit(deps, env, signal, retryRequestId)
   const call = buildCall(command, flags, invocation.caller)
   const requestId = retryRequestId ?? randomUUID()
-  const response = await dispatchAsCaller(deps, invocation, call, requestId)
+  const response = await dispatchAsCaller(deps, invocation, call, requestId, methods)
   return formatLegacyRelayCliResult(call, response, invocation.caller, flags)
 }
 
@@ -297,6 +287,7 @@ async function servePostOutput(
   signal: AbortSignal
 ): Promise<unknown> {
   const env = stringRecord(params.env)
+  const methods = await loadRpcMethods()
   const invocation = admit(deps, env, signal)
   const { caller } = invocation
   const post = isRecord(params.postOutput) ? params.postOutput : {}
@@ -324,7 +315,7 @@ async function servePostOutput(
     throw new Error('Invalid SSH CLI post-output action.')
   }
   const call = { method: 'orchestration.check', params: { terminal: caller.handle, ...ack } }
-  const response = await dispatchAsCaller(deps, invocation, call, randomUUID())
+  const response = await dispatchAsCaller(deps, invocation, call, randomUUID(), methods)
   if (!response.ok) {
     throw new Error(response.error.message)
   }

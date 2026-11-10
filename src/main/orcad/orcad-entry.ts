@@ -344,7 +344,7 @@ async function startOrcadRuntime(
   await new ServeReadinessPublisher().publish(readiness, servePublishMode(options))
   reportStartupTiming()
   managedAgentHooks.readinessPublished()
-  void startOrcadPostReadyWork(orcadPostReadyDeps(runtime, profileStore))
+  void startOrcadPostReadyWork(orcadPostReadyDeps(runtime, profileStore, rpc))
 
   installOrcadWorkProbes({
     agentStates: () => agentHookServer.getStatusSnapshot(),

@@ -1,7 +1,5 @@
 import {
-  buildRegistry,
   isStreamingMethod,
-  type RpcAnyMethodDeclaration,
   type RpcEnvelopeMeta,
   type RpcMethod,
   type RpcRegistry,
@@ -33,10 +31,12 @@ import type { RpcCallerScope } from './rpc-caller-scope'
 import { runWithActiveRpcCaller } from './rpc-active-caller'
 import { admitRpcRequest } from './rpc-request-admission-prologue'
 import { resolveOrcadFeatureRequirement, rpcMethodFeatureWait } from './orcad-feature-readiness'
+import { RpcRegistrySource, type RpcMethodSource } from './rpc-method-source'
 
 export type DispatcherOptions = {
   runtime: OrcaRuntimeService
-  methods: readonly RpcAnyMethodDeclaration[]
+  /** A loader defers importing handler modules to the first call (or preloadMethods). */
+  methods: RpcMethodSource
   /** Pins every call to this scope, for in-process bridges that relay a non-owner caller. */
   callerScope?: RpcCallerScope
 }
@@ -50,7 +50,7 @@ type AdmittedUnaryCall = {
 
 export class RpcDispatcher {
   private readonly runtime: OrcaRuntimeService
-  private readonly registry: RpcRegistry
+  private readonly registry: RpcRegistrySource
   private readonly orchestrationMutations: OrchestrationMutationExecutor
   private readonly legacyOrchestration: OrchestrationLegacyCompatibility
   private readonly pinnedCallerScope: RpcCallerScope | undefined
@@ -58,9 +58,14 @@ export class RpcDispatcher {
   constructor({ runtime, methods, callerScope }: DispatcherOptions) {
     this.runtime = runtime
     this.pinnedCallerScope = callerScope
-    this.registry = buildRegistry(withoutMethodsThisHostDoesNotServe(methods))
+    this.registry = new RpcRegistrySource(methods, withoutMethodsThisHostDoesNotServe)
     this.orchestrationMutations = getOrchestrationMutationExecutor(runtime)
     this.legacyOrchestration = new OrchestrationLegacyCompatibility(runtime)
+  }
+
+  /** Loads a lazy method table now; a no-op for a method list. Never rejects. */
+  preloadMethods(): Promise<void> {
+    return this.registry.preload()
   }
 
   async dispatch(request: RpcRequest, options?: RpcDispatchStreamingOptions): Promise<RpcResponse> {
@@ -187,17 +192,21 @@ export class RpcDispatcher {
     meta: RpcEnvelopeMeta,
     isTransportSupported: (method: RpcMethod | RpcStreamingMethod) => method is M
   ) {
-    return admitRpcRequest(
-      {
-        runtime: this.runtime,
-        registry: this.registry,
-        meta,
-        pinnedCallerScope: this.pinnedCallerScope
-      },
-      request,
-      options,
-      isTransportSupported
-    )
+    const admitWith = (registry: RpcRegistry) =>
+      admitRpcRequest(
+        { runtime: this.runtime, registry, meta, pinnedCallerScope: this.pinnedCallerScope },
+        request,
+        options,
+        isTransportSupported
+      )
+    const registry = this.registry.get()
+    if (!(registry instanceof Promise)) {
+      return admitWith(registry)
+    }
+    // Calls that arrive while methods load resume in arrival order once they land.
+    return registry.then(admitWith, (error: unknown) => ({
+      rejected: mapDispatcherError(request, meta, error)
+    }))
   }
 
   private async invokeUnary(
