@@ -169,7 +169,12 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/claude/claude-agent-sdk-contract-pins.test.ts',
   'config/scripts/orcad-distribution/server-bundle/profile-state-worker-smoke.test.mjs',
   'config/scripts/desktop-distribution/runtime-verification/process-host-dev-rebuild.test.ts',
-  'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts'
+  'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts',
+  // Reopen the WAL-backed dismissal cache read-only through the row cache, which Bun on macOS cannot.
+  'src/main/runtime/push/notifications/mobile-notification-dismissal-store.test.ts',
+  'src/main/runtime/push/notifications/mobile-notification-dismissal-read-failure.test.ts',
+  'src/main/ipc/notifications-subject-retirement.test.ts',
+  'src/main/ipc/notifications-external-acknowledgement.test.ts'
 ]
 
 /** `filters` limits the SQLite import scan to the tests a filtered CLI run can select. */
