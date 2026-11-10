@@ -4,6 +4,7 @@ import { exposeQuestionTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'
 import { handHelperMailToRun } from '../messages/helper-mailbox-hand-back'
 import { isDispatchAssignee } from '../dispatch-context/dispatch-lookup'
+import { readCoordinatorMail } from '../messages/dispatch-read-mail'
 
 export function createQuestion(
   this: OrchestrationDb,
@@ -200,35 +201,40 @@ function awaitsAnswerToLatestQuestion(db: OrchestrationDb, dispatchId: string): 
 }
 
 function repliedSinceLatestMail(db: OrchestrationDb, dispatchId: string): boolean {
-  const inbox = `dispatch:${dispatchId}`
+  // Only the coordinator's mail ends the wait, as only it re-arms the stop report.
+  const latest = readCoordinatorMail(db, dispatchId).at(-1)
+  if (!latest) {
+    return false
+  }
+  // A reply carries the thread of the mail it answers; an unprompted status has none.
+  const thread = latest.threadId ?? latest.id
   const dispatch = db.getDispatchContextById(dispatchId)
   if (!dispatch) {
-    // A paired worker's outgoing mail is in its relay to the Run home, so only timestamps order it here.
+    // A paired worker's mail is in its relay to the Run home, sequenced apart from its inbox, so a reply
+    // in that thread from the same second as the mail still counts as after it.
     const last = db.db
       .prepare(
-        `SELECT json_extract(r.payload, '$.threadId') AS thread_id FROM federation_relay_items r
-          WHERE r.dispatch_id = ? AND r.direction = 'to_home' AND r.kind <> 'heartbeat'
-            AND r.created_at > (SELECT MAX(m.created_at) FROM messages m WHERE m.to_handle = ?)
-          ORDER BY r.sequence DESC LIMIT 1`
+        `SELECT json_extract(payload, '$.threadId') AS thread_id, created_at FROM federation_relay_items
+          WHERE dispatch_id = ? AND direction = 'to_home' AND kind <> 'heartbeat'
+          ORDER BY sequence DESC LIMIT 1`
       )
-      .get(dispatchId, inbox)
-    return typeof last?.thread_id === 'string'
+      .get(dispatchId)
+    return last?.thread_id === thread && String(last.created_at) >= latest.createdAt
   }
+  const inbox = `dispatch:${dispatchId}`
   const sent = db.db
     .prepare(
       `SELECT from_handle, sender_pane_key, thread_id FROM messages
-        WHERE run_id = ? AND to_handle <> ? AND type <> 'heartbeat'
-          AND sequence > (SELECT MAX(sequence) FROM messages WHERE to_handle = ?)
+        WHERE run_id = ? AND to_handle <> ? AND type <> 'heartbeat' AND sequence > ?
         ORDER BY sequence DESC`
     )
-    .all(dispatch.run_id, inbox, inbox)
-  // Only a threaded reply answers the coordinator; an unprompted progress status does not excuse a stop.
+    .all(dispatch.run_id, inbox, latest.sequence)
   const last = sent.find((message) => {
     const from = typeof message.from_handle === 'string' ? message.from_handle : ''
     const paneKey = typeof message.sender_pane_key === 'string' ? message.sender_pane_key : null
     return from === inbox || isDispatchAssignee(dispatch, from, paneKey)
   })
-  return typeof last?.thread_id === 'string'
+  return last?.thread_id === thread
 }
 
 export function closeQuestionsForDispatch(this: OrchestrationDb, dispatchId: string): string[] {

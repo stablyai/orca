@@ -347,6 +347,19 @@ describe('terminal worker turn stops', () => {
       threadId: hold.id,
       runId: ctx.run.id
     })
+    // A sibling worker's mail is not the coordinator writing again.
+    createRootDispatch(
+      ctx.db,
+      ctx.db.createTask({ spec: 'sibling', runId: ctx.run.id }).id,
+      'term_sibling'
+    )
+    const sibling = ctx.db.insertMessage({
+      from: 'term_sibling',
+      to: `dispatch:${ctx.dispatch.id}`,
+      subject: 'fyi',
+      runId: ctx.run.id
+    })
+    ctx.db.markAsRead([sibling.id])
     const current = { row: hookRow({}) }
     const stops = terminal(ctx, current)
     stops.observe(moved('working', 'done'))
@@ -364,6 +377,26 @@ describe('terminal worker turn stops', () => {
     stops.observe(moved('working', 'done'))
     await settle()
     expect(ctx.mail().map((m) => m.subject)).toEqual(['Worker stopped without reporting'])
+
+    // A chat worker replies as its Dispatch, with no pane.
+    const again = ctx.db.insertMessage({
+      from: 'term_coordinator',
+      to: `dispatch:${ctx.dispatch.id}`,
+      subject: 'Hold again',
+      runId: ctx.run.id
+    })
+    ctx.db.markAsRead([again.id])
+    ctx.db.insertMessage({
+      from: `dispatch:${ctx.dispatch.id}`,
+      to: `run:${ctx.run.id}`,
+      subject: 'Re: Hold again',
+      threadId: again.id,
+      runId: ctx.run.id
+    })
+    current.row = hookRow({ stateStartedAt: 400 })
+    stops.observe(moved('working', 'done'))
+    await settle()
+    expect(ctx.mail()).toHaveLength(1)
   })
 
   it('reports a stop after an unprompted progress status', async () => {
@@ -582,9 +615,7 @@ describe('remote worker turn stops', () => {
       subject: 'HOLD',
       runId: run.id
     })
-    db.db
-      .prepare("UPDATE messages SET created_at = datetime('now', '-1 minute') WHERE id = ?")
-      .run(hold.id)
+    db.markAsRead([hold.id])
     const target = {
       kind: 'remote' as const,
       attachment: { dispatch_id: 'dsp_remote', task_id: 'task_remote' }
@@ -601,12 +632,14 @@ describe('remote worker turn stops', () => {
     reportWorkerTurnStop(db, target, stop, deps)
     expect(enqueueFederationRelay).not.toHaveBeenCalled()
 
-    db.enqueueFederationRelay({
-      dispatchId: 'dsp_remote',
-      direction: 'to_home',
-      kind: 'status',
-      payload: JSON.stringify({ from: HANDLE, subject: 'Progress', threadId: null })
+    // The coordinator writing again ends the wait.
+    const next = db.insertMessage({
+      from: 'term_home',
+      to: 'dispatch:dsp_remote',
+      subject: 'Go ahead',
+      runId: run.id
     })
+    db.markAsRead([next.id])
     enqueueFederationRelay.mockClear()
     reportWorkerTurnStop(db, target, { ...stop, stopKey: 'k2' }, deps)
     expect(enqueueFederationRelay.mock.calls[0]?.[0]).toMatchObject({ kind: 'escalation' })

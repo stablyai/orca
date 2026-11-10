@@ -8,6 +8,18 @@ const text = (value: unknown): string | null => (typeof value === 'string' ? val
  *  Mail a worker of the Run sent while its Dispatch was open (this worker's own heartbeats, its helpers'
  *  reports, a sibling's broadcast) does not count, nor does mail it has not taken yet. */
 export function readCoordinatorMailCount(db: OrchestrationDb, dispatchId: string): number {
+  return readCoordinatorMail(db, dispatchId).length
+}
+
+export type CoordinatorMail = {
+  id: string
+  sequence: number
+  threadId: string | null
+  createdAt: string
+}
+
+/** The coordinator mail the worker has consumed, oldest first; see readCoordinatorMailCount. */
+export function readCoordinatorMail(db: OrchestrationDb, dispatchId: string): CoordinatorMail[] {
   // The Dispatch that started this one is its coordinator, so its worker's mail is from above.
   const workers = db.db
     .prepare(
@@ -33,19 +45,26 @@ export function readCoordinatorMailCount(db: OrchestrationDb, dispatchId: string
     })
   const read = db.db
     .prepare(
-      'SELECT from_handle, sender_pane_key, created_at FROM messages WHERE to_handle = ? AND read = 1'
+      'SELECT id, sequence, thread_id, from_handle, sender_pane_key, created_at FROM messages WHERE to_handle = ? AND read = 1 ORDER BY sequence'
     )
     .all(`dispatch:${dispatchId}`)
-  return read.filter((message) => {
-    const from = text(message.from_handle) ?? ''
-    const sentAt = Date.parse(exposeUtcTimestamp(text(message.created_at)) ?? '')
-    // The same agent can coordinate before or after it works; only what it sent while working is a worker's.
-    return !workers.some(
-      (worker) =>
-        sentAt >= worker.createdAt &&
-        (Number.isNaN(worker.completedAt) || sentAt <= worker.completedAt) &&
-        (from === `dispatch:${worker.id}` ||
-          isDispatchAssignee(worker, from, text(message.sender_pane_key)))
-    )
-  }).length
+  return read
+    .filter((message) => {
+      const from = text(message.from_handle) ?? ''
+      const sentAt = Date.parse(exposeUtcTimestamp(text(message.created_at)) ?? '')
+      // The same agent can coordinate before or after it works; only what it sent while working is a worker's.
+      return !workers.some(
+        (worker) =>
+          sentAt >= worker.createdAt &&
+          (Number.isNaN(worker.completedAt) || sentAt <= worker.completedAt) &&
+          (from === `dispatch:${worker.id}` ||
+            isDispatchAssignee(worker, from, text(message.sender_pane_key)))
+      )
+    })
+    .map((message) => ({
+      id: text(message.id) ?? '',
+      sequence: Number(message.sequence),
+      threadId: text(message.thread_id),
+      createdAt: text(message.created_at) ?? ''
+    }))
 }

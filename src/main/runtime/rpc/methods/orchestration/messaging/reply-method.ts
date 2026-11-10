@@ -156,8 +156,16 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
       originalRunId: original.run_id
     })
     db.markAsRead([original.id])
+    const from = params.from ?? original.to_handle
     const reply = db.insertMessage({
-      from: params.from ?? original.to_handle,
+      from,
+      // The pane names the worker after its handle is reminted, as on `send`.
+      senderPaneKey:
+        orchestrationCallerIdentity(runtime, {
+          handle: from,
+          session: orchestrationCaller,
+          paneKey: runtime.getTerminalPaneKey(from)
+        }).paneKey ?? undefined,
       to: recipient.to,
       subject: `Re: ${original.subject}`,
       body: params.body,
