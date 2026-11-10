@@ -17,7 +17,7 @@ import {
 } from '@/lib/reveal-in-file-manager'
 import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
 import type { ConflictResolution } from '../../../../../../shared/source-control/listing/source-control-entry-actions'
 import { CONFLICT_RESOLUTION_ICONS, getLocalizedConflictResolutionLabel } from './conflict-label'
 import { OpenInContextSubmenu } from '@/components/file-actions/OpenInContextSubmenu'

@@ -14,7 +14,7 @@ vi.mock('@monaco-editor/react', () => ({
   },
   loader: { config: vi.fn() }
 }))
-vi.mock('@/lib/monaco-setup', () => ({ monaco: {} }))
+vi.mock('@/lib/editor/monaco/monaco-setup', () => ({ monaco: {} }))
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({

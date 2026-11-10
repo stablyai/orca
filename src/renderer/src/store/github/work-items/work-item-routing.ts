@@ -1,5 +1,5 @@
 import { getGitHubRepoLookupIndex } from '../repositories/github-repo-lookup-index'
-import { githubTaskBinding } from '@/lib/github-task-observation'
+import { githubTaskBinding } from '@/lib/work-items/github/github-task-observation'
 import type { AppState } from '../../types'
 import type { RuntimeFocusSettings } from '../../../../../shared/github/github-cache-key'
 import type { Repo } from '../../../../../shared/repo-types'
@@ -19,7 +19,7 @@ import {
 import { classifyGitHubUnavailable } from '../../../../../shared/github/api-availability'
 import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../../runtime/rpc/calls/runtime-rpc-result'
-import { getHostlessSourceRepoOwnerEnvironmentId } from '@/lib/repo-runtime-owner'
+import { getHostlessSourceRepoOwnerEnvironmentId } from '@/lib/workspace/ownership/repo-runtime-owner'
 import {
   runtimeTargetForOwnerEnvironment,
   ipcOrRuntimeTargetForHostId

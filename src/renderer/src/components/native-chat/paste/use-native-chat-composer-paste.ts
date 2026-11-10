@@ -8,13 +8,11 @@ import { NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES } from './native-chat-context-paste
 import { isMacPlatform } from '../pane/routing/native-chat-shortcut'
 import {
   clipboardEventCopiedFilePaths,
+  clipboardEventPastedText,
   readClipboardPasteText,
   type ClipboardEventLike
 } from './native-chat-clipboard-payload'
-import {
-  clipboardEventImageFile,
-  clipboardEventPromptText
-} from '../../../../../shared/native-chat/input/native-chat-clipboard-event'
+import { clipboardEventImageFile } from '../../../../../shared/native-chat/input/native-chat-clipboard-event'
 import {
   nativeChatLocalAttachmentUnsupportedNotice,
   nativeChatWorktreeNotReadyNotice
@@ -133,7 +131,7 @@ export function useNativeChatComposerPaste({
       const copiedFilePaths = clipboardEventCopiedFilePaths(event)
       const copiesFiles = copiedFilePaths.length > 0
       const imageFile = copiesFiles ? null : clipboardEventImageFile(event)
-      const text = copiesFiles ? '' : clipboardEventPromptText(event, imageFile !== null)
+      const text = copiesFiles ? '' : clipboardEventPastedText(event, imageFile !== null)
       if (!copiesFiles && !imageFile && !text) {
         return
       }

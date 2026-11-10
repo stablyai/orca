@@ -111,7 +111,7 @@ vi.mock('../../src/main/opencode/hook-service', () =>
 vi.mock('../../src/main/mimo/hook-service', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
-vi.mock('../../src/main/agent-hooks/server', () =>
+vi.mock('../../src/main/agent-hooks/server/agent-hook-server', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
 vi.mock('../../src/main/pi/titlebar-extension-service', () =>
@@ -144,7 +144,7 @@ vi.mock('../../src/main/cli/linux-terminal-orca-cli-shim', () =>
 vi.mock('../../src/main/memory/pty-registry', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
-vi.mock('../../src/main/agent-hooks/migration-unsupported-pty-state', () =>
+vi.mock('../../src/main/agent-hooks/observations/migration-unsupported-pty-state', () =>
   import('../../src/main/ipc/pty/pty-ipc-mock-registry').then((m) =>
     m.migrationUnsupportedPtyModuleMock()
   )

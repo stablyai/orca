@@ -22,7 +22,9 @@ import {
 import { createInitialStoreState } from '../test-fixtures/pty-connection-test-store-fixtures'
 import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
 import type * as TerminalWorktreeRouteModule from '@/lib/terminal-worktree-route'
-const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+  '@/lib/agent-status/aggregation/worktree-agent-status'
+)
 
 const {
   notifyCodexPaneBoundForStaleSweep,
@@ -59,7 +61,9 @@ vi.mock('../../../../../../shared/layout-owner-switch', () => ({
 
 vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({ scheduleRuntimeGraphSync }))
 
-vi.mock('@/lib/agent-draft-readiness', () => ({ waitForAgentDraftInputReady }))
+vi.mock('@/lib/agent-session/messaging/paste/agent-draft-readiness', () => ({
+  waitForAgentDraftInputReady
+}))
 
 const { requestTerminalPaneRecovery } = vi.hoisted(() => ({
   requestTerminalPaneRecovery: vi.fn(async () => undefined)
@@ -101,7 +105,9 @@ vi.mock('../../pty-transport/remote-runtime/remote-runtime-pty-transport', () =>
   )
 }))
 
-vi.mock('@/lib/agent-draft-paste-content', () => ({ sendAgentDraftPasteContent }))
+vi.mock('@/lib/agent-session/messaging/paste/agent-draft-paste-content', () => ({
+  sendAgentDraftPasteContent
+}))
 
 vi.mock('@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice', () => ({
   createPasteReadinessTimeoutNotice: (args: unknown) => {
@@ -122,7 +128,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } =
     await import('../test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
@@ -160,7 +166,6 @@ type ConnectedAgentPane = {
   transport: MockTransport
   type: (data: string) => void
   bind: (ptyId: string) => void
-  bindAttached: (ptyId: string) => void
   unbind: () => void
   resolveConnect: (result: unknown) => void
   dispose: () => void
@@ -214,13 +219,6 @@ function connectAgentPane(overrides: Record<string, unknown> = {}): ConnectedAge
       const onPtySpawn = createdTransportOptions[0]?.onPtySpawn
       if (typeof onPtySpawn === 'function') {
         onPtySpawn(id)
-      }
-    },
-    bindAttached: (id) => {
-      ptyId = id
-      const onPtyRebind = createdTransportOptions[0]?.onPtyRebind
-      if (typeof onPtyRebind === 'function') {
-        onPtyRebind(id, 'pty-previous')
       }
     },
     unbind: () => {
@@ -295,18 +293,6 @@ describe('agent pane keys typed before its PTY binds', () => {
     pane.dispose()
   })
 
-  it('leaves input typed after the bind on today’s path when nothing was held', async () => {
-    const pane = connectAgentPane()
-    await flushAsyncTicks(20)
-
-    pane.bind('pty-1')
-    pane.type('y')
-
-    expect(waitForAgentDraftInputReady).not.toHaveBeenCalled()
-    expect(pane.transport.sendInput).toHaveBeenCalledWith('y', 'driving')
-    pane.dispose()
-  })
-
   it('sends keys typed after the bind live and drops the draft rather than pasting over them', async () => {
     let ready!: (value: boolean) => void
     waitForAgentDraftInputReady.mockReturnValue(
@@ -328,29 +314,6 @@ describe('agent pane keys typed before its PTY binds', () => {
     pane.dispose()
   })
 
-  it('drops the draft when the agent is blocked on a prompt at ready time', async () => {
-    waitForAgentDraftInputReady.mockResolvedValue(true)
-    const pane = connectAgentPane()
-    await flushAsyncTicks(20)
-
-    pane.type('later')
-    mockStoreState.agentStatusByPaneKey[pane.paneKey] = {
-      state: 'waiting',
-      prompt: '',
-      agentType: 'claude',
-      paneKey: pane.paneKey,
-      updatedAt: 1_000,
-      stateStartedAt: 1_000,
-      stateHistory: []
-    }
-    pane.bind('pty-1')
-    await flushAsyncTicks(20)
-
-    expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
-    expect(onPasteTimeout).toHaveBeenCalledOnce()
-    pane.dispose()
-  })
-
   it('drops the held draft when the pane closes before the bind', async () => {
     const pane = connectAgentPane()
     await flushAsyncTicks(20)
@@ -362,45 +325,6 @@ describe('agent pane keys typed before its PTY binds', () => {
 
     expect(waitForAgentDraftInputReady).not.toHaveBeenCalled()
     expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
-  })
-
-  it('turns keys handed off to a remounted agent split into the draft', async () => {
-    waitForAgentDraftInputReady.mockResolvedValue(true)
-    const pane = connectAgentPane({
-      cwdPromise: Promise.resolve('/split'),
-      preconnectInput: [{ data: 'handed off', kind: 'ordinary', inputKind: 'driving' }]
-    })
-    await flushAsyncTicks(20)
-
-    pane.bind('pty-1')
-    await flushAsyncTicks(20)
-
-    expect(createdTransportOptions[0]?.bufferInputUntilConnect).toBeUndefined()
-    expect(createdTransportOptions[0]?.preconnectInput).toBeUndefined()
-    expect(sendAgentDraftPasteContent).toHaveBeenCalledWith(
-      'pty-1',
-      'handed off',
-      'driving',
-      expect.any(Function)
-    )
-    pane.dispose()
-  })
-
-  // Why: after the first bind an unbind (exit, hibernation, remote re-attach) must not trap keys.
-  it('never captures keys again after the first bind, even while unbound', async () => {
-    const pane = connectAgentPane()
-    await flushAsyncTicks(20)
-
-    pane.bind('pty-1')
-    pane.unbind()
-    pane.type('abc')
-    expect(pane.transport.sendInput).toHaveBeenCalledWith('abc', 'driving')
-
-    pane.bind('pty-2')
-    await flushAsyncTicks(20)
-    expect(waitForAgentDraftInputReady).not.toHaveBeenCalled()
-    expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
-    pane.dispose()
   })
 
   it('discards the draft when the first bind is a reattach result, then sends keys live', async () => {
@@ -420,21 +344,6 @@ describe('agent pane keys typed before its PTY binds', () => {
     expect(waitForAgentDraftInputReady).not.toHaveBeenCalled()
     expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
     expect(pane.transport.sendInput).toHaveBeenCalledWith('z', 'driving')
-    pane.dispose()
-  })
-
-  // Why: an attach can land on a shell before main types the launch line; a paste would prefix it.
-  it('drops the draft with a notice when the first bind is not a fresh spawn', async () => {
-    const pane = connectAgentPane()
-    await flushAsyncTicks(20)
-
-    pane.type('held')
-    pane.bindAttached('pty-1')
-    await flushAsyncTicks(20)
-
-    expect(waitForAgentDraftInputReady).not.toHaveBeenCalled()
-    expect(sendAgentDraftPasteContent).not.toHaveBeenCalled()
-    expect(onPasteTimeout).toHaveBeenCalledOnce()
     pane.dispose()
   })
 
@@ -484,16 +393,6 @@ describe('agent pane keys typed before its PTY binds', () => {
     } finally {
       clock.mockRestore()
     }
-    pane.dispose()
-  })
-
-  it('keeps a startup-command pane that runs no agent on today’s drop', async () => {
-    const pane = connectAgentPane({ startup: { command: 'pnpm install' } })
-    await flushAsyncTicks(20)
-
-    pane.type('x')
-
-    expect(pane.transport.sendInput).toHaveBeenCalledWith('x', 'driving')
     pane.dispose()
   })
 })

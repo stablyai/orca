@@ -8,7 +8,11 @@ import { useStore } from 'zustand'
 import { worktreeGitCopyHostId } from '@/lib/worktree-git-copy'
 import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
 import { remoteActionErrorSettledByConflictOperation } from '../sync/remote-refresh'
-import { getWorktreeOperationStore, writeWorktreeCommitDraft } from './worktree-operation-store'
+import {
+  clearLandedBranchSwitchError,
+  getWorktreeOperationStore,
+  writeWorktreeCommitDraft
+} from './worktree-operation-store'
 
 /** Bind the panel to its owner's operation record; admission reads `operationStore.getState()`. */
 export function useSourceControlWorktreeOperationState({
@@ -48,12 +52,9 @@ export function useSourceControlWorktreeOperationState({
       writeWorktreeCommitDraft(operationStore, update),
     [operationStore]
   )
-  // A landed switch clears the last action error, which belonged to the previous branch.
   const recordBranchSwitchOutcome = useCallback(
     (refresh?: () => Promise<void>): void => {
-      if (operationStore.getState().remoteActionError) {
-        operationStore.setState({ remoteActionError: null })
-      }
+      clearLandedBranchSwitchError(operationStore)
       void refresh?.().catch(() => {})
     },
     [operationStore]

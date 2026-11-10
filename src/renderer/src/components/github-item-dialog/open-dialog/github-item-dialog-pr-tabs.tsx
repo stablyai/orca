@@ -6,7 +6,7 @@ import {
   resolvePullRequestRepo,
   type ItemDialogTab
 } from '@/components/github/github-work-item-identity'
-import { canUseGitHubRepoContext } from '@/lib/github-source-runtime-context'
+import { canUseGitHubRepoContext } from '@/lib/work-items/github/github-source-runtime-context'
 import { useTranslate } from '@/i18n/use-translate'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
@@ -121,6 +121,7 @@ export function GitHubItemDialogPRTabs({
             repoId={effectiveRepoId}
             sourceContext={sourceContext}
             body={body}
+            bodyImageUrls={details?.bodyImageUrls}
             comments={comments}
             timelineItems={timelineItems}
             files={files}
@@ -138,9 +139,9 @@ export function GitHubItemDialogPRTabs({
                 patchCachedPRChecks(detailsCacheKey, nextChecks)
               }
             }}
-            onBodyUpdated={(nextBody) => {
+            onBodyUpdated={(nextBody, representation) => {
               if (detailsCacheKey) {
-                patchCachedWorkItemBody(detailsCacheKey, nextBody)
+                patchCachedWorkItemBody(detailsCacheKey, nextBody, representation)
               }
             }}
             onCommentAdded={onCommentAdded}

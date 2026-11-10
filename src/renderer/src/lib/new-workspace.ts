@@ -1,15 +1,15 @@
 import { useAppStore } from '@/store'
-import { pasteDraftToAgentPtyWhenReady } from '@/lib/agent-paste-draft'
-import { sendFollowupPromptWhenAgentReady } from '@/lib/agent-followup-delivery'
+import { pasteDraftToAgentPtyWhenReady } from '@/lib/agent-session/messaging/paste/agent-paste-draft'
+import { sendFollowupPromptWhenAgentReady } from '@/lib/agent-session/messaging/paste/agent-followup-delivery'
 import { showAutomationPromptNotSentToast } from '@/lib/agent-session/launch/background/agent-background-session-timeout-toast'
 import type { AgentStartupPlan } from '../../../shared/agent-launch/startup/tui-agent-startup'
-import type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
+import type { LinkedWorkItemContext } from '@/lib/work-items/linked-work-item-context'
 import {
   beginAgentStartupDeliveryAttempt,
   getAgentStartupTabPtyId,
   queuePendingAgentStartupDelivery,
   resolveAgentStartupTabId
-} from '@/lib/agent-startup-delayed-delivery'
+} from '@/lib/agent-session/launch/startup/agent-startup-delayed-delivery'
 import type { WorkspaceLinkedItem as FolderWorkspaceLinkedTask } from '../../../shared/worktree/types'
 import { slugifyForWorkspaceName } from '../../../shared/workspace-name'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
@@ -22,8 +22,6 @@ export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Wi
   : navigator.userAgent.includes('Mac')
     ? 'darwin'
     : 'linux'
-
-export { getLinkedWorkItemProvider, isGitLabIssueUrl } from './linked-work-item-provider'
 
 export type LinkedWorkItemSummary = Omit<FolderWorkspaceLinkedTask, 'provider'> & {
   provider?: FolderWorkspaceLinkedTask['provider']

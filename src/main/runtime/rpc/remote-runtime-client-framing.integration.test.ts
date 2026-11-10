@@ -5,7 +5,7 @@ import nacl from 'tweetnacl'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { E2EEChannel } from './e2ee-channel'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { createRemoteRuntimeClientHandshake } from '../../../shared/remote-runtime/remote-runtime-client-framing'
 import {
   configureRemoteRuntimeE2EEV2HostLatch,
@@ -123,14 +123,17 @@ async function startHost(kind: HostKind, keyPair = nacl.box.keyPair()): Promise<
 }
 
 function ping(host: TestHost): Promise<unknown> {
-  return sendRemoteRuntimeRequest(
+  return sendRemoteRuntimeRequestOnSocket(
     host.connection,
     'status.ping',
     undefined,
     5_000,
     undefined,
     undefined,
-    ['test.capability.v1']
+    undefined,
+    ['test.capability.v1'],
+    undefined,
+    undefined
   ).then((response) => (response.ok ? response.result : response.error))
 }
 

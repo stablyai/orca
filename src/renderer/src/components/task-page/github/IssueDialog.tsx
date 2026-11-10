@@ -1,6 +1,6 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { useRef, useState } from 'react'
-import { getGitHubRuntimeRepoId } from '@/lib/github-source-runtime-context'
+import { getGitHubRuntimeRepoId } from '@/lib/work-items/github/github-source-runtime-context'
 import {
   Dialog,
   DialogContent,

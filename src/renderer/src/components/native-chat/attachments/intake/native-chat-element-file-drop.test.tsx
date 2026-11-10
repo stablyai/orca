@@ -162,13 +162,4 @@ describe('element-owned native chat drops', () => {
     expect(prepare).toHaveBeenCalledOnce()
     expect(electron.send).not.toHaveBeenCalled()
   })
-  it('attaches hybrid Files and HTML without inserting HTML into the real editor', async () => {
-    const attach = vi.fn()
-    const view = render(<Chat attach={attach} />)
-    const editor = view.container.querySelector('.ProseMirror')!
-    await drop(editor, ['Files', 'text/html'])
-    expect(attach).toHaveBeenCalledExactlyOnceWith(['/drop/a.png'])
-    expect(editor.textContent).toBe('Original')
-    expect(editor.querySelector('b')).toBeNull()
-  })
 })

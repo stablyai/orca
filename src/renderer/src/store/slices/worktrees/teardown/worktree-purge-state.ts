@@ -10,7 +10,7 @@ import { createWorktreePurgeOmitters } from './worktree-purge-omitters'
 import { omitSleepingAgentSessionsForWorktrees } from './sleeping-agent-session-omission'
 import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
 import { omitRecordKeys } from './record-key-omission'
-import { removeWorktreeVisitEntriesForTargets } from '@/lib/worktree-visit-recency'
+import { removeWorktreeVisitEntriesForTargets } from '@/lib/workspace/activation/worktree-visit-recency'
 import { forgetAmbiguousOwnerWarnings } from '@/lib/ambiguous-owner-warning'
 import { forgetWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
@@ -21,7 +21,8 @@ import {
 import { buildWorktreePurgeSurfacePatch } from './worktree-purge-surface-patch'
 import { noticeRemovedUnsavedFiles } from './removed-workspace-unsaved-files'
 import { mergeEditorBufferKeepRequests } from '../../editor/buffers/editor-buffer-kept'
-import { buildHostTwinPurgeState, collectHostTwinPurgeScopes } from './host-twin-worktree-purge'
+import { buildHostTwinPurgeState } from './host-twin-worktree-purge'
+import { collectHostTwinPurgeScopes } from './host-twin-purge-scopes'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 
 /**

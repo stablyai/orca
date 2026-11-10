@@ -4,17 +4,15 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import {
-  SshChannelMultiplexer,
-  type MultiplexerTransport
-} from '../main/ssh/ssh-channel-multiplexer'
+import { SshChannelMultiplexer } from '../main/ssh/protocol/ssh-channel-multiplexer'
+import type { MultiplexerTransport } from '../main/ssh/protocol/ssh-multiplexer-transport-writer'
 import { RelayDispatcher } from './dispatcher'
 import { RelayAgentHookServer } from './agent-hook-server'
 import {
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD
 } from '../shared/agent-hook-listener/transport/agent-hook-relay'
-import { AgentHookServer } from '../main/agent-hooks/server'
+import { AgentHookServer } from '../main/agent-hooks/server/agent-hook-server'
 import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
 
 const LEAF_7 = '77777777-7777-4777-8777-777777777777'

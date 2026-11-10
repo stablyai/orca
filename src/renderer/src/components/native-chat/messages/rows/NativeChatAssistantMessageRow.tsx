@@ -76,16 +76,11 @@ export function NativeChatAssistantMessageRow({
     !message.agentStart &&
     !inSubagentSection &&
     isRootAgentJournalItem(message)
-  // A row whose fork is opening keeps its controls up so the spinner stays visible.
-  const revealOnHover =
-    fork?.pendingItemId === message.id
-      ? 'mt-1 w-fit select-none'
-      : 'mt-1 w-fit select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100'
 
   return (
     <div
       ref={rowRef}
-      // The context menu offers Copy message only where the hover controls offer Copy.
+      // The context menu offers Copy message only where the row's controls offer Copy.
       data-native-chat-message-id={showControls && words.length > 0 ? message.id : undefined}
       data-native-chat-message-tone={isSystem ? 'faint' : undefined}
       className={cn(
@@ -126,7 +121,7 @@ export function NativeChatAssistantMessageRow({
             ) : null
           }
           className={cn(
-            revealOnHover,
+            'mt-1 w-fit select-none',
             // They hang into the gap below; a section keeps them inside its border instead.
             !inSubagentSection && '-mb-5'
           )}

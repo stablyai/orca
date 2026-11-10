@@ -8,7 +8,8 @@ import { getEphemeralVmRecipeResultProjectRoot } from '../../shared/ephemeral-vm
 import {
   runEphemeralVmRecipeCleanup,
   runEphemeralVmRecipeResume,
-  runEphemeralVmRecipeStart
+  runEphemeralVmRecipeStart,
+  runEphemeralVmRecipeSuspend
 } from '../../shared/ephemeral-vm-recipe-runner'
 import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
 
@@ -276,5 +277,71 @@ describe('runEphemeralVmRecipeSuspend and runEphemeralVmRecipeResume', () => {
         projectRoot: '/workspace/resumed'
       })
     }
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'stops a suspend that outlives its timeout and reports the timeout code',
+    async () => {
+      const repoPath = makeRepo()
+      const suspendPath = join(repoPath, 'suspend.js')
+      writeFileSync(suspendPath, 'setTimeout(() => {}, 30_000)\n')
+
+      const result = await runEphemeralVmRecipeSuspend({
+        repoPath,
+        recipe: {
+          id: 'cloud-sandbox',
+          name: 'Cloud Sandbox',
+          create: 'unused',
+          suspend: nodeCommand(suspendPath),
+          resume: 'unused',
+          timeoutSeconds: { suspend: 1 }
+        },
+        context: { recipeId: 'cloud-sandbox', repoPath, instanceId: 'orca-test-instance' },
+        recipeResult: {
+          schemaVersion: 1,
+          pairingCode: makePairingCode(),
+          projectRoot: '/workspace/repo'
+        }
+      })
+
+      expect(result).toMatchObject({
+        ok: false,
+        skipped: false,
+        timedOut: true,
+        errorCode: 'recipeTimedOut',
+        errorParams: { mode: 'suspend', timeout: '1s', timeoutSeconds: 1 },
+        error:
+          'The recipe suspend step did not finish within 1s, so Orca stopped it. Check the recipe output, or raise timeoutSeconds in orca.yaml if it needs longer.'
+      })
+    }
+  )
+
+  it('reports a failed resume exit through the failure catalog', async () => {
+    const repoPath = makeRepo()
+    const resumePath = join(repoPath, 'resume.js')
+    writeFileSync(resumePath, 'process.exit(3)\n')
+
+    const result = await runEphemeralVmRecipeResume({
+      repoPath,
+      recipe: {
+        id: 'cloud-sandbox',
+        name: 'Cloud Sandbox',
+        create: 'unused',
+        resume: nodeCommand(resumePath)
+      },
+      context: { recipeId: 'cloud-sandbox', repoPath, instanceId: 'orca-test-instance' },
+      recipeResult: {
+        schemaVersion: 1,
+        pairingCode: makePairingCode(),
+        projectRoot: '/workspace/repo'
+      }
+    })
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: 'Resume exited with code 3.',
+      errorCode: 'resumeExited',
+      errorParams: { exitCode: 3 }
+    })
   })
 })

@@ -1,4 +1,4 @@
-import { ImeInput } from '@/lib/ime-text-field'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { useTranslate } from '@/i18n/use-translate'
 import { linearLabelCountLabel, linearMemberCountLabel } from './linear-attribute-count-labels'

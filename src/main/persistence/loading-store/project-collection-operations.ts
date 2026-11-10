@@ -138,6 +138,12 @@ export class ProjectCollectionOperations {
     return getProjectGroupOperations(this).deleteProjectGroup(groupId)
   }
 
+  updateProjectGroups(
+    mutations: Parameters<ProjectGroupPersistenceOperations['updateProjectGroups']>[0]
+  ): ProjectGroup[] | null {
+    return getProjectGroupOperations(this).updateProjectGroups(mutations)
+  }
+
   getFolderWorkspaces(): FolderWorkspace[] {
     return getFolderWorkspaceOperations(this).getFolderWorkspaces()
   }

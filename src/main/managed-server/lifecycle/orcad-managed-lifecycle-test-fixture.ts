@@ -6,9 +6,9 @@ import { PAIRING_OFFER_VERSION } from '../../../shared/remote-runtime/pairing/mo
 import { addManagedOrcadEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { ServeReadiness } from '../../server/serve-readiness'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import { SshTargetOrcadClaims } from '../../ssh/targets/ssh-target-orcad-claims'
-import { emptyDependentStateStore } from '../../ssh/targets/ssh-target-orcad-dependents-fixture'
+import { emptyDependentStateStore } from '../../ssh/targets/testing/ssh-target-orcad-dependents-fixture'
 
 export const MANAGED_VERSION = '0.2.0+abc'
 export const MANAGED_PREVIOUS_VERSION = '0.1.0+def'

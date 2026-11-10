@@ -1,6 +1,9 @@
 // Strict create hosts must advertise native independent conversation forks.
 export const AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY = 'agentSession.create.fork.v1' as const
 
+export const AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY =
+  'agentSession.create.fork.original.v1' as const
+
 // Create is strict: send reserved tabId only to hosts advertising support.
 export const AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY =
   'agentSession.create.tab-id.v1' as const
@@ -41,6 +44,7 @@ export const AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY =
 
 export const AGENT_SESSION_CREATE_RUNTIME_CAPABILITIES = [
   AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY,
   AGENT_SESSION_USAGE_LIMIT_AUTO_CONTINUE_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY,

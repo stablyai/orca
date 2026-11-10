@@ -1,7 +1,10 @@
-import { capturePRCheckContract, type PRCheckContract } from '../../pr-check-observation-contract'
+import {
+  capturePRCheckContract,
+  type PRCheckContract
+} from '../../source-control/checks/pr-check-observation-contract'
 import { acceptPRCheckObservation } from '../../../../../shared/github/complete-pr-check-owner'
 import type { GhAccountBinding } from '../../../../../shared/github/account-binding'
-import { getWorkItemRepo } from '../../work-item-repo-row'
+import { getWorkItemRepo } from '../work-item-repo-row'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
@@ -21,7 +24,7 @@ import {
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost,
   getGitHubSourceRuntimeTarget
-} from '../../github-source-runtime-context'
+} from './github-source-runtime-context'
 
 type GitHubWorkItemLookupArgs = {
   repoPath: string

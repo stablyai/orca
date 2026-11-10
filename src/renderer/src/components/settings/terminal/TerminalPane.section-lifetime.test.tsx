@@ -97,7 +97,9 @@ vi.mock('@/components/shared/useDaemonActions', () => ({
 vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
-vi.mock('@/lib/activate-tab-and-focus-pane', () => ({ activateTabAndFocusPane: vi.fn() }))
+vi.mock('@/lib/workspace/tabs/activate-tab-and-focus-pane', () => ({
+  activateTabAndFocusPane: vi.fn()
+}))
 
 beforeEach(() => {
   vi.clearAllMocks()

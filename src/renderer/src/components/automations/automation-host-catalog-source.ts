@@ -2,7 +2,7 @@
 
 import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
 import { AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY } from '../../../../shared/automations/automation-runtime-capabilities'
-import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { StableAutomationAuthorityRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import type {
