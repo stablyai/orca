@@ -5,19 +5,19 @@ const RETRY_MS = 100
 /** The first non-null `read` within the wait, retried on `setTimer`; null when none came. */
 export function firstWithin<T>(
   setTimer: (run: () => void, delayMs: number) => unknown,
-  read: () => T | null
+  read: () => T | null | Promise<T | null>
 ): Promise<T | null> {
   return new Promise((resolve) => {
     let waited = 0
-    const check = (): void => {
-      const value = read()
+    const check = async (): Promise<void> => {
+      const value = await read()
       if (value !== null || waited >= WAIT_MS) {
         resolve(value)
         return
       }
       waited += RETRY_MS
-      setTimer(check, RETRY_MS)
+      setTimer(() => void check(), RETRY_MS)
     }
-    check()
+    void check()
   })
 }

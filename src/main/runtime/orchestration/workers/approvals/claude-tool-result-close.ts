@@ -2,7 +2,7 @@
  *  call (probe 2026-11-10, Claude 2.1.322): a hook's deny message verbatim, the user's No, the 2:00
  *  safety-check block, or the command's own output. Hook events do not say this: a deny or a No
  *  fires no PostToolUse or PostToolUseFailure. */
-import { closeSync, fstatSync, openSync, readSync } from 'node:fs'
+import { open, stat, type FileHandle } from 'node:fs/promises'
 
 export type ClaudeToolResult = { isError: boolean; text: string }
 export type ClaudeToolClose = 'hook-denied' | 'user-denied' | 'auto-denied' | 'ran' | 'other'
@@ -12,23 +12,29 @@ const TAIL_BYTES = 512 * 1024
 const USER_DENIED = "The user doesn't want to proceed with this tool use"
 const AUTO_DENIED = 'denied by a built-in Claude Code safety check'
 
-export function readClaudeToolResult(
+/** Null unless the path is a regular file: a FIFO or device would never finish a read. */
+export async function readClaudeToolResult(
   transcriptPath: string,
   toolUseId: string
-): ClaudeToolResult | null {
-  let fd: number | null = null
+): Promise<ClaudeToolResult | null> {
+  let file: FileHandle | null = null
   try {
-    fd = openSync(transcriptPath, 'r')
-    const size = fstatSync(fd).size
-    const length = Math.min(size, TAIL_BYTES)
-    const buffer = Buffer.alloc(length)
-    readSync(fd, buffer, 0, length, size - length)
-    const lines = buffer
-      .toString('utf8')
-      .split('\n')
-      .filter((line) => line.includes(toolUseId))
+    // Why stat before open: opening a FIFO waits for a writer.
+    const stats = await stat(transcriptPath)
+    if (!stats.isFile()) {
+      return null
+    }
+    file = await open(transcriptPath, 'r')
+    const length = Math.min(stats.size, TAIL_BYTES)
+    const { buffer, bytesRead } = await file.read(
+      Buffer.alloc(length),
+      0,
+      length,
+      stats.size - length
+    )
+    const lines = buffer.subarray(0, bytesRead).toString('utf8').split('\n')
     for (const line of lines.toReversed()) {
-      const result = toolResultIn(line, toolUseId)
+      const result = line.includes(toolUseId) ? toolResultIn(line, toolUseId) : null
       if (result) {
         return result
       }
@@ -37,9 +43,7 @@ export function readClaudeToolResult(
   } catch {
     return null
   } finally {
-    if (fd !== null) {
-      closeSync(fd)
-    }
+    await file?.close().catch(() => {})
   }
 }
 

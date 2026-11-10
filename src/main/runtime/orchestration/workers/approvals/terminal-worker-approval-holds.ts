@@ -10,7 +10,8 @@ import type {
 } from '../../../../agent-hooks/server/claude-permission-hook-hold'
 import type { AgentHookEventPayload } from '../../../../../shared/agent-hook-listener/listener-event'
 import { showsClaudeDialog } from '../../../terminal/wait/claude-open-dialog-hold'
-import { claudeToolClose, type ClaudeToolResult } from './claude-tool-result-close'
+import { claudeToolClose } from './claude-tool-result-close'
+import type { ClaudeToolClose, ClaudeToolResult } from './claude-tool-result-close'
 import { firstWithin } from './first-within'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow } from '../../db/orchestration-records'
@@ -26,6 +27,14 @@ import type {
 
 // Why 500 ms: Esc posts no hook, so only the screen says the dialog left; a click is refused within it.
 const DIALOG_POLL_MS = 500
+// How each tool_result names a close Orca did not make; null says no more than "closed".
+const CLOSE_OF: Record<ClaudeToolClose, CloseHow | null> = {
+  ran: { by: 'worker-terminal', decision: 'allow' },
+  'user-denied': { by: 'worker-terminal', decision: 'deny' },
+  'auto-denied': { by: 'auto', decision: 'deny' },
+  'hook-denied': null,
+  other: null
+}
 // A closed prompt waits this long for its tool's result before its closing line says no more than "closed".
 const CLOSE_EVIDENCE_MS = 10 * 60_000
 
@@ -41,7 +50,10 @@ export type TerminalWorkerApprovalHoldsDeps = Pick<WorkerTurnStopReportDeps, 'no
   /** The pane's screen once it has applied every PTY chunk; null while it lags or is unreadable. */
   readScreen: (paneKey: string) => readonly string[] | null
   /** The tool_result Claude's transcript records for this tool call, once written. */
-  readToolResult: (call: { transcriptPath: string; toolUseId: string }) => ClaudeToolResult | null
+  readToolResult: (call: {
+    transcriptPath: string
+    toolUseId: string
+  }) => Promise<ClaudeToolResult | null>
   setTimer: (run: () => void, delayMs: number) => { cancel: () => void }
 }
 
@@ -151,7 +163,10 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
     ) {
       for (const hold of this.closingByToolUseId.values()) {
         if (hold.paneKey === event.paneKey) {
-          this.close(hold, null)
+          // One last read: a result written late still names the close.
+          void this.deps
+            .readToolResult(hold)
+            .then((result) => this.close(hold, result && CLOSE_OF[claudeToolClose(result, null)]))
         }
       }
     }
@@ -238,34 +253,20 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
     if (hold.state !== 'open') {
       return
     }
-    switch (hold.ranSeen ? 'ran' : result && claudeToolClose(result, null)) {
-      case 'ran':
-        this.close(hold, { by: 'worker-terminal', decision: 'allow' })
-        return
-      case 'user-denied':
-        this.close(hold, { by: 'worker-terminal', decision: 'deny' })
-        return
-      case 'auto-denied':
-        this.close(hold, { by: 'auto', decision: 'deny' })
-        return
-      case 'hook-denied':
-      case 'other':
-        this.close(hold, null)
-        return
-      case null: {
-        const lines = await firstWithin(this.deps.setTimer, () =>
-          this.deps.readScreen(hold.paneKey)
-        )
-        if (hold.state !== 'open') {
-          return
-        }
-        if (!lines || showsClaudeDialog(lines)) {
-          // The dialog is up but Orca can no longer answer it: a person must, in the terminal.
-          this.close(hold, { by: 'terminal-only', decision: null })
-        } else {
-          this.closeAwaitingEvidence(hold)
-        }
-      }
+    const close = hold.ranSeen ? 'ran' : result && claudeToolClose(result, null)
+    if (close) {
+      this.close(hold, CLOSE_OF[close])
+      return
+    }
+    const lines = await firstWithin(this.deps.setTimer, () => this.deps.readScreen(hold.paneKey))
+    if (hold.state !== 'open') {
+      return
+    }
+    if (!lines || showsClaudeDialog(lines)) {
+      // The dialog is up but Orca can no longer answer it: a person must, in the terminal.
+      this.close(hold, { by: 'terminal-only', decision: null })
+    } else {
+      this.closeAwaitingEvidence(hold)
     }
   }
 
