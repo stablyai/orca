@@ -10,8 +10,8 @@ export function DeleteCloudSandboxAgentsNote({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const state = useCloudSshMenuState(worktree)
-  // Asleep sandboxes are never woken for it; their disk goes with the delete.
-  if (state.kind !== 'ready' || state.status.asleep) {
+  // Only a running sandbox is signed out; asleep or archived ones are never woken for it.
+  if (state.kind !== 'ready' || state.status.running !== true) {
     return null
   }
   return (

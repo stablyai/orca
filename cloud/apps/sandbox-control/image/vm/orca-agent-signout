@@ -4,7 +4,7 @@
 # Never fails: the sandbox is deleted next whatever happens. Values are never printed.
 set -u
 HOME="${HOME:-$(getent passwd "$(id -u)" | cut -d: -f6)}"
-export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:/usr/local/bin:/usr/bin:/bin:/opt/orca/bin:${PATH:-}"
+export PATH="/opt/orca/tools/bin:$HOME/.local/bin:$HOME/.npm-global/bin:/usr/local/bin:/usr/bin:/bin:/opt/orca/bin:${PATH:-}"
 claude_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 claude_json="${CLAUDE_CONFIG_DIR:-$HOME}/.claude.json"
 codex_dir="${CODEX_HOME:-$HOME/.codex}"

@@ -60,6 +60,16 @@ describe('sign agents out before delete', () => {
     expect(h.vercel.commands.slice(before).filter((c) => c.args?.[2] === 'orca-agent-signout')).toEqual([])
   })
 
+  it('a retried destroy (row already destroying) does not wait on sign-out again', async () => {
+    const h = await createHarness()
+    const { body } = await h.call('POST', '/v1/sandboxes', { body: create })
+    h.raw.prepare(`UPDATE sandboxes SET status = 'destroying' WHERE id = ?`).run(body.sandbox.id)
+    const before = h.vercel.commands.length
+    const destroyed = await h.call('DELETE', `/v1/sandboxes/${body.sandbox.id}`)
+    expect(destroyed.body.sandbox.status).toBe('destroyed')
+    expect(h.vercel.commands.slice(before).filter((c) => c.args?.[2] === 'orca-agent-signout')).toEqual([])
+  })
+
   describe('bounded wait', () => {
     afterEach(() => {
       vi.useRealTimers()
