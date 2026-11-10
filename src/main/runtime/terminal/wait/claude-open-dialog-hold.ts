@@ -44,7 +44,7 @@ export function showsClaudeDialog(lines: readonly string[]): boolean {
   return region.some((line) => DIALOG_FOOTER_RE.test(line)) || hasCursoredOptionList(region)
 }
 
-// Claude's permission dialog: "Claude Code will automatically block this request in 1:59, …".
+// Claude's permission dialog: "Claude Code will automatically block this request in 1:59, ...".
 const AUTO_BLOCK_COUNTDOWN_RE = /automatically block this request in (\d+):(\d{2})/
 
 /** When the dialog's own auto-block countdown runs out, if the screen shows one. */
@@ -62,8 +62,8 @@ export function claudeDialogExpiresAt(
 }
 
 // Why String.raw: the orcad bundle must stay ASCII (see CURSORED_OPTION_RE).
-const DASHED_RULE_RE = new RegExp(String.raw`^\s*╌`)
-const BOX_LINE_RE = new RegExp(String.raw`^\s*│ ?`)
+const DASHED_RULE_RE = new RegExp(String.raw`^\s*\u254C`)
+const BOX_LINE_RE = new RegExp(String.raw`^\s*\u2502 ?`)
 const PROCEED_RE = /Do you want to proceed\?/
 
 /** The warning Claude prints under a command it flagged, the paragraph after the command's own
