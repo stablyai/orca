@@ -21,6 +21,8 @@ export type WorktreeRunActions = {
   scripts: OrcaRunScripts
   /** Ids defined by the shared orca.yaml (they need the user's approval before running). */
   sharedIds: ReadonlySet<string>
+  /** The host prepared the checkout itself (setup ran in an environment build, not a Setup tab). */
+  setupProvisioned?: true
 }
 
 export type RunActionTarget = {
@@ -96,13 +98,20 @@ export async function loadWorktreeRunActions(
   }
   const repo = state.repos.find((candidate) => candidate.id === target.repoId)
   let shared: OrcaHooks['scripts'] | undefined
+  let setupProvisioned = false
   try {
     const result = await checkRuntimeHooks(target.hostId, target.repoId, options)
     shared = result.status === 'error' ? undefined : (result.hooks?.scripts ?? undefined)
+    setupProvisioned = result.environmentProvisioned === true
   } catch {
     shared = undefined
   }
-  return mergeRunActions(shared, repo?.hookSettings?.scripts, target.isLocal ? 'local' : 'remote')
+  const merged = mergeRunActions(
+    shared,
+    repo?.hookSettings?.scripts,
+    target.isLocal ? 'local' : 'remote'
+  )
+  return setupProvisioned ? { ...merged, setupProvisioned: true } : merged
 }
 
 /** The action the Run button and shortcut act on: the last one still running here, else the default. */

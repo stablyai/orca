@@ -11,6 +11,8 @@ export type RunActionRun = {
   actionName: string
   /** The terminal tab showing this run's output. */
   tabId: string
+  /** The tab's pane running the action (learned once the pane exists); splits are other panes. */
+  leafId?: string
   status: RunActionStatus
   exitCode: number | null
   startedAt: number
@@ -40,7 +42,8 @@ function readRun(value: unknown): RunActionRun | null {
     return null
   }
   const run: Record<string, unknown> = { ...value }
-  const { worktreeId, repoId, actionId, actionName, tabId, status, exitCode, startedAt } = run
+  const { worktreeId, repoId, actionId, actionName, tabId, status, exitCode, startedAt, leafId } =
+    run
   if (
     typeof worktreeId !== 'string' ||
     typeof repoId !== 'string' ||
@@ -60,7 +63,8 @@ function readRun(value: unknown): RunActionRun | null {
     tabId,
     status: STATUSES.find((known) => known === status) ?? 'exited',
     exitCode: typeof exitCode === 'number' ? exitCode : null,
-    startedAt
+    startedAt,
+    ...(typeof leafId === 'string' ? { leafId } : {})
   }
 }
 
@@ -124,7 +128,7 @@ export function setRunActionRun(run: RunActionRun): void {
 export function patchRunActionRun(
   worktreeId: string,
   actionId: string,
-  patch: Partial<Pick<RunActionRun, 'status' | 'exitCode'>>
+  patch: Partial<Pick<RunActionRun, 'status' | 'exitCode' | 'leafId'>>
 ): void {
   const current = runs[worktreeId]?.[actionId]
   if (!current) {
