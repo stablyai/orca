@@ -60,11 +60,11 @@ it('withdraws abandoned queued upgrades and shares the surviving upgrade across 
     // The mounted display subscription owns no permission to continue either ended request.
     a.abort()
     b.abort()
-    stops[0]()
     first.resolve(listing)
     const ended = await Promise.all([plain, queued])
     expect(request.mock.calls).toEqual([[false]])
     expect(ended.every((answer) => !answer?.waitExpired)).toBe(true)
+    stops[0]()
 
     reopening = true
     const successor = hostModelMenuCatalog(scope)

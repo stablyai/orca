@@ -18,6 +18,16 @@ export function agentPickerCatalogJobs(entries: AgentPickerEntry[]): AgentPicker
     )
   )
 }
+export function agentPickerCatalogFailure(error: unknown): 'unsupported' | 'failed' {
+  return typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error.code === 'method_not_found' ||
+      error.code === 'structured_agent_session_unsupported' ||
+      error.code === 'forbidden')
+    ? 'unsupported'
+    : 'failed'
+}
 export function updateAgentPickerCatalog(
   entries: AgentPickerEntry[],
   job: AgentPickerCatalogJob,

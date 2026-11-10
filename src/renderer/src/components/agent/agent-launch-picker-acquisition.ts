@@ -1,5 +1,6 @@
 import {
   agentPickerCatalogJobs,
+  agentPickerCatalogFailure,
   updateAgentPickerCatalog,
   agentPickerSourceView,
   type AgentPickerCatalogJob
@@ -74,6 +75,8 @@ class AgentPickerAcquisition {
                 catalogRead: pending || invalidated ? 'pending' : 'settled'
               })
               if (invalidated) {
+                // Retire completions admitted under the previous generation's job identity.
+                this.jobs[index] = { ...job }
                 this.queued.catalog.add(index)
               }
               this.publish()
@@ -186,6 +189,9 @@ class AgentPickerAcquisition {
     const job = this.jobs[index]
     const signal = this.demand.signal(index)
     const catalog = await this.reads.catalog(entry, waitForListing, job.source, signal)
+    if (job !== this.jobs[index]) {
+      return
+    }
     if (signal.aborted && (!catalog || catalog.listingInProgress)) {
       this.queued.catalog.add(index)
     }
@@ -238,19 +244,15 @@ class AgentPickerAcquisition {
       if (kind === 'support') {
         this.supports.set(index, { state: 'pending' })
       }
+      const job = this.jobs[index]
       const read =
         kind !== 'support'
           ? this.readCatalog(entry, index, kind === 'refresh').catch((error: unknown) => {
-              const unsupported =
-                typeof error === 'object' &&
-                error !== null &&
-                'code' in error &&
-                (error.code === 'method_not_found' ||
-                  error.code === 'structured_agent_session_unsupported' ||
-                  error.code === 'forbidden')
-              this.entries = updateAgentPickerCatalog(this.entries, this.jobs[index], {
-                catalogRead: unsupported ? 'unsupported' : 'failed'
-              })
+              if (job === this.jobs[index]) {
+                this.entries = updateAgentPickerCatalog(this.entries, job, {
+                  catalogRead: agentPickerCatalogFailure(error)
+                })
+              }
             })
           : this.reads
               .support(entry)
