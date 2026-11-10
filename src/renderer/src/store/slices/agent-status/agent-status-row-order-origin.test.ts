@@ -86,7 +86,7 @@ describe('observed agent session row origin', () => {
         now: 1_000_000 + version
       })
     }
-    write(1000, 'working', 'A')
+    write(1000, 'working', 'A', { turnStartedAt: 1000 })
     store
       .getState()
       .setAgentStatus(
@@ -98,7 +98,11 @@ describe('observed agent session row origin', () => {
         { providerSession: { key: 'session_id', id: 'quiet' } }
       )
     expect(publish(1).map((row) => row.entry.providerSession?.id)).toEqual(['A', 'quiet'])
-    write(7000, 'working', 'B', { stateStartedAt: 1000, evidenceObservedAt: 6000 })
+    write(7000, 'working', 'B', {
+      stateStartedAt: 1000,
+      turnStartedAt: 1000,
+      evidenceObservedAt: 6000
+    })
     expect(store.getState().agentStatusByPaneKey[pane]).toMatchObject({
       stateStartedAt: 1000,
       firstStateStartedAt: 6000,
@@ -205,60 +209,82 @@ it('keeps the first session clock across transient SSH loss and provider-less re
   expect(store.getState().agentStatusByPaneKey[pane].firstStateStartedAt).toBe(8000)
 })
 
-it('keeps an old paired host session clock across omission and provider-less replay', () => {
-  let client = makeState()
-  const publish = (version: number, at: number, state: 'working' | 'done', session?: string) => {
-    client = {
-      ...client,
-      ...applyWebSessionTabsSnapshot(
-        client,
-        makeSnapshot(
-          [
-            {
-              type: 'terminal',
-              id: `tab-order::11111111-1111-4111-8111-111111111111`,
-              title: 'Claude',
-              parentTabId: 'tab-order',
-              leafId: '11111111-1111-4111-8111-111111111111',
-              isActive: true,
-              status: 'ready',
-              terminal: 'terminal-order',
-              agentStatus: {
-                paneKey: pane,
-                tabId: 'tab-order',
-                worktreeId: 'wt-order',
-                agentType: 'claude',
-                state,
-                prompt: 'task',
-                updatedAt: at,
-                stateStartedAt: at,
-                stateHistory: [],
-                ...(session ? { providerSession: { key: 'session_id' as const, id: session } } : {})
+it.each([false, true])(
+  'keeps a paired host session clock through omission and stale replay (stamped: %s)',
+  (stamped) => {
+    let client = makeState()
+    const publish = (version: number, at: number, state: 'working' | 'done', session?: string) => {
+      client = {
+        ...client,
+        ...applyWebSessionTabsSnapshot(
+          client,
+          makeSnapshot(
+            [
+              {
+                type: 'terminal',
+                id: `tab-order::11111111-1111-4111-8111-111111111111`,
+                title: 'Claude',
+                parentTabId: 'tab-order',
+                leafId: '11111111-1111-4111-8111-111111111111',
+                isActive: true,
+                status: 'ready',
+                terminal: 'terminal-order',
+                agentStatus: {
+                  paneKey: pane,
+                  tabId: 'tab-order',
+                  worktreeId: 'wt-order',
+                  agentType: 'claude',
+                  state,
+                  prompt: 'task',
+                  updatedAt: at,
+                  stateStartedAt: stamped && at === 7500 ? 1000 : at,
+                  ...(stamped
+                    ? {
+                        observation: {
+                          origin: 'hook' as const,
+                          authorityId: 'H',
+                          incarnation: 0,
+                          revision: version,
+                          observedAt: at,
+                          kind: 'snapshot' as const
+                        },
+                        ...(at < 8000 ? { turnStartedAt: 1000 } : {})
+                      }
+                    : {}),
+                  stateHistory: [],
+                  ...(session
+                    ? { providerSession: { key: 'session_id' as const, id: session } }
+                    : {})
+                }
               }
-            }
-          ],
-          { worktree: 'wt-order', snapshotVersion: version }
-        ),
-        ENV,
-        1_000_000 + version
-      )
+            ],
+            { worktree: 'wt-order', snapshotVersion: version }
+          ),
+          ENV,
+          1_000_000 + version
+        )
+      }
+      return Object.values(client.agentStatusByPaneKey)[0]
     }
-    return Object.values(client.agentStatusByPaneKey)[0]
+    const initial = publish(1, 1000, 'working', 'A')
+    expect(initial.firstStateStartedAt).toBe(1000)
+    expect(publish(2, 5000, 'done', 'A').firstStateStartedAt).toBe(1000)
+    client = { ...client, agentStatusByPaneKey: {} }
+    expect(publish(3, 6000, 'done').firstStateStartedAt).toBe(1000)
+    expect(client.agentConversationsByPaneKey?.[initial.paneKey].providerSession?.id).toBe('A')
+    const conversations = client.agentConversationsByPaneKey
+    publish(4, 7000, 'done', 'A')
+    expect(client.agentConversationsByPaneKey).toBe(conversations)
+    client = { ...client, agentStatusByPaneKey: {} }
+    if (stamped) {
+      publish(5, 7500, 'working')
+      client = { ...client, agentStatusByPaneKey: {} }
+    }
+    expect(publish(6, 8000, 'working').firstStateStartedAt).toBe(8000)
+    expect(client.agentConversationsByPaneKey?.[initial.paneKey].providerSession).toBeUndefined()
+    expect(publish(7, 9000, 'working', 'B').firstStateStartedAt).toBe(8000)
   }
-  const initial = publish(1, 1000, 'working', 'A')
-  expect(initial.firstStateStartedAt).toBe(1000)
-  expect(publish(2, 5000, 'done', 'A').firstStateStartedAt).toBe(1000)
-  client = { ...client, agentStatusByPaneKey: {} }
-  expect(publish(3, 6000, 'done').firstStateStartedAt).toBe(1000)
-  expect(client.agentConversationsByPaneKey?.[initial.paneKey].providerSession?.id).toBe('A')
-  const conversations = client.agentConversationsByPaneKey
-  publish(4, 7000, 'done', 'A')
-  expect(client.agentConversationsByPaneKey).toBe(conversations)
-  client = { ...client, agentStatusByPaneKey: {} }
-  expect(publish(5, 8000, 'working').firstStateStartedAt).toBe(8000)
-  expect(client.agentConversationsByPaneKey?.[initial.paneKey].providerSession).toBeUndefined()
-  expect(publish(6, 9000, 'working', 'B').firstStateStartedAt).toBe(8000)
-})
+)
 
 it('does not give an unidentified successor the previous conversation clock or prompt', () => {
   const { store, write } = fixture('codex')

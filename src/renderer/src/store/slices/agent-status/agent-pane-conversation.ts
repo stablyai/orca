@@ -177,9 +177,14 @@ export function classifyAgentPaneConversation(
     entry.agentType,
     confirmedProvider
   )
-  const reset =
-    providerChanged ||
-    phase.successor ||
-    Boolean(state.agentConversationsByPaneKey?.[entry.paneKey] && !previous)
-  return { previous, reset, continuity: phase.continuity, stale: phase.stale }
+  const identityChanged =
+    providerChanged || Boolean(state.agentConversationsByPaneKey?.[entry.paneKey] && !previous)
+  const reset = identityChanged || phase.successor
+  return {
+    previous,
+    reset,
+    continuity: phase.continuity,
+    stale: phase.stale,
+    newTurnStartedAt: identityChanged ? undefined : phase.newTurnStartedAt
+  }
 }

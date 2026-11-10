@@ -31,7 +31,12 @@ export function classifyConversationContinuity(
   source: AgentConversationSource,
   agentType: AgentStatusEntry['agentType'],
   confirmedProvider: boolean
-): { successor: boolean; continuity: AgentConversationContinuity | undefined; stale?: boolean } {
+): {
+  successor: boolean
+  continuity: AgentConversationContinuity | undefined
+  stale?: boolean
+  newTurnStartedAt?: number
+} {
   if (source.identityOnly || source.observation?.kind === 'identity-only' || !source.state) {
     return { successor: false, continuity: previous }
   }
@@ -57,21 +62,34 @@ export function classifyConversationContinuity(
         previous.promptInteractionKey &&
         source.promptInteractionKey !== previous.promptInteractionKey))
   )
-  const stale = Boolean(
+  const incarnationChanged = Boolean(ordered && after.incarnation > before.incarnation)
+  const replay = after?.kind === 'snapshot' || (source.isReplay && after?.kind !== 'transition')
+  const staleRevision = Boolean(
+    ordered &&
+    (after.incarnation < before.incarnation ||
+      (after.incarnation === before.incarnation && after.revision <= before.revision))
+  )
+  const stalePhase = Boolean(
     previous &&
     comparable &&
-    (ordered
-      ? after.incarnation < before.incarnation ||
-        (after.incarnation === before.incarnation && after.revision <= before.revision)
-      : !newTurn &&
-        source.stateStartedAt !== undefined &&
-        previous.stateStartedAt !== undefined &&
-        source.stateStartedAt <= previous.stateStartedAt)
+    !incarnationChanged &&
+    !newTurn &&
+    (!ordered || replay) &&
+    source.stateStartedAt !== undefined &&
+    previous.stateStartedAt !== undefined &&
+    source.stateStartedAt <= previous.stateStartedAt
   )
-  if (stale) {
+  if (staleRevision || stalePhase) {
     return { successor: false, continuity: previous, stale: true }
   }
-  const incarnationChanged = Boolean(ordered && after.incarnation > before.incarnation)
+  const newTurnStartedAt =
+    previous &&
+    comparable &&
+    source.turnStartedAt !== undefined &&
+    previous.turnStartedAt !== undefined &&
+    source.turnStartedAt > previous.turnStartedAt
+      ? source.turnStartedAt
+      : undefined
   const sourceAdvanced = Boolean(
     previous &&
     comparable &&
@@ -111,6 +129,7 @@ export function classifyConversationContinuity(
   }
   return {
     successor,
+    newTurnStartedAt,
     continuity: {
       state: source.state,
       ...(source.stateStartedAt !== undefined ? { stateStartedAt: source.stateStartedAt } : {}),

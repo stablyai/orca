@@ -56,7 +56,7 @@ export function conversationSessionStartedAt(
   if (acceptance.reset) {
     return (
       source.firstStateStartedAt ??
-      source.turnStartedAt ??
+      acceptance.newTurnStartedAt ??
       entry.evidenceObservedAt ??
       entry.updatedAt
     )

@@ -91,9 +91,9 @@ beforeEach(() => {
 describe('one pane of a terminal tab', () => {
   const paneGate = (state: AppState, paneKey: string) =>
     canPaneOfferResumeInNewChat(state, { worktreeId: WORKTREE_ID, paneKey })
-  it.each([false, true])(
+  it.each(['live', 'removed', 'stamped-replay'])(
     'identifies the current provider without selecting its sibling (predecessor removed: %s)',
-    (removePredecessor) => {
+    (predecessor) => {
       makeState()
       const [L1, L2] = [
         '11111111-1111-4111-8111-111111111111',
@@ -133,17 +133,55 @@ describe('one pane of a terminal tab', () => {
         })
       ).toMatchObject({ agent: 'codex', providerSessionId: 'thread-c' })
       expect(paneGate(state, `term-1:${L2}`)).toBe(false)
-      useAppStore
-        .getState()
-        .setAgentStatus(
+      useAppStore.getState().setAgentStatus(
+        pane,
+        {
+          state: 'done',
+          prompt: 'first',
+          agentType: 'codex',
+          ...(predecessor === 'stamped-replay'
+            ? {
+                observation: {
+                  origin: 'hook' as const,
+                  authorityId: 'H',
+                  incarnation: 0,
+                  revision: 2,
+                  observedAt: 5000,
+                  kind: 'transition' as const
+                }
+              }
+            : {})
+        },
+        undefined,
+        predecessor === 'stamped-replay'
+          ? { updatedAt: 5000, stateStartedAt: 5000, turnStartedAt: 1000 }
+          : undefined,
+        { tabId: 'term-1', worktreeId: WORKTREE_ID },
+        { providerSession: { key: 'session_id', id: 'thread-c' } }
+      )
+      if (predecessor !== 'live') {
+        useAppStore.getState().removeAgentStatus(pane)
+      }
+      if (predecessor === 'stamped-replay') {
+        useAppStore.getState().setAgentStatus(
           pane,
-          { state: 'done', prompt: 'first', agentType: 'codex' },
+          {
+            state: 'working',
+            prompt: 'first',
+            agentType: 'codex',
+            observation: {
+              origin: 'hook',
+              authorityId: 'H',
+              incarnation: 0,
+              revision: 3,
+              observedAt: 6000,
+              kind: 'snapshot'
+            }
+          },
           undefined,
-          undefined,
-          { tabId: 'term-1', worktreeId: WORKTREE_ID },
-          { providerSession: { key: 'session_id', id: 'thread-c' } }
+          { updatedAt: 6000, stateStartedAt: 1000, turnStartedAt: 1000, isReplay: true },
+          { tabId: 'term-1', worktreeId: WORKTREE_ID }
         )
-      if (removePredecessor) {
         useAppStore.getState().removeAgentStatus(pane)
       }
       useAppStore
