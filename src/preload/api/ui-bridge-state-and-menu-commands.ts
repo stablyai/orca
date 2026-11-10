@@ -1,6 +1,10 @@
 import type { MarkdownDocument } from '../../shared/file-listing/file-document'
 import type { BrowserTabCreateRequest } from '../../shared/browser-tab-create-request'
 import { ipcRenderer } from 'electron'
+import {
+  ORCA_PLAN_BILLING_SETTINGS_TARGET,
+  type OrcaOpenSettingsTarget
+} from '../../shared/orca-billing'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { KeybindingActionId } from '../../shared/keybindings'
 import type { PreloadApi } from '../api-types'
@@ -23,8 +27,13 @@ export const uiStateAndMenuCommandsApi = {
     ipcRenderer.on('ui:stateChanged', listener)
     return () => ipcRenderer.removeListener('ui:stateChanged', listener)
   },
-  onOpenSettings: (callback: () => void): (() => void) => {
-    const listener = (_event: Electron.IpcRendererEvent) => callback()
+  onOpenSettings: (callback: (target?: OrcaOpenSettingsTarget) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, target?: unknown) =>
+      callback(
+        (target as { pane?: unknown } | undefined)?.pane === ORCA_PLAN_BILLING_SETTINGS_TARGET.pane
+          ? ORCA_PLAN_BILLING_SETTINGS_TARGET
+          : undefined
+      )
     ipcRenderer.on('ui:openSettings', listener)
     return () => ipcRenderer.removeListener('ui:openSettings', listener)
   },

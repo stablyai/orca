@@ -22,6 +22,10 @@ import {
   setOrcaBillingOverage
 } from '../../billing/billing-service'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
+import { ensureActiveOrcaProfile } from '../../orca-profiles/profile-index-store'
+import { notifyUsageAlertIfDue } from '../../billing/usage-alert-notifier'
+import { showUsageAlertNotification, usageAlertBody } from '../../billing/usage-alert-desktop'
+import type { Store } from '../../persistence/loading-store/store'
 
 const CheckoutArgs = z
   .object({
@@ -77,10 +81,32 @@ export function billingOverageArgsFromUnknown(args: unknown): OrcaBillingOverage
   return parsed.data
 }
 
-export function registerOrcaProfileBillingHandlers(): void {
-  ipcMain.handle('orcaProfiles:billingStatus', async (): Promise<OrcaBillingStatusResult> =>
-    getOrcaBillingStatus(getProfileUserDataPath())
-  )
+/** `${userId}:${activeOrgId}` for the active profile's account (as the renderer keys it), or null. */
+function billingAccountKey(userDataPath: string): string | null {
+  const cloud = ensureActiveOrcaProfile(userDataPath).profile.cloud
+  return cloud ? `${cloud.userId}:${cloud.activeOrgId ?? ''}` : null
+}
+
+export function registerOrcaProfileBillingHandlers(store: Store): void {
+  ipcMain.handle('orcaProfiles:billingStatus', async (): Promise<OrcaBillingStatusResult> => {
+    const userDataPath = getProfileUserDataPath()
+    const account = billingAccountKey(userDataPath)
+    const result = await getOrcaBillingStatus(userDataPath)
+    // An account or team switch mid-read means this answer isn't for the account now active.
+    if (result.status === 'ok' && account && account === billingAccountKey(userDataPath)) {
+      try {
+        notifyUsageAlertIfDue(account, result.entitlement, {
+          userDataPath,
+          notificationsEnabled: () => store.getSettings().notifications?.enabled !== false,
+          body: usageAlertBody,
+          show: showUsageAlertNotification
+        })
+      } catch {
+        // An alert must never fail the billing read.
+      }
+    }
+    return result
+  })
   ipcMain.handle(
     'orcaProfiles:billingOpenCheckout',
     async (_event, rawArgs: unknown): Promise<OrcaBillingOpenResult> =>

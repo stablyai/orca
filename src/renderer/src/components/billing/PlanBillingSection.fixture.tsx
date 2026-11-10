@@ -193,6 +193,26 @@ export const usageWarning90 = defineFixture({
   )
 })
 
+/** A member at billing's 90% level: no admin usage notice (members aren't alerted). */
+export const usageWarningMember = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      result={{
+        status: 'ok',
+        entitlement: {
+          ...sampleTeam,
+          usedSeconds: 109 * HOUR,
+          remainingIncludedSeconds: 11 * HOUR,
+          usageWarningPercent: 90,
+          canManageBilling: false
+        }
+      }}
+    />
+  )
+})
+
 /** An admin types a cap above billing's maximum: the field says what the maximum is. */
 export const capTooHigh = defineFixture({
   width: 600,

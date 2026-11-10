@@ -5,6 +5,7 @@ import type {
   OrcaBillingEntitlement,
   OrcaBillingStatusResult
 } from '../../../../shared/orca-billing'
+import { usageWarningUsedPercent } from '../../../../shared/orca-billing-usage-alerts'
 import { includedUsagePercent } from './plan-billing-format'
 import { isActivePlan } from './team/team-seat-math'
 
@@ -55,27 +56,17 @@ export function sandboxHoursOverLine(
   )
 }
 
-/**
- * The share of included hours actually used, floored, for the warning sentence: never below the
- * level billing reported (its count may be fresher) and never 100 while hours remain.
- */
-export function usedPercentForWarning(entitlement: OrcaBillingEntitlement): number {
-  const level = entitlement.usageWarningPercent ?? 0
-  const used =
-    entitlement.includedSeconds > 0
-      ? Math.floor((entitlement.usedSeconds / entitlement.includedSeconds) * 100)
-      : level
-  return Math.min(99, Math.max(level, used))
-}
+/** The share used for the warning sentence; shared with the desktop notification in main. */
+export const usedPercentForWarning = usageWarningUsedPercent
 
 /**
- * Shown once billing reports a warning level (75%, 90%) until the hours run out; the sentence states
- * the actual share used, not the level. At 100% the bar, the hours-left line and the out-of-hours
- * states say it instead.
+ * Shown to owners and admins once billing reports a warning level (75%, 90%) until the hours run
+ * out; the sentence states the actual share used, not the level. At 100% the bar, the hours-left
+ * line and the out-of-hours states say it instead. Members aren't alerted, so they don't see it.
  */
 export function usageWarningLine(entitlement: OrcaBillingEntitlement, t: Translate): string | null {
   const level = entitlement.usageWarningPercent
-  if (level === null || level >= 100) {
+  if (!entitlement.canManageBilling || level === null || level >= 100) {
     return null
   }
   return t(

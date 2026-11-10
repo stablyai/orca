@@ -208,6 +208,12 @@ export function OverageControls({
           <p id={descriptionId} className="text-xs text-muted-foreground">
             {optedIn ? descriptionOn : description}
           </p>
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'auto.components.billing.usageAlertsNote',
+              'Owners and admins are alerted in Orca at 75%, 90% and 100% of your team’s sandbox hours.'
+            )}
+          </p>
         </div>
         <SettingsDisabledControlTooltip
           reason={

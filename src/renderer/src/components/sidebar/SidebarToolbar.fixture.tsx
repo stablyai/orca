@@ -132,6 +132,31 @@ export const signedInMenuUsageWarning = footer({
   interact: openAccountMenu
 })
 
+/** The team at billing's 90% level: the warning states the actual share used (owner or admin). */
+export const signedInMenuUsageWarning90 = footer({
+  height: 360,
+  authStatus: signedInWithBilling,
+  setup: withBilling(true, {
+    usedSeconds: 109 * 3600,
+    remainingIncludedSeconds: 11 * 3600,
+    usageWarningPercent: 90
+  }),
+  interact: openAccountMenu
+})
+
+/** A member at the same 90% level: hours left only, no admin usage notice. */
+export const signedInMenuUsageWarningMember = footer({
+  height: 360,
+  authStatus: signedInWithBilling,
+  setup: withBilling(true, {
+    usedSeconds: 109 * 3600,
+    remainingIncludedSeconds: 11 * 3600,
+    usageWarningPercent: 90,
+    canManageBilling: false
+  }),
+  interact: openAccountMenu
+})
+
 const openTeamSwitcher = async (frame: HTMLElement): Promise<void> => {
   await openAccountMenu(frame)
   const trigger = document.querySelector<HTMLElement>('[data-account-menu-team-switcher]')

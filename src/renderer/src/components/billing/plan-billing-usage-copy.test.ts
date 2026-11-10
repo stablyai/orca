@@ -74,6 +74,19 @@ describe('sandbox hours copy', () => {
     )
   })
 
+  it('shows the warning to owners and admins only: members are not alerted', () => {
+    const member = team({
+      usedSeconds: 110 * HOUR,
+      usageWarningPercent: 90,
+      canManageBilling: false
+    })
+    expect(usageWarningLine(member, t)).toBeNull()
+    expect(accountMenuUsageLines({ status: 'ok', entitlement: member }, t)).toEqual({
+      hoursLeft: '78.5 sandbox hours left',
+      warning: null
+    })
+  })
+
   it('turns the hours bar to the warning tone at 90%', () => {
     expect(includedUsageTone(team({ usedSeconds: 107 * HOUR }))).toBe('default')
     expect(includedUsageTone(team({ usedSeconds: 108 * HOUR }))).toBe('warning')

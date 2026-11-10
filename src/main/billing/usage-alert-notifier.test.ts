@@ -1,0 +1,164 @@
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { OrcaBillingEntitlement } from '../../shared/orca-billing'
+import { decideUsageAlert, usageAlertLevel } from '../../shared/orca-billing-usage-alerts'
+import {
+  notifyUsageAlertIfDue,
+  readUsageAlertLedger,
+  USAGE_ALERT_TITLE,
+  type UsageAlertDeps
+} from './usage-alert-notifier'
+
+const HOUR = 3600
+const NOV = Date.UTC(2026, 10, 3)
+const DEC = Date.UTC(2026, 11, 3)
+const JAN = Date.UTC(2027, 0, 3)
+
+const team = (patch: Partial<OrcaBillingEntitlement> = {}): OrcaBillingEntitlement => ({
+  plan: 'team',
+  planLabel: 'Team',
+  status: 'active',
+  interval: 'month',
+  seats: 2,
+  seatChange: null,
+  period: { start: NOV, end: DEC },
+  usageWindow: { start: NOV, end: DEC },
+  cancelAtPeriodEnd: false,
+  includedSeconds: 120 * HOUR,
+  usedSeconds: 41.5 * HOUR,
+  remainingIncludedSeconds: 78.5 * HOUR,
+  usageWarningPercent: null,
+  overageSeconds: 0,
+  overage: { optedIn: false, active: false, spendCapCents: 2500, spentCents: 0, centsPerHour: 100 },
+  payment: { pastDueSince: null, graceEndsAt: null, suspendRunning: false },
+  canStartSandbox: true,
+  reason: null,
+  canManageBilling: true,
+  offers: null,
+  ...patch
+})
+
+/** `used` hours of 120, with billing's level. */
+const at = (
+  level: number | null,
+  used: number,
+  patch: Partial<OrcaBillingEntitlement> = {}
+): OrcaBillingEntitlement =>
+  team({
+    usedSeconds: used * HOUR,
+    remainingIncludedSeconds: Math.max(0, 120 - used) * HOUR,
+    usageWarningPercent: level,
+    ...patch
+  })
+const nextMonth = { period: { start: DEC, end: JAN }, usageWindow: { start: DEC, end: JAN } }
+
+describe('decideUsageAlert', () => {
+  it('does nothing below 75%', () => {
+    expect(decideUsageAlert({}, 'u:o', at(null, 80)).notify).toBeNull()
+    expect(usageAlertLevel(at(null, 89))).toBeNull()
+  })
+
+  it('never alerts members', () => {
+    const decision = decideUsageAlert({}, 'u:o', at(90, 110, { canManageBilling: false }))
+    expect(decision.notify).toBeNull()
+    expect(decision.ledger).toEqual({})
+  })
+
+  it('alerts once per level with the floored percent used', () => {
+    const first = decideUsageAlert({}, 'u:o', at(75, 92))
+    expect(first.notify).toEqual({ level: 75, percent: 76 })
+    expect(decideUsageAlert(first.ledger, 'u:o', at(75, 95)).notify).toBeNull()
+    const second = decideUsageAlert(first.ledger, 'u:o', at(90, 109))
+    expect(second.notify).toEqual({ level: 90, percent: 90 })
+    const third = decideUsageAlert(second.ledger, 'u:o', at(100, 120))
+    expect(third.notify).toEqual({ level: 100, percent: 100 })
+    expect(decideUsageAlert(third.ledger, 'u:o', at(100, 130)).notify).toBeNull()
+  })
+
+  it('sends one alert for the highest level when several are crossed at once', () => {
+    const jump = decideUsageAlert({}, 'u:o', at(90, 110))
+    expect(jump.notify?.level).toBe(90)
+    expect(jump.ledger['u:o'].levels).toEqual([75, 90])
+    expect(decideUsageAlert(jump.ledger, 'u:o', at(75, 110)).notify).toBeNull()
+  })
+
+  it('keeps accounts and teams apart', () => {
+    const one = decideUsageAlert({}, 'u:org-a', at(75, 92))
+    expect(decideUsageAlert(one.ledger, 'u:org-b', at(75, 92)).notify?.level).toBe(75)
+    expect(decideUsageAlert(one.ledger, 'other:org-a', at(75, 92)).notify?.level).toBe(75)
+  })
+
+  it('starts over in a new billing period', () => {
+    const done = decideUsageAlert({}, 'u:o', at(90, 110)).ledger
+    const fresh = decideUsageAlert(done, 'u:o', at(75, 92, nextMonth))
+    expect(fresh.notify?.level).toBe(75)
+    expect(fresh.ledger['u:o']).toEqual({ periodStart: DEC, levels: [75] })
+  })
+
+  it('needs a period to dedupe against', () => {
+    expect(
+      decideUsageAlert({}, 'u:o', at(75, 92, { period: null, usageWindow: null })).notify
+    ).toBeNull()
+  })
+})
+
+describe('notifyUsageAlertIfDue', () => {
+  let dir: string
+  let show: ReturnType<typeof vi.fn>
+  let enabled: boolean
+  const deps = (): UsageAlertDeps => ({
+    userDataPath: dir,
+    notificationsEnabled: () => enabled,
+    body: (percent) => `Your team has used ${percent}% of this month’s sandbox hours.`,
+    show
+  })
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'usage-alerts-'))
+    show = vi.fn()
+    enabled = true
+  })
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('shows the alert and records it on disk, so a reload or second window does not repeat it', () => {
+    expect(notifyUsageAlertIfDue('u:o', at(75, 92), deps())).toBe(75)
+    expect(show).toHaveBeenCalledWith({
+      title: USAGE_ALERT_TITLE,
+      body: 'Your team has used 76% of this month’s sandbox hours.'
+    })
+    // Every later read (another window, a reload, a restart) reads the same ledger file.
+    expect(notifyUsageAlertIfDue('u:o', at(75, 93), deps())).toBeNull()
+    expect(notifyUsageAlertIfDue('u:o', at(75, 93), deps())).toBeNull()
+    expect(show).toHaveBeenCalledTimes(1)
+    expect(readUsageAlertLedger(dir)).toEqual({ 'u:o': { periodStart: NOV, levels: [75] } })
+  })
+
+  it('does not notify members or below 75%', () => {
+    expect(notifyUsageAlertIfDue('u:o', at(90, 110, { canManageBilling: false }), deps())).toBe(
+      null
+    )
+    expect(notifyUsageAlertIfDue('u:o', at(null, 60), deps())).toBeNull()
+    expect(show).not.toHaveBeenCalled()
+  })
+
+  it('counts a level as handled while notifications are off', () => {
+    enabled = false
+    expect(notifyUsageAlertIfDue('u:o', at(75, 92), deps())).toBeNull()
+    enabled = true
+    expect(notifyUsageAlertIfDue('u:o', at(75, 92), deps())).toBeNull()
+    expect(notifyUsageAlertIfDue('u:o', at(90, 110), deps())).toBe(90)
+    expect(show).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats a corrupt ledger as empty', () => {
+    writeFileSync(join(dir, 'orca-billing-usage-alerts.json'), '{not json')
+    expect(notifyUsageAlertIfDue('u:o', at(75, 92), deps())).toBe(75)
+    expect(JSON.parse(readFileSync(join(dir, 'orca-billing-usage-alerts.json'), 'utf8'))).toEqual({
+      'u:o': { periodStart: NOV, levels: [75] }
+    })
+  })
+})

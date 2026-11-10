@@ -20734,7 +20734,8 @@
         "sandboxHoursLeftCount_other": "{{count}} sandbox hours left",
         "sandboxHoursOverIncluded_one": "{{count}} sandbox hour over the included amount this month",
         "sandboxHoursOverIncluded_other": "{{count}} sandbox hours over the included amount this month",
-        "teamUsedPercent": "Your team has used {{percent}}% of this month’s sandbox hours."
+        "teamUsedPercent": "Your team has used {{percent}}% of this month’s sandbox hours.",
+        "usageAlertsNote": "Owners and admins are alerted in Orca at 75%, 90% and 100% of your team’s sandbox hours."
       },
       "ports": {
         "RuntimePortAutoForwarder": {
