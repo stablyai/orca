@@ -64,7 +64,7 @@ function renderOverflowMenu(
     | 'onExpandNotes'
   >
 ): React.JSX.Element {
-  return <SourceControlHeaderOverflowMenu {...props} />
+  return <SourceControlHeaderOverflowMenu panelActions={props} />
 }
 
 export function SourceControlHeaderToolbar({
@@ -142,6 +142,7 @@ export function SourceControlHeaderToolbar({
   const reviewControl = hostedReview ? (
     <HostedReviewToolbarLink
       review={hostedReview}
+      compact={embedded}
       onOpenHostedReviewInChecks={onOpenHostedReviewInChecks}
     />
   ) : suppressedGitHubPRNumber !== null ? (
@@ -257,7 +258,9 @@ export function SourceControlHeaderToolbar({
         {filterExpanded || showBranchContext || reviewRowShown ? (
           <div className="flex flex-col gap-1 border-b border-border px-3 py-1.5">
             {filterExpanded ? (
-              <div className="flex min-w-0 items-center gap-1.5">{filterRow}</div>
+              <div className="mb-1.5 flex min-w-0 items-center gap-1.5 border-b border-border pb-1.5">
+                {filterRow}
+              </div>
             ) : null}
             {showBranchContext ? branchContextRow(reviewControl) : null}
             {reviewRowShown ? (

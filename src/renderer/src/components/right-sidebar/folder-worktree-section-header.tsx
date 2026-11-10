@@ -15,6 +15,8 @@ type FolderWorktreeSectionHeaderProps = {
   behind?: number
   changeCount: number
   expanded: boolean
+  showBranchInHeader?: boolean
+  actions?: React.ReactNode
   onToggle: () => void
   onOpen: () => void
   /** Receives the embedded panel's filter and overflow buttons while expanded. */
@@ -48,6 +50,8 @@ export function FolderWorktreeSectionHeader({
   behind,
   changeCount,
   expanded,
+  showBranchInHeader = !expanded,
+  actions,
   onToggle,
   onOpen,
   actionsSlotRef
@@ -59,7 +63,7 @@ export function FolderWorktreeSectionHeader({
   )
   const showWorktreeName = !!worktreeName && worktreeName !== branch
   // Expanded cards show the branch once, in the body's picker; collapsed cards have no body.
-  const showSummaryRow = !expanded && (!!branch || !!ahead || !!behind || changeCount > 0)
+  const showSummaryRow = showBranchInHeader && (!!branch || !!ahead || !!behind || changeCount > 0)
   return (
     // Pinned within its own card, above the panel's sticky COMMITS dock.
     <div
@@ -70,6 +74,9 @@ export function FolderWorktreeSectionHeader({
         <button
           type="button"
           aria-expanded={expanded}
+          aria-label={[repoName, showWorktreeName ? worktreeName : null, branch]
+            .filter(Boolean)
+            .join(', ')}
           onClick={onToggle}
           className="flex min-w-0 items-center gap-1.5 text-left after:absolute after:inset-0 focus-visible:outline-none focus-visible:after:ring-1 focus-visible:after:ring-inset focus-visible:after:ring-ring"
         >
@@ -77,10 +84,14 @@ export function FolderWorktreeSectionHeader({
             className={`size-3 shrink-0 text-muted-foreground ${expanded ? 'rotate-90' : ''}`}
           />
           <FolderGit2 className="size-3.5 shrink-0 text-muted-foreground" />
-          <span className="min-w-0 truncate text-[13px] font-semibold">{repoName}</span>
+          <span className="min-w-0 truncate text-[13px] font-semibold" title={repoName}>
+            {repoName}
+          </span>
           {/* Same-repo worktrees are told apart by name, as main did. */}
           {showWorktreeName && (
-            <span className="min-w-0 truncate text-muted-foreground">{worktreeName}</span>
+            <span className="min-w-0 truncate text-muted-foreground" title={worktreeName}>
+              {worktreeName}
+            </span>
           )}
         </button>
         <Tooltip>
@@ -88,11 +99,11 @@ export function FolderWorktreeSectionHeader({
             <Button
               variant="ghost"
               size="icon"
-              className="relative z-10 -my-0.5 size-5 shrink-0 text-muted-foreground group-hover/card-header:text-foreground"
+              className="relative z-10 -my-0.5 size-5 shrink-0"
               onClick={onOpen}
               aria-label={openLabel}
             >
-              <ArrowUpRight className="size-3.5" />
+              <ArrowUpRight className="size-3.5 text-muted-foreground" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>{openLabel}</TooltipContent>
@@ -106,19 +117,23 @@ export function FolderWorktreeSectionHeader({
         <div
           ref={actionsSlotRef}
           className="relative z-10 -my-1 flex shrink-0 items-center empty:hidden"
-        />
+        >
+          {actions}
+        </div>
       </span>
       {showSummaryRow && (
         <span className="flex w-full min-w-0 items-center gap-1 pl-[2.375rem] pr-1 text-muted-foreground">
           {branch && (
             <span className="flex min-w-0 items-center gap-1 rounded-full border border-input px-1.5">
               <GitBranch className="size-3 shrink-0" />
-              <span className="truncate">{branch}</span>
+              <span className="truncate" title={branch}>
+                {branch}
+              </span>
             </span>
           )}
           <span className="ml-auto flex shrink-0 items-center gap-1">
-            <AheadBehind ahead={ahead} behind={behind} />
-            {changeCount > 0 && (
+            {!expanded && <AheadBehind ahead={ahead} behind={behind} />}
+            {!expanded && changeCount > 0 && (
               <span className="text-2xs tabular-nums">
                 {t(
                   'auto.components.rightSidebar.FolderWorkspaceSourceControl.changeCount',

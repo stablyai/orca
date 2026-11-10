@@ -168,7 +168,6 @@ it('identifies same-repo cards by name and shows their branch when collapsed', a
     ...container.querySelectorAll<HTMLButtonElement>('section button[aria-expanded]')
   ]
   expect(toggles.map((toggle) => toggle.textContent)).toEqual(['ChildChild 0', 'ChildChild 1'])
-  await act(async () => toggles.forEach((toggle) => toggle.click()))
   expect([...container.querySelectorAll('section')].map((section) => section.textContent)).toEqual([
     'ChildChild 0feature-0',
     'ChildChild 1Detached HEAD · abc1234'

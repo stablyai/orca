@@ -26,6 +26,7 @@ import {
   SourceControlScopeProvider,
   type SourceControlScope
 } from './source-control/panel/worktree-scope'
+import { SourceControlHeaderOverflowMenu } from './source-control/panel/header-overflow-menu'
 import { SourceControlHeaderActionsSlot } from './source-control/panel/header-actions-slot'
 import { useWorktreeGitStatusObservation } from './source-control/sync/use-worktree-git-status-observation'
 import { useSourceControlWatchConsumer } from '@/hooks/source-control-watch-consumers'
@@ -133,6 +134,12 @@ const WorktreeSection = memo(
           behind={remote?.behind}
           changeCount={entries.length}
           expanded={isExpanded}
+          showBranchInHeader={!bodyShown}
+          actions={
+            isExpanded && (!bodyShown || !bodyMounted) ? (
+              <SourceControlHeaderOverflowMenu worktree={owner.worktree} />
+            ) : null
+          }
           onToggle={() => setExpanded(!isExpanded)}
           onOpen={() => useAppStore.getState().setActiveWorktree(id, owner.executionHostId)}
           actionsSlotRef={setActionsSlot}
