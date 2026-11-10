@@ -7,7 +7,8 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import type { RenderRow } from '../listing/render-row'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
-import { getMountedWorktreeOptionsById } from '../rows/option-dom'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import { getMountedWorktreeCopyOptions } from '../rows/option-dom'
 
 export function installWorktreeVisibleRefreshVisibilityListener(onChange: () => void): () => void {
   document.addEventListener('visibilitychange', onChange)
@@ -97,13 +98,10 @@ function useVisibleCardPublisher(
         return
       }
       const viewport = scroll.getBoundingClientRect()
-      const mountedOptions = getMountedWorktreeOptionsById(
-        candidates.map((worktree) => worktree.id),
-        scroll
-      )
+      const mountedOptions = getMountedWorktreeCopyOptions(candidates, scroll)
       publish(
         candidates.filter((worktree) =>
-          mountedOptions.get(worktree.id)?.some((option) => {
+          mountedOptions.get(getWorktreeHostIdentity(worktree))?.some((option) => {
             const surface = option.querySelector('[data-worktree-card-surface]')
             const bounds = (surface?.firstElementChild ?? option).getBoundingClientRect()
             return bounds.height > 0 && bounds.top < viewport.bottom && bounds.bottom > viewport.top

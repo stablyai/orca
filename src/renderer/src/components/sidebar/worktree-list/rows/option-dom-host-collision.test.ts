@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it } from 'vitest'
-import { markSidebarWorktreeActiveImmediately } from './option-dom'
+import { getMountedWorktreeCopyOptions, markSidebarWorktreeActiveImmediately } from './option-dom'
 
 afterEach(() => {
   document.body.replaceChildren()
@@ -25,5 +25,26 @@ describe('immediate sidebar activation host identity', () => {
       null,
       'page'
     ])
+  })
+})
+
+describe('mounted worktree copy lookup', () => {
+  it('returns only the requested host copy when workspace ids collide', () => {
+    document.body.innerHTML = `
+      <div role="option" data-worktree-id="shared" data-worktree-host-identity="|shared"></div>
+      <div role="option" data-worktree-id="shared" data-worktree-host-identity="ssh:host-b|shared"></div>
+    `
+
+    const options = getMountedWorktreeCopyOptions(
+      [{ id: 'shared', hostId: 'ssh:host-b' }],
+      document
+    )
+
+    expect(
+      [...options].map(([identity, matches]) => [
+        identity,
+        matches.map((option) => option.dataset.worktreeHostIdentity)
+      ])
+    ).toEqual([['ssh:host-b|shared', ['ssh:host-b|shared']]])
   })
 })

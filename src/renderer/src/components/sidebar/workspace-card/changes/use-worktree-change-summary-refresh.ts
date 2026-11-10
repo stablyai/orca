@@ -5,12 +5,19 @@ import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-reco
 import { summarizeGitStatus, useWorktreeChangeSummaryStore } from '@/store/worktree-change-summary'
 import { getRuntimeGitStatus } from '@/runtime/source-control/git/runtime-git-status-client'
 import { isMacAppDataPath } from '@/app-shell/platform/passive-macos-app-data-access'
-import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-activity/window-visibility-interval'
+import {
+  installWindowVisibilityInterval,
+  isWindowVisible
+} from '@/lib/window-activity/window-visibility-interval'
 import {
   ORCA_TERMINAL_COMMAND_FINISHED_EVENT,
   type TerminalCommandFinishedEventDetail
 } from '@/hooks/terminal-command-finished-event'
-import type { GitStatusMetadataChangedEvent, Worktree } from '../../../../../../shared/worktree/types'
+import type {
+  GitStatusMetadataChangedEvent,
+  Worktree
+} from '../../../../../../shared/worktree/types'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import {
   getWorktreeHostIdentity,
   type HostScopedWorktreeKey
@@ -21,22 +28,33 @@ import { gitStatusSignalRecipientTest } from '../../../right-sidebar/source-cont
 import { SLOW_GIT_POLL_BACKOFF } from '../../../right-sidebar/source-control/sync/use-worktree-git-status-observation'
 import { resolveWorktreeStatusReadContext } from './worktree-status-read-context'
 import {
-  isActiveWorktreeRow,
+  selectMirroredActiveWorktree,
   selectWorktreeChangeRefreshTargets
 } from './worktree-change-refresh-targets'
 
 const CHANGE_SUMMARY_TICK_MS = 15_000
 
-function findActiveWorktree(state: AppState): Worktree | null {
-  for (const worktrees of Object.values(selectWorktreesByRepo(state))) {
-    const active = worktrees.find((worktree) =>
-      isActiveWorktreeRow(worktree, state.activeWorktreeId, state.activeWorkspaceExecutionHostId)
-    )
-    if (active) {
-      return active
-    }
+function findMirroredActiveWorktree(state: AppState): Worktree | null {
+  const { activeWorktreeId } = state
+  if (!activeWorktreeId) {
+    return null
   }
-  return null
+  return selectMirroredActiveWorktree(
+    selectWorktreesByRepo(state)[getRepoIdFromWorktreeId(activeWorktreeId)] ?? [],
+    activeWorktreeId,
+    state.activeWorkspaceExecutionHostId
+  )
+}
+
+function mirroredIdentityOf(state: AppState): HostScopedWorktreeKey | null {
+  const worktree = findMirroredActiveWorktree(state)
+  return worktree ? getWorktreeHostIdentity(worktree) : null
+}
+
+function visibleIdentities(): Set<HostScopedWorktreeKey> {
+  return new Set(
+    useWorktreeChangeSummaryStore.getState().visibleWorktrees.map(getWorktreeHostIdentity)
+  )
 }
 
 function isConnectionReady(state: AppState, connectionId: string | undefined): boolean {
@@ -60,7 +78,7 @@ export function useWorktreeChangeSummaryRefresh({ enabled }: { enabled: boolean 
 
     // The active checkout is already polled; reuse it so leaving a workspace keeps a fresh stripe.
     const mirrorActiveStatus = (state: AppState): void => {
-      const worktree = findActiveWorktree(state)
+      const worktree = findMirroredActiveWorktree(state)
       const entries = worktree ? state.gitStatusByWorktree[worktree.id] : undefined
       if (!worktree || !entries) {
         return
@@ -81,8 +99,7 @@ export function useWorktreeChangeSummaryRefresh({ enabled }: { enabled: boolean 
       const state = useAppStore.getState()
       const targets = selectWorktreeChangeRefreshTargets({
         visibleWorktrees: useWorktreeChangeSummaryStore.getState().visibleWorktrees,
-        activeWorktreeId: state.activeWorktreeId,
-        activeExecutionHostId: state.activeWorkspaceExecutionHostId,
+        mirroredIdentity: mirroredIdentityOf(state),
         lastReadAtByIdentity,
         signaledIdentities,
         now: Date.now(),
@@ -94,9 +111,13 @@ export function useWorktreeChangeSummaryRefresh({ enabled }: { enabled: boolean 
           return
         }
         const identity = getWorktreeHostIdentity(worktree)
+        const current = useAppStore.getState()
+        // Earlier reads may have outlasted a scroll or switch; leave skipped cards due for the next pass.
+        if (!visibleIdentities().has(identity) || identity === mirroredIdentityOf(current)) {
+          continue
+        }
         signaledIdentities.delete(identity)
         lastReadAtByIdentity.set(identity, Date.now())
-        const current = useAppStore.getState()
         const context = resolveWorktreeStatusReadContext(current, worktree)
         if (!context || !isConnectionReady(current, context.connectionId)) {
           continue
@@ -107,7 +128,8 @@ export function useWorktreeChangeSummaryRefresh({ enabled }: { enabled: boolean 
             includeLineStats: false,
             signal: controller.signal
           })
-          if (!disposed) {
+          // A failed read lists no entries; keep the last known summary instead of clearing the stripe.
+          if (!disposed && !status.readError) {
             summaries.setSummary(identity, summarizeGitStatus(status))
           }
         } catch {
@@ -136,7 +158,9 @@ export function useWorktreeChangeSummaryRefresh({ enabled }: { enabled: boolean 
     const stopMirror = useAppStore.subscribe((state, previous) => {
       if (
         state.gitStatusByWorktree !== previous.gitStatusByWorktree ||
-        state.activeWorktreeId !== previous.activeWorktreeId
+        state.gitStatusHugeByWorktree !== previous.gitStatusHugeByWorktree ||
+        state.activeWorktreeId !== previous.activeWorktreeId ||
+        state.activeWorkspaceExecutionHostId !== previous.activeWorkspaceExecutionHostId
       ) {
         mirrorActiveStatus(state)
       }

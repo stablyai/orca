@@ -3,6 +3,7 @@ import { makePRRefreshWorktree } from '@/store/github/github-slice-test-harness'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
   WORKTREE_CHANGE_SUMMARY_STALE_MS,
+  selectMirroredActiveWorktree,
   selectWorktreeChangeRefreshTargets
 } from './worktree-change-refresh-targets'
 
@@ -15,8 +16,7 @@ function worktree(id: string, overrides: Parameters<typeof makePRRefreshWorktree
 function select(args: Partial<Parameters<typeof selectWorktreeChangeRefreshTargets>[0]>) {
   return selectWorktreeChangeRefreshTargets({
     visibleWorktrees: [],
-    activeWorktreeId: null,
-    activeExecutionHostId: null,
+    mirroredIdentity: null,
     lastReadAtByIdentity: new Map(),
     signaledIdentities: new Set(),
     now: NOW,
@@ -48,24 +48,16 @@ describe('selectWorktreeChangeRefreshTargets', () => {
     ).toEqual(['signaled', 'unread', 'staler', 'stale'])
   })
 
-  it('skips the active checkout only on its own host', () => {
-    const localTwin = worktree('shared-id')
-    const remoteTwin = worktree('shared-id', { hostId: 'ssh:box' })
+  it('skips only the mirrored copy', () => {
+    const active = worktree('active')
+    const other = worktree('other')
 
     expect(
       select({
-        visibleWorktrees: [localTwin, remoteTwin],
-        activeWorktreeId: 'shared-id',
-        activeExecutionHostId: 'local'
+        visibleWorktrees: [active, other],
+        mirroredIdentity: getWorktreeHostIdentity(active)
       })
-    ).toEqual(['ssh:box|shared-id'])
-    expect(
-      select({
-        visibleWorktrees: [localTwin, remoteTwin],
-        activeWorktreeId: 'shared-id',
-        activeExecutionHostId: 'ssh:box'
-      })
-    ).toEqual(['shared-id'])
+    ).toEqual(['other'])
   })
 
   it('never reads protected paths passively', () => {
@@ -75,5 +67,21 @@ describe('selectWorktreeChangeRefreshTargets', () => {
         isProtectedPath: (path) => path.endsWith('container')
       })
     ).toEqual(['plain'])
+  })
+})
+
+describe('selectMirroredActiveWorktree', () => {
+  it('mirrors a lone copy, treating stamped local and unstamped rows as one copy', () => {
+    const unstamped = worktree('solo')
+    const stamped = worktree('solo', { hostId: 'local' })
+
+    expect(selectMirroredActiveWorktree([unstamped, stamped], 'solo', 'local')).toBe(unstamped)
+  })
+
+  it('refuses to mirror when the bare-id status could belong to a host twin', () => {
+    const localTwin = worktree('shared-id')
+    const remoteTwin = worktree('shared-id', { hostId: 'ssh:box' })
+
+    expect(selectMirroredActiveWorktree([localTwin, remoteTwin], 'shared-id', 'ssh:box')).toBe(null)
   })
 })

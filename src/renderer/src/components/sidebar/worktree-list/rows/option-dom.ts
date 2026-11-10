@@ -1,4 +1,6 @@
 import type React from 'react'
+import type { Worktree } from '../../../../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 
 export function getWorktreeOptionId(rowKey: string): string {
   return `worktree-list-option-${encodeURIComponent(rowKey)}`
@@ -39,6 +41,28 @@ export function getMountedWorktreeOptionsById(
       result.set(id, [element])
     }
   })
+  return result
+}
+
+/** Mounted options per host copy, keyed by host identity; bare ids repeat across hosts. */
+export function getMountedWorktreeCopyOptions(
+  worktrees: readonly Pick<Worktree, 'id' | 'hostId'>[],
+  root: ParentNode
+): Map<string, HTMLElement[]> {
+  const optionsById = getMountedWorktreeOptionsById(
+    worktrees.map((worktree) => worktree.id),
+    root
+  )
+  const result = new Map<string, HTMLElement[]>()
+  for (const worktree of worktrees) {
+    const identity = getWorktreeHostIdentity(worktree)
+    const options = optionsById
+      .get(worktree.id)
+      ?.filter((option) => option.dataset.worktreeHostIdentity === identity)
+    if (options?.length) {
+      result.set(identity, options)
+    }
+  }
   return result
 }
 

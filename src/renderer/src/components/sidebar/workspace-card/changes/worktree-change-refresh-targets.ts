@@ -1,3 +1,4 @@
+import { worktreeCopyOwnerKey } from '@/store/slices/worktrees/metadata/worktree-copy-review-clear'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   getWorktreeHostIdentity,
@@ -7,7 +8,7 @@ import {
 // Edits and new files never touch the index, so only this safety pass can notice them.
 export const WORKTREE_CHANGE_SUMMARY_STALE_MS = 60_000
 
-export function isActiveWorktreeRow(
+function isActiveWorktreeRow(
   worktree: Pick<Worktree, 'id' | 'hostId'>,
   activeWorktreeId: string | null,
   activeExecutionHostId: string | null
@@ -18,11 +19,33 @@ export function isActiveWorktreeRow(
   )
 }
 
-/** Visible inactive checkouts due for a status read: signaled first, then never read, then oldest. */
+/**
+ * The active row whose polled status can be mirrored. The polled map is keyed by bare id, so a
+ * row with a same-id copy on another host returns null and is read like any inactive card.
+ */
+export function selectMirroredActiveWorktree(
+  repoWorktrees: readonly Worktree[],
+  activeWorktreeId: string | null,
+  activeExecutionHostId: string | null
+): Worktree | null {
+  const active = repoWorktrees.find((worktree) =>
+    isActiveWorktreeRow(worktree, activeWorktreeId, activeExecutionHostId)
+  )
+  if (!active) {
+    return null
+  }
+  const copies = new Set(
+    repoWorktrees
+      .filter((worktree) => worktree.id === active.id)
+      .map((worktree) => worktreeCopyOwnerKey(worktree))
+  )
+  return copies.size === 1 ? active : null
+}
+
+/** Visible checkouts due for a status read: signaled first, then never read, then oldest. */
 export function selectWorktreeChangeRefreshTargets(args: {
   visibleWorktrees: readonly Worktree[]
-  activeWorktreeId: string | null
-  activeExecutionHostId: string | null
+  mirroredIdentity: HostScopedWorktreeKey | null
   lastReadAtByIdentity: ReadonlyMap<HostScopedWorktreeKey, number>
   signaledIdentities: ReadonlySet<HostScopedWorktreeKey>
   now: number
@@ -31,13 +54,10 @@ export function selectWorktreeChangeRefreshTargets(args: {
 }): Worktree[] {
   const due: { worktree: Worktree; rank: number; lastReadAt: number }[] = []
   for (const worktree of args.visibleWorktrees) {
-    if (
-      isActiveWorktreeRow(worktree, args.activeWorktreeId, args.activeExecutionHostId) ||
-      args.isProtectedPath(worktree.path)
-    ) {
+    const identity = getWorktreeHostIdentity(worktree)
+    if (identity === args.mirroredIdentity || args.isProtectedPath(worktree.path)) {
       continue
     }
-    const identity = getWorktreeHostIdentity(worktree)
     const lastReadAt = args.lastReadAtByIdentity.get(identity)
     if (args.signaledIdentities.has(identity)) {
       due.push({ worktree, rank: 0, lastReadAt: lastReadAt ?? 0 })
