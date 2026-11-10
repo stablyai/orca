@@ -11,7 +11,7 @@ import {
   installRendererCrashDiagnostics,
   recordRendererCrashBreadcrumb
 } from './lib/crash-diagnostics'
-import { installAutomationHostDiagnostic } from './components/automations/automation-host-diagnostics'
+import { installAutomationHostDiagnostic } from './components/automations/hosts/automation-host-diagnostics'
 import {
   applyCachedPluginAppTheme,
   applyDocumentTheme,
