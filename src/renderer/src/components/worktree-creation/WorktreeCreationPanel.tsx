@@ -9,7 +9,11 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { useTranslate } from '@/i18n/use-translate'
 import WorktreeCreationTabStrip from './WorktreeCreationTabStrip'
-import { formatElapsedTime, useWorktreeCreationClock } from './worktree-creation-clock'
+import {
+  buildClockElapsedMs,
+  formatElapsedTime,
+  useWorktreeCreationClock
+} from './worktree-creation-clock'
 import { VmBuildSheet } from './VmBuildSheet'
 import { VmDeleteConfirmDialog } from './VmDeleteConfirmDialog'
 
@@ -25,12 +29,10 @@ export default function WorktreeCreationPanel({
   const entry = useAppStore((s) => s.pendingWorktreeCreations[creationId])
   const progressLabelId = React.useId()
   const [confirmingDelete, setConfirmingDelete] = React.useState(false)
-  const checksFinishedAt =
-    entry?.environmentCheck?.status === 'failed' ? entry.environmentCheck.finishedAt : undefined
   // Depend on primitives so stderr’s fresh entry objects cannot continuously reset the interval;
   // a build paused on failed checks waits on the user, so its clock stops.
   const now = useWorktreeCreationClock(
-    entry?.status === 'creating' && entry.environmentCheck?.status !== 'failed'
+    entry?.status === 'creating' && entry.waitingSince === undefined
   )
   if (!entry) {
     return null
@@ -46,8 +48,7 @@ export default function WorktreeCreationPanel({
   // A VM build keeps its sheet through fetch and checkout, so it never drops to the one-line status.
   const isVmCreation = Boolean(entry.request.ephemeralVmRecipe) || entry.phase === 'provisioning-vm'
   const title = entry.request.displayName || entry.request.name
-  const stoppedAt = checksFinishedAt ?? (isError ? entry.errorAt : undefined)
-  const elapsedLabel = formatElapsedTime((stoppedAt ?? now) - entry.startedAt)
+  const elapsedLabel = formatElapsedTime(buildClockElapsedMs(entry, now))
   const checkoutProgress = getVisibleCheckoutProgress(entry)
 
   return (

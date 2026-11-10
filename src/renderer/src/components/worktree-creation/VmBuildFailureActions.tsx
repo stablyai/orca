@@ -129,7 +129,7 @@ function failureActions(
             label: signingIn
               ? t('auto.components.OrcaSignInProgress.signingIn', 'Signing in…')
               : t('auto.components.worktree.creation.VmBuildFailureCard.signIn', 'Sign in'),
-            icon: signingIn ? <Loader2 className="motion-safe:animate-spin" /> : <LogIn />,
+            icon: signingIn ? <Loader2 className="animate-spin" /> : <LogIn />,
             onClick: actions.onSignIn,
             pending: signingIn
           }
@@ -216,7 +216,7 @@ function failureActions(
                   'auto.components.worktree.creation.VmBuildFailureCard.connectGitHub',
                   'Connect GitHub'
                 ),
-            icon: connectingGitHub ? <Loader2 className="motion-safe:animate-spin" /> : <Github />,
+            icon: connectingGitHub ? <Loader2 className="animate-spin" /> : <Github />,
             onClick: actions.onConnectGitHub,
             pending: connectingGitHub
           },

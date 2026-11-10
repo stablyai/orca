@@ -69,7 +69,8 @@ export function VmBuildFailureCard({
   const headingRef = React.useRef<HTMLHeadingElement>(null)
   const cardRef = React.useRef<HTMLDivElement>(null)
   // Move focus to the card when it opens, so keyboard and screen-reader users land on the way forward.
-  React.useEffect(() => {
+  // Layout effect: focus lands before paint, so the collapsing card never strands it on <body>.
+  React.useLayoutEffect(() => {
     const card = cardRef.current
     const sheet = card?.closest('[data-vm-build-sheet]')
     const active = document.activeElement
