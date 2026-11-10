@@ -19,7 +19,7 @@ type PairedDevicesProps = {
 
 type StoreState = {
   orcaProfileAuthStatus: { state: 'connected' | 'local' }
-  settingsSearchQuery: string
+  settingsSearchInputQuery: string
   settings: {
     mobileAutoRestoreFitMs: number | null
     mobilePairingConnectionMode?: MobilePairingConnectionMode
@@ -182,7 +182,7 @@ describe('MobilePane pairing connection mode', () => {
     updateSettings.mockReset().mockResolvedValue(undefined)
     mocks.holder.state = {
       orcaProfileAuthStatus: { state: 'connected' },
-      settingsSearchQuery: '',
+      settingsSearchInputQuery: '',
       settings: { mobileAutoRestoreFitMs: null },
       updateSettings,
       recordFeatureInteraction: vi.fn(),

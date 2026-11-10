@@ -96,12 +96,13 @@ export function renderSettingsPage(
         activeSectionId={model.activeSectionId}
         generalGroups={view.generalNavGroups}
         repoSections={view.repoNavSections}
-        hasRepos={model.repos.length > 0}
+        searchCandidates={navigation.searchCandidates}
         searchInputRef={interactions.searchInputRef}
         // Deep-linked panes/modals own focus; plain entry focuses search.
         searchAutoFocus={model.settingsNavigationTarget == null}
         onBack={interactions.closeSettingsPageWithPromptGuard}
         onSelectSection={actions.scrollToSection}
+        onOpenSearchResult={(result, mode) => void actions.openSettingsSearchResult(result, mode)}
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">

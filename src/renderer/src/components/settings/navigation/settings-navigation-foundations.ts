@@ -9,6 +9,7 @@ import type {
   SettingsNavTarget
 } from '@/components/settings/navigation/settings-navigation-types'
 import type { SettingsDeepLinkTargetWatch } from './settings-deep-link-target-watcher'
+import { parseSettingsTitleTargetId } from '../section-layout/settings-target-highlight'
 
 export const SETTINGS_NAV_GROUPS = [
   {
@@ -116,6 +117,12 @@ export function getSettingsScrollTarget(
   sectionId: string,
   container?: HTMLElement | null
 ): HTMLElement | null {
+  const title = parseSettingsTitleTargetId(sectionId)
+  if (title !== null) {
+    return (container ?? document).querySelector<HTMLElement>(
+      `[data-settings-search-title="${CSS.escape(title)}"]`
+    )
+  }
   return (
     container?.querySelector<HTMLElement>(`[data-settings-section="${CSS.escape(sectionId)}"]`) ??
     document.getElementById(sectionId)

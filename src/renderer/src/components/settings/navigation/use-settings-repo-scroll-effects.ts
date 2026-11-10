@@ -199,9 +199,7 @@ export function useSettingsRepoScrollEffects(
           })
           return
         }
-        if (pendingNavSectionId === 'general') {
-          setHighlightedSettingsTarget({ id: scrollTargetId })
-        }
+        setHighlightedSettingsTarget({ id: scrollTargetId })
         const scrollToSubsection = (): void => {
           scrollSubsectionIntoView(scrollTargetId, contentScrollRef.current)
         }

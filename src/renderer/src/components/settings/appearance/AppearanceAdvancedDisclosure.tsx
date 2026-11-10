@@ -25,7 +25,7 @@ export function AppearanceAdvancedDisclosure({
   children
 }: AppearanceAdvancedDisclosureProps): React.JSX.Element {
   const t = useTranslate()
-  const searchQuery = useAppStore((state) => state.settingsSearchQuery)
+  const searchQuery = useAppStore((state) => state.settingsSearchInputQuery)
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
   const [open, setOpen] = useState(false)
   const forced = isSearching || forceOpen

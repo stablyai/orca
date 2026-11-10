@@ -150,7 +150,8 @@ export function AdvancedNetworkSettingsSection({
   updateSettings
 }: AdvancedNetworkSettingsSectionProps): React.JSX.Element {
   const t = useTranslate()
-  const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+  // Reveal follows the sidebar query so results inside the disclosure stay reachable.
+  const searchQuery = useAppStore((s) => s.settingsSearchInputQuery)
   const [proxyConfigOpen, setProxyConfigOpen] = useState(false)
   const proxyConfigForcedOpen =
     shouldOpenNetworkProxyConfig(searchQuery) || hasConfiguredNetworkProxy(settings)

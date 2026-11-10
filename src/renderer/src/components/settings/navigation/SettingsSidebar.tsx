@@ -1,6 +1,6 @@
-import type { RefObject } from 'react'
-import { useMemo } from 'react'
-import { ArrowLeft, Search, Server } from 'lucide-react'
+import type { KeyboardEvent, RefObject } from 'react'
+import { useId, useMemo, useState } from 'react'
+import { ArrowLeft, Server } from 'lucide-react'
 import type { RepoIcon } from '../../../../../shared/repo-icon'
 import type {
   SettingsNavIcon,
@@ -8,19 +8,22 @@ import type {
 } from '@/components/settings/navigation/settings-navigation-types'
 import type { GitHubRepositoryIdentity } from '../../../../../shared/github/pull-request-types'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
-import { ShortcutKeyCombo } from '../../ShortcutKeyCombo'
 import { cn } from '@/lib/class-names'
 import { RepoIconGlyph } from '../../repo/repo-icon'
 import { RepoForkIndicator } from '../../repo/repo-fork-indicator'
 import { Button } from '../../ui/button'
-import { Input } from '../../ui/input'
 import { SetupGuideProgressRing } from '../../setup-guide/SetupGuideProgressRing'
 import { useSettingsSetupGuideProgress } from '../setup-guide/settings-setup-guide-progress'
 import type { SettingsSetupGuideProgress } from '../setup-guide/settings-setup-guide-progress'
 import { useTranslate } from '@/i18n/use-translate'
 import { resolveLeftSidebarStyleVariables } from '@/app-shell/appearance/left-sidebar-appearance'
 import { useAppStore } from '@/store/index'
+import {
+  rankSettingsSearchResults,
+  type SettingsSearchResult,
+  type SettingsSearchResultOpenMode
+} from './settings-search-results'
+import { SettingsSearchField, SettingsSearchResultsList } from './SettingsSidebarSearch'
 
 type NavSection = {
   id: string
@@ -48,50 +51,12 @@ type SettingsSidebarProps = {
   settings: GlobalSettings | null
   generalGroups: NavGroup[]
   repoSections: RepoNavSection[]
-  hasRepos: boolean
+  searchCandidates: readonly SettingsSearchResult[]
   searchInputRef?: RefObject<HTMLInputElement | null>
   searchAutoFocus?: boolean
   onBack: () => void
   onSelectSection: (sectionId: string) => void
-}
-
-function SettingsSearchField({
-  searchInputRef,
-  searchAutoFocus = false
-}: Pick<SettingsSidebarProps, 'searchInputRef' | 'searchAutoFocus'>): React.JSX.Element {
-  const t = useTranslate()
-  const searchQuery = useAppStore((state) => state.settingsSearchInputQuery)
-  const onSearchChange = useAppStore((state) => state.setSettingsSearchQuery)
-  const searchShortcutCombos = useShortcutKeyComboDetails('settings.search')
-
-  return (
-    <div className="border-b border-worktree-sidebar-border px-3 py-3">
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          ref={searchInputRef}
-          autoFocus={searchAutoFocus}
-          value={searchQuery}
-          onChange={(event) => onSearchChange(event.target.value)}
-          placeholder={t('auto.components.settings.SettingsSidebar.dbceaa8840', 'Search settings')}
-          className="bg-background/60 pl-9 pr-14 text-[13px]"
-        />
-        {searchQuery === '' ? (
-          <span className="pointer-events-none absolute right-2 top-1/2 flex -translate-y-1/2 items-center">
-            {searchShortcutCombos.map((combo) => (
-              <ShortcutKeyCombo
-                key={combo.keys.join('-')}
-                keys={combo.keys}
-                doubleTap={combo.doubleTap}
-                className="inline-flex gap-0.5"
-                separatorClassName="text-[10px] text-muted-foreground"
-              />
-            ))}
-          </span>
-        ) : null}
-      </div>
-    </div>
-  )
+  onOpenSearchResult: (result: SettingsSearchResult, mode: SettingsSearchResultOpenMode) => void
 }
 
 type VisibleInstallStatus = Extract<
@@ -158,13 +123,79 @@ export function SettingsSidebar({
   settings,
   generalGroups,
   repoSections,
-  hasRepos,
+  searchCandidates,
   searchInputRef,
   searchAutoFocus = false,
   onBack,
-  onSelectSection
+  onSelectSection,
+  onOpenSearchResult
 }: SettingsSidebarProps): React.JSX.Element {
   const t = useTranslate()
+  const searchQuery = useAppStore((state) => state.settingsSearchInputQuery)
+  const setSearchQuery = useAppStore((state) => state.setSettingsSearchQuery)
+  const listboxId = useId()
+  const searchResults = useMemo(
+    () => rankSettingsSearchResults(searchQuery, searchCandidates),
+    [searchCandidates, searchQuery]
+  )
+  const isSearching = searchQuery.trim() !== ''
+  const [selectedResultKey, setSelectedResultKey] = useState<string | null>(null)
+  const selectedResultIndex = Math.max(
+    0,
+    searchResults.findIndex((result) => result.key === selectedResultKey)
+  )
+  const selectedResult = searchResults.at(selectedResultIndex)
+  const repoSectionById = useMemo(
+    () => new Map(repoSections.map((section) => [section.id, section] as const)),
+    [repoSections]
+  )
+  const groupTitleById = useMemo(
+    () => new Map(generalGroups.map((group) => [group.id, group.title] as const)),
+    [generalGroups]
+  )
+  const getOptionId = (index: number): string => `${listboxId}-option-${index}`
+
+  const selectResult = (result: SettingsSearchResult, mode: SettingsSearchResultOpenMode): void => {
+    setSelectedResultKey(result.key)
+    onOpenSearchResult(result, mode)
+  }
+  const changeSearchQuery = (query: string): void => {
+    setSearchQuery(query)
+    // The first result follows the query; skip re-navigating when it is already shown.
+    const first = rankSettingsSearchResults(query, searchCandidates).at(0)
+    if (first && first.key !== selectedResult?.key) {
+      selectResult(first, 'preview')
+    } else if (!first) {
+      setSelectedResultKey(null)
+    }
+  }
+  const handleSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
+    if (event.nativeEvent.isComposing) {
+      return
+    }
+    if (event.key === 'Escape' && searchQuery !== '') {
+      // Keep the page-level Escape from closing Settings while clearing search.
+      event.preventDefault()
+      changeSearchQuery('')
+      return
+    }
+    if (!isSearching || searchResults.length === 0) {
+      return
+    }
+    const count = searchResults.length
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      const step = event.key === 'ArrowDown' ? 1 : -1
+      const nextIndex = (selectedResultIndex + step + count) % count
+      selectResult(searchResults[nextIndex], 'preview')
+      document.getElementById(getOptionId(nextIndex))?.scrollIntoView({ block: 'nearest' })
+      return
+    }
+    if (event.key === 'Enter' && selectedResult) {
+      event.preventDefault()
+      selectResult(selectedResult, 'pick')
+    }
+  }
   const setupGuideProgress = useSettingsSetupGuideProgress(true)
   const leftSidebarStyle = useMemo(() => resolveLeftSidebarStyleVariables(settings), [settings])
   const setupActive = activeSectionId === 'setup-guide'
@@ -197,7 +228,8 @@ export function SettingsSidebar({
       className="flex w-[280px] shrink-0 flex-col border-r border-worktree-sidebar-border bg-worktree-sidebar"
       style={leftSidebarStyle}
     >
-      <div className="border-b border-worktree-sidebar-border px-3 py-3">
+      {/* Same 48px height as SettingsHeader so both bottom borders meet in one line. */}
+      <div className="box-border flex h-12 shrink-0 items-center border-b border-worktree-sidebar-border px-3">
         <Button
           variant="ghost"
           size="sm"
@@ -209,9 +241,32 @@ export function SettingsSidebar({
         </Button>
       </div>
 
-      <SettingsSearchField searchInputRef={searchInputRef} searchAutoFocus={searchAutoFocus} />
+      <SettingsSearchField
+        searchInputRef={searchInputRef}
+        searchAutoFocus={searchAutoFocus}
+        query={searchQuery}
+        listboxId={listboxId}
+        activeOptionId={
+          isSearching && selectedResult ? getOptionId(selectedResultIndex) : undefined
+        }
+        onQueryChange={changeSearchQuery}
+        onKeyDown={handleSearchKeyDown}
+      />
 
-      {showSetupGuideTopRow ? (
+      {isSearching ? (
+        <SettingsSearchResultsList
+          results={searchResults}
+          selectedIndex={selectedResultIndex}
+          query={searchQuery}
+          listboxId={listboxId}
+          getOptionId={getOptionId}
+          repoSectionById={repoSectionById}
+          groupTitleById={groupTitleById}
+          onSelect={(result) => selectResult(result, 'pick')}
+        />
+      ) : null}
+
+      {!isSearching && showSetupGuideTopRow ? (
         <div className="border-b border-worktree-sidebar-border px-3 py-3">
           <SettingsSetupGuideNavRow
             progress={setupGuideProgress}
@@ -221,7 +276,10 @@ export function SettingsSidebar({
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek px-3 py-4">
+      <div
+        hidden={isSearching}
+        className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek px-3 py-4"
+      >
         <div className="space-y-5">
           {generalGroups.map((group) => (
             <div key={group.id} className="space-y-2">
@@ -299,15 +357,7 @@ export function SettingsSidebar({
               </div>
             ) : (
               <p className="px-3 text-xs text-muted-foreground">
-                {hasRepos
-                  ? t(
-                      'auto.components.settings.SettingsSidebar.3e483e256b',
-                      'No matching project settings.'
-                    )
-                  : t(
-                      'auto.components.settings.SettingsSidebar.df38d612b7',
-                      'No projects added yet.'
-                    )}
+                {t('auto.components.settings.SettingsSidebar.df38d612b7', 'No projects added yet.')}
               </p>
             )}
           </div>

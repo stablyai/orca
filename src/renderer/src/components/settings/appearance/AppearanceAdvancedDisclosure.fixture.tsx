@@ -42,7 +42,7 @@ export const expanded = defineFixture({
 // An active settings search force-opens the disclosure and disables its toggle.
 export const forcedOpenBySearch = defineFixture({
   width: 420,
-  store: { settingsSearchQuery: 'font' },
+  store: { settingsSearchInputQuery: 'font' },
   render: () => (
     <AppearanceAdvancedDisclosure>
       <AdvancedFontControls />

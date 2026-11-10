@@ -5,7 +5,14 @@ import type { Translate } from '@/i18n/use-translate'
 import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsInteractionController } from './use-settings-interaction-controller'
 import type { SettingsNavigationModel } from '../navigation/use-settings-navigation-model'
-import { getSettingsNavGroupDefinitionsForSearch } from '../navigation/settings-navigation-foundations'
+import {
+  cancelPendingSettingsDeepLinkTargetWatch,
+  getSettingsNavGroupDefinitionsForSearch
+} from '../navigation/settings-navigation-foundations'
+import type {
+  SettingsSearchResult,
+  SettingsSearchResultOpenMode
+} from '../navigation/settings-search-results'
 
 export function useSettingsNavigationActions(
   model: Pick<
@@ -35,8 +42,10 @@ export function useSettingsNavigationActions(
   const {
     confirmDiscardSourceControlAiPromptChanges,
     contentScrollRef,
+    hasUnsavedSourceControlAiPromptChanges,
     pendingNavSectionRef,
-    pendingScrollTargetRef
+    pendingScrollTargetRef,
+    pendingScrollTargetWatchRef
   } = interactions
   const scrollToSection = useCallback(
     async (sectionId: string): Promise<void> => {
@@ -51,6 +60,10 @@ export function useSettingsNavigationActions(
         // Clear stale filtering when selecting a result’s pane.
         setSettingsSearchQuery('')
       }
+      // A plain pane pick supersedes any search or deep-link jump still waiting for its row.
+      pendingNavSectionRef.current = null
+      pendingScrollTargetRef.current = null
+      cancelPendingSettingsDeepLinkTargetWatch(pendingScrollTargetWatchRef)
       setHighlightedSettingsTarget(null)
       setGeneralSubPage(null)
       releaseNativeAccounts()
@@ -61,11 +74,45 @@ export function useSettingsNavigationActions(
       releaseNativeAccounts,
       confirmDiscardSourceControlAiPromptChanges,
       contentScrollRef,
+      pendingNavSectionRef,
+      pendingScrollTargetRef,
+      pendingScrollTargetWatchRef,
       setActiveSectionId,
       setGeneralSubPage,
       setHighlightedSettingsTarget,
       setSettingsSearchQuery,
       settingsSearchQuery
+    ]
+  )
+
+  const openSettingsSearchResult = useCallback(
+    async (result: SettingsSearchResult, mode: SettingsSearchResultOpenMode): Promise<void> => {
+      const sectionId = result.section.id
+      if (sectionId !== activeSectionId) {
+        // Typing and arrowing must not raise the discard dialog; hold the preview until a pick.
+        if (mode === 'preview' && hasUnsavedSourceControlAiPromptChanges) {
+          return
+        }
+        if (mode === 'pick' && !(await confirmDiscardSourceControlAiPromptChanges())) {
+          return
+        }
+        releaseNativeAccounts()
+      }
+      setHighlightedSettingsTarget(null)
+      pendingNavSectionRef.current = sectionId
+      pendingScrollTargetRef.current = result.targetId
+      // Pending refs cannot schedule the jump effect; trigger a render.
+      setPendingNavRequestTick((tick) => tick + 1)
+    },
+    [
+      activeSectionId,
+      confirmDiscardSourceControlAiPromptChanges,
+      hasUnsavedSourceControlAiPromptChanges,
+      pendingNavSectionRef,
+      pendingScrollTargetRef,
+      releaseNativeAccounts,
+      setHighlightedSettingsTarget,
+      setPendingNavRequestTick
     ]
   )
 
@@ -90,7 +137,7 @@ export function useSettingsNavigationActions(
     settingsSearchQuery
   ])
 
-  return { scrollToSection, openComputerUseFromBrowser }
+  return { scrollToSection, openSettingsSearchResult, openComputerUseFromBrowser }
 }
 
 export type SettingsNavigationActions = ReturnType<typeof useSettingsNavigationActions>
