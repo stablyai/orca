@@ -16,7 +16,7 @@ import {
   getProjectSkillInstallDisabledReason,
   type ProjectAgentSkillRuntime
 } from '@/lib/skills/runtime/project-skill-runtime'
-import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
+import { useWindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import {
   resolveBundledSkillTarget,
   servingExecutionHostId,

@@ -1,10 +1,6 @@
 import type { AppState } from '../../store/types'
 import type { RetiredTerminalTabSweepState } from '../../store/terminals/retired-terminal-tab-state-sweep'
-import type {
-  RuntimeMobileSessionTabGroup,
-  RuntimeMobileSessionTabsRemovedResult,
-  RuntimeMobileSessionTabsResult
-} from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionFileTab,
@@ -282,6 +278,3 @@ export type WebSessionTabsBatchContext = {
   changedRecords: Set<WebSessionTabsBatchRecordKey>
   openFilesIndex: WebSessionOpenFilesIndex | null
 }
-
-export type TabGroupSnapshot = RuntimeMobileSessionTabGroup
-export type RemovedTabsResult = RuntimeMobileSessionTabsRemovedResult

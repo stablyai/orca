@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/store'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
-import { textFieldClaimsActionKey } from '@/lib/file-search-shortcut-policy'
+import { textFieldClaimsActionKey } from '@/lib/keyboard/text-field-shortcut-policy'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'

@@ -14,7 +14,7 @@ import {
   recordPaneIsOwnedByPreservedPane,
   stablePaneHasLivePty
 } from './sleeping-agent-pane-ownership'
-import { isPaneSpawnDeferred } from '../../pane-spawn-deferral-registry'
+import { isPaneSpawnDeferred } from '../../../components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry'
 import { settleSweptRecord, sweepTreatsAsFinished } from './swept-sleep-record-settlement'
 import {
   launchSleepingAgentSession,

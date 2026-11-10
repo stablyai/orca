@@ -6,9 +6,9 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import { routeListingBranchSwitchesThroughGitIdentity } from './worktree-listing-branch-switch'
 import {
   areDetectedWorktreeResultsEqual,
-  areWorktreesEqual,
   worktreesDifferOnlyInSortOrder
 } from './worktree-catalog-visibility'
+import { catalogRowsEqual } from '../../../../lib/catalog-reconciliation/catalog-row-reconciliation'
 import { mergeDetectedWorktreesForHost } from './detected-worktree-host-merge'
 import {
   getRemovedWorktreeIdsAfterAuthoritativeScan,
@@ -244,7 +244,7 @@ export function mergeFetchedWorktrees(
     if (args.refresh.result.authoritative) {
       authoritativelySeenIds = args.refresh.result.worktrees.map((worktree) => worktree.id)
     }
-    const worktreesChanged = !areWorktreesEqual(s.worktreesByRepo[args.repoId], mergedWorktrees)
+    const worktreesChanged = !catalogRowsEqual(s.worktreesByRepo[args.repoId], mergedWorktrees)
     const detectedChanged = !areDetectedWorktreeResultsEqual(
       s.detectedWorktreesByRepo[args.repoId],
       mergedDetected

@@ -33,7 +33,7 @@ import {
 } from '../composer-drop-result'
 import { applyComposerNativeFileDrop } from '../composer-native-file-drop'
 import { useMountedRef } from '../useMountedRef'
-import { userNamedFileAccess } from '@/lib/local-file-access'
+import { userNamedFileAccess } from '@/lib/files/access/local-file-access'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 
 // Local drops bypass the runtime importer's skip classification.

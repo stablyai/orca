@@ -25,13 +25,9 @@ import { preservedBranchRuntimeTargetByCleanupKey } from './preserved-branch-cle
 import { worktreeHostMatchOptions, worktreeMatchesHost } from '../listing/worktree-host-ownership'
 import {
   dropConfirmedHostRow,
-  prepareHostScopedRemovalCompletion,
-  preservesSameIdRendererState,
   resolveSameIdSurvivingHostId
 } from './host-qualified-worktree-row-removal'
 import { ambiguousWorkspaceOwnerMessage } from '@/lib/duplicate-paired-servers'
-
-export { prepareHostScopedRemovalCompletion, preservesSameIdRendererState }
 
 type PreservedBranchWorktree = Pick<Worktree, 'displayName' | 'isMainWorktree'> | undefined
 type RemoveWorktreeSliceResult = Awaited<ReturnType<WorktreeSlice['removeWorktree']>>

@@ -14,7 +14,7 @@ import { getAllDrivers } from '../../pane-manager/mobile-driver-state'
 import {
   getForegroundTerminalTabIds,
   getForegroundTerminalTabLastSeenAtById
-} from '../../foreground-terminal-tabs'
+} from '../../../components/terminal-pane/parking/retention/foreground-terminal-tabs'
 import { getAgentHibernationOutputSignature } from './agent-hibernation-output-activity'
 import {
   getHibernationBoundaryResolvedAtByPaneKey,

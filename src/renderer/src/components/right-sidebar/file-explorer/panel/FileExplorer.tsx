@@ -1,8 +1,8 @@
 import React, { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { getWorkspaceFileRevealOwner } from '@/lib/reveal-in-file-manager'
-import { getRouteForLocalPathOpenOwner } from '@/lib/local-path-open-guard'
+import { getWorkspaceFileRevealOwner } from '@/lib/files/os-open/reveal-in-file-manager'
+import { getRouteForLocalPathOpenOwner } from '@/lib/files/os-open/local-path-open-guard'
 import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
 import { useRepoById } from '@/store/repos/use-repository-catalog'
 import {

@@ -1,6 +1,6 @@
 import * as Notifications from 'expo-notifications'
 import { pushMissedSinceRead, type MobilePushDismissalRpcSender } from './push-dismissal-operations'
-import { loadHostCatalog } from '../transport/hosts/host-store'
+import { loadHostCatalog } from '../host-catalog/host-store'
 import { resolveHostIdForFingerprint } from './push-host-fingerprint'
 import { readNativeNotificationData } from './native-notification-data'
 import { readOrcaPushPayload, type OrcaPushPayload } from './push-payload'
