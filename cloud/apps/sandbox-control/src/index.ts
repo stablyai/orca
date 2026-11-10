@@ -121,6 +121,7 @@ import type { GoldenImageProviderApi } from './golden-image-provider'
 import { CreateRequestSchema, LeaseRequestSchema, parseWakeWait, readyView, sandboxView } from './wire'
 import { ArchiveRequestSchema } from './sandbox-vm-inspect'
 import {
+  restoreArchivedToSleeping,
   archiveSandbox,
   readArchive,
   restartSandbox,
@@ -159,6 +160,7 @@ import {
   isOrgAdmin,
   listWorkspaces,
   patchWorkspace,
+  assertCanManageWorkspace,
   reportPresence,
   requireVisible,
   resolveLink,
@@ -1426,7 +1428,35 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
       if (!body.success) {
         return fail('invalid_request', 400)
       }
-      const patched = await patchWorkspace(db, caller, row, body.data, now)
+      const { archived, ...rest } = body.data
+      // Archive/unarchive are lifecycle changes, not labels. The lifecycle runs FIRST and is what
+      // sets archived_at, so a failed or refused archive never labels a running sandbox archived.
+      let archivedNow = false
+      if (archived !== undefined) {
+        assertCanManageWorkspace(caller, row)
+        if (archived && row.archived_at === null) {
+          if (row.status !== 'running' && row.status !== 'suspended') {
+            // Starting, waking or going to sleep: nothing changes; the client asks to try again.
+            return fail('conflict', 409, `sandbox_${row.status}`)
+          }
+          await archiveSandbox(life, row, {}, workspaceConfig(env, deps))
+          archivedNow = true
+        } else if (!archived && row.status === 'archived') {
+          await restoreArchivedToSleeping(life, row)
+        } else if (!archived && row.archived_at !== null) {
+          // A label-only archive from before archive stopped the sandbox: clear the label.
+          await patchWorkspace(db, caller, row, { archived: false }, now)
+        }
+      }
+      const current = (await getSandbox(env.SANDBOX_DB, row.id)) ?? row
+      let patched: Awaited<ReturnType<typeof patchWorkspace>> =
+        Object.keys(rest).length > 0
+          ? await patchWorkspace(db, caller, current, rest, now)
+          : { row: current, revoke: 'none' }
+      if (archivedNow && patched.revoke === 'none') {
+        // Archiving disconnects teammates' devices, as before.
+        patched = { ...patched, revoke: 'non_owner' }
+      }
       if (patched.revoke !== 'none') {
         // Readers lose the sleeping copy at once, before (and regardless of) the VM-side revokes.
         await pruneReadSnapshotToOwner(db, patched.row)

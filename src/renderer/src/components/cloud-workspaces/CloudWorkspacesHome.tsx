@@ -23,6 +23,7 @@ import { formatSandboxHours, sandboxHours, type MemberDirectory } from './cloud-
 import { refreshCloudMessageSenders } from '@/lib/cloud-message-sender'
 import { describeError } from './cloud-workspace-errors'
 import { focusCloudChat } from './cloud-chat-focus'
+import { homeArchiveActions, runHomeArchive } from './cloud-workspace-home-archive'
 import { frontCloudChat } from './cloud-workspace-links'
 import {
   cloudWorkspaceTitle,
@@ -245,12 +246,6 @@ export function CloudWorkspacesHome({
         )
       } else if (change.ownerUserId) {
         toast.success(t('auto.components.cloudWorkspaces.ownerChanged', 'Owner changed'))
-      } else if (change.archived !== undefined) {
-        toast.success(
-          change.archived
-            ? t('auto.components.cloudWorkspaces.archived', 'Archived')
-            : t('auto.components.cloudWorkspaces.restored', 'Restored')
-        )
       }
       refresh()
     },
@@ -267,9 +262,10 @@ export function CloudWorkspacesHome({
       },
       copyWorkspaceLink: (w: CloudWorkspace) => void copyCloudWorkspaceLink(w.id),
       goToChat: (w: CloudWorkspace, member: CloudWorkspacePresence) => void open(w, member.chatId),
-      patch: (w: CloudWorkspace, change: CloudWorkspacePatch) => void patch(w, change)
+      patch: (w: CloudWorkspace, change: CloudWorkspacePatch) => void patch(w, change),
+      ...homeArchiveActions({ selfId, t, refresh, confirmArchive: setConfirm })
     }),
-    [open, patch, setReadingId]
+    [open, patch, refresh, selfId, setReadingId, t]
   )
 
   // Nothing (not even a skeleton) until we know this build has a control plane and you are in.
@@ -410,6 +406,11 @@ export function CloudWorkspacesHome({
           canAdmin={canAdmin}
           onCancel={() => setConfirm(null)}
           onConfirm={() => {
+            if (confirm.kind === 'archive') {
+              setConfirm(null)
+              runHomeArchive(confirm.workspace, t, refresh)
+              return
+            }
             const change: CloudWorkspacePatch =
               confirm.kind === 'private'
                 ? { visibility: 'private' }

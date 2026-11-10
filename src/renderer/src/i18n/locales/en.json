@@ -2295,7 +2295,8 @@
       },
       "orcaCloud": {
         "workspaceActions": {
-          "unavailable": "Orca Cloud is unavailable."
+          "unavailable": "Orca Cloud is unavailable.",
+          "archiveSleepFailed": "It’s still running. Your files are safe."
         }
       }
     },
@@ -20831,7 +20832,6 @@
         "reassignOwner": "Reassign owner",
         "reassignTitle": "Make {{name}} the owner?",
         "refresh": "Refresh cloud workspaces",
-        "restored": "Restored",
         "retry": "Retry",
         "rowActions": "Actions for {{value0}}",
         "rowDescription2": "{{usage}}. Last active {{lastActive}}. {{visibility}}.",
@@ -20870,7 +20870,10 @@
         "youAreViewing": "You are viewing",
         "view": "View",
         "viewAsleep": "View read-only copy",
-        "routines": "Routines"
+        "routines": "Routines",
+        "archiveConfirmTitle": "Archive {{name}}?",
+        "archiveConfirmBody": "{{owner}}'s agents in this workspace will stop. Files are kept and it can be unarchived.",
+        "archiveBusy": "This workspace is still starting or going to sleep. Nothing was changed. Try again in a moment."
       },
       "orcaCloud": {
         "QueuedPrompt": {
@@ -26645,9 +26648,6 @@
     "restarted": "Sandbox restarted",
     "restartedDetail": "Orca resumes your agents after the restart.",
     "archiveFailed": "Couldn’t archive the workspace",
-    "archivingNamed": "Archiving {{name}}…",
-    "archiving": "Archiving workspace…",
-    "archivingDetail": "It stops and stays browsable: PRs, last changes and files.",
     "undo": "Undo",
     "unarchiveFailed": "Couldn’t unarchive the workspace",
     "asleep": {
@@ -26680,7 +26680,14 @@
     "recovery": {
       "reconnectingTitle": "Reconnecting to {{workspaceName}}…",
       "reconnectingBody": "The connection dropped. Orca is retrying; your files and chats are safe."
-    }
+    },
+    "unarchiveFailedNamed": "Couldn’t unarchive {{name}}",
+    "unarchivedNamed": "Unarchived {{name}}",
+    "unarchivedAsleep": "It’s asleep. Opening it wakes it.",
+    "archiveFailedNamed": "Couldn’t archive {{name}}",
+    "archivedNamed": "Archived {{name}}",
+    "archivedWorkspace": "Archived the workspace",
+    "archivedDetail": "It goes to sleep and stays browsable: PRs, last changes and files."
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",
