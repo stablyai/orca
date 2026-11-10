@@ -1,10 +1,13 @@
 import { createSessionJsonlDependency } from '../../session-jsonl-dependency'
-import { parseCodexTitleIndexRecord } from './session-scanner-codex-index-read'
+import {
+  parseCodexTitleIndexRecord,
+  readCodexIndexUpdate,
+  type CodexIndexRead
+} from './session-scanner-codex-index-read'
 import type { SessionDiscoveryDependency } from '../../session-discovery-context'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { basename, dirname, join } from 'node:path'
 import type { Stats } from 'node:fs'
-import { readCodexIndexUpdate, type CodexIndexRead } from './session-scanner-codex-index-read'
 import {
   InFlightPromiseDedupe,
   stableInFlightKey

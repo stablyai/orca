@@ -1,12 +1,13 @@
-import { currentSessionDiscovery } from '../../session-discovery-context'
-import { wslGatedReadFile } from '../../../native-chat/wsl-transcript-fs-access'
+import {
+  currentSessionDiscovery,
+  type SessionDiscoveryDependency
+} from '../../session-discovery-context'
+import { wslGatedReadFile, wslGatedStat } from '../../../native-chat/wsl-transcript-fs-access'
 import { createSessionJsonlDependency } from '../../session-jsonl-dependency'
-import type { SessionDiscoveryDependency } from '../../session-discovery-context'
 import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { resolveAbsoluteDirOverride } from '../../../../shared/absolute-dir-override'
-import { wslGatedStat } from '../../../native-chat/wsl-transcript-fs-access'
 import { readSessionIndexJsonl, type SessionIndexJsonlRead } from '../../session-index-jsonl-read'
 import { asRecord } from '../../session-scanner-record-value'
 import { extractString } from '../../session-scanner-values'

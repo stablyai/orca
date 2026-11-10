@@ -1,8 +1,10 @@
 import { vi } from 'vitest'
 import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import type { WatcherProcessHooks } from '../ipc/filesystem/watcher-process/parcel-watcher-process-subscription'
-import type { WatcherProcessCallback } from '../ipc/filesystem/watcher-process/parcel-watcher-process-subscription'
+import type {
+  WatcherProcessHooks,
+  WatcherProcessCallback
+} from '../ipc/filesystem/watcher-process/parcel-watcher-process-subscription'
 
 const watchers = vi.hoisted(
   () =>
