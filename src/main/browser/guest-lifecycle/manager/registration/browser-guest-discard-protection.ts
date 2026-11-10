@@ -51,10 +51,23 @@ export function installBrowserGuestDiscardProtection(
     navigating: false
   }
   owners.set(guest, owner)
+  let published: BrowserGuestDiscardProtection | undefined
+  const publish = (invalidateDocument = false): void => {
+    const next = readBrowserGuestDiscardProtection(guest)
+    if (
+      !invalidateDocument &&
+      published?.protection === next.protection &&
+      published.reason === next.reason
+    ) {
+      return
+    }
+    published = next
+    changed()
+  }
   const invalidate = (): void => {
     owner.generation = null
     owner.dirty = null
-    changed()
+    publish(true)
   }
   const snapshot = (): void => {
     if (guest.isDestroyed() || guest.isCrashed() || owner.navigating || owner.unavailable) {
@@ -62,7 +75,7 @@ export function installBrowserGuestDiscardProtection(
     }
     owner.generation = randomUUID()
     owner.dirty = null
-    changed()
+    publish(true)
     try {
       guest.mainFrame.send(BROWSER_GUEST_PROTECTION_CHALLENGE, owner.generation)
     } catch {
@@ -97,7 +110,7 @@ export function installBrowserGuestDiscardProtection(
     }
     if (owner.dirty !== payload.dirty) {
       owner.dirty = payload.dirty
-      changed()
+      publish()
     }
   }
   const navigation = (
@@ -107,7 +120,7 @@ export function installBrowserGuestDiscardProtection(
       owner.navigating = true
       invalidate()
     } else if (!details.isMainFrame) {
-      changed()
+      publish()
     }
   }
   const settled = (): void => {
@@ -124,9 +137,9 @@ export function installBrowserGuestDiscardProtection(
     snapshot()
   }
   const frameCreated = (): void => {
-    invalidate()
-    snapshot()
+    publish()
   }
+  const audioChanged = (): void => publish()
   guest.on('ipc-message', report)
   guest.on('did-start-navigation', navigation)
   guest.on('dom-ready', settled)
@@ -135,7 +148,7 @@ export function installBrowserGuestDiscardProtection(
   guest.on('unresponsive', unresponsive)
   guest.on('render-process-gone', unresponsive)
   guest.on('frame-created', frameCreated)
-  guest.on('audio-state-changed', changed)
+  guest.on('audio-state-changed', audioChanged)
   return () => {
     if (owners.get(guest) === owner) {
       owners.delete(guest)
@@ -148,6 +161,6 @@ export function installBrowserGuestDiscardProtection(
     guest.off('unresponsive', unresponsive)
     guest.off('render-process-gone', unresponsive)
     guest.off('frame-created', frameCreated)
-    guest.off('audio-state-changed', changed)
+    guest.off('audio-state-changed', audioChanged)
   }
 }

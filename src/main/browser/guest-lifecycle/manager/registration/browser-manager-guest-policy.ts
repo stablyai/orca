@@ -117,17 +117,11 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     host: Electron.WebContents
   ): void {
     const disposeDocPolicy = installDocPreviewGuestPolicy(guest, host)
-    let lastAudible: boolean | undefined
     const publishProtection = (): void => {
       const grantId = readDocPreviewGuestBoundGrantId(guest)
       const pageId = grantId ? getDocPreviewGrant(grantId)?.browserPageId : undefined
       if (!pageId || host.isDestroyed() || getWorkspaceDocPageGuest(pageId, host.id) !== guest) {
         return
-      }
-      const audible = guest.isCurrentlyAudible()
-      if (audible !== lastAudible) {
-        lastAudible = audible
-        host.send('browser:audio-state-changed', { browserPageId: pageId, audible })
       }
       host.send('browser:guest-discard-protection-changed', {
         browserPageId: pageId,

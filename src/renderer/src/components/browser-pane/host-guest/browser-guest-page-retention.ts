@@ -50,7 +50,8 @@ export function installBrowserGuestPageRetention(args: {
       }
       running = true
       const cursor = [...eligible.entries()]
-        .sort((left, right) => left[1].lastUsed - right[1].lastUsed)
+        .map(([pageId, entry]) => ({ pageId, entry, lastUsed: entry.lastUsed }))
+        .sort((left, right) => left.lastUsed - right.lastUsed)
         .values()
       let admitted = 0
       const excess = eligible.size - limit
@@ -60,11 +61,10 @@ export function installBrowserGuestPageRetention(args: {
           if (next.done) {
             return
           }
-          const [pageId, entry] = next.value
-          if (pending.has(pageId)) {
+          const { pageId, entry, lastUsed } = next.value
+          if (pending.has(pageId) || entry.lastUsed !== lastUsed) {
             continue
           }
-          admitted += 1
           const revision = entry.revision
           if (!isCurrent(pageId, entry, revision)) {
             continue
@@ -76,6 +76,7 @@ export function installBrowserGuestPageRetention(args: {
             eligible.delete(pageId)
             continue
           }
+          admitted += 1
           pending.add(pageId)
           let protection: BrowserGuestDiscardProtection | null = null
           try {

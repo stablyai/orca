@@ -19,7 +19,8 @@ it('binds edit protection to the current main-frame document and real lifecycle 
     isCrashed: () => crashed,
     isCurrentlyAudible: () => audible
   }) as unknown as Electron.WebContents
-  const stop = installBrowserGuestDiscardProtection(guest, vi.fn())
+  const changed = vi.fn()
+  const stop = installBrowserGuestDiscardProtection(guest, changed)
   const send = (payload: unknown, frame: unknown = mainFrame): void => {
     guest.emit(
       'ipc-message',
@@ -63,6 +64,16 @@ it('binds edit protection to the current main-frame document and real lifecycle 
     audible = false
     mainFrame.frames.push({})
     guest.emit('frame-created')
+    const challenges = mainFrame.send.mock.calls.length
+    for (const count of [200, 2000]) {
+      changed.mockClear()
+      for (let event = 0; event < count; event++) {
+        guest.emit('frame-created')
+        guest.emit('did-start-navigation', { isMainFrame: false, isSameDocument: false })
+      }
+      expect(changed).not.toHaveBeenCalled()
+      expect(mainFrame.send).toHaveBeenCalledTimes(challenges)
+    }
     send({ generation: generation(), dirty: false })
     expect(readBrowserGuestDiscardProtection(guest)).toEqual({
       webContentsId: 7,
@@ -75,7 +86,9 @@ it('binds edit protection to the current main-frame document and real lifecycle 
     expect(readBrowserGuestDiscardProtection(guest).protection).toBe('discardable')
     guest.emit('unresponsive')
     expect(readBrowserGuestDiscardProtection(guest).protection).toBe('unknown')
+    changed.mockClear()
     guest.emit('responsive')
+    expect(changed).toHaveBeenCalledTimes(1)
     send({ generation: generation(), dirty: true })
     expect(readBrowserGuestDiscardProtection(guest).reason).toBe('edits')
     crashed = true

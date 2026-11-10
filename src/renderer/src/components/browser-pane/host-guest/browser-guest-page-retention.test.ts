@@ -206,6 +206,31 @@ describe('hidden guest page pool', () => {
     }
   )
 
+  it('keeps a page used after selection but before its protection request is admitted', async () => {
+    for (let id = 1; id <= 26; id++) {
+      guest(id)
+    }
+    const answers = new Map<number, (result: BrowserGuestDiscardProtection) => void>()
+    const query = vi.fn((_pageId: string, id: number) =>
+      id <= 4
+        ? new Promise<BrowserGuestDiscardProtection>((resolve) => answers.set(id, resolve))
+        : Promise.resolve(clean(id))
+    )
+    stops.push(
+      installBrowserGuestPageRetention({ isBlocked: () => false, getProtection: query, destroy })
+    )
+    await vi.waitFor(() => expect(query).toHaveBeenCalledTimes(4))
+    setBrowserGuestVisible('page-5', true)
+    setBrowserGuestVisible('page-5', false)
+    for (const [id, answer] of answers) {
+      answer(clean(id))
+    }
+    await vi.waitFor(() => expect(browserGuestActivity.size).toBe(20))
+    expect(browserGuestActivity.has('page-5')).toBe(true)
+    expect(browserGuestActivity.has('page-6')).toBe(false)
+    expect(browserGuestActivity.has('page-7')).toBe(false)
+  })
+
   it('keeps visible and actively used pages while reclaiming their idle siblings, and fences teardown', async () => {
     for (let id = 1; id <= 24; id++) {
       guest(id)
