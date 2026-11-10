@@ -217,7 +217,9 @@ export function SettingsSubsectionHeader({
   return (
     <div className={cn('flex items-start justify-between gap-3', className)}>
       <div className="space-y-1">
-        <h3 className="text-sm font-semibold">{title}</h3>
+        <h3 data-settings-group-heading="" className="text-sm font-semibold">
+          {title}
+        </h3>
         {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}

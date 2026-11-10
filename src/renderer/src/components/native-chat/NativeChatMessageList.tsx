@@ -20,7 +20,7 @@ import { useNativeChatTranscriptProjection } from './conversation/projection/use
 import { desktopStructuredTranscript } from './conversation/projection/structured-agent-session-message-projection'
 import { nativeChatTaskListPredecessors } from '../../../../shared/native-chat/input/native-chat-task-list-history'
 import { NativeChatDockedTaskList } from './tools/tasks/NativeChatDockedTaskList'
-import { useNativeChatTurnStatus } from './conversation/turns/use-native-chat-turn-status'
+import * as turnStatus from './conversation/turns/use-native-chat-turn-status'
 import { NativeChatAwaitingInputRow } from './prompts/NativeChatAwaitingInputRow'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { NativeChatTurnActivity } from '../../../../shared/native-chat/transcript/native-chat-turn-activity'
@@ -66,7 +66,6 @@ import type {
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionLatestTurn } from '../../../../shared/agent-session/agent-session-wire'
-import { isStructuredAgentSessionThinking } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
 import { useNativeChatTurnDiffs } from './tools/diffs/use-native-chat-turn-diffs'
 import { useNativeChatTurnOpenedPullRequests } from './tools/pull-requests/use-native-chat-turn-opened-pull-requests'
@@ -191,11 +190,8 @@ export function NativeChatMessageList({
   )
   const openedPullRequests = useNativeChatTurnOpenedPullRequests(turnRows, subagentRowsInOrder)
   // Only real tail reasoning counts as thinking; an in-flight request with no output does not.
-  const thinking = useMemo(
-    () => isStructuredAgentSessionThinking({ items: journalItems ?? [], latestTurn }),
-    [journalItems, latestTurn]
-  )
-  const turnStatuses = useNativeChatTurnStatus({
+  const thinking = turnStatus.useNativeChatTurnThinking(journalItems, latestTurn)
+  const turnStatuses = turnStatus.useNativeChatTurnStatus({
     turnKeys,
     liveTurnKey,
     isWorking,
@@ -225,7 +221,7 @@ export function NativeChatMessageList({
     subagentChoices: inlineSubagentChoices,
     forkOffer,
     line: {
-      draws: tailRow === 'activity',
+      tailRow,
       thinking: turnStatuses.active?.thinking === true,
       stopping,
       activityText: turnActivity?.text

@@ -2,58 +2,58 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Share2, Trash2 } from 'lucide-react'
 import { readIpcErrorDetail } from '@/lib/ipc-error'
 import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { discoverSkillsForRuntimeTarget } from '@/runtime/skills/configuration/runtime-skills-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { useActiveSkillDiscoveryRuntimeTarget } from '@/hooks/use-active-skill-discovery-runtime-target'
+import { useActiveSkillDiscoveryRuntimeTarget } from '@/hooks/skills/discovery/use-active-skill-discovery-runtime-target'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { UNRESOLVED_OWNER_HOST_ID } from '../../../../shared/execution-host'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../../shared/skills'
 import { MAX_SKILL_DELETE_BATCH } from '../../../../shared/skill-delete-contract'
-import { SkillsList } from './SkillsList'
-import { SkillShareDialog } from './SkillShareDialog'
-import { SkillInstallDialog } from './SkillInstallDialog'
-import { SkillInstallManagementDialog } from './SkillInstallManagementDialog'
-import { SkillsPageHeader } from './SkillsPageHeader'
-import { SkillsFilterToolbar } from './SkillsFilterToolbar'
-import { SkillsSelectionHeader } from './SkillsSelectionHeader'
+import { SkillsList } from './catalog/SkillsList'
+import { SkillShareDialog } from './sharing/SkillShareDialog'
+import { SkillInstallDialog } from './installation/SkillInstallDialog'
+import { SkillInstallManagementDialog } from './installation/SkillInstallManagementDialog'
+import { SkillsPageHeader } from './catalog/SkillsPageHeader'
+import { SkillsFilterToolbar } from './catalog/SkillsFilterToolbar'
+import { SkillsSelectionHeader } from './catalog/SkillsSelectionHeader'
 import {
   SkillsEmptyState,
   SkillsListSkeleton,
   SkillsNoMatchesState,
   SkillsRemoteShareNotice,
   SkillsScanErrorBand
-} from './skills-page-states'
-import { SKILLS_PAGE_COLUMN } from './skills-page-column'
-import { scannedSkillSourceCount, summarizeSkillSources } from './skill-source-inventory'
-import { useSkillDiscoveryHostLabel } from './use-skill-discovery-host-label'
-import { countSkillsBySource, filterSkills, type SkillsFilterState } from './skills-filter'
-import { skillAgentByRootPath, skillAgentOptions } from './skill-agent-filter'
-import { SkillSharedLinksView } from './SkillSharedLinksView'
-import { useOwnedSkillShares } from './use-owned-skill-shares'
-import type { SkillsPageView } from './skills-page-view'
-import { useSkillsPageKeyboardNavigation } from './use-skills-page-keyboard-navigation'
+} from './catalog/skills-page-states'
+import { SKILLS_PAGE_COLUMN } from './catalog/skills-page-column'
+import { scannedSkillSourceCount, summarizeSkillSources } from './catalog/skill-source-inventory'
+import { useSkillDiscoveryHostLabel } from './catalog/use-skill-discovery-host-label'
+import { countSkillsBySource, filterSkills, type SkillsFilterState } from './catalog/skills-filter'
+import { skillAgentByRootPath, skillAgentOptions } from './catalog/skill-agent-filter'
+import { SkillSharedLinksView } from './sharing/SkillSharedLinksView'
+import { useOwnedSkillShares } from './sharing/use-owned-skill-shares'
+import type { SkillsPageView } from './catalog/skills-page-view'
+import { useSkillsPageKeyboardNavigation } from './catalog/use-skills-page-keyboard-navigation'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   INSTALLED_AGENT_SKILLS_CHANGED_EVENT,
   INSTALLED_AGENT_SKILLS_REFRESHED_EVENT
-} from '@/hooks/installed-agent-skills-change-event'
+} from '@/hooks/skills/discovery/installed-agent-skills-change-event'
 import {
   addShareableSkillResults,
   eligibleShareSkillCount,
   retainedShareableSkillSelection,
   updatedSkillSelection
-} from './skill-share-selection'
+} from './sharing/skill-share-selection'
 import {
   addDeletableSkillResults,
   eligibleDeleteSkillCount,
   retainedDeletableSkillSelection
-} from './skill-delete-selection'
-import { skillDeleteActionLabel } from './skill-delete-copy'
-import { shareSelectionActionLabel } from './skill-display-labels'
-import { SkillDeleteResultBand } from './SkillDeleteResultBand'
-import { useSkillDeleteFlow } from './use-skill-delete-flow'
+} from './deletion/skill-delete-selection'
+import { skillDeleteActionLabel } from './deletion/skill-delete-copy'
+import { shareSelectionActionLabel } from './presentation/skill-display-labels'
+import { SkillDeleteResultBand } from './deletion/SkillDeleteResultBand'
+import { useSkillDeleteFlow } from './deletion/use-skill-delete-flow'
 
 const EMPTY_SKILLS: DiscoveredSkill[] = []
 const NO_FILTERS: SkillsFilterState = {

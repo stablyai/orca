@@ -1,4 +1,7 @@
-import { useNativeChatDeliveryProjection } from './session/terminal/delivery/use-native-chat-delivery-projection'
+import {
+  useNativeChatDeliveryProjection,
+  useNativeChatPendingProjection
+} from './session/terminal/delivery/use-native-chat-delivery-projection'
 import { NativeChatPaneFileDropScope } from './attachments/intake/NativeChatPaneFileDropSurface'
 import { NativeChatCrewFrame } from '../orchestration-crew/NativeChatCrewPanel'
 import { TerminalChatCrewPanel } from '../orchestration-crew/TerminalChatCrewPanel'
@@ -37,22 +40,11 @@ import { useNativeChatInteractiveSend } from './session/terminal/send/use-native
 import { shouldClearNativeChatWorkingSuppression } from '../../../../shared/native-chat/native-chat-working-suppression'
 import { resolveNativeChatTerminalTurn } from '../../../../shared/native-chat/native-chat-terminal-turn'
 import { useNativeChatTerminalTurnTiming } from './conversation/turns/use-native-chat-terminal-turn-timing'
-import { shouldPruneLaunchPrompt } from './session/terminal/delivery/native-chat-pending'
-import { pendingSendsAsMessages } from '../../../../shared/native-chat/transcript/native-chat-pending-sends'
 import {
   useNativeChatPendingDelivery,
   useNativeChatOptimisticSend
 } from './session/terminal/delivery/use-native-chat-pending-delivery'
-import {
-  appendCommandMarkerCache,
-  commandMarkersAsMessages,
-  readCommandMarkerCache,
-  type NativeChatCommandMarker
-} from './session/terminal/delivery/native-chat-command-marker'
-import {
-  deriveNativeChatStreamingText,
-  nativeChatStreamingMessage
-} from '../../../../shared/native-chat/native-chat-streaming'
+import { useNativeChatCommandMarkers } from './session/terminal/delivery/use-native-chat-command-markers'
 import { useNativeChatRootInputRouting } from './composer/focus/use-native-chat-root-input-routing'
 import {
   emptyNativeChatContextMenuActions,
@@ -104,7 +96,6 @@ export function NativeChatResolvedView({
     enabled: isVisible
   })
   const launchPrompt = useAppStore((s) => s.nativeChatLaunchPromptByTabId[terminalTabId] ?? null)
-  const clearNativeChatLaunchPrompt = useAppStore((s) => s.clearNativeChatLaunchPrompt)
   const paneLaunchPrompt = launchPrompt?.agent === agent ? launchPrompt : null
   // Adopt the TUI’s unsent launch context into the GUI composer.
   const launchDraftSignal = useNativeChatLaunchDraftSignal({ terminalTabId, agent, session })
@@ -157,34 +148,17 @@ export function NativeChatResolvedView({
     composerRef,
     workingEpoch: sendWorkingEpoch
   })
-  // Slash commands are local session-scoped feedback, not user turns; cap and cache their markers.
-  const [commandMarkers, setCommandMarkers] = useState<NativeChatCommandMarker[]>(() =>
-    readCommandMarkerCache(commandMarkerScope)
+  const { commandMarkers, onSlashCommand } = useNativeChatCommandMarkers(
+    commandMarkerScope,
+    setWorkingInterrupted
   )
-  const [prevCommandMarkerScope, setPrevCommandMarkerScope] = useState(commandMarkerScope)
-  if (prevCommandMarkerScope !== commandMarkerScope) {
-    setPrevCommandMarkerScope(commandMarkerScope)
-    setCommandMarkers(readCommandMarkerCache(commandMarkerScope))
-    setWorkingInterrupted(false)
-  }
-  useEffect(() => {
-    if (!paneLaunchPrompt || !shouldPruneLaunchPrompt(paneLaunchPrompt, session.messages)) {
-      return
-    }
-    clearNativeChatLaunchPrompt(terminalTabId)
-  }, [clearNativeChatLaunchPrompt, paneLaunchPrompt, session.messages, terminalTabId])
   const onOptimisticSend = useNativeChatOptimisticSend(delivery.record, setWorkingInterrupted)
-  const onSlashCommand = useCallback(
-    (command: string, output?: string) => {
-      setCommandMarkers(appendCommandMarkerCache(commandMarkerScope, command, Date.now(), output))
-    },
-    [commandMarkerScope]
-  )
 
   const { launchPromptMessage, sessionAfterCommandBoundaries } = useNativeChatDeliveryProjection(
     paneLaunchPrompt,
     session,
-    commandMarkers
+    commandMarkers,
+    terminalTabId
   )
   // Why: answer from the conversation the pane shows, so a `/clear` sent here reads as reset.
   const answerLocally = useNativeChatLocalCommandAnswer(agent, sessionAfterCommandBoundaries)
@@ -228,40 +202,15 @@ export function NativeChatResolvedView({
     composerReady: composerReady && childNavigator.child === null
   })
 
-  const { pending } = delivery
-  const pendingMessages = useMemo(
-    () => pendingSendsAsMessages(pending, sessionAfterCommandBoundaries.messages, sendWorkingEpoch),
-    [pending, sessionAfterCommandBoundaries.messages, sendWorkingEpoch]
+  const sessionWithPending = useNativeChatPendingProjection(
+    sessionAfterCommandBoundaries,
+    delivery.pending,
+    commandMarkers,
+    sendWorkingEpoch,
+    hookPreview,
+    liveWorking,
+    hookPreviewIsToolOutput
   )
-  const messagesWithPending = useMemo(
-    () =>
-      pendingMessages.length === 0
-        ? sessionAfterCommandBoundaries.messages
-        : [...sessionAfterCommandBoundaries.messages, ...pendingMessages],
-    [sessionAfterCommandBoundaries.messages, pendingMessages]
-  )
-  const streamingText = useMemo(() => {
-    return deriveNativeChatStreamingText({
-      messages: messagesWithPending,
-      previewText: hookPreview,
-      working: liveWorking,
-      previewIsToolOutput: hookPreviewIsToolOutput
-    })
-  }, [messagesWithPending, hookPreview, liveWorking, hookPreviewIsToolOutput])
-  const sessionWithPending = useMemo<typeof session>(() => {
-    if (pending.length === 0 && commandMarkers.length === 0 && !streamingText) {
-      return sessionAfterCommandBoundaries
-    }
-    return {
-      ...sessionAfterCommandBoundaries,
-      messages: [
-        ...sessionAfterCommandBoundaries.messages,
-        ...commandMarkersAsMessages(commandMarkers),
-        ...(streamingText ? [nativeChatStreamingMessage(streamingText)] : []),
-        ...pendingMessages
-      ]
-    }
-  }, [sessionAfterCommandBoundaries, pending, pendingMessages, commandMarkers, streamingText])
   // Include pending sends when selecting view state so the first echo leaves the empty screen immediately.
   const viewState = selectNativeChatViewState(sessionWithPending)
 
