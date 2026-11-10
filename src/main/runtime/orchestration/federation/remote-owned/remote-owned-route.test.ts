@@ -278,6 +278,20 @@ describe('commands about a worker a paired server owns', () => {
     expect(db.getTask(String(sent[0].params.adoptTaskId))?.status).toBe('ready')
   })
 
+  it("shows this Orca's record of a worker whose pairing was re-made", async () => {
+    await startOnB()
+    closeRemoteRunLink(
+      db,
+      String(
+        record(db.db.prepare('SELECT conversation_id FROM remote_run_links').get()).conversation_id
+      ),
+      're-paired'
+    )
+    const show = await call('orchestration.workerShow', { dispatch: 'ctx_b1' })
+
+    expect(show.ok ? record(show.result).server : undefined).toMatchObject({ name: 'devB' })
+  })
+
   it('scopes the retry key to the caller: two terminals reusing an ID never collide, one retrying gets its own key', async () => {
     const receipt = await startOnB()
     answers['orchestration.workerRelease'] = [
