@@ -295,8 +295,8 @@ export function CloudWorkspaceRow({
       />
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="w-14 text-right text-xs tabular-nums text-muted-foreground">
-            {hours}
+          <span className="w-28 text-right text-xs tabular-nums text-muted-foreground">
+            {usage}
           </span>
         </TooltipTrigger>
         <TooltipContent side="top">

@@ -11,7 +11,6 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import {
   formatBytes,
-  formatCents,
   formatDuration,
   formatSandboxHours,
   formatShortDate,
@@ -168,9 +167,6 @@ export function CloudWorkspaceStatusPanel({
       ? t('orcaCloudWorkspace.detail.restarting', 'Orca resumes your agents after the restart.')
       : cloudStateDetail(state, t)
   const showMeters = Boolean(metrics) && (state === 'running' || state === 'unresponsive')
-  // Overage is what's billed beyond the plan; the status call doesn't carry it yet, so this stays 0
-  // (no dollars shown) until billing reports it.
-  const overageCents = 0
   const showAgo = Boolean(entry?.fetchedAt && showUpdatedAgo(entry.fetchedAt, now))
   const hasActions = canArchive || canRestart || restarting || state === 'archived'
   const showFooter = showAgo || hasActions
@@ -261,17 +257,9 @@ export function CloudWorkspaceStatusPanel({
               />
             ) : null}
             <Fact
-              label={t('orcaCloudWorkspace.usedLabel', 'Used')}
+              label={t('orcaCloudWorkspace.sandboxHoursUsedLabel', 'Sandbox hours used')}
               value={formatSandboxHours(status.usage.totalMs)}
             />
-            {/* Dollars only once the plan's included hours are used up (overage). */}
-            {overageCents > 0 ? (
-              <Fact
-                muted
-                label={t('orcaCloudWorkspace.overage', 'Overage so far')}
-                value={formatCents(overageCents)}
-              />
-            ) : null}
             {status.archive?.expiresAt ? (
               <Fact
                 label={t('orcaCloudWorkspace.keptUntil', 'Kept until')}
