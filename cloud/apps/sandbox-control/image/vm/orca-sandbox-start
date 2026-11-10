@@ -136,7 +136,7 @@ managed_env=(
   ORCA_WORKSPACE_NAME="$workspace_name" ORCA_PORT=3000
   CONDUCTOR_IS_CLOUD=1
   # Agent CLIs are pinned by the image (smoke-tested); a self-update mid-session can break a running agent.
-  DISABLE_AUTOUPDATER=1
+  DISABLE_AUTOUPDATER=1 OPENCODE_DISABLE_AUTOUPDATE=1 COPILOT_AUTO_UPDATE=false
   CONDUCTOR_ROOT_PATH="$PROJECT" CONDUCTOR_WORKSPACE_PATH="$PROJECT"
   CONDUCTOR_WORKSPACE_NAME="$workspace_name" CONDUCTOR_PORT=3000
 )
@@ -170,7 +170,15 @@ unset ORCA_SECRET_ENV
 # Agent CLIs installed with the image's npm (codex, gemini, ...) are `#!/usr/bin/env node` scripts:
 # terminals need that node on PATH, not only orcad's bundled runtime.
 system_node="$(command -v node 2>/dev/null || echo "$node")"
-env -i HOME="$HOME" USER="$(id -un)" LANG=C.UTF-8 TERM=xterm-256color \
+# The egress proxy answers for hosts with credential rules (model APIs, api.github.com) with a
+# certificate from Vercel's CA, which this command's env trusts (Vercel sets these). Pure-Node clients
+# use Node's bundled roots otherwise: Gemini CLI retried forever ("taking a bit longer") in every
+# terminal while the same call worked here. Pass the provider's CA settings on to orcad and its shells.
+ca_env=(NODE_USE_SYSTEM_CA="${NODE_USE_SYSTEM_CA:-1}")
+for name in NODE_EXTRA_CA_CERTS SSL_CERT_FILE; do
+  if [ -n "${!name:-}" ]; then ca_env+=("$name=${!name}"); fi
+done
+env -i HOME="$HOME" USER="$(id -un)" LANG=C.UTF-8 TERM=xterm-256color "${ca_env[@]}" \
   PATH="$ORCA_HOME/tools/bin:$ORCA_HOME/bin:$(dirname "$system_node"):/usr/local/bin:/usr/bin:/bin" \
   ORCA_USER_DATA="$HOME/.orcad-data" ORCA_SANDBOX_ID="$ORCA_SANDBOX_ID" "${managed_env[@]}" \
   NODE_COMPILE_CACHE="$ORCA_HOME/compile-cache" ORCA_ORCAD_STARTUP_QUALIFICATION_DIR="$ORCA_HOME/startup-qualification" \

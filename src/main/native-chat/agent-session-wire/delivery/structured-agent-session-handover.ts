@@ -113,9 +113,18 @@ export async function beginSubmissionHandover(
   }
   // Preserve handover time so turn-open cannot re-anchor elapsed work.
   const requestedAt = structuredAgentSessionHandoverOrigin(ctx.journal, submission)
+  let releaseCheckpoint: (() => void) | undefined
   return {
     run: async (commit) => {
       try {
+        // A message that opens a turn gets a file checkpoint first, taken before the agent can
+        // write; one that joins a running turn would snapshot the agent mid-edit, so it gets none.
+        if (turnScope.kind === 'thread' && ctx.captureTurnCheckpoint && !attempt?.signal.aborted) {
+          releaseCheckpoint = await ctx.captureTurnCheckpoint(
+            agentJournalSubmissionKey(clientMessageId),
+            attempt?.signal
+          )
+        }
         let outcome: AgentSessionDispatchOutcome | null
         try {
           for (;;) {
@@ -216,6 +225,7 @@ export async function beginSubmissionHandover(
           }
         })
       } finally {
+        releaseCheckpoint?.()
         release?.()
         released()
       }

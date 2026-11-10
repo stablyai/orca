@@ -11,11 +11,16 @@ export type Env = {
   VERCEL_TOKEN?: string
   VERCEL_TEAM_ID?: string
   VERCEL_PROJECT_ID?: string
+  /** Default region for new sandboxes (default pdx1); see regions.ts. */
   VERCEL_REGION?: string
+  /** Comma list tried in order when the default region's create fails on capacity (default `iad1`; "" = none). */
+  VERCEL_FALLBACK_REGIONS?: string
   /** Overrides the Vercel API origin (tests only). */
   VERCEL_API_BASE?: string
-  /** Golden image (orcad + agent CLIs) every new sandbox boots from; see image/. */
+  /** Seed golden image (orcad + agent CLIs), adopted when its region has none yet; see image/. */
   GOLDEN_SNAPSHOT_ID?: string
+  /** Region GOLDEN_SNAPSHOT_ID was taken in (default iad1); other regions build their own first image. */
+  GOLDEN_SNAPSHOT_REGION?: string
   /** Non-prod only: pin this image over the rotated active one (preview versions testing new VM entry points). */
   GOLDEN_SNAPSHOT_OVERRIDE?: string
   /** Git as the sender: `on`, `accounts:<id>,<id>` or off (default). See memberGitEnabled in index.ts. */
@@ -37,6 +42,13 @@ export type Env = {
   SANDBOX_JWT_AUDIENCE: string
   /** Dev-only operator key set (issuer `orca-sandbox-dev-test`); ignored when SANDBOX_ENV=prod. */
   SANDBOX_DEV_JWKS?: string
+  /**
+   * Dev only (ignored when SANDBOX_ENV=prod): also trust Orca Cloud auth STAGING sandbox tokens, as
+   * billing dev does, so a staging sign-in works end to end. URL in deployments, inline set in tests.
+   */
+  SANDBOX_STAGING_JWKS_URL?: string
+  SANDBOX_STAGING_JWKS?: string
+  SANDBOX_STAGING_AUTH_ISSUER?: string
 
   // Billing Worker (entitlement checks + usage). CONTROL_PLANE_TOKEN is shared with it.
   BILLING_URL?: string
@@ -135,6 +147,6 @@ export type Env = {
   ARCHIVE_TTL_DAYS?: string
   /** Idle minutes before a sandbox sleeps (default 15; keep equal to billing's plan idleSleepMinutes). */
   IDLE_SLEEP_MINUTES?: string
-  /** Status-panel cost estimate, cents per running hour by machine size: {"standard":75,"large":150}. */
+  /** Status-panel cost estimate, cents per running hour by machine size: {"standard":75}. */
   COST_CENTS_PER_HOUR?: string
 }

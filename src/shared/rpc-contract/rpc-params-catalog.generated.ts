@@ -651,6 +651,10 @@ import {
   SshTargetUpdate
 } from './ssh-params'
 import { StatusGetParams } from './status-params'
+import {
+  CheckpointItemParams,
+  CheckpointUndoParams
+} from './structured-agent-session-checkpoint-params'
 import { ContinueInterruptedParams } from './structured-agent-session-continue-params'
 import { ContinuationContextParams } from './structured-agent-session-identifiers'
 import {
@@ -848,6 +852,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.agents': AgentsParams,
   'agentSession.cancel': CancelParams,
   'agentSession.cancelUsageLimitContinue': CancelUsageLimitContinueParams,
+  'agentSession.checkpointPreview': CheckpointItemParams,
+  'agentSession.checkpointRestore': CheckpointItemParams,
+  'agentSession.checkpointUndo': CheckpointUndoParams,
   'agentSession.close': OptionsParams,
   'agentSession.commands': OptionsParams,
   'agentSession.continuationContext': ContinuationContextParams,

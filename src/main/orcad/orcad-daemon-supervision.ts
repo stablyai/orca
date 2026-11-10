@@ -7,9 +7,36 @@ import {
 import { initDaemonPtyProvider } from '../daemon/providers/lifecycle/daemon-provider-init'
 import { resolveTerminalSpawnAdmissionMode } from '../daemon/admission/terminal-spawn-admission-mode'
 import { errorMessage } from '../../shared/error-message'
+import { nextDaemonChildSpawn } from '../daemon/launch/daemon-launched-child-spawn'
 import { OrcadTerminalsNotDurableError, takeOrcadServeSupervision } from './orcad-serve-supervision'
 
 const WINDOWS_DAEMON_STARTUP_TIMEOUT_MS = 30_000
+/** Most a launching daemon may hold startup before the host's synchronous work. */
+const DAEMON_LAUNCH_HEAD_START_MS = 50
+
+/**
+ * Waits until the daemon launch forks its child, or startup settles (an adopted daemon never
+ * forks), bounded so a slow launch cannot hold startup. Never rejects. Call it in the same turn that
+ * starts the launch: it only sees a fork that happens after the call.
+ */
+export async function daemonLaunchHeadStart(
+  startup: Promise<unknown>,
+  boundMs = DAEMON_LAUNCH_HEAD_START_MS,
+  spawned: Promise<void> = nextDaemonChildSpawn()
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  await Promise.race([
+    spawned,
+    startup.then(
+      () => {},
+      () => {}
+    ),
+    new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, boundMs)
+    })
+  ])
+  clearTimeout(timer)
+}
 
 type OrcadDaemonStartup =
   | { state: 'live'; pid: number | null }

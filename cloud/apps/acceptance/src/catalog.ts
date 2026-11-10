@@ -38,9 +38,14 @@ export const CATALOG: Feature[] = [
   { id: 'billing.overage', section: S.acct, feature: 'Overage opt-in at $0.75/h with a monthly spend cap that blocks starts', conductor: 'No metering ("no extra charge today")', owner: 'team-billing-ux', priority: 'P0', better: 'Metered from day one with a hard cap' },
   { id: 'billing.dunning', section: S.acct, feature: 'Payment failure -> grace -> suspend -> pay -> resume (test clocks)', conductor: 'not documented', owner: 'team-billing-ux', priority: 'P0' },
   { id: 'billing.entitlement-gate', section: S.acct, feature: 'Account without a plan is refused a sandbox (fail closed)', conductor: 'Pro/org required', owner: 'core', priority: 'P0' },
+  // Conductor's local core workflow (added after the independent audit; the cloud matrix left it out)
+  { id: 'local.core-workflow', section: S.acct, feature: 'Local core workflow: create a local worktree, run an agent, see the diff, commit (desktop)', conductor: 'Core local app (free)', owner: 'w9-eval (m4air desktop run)', priority: 'P0' },
+  { id: 'local.run-actions', section: S.acct, feature: 'Run actions: named run scripts (several, run_mode, auto-run after setup) with a per-workspace port block; Conductor import keeps them', conductor: '0.70 multiple run scripts, CONDUCTOR_PORT 10-port block', owner: 'gap-run-actions', priority: 'P0' },
+  { id: 'life.read-asleep', section: S.life, feature: 'Chats, PR comments and check logs readable while asleep from any device (no wake)', conductor: '0.80/0.85, server-held', owner: 'gap-read-asleep', priority: 'P0' },
+  { id: 'local.checkpoints', section: S.acct, feature: 'Per-turn code checkpoints: revert restores files and chat together', conductor: '0.19 (Claude), 0.44 (Codex) checkpoints', owner: 'gap-checkpoints', priority: 'P0' },
   // 1. Substrate
   { id: 'sub.create', section: S.sub, feature: 'Hosted microVM per workspace, one call / one click', conductor: '0.78 GA', owner: 'core', priority: 'P0' },
-  { id: 'sub.size', section: S.sub, feature: 'Machine sizes (standard 4 vCPU, large 8 vCPU)', conductor: 'Fixed 8 vCPU / 16 GB', owner: 'core', priority: 'P0', better: 'Choice of size' },
+  { id: 'sub.size', section: S.sub, feature: 'Machine size: Standard 8 vCPU / 16 GB (Conductor parity)', conductor: 'Fixed 8 vCPU / 16 GB', owner: 'core', priority: 'P0' },
   { id: 'sub.disk', section: S.sub, feature: 'Disk >= 32 GB and low-disk alert', conductor: '64 GB (0.82), low-disk alerts', owner: 'w1-env-builds', priority: 'P1' },
   { id: 'sub.tools', section: S.sub, feature: 'Preinstalled tools (node, git, gh, rg, jq, python3, orca CLI, Claude, Codex)', conductor: 'AL2023, Node 24, git, gh, jq, rg, LFS, tmux, Vim, Chrome', owner: 'core', priority: 'P0' },
   { id: 'sub.region', section: S.sub, feature: 'Region iad1', conductor: 'us-east-1 only', owner: 'core', priority: 'P0' },
@@ -60,6 +65,9 @@ export const CATALOG: Feature[] = [
   { id: 'sec.egress-deny', section: S.sec, feature: 'Egress fails closed: unlisted hosts do not resolve; foreign tokens refused', conductor: 'not documented', owner: 'core', priority: 'P0', better: 'Default-deny egress' },
   { id: 'agent.real-task', section: S.sec, feature: 'Real agent task in the VM (Claude Code / Codex via AI Gateway key)', conductor: 'Claude Code, Codex, Cursor with API key or subscription', owner: 'w6-agents-secrets', priority: 'P0' },
   { id: 'agent.signin', section: S.sec, feature: 'Agent sign-in on the VM persists across sleep/rollover', conductor: 'Per-org agent connections', owner: 'w6-agents-secrets', priority: 'P0' },
+  { id: 'image.agents', section: S.sec, feature: 'Agent CLIs in the image: Claude Code, Codex, Cursor, OpenCode, Gemini, Copilot', conductor: 'Claude Code, Codex, Cursor (+ OpenCode)', owner: 'gap-agents', priority: 'P0' },
+  { id: 'agent.keys-swap', section: S.sec, feature: 'Gemini/Cursor keys via egress swap (placeholder on VM, real key only at the provider); keys never on the VM', conductor: 'Keys as plain env in the VM', owner: 'gap-agents', priority: 'P0', better: 'Agent keys never on the VM; foreign keys and paths refused' },
+  { id: 'agent.more-agents', section: S.sec, feature: 'OpenCode and Copilot (BYOK) finish a real task and commit in a cloud workspace', conductor: 'Cursor, OpenCode in cloud', owner: 'gap-agents', priority: 'P1' },
   // 4. Lifecycle
   { id: 'life.sleep-wake', section: S.life, feature: 'Sleep (stop + snapshot) and wake keep files and pairing', conductor: 'Files + chats survive sleep; processes do not', owner: 'core', priority: 'P0', better: 'Same pairing; no re-pair' },
   { id: 'life.idle-sleep', section: S.life, feature: 'Auto-sleep when idle (lease lapses / idle stop)', conductor: '20 min idle', owner: 'w2-lifecycle', priority: 'P0' },

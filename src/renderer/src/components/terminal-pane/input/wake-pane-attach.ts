@@ -4,8 +4,10 @@
 // never disappears over a pane that can't take a keystroke yet.
 
 export type WakePaneEntry = {
-  /** Attached to the woken terminal and taking input. */
+  /** Taking input: attached to a terminal, connected, nothing it was given still unsent. */
   isReady: () => boolean
+  /** Reconnect this pane's terminal (Try again on "Couldn't reconnect the terminal"). */
+  retry?: () => boolean
   /** The pane in front: its tab is the active, visible one and it is that tab's active pane. */
   isActive: () => boolean
 }
@@ -59,6 +61,16 @@ export function isActiveWakePaneAttached(workspaceId: string): boolean | null {
     }
   }
   return null
+}
+
+/** Try again: reconnects the pane in front. False when there is none, or it has no way to. */
+export function retryActiveWakePane(workspaceId: string): boolean {
+  for (const entry of panes.get(workspaceId)?.values() ?? []) {
+    if (safely(entry.isActive)) {
+      return entry.retry ? safely(entry.retry) : false
+    }
+  }
+  return false
 }
 
 /** Tests. */

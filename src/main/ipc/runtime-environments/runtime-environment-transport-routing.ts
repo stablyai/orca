@@ -12,7 +12,7 @@ import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/ru
 import { prepareFencedRuntimeRequest } from './runtime-environment-request-preparation'
 import {
   requireWslHostWithoutStart,
-  resolveManagedRuntimeEnvironment,
+  resolveSubscribedRuntimeEnvironment,
   type ManagedRuntimeCallPreparation
 } from './runtime-environment-managed-tunnel'
 import { markEnvironmentUsedFromResponse } from './runtime-environment-usage-marking'
@@ -85,13 +85,7 @@ export async function callRuntimeEnvironment(
     )
   }
   const environment = resolveEnvironment(userDataPath, selector)
-  const held = await holdForInFlightRecipeVmWake(
-    userDataPath,
-    environment,
-    method,
-    timeoutMs,
-    options
-  )
+  const held = await holdForInFlightRecipeVmWake(userDataPath, environment, method, options)
   // Connect failures reject; retain the dispatched endpoint for hints because queued re-pairing can change it.
   let endpoint = getPreferredPairedRuntimeConnection(environment).endpoint
   try {
@@ -213,7 +207,7 @@ export async function subscribeRuntimeEnvironment(
   crewAttempt?.assertCurrent()
   const environment = crewAttempt
     ? resolveEnvironment(userDataPath, selector)
-    : await resolveManagedRuntimeEnvironment(userDataPath, selector, preparation, method, signal)
+    : await resolveSubscribedRuntimeEnvironment(userDataPath, selector, preparation, method, signal)
   crewAttempt?.assertCurrent()
   if (crewAttempt) {
     assertCrewSourceCurrent(environment)

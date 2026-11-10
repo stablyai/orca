@@ -76,6 +76,13 @@ export function buildDaemonScriptArgs(
 }
 
 /** Wrappers inherit readiness IPC; use the daemon's self-reported identity, not the wrapper PID. */
+const spawnWaiters: (() => void)[] = []
+
+/** Resolves when this process next starts a daemon child, so a host can overlap other startup work. */
+export function nextDaemonChildSpawn(): Promise<void> {
+  return new Promise((resolve) => spawnWaiters.push(resolve))
+}
+
 export function spawnDaemonChildProcess(
   options: DaemonChildSpawnOptions,
   useDurableScope: boolean
@@ -88,6 +95,9 @@ export function spawnDaemonChildProcess(
     userDataPath,
     launchNonce
   } = options
+  for (const resolve of spawnWaiters.splice(0)) {
+    resolve()
+  }
   const scriptArgs = buildDaemonScriptArgs(options)
   // Plain Node avoids Electron display initialization interfering with node-pty spawn-helper.
   const daemonEnv: NodeJS.ProcessEnv = {

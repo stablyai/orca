@@ -1,10 +1,11 @@
 // Model API keys kept out of the VM: the session env carries a placeholder, and the egress proxy
 // swaps in the real key only on the host that credential is for (api.anthropic.com,
-// api.openai.com, ai-gateway.vercel.sh or a custom provider base URL). Node clients (Claude Code,
+// api.openai.com, ai-gateway.vercel.sh, generativelanguage.googleapis.com, api2.cursor.sh or a custom
+// provider base URL). Node clients (Claude Code,
 // Codex) hang under Vercel transform rules, so these hosts always take the forwardURL path through
 // /v1/egress/proxy, the same path api.github.com uses. Placeholders are not secrets: the proxy
 // authenticates the sandbox by Vercel's OIDC token, the placeholder only marks which header to swap.
-import { credentialTargets, type CredentialTarget, type ValueScopes } from './provider-env'
+import { SWAPPED_CREDENTIALS, credentialTarget, credentialTargets, type CredentialTarget, type ValueScopes } from './provider-env'
 import type { SandboxRow } from './store'
 
 export type SecretEgressHost = CredentialTarget
@@ -23,26 +24,28 @@ export function encodeEgressSecretHosts(targets: readonly CredentialTarget[]): s
 
 /** Credential routes recorded on the row for this session. */
 export function egressSecretHosts(row: Pick<SandboxRow, 'egress_secret_hosts'>): SecretEgressHost[] {
-  const recorded: Record<string, string> = {}
+  const recorded = new Map<string, Set<string>>()
   for (const entry of (row.egress_secret_hosts ?? '').split(',').filter(Boolean)) {
     const at = entry.indexOf('@')
     const [secret, host] = at === -1 ? [LEGACY_HOSTS[entry], entry] : [entry.slice(0, at), entry.slice(at + 1)]
     if (secret && host) {
-      recorded[secret] = host
+      recorded.set(secret, (recorded.get(secret) ?? new Set()).add(host))
     }
   }
-  // Header shapes come from the code, never from the row. The base URL value is only used to
-  // pick the default-vs-custom host, and the recorded host is what was allowlisted at boot.
-  const shapes = credentialTargets({
-    ANTHROPIC_API_KEY: 'x',
-    ANTHROPIC_AUTH_TOKEN: 'x',
-    AI_GATEWAY_API_KEY: 'x',
-    OPENAI_API_KEY: 'x'
-  })
-  return shapes.flatMap((shape) => {
-    const host = recorded[shape.secret]
-    return host ? [{ ...shape, host }] : []
-  })
+  // Header shapes and policies come from the code, never from the row. The base URL value is only
+  // used to pick the default-vs-custom host, and the recorded hosts are what was allowlisted at boot.
+  return SWAPPED_CREDENTIALS.flatMap((secret) =>
+    [...(recorded.get(secret) ?? [])].flatMap((host) => {
+      const target = credentialTarget(secret, host)
+      return target ? [target] : []
+    })
+  )
+}
+
+/** Every header value the VM may send a credential's placeholder in. */
+export function placeholderValues(target: CredentialTarget, header: string, placeholder: string): string[] {
+  const format = target.headers[header]
+  return format ? [format(placeholder), ...(target.altHeaderFormats?.[header] ?? []).map((alt) => alt(placeholder))] : []
 }
 
 /**
@@ -56,8 +59,13 @@ export function applySecretPlaceholders(
 ): { env: Record<string, string>; targets: CredentialTarget[] } {
   const next = { ...env }
   const targets = credentialTargets(env, scopes)
-  for (const target of targets) {
-    next[target.secret] = secretPlaceholder(row, target.secret)
+  // Every swappable key becomes a placeholder, routed or not: a key with no usable route (a Copilot
+  // key without its base URL, a base URL from another scope, an unacceptable URL) must not reach
+  // the VM as itself. Unrouted, its placeholder is simply refused or rejected by the provider.
+  for (const secret of SWAPPED_CREDENTIALS) {
+    if (secret in next) {
+      next[secret] = secretPlaceholder(row, secret)
+    }
   }
   return { env: next, targets }
 }

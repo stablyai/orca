@@ -33,9 +33,27 @@ export function paneRecoveryCause(
 export function remoteRuntimeRecoveryCopy(
   cause: RemoteRuntimeRecoveryCause,
   serverName: string,
-  t: Translate = translate
+  t: Translate = translate,
+  /** An Orca Cloud workspace: named as the person knows it, never by its sandbox's id. */
+  cloudWorkspaceName: string | null = null
 ): RemoteRuntimeRecoveryCopy {
-  const server = { server: serverName }
+  const server = { server: cloudWorkspaceName ?? serverName }
+  if (cloudWorkspaceName !== null && cause === 'connection-lost') {
+    return {
+      retrying: true,
+      title: t(
+        'orcaCloudWorkspace.recovery.reconnectingTitle',
+        'Reconnecting to {{workspaceName}}…',
+        {
+          workspaceName: cloudWorkspaceName
+        }
+      ),
+      body: t(
+        'orcaCloudWorkspace.recovery.reconnectingBody',
+        'The connection dropped. Orca is retrying; your files and chats are safe.'
+      )
+    }
+  }
   switch (cause) {
     case 'connection-lost':
       return {

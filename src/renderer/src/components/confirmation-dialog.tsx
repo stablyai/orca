@@ -20,6 +20,7 @@ import {
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
+import { ConfirmationDialogOption } from '@/components/confirmation-dialog-option'
 
 type ConfirmationDialogRequest = {
   id: number
@@ -35,8 +36,11 @@ export function ConfirmationDialogProvider({
   const t = useTranslate()
   const nextIdRef = useRef(0)
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
+  const cancelButtonRef = useRef<HTMLButtonElement>(null)
   const [queue, setQueue] = useState<ConfirmationDialogRequest[]>([])
   const [dontAskAgain, setDontAskAgain] = useState(false)
+  // null until the user touches the option, so each prompt starts from its own default.
+  const [optionChecked, setOptionChecked] = useState<boolean | null>(null)
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({})
   const activeRequest = queue[0] ?? null
   const activeRequestRef = useRef<ConfirmationDialogRequest | null>(activeRequest)
@@ -109,6 +113,10 @@ export function ConfirmationDialogProvider({
       if (confirmed && dontAskAgain) {
         request.options.dontAskAgain?.onConfirmed()
       }
+      const option = request.options.option
+      if (confirmed && option) {
+        option.onConfirmed(optionChecked ?? option.defaultChecked)
+      }
       const fields = request.options.fields
       if (confirmed && fields) {
         const defaults = Object.fromEntries(
@@ -118,6 +126,7 @@ export function ConfirmationDialogProvider({
       }
       // Why: queued prompts must not inherit this request's preference or typed values.
       setDontAskAgain(false)
+      setOptionChecked(null)
       setFieldValues({})
       request.resolve(confirmed)
       setQueue((currentQueue) => {
@@ -127,7 +136,7 @@ export function ConfirmationDialogProvider({
         return currentQueue.filter((queuedRequest) => queuedRequest.id !== request.id)
       })
     },
-    [dontAskAgain, fieldValues]
+    [dontAskAgain, fieldValues, optionChecked]
   )
 
   return (
@@ -151,6 +160,9 @@ export function ConfirmationDialogProvider({
             if (activeRequest?.options.initialFocus === 'confirm') {
               event.preventDefault()
               confirmButtonRef.current?.focus()
+            } else if (activeRequest?.options.initialFocus === 'cancel') {
+              event.preventDefault()
+              cancelButtonRef.current?.focus()
             }
           }}
         >
@@ -178,6 +190,13 @@ export function ConfirmationDialogProvider({
               ) : null}
             </DialogHeader>
           </div>
+          {displayedRequest?.options.option ? (
+            <ConfirmationDialogOption
+              option={displayedRequest.options.option}
+              checked={optionChecked ?? displayedRequest.options.option.defaultChecked}
+              onCheckedChange={setOptionChecked}
+            />
+          ) : null}
           {displayedRequest?.options.fields ? (
             <div className="space-y-3">
               {displayedRequest.options.fields.inputs.map((field) => (
@@ -229,6 +248,7 @@ export function ConfirmationDialogProvider({
             {displayedRequest?.options.acknowledgeOnly ? null : (
               <Button
                 type="button"
+                ref={cancelButtonRef}
                 variant={displayedRequest?.options.cancelVariant ?? 'outline'}
                 size={buttonSize}
                 onKeyDown={ignoreRepeatedKey}

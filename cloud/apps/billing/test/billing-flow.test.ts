@@ -215,7 +215,7 @@ describe('entitlements, overage and usage', () => {
       usedSeconds: 10 * HOUR,
       remainingIncludedSeconds: 110 * HOUR,
       usageWarningPercent: null,
-      overage: { optedIn: false, active: false, spendCapCents: 2500, spentCents: 0, centsPerHour: 75 },
+      overage: { optedIn: false, active: false, spendCapCents: 2500, spentCents: 0, centsPerHour: 100 },
       limits: { maxConcurrentSandboxes: 6, machineSizes: ['standard', 'large'], idleSleepMinutes: 15 },
       canStartSandbox: true,
       canManageBilling: true,
@@ -230,12 +230,14 @@ describe('entitlements, overage and usage', () => {
     expect((await h.call('GET', '/v1/billing/entitlements', { headers: auth })).body.usageWarningPercent).toBe(80)
   })
 
-  it('is idempotent per usageId and burns Large at 2x', async () => {
+  it('is idempotent per usageId and counts every size 1x (legacy large is the same 8 vCPU / 16 GB box)', async () => {
     const { h } = await subscribedTeam()
     const first = await h.controlPlane('/v1/internal/usage', usage('u-1', 1, { machineSize: 'large' }))
     const again = await h.controlPlane('/v1/internal/usage', usage('u-1', 1, { machineSize: 'large' }))
-    expect(first.body).toMatchObject({ recorded: true, weightedSeconds: 2 * HOUR })
+    const standard = await h.controlPlane('/v1/internal/usage', usage('u-2', 1))
+    expect(first.body).toMatchObject({ recorded: true, weightedSeconds: HOUR })
     expect(again.body).toMatchObject({ recorded: false })
+    expect(standard.body).toMatchObject({ recorded: true, weightedSeconds: HOUR })
     expect(h.raw.prepare('SELECT SUM(weighted_seconds) AS s FROM usage_events').get()).toEqual({ s: 2 * HOUR })
   })
 
@@ -270,17 +272,17 @@ describe('entitlements, overage and usage', () => {
       expect.objectContaining({ identifier: 'u-5', 'payload[stripe_customer_id]': customer, 'payload[value]': String(4 * HOUR) })
     ])
     const entitlement = await h.call('GET', '/v1/billing/entitlements', { headers: auth })
-    expect(entitlement.body.overage).toMatchObject({ optedIn: true, active: true, spentCents: 300 })
+    expect(entitlement.body.overage).toMatchObject({ optedIn: true, active: true, spentCents: 400 })
   })
 
   it('stops metering and new starts at the spend cap; admins can raise it', async () => {
-    // $3 cap = 4 overage hours at $0.75.
+    // $3 cap = 3 overage hours at $1.00.
     const { h, auth } = await subscribedTeam({ overage: true, spendCapCents: 300 })
     for (let i = 0; i < 5; i++) {
       await h.controlPlane('/v1/internal/usage', usage(`u-${i}`, 24))
     }
     await h.controlPlane('/v1/internal/usage', usage('o-1', 6))
-    expect(h.stripe.meterEvents.map((event) => event['payload[value]'])).toEqual([String(4 * HOUR)])
+    expect(h.stripe.meterEvents.map((event) => event['payload[value]'])).toEqual([String(3 * HOUR)])
     const check = () => h.controlPlane('/v1/internal/entitlements/check', { accountId: 'org:o1', machineSize: 'standard', runningSandboxes: 0 })
     expect((await check()).body).toMatchObject({ allow: false, reason: 'overage_cap_reached' })
 

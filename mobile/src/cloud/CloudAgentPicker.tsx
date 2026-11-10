@@ -1,18 +1,14 @@
 import { Pressable, Text, View } from 'react-native'
 import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
-import { ClaudeIcon, OpenAIIcon } from '../components/AgentIcons'
+import {
+  ORCA_CLOUD_IMAGE_AGENTS,
+  type OrcaCloudImageAgent
+} from '../../../src/shared/hosted-sandbox/orca-cloud-image-agents'
+import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-
-/** The agent CLIs every Orca Cloud image ships. */
-const CLOUD_AGENTS = [
-  { id: 'claude', Icon: ClaudeIcon },
-  { id: 'codex', Icon: OpenAIIcon }
-] as const
-
-export const CLOUD_DEFAULT_AGENT = 'claude'
 
 /** Product names, from the app's one agent-name table. */
 export function cloudAgentLabel(agent: string): string {
@@ -20,8 +16,8 @@ export function cloudAgentLabel(agent: string): string {
 }
 
 export function CloudAgentPicker(props: {
-  value: string
-  onChange: (agent: string) => void
+  value: OrcaCloudImageAgent
+  onChange: (agent: OrcaCloudImageAgent) => void
   disabled?: boolean
 }) {
   useMobileColorScheme()
@@ -32,7 +28,8 @@ export function CloudAgentPicker(props: {
       accessibilityRole="radiogroup"
       accessibilityLabel={t('cloud.agent.label', 'Agent')}
     >
-      {CLOUD_AGENTS.map(({ id, Icon }) => {
+      {/* Only what the image ships: the VM does not exist yet, so nothing else could start. */}
+      {ORCA_CLOUD_IMAGE_AGENTS.map((id) => {
         const label = cloudAgentLabel(id)
         const checked = props.value === id
         return (
@@ -50,7 +47,7 @@ export function CloudAgentPicker(props: {
               pressed && styles.pressed
             ]}
           >
-            <Icon size={15} />
+            <MobileAgentIcon agentId={id} size={15} />
             <Text style={[styles.label, checked && styles.labelSelected]}>{label}</Text>
           </Pressable>
         )

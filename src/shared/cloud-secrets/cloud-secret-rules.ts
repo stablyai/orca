@@ -29,8 +29,29 @@ const AGENT_KEY_NAMES: ReadonlySet<string> = new Set([
   'CLAUDE_CODE_USE_VERTEX',
   'ANTHROPIC_VERTEX_PROJECT_ID',
   'CLOUD_ML_REGION',
-  'GOOGLE_CLOUD_PROJECT'
+  'GOOGLE_CLOUD_PROJECT',
+  'GOOGLE_GENERATIVE_AI_API_KEY',
+  'COPILOT_PROVIDER_BASE_URL',
+  'COPILOT_PROVIDER_API_KEY',
+  'COPILOT_PROVIDER_BEARER_TOKEN',
+  'COPILOT_MODEL'
 ])
+
+/**
+ * Agent keys the egress proxy cannot swap, so the workspace VM holds the real value: AWS requests
+ * are signed in the VM (SigV4) with the secret key, and Bedrock API keys are not routed yet. Every
+ * other agent key reaches the VM only as a placeholder. Mirrors the control plane's swap list.
+ */
+const STORED_ON_VM_NAMES: ReadonlySet<string> = new Set([
+  'AWS_ACCESS_KEY_ID',
+  'AWS_SECRET_ACCESS_KEY',
+  'AWS_SESSION_TOKEN',
+  'AWS_BEARER_TOKEN_BEDROCK'
+])
+
+export function cloudSecretStoredOnVm(name: string): boolean {
+  return STORED_ON_VM_NAMES.has(name)
+}
 
 const RESERVED_NAMES: ReadonlySet<string> = new Set([
   'PATH',

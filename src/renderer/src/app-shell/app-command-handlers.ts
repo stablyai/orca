@@ -1,3 +1,4 @@
+import { runOrRestartPrimaryRunAction } from '@/lib/run-actions/run-action-events'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { runBuiltInOrReplacement } from '@/lib/plugin-command-replacements'
 import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
@@ -220,6 +221,17 @@ export function createAppCommandHandlers(
         return claim('workspace.rename', () => {
           useAppStore.getState().setSidebarOpen(true)
           requestScrollToCurrentWorkspaceRevealAndRename()
+        })
+      }
+    ],
+    [
+      'workspace.run',
+      () => {
+        if (!workspaceChromeActive || floatingWorkspaceFocused || !activeWorktreeId) {
+          return false
+        }
+        return claim('workspace.run', () => {
+          void runOrRestartPrimaryRunAction(activeWorktreeId)
         })
       }
     ],

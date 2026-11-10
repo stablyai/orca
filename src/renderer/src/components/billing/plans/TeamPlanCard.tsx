@@ -8,6 +8,7 @@ import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { OrcaBillingInterval, OrcaBillingOffers } from '../../../../../shared/orca-billing'
 import { PlanCardShell } from './PlanCardShell'
 import { formatCents, perSeatMonthlyCents, periodTotalCents } from './plans-pricing'
+import { ORCA_CLOUD_SANDBOX_SPEC } from '../../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 
 export type TeamPlanCardMode = 'choose' | 'current' | 'locked'
 
@@ -49,11 +50,13 @@ export function TeamPlanCard({
       '{{value0}} sandbox hours per seat each month, pooled across your team',
       { value0: String(team.includedHoursPerSeat) }
     ),
-    t('auto.components.billing.plans.featureStandard', 'Standard (4 vCPU · 8 GB)'),
     t(
-      'auto.components.billing.plans.featureLarge4',
-      'Large (8 vCPU · 16 GB) uses sandbox hours at {{value0}}× the rate',
-      { value0: String(team.largeMachineWeight) }
+      'auto.components.billing.plans.featureSpec',
+      'Every sandbox gets {{value0}} vCPU · {{value1}} GB',
+      {
+        value0: String(ORCA_CLOUD_SANDBOX_SPEC.vcpus),
+        value1: String(ORCA_CLOUD_SANDBOX_SPEC.memoryGb)
+      }
     ),
     t(
       'auto.components.billing.plans.featureSleep3',
@@ -62,12 +65,11 @@ export function TeamPlanCard({
     ),
     t('auto.components.billing.plans.featureReady', 'Ready in seconds, nothing to set up or host'),
     t(
-      'auto.components.billing.plans.featureOverage3',
-      'Optional overage at {{value0}}/hour ({{value1}}/hour on Large), capped at a monthly spend cap you set ({{value2}} by default)',
+      'auto.components.billing.plans.featureOverage5',
+      'Optional overage at {{value0}}/hour, up to a monthly spend cap you set ({{value1}} by default)',
       {
         value0: formatCents(team.overageCentsPerHour, locale),
-        value1: formatCents(team.overageCentsPerHour * team.largeMachineWeight, locale),
-        value2: formatCents(team.defaultSpendCapCents, locale)
+        value1: formatCents(team.defaultSpendCapCents, locale)
       }
     )
   ]

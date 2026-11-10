@@ -8,6 +8,10 @@
 //   not retried for the same golden (the attempt is recorded by its base_snapshot_id);
 // - rate-limited: a few starts per tick and a cap on builds in flight across all accounts.
 // Staleness is exact: environment_builds.base_snapshot_id is the golden snapshot each build started from.
+// Regions (U17): an environment lives in the default region, so a build is compared with the default
+// region's golden. An older build from another region (iad1 before pdx1 became the default) is stale
+// by that rule and is rebuilt in the default region; its workspaces boot in the build's own region
+// until the new build is active.
 import type { SandboxCaller } from './auth'
 import { parseConfig, startBuild, type BuildConfig, type BuildDeps, type BuildRow } from './environment-builds'
 import type { EnvironmentRow } from './environments'

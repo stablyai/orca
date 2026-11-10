@@ -1,3 +1,4 @@
+import { formatRunActionsForTrust } from '../../../shared/orca-yaml-run-actions'
 import { getDefaultRepoHookSettings } from '../../../shared/constants'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import type { SetupScriptImportCandidate } from '../../../shared/workspace-setup/setup-script-imports'
@@ -198,7 +199,11 @@ export function buildImportedHookSettings(
       ...defaults.scripts,
       ...current?.scripts,
       setup: candidate.setup,
-      archive: candidate.archive ?? current?.scripts?.archive ?? defaults.scripts.archive
+      archive: candidate.archive ?? current?.scripts?.archive ?? defaults.scripts.archive,
+      // Imported run actions join this machine's own; orca.yaml actions with the same id yield.
+      ...(candidate.run ? { run: candidate.run } : {}),
+      ...(candidate.runMode ? { runMode: candidate.runMode } : {}),
+      ...(candidate.autoRunAfterSetup ? { autoRunAfterSetup: candidate.autoRunAfterSetup } : {})
     }
   }
 }
@@ -208,6 +213,8 @@ export type DetectedSetupPreviewContent = {
   archive: string | null
   editable: boolean
   skippedFields: readonly string[]
+  /** Imported run actions, as the text the Run button will execute. */
+  runActions: string | null
 }
 
 // Mirrors what buildImportedHookSettings saves; only package-manager guesses are editable before saving.
@@ -220,7 +227,8 @@ export function getDetectedSetupPreviewContent(
     setup: editable ? packageManagerSetupDraft : candidate.setup,
     archive: candidate.archive ?? null,
     editable,
-    skippedFields: candidate.unsupportedFields ?? []
+    skippedFields: candidate.unsupportedFields ?? [],
+    runActions: candidate.run?.length ? formatRunActionsForTrust(candidate.run) : null
   }
 }
 

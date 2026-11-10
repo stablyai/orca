@@ -2,7 +2,7 @@
 // retention for long-suspended sandboxes. Every destructive step is two-phase (seen, then acted on
 // after a grace period) and logged; partial provider listings never delete anything.
 import { RETENTION_HOLD_REASONS } from './entitlements'
-import { destroySandbox, suspendSandbox, type LifecycleDeps } from './lifecycle'
+import { destroySandbox, goldenSnapshotIds, suspendSandbox, type LifecycleDeps } from './lifecycle'
 import { getControlState, setControlState } from './guardrails'
 import { ACTIVE_STATUSES, getSandboxByProviderName, listByStatus, type SandboxRow } from './store'
 
@@ -272,7 +272,7 @@ async function sweepOrphans(deps: LifecycleDeps, summary: HousekeepingSummary): 
     if (now - orphan.first_seen_at >= grace) {
       await deps.provider.deleteSandbox(box.name)
       for (const snapshot of await deps.provider.listSnapshots(box.name)) {
-        if (snapshot.status === 'created' && snapshot.id !== deps.config.goldenSnapshotId && !(await isEnvironmentBuildSnapshot(deps.db, snapshot.id))) {
+        if (snapshot.status === 'created' && !goldenSnapshotIds(deps.config).includes(snapshot.id) && !(await isEnvironmentBuildSnapshot(deps.db, snapshot.id))) {
           await deps.provider.deleteSnapshot(snapshot.id)
         }
       }
@@ -313,7 +313,7 @@ async function sweepSnapshots(deps: LifecycleDeps, sandboxNames: string[], summa
     log('orphan_snapshot_sweep_partial', { listed: listed.snapshots.length })
     return
   }
-  const owned = new Set<string>([deps.config.goldenSnapshotId])
+  const owned = new Set<string>(goldenSnapshotIds(deps.config))
   for (const name of sandboxNames) {
     for (const snapshot of await deps.provider.listSnapshots(name)) {
       owned.add(snapshot.id)

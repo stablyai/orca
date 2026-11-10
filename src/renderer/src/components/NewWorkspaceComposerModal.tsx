@@ -9,8 +9,6 @@ import type {
   AgentPickerEntry
 } from '../../../shared/agent-launch/picker/agent-launch-picker'
 import { DirectWorkItemSetupDialog } from './new-workspace/DirectWorkItemSetupDialog'
-import { isOrcaCloudSelection } from './new-workspace/run-target-options'
-import { agentChoicePending } from '@/lib/host-chat-program'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
@@ -28,13 +26,8 @@ import AgentSettingsDialog, {
 } from '@/components/agent/AgentSettingsDialog'
 import type { AddRepoDialogHostedController } from '@/components/sidebar/project-admission/host-selection/use-add-repo-hosted-controller'
 import { useComposerState } from '@/hooks/useComposerState'
-import {
-  composerLaunchWorkspace,
-  quickWorkspacePickerInputs,
-  pickQuickWorkspaceAgent,
-  resolveQuickWorkspaceAgentSelection
-} from '@/lib/quick-workspace-agent-selection'
-import { useAgentsOfferedForLaunch } from '@/lib/host-chat-program-acquisition'
+import { quickWorkspacePickerInputs } from '@/lib/quick-workspace-agent-selection'
+import { useComposerQuickAgent } from './new-workspace/use-composer-quick-agent'
 import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
@@ -165,38 +158,12 @@ function QuickTabBody({
   const [quickAgentOverride, setQuickAgentOverride] = useState<TuiAgent | null | undefined>(
     modalData.recovery?.agent
   )
-  // The picker rows' workspace when known, so the offered list and the rows read one host.
-  const launchWorkspace =
-    cardProps.agentRows?.target.workspace ?? composerLaunchWorkspace(cardProps)
-  const offeredAgentIds = useAgentsOfferedForLaunch(launchWorkspace, cardProps.detectedAgentIds)
-  const detected = cardProps.detectedAgentIds ? [...cardProps.detectedAgentIds] : null
-  const choicePending = (agent: TuiAgent): boolean =>
-    agentChoicePending(useAppStore.getState(), agent, launchWorkspace, detected)
-  // Pending discovery preserves the existing catalog fallback; current facts settle the default.
-  const preferredQuickAgent = pickQuickWorkspaceAgent(
-    settings?.defaultTuiAgent,
-    cardProps.detectedAgentIds,
-    settings?.disabledTuiAgents,
-    offeredAgentIds,
-    choicePending
-  )
-  // An explicit pick stays valid where it opens as a chat without its CLI.
-  const resolvedQuickAgentSelection = resolveQuickWorkspaceAgentSelection({
+  const { orcaCloud, orcaCloudModel, quickAgent, chipAgentIds } = useComposerQuickAgent(
+    cardProps,
+    settings,
     quickAgentOverride,
-    preferredQuickAgent,
-    detectedAgentIds: cardProps.detectedAgentIds,
-    offeredAgentIds,
-    selectedChoiceUnresolved: Boolean(quickAgentOverride && choicePending(quickAgentOverride)),
-    disabledTuiAgents: settings?.disabledTuiAgents
-  })
-  if (resolvedQuickAgentSelection.quickAgentOverride !== quickAgentOverride) {
-    // Repair invalid picks before children render an unavailable option.
-    setQuickAgentOverride(resolvedQuickAgentSelection.quickAgentOverride)
-  }
-  const quickAgent = resolvedQuickAgentSelection.quickAgent
-  const chipAgentIds =
-    offeredAgentIds &&
-    new Set([...offeredAgentIds, ...(quickAgent && choicePending(quickAgent) ? [quickAgent] : [])])
+    setQuickAgentOverride
+  )
   // Why keyed by agent: a pick repaired to another agent must not carry the old one's surface.
   const [quickAgentPick, setQuickAgentPick] = useState<
     Omit<NonNullable<ComposerModalData['recovery']>, 'note'>
@@ -213,6 +180,7 @@ function QuickTabBody({
       : undefined
   const quickAgentSurface = quickAgentPick.agent === quickAgent ? quickAgentPick.surface : undefined
   const launchSelection = observation.selectionFor(quickAgent, quickAgentSurface)
+  const agentMenuModel = orcaCloudModel ?? (cardProps.agentRows ? observation.model : null)
   const createDisabled = formDisabled || !launchSelection.ready
 
   const handleQuickAgentChange = useCallback(
@@ -223,9 +191,12 @@ function QuickTabBody({
       entry?: AgentPickerEntry
     ) => {
       setQuickAgentOverride(agent)
-      setQuickAgentPick({ agent, surface, draft, entry, contextKey: observation.contextKey })
+      // Orca Cloud is terminal-only; keeping its surface would pin the agent to a terminal locally.
+      setQuickAgentPick(
+        orcaCloud ? { agent } : { agent, surface, draft, entry, contextKey: observation.contextKey }
+      )
     },
-    [observation.contextKey]
+    [observation.contextKey, orcaCloud]
   )
 
   const handleCreate = useCallback(async (): Promise<void> => {
@@ -322,7 +293,7 @@ function QuickTabBody({
   // An Orca Cloud sandbox is a whole workspace, not a local worktree.
   const primaryActionLabel = isFolderWorkspaceTarget
     ? getFolderWorkspacePrimaryActionLabel(t)
-    : cardProps.selectedRepoIsGit && !isOrcaCloudSelection(cardProps)
+    : cardProps.selectedRepoIsGit && !orcaCloud
       ? t('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')
       : t('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
 
@@ -380,6 +351,8 @@ function QuickTabBody({
         quickAgent={quickAgent}
         agentPickerDraft={pickerDraft}
         agentSetupDisabled={
+          // Orca Cloud's per-agent defaults live on a VM that does not exist yet.
+          orcaCloud ||
           observation.model.state !== 'settled' ||
           observation.model.pickerContext?.executionHostId !== 'local'
         }
@@ -389,9 +362,9 @@ function QuickTabBody({
         detectedAgentIds={chipAgentIds}
         createDisabled={createDisabled}
         agentSurfaceRows={
-          cardProps.agentRows
+          agentMenuModel
             ? {
-                model: observation.model,
+                model: agentMenuModel,
                 selection: launchSelection,
                 surface: quickAgentSurface,
                 contextKey: observation.contextKey,

@@ -94,6 +94,9 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     `${ORCA_SCRUB_SAFE_PANE_ENV}/u`,
     'ORCA_TAB_ID/u',
     'ORCA_WORKTREE_ID/u',
+    'ORCA_PORT/u',
+    'ORCA_PORT_COUNT/u',
+    'CONDUCTOR_PORT/u',
     // Workspace identity must remain untranslated.
     'ORCA_WORKSPACE_ID/u',
     'ORCA_AGENT_LAUNCH_TOKEN/u',

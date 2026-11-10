@@ -1,6 +1,8 @@
 import { getRuntimePathBasename } from '../../shared/cross-platform-path'
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../shared/shell/launch/terminal-git-credential-guard'
 import type { Repo } from '../../shared/repo-types'
+import { buildWorkspacePortEnv } from '../../shared/workspace-port-block'
+import { peekWorkspacePortBlock } from '../workspace-ports/workspace-port-block-registry'
 
 // Path-valued keys only, so WSL and posix-shell launches translate them; names are not paths.
 export const SETUP_RUNNER_PATH_ENV_KEYS = [
@@ -23,7 +25,18 @@ export function getSetupEnvVars(
     CONDUCTOR_ROOT_PATH: repo.path,
     CONDUCTOR_WORKSPACE_PATH: worktreePath,
     CONDUCTOR_WORKSPACE_NAME: getRuntimePathBasename(worktreePath),
-    GHOSTX_ROOT_PATH: repo.path
+    GHOSTX_ROOT_PATH: repo.path,
+    ...getWorkspacePortEnv(worktreePath)
+  }
+}
+
+function getWorkspacePortEnv(worktreePath: string): Record<string, string> {
+  try {
+    // Setup terminals get the block from their own spawn; this covers hook processes run directly.
+    const block = peekWorkspacePortBlock(worktreePath)
+    return block ? buildWorkspacePortEnv(block) : {}
+  } catch {
+    return {}
   }
 }
 

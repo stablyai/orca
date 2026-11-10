@@ -7,6 +7,7 @@ import { inspectDevcontainerConfig } from './setup-script-import-devcontainer'
 import { asRecord, parseJsonObject } from './setup-script-import-parsers'
 import { inspectPackageManagerSetupCandidate } from './setup-script-package-manager-suggestion'
 import type { SetupScriptImportProvider } from './setup-script-import-providers'
+import type { OrcaRunAction, OrcaRunMode } from '../orca-yaml-hook-types'
 import {
   isSetupScriptImportFieldWithinLimit,
   isSetupScriptImportTextWithinLimit,
@@ -26,6 +27,10 @@ export type SetupScriptImportCandidate = {
   files: string[]
   setup: string
   archive?: string
+  /** Named run actions, in orca.yaml's `scripts.run` shape. Only Conductor supplies these today. */
+  run?: OrcaRunAction[]
+  runMode?: OrcaRunMode
+  autoRunAfterSetup?: boolean | string
   unsupportedFields?: string[]
 }
 

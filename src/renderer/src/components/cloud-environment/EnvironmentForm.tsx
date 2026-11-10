@@ -23,7 +23,7 @@ import {
   RepoListEditor,
   type LocalRepoSuggestion
 } from './EnvironmentFormFields'
-import { EnvVarChipEditor, MachineSizeControl } from './EnvironmentSettingsFields'
+import { EnvVarChipEditor, SandboxSizeInfo } from './EnvironmentSettingsFields'
 import { ImportFromRepoDialog, type ImportReview } from './ImportFromRepoDialog'
 
 export type EnvironmentFormProps = {
@@ -159,10 +159,7 @@ export function EnvironmentForm({
         onChange={(envVarNames) => setDraft((current) => ({ ...current, envVarNames }))}
       />
 
-      <MachineSizeControl
-        value={draft.machineSize}
-        onChange={(machineSize) => setDraft((current) => ({ ...current, machineSize }))}
-      />
+      <SandboxSizeInfo />
 
       <div className="flex flex-wrap items-center gap-3 border-t border-border/60 pt-4">
         <Button
@@ -263,17 +260,7 @@ export function EnvironmentSummary({ base }: { base: EnvironmentDraft }): React.
         <InstallScriptEditor id={scriptId} value={base.installScript} readOnly />
       </div>
       <EnvVarChipEditor names={base.envVarNames} readOnly />
-      <div className="space-y-1">
-        <FieldLabel>{t('cloudEnvironment.size.label', 'Sandbox size')}</FieldLabel>
-        <p className="text-sm">
-          {base.machineSize === 'large'
-            ? t('cloudEnvironment.size.large', 'Large (8 vCPU · 16 GB)')
-            : t('cloudEnvironment.size.standard', 'Standard (4 vCPU · 8 GB)')}
-        </p>
-        <p className="text-xs text-muted-foreground">
-          {t('cloudEnvironment.size.rateNote', 'Large uses sandbox hours at 2× the rate.')}
-        </p>
-      </div>
+      <SandboxSizeInfo />
     </div>
   )
 }

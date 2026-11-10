@@ -13,6 +13,7 @@ import {
   MAX_ORCA_YAML_COLLECTION_ENTRIES
 } from './orca-yaml-file-limit'
 import { parseEphemeralVmRecipeTimeoutSeconds } from './ephemeral-vm-recipe-timeouts'
+import { parseOrcaRunScripts } from './orca-yaml-run-actions'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -231,6 +232,7 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
   const scriptsRecord = asRecord(record.scripts)
   const setup = scriptsRecord ? asTrimmedString(scriptsRecord.setup) : undefined
   const archive = scriptsRecord ? asTrimmedString(scriptsRecord.archive) : undefined
+  const runScripts = parseOrcaRunScripts(scriptsRecord)
   const setupAgentStartupPolicy =
     record.setupAgentStartupPolicy === 'start-immediately' ||
     record.setupAgentStartupPolicy === 'wait-for-setup'
@@ -249,6 +251,7 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
   if (
     !setup &&
     !archive &&
+    !runScripts.run &&
     !issueCommand &&
     !setupAgentStartupPolicy &&
     defaultTabs.length === 0 &&
@@ -262,7 +265,8 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
   return {
     scripts: {
       ...(setup ? { setup } : {}),
-      ...(archive ? { archive } : {})
+      ...(archive ? { archive } : {}),
+      ...runScripts
     },
     ...(setupAgentStartupPolicy ? { setupAgentStartupPolicy } : {}),
     ...(issueCommand ? { issueCommand } : {}),

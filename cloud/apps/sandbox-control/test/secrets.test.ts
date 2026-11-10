@@ -299,7 +299,8 @@ describe('model API key egress placeholders (phase 2)', () => {
     const { h, sandboxId, proxied, upstream } = await placeholderSetup()
     const anthropicPh = `orca-ph-anthropic-api-key-${sandboxId}`
     const openaiPh = `orca-ph-openai-api-key-${sandboxId}`
-    expect(startEnv(h)).toEqual({ ANTHROPIC_API_KEY: anthropicPh, OPENAI_API_KEY: openaiPh, GEMINI_API_KEY: 'gemini-plain-value' })
+    const geminiPh = `orca-ph-gemini-api-key-${sandboxId}`
+    expect(startEnv(h)).toEqual({ ANTHROPIC_API_KEY: anthropicPh, OPENAI_API_KEY: openaiPh, GEMINI_API_KEY: geminiPh })
     const [box] = [...h.vercel.boxes.values()]
     const forward = (header: string, value: string) => ({
       match: { headers: [{ key: { exact: header }, value: { exact: value } }] },
@@ -312,7 +313,8 @@ describe('model API key egress placeholders (phase 2)', () => {
       deny
     ])
     expect(box!.policy.allow['api.openai.com']).toEqual([forward('authorization', `Bearer ${openaiPh}`), deny])
-    expect(box!.policy.allow['generativelanguage.googleapis.com']).toEqual([])
+    // Gemini keys are swapped too (x-goog-api-key), fail closed like the other model hosts.
+    expect(box!.policy.allow['generativelanguage.googleapis.com']).toEqual([forward('x-goog-api-key', geminiPh), deny])
 
     expect(await proxied('api.anthropic.com', { 'x-api-key': anthropicPh })).toEqual({ status: 200, body: 'data: {"type":"message_stop"}\n\n' })
     expect(upstream.at(-1)!.headers.get('x-api-key')).toBe(ORG_KEY)

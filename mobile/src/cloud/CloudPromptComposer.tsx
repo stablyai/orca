@@ -4,7 +4,8 @@ import { Pressable, Text, TextInput, View } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { CloudAgentPicker, CLOUD_DEFAULT_AGENT } from './CloudAgentPicker'
+import { ORCA_CLOUD_DEFAULT_AGENT } from '../../../src/shared/hosted-sandbox/orca-cloud-image-agents'
+import { CloudAgentPicker } from './CloudAgentPicker'
 import { cloudWorkspaceScreenStyles as styles } from './cloud-workspace-screen-styles'
 
 /** One card: the agent, the prompt, and Send. The send button keeps its shape in every state; when
@@ -20,7 +21,7 @@ export function CloudPromptComposer(props: {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const [draft, setDraft] = useState('')
-  const [agent, setAgent] = useState(CLOUD_DEFAULT_AGENT)
+  const [agent, setAgent] = useState(ORCA_CLOUD_DEFAULT_AGENT)
   const canSend = draft.trim() !== '' && !props.disabled
   const send = async () => {
     if (canSend && (await props.onSend(draft.trim(), agent))) {

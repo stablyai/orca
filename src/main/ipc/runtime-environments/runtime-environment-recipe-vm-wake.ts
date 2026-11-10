@@ -197,14 +197,18 @@ function refusal(outcome: Exclude<RecipeVmOpening, 'up'> | 'asleep'): RemoteRunt
   }
 }
 
-/** A request that does not open the workspace waits (bounded by its own timeout and hold) for a wake
- *  already in flight. Called before the request takes a per-environment call slot, so held
- *  background requests never block an open. */
+/**
+ * A request that does not open the workspace waits for a wake already in flight (bounded by the
+ * in-flight hold and its caller's preparation), then gets its own timeout once dispatched. Not
+ * bounded by that call timeout: a wake slower than it would refuse every request made meanwhile,
+ * and several (terminal.resolvePane, session.tabs.activate, the pane layout) are not retried, which
+ * left the woken pane dead. A caller that gives up aborts its signal, which ends the hold. Called
+ * before the request takes a per-environment call slot, so held requests never block an open.
+ */
 export function holdForInFlightRecipeVmWake<E extends RecipeVmEnvironment>(
   userDataPath: string,
   environment: E,
   method: string,
-  timeoutMs: number | undefined,
   options?: { preparation?: { recipeVmHoldMs?: number }; signal?: AbortSignal }
 ): Promise<HeldRecipeVmWake<E> | null> {
   if (recipeVmWakeIntentFor(method) !== 'none') {
@@ -212,11 +216,7 @@ export function holdForInFlightRecipeVmWake<E extends RecipeVmEnvironment>(
   }
   const holdMs = Math.min(
     RECIPE_VM_IN_FLIGHT_WAKE_HOLD_MS,
-    options?.preparation?.recipeVmHoldMs ?? Infinity,
-    timeoutMs ?? DEFAULT_CALL_TIMEOUT_MS
+    options?.preparation?.recipeVmHoldMs ?? Infinity
   )
   return awaitRecipeVmInFlightWake(userDataPath, environment, holdMs, options?.signal)
 }
-
-/** The transport's default call timeout, which also bounds the hold for calls that set none. */
-const DEFAULT_CALL_TIMEOUT_MS = 15_000

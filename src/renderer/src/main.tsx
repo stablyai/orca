@@ -35,6 +35,7 @@ import { registerPlanBillingMenuItem } from './components/billing/register-plan-
 import { installOrcaCloudSessionEvents } from './lib/orca-cloud-session-events'
 import { installCloudWorkspaceLinks } from './components/cloud-workspaces/cloud-workspace-links'
 import { installCloudMessageSenderFromStore } from './lib/cloud-message-sender-install'
+import { installRunActionEvents } from './lib/run-actions/run-action-events'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
@@ -42,6 +43,8 @@ const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
 import.meta.hot?.dispose(disposeBodyOverlayAttributes)
 const disposePlanBillingMenuItem = registerPlanBillingMenuItem()
 import.meta.hot?.dispose(disposePlanBillingMenuItem)
+const disposeRunActionEvents = installRunActionEvents()
+import.meta.hot?.dispose(disposeRunActionEvents)
 const disposeOrcaCloudSessionEvents = installOrcaCloudSessionEvents()
 import.meta.hot?.dispose(disposeOrcaCloudSessionEvents)
 const disposeCloudWorkspaceLinks = installCloudWorkspaceLinks()

@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import type { OrcadReady } from './sandbox-vm-commands'
 import type { SandboxRow } from './store'
+import { MachineSizeInput } from './machine-size'
 
 const Id = z
   .string()
@@ -13,7 +14,7 @@ const Id = z
 export const CreateRequestSchema = z
   .object({
     workspaceId: Id,
-    machineSize: z.enum(['standard', 'large']),
+    machineSize: MachineSizeInput,
     region: z
       .string()
       .regex(/^[a-z]{3}[0-9]$/)

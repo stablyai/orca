@@ -3,6 +3,7 @@ import {
   subscribeWindowParkVisibility,
   WINDOW_HIDE_PARK_GRACE_MS
 } from '@/lib/window-park-visibility'
+import { isRecipeVmWakingRefusal } from '../../../../../shared/remote-runtime/recipe-vm-wake'
 import {
   createWindowVisibilitySubscriptionEntry,
   type SubscriptionEntry
@@ -179,6 +180,11 @@ export function installWindowVisibilitySubscriptionParking(
         entry.pending = null
         if (isCurrent()) {
           spec.onSubscribeError?.(error)
+          // The VM is still waking: the same subscribe succeeds once it is up, so retry soon rather
+          // than on a backoff that can outlast the wake and leave the woken pane without its stream.
+          if (isRecipeVmWakingRefusal(error)) {
+            entry.retryAttempt = 0
+          }
           scheduleRetry(entry, spec)
           return
         }

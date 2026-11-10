@@ -40,7 +40,7 @@ const running: HostedWorkspaceStatus = {
     orcadAlive: true
   },
   uptimeMs: 2 * 3_600_000 + 3 * 60_000,
-  usage: { totalMs: 14.6 * 3_600_000, centsPerHour: 75, costCents: 1095 },
+  usage: { totalMs: 14.6 * 3_600_000, centsPerHour: 100, costCents: 1460 },
   archive: null,
   checkedAt: NOW
 }

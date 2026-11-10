@@ -6,6 +6,7 @@ import { expandWindowsEnvironmentVariables } from '../../../shared/windows-envir
 import { resolveSafePtyDefaultCwd } from '../pty-default-cwd'
 import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../../shared/remote-viewer-clipboard-env'
 import { ORCAD_SERVER_LAUNCH_ENV_KEYS } from '../../../shared/orcad-server-launch-env'
+import { WORKSPACE_PORT_ENV_KEYS } from '../../../shared/workspace-port-block'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -13,6 +14,8 @@ const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_WORKTREE_ID',
   'ORCA_AGENT_LAUNCH_TOKEN',
   'JCODE_RUNTIME_DIR',
+  // A parent Orca's workspace port block belongs to that workspace, not this pane's.
+  ...WORKSPACE_PORT_ENV_KEYS,
   // Per-viewer: an Orca started from a remote viewer's pane must not mark its own local panes.
   REMOTE_VIEWER_CLIPBOARD_ENV,
   // A server's own launch env; a user's `orcad` in this shell is not that server.

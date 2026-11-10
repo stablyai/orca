@@ -87,3 +87,23 @@ export const wakingFromPredictive = defineFixture({
   width: 640,
   render: () => <TypeThrough value={startedAgo(3_000)} />
 })
+
+// The sandbox woke but the pane in front never took input within the cap: a reconnect card,
+// never a silent dead pane.
+export const wakingTerminalStalled = defineFixture({
+  width: 640,
+  render: () => (
+    <Pane>
+      <CloudWakingOverlay
+        wake={startedAgo(26_000, { phase: 'failed' })}
+        workspaceName="fix-auth-redirect"
+        autoFocus={false}
+        typeThrough
+        terminalStalled
+        onRetry={noop}
+        onRestart={noop}
+        onDismiss={noop}
+      />
+    </Pane>
+  )
+})

@@ -6684,7 +6684,13 @@
           "newVmRecipe": "New VM recipe",
           "vmRecipe": "VM recipe",
           "thisRepository": "this repository",
-          "alwaysTrustRepo": "Always trust <code>orca.yaml</code> in <repo/>"
+          "alwaysTrustRepo": "Always trust <code>orca.yaml</code> in <repo/>",
+          "runChangedTitle": "{{repo}}'s run actions changed — run the new version?",
+          "runRunTitle": "Run actions from {{repo}}?",
+          "runChangedBody": "<code>orca.yaml</code> changed since you last approved. Re-review before these run from the Run button.",
+          "runRunBody": "This repository's <code>orca.yaml</code> defines these run actions. They run in this workspace's terminal when you start them. Only run if you trust <repo/>.",
+          "newRunActions": "New run actions",
+          "runActions": "Run actions"
         },
         "PendingWorktreeRow": {
           "af21e953d1": "Cancel worktree creation",
@@ -6790,7 +6796,8 @@
           "save": "Save local setup",
           "descriptionWithSource": "From <file>{{source}}</file>. Saving runs this whenever Orca creates a worktree for {{repo}}.",
           "notImported": "Not imported",
-          "notImportedHint": "These settings have no Orca equivalent and won't be saved."
+          "notImportedHint": "These settings have no Orca equivalent and won't be saved.",
+          "runActions": "Run actions"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "Cancel",
@@ -14448,8 +14455,6 @@
         "cloudRoutines": {
           "queued": "Run queued. It shows up in the history below.",
           "pausedSr": "(paused)",
-          "agentCodex": "Codex",
-          "agentClaude": "Claude Code",
           "createdByPerson": "by <person></person>",
           "lastRun": "Last run:",
           "neverRun": "Never run",
@@ -16580,7 +16585,7 @@
             "orcaCloudPaymentFailed": "Payment failed",
             "orcaCloudSignInButton": "Sign in",
             "orcaCloudHosted": "Hosted sandbox",
-            "orcaCloudSpecs": "4 vCPU · 8 GB",
+            "orcaCloudSpecs2": "{{value0}} vCPU · {{value1}} GB",
             "orcaCloudPlanEnded": "Your Team plan ended",
             "orcaCloudCapReached": "Spend cap reached",
             "orcaCloudTurnOnOverage": "Turn on overage",
@@ -20607,9 +20612,8 @@
           "seatsPeriod": "{{value0}} · {{value1}}",
           "was": "Was",
           "featureHours4": "{{value0}} sandbox hours per seat each month, pooled across your team",
-          "featureStandard": "Standard (4 vCPU · 8 GB)",
-          "featureLarge4": "Large (8 vCPU · 16 GB) uses sandbox hours at {{value0}}× the rate",
-          "featureOverage3": "Optional overage at {{value0}}/hour ({{value1}}/hour on Large), capped at a monthly spend cap you set ({{value2}} by default)",
+          "featureSpec": "Every sandbox gets {{value0}} vCPU · {{value1}} GB",
+          "featureOverage5": "Optional overage at {{value0}}/hour, up to a monthly spend cap you set ({{value1}} by default)",
           "footTerms4": "Prices in USD, before tax. Overage is off until an owner or admin turns it on. Cancel anytime; your plan runs to the end of the billing period.",
           "lockedBody2": "Only an owner or admin of your team can choose a plan. Ask one of them to open Plan & billing in Orca.",
           "vpSecretsBody4": "API keys you add to Orca are never written to the sandbox. Agents and terminals get them as environment variables.",
@@ -20681,7 +20685,7 @@
         "enterpriseContactSales": "Contact sales",
         "openForbidden2": "Only an owner or admin can manage billing.",
         "openSignedOut2": "Sign in to Orca again to manage your team.",
-        "overageDescription4": "Optional overage at {{value0}}/hour ({{value1}}/hour on Large), up to a monthly spend cap you set ({{value2}} by default).",
+        "overageDescription5": "Optional overage at {{value0}}/hour, up to a monthly spend cap you set ({{value1}} by default).",
         "overageHoursOnly": "{{value0}} overage hours this month",
         "overageMemberHint": "Owners and admins can change overage.",
         "overageOffRead": "Off",
@@ -20701,7 +20705,7 @@
         "sandboxHoursUsedMonth": "{{value0}} of {{value1}} sandbox hours used this month",
         "warn100b": "All of this month’s sandbox hours are used.",
         "warnPercent2": "You’ve used {{value0}}% of this month’s sandbox hours.",
-        "overageDescriptionOn": "Optional overage at {{value0}}/hour ({{value1}}/hour on Large), up to a monthly spend cap you set.",
+        "overageDescriptionOn2": "Optional overage at {{value0}}/hour, up to a monthly spend cap you set.",
         "reasonCapMember3": "Spend cap reached. Ask an owner or admin to raise the spend cap. Your files are safe.",
         "reasonGraceExpired3": "Payment failed. New sandboxes can’t start and running sandboxes are asleep. Update your payment method. Your files are safe.",
         "reasonGraceExpiredMember2": "Payment failed. New sandboxes can’t start and running sandboxes are asleep. Ask an owner or admin to update the payment method. Your files are safe.",
@@ -20740,7 +20744,6 @@
         "copyFailed": "Couldn't copy the link. Try again.",
         "copyLink": "Copy link",
         "copyWorkspaceLink": "Copy workspace link",
-        "cost": "Cost",
         "daysAgo": "{{value0}}d ago",
         "emptyArchivedBody": "Archived cloud workspaces show up here.",
         "emptyArchivedTitle": "No archived workspaces",
@@ -20780,8 +20783,10 @@
         "inRepo": "In {{value0}}",
         "justNow": "just now",
         "linkNotFound": "This link points to a private workspace, another team, or a workspace that was deleted.",
-        "listMeta_one": "{{count}} workspace · {{cost}}",
-        "listMeta_other": "{{count}} workspaces · {{cost}}",
+        "listMeta2_one": "{{count}} workspace · {{usage}}",
+        "listMeta2_other": "{{count}} workspaces · {{usage}}",
+        "listSandboxHours_one": "{{hours}} sandbox hour used",
+        "listSandboxHours_other": "{{hours}} sandbox hours used",
         "loading": "Loading cloud workspaces",
         "makeOwner": "Make owner",
         "makePrivate": "Make private",
@@ -20792,7 +20797,6 @@
         "memberViewing": "{{value0}} is viewing",
         "memberYou": "{{value0}} (you)",
         "minutesAgo": "{{value0}}m ago",
-        "modelTokensCost": "Model tokens {{value0}}",
         "moreMembers": "{{count}} more",
         "move": "Move",
         "moveToSection": "Move to section",
@@ -20817,12 +20821,14 @@
         "restored": "Restored",
         "retry": "Retry",
         "rowActions": "Actions for {{value0}}",
-        "rowDescription": "Cost {{cost}}. Last active {{lastActive}}. {{visibility}}.",
-        "rowDescriptionWithPresence": "Cost {{cost}}. Last active {{lastActive}}. {{visibility}}. {{presence}}.",
+        "rowDescription2": "{{usage}}. Last active {{lastActive}}. {{visibility}}.",
+        "rowSandboxHours_one": "{{hours}} sandbox hour",
+        "rowSandboxHours_other": "{{hours}} sandbox hours",
+        "rowDescriptionWithPresence2": "{{usage}}. Last active {{lastActive}}. {{visibility}}. {{presence}}.",
         "rowLabel": "{{value0}}, {{value1}}, owned by {{value2}}",
         "rowLabelOwnedByYou": "{{title}}, {{status}}, owned by you",
-        "sandboxHoursCost_one": "{{hours}} sandbox hour × {{rate}}/hour = {{cost}}",
-        "sandboxHoursCost_other": "{{hours}} sandbox hours × {{rate}}/hour = {{cost}}",
+        "sandboxHoursHint": "Sandbox hours this workspace has used.",
+        "sandboxHoursTitle": "Sandbox hours",
         "scopeMine": "Mine",
         "scopeTeam": "Team",
         "sectionCount_one": "{{count}} workspace",
@@ -21855,7 +21861,24 @@
         "confirmation": "Discard this message and everything after it? The message returns to the composer so you can edit and resend it. File changes on disk are kept.",
         "confirm": "Rewind",
         "cancel": "Cancel",
-        "action": "Rewind to here"
+        "action": "Rewind to here",
+        "restoreFilesCommitsStay": "Commits made since then stay on the branch.",
+        "filesAlreadyMatch": "Files on disk already match this message.",
+        "undoRestore": "Undo",
+        "undoneRestore": "Files are back to how they were before the rewind.",
+        "removedDescription": "This message and everything after it are removed from the chat. The message goes back to the composer so you can edit and resend it.",
+        "restoreChangedFiles_one": "Also restore {{count}} changed file",
+        "restoreChangedFiles_other": "Also restore {{count}} changed files",
+        "restoreFilesOutcome": "Files go back to how they were when this message was sent. Later changes are discarded. You can undo the file restore afterwards.",
+        "restoreFilesBusy": "Files can't be restored while the agent is working.",
+        "keepFilesOutcome": "Files on disk stay as they are.",
+        "restoredFiles_one": "Restored {{count}} file",
+        "restoredFiles_other": "Restored {{count}} files",
+        "chatRewoundBusy": "The chat was rewound, but files weren't restored because the agent is still working. Nothing on disk changed.",
+        "chatRewoundConflicts": "The chat was rewound, but files weren't restored because this workspace has unresolved merge conflicts. Nothing on disk changed.",
+        "chatRewoundBlocked": "The chat was rewound, but files weren't restored because a folder now sits where a restored file goes. Nothing on disk changed.",
+        "chatRewoundMissing": "The chat was rewound, but files weren't restored because Orca no longer has the files saved for this message. Nothing on disk changed.",
+        "chatRewoundFailed": "The chat was rewound, but some files couldn't be restored. Check Source Control before you continue."
       },
       "drop": {
         "messageTitle": "Drop to attach to this message",
@@ -25236,7 +25259,8 @@
       "e9da9f872a": "Send review notes to agent",
       "1524825c2c": "Toggle workspace board",
       "d286d1ab85": "Clear pane title",
-      "cloudWorkspaceCopyLink": "Copy cloud workspace link"
+      "cloudWorkspaceCopyLink": "Copy cloud workspace link",
+      "workspaceRun": "Run or restart the run action"
     },
     "group": {
       "global": "Global",
@@ -26312,9 +26336,7 @@
     },
     "header": {
       "active": "New workspaces start from build #{{number}}",
-      "noActive": "No build yet: workspaces start from a fresh sandbox",
-      "large": "Large",
-      "standard": "Standard"
+      "noActive": "No build yet: workspaces start from a fresh sandbox"
     },
     "agent": {
       "hint": "Starts your default agent in a local checkout. It writes the install script and builds until it succeeds.",
@@ -26403,10 +26425,7 @@
     "readOnlyAsk": "Ask an owner or admin to change the environment or start a build.",
     "size": {
       "label": "Sandbox size",
-      "large": "Large (8 vCPU · 16 GB)",
-      "standard": "Standard (4 vCPU · 8 GB)",
-      "rateNote": "Large uses sandbox hours at 2× the rate.",
-      "hint": "Used for builds and for cloud workspaces started from this environment. Large uses sandbox hours at 2× the rate."
+      "spec": "{{value0}} vCPU · {{value1}} GB"
     },
     "staleness": {
       "rebuild": "Rebuild",
@@ -26524,6 +26543,7 @@
       "unarchiving": "Restoring from archive…",
       "waking": "Waking…",
       "connecting": "Connecting…",
+      "terminalStalledTitle": "Couldn’t reconnect the terminal",
       "stuck": "This is taking much longer than usual.",
       "slow": "Taking longer than usual. Your files and chats are safe.",
       "messageQueued": "Your message sends as soon as it’s up.",
@@ -26623,7 +26643,11 @@
     "moveHere": "Move here",
     "openLocal": "Open local workspace",
     "copiedOn": "Moved to this computer · {{date}}",
-    "moveAgain": "Move again"
+    "moveAgain": "Move again",
+    "recovery": {
+      "reconnectingTitle": "Reconnecting to {{workspaceName}}…",
+      "reconnectingBody": "The connection dropped. Orca is retrying; your files and chats are safe."
+    }
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",
@@ -26846,6 +26870,10 @@
       "unterminatedQuote": "The closing quote is missing.",
       "overridden": "Set again further down; the later line is used.",
       "unknown": "Something went wrong in Orca Cloud. Nothing was changed. Try again."
+    },
+    "vm": {
+      "badge": "Stored on workspace",
+      "warning": "Orca can’t swap this key at the network edge, so cloud workspaces get the real value. Anything running in the workspace can read it."
     }
   },
   "cloudMcpSync": {
@@ -27001,5 +27029,29 @@
       "title": "An agent was interrupted by the restart",
       "action": "Continue"
     }
+  },
+  "runActions": {
+    "status": {
+      "running": "Running",
+      "stopping": "Stopping…",
+      "stopped": "Stopped",
+      "exited": "Exited",
+      "failed": "Failed",
+      "failedWithCode": "Failed (exit {{code}})",
+      "notRunning": "Not running"
+    },
+    "restart": "Restart",
+    "stop": "Stop",
+    "runAgain": "Run again",
+    "run": "Run",
+    "showOutput": "Show output",
+    "showRunning": "Show {{name}}",
+    "runNamed": "Run {{name}}",
+    "menu": "Run actions",
+    "ports": "Ports",
+    "noPorts": "No servers listening in this workspace yet.",
+    "tabTitle": "Run: {{name}}",
+    "noneTitle": "No run actions for this workspace",
+    "noneBody": "Add a command under scripts.run in orca.yaml, for example a dev server on $ORCA_PORT."
   }
 }

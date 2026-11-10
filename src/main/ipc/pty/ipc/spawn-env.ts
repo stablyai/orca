@@ -10,7 +10,11 @@ import { resolvePathEnvKey } from '../../../pty/environment/windows-path-segment
 import { routesFreshSpawnsToLocalProvider } from '../host-env/fresh-spawn-routing'
 import { parseValidPaneKey } from '../pane/key-state'
 import { shouldRefreshNativeClaudeAgentTeamsEnv } from '../pane/launch-authority'
-import { selectWindowJcodeRuntimeDir, stampPtySpawnPaneEnv } from '../spawn-pane-env'
+import {
+  selectWindowJcodeRuntimeDir,
+  stampPtySpawnPaneEnv,
+  stampWorkspacePortEnv
+} from '../spawn-pane-env'
 import type { PtyIpcSpawnState } from './spawn-state'
 import { assemblePtyIpcSpawnCodexEnv } from './spawn-env-codex'
 import { prepareAntigravityAccountForLaunch } from '../../../antigravity/native-account-launch'
@@ -113,6 +117,12 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
         ? selectWindowJcodeRuntimeDir(ctx.stablePaneKey, ctx.isDaemonHostSpawn)
         : undefined
   })
+  if (ctx.stablePaneKey) {
+    await stampWorkspacePortEnv(
+      ctx.baseEnv,
+      typeof args.worktreeId === 'string' ? args.worktreeId : undefined
+    )
+  }
   ctx.validatedPaneKey = ctx.stablePaneKey
   // Tab/leaf metadata still identifies the pane when its supplied ORCA_PANE_KEY was unproved.
   ctx.reservationPaneKey = ctx.metadataPaneKey ?? ctx.validatedPaneKey

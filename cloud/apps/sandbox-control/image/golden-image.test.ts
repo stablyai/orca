@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { ManifestSchema, VM_SCRIPTS, buildGoldenImage, provisionEnv, resolveReleaseBundle, type BuildInputs } from './golden-image'
 import { renderVmScriptsModule } from './generate-vm-scripts'
+import { ORCA_CLOUD_IMAGE_AGENTS, type OrcaCloudImageAgent } from '../../../../src/shared/hosted-sandbox/orca-cloud-image-agents'
 
 const manifest: BuildInputs['manifest'] = {
   imageVersion: '2026-11-08.1',
@@ -158,5 +159,67 @@ describe('Worker-embedded image scripts', () => {
   it('match image/ (run image/generate-vm-scripts.ts after editing a script)', () => {
     const generated = readFileSync(fileURLToPath(new URL('./vm-scripts.generated.ts', import.meta.url).href), 'utf8')
     expect(generated).toBe(renderVmScriptsModule())
+  })
+})
+
+describe('agents the image ships', () => {
+  const committed = ManifestSchema.parse(
+    JSON.parse(readFileSync(fileURLToPath(new URL('./golden-image.manifest.json', import.meta.url).href), 'utf8'))
+  )
+  const provision = readFileSync(fileURLToPath(new URL('./provision-golden.sh', import.meta.url).href), 'utf8')
+  // Agent id (the pickers' list) -> how the manifest installs its CLI.
+  const installs: Record<OrcaCloudImageAgent, (m: typeof committed) => boolean> = {
+    claude: (m) => m.agentCliPackages.some((p) => p.startsWith('@anthropic-ai/claude-code@')),
+    codex: (m) => m.agentCliPackages.some((p) => p.startsWith('@openai/codex@')),
+    opencode: (m) => m.agentCliPackages.some((p) => p.startsWith('opencode-ai@')),
+    gemini: (m) => m.agentCliPackages.some((p) => p.startsWith('@google/gemini-cli@')),
+    copilot: (m) => m.agentCliPackages.some((p) => p.startsWith('@github/copilot@')),
+    cursor: (m) => Boolean(m.cursorAgent)
+  }
+
+  it('installs every agent the pickers offer for a new Orca Cloud workspace', () => {
+    for (const agent of ORCA_CLOUD_IMAGE_AGENTS) {
+      expect(installs[agent](committed), `${agent} is offered but not installed`).toBe(true)
+    }
+  })
+
+  it('pins cursor-agent by checksum and passes it to provisioning', () => {
+    expect(committed.cursorAgent?.sha256).toMatch(/^[a-f0-9]{64}$/)
+    expect(provisionEnv(inputs({ manifest: { ...manifest, cursorAgent: committed.cursorAgent } }))).toMatchObject({
+      CURSOR_AGENT_VERSION: committed.cursorAgent!.version,
+      CURSOR_AGENT_SHA256: committed.cursorAgent!.sha256
+    })
+    expect(provisionEnv(inputs())).not.toHaveProperty('CURSOR_AGENT_VERSION')
+    expect(provision).toContain('fetch_verified "https://downloads.cursor.com/lab/${CURSOR_AGENT_VERSION}/linux/x64/agent-cli-package.tar.gz"')
+  })
+
+  it('reports each agent CLI version in the build report', () => {
+    expect(provision).toMatch(/for bin in claude codex opencode gemini cursor-agent copilot gh; do/)
+  })
+})
+
+describe('orcad env', () => {
+  it("passes the provider's CA settings to orcad, so Node agents trust the egress proxy's certificate", () => {
+    const start = readFileSync(fileURLToPath(new URL('./vm/orca-sandbox-start', import.meta.url).href), 'utf8')
+    expect(start).toMatch(/ca_env=\(NODE_USE_SYSTEM_CA="\$\{NODE_USE_SYSTEM_CA:-1\}"\)/)
+    expect(start).toMatch(/for name in NODE_EXTRA_CA_CERTS SSL_CERT_FILE; do/)
+    expect(start).toMatch(/env -i HOME="\$HOME" USER="\$\(id -un\)" LANG=C\.UTF-8 TERM=xterm-256color "\$\{ca_env\[@\]\}"/)
+  })
+})
+
+describe('copilot wrapper', () => {
+  it('drops only the Orca GitHub placeholders, and keeps them for BYOK', () => {
+    const provision = readFileSync(fileURLToPath(new URL('./provision-golden.sh', import.meta.url).href), 'utf8')
+    const block = provision.slice(provision.indexOf('copilot_loader='), provision.indexOf("# The agents' first run"))
+    const root = mkdtempSync(join(tmpdir(), 'orca-copilot-'))
+    const loaderDir = join(root, 'tools/lib/node_modules/@github/copilot')
+    spawnSync('mkdir', ['-p', loaderDir, join(root, 'tools/bin')])
+    spawnSync('sh', ['-c', `printf '#!/bin/sh\\necho "$GH_TOKEN|$GITHUB_TOKEN|$*"\\n' > "${loaderDir}/npm-loader.js" && chmod +x "${loaderDir}/npm-loader.js"`])
+    expect(spawnSync('bash', ['-c', block], { env: { ...process.env, ORCA_HOME: root } }).status).toBe(0)
+    const run = (env: Record<string, string>) =>
+      spawnSync(join(root, 'tools/bin/copilot'), ['-i', 'a b'], { env: { PATH: process.env.PATH ?? '', ...env }, encoding: 'utf8' }).stdout.trim()
+    expect(run({ GH_TOKEN: 'orca-ph-sbx1', GITHUB_TOKEN: 'orca-ph-sbx1' })).toBe('||-i a b')
+    expect(run({ GH_TOKEN: 'github_pat_user' })).toBe('github_pat_user||-i a b')
+    expect(run({ GH_TOKEN: 'orca-ph-sbx1', COPILOT_PROVIDER_BASE_URL: 'https://llm.example.com/v1' })).toBe('orca-ph-sbx1||-i a b')
   })
 })

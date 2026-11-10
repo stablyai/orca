@@ -33,15 +33,18 @@ The `.cache` directory must already exist and be gitignored in the primary check
 
 All keys are optional. Script, title, command, and path values must be strings; Orca trims them and drops empty or oversized values. Invalid fields are skipped while valid siblings still apply. Unknown keys do not configure additional behavior.
 
-| Key                          | Accepted value                                                                                                                                                                                        | When omitted                                                                  |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `scripts.setup`              | Nonempty script string, including a YAML block scalar (`\|`). Runs in the new worktree when setup is enabled.                                                                                         | No project setup script.                                                      |
-| `scripts.archive`            | Nonempty script string. Runs in the worktree before archive/removal when hooks are enabled.                                                                                                           | No project archive script.                                                    |
-| `setupAgentStartupPolicy`    | Exactly `start-immediately` or `wait-for-setup`.                                                                                                                                                      | `start-immediately`; a local **wait** setting still takes precedence.         |
-| `issueCommand`               | Nonempty command template for linked GitHub/GitLab items in the create composer.                                                                                                                      | No project template; the composer can still supply its built-in agent prompt. |
-| `defaultTabs`                | List of mappings with optional `title`, `command`, and `color`. At least one valid field is required per entry. `color` accepts `#RGB` or `#RRGGBB`.                                                  | Normal initial terminal behavior.                                             |
-| `worktree.sharedDirectories` | List of repository-relative directory paths. Only existing, gitignored directories are shared.                                                                                                        | Only the user's Settings shared paths apply.                                  |
-| `environmentRecipes`         | List of per-workspace environment recipes. See [Cloud VMs](/docs/ways-to-run#4-cloud-vms-per-workspace-environments) and the `orca-per-workspace-env` skill for recipe fields and lifecycle commands. | No project recipes.                                                           |
+| Key                          | Accepted value                                                                                                                                                                                                      | When omitted                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `scripts.setup`              | Nonempty script string, including a YAML block scalar (`\|`). Runs in the new worktree when setup is enabled.                                                                                                       | No project setup script.                                                      |
+| `scripts.archive`            | Nonempty script string. Runs in the worktree before archive/removal when hooks are enabled.                                                                                                                         | No project archive script.                                                    |
+| `scripts.run`                | A command string (one action named `run`), or a mapping of action id to `command` plus optional `name`, `cwd`, `env`, `default`, `runMode`, and `availableIn` (`local`, `remote`). See [Run actions](#run-actions). | No Run button.                                                                |
+| `scripts.runMode`            | `concurrent` or `nonconcurrent`.                                                                                                                                                                                    | `concurrent`.                                                                 |
+| `scripts.autoRunAfterSetup`  | `true` (the default action) or an action id.                                                                                                                                                                        | Actions start only from the Run button.                                       |
+| `setupAgentStartupPolicy`    | Exactly `start-immediately` or `wait-for-setup`.                                                                                                                                                                    | `start-immediately`; a local **wait** setting still takes precedence.         |
+| `issueCommand`               | Nonempty command template for linked GitHub/GitLab items in the create composer.                                                                                                                                    | No project template; the composer can still supply its built-in agent prompt. |
+| `defaultTabs`                | List of mappings with optional `title`, `command`, and `color`. At least one valid field is required per entry. `color` accepts `#RGB` or `#RRGGBB`.                                                                | Normal initial terminal behavior.                                             |
+| `worktree.sharedDirectories` | List of repository-relative directory paths. Only existing, gitignored directories are shared.                                                                                                                      | Only the user's Settings shared paths apply.                                  |
+| `environmentRecipes`         | List of per-workspace environment recipes. See [Cloud VMs](/docs/ways-to-run#4-cloud-vms-per-workspace-environments) and the `orca-per-workspace-env` skill for recipe fields and lifecycle commands.               | No project recipes.                                                           |
 
 `scripts` and `worktree` must be mappings; `defaultTabs`, `environmentRecipes`, and `sharedDirectories` must be lists. `setupRunPolicy` and `commandSourcePolicy` are **Settings values**, not accepted `orca.yaml` keys.
 
@@ -96,10 +99,41 @@ The setup runner receives:
 | `ORCA_WORKTREE_PATH`                      | New worktree path.                                                |
 | `ORCA_WORKSPACE_NAME`                     | Worktree directory basename, rather than a renamed display title. |
 | `CONDUCTOR_ROOT_PATH`, `GHOSTX_ROOT_PATH` | Compatibility aliases for `ORCA_ROOT_PATH`.                       |
+| `ORCA_PORT`, `ORCA_PORT_COUNT`            | The worktree's port block (see [Run actions](#run-actions)).      |
+| `CONDUCTOR_PORT`                          | Compatibility alias for `ORCA_PORT`.                              |
 
 Paths and shell syntax differ by platform. Use `$ORCA_WORKTREE_PATH` in Bash and `%ORCA_WORKTREE_PATH%` in `.cmd` scripts. `wait-for-setup` waits for successful setup before agent startup; either the YAML or local wait setting enables it. This controls startup order, not whether setup runs.
 
 Archive hooks run before local removal; the CLI requires `--run-hooks` to enable them. A failed archive hook blocks removal unless the caller explicitly accepts that failure.
+
+### Run actions
+
+Run actions start long-running commands such as dev servers, workers, and watchers from the **Run** button in the title bar (or **Cmd/Ctrl+Alt+Enter**). Each run opens a terminal tab named **Run: \<name\>**, so its output, status, and exit code stay visible.
+
+```yaml
+scripts:
+  setup: pnpm install
+  runMode: concurrent
+  autoRunAfterSetup: true
+  run:
+    web:
+      command: pnpm dev --port $ORCA_PORT
+      default: true
+    api:
+      command: pnpm api --port $((ORCA_PORT + 1))
+      cwd: apps/api
+      env:
+        LOG_LEVEL: debug
+```
+
+- Ids may use letters, numbers, spaces, dots, underscores, and hyphens. Hyphens show as spaces when `name` is omitted.
+- `cwd` is relative to the worktree. Absolute paths and `..` are ignored.
+- **Stop** sends an interrupt (Ctrl+C). If the command is still running after 5 seconds, Orca closes its terminal, which ends every process the shell started. **Restart** stops the action and starts it again in a fresh terminal.
+- `runMode: concurrent` lets the same action run in several worktrees at once. `nonconcurrent` stops every other running action of the project first; use it when worktrees share one fixed port, database, or container stack. An action's own `runMode` overrides the project setting.
+- `autoRunAfterSetup` starts the action once the Setup terminal's script succeeds.
+- Shared `orca.yaml` actions go through the same approval prompt as setup scripts. Actions imported into local settings are treated as your own.
+
+Every terminal in a worktree gets a stable block of 10 ports: `ORCA_PORT` through `ORCA_PORT+9` (`ORCA_PORT_COUNT` is `10`). Two worktrees on the same host never share a block, so the same dev server can run in each without port collisions. `CONDUCTOR_PORT` is set to the same value, so imported Conductor scripts work unchanged. Ports a run opens appear in the Run menu and the **Ports** panel.
 
 ### Terminal defaults and issue commands
 

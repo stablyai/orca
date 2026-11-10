@@ -49,10 +49,12 @@ function connect(pairingCode: string): Caller {
 }
 const who = { sub: 'w9-wake-split' }
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+const region = process.argv[5] && process.argv[5] !== '-' ? process.argv[5] : undefined
+const cpus: string[] = []
 const out: Record<string, number[]> = { 'resume.vm': [], 'orcad.ready': [], firstList: [], termCreate: [], echo: [], total: [], api: [] }
 const errors: string[] = []
 
-const created = await control.as(who, 'POST', '/v1/sandboxes', { workspaceId: `w9-wake-split-${Date.now()}`, machineSize })
+const created = await control.as(who, 'POST', '/v1/sandboxes', { workspaceId: `w9-wake-split-${Date.now()}`, machineSize, ...(region ? { region } : {}) })
 if (created.status !== 200) {
   console.log(JSON.stringify({ error: `create ${created.status} ${JSON.stringify(created.body)}` }))
   process.exit(0)
@@ -106,10 +108,12 @@ try {
     // VM clock: boot epoch and orcad start epoch (10 ms resolution).
     const vm = await vercel().runCommand(w.body.sandbox.session.id, {
       command: 'bash',
-      args: ['-c', `read up _ < /proc/uptime; now=$(date +%s.%N); hz=$(getconf CLK_TCK); st=$(awk '{print $22}' /proc/$(cat ~/.orca-sandbox/orcad.pid)/stat); echo "$now $up $st $hz"`],
+      args: ['-c', `read up _ < /proc/uptime; now=$(date +%s.%N); hz=$(getconf CLK_TCK); st=$(awk '{print $22}' /proc/$(cat ~/.orca-sandbox/orcad.pid)/stat); echo "$now $up $st $hz"; grep -m1 'model name' /proc/cpuinfo | sed 's/.*: //'`],
       timeoutMs: 20_000
     })
-    const [now, up, st, hz] = vm.stdout.trim().split(/\s+/).map(Number) as [number, number, number, number]
+    const [line1, cpuModel] = vm.stdout.trim().split('\n') as [string, string | undefined]
+    cpus.push((cpuModel ?? '?').trim())
+    const [now, up, st, hz] = line1.trim().split(/\s+/).map(Number) as [number, number, number, number]
     const bootMs = Math.round((now - up) * 1000)
     const orcadMs = bootMs + Math.round((st / hz) * 1000)
     out['resume.vm']!.push(orcadMs - t0)
@@ -126,5 +130,5 @@ try {
 } finally {
   await control.as(who, 'DELETE', `/v1/sandboxes/${id}`)
 }
-console.log(JSON.stringify({ sandboxId: id, machineSize, transport, samples: out, errors }))
+console.log(JSON.stringify({ sandboxId: id, machineSize, region: region ?? "default", transport, samples: out, cpus, errors }))
 process.exit(0)

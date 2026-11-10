@@ -280,6 +280,9 @@ export type AgentSessionHandoverContext = StructuredAgentSessionCommandHandoverC
   settleEndedInput?: (owner: () => void) => Promise<void>
   /** A message the agent took: a chat keeps, where it has none saved, the options it ran. */
   recordRanOptions?: ReturnType<StructuredAgentSessionRanRecorder>
+  /** Snapshots the worktree before this message opens a turn; never throws. */
+  /** Resolves to a release, called once the message has been handed to the agent. */
+  captureTurnCheckpoint?: (itemId: string, signal?: AbortSignal) => Promise<() => void>
 }
 
 export type StructuredAgentSessionConversationLifetime = ReturnType<

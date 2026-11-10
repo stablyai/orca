@@ -4999,11 +4999,6 @@
       "errorAgent": "That agent isn’t installed in this workspace",
       "errorLaunch": "The agent didn’t start"
     },
-    "spend": {
-      "asleep": "{{cost}} so far · no sandbox hours while asleep",
-      "runningLarge": "{{cost}} so far · uses sandbox hours at 2× the rate",
-      "running": "{{cost}} so far · uses sandbox hours while running"
-    },
     "status": {
       "waking": "Waking",
       "cantConnect": "Can’t connect",
@@ -5070,13 +5065,8 @@
       "machine": "Sandbox size"
     },
     "size": {
-      "large": "Large (8 vCPU · 16 GB)",
-      "standard": "Standard (4 vCPU · 8 GB)",
-      "standardShort": "Standard",
-      "largeShort": "Large",
-      "standardSpec": "4 vCPU · 8 GB",
-      "largeSpec": "8 vCPU · 16 GB",
-      "largeNote": "Large uses sandbox hours at 2× the rate."
+      "spec": "{{vcpus}} vCPU · {{memoryGb}} GB",
+      "note": "Every sandbox gets {{vcpus}} vCPU · {{memoryGb}} GB."
     },
     "new": {
       "title": "Create workspace",
@@ -5089,7 +5079,6 @@
       "branchPlaceholder": "Default branch",
       "agentHeading": "First task",
       "promptPlaceholder": "Optional. What should the agent start on?",
-      "sizeHeading": "Sandbox size",
       "creating": "Starting your cloud workspace",
       "createAndStart": "Start workspace and agent",
       "create": "Start workspace"
@@ -5205,6 +5194,12 @@
         "more_one": "and {{count}} more",
         "more_other": "and {{count}} more"
       }
+    },
+    "usage": {
+      "asleep_one": "{{hours}} sandbox hour so far · no sandbox hours while asleep",
+      "asleep_other": "{{hours}} sandbox hours so far · no sandbox hours while asleep",
+      "running_one": "{{hours}} sandbox hour so far · uses sandbox hours while running",
+      "running_other": "{{hours}} sandbox hours so far · uses sandbox hours while running"
     }
   }
 }

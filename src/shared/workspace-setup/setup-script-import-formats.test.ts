@@ -19,7 +19,7 @@ async function inspect(files: Record<string, string>) {
 }
 
 describe('Conductor settings.toml', () => {
-  it('imports setup and archive and lists run actions as skipped', async () => {
+  it('imports setup, archive and run actions', async () => {
     expect(
       await inspect({ '.conductor/settings.toml': fixture('conductor-settings-inbox-zero.toml') })
     ).toEqual([
@@ -30,19 +30,29 @@ describe('Conductor settings.toml', () => {
         setup: 'pnpm install --prefer-offline --frozen-lockfile',
         archive:
           'node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/dev-setup.ts clean',
-        unsupportedFields: ['scripts.run']
+        run: [
+          { id: 'dev', name: 'Dev', command: 'pnpm dev-setup dev --url conductor', default: true },
+          {
+            id: 'evals',
+            name: 'Evals',
+            command:
+              'EVAL_RESULT_CACHE=readwrite pnpm --filter inbox-zero-ai test-ai __tests__/eval'
+          }
+        ],
+        unsupportedFields: []
       }
     ])
   })
 
-  it('reports run_mode alongside run actions', async () => {
+  it('imports run_mode alongside run actions', async () => {
     const [candidate] = await inspect({
       '.conductor/settings.toml': fixture('conductor-settings-relaticle.toml')
     })
     expect(candidate).toMatchObject({
       setup: 'bash bin/setup-workspace.sh',
       archive: 'bash bin/archive-workspace.sh',
-      unsupportedFields: ['scripts.run', 'scripts.run_mode']
+      runMode: 'concurrent',
+      unsupportedFields: []
     })
   })
 

@@ -5,6 +5,16 @@ const WINDOWS_LINUX_TOGGLE_BINDINGS = ['Mod+Shift+F11', 'Mod+Shift+J']
 
 export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
   {
+    id: 'workspace.run',
+    title: 'Run or restart the run action',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'run', 'action', 'dev server', 'start', 'restart', 'workspace'],
+    defaultBindings: platformBindings(['Mod+Alt+Enter']),
+    // A dev server is usually restarted from its own terminal.
+    allowInTerminal: true
+  },
+  {
     id: 'sidebar.projects.toggleCollapse',
     title: 'Collapse / Expand All Projects',
     group: 'Global',

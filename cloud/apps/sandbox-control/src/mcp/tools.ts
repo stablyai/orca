@@ -32,7 +32,7 @@ type ToolDef<T extends z.ZodObject> = {
 // Ids go into URL paths: restrict them so a tool argument can never address another route.
 const Id = (what: string) => z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, `a ${what} id`).describe(`The ${what} id.`)
 const WorkspaceId = z.object({ workspaceId: Id('workspace') }).strict()
-const Agent = z.enum(AGENTS).describe('Agent CLI to run: claude (Claude Code, default) or codex.')
+const Agent = z.enum(AGENTS).describe(`Agent CLI to run: ${AGENTS.join(', ')} (claude, Claude Code, is the default).`)
 const MAX_WAIT_SECONDS = 45
 
 function ok(body: unknown): ToolResult {
@@ -136,7 +136,7 @@ export const TOOLS = [
         projectId: Id('project').optional().describe('Project to start from (see list_projects). Supplies the repo and sandbox defaults.'),
         repoUrl: z.url({ protocol: /^https$/ }).max(2048).optional().describe('https Git URL to clone when not using a project, e.g. https://github.com/acme/app.'),
         ref: z.string().min(1).max(255).optional().describe('Branch, tag or commit to check out (default: the repo default branch).'),
-        machineSize: z.enum(['standard', 'large']).optional().describe('Sandbox size: standard (4 vCPU · 8 GB) or large (8 vCPU · 16 GB, uses sandbox hours at 2× the rate).'),
+        machineSize: z.enum(['standard', 'large']).optional().describe('Deprecated: every sandbox is Standard (8 vCPU · 16 GB); `large` is accepted and means the same.'),
         message: z.string().min(1).max(32_000).optional().describe('First task for the agent in the new workspace.'),
         agent: Agent.optional()
       })

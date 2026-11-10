@@ -39,7 +39,8 @@ export type CloudWorkspace = {
   createdAt: number
   lastActivityAt: number | null
   /** Compute spend so far, when the registry reports it. */
-  cost: { usd: number; usdPerHour: number | null } | null
+  /** Awake time so far, from the team registry; the plan meters hours, not per-workspace dollars. */
+  sandboxMs: number | null
   createdByUserId: string | null
   /** When the last sleeping read snapshot was stored (ms); null when none or unknown. */
   readSnapshotAt: number | null
@@ -93,10 +94,7 @@ function fromRegistry(row: TeamWorkspace): CloudWorkspace {
     machineSize: row.machineSize,
     createdAt: row.createdAt,
     lastActivityAt: row.lastActivityAt,
-    cost: {
-      usd: row.cost.totalUsdMicros / 1_000_000,
-      usdPerHour: row.cost.rateUsdMicrosPerHour ? row.cost.rateUsdMicrosPerHour / 1_000_000 : null
-    },
+    sandboxMs: row.cost.computeMs,
     createdByUserId: row.createdBy,
     readSnapshotAt: row.readSnapshotAt ?? null
   }
@@ -112,7 +110,7 @@ function fromSandbox(row: z.infer<typeof SandboxViewSchema>): CloudWorkspace {
     machineSize: row.machineSize,
     createdAt: row.createdAt,
     lastActivityAt: null,
-    cost: null,
+    sandboxMs: null,
     createdByUserId: null,
     readSnapshotAt: null
   }

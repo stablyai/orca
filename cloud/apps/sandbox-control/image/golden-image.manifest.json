@@ -17,8 +17,15 @@
   },
   "agentCliPackages": [
     "@anthropic-ai/claude-code@2.1.319",
-    "@openai/codex@0.166.0"
+    "@openai/codex@0.166.0",
+    "opencode-ai@1.19.5",
+    "@google/gemini-cli@0.67.0",
+    "@github/copilot@1.0.108"
   ],
+  "cursorAgent": {
+    "version": "2026.11.05-86047df",
+    "sha256": "170b77786cbf4c93064d64fff12b71a178b968730561c64afc2e8e752535442e"
+  },
   "desktop": {
     "novnc": {
       "version": "1.6.0",

@@ -54,6 +54,22 @@ export const RUNTIME_ENVIRONMENT_SLEPT_MESSAGE =
 export const RUNTIME_ENVIRONMENT_ASLEEP_MESSAGE =
   "This workspace's VM is asleep. Open the workspace to wake it."
 
+/**
+ * The host refused because the VM is still waking (it held the request as long as it would).
+ * Matches the error itself, a refused RPC response's error, and the message an IPC hop leaves.
+ */
+export function isRecipeVmWakingRefusal(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+  const code = 'code' in error ? error.code : undefined
+  const message = 'message' in error ? error.message : undefined
+  return (
+    code === RUNTIME_ENVIRONMENT_WAKING_ERROR_CODE ||
+    (typeof message === 'string' && message.includes(RUNTIME_ENVIRONMENT_WAKING_MESSAGE))
+  )
+}
+
 /** Every refusal a request to a recipe VM's server can get from the host. */
 export const RECIPE_VM_REFUSAL_CODES = [
   RUNTIME_ENVIRONMENT_WAKING_ERROR_CODE,

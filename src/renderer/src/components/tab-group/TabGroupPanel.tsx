@@ -1,3 +1,4 @@
+import { RunActionButton } from '../run-actions/RunActionButton'
 import { Suspense, useCallback, useMemo } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
@@ -309,6 +310,8 @@ export default function TabGroupPanel({
               className={actionChromeClassName}
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             >
+              {/* One Run button per workspace: in the focused split, or the only group. */}
+              {!hasSplitGroups || isFocused ? <RunActionButton worktreeId={worktreeId} /> : null}
               <TabBarQuickCommandsButton
                 worktreeId={worktreeId}
                 groupId={groupId}

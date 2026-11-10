@@ -233,6 +233,9 @@ export function useGlobalKeybindings(args: {
       if (matchAppShortcut('view.plugins') && handlers.get('view.plugins')?.()) {
         return
       }
+      if (matchAppShortcut('workspace.run') && handlers.get('workspace.run')?.()) {
+        return
+      }
       for (const actionId of PLUGIN_COMMAND_ALIAS_ACTION_IDS) {
         if (matchAppShortcut(actionId) && handlers.get(actionId)?.()) {
           return

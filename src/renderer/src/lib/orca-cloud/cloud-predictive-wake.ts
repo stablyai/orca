@@ -61,6 +61,8 @@ export type PredictiveWakeController = {
   /** The user opened it: its wake is no longer silent, and it is no longer put back to sleep. */
   claim: (workspaceId: string) => void
   isSilent: (workspaceId: string) => boolean
+  /** When intent fired for this workspace's latest predictive wake (before its server checks). */
+  intentStartedAt: (workspaceId: string) => number | undefined
   /** Test seams. */
   inFlight: () => ReadonlySet<string>
   awakeUnopened: () => ReadonlySet<string>
@@ -77,6 +79,7 @@ export function createPredictiveWakeController(deps: PredictiveWakeDeps): Predic
   // Woken on intent, not opened yet: each holds its return-to-sleep timer.
   const unopened = new Map<string, () => void>()
   const pending = new Map<string, () => void>()
+  const intentAt = new Map<string, number>()
   let lastWeakWakeAt = Number.NEGATIVE_INFINITY
   let dragging = false
   // Why: the first focus after launch is the app opening, not someone coming back to it.
@@ -130,6 +133,8 @@ export function createPredictiveWakeController(deps: PredictiveWakeDeps): Predic
     }
     const thisWeakWakeAt = lastWeakWakeAt
     running.add(workspaceId)
+    const firedAt = deps.now()
+    intentAt.set(workspaceId, firedAt)
     silent.add(workspaceId)
     void Promise.resolve()
       .then(async () => {
@@ -141,6 +146,10 @@ export function createPredictiveWakeController(deps: PredictiveWakeDeps): Predic
       .catch(() => false)
       .then((woke) => {
         const claimed = !silent.has(workspaceId)
+        // No wake came of this intent: a later, ordinary wake must not count from it.
+        if ((woke === 'skipped' || !woke) && intentAt.get(workspaceId) === firedAt) {
+          intentAt.delete(workspaceId)
+        }
         if (woke === 'skipped') {
           // Unless a later wake took the gap since.
           if (trigger !== 'select' && lastWeakWakeAt === thisWeakWakeAt) {
@@ -215,6 +224,7 @@ export function createPredictiveWakeController(deps: PredictiveWakeDeps): Predic
       unopened.delete(workspaceId)
     },
     isSilent: (workspaceId) => silent.has(workspaceId),
+    intentStartedAt: (workspaceId) => intentAt.get(workspaceId),
     inFlight: () => running,
     awakeUnopened: () => new Set(unopened.keys()),
     dispose: () => {
@@ -266,6 +276,21 @@ export function isPredictiveWakeOutstanding(workspaceId: string): boolean {
   return Boolean(
     current && (current.isSilent(workspaceId) || current.awakeUnopened().has(workspaceId))
   )
+}
+/** How long before a wake's own start (the server checks in between) its intent may have fired. */
+export const PREDICTIVE_INTENT_LEAD_MS = 5_000
+
+/**
+ * A wake started on intent counts from when the intent fired (the hover dwell's end), not from
+ * when main began resuming after the server checks: the pill opened mid-wake reads its real age.
+ */
+export function predictiveWakeStartedAt(workspaceId: string, startedAt: number): number {
+  const intent = current?.intentStartedAt(workspaceId)
+  return intent !== undefined &&
+    intent <= startedAt &&
+    startedAt - intent <= PREDICTIVE_INTENT_LEAD_MS
+    ? intent
+    : startedAt
 }
 export function isSilentPredictiveWake(workspaceId: string): boolean {
   return current?.isSilent(workspaceId) ?? false

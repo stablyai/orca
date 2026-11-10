@@ -7,6 +7,7 @@ import { useNow } from '@/hooks/use-now'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { wakeElapsedSeconds } from '@/lib/orca-cloud/orca-cloud-workspace-state'
+import { TERMINAL_CONTENT_INSET_PX, useTerminalContentInset } from './use-terminal-content-inset'
 import type { CloudWakeProgressEvent } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 
 /** After this long the pill says it's slower than usual; after STUCK_S it offers recovery inline. */
@@ -66,6 +67,7 @@ export function CloudWakingOverlay({
   autoFocus = true,
   typeThrough = false,
   pendingInput = 0,
+  terminalStalled = false,
   onClearPending,
   onRetry,
   onRestart,
@@ -78,6 +80,8 @@ export function CloudWakingOverlay({
   typeThrough?: boolean
   /** Characters held for the woken terminal (a count, never the text: it may be a password). */
   pendingInput?: number
+  /** The server woke but the terminal in front never took input again: a reconnect card. */
+  terminalStalled?: boolean
   onClearPending?: () => void
   /** Move focus into the overlay (only when it covers the pane that had focus). */
   autoFocus?: boolean
@@ -126,6 +130,8 @@ export function CloudWakingOverlay({
   // Announced once each (the text changes only when crossing WAKE_SLOW_S and WAKE_STUCK_S).
   const slowAnnouncement = stuck ? hint : slow ? hint : ''
   const passThrough = typeThrough && !failed
+  // Over the terminal content, below the pane's tab strip: never over Run, split or close.
+  const inset = useTerminalContentInset(rootRef, passThrough)
   return (
     <div
       ref={rootRef}
@@ -133,7 +139,7 @@ export function CloudWakingOverlay({
       className={cn(
         passThrough
           ? // Top-right, clear of the prompt line and what is being typed into it.
-            'pointer-events-none absolute inset-x-0 top-3 flex justify-end pr-3 outline-none'
+            'pointer-events-none absolute inset-0 outline-none'
           : 'absolute inset-0 bg-background outline-none',
         'motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150',
         'motion-safe:transition-opacity motion-safe:duration-200',
@@ -160,9 +166,18 @@ export function CloudWakingOverlay({
       <div
         className={
           passThrough
-            ? 'pointer-events-auto flex flex-col items-end gap-1.5'
+            ? 'pointer-events-auto absolute flex flex-col items-end gap-1.5'
             : 'absolute inset-0 flex items-center justify-center p-4'
         }
+        style={
+          passThrough
+            ? {
+                top: inset?.top ?? TERMINAL_CONTENT_INSET_PX,
+                right: inset?.right ?? TERMINAL_CONTENT_INSET_PX
+              }
+            : undefined
+        }
+        data-cloud-waking-anchor={passThrough ? 'terminal' : undefined}
       >
         {failed ? (
           <div
@@ -176,7 +191,14 @@ export function CloudWakingOverlay({
               />
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="text-sm font-medium">
-                  {t('orcaCloudWorkspace.overlay.failedTitle', 'Couldn’t wake {{name}}', { name })}
+                  {terminalStalled
+                    ? t(
+                        'orcaCloudWorkspace.overlay.terminalStalledTitle',
+                        'Couldn’t reconnect the terminal'
+                      )
+                    : t('orcaCloudWorkspace.overlay.failedTitle', 'Couldn’t wake {{name}}', {
+                        name
+                      })}
                 </div>
                 {wake.message ? (
                   <p className="break-words text-xs text-foreground">{wake.message}</p>
@@ -196,9 +218,11 @@ export function CloudWakingOverlay({
               </Button>
             </div>
             <div className="flex justify-end gap-2">
-              <Button size="sm" variant="ghost" onClick={onRestart}>
-                {t('orcaCloudWorkspace.restartSandbox', 'Restart sandbox')}
-              </Button>
+              {terminalStalled ? null : (
+                <Button size="sm" variant="ghost" onClick={onRestart}>
+                  {t('orcaCloudWorkspace.restartSandbox', 'Restart sandbox')}
+                </Button>
+              )}
               <Button ref={retryRef} size="sm" onClick={onRetry}>
                 {t('orcaCloudWorkspace.overlay.tryAgain', 'Try again')}
               </Button>

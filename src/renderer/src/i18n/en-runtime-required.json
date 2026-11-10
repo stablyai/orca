@@ -236,10 +236,12 @@
         }
       },
       "cloudWorkspaces": {
-        "listMeta_one": "{{count}} workspace · {{cost}}",
-        "listMeta_other": "{{count}} workspaces · {{cost}}",
-        "sandboxHoursCost_one": "{{hours}} sandbox hour × {{rate}}/hour = {{cost}}",
-        "sandboxHoursCost_other": "{{hours}} sandbox hours × {{rate}}/hour = {{cost}}",
+        "listMeta2_one": "{{count}} workspace · {{usage}}",
+        "listMeta2_other": "{{count}} workspaces · {{usage}}",
+        "listSandboxHours_one": "{{hours}} sandbox hour used",
+        "listSandboxHours_other": "{{hours}} sandbox hours used",
+        "rowSandboxHours_one": "{{hours}} sandbox hour",
+        "rowSandboxHours_other": "{{hours}} sandbox hours",
         "sectionCount_one": "{{count}} workspace",
         "sectionCount_other": "{{count}} workspaces"
       },
@@ -1835,6 +1837,12 @@
         "resolved": "Resolved",
         "resolver": "Answered on {{device}}",
         "unavailable": "Selected answer unavailable"
+      },
+      "rewind": {
+        "restoreChangedFiles_one": "Also restore {{count}} changed file",
+        "restoreChangedFiles_other": "Also restore {{count}} changed files",
+        "restoredFiles_one": "Restored {{count}} file",
+        "restoredFiles_other": "Restored {{count}} files"
       },
       "sessionOptionErrors": {
         "afterStartOnly": "This option is only available after the session starts.",
