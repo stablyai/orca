@@ -1371,7 +1371,9 @@
       "child": "Child",
       "children_one": "{{count}} child",
       "children_other": "{{count}} children",
-      "unsavedName": "Unsaved name: {{name}}"
+      "unsavedName": "Unsaved name: {{name}}",
+      "cloudWorkspaceState": "Cloud workspace, {{state}}",
+      "cloudWorkspace": "Cloud workspace"
     },
     "accountsSnapshot": {
       "invalidSnapshot": "Invalid accounts snapshot from host"
@@ -5116,8 +5118,8 @@
       "emptyDetail": "Start one here. It keeps running while this phone and your computer sleep.",
       "new": "New cloud workspace",
       "createdAgo": "Created {{ago}} ago",
-      "openWorkspace": "Open {{title}}, {{detail}}",
-      "createdJustNow": "Created just now"
+      "createdJustNow": "Created just now",
+      "workspaceRowLabel": "Cloud workspace, {{title}}, {{detail}}"
     },
     "connect": {
       "signedOut": "Sign in to Orca on {{desktop}}, then try again.",

@@ -12,13 +12,15 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 type SettingsNavBarProps = {
   title: string
+  /** A small glyph before the title (NavBar titleIcon). */
+  titleIcon?: ReactNode
   onBack: () => void
   /** At most two NavBarButtons. */
   trailing?: ReactNode
 }
 
 /** A settings screen's top bar: Back, the centred title, and up to two buttons. */
-export function SettingsNavBar({ title, onBack, trailing }: SettingsNavBarProps) {
+export function SettingsNavBar({ title, titleIcon, onBack, trailing }: SettingsNavBarProps) {
   const t = useMobileTranslation()
   return (
     <NavBar
@@ -30,6 +32,7 @@ export function SettingsNavBar({ title, onBack, trailing }: SettingsNavBarProps)
         />
       }
       title={title}
+      titleIcon={titleIcon}
       trailing={trailing}
     />
   )
