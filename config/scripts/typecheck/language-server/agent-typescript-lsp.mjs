@@ -56,10 +56,25 @@ export function encodeLspMessage(message) {
   return Buffer.concat([Buffer.from(`Content-Length: ${body.length}\r\n\r\n`), body])
 }
 
+/** End the session's server: close its input, then stop it; already-exited children tolerate both. */
+export function terminateLanguageServerChild(child) {
+  try {
+    child.stdin.end()
+  } catch {
+    // A child that already exited has nothing to close.
+  }
+  try {
+    child.kill()
+  } catch {
+    // Already gone.
+  }
+}
+
 // For push-only clients, pull diagnostics after open/change/save or server refresh, then publish them.
 export function createDiagnosticsBridge({
   toClient,
   toServer,
+  onExit,
   debounceMs = PULL_DEBOUNCE_MS,
   setTimer = setTimeout,
   clearTimer = clearTimeout
@@ -126,6 +141,16 @@ export function createDiagnosticsBridge({
       } else if (method === 'textDocument/didClose' && typeof openedUri === 'string') {
         openDocuments.delete(openedUri)
       }
+      // exit ends the session whatever the client's capabilities are.
+      if (method === 'exit') {
+        for (const timer of timers.values()) {
+          clearTimer(timer)
+        }
+        timers.clear()
+        // LSP exit is the client ending the session; the child must not linger after it.
+        onExit?.()
+        return
+      }
       if (!bridging) {
         return
       }
@@ -144,11 +169,6 @@ export function createDiagnosticsBridge({
           method: 'textDocument/publishDiagnostics',
           params: { uri, diagnostics: [] }
         })
-      } else if (method === 'exit') {
-        for (const timer of timers.values()) {
-          clearTimer(timer)
-        }
-        timers.clear()
       }
     },
     fromServer(message) {
@@ -250,9 +270,13 @@ function runLanguageServer() {
     process.env.CLAUDE_PROJECT_DIR || fileURLToPath(new URL('../../../..', import.meta.url))
   const command = resolveTypescriptLanguageServer({ root })
   const child = spawnProcess({ ...command, stdio: ['pipe', 'pipe', 'inherit'] })
+  // A client-requested LSP exit is a deliberate stop, not a failure.
+  let intentionalClientExit = false
+  let stopForClientExit = () => {}
   const bridge = createDiagnosticsBridge({
     toClient: (message) => process.stdout.write(encodeLspMessage(message)),
-    toServer: (message) => child.stdin.write(encodeLspMessage(message))
+    toServer: (message) => child.stdin.write(encodeLspMessage(message)),
+    onExit: () => stopForClientExit()
   })
   // The idle reap is a deliberate stop, not a failure: report it as a clean exit.
   let intentionalIdleReap = false
@@ -297,6 +321,12 @@ function runLanguageServer() {
   process.stdin.on('end', closeChildInput)
   // A destroyed pipe emits `close` without `end`.
   process.stdin.on('close', closeChildInput)
+  // LSP `exit` ends the session from the client's side: the server must not outlive it.
+  stopForClientExit = () => {
+    intentionalClientExit = true
+    watchdog.stop()
+    terminateLanguageServerChild(child)
+  }
   process.on('exit', () => child.kill())
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK']) {
     process.on(signal, () => child.kill(signal))
@@ -306,7 +336,7 @@ function runLanguageServer() {
     process.exit(1)
   })
   child.on('exit', (code, signal) =>
-    process.exit(intentionalIdleReap ? 0 : (code ?? (signal ? 1 : 0)))
+    process.exit(intentionalIdleReap || intentionalClientExit ? 0 : (code ?? (signal ? 1 : 0)))
   )
 }
 

@@ -1,13 +1,14 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   createDiagnosticsBridge,
   createIdleWatchdog,
   createLspMessageReader,
   encodeLspMessage,
-  resolveIdleMs
+  resolveIdleMs,
+  terminateLanguageServerChild
 } from './agent-typescript-lsp.mjs'
 
 const repoRoot = fileURLToPath(new URL('../../../..', import.meta.url))
@@ -257,5 +258,49 @@ describe('idle reaper for a connected but quiet client (#38188)', () => {
     disabled.start()
     disabled.touch()
     expect(reaped).toEqual([])
+  })
+})
+
+describe('LSP exit', () => {
+  it('forwards exit and stops the child', () => {
+    const server = []
+    let exits = 0
+    const bridge = createDiagnosticsBridge({
+      toClient: () => {},
+      toServer: (message) => server.push(message),
+      onExit: () => {
+        exits += 1
+      }
+    })
+
+    bridge.fromClient({ jsonrpc: '2.0', method: 'exit' })
+
+    expect(server.at(-1)).toMatchObject({ method: 'exit' })
+    expect(exits).toBe(1)
+  })
+
+  it('closes the child input and kills a child that is still running', () => {
+    const end = vi.fn()
+    const kill = vi.fn()
+
+    terminateLanguageServerChild({ stdin: { end }, kill })
+
+    expect(end).toHaveBeenCalledTimes(1)
+    expect(kill).toHaveBeenCalledTimes(1)
+  })
+
+  it('tolerates a child that already exited', () => {
+    const child = {
+      stdin: {
+        end: () => {
+          throw new Error('closed')
+        }
+      },
+      kill: () => {
+        throw new Error('gone')
+      }
+    }
+
+    expect(() => terminateLanguageServerChild(child)).not.toThrow()
   })
 })
