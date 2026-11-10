@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef } from 'react'
 import type React from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import type { InlineInput } from '../mutations/file-explorer-inline-input-row'
 import type { TreeNode } from '../tree/file-explorer-types'
 import type { FileExplorerRowProjection } from '../tree/file-explorer-row-projection'
@@ -20,8 +20,8 @@ import {
 } from './file-explorer-keyboard-navigation'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings'
 import { translate } from '@/i18n/i18n'
-import { isEditableTarget } from '@/lib/editable-target'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 export function shouldIgnoreFileExplorerKeyTarget(target: EventTarget | null): boolean {
   return (

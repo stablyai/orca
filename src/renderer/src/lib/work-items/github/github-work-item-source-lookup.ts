@@ -1,7 +1,10 @@
-import { capturePRCheckContract, type PRCheckContract } from '../../pr-check-observation-contract'
+import {
+  capturePRCheckContract,
+  type PRCheckContract
+} from '../../source-control/checks/pr-check-observation-contract'
 import { acceptPRCheckObservation } from '../../../../../shared/github/complete-pr-check-owner'
 import type { GhAccountBinding } from '../../../../../shared/github/account-binding'
-import { getWorkItemRepo } from '../../work-item-repo-row'
+import { getWorkItemRepo } from '../work-item-repo-row'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
@@ -21,7 +24,7 @@ import {
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost,
   getGitHubSourceRuntimeTarget
-} from '../../github-source-runtime-context'
+} from './github-source-runtime-context'
 
 type GitHubWorkItemLookupArgs = {
   repoPath: string
@@ -191,7 +194,11 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
     number: args.number,
     type: args.type
   }
-  if (row && !matchesGitHubWorkItemTarget(row, requestedTarget)) {
+  // A preview asked for as an issue answers with the pull request when the number is one, as bare
+  // `#N` links are; the repository and number still have to be the ones asked for.
+  const answeredTarget =
+    row && args.preview ? { ...requestedTarget, type: row.type } : requestedTarget
+  if (row && !matchesGitHubWorkItemTarget(row, answeredTarget)) {
     throw new GitHubWorkItemTargetError(requestedTarget)
   }
   if (row && contract?.complete && contract.current() && !('preview' in args && args.preview)) {

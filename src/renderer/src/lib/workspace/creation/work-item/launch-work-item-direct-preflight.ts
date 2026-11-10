@@ -28,7 +28,7 @@ import {
   planAgentSessionLaunch,
   type AgentSessionLaunchRequest
 } from '../../../agent-session/launch/routing/agent-session-launch-plan'
-import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
+import { resolveGitHubPrStartPointForRepo } from '@/lib/source-control/review/github-pr-start-point'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import {
   getRepoExecutionHostId,

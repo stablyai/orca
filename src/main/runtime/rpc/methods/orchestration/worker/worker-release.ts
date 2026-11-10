@@ -1,9 +1,9 @@
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { defineMethod } from '../../../core'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import {
   releaseFederatedWorker,
   retainFederatedWorker
-} from '../federation/federated-worker-release'
+} from '../../../../orchestration/legacy-remote-home/legacy-remote-home'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from './worker-list-method'
 import { resolvePinnedFederatedServer } from './worker-observation'
 import { archiveSummary, exposeWorkerRetainReceipt } from './worker-terminal-resource-presentation'
@@ -18,8 +18,9 @@ import {
 import { ORCHESTRATION_WORKER_KEEP_OPEN_METHODS } from './worker-keep-open'
 
 export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.workerRelease',
+    access: { kind: 'writes', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
     params: WorkerDispatchParams,
     handler: async (params, { runtime, orchestrationMutation }): Promise<WorkerReleaseReceipt> => {
@@ -91,8 +92,9 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
       })
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.workerRetain',
+    access: { kind: 'writes', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
     params: WorkerRetainParams,
     handler: async (params, { runtime, orchestrationMutation }): Promise<WorkerReleaseReceipt> => {

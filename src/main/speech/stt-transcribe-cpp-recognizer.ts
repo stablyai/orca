@@ -174,9 +174,15 @@ export async function createTranscribeCppRecognizer(
     })
   }
 
+  // Canceled streams, until their queued discard runs; also covers a finish that already closed its stream.
+  const canceled = new Set<string>()
+
   const decode = async (streamId: string, stream: StreamCoverage, chunks: Float32Array[]) => {
     let undecoded = chunks.reduce((total, chunk) => total + chunk.length, 0)
     for (const chunk of chunks) {
+      if (canceled.has(streamId)) {
+        return
+      }
       const startedAt = performance.now()
       const text = await transcribeChunk(chunk, stream.options)
       const decodeMs = performance.now() - startedAt
@@ -254,7 +260,11 @@ export async function createTranscribeCppRecognizer(
       }
     },
     discard(streamId) {
+      canceled.delete(streamId)
       closeStream(streamId)?.vad?.dispose()
+    },
+    cancel(streamId) {
+      canceled.add(streamId)
     }
   }
 }

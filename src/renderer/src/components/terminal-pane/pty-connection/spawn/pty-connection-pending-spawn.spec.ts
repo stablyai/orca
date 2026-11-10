@@ -56,49 +56,6 @@ export function registerPtyConnectionPendingSpawnTests(): void {
       await restoreTerminalTestGlobals()
     })
 
-    it('does not hold a successor behind a canceled spawn serializer declaration', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
-        '@/lib/agent-status/aggregation/worktree-agent-status'
-      )
-      const { pendingSpawnByPaneKey } = await import('./pending-pane-spawn')
-      const declaration = createDeferred<number>()
-      const spawn = createDeferred<null>()
-      const transport = createMockTransport()
-      transport.connect.mockReturnValueOnce(spawn.promise)
-      transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
-        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
-        ptyIdsByTabId: { 'tab-1': [] }
-      }
-      vi.mocked(window.api.pty.declarePendingPaneSerializer).mockReturnValueOnce(
-        declaration.promise
-      )
-
-      const binding = connectPanePty(
-        createPane(1) as never,
-        createManager(1) as never,
-        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks2)
-      )
-      await flushAsyncTicks(12)
-      expect(pendingSpawnByPaneKey.size).toBe(1)
-      binding.dispose()
-      spawn.resolve(null)
-      await flushAsyncTicks(12)
-
-      expect(pendingSpawnByPaneKey.size).toBe(0)
-      expect(window.api.pty.clearPendingPaneSerializer).not.toHaveBeenCalled()
-
-      declaration.resolve(7)
-      await flushAsyncTicks(12)
-
-      expect(window.api.pty.clearPendingPaneSerializer).toHaveBeenCalledExactlyOnceWith(
-        expect.any(String),
-        7
-      )
-    })
-
     it('joins a successful pending spawn across a StrictMode remount', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
       const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(

@@ -9,7 +9,7 @@ import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
-} from '@/lib/comment-body-submit-state'
+} from '@/lib/source-control/review/comments/comment-body-submit-state'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import type { MentionOption } from '../page-types'

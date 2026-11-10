@@ -36,7 +36,8 @@ import {
   descriptorRowElements,
   ModelPill,
   SessionOptionCaption,
-  SessionOptionSummaryRow
+  SessionOptionSummaryRow,
+  showsSessionOptionAsSwitch
 } from './MobileNativeChatSessionOptionRows'
 import {
   SessionOptionSegments,
@@ -383,7 +384,7 @@ function OptionRows({
         {descriptors.flatMap((descriptor) => {
           const isPermission = descriptor === permission
           const disabled = locked(descriptor) || !descriptor.settable
-          if (descriptor.kind.type === 'boolean' && !descriptor.action) {
+          if (showsSessionOptionAsSwitch(descriptor)) {
             return descriptorRowElements(
               {
                 descriptor,

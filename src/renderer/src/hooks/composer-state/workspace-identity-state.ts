@@ -18,7 +18,10 @@ type WorkspaceIdentityStateInput = Pick<
 
 import { useState, useMemo, useCallback, type SetStateAction } from 'react'
 import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'
-import { getLinkedWorkItemProvider, isGitLabIssueUrl } from '@/lib/new-workspace'
+import {
+  getWorkspaceSourceProvider,
+  isGitLabIssueUrl
+} from '../../../../shared/new-workspace/workspace-source'
 import {
   type SmartNameMode,
   isBlockingJiraUrlIntent
@@ -65,7 +68,7 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     }
     if (
       initialLinkedWorkItem?.type === 'issue' &&
-      getLinkedWorkItemProvider(initialLinkedWorkItem) === 'github'
+      getWorkspaceSourceProvider(initialLinkedWorkItem) === 'github'
     ) {
       return String(initialLinkedWorkItem.number)
     }

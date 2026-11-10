@@ -1,3 +1,5 @@
+import { replaceTabBuckets, replaceRecordEntries } from '@/store/keyed-record-transitions'
+import { getFirstTerminalTabOwnerWorktreeId } from './terminal-tab-owner-index'
 import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId,
@@ -62,15 +64,18 @@ export function createTerminalPtyBindingActions(
               })
             )
             if (changed) {
-              nextTerminalLayoutsByTabId = {
-                ...s.terminalLayoutsByTabId,
-                [tabId]: { ...existingLayout, ptyIdsByLeafId: nextBindings }
-              }
+              nextTerminalLayoutsByTabId = replaceRecordEntries<
+                TerminalSlice['terminalLayoutsByTabId'][string]
+              >(s.terminalLayoutsByTabId, [
+                [tabId, { ...existingLayout, ptyIdsByLeafId: nextBindings }]
+              ])
             }
           }
         }
         let nextTabsByWorktree = s.tabsByWorktree
-        for (const [wId, tabs] of Object.entries(s.tabsByWorktree)) {
+        const ownerId = getFirstTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
+        for (const wId of ownerId ? [ownerId] : []) {
+          const tabs = s.tabsByWorktree[wId] ?? []
           const index = tabs.findIndex((t) => t.id === tabId)
           if (index === -1) {
             continue
@@ -99,7 +104,7 @@ export function createTerminalPtyBindingActions(
                 : {}),
               ptyId: nextTabPtyId
             }
-            nextTabsByWorktree = { ...s.tabsByWorktree, [wId]: nextTabs }
+            nextTabsByWorktree = replaceTabBuckets(s.tabsByWorktree, [[wId, nextTabs]])
           }
           break
         }
@@ -176,17 +181,20 @@ export function createTerminalPtyBindingActions(
         }
         return {
           ...(nextTabsByWorktree !== s.tabsByWorktree
-            ? { tabsByWorktree: nextTabsByWorktree }
+            ? {
+                tabsByWorktree: nextTabsByWorktree
+              }
             : {}),
           ...(nextPtyIds !== existingPtyIds || !(tabId in s.ptyIdsByTabId)
-            ? { ptyIdsByTabId: { ...s.ptyIdsByTabId, [tabId]: nextPtyIds } }
+            ? {
+                ptyIdsByTabId: replaceRecordEntries(s.ptyIdsByTabId, [[tabId, nextPtyIds]])
+              }
             : {}),
           ...(s.lastKnownRelayPtyIdByTabId[tabId] !== ptyId
             ? {
-                lastKnownRelayPtyIdByTabId: {
-                  ...s.lastKnownRelayPtyIdByTabId,
-                  [tabId]: ptyId
-                }
+                lastKnownRelayPtyIdByTabId: replaceRecordEntries(s.lastKnownRelayPtyIdByTabId, [
+                  [tabId, ptyId]
+                ])
               }
             : {}),
           ...(nextUnverifiedPtyLossTabIds !== s.unverifiedPtyLossTabIds
@@ -200,7 +208,9 @@ export function createTerminalPtyBindingActions(
           codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
           migrationUnsupportedByPtyId: nextMigrationUnsupportedByPtyId,
           ...(nextTerminalLayoutsByTabId !== s.terminalLayoutsByTabId
-            ? { terminalLayoutsByTabId: nextTerminalLayoutsByTabId }
+            ? {
+                terminalLayoutsByTabId: nextTerminalLayoutsByTabId
+              }
             : {}),
           ...(shouldBumpSortEpoch ? { sortEpoch: s.sortEpoch + 1 } : {})
         }
