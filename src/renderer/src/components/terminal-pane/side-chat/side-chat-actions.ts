@@ -13,7 +13,8 @@ import {
   sideChatTitle,
   findSideChatBySide,
   findSideChatForParent,
-  registerSideChat
+  registerSideChat,
+  unregisterSideChat
 } from '@/lib/agent-session/side-chat/side-chat-registry'
 import { getAiVaultResumePlatform } from '@/lib/agent-session/resume/history/ai-vault-resume-platform'
 import { resolveAiVaultResumeStartupShell } from '@/lib/agent-session/resume/history/ai-vault-resume-shell'
@@ -101,10 +102,14 @@ export function toggleSideChatFromPane(
   const existing = findSideChatForParent(tabId, pane.leafId)
   if (existing) {
     const sidePane = focusLeaf(manager, existing.sideLeafId)
-    if (sidePane && args.draftPrompt?.trim()) {
-      sidePane.terminal.paste(args.draftPrompt)
+    if (sidePane) {
+      if (args.draftPrompt?.trim()) {
+        sidePane.terminal.paste(args.draftPrompt)
+      }
+      return
     }
-    return
+    // The split never landed; drop the stale pairing and start a new side chat.
+    unregisterSideChat(existing)
   }
 
   const status = paneStatus(tabId, pane.leafId)

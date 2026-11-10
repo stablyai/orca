@@ -44,6 +44,10 @@ export function registerSideChat(sideChat: SideChat): void {
   })
 }
 
+export function unregisterSideChat(sideChat: SideChat): void {
+  sideChatsBySideKey.delete(makePaneKey(sideChat.tabId, sideChat.sideLeafId))
+}
+
 export function findSideChatForParent(tabId: string, parentLeafId: string): SideChat | null {
   for (const sideChat of sideChatsBySideKey.values()) {
     if (sideChat.tabId === tabId && sideChat.parentLeafId === parentLeafId) {
