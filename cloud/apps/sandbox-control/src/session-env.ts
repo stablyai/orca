@@ -6,7 +6,7 @@ import { agentModesFor, withoutSignInCredentials, type AgentMode } from './agent
 import { accountProvider } from './account-providers'
 import type { CredentialAgent } from './agent-credential-names'
 import { deriveProviderEnv, deriveProviderScopes, providerHosts } from './provider-env'
-import { applySecretPlaceholders, encodeEgressSecretHosts } from './secret-egress'
+import { applySecretPlaceholders, encodeAccountRoute, encodeEgressSecretHosts } from './secret-egress'
 import { resolveSandboxSecrets } from './secrets'
 import type { Keyring } from './secrets-crypto'
 import type { SandboxRow } from './store'
@@ -92,7 +92,12 @@ export async function sessionSecretEnv(
   const modes = await agentModesFor(deps.db, row, derived, {
     providerEnabled: deps.secrets.accountProviders ?? { claude: false, codex: false },
     accountsUsable: swap,
-    now: Date.now()
+    now: Date.now(),
+    // Usable means decryptable now, not just stored: a token we can't open must not hold the session in account mode.
+    readable: async (agent) => {
+      const provider = accountProvider(agent)
+      return provider ? (await provider.credential(deps.db, deps.secrets!.keyring, row.user_id, Date.now())) !== null : false
+    }
   })
   const dropped = new Set((Object.keys(modes) as CredentialAgent[]).filter((agent) => modes[agent] !== 'keep'))
   const env = withoutSignInCredentials(derived, dropped)
@@ -110,7 +115,7 @@ export async function sessionSecretEnv(
     const provider = modes[agent] === 'account' ? accountProvider(agent) : undefined
     if (provider) {
       Object.assign(accountEnv, provider.sessionEnv(row))
-      accountRoutes.push(...provider.hosts.map((host) => `account:${agent}@${host}`))
+      accountRoutes.push(...provider.hosts.map((host) => encodeAccountRoute(agent, row.user_id, host)))
     }
   }
   const secretHosts = [encodeEgressSecretHosts(swapped.targets), ...accountRoutes].filter(Boolean).join(',') || null

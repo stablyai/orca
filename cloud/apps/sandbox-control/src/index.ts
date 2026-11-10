@@ -103,6 +103,7 @@ import {
   deleteAgentCredential,
   providerEnabled,
   putClaudeCredential,
+  markAgentCredentialRevoked,
   readUsableAgentCredential
 } from './agent-credentials'
 import {
@@ -306,12 +307,13 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
   const accountRoutes = (row: SandboxRow, host: string): ProxiedRoute[] =>
     egressAccountRoutes(row)
       .filter((route) => route.host === host)
-      .flatMap(({ agent }) => {
+      .flatMap(({ agent, owner }) => {
         const provider = accountProvider(agent)
         const keyring = keyringFor(env)
         if (!provider || !keyring) {
           return []
         }
+        let real: string | null = null
         return [
           {
             header: provider.header,
@@ -319,16 +321,42 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
             label: `account:${agent}`,
             credential: async () => {
               const now = (deps.now ?? Date.now)()
-              if (!providerEnabled(env)[agent] || isSharedWorkspace(row)) {
-                // Refused rather than silently billed elsewhere; the env refresh below moves the session to its key.
+              // The session was set up for this owner; a workspace handed to someone else never uses
+              // the new owner's account until its env is rebuilt for them.
+              if (owner !== row.user_id) {
                 scheduleEnvRefresh(env, deps, row)
-                return null
+                return { deny: 'account_owner_changed' }
               }
-              const value = await cachedAccountCredential(env.SANDBOX_DB, await keyring, row.user_id, agent, now)
-              if (!value) {
+              if (isSharedWorkspace(row)) {
                 scheduleEnvRefresh(env, deps, row)
+                return { deny: 'account_not_shared' }
               }
-              return value ? provider.format(value) : null
+              if (!providerEnabled(env)[agent]) {
+                scheduleEnvRefresh(env, deps, row)
+                return { deny: 'account_disabled' }
+              }
+              real = await cachedAccountCredential(env.SANDBOX_DB, await keyring, row.user_id, agent, now)
+              if (!real) {
+                scheduleEnvRefresh(env, deps, row)
+                return { deny: 'no_agent_credential' }
+              }
+              return provider.format(real)
+            },
+            ...(provider.extraHeaders ? { extraHeaders: () => (real ? provider.extraHeaders!(real) : {}) } : {}),
+            onUpstreamStatus: (status) => {
+              if (status === 401) {
+                // The provider no longer accepts it (revoked at the source): stop using it until renewed.
+                const now = (deps.now ?? Date.now)()
+                const work = markAgentCredentialRevoked(env.SANDBOX_DB, row.user_id, agent, now).then(() => {
+                  forgetAccountCredential(row.user_id, agent)
+                  scheduleEnvRefresh(env, deps, row)
+                })
+                if (deps.waitUntil) {
+                  deps.waitUntil(work.catch(() => undefined))
+                } else {
+                  void work.catch(() => undefined)
+                }
+              }
             }
           }
         ]
@@ -351,7 +379,7 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
 }
 
 // Account credentials per person, decrypted at most once a minute per isolate; an edit or delete drops it.
-const ACCOUNT_CACHE_MS = 60_000
+const ACCOUNT_CACHE_MS = 10_000
 const accountCache = new Map<string, { at: number; value: Promise<string | null> }>()
 function cachedAccountCredential(db: D1Database, keyring: Keyring, userId: string, agent: 'claude' | 'codex', now: number): Promise<string | null> {
   const key = `${userId}:${agent}`
@@ -376,6 +404,13 @@ function scheduleEnvRefresh(env: Env, deps: Deps, row: SandboxRow): void {
     return
   }
   lastHealRefresh.set(row.id, now)
+  if (lastHealRefresh.size > 1000) {
+    for (const [id, at] of lastHealRefresh) {
+      if (now - at >= 60_000) {
+        lastHealRefresh.delete(id)
+      }
+    }
+  }
   const work = lifecycleDeps(env, deps).then((life) => (life ? refreshSandboxEnv(life, row) : false))
   if (deps.waitUntil) {
     deps.waitUntil(work.catch(() => undefined))
@@ -1617,6 +1652,18 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
       }
       const revoked =
         patched.revoke === 'none' ? null : await revokeForAccessChange(life, patched.row, patched.revoke, caller.userId)
+      if (
+        patched.row.status === 'running' &&
+        (patched.row.user_id !== current.user_id || patched.row.visibility !== current.visibility)
+      ) {
+        // A new owner or a share changes which account (if any) the agents use (D10/D13): rebuild the env now.
+        const work = refreshSandboxEnv(life, patched.row).catch(() => false)
+        if (deps.waitUntil) {
+          deps.waitUntil(work)
+        } else {
+          await work
+        }
+      }
       return json({ workspace: await view(patched.row), ...(revoked ? { revoked } : {}) })
     }
     case 'POST wake': {

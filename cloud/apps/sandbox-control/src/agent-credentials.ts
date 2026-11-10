@@ -39,7 +39,8 @@ export class AgentCredentialError extends Error {
   }
 }
 
-const binding = (userId: string, agent: CredentialAgent): SecretBinding => ({ scope: 'account', ownerId: userId, name: agent })
+/** The AAD every account credential is sealed with; the Codex lease refresher must reuse it exactly. */
+export const credentialBinding = (userId: string, agent: CredentialAgent): SecretBinding => ({ scope: 'account', ownerId: userId, name: agent })
 
 /** Flags S1/S2 turn a provider on; the *_DISABLED switch turns it off again (kill switch, operator-only). */
 export function providerEnabled(env: Pick<Env, 'AGENT_ACCOUNTS_CLAUDE' | 'AGENT_ACCOUNTS_CLAUDE_DISABLED' | 'AGENT_ACCOUNTS_CODEX' | 'AGENT_ACCOUNTS_CODEX_DISABLED'>): Record<CredentialAgent, boolean> {
@@ -84,7 +85,7 @@ export async function putAgentCredential(
   input: { userId: string; accountId: string; agent: CredentialAgent; value: string; label?: string | null; expiresAt?: number | null },
   now: number
 ): Promise<void> {
-  const sealed = await keyring.seal(binding(input.userId, input.agent), input.value)
+  const sealed = await keyring.seal(credentialBinding(input.userId, input.agent), input.value)
   await db
     .prepare(
       `INSERT INTO agent_credentials (user_id, account_id, agent, kek_id, wrapped_dek, ciphertext, label, expires_at, state, created_at, updated_at)
@@ -104,7 +105,7 @@ export async function readUsableAgentCredential(db: D1Database, keyring: Keyring
     return null
   }
   try {
-    return await keyring.open(binding(userId, agent), { kekId: row.kek_id, wrappedDek: row.wrapped_dek, ciphertext: row.ciphertext })
+    return await keyring.open(credentialBinding(userId, agent), { kekId: row.kek_id, wrappedDek: row.wrapped_dek, ciphertext: row.ciphertext })
   } catch {
     console.log(JSON.stringify({ event: 'agent_credential_unreadable', agent }))
     return null

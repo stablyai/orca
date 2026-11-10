@@ -209,7 +209,12 @@ export async function agentModesFor(
   db: D1Database,
   row: Pick<SandboxRow, 'id' | 'user_id' | 'visibility'>,
   env: Readonly<Record<string, string>>,
-  options: { providerEnabled: Record<CredentialAgent, boolean>; accountsUsable: boolean; now: number }
+  options: {
+    providerEnabled: Record<CredentialAgent, boolean>
+    accountsUsable: boolean
+    now: number
+    readable?: (agent: CredentialAgent) => Promise<boolean>
+  }
 ): Promise<Record<CredentialAgent, AgentMode>> {
   const rows = await rowsFor(db, row.user_id, [row.id, DEFAULT_SCOPE])
   const workspace = byAgent(rows, row.id)
@@ -220,7 +225,9 @@ export async function agentModesFor(
     const explicit = workspace[agent] ?? defaults[agent]
     const provider = accountProvider(agent)
     const enabled = options.providerEnabled[agent] && provider !== undefined
-    const usable = enabled ? isUsable(await agentCredentialState(db, row.user_id, agent, options.now)) : false
+    const usable = enabled
+      ? isUsable(await agentCredentialState(db, row.user_id, agent, options.now)) && (options.readable ? await options.readable(agent) : true)
+      : false
     const source = explicit ?? (covered[agent] ? 'key' : usable ? 'sign-in' : null)
     if (source !== 'sign-in') {
       modes[agent] = 'keep'

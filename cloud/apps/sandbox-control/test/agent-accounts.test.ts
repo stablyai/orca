@@ -40,6 +40,7 @@ async function setup(overrides: Record<string, string> = {}) {
   const { privateKey, publicKey } = await generateKeyPair('RS256')
   const jwks = { keys: [{ ...(await exportJWK(publicKey)), kid: 'v1', alg: 'RS256' }] }
   const upstream: { url: string; headers: Headers }[] = []
+  const reply = { status: 200 }
   const h = await createHarness(
     { SECRETS_KEK: KEK, EGRESS_PROXY_URL: PROXY_URL, SECRETS_EGRESS_PLACEHOLDERS: 'on', AGENT_ACCOUNTS_CLAUDE: 'on', ...overrides },
     {
@@ -47,7 +48,7 @@ async function setup(overrides: Record<string, string> = {}) {
       credentials: { authorizationFor: async () => null },
       egressFetch: async (input, init) => {
         upstream.push({ url: String(input), headers: new Headers(init?.headers) })
-        return new Response('{}', { status: 200 })
+        return new Response('{}', { status: reply.status })
       }
     }
   )
@@ -77,7 +78,7 @@ async function setup(overrides: Record<string, string> = {}) {
     )
     return { status: response.status, body: await response.text() }
   }
-  return { h, as, lastEnv, proxied, upstream }
+  return { h, as, lastEnv, proxied, upstream, reply }
 }
 
 describe('Orca-account credentials (D11)', () => {
@@ -156,6 +157,33 @@ describe('egress-time Source (D10) and shared workspaces (D13)', () => {
     expect(refused.status).toBe(403)
     expect(lastEnv(ENV_COMMAND).CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
     expect((await h.call('GET', `/v1/agent-sources?workspaceId=${id}`, { bearer: mia })).body.sharedWorkspace).toBe(true)
+  })
+
+  it('a workspace handed to a new owner never uses the new owner\'s account behind the old session', async () => {
+    const { h, as, proxied } = await setup()
+    const mia = await as('mia', 'acme', 'member')
+    const bob = await as('bob', 'acme', 'member')
+    await h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN } })
+    await h.call('PUT', '/v1/agent-credentials/claude', { bearer: bob, body: { token: 'sk-ant-oat01-BOBsetupTOKEN_for_tests_only_111111111111' } })
+    const created = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
+    const id: string = created.body.sandbox.id
+    await h.env.SANDBOX_DB.prepare(`UPDATE sandboxes SET user_id = 'bob' WHERE id = ?`).bind(id).run()
+    const refused = await proxied(id, 'api.anthropic.com', { authorization: `Bearer orca-ph-claude-account-${id}` })
+    expect(refused).toEqual({ status: 403, body: 'account_owner_changed' })
+  })
+
+  it('a 401 from the provider marks the account revoked and the session falls off it', async () => {
+    const { h, as, proxied, reply, lastEnv } = await setup()
+    const mia = await as('mia')
+    await h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN } })
+    const created = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
+    const id: string = created.body.sandbox.id
+    reply.status = 401
+    expect((await proxied(id, 'api.anthropic.com', { authorization: `Bearer orca-ph-claude-account-${id}` })).status).toBe(401)
+    expect((await h.call('GET', '/v1/agent-credentials', { bearer: mia })).body.claude.state).toBe('revoked')
+    // Already off the account: no placeholder in new shells, and the proxy refuses with a clear reason.
+    await vi.waitFor(() => expect(lastEnv(ENV_COMMAND).CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined())
+    expect((await proxied(id, 'api.anthropic.com', { authorization: `Bearer orca-ph-claude-account-${id}` })).status).toBe(403)
   })
 
   it('kill switch: Source "sign-in" falls back to the agent signing in inside the sandbox (no key, no placeholder)', async () => {
