@@ -116,15 +116,23 @@ export function table(header: string[], rows: string[][]): string {
 /** "Sandbox size: 8 vCPU · 16 GB". There is one size; it always comes from ORCA_CLOUD_SANDBOX_SPEC. */
 export const CLOUD_SANDBOX_SIZE_LINE = `Sandbox size: ${ORCA_CLOUD_SANDBOX_SPEC.vcpus} vCPU · ${ORCA_CLOUD_SANDBOX_SPEC.memoryGb} GB`
 
-/** The API's workspace status in glossary words (Starting, Running, Asleep, Waking, …). */
-export function cloudWorkspaceStateLabel(w: Pick<CloudWorkspace, 'status' | 'archived'>): string {
+/**
+ * The API's workspace status in glossary words (Starting, Running, Asleep, Waking, …). A failed
+ * wake leaves the workspace asleep with lastError resume_failed: that is "Couldn't wake".
+ */
+export function cloudWorkspaceStateLabel(
+  w: Pick<CloudWorkspace, 'status' | 'archived'> & { lastError?: string | null }
+): string {
   switch (w.status) {
     case 'starting':
       return 'Starting'
     case 'running':
       return 'Running'
     case 'sleeping':
-      return w.archived ? 'Archived' : 'Asleep'
+      if (w.archived) {
+        return 'Archived'
+      }
+      return w.lastError === 'resume_failed' ? "Couldn't wake" : 'Asleep'
     case 'waking':
       return 'Waking'
     case 'destroying':

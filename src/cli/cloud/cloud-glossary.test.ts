@@ -99,6 +99,9 @@ describe('workspace states and output', () => {
     expect(label('waking')).toBe('Waking')
     expect(label('failed')).toBe("Couldn't start")
     expect(label('destroying')).toBe('Deleting')
+    expect(
+      cloudWorkspaceStateLabel({ status: 'sleeping', archived: false, lastError: 'resume_failed' })
+    ).toBe("Couldn't wake")
   })
 
   it('lists ID NAME STATE REPO BRANCH LAST ACTIVE, falling back to updatedAt', () => {
@@ -123,7 +126,7 @@ describe('workspace states and output', () => {
       { workspace: workspace({ status: 'sleeping', lastError: 'resume_failed' }) },
       NOW
     )
-    expect(text).toContain('State: Asleep')
+    expect(text).toContain("State: Couldn't wake")
     expect(text).toContain('Sandbox size: 8 vCPU · 16 GB')
     expect(text).toContain(
       "The last wake didn't finish. Your files are safe. Run: orca cloud workspace wake sbx_aa11"
