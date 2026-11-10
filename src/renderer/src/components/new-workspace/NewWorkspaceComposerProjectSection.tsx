@@ -159,6 +159,7 @@ export function NewWorkspaceComposerProjectSection({
               cloudRepoValue={cloudOnly?.picked?.fullName ?? null}
               onCloudRepoSelected={cloudOnly?.pick}
               onMoreCloudAccess={cloudOnly?.moreAccess}
+              onShowMoreCloudRepos={cloudOnly?.showMore ?? null}
               placeholder={
                 projectPlaceholder ??
                 t('auto.components.NewWorkspaceComposerCard.dccd26d4e4', 'Choose project')

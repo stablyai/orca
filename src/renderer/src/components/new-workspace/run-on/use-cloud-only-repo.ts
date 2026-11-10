@@ -14,6 +14,8 @@ import type { CloudSetupStep } from './cloud-start-model'
 
 export type CloudOnlyRepo = {
   repos: readonly OrcaCloudGitHubRepository[] | null
+  /** Fetches GitHub's next pages; null when everything is listed. */
+  showMore: (() => void) | null
   picked: OrcaCloudGitHubRepository | null
   /** The GitHub row is done for a repository listed from the team's installations. */
   githubStep: CloudSetupStep | null
@@ -32,7 +34,7 @@ export function useCloudOnlyRepo({
   /** The list needs an account; signed out, setup comes first. */
   signedIn: boolean
 }): CloudOnlyRepo {
-  const repos = useOrcaCloudGitHubRepositories(enabled && signedIn)
+  const { repos, showMore } = useOrcaCloudGitHubRepositories(enabled && signedIn)
   const [pickedName, setPickedName] = useState<string | null>(null)
   const picked = useMemo(
     () => (enabled ? (repos?.find((repo) => repo.fullName === pickedName) ?? null) : null),
@@ -66,7 +68,7 @@ export function useCloudOnlyRepo({
         : Promise.resolve(false),
     [picked]
   )
-  return { repos, picked, githubStep, pick: setPickedName, clear, moreAccess, start }
+  return { repos, showMore, picked, githubStep, pick: setPickedName, clear, moreAccess, start }
 }
 
 /**

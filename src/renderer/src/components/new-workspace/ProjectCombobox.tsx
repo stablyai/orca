@@ -19,6 +19,7 @@ import type { OrcaCloudGitHubRepository } from '@/lib/orca-cloud/use-orca-cloud-
 import {
   CLOUD_REPO_KEY_PREFIX,
   CLOUD_REPO_MORE_KEY,
+  CLOUD_REPO_SHOW_MORE_KEY,
   cloudRepoKey,
   filterCloudRepos,
   ProjectComboboxCloudSection
@@ -40,6 +41,8 @@ type ProjectComboboxProps = {
   cloudRepoValue?: string | null
   onCloudRepoSelected?: (fullName: string) => void
   onMoreCloudAccess?: () => void
+  /** Present while GitHub has more repositories than are listed. */
+  onShowMoreCloudRepos?: (() => void) | null
 }
 
 const ADD_PROJECT_KEY = 'add-project'
@@ -59,7 +62,8 @@ export default function ProjectCombobox({
   cloudRepos = null,
   cloudRepoValue = null,
   onCloudRepoSelected,
-  onMoreCloudAccess
+  onMoreCloudAccess,
+  onShowMoreCloudRepos = null
 }: ProjectComboboxProps): React.JSX.Element {
   const t = useTranslate()
   const [tooltipOpen, setTooltipOpen] = useState(false)
@@ -76,10 +80,11 @@ export default function ProjectCombobox({
       ...(cloudRepos
         ? filterCloudRepos(cloudRepos, query).map((repo) => cloudRepoKey(repo.fullName))
         : []),
+      ...(cloudRepos && onShowMoreCloudRepos ? [CLOUD_REPO_SHOW_MORE_KEY] : []),
       ...(cloudRepos && onMoreCloudAccess ? [CLOUD_REPO_MORE_KEY] : []),
       ...(onAddProject ? [ADD_PROJECT_KEY] : [])
     ],
-    [cloudRepos, onAddProject, onMoreCloudAccess, options, recentIds]
+    [cloudRepos, onAddProject, onMoreCloudAccess, onShowMoreCloudRepos, options, recentIds]
   )
   const {
     query,
@@ -123,6 +128,11 @@ export default function ProjectCombobox({
       if (key === null) {
         return
       }
+      if (key === CLOUD_REPO_SHOW_MORE_KEY) {
+        // Keep the list open: the next page appends in place.
+        onShowMoreCloudRepos?.()
+        return
+      }
       close()
       if (key === ADD_PROJECT_KEY) {
         onAddProject?.()
@@ -139,7 +149,15 @@ export default function ProjectCombobox({
       onValueChange(key)
       onValueSelected?.(key)
     },
-    [close, onAddProject, onCloudRepoSelected, onMoreCloudAccess, onValueChange, onValueSelected]
+    [
+      close,
+      onAddProject,
+      onCloudRepoSelected,
+      onMoreCloudAccess,
+      onShowMoreCloudRepos,
+      onValueChange,
+      onValueSelected
+    ]
   )
 
   const handleKeyDown = useCallback(
@@ -358,6 +376,7 @@ export default function ProjectCombobox({
                   onArm={arm}
                   onCommit={commit}
                   showMoreAccess={Boolean(onMoreCloudAccess)}
+                  showMoreRepos={Boolean(onShowMoreCloudRepos)}
                 />
               ) : null}
             </div>

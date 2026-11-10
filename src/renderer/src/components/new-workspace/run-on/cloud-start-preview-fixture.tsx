@@ -102,6 +102,7 @@ export function ComposerPreview({
       ? {
           cloudOnly: {
             repos: cloudRepos,
+            showMore: () => {},
             picked: cloudRepos.find((repo) => repo.fullName === picked) ?? null,
             githubStep: null,
             pick: setPicked,

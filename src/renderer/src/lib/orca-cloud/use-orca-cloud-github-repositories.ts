@@ -1,7 +1,7 @@
 // Repositories Orca Cloud can reach on GitHub that have no clone on this computer (cloud-start D4,
 // N12): the Project picker lists them under "On GitHub · Orca Cloud only" while Orca Cloud is
 // picked, because a sandbox clones from GitHub anyway.
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import type { HostedGithubRepositoriesResponse } from '../../../../shared/hosted-sandbox/hosted-github-wire'
 import { orcaCloudGitHubRepoUrl } from './use-orca-cloud-repo-access'
@@ -13,39 +13,53 @@ export type OrcaCloudGitHubRepository = {
   private: boolean
 }
 
-/** Two pages cover nearly every team; the rest is a search away on GitHub's own page. */
-const MAX_PAGES = 2
+/** Two pages at a time cover nearly every team; "Show more repositories…" fetches the next two. */
+const PAGES_PER_LOAD = 2
 const CACHE_MS = 5 * 60_000
 
-let cache: { at: number; value: Promise<OrcaCloudGitHubRepository[]> } | null = null
+type Listing = { repos: OrcaCloudGitHubRepository[]; nextCursor: string | null }
 
-async function fetchAll(): Promise<OrcaCloudGitHubRepository[]> {
-  const out: OrcaCloudGitHubRepository[] = []
-  let cursor: string | null = null
-  for (let page = 0; page < MAX_PAGES; page += 1) {
+let cache: { at: number; value: Promise<Listing> } | null = null
+
+async function fetchPages(after: Listing): Promise<Listing> {
+  const repos = [...after.repos]
+  let cursor = after.nextCursor
+  for (let page = 0; page < PAGES_PER_LOAD; page += 1) {
     const result = await window.api.orcaCloudWorkspace.listGitHubRepositories({ cursor })
     if (!result.ok) {
       break
     }
     const value: HostedGithubRepositoriesResponse = result.value
     for (const repo of value.repositories) {
-      out.push({ fullName: repo.fullName, url: repo.url, private: repo.private })
+      repos.push({ fullName: repo.fullName, url: repo.url, private: repo.private })
     }
     cursor = value.nextCursor
     if (!cursor) {
       break
     }
   }
-  return out
+  return { repos, nextCursor: cursor }
 }
 
-function loadRepositories(): Promise<OrcaCloudGitHubRepository[]> {
+function loadRepositories(more = false): Promise<Listing> {
   const now = Date.now()
   if (!cache || now - cache.at >= CACHE_MS) {
-    const entry = { at: now, value: fetchAll().catch(() => []) }
-    cache = entry
+    cache = { at: now, value: fetchPages({ repos: [], nextCursor: null }) }
+  } else if (more) {
+    const previous = cache.value
+    cache = {
+      at: cache.at,
+      value: previous.then((listing) => (listing.nextCursor ? fetchPages(listing) : listing))
+    }
   }
-  return cache.value
+  const entry = cache
+  // A failed read isn't cached: the next open asks again.
+  return entry.value.catch(() => {
+    if (cache === entry) {
+      cache = null
+    }
+    return { repos: [], nextCursor: null }
+  })
 }
 
 /** Forget the list after the user gives Orca Cloud access to more repositories. */
@@ -75,33 +89,38 @@ export function selectCloudOnlyRepositories(
     .sort((a, b) => a.fullName.localeCompare(b.fullName))
 }
 
-export function useOrcaCloudGitHubRepositories(
-  enabled: boolean
-): OrcaCloudGitHubRepository[] | null {
+export function useOrcaCloudGitHubRepositories(enabled: boolean): {
+  repos: OrcaCloudGitHubRepository[] | null
+  /** Present while GitHub has more pages than are listed. */
+  showMore: (() => void) | null
+} {
   const repos = useAppStore((s) => s.repos)
-  const [reachable, setReachable] = useState<OrcaCloudGitHubRepository[] | null>(null)
+  const [listing, setListing] = useState<Listing | null>(null)
+  const [moreRequests, setMoreRequests] = useState(0)
   useEffect(() => {
     if (!enabled) {
       return
     }
     let cancelled = false
-    void loadRepositories().then((value) => {
+    void loadRepositories(moreRequests > 0).then((value) => {
       if (!cancelled) {
-        setReachable(value)
+        setListing(value)
       }
     })
     return () => {
       cancelled = true
     }
-  }, [enabled])
-  return useMemo(
+  }, [enabled, moreRequests])
+  const visible = useMemo(
     () =>
-      enabled && reachable
+      enabled && listing
         ? selectCloudOnlyRepositories(
-            reachable,
+            listing.repos,
             repos.map((repo) => orcaCloudGitHubRepoUrl(repo))
           )
         : null,
-    [enabled, reachable, repos]
+    [enabled, listing, repos]
   )
+  const showMore = useCallback(() => setMoreRequests((n) => n + 1), [])
+  return { repos: visible, showMore: enabled && listing?.nextCursor ? showMore : null }
 }

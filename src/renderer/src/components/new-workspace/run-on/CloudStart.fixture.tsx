@@ -219,7 +219,8 @@ export const d3NotOnGitHub = defineFixture({
 })
 const cloudRepos = [
   { fullName: 'acme/billing', url: 'https://github.com/acme/billing', private: true },
-  { fullName: 'acme/infra', url: 'https://github.com/acme/infra', private: true }
+  { fullName: 'acme/infra', url: 'https://github.com/acme/infra', private: true },
+  { fullName: 'acme/docs', url: 'https://github.com/acme/docs', private: false }
 ]
 /** D4: Orca Cloud picked; the Project picker adds GitHub repositories with no clone here. */
 export const d4GitHubProjects = defineFixture({
