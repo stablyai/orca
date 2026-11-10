@@ -7,7 +7,7 @@ import {
   SETUP_SUCCESS_EXIT_CODE,
   applySetupAutoCloseSetting,
   buildSetupRunnerCommand
-} from '../../shared/setup-runner-command'
+} from '../../shared/agent-launch/startup/setup-runner-command'
 import { buildPosixRunnerScript } from './setup-runner-script-text'
 
 // Runs a multi-line setup through the real runner text, launch command and success clause in bash.
