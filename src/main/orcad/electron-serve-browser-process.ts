@@ -1,7 +1,7 @@
 import {
   BROWSER_EXPECT_URL_RUNTIME_CAPABILITY,
   BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY
-} from '../../shared/browser-runtime-capabilities'
+} from '../../shared/browser/runtime/browser-runtime-capabilities'
 import {
   BROWSER_EXPECT_URL_UNSUPPORTED_CODE,
   BrowserExpectedUrlMismatch

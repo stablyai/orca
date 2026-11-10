@@ -3,7 +3,7 @@ import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/laun
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
+import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type {
   AgentProviderSessionMetadata,

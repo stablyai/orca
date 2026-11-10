@@ -1,11 +1,12 @@
 import type { AppState } from '@/store/types'
 import { useOwnedDiffComments } from '../../../diff-comments/use-diff-comment-owner'
-import { withoutMarkdownReviewNotes } from '@/lib/markdown-review-notes-setting'
+import { withoutMarkdownReviewNotes } from '@/lib/editor/markdown/review-notes/markdown-review-notes-setting'
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { formatDiffComments } from '@/lib/diff-comments-format'
-import { describeClipboardWriteFailure } from '@/lib/clipboard-write-failure'
+import { useTranslate } from '@/i18n/use-translate'
+import { formatDiffComments } from '../../../../../../shared/diff-comments-format'
+import { describeClipboardWriteFailure } from '@/lib/clipboard/clipboard-write-failure'
 import { useVisibleWorktreeDiffComments } from '../../../diff-comments/use-visible-worktree-diff-comments'
 import {
   countPendingDiffCommentsClear,
@@ -24,6 +25,7 @@ export function useSourceControlDiffCommentNotes({
   clearDiffComments: AppState['clearDiffComments']
   clearDiffCommentsForFile: AppState['clearDiffCommentsForFile']
 }) {
+  const t = useTranslate()
   const { comments: diffCommentsForActive, markdownReviewNotesEnabled } =
     useVisibleWorktreeDiffComments(activeWorktreeId, 'selection')
   const diffCommentCount = diffCommentsForActive.length
@@ -99,7 +101,8 @@ export function useSourceControlDiffCommentNotes({
 
   const pendingDiffCommentsClearDescription = formatPendingDiffCommentsClearDescription(
     resolvedPendingDiffCommentsClear,
-    pendingDiffCommentsClearCount
+    pendingDiffCommentsClearCount,
+    t
   )
 
   const handleConfirmDiffCommentsClear = useCallback(async (): Promise<void> => {

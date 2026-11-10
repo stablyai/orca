@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
-import { holdChatProgramFacts } from '@/lib/host-chat-program-acquisition'
-import { resolveChatProgramContext } from '@/lib/host-chat-program'
+import { holdChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
+import { resolveChatProgramContext } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import {
   selectAgentLaunchRouteView,
   worktreeLaunchWorkspace

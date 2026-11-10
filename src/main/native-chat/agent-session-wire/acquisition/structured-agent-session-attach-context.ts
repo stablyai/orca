@@ -59,6 +59,7 @@ export type StructuredAgentSessionAttachOptions = {
   onAcquisitionFailed?: AttachFlowInput['onAcquisitionFailed']
   /** The queued message a start is for; see `StructuredAgentSessionProviderChild.startedFor`. */
   startedFor?: string
+  telemetryCallerKey?: string
   startupOptions?: Readonly<Record<string, string>>
   /** A close, an admitted Stop or quit aborted this attach: its refusal is that abort's. */
   onAborted?: () => void

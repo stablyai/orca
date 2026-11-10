@@ -6,7 +6,7 @@ import {
 import { getRepoHostIdentityForParts } from '../../../../../shared/repo-host-identity'
 import { composeWorktreeHostIdentity } from '../../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import { isExecutionHostAliasForWorktree } from '../../worktree-execution-host-alias'
+import { isExecutionHostAliasForWorktree } from '../ownership/worktree-execution-host-alias'
 
 type PaletteWorktreeIdentity = Pick<Worktree, 'hostId' | 'id' | 'runtimeOwnerEnvironmentId'>
 

@@ -6,7 +6,7 @@ import { Button } from '../../ui/button'
 import { Label } from '../../ui/label'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 // Do not deep-link to /stargazers: GitHub 404s that page for users without repo write access.
 const ORCA_GITHUB_URL = 'https://github.com/stablyai/orca'
@@ -21,11 +21,13 @@ type SupportState =
   | 'hidden'
 
 type GeneralSupportSectionProps = {
+  inline?: boolean
   hasPrecedingSections: boolean
 }
 
 export function GeneralSupportSection({
-  hasPrecedingSections
+  hasPrecedingSections,
+  inline
 }: GeneralSupportSectionProps): React.JSX.Element {
   const mountedRef = useMountedRef()
   // Keep gh-derived state local; use a same-size placeholder that collapses with its divider when the section is hidden.
@@ -77,6 +79,7 @@ export function GeneralSupportSection({
 
   return (
     <SupportSection
+      inline={inline}
       state={starState}
       hasPrecedingSections={hasPrecedingSections}
       onStarClick={handleStarClick}
@@ -86,17 +89,30 @@ export function GeneralSupportSection({
 
 type SupportSectionProps = {
   state: SupportState
+  inline?: boolean
   hasPrecedingSections: boolean
   onStarClick: () => void | Promise<void>
 }
 
 function SupportSection({
   state,
+  inline,
   hasPrecedingSections,
   onStarClick
-}: SupportSectionProps): React.JSX.Element {
+}: SupportSectionProps): React.JSX.Element | null {
+  const t = useTranslate()
   // Collapse the leading gap too when gh is unavailable or the repo was already starred.
   const collapsed = state === 'hidden'
+  if (inline) {
+    if (state === 'hidden') {
+      return null
+    }
+    return state === 'loading' ? (
+      <SupportRowSkeleton />
+    ) : (
+      <SupportRow state={state} onStarClick={onStarClick} />
+    )
+  }
 
   return (
     <section
@@ -108,10 +124,7 @@ function SupportSection({
       <div className="min-h-0 overflow-hidden">
         <div className={hasPrecedingSections ? 'pt-2' : undefined}>
           <SettingsGroup
-            title={translate(
-              'auto.components.settings.GeneralSupportSection.55a87e5fd1',
-              'Support Orca'
-            )}
+            title={t('auto.components.settings.GeneralSupportSection.55a87e5fd1', 'Support Orca')}
           >
             {state === 'loading' ? <SupportRowSkeleton /> : null}
             {state !== 'loading' && state !== 'hidden' ? (
@@ -140,31 +153,26 @@ function SupportRow({
   state: 'not-starred' | 'web-fallback' | 'opening-github' | 'starring' | 'starred'
   onStarClick: () => void | Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   // Keep the setting label stable; only its action changes to confirmation after starring.
   return (
     <SearchableSetting
-      title={translate(
-        'auto.components.settings.GeneralSupportSection.6922c1fa2b',
-        'Star Orca on GitHub'
-      )}
-      description={translate(
+      title={t('auto.components.settings.GeneralSupportSection.6922c1fa2b', 'Star Orca on GitHub')}
+      description={t(
         'auto.components.settings.GeneralSupportSection.511782265b',
         'Support the project with a GitHub star.'
       )}
-      keywords={['star', 'github', 'support', 'feedback', 'like']}
+      keywords={['about', 'star', 'github', 'support', 'feedback', 'like']}
       className="flex items-center justify-between gap-4 py-2"
     >
       <Label>
-        {translate(
-          'auto.components.settings.GeneralSupportSection.6922c1fa2b',
-          'Star Orca on GitHub'
-        )}
+        {t('auto.components.settings.GeneralSupportSection.6922c1fa2b', 'Star Orca on GitHub')}
       </Label>
       {state === 'starred' ? (
         <SupportRowThanks />
       ) : (
         <Button
-          variant="default"
+          variant="outline"
           size="sm"
           onClick={() => void onStarClick()}
           disabled={state === 'starring' || state === 'opening-github'}
@@ -178,15 +186,12 @@ function SupportRow({
             <Star className="size-3.5 fill-amber-400 text-amber-400" />
           )}
           {state === 'starring'
-            ? translate('auto.components.settings.GeneralSupportSection.397719bee5', 'Starring...')
+            ? t('auto.components.settings.GeneralSupportSection.397719bee5', 'Starring...')
             : state === 'opening-github'
-              ? translate('auto.components.settings.GeneralSupportSection.cb65c75b11', 'Opening...')
+              ? t('auto.components.settings.GeneralSupportSection.cb65c75b11', 'Opening...')
               : state === 'web-fallback'
-                ? translate(
-                    'auto.components.settings.GeneralSupportSection.f2d4f877b2',
-                    'Open GitHub'
-                  )
-                : translate('auto.components.settings.GeneralSupportSection.964acc6bb4', 'Star')}
+                ? t('auto.components.settings.GeneralSupportSection.f2d4f877b2', 'Open GitHub')
+                : t('auto.components.settings.GeneralSupportSection.964acc6bb4', 'Star')}
         </Button>
       )}
     </SearchableSetting>
@@ -194,6 +199,7 @@ function SupportRow({
 }
 
 function SupportRowThanks(): React.JSX.Element {
+  const t = useTranslate()
   // Match the sm button’s dimensions so confirmation cannot change row height.
   return (
     <div
@@ -203,10 +209,7 @@ function SupportRowThanks(): React.JSX.Element {
       aria-live="polite"
     >
       <Star className="size-3.5 fill-amber-400/80 text-amber-400/80" aria-hidden="true" />
-      {translate(
-        'auto.components.settings.GeneralSupportSection.af7d9f4396',
-        'Thanks for the support!'
-      )}
+      {t('auto.components.settings.GeneralSupportSection.af7d9f4396', 'Thanks for the support!')}
     </div>
   )
 }

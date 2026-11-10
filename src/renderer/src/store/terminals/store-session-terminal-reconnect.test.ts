@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { createTestStore } from '../testing/app-store-test-fixture'
 import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
@@ -11,7 +11,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
     ...actual,

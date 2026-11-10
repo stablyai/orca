@@ -5,7 +5,10 @@ import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-
 import TerminalSearch from '@/components/TerminalSearch'
 import { DaemonActionDialog } from '@/components/shared/useDaemonActions'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
-import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
+import {
+  WORKSPACE_FILE_PATH_MIME,
+  WORKSPACE_FILE_PATHS_MIME
+} from '@/lib/files/drop/workspace-file-drag'
 import CloseTerminalDialog from '../layout/close/CloseTerminalDialog'
 import TerminalContextMenu from '../context-menu/TerminalContextMenu'
 import TerminalPaneHeaderOverlay from '../titles/TerminalPaneHeaderOverlay'
@@ -34,12 +37,14 @@ import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/wo
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { useWslHostStartCardReplacesPaneError } from '../pty-transport/recovery/wsl/use-wsl-host-stopped-pane'
 import { terminalPaneMenuAddToChat } from '../clipboard/terminal-pane-menu-copy-actions'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function TerminalPaneSurface({
   controller
 }: {
   controller: TerminalPaneController
 }): React.JSX.Element {
+  const t = useTranslate()
   const {
     activeAgentId,
     activePane,
@@ -269,7 +274,7 @@ export function TerminalPaneSurface({
           showSplitButton,
           isTabPinned
         })}
-        closePaneLabel={terminalPaneCloseLabel(contextMenu.paneCount)}
+        closePaneLabel={terminalPaneCloseLabel(contextMenu.paneCount, t)}
         canExpandPane={contextMenu.paneCount > 1}
         canEqualizePaneSizes={contextMenu.paneCount > 1 && expandedPaneId === null}
         menuPaneIsExpanded={

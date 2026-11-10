@@ -3,7 +3,10 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatContextUsageSummary } from '../../../../../shared/native-chat/native-chat-context-usage-summary'
+import {
+  summarizeContextUsage,
+  type NativeChatContextUsageSummary
+} from '../../../../../shared/native-chat/native-chat-context-usage-summary'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -95,6 +98,26 @@ function pointer(type: 'pointerover' | 'pointerout', pointerType: string): Point
 }
 
 describe('NativeChatContextUsageRing', () => {
+  it('lists deferred rows apart from the used total, in tokens rather than a share of the window', async () => {
+    const usage = summarizeContextUsage({
+      usedTokens: 607_700,
+      windowTokens: 1_000_000,
+      percentage: 61,
+      estimated: false,
+      categories: [
+        { name: 'Messages', tokens: 589_000 },
+        { name: 'MCP tools (deferred)', tokens: 542_000, deferred: true },
+        { name: 'System prompt', tokens: 18_700 }
+      ]
+    })
+    await click(await renderRing(usage))
+
+    const groups = [...card()!.querySelectorAll('ul')].map((list) =>
+      [...list.querySelectorAll('li')].map((row) => row.textContent)
+    )
+    expect(groups).toEqual([['Messages58.9%', 'System prompt1.9%'], ['MCP tools (deferred)542k']])
+  })
+
   it('stays open while the pointer crosses the gap from the ring into the card', async () => {
     const trigger = await renderRing()
     const hoverTarget = trigger.parentElement!
@@ -123,6 +146,23 @@ describe('NativeChatContextUsageRing', () => {
     expect(card()).toBeNull()
   })
 
+  it('dismisses the hover card and cancels pending hover when a context menu opens', async () => {
+    const trigger = await renderRing()
+    const contextMenu = () =>
+      dispatch(trigger, new MouseEvent('contextmenu', { bubbles: true, button: 2 }))
+
+    await dispatch(trigger.parentElement!, pointer('pointerover', 'mouse'))
+    await contextMenu()
+    await advance(500)
+    expect(card()).toBeNull()
+
+    await dispatch(trigger.parentElement!, pointer('pointerout', 'mouse'))
+    await dispatch(trigger.parentElement!, pointer('pointerover', 'mouse'))
+    await advance(150)
+    expect(card()).not.toBeNull()
+    await contextMenu()
+    expect(card()).toBeNull()
+  })
   it('does not reopen a card dismissed with Escape once a stale hover would have fired', async () => {
     const trigger = await renderRing()
 

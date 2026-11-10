@@ -2,7 +2,7 @@ import { useCallback, useRef, type RefObject } from 'react'
 import { browseRuntimeServerDirectory } from '@/runtime/files/reads/runtime-server-directory-browser'
 import { browseRuntimeSshDirectory } from '@/runtime/hosts/ssh/runtime-ssh-target-management'
 import type { DirEntry } from './remote-file-browser-entry-actions'
-import type { FilesystemPathFlavor } from '../../../../../shared/filesystem-entry-types'
+import type { FilesystemPathFlavor } from '../../../../../shared/file-access/filesystem-path-flavor'
 
 export type BrowseResult = {
   resolvedPath: string

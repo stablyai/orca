@@ -6,7 +6,7 @@ import {
 import { Label } from '../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type BrowserDefaultZoomSettingProps = {
   value: number
@@ -17,15 +17,13 @@ export function BrowserDefaultZoomSetting({
   value,
   onChange
 }: BrowserDefaultZoomSettingProps): React.JSX.Element {
+  const t = useTranslate()
   const selectedZoomLevel = normalizeBrowserPageZoomLevel(value)
 
   return (
     <SearchableSetting
-      title={translate(
-        'auto.components.settings.BrowserDefaultZoomSetting.265597101f',
-        'Default Zoom'
-      )}
-      description={translate(
+      title={t('auto.components.settings.BrowserDefaultZoomSetting.f3d989184e', 'Default zoom')}
+      description={t(
         'auto.components.settings.BrowserDefaultZoomSetting.siteDefault',
         "Zoom for sites you haven't zoomed."
       )}
@@ -34,13 +32,10 @@ export function BrowserDefaultZoomSetting({
     >
       <div className="space-y-0.5">
         <Label>
-          {translate(
-            'auto.components.settings.BrowserDefaultZoomSetting.265597101f',
-            'Default Zoom'
-          )}
+          {t('auto.components.settings.BrowserDefaultZoomSetting.f3d989184e', 'Default zoom')}
         </Label>
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.BrowserDefaultZoomSetting.siteDefault',
             "Zoom for sites you haven't zoomed."
           )}

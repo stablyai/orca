@@ -1,9 +1,9 @@
 import {
   hasUnroutableTerminalWorktreeOwner,
   resolveTerminalWorktreeRoute
-} from '@/lib/terminal-worktree-route'
-import { closeWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
+} from '@/lib/workspace/ownership/terminal-worktree-route'
+import { closeWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle'
+import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { useAppStore } from '@/store'
 import { closeLocalTerminalTabState } from './close-local-terminal-tab-state'
 

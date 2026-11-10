@@ -5,7 +5,7 @@ import React, { useCallback, useMemo } from 'react'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 import { formatDiffComments } from '../../../../../../shared/diff-comments-format'
 import { NotesSendMenu, type NotesSendMenuScope } from '../../review-note-delivery/NotesSendMenu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 // Expire unconsumed keyboard requests so navigating away cannot reopen the menu on a later mount.
@@ -42,6 +42,7 @@ export function DiffNotesSendMenu({
   // Enable on exactly one instance per worktree to avoid opening multiple menus for one shortcut.
   respondToOpenRequest?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const openRequest = useAppStateValue((s) =>
     respondToOpenRequest && s.diffNotesSendMenuOpenRequest?.worktreeId === worktreeId
@@ -68,7 +69,7 @@ export function DiffNotesSendMenu({
   const scopes = useMemo<NotesSendMenuScope<DiffComment>[]>(() => {
     const allNotesScope = {
       id: 'all',
-      label: translate('auto.components.editor.DiffNotesSendMenu.8b87612461', 'All unsent notes'),
+      label: t('auto.components.editor.DiffNotesSendMenu.8b87612461', 'All unsent notes'),
       notes: unsentNotes,
       formatPrompt: formatDiffComments
     }
@@ -78,14 +79,14 @@ export function DiffNotesSendMenu({
     return [
       {
         id: 'file',
-        label: translate('auto.components.editor.DiffNotesSendMenu.f1aa04b5cf', 'This file'),
+        label: t('auto.components.editor.DiffNotesSendMenu.f1aa04b5cf', 'This file'),
         notes: unsentFileNotes,
         formatPrompt: formatDiffComments
       },
       allNotesScope
     ]
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
-  }, [canSendFileScope, unsentFileNotes, unsentNotes, languageRevision])
+  }, [canSendFileScope, unsentFileNotes, unsentNotes, languageRevision, t])
 
   return (
     <NotesSendMenu

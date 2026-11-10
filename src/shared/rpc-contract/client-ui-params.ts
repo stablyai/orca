@@ -1,6 +1,6 @@
 import { GitHistoryRefName } from './git-params'
 import { z } from 'zod'
-import { isFeatureTipId } from '../feature-tips'
+import { isFeatureTipSeenId } from '../feature-tips'
 import {
   WORKTREE_CARD_PROPERTIES,
   normalizeWorktreeCardProperties
@@ -21,7 +21,7 @@ export const NullableString = z.string().nullable()
 export const StringArray = z.array(z.string())
 
 export const FeatureTipIds = z.array(
-  z.custom(isFeatureTipId, { message: 'Unknown feature tip id' })
+  z.custom(isFeatureTipSeenId, { message: 'Unknown feature tip id' })
 )
 
 export const UnknownRecord = z.record(z.string(), z.unknown())
@@ -259,6 +259,7 @@ export const UiUpdateFields = z
     pluginsAlphaNoticeDismissed: z.boolean().optional(),
     codexTerminalServerIsolationNoticeSeen: z.boolean().optional(),
     codexSharedSettingsNoticeSeen: z.boolean().optional(),
+    speechModelUpdateNoticeSeen: z.boolean().optional(),
     claudeDiffPanelNoticeSeen: z.boolean().optional(),
     claudeAccountSignInNoticeSeen: z.boolean().optional(),
     petVisible: z.boolean().optional(),

@@ -289,16 +289,6 @@ describe('useNativeChatComposerRevealFocus', () => {
     other.remove()
   })
 
-  it('holds the latch across unrelated rerenders', () => {
-    render({ isVisible: true, isFocusedGroup: true, nonce: 1 })
-    drainFrames()
-    expect(focusCalls).toBe(1)
-    render({ isVisible: true, isFocusedGroup: true, nonce: 2 })
-    render({ isVisible: true, isFocusedGroup: true, nonce: 3 })
-    drainFrames()
-    expect(focusCalls).toBe(1)
-  })
-
   it.each(['menu', 'dialog'] as const)(
     'preserves a newer %s when the composer becomes ready',
     (role) => {

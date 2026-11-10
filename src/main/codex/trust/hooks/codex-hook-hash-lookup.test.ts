@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import type * as CodexCommand from '../../../codex-cli/command'
 import type * as TrustDerivation from './codex-hook-trust-derivation'
 import { fingerprintCodex } from './codex-hook-trust-derivation'
-import { writeFileAtomically } from '../../../codex-accounts/fs-utils'
+import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
 import type { CodexHookAnswer, CodexHookHashes } from './codex-hook-trust-derivation'
 
 const mocks = vi.hoisted(() => ({

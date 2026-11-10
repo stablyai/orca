@@ -1,18 +1,15 @@
+import { workspaceId, local, repo } from './git-graph-workspace.test-fixtures'
 // @vitest-environment happy-dom
 import { useAppStore } from '@/store'
-import { gitGraphHistoryForTab, disposeGitGraphHistory } from './git-graph-history-controller'
-import { attachClosedEditorTabCleanup } from '../model-lifetime/retention/closed-editor-tab-controller'
-import { gitGraphScope } from '@/lib/git-graph-tab'
-import { captureWorktreeOperationGenerationSnapshot } from '@/lib/worktree-operation-generation'
-import type { Worktree } from '../../../../../shared/worktree/types'
-import type { Repo } from '../../../../../shared/repo-types'
-import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { gitGraphHistoryForTab, disposeGitGraphHistory } from './git-graph-tab-controllers'
+
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { GitGraphTab } from './git-graph-tab'
 import { GitGraphFilter } from './git-graph-filter'
+import * as commitSupport from '@/runtime/source-control/git/git-commit-actions-capability'
 import { useGitGraphHistory } from './use-git-graph-history'
 import type { GitHistoryResult } from '../../../../../shared/git/history/git-history-types'
 
@@ -44,35 +41,6 @@ const container = document.createElement('div')
 document.body.appendChild(container)
 let root = createRoot(container)
 const initialState = useAppStore.getState()
-const workspaceId = 'r::/repo'
-const local: Worktree = {
-  id: workspaceId,
-  repoId: 'r',
-  path: '/repo',
-  branch: 'refs/heads/main',
-  hostId: 'local',
-  head: 'a',
-  isBare: false,
-  isMainWorktree: true,
-  displayName: 'repo',
-  comment: '',
-  linkedIssue: null,
-  linkedPR: null,
-  linkedLinearIssue: null,
-  isArchived: false,
-  isUnread: false,
-  isPinned: false,
-  sortOrder: 0,
-  lastActivityAt: 0
-}
-const repo: Repo = {
-  id: 'r',
-  path: '/repo',
-  displayName: 'repo',
-  badgeColor: '',
-  addedAt: 0,
-  executionHostId: 'local'
-}
 beforeEach(() => {
   useAppStore.setState({
     repos: [repo],
@@ -96,6 +64,40 @@ const result: GitHistoryResult = {
   hasOutgoingChanges: false,
   limit: 50
 }
+
+it('keeps the branch checkout strip open after selecting a badge context-menu action', async () => {
+  vi.spyOn(commitSupport, 'useGitCommitActionsSupport').mockReturnValue({
+    supported: true,
+    reason: undefined
+  })
+  getHistory.mockReset().mockResolvedValue({
+    ...result,
+    items: [
+      {
+        ...result.items[0],
+        references: [{ id: 'refs/heads/topic', name: 'topic' }]
+      }
+    ]
+  })
+  await act(async () =>
+    root.render(
+      <TooltipProvider>
+        <GitGraphTab worktreeId={workspaceId} />
+      </TooltipProvider>
+    )
+  )
+  await act(async () => {
+    container
+      .querySelector('[title="topic"]')!
+      .dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, button: 2 }))
+  })
+  await act(async () => {
+    Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]'))
+      .find((item) => item.textContent === 'Check out branch')!
+      .click()
+  })
+  expect(container.querySelector('form')?.textContent).toContain('Check out branch topic?')
+})
 
 it('recovers silently after each later token expiry and ignores refreshes for other worktrees', async () => {
   let history: ReturnType<typeof useGitGraphHistory>
@@ -322,115 +324,6 @@ it('keeps a newer selection and its details during refresh and after a partial f
   expect(container.querySelector('aside h2')?.textContent).toBe('Commit 120')
 })
 
-it.each(['local', 'ssh:A'] as const)(
-  'retains %s twin history across workspace switches, then follows its tab owner move',
-  async (hostId) => {
-    useAppStore.setState({
-      repos: [
-        ...useAppStore.getState().repos,
-        { ...repo, executionHostId: 'ssh:A', connectionId: 'A' }
-      ],
-      worktreesByRepo: { r: [local, { ...local, hostId: 'ssh:A' }] },
-      activeWorkspaceExecutionHostId: hostId
-    })
-    const cleanup = attachClosedEditorTabCleanup(useAppStore)
-    const original = useAppStore.getState().openFiles
-    const file: OpenFile = {
-      id: `${workspaceId}::git-graph`,
-      worktreeId: workspaceId,
-      mode: 'git-graph',
-      relativePath: 'Git Graph',
-      language: 'plaintext',
-      isDirty: false,
-      filePath: `${workspaceId}::git-graph`,
-      operationProvenance: {
-        ownershipProjection: 'explicit',
-        generation: captureWorktreeOperationGenerationSnapshot({
-          executionHostId: hostId,
-          runtimeEnvironmentId: null
-        })
-      }
-    }
-    useAppStore.setState({ openFiles: [...original, file] })
-    const render = () => (
-      <TooltipProvider>
-        <GitGraphTab worktreeId={workspaceId} />
-      </TooltipProvider>
-    )
-    const page = {
-      ...result,
-      items: [...result.items, { id: 'b', subject: 'second', message: 'second', parentIds: [] }],
-      refs: 'all' as const
-    }
-    getHistory.mockReset().mockResolvedValueOnce(page)
-    try {
-      await act(async () => root.render(render()))
-      expect(getHistory.mock.calls[0]?.[0].connectionId).toBe(hostId === 'ssh:A' ? 'A' : undefined)
-      await act(async () => {
-        const commit = Array.from(container.querySelectorAll('button')).find(
-          (button) => button.textContent === 'second'
-        )!
-        commit.click()
-        const scroll = container.querySelector<HTMLDivElement>('div.overflow-y-auto')!
-        scroll.scrollTop = 144
-        scroll.dispatchEvent(new Event('scroll'))
-      })
-      await act(async () => root.render(null))
-      await act(async () =>
-        useAppStore.setState({ activeWorktreeId: 'other', activeWorkspaceExecutionHostId: 'local' })
-      )
-      expect(gitGraphScope(workspaceId)).toBeNull()
-      expect(gitGraphHistoryForTab(workspaceId).view.getState().selectedId).toBe('b')
-      await act(async () =>
-        useAppStore.setState({
-          activeWorktreeId: workspaceId,
-          activeWorkspaceExecutionHostId: hostId
-        })
-      )
-      await act(async () => root.render(render()))
-      expect(container.querySelector('[data-current="true"]')?.textContent).toContain('second')
-      expect(container.querySelector<HTMLDivElement>('div.overflow-y-auto')?.scrollTop).toBe(144)
-      expect(getHistory).toHaveBeenCalledTimes(1)
-      await act(async () => root.render(null))
-      useAppStore.setState({
-        worktreesByRepo: { r: [{ ...local, hostId: hostId === 'local' ? 'ssh:A' : 'local' }] }
-      })
-      expect(gitGraphHistoryForTab(workspaceId).view.getState().result).toBeUndefined()
-      expect(gitGraphHistoryForTab(workspaceId).scrollOffset).toBe(0)
-      await act(async () => root.render(render()))
-      const movedHost = hostId === 'local' ? 'ssh:A' : 'local'
-      getHistory.mockResolvedValueOnce({ ...result, refs: 'all' })
-      await act(async () =>
-        useAppStore.setState({
-          openFiles: [
-            ...original,
-            {
-              ...file,
-              operationProvenance: {
-                ownershipProjection: 'explicit',
-                generation: captureWorktreeOperationGenerationSnapshot({
-                  executionHostId: movedHost,
-                  runtimeEnvironmentId: null
-                })
-              }
-            }
-          ]
-        })
-      )
-      expect(getHistory.mock.calls.at(-1)?.[0].connectionId).toBe(
-        movedHost === 'ssh:A' ? 'A' : undefined
-      )
-      expect(gitGraphHistoryForTab(workspaceId).view.getState().selectedId).toBe('a')
-      await act(async () => root.render(null))
-      useAppStore.setState({ openFiles: original })
-      expect(gitGraphHistoryForTab(workspaceId).view.getState().result).toBeUndefined()
-    } finally {
-      cleanup()
-      useAppStore.setState({ openFiles: original })
-    }
-  }
-)
-
 it('waits for an in-flight page before retrieving a distant parent in one operation', async () => {
   let history: ReturnType<typeof useGitGraphHistory>
   function History() {
@@ -596,4 +489,34 @@ it('applies checkbox choices once on picker close, with no choices returning to 
   expect(onChange).toHaveBeenCalledTimes(2)
   await openPicker()
   expect(document.querySelector('[role="checkbox"]')?.getAttribute('aria-checked')).toBe('false')
+})
+
+it('keeps the confirm strip across tab switches, discarding it on navigation, filter change and close', async () => {
+  getHistory.mockResolvedValue(result)
+  const render = () => (
+    <TooltipProvider>
+      <GitGraphTab worktreeId={workspaceId} />
+    </TooltipProvider>
+  )
+  await act(async () => root.render(render()))
+  const controller = gitGraphHistoryForTab(workspaceId)
+  await act(async () => controller.actions.request('revert', result.items[0]!))
+  expect(container.textContent).toContain('Revert a?')
+  await act(async () => root.render(<div>Another tab</div>))
+  await act(async () => root.render(render()))
+  expect(container.textContent).toContain('Revert a?')
+  await act(async () => controller.select('a'))
+  expect(container.textContent).not.toContain('Revert a?')
+  await act(async () => controller.actions.request('revert', result.items[0]!))
+  await act(async () =>
+    useAppStore.setState({ gitGraphFiltersByWorktree: { [workspaceId]: 'head' } })
+  )
+  expect(container.textContent).not.toContain('Revert a?')
+  await act(async () => controller.actions.request('revert', result.items[0]!))
+  await act(async () => {
+    disposeGitGraphHistory(`${workspaceId}::git-graph`)
+    root.render(<div>Closed</div>)
+  })
+  await act(async () => root.render(render()))
+  expect(container.textContent).not.toContain('Revert a?')
 })

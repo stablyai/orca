@@ -1,7 +1,11 @@
+import {
+  agentLaunchRecoveryMessage,
+  notifyAgentLaunchFailure
+} from '@/lib/agent-session/launch/failure/agent-launch-failure'
 import type { DirectWorkItemLaunchResult } from '@/lib/workspace/creation/work-item/direct-work-item-setup'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
+import { startFixChecksAgent } from '@/lib/source-control/checks/fix-checks-agent-launch'
 import { launchWorkItemDirect } from '@/lib/workspace/creation/work-item/launch-work-item-direct'
 import { buildFixBrokenChecksPrompt } from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
 import type { SourceControlAiWriteTarget } from '../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
@@ -54,10 +58,15 @@ export async function startFixChecksFromDialog(args: {
   if (!args.targetRepoId) {
     return false
   }
+  let failureNotified = false
+  const onFailureNotified = () => {
+    failureNotified = true
+    args.onFailureNotified?.()
+  }
   return await launchWorkItemDirect({
     signal: args.signal,
     onCreateAccepted: args.onCreateAccepted,
-    onFailureNotified: args.onFailureNotified,
+    onFailureNotified,
     item: { ...args.item, repoId: args.targetRepoId, pasteContent: args.commandInput },
     repoId: args.targetRepoId,
     launchSource: 'task_page',
@@ -81,12 +90,20 @@ export async function startFixChecksFromDialog(args: {
       : {}),
     sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
     openModalFallback: () => {
-      toast.error(
-        translate(
-          'auto.components.PullRequestPage.c4c02ea23e',
-          'Unable to create a fix workspace automatically.'
+      if (failureNotified) {
+        return
+      }
+      if (args.agent) {
+        notifyAgentLaunchFailure(args.agent, agentLaunchRecoveryMessage('refreshProjects'))
+      } else {
+        toast.error(
+          translate(
+            'auto.components.PullRequestPage.c4c02ea23e',
+            'Unable to create a fix workspace automatically.'
+          )
         )
-      )
+      }
+      onFailureNotified()
     }
   })
 }

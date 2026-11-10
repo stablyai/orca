@@ -44,7 +44,7 @@ import {
   holdStructuredAgentSessionLaunchOption,
   structuredLaunchOptionOverlay
 } from './structured-agent-session-launch-options'
-import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
+import { recordHostModelCatalogSnapshot } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import {
   resetStructuredAgentLaunchPersistenceForTests,
   readStructuredAgentLaunchRecord

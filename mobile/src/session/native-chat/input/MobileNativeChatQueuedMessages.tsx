@@ -9,7 +9,7 @@ import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useLargeSystemText } from '../../../theme/use-large-system-text'
-import type { MobileQueuedMessageCard } from '../../mobile-structured-queued-message-cards'
+import type { MobileQueuedMessageCard } from './mobile-structured-queued-message-cards'
 import type { MobileQueuedHeadLight } from './mobile-queued-head-light'
 import {
   createMobileQueuedCardActionStore,
@@ -18,10 +18,10 @@ import {
 } from './mobile-queued-card-actions'
 import { headSteerableQueuedMessageCard } from '../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import type { AgentSessionQueuePause } from '../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
-import type { MobileQueuedMessageEdit } from '../../use-mobile-structured-queued-message-controls'
-import type { MobileQueuedMessageInlineEditor } from '../../mobile-queued-message-edit-draft'
-import { MobileQueuedMessageCardRow } from '../../MobileQueuedMessageCardRow'
-import { MobileQueuedMessageScrollList } from '../../MobileQueuedMessageScrollList'
+import type { MobileQueuedMessageEdit } from './use-mobile-structured-queued-message-controls'
+import type { MobileQueuedMessageInlineEditor } from './mobile-queued-message-edit-draft'
+import { MobileQueuedMessageCardRow } from './MobileQueuedMessageCardRow'
+import { MobileQueuedMessageScrollList } from './MobileQueuedMessageScrollList'
 import { queuedMessageStyles as styles } from './mobile-native-chat-queued-message-styles'
 import { useMobileNativeChatLowerRegion } from '../mobile-native-chat-lower-region-context'
 
@@ -54,6 +54,8 @@ export type MobileNativeChatQueuedMessagesProps = {
   onSend?: (messageId: string) => Promise<boolean>
   onDelete?: (messageId: string) => Promise<boolean>
   onClearAll?: (messageIds: string[]) => Promise<boolean>
+  /** Offers Clear all while the queue still sends on its own; otherwise only a paused queue does. */
+  clearable?: boolean
   // Older hosts cannot edit inline; copy their draft to the composer.
   onEdit?: MobileQueuedMessageEdit
   editor?: MobileQueuedMessageInlineEditor
@@ -73,6 +75,7 @@ export function MobileNativeChatQueuedMessages({
   onSend,
   onDelete,
   onClearAll,
+  clearable = false,
   onEdit,
   editor,
   onMove,
@@ -108,7 +111,8 @@ export function MobileNativeChatQueuedMessages({
   if (menuFor !== null && !menuCard) {
     setMenuFor(null)
   }
-  const headerActions = pause ? (
+  const actionable = pause || clearable
+  const headerActions = actionable ? (
     <>
       {onClearAll ? (
         <Pressable
@@ -127,24 +131,26 @@ export function MobileNativeChatQueuedMessages({
           <Text style={styles.actionLabel}>{t('chat.queuedMessages.clearAll', 'Clear all')}</Text>
         </Pressable>
       ) : null}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ disabled: queueBusy }}
-        accessibilityLabel={t(
-          'chat.queuedMessages.resumeSending',
-          'Resume sending the queued messages'
-        )}
-        style={({ pressed }) => [
-          styles.headerAction,
-          pressed && styles.pressed,
-          queueBusy && styles.disabled
-        ]}
-        disabled={queueBusy}
-        onPress={() => void run(QUEUE_KEY, onResume && (() => onResume()))}
-      >
-        <Play size={12} color={colors.textPrimary} strokeWidth={2} />
-        <Text style={styles.actionLabel}>{t('chat.queuedMessages.resume', 'Resume')}</Text>
-      </Pressable>
+      {pause ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: queueBusy }}
+          accessibilityLabel={t(
+            'chat.queuedMessages.resumeSending',
+            'Resume sending the queued messages'
+          )}
+          style={({ pressed }) => [
+            styles.headerAction,
+            pressed && styles.pressed,
+            queueBusy && styles.disabled
+          ]}
+          disabled={queueBusy}
+          onPress={() => void run(QUEUE_KEY, onResume && (() => onResume()))}
+        >
+          <Play size={12} color={colors.textPrimary} strokeWidth={2} />
+          <Text style={styles.actionLabel}>{t('chat.queuedMessages.resume', 'Resume')}</Text>
+        </Pressable>
+      ) : null}
     </>
   ) : null
   const attentionCaption = !expanded ? cards.find((card) => card.needsAttention)?.caption : null

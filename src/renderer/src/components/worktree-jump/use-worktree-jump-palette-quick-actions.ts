@@ -3,7 +3,7 @@ import {
   gitGraphSupport,
   gitGraphUpdateMessage,
   probeGitGraphSupport
-} from '@/lib/git-graph-tab'
+} from '@/lib/source-control/graph/git-graph-tab'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { runWorktreeDelete } from '@/components/sidebar/workspace-actions/deletion/delete-worktree-flow'
@@ -13,10 +13,10 @@ import { buildCmdJBrowserNavigationAction } from '@/components/cmd-j/browser-nav
 import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
 import { findGroupAndWorktree } from '@/store/slices/tabs/tab-group-state'
 import {
-  getComposerEligibleRepos,
-  resolveComposerActiveRepoId,
-  resolveComposerGitRepoId
-} from '@/lib/new-workspace-composer-repo'
+  getNewWorkspaceDialogEligibleRepos,
+  resolveNewWorkspaceDialogGitRepoId
+} from '../../../../shared/new-workspace-dialog-repo'
+import { resolveComposerActiveRepoId } from '@/lib/workspace/creation/new-workspace-composer-repo'
 import type { QuickActionPaletteItem, SettingsPaletteItem } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
 import type { WorktreeJumpPaletteOpenTabs } from './use-worktree-jump-palette-open-tabs'
@@ -25,17 +25,20 @@ import type { WorktreeJumpPaletteStoreState } from './use-worktree-jump-palette-
 import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
 import { recomputeOn } from '@/lib/recompute-on'
 
+/** Prefetch the repo New workspace will seed, mapping a per-workspace VM repo to its visible checkout. */
 function getComposerPrefetchRepoId(
   state: ReturnType<typeof useAppStore.getState>,
   initialRepoId?: string
 ): string | null {
-  return resolveComposerGitRepoId({
-    eligibleRepos: getComposerEligibleRepos(state.repos),
+  const eligibleRepos = getNewWorkspaceDialogEligibleRepos(state.repos)
+  return resolveNewWorkspaceDialogGitRepoId({
+    eligibleRepos,
     initialRepoId,
     activeRepoId: resolveComposerActiveRepoId(
       state.repos,
-      getComposerEligibleRepos(state.repos),
-      state.activeRepoId
+      eligibleRepos,
+      state.activeRepoId,
+      state.runtimeEnvironments
     ),
     focusedHostScope: state.workspaceHostScope
   })

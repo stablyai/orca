@@ -19,11 +19,11 @@ import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 import { getLocalProjectExecutionRuntimeContext } from './local-preflight-context'
 import { getRendererAppPlatform } from './renderer-app-platform'
-import { wslHostDistroForTarget } from './wsl-host-account-owner'
+import { wslHostDistroForTarget } from '../runtime/provider-accounts/ownership/wsl-host-account-owner'
 import {
   getCachedWindowsTerminalCapabilities,
   hasCachedWindowsTerminalCapabilities
-} from './windows-terminal-capabilities'
+} from '../runtime/hosts/capabilities/windows-terminal-capabilities'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo

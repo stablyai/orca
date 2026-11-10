@@ -1,7 +1,7 @@
 import { captureNativeChatEditDraftDestination } from '../../drafts/native-chat-composer-draft-memory'
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
-import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../../../shared/native-file-drop'
+import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../../../shared/file-import/native-file-drop'
 import {
   isSameComposerWorkspace,
   nativeChatAttachmentOwnerUnchanged,
@@ -29,7 +29,7 @@ import {
   type NativeChatPendingAttachmentChips,
   type NativeChatReservedAttachment
 } from './native-chat-session-attachment-drop'
-import { releaseBrowserAttachmentFiles } from '@/lib/browser-attachment-files'
+import { releaseBrowserAttachmentFiles } from '@/lib/files/drop/browser-attachment-files'
 import { attachNativeChatLocalAttachmentPaths } from './native-chat-local-attachment-drop'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '../../../../lib/structured-chat-tab-index'

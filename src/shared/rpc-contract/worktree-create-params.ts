@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { WorkspaceAttachmentsSchema } from '../workspace-attachments/workspace-attachment-schema'
 import { WorkspaceLinkedItemSchema } from '../workspace-attachments/workspace-linked-item-schema'
-import { TaskSourceContextSchema } from '../task-source-context-schema'
+import { TaskSourceContextSchema } from '../work-items/task-source-context-schema'
 import { workspaceSourceSchema } from '../telemetry-events'
 import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'
 import { sleepingAgentLaunchConfigSchema } from '../workspace-session/workspace-session-sleeping-agents'
@@ -18,6 +18,7 @@ import {
 import {
   AutomationWorkspaceProvenanceRequest,
   CliWorkspaceProvenanceRequest,
+  MatchFolderWorkspaces,
   OptionalExecutionHostId,
   OptionalTuiAgent,
   assertLinkedWorkItemSourceContextMatch
@@ -37,7 +38,9 @@ export const WorktreeCreate = z
     baseBranch: OptionalString,
     compareBaseRef: OptionalString,
     branchNameOverride: OptionalString,
-    branchIntent: z.enum(['open-existing', 'open-existing-v2', 'create-new']).optional(),
+    branchIntent: z
+      .enum(['open-existing', 'open-existing-v2', 'create-new', 'create-exact'])
+      .optional(),
     linkedIssue: TriStateLinkedIssue,
     linkedPR: TriStateLinkedIssue,
     linkedLinearIssue: z.string().optional(),
@@ -91,6 +94,7 @@ export const WorktreeCreate = z
     parentWorkspaceOrigin: z.literal('manual').optional(),
     envParentWorkspace: OptionalString,
     parentWorktree: OptionalString,
+    matchFolderWorkspaces: MatchFolderWorkspaces,
     /** Sent only to hosts advertising worktree.lineage.crossMachine; older hosts strip it. */
     crossStoreParent: CrossStoreParentRefSchema.optional(),
     // No parent flag: the caller's own workspace implied it.

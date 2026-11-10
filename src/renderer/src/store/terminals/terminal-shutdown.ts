@@ -1,7 +1,7 @@
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/snapshots/shutdown-buffer-captures'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import '../slices/agent-status/agent-status'
 import {
   collectHibernatedCompletionEvidenceForWorktree,
@@ -10,7 +10,7 @@ import {
 import type { AgentStatusWorktreeShutdownReason } from '../slices/agent-status/agent-status-contract'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { equalStringSets, sortedUniquePtyIds } from './terminal-pty-identities'
-import { resolveTerminalPtyOwner } from '@/lib/terminal-worktree-route'
+import { resolveTerminalPtyOwner } from '@/lib/workspace/ownership/terminal-worktree-route'
 import { resolveTerminalTeardownOwner } from './terminal-teardown-owner'
 import { createTerminalShutdownGuardController } from './terminal-shutdown-guards'
 import { commitTerminalShutdownState } from './terminal-shutdown-state'

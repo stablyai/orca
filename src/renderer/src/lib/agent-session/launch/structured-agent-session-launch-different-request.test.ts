@@ -57,7 +57,7 @@ vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => 
   refreshLocalStructuredSessionTabs: vi.fn()
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   // Sends reach the runtime RPC through this wrapper, as in the app.
   callStructuredAgentSession: (target: unknown, method: string, params?: unknown) =>
     mocks.callRuntimeRpc(target, method, params)
@@ -85,7 +85,7 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
-vi.mock('@/lib/agent-catalog', () => ({
+vi.mock('@/lib/agent-catalog/agent-catalog', () => ({
   getAgentLabel: () => 'Codex',
   getAgentCatalog: () => [{ id: 'codex', label: 'Codex' }]
 }))

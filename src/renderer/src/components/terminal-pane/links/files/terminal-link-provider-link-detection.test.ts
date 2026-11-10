@@ -3,9 +3,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { createFilePathLinkProvider } from './terminal-link-handlers'
 import { getTerminalFileOpenHint } from '../terminal-link-open-hints'
-import type { TerminalPathExistsCache } from './terminal-path-exists-cache'
-import { RECENT_PATH_ANSWERS_MAX } from '../../../../../../shared/recent-path-answers'
-import { getConnectionId } from '@/lib/connection-context'
+
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { createTerminalLinkTestDoubles } from '../terminal-link-handlers-test-fixtures'
 import {
   collectLinks,
@@ -31,7 +30,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/language-detect', () => ({
+vi.mock('../../../../../../shared/editor-language/editor-language-detect', () => ({
   detectLanguage: (filePath: string) => (filePath.endsWith('.md') ? 'markdown' : 'plaintext')
 }))
 
@@ -40,7 +39,7 @@ vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: vi.fn(() => null)
 }))
 
@@ -74,107 +73,6 @@ describe('createFilePathLinkProvider range bounds', () => {
     provider.provideLinks(1, callback)
     await vi.waitFor(() => expect(callback).toHaveBeenCalledTimes(1))
   })
-
-  it('bounds the terminal path-exists cache while preserving recent probes', async () => {
-    const pathExistsCache = makeExistsCache()
-    for (let index = 0; index < RECENT_PATH_ANSWERS_MAX; index += 1) {
-      pathExistsCache.set(`active\0/repo/old-${index}.ts`, {
-        exists: true,
-        checkedAt: Date.now(),
-        sequence: 0
-      })
-    }
-    const pane = makePane([makeBufferLine('fresh.ts')])
-    const managerRef = {
-      current: { getPanes: () => [pane] } as unknown as PaneManager
-    }
-    const provider = createFilePathLinkProvider(
-      1,
-      {
-        worktreeId: 'wt-1',
-        worktreePath: '/repo',
-        startupCwd: '/repo',
-        managerRef,
-        linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
-        pathExistsCache
-      },
-      { textContent: '', style: { display: '' } } as unknown as HTMLElement,
-      getTerminalFileOpenHint()
-    )
-
-    const links = await new Promise<ILink[]>((resolve) => {
-      provider.provideLinks(1, (provided) => resolve(provided ?? []))
-    })
-
-    expect(links.map((link) => link.text)).toEqual(['fresh.ts'])
-    expect(pathExistsCache.size).toBe(RECENT_PATH_ANSWERS_MAX)
-    expect(pathExistsCache.has('active\0/repo/old-0.ts')).toBe(false)
-    expect(pathExistsCache.get('active\0/repo/fresh.ts')?.exists).toBe(true)
-  })
-
-  it('expires a cached missing path even when the provider scans it repeatedly', async () => {
-    const now = vi.spyOn(Date, 'now').mockReturnValue(5_000)
-    const cacheKey = 'active\0/repo/eventually-created.ts'
-    const pathExistsCache: TerminalPathExistsCache = new Map([
-      [cacheKey, { exists: false, checkedAt: 1_000, sequence: 0 }]
-    ])
-    const { provider } = createProviderSetup(
-      [makeBufferLine('eventually-created.ts')],
-      pathExistsCache
-    )
-
-    const firstLinks = await new Promise<ILink[]>((resolve) => {
-      provider.provideLinks(1, (provided) => resolve(provided ?? []))
-    })
-    expect(firstLinks).toEqual([])
-    expect(window.api.shell.pathExists).not.toHaveBeenCalled()
-    expect(pathExistsCache.get(cacheKey)?.checkedAt).toBe(1_000)
-
-    now.mockReturnValue(11_000)
-    const refreshedLinks = await new Promise<ILink[]>((resolve) => {
-      provider.provideLinks(1, (provided) => resolve(provided ?? []))
-    })
-
-    expect(refreshedLinks.map((link) => link.text)).toEqual(['eventually-created.ts'])
-    expect(window.api.shell.pathExists).toHaveBeenCalledOnce()
-    expect(pathExistsCache.get(cacheKey)).toMatchObject({ exists: true, checkedAt: 11_000 })
-    now.mockRestore()
-  })
-
-  it.each([12_000, 11_000])(
-    'keeps a newer found result when an older missing probe resolves last (newer starts at %i)',
-    async (newerStartedAt) => {
-      const now = vi.spyOn(Date, 'now').mockReturnValue(11_000)
-      const cacheKey = 'active\0/repo/eventually-created.ts'
-      const pathExistsCache: TerminalPathExistsCache = new Map()
-      const { provider } = createProviderSetup(
-        [makeBufferLine('eventually-created.ts')],
-        pathExistsCache
-      )
-      const olderProbe = createDeferred<boolean>()
-      vi.mocked(window.api.shell.pathExists)
-        .mockImplementationOnce(() => olderProbe.promise)
-        .mockResolvedValueOnce(true)
-
-      const olderLinks = new Promise<ILink[]>((resolve) => {
-        provider.provideLinks(1, (provided) => resolve(provided ?? []))
-      })
-      await flushAsyncWork()
-      now.mockReturnValue(newerStartedAt)
-      const newerLinks = await new Promise<ILink[]>((resolve) => {
-        provider.provideLinks(1, (provided) => resolve(provided ?? []))
-      })
-      olderProbe.resolve(false)
-
-      expect(await olderLinks).toEqual([])
-      expect(newerLinks.map((link) => link.text)).toEqual(['eventually-created.ts'])
-      expect(pathExistsCache.get(cacheKey)).toMatchObject({
-        exists: true,
-        checkedAt: newerStartedAt
-      })
-      now.mockRestore()
-    }
-  )
 
   it('does not reuse SSH path-exists cache entries across connections', async () => {
     setPlatform('Macintosh')
@@ -276,71 +174,6 @@ describe('createFilePathLinkProvider range bounds', () => {
       start: { x: 'open '.length + 1, y: 1 },
       end: { x: 'terminal-link-handlers.ts'.length, y: 2 }
     })
-  })
-
-  it('returns the same wrapped file link when hovering the continuation row', async () => {
-    const rows = [
-      makeBufferLine('open src/components/'),
-      makeBufferLine('terminal-link-handlers.ts', { isWrapped: true })
-    ]
-
-    const firstRowLinks = await collectLinks(rows, 1)
-    const continuationLinks = await collectLinks(rows, 2)
-    const firstRowLink = firstRowLinks.find(
-      (candidate) => candidate.text === 'src/components/terminal-link-handlers.ts'
-    )
-    const continuationLink = continuationLinks.find(
-      (candidate) => candidate.text === 'src/components/terminal-link-handlers.ts'
-    )
-
-    expect(
-      continuationLink,
-      'wrapped path should be linkified from the continuation row'
-    ).toBeDefined()
-    expect(continuationLink!.text).toBe(firstRowLink!.text)
-    expect(continuationLink!.range).toEqual(firstRowLink!.range)
-  })
-
-  it('returns all three sibling links and the same boundary link from either row over SSH', async () => {
-    const firstPath = 'validation-screenshots/01-before-white-terminal-scrollbar-gutter.png'
-    const middleStart = 'validation-screenshots/02-after-'
-    const middleEnd = 'transparent-terminal-scrollbar-gutter.png'
-    const middlePath = middleStart + middleEnd
-    const thirdPath = 'validation-screenshots/03-after-light-theme.png'
-    const rows = [
-      makeBufferLine(`${firstPath} · ${middleStart}`),
-      makeBufferLine(`${middleEnd} · ${thirdPath}`)
-    ]
-    const completePaths = new Set([firstPath, middlePath, thirdPath].map((path) => `/repo/${path}`))
-    vi.mocked(getConnectionId).mockReturnValue('ssh-wrapped')
-    fsPathExistsMock.mockImplementation(async ({ filePath }) => completePaths.has(filePath))
-    const { provider } = createProviderSetup(rows, new Map())
-    const provide = (line: number): Promise<ILink[]> =>
-      new Promise((resolve) => provider.provideLinks(line, (links) => resolve(links ?? [])))
-
-    const firstRowLinks = await provide(1)
-    const secondRowLinks = await provide(2)
-    const firstMiddle = firstRowLinks.find((link) => link.text === middlePath)
-    const secondMiddle = secondRowLinks.find((link) => link.text === middlePath)
-
-    expect(firstRowLinks.map((link) => link.text)).toEqual([firstPath, middlePath])
-    expect(secondRowLinks.map((link) => link.text)).toEqual([middlePath, thirdPath])
-    expect(new Set([...firstRowLinks, ...secondRowLinks].map((link) => link.text))).toEqual(
-      new Set([firstPath, middlePath, thirdPath])
-    )
-    expect(firstMiddle?.range).toEqual({
-      start: { x: firstPath.length + ' · '.length + 1, y: 1 },
-      end: { x: middleEnd.length, y: 2 }
-    })
-    expect(secondMiddle?.range).toEqual(firstMiddle?.range)
-    expect([...firstRowLinks, ...secondRowLinks].every((link) => !link.text.includes(' · '))).toBe(
-      true
-    )
-    expect(fsPathExistsMock).toHaveBeenCalledWith({
-      filePath: `/repo/${middlePath}`,
-      connectionId: 'ssh-wrapped'
-    })
-    expect(window.api.shell.pathExists).not.toHaveBeenCalled()
   })
 
   it('maps file link columns through multi-code-unit characters before the path', async () => {

@@ -3,7 +3,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { SEARCH_ENGINE_LABELS, type SearchEngine } from '../../../../../shared/browser-url'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { KagiSessionLinkForm } from './KagiSessionLinkForm'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type BrowserSearchEngineSettingProps = {
   selectedSearchEngine: SearchEngine
@@ -14,10 +14,11 @@ export function BrowserSearchEngineSetting({
   selectedSearchEngine,
   onSearchEngineChange
 }: BrowserSearchEngineSettingProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <SearchableSetting
-      title={translate('auto.components.settings.BrowserPane.0d9c987f21', 'Default Search Engine')}
-      description={translate(
+      title={t('auto.components.settings.BrowserPane.e25fd16b91', 'Default search engine')}
+      description={t(
         'auto.components.settings.BrowserPane.7b225c78f5',
         'Search engine used when typing non-URL text in the address bar.'
       )}
@@ -38,10 +39,10 @@ export function BrowserSearchEngineSetting({
     >
       <div className="space-y-0.5">
         <Label>
-          {translate('auto.components.settings.BrowserPane.0d9c987f21', 'Default Search Engine')}
+          {t('auto.components.settings.BrowserPane.e25fd16b91', 'Default search engine')}
         </Label>
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.BrowserPane.3e46903ad4',
             'Used when typing non-URL text in the address bar.'
           )}

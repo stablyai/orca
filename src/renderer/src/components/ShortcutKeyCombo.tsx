@@ -1,6 +1,6 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 function KeyCap({
   label,
@@ -40,6 +40,7 @@ export function ShortcutKeyCombo({
   renderKey,
   doubleTap = false
 }: ShortcutKeyComboProps): React.JSX.Element {
+  const t = useTranslate()
   const isMac = navigator.userAgent.includes('Mac')
 
   return (
@@ -47,7 +48,7 @@ export function ShortcutKeyCombo({
       className={cn('inline-flex items-center gap-1', className)}
       title={
         doubleTap && keys.length > 0
-          ? translate('auto.components.ShortcutKeyCombo.07eb4985a1', 'Double-tap {{value0}}', {
+          ? t('auto.components.ShortcutKeyCombo.07eb4985a1', 'Double-tap {{value0}}', {
               value0: keys[0]
             })
           : undefined

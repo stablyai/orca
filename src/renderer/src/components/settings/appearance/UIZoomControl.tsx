@@ -8,9 +8,10 @@ import {
   UI_ZOOM_MAX as ZOOM_MAX,
   zoomLevelToPercent
 } from '../../../../../shared/ui-zoom-level'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function UIZoomControl(): React.JSX.Element {
+  const t = useTranslate()
   const [zoomLevel, setZoomLevel] = useState(() => window.api.ui.getZoomLevel())
 
   useEffect(() => {
@@ -55,7 +56,7 @@ export function UIZoomControl(): React.JSX.Element {
         className="ml-1 gap-1.5"
       >
         <RotateCcw className="size-3" />
-        {translate('auto.components.settings.UIZoomControl.c2c64b24d0', 'Reset')}
+        {t('auto.components.settings.UIZoomControl.c2c64b24d0', 'Reset')}
       </Button>
     </div>
   )

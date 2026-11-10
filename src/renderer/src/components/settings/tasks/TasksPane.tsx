@@ -7,13 +7,14 @@ import {
   TASK_PROVIDERS,
   normalizeVisibleTaskProviders,
   resolveVisibleTaskProvider
-} from '../../../../../shared/task-providers'
+} from '../../../../../shared/work-items/task-providers'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { CodeHostSetupSteps, JiraSetupSteps } from './TaskSourceSimpleSetup'
+import { CodeHostSetupSteps } from './TaskSourceCodeHostSetup'
+import { JiraSetupSteps } from './TaskSourceJiraSetup'
 import { TaskSourceLinearSetup } from './TaskSourceLinearSetup'
 import { TaskSourceProviderCard } from './TaskSourceProviderCard'
 import {
@@ -28,6 +29,7 @@ import { getTasksPaneSearchKeywords } from './tasks-search'
 import { useIntegrationProviderStatusRefresh } from '../../../hooks/use-integration-provider-status-refresh'
 import { useTaskSourceProviderReadiness } from './use-task-source-provider-readiness'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 type TasksPaneProps = {
@@ -94,6 +96,7 @@ const PROVIDER_META: Record<
 }
 
 export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.JSX.Element {
+  const t = useTranslate()
   const visibleProviders = normalizeVisibleTaskProviders(settings.visibleTaskProviders)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
@@ -142,8 +145,8 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
 
   return (
     <SettingsGroup
-      title={translate('auto.components.settings.TasksPane.setupTitle', 'Task management setup')}
-      description={translate(
+      title={t('auto.components.settings.TasksPane.setupTitle', 'Task management setup')}
+      description={t(
         'auto.components.settings.TasksPane.setupDescription',
         'Finish connect + visibility for each provider in one place. Linear also needs the agent skill so coding agents can read and update tickets. At least one provider must stay visible.'
       )}
@@ -151,18 +154,18 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
       {stalledVisible.length > 0 ? (
         <div className="my-4 rounded-xl border border-status-warning-border bg-status-warning-background px-3.5 py-3 text-xs text-muted-foreground">
           <p className="font-medium text-amber-800 dark:text-amber-200">
-            {translate(
+            {t(
               'auto.components.settings.TasksPane.incompleteBannerTitle',
               'Some visible providers still need setup'
             )}
           </p>
           <p className="mt-1">
             {stalledVisible.includes('linear')
-              ? translate(
+              ? t(
                   'auto.components.settings.TasksPane.incompleteBannerBodyWithLinear',
                   'Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks.'
                 )
-              : translate(
+              : t(
                   'auto.components.settings.TasksPane.incompleteBannerBody',
                   'Hide providers you do not use, or expand a card and finish its steps.'
                 )}
@@ -171,8 +174,8 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
       ) : null}
 
       <SearchableSetting
-        title={translate('auto.components.settings.TasksPane.f71d8a9dd3', 'Task Providers')}
-        description={translate(
+        title={t('auto.components.settings.TasksPane.30255b39dc', 'Task providers')}
+        description={t(
           'auto.components.settings.TasksPane.providersDescription',
           'Each card walks through connection (and skill, for Linear) plus whether it appears in Tasks.'
         )}
@@ -238,7 +241,7 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
       </SearchableSetting>
 
       <p data-settings-row="" className="py-3 text-xs text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.settings.TasksPane.integrationsHint',
           'Credentials for all providers also live under'
         )}{' '}
@@ -249,9 +252,9 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
           className="h-auto p-0 text-xs align-baseline"
           onClick={() => openIntegrations()}
         >
-          {translate('auto.components.settings.TasksPane.integrationsLink', 'Integrations')}
+          {t('auto.components.settings.TasksPane.integrationsLink', 'Integrations')}
         </Button>
-        {translate(
+        {t(
           'auto.components.settings.TasksPane.skillHint',
           '. After Linear is connected, usage examples stay under Settings → Linear.'
         )}

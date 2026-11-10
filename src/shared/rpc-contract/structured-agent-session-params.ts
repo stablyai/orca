@@ -335,12 +335,6 @@ export const HistoryParams = z
   })
   .strict()
 
-export const SubscribeParams = OptionsParams.extend({
-  cursor: JournalCursor.optional(),
-  // Not strict: this host drops keys a newer client adds; a new value for a known key still needs a capability.
-  capabilities: z.object({ textAppend: z.literal(1).optional() }).optional()
-}).strict()
-
 // Not strict: an older host ignores these params entirely, and this host must ignore a newer client's.
 export const SubscribeTurnCompletionsParams = z.object({ includePrompts: z.boolean().optional() })
 
@@ -361,7 +355,5 @@ export const RewindParams = z
     expectedEpoch: Identifier('Invalid journal epoch')
   })
   .strict()
-
-export { RespondToQuestionParams } from './structured-agent-session-question-params'
 
 export { MutationEnvelope } from './structured-agent-session-mutation-envelope'

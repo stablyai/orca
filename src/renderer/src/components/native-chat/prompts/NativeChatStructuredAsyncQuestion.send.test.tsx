@@ -3,7 +3,7 @@ import { act } from 'react'
 
 import { resetStructuredAgentSessionSendsForTests } from '../session/structured/delivery/structured-agent-session-message-sender'
 const rpc = vi.hoisted(() => ({ call: vi.fn() }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: rpc.call
 }))
 import { createRoot } from 'react-dom/client'

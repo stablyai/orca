@@ -1,9 +1,12 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { writeFileAtomically } from '../../../codex-accounts/fs-utils'
-import type { HooksConfig } from '../../../agent-hooks/installer-utils'
-import { resolveHooksJsonWritePath } from '../../../agent-hooks/hook-config-write-path'
-import { isPlainObject, readHooksJsonWithRaw } from '../../../agent-hooks/hooks-json-read'
+import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
+import type { HooksConfig } from '../../../agent-hooks/installation/configuration/hook-config-schema'
+import { resolveHooksJsonWritePath } from '../../../agent-hooks/installation/configuration/hook-config-write-path'
+import {
+  isPlainObject,
+  readHooksJsonWithRaw
+} from '../../../agent-hooks/installation/configuration/hooks-json-read'
 import { getSystemCodexHomePath } from '../../configuration/homes/codex-home-paths'
 import '../../trust/toml/config-toml-trust'
 import {

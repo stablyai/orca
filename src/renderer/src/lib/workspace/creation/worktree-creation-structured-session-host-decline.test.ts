@@ -16,7 +16,7 @@ vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab', () => ({
   launchAgentInWebHostTab: mocks.webLaunch
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: vi.fn(async (_target: unknown, method: string) =>
     method === 'agentSession.createSupport' ? mocks.createSupport() : new Promise(() => undefined)
   )
@@ -52,7 +52,7 @@ import { launchStructuredWorktreeSession } from './worktree-creation-structured-
 // terminals it starts for the window's new tabs.
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
   const client = (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
   return {
     ...client,

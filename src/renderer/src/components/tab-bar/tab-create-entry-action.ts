@@ -49,13 +49,13 @@ export {
   getTabEntryAllowAbsolutePaths,
   isTabEntryAbsolutePathAllowed
 } from './tab-create-entry-local-path'
-import { statUserOpenedPath } from '@/lib/user-opened-local-path'
-import { openHtmlFilePreview } from '@/lib/open-html-file-preview'
+import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
+import { openHtmlFilePreview } from '@/lib/browser/documents/open-html-file-preview'
 import { selectFileListWorktree } from '@/store/workspaces/selection/known-worktree-selection'
 import {
   assertEditorFileOperationCurrent,
   captureEditorFileOperationProvenance
-} from '@/lib/editor-file-operation-provenance'
+} from '@/lib/editor/file-operations/editor-file-operation-provenance'
 
 export type TabCreateEntryArgs = {
   classification?: TabEntryActionClassification

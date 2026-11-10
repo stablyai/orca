@@ -1,10 +1,10 @@
 // Layout-owner browser/chat/simulator commands draw only from main’s answers; refusals preserve tabs. With switch off, window draws without sending main.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 
 import '../../../../../shared/agent-session/view/structured-agent-session-projection'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import { createTestStore, seedStore } from '../../testing/app-store-test-fixture'
 import { makeWorktree } from '../worktrees/worktree.test-fixture'
 import { createStoreCascadesMockApi } from '../../testing/app-store-cascade-api.test-fixture'
@@ -14,12 +14,12 @@ const mocks = vi.hoisted((): { store: unknown } => ({ store: null }))
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 vi.mock('@/store/index', () => ({
@@ -30,14 +30,14 @@ vi.mock('@/store/index', () => ({
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
 createStoreCascadesMockApi()
 
-import { ensureSimulatorTab } from '@/lib/ensure-simulator-tab'
+import { ensureSimulatorTab } from '@/lib/simulator/tabs/ensure-simulator-tab'
 import { openStructuredAgentSessionProvisionalTab } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
 import { resetLocalStructuredSessionVersionForTests } from '@/runtime/local-structured-session-tabs-sync/inventory-generation-fence'

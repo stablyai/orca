@@ -1,9 +1,9 @@
 import { Import } from 'lucide-react'
-import { ORCA_CLI_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+import { ORCA_CLI_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
 import { useMobileEmulatorAgentSetupState } from '../../../emulator-pane/use-mobile-emulator-agent-setup-state'
 import { AgentSkillSetupPanel } from '../../../skills/setup/AgentSkillSetupPanel'
 import { MobileEmulatorExamples } from './MobileEmulatorExamples'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 const EMULATOR_CLI_COMMANDS = [
@@ -14,16 +14,17 @@ const EMULATOR_CLI_COMMANDS = [
 ] as const
 
 export function MobileEmulatorAgentControlRow(): React.JSX.Element {
+  const t = useTranslate()
   const setup = useMobileEmulatorAgentSetupState(true)
   const activeSkillRuntime = setup.skillRuntime
 
   return (
     <SettingsGroup
-      title={translate(
-        'auto.components.settings.MobileEmulatorAgentControlRow.2a674aa810',
-        'Agent Mobile Emulator Control'
+      title={t(
+        'auto.components.settings.MobileEmulatorAgentControlRow.10243e70ff',
+        'Agent mobile emulator control'
       )}
-      description={translate(
+      description={t(
         'auto.components.settings.MobileEmulatorAgentControlRow.ff4b7e65d6',
         'Let coding agents control the active mobile emulator with Orca CLI commands.'
       )}
@@ -32,11 +33,11 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
         <div className="py-3">
           <AgentSkillSetupPanel
             variant="inline"
-            title={translate(
+            title={t(
               'auto.components.settings.MobileEmulatorAgentControlRow.67e19ee03c',
               'Orca CLI skill'
             )}
-            description={translate(
+            description={t(
               'auto.components.settings.MobileEmulatorAgentControlRow.d94ca6a623',
               'Enables agents to use Orca CLI commands, including mobile emulator control.'
             )}
@@ -58,14 +59,14 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
           <div className="flex items-center gap-2">
             <Import className="size-3.5 text-muted-foreground" />
             <p className="text-sm font-medium">
-              {translate(
+              {t(
                 'auto.components.settings.MobileEmulatorAgentControlRow.c7f3fe0a6e',
                 'Common emulator commands'
               )}
             </p>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.MobileEmulatorAgentControlRow.8af7a8bc38',
               'Commands target the active emulator for the current worktree. Coordinates are normalized from 0..1.'
             )}

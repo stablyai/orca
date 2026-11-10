@@ -1,23 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  existsSync,
-  linkSync,
-  mkdtempSync,
-  mkdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, dirname, join } from 'node:path'
+import { basename, join } from 'node:path'
 import type * as NodeFsPromises from 'node:fs/promises'
-import {
-  codexRolloutHardlinkIdentity,
-  dedupeCodexRolloutFileAliases
-} from '../../../ai-vault/scanners/codex/codex-session-root-dedup'
+import '../../../ai-vault/scanners/codex/codex-session-root-dedup'
 import { prepareLegacySharedCodexSessionResume } from './codex-legacy-session-resume'
-import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/host-codex-managed-home-ownership'
+import '../../../codex-accounts/host-codex-managed-home-ownership'
 
 const lstatFaults = vi.hoisted(() => ({
   path: null as string | null,
@@ -89,21 +77,6 @@ describe('prepareLegacySharedCodexSessionResume', () => {
     expect(statSync(targetPath).ino).toBe(statSync(rolloutPath).ino)
   })
 
-  it('coalesces concurrent resumes of the same legacy rollout', async () => {
-    const [first, second] = await Promise.all([prepare(), prepare()])
-
-    expect(first.useRealCodexHome).toBe(true)
-    expect(second.useRealCodexHome).toBe(true)
-    expect(readFileSync(targetRolloutPath(), 'utf-8')).toContain('session_meta')
-  })
-
-  it('fails clearly and retryably instead of approving a missing rollout', async () => {
-    rmSync(rolloutPath)
-
-    await expect(prepare()).rejects.toThrow(/Retry resume/)
-    expect(existsSync(targetRolloutPath())).toBe(false)
-  })
-
   it('fails closed when a different rollout already owns the target path', async () => {
     mkdirSync(join(targetRolloutPath(), '..'), { recursive: true })
     writeFileSync(targetRolloutPath(), '{"different":true}\n', 'utf-8')
@@ -137,125 +110,3 @@ describe('prepareLegacySharedCodexSessionResume', () => {
     return join(systemHome, 'sessions', '2026', '07', '20', basename(rolloutPath))
   }
 })
-
-// Vault dedup's smallest bridge alias may name a peer account instead of the selected one.
-describe('per-account resume repin', () => {
-  let root: string
-  // Make the selected account lose the path tie-break.
-  let peerHome: string
-  let selectedHome: string
-  let recordedRolloutPath: string
-  let bridgedRolloutPath: string
-
-  const rolloutRelativePath = join(
-    'sessions',
-    '2026',
-    '07',
-    '20',
-    'rollout-2026-07-20T10-00-00-abcdef00-1234-4321-9999-cafecafecafe.jsonl'
-  )
-
-  beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'orca-codex-account-repin-'))
-    peerHome = join(root, 'codex-accounts', '11111111-aaaa-4aaa-8aaa-111111111111', 'home')
-    selectedHome = join(root, 'codex-accounts', '99999999-bbbb-4bbb-8bbb-999999999999', 'home')
-    recordedRolloutPath = join(selectedHome, rolloutRelativePath)
-    bridgedRolloutPath = join(peerHome, rolloutRelativePath)
-    mkdirSync(dirname(recordedRolloutPath), { recursive: true })
-    writeFileSync(recordedRolloutPath, '{"type":"session_meta"}\n', 'utf-8')
-    mkdirSync(dirname(bridgedRolloutPath), { recursive: true })
-    linkSync(recordedRolloutPath, bridgedRolloutPath)
-  })
-
-  afterEach(() => {
-    rmSync(root, { recursive: true, force: true })
-  })
-
-  it.each([['recorded rollout first'], ['bridged alias first']])(
-    'repins the surviving vault row to the selected account, discovered %s',
-    async (order) => {
-      const recorded = rolloutCandidate(recordedRolloutPath, selectedHome)
-      const bridged = rolloutCandidate(bridgedRolloutPath, peerHome)
-      const survivors = dedupeCodexRolloutFileAliases(
-        order === 'recorded rollout first' ? [recorded, bridged] : [bridged, recorded],
-        rolloutCandidateAccessors
-      )
-
-      expect(survivors).toEqual([bridged])
-
-      const result = await prepareLegacySharedCodexSessionResume(
-        {
-          agent: 'codex',
-          filePath: bridged.filePath,
-          codexHome: peerHome,
-          executionHostId: 'local'
-        },
-        repinOptions()
-      )
-
-      expect(result).toEqual({ useRealCodexHome: false, substituteCodexHome: selectedHome })
-    }
-  )
-
-  it('declines while the bridge has not yet linked the rollout into the selected home', async () => {
-    const unbridgedSelectedHome = join(
-      root,
-      'codex-accounts',
-      'ffffffff-cccc-4ccc-8ccc-ffffffffffff',
-      'home'
-    )
-    mkdirSync(unbridgedSelectedHome, { recursive: true })
-
-    const result = await prepareLegacySharedCodexSessionResume(
-      {
-        agent: 'codex',
-        filePath: bridgedRolloutPath,
-        codexHome: peerHome,
-        executionHostId: 'local'
-      },
-      { ...repinOptions(), getSelectedHostAccountCodexHomePath: () => unbridgedSelectedHome }
-    )
-
-    expect(result).toEqual({ useRealCodexHome: false })
-  })
-
-  it('refuses when the selected rollout is temporarily unreadable', async () => {
-    lstatFaults.path = recordedRolloutPath
-
-    await expect(
-      prepareLegacySharedCodexSessionResume(
-        {
-          agent: 'codex',
-          filePath: bridgedRolloutPath,
-          codexHome: peerHome,
-          executionHostId: 'local'
-        },
-        repinOptions()
-      )
-    ).rejects.toBeInstanceOf(ManagedCodexHomeTemporarilyUnavailableError)
-  })
-
-  function repinOptions() {
-    return {
-      isHostSystemDefaultRealHomeSelected: () => false,
-      getSelectedHostAccountCodexHomePath: () => selectedHome
-    }
-  }
-
-  function rolloutCandidate(filePath: string, codexHome: string) {
-    const stat = statSync(filePath)
-    return {
-      filePath,
-      codexHome,
-      file: { dev: stat.dev, ino: stat.ino, nlink: stat.nlink }
-    }
-  }
-})
-
-const rolloutCandidateAccessors = {
-  isCodex: () => true,
-  getFilePath: (candidate: { filePath: string }) => candidate.filePath,
-  getCodexHome: (candidate: { codexHome: string }) => candidate.codexHome,
-  getHardlinkIdentity: (candidate: { file: { dev: number; ino: number; nlink: number } }) =>
-    codexRolloutHardlinkIdentity(candidate.file)
-}

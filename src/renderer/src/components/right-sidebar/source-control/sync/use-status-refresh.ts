@@ -7,7 +7,10 @@ import {
   worktreeGitCopyHostId,
   worktreeCopyPushTarget
 } from '@/lib/worktree-git-copy'
-import { getLocalPathOpenOwnerForRoute, isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
+import {
+  getLocalPathOpenOwnerForRoute,
+  isLocalPathOpenBlocked
+} from '@/lib/files/os-open/local-path-open-guard'
 import {
   beginHugeRepoWarningProbe,
   hasDismissedHugeRepoWarning,

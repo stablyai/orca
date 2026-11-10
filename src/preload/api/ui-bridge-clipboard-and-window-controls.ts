@@ -11,6 +11,10 @@ import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { TerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surface-close-target'
 import type { ClipboardImageThumbnail } from '../../shared/clipboard-image'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
+import type {
+  AgentPaneActivityReply,
+  AgentPaneActivityRequest
+} from '../../shared/agent-status/presentation/agent-list-status'
 import type { PreloadApi } from '../api-types'
 
 export const uiClipboardAndWindowControlsApi = {
@@ -85,6 +89,15 @@ export const uiClipboardAndWindowControlsApi = {
     ipcRenderer.on('ui:resumeSleepingAgents', listener)
     return () => ipcRenderer.removeListener('ui:resumeSleepingAgents', listener)
   },
+  onApplyAgentPaneActivity: (callback: (data: AgentPaneActivityRequest) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: AgentPaneActivityRequest) =>
+      callback(data)
+    ipcRenderer.on('ui:applyAgentPaneActivity', listener)
+    return () => ipcRenderer.removeListener('ui:applyAgentPaneActivity', listener)
+  },
+  replyAgentPaneActivity: (reply: AgentPaneActivityReply): void => {
+    ipcRenderer.send('ui:agentPaneActivityReply', reply)
+  },
   onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, direction: 'in' | 'out' | 'reset') =>
       callback(direction)
@@ -93,6 +106,7 @@ export const uiClipboardAndWindowControlsApi = {
   },
   readClipboardText: (options?: ReadClipboardTextOptions): Promise<string> =>
     ipcRenderer.invoke('clipboard:readText', options),
+  readClipboardLinkHtml: (): Promise<string> => ipcRenderer.invoke('clipboard:readLinkHtml'),
   readSelectionClipboardText: (options?: ReadClipboardTextOptions): Promise<string> =>
     ipcRenderer.invoke('clipboard:readSelectionText', options),
   saveClipboardImageAsTempFile: (args?: {
@@ -227,6 +241,9 @@ export const uiClipboardAndWindowControlsApi = {
   },
   confirmWindowClose: (): void => {
     ipcRenderer.send('window:confirm-close')
+  },
+  cancelWindowClose: (): void => {
+    ipcRenderer.send('window:close-cancelled')
   },
   notifyWindowRevealed: (): void => {
     ipcRenderer.send('ui:window-revealed')

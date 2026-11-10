@@ -1,6 +1,8 @@
 import type { Root, RootContent } from 'mdast'
 import type { Token } from './mobile-markdown-code-nodes'
-import { markdownTokens, parseMobileMarkdownTree, type MathEnv } from './mobile-markdown-tree'
+import { hasDetailsSectionTag } from './mobile-markdown-details'
+import type { MathEnv } from './mobile-markdown-math'
+import { markdownTokens, parseMobileMarkdownTree } from './mobile-markdown-tree'
 
 /** One parse's finished blocks, kept for the next parse of the same text grown longer. */
 export type MobileMarkdownTreeCache = {
@@ -18,15 +20,10 @@ const NOTHING_SETTLED = { settled: [], line: 0, offset: 0 }
 
 /** Kinds of top-level block a later line can still join after a blank line. */
 const CONTINUES_AFTER_BLANK = new Set(['bullet_list_open', 'ordered_list_open', 'code_block'])
-/** A display-math opener left as text waits for its closer: one arriving later, past any number
- *  of blocks, turns everything from its line on into one math block. */
-const MATH_OPENER_LINE = /^[ \t]*(?:\$\$|\\\[)/m
-/** `<details>` sections span blocks, so no block before their end is finished. */
-const DETAILS_SECTION = /<\/?details[\s/>]/i
 
 /** The token index where the last finished block ends (0: none yet): before a top-level block that has a blank line above it,
- *  under a block no later line can join. Text added later starts no earlier. */
-function finishedSplit(tokens: readonly Token[]): number {
+ *  under a block no later line can join, and above the block holding a waiting math opener. Text added later starts no earlier. */
+function finishedSplit(tokens: readonly Token[], waitingMathLine = Infinity): number {
   let split = 0
   let above: Token | undefined
   for (const [index, token] of tokens.entries()) {
@@ -36,8 +33,7 @@ function finishedSplit(tokens: readonly Token[]): number {
     if (above?.map && above.map[1] < token.map[0] && !CONTINUES_AFTER_BLANK.has(above.type)) {
       split = index
     }
-    const inline = tokens[index + 1]
-    if (inline?.type === 'inline' && MATH_OPENER_LINE.test(inline.content)) {
+    if (token.map[1] > waitingMathLine) {
       return split
     }
     above = token
@@ -65,8 +61,8 @@ export function parseGrowingMobileMarkdownTree(
     link(root)
     return { root, cache: null }
   }
-  // A lone \r ends a line for markdown-it but not for the line counting here.
-  if (source.includes('\r') || DETAILS_SECTION.test(source)) {
+  // A lone \r ends a line for markdown-it but not for the line counting here; `<details>` sections span blocks.
+  if (source.includes('\r') || hasDetailsSectionTag(source)) {
     return whole()
   }
   const resume =
@@ -79,7 +75,7 @@ export function parseGrowingMobileMarkdownTree(
   if (env.references || env.footnotes) {
     return whole(line === 0 ? { env, tokens } : undefined)
   }
-  const split = finishedSplit(tokens)
+  const split = finishedSplit(tokens, env.waitingMathLine)
   if (split > 0) {
     const finished = parseMobileMarkdownTree(unfinished, false, chatMath, {
       env,

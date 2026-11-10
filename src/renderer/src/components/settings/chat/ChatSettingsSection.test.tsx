@@ -18,7 +18,9 @@ import { i18n } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { getChatLaunchSearchEntries } from './chat-launch-search'
 
-vi.mock('@/lib/host-chat-program-acquisition', () => ({ useChatProgramFacts: () => {} }))
+vi.mock('@/lib/agent-session/launch/inventory/host-chat-program-acquisition', () => ({
+  useChatProgramFacts: () => {}
+}))
 
 afterEach(async () => {
   cleanup()

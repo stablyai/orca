@@ -1,6 +1,6 @@
 import { useCallback, useRef, type Dispatch, type SetStateAction } from 'react'
 import { toast } from 'sonner'
-import { applyDocumentTheme } from '@/lib/document-theme'
+import { applyDocumentTheme } from '@/app-shell/appearance/document-theme'
 import { track } from '@/lib/telemetry'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'

@@ -4,10 +4,14 @@ import { Button } from '@/components/ui/button'
 import { SparsePresetChooser } from './SparsePresetChooser'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useAppStore } from '@/store'
-import { parseSparsePresetDirectories, validateSparsePresetName } from '@/lib/sparse-preset-draft'
+import {
+  parseSparsePresetDirectories,
+  validateSparsePresetName
+} from '@/components/sparse/sparse-preset-draft'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { SparsePresetDraft } from './SparseCheckoutPresetDraftForm'
 import { SparsePresetInlineEditor } from './SparsePresetInlineEditor'
 
@@ -28,6 +32,7 @@ export default function SparseCheckoutPresetSelect({
   disabled = false,
   onEditingChange
 }: SparseCheckoutPresetSelectProps): React.JSX.Element {
+  const t = useTranslate()
   const repo = useAppStore((s) => s.repos.find((entry) => entry.id === repoId))
   const fetchSparsePresets = useAppStore((s) => s.fetchSparsePresets)
   const saveSparsePreset = useAppStore((s) => s.saveSparsePreset)
@@ -61,10 +66,10 @@ export default function SparseCheckoutPresetSelect({
     () => visiblePresets.find((preset) => preset.id === selectedPresetId) ?? null,
     [visiblePresets, selectedPresetId]
   )
-  const parsedDirectories = draft ? parseSparsePresetDirectories(draft.directoriesText) : null
+  const parsedDirectories = draft ? parseSparsePresetDirectories(draft.directoriesText, t) : null
   const trimmedName = draft?.name.trim() ?? ''
   const nameError = draft
-    ? validateSparsePresetName(draft.name, visiblePresets, draft.presetId)
+    ? validateSparsePresetName(draft.name, visiblePresets, draft.presetId, t)
     : null
   const canSave =
     draft !== null &&
@@ -210,17 +215,14 @@ export default function SparseCheckoutPresetSelect({
   )
 
   const triggerLabel = isLoadingPresets
-    ? translate('sparsePreset.loading', 'Loading presets...')
+    ? t('sparsePreset.loading', 'Loading presets...')
     : hasPresetLoadError
-      ? translate(
-          'auto.components.sparse.SparseCheckoutPresetSelect.a683a4bc8e',
-          'Retry loading presets'
-        )
+      ? t('auto.components.sparse.SparseCheckoutPresetSelect.a683a4bc8e', 'Retry loading presets')
       : !presetsLoaded
-        ? translate('auto.components.sparse.SparseCheckoutPresetSelect.16223dde6a', 'Load presets')
+        ? t('auto.components.sparse.SparseCheckoutPresetSelect.16223dde6a', 'Load presets')
         : selectedPreset
           ? selectedPreset.name
-          : translate('sparsePreset.fullCheckout', 'Full checkout')
+          : t('sparsePreset.fullCheckout', 'Full checkout')
 
   return (
     <>
@@ -244,7 +246,7 @@ export default function SparseCheckoutPresetSelect({
             type="button"
             variant="outline"
             role="combobox"
-            aria-label={translate('sparsePreset.checkoutPreset', 'Checkout preset')}
+            aria-label={t('sparsePreset.checkoutPreset', 'Checkout preset')}
             aria-expanded={open}
             aria-busy={isLoadingPresets}
             aria-disabled={Boolean(draft) || undefined}
@@ -287,11 +289,11 @@ export default function SparseCheckoutPresetSelect({
                 <RefreshCcw className="size-3.5 text-muted-foreground" />
                 <span className="truncate">
                   {hasPresetLoadError
-                    ? translate(
+                    ? t(
                         'auto.components.sparse.SparseCheckoutPresetSelect.a683a4bc8e',
                         'Retry loading presets'
                       )
-                    : translate(
+                    : t(
                         'auto.components.sparse.SparseCheckoutPresetSelect.16223dde6a',
                         'Load presets'
                       )}

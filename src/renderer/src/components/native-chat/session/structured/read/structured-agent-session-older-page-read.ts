@@ -8,7 +8,7 @@ import {
   type StructuredAgentSessionState
 } from '../../../../../../../shared/agent-session/structured-agent-session-reducer'
 import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import type { NativeChatOlderPageResult } from '../../../viewport/history/native-chat-pagination'
 
 /** Bounded so a busy stream cannot turn one scroll-to-top into an endless read chain. */

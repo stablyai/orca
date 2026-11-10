@@ -1,8 +1,8 @@
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Label } from '../../../ui/label'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { SettingsSwitch } from '../../form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 import { getExperimentalSearchEntry } from '../../advanced/experimental-search'
 
 type BrowserExtensionsExperimentalSettingProps = {
@@ -14,6 +14,7 @@ export function BrowserExtensionsExperimentalSetting({
   settings,
   updateSettings
 }: BrowserExtensionsExperimentalSettingProps): React.JSX.Element {
+  const t = useTranslate()
   const entry = getExperimentalSearchEntry().browserExtensions
   const enabled = settings.experimentalBrowserExtensions === true
 
@@ -29,19 +30,19 @@ export function BrowserExtensionsExperimentalSetting({
         <div className="min-w-0 shrink space-y-0.5">
           <Label>{entry.title}</Label>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.ExperimentalPane.browserExtensions.copy',
               'Adds Settings › Browser › Extensions for local browser profiles.'
             )}
           </p>
         </div>
-        <SettingsSwitch
+        <Switch
           checked={enabled}
-          ariaLabel={translate(
+          aria-label={t(
             'auto.components.settings.ExperimentalPane.browserExtensions.toggleLabel',
             'Toggle browser extensions'
           )}
-          onChange={() => updateSettings({ experimentalBrowserExtensions: !enabled })}
+          onCheckedChange={() => updateSettings({ experimentalBrowserExtensions: !enabled })}
         />
       </div>
     </SearchableSetting>
