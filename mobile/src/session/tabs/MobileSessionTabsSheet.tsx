@@ -62,8 +62,8 @@ export function MobileSessionTabsSheet({
   }
   const title =
     rows.length === 1
-      ? t('session.tabPill.oneTab', '1 tab')
-      : t('session.tabPill.tabCount', '{{count}} tabs', { count: rows.length })
+      ? t('session.tabBar.oneTab', '1 tab')
+      : t('session.tabBar.tabCount', '{{count}} tabs', { count: rows.length })
 
   const renderRow = (row: MobileSessionTabRow) => {
     const current = row.tab.id === activeSessionTabId

@@ -2925,15 +2925,6 @@
       "stop": "Stop",
       "yes": "Yes"
     },
-    "tabPill": {
-      "oneTab": "1 tab",
-      "tabCount": "{{count}} tabs",
-      "anotherNeedsYou": "another tab needs you",
-      "hint": "Shows all tabs",
-      "next": "Next tab",
-      "previous": "Previous tab",
-      "actionsHint": "Shows actions for this tab"
-    },
     "tabsSheet": {
       "needsYou": "Needs you",
       "working": "Working",
@@ -2947,6 +2938,15 @@
       "file": "File",
       "chat": "Chat",
       "terminal": "Terminal"
+    },
+    "tabBar": {
+      "oneTab": "1 tab",
+      "tabCount": "{{count}} tabs",
+      "anotherNeedsYou": "another tab needs you",
+      "actionsHint": "Shows actions for this tab",
+      "next": "Next tab",
+      "previous": "Previous tab",
+      "hint": "Shows all tabs"
     }
   },
   "chat": {

@@ -76,7 +76,7 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     presentedConnState === 'connected'
       ? showLoadingState && visibleTabs.length === 0
         ? t('session.presentation.loadingTabs', 'Loading tabs')
-        : // The tab count lives on the tab pill, so the header names the branch instead.
+        : // The tab count lives in the tab bar, so the header names the branch instead.
           (scope.worktreeBranch ?? MOBILE_SESSION_STATUS_LABELS.connected)
       : showConnectionRetry
         ? t('session.presentation.tapToRetry', '{{status}} — tap to retry', {
