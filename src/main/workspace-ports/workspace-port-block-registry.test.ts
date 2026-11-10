@@ -6,8 +6,7 @@ import {
   WORKSPACE_PORT_BLOCK_SIZE,
   WORKSPACE_PORT_RANGE_END,
   WORKSPACE_PORT_RANGE_START,
-  buildWorkspacePortEnv,
-  hostPinnedPortBlock
+  buildWorkspacePortEnv
 } from '../../shared/workspace-port-block'
 import { WorkspacePortBlockRegistry } from './workspace-port-block-registry'
 
@@ -123,23 +122,5 @@ describe('peekBlock', () => {
       Array.from({ length: 20 }, (_, i) => registry.getBlock(`/repo/c-${i}`))
     )
     expect(new Set(blocks.map((block) => block.base)).size).toBe(20)
-  })
-})
-
-describe('hostPinnedPortBlock', () => {
-  it('honors a launcher-pinned ORCA_PORT on a one-workspace host', () => {
-    expect(hostPinnedPortBlock({ ORCA_PORT: '3000' })).toEqual({ base: 3000, count: 10 })
-    expect(hostPinnedPortBlock({ ORCA_PORT: '3000', ORCA_PORT_COUNT: '5' })).toEqual({
-      base: 3000,
-      count: 5
-    })
-  })
-
-  it('ignores a block inherited from a parent Orca pane, and bad values', () => {
-    expect(hostPinnedPortBlock({ ORCA_PORT: '28570', ORCA_WORKTREE_ID: 'r::/w' })).toBeNull()
-    expect(hostPinnedPortBlock({ ORCA_PORT: '28570', ORCA_PANE_KEY: 't:l' })).toBeNull()
-    expect(hostPinnedPortBlock({ ORCA_PORT: 'abc' })).toBeNull()
-    expect(hostPinnedPortBlock({ ORCA_PORT: '80' })).toBeNull()
-    expect(hostPinnedPortBlock({})).toBeNull()
   })
 })
