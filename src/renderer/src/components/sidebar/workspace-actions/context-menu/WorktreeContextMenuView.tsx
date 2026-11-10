@@ -7,7 +7,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Bell, BellOff, Pencil, Pin, PinOff, Unlink } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { WorktreeRowOpenInSubMenu } from '../open/WorktreeRowOpenInSubMenu'
 import { PerforceCopyUpMenuItem } from '../../../perforce-copies/PerforceCopyUpMenuItem'
 import { WorktreeDeveloperMenu } from '../open/WorktreeDeveloperMenu'
@@ -31,7 +31,7 @@ import {
   shouldRevealWorktreeDeveloperMenu,
   shouldUseNativeContextMenu
 } from './worktree-context-menu-policy'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 
 export default function WorktreeContextMenuView({ model }: { model: WorktreeContextMenuModel }) {
   const {

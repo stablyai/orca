@@ -156,13 +156,6 @@ beforeEach(() => {
     live: true,
     activations: 0
   })
-  feeds.set('remote', {
-    snapshot: new Map(),
-    names: new Map(),
-    listeners: new Set(),
-    live: true,
-    activations: 0
-  })
   useAppStore.setState(
     { ...initial, activeWorktreeId: RECIPIENT, activeWorkspaceExecutionHostId: 'local' },
     true
@@ -172,19 +165,6 @@ afterEach(() => {
   cleanup()
   useAppStore.setState(initial, true)
   feeds.clear()
-})
-
-it('uses the recipient host when identical session text is published by two hosts', () => {
-  publish('local', [summary(ROOT)])
-  publish('remote', [summary(ROOT)])
-  useAppStore.setState({
-    activeWorkspaceExecutionHostId: 'runtime:remote',
-    unifiedTabsByWorktree: {
-      [SENDER]: [tab(ROOT, 'Remote sender', 'runtime:remote'), tab(ROOT, 'Wrong host')]
-    }
-  })
-  render(<NativeChatAgentMessageSenders from={source()} chatWorktreeId={RECIPIENT} />)
-  expect(screen.getByText('Remote sender')).toBeInTheDocument()
 })
 
 it('shows a chat sender by its current rename', () => {

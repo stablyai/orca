@@ -13,7 +13,8 @@ import {
 } from './linear-slice-scope'
 import { evictStaleEntries } from './linear-cache'
 import { openStoreLinearIssueRead } from './linear-issue-read-actions'
-import { mapLinearIssueRead, invalidateLinearIssueReads } from './linear-issue-publication'
+import './linear-issue-read'
+import { mapLinearIssueRead, invalidateLinearIssueReads } from './linear-issue-read-lifecycle'
 
 export function createLinearIssueDetailActions(
   set: LinearSliceSet,

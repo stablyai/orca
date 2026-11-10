@@ -11,7 +11,7 @@ import { buildSettingsProjectList } from '@/components/settings/navigation/setti
 import { getSshPaneSearchEntries } from '@/components/settings/ssh/ssh-search'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { SettingsNavSection } from '@/lib/settings-navigation-types'
+import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
 import { getRepoKindLabel } from '../../../shared/repo-kind'
 import type { Repo } from '../../../shared/repo-types'
 import {

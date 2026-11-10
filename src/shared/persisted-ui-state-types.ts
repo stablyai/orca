@@ -198,6 +198,8 @@ export type PersistedUIState = {
   codexTerminalServerIsolationNoticeSeen?: boolean
   /** Windows one-shot toast for Codex moving onto ~/.codex; set when shown, so absent means not yet seen. */
   codexSharedSettingsNoticeSeen?: boolean
+  /** Retired launch card for the speech model update; kept because a paired client from that build still sends it. */
+  speechModelUpdateNoticeSeen?: boolean
   /** One-shot pane banner explaining Claude Code's own diff panel; set when the user closes it. */
   claudeDiffPanelNoticeSeen?: boolean
   /** Retired one-shot Claude sign-in toast; kept because a paired client from that build still sends it. */

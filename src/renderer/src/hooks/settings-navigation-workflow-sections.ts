@@ -12,7 +12,7 @@ import { getShareSkillsSettingsSearchEntries } from '@/components/settings/skill
 import { getTasksPaneSearchEntries } from '@/components/settings/tasks/tasks-search'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { SettingsNavSection } from '@/lib/settings-navigation-types'
+import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
 import {
   BookOpen,
   CalendarClock,

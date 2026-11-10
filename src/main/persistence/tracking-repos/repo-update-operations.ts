@@ -102,6 +102,7 @@ export class RepoUpdatePersistenceOperations {
         | 'folderUpgradeGitRootPath'
         | 'executionHostId'
         | 'symlinkPaths'
+        | 'dictationTerms'
         | 'issueSourcePreference'
         | 'defaultJiraProject'
         | 'forkSyncMode'

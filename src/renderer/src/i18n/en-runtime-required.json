@@ -511,6 +511,10 @@
                     "body": "This repository's execution host is disconnected, so Orca cannot refresh {{reviewLabel}} status.",
                     "title": "Host disconnected"
                   },
+                  "host_off": {
+                    "body": "Orca refreshes {{reviewLabel}} status through this project’s WSL host, which is off. Reconnect it to refresh.",
+                    "title": "WSL host is off"
+                  },
                   "not_git": {
                     "body": "Orca could not treat this folder as a Git repository for {{reviewLabel}} status.",
                     "title": "Not a Git repository"
@@ -702,8 +706,10 @@
           "syncedServerSingular": "Synced {{count}} server"
         },
         "WarpThemeImportModal": {
+          "found_theme": "Found {{value0}} themes",
           "found_theme_one": "Found {{value0}} theme",
           "found_theme_other": "Found {{value0}} themes",
+          "import_theme": "Import {{value0}} Themes",
           "import_theme_one": "Import {{value0}} Theme",
           "import_theme_other": "Import {{value0}} Themes"
         },
@@ -783,6 +789,11 @@
         "computerUseSummary": {
           "permissionsRequired_one": "{{value0}} permission required before agents can operate app windows.",
           "permissionsRequired_other": "{{value0}} permissions required before agents can operate app windows."
+        },
+        "repository": {
+          "search": {
+            "keepForkUpToDate": "Keep Fork Up to Date"
+          }
         },
         "sshHostServer": {
           "automationsLeftDisabled_one": "This host’s Orca server took over {{count}} automation but couldn’t turn it back on. Turn it on in Automations.",
@@ -1623,17 +1634,21 @@
         "providerRateLimited": "{{agent}} is rate-limited and retrying.",
         "providerRejected": "{{agent}} didn't accept this message.",
         "providerRejectedQuoted": "{{agent}} didn't accept this message: {{detail}}.",
+        "providerResponseFailed": "{{agent}} couldn't finish this response. Open Details for more information.",
         "providerRetryLastError": "Last error: {{detail}}.",
         "providerRetryNumber": "Retry {{attempt}}.",
         "providerRetryNumberOf": "Retry {{attempt}} of {{maxRetries}}.",
         "providerRetrying": "{{agent}} hit a temporary problem and is retrying.",
         "providerRetryingQuoted": "{{agent}} is retrying: {{detail}}.",
+        "providerSafetyStopped": "{{agent}} stopped this response after a safety check. Review your request and send again.",
         "providerStartFailed": "{{agent}} stopped before it finished starting.",
+        "providerUnavailable": "{{agent}} couldn't respond because the service is busy. Pick another model, or wait a little and send again.",
         "queueFull": "Too many messages were waiting for the agent, so this one was not sent.",
         "runCommandAgain": "Run /{{command}} again.",
         "runCommandWhenDone": "Run /{{command}} when it's done.",
         "runtimeNotInstalled": "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
         "savedConversationMissing": "{{agent}} couldn't find this chat's saved conversation.",
+        "selectedModel": "the selected model",
         "sendAgainToTryOnceMore": "Send your message again to try once more.",
         "sendToTryAgain": "Send your message to try again.",
         "sessionNotRestored": "{{agent}} couldn't reopen its earlier session, so this chat continues in a new one. {{agent}} doesn't remember the earlier messages.",

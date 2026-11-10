@@ -7,7 +7,7 @@ import {
 } from './native-chat-transcript-projection'
 
 // Clocks cannot order a null-timestamp preview against a client send or a remote transcript.
-function messageSortRank(message: NativeChatMessage): number {
+export function nativeChatDisplaySortRank(message: NativeChatMessage): number {
   if (message.queued || message.pendingSend === 'queued') {
     return 3
   }
@@ -28,8 +28,8 @@ export function compareNativeChatDisplayMessages(
   a: NativeChatMessage,
   b: NativeChatMessage
 ): number {
-  const rank = messageSortRank(a)
-  const difference = rank - messageSortRank(b)
+  const rank = nativeChatDisplaySortRank(a)
+  const difference = rank - nativeChatDisplaySortRank(b)
   return difference || (rank === 0 ? compareNativeChatTranscriptMessages(a, b) : 0)
 }
 
@@ -38,7 +38,7 @@ export function orderNativeChatDisplayEntries<T>(
   messageOf: (entry: T) => NativeChatMessage
 ): T[] {
   return [0, 1, 2, 3].flatMap((rank) => {
-    const tier = entries.filter((entry) => messageSortRank(messageOf(entry)) === rank)
+    const tier = entries.filter((entry) => nativeChatDisplaySortRank(messageOf(entry)) === rank)
     return rank === 0 ? orderNativeChatTranscriptEntries(tier, messageOf) : tier
   })
 }

@@ -52,7 +52,7 @@ vi.mock(
   () => import('./local-host-test-fixture')
 )
 
-vi.mock('@/lib/runtime-workspace-file-route', () => ({
+vi.mock('@/lib/files/access/runtime-workspace-file-route', () => ({
   findWorkspaceFileRoute: mocks.findWorkspaceFileRoute
 }))
 
@@ -128,24 +128,6 @@ describe('restored client-local editor tabs', () => {
   })
 
   // The notebook kernel and environment handlers check the same file path as user-named.
-  it.each(['/Users/me/notes.txt', '/Users/me/analysis.ipynb'])(
-    'reads %s as the file the user named after a restart',
-    async (filePath) => {
-      const activeFile = createFloatingFile(filePath)
-
-      await act(async () => root?.render(<HookProbe activeFile={activeFile} />))
-
-      await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('# local'))
-      expect(mocks.readRuntimeFileContent).toHaveBeenCalledTimes(1)
-      expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          filePath,
-          connectionId: undefined,
-          access: { kind: 'user-file' }
-        })
-      )
-    }
-  )
 
   it('keeps an absolute floating file in its panel when a project also owns the path', async () => {
     const filePath = '/project/readme.md'

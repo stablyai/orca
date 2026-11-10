@@ -1,5 +1,5 @@
-import { useAppMenuPaste } from '@/hooks/useAppMenuPaste'
-import { useAppMenuSelectionActions } from '@/hooks/useAppMenuSelectionActions'
+import { useAppMenuPaste } from '@/hooks/clipboard/menu/useAppMenuPaste'
+import { useAppMenuSelectionActions } from '@/hooks/app-commands/useAppMenuSelectionActions'
 import { AgentKanbanBoard } from './AgentKanbanBoard'
 import { useDashboardSnapshot } from './useDashboardSnapshot'
 import { useAgentDashboardTelemetry } from './use-agent-dashboard-telemetry'

@@ -4,14 +4,14 @@ import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-w
 import type { QuickSubmitOptions } from './quick-creation-request'
 import { findPendingLinkedWorkItemCreationId } from '@/lib/workspace/creation/pending-worktree-creation'
 import { useAppStore } from '@/store'
-import { getWorkspaceSeedName } from '@/lib/new-workspace'
-import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
+import { getWorkspaceSeedName } from '@/lib/workspace/creation/new-workspace'
+import { settleComposerSubmit } from '@/lib/workspace/creation/composer-submit-cancellation'
 import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
-} from '@/lib/workspace-create-error-format'
+} from '@/lib/workspace/creation/workspace-create-error-format'
 import { toast } from 'sonner'
-import { scheduleComposerCreateHandoff } from '@/lib/composer-create-handoff'
+import { scheduleComposerCreateHandoff } from '@/lib/workspace/creation/composer-create-handoff'
 
 import type { ComposerModel } from './composer-model'
 
@@ -34,6 +34,7 @@ type QuickSubmitActionInput = Pick<
   | 'selectedRepoRequiresConnection'
   | 'selectedTargetNeedsVisibleHost'
   | 'selectedWorkspaceTarget'
+  | 'revealSetupChoice'
   | 'setCreateError'
   | 'setCreating'
   | 'setupDecision'
@@ -64,6 +65,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
     selectedRepoRequiresConnection,
     selectedTargetNeedsVisibleHost,
     selectedWorkspaceTarget,
+    revealSetupChoice,
     setCreateError,
     setCreating,
     setupDecision,
@@ -100,7 +102,6 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
         sourceIntentBlocksCreate ||
         selectedRepoRequiresConnection ||
         selectedTargetNeedsVisibleHost ||
-        (requiresExplicitSetupChoice && !setupDecision) ||
         sparseError !== null
       ) {
         return
@@ -136,6 +137,12 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
         liveStore.setActiveView('terminal')
         liveStore.setSidebarOpen(true)
         onCreated?.()
+        return
+      }
+
+      if (requiresExplicitSetupChoice && !setupDecision) {
+        // The Run/Skip choice lives in Advanced; reveal it rather than refuse silently.
+        revealSetupChoice()
         return
       }
 
@@ -219,6 +226,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
       selectedRepoRequiresConnection,
       selectedTargetNeedsVisibleHost,
       selectedWorkspaceTarget,
+      revealSetupChoice,
       setCreateError,
       setCreating,
       setupDecision,

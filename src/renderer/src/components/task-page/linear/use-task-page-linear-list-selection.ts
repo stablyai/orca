@@ -1,4 +1,4 @@
-import { linearIssueReadError } from '@/lib/linear-read-error'
+import { linearIssueReadError } from '@/lib/work-items/linear/linear-read-error'
 import type { TaskPageProviderMetadataModel } from '../use-task-page-provider-metadata'
 import { useState, useMemo, useEffect } from 'react'
 import { LINEAR_ISSUE_LIST_MAX } from '../../../../../shared/linear/issue-read-limits'

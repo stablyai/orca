@@ -11,7 +11,9 @@ import {
   remapClosedTerminalTabSnapshotCwds,
   type ClosedTerminalTabSnapshot
 } from '../../../terminals/recently-closed-terminal-tabs'
-import { renameWorktreeLayoutKeys } from '../../tabs/worktree-layout-lifecycle'
+import '../../tabs/worktree-layout-lifecycle'
+import { renameWorktreeLayoutKeys } from '../../tabs/rename-worktree-layout'
+import { replaceRecordEntries } from '../../../keyed-record-transitions'
 import { renameCombinedDiffViewOwner } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 
 // Inventory non-layout worktree-keyed maps; layout migrates separately, while surviving tab/file IDs keep their keys.
@@ -214,16 +216,16 @@ export function buildWorktreeRenameState(
     s.pairedTerminalTabCloseIntentsByEnvironment
   )
   const currentSleepingAgentSessionsByPaneKey = s.sleepingAgentSessionsByPaneKey ?? {}
-  const sleepingAgentSessionsByPaneKey = Object.values(currentSleepingAgentSessionsByPaneKey).some(
-    (record) => record.worktreeId === oldWorktreeId
+  const repointedSleepingSessions = Object.entries(currentSleepingAgentSessionsByPaneKey).flatMap(
+    ([paneKey, record]) =>
+      record.worktreeId === oldWorktreeId
+        ? [[paneKey, { ...record, worktreeId: newWorktreeId }] as const]
+        : []
   )
-    ? Object.fromEntries(
-        Object.entries(currentSleepingAgentSessionsByPaneKey).map(([paneKey, record]) => [
-          paneKey,
-          record.worktreeId === oldWorktreeId ? { ...record, worktreeId: newWorktreeId } : record
-        ])
-      )
-    : s.sleepingAgentSessionsByPaneKey
+  const sleepingAgentSessionsByPaneKey =
+    repointedSleepingSessions.length > 0
+      ? replaceRecordEntries(currentSleepingAgentSessionsByPaneKey, repointedSleepingSessions)
+      : s.sleepingAgentSessionsByPaneKey
   // Groups keep their ids across the rename, so their chooser marks move with them.
   const splitLandingGroupIds = Object.values(s.splitLandingGroupIds ?? {}).includes(oldWorktreeId)
     ? Object.fromEntries(

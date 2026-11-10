@@ -4,41 +4,31 @@
   "family": "session.pr-sidebar",
   "namedDeltas": [],
   "values": {
-    "0e5be7456ec2": {
-      "name": "status.get#2",
-      "ordinal": 24,
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "beforeSend": "[local beforeSend]",
-            "failWhenDisconnected": true,
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-13",
-          "ok": true,
-          "result": {
-            "runtimeId": "recorded"
-          }
-        }
+    "03bcac42a924": {
+      "name": "worktree.show#3",
+      "ordinal": 26,
+      "json": "{\"id\":\"frame-11\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
+    },
+    "0726612d4a89": {
+      "name": "reply-salvage",
+      "ordinal": 19,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["linkedPR"],
+        "method": "worktree.show",
+        "operation": "worktree.summary-or-skip",
+        "variant": "worktree-summary"
       }
+    },
+    "0730389db3e9": {
+      "name": "hostedReview.forBranch#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.forBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedGitHubPR\":null,\"active\":true}}"
+    },
+    "0d9f7988ff86": {
+      "name": "github.prChecks#1",
+      "ordinal": 13,
+      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"headSha\":\"head-sha-1\"}}"
     },
     "1287167eaf56": {
       "name": "github.repoSlug#1",
@@ -75,41 +65,28 @@
         }
       }
     },
-    "156f18eff4ec": {
-      "name": "reply-salvage",
-      "ordinal": 29,
-      "value": {
-        "droppedCount": 1,
-        "droppedPaths": ["linkedPR"],
-        "method": "worktree.show",
-        "operation": "worktree.summary-or-skip",
-        "variant": "worktree-summary"
-      }
-    },
-    "1723d8a5d8be": {
-      "name": "github.workItemDetails#1",
-      "ordinal": 15,
-      "json": "{\"id\":\"frame-7\",\"deviceToken\":\"recording-device\",\"method\":\"github.workItemDetails\",\"params\":{\"repo\":\"id:repo-9\",\"number\":12,\"type\":\"pr\"}}"
+    "1c1b5062fc21": {
+      "name": "github.prForBranch#2",
+      "ordinal": 21,
+      "json": "{\"id\":\"frame-10\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null,\"fallbackPRNumber\":12,\"acceptMergedFallbackPR\":true,\"currentHeadOid\":null}}"
     },
     "1f5765918736": {
       "name": "github.repoSlug#1",
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.repoSlug\",\"params\":{\"repo\":\"id:repo-9\"}}"
     },
-    "214734b00350": {
-      "name": "github.workItemDetails#2",
-      "ordinal": 34,
+    "2055aa3ead1b": {
+      "name": "status.get#3",
+      "ordinal": 31,
       "args": [
         {
           "name": "method",
-          "value": "github.workItemDetails"
+          "value": "status.get"
         },
         {
           "name": "params",
           "value": {
-            "number": 12,
-            "repo": "id:repo-9",
-            "type": "pr"
+            "$rpc": "undefined"
           }
         },
         {
@@ -117,7 +94,7 @@
           "value": {
             "beforeSend": "[local beforeSend]",
             "failWhenDisconnected": true,
-            "timeoutMs": 30000
+            "timeoutMs": 15000
           }
         }
       ],
@@ -126,65 +103,55 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-16",
+          "id": "frame-15",
           "ok": true,
           "result": {
-            "body": "body",
-            "comments": [
-              {
-                "author": "rev",
-                "body": "please fix",
-                "createdAt": "2026-01-01T00:00:00Z",
-                "id": 55,
-                "isResolved": false,
-                "line": 3,
-                "path": "src/app.ts",
-                "threadId": "thread-1",
-                "url": "https://github.com/owner/repo/pull/12#discussion_r55"
+            "runtimeId": "recorded"
+          }
+        }
+      }
+    },
+    "214acb975f72": {
+      "name": "worktree.show#2",
+      "ordinal": 17,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-9",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "linkedPR": {
+                "$rpc": "null"
               }
-            ],
-            "headSha": "head-sha-1",
-            "item": {
-              "assignees": [],
-              "id": "PR_1",
-              "labels": [],
-              "number": 12,
-              "state": "open",
-              "title": "Recorded",
-              "type": "pr",
-              "updatedAt": "2026-01-01T00:00:00Z",
-              "url": "https://github.com/owner/repo/pull/12"
             }
           }
         }
       }
     },
-    "2bb452e534eb": {
-      "name": "github.prChecks#1",
-      "ordinal": 12,
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"headSha\":\"head-sha-1\"}}"
-    },
-    "3358329fa363": {
-      "name": "hostedReview.forBranch#2",
-      "ordinal": 26,
-      "json": "{\"id\":\"frame-11\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.forBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedGitHubPR\":null,\"active\":true}}"
-    },
-    "35045fa5a752": {
-      "commentError": {
-        "$rpc": "null"
-      },
-      "pr": {
-        "kind": "loading"
-      }
-    },
-    "3b5c096da2a3": {
-      "name": "hostedReview.forBranch#1",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.forBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedGitHubPR\":null,\"active\":true}}"
-    },
-    "415376507669": {
-      "name": "github.prForBranch#2",
-      "ordinal": 19,
+    "2dc2ca47b4e7": {
+      "name": "github.prForBranch#1",
+      "ordinal": 9,
       "args": [
         {
           "name": "method",
@@ -214,322 +181,13 @@
         }
       ],
       "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-9",
-          "ok": true,
-          "result": {
-            "fetchedAt": 0,
-            "kind": "found",
-            "pr": {
-              "headSha": "head-sha-1",
-              "mergeable": "MERGEABLE",
-              "number": 12,
-              "state": "open",
-              "title": "Recorded",
-              "updatedAt": "2026-01-01T00:00:00Z",
-              "url": "https://github.com/owner/repo/pull/12"
-            }
-          }
-        }
-      }
-    },
-    "463387bfd97b": {
-      "name": "status.get#3",
-      "ordinal": 30,
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "beforeSend": "[local beforeSend]",
-            "failWhenDisconnected": true,
-            "timeoutMs": 15000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-14",
-          "ok": true,
-          "result": {
-            "runtimeId": "recorded"
-          }
-        }
-      }
-    },
-    "65beb11d253c": {
-      "name": "github.prForBranch#2",
-      "ordinal": 20,
-      "json": "{\"id\":\"frame-9\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null,\"fallbackPRNumber\":12,\"acceptMergedFallbackPR\":true,\"currentHeadOid\":null}}"
-    },
-    "6c4dd527b59b": {
-      "name": "worktree.show#3",
-      "ordinal": 21,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.show"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo-9::/w"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-10",
-          "ok": true,
-          "result": {
-            "worktree": {
-              "linkedPR": {
-                "$rpc": "null"
-              }
-            }
-          }
-        }
-      }
-    },
-    "6fad2b580d21": {
-      "name": "worktree.show#3",
-      "ordinal": 25,
-      "json": "{\"id\":\"frame-10\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
-    },
-    "743fd59534bc": {
-      "name": "worktree.show#2",
-      "ordinal": 16,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.show"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo-9::/w"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-8",
-          "ok": true,
-          "result": {
-            "worktree": {
-              "linkedPR": {
-                "$rpc": "null"
-              }
-            }
-          }
-        }
-      }
-    },
-    "79306c86c331": {
-      "name": "github.prForBranch#3",
-      "ordinal": 33,
-      "json": "{\"id\":\"frame-15\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null,\"fallbackPRNumber\":12,\"acceptMergedFallbackPR\":true,\"currentHeadOid\":null,\"userRefresh\":true}}"
-    },
-    "8352e3c99668": {
-      "name": "status.get#1",
-      "ordinal": 11,
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "beforeSend": "[local beforeSend]",
-            "failWhenDisconnected": true,
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-6",
-          "ok": true,
-          "result": {
-            "runtimeId": "recorded"
-          }
-        }
-      }
-    },
-    "87ba39148f02": {
-      "name": "github.prChecks#1",
-      "ordinal": 10,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.prChecks"
-        },
-        {
-          "name": "params",
-          "value": {
-            "headSha": "head-sha-1",
-            "prNumber": 12,
-            "repo": "id:repo-9"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-5",
-          "ok": true,
-          "result": [
-            {
-              "checkRunId": 7,
-              "conclusion": "success",
-              "name": "build",
-              "status": "completed"
-            }
-          ]
-        }
-      }
-    },
-    "897654ba1e6c": {
-      "name": "status.get#2",
-      "ordinal": 28,
-      "json": "{\"id\":\"frame-13\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
-    },
-    "8fd563d499bd": {
-      "name": "github.workItemDetails#2",
-      "ordinal": 35,
-      "json": "{\"id\":\"frame-16\",\"deviceToken\":\"recording-device\",\"method\":\"github.workItemDetails\",\"params\":{\"repo\":\"id:repo-9\",\"number\":12,\"type\":\"pr\"}}"
-    },
-    "9c952632b0c0": {
-      "name": "status.get#1",
-      "ordinal": 11,
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "beforeSend": "[local beforeSend]",
-            "failWhenDisconnected": true,
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
         "status": "pending",
         "startedAt": 0
       }
     },
-    "a0729c676b9a": {
-      "name": "worktree.show#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.show"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo-9::/w"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "worktree": {
-              "linkedPR": {
-                "$rpc": "null"
-              }
-            }
-          }
-        }
-      }
-    },
-    "a299c1832313": {
-      "name": "reply-salvage",
-      "ordinal": 18,
-      "value": {
-        "droppedCount": 1,
-        "droppedPaths": ["linkedPR"],
-        "method": "worktree.show",
-        "operation": "worktree.summary-or-skip",
-        "variant": "worktree-summary"
-      }
-    },
-    "a8038818d0e2": {
+    "2e217691ed33": {
       "name": "hostedReview.forBranch#2",
-      "ordinal": 22,
+      "ordinal": 23,
       "args": [
         {
           "name": "method",
@@ -558,7 +216,7 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-11",
+          "id": "frame-12",
           "ok": true,
           "result": {
             "mergeable": "MERGEABLE",
@@ -572,14 +230,32 @@
         }
       }
     },
-    "abcf3bdc5cde": {
-      "name": "status.get#1",
-      "ordinal": 13,
-      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    "35045fa5a752": {
+      "commentError": {
+        "$rpc": "null"
+      },
+      "pr": {
+        "kind": "loading"
+      }
     },
-    "b341f4128fcc": {
+    "357f9b7862e3": {
+      "name": "worktree.show#1",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
+    },
+    "3a8e6b13f380": {
+      "name": "github.prForBranch#1",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null,\"fallbackPRNumber\":12,\"acceptMergedFallbackPR\":true,\"currentHeadOid\":null}}"
+    },
+    "3ecc2d44a209": {
+      "name": "runtime.clientEvents.subscribe#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}"
+    },
+    "472f9e734ac0": {
       "name": "github.prForBranch#3",
-      "ordinal": 32,
+      "ordinal": 33,
       "args": [
         {
           "name": "method",
@@ -614,7 +290,7 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-15",
+          "id": "frame-16",
           "ok": true,
           "result": {
             "fetchedAt": 0,
@@ -632,74 +308,23 @@
         }
       }
     },
-    "b3a7ec3ab1c7": {
-      "name": "github.prForBranch#1",
-      "ordinal": 8,
+    "4da7ea39401b": {
+      "name": "worktree.show#1",
+      "ordinal": 4,
       "args": [
         {
           "name": "method",
-          "value": "github.prForBranch"
+          "value": "worktree.show"
         },
         {
           "name": "params",
           "value": {
-            "acceptMergedFallbackPR": true,
-            "branch": "feature",
-            "currentHeadOid": {
-              "$rpc": "null"
-            },
-            "fallbackPRNumber": 12,
-            "linkedPRNumber": {
-              "$rpc": "null"
-            },
-            "repo": "id:repo-9"
+            "worktree": "id:repo-9::/w"
           }
         },
         {
           "name": "options",
           "value": {
-            "beforeSend": "[local beforeSend]",
-            "failWhenDisconnected": true
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "c2a6bcc380f8": {
-      "name": "worktree.show#2",
-      "ordinal": 17,
-      "json": "{\"id\":\"frame-8\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
-    },
-    "c2f3182f1780": {
-      "name": "github.prForBranch#1",
-      "ordinal": 8,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.prForBranch"
-        },
-        {
-          "name": "params",
-          "value": {
-            "acceptMergedFallbackPR": true,
-            "branch": "feature",
-            "currentHeadOid": {
-              "$rpc": "null"
-            },
-            "fallbackPRNumber": 12,
-            "linkedPRNumber": {
-              "$rpc": "null"
-            },
-            "repo": "id:repo-9"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "beforeSend": "[local beforeSend]",
             "failWhenDisconnected": true
           }
         }
@@ -709,27 +334,31 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-4",
+          "id": "frame-3",
           "ok": true,
           "result": {
-            "fetchedAt": 0,
-            "kind": "found",
-            "pr": {
-              "headSha": "head-sha-1",
-              "mergeable": "MERGEABLE",
-              "number": 12,
-              "state": "open",
-              "title": "Recorded",
-              "updatedAt": "2026-01-01T00:00:00Z",
-              "url": "https://github.com/owner/repo/pull/12"
+            "worktree": {
+              "linkedPR": {
+                "$rpc": "null"
+              }
             }
           }
         }
       }
     },
-    "c79bbd27f177": {
+    "5b1c7d371b2a": {
+      "name": "worktree.show#2",
+      "ordinal": 18,
+      "json": "{\"id\":\"frame-9\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
+    },
+    "5d309fcf43a7": {
+      "name": "github.workItemDetails#1",
+      "ordinal": 16,
+      "json": "{\"id\":\"frame-8\",\"deviceToken\":\"recording-device\",\"method\":\"github.workItemDetails\",\"params\":{\"repo\":\"id:repo-9\",\"number\":12,\"type\":\"pr\"}}"
+    },
+    "75885386f005": {
       "name": "hostedReview.forBranch#1",
-      "ordinal": 4,
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -758,7 +387,7 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-3",
+          "id": "frame-4",
           "ok": true,
           "result": {
             "mergeable": "MERGEABLE",
@@ -772,9 +401,216 @@
         }
       }
     },
-    "cb071b912510": {
+    "7749a3b2d060": {
+      "name": "github.prForBranch#3",
+      "ordinal": 34,
+      "json": "{\"id\":\"frame-16\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null,\"fallbackPRNumber\":12,\"acceptMergedFallbackPR\":true,\"currentHeadOid\":null,\"userRefresh\":true}}"
+    },
+    "7b3f2de1ee65": {
+      "name": "github.prChecks#2",
+      "ordinal": 28,
+      "json": "{\"id\":\"frame-13\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"noCache\":true,\"userRefresh\":true,\"headSha\":\"head-sha-1\"}}"
+    },
+    "861c8796ae1f": {
       "name": "github.prChecks#1",
-      "ordinal": 10,
+      "ordinal": 11,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prChecks"
+        },
+        {
+          "name": "params",
+          "value": {
+            "headSha": "head-sha-1",
+            "prNumber": 12,
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-6",
+          "ok": true,
+          "result": [
+            {
+              "checkRunId": 7,
+              "conclusion": "success",
+              "name": "build",
+              "status": "completed"
+            }
+          ]
+        }
+      }
+    },
+    "870c2b9bacd0": {
+      "name": "status.get#1",
+      "ordinal": 12,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "beforeSend": "[local beforeSend]",
+            "failWhenDisconnected": true,
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "8b7e690466d7": {
+      "name": "status.get#1",
+      "ordinal": 12,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "beforeSend": "[local beforeSend]",
+            "failWhenDisconnected": true,
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-7",
+          "ok": true,
+          "result": {
+            "runtimeId": "recorded"
+          }
+        }
+      }
+    },
+    "9091d133c3b0": {
+      "name": "reply-salvage",
+      "ordinal": 8,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["linkedPR"],
+        "method": "worktree.show",
+        "operation": "worktree.summary-or-skip",
+        "variant": "worktree-summary"
+      }
+    },
+    "9cfd3529adf9": {
+      "name": "streams-registered-at-teardown",
+      "ordinal": 37,
+      "value": [
+        {
+          "cancelled": true,
+          "method": "runtime.clientEvents.subscribe",
+          "payload": "runtime.clientEvents.subscribe#1"
+        }
+      ]
+    },
+    "a2c2965e14f8": {
+      "name": "github.workItemDetails#2",
+      "ordinal": 36,
+      "json": "{\"id\":\"frame-17\",\"deviceToken\":\"recording-device\",\"method\":\"github.workItemDetails\",\"params\":{\"repo\":\"id:repo-9\",\"number\":12,\"type\":\"pr\"}}"
+    },
+    "a55c83eeaeea": {
+      "name": "github.prForBranch#1",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prForBranch"
+        },
+        {
+          "name": "params",
+          "value": {
+            "acceptMergedFallbackPR": true,
+            "branch": "feature",
+            "currentHeadOid": {
+              "$rpc": "null"
+            },
+            "fallbackPRNumber": 12,
+            "linkedPRNumber": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "beforeSend": "[local beforeSend]",
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": {
+            "fetchedAt": 0,
+            "kind": "found",
+            "pr": {
+              "headSha": "head-sha-1",
+              "mergeable": "MERGEABLE",
+              "number": 12,
+              "state": "open",
+              "title": "Recorded",
+              "updatedAt": "2026-01-01T00:00:00Z",
+              "url": "https://github.com/owner/repo/pull/12"
+            }
+          }
+        }
+      }
+    },
+    "a5aaa57d24bd": {
+      "name": "reply-salvage",
+      "ordinal": 30,
+      "value": {
+        "droppedCount": 1,
+        "droppedPaths": ["linkedPR"],
+        "method": "worktree.show",
+        "operation": "worktree.summary-or-skip",
+        "variant": "worktree-summary"
+      }
+    },
+    "a7e609fcb031": {
+      "name": "github.prChecks#1",
+      "ordinal": 11,
       "args": [
         {
           "name": "method",
@@ -800,126 +636,9 @@
         "startedAt": 0
       }
     },
-    "d28ec805dd9e": {
-      "name": "status.get#3",
-      "ordinal": 31,
-      "json": "{\"id\":\"frame-14\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
-    },
-    "d3426861162d": {
-      "name": "github.workItemDetails#1",
-      "ordinal": 14,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.workItemDetails"
-        },
-        {
-          "name": "params",
-          "value": {
-            "number": 12,
-            "repo": "id:repo-9",
-            "type": "pr"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "beforeSend": "[local beforeSend]",
-            "failWhenDisconnected": true,
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-7",
-          "ok": true,
-          "result": {
-            "body": "body",
-            "comments": [
-              {
-                "author": "rev",
-                "body": "please fix",
-                "createdAt": "2026-01-01T00:00:00Z",
-                "id": 55,
-                "isResolved": false,
-                "line": 3,
-                "path": "src/app.ts",
-                "threadId": "thread-1",
-                "url": "https://github.com/owner/repo/pull/12#discussion_r55"
-              }
-            ],
-            "headSha": "head-sha-1",
-            "item": {
-              "assignees": [],
-              "id": "PR_1",
-              "labels": [],
-              "number": 12,
-              "state": "open",
-              "title": "Recorded",
-              "type": "pr",
-              "updatedAt": "2026-01-01T00:00:00Z",
-              "url": "https://github.com/owner/repo/pull/12"
-            }
-          }
-        }
-      }
-    },
-    "d3d85b61b684": {
-      "name": "reply-salvage",
-      "ordinal": 7,
-      "value": {
-        "droppedCount": 1,
-        "droppedPaths": ["linkedPR"],
-        "method": "worktree.show",
-        "operation": "worktree.summary-or-skip",
-        "variant": "worktree-summary"
-      }
-    },
-    "e0a11d8a1005": {
-      "commentError": {
-        "$rpc": "null"
-      },
-      "pr": {
-        "checks": ["build:success"],
-        "checksError": {
-          "$rpc": "null"
-        },
-        "comments": [
-          {
-            "body": "please fix",
-            "id": 55,
-            "resolved": false
-          }
-        ],
-        "kind": "ready",
-        "pr": {
-          "headSha": "head-sha-1",
-          "number": 12,
-          "title": "Recorded"
-        },
-        "refreshFailed": false
-      }
-    },
-    "ea4c904bfb5f": {
-      "name": "worktree.show#1",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo-9::/w\"}}"
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "ed61696aef2a": {
+    "a7feeba7e968": {
       "name": "github.prChecks#2",
-      "ordinal": 23,
+      "ordinal": 24,
       "args": [
         {
           "name": "method",
@@ -947,7 +666,7 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-12",
+          "id": "frame-13",
           "ok": true,
           "result": [
             {
@@ -960,15 +679,312 @@
         }
       }
     },
-    "f207e2355d21": {
-      "name": "github.prChecks#2",
-      "ordinal": 27,
-      "json": "{\"id\":\"frame-12\",\"deviceToken\":\"recording-device\",\"method\":\"github.prChecks\",\"params\":{\"repo\":\"id:repo-9\",\"prNumber\":12,\"noCache\":true,\"userRefresh\":true,\"headSha\":\"head-sha-1\"}}"
+    "b8ec75ce4213": {
+      "name": "status.get#2",
+      "ordinal": 29,
+      "json": "{\"id\":\"frame-14\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     },
-    "fcced642024c": {
-      "name": "github.prForBranch#1",
-      "ordinal": 9,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"github.prForBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedPRNumber\":null,\"fallbackPRNumber\":12,\"acceptMergedFallbackPR\":true,\"currentHeadOid\":null}}"
+    "bfedf583a747": {
+      "name": "github.workItemDetails#1",
+      "ordinal": 15,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.workItemDetails"
+        },
+        {
+          "name": "params",
+          "value": {
+            "number": 12,
+            "repo": "id:repo-9",
+            "type": "pr"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "beforeSend": "[local beforeSend]",
+            "failWhenDisconnected": true,
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-8",
+          "ok": true,
+          "result": {
+            "body": "body",
+            "comments": [
+              {
+                "author": "rev",
+                "body": "please fix",
+                "createdAt": "2026-01-01T00:00:00Z",
+                "id": 55,
+                "isResolved": false,
+                "line": 3,
+                "path": "src/app.ts",
+                "threadId": "thread-1",
+                "url": "https://github.com/owner/repo/pull/12#discussion_r55"
+              }
+            ],
+            "headSha": "head-sha-1",
+            "item": {
+              "assignees": [],
+              "id": "PR_1",
+              "labels": [],
+              "number": 12,
+              "state": "open",
+              "title": "Recorded",
+              "type": "pr",
+              "updatedAt": "2026-01-01T00:00:00Z",
+              "url": "https://github.com/owner/repo/pull/12"
+            }
+          }
+        }
+      }
+    },
+    "cdb9ad4feb12": {
+      "name": "hostedReview.forBranch#2",
+      "ordinal": 27,
+      "json": "{\"id\":\"frame-12\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.forBranch\",\"params\":{\"repo\":\"id:repo-9\",\"branch\":\"feature\",\"linkedGitHubPR\":null,\"active\":true}}"
+    },
+    "d8daaef1bef7": {
+      "name": "status.get#2",
+      "ordinal": 25,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "beforeSend": "[local beforeSend]",
+            "failWhenDisconnected": true,
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-14",
+          "ok": true,
+          "result": {
+            "runtimeId": "recorded"
+          }
+        }
+      }
+    },
+    "e0a11d8a1005": {
+      "commentError": {
+        "$rpc": "null"
+      },
+      "pr": {
+        "checks": ["build:success"],
+        "checksError": {
+          "$rpc": "null"
+        },
+        "comments": [
+          {
+            "body": "please fix",
+            "id": 55,
+            "resolved": false
+          }
+        ],
+        "kind": "ready",
+        "pr": {
+          "headSha": "head-sha-1",
+          "number": 12,
+          "title": "Recorded"
+        },
+        "refreshFailed": false
+      }
+    },
+    "e10925fa98de": {
+      "name": "status.get#1",
+      "ordinal": 14,
+      "json": "{\"id\":\"frame-7\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "e5e21b070305": {
+      "name": "github.workItemDetails#2",
+      "ordinal": 35,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.workItemDetails"
+        },
+        {
+          "name": "params",
+          "value": {
+            "number": 12,
+            "repo": "id:repo-9",
+            "type": "pr"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "beforeSend": "[local beforeSend]",
+            "failWhenDisconnected": true,
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-17",
+          "ok": true,
+          "result": {
+            "body": "body",
+            "comments": [
+              {
+                "author": "rev",
+                "body": "please fix",
+                "createdAt": "2026-01-01T00:00:00Z",
+                "id": 55,
+                "isResolved": false,
+                "line": 3,
+                "path": "src/app.ts",
+                "threadId": "thread-1",
+                "url": "https://github.com/owner/repo/pull/12#discussion_r55"
+              }
+            ],
+            "headSha": "head-sha-1",
+            "item": {
+              "assignees": [],
+              "id": "PR_1",
+              "labels": [],
+              "number": 12,
+              "state": "open",
+              "title": "Recorded",
+              "type": "pr",
+              "updatedAt": "2026-01-01T00:00:00Z",
+              "url": "https://github.com/owner/repo/pull/12"
+            }
+          }
+        }
+      }
+    },
+    "e97818adb1c8": {
+      "name": "worktree.show#3",
+      "ordinal": 22,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo-9::/w"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-11",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "linkedPR": {
+                "$rpc": "null"
+              }
+            }
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "fd8df0a75a2b": {
+      "name": "github.prForBranch#2",
+      "ordinal": 20,
+      "args": [
+        {
+          "name": "method",
+          "value": "github.prForBranch"
+        },
+        {
+          "name": "params",
+          "value": {
+            "acceptMergedFallbackPR": true,
+            "branch": "feature",
+            "currentHeadOid": {
+              "$rpc": "null"
+            },
+            "fallbackPRNumber": 12,
+            "linkedPRNumber": {
+              "$rpc": "null"
+            },
+            "repo": "id:repo-9"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "beforeSend": "[local beforeSend]",
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-10",
+          "ok": true,
+          "result": {
+            "fetchedAt": 0,
+            "kind": "found",
+            "pr": {
+              "headSha": "head-sha-1",
+              "mergeable": "MERGEABLE",
+              "number": 12,
+              "state": "open",
+              "title": "Recorded",
+              "updatedAt": "2026-01-01T00:00:00Z",
+              "url": "https://github.com/owner/repo/pull/12"
+            }
+          }
+        }
+      }
+    },
+    "ffe160d981d2": {
+      "name": "status.get#3",
+      "ordinal": 32,
+      "json": "{\"id\":\"frame-15\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
     }
   },
   "recording": {
@@ -977,13 +993,19 @@
       {
         "id": "branch-hint",
         "observation": {
-          "sender": ["1287167eaf56", "a0729c676b9a", "c79bbd27f177", "b3a7ec3ab1c7"],
-          "payloads": ["1f5765918736", "ea4c904bfb5f", "3b5c096da2a3", "fcced642024c"],
+          "sender": ["1287167eaf56", "4da7ea39401b", "75885386f005", "2dc2ca47b4e7"],
+          "payloads": [
+            "1f5765918736",
+            "3ecc2d44a209",
+            "357f9b7862e3",
+            "0730389db3e9",
+            "3a8e6b13f380"
+          ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "35045fa5a752",
-          "effects": ["d3d85b61b684"]
+          "effects": ["9091d133c3b0"]
         }
       },
       {
@@ -991,25 +1013,26 @@
         "observation": {
           "sender": [
             "1287167eaf56",
-            "a0729c676b9a",
-            "c79bbd27f177",
-            "c2f3182f1780",
-            "cb071b912510",
-            "9c952632b0c0"
+            "4da7ea39401b",
+            "75885386f005",
+            "a55c83eeaeea",
+            "a7e609fcb031",
+            "870c2b9bacd0"
           ],
           "payloads": [
             "1f5765918736",
-            "ea4c904bfb5f",
-            "3b5c096da2a3",
-            "fcced642024c",
-            "2bb452e534eb",
-            "abcf3bdc5cde"
+            "3ecc2d44a209",
+            "357f9b7862e3",
+            "0730389db3e9",
+            "3a8e6b13f380",
+            "0d9f7988ff86",
+            "e10925fa98de"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "35045fa5a752",
-          "effects": ["d3d85b61b684"]
+          "effects": ["9091d133c3b0"]
         }
       },
       {
@@ -1017,27 +1040,28 @@
         "observation": {
           "sender": [
             "1287167eaf56",
-            "a0729c676b9a",
-            "c79bbd27f177",
-            "c2f3182f1780",
-            "87ba39148f02",
-            "8352e3c99668",
-            "d3426861162d"
+            "4da7ea39401b",
+            "75885386f005",
+            "a55c83eeaeea",
+            "861c8796ae1f",
+            "8b7e690466d7",
+            "bfedf583a747"
           ],
           "payloads": [
             "1f5765918736",
-            "ea4c904bfb5f",
-            "3b5c096da2a3",
-            "fcced642024c",
-            "2bb452e534eb",
-            "abcf3bdc5cde",
-            "1723d8a5d8be"
+            "3ecc2d44a209",
+            "357f9b7862e3",
+            "0730389db3e9",
+            "3a8e6b13f380",
+            "0d9f7988ff86",
+            "e10925fa98de",
+            "5d309fcf43a7"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "e0a11d8a1005",
-          "effects": ["d3d85b61b684"]
+          "effects": ["9091d133c3b0"]
         }
       },
       {
@@ -1045,32 +1069,33 @@
         "observation": {
           "sender": [
             "1287167eaf56",
-            "a0729c676b9a",
-            "c79bbd27f177",
-            "c2f3182f1780",
-            "87ba39148f02",
-            "8352e3c99668",
-            "d3426861162d",
-            "743fd59534bc",
-            "415376507669"
+            "4da7ea39401b",
+            "75885386f005",
+            "a55c83eeaeea",
+            "861c8796ae1f",
+            "8b7e690466d7",
+            "bfedf583a747",
+            "214acb975f72",
+            "fd8df0a75a2b"
           ],
           "payloads": [
             "1f5765918736",
-            "ea4c904bfb5f",
-            "3b5c096da2a3",
-            "fcced642024c",
-            "2bb452e534eb",
-            "abcf3bdc5cde",
-            "1723d8a5d8be",
-            "c2a6bcc380f8",
-            "65beb11d253c"
+            "3ecc2d44a209",
+            "357f9b7862e3",
+            "0730389db3e9",
+            "3a8e6b13f380",
+            "0d9f7988ff86",
+            "e10925fa98de",
+            "5d309fcf43a7",
+            "5b1c7d371b2a",
+            "1c1b5062fc21"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
             "revisit": "eb79a9b3682a"
           },
           "state": "e0a11d8a1005",
-          "effects": ["d3d85b61b684", "a299c1832313"]
+          "effects": ["9091d133c3b0", "0726612d4a89"]
         }
       },
       {
@@ -1078,39 +1103,40 @@
         "observation": {
           "sender": [
             "1287167eaf56",
-            "a0729c676b9a",
-            "c79bbd27f177",
-            "c2f3182f1780",
-            "87ba39148f02",
-            "8352e3c99668",
-            "d3426861162d",
-            "743fd59534bc",
-            "415376507669",
-            "6c4dd527b59b",
-            "a8038818d0e2",
-            "ed61696aef2a",
-            "0e5be7456ec2",
-            "463387bfd97b",
-            "b341f4128fcc",
-            "214734b00350"
+            "4da7ea39401b",
+            "75885386f005",
+            "a55c83eeaeea",
+            "861c8796ae1f",
+            "8b7e690466d7",
+            "bfedf583a747",
+            "214acb975f72",
+            "fd8df0a75a2b",
+            "e97818adb1c8",
+            "2e217691ed33",
+            "a7feeba7e968",
+            "d8daaef1bef7",
+            "2055aa3ead1b",
+            "472f9e734ac0",
+            "e5e21b070305"
           ],
           "payloads": [
             "1f5765918736",
-            "ea4c904bfb5f",
-            "3b5c096da2a3",
-            "fcced642024c",
-            "2bb452e534eb",
-            "abcf3bdc5cde",
-            "1723d8a5d8be",
-            "c2a6bcc380f8",
-            "65beb11d253c",
-            "6fad2b580d21",
-            "3358329fa363",
-            "f207e2355d21",
-            "897654ba1e6c",
-            "d28ec805dd9e",
-            "79306c86c331",
-            "8fd563d499bd"
+            "3ecc2d44a209",
+            "357f9b7862e3",
+            "0730389db3e9",
+            "3a8e6b13f380",
+            "0d9f7988ff86",
+            "e10925fa98de",
+            "5d309fcf43a7",
+            "5b1c7d371b2a",
+            "1c1b5062fc21",
+            "03bcac42a924",
+            "cdb9ad4feb12",
+            "7b3f2de1ee65",
+            "b8ec75ce4213",
+            "ffe160d981d2",
+            "7749a3b2d060",
+            "a2c2965e14f8"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1118,7 +1144,56 @@
             "refresh": "eb79a9b3682a"
           },
           "state": "e0a11d8a1005",
-          "effects": ["d3d85b61b684", "a299c1832313", "156f18eff4ec"]
+          "effects": ["9091d133c3b0", "0726612d4a89", "a5aaa57d24bd"]
+        }
+      },
+      {
+        "id": "cleanup",
+        "observation": {
+          "sender": [
+            "1287167eaf56",
+            "4da7ea39401b",
+            "75885386f005",
+            "a55c83eeaeea",
+            "861c8796ae1f",
+            "8b7e690466d7",
+            "bfedf583a747",
+            "214acb975f72",
+            "fd8df0a75a2b",
+            "e97818adb1c8",
+            "2e217691ed33",
+            "a7feeba7e968",
+            "d8daaef1bef7",
+            "2055aa3ead1b",
+            "472f9e734ac0",
+            "e5e21b070305"
+          ],
+          "payloads": [
+            "1f5765918736",
+            "3ecc2d44a209",
+            "357f9b7862e3",
+            "0730389db3e9",
+            "3a8e6b13f380",
+            "0d9f7988ff86",
+            "e10925fa98de",
+            "5d309fcf43a7",
+            "5b1c7d371b2a",
+            "1c1b5062fc21",
+            "03bcac42a924",
+            "cdb9ad4feb12",
+            "7b3f2de1ee65",
+            "b8ec75ce4213",
+            "ffe160d981d2",
+            "7749a3b2d060",
+            "a2c2965e14f8"
+          ],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "revisit": "eb79a9b3682a",
+            "refresh": "eb79a9b3682a"
+          },
+          "state": "e0a11d8a1005",
+          "effects": ["9091d133c3b0", "0726612d4a89", "a5aaa57d24bd", "9cfd3529adf9"]
         }
       }
     ]

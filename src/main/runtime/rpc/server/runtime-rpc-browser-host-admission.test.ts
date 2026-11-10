@@ -7,7 +7,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type { WebSocket } from 'ws'
 import { DeviceRegistry } from './pairing/device-registry'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import { defineStreamingMethod } from '../core'
+import { defineStreamingMethod, type RpcContext } from '../core'
+import { defineOrchestrationStreamingMethod } from '../methods/orchestration/access/orchestration-method-access'
 
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { withCurrentOrchestrationContract } from './runtime-rpc-test-harness'
@@ -108,23 +109,24 @@ describe('runtime RPC browser-host admission', () => {
 
   it('keeps a wait slot when asks and browser hosts fill their shared budget', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-browser-host-wait-reserve-'))
-    const blockingMethod = (
-      name: 'browser.clientHost.attach' | 'orchestration.ask' | 'terminal.wait'
-    ) =>
-      defineStreamingMethod({
-        name,
-        permission: 'workspace',
-        params: null,
-        handler: async (_params, { signal }) =>
-          await new Promise<void>((resolve) => signal?.addEventListener('abort', () => resolve()))
-      })
+    const block = async (_params: void, { signal }: RpcContext) =>
+      await new Promise<void>((resolve) => signal?.addEventListener('abort', () => resolve()))
+    const blockingMethod = (name: 'browser.clientHost.attach' | 'terminal.wait') =>
+      defineStreamingMethod({ name, permission: 'workspace', params: null, handler: block })
+    const blockingAsk = defineOrchestrationStreamingMethod({
+      name: 'orchestration.ask',
+      permission: 'workspace',
+      params: null,
+      access: { kind: 'writes', targets: {} },
+      handler: block
+    })
     const server = new OrcaRuntimeRpcServer({
       runtime: new OrcaRuntimeService(),
       userDataPath,
       longPollCap: 4,
       methods: [
         blockingMethod('browser.clientHost.attach'),
-        blockingMethod('orchestration.ask'),
+        blockingAsk,
         blockingMethod('terminal.wait')
       ]
     })

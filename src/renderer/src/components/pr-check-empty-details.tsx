@@ -1,6 +1,6 @@
 import type React from 'react'
 import { CircleDashed } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { isCompletePRCheckOwner } from '../../../shared/github/complete-pr-check-owner'
 import type { ProviderCheckSummary } from '../../../shared/github/pull-request-types'

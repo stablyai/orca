@@ -17,14 +17,14 @@ import { resolveNativeChatTabAgentEvidence } from '../../../tab-bar/native-chat-
 import { canToggleNativeChat } from '../../../../../../shared/native-chat/native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '../../../../../../shared/native-chat/transcript/native-chat-transcript-readability'
 import { matchesNativeChatToggleShortcut } from './native-chat-shortcut'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
-import { resolveKeyboardWorkspaceId } from '@/lib/floating-workspace-terminal-actions'
+import { resolveKeyboardWorkspaceId } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import {
   isNativeChatTabWideFallbackSafe,
   resolveNativeChatActiveLayoutLeafId
 } from './native-chat-leaf-routing'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 export function resolveNativeChatToggleShortcutDetectedAgent({
   terminalTabId,

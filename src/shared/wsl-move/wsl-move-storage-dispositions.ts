@@ -6,7 +6,7 @@ import {
 
 /** Census tests require a disposition for each renderer module using localStorage. */
 export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> = {
-  'src/renderer/src/lib/quick-open-file-history.ts': {
+  'src/renderer/src/lib/files/search/quick-open-file-history.ts': {
     disposition: 'rewrite-desktop',
     item: 42
   },
@@ -85,7 +85,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/terminal-pane/diagnostics/startup/terminal-startup-timing.ts',
       'src/renderer/src/components/UnexpectedSignoutCard.tsx',
       'src/renderer/src/lib/document-theme.ts',
-      'src/renderer/src/lib/feature-education-telemetry.ts',
+      'src/renderer/src/diagnostics/telemetry/feature-education-telemetry.ts',
       'src/renderer/src/lib/orchestration-setup-state.ts',
       'src/renderer/src/lib/terminal-shortcut-capture-notification.tsx',
       'src/renderer/src/web/preload-api/web-keybindings-api.ts',

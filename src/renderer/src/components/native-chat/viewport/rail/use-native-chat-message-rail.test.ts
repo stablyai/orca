@@ -8,6 +8,7 @@ import type { NativeChatResolvedPrompt } from '../../../../../../shared/native-c
 import type { NativeChatTurnDiff } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import { buildNativeChatTranscriptSlots } from '../../conversation/slots/native-chat-transcript-slots'
 import { useNativeChatMessageRail } from './use-native-chat-message-rail'
+import { buildNativeChatRailItems } from './native-chat-message-rail-items'
 
 function message(id: string, role: NativeChatMessage['role']): NativeChatMessage {
   return {
@@ -136,5 +137,20 @@ describe('message rail hook', () => {
       expect(result.current.activeId).toBe('u1')
       unmount()
     })
+  })
+})
+
+describe('loaded rail items', () => {
+  it('gives no tick to a message another agent wrote', () => {
+    const task: NativeChatMessage = {
+      ...message('task', 'user'),
+      from: {
+        kind: 'agent',
+        senders: [],
+        orchestration: { message: 'task', runId: 'run-1', taskId: 'task-1', dispatchId: 'd-1' }
+      }
+    }
+    const slots = slotsOf([task, message('a0', 'assistant'), ...CONVERSATION])
+    expect(buildNativeChatRailItems(slots).map((item) => item.id)).toEqual(['u1', 'u2', 'u3'])
   })
 })
