@@ -14,10 +14,20 @@ const tag = (ctx: Ctx) => ctx.run.file.runId.replace(/[^0-9]/g, '').slice(-10)
 type BuildState = { envId: string; first: any; second: any; error?: string }
 let builds: Promise<BuildState> | null = null
 
-/** Follows the build the way the desktop does (live NDJSON events); polls GET as a fallback. */
+/**
+ * Polls GET only by default: builds must progress server-side with nobody streaming (the W1-1 bug).
+ * ORCA_ACCEPTANCE_BUILD_EVENTS=1 follows the live NDJSON events the way the desktop does.
+ */
 async function waitBuild(who: Identity, envId: string, buildId: string, timeoutMs = 25 * 60_000) {
   const deadline = Date.now() + timeoutMs
   let b: any = null
+  while (process.env.ORCA_ACCEPTANCE_BUILD_EVENTS !== '1' && Date.now() < deadline) {
+    b = (await control.as(who, 'GET', `/v1/environments/${envId}/builds/${buildId}`)).body?.build
+    if (['succeeded', 'failed', 'canceled'].includes(b?.status)) {
+      return b
+    }
+    await sleep(5000)
+  }
   while (Date.now() < deadline) {
     const ctl = new AbortController()
     const timer = setTimeout(() => ctl.abort(), Math.min(5 * 60_000, deadline - Date.now()))

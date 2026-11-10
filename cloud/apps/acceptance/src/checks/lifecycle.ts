@@ -1,6 +1,10 @@
 // W2 lifecycle + W3 networking checks on a dedicated workspace (status, OOM, wake, archive,
 // share links, SSH keys, ports). Share-link cold load is also benchmarked here (n >= 10).
+import { execFile } from 'node:child_process'
 import { generateKeyPairSync } from 'node:crypto'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { control } from '../clients'
 import { config } from '../env'
 import { log, type Check, type Ctx } from '../context'
@@ -178,6 +182,45 @@ export const lifecycleChecks: Record<string, Check> = {
       status: ok ? 'pass' : 'fail',
       detail: `public share -> ${firstBody.slice(0, 40)}; cold load p50 ${[...samples].sort((x, y) => x - y)[4]} ms (n=10); while asleep -> ${asleep}`,
       evidence: [log('cold loads ms', samples.join(', '))]
+    }
+  },
+
+  'acc.download': async (ctx) => {
+    const b = await refresh(ctx)
+    let expected = ''
+    await ctx.exec(b.sessionId, `cd ${b.root} && mkdir -p dl/sub && head -c 5242880 /dev/urandom > dl/big.bin && echo hi > dl/sub/a.txt && sha256sum dl/big.bin | cut -d' ' -f1`).then((r) => (expected = r.stdout.trim()))
+    const t = await openTerminal(b.code, b.root)
+    const worktree: string | undefined = t.term.json?.result?.terminal?.worktreeId
+    if (!worktree) {
+      return { status: 'fail', detail: `no worktree id (${t.term.stderr.slice(0, 200)})` }
+    }
+    const out = mkdtempSync(join(tmpdir(), 'orca-acc-dl-'))
+    const repoRoot = new URL('../../../../../', import.meta.url).pathname
+    const r = await new Promise<string>((resolve) => {
+      execFile(
+        `${repoRoot}node_modules/.bin/tsx`,
+        [new URL('../../desktop/runtime-download.ts', import.meta.url).pathname, worktree, 'dl/big.bin', 'dl', out],
+        { cwd: repoRoot, timeout: 240_000, env: { ...process.env, ORCA_PAIRING_CODE: b.code } },
+        (_e, stdout, stderr) => resolve(stdout.trim().split('\n').at(-1) || stderr.replaceAll(b.code, '<pairing>').slice(-400))
+      )
+    })
+    rmSync(out, { recursive: true, force: true })
+    let j: any = null
+    try {
+      j = JSON.parse(r)
+    } catch {
+      return { status: 'fail', detail: `download helper: ${r.slice(0, 300)}` }
+    }
+    if (j.error) {
+      return { status: 'fail', detail: `download over the pairing failed: ${j.error}` }
+    }
+    const fileOk = j.file.bytes === 5242880 && j.file.sha256 === expected
+    const ok = fileOk && j.folder.zipOk
+    const mbps = (5242880 / 1048576 / (j.file.ms / 1000)).toFixed(1)
+    return {
+      status: ok ? 'pass' : fileOk ? 'partial' : 'fail',
+      detail: `5 MiB file via files.readChunk in ${j.file.ms} ms (${mbps} MiB/s Mac<-iad1, sha256 match=${j.file.sha256 === expected}); folder as zip: ${j.folder.error ? `failed (${j.folder.error}; the VM's orcad predates #115)` : `${j.folder.bytes} bytes in ${j.folder.ms} ms, complete=${j.folder.zipOk}`}. Uses the desktop's download transfer code headlessly; toasts/Save dialog are UI.`,
+      timingsMs: { file5MiB: j.file.ms, folderZip: j.folder.ms }
     }
   },
 
