@@ -57,3 +57,31 @@ it('settles a proven missing-original fork refusal but keeps a lost earlier atte
     (await createMobileStructuredAgentSession(lost, 'workspace-1', 'opencode', forkFrom)).kind
   ).toBe('unknown')
 })
+
+it('settles a proven fork read refusal without settling a prior lost copy', async () => {
+  const refusal = {
+    ok: true,
+    result: {
+      ok: false,
+      refusal: {
+        code: 'agent_session_identity_required',
+        details: { reason: 'transcriptUnreadable' },
+        createAttemptRefusedBeforeCommit: true,
+        message: 'Codex could not read the saved chat.'
+      }
+    }
+  }
+  const client = clientReturning({ ok: true, result: { supported: true } }, refusal)
+  const forkFrom = { sessionId: 'source-chat', throughItemId: 'codex:source:selected:1' }
+  expect(
+    (await createMobileStructuredAgentSession(client, 'workspace-1', 'codex', forkFrom)).kind
+  ).toBe('failed')
+  const lost = clientReturning({ ok: true, result: { supported: true } }, refusal)
+  lost.sendRequest
+    .mockImplementationOnce(async () => ({ ok: true, result: { supported: true } }))
+    .mockRejectedValueOnce(markRpcDeliveryUnknown(new Error('copy reply lost')))
+    .mockResolvedValueOnce(refusal)
+  expect(
+    (await createMobileStructuredAgentSession(lost, 'workspace-1', 'codex', forkFrom)).kind
+  ).toBe('unknown')
+})

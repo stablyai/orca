@@ -320,6 +320,17 @@ describe('generation store', () => {
     expect(fs.paths()).toEqual(before)
     expect((await store.readActiveGeneration(HOST))?.buildId).toBe(BUILD)
   })
+
+  it('opens builds kept under the old root without a download once the root moves', async () => {
+    const fs = createFakeFileSystem()
+    const legacyRootUri = 'file:///caches/mobile-web'
+    await activate(createGenerationStore({ fileSystem: { ...fs, rootUri: legacyRootUri } }), HOST)
+
+    const store = createGenerationStore({ fileSystem: fs, legacyRootUri })
+
+    expect((await store.readActiveGeneration(HOST))?.buildId).toBe(BUILD)
+    expect(await fs.list(legacyRootUri)).toEqual([])
+  })
 })
 
 describe('reusable assets for the next download', () => {

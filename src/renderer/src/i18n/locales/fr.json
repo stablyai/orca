@@ -742,19 +742,6 @@
         "missingHost": "L’URL du proxy doit inclure un hôte."
       }
     },
-    "voice": {
-      "modelDescriptions": {
-        "parakeetV3": "Précision maximale pour 25 langues européennes. Ponctuation, majuscules et minuscules, et horodatage par mot.",
-        "parakeetV2": "Anglais uniquement. Plus rapide que v3 avec une précision similaire. Ponctuation, majuscules et minuscules.",
-        "zipformerStreamingEnRetired": "N’est plus proposé : il omet le début des phrases. Supprimez-le pour libérer de l’espace.",
-        "whisperTiny": "Plus de 90 langues. Moins précis que Parakeet, mais offre la plus large couverture linguistique.",
-        "senseVoice": "Chinois, anglais, japonais, coréen et cantonais avec détection automatique de la langue.",
-        "gptTranscribe": "Transcription dans le cloud avec une grande précision. Nécessite une clé API OpenAI.",
-        "whisperLargeV3Turbo": "Meilleure précision pour le japonais, le coréen et le chinois, et plus de 90 langues. Plus lent que Parakeet.",
-        "retiredForEngine": "N’est plus proposé : le moteur vocal ne peut plus l’exécuter. Supprimez-le pour libérer de l’espace.",
-        "nemotron": "Anglais, espagnol, allemand et bien d’autres langues, avec détection automatique de la langue."
-      }
-    },
     "diagnostics": {
       "errors": {
         "creatingDisabled": "la création de fichiers de révision est désactivée",
@@ -8814,7 +8801,6 @@
           "7807c11c4d": "Général",
           "6855b0f77d": "Terminez les workflows essentiels qui rendent Orca utile au travail parallèle avec des agents.",
           "6d119427ef": "Checklist d'intégration",
-          "eb1176a14e": "Dictée vocale locale avec modèles embarqués sur l'appareil.",
           "5063bb47a5": "Voix",
           "7118953f14": "Permettez aux agents de contrôler n'importe quelle app de votre ordinateur.",
           "c9841721cb": "Computer Use",
@@ -9329,7 +9315,6 @@
         "VoicePane": {
           "6fa734ed95": "Supprimer {{value0}}",
           "68de13f72c": "Échec de la suppression du modèle.",
-          "1ba81c0ff0": "recommandé",
           "cfde55c7b0": "Échec du téléchargement du modèle.",
           "43fd4f454b": "Modèle vocal",
           "ba4a900d1d": "Mode de dictée",
@@ -9340,10 +9325,6 @@
           "506df81ba6": "Clé API OpenAI enregistrée",
           "91980ce124": "{{value0}} Mo",
           "61a16c8141": "Extraction...",
-          "8f4d2a51d7": "hors ligne",
-          "d504ab05f0": "streaming",
-          "fbe5990716": "Sélectionner un modèle",
-          "e24f7d43d2": "Sélectionnez un modèle vocal. Les modèles locaux fonctionnent hors ligne ; les modèles cloud nécessitent une clé API.",
           "174da92062": "Maintien",
           "118b3c2dee": "Bascule",
           "ad5d036ecc": "Impossible de demander l'autorisation d'accès au micro. La dictée vocale n'a pas été activée.",
@@ -9351,7 +9332,6 @@
           "1eac933202": "Panneau Confidentialité et sécurité de macOS ouvert. Réactivez la dictée après avoir accordé l'accès.",
           "cd9fe37556": "Autorisation d'accès au micro accordée",
           "openAiKeyName": "Votre clé de transcription OpenAI",
-          "dictationShortcutDescription": "Appuyez sur {{shortcut}} pour dicter du texte dans n'importe quel volet actif.",
           "dictationModeAuto": "Auto",
           "dictationModesWithAutoDescription": "Auto : maintenez {{shortcut}} pour dicter jusqu’à ce que vous relâchiez, ou appuyez brièvement pour démarrer et arrêter. Maintien : dictez tant que {{shortcut}} est maintenu. Bascule : appuyez une fois sur {{shortcut}} pour démarrer, puis à nouveau pour arrêter.",
           "speechGpuLabel": "Utiliser le GPU",
@@ -11187,7 +11167,10 @@
               "modelMemoryKeyword": "mémoire",
               "fillerWordsTitle": "Supprimer les hésitations",
               "fillerWordsDescription": "Supprime « euh », « hum » et les sons similaires du texte dicté.",
-              "fillerWordsKeyword": "hésitations"
+              "fillerWordsKeyword": "hésitations",
+              "vocabularyTitle": "Vocabulaire",
+              "vocabularyDescription": "Noms et termes de code que la dictée écrit à votre façon, pour vous ou pour un dépôt.",
+              "vocabularyKeyword": "dictionnaire"
             }
           }
         },
@@ -17130,10 +17113,6 @@
                     }
                   },
                   "browser": {
-                    "grab": {
-                      "title": "Récupérez le contexte de la page pour les agents",
-                      "body": "Utilisez l’outil de capture pour copier le contexte d’un élément de la page pour les agents."
-                    },
                     "annotate": {
                       "title": "Annotez vos retours de design sur place",
                       "body": "Annotez des éléments et envoyez ces notes à un agent."
@@ -17266,7 +17245,6 @@
             "244266c122": "Importer…",
             "e52a955e6f": "Vous retrouverez toujours cette option dans Paramètres > Navigateur.",
             "4f5ffaa6a1": "Importer les données du navigateur",
-            "b24fef25be": "Importer",
             "02e89014c5": "{{value0}} cookies importés depuis {{value1}}{{value2}}.",
             "d40d584769": "{{value0}} cookies importés depuis un fichier."
           },
@@ -17347,7 +17325,6 @@
             "4328a0a062": "Échec de la capture : {{value0}}",
             "759f32af29": "Téléchargement",
             "4300f38145": "Téléchargement depuis {{value0}}{{value1}}",
-            "acbe79fd01": "Capturer un élément de la page ({{value0}})",
             "cc4a071d3a": "Annoter un élément de la page ({{value0}})",
             "572046436a": "Navigateur distant",
             "b313a7275b": "Ouverture du navigateur distant",
@@ -19207,7 +19184,9 @@
         "linkActions": "Actions sur le lien"
       },
       "install": {
-        "checking": "Vérification que {{agent}} est prêt sur cet hôte…"
+        "checking": "Vérification que {{agent}} est prêt sur cet hôte…",
+        "cliInstall": "Installer",
+        "cliRecheck": "Revérifier"
       },
       "reasoning": "Raisonnement",
       "contextMenu": {
@@ -19260,6 +19239,11 @@
         "providerExitedRow": "{{agent}} s'est arrêté pendant que cette réponse était en cours. Vous pouvez continuer dans cette conversation.",
         "providerExitedRejection": "{{agent}} s'est arrêté avant l'envoi de ce message.",
         "providerExitedAnswer": "{{agent}} s'est arrêté, donc votre réponse n'a pas été envoyée. Envoyez un message pour continuer.",
+        "providerUnavailable": "{{agent}} n’a pas pu répondre car le service est occupé. Choisissez un autre modèle ou patientez un peu, puis renvoyez le message.",
+        "providerSafetyStopped": "{{agent}} a arrêté cette réponse après un contrôle de sécurité. Vérifiez votre demande et renvoyez-la.",
+        "providerResponseFailed": "{{agent}} n’a pas pu terminer cette réponse. Ouvrez les détails pour en savoir plus.",
+        "modelUnavailable": "{{agent}} n'a pas pu utiliser {{detail}}. Choisissez un autre modèle, puis renvoyez le message.",
+        "selectedModel": "le modèle sélectionné",
         "providerRejected": "{{agent}} n'a pas accepté ce message.",
         "providerRejectedQuoted": "{{agent}} n'a pas accepté ce message : {{detail}}.",
         "attachmentEmpty": "Une image de ce message est vide, le message n'a donc pas été envoyé.",
@@ -19664,6 +19648,8 @@
         "toggleDetails": "Basculer les détails du tour"
       },
       "jumpToLatest": "Aller au dernier message",
+      "newRowsAnnouncement": "De nouveaux messages sont arrivés en votre absence",
+      "newRowsMarker": "Nouveau",
       "find": {
         "label": "Rechercher dans le chat",
         "noResults": "Aucun résultat",
@@ -20755,6 +20741,9 @@
         "scrollToLatestOnSendTitle": "Défiler jusqu’au dernier message à l’envoi",
         "scrollToLatestOnSendCopy": "Envoyer après avoir remonté le fil fait défiler jusqu’au dernier message et suit la réponse. Désactivez cette option pour garder votre position.",
         "scrollToLatestOnSendSearchPosition": "position",
+        "markNewMessagesTitle": "Signaler les nouveaux messages au retour dans un chat",
+        "markNewMessagesCopy": "En revenant dans un chat, une ligne Nouveau s'affiche au-dessus de ce qui est arrivé pendant votre absence, et le chat y défile si vous lisiez les derniers messages.",
+        "markNewMessagesSearchUnread": "non lu",
         "followUpBehaviorCopy": "Les messages envoyés pendant que l’agent travaille attendent sous forme de cartes jusqu’à la fin du tour, au lieu d’entrer dans le tour en cours. Cmd/Ctrl+Entrée fait l’inverse pour un message et, si rien n’est saisi, dirige la première carte en attente vers le tour en cours. Les messages contenant des images attendent aussi sous forme de cartes.",
         "inlineVisualsTitle": "Visuels intégrés",
         "inlineVisualsCopy": "Laissez l'agent afficher des graphiques, des diagrammes et des maquettes dans ses réponses. S'applique aux nouveaux chats.",
@@ -20805,6 +20794,88 @@
         "fillerWords": {
           "title": "Supprimer les hésitations",
           "description": "Supprime les sons comme « euh » et « hum » du texte dicté, selon la langue de dictée."
+        },
+        "sectionDescription": "Parlez au lieu de taper, dans n’importe quel volet. La parole est reconnue sur cet ordinateur, sauf si vous choisissez un modèle cloud.",
+        "input": {
+          "title": "Entrée",
+          "shortcut": "Raccourci",
+          "shortcutDescription": "Lance la dictée dans le volet actif.",
+          "changeShortcut": "Modifier"
+        },
+        "language": {
+          "title": "Langue"
+        },
+        "cleanup": {
+          "title": "Nettoyage"
+        },
+        "advanced": {
+          "title": "Avancé"
+        },
+        "setup": {
+          "downloadingDescription": "Vous pouvez quitter cette page. La dictée fonctionnera une fois le téléchargement terminé.",
+          "title": "Configurer la dictée",
+          "pickModel": "Parlez au lieu de taper, dans n’importe quel volet. Téléchargez un modèle vocal ci-dessous pour commencer ; les modèles de cet ordinateur gardent votre audio ici.",
+          "microphoneMissingTitle": "{{microphone}} n’est pas connecté",
+          "microphoneMissingDescription": "La dictée utilise le micro par défaut du système jusqu’à son retour.",
+          "changeMicrophone": "Changer de micro",
+          "onTitle": "La dictée est activée",
+          "onLocal": "Appuyez sur {{shortcut}} dans n’importe quel volet. {{model}} tourne sur cet ordinateur.",
+          "onCloud": "Appuyez sur {{shortcut}} dans n’importe quel volet. {{model}} tourne dans le cloud.",
+          "offTitle": "La dictée est désactivée",
+          "offDescription": "Activez-la pour dicter avec {{shortcut}} dans n’importe quel volet.",
+          "savedMicrophone": "Votre micro",
+          "description": "Parlez au lieu de taper, dans n’importe quel volet. La parole est reconnue sur cet ordinateur, votre audio reste donc ici.",
+          "setUp": "Configurer",
+          "asksForMicrophone": "Orca demandera l’accès au micro."
+        },
+        "quality": {
+          "unsupported": "Ne prend pas en charge votre langue",
+          "unmeasured": "Non mesuré",
+          "poor": "Faible",
+          "fair": "Passable",
+          "good": "Bonne",
+          "veryGood": "Très bonne",
+          "excellent": "Excellente",
+          "characterErrorRate": "{{percent}} % d’erreurs par caractère",
+          "wordErrorRate": "{{percent}} % d’erreurs par mot",
+          "librispeech": "Test : LibriSpeech (parole lue), {{clips}} extraits, mesuré le {{date}}.",
+          "fleurs": "Test : FLEURS (parole lue), {{clips}} extraits, mesuré le {{date}}.",
+          "bench": "Benchmark d’Orca sur un Mac avec puce Apple.",
+          "label": "Qualité : {{word}}"
+        },
+        "models": {
+          "retired": "N’est plus proposé. Supprimez-le pour libérer de l’espace.",
+          "sendsToOpenAi": "Envoie votre audio à OpenAI.",
+          "delete": "Supprimer",
+          "cancelDownload": "Annuler le téléchargement",
+          "inUse": "Utilisé",
+          "use": "Utiliser",
+          "setUpCloud": "Configurer",
+          "download": "Télécharger",
+          "cloud": "Cloud",
+          "description": "La qualité est évaluée pour {{language}}. Survolez une note pour voir le test.",
+          "where": "Où les modèles tournent",
+          "local": "Sur cet ordinateur",
+          "cloudDescription": "Les modèles cloud envoient votre audio au fournisseur. Ceux de cet ordinateur le gardent ici.",
+          "sendsToCompatible": "Envoie votre audio au service que vous avez configuré."
+        },
+        "vocabulary": {
+          "title": "Vocabulaire",
+          "description": "Noms et termes de code à écrire à votre façon. Ajoutez ce que le modèle entend à la place s’il se trompe toujours.",
+          "repoScope": "Utilisé seulement quand vous dictez dans {{repo}}.",
+          "personalScope": "Utilisé dans tous les dépôts.",
+          "scope": "Termes pour",
+          "personal": "Personnel · {{total}}",
+          "repo": "{{repo}} · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "Retirer {{term}}",
+          "term": "Mot ou expression",
+          "heardAs": "Entendu comme (facultatif)",
+          "heardAsLabel": "Entendu comme",
+          "add": "Ajouter",
+          "repoNameHint": "Utiliser le nom du dépôt comme indice",
+          "repoNameHintDescription": "Aide à reconnaître le nom du dépôt.",
+          "repoSaveFailed": "Impossible d’enregistrer les termes du dépôt. L’hôte de ce dépôt doit peut-être mettre Orca à jour."
         }
       },
       "repositoryHooks": {

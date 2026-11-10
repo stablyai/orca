@@ -6,7 +6,6 @@ function model(id: string, extra: Partial<SpeechModelManifest> = {}): SpeechMode
   return {
     id,
     label: id,
-    description: '',
     type: 'transducer',
     provider: 'local',
     language: 'en',

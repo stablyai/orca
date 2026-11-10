@@ -7,6 +7,7 @@ import type {
   SpeechLifecycleEvent,
   SpeechModelManifest,
   SpeechModelState,
+  SpeechPendingEvent,
   SpeechTranscriptEvent
 } from '../../shared/speech-types'
 
@@ -39,6 +40,7 @@ export type SpeechApi = {
   cancelDictation: (sessionId: string) => Promise<void>
   onPartialTranscript: (callback: (data: SpeechTranscriptEvent) => void) => () => void
   onFinalTranscript: (callback: (data: SpeechTranscriptEvent) => void) => () => void
+  onSpeechPending: (callback: (data: SpeechPendingEvent) => void) => () => void
   onDownloadProgress: (
     callback: (data: { modelId: string; progress: number }) => void
   ) => () => void

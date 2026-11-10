@@ -6,7 +6,7 @@ import {
   type MessagePortMain
 } from 'electron'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
-import { mergeDictationTerms } from '../../shared/dictation-dictionary'
+import { dictationTermsFor } from '../../shared/dictation-dictionary'
 import { SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
 import { deleteLocalSpeechModel } from '../speech/speech-model-deletion'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
@@ -204,6 +204,9 @@ export function registerSpeechHandlers(store: Store): void {
               case 'final':
                 window.webContents.send('speech:final', { text: msg.text ?? '', sessionId })
                 break
+              case 'speech-pending':
+                window.webContents.send('speech:pending', { pending: msg.pending, sessionId })
+                break
               case 'stopped':
                 cleanupSessionListener()
                 window.webContents.send('speech:stopped', { sessionId })
@@ -217,7 +220,10 @@ export function registerSpeechHandlers(store: Store): void {
                 break
             }
           },
-          mergeDictationTerms(context?.repoTerms, store.getSettings().voice?.dictationTerms),
+          dictationTermsFor(store.getSettings().voice, {
+            dictationTerms: context?.repoTerms,
+            displayName: context?.repoName
+          }),
           owner,
           store.getSettings().voice
         )

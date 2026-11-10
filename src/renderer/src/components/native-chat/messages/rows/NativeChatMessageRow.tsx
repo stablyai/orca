@@ -55,7 +55,7 @@ export type MessageRowProps = {
   activeTurnIsWorking?: boolean
   /** This row's tool run is the turn's last, so it is the one still live. */
   trailingRun?: boolean
-  /** Hover controls would overlap the next row. */
+  /** Response controls would overlap the next row. */
   continuesTurn?: boolean
   /** In a turn: whether this row holds the response's actions (its last words, else its last images). */
   endsResponse?: boolean
