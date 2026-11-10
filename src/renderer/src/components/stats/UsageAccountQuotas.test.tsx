@@ -10,10 +10,7 @@ import { UsageAccountQuotas, UsageAccountQuotaCard } from './UsageAccountQuotas'
 import { buildUsageAccountQuotaRows } from './usage-account-quota-rows'
 
 vi.mock('../../store', () => ({ useAppStore: () => vi.fn() }))
-vi.mock('@/components/agent/icons/AgentIcon', () => ({
-  AgentIcon: () => <span />,
-  getAgentLabel: (agent: string) => agent
-}))
+vi.mock('@/components/agent/icons/AgentIcon', () => ({ AgentIcon: () => <span /> }))
 vi.mock('@/i18n/i18n', () => ({
   getIntlLocale: () => 'en-US',
   translate: (_key: string, fallback: string, values: Record<string, unknown> = {}) =>
