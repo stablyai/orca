@@ -1833,6 +1833,9 @@
             "creation": {
               "f3785eddc2": "New Browser Tab"
             }
+          },
+          "availability": {
+            "web": "The floating workspace runs on your own computer, so it is only available in the Orca desktop app."
           }
         }
       },
