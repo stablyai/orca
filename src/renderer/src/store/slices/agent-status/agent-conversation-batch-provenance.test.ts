@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { createTestStore } from '../../testing/app-store-test-fixture'
 import { readRecordChanges } from '../../keyed-record-change-reads'
 import * as transitions from '../../keyed-record-transitions'
+import type { AgentPaneConversationIdentity } from './agent-pane-conversation'
 import type { AgentStatusUpdate } from './agent-status-contract'
 import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
 import {
@@ -22,7 +23,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function countProvenance(source: object) {
+function countProvenance(source: Readonly<Record<string, AgentPaneConversationIdentity>>) {
   let materialized = 0
   const seen = new WeakSet<readonly string[]>()
   function countedDraft<V>(previous: Readonly<Record<string, V>>): transitions.RecordDraft<V> {
@@ -172,7 +173,7 @@ it('keeps complete provenance across an interleaved writer and discards an abort
   store.getState().transactAgentStatuses((transaction) => {
     transaction.apply({ kind: 'status', ...update('first', 'done', 3000) })
     store.getState().updateAgentStatusState((state) => ({
-      agentConversationsByPaneKey: transitions.replaceRecordEntries(
+      agentConversationsByPaneKey: transitions.replaceRecordEntries<AgentPaneConversationIdentity>(
         state.agentConversationsByPaneKey,
         [[`removed:${LEAF_ID}`, null]]
       )
