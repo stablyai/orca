@@ -7,7 +7,13 @@ import {
   type AgentSessionPromptResponse
 } from '../../../../shared/agent-session/agent-session-question-answer'
 import type { ProviderTimelineEvent } from '../../../native-chat/agent-session-timeline/provider-timeline-event'
-import { openProviderTimelineRig } from '../../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
+import {
+  AGENT,
+  SESSION,
+  openProviderTimelineRig
+} from '../../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
+import { createLegacyProviderTimelineIdentityScheme } from '../../../native-chat/agent-session-timeline/provider-timeline-identity'
+import { createAcpOwnershipReader } from '../../journal/acp-ownership-reader'
 import { GROK_ACP_DIALECT } from '../../acp-dialects/grok-dialect'
 import type { AcpDialect, AcpRequestPresentation } from '../../acp-dialects/acp-dialect'
 import { AcpTimelineTranslator } from '../acp-timeline-translator'
@@ -69,10 +75,29 @@ function fixtureAnswer(
   }
 }
 
-export async function openAcpFixtureRig(dialect: AcpDialect = GROK_ACP_DIALECT) {
-  const rig = await openProviderTimelineRig()
+/** `journalOwnership` reads row placement back from the journal, as production lanes do. */
+export async function openAcpFixtureRig(
+  dialect: AcpDialect = GROK_ACP_DIALECT,
+  { journalOwnership = false }: { journalOwnership?: boolean } = {}
+) {
   let providerSessionId = 'session-1'
-  const translator = () => new AcpTimelineTranslator({ sessionId: providerSessionId, dialect })
+  // Production lanes key the journal namespace by the provider session the reader resolves.
+  const rig = await openProviderTimelineRig(
+    journalOwnership ? { namespace: providerSessionId } : {}
+  )
+  const scheme = createLegacyProviderTimelineIdentityScheme({ agent: AGENT, sessionId: SESSION })
+  const translator = () =>
+    new AcpTimelineTranslator({
+      sessionId: providerSessionId,
+      dialect,
+      ...(journalOwnership
+        ? {
+            ownership: createAcpOwnershipReader(scheme, providerSessionId, () =>
+              rig.sink.journalItems()
+            )
+          }
+        : {})
+    })
   let lane = translator()
   const records = acpSubagentRecords()
   // Preserve the host's last saved view after record retirement.

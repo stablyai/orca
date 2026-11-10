@@ -21,7 +21,7 @@ import {
 } from '@/lib/backlog-task-source'
 import { buildExecutionHostRegistry } from '../../../../../shared/execution-host/execution-host-registry'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import { getTaskPageRepoSourceContext } from '@/lib/task-repo-source-context'
+import { getTaskPageRepoSourceContext } from '@/lib/work-items/task-repo-source-context'
 import { BacklogTaskEditor } from './BacklogTaskEditor'
 
 /** Selects supported repo or folder projects and remounts task state when host, repo, or path changes. */

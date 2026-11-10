@@ -5,8 +5,8 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
-      'auto.components.settings.integrations.search.f16e41cc72',
-      'GitHub Integration'
+      'auto.components.settings.integrations.search.a17a94d0b0',
+      'GitHub integration'
     ),
     description: translate(
       'auto.components.settings.integrations.search.7166b9090c',
@@ -26,8 +26,8 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.integrations.search.b50b71ef9d',
-      'GitLab Integration'
+      'auto.components.settings.integrations.search.cd74b2f587',
+      'GitLab integration'
     ),
     description: translate(
       'auto.components.settings.integrations.search.6e2ab619c6',
@@ -52,8 +52,8 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.integrations.search.67a2a0e868',
-      'Bitbucket Integration'
+      'auto.components.settings.integrations.search.9e238582e8',
+      'Bitbucket integration'
     ),
     description: translate(
       'auto.components.settings.integrations.search.760e2446e0',
@@ -96,8 +96,8 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.integrations.search.af6611fa6e',
-      'Azure DevOps Integration'
+      'auto.components.settings.integrations.search.b3efe7ab71',
+      'Azure DevOps integration'
     ),
     description: translate(
       'auto.components.settings.integrations.search.7b1f3984bb',
@@ -129,8 +129,8 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.integrations.search.aab86d64e5',
-      'Gitea Integration'
+      'auto.components.settings.integrations.search.86a08aa60c',
+      'Gitea integration'
     ),
     description: translate(
       'auto.components.settings.integrations.search.d0d019dc29',
@@ -157,7 +157,7 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
-    title: translate('auto.components.settings.integrations.search.617603509b', 'Jira Integration'),
+    title: translate('auto.components.settings.integrations.search.d8906d60a9', 'Jira integration'),
     description: translate(
       'auto.components.settings.integrations.search.76f6af7c57',
       'Connect Jira Cloud or update Jira API token credentials.'
@@ -192,8 +192,8 @@ export const getIntegrationsPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.integrations.search.b027b4b318',
-      'Linear Integration'
+      'auto.components.settings.integrations.search.d905b3ecee',
+      'Linear integration'
     ),
     description: translate(
       'auto.components.settings.integrations.search.16a486a49d',

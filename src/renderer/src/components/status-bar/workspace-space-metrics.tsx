@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import {
   getWorkspaceSpaceScanDateTimeLabel,

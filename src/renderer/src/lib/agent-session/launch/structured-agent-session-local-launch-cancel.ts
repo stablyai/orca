@@ -1,5 +1,5 @@
 import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
-import { retireStructuredAgentSessionTab } from '@/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement'
+import { retireStructuredAgentSessionTab } from '@/runtime/native-chat/tab-retirement/structured-agent-session-host-tab-retirement'
 import { deleteStructuredAgentLaunchRecord } from './structured-agent-session-launch-persistence'
 
 // Chats a cancel closed on this machine's host; session ids are never reused.

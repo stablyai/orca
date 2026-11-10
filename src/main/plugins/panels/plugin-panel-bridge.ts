@@ -1,5 +1,8 @@
 import type { PluginCapabilityKind } from '../../../shared/plugins/capabilities/plugin-capabilities'
-import { PLUGIN_EVENT_CAPABILITY } from '../../../shared/plugins/contributions/plugin-event-contribution'
+import {
+  PLUGIN_EVENT_CAPABILITY,
+  pluginEventCapabilityGranted
+} from '../../../shared/plugins/contributions/plugin-event-contribution'
 import type { PluginEventName } from '../../../shared/plugins/manifest/plugin-manifest'
 import { PLUGIN_EVENT_PAYLOAD_SCHEMAS } from '../../../shared/plugins/events/plugin-events'
 import {
@@ -92,11 +95,11 @@ export class PluginPanelBridge {
   }
 
   subscribe(pluginKey: string, panelId: string, event: PluginEventName): void {
-    const required = PLUGIN_EVENT_CAPABILITY[event]
-    if (!this.deps.grantedCapabilities(pluginKey)?.includes(required)) {
+    if (!pluginEventCapabilityGranted(event, this.deps.grantedCapabilities(pluginKey))) {
+      const required = PLUGIN_EVENT_CAPABILITY[event]
       throw new PluginHostCallError(
         'capability_denied',
-        `plugin does not have the "${required}" capability`
+        required ? `plugin does not have the "${required}" capability` : 'plugin is not approved'
       )
     }
     const events = this.subscriptions.get(panelId) ?? new Set<PluginEventName>()
@@ -122,11 +125,11 @@ export class PluginPanelBridge {
     }
     this.replays.delete(panelId)
     for (const event of owed) {
-      const payload = await readPluginWorkspaceChange(delegate)
+      const payload = (await readPluginWorkspaceChange(delegate)).change
       if (
         this.channels.get(panelId) === channel &&
         this.subscriptions.get(panelId)?.has(event) &&
-        this.deps.grantedCapabilities(channel.pluginKey)?.includes(PLUGIN_EVENT_CAPABILITY[event])
+        pluginEventCapabilityGranted(event, this.deps.grantedCapabilities(channel.pluginKey))
       ) {
         channel.deliver({ kind: 'event', event, payload })
       }
@@ -211,14 +214,13 @@ export class PluginPanelBridge {
       return 0
     }
     const payload = projected.data
-    const required = PLUGIN_EVENT_CAPABILITY[event]
     let delivered = 0
     for (const [panelId, channel] of this.channels) {
       if (
         (!only || channel.pluginKey === only.pluginKey) &&
         this.subscriptions.get(panelId)?.has(event) === true &&
         this.deps.findApprovedPlugin(channel.pluginKey) &&
-        this.deps.grantedCapabilities(channel.pluginKey)?.includes(required)
+        pluginEventCapabilityGranted(event, this.deps.grantedCapabilities(channel.pluginKey))
       ) {
         channel.deliver({ kind: 'event', event, payload })
         delivered += 1

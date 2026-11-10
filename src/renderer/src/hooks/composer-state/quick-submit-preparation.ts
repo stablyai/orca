@@ -1,11 +1,9 @@
 import type { QuickSubmitPreparationInput } from './quick-submit-input-contract'
 
 import { useCallback } from 'react'
-import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
-import {
-  getLinkedWorkItemProvider,
-  canUseIssueCommandForLinkedItemProvider
-} from '@/lib/new-workspace'
+import { settleComposerSubmit } from '@/lib/workspace/creation/composer-submit-cancellation'
+import { getWorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
+import { canUseIssueCommandForLinkedItemProvider } from '@/lib/workspace/creation/new-workspace'
 import { getSetupConfig } from '../../../../shared/orca-hook-setup-config'
 import {
   deriveWorkspaceSetupState,
@@ -38,7 +36,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
     selectedRepoExecutionHostId,
     selectedRepoHookContextKey,
     selectedRepoIsGit,
-    setAdvancedOpen,
+    revealSetupChoice,
     settings,
     setupConfig,
     setupDecision,
@@ -100,7 +98,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
       }
 
       if (selectedRepoIsGit && submitSetupConfig && setupPolicy === 'ask' && !setupDecision) {
-        setAdvancedOpen(true)
+        revealSetupChoice()
         return null
       }
 
@@ -108,7 +106,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
         ? (submitResolvedSetupDecision ?? 'inherit')
         : 'skip'
       const submitLinkedWorkItemProvider = submitLinkedWorkItem
-        ? getLinkedWorkItemProvider(submitLinkedWorkItem)
+        ? getWorkspaceSourceProvider(submitLinkedWorkItem)
         : null
       const hookPreparation: WorktreeCreationRequest['hookPreparation'] = selectedRepoIsGit
         ? {
@@ -218,7 +216,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
       selectedRepoExecutionHostId,
       selectedRepoHookContextKey,
       selectedRepoIsGit,
-      setAdvancedOpen,
+      revealSetupChoice,
       settings,
       setupConfig,
       setupDecision,

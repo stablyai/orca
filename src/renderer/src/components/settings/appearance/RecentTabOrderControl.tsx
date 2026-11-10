@@ -17,7 +17,7 @@ export function RecentTabOrderControl({
   const t = useTranslate()
   return (
     <SearchableSetting
-      title={t('auto.components.settings.RecentTabOrderControl.7a546f2309', 'Tab Order')}
+      title={t('auto.components.settings.RecentTabOrderControl.b5cfdc0198', 'Tab order')}
       description={t(
         'auto.components.settings.RecentTabOrderControl.a867a0889f',
         'Recent or tab strip.'
@@ -26,7 +26,7 @@ export function RecentTabOrderControl({
       className="max-w-none"
     >
       <SettingsRow
-        label={t('auto.components.settings.RecentTabOrderControl.7a546f2309', 'Tab Order')}
+        label={t('auto.components.settings.RecentTabOrderControl.b5cfdc0198', 'Tab order')}
         control={
           <Select
             value={ctrlTabOrderMode}

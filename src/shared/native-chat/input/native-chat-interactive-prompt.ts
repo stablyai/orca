@@ -120,8 +120,10 @@ export function resolveNativeChatInteractivePromptCard(args: {
   if (statusCard?.kind === 'approval') {
     return statusCard
   }
+  // Codex's async questions come from the transcript, which knows which ones were answered.
+  const liveAsk = statusCard?.prompt.replyAsMessage ? null : (statusCard?.prompt ?? null)
   const prompt = resolveNativeChatAsk({
-    liveAsk: statusCard?.prompt ?? null,
+    liveAsk,
     messages: args.messages,
     transcriptSettled: args.transcriptSettled,
     transcriptAsk: args.transcriptAsk

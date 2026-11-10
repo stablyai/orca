@@ -19,7 +19,7 @@ vi.mock('../components/tab-bar/terminal-tab-rename-request', () => ({
   requestTerminalTabRename: mocks.requestTerminalTabRename
 }))
 
-vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
+vi.mock('@/components/floating-terminal/floating-workspace-terminal-actions', () => ({
   isFloatingWorkspacePanelFocused: () => false
 }))
 

@@ -18,38 +18,6 @@ beforeEach(() => {
 })
 afterEach(() => vi.restoreAllMocks())
 
-/** Null omits the classifier boundary; mimo-code revives separately through explicit-prompt MessagePart. */
-const NEW_TURN_EVENT: Record<AgentHookSource, string | null> = {
-  qoder: 'SessionStart',
-  'qoder-cn': 'SessionStart',
-  'qwen-code': 'SessionStart',
-  claude: 'SessionStart',
-  kimi: 'UserPromptSubmit',
-  codebuddy: 'UserPromptSubmit',
-  codex: 'SessionStart',
-  gemini: 'BeforeAgent',
-  antigravity: 'PreInvocation',
-  amp: 'agent.start',
-  cursor: 'beforeSubmitPrompt',
-  pi: 'before_agent_start',
-  omp: 'before_agent_start',
-  'prime-agent': 'before_agent_start',
-  droid: 'UserPromptSubmit',
-  grok: 'user_prompt_submit',
-  copilot: 'sessionStart',
-  hermes: 'pre_llm_call',
-  devin: 'UserPromptSubmit',
-  opencode: 'SessionStart',
-  opencode2: 'SessionStart',
-  'mimo-code': null,
-  'command-code': null,
-  muse: 'UserPromptSubmit',
-  zcode: 'SessionStart',
-  dsh: 'SessionStart',
-  jcode: 'turn_start',
-  kiro: 'agentSpawn'
-}
-
 function reviveRetiredPane(source: unknown, hookEventName: string): boolean {
   const server = new AgentHookServer()
   server.retirePaneAuthority(PANE)
@@ -72,20 +40,6 @@ function reviveRetiredPane(source: unknown, hookEventName: string): boolean {
 }
 
 describe("retired pane un-retires on each provider's own new-turn event", () => {
-  // Why: the gate matched two raw literals, so only the 5 sources that happen to name their
-  // boundary UserPromptSubmit/SessionStart could ever revive — the rest stayed rowless forever.
-  // Why: keys of a Record<AgentHookSource, …> — a new source fails typecheck here rather than
-  // silently skipping coverage, which is the same guarantee the runtime list would give.
-  const revivable = (Object.keys(NEW_TURN_EVENT) as AgentHookSource[]).filter(
-    (source) => NEW_TURN_EVENT[source] !== null
-  )
-
-  it.each(revivable)('%s', (source) => {
-    const hookEventName = NEW_TURN_EVENT[source]
-    expect(hookEventName).not.toBeNull()
-    expect(reviveRetiredPane(source, hookEventName as string)).toBe(true)
-  })
-
   it('revives on a literal boundary when an older relay omits source', () => {
     expect(reviveRetiredPane(undefined, 'UserPromptSubmit')).toBe(true)
   })

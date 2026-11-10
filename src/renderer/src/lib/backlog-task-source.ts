@@ -9,7 +9,7 @@ import {
 } from '../../../shared/backlog-types'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { assertRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
-import { buildContainedLinkedContextBlock } from './linked-work-item-context'
+import { buildContainedLinkedContextBlock } from './work-items/linked-work-item-context'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host/execution-host-registry-entry'

@@ -9,14 +9,13 @@ public class OrcaMobileWebShellModule: Module {
   public func definition() -> ModuleDefinition {
     Name("OrcaMobileWebShell")
 
-    // A spare is the first thing to give back: nothing is shown by it.
     OnCreate {
       memoryWarningObserver = NotificationCenter.default.addObserver(
         forName: UIApplication.didReceiveMemoryWarningNotification,
         object: nil,
         queue: .main
       ) { _ in
-        MobileWebShellSparePool.shared.discardAll()
+        MobileWebShellSparePool.shared.didReceiveMemoryWarning()
       }
     }
 
@@ -47,6 +46,11 @@ public class OrcaMobileWebShellModule: Module {
     AsyncFunction("discardSpareDocument") {
       MobileWebShellSparePool.shared.discardAll()
     }.runOnQueue(.main)
+
+    // The generation store's root as a file URL, created and excluded from backups.
+    Function("generationStoreDirectory") { (name: String) throws -> String in
+      try MobileWebShellGenerationStoreDirectory.prepare(name: name)
+    }
 
     // Home calls this once it has a paired host, so a user with nothing to open pays nothing.
     Function("warmUp") {

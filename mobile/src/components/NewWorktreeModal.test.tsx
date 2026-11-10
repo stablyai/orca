@@ -62,12 +62,16 @@ vi.mock('../host-screen/host-list-queries', () => ({
     (hostId && cachedRepos.get(hostId)) || null
 }))
 
-import '../transport/hosts/host-descriptor-store'
+import '../host-descriptors/host-descriptor-store'
 import { FakeSession } from '../transport/connection/mobile-endpoint-supervisor-test-fakes'
+
 import '../../../src/shared/execution-host'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 
 import { NewWorktreeModal } from './NewWorktreeModal'
+import { publishPageDeviceStore } from '../mobile-web-shell/bridge/page-device-store'
+import { resetDurableDraftFieldsForTests } from '../drafts/durable-draft-fields'
+import { publishInMemoryDeviceStore } from '../drafts/in-memory-device-store.test-support'
 
 import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
@@ -189,6 +193,42 @@ describe('NewWorktreeModal project targets', () => {
     expect(
       renderer.root.find((node) => node.props.runTarget !== undefined).props.runTarget.detail
     ).toBe('/srv/orca')
+  })
+
+  it("offers only the folder host's copy of a repo when opened from a folder", async () => {
+    const serverRepo = { ...repos[0]!, path: '/srv/orca' }
+    const listing = (listed: unknown[]) =>
+      vi.fn((method: string) =>
+        method === 'repo.list' ? replied({ repos: listed }) : new Promise<never>(() => {})
+      )
+
+    await act(async () => {
+      renderer = create(
+        createElement(NewWorktreeModal, {
+          visible: true,
+          client: requestsOnly(listing(repos)),
+          serverClients: new Map<ExecutionHostId, RpcClient>([
+            ['runtime:env-1', requestsOnly(listing([serverRepo]))]
+          ]),
+          hostId: 'host-1',
+          onCreated: () => {},
+          onClose: () => {},
+          openExternalUrl: () => {},
+          folderLaunch: {
+            repoId: 'repo-1',
+            executionHostId: 'runtime:env-1',
+            name: 'payments',
+            parentWorkspace: 'folder:f-1',
+            submit: { begin: () => null, presenting: () => true }
+          }
+        })
+      )
+    })
+    await flushUpdates()
+
+    // The desktop's same-id repo is not offered: its store doesn't hold this folder.
+    expect(pickerItems(renderer, 'Run on').map((item) => item.detail)).toEqual(['/srv/orca'])
+    expect(runTargetPicker(renderer).props.selectedId).toBe('runtime:env-1')
   })
 
   it('ignores a stale repo list after the client changes', async () => {
@@ -345,5 +385,75 @@ describe('NewWorktreeModal project targets', () => {
     })
 
     expect(sourceInputs(renderer).map((input) => input.props.value)).toEqual(['', ''])
+  })
+})
+
+describe('NewWorktreeModal note draft', () => {
+  // The shell's draft table outlives the page; nothing else does.
+  const table = new Map<string, string>()
+  let renderer: ReactTestRenderer | null = null
+
+  async function open(): Promise<ReactTestRenderer> {
+    const client = requestsOnly(
+      vi.fn((method: string) =>
+        method === 'repo.list' ? replied({ repos }) : new Promise<never>(() => {})
+      )
+    )
+    await act(async () => {
+      renderer = create(
+        createElement(NewWorktreeModal, {
+          visible: true,
+          client,
+          hostId: 'host-1',
+          onCreated: () => {},
+          onClose: () => {},
+          openExternalUrl: () => {}
+        })
+      )
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    return renderer!
+  }
+
+  const noteInput = (opened: ReactTestRenderer) =>
+    findAllByHostType(opened.root, 'TextInput').find(
+      (node) => node.props.placeholder === 'Write a note'
+    )!
+  const optionsExpanded = (opened: ReactTestRenderer) =>
+    opened.root.find((node) => node.props.title === 'Options' && 'expanded' in node.props).props
+      .expanded
+
+  // A kill: the page and its memory go, the store stays.
+  function kill(): void {
+    act(() => renderer?.unmount())
+    renderer = null
+    resetDurableDraftFieldsForTests()
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    setCachedRepos('host-1', repos)
+    resetDurableDraftFieldsForTests()
+    publishInMemoryDeviceStore(table)
+  })
+
+  afterEach(() => {
+    kill()
+    table.clear()
+    publishPageDeviceStore(null)
+    vi.useRealTimers()
+  })
+
+  it('brings the note back after a kill, with Options open so it is not sent unseen', async () => {
+    const typed = await open()
+    act(() => noteInput(typed).props.onChangeText('pairing with Ama on the flaky test'))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000)
+    })
+    kill()
+
+    const reopened = await open()
+    expect(noteInput(reopened).props.value).toBe('pairing with Ama on the flaky test')
+    expect(optionsExpanded(reopened)).toBe(true)
   })
 })

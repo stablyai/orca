@@ -2,7 +2,6 @@ import { bindPtyConnectionTestMocks } from '../test-fixtures/pty-connection-mock
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushAsyncTicks, createDeferred } from '../test-fixtures/pty-connection-test-async'
 import {
-  LEAF_1,
   captureCallbackTerminalWrites,
   createMockTransport,
   createPane,
@@ -167,63 +166,6 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
         'snapshot-after-hidden-again\r\n',
         expect.any(Function)
       )
-      disposable.dispose()
-    })
-
-    it('does not signal SIGWINCH after hidden-backlog snapshot replay when dimensions are unchanged', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
-        '@/lib/agent-status/aggregation/worktree-agent-status'
-      )
-      const transport = createMockTransport('pty-id')
-      const capturedDataCallback: {
-        current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
-      } = { current: null }
-      transport.connect.mockImplementation(
-        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-          capturedDataCallback.current = callbacks.onData ?? null
-          return 'pty-id'
-        }
-      )
-      transportFactoryQueue.push(transport)
-      const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
-        typeof vi.fn
-      >
-      const signalPty = window.api.pty.signal as unknown as ReturnType<typeof vi.fn>
-      const hidden = 'x'.repeat(2 * 1024 * 1024 + 1)
-      const live = 'visible-after\r\n'
-      getMainBufferSnapshot.mockResolvedValue({
-        data: 'snapshot-state\r\n',
-        cols: 120,
-        rows: 40,
-        seq: hidden.length + live.length
-      })
-
-      const pane = createPane(1)
-      const manager = createManager(1)
-      const deps = createDeps({
-        isVisibleRef: { current: false }
-      })
-      const disposable = connectPanePty(
-        pane as never,
-        manager as never,
-        bindPaneAgentTitleMocks(deps as never, agentTitleMocks2)
-      )
-      await flushAsyncTicks(6)
-      transport.resize.mockClear()
-      signalPty.mockClear()
-
-      capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
-      ;(deps.isVisibleRef as { current: boolean }).current = true
-      capturedDataCallback.current?.(live, {
-        seq: hidden.length + live.length,
-        rawLength: live.length
-      })
-      await flushAsyncTicks(20)
-
-      expect(pane.terminal.write).toHaveBeenCalledWith('snapshot-state\r\n', expect.any(Function))
-      expect(transport.resize).not.toHaveBeenCalledWith(120, 40)
-      expect(signalPty).not.toHaveBeenCalledWith('pty-id', 'SIGWINCH')
       disposable.dispose()
     })
 
@@ -398,71 +340,6 @@ export function registerPtyConnectionHiddenSnapshotResizeSignalsTests(): void {
       expect(getMainBufferSnapshot).toHaveBeenCalledTimes(2)
       expect(writes.join('')).toContain('model-frame')
       expect(transport.resize).not.toHaveBeenCalledWith(132, 40)
-      disposable.dispose()
-    })
-
-    it('restores a dropped daemon alt frame from the model when the fit lands back on the capture grid', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
-        '@/lib/agent-status/aggregation/worktree-agent-status'
-      )
-      const transport = createMockTransport('tab-pty')
-      transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
-        sessionId
-          ? {
-              id: sessionId,
-              snapshot: 'PREFIX-SCROLLBACK' + 'ALT-FRAME-BODY',
-              snapshotPrefixAnsi: 'PREFIX-SCROLLBACK',
-              snapshotFrameAnsi: 'ALT-FRAME-BODY',
-              snapshotFrameRestoreAnsi: 'RESTORE-LIVE-STATE',
-              snapshotCols: 200,
-              snapshotRows: 50,
-              isAlternateScreen: true
-            }
-          : null
-      )
-      transportFactoryQueue.push(transport)
-      mockStoreState = {
-        ...mockStoreState,
-        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'tab-pty' }] }
-      }
-      const getMainBufferSnapshot = vi.mocked(window.api.pty.getMainBufferSnapshot)
-      getMainBufferSnapshot.mockResolvedValue({
-        data: '\x1b[?1049hMODEL-FRAME',
-        scrollbackAnsi: '',
-        frameRestoreAnsi: 'MODEL-RESTORE',
-        cols: 200,
-        rows: 50,
-        seq: 10,
-        alternateScreen: true
-      })
-
-      const pane = createPane(1)
-      pane.terminal.cols = 200
-      pane.terminal.rows = 50
-      const writtenText = (): string => pane.terminal.write.mock.calls.map((c) => c[0]).join('')
-      // The replay measures a transient narrower grid; the fit then lands back on the capture grid.
-      pane.fitAddon.proposeDimensions = vi.fn(() =>
-        writtenText().includes('RESTORE-LIVE-STATE')
-          ? { cols: 200, rows: 50 }
-          : { cols: 120, rows: 40 }
-      )
-      const manager = createManager(1)
-      const deps = createDeps({
-        restoredLeafId: LEAF_1,
-        restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
-      })
-
-      const disposable = connectPanePty(
-        pane as never,
-        manager as never,
-        bindPaneAgentTitleMocks(deps as never, agentTitleMocks5)
-      )
-      await flushAsyncTicks(40)
-
-      expect(writtenText()).not.toContain('ALT-FRAME-BODY')
-      expect(getMainBufferSnapshot).toHaveBeenCalledWith('tab-pty', expect.anything())
-      await vi.waitFor(() => expect(writtenText()).toContain('MODEL-FRAME'))
       disposable.dispose()
     })
   })

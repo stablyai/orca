@@ -11,7 +11,7 @@ export function getRepositoryGitHooksSearchEntries(
   const translateSearchKeyword = searchKeywordTranslator(t)
   return [
     {
-      title: t('auto.components.settings.repository.search.b79df26937', 'Setup Script'),
+      title: t('auto.components.settings.repository.search.810b9f4106', 'Setup script'),
       description: t(
         'auto.components.settings.repository.search.baaf70bb37',
         'Local and shared scripts that run after a new worktree is created.'
@@ -40,7 +40,7 @@ export function getRepositoryGitHooksSearchEntries(
       ]
     },
     {
-      title: t('auto.components.settings.repository.search.bce0ca23c6', 'Archive Script'),
+      title: t('auto.components.settings.repository.search.1617bc353d', 'Archive script'),
       description: t(
         'auto.components.settings.repository.search.acd1157f0c',
         'Local and shared scripts that run before a worktree is archived.'
@@ -108,7 +108,7 @@ export function getRepositoryGitHooksSearchEntries(
       ]
     },
     {
-      title: t('auto.components.settings.repository.search.cdfe398068', 'When to Run Setup'),
+      title: t('auto.components.settings.repository.search.cedbe6c02c', 'When to run setup'),
       description: t(
         'auto.components.settings.repository.search.c00a549e03',
         'Choose the default behavior when a setup script is available.'
@@ -136,8 +136,8 @@ export function getRepositoryGitHooksSearchEntries(
     },
     {
       title: t(
-        'auto.components.settings.repository.search.d86ea12d16',
-        'Custom GitHub Issue Command'
+        'auto.components.settings.repository.search.aced2fc1be',
+        'Custom GitHub issue command'
       ),
       description: t(
         'auto.components.settings.repository.search.d42d1e49c0',

@@ -38,7 +38,7 @@ vi.mock('@/lib/backlog-task-source', async (original) => ({
   ...(await original<typeof BacklogSource>()),
   callBacklog: vi.fn()
 }))
-vi.mock('@/lib/task-repo-source-context', () => ({
+vi.mock('@/lib/work-items/task-repo-source-context', () => ({
   getTaskPageRepoSourceContext: () => ({
     kind: 'task-source',
     provider: 'backlog',

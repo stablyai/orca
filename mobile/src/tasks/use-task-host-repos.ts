@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { HostContextLabelSources } from '../../../src/shared/worktree/host-context-labels'
-import { useHostDescriptor } from '../transport/hosts/host-descriptor-store'
+import { useHostDescriptor } from '../host-descriptors/host-descriptor-store'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import { withServerHosts } from '../worktree/server-workspaces'
