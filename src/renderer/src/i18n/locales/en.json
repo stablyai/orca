@@ -14616,9 +14616,8 @@
           "sectionDescription": "Agents that run in Orca Cloud on a schedule, on GitHub events or from a webhook."
         },
         "orcaCloudPredictiveWake": {
-          "title": "Wake cloud workspaces early",
+          "title": "Wake sleeping workspaces early",
           "description": "A sleeping cloud workspace starts waking when you point at it or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after the idle time.",
-          "toggleLabel": "Wake cloud workspaces early",
           "group": "Orca Cloud",
           "description_one": "Starts waking a sleeping sandbox when you point at its workspace or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after {{count}} minute idle. Early wakes count toward your sandbox hours.",
           "description_other": "Starts waking a sleeping sandbox when you point at its workspace or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after {{count}} minutes idle. Early wakes count toward your sandbox hours."
