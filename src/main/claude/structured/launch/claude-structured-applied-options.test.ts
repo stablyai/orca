@@ -46,16 +46,6 @@ const SETTINGS = {
     effective: { model: 'haiku' },
     sources: [{ source: 'userSettings', settings: { model: 'haiku' } }],
     applied: { model: 'claude-haiku-4-5-20251001', effort: null, advisor: null, ultracode: false }
-  },
-  envSonnet: {
-    effective: {},
-    sources: [],
-    applied: { model: 'claude-sonnet-5', effort: 'high', advisor: null, ultracode: false }
-  },
-  settingsHaikuEnvSonnet: {
-    effective: { model: 'haiku' },
-    sources: [{ source: 'userSettings', settings: { model: 'haiku' } }],
-    applied: { model: 'claude-sonnet-5', effort: 'high', advisor: null, ultracode: false }
   }
 }
 
@@ -69,34 +59,69 @@ function startedWithoutATurn(settings: unknown) {
   })
 }
 
-async function readCurrent(settings: unknown) {
-  const adapter = await acquired(startedWithoutATurn(settings))
-  return (await adapter.readOptions({ sessionId: 'session-1', fence: 7 })).current
-}
-
 describe('Claude model before the first turn', () => {
-  it.each([
-    ['nothing overrides the default', SETTINGS.noOverride, 'claude-opus-5-5[1m]', 'medium'],
-    ['settings name a model', SETTINGS.settingsHaiku, 'claude-haiku-4-5-20251001', undefined],
-    ['the env names a model', SETTINGS.envSonnet, 'claude-sonnet-5', 'high'],
-    ['the env overrides the settings', SETTINGS.settingsHaikuEnvSonnet, 'claude-sonnet-5', 'high']
-  ])(
-    'names what Claude will apply when %s, unconfirmed',
-    async (_case, settings, model, effort) => {
-      const current = await readCurrent(settings)
+  it('uses native applied effort despite settings High, before and after a reply', async () => {
+    // Claude Code 2.1.318: no flag applies Medium; --effort low applies Low.
+    const claude = startedWithoutATurn({
+      effective: { effortLevel: 'high' },
+      applied: { model: 'claude-opus-5-5', effort: 'medium', ultracode: false }
+    })
+    const events: ClaudeStructuredSessionEvent[] = []
+    const adapter = await acquired(claude, {}, events)
+    const current = async () =>
+      (await adapter.readOptions({ sessionId: 'session-1', fence: 7 })).current
+    expect((await current()).effort).toBe('medium')
+    expect((await current()).confirmed ?? []).not.toContain('effort')
+    const connection = claude.connections[0]!
+    connection.getSettings = async () => ({
+      effective: { effortLevel: 'high' },
+      applied: { model: 'claude-opus-5-5', effort: 'low', ultracode: false }
+    })
+    connection.handlers.onMessage?.({
+      type: 'result',
+      subtype: 'success',
+      uuid: 'finished',
+      session_id: PROVIDER_SESSION_ID,
+      is_error: false
+    })
+    await vi.waitFor(async () => expect((await current()).effort).toBe('low'))
+    expect((await current()).confirmed ?? []).not.toContain('effort')
+    const started = await claudeOpened(adapter, 'session-1')
+    expect(started.reportedOptions).not.toHaveProperty('effort')
+    const reported = events.find((event) => event.type === 'options-reported')
+    expect(reported).toMatchObject({
+      reportedOptions: expect.not.objectContaining({ effort: expect.anything() })
+    })
+    await adapter.closeAll()
+  })
 
-      expect(current.model).toBe(model)
-      expect(current.effort).toBe(effort)
-      expect(current.confirmed ?? []).not.toContain('model')
-      expect(current.confirmed ?? []).not.toContain('effort')
-    }
-  )
-
-  it('marks an unknown applied model as defaulted for the host to resolve', async () => {
-    const current = await readCurrent({ effective: {}, sources: [] })
-
-    expect(current.defaulted).toEqual(['model'])
-    expect(current.effort).toBeUndefined()
+  it('clears inferred effort when native settings explicitly report none', async () => {
+    const claude = startedWithoutATurn({
+      effective: { effortLevel: 'high' },
+      applied: { model: 'claude-opus-5-5', effort: 'medium', ultracode: false }
+    })
+    const adapter = await acquired(claude)
+    expect((await adapter.readOptions({ sessionId: 'session-1', fence: 7 })).current.effort).toBe(
+      'medium'
+    )
+    // The recorded Haiku response explicitly names no effort parameter.
+    claude.connections[0]!.getSettings = async () => ({
+      ...SETTINGS.settingsHaiku,
+      effective: { model: 'haiku', effortLevel: 'high' }
+    })
+    claude.connections[0]!.handlers.onMessage?.({
+      type: 'result',
+      subtype: 'success',
+      uuid: 'haiku-finished',
+      session_id: PROVIDER_SESSION_ID,
+      is_error: false
+    })
+    await vi.waitFor(async () =>
+      expect(
+        (await adapter.readOptions({ sessionId: 'session-1', fence: 7 })).current.effort
+      ).toBeUndefined()
+    )
+    await adapter.closeAll()
   })
 
   it('lets the first turn confirm or correct it', async () => {

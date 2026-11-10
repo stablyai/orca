@@ -1,6 +1,9 @@
 import { AGENT_SESSION_ATTENTION_RUNTIME_CAPABILITIES } from './agent-session-attention-capabilities'
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from './agent-session-background-task-child-views-capability'
-import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from './agent-session-continue-interrupted-capability'
+import {
+  AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY,
+  AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY
+} from './agent-session-continue-interrupted-capability'
 import { AGENT_SESSION_CREATE_RUNTIME_CAPABILITIES } from './agent-session-create-capabilities'
 import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from './requests/agent-session-current-requests-capability'
 import { AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY } from './agent-session-permission-modes-capability'
@@ -13,8 +16,13 @@ export const AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY =
   'agent-session.session-boundary.v1' as const
 export const AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY =
   'agent-session.host-authority.v1' as const
+export const AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY =
+  'agent-session.create-options.v1' as const
 // Older launch schemas reject unknown fields; advertise before clients send keyboard support.
 export const AGENT_SESSION_KEYBOARD_RUNTIME_CAPABILITY = 'agent-session.keyboard.v1' as const
+// Strict older launch schemas cannot accept a section's transient trust owner.
+export const AGENT_SESSION_TRUST_WORKTREE_RUNTIME_CAPABILITY =
+  'agent-session.trust-worktree.v1' as const
 export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
   'agent-session.omp-resume-path.v1' as const
 // Gate journal/lifecycle/destructive tab mutations by client capability. Mobile may receive metadata-only placeholders for these non-PTY sessions.
@@ -74,10 +82,16 @@ export const AGENT_SESSION_CONTINUATION_CONTEXT_RUNTIME_CAPABILITY =
   'agent-session.continuation-context.v1' as const
 // Probe additive item reads before offering full output; older hosts retain only heads.
 export const AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY = 'agent-session.item-detail.v1' as const
+// Probe before asking whether a send is recorded; older hosts answer only through the history pages a client loaded.
+export const AGENT_SESSION_SEND_RECORDED_RUNTIME_CAPABILITY =
+  'agent-session.send-recorded.v1' as const
 // The RPC is registered unconditionally; per-session rewind support is a separate check.
 export const AGENT_SESSION_REWIND_RUNTIME_CAPABILITY = 'agent-session.rewind.v1' as const
 // Why: the rewind UI relies on the next send settling an in-doubt rewind, even with the agent up.
 export const AGENT_SESSION_REWIND_RECOVERY_CAPABILITY = 'agent-session.rewind-recovery.v1' as const
+// Why: hosts before this advertise rewind.v1 but refuse agentSession.rewind from a phone.
+export const AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY =
+  'agent-session.rewind.phone.v1' as const
 // Readers must understand a monitoring roster with no available stop control.
 // Downgrade turn items to legacy status rows for incapable clients; remove only after every supported release understands turn items.
 export const AGENT_SESSION_TURN_ITEM_CAPABILITY = 'agent-session.turn-item.v1' as const
@@ -94,22 +108,42 @@ export const AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY = 'agent-session.attac
 // Why: hosts before this advertise attachments.v1 but refuse the upload methods from a phone.
 export const AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY =
   'agent-session.attachments.phone.v1' as const
+// Why: hosts before this report goals in options but refuse agentSession.threadGoal from a phone.
+export const AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY =
+  'agent-session.thread-goal.phone.v1' as const
+// Why: hosts before this advertise usage-limit auto-continue but refuse its cancel from a phone.
+export const AGENT_SESSION_PHONE_USAGE_LIMIT_CONTINUE_CANCEL_RUNTIME_CAPABILITY =
+  'agent-session.usage-limit-auto-continue.phone-cancel.v1' as const
 export const AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY =
   'native-chat.text-attachment-read.v1' as const
 // Readers must explicitly honor stoppable:false on live child rows. The Stop capability alone predates this field and cannot prove safe rendering.
 export const AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY =
   'agent-session.background-task-row-stop.v1' as const
+// Strict subscribe params refuse `capabilities` on older hosts; a client sends it only when advertised.
+export const AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY = 'agent-session.text-append.v1' as const
+// Why: a saved restore into a new tab names the pane that ran it; older hosts' strict schema rejects it.
+export const AGENT_SESSION_RESTORE_SOURCE_PANE_RUNTIME_CAPABILITY =
+  'agent-session.restore-source-pane.v1' as const
+// Hosts with only text-append.v1 drop `toolOutputAppend`; a reader tracking tool bases could evict a reply base they hold.
+export const AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY =
+  'agent-session.tool-output-append.v1' as const
+
+// The host appends CI result lines to chats that opened or pushed to a PR; older hosts write none.
+export const AGENT_SESSION_PR_EVENTS_RUNTIME_CAPABILITY = 'agent-session.pr-events.v1' as const
 
 // Individual client flags must not retain the unused host capability aggregate.
 export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
   [
+    AGENT_SESSION_RESTORE_SOURCE_PANE_RUNTIME_CAPABILITY,
     AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY,
     ...AGENT_SESSION_STOP_RUNTIME_CAPABILITIES,
     ...AGENT_SESSION_CREATE_RUNTIME_CAPABILITIES,
     AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
     AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
+    AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY,
     AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
     AGENT_SESSION_KEYBOARD_RUNTIME_CAPABILITY,
+    AGENT_SESSION_TRUST_WORKTREE_RUNTIME_CAPABILITY,
     STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
     AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY,
     STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
@@ -125,21 +159,29 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     AGENT_SESSION_QUEUED_MESSAGE_IMAGE_EDIT_RUNTIME_CAPABILITY,
     AGENT_SESSION_QUEUED_MESSAGE_SKILLS_EDIT_RUNTIME_CAPABILITY,
     AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY,
+    AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY,
     AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY,
     ...STRUCTURED_AGENT_SESSION_SURFACE_RUNTIME_CAPABILITIES,
     ...AGENT_SESSION_ATTENTION_RUNTIME_CAPABILITIES,
     AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY,
     AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
     AGENT_SESSION_REWIND_RECOVERY_CAPABILITY,
+    AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY,
     AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
     AGENT_SESSION_CONTINUATION_CONTEXT_RUNTIME_CAPABILITY,
     AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
+    AGENT_SESSION_SEND_RECORDED_RUNTIME_CAPABILITY,
     AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
     AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
     AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY,
     AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY,
+    AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY,
+    AGENT_SESSION_PHONE_USAGE_LIMIT_CONTINUE_CANCEL_RUNTIME_CAPABILITY,
     AGENT_SESSION_TURN_ITEM_CAPABILITY,
     AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
     AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY,
+    AGENT_SESSION_PR_EVENTS_RUNTIME_CAPABILITY,
+    AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY,
+    AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY,
     ...AGENT_SESSION_RESUME_RUNTIME_CAPABILITIES
   ] as const)()

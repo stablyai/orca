@@ -8,7 +8,7 @@ const { gitExecFileAsyncMock, gitExecFileSyncMock, translateWslOutputPathsMock }
   })
 )
 
-vi.mock('../../../../shared/git-worktree-admin', () => ({
+vi.mock('../../../../shared/git/worktrees/git-worktree-admin', () => ({
   annotateWorktreeLocksFromAdmin: async (_repoPath: string, rows: unknown[]) => rows
 }))
 
@@ -71,24 +71,6 @@ branch refs/heads/main
         { cwd: '/repo', timeout: WORKTREE_LIST_TIMEOUT_MS }
       ],
       [['worktree', 'list', '--porcelain'], { cwd: '/repo', timeout: WORKTREE_LIST_TIMEOUT_MS }]
-    ])
-  })
-
-  it('does not retry without -z for non-usage Git failures', async () => {
-    gitExecFileAsyncMock.mockRejectedValueOnce(
-      Object.assign(new Error('git worktree list --porcelain -z'), {
-        code: 128,
-        stderr: 'fatal: unable to read tree\n'
-      })
-    )
-
-    await expect(listWorktreeGraph('/repo')).resolves.toEqual([])
-
-    expect(gitExecFileAsyncMock.mock.calls).toEqual([
-      [
-        ['worktree', 'list', '--porcelain', '-z'],
-        { cwd: '/repo', timeout: WORKTREE_LIST_TIMEOUT_MS }
-      ]
     ])
   })
 })

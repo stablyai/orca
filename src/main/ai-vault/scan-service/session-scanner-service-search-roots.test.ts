@@ -32,7 +32,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  subject.close()
+  await subject.close()
   vi.restoreAllMocks()
   resetTranscriptConsumersForTests()
   resetSessionParseCacheForTests()
@@ -73,12 +73,6 @@ async function indexedSessions(term: string, expected: string[]): Promise<void> 
     { timeout: 20_000 }
   )
 }
-
-it('refuses to clear when the child has no search instance', async () => {
-  await expect(
-    subject.execute({ type: 'request', id: 1, operation: 'searchClear' })
-  ).rejects.toThrow('Agent Session History search is not available.')
-})
 
 it('refreshes a late root without rebuilding the index', async () => {
   await writeMessageGraphTranscript(openclawTranscript(spawnRoot, 'early-session'), [

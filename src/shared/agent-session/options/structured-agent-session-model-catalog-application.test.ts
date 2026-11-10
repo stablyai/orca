@@ -1,16 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import { structuredAgentSessionSendSelection } from './structured-agent-session-option-view'
+import {
+  structuredAgentSessionMessageSelection,
+  structuredAgentSessionShownSnapshot,
+  structuredAgentSessionSendSelection
+} from './structured-agent-session-option-view'
 import { getAgentSessionOptionCatalog } from './agent-session-option-catalog'
 import { structuredAgentSessionSeedCatalog } from './structured-agent-session-seed-catalog'
 import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
 import {
   applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
+  structuredAgentSessionOptionPicks,
   createStructuredAgentSessionOptionState,
   commitStructuredAgentSessionOption,
   settleStructuredAgentSessionBuiltinCatalog
 } from './structured-agent-session-options'
 import { structuredAgentSessionOptionSnapshot } from './structured-agent-session-option-snapshot'
+import { cloneStructuredAgentSessionOptionRecord } from './structured-agent-session-option-state'
 
 const SEED = getAgentSessionOptionCatalog('codex')!
 
@@ -229,11 +235,158 @@ it('keeps one flat selection across inventory/answer arrival order and child rep
       effort: 'high'
     })
     // A replacement child drops live capabilities while the conversation keeps its flat record.
-    state = { ...createStructuredAgentSessionOptionState('claude', SEED), record: state.record }
+    state = {
+      ...state,
+      record: cloneStructuredAgentSessionOptionRecord(state.record),
+      catalog: SEED,
+      catalogSource: 'seed',
+      verifiedModelIds: undefined,
+      reportedEffort: undefined,
+      reportedPermissionMode: undefined
+    }
     state = inventory(state)
     expect(structuredAgentSessionSendSelection(state)).toMatchObject({
       model: 'omitted',
       effort: 'high'
     })
   }
+})
+
+it('requires current session and explicit catalog proof, replacing each observation without inferring inputs', () => {
+  const launch = { newLaunch: false, coherentCatalog: true }
+  const value = (state: ReturnType<typeof createStructuredAgentSessionOptionState>) =>
+    structuredAgentSessionShownSnapshot(state).find(({ id }) => id === 'model')?.kind.currentValue
+  for (const catalogFirst of [false, true]) {
+    const answer = (
+      state: ReturnType<typeof createStructuredAgentSessionOptionState>,
+      sessionNeverStarted?: boolean
+    ) =>
+      applyStructuredAgentSessionOptions(
+        state,
+        SEED,
+        {
+          models: [],
+          modelsKnown: false,
+          sessionNeverStarted,
+          current: { defaulted: [], acceptedInputSources: {} }
+        },
+        launch
+      )
+    const listing = (
+      state: ReturnType<typeof createStructuredAgentSessionOptionState>,
+      listingNamesConfiguredModel?: boolean
+    ) =>
+      applyStructuredAgentSessionModelCatalog(
+        state,
+        SEED,
+        { ...HOST_CATALOG, listingNamesConfiguredModel },
+        launch
+      )
+    const start = createStructuredAgentSessionOptionState('codex', SEED)
+    const known = catalogFirst
+      ? answer(listing(start, true), true)
+      : listing(answer(start, true), true)
+    expect(value(known)).toBe('gpt-hosted')
+    expect(structuredAgentSessionOptionPicks(known, { effort: 'high' }, true)).toEqual([
+      { modelId: 'gpt-hosted', adoptModelAsLaunchDefault: false, optionId: 'effort', value: 'high' }
+    ])
+    expect(structuredAgentSessionMessageSelection(known)).toEqual({})
+    for (const proof of [false, undefined]) {
+      expect(value(listing(answer(known, proof), true))).toBeUndefined()
+      expect(value(answer(listing(known, proof), true))).toBeUndefined()
+    }
+    const unknown = applyStructuredAgentSessionModelCatalog(
+      known,
+      SEED,
+      { origin: 'unknown' },
+      launch
+    )
+    expect(value(answer(unknown, true))).toBeUndefined()
+    const unavailable = applyStructuredAgentSessionModelCatalog(
+      known,
+      SEED,
+      {
+        ...HOST_CATALOG,
+        listingNamesConfiguredModel: true,
+        unavailable: { reason: 'cliMissing' }
+      },
+      launch
+    )
+    expect(value(answer(unavailable, true))).toBeUndefined()
+    const own = commitStructuredAgentSessionOption(known, 'model', 'own-unlisted')
+    expect(value(listing(own, false))).toBe('own-unlisted')
+  }
+})
+
+it('keeps existing new-launch default authority when its live catalog refresh cannot name a default', () => {
+  const launch = { newLaunch: true, coherentCatalog: true }
+  const listed = applyStructuredAgentSessionModelCatalog(
+    createStructuredAgentSessionOptionState('codex', SEED),
+    SEED,
+    { ...HOST_CATALOG, listingNamesConfiguredModel: true },
+    launch
+  )
+  const live = applyStructuredAgentSessionOptions(
+    listed,
+    SEED,
+    {
+      models: HOST_CATALOG.models,
+      current: { model: 'gpt-hosted', defaulted: ['model'], acceptedInputSources: {} }
+    },
+    launch
+  )
+  const refreshing = applyStructuredAgentSessionModelCatalog(
+    live,
+    SEED,
+    {
+      ...HOST_CATALOG,
+      listingInProgress: true,
+      listingNamesConfiguredModel: false,
+      models: HOST_CATALOG.models.map((row) => ({ ...row, isDefault: false }))
+    },
+    launch
+  )
+  expect(
+    structuredAgentSessionShownSnapshot(refreshing).find(({ id }) => id === 'model')?.kind
+      .currentValue
+  ).toBe('gpt-hosted')
+})
+
+it('offers only the speeds the model lists while a configured Flex keeps running', () => {
+  const models = [
+    {
+      id: 'gpt-fast',
+      label: 'GPT Fast',
+      isDefault: true,
+      efforts: [{ value: 'low', label: 'Low' }],
+      serviceTiers: [{ value: 'priority', label: 'Fast' }]
+    }
+  ]
+  const host: AgentSessionModelCatalogResult = { origin: 'probe', models, fetchedAt: 1 }
+  const seed = structuredAgentSessionSeedCatalog('codex')!
+  const state = applyStructuredAgentSessionOptions(
+    applyStructuredAgentSessionModelCatalog(
+      createStructuredAgentSessionOptionState('codex', seed),
+      seed,
+      host,
+      LAUNCH
+    ),
+    seed,
+    {
+      models,
+      listedModelIds: ['gpt-fast'],
+      current: { model: 'gpt-fast', effort: 'low', serviceTier: 'flex', defaulted: [] }
+    },
+    LAUNCH
+  )
+  const speed = structuredAgentSessionOptionSnapshot(state).find(({ id }) => id === 'serviceTier')
+  expect(speed?.kind).toEqual({
+    type: 'select',
+    currentValue: 'flex',
+    choices: [
+      { value: 'default', label: 'Standard' },
+      { value: 'priority', label: 'Fast' }
+    ]
+  })
+  expect(structuredAgentSessionMessageSelection(state).serviceTier).toBe('flex')
 })

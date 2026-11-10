@@ -1,9 +1,8 @@
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import type * as childProcess from 'node:child_process'
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
-import { WORKTREE_METHODS } from '../../src/main/runtime/rpc/methods/worktree'
+import { WORKTREE_METHODS } from '../../src/main/runtime/rpc/methods/workspaces/worktree'
 import type { WorkspaceStatusDefinition } from '../../src/shared/worktree/types'
 import { DEFAULT_WORKSPACE_STATUSES, getWorkspaceStatus } from '../../src/shared/workspace-statuses'
 
@@ -23,9 +22,12 @@ vi.mock('../../src/cli/runtime-client', async () => {
 })
 vi.mock('../../src/cli/runtime/environments', () => ({
   addEnvironmentFromPairingCode: mocks.addEnvironmentFromPairingCodeMock,
-  listEnvironments: mocks.listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../../src/shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: mocks.listEnvironmentsMock
 }))
 vi.mock('child_process', async (importOriginal) => {
   const original = await importOriginal<typeof childProcess>()

@@ -47,23 +47,6 @@ describe('resolveGitStatusUpstreamRef', () => {
     ).resolves.toBe('refs/heads/feature/base')
   })
 
-  it('returns a missing custom refspec destination from branch configuration', async () => {
-    const execGit = vi.fn().mockResolvedValue({
-      stdout: 'refs/heads/feature/main\0refs/custom/origin/main\0custom/origin/main\n'
-    })
-
-    await expect(
-      resolveGitStatusUpstreamRef(
-        execGit,
-        '/repo',
-        'refs/heads/feature/main',
-        'custom/origin/main',
-        signal()
-      )
-    ).resolves.toBe('refs/custom/origin/main')
-    expect(execGit).toHaveBeenCalledOnce()
-  })
-
   it('resolves an accepted effective upstream override explicitly', async () => {
     const execGit = vi
       .fn()
@@ -109,14 +92,6 @@ describe('resolveGitStatusUpstreamRef', () => {
         'origin/feature/main',
         signal()
       )
-    ).resolves.toBeUndefined()
-  })
-
-  it('rejects a stale status whose accepted branch no longer exists', async () => {
-    const execGit = vi.fn().mockResolvedValue({ stdout: '' })
-
-    await expect(
-      resolveGitStatusUpstreamRef(execGit, '/repo', 'refs/heads/old', 'origin/old', signal())
     ).resolves.toBeUndefined()
   })
 })

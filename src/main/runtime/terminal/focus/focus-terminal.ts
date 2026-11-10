@@ -1,12 +1,12 @@
 import { OrcaRuntimeWithWaitForLeafPtyId } from '../view/renderer-terminal-snapshot'
-import type { RuntimeTerminalFocus } from '../../../../shared/runtime-types'
+import type { RuntimeTerminalFocus } from '../../../../shared/runtime-terminal-contracts'
 import type {
   RuntimeTerminalReveal,
   TerminalPaneRevealTarget
-} from '../../../../shared/terminal-pane-reveal'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import { getLatestPtyTitle } from '../../runtime-worktree-status-projection'
-import { copySleepingAgentLaunchConfig } from '../../runtime-agent-launch-resolution'
+} from '../../../../shared/workspace-layout/terminal-pane-reveal'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { getLatestPtyTitle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
+import { copySleepingAgentLaunchConfig } from '../launch/runtime-agent-launch-resolution'
 import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../query/pty-terminal-summary'
 
 export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitForLeafPtyId {

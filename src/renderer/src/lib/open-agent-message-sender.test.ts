@@ -37,19 +37,26 @@ vi.mock('@/store', () => ({
     })
   }
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) => ({
   ...(await original<Record<string, unknown>>()),
-  callRuntimeRpc: mocks.rpc,
+  callRuntimeRpc: mocks.rpc
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (original) => ({
+  ...(await original<Record<string, unknown>>()),
   runtimeEnvironmentSupportsCapability: async () => true
 }))
-vi.mock('@/components/terminal-pane/terminal-handle-links', () => ({
+vi.mock('@/components/terminal-pane/links/handles/terminal-handle-links', () => ({
   focusRendererTerminalHandle: mocks.focus,
   focusRuntimeTerminalHandle: mocks.remoteFocus
 }))
-vi.mock('./worktree-activation', () => ({ activateAndRevealWorktree: mocks.reveal }))
-vi.mock('./wsl-moved-chat-activation', () => ({ activateWslMovedWorkspace: () => false }))
+vi.mock('./workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorktree: mocks.reveal
+}))
+vi.mock('./workspace/activation/wsl-moved-chat-activation', () => ({
+  activateWslMovedWorkspace: () => false
+}))
 import { openAgentMessageSender } from './open-agent-message-sender'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 const host = { kind: 'environment', environmentId: 'remote-2' } as const
 const party: AgentMessageSender['party'] = {
   address: 'term_worker',

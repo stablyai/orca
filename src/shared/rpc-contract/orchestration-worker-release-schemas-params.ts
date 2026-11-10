@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { requiredString } from './rpc-param-primitives'
-import { ORCHESTRATION_FLEET_PAGE_MAX } from '../orchestration-fleet-projection'
+import { ORCHESTRATION_FLEET_PAGE_MAX } from '../orchestration/fleet/orchestration-fleet-projection'
 
 export const WorkerDispatchParams = z.object({ dispatch: requiredString('Missing --dispatch') })
 

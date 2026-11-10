@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { resolveWorktreeHostPath } from '../../../../shared/git-metadata-path'
+import { resolveWorktreeHostPath } from '../../../../shared/git/metadata/git-metadata-path'
 import { isWorktreePathMissing } from '../../../workspaces/removal/worktree-removal-safety'
 import {
   SUBMODULE_DIRTY_REMOVAL_DETAIL,

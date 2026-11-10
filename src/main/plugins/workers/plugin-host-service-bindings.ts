@@ -12,8 +12,10 @@ import {
 import { pluginSettingDefaults } from '../../../shared/plugins/contributions/plugin-settings-values'
 import { PluginSecretsStore, pluginSecretsProtection } from '../plugin-secrets-store'
 import { PluginKvStore } from '../plugin-storage-store'
-import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
+import type { TerminalInputKind } from '../../../shared/terminal/input/terminal-input-kind'
 import { pluginTerminalTitle, type PluginAgentStatusRow } from './plugin-workspace-projection'
+import type { PluginAppearanceService } from '../appearance/plugin-appearance-service'
+import type { PluginEditorTypographySource } from '../appearance/plugin-editor-typography'
 
 export type PluginRuntimeDelegate = {
   resolveActiveWorktreeContext(): Promise<{
@@ -60,6 +62,8 @@ export function bindPluginHostServices(input: {
   /** The calling plugin's `contributes.settings`: defaults and value checks. */
   declaredSettings?: readonly PluginSettingContribution[]
   statusBar?: PluginStatusBarState | null
+  appearance?: PluginAppearanceService | null
+  editorTypography?: PluginEditorTypographySource | null
   /** Ids of the calling plugin's `contributes.statusBarItems`, and its install's revision. */
   declaredStatusBarItemIds?: readonly string[]
   statusBarRevision?: string
@@ -67,6 +71,8 @@ export function bindPluginHostServices(input: {
   const declared = new Map((input.declaredSettings ?? []).map((setting) => [setting.key, setting]))
   const { delegate, pluginsDataDir } = input
   return {
+    appearance: input.appearance ?? null,
+    editorTypography: input.editorTypography ?? null,
     desktop: input.desktop ?? null,
     panels: input.panels ?? null,
     statusBar: input.statusBar

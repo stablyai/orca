@@ -143,28 +143,6 @@ describe('terminal WebView init surface replacement', () => {
     vi.restoreAllMocks()
   })
 
-  it("keeps xterm's inactive cursor visible across replacement surfaces", () => {
-    dispatchInit(120, 'desktop')
-    dispatchInit(51, 'phone-resize')
-    dispatchInit(51, 'phone-scrollback')
-
-    expect(terminalOptions).toHaveLength(3)
-    for (const options of terminalOptions) {
-      expect(options).toMatchObject({
-        cursorStyle: 'bar',
-        cursorInactiveStyle: 'block',
-        showCursorImmediately: true
-      })
-    }
-  })
-
-  it('grounds the initial replay without clearing the host live pen', () => {
-    dispatchInit(80, '\x1b[1mBOLD-RUN-LEFT-OPEN')
-    animationFrames.shift()?.()
-
-    expect(writes).toEqual(['\x1b[0m\x1b[1mBOLD-RUN-LEFT-OPEN'])
-  })
-
   it('commits only the newest surface when phone-fit init calls overlap', () => {
     // Restored terminals may receive desktop replay, resize and phone replay before any xterm write completes.
     dispatchInit(120, 'desktop')

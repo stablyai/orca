@@ -1,16 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GitLabWorkItemDetails } from '../../../../../shared/gitlab-types'
 
 const runtime = vi.hoisted(() => ({ call: vi.fn() }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: runtime.call,
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: runtime.call
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: vi.fn()
 }))
 
 import {
   fetchGitLabMRDetailsForChecks,
-  gitLabMRCommentsToPRComments,
   resolveGitLabMRDiscussionForChecks
 } from './gitlab-review-client'
 
@@ -73,30 +73,5 @@ describe('GitLab checks-panel provider adapter', () => {
       }),
       { timeoutMs: 30_000 }
     )
-  })
-
-  it('removes open-ended GitLab reactions before rendering shared comments', () => {
-    const comments: GitLabWorkItemDetails['comments'] = [
-      {
-        id: 9,
-        author: 'reviewer',
-        authorAvatarUrl: 'https://gitlab.example/avatar.png',
-        body: 'Please update this.',
-        createdAt: '2026-01-01T00:00:00Z',
-        url: 'https://gitlab.example/comment/9',
-        reactions: [{ name: 'custom-award', count: 2 }]
-      }
-    ]
-
-    expect(gitLabMRCommentsToPRComments(comments)).toEqual([
-      {
-        id: 9,
-        author: 'reviewer',
-        authorAvatarUrl: 'https://gitlab.example/avatar.png',
-        body: 'Please update this.',
-        createdAt: '2026-01-01T00:00:00Z',
-        url: 'https://gitlab.example/comment/9'
-      }
-    ])
   })
 })

@@ -8,7 +8,7 @@ import {
   getCommitMessageAgentCapability,
   isCustomAgentId,
   resolveCommitMessageAgentChoice
-} from '../../../../shared/commit-message-agent-spec'
+} from '../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { useAppStore } from '@/store'
 import {
   FEATURE_WALL_AGENT_STEP_IDS,

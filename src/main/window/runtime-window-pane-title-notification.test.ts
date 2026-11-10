@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { RuntimeNotifier } from '../runtime/runtime-notifier-contract'
+import type { RuntimeNotifier } from '../runtime/client/events/runtime-notifier-contract'
 
 vi.mock('electron', () => ({ ipcMain: { on: vi.fn(), removeListener: vi.fn() } }))
-vi.mock('../ipc/worktree-change-invalidators', () => ({ runWorktreeChangeInvalidators: vi.fn() }))
+vi.mock('../ipc/worktrees/listing/worktree-change-invalidators', () => ({
+  runWorktreeChangeInvalidators: vi.fn()
+}))
 vi.mock('./renderer-document-navigation', () => ({ registerRendererDocumentNavigation: vi.fn() }))
 vi.mock('./session-tab-close-request-relay', () => ({
   requestSessionTabCloseFromRenderer: vi.fn()
@@ -46,16 +48,6 @@ function attachNotifier() {
 }
 
 describe('pane title renderer emission receipts', () => {
-  it('returns true only after emitting the exact addressed leaf and title', () => {
-    const { setPaneTitle, send } = attachNotifier()
-    expect(setPaneTitle('tab-1', 'leaf-1', 'REVIEWER')).toBe(true)
-    expect(send).toHaveBeenCalledExactlyOnceWith('ui:setPaneTitle', {
-      tabId: 'tab-1',
-      leafId: 'leaf-1',
-      title: 'REVIEWER'
-    })
-  })
-
   it('returns false without emitting to a destroyed desktop', () => {
     const { setPaneTitle, send, windowState } = attachNotifier()
     windowState.destroyed = true

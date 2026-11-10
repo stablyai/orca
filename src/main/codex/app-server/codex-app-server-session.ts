@@ -26,6 +26,7 @@ export type CodexAppServerInvocation = {
   envToDelete?: readonly string[]
   timeoutMs: number
   signal?: AbortSignal
+  experimentalApi?: boolean
   /** Kill unsupervised plugin trees before stdin EOF; root exit leaves children behind and blocks tree killing. */
   treeKillOnFinish?: boolean
 }
@@ -293,7 +294,8 @@ export async function runCodexAppServerSession<T>(
   try {
     const session = async (): Promise<T> => {
       await requestRpc('initialize', {
-        clientInfo: { name: 'orca_desktop', title: 'Orca', version: '0.0.0' }
+        clientInfo: { name: 'orca_desktop', title: 'Orca', version: '0.0.0' },
+        ...(invocation.experimentalApi ? { capabilities: { experimentalApi: true } } : {})
       })
       notify('initialized')
       return body({ request: requestRpc, notify, signal: lifetime.signal })

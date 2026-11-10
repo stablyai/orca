@@ -1,12 +1,13 @@
 import type { RepoProjectHostSetupMethod } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { editorFormatterSchema } from '../../../shared/editor-formatter'
-import type { GitRemoteIdentity } from '../../../shared/git-remote-identity'
+import type { GitRemoteIdentity } from '../../../shared/git/remotes/git-remote-identity'
 import { normalizeRepoBadgeColor } from '../../../shared/repo-badge-color'
 import { sanitizeRepoIcon } from '../../../shared/repo-icon'
 import { normalizeGhAccountBinding } from '../../../shared/github/account-binding'
 import { normalizeJiraProjectReference } from '../../../shared/jira/jira-project-reference'
 import type { GhAccountBinding } from '../../../shared/github/account-binding'
+import { sanitizeAgentWorkspaceTrustDecision } from '../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
@@ -77,6 +78,7 @@ export function sanitizeRepoUpdatesForPersistence<
       | 'worktreeBasePath'
       | 'projectHostSetupMethod'
       | 'forkSyncMode'
+      | 'agentWorkspaceTrust'
       | 'defaultJiraProject'
       | 'customWorktreeVisibilitySources'
       | 'worktreeVisibilitySourcePreferences'
@@ -151,6 +153,14 @@ export function sanitizeRepoUpdatesForPersistence<
       delete sanitized.forkSyncMode
     } else {
       sanitized.forkSyncMode = forkSyncMode
+    }
+  }
+  if ('agentWorkspaceTrust' in sanitized) {
+    const agentWorkspaceTrust = sanitizeAgentWorkspaceTrustDecision(sanitized.agentWorkspaceTrust)
+    if (agentWorkspaceTrust === undefined) {
+      delete sanitized.agentWorkspaceTrust
+    } else {
+      sanitized.agentWorkspaceTrust = agentWorkspaceTrust
     }
   }
   // Null explicitly clears ghAccount; only malformed shapes are discarded.

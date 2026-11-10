@@ -1,12 +1,14 @@
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
+import { sleepingAgentRecordIndex } from '../../terminals/sleeping-agent-record-index'
 import type { AppState } from '../../types'
-import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
-import { agentTurnEndedUncleanly } from '../../../../../shared/agent-main-agent-verdict'
+import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
+import { agentTurnEndedUncleanly } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type {
   SleepingAgentLaunchConfig,
   SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { resumeRecordFromStatus } from '../../../../../shared/agent-resume-record-from-status'
-import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
+import { resumeRecordFromStatus } from '../../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
+import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { findTabForAgentEntry } from './agent-status-pane-key-tab-binding'
 
 export function sleepingRecordFromEntry(args: {
@@ -76,9 +78,8 @@ export function removeSleepingRecordsReplacedByManualWorktreeSleep(
   replacements?: Readonly<Record<string, SleepingAgentSessionRecord>>
 ): { records: Record<string, SleepingAgentSessionRecord>; changed: boolean } {
   const allowedPaneKeys = paneKeys ? new Set(paneKeys) : null
-  let next = records
-  let changed = false
-  for (const [paneKey, record] of Object.entries(records)) {
+  const deletions: [string, null][] = []
+  for (const [paneKey, record] of sleepingAgentRecordIndex.entries(records, worktreeId)) {
     if (record.worktreeId !== worktreeId || (allowedPaneKeys && !allowedPaneKeys.has(paneKey))) {
       continue
     }
@@ -86,11 +87,13 @@ export function removeSleepingRecordsReplacedByManualWorktreeSleep(
     if (!replacements?.[paneKey] && isDurableSleepingCapture(record)) {
       continue
     }
-    if (next === records) {
-      next = { ...records }
-    }
-    delete next[paneKey]
-    changed = true
+    deletions.push([paneKey, null])
   }
-  return { records: next, changed }
+  return {
+    records:
+      deletions.length > 0
+        ? replaceRecordEntries<SleepingAgentSessionRecord>(records, deletions)
+        : records,
+    changed: deletions.length > 0
+  }
 }

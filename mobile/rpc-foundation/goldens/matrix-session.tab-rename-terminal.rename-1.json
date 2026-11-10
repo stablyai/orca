@@ -4,47 +4,39 @@
   "family": "session.tab-rename",
   "namedDeltas": [],
   "values": {
-    "056772c9ebd6": {
-      "name": "terminal.rename#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.rename"
-        },
-        {
-          "name": "params",
-          "value": {
-            "terminal": "terminal-1",
-            "title": "build"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "renamed": true
-          }
-        }
-      }
-    },
     "0923ddf47a9b": {
       "name": "fetch-terminals",
       "ordinal": 3,
       "value": {}
     },
-    "1d611ce0704b": {
+    "0cf23ec95cc3": {
+      "name": "terminal.rename#2",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.rename"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1",
+            "title": "build"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "1e34b997cfe0": {
       "name": "terminal.rename#1",
       "ordinal": 1,
       "args": [
@@ -62,7 +54,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -72,17 +64,11 @@
         "settledAt": 0,
         "value": {
           "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": {
-              "message": "inner refused"
-            },
-            "ok": false
-          }
+          "ok": true
         }
       }
     },
-    "24798624fc93": {
+    "2216df7abfbb": {
       "name": "terminal.rename#1",
       "ordinal": 1,
       "args": [
@@ -100,57 +86,29 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
       "settlement": {
-        "status": "fulfilled",
+        "status": "rejected",
         "startedAt": 0,
         "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
         }
       }
     },
-    "330257f904ce": {
-      "name": "terminal.rename#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.rename"
-        },
-        {
-          "name": "params",
-          "value": {
-            "terminal": "terminal-1",
-            "title": "build"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
+    "32a7c0ae7918": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "outer refused",
+        "isRpcDeliveryUnknown": false
       }
     },
     "3e15def58214": {
@@ -191,7 +149,7 @@
         }
       ]
     },
-    "5edef2bfcf88": {
+    "44569d678c4b": {
       "name": "terminal.rename#1",
       "ordinal": 1,
       "args": [
@@ -209,7 +167,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -219,15 +177,15 @@
         "settledAt": 0,
         "value": {
           "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
+            "code": "refused",
+            "message": ""
           },
           "id": "frame-1",
           "ok": false
         }
       }
     },
-    "638bebed5ea5": {
+    "53ded5a9df97": {
       "name": "terminal.rename#1",
       "ordinal": 1,
       "args": [
@@ -245,7 +203,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -268,7 +226,7 @@
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.rename\",\"params\":{\"terminal\":\"terminal-1\",\"title\":\"build\"}}"
     },
-    "83eae96b12ce": {
+    "8980995db3db": {
       "name": "terminal.rename#1",
       "ordinal": 1,
       "args": [
@@ -286,7 +244,47 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "92c8d9e31310": {
+      "name": "terminal.rename#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.rename"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1",
+            "title": "build"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -303,7 +301,12 @@
         }
       }
     },
-    "a40fd2ac2d57": {
+    "a8e7bb2951d3": {
+      "name": "terminal.rename#2",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.rename\",\"params\":{\"terminal\":\"terminal-1\",\"title\":\"build\"}}"
+    },
+    "ac6fa6599ad2": {
       "name": "terminal.rename#1",
       "ordinal": 1,
       "args": [
@@ -321,7 +324,169 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "b6460631c63c": {
+      "name": "terminal.rename#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.rename"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1",
+            "title": "build"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "renamed": true
+          }
+        }
+      }
+    },
+    "b948e8307e81": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Unknown method",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "dcf74f518078": {
+      "name": "terminal.rename#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.rename"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1",
+            "title": "build"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "e932ac630cbd": {
+      "name": "terminal.rename#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.rename"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1",
+            "title": "build"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ed902d7e4b50": {
+      "name": "terminal.rename#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.rename"
+        },
+        {
+          "name": "params",
+          "value": {
+            "terminal": "terminal-1",
+            "title": "build"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -336,113 +501,14 @@
         }
       }
     },
-    "cc17876206bc": {
-      "name": "terminal.rename#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.rename"
-        },
-        {
-          "name": "params",
-          "value": {
-            "terminal": "terminal-1",
-            "title": "build"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
-          "id": "frame-1",
-          "ok": false
-        }
-      }
-    },
-    "e2f83d8cb4f5": {
-      "name": "terminal.rename#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.rename"
-        },
-        {
-          "name": "params",
-          "value": {
-            "terminal": "terminal-1",
-            "title": "build"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true
-        }
-      }
-    },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
+    "f3b516f62081": {
+      "status": "rejected",
       "startedAt": 0,
       "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
-      }
-    },
-    "f534030ca3f7": {
-      "name": "terminal.rename#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.rename"
-        },
-        {
-          "name": "params",
-          "value": {
-            "terminal": "terminal-1",
-            "title": "build"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "transport failure",
-          "isRpcDeliveryUnknown": true
-        }
+      "error": {
+        "category": "Error",
+        "message": "",
+        "isRpcDeliveryUnknown": false
       }
     }
   },
@@ -452,7 +518,7 @@
       {
         "id": "session-tab-renamed.normal:renamed",
         "observation": {
-          "sender": ["056772c9ebd6"],
+          "sender": ["b6460631c63c"],
           "payloads": ["7e43ade02444"],
           "settlements": {
             "rename": "eb79a9b3682a"
@@ -464,7 +530,7 @@
       {
         "id": "session-tab-renamed.result-absent:renamed",
         "observation": {
-          "sender": ["e2f83d8cb4f5"],
+          "sender": ["1e34b997cfe0"],
           "payloads": ["7e43ade02444"],
           "settlements": {
             "rename": "eb79a9b3682a"
@@ -476,7 +542,7 @@
       {
         "id": "session-tab-renamed.result-null:renamed",
         "observation": {
-          "sender": ["83eae96b12ce"],
+          "sender": ["92c8d9e31310"],
           "payloads": ["7e43ade02444"],
           "settlements": {
             "rename": "eb79a9b3682a"
@@ -488,7 +554,7 @@
       {
         "id": "session-tab-renamed.inner-ok-missing:renamed",
         "observation": {
-          "sender": ["330257f904ce"],
+          "sender": ["e932ac630cbd"],
           "payloads": ["7e43ade02444"],
           "settlements": {
             "rename": "eb79a9b3682a"
@@ -500,7 +566,7 @@
       {
         "id": "session-tab-renamed.inner-false-string-error:renamed",
         "observation": {
-          "sender": ["24798624fc93"],
+          "sender": ["8980995db3db"],
           "payloads": ["7e43ade02444"],
           "settlements": {
             "rename": "eb79a9b3682a"
@@ -512,7 +578,7 @@
       {
         "id": "session-tab-renamed.inner-false-object-error:renamed",
         "observation": {
-          "sender": ["1d611ce0704b"],
+          "sender": ["dcf74f518078"],
           "payloads": ["7e43ade02444"],
           "settlements": {
             "rename": "eb79a9b3682a"
@@ -524,10 +590,10 @@
       {
         "id": "session-tab-renamed.outer-refused:renamed",
         "observation": {
-          "sender": ["638bebed5ea5"],
+          "sender": ["53ded5a9df97"],
           "payloads": ["7e43ade02444"],
           "settlements": {
-            "rename": "eb79a9b3682a"
+            "rename": "32a7c0ae7918"
           },
           "state": "3e15def58214",
           "effects": []
@@ -536,10 +602,10 @@
       {
         "id": "session-tab-renamed.outer-refused-no-message:renamed",
         "observation": {
-          "sender": ["cc17876206bc"],
+          "sender": ["44569d678c4b"],
           "payloads": ["7e43ade02444"],
           "settlements": {
-            "rename": "eb79a9b3682a"
+            "rename": "f3b516f62081"
           },
           "state": "3e15def58214",
           "effects": []
@@ -548,10 +614,10 @@
       {
         "id": "session-tab-renamed.method-not-found:renamed",
         "observation": {
-          "sender": ["5edef2bfcf88"],
+          "sender": ["ac6fa6599ad2"],
           "payloads": ["7e43ade02444"],
           "settlements": {
-            "rename": "eb79a9b3682a"
+            "rename": "b948e8307e81"
           },
           "state": "3e15def58214",
           "effects": []
@@ -560,10 +626,10 @@
       {
         "id": "session-tab-renamed.transport-rejection:renamed",
         "observation": {
-          "sender": ["f534030ca3f7"],
-          "payloads": ["7e43ade02444"],
+          "sender": ["2216df7abfbb", "0cf23ec95cc3"],
+          "payloads": ["7e43ade02444", "a8e7bb2951d3"],
           "settlements": {
-            "rename": "eb79a9b3682a"
+            "rename": "9270aeb7d9c6"
           },
           "state": "3e15def58214",
           "effects": []
@@ -572,10 +638,10 @@
       {
         "id": "session-tab-renamed.transport-rejection-no-message:renamed",
         "observation": {
-          "sender": ["a40fd2ac2d57"],
-          "payloads": ["7e43ade02444"],
+          "sender": ["ed902d7e4b50", "0cf23ec95cc3"],
+          "payloads": ["7e43ade02444", "a8e7bb2951d3"],
           "settlements": {
-            "rename": "eb79a9b3682a"
+            "rename": "9270aeb7d9c6"
           },
           "state": "3e15def58214",
           "effects": []

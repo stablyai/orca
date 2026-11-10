@@ -1,4 +1,4 @@
-import { resolvePaneKey } from '../../../lib/agent-status-pane-ownership'
+import { resolvePaneKey } from '../../../lib/agent-status/ownership/agent-status-pane-ownership'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import type {
@@ -10,7 +10,7 @@ import type {
 import {
   resolveAgentPaneAuthorityKey,
   transferAgentPaneAuthorityAlias
-} from '../agent-pane-authority'
+} from './agent-pane-authority'
 import {
   buildAgentStatusLiveEntry,
   type AgentStatusLiveEntryBuild,
@@ -26,7 +26,7 @@ import {
 import {
   generatedTitleReplacesExisting,
   generatedTitleSourceText
-} from '../../../../../shared/agent-generated-tab-title-rules'
+} from '../../../../../shared/agent-status/presentation/agent-generated-tab-title-rules'
 
 export function createAgentStatusLiveActions(
   runtime: AgentStatusRuntime

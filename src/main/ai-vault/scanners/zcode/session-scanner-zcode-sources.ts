@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { AiVaultScanIssue } from '../../../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { throwIfSignalAborted } from '../../../../shared/abort-signal-reason'
 import { wslGatedAccess } from '../../../native-chat/wsl-transcript-fs-access'
 import { listZcodeSqliteSessionsViaWorker } from '../opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'

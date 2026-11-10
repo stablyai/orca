@@ -1,7 +1,10 @@
-import { writeNativeChatFontSize } from '@/components/native-chat/native-chat-font-size-write'
+import { writeNativeChatFontSize } from '@/components/native-chat/appearance/native-chat-font-size-write'
 import { applyUIZoom } from '@/lib/ui-zoom'
-import { computeEditorFontSize, nextEditorFontZoomLevel } from '@/lib/editor-font-zoom'
-import { resolveEditorBaseFontSize } from '@/lib/editor-typography'
+import {
+  computeEditorFontSize,
+  nextEditorFontZoomLevel
+} from '../../../../shared/editor/editor-font-zoom'
+import { resolveEditorBaseFontSize } from '../../../../shared/editor/editor-typography'
 import { zoomLevelToPercent, stepUIZoomLevel } from '../../../../shared/ui-zoom-level'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 

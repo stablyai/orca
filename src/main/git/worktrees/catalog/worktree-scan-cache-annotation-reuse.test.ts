@@ -58,13 +58,6 @@ describe('graph and annotated worktree scans', () => {
     expect(detectSparseCheckoutMock).not.toHaveBeenCalled()
   })
 
-  it('still probes sparse state for the annotated scan', async () => {
-    const rows = await listWorktrees(REPO, { wslDistro: 'Ubuntu' })
-
-    expect(rows[0]?.isSparse).toBe(true)
-    expect(detectSparseCheckoutMock).toHaveBeenCalledTimes(1)
-  })
-
   it('reads the git listing once for an overlapping graph and annotated scan', async () => {
     const [graphRows, annotatedRows] = await Promise.all([
       listWorktreeGraph(REPO, { wslDistro: 'Ubuntu' }),

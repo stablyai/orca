@@ -5,7 +5,7 @@ import type { LayoutEditorFile } from './workspace-layout-model'
 
 export type LayoutEditorView = {
   view: EditorTabView
-  file: Pick<
+  file: { worktreeId?: string } & Pick<
     LayoutEditorFile,
     | 'filePath'
     | 'relativePath'

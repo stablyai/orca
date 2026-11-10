@@ -1,10 +1,11 @@
-import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { DaemonLaunchNote } from '../daemon/protocol/daemon-launch-note-protocol'
+import type { TerminalExitCause } from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { TerminalLaunchResult } from '../../shared/agent-session/lifecycle/agent-session-resume'
-import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TerminalOscLinkRange } from '../../shared/terminal/links/terminal-osc-link-ranges'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session/agent-session-host-authority'
-import type { PtyIncarnationId } from '../../shared/pty-incarnation'
-import type { TerminalOwner } from '../../shared/terminal-owner'
+import type { PtyIncarnationId } from '../../shared/terminal/pty/lifecycle/pty-incarnation'
+import type { TerminalOwner } from '../../shared/terminal/pty/lifecycle/terminal-owner'
 import type { OpenCodeCliCapabilities } from '../../shared/opencode-cli-version'
 
 export type PtySpawnResult = TerminalLaunchResult & {
@@ -25,6 +26,8 @@ export type PtySpawnResult = TerminalLaunchResult & {
   pid?: number | null
   /** Minimal allowlisted launch ownership returned by daemon reattach. */
   launchAgent?: TuiAgent
+  /** The unretired launch main armed before a restart, returned by daemon reattach. */
+  launchNote?: DaemonLaunchNote | null
   /** Local WSL context: null is native; undefined is unavailable/legacy. */
   wslDistro?: string | null
   /** Daemon reattach ANSI screen restore for xterm. */

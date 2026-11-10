@@ -1,23 +1,23 @@
-import { resolveHostCodexSessionSourceHome } from '../codex/codex-session-source-home'
-import { startSystemCodexSessionBridgeInBackground } from '../codex/codex-session-bridge'
-import { startCodexAccountSessionBridgeInBackground } from '../codex/codex-account-session-bridge'
+import { resolveHostCodexSessionSourceHome } from '../codex/history/rollouts/codex-session-source-home'
+import { startSystemCodexSessionBridgeInBackground } from '../codex/history/bridges/codex-session-bridge'
+import { startCodexAccountSessionBridgeInBackground } from '../codex/history/bridges/codex-account-session-bridge'
 import { isCodexHistorySharedAcrossAccounts } from './codex-history-sharing'
 import {
   getSystemCodexHomePath,
   resolveOrcaManagedCodexHomePath,
   syncSystemCodexResourcesIntoManagedHome
-} from '../codex/codex-home-paths'
-import { syncSystemConfigIntoManagedCodexHome } from '../codex/codex-config-mirror'
+} from '../codex/configuration/homes/codex-home-paths'
+import { syncSystemConfigIntoManagedCodexHome } from '../codex/configuration/settings/codex-config-mirror'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import {
   normalizeCodexRuntimeSelection,
   type CodexAccountSelectionTarget
 } from './runtime-selection'
-import { hasCustomCodexHomeOverrideForLaunch } from '../codex/codex-real-home-path'
-import { markCodexSessionBackfillMarkerPending } from '../codex/codex-session-backfill-marker'
-import { getCodexSessionBackfillDate } from '../codex/codex-session-backfill-scan-dates'
-import { resolveCodexSessionBackfillPaths } from '../codex/codex-session-backfill'
-import type { CodexSessionBackfillDate } from '../codex/codex-session-backfill-types'
+import { hasCustomCodexHomeOverrideForLaunch } from '../codex/configuration/homes/codex-real-home-path'
+import { markCodexSessionBackfillMarkerPending } from '../codex/history/backfill/codex-session-backfill-marker'
+import { getCodexSessionBackfillDate } from '../codex/history/backfill/codex-session-backfill-scan-dates'
+import { resolveCodexSessionBackfillPaths } from '../codex/history/backfill/codex-session-backfill'
+import type { CodexSessionBackfillDate } from '../codex/history/backfill/codex-session-backfill-types'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 import { CodexRuntimeHomeRouting } from './runtime-home-service-home-routing'
 import { blockedWslDistroForExec } from '../wsl/discovery/wsl-background-exec-gate'

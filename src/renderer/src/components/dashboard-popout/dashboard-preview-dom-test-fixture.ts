@@ -1,7 +1,7 @@
 import type { PreviewTerminalLinkHandler } from './preview-terminal-links'
 import { vi, type Mock } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import {
   openStandaloneTerminal,
   type StandaloneTerminal
@@ -52,86 +52,6 @@ export function installPreviewDomFixture(): () => void {
     }
   )
   return () => style.remove()
-}
-
-export function observePreviewListeners(elements: HTMLElement[]) {
-  type Registration = {
-    target: EventTarget
-    type: string
-    listener: EventListenerOrEventListenerObject
-    capture: boolean
-    wrapped: EventListener
-  }
-  const active = new Set<Registration>()
-  let callbacks = 0
-  const spies = [document, window, ...elements].flatMap((target) => {
-    const nativeAdd: EventTarget['addEventListener'] = target.addEventListener
-    const nativeRemove: EventTarget['removeEventListener'] = target.removeEventListener
-    const add = vi.spyOn(target, 'addEventListener').mockImplementation(function (
-      this: EventTarget,
-      type: string,
-      listener: EventListenerOrEventListenerObject | null,
-      options?: boolean | AddEventListenerOptions
-    ) {
-      if (!listener) {
-        return
-      }
-      const capture = typeof options === 'boolean' ? options : Boolean(options?.capture)
-      if (
-        Array.from(active).some(
-          (r) =>
-            r.target === this && r.type === type && r.listener === listener && r.capture === capture
-        )
-      ) {
-        return
-      }
-      const wrapped: EventListener = function (this: EventTarget, event) {
-        if (this === document || this === window) {
-          callbacks++
-        }
-        if (typeof listener === 'function') {
-          listener.call(this, event)
-        } else {
-          listener.handleEvent(event)
-        }
-      }
-      active.add({ target: this, type, listener, capture, wrapped })
-      nativeAdd.call(this, type, wrapped, options)
-    })
-    const remove = vi.spyOn(target, 'removeEventListener').mockImplementation(function (
-      this: EventTarget,
-      type: string,
-      listener: EventListenerOrEventListenerObject | null,
-      options?: boolean | EventListenerOptions
-    ) {
-      const capture = typeof options === 'boolean' ? options : Boolean(options?.capture)
-      const registration = Array.from(active).find(
-        (r) =>
-          r.target === this && r.type === type && r.listener === listener && r.capture === capture
-      )
-      if (registration) {
-        nativeRemove.call(this, type, registration.wrapped, options)
-        active.delete(registration)
-      } else {
-        nativeRemove.call(this, type, listener, options)
-      }
-    })
-    return [add, remove]
-  })
-  return {
-    active,
-    get callbacks() {
-      return callbacks
-    },
-    resetCallbacks: () => {
-      callbacks = 0
-    },
-    restore: () => {
-      for (const spy of spies) {
-        spy.mockRestore()
-      }
-    }
-  }
 }
 
 export function mountPreviewLinkInteraction(

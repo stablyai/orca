@@ -1,9 +1,12 @@
-import type { GitUpstreamStatus } from '../../../shared/git-status-types'
+import type { GitUpstreamStatus } from '../../../shared/git/status/git-status-types'
 import type { GitPushTarget } from '../../../shared/worktree/types'
-import { upstreamOnlyCommitsArePatchEquivalent } from '../../../shared/git-upstream-status'
-import { isNoUpstreamError, normalizeGitErrorMessage } from '../../../shared/git-remote-error'
-import { getEffectiveGitUpstreamStatus } from '../../../shared/git-effective-upstream'
-import { getPublishTargetStatus } from '../../../shared/git-publish-target-status'
+import { upstreamOnlyCommitsArePatchEquivalent } from '../../../shared/git/remotes/git-upstream-status'
+import {
+  isNoUpstreamError,
+  normalizeGitErrorMessage
+} from '../../../shared/git/remotes/git-remote-error'
+import { getEffectiveGitUpstreamStatus } from '../../../shared/git/remotes/git-effective-upstream'
+import { getPublishTargetStatus } from '../../../shared/git/remotes/git-publish-target-status'
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { validateGitPushTarget } from '../push-target-validation'
 import { nativeAndWslGitUpstreamStatusReadOwner } from './git-upstream-status-read-owner'

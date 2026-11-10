@@ -23,9 +23,15 @@ import type { MobileWebShellRuntime } from './mobile-web-shell-runtime'
 import { useKeyboardOcclusion } from '../platform/keyboard-occlusion'
 import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
 import { useNativePdfViewer } from '../platform/native-pdf-view'
+import { useNativeImageActions } from '../platform/native-image-actions'
+import { processDeviceStore } from '../device-store/device-store'
+import { serveDeviceStoreVerb } from './device-store-verb-server'
+import { BRIDGE_STORE_VERB } from './bridge/bridge-store-verb'
+import { useAppLeavesForeground } from './use-app-leaves-foreground'
 import { useShellPageBack } from './use-shell-page-back'
 import { useShellStackPop } from './use-shell-stack-pop'
 import { usePageLocationOnFold } from './page-location-on-fold'
+import { usePageOpenTarget } from './page-open-target'
 import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 import { useShellPageStorageRefresh } from './use-shell-page-storage-refresh'
 import { usePageHostSnapshot } from './use-page-host-snapshot'
@@ -60,6 +66,8 @@ export type MobileWebShellScreenProps = {
   appNamesRoute?: boolean
   // The caller compares the consumed one-shot value before clearing it; a newer tap may already have replaced it (ruling 34).
   onRouteParamClear?: (param: BridgeClearableRouteParam, value: string) => void
+  // Where the page has navigated inside its own document; without it the location is only held for a fold.
+  onPageLocation?: (href: string) => void
   runtime?: MobileWebShellRuntime
 }
 
@@ -69,6 +77,7 @@ export function MobileWebShellScreen({
   route,
   appNamesRoute,
   onRouteParamClear,
+  onPageLocation,
   onOverlayLoad,
   runtime
 }: MobileWebShellScreenProps) {
@@ -135,13 +144,18 @@ export function MobileWebShellScreen({
   // Create the media registry before the bridge; staged files belong to this page session.
   const serveDeviceVerb = useNativeDeviceVerbs(readySessionId)
   const servePdfView = useNativePdfViewer(hostId, readySessionId)
+  const serveImageAction = useNativeImageActions(readySessionId)
   // Read the shell's storage for this host.
   const serveNativeVerb = (verb: BridgeNativeVerb, params: unknown): Promise<unknown> =>
     verb === 'native.storage.read'
       ? readWorkspaceKey(storageReadParamsSchema.parse(params).key).then((value) => ({ value }))
       : verb === 'native.pdf.view'
         ? servePdfView(params)
-        : serveDeviceVerb(verb, params)
+        : verb === 'native.image.act'
+          ? serveImageAction(params)
+          : verb === BRIDGE_STORE_VERB
+            ? serveDeviceStoreVerb(processDeviceStore(), hostId, params)
+            : serveDeviceVerb(verb, params)
   // Both externalLink and cancelled navigation use this filtered opener. Report device-handler failure without throwing from a native frame callback; neither path has a reply.
   const openUrlForPage = (url: string) => {
     void Linking.openURL(url).catch((error: unknown) => {
@@ -176,6 +190,15 @@ export function MobileWebShellScreen({
     }
     return void (replace ? router.replace(href) : router.push(href))
   }
+  const openTarget = usePageOpenTarget({
+    route,
+    sessionId: readySessionId,
+    pageVersion: state.kind === 'ready' ? (state.compat.pageVersion ?? 0) : null,
+    isFocused: () => navigation.isFocused(),
+    openNatively: openPageRoute,
+    onRouteParamClear
+  })
+  const pageRoute = openTarget.pageRoute
   const holdPageLocation = usePageLocationOnFold(
     isWideLayout,
     () => navigation.isFocused(),
@@ -185,7 +208,7 @@ export function MobileWebShellScreen({
   const bridge = useMobileWebShellBridge({
     hostId,
     hostStatus,
-    route,
+    route: pageRoute,
     safeAreaInsets: pageInsets,
     keyboardInset,
     pageGeometry: pageFold.geometry,
@@ -202,7 +225,7 @@ export function MobileWebShellScreen({
     snapshot,
     readStorage,
     onStorageWrite: writeStorage,
-    // Treat a page that never renders as document-load-failed: refetch once for replaced bytes, then fail visibly if its code still breaks.
+    // Treat a page that never renders as document-load-failed: remount the same bytes once, then fail visibly; Try again downloads fresh.
     // Never throw from the page error boundary/native frame callback.
     onPageFault: (error) => {
       console.warn('[web-shell] the page faulted', error)
@@ -217,11 +240,15 @@ export function MobileWebShellScreen({
     // Keep the cover until the page reports its own first frame.
     onPagePainted: reportPagePainted,
     onPageBackClaim: reportPageBackClaim,
-    onPageLocation: (href) => holdPageLocation(href, ownsHostArea),
-    onTerminalKeyRailClaim: keyRail.reportClaim,
-    onRouteParamClear: (param, value) => {
-      onRouteParamClear?.(param, value)
+    // A caller that tracks the location takes it; pages from #34484 desktops report it only for a fold to reopen.
+    onPageLocation: (href) => {
+      openTarget.recordLocation(href)
+      return onPageLocation === undefined
+        ? holdPageLocation(href, ownsHostArea)
+        : onPageLocation(href)
     },
+    onTerminalKeyRailClaim: keyRail.reportClaim,
+    onRouteParamClear: openTarget.onRouteParamClear,
     // Route refusal builds no tree; use document-load-failed for bounded recovery, then a terminal failure. The host logs the specific issue.
     onRouteRefused: (issue) => {
       console.warn('[web-shell] refused to open this screen', issue)
@@ -237,10 +264,11 @@ export function MobileWebShellScreen({
     // The stream survives dropped frames; keep a count because diagnostics print only once per host.
     onBinaryFramesDropped: reportDroppedBinaryFrames
   })
+  useAppLeavesForeground(bridge.sendAppInactive)
 
   // paneKey changes keep the session mounted; the host deduplicates routes and preserves in-flight frames.
   useShellPageStorageRefresh(refreshStorage, bridge.publishStorage)
-  useEffect(() => bridge.publishRoute(route), [bridge.publishRoute, route])
+  useEffect(() => bridge.publishRoute(pageRoute), [bridge.publishRoute, pageRoute])
 
   usePublishedSafeAreaInsets(bridge.publishSafeAreaInsets, pageInsets)
   const publishKeyboardInset = bridge.publishKeyboardInset
@@ -335,7 +363,7 @@ export function MobileWebShellScreen({
         onLoadState={(event) => {
           const parsed = parseMobileWebShellLoadState(event.nativeEvent)
           if (parsed?.state === 'failed') {
-            reportShellFailure(parsed.reason)
+            reportShellFailure(parsed.reason, parsed.reclaimed === true)
             return
           }
           // Load completion proves only response commit; start waiting for the page’s own first paint here.

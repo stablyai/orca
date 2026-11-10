@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
+  Alert,
   View,
   Text,
   Pressable,
@@ -10,15 +12,26 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ChevronLeft } from 'lucide-react-native'
+import { Check, ChevronLeft } from 'lucide-react-native'
 import { colors, radii, spacing, typography, pressedStyle } from '../../../src/theme/mobile-theme'
+import { NavBar } from '../../../src/components/nav-bar/NavBar'
+import { NavBarButton } from '../../../src/components/nav-bar/NavBarButton'
 import { themedStyleSheet } from '../../../src/theme/themed-styles'
 import { useMobileColorScheme } from '../../../src/theme/use-mobile-color-scheme'
-import { loadHosts, updateHostNameAndEndpoint } from '../../../src/transport/host-store'
-import { displayHostEndpoint } from '../../../src/transport/host-endpoint'
-import { resolveHostEndpointEdit } from '../../../src/transport/host-endpoint-edit'
-import { usePrimeHosts, useRefreshHostClient } from '../../../src/transport/host-client-hooks'
-import type { HostProfile } from '../../../src/transport/types'
+import { loadHosts, updateHostNameAndEndpoint } from '../../../src/host-catalog/host-store'
+import { displayHostEndpoint } from '../../../src/transport/hosts/host-endpoint'
+import { resolveHostEndpointEdit } from '../../../src/transport/hosts/host-endpoint-edit'
+import {
+  useForgetHostClient,
+  usePrimeHosts,
+  useRefreshHostClient
+} from '../../../src/transport/connection/host-client-hooks'
+import { removeHostAndCloseClient } from '../../../src/host-catalog/host-removal-lifecycle'
+import { useHostDisplay } from '../../../src/host-descriptors/use-host-display'
+import { leaveHostRoute } from '../../../src/host-route-exit'
+import { ConfirmModal } from '../../../src/components/ConfirmModal'
+import { ListGroup, ListRow } from '../../../src/components/list/ListGroup'
+import type { HostProfile } from '../../../src/host-catalog/host-profile'
 import { hostOs } from '../../../src/platform/host-os'
 import { translate } from '../../../src/i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../src/i18n/use-mobile-translation'
@@ -32,6 +45,8 @@ export default function EditHostScreen() {
   const { hostId } = useLocalSearchParams<{ hostId: string }>()
   const primeHosts = usePrimeHosts()
   const refreshHostClient = useRefreshHostClient()
+  const forgetHostClient = useForgetHostClient()
+  const queryClient = useQueryClient()
 
   const [host, setHost] = useState<HostProfile | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -39,6 +54,8 @@ export default function EditHostScreen() {
   const [address, setAddress] = useState('')
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [confirmRemove, setConfirmRemove] = useState(false)
+  const hostTitle = useHostDisplay(host).title
   // Ref blocks re-entry before async setSaving rerenders.
   const savingRef = useRef(false)
   const routeRevision = useRef(0)
@@ -169,35 +186,44 @@ export default function EditHostScreen() {
     }
   }
 
+  async function handleRemove() {
+    if (!host) {
+      return
+    }
+    try {
+      await removeHostAndCloseClient(host.id, forgetHostClient, queryClient)
+    } catch {
+      setConfirmRemove(true)
+      Alert.alert(
+        t('home.screen.removeHostFailed', 'Could not remove host'),
+        t('home.screen.tryAgain', 'Please try again.')
+      )
+      return
+    }
+    routeRevision.current += 1
+    leaveHostRoute(router)
+  }
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
-      <View style={styles.topRow}>
-        <Pressable
-          style={({ pressed }) => [styles.backButton, pressed && pressedStyle]}
-          onPress={leave}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back', 'Back')}
-        >
-          <ChevronLeft size={22} color={colors.textSecondary} />
-        </Pressable>
-        <Text style={styles.heading}>{t('host.edit.title', 'Edit host')}</Text>
-        <Pressable
-          style={({ pressed }) => [
-            styles.saveButton,
-            (!canSave || pressed) && styles.saveButtonDisabled
-          ]}
-          onPress={() => void handleSave()}
-          disabled={!canSave}
-          accessibilityRole="button"
-          accessibilityLabel={t('host.edit.saveHost', 'Save host')}
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color={colors.bgBase} />
-          ) : (
-            <Text style={styles.saveButtonText}>{t('common.save', 'Save')}</Text>
-          )}
-        </Pressable>
-      </View>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <NavBar
+        leading={
+          <NavBarButton
+            icon={ChevronLeft}
+            onPress={leave}
+            accessibilityLabel={t('common.back', 'Back')}
+          />
+        }
+        title={t('host.edit.title', 'Edit host')}
+        trailing={
+          <NavBarButton
+            icon={Check}
+            onPress={() => void handleSave()}
+            disabled={!canSave}
+            accessibilityLabel={t('host.edit.saveHost', 'Save host')}
+          />
+        }
+      />
 
       {loadError ? (
         <View style={styles.errorState}>
@@ -283,9 +309,29 @@ export default function EditHostScreen() {
             ) : null}
 
             {saveError ? <Text style={styles.errorText}>{saveError}</Text> : null}
+
+            <ListGroup style={styles.removeGroup}>
+              <ListRow
+                title={t('host.edit.removeHost', 'Remove host')}
+                destructive
+                disabled={saving}
+                onPress={() => setConfirmRemove(true)}
+              />
+            </ListGroup>
           </ScrollView>
         </KeyboardAvoidingView>
       )}
+      <ConfirmModal
+        visible={confirmRemove}
+        title={t('home.screen.removeHostTitle', 'Remove Host')}
+        message={t('home.screen.removeHostMessage', 'Remove "{{name}}"? You can re-pair later.', {
+          name: hostTitle
+        })}
+        confirmLabel={t('common.remove', 'Remove')}
+        destructive
+        onConfirm={() => void handleRemove()}
+        onCancel={() => setConfirmRemove(false)}
+      />
     </View>
   )
 }
@@ -298,43 +344,11 @@ const styles = themedStyleSheet(() => ({
   flex: {
     flex: 1
   },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.md,
-    gap: spacing.sm
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  heading: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 20,
-    fontWeight: '700'
-  },
-  saveButton: {
-    minWidth: 64,
-    height: 34,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.control,
-    backgroundColor: colors.surfaceBright,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  saveButtonDisabled: {
-    opacity: 0.4
-  },
-  saveButtonText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
+  removeGroup: {
+    marginTop: spacing.xl
   },
   form: {
+    paddingTop: spacing.md,
     paddingHorizontal: spacing.lg,
     gap: spacing.sm
   },

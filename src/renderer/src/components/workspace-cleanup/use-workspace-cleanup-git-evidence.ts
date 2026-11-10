@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
-import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
+
+import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
+import { selectWorkspaceCleanupGitEvidenceTargets } from './workspace-cleanup-git-evidence'
 import {
-  selectWorkspaceCleanupGitEvidenceTargets,
-  WORKSPACE_CLEANUP_GIT_EVIDENCE_MAX_TARGETS
-} from './workspace-cleanup-git-evidence'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+  type WorkspaceCleanupCandidate,
+  WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT as WORKSPACE_CLEANUP_GIT_EVIDENCE_MAX_TARGETS
+} from '../../../../shared/workspace-cleanup/workspace-cleanup'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 
 export type WorkspaceCleanupGitEvidenceState = {
   /** Focused re-scan results, keyed by host-qualified identity. */
@@ -117,13 +118,15 @@ export function useWorkspaceCleanupGitEvidence({
     publish()
   }, [publish])
 
-  useEffect(() => {
+  // Layout effect: queue targets before first paint so unchecked rows open as "Checking", not "unknown".
+  useLayoutEffect(() => {
     const wasEnabled = enabledRef.current
     const snapshotChanged = scannedAtRef.current !== scannedAt
     enabledRef.current = enabled
     scannedAtRef.current = scannedAt
 
-    if ((wasEnabled && !enabled) || (enabled && snapshotChanged)) {
+    const closing = wasEnabled && !enabled
+    if (closing || (enabled && (!wasEnabled || snapshotChanged))) {
       generationRef.current += 1
       const activeScanId = activeScanIdRef.current
       if (activeScanId) {
@@ -132,8 +135,11 @@ export function useWorkspaceCleanupGitEvidence({
       queueRef.current = []
       queuedRef.current.clear()
       inFlightRef.current.clear()
-      attemptedRef.current.clear()
-      evidenceRef.current.clear()
+      // Closing keeps evidence so the exit animation does not flash "Git status unknown"; reopening resets it.
+      if (!closing) {
+        attemptedRef.current.clear()
+        evidenceRef.current.clear()
+      }
       totalRef.current = 0
       publishDirtyRef.current = true
       publish()

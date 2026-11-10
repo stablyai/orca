@@ -2,7 +2,7 @@
  * Writes the `orcadRetained` mark on local project rows (mover design, section 4.5). Only this
  * machine's rows: the WSL host's own row carries the same id and is never marked.
  */
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import {
   sameOrcadRetainedMarker,
   type OrcadRetainedMarker

@@ -3,18 +3,18 @@ import type { GlobalSettings } from '../../../../../shared/global-settings-types
 import {
   AGENT_CHAT_PERMISSION_MODES,
   newChatPermissionModeForSettings
-} from '../../../../../shared/agent-chat-permission-mode'
-import { agentChatPermissionModes } from '../../../../../shared/agent-chat-permission-support'
-import { TUI_AGENT_DISPLAY_NAMES } from '../../../../../shared/tui-agent-display-names'
-import { PERMISSION_CHOICE_AGENTS } from '../../../../../shared/tui-agent-permission-choice'
+} from '../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+import { agentChatPermissionModes } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
+import { PERMISSION_CHOICE_AGENTS } from '../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { useAppStore } from '@/store/index'
 import { Button } from '../../ui/button'
-import { NativeChatPermissionModePicker } from '../../native-chat/NativeChatPermissionModePicker'
-import { nativeChatPermissionModeLabel } from '../../native-chat/native-chat-permission-mode-labels'
+import { NativeChatPermissionModePicker } from '../../native-chat/session/options/controls/NativeChatPermissionModePicker'
+import { nativeChatPermissionModeLabel } from '../../native-chat/session/options/controls/native-chat-permission-mode-labels'
 import { SettingsRow } from '../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { getChatPermissionSearchEntry } from './chat-permission-search'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** The host seeds every chat from its agent's one stored permission. */
 export function ChatPermissionSetting({
@@ -26,6 +26,7 @@ export function ChatPermissionSetting({
   updateSettings: (updates: Partial<GlobalSettings>) => void
   forceVisible: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const { capability, settings: permissionSettings } = useChatPermissionSettings(settings)
   const supported = capability === 'supported'
   const modern = capability !== 'unsupported'
@@ -52,7 +53,7 @@ export function ChatPermissionSetting({
               disabled={!supported}
               onClick={() => openSettingsTarget({ pane: 'agents', repoId: null })}
             >
-              {translate('settings.chat.permissionsAgentsLink', 'Settings → Agents')}
+              {t('settings.chat.permissionsAgentsLink', 'Settings → Agents')}
             </Button>
           ) : (
             <NativeChatPermissionModePicker
@@ -69,9 +70,9 @@ export function ChatPermissionSetting({
               const mode = newChatPermissionModeForSettings(agent, permissionSettings)
               const label =
                 mode === 'own'
-                  ? translate('settings.agents.permissionOwnShort', 'Own settings')
+                  ? t('settings.agents.permissionOwnShort', 'Own settings')
                   : mode
-                    ? nativeChatPermissionModeLabel(mode)
+                    ? nativeChatPermissionModeLabel(mode, t)
                     : ''
               return (
                 <SettingsRow

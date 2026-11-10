@@ -47,12 +47,7 @@ export async function resolveOrchestrationTerminalHandle(
   if (hasStructuredSessionMarker()) {
     throw structuredSessionRefusal(flagName)
   }
-  if (flagName === 'from') {
-    return await resolveImplicitOrchestrationSender(cwd, client)
-  }
-  return await getTerminalHandle(callerScopeFlags(), cwd, client, {
-    purpose: 'orchestration-caller'
-  })
+  return await resolveImplicitOrchestrationCaller(cwd, client, flagName)
 }
 
 // terminal.show requires a PTY; resolveIdentity also recognizes structured workers without panes.
@@ -180,9 +175,10 @@ export async function resolveCoordinatorTerminalHandle(
   })
 }
 
-async function resolveImplicitOrchestrationSender(
+async function resolveImplicitOrchestrationCaller(
   cwd: string,
-  client: RuntimeClient
+  client: RuntimeClient,
+  flagName: 'from' | 'terminal'
 ): Promise<string> {
   try {
     // An arbitrary active-terminal choice would let this command speak as a sibling worker.
@@ -194,7 +190,7 @@ async function resolveImplicitOrchestrationSender(
     if (!isNoActiveTerminalError(err)) {
       throw err
     }
-    throwNoActiveSenderTerminal()
+    throwNoActiveSenderTerminal(flagName)
   }
 }
 
@@ -209,10 +205,10 @@ function structuredSessionRefusal(flagName: 'from' | 'terminal'): RuntimeClientE
   )
 }
 
-export function throwNoActiveSenderTerminal(): never {
+export function throwNoActiveSenderTerminal(flagName: 'from' | 'terminal' = 'from'): never {
   // Lifecycle sends can refuse before the structured guard; distinguish missing identity from stale handles.
   if (hasStructuredSessionMarker() && !process.env.ORCA_TERMINAL_HANDLE) {
-    throw structuredSessionRefusal('from')
+    throw structuredSessionRefusal(flagName)
   }
   // Codex sets CODEX_THREAD_ID after the env filter that can drop Orca identity (#25775).
   if (process.env.CODEX_THREAD_ID && !process.env.ORCA_TERMINAL_HANDLE) {
@@ -222,14 +218,14 @@ export function throwNoActiveSenderTerminal(): never {
         'an Orca terminal, its shell_environment_policy removed it, and relaunching the same way ' +
         'will not restore it. Start Codex by typing `codex` in an Orca terminal, or set ' +
         'inherit = "all" with include_only listing the variables to keep plus "ORCA_*". ' +
-        "Pass --from only with your own terminal's handle — another pane's handle would act on " +
+        `Pass --${flagName} only with your own terminal's handle — another pane's handle would act on ` +
         'its mailbox.'
     )
   }
   throw new RuntimeClientError(
     'no_active_sender_terminal',
-    'Could not determine the sender terminal for this orchestration command. ' +
-      "Pass --from with your own terminal's handle — another pane's handle would act on its mailbox — " +
+    'Could not determine the calling terminal for this orchestration command. ' +
+      `Pass --${flagName} with your own terminal's handle — another pane's handle would act on its mailbox — ` +
       'or run the command inside a live Orca terminal with ORCA_TERMINAL_HANDLE set.'
   )
 }

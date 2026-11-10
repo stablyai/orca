@@ -13,7 +13,7 @@ vi.mock('sonner', () => {
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(() => undefined, { getState: () => ({ tabsByWorktree: {} }) })
 }))
-vi.mock('@/lib/reveal-terminal-pane', () => ({ revealTerminalPane: vi.fn() }))
+vi.mock('@/lib/workspace/activation/reveal-terminal-pane', () => ({ revealTerminalPane: vi.fn() }))
 
 const { followWslMoveOrchestratorStatus, useWslMoveOrchestratorStatus } =
   await import('./wsl-move-orchestrator-status')

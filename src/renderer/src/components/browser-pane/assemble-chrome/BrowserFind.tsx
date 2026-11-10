@@ -1,11 +1,13 @@
-import { ImeInput } from '@/lib/ime-text-field'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronUp, ChevronDown, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
-import { getFindRequestQuery } from '@/lib/find-query-bounds'
+import { useTranslate } from '@/i18n/use-translate'
+import { getFindRequestQuery } from '@/lib/text-search/find-query-bounds'
+import { useGuestEscape } from '../host-guest/use-guest-escape'
 
 type BrowserFindProps = {
+  browserPageId: string
   isOpen: boolean
   onClose: () => void
   webviewRef: React.RefObject<Electron.WebviewTag | null>
@@ -14,11 +16,13 @@ type BrowserFindProps = {
 }
 
 export default function BrowserFind({
+  browserPageId,
   isOpen,
   onClose,
   webviewRef,
   guestGeneration = null
 }: BrowserFindProps): React.JSX.Element | null {
+  const t = useTranslate()
   const inputRef = useRef<HTMLInputElement>(null)
   const wasOpenRef = useRef(isOpen)
   const activeFindRef = useRef<{
@@ -167,6 +171,9 @@ export default function BrowserFind({
     setResult(null)
   }
 
+  // Like Chrome, Escape typed in the page closes the bar.
+  useGuestEscape(browserPageId, isOpen, onClose)
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       e.stopPropagation()
@@ -197,10 +204,7 @@ export default function BrowserFind({
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder={translate(
-          'auto.components.browser.pane.BrowserFind.636a69cd66',
-          'Find in page...'
-        )}
+        placeholder={t('auto.components.browser.pane.BrowserFind.636a69cd66', 'Find in page...')}
         className="min-w-0 flex-1 border-none bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
       />
 
@@ -208,12 +212,11 @@ export default function BrowserFind({
       {query && (currentResult !== null || !requestQuery) ? (
         <span className="shrink-0 text-xs text-zinc-400">
           {totalMatches > 0
-            ? translate(
-                'auto.components.browser.pane.BrowserFind.fc63f336aa',
-                '{{value0}} of {{value1}}',
-                { value0: activeMatch, value1: totalMatches }
-              )
-            : translate('auto.components.browser.pane.BrowserFind.7baca7b1b8', 'No matches')}
+            ? t('auto.components.browser.pane.BrowserFind.fc63f336aa', '{{value0}} of {{value1}}', {
+                value0: activeMatch,
+                value1: totalMatches
+              })
+            : t('auto.components.browser.pane.BrowserFind.7baca7b1b8', 'No matches')}
         </span>
       ) : null}
 
@@ -225,7 +228,7 @@ export default function BrowserFind({
         size="icon-xs"
         onClick={findPrevious}
         className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
-        title={translate('auto.components.browser.pane.BrowserFind.ca7aebbd7f', 'Previous match')}
+        title={t('auto.components.browser.pane.BrowserFind.ca7aebbd7f', 'Previous match')}
       >
         <ChevronUp size={14} />
       </Button>
@@ -236,7 +239,7 @@ export default function BrowserFind({
         size="icon-xs"
         onClick={findNext}
         className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
-        title={translate('auto.components.browser.pane.BrowserFind.5c0c02ae76', 'Next match')}
+        title={t('auto.components.browser.pane.BrowserFind.5c0c02ae76', 'Next match')}
       >
         <ChevronDown size={14} />
       </Button>
@@ -249,7 +252,7 @@ export default function BrowserFind({
         size="icon-xs"
         onClick={onClose}
         className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
-        title={translate('auto.components.browser.pane.BrowserFind.c9d5f63fdc', 'Close')}
+        title={t('auto.components.browser.pane.BrowserFind.c9d5f63fdc', 'Close')}
       >
         <X size={14} />
       </Button>

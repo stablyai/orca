@@ -1,15 +1,15 @@
 import type { PtySpawnOutcome } from '../spawn-outcome'
 import type { PaneSpawnReservation } from '../pane/spawn-reservation'
 import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
-import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
+import type { StartupCommandDelivery } from '../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { TerminalStartupCwdMissingDirFallback } from '../../../../shared/terminal-startup-cwd'
+import type { TerminalStartupCwdMissingDirFallback } from '../../../../shared/shell/launch/terminal-startup-cwd'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
@@ -38,6 +38,7 @@ export type PtySpawnIpcArgs = {
   resumeOrigin?: unknown
   launchToken?: unknown
   launchAgent?: TuiAgent
+  trustWorktreeId?: string
   startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null
   worktreeId?: string
@@ -64,6 +65,8 @@ export type PtySpawnIpcArgs = {
   spawnIntent?: unknown
   // Only `true` counts: a window restore no user act asked for.
   wslPassiveRestore?: unknown
+  // Only `true` counts: the user just chose to let agents ask, even if saving that answer failed.
+  skipAgentWorkspaceTrust?: unknown
   // Validate untyped launch input through AgentLaunch.safeParse.
   agentLaunch?: unknown
   // Main validates renderer telemetry; retain unknown input types at the IPC boundary.

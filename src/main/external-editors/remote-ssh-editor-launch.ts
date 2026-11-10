@@ -1,13 +1,13 @@
 import { getRemoteSshEditorKind } from '../../shared/remote-ssh-editor-launcher'
-import type { ShellOpenExternalEditorResult } from '../../shared/shell-open-types'
+import type { ShellOpenExternalEditorResult } from '../../shared/shell/opening/shell-open-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import { getLauncherBaseName } from './editor-launcher-name'
 import {
   resolveExternalEditorExecutable,
   type ExternalEditorLaunchSpec
 } from './external-editor-launch'
-import { resolveVsCodeSshAuthority } from '../ssh/config/vscode-ssh-authority'
-import { resolveZedSshUrl } from '../ssh/config/zed-ssh-url'
+import { resolveVsCodeSshAuthority } from '../ssh/external-editors/vscode-ssh-authority'
+import { resolveZedSshUrl } from '../ssh/external-editors/zed-ssh-url'
 
 export function resolveRemoteSshEditorLaunchSpec(
   command: string | undefined,

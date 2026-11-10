@@ -1,5 +1,5 @@
 import type { GitPushTarget } from '../../shared/worktree/types'
-import { assertValidGitPushTarget } from '../../shared/git-push-target-validation'
+import { assertValidGitPushTarget } from '../../shared/git/remotes/git-push-target-validation'
 import { gitExecFileAsync } from './runner'
 import type { GitExecOptions as GitCommandExecOptions } from './command-runner/git-exec-options'
 

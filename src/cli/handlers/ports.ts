@@ -1,9 +1,9 @@
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
-import type { FolderWorkspace } from '../../shared/folder-workspace-types'
-import type { RuntimeWorktreeRecord } from '../../shared/runtime-types'
+import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
+import type { RuntimeStatus, RuntimeWorktreeRecord } from '../../shared/runtime-types'
+import { WORKSPACE_SELECTOR_FOLDER_MATCH_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
 import type { WorkspacePortHostScanResult } from '../../shared/workspace-ports'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
-import { resolveCurrentAgentWorkspaceSelector } from '../agent-workspace-selector'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { getOptionalStringFlag } from '../flags'
 import { printResult } from '../format'
@@ -13,7 +13,7 @@ import {
   RuntimeRpcFailureError,
   type RuntimeRpcSuccess
 } from '../runtime-client'
-import { normalizeWorktreeSelectorForCaller } from '../selectors'
+import { normalizeWorktreeSelectorForCaller, resolveCurrentWorktreeSelector } from '../selectors'
 
 type PortsTarget = { selector: string; worktreePath: string | null }
 
@@ -58,12 +58,24 @@ async function worktreeIdAtSelector(
   }
 }
 
-// Why: worktree path selectors never match a native folder, so a folder's path is named by its id.
+async function runtimeMatchesFolderSelectors(
+  client: Pick<HandlerContext['client'], 'call'>
+): Promise<boolean> {
+  // An unanswered probe keeps the older lookup, which is also correct on capable runtimes.
+  const status = await client.call<RuntimeStatus>('status.get').catch(() => null)
+  return (
+    status?.result.capabilities?.includes(WORKSPACE_SELECTOR_FOLDER_MATCH_RUNTIME_CAPABILITY) ===
+    true
+  )
+}
+
+// Compat: runtimes without the folder-matching selector never match a folder by path, so name it by
+// its id here. Remove once every supported runtime advertises the capability.
 async function resolveNativeFolderPathSelector(
   selector: string,
   client: Pick<HandlerContext['client'], 'call'>
 ): Promise<string> {
-  if (!selector.startsWith('path:')) {
+  if (!selector.startsWith('path:') || (await runtimeMatchesFolderSelectors(client))) {
     return selector
   }
   const folders = await listFoldersAtPath(client, selector.slice('path:'.length))
@@ -71,10 +83,10 @@ async function resolveNativeFolderPathSelector(
     return selector
   }
   const worktreeId = await worktreeIdAtSelector(client, selector)
+  // One workspace is counted once, however both reads named it.
   const candidates = [
-    ...(worktreeId ? [`id:${worktreeId}`] : []),
-    ...folders.map((row) => `folder:${row.id}`)
-  ]
+    ...new Set([...(worktreeId ? [worktreeId] : []), ...folders.map((row) => `folder:${row.id}`)])
+  ].map((id) => `id:${id}`)
   // Why refuse: workspaces on different hosts can share a path, and guessing would scan the wrong host.
   if (candidates.length > 1) {
     throw new RuntimeClientError(
@@ -82,7 +94,7 @@ async function resolveNativeFolderPathSelector(
       `More than one workspace has this path. Pass one of: ${candidates.join(', ')}.`
     )
   }
-  return `id:${candidates[0]}`
+  return candidates[0]
 }
 
 async function resolvePortsTarget(
@@ -93,7 +105,7 @@ async function resolvePortsTarget(
   const explicit = getOptionalStringFlag(flags, 'worktree')
   const selector =
     !explicit || explicit === 'active' || explicit === 'current'
-      ? await resolveCurrentAgentWorkspaceSelector(cwd, client, 'ports')
+      ? await resolveCurrentWorktreeSelector(cwd, client, 'ports')
       : await resolveNativeFolderPathSelector(
           await normalizeWorktreeSelectorForCaller(explicit, cwd, client),
           client

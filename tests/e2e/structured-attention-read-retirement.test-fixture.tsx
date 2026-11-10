@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { transport } from './__mocks__/structured-attention-read-surfaces'
 import { cleanup } from '@testing-library/react'
 import { beforeEach, afterEach, vi } from 'vitest'
@@ -16,32 +15,33 @@ import {
   structuredAgentSessionPaneKey,
   projectStructuredAgentSessionStatusState
 } from '../../src/shared/agent-session/view/structured-agent-session-projection'
-import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
+import { getStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-chat/agent-session-wire/observations/structured-agent-session-turn-completion-feed'
 import {
   RuntimeMobileNotificationController,
   type MobileNotificationEvent
-} from '../../src/main/runtime/runtime-mobile-notification-controller'
+} from '../../src/main/runtime/push/notifications/runtime-mobile-notification-controller'
 import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/agent-session/structured-agent-session-mobile-attention'
 import {
   call,
   installStructuredHostStub,
-  clearStructuredHostStub,
+  clearStructuredHostStub
+} from '../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc.test-fixture'
+
+import {
   STRUCTURED_CLIENT,
   SESSION
-} from '../../src/main/runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
-import {
-  makeUnifiedTab,
-  makeTabGroup,
-  makeWorktree,
-  TEST_REPO
-} from '@/store/slices/store-test-helpers'
+} from '../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc-client.test-fixture'
+import { makeUnifiedTab, makeTabGroup } from '@/store/slices/tabs/tab-group.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 
 import { useAppStore } from '@/store'
 import { useReadOnScreenAttention } from '@/hooks/useReadOnScreenAttention'
-import { useStructuredAgentSessionRead } from '@/components/native-chat/use-structured-agent-session-read'
-import { resetStructuredAgentSessionReadOwnersForTests } from '@/components/native-chat/structured-agent-session-read-owner'
-import { resetStructuredAgentSessionTurnCompletionFeedsForTests } from '@/runtime/structured-agent-session-turn-completion-feed'
-import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
+import { useStructuredAgentSessionRead } from '@/components/native-chat/session/structured/read/use-structured-agent-session-read'
+import { resetStructuredAgentSessionReadOwnersForTests } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
+import { resetStructuredAgentSessionTurnCompletionFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-turn-completion-feed'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 
 export const WORKSPACE = 'repo1::/tmp/wt'
 export const TAB = 'chat'
@@ -184,6 +184,11 @@ beforeEach(() => {
   vi.spyOn(document, 'hasFocus').mockReturnValue(true)
   const directory = mkdtempSync(join(tmpdir(), 'orca-renderer-read-'))
   installStructuredHostStub()
+  const host = getStructuredAgentSessionHost()
+  if (!host) {
+    throw new Error('structured host not installed')
+  }
+  vi.spyOn(host.attentionReads, 'sessionLocation').mockReturnValue(SCOPE)
   const controller = new RuntimeMobileNotificationController()
   controller.configureDismissalStore(directory)
   const events: MobileNotificationEvent[] = []
@@ -302,7 +307,7 @@ beforeEach(() => {
       })
     }
     const reply = await call(method, params, STRUCTURED_CLIENT, {
-      retireStructuredAttention: fixture.controller.retireStructuredAttention.bind(
+      acknowledgeNotificationAttention: fixture.controller.acknowledgeAttention.bind(
         fixture.controller
       )
     })

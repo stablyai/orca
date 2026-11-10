@@ -1,8 +1,8 @@
-import { linearIssueReadError } from '@/lib/linear-read-error'
+import { linearIssueReadError } from '@/lib/work-items/linear/linear-read-error'
 import type { TaskPageProviderMetadataModel } from '../use-task-page-provider-metadata'
 import { useState, useMemo, useEffect } from 'react'
 import { LINEAR_ISSUE_LIST_MAX } from '../../../../../shared/linear/issue-read-limits'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { LinearTeam } from '../../../../../shared/linear/workspace-types'
 import {
   buildLinearTeamUrl,
@@ -17,6 +17,7 @@ export type TaskPageLinearListSelectionPreludeModel = ReturnType<
   typeof useTaskPageLinearListSelectionPrelude
 >
 export function useTaskPageLinearListSelectionPrelude(model: TaskPageProviderMetadataModel) {
+  const t = useTranslate()
   const {
     settings,
     linearStatus,
@@ -74,12 +75,12 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageProviderMet
     (selectedLinearProject && linearProjectTab === 'issues'
       ? (linearProjectIssuesError ??
         (linearProjectIssuesResult.errors?.length
-          ? linearIssueReadError(linearProjectIssuesResult.errors[0].message)
+          ? linearIssueReadError(linearProjectIssuesResult.errors[0].message, t)
           : null))
       : selectedLinearCustomView?.model === 'issue'
         ? (linearCustomViewContentsError ??
           (linearCustomViewIssuesResult.errors?.length
-            ? linearIssueReadError(linearCustomViewIssuesResult.errors[0].message)
+            ? linearIssueReadError(linearCustomViewIssuesResult.errors[0].message, t)
             : null))
         : linearError)
   const activeLinearIssueCollectionErrors =
@@ -90,11 +91,11 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageProviderMet
         : undefined
   const activeLinearIssueHasCollectionError = (activeLinearIssueCollectionErrors?.length ?? 0) > 0
   const activeLinearIssueContextLabel = selectedLinearProject
-    ? translate('auto.components.TaskPage.linearProjectContext', 'Project: {{name}}', {
+    ? t('auto.components.TaskPage.linearProjectContext', 'Project: {{name}}', {
         name: selectedLinearProject.name
       })
     : selectedLinearCustomView?.model === 'issue'
-      ? translate('auto.components.TaskPage.linearViewContext', 'View: {{name}}', {
+      ? t('auto.components.TaskPage.linearViewContext', 'View: {{name}}', {
           name: selectedLinearCustomView.name
         })
       : null

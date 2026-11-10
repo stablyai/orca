@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { PLUGIN_EVENT_NAMES } from '../contributions/plugin-event-contribution'
 import { ALL_SURFACES, FRAMES_ONLY, spec } from './plugin-host-method-spec'
-import { AGENT_STATUS_STATES } from '../../agent-status-types'
+import { AGENT_STATUS_STATES } from '../../agent-status/contracts/agent-status-types'
 import {
   PLUGIN_PANEL_REQUEST_MAX_TIMEOUT_MS,
   pluginBridgeNameSchema
@@ -64,7 +64,7 @@ export const PLUGIN_PANEL_BRIDGE_API = {
   }),
   'events.subscribe': spec({
     summary:
-      "Delivers a workspace or agent event to this panel as `orca.on(event)`; needs the event's read capability. The frame APIs call it for you.",
+      "Delivers a workspace, agent or editor event to this panel as `orca.on(event)`; needs the event's read capability, when it has one. The frame APIs call it for you.",
     since: 2,
     scope: 'plugin-private',
     capability: null,

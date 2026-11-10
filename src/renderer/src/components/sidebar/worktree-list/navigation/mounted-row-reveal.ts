@@ -1,4 +1,4 @@
-import { revealElementInScrollContainer } from '../../worktree-sidebar-reveal'
+import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
 import { getMountedWorktreeOptions, getWorktreeOptionId } from '../rows/option-dom'
 
 export function revealMountedWorktreeElement(

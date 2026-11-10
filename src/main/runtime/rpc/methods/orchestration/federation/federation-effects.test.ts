@@ -3,7 +3,7 @@ import {
   appendFederationSetupEffect,
   appendFederationTerminalEffects,
   type FederationEffect
-} from './federation-effects'
+} from '../../../../orchestration/legacy-remote/federation-effects'
 
 describe('orchestration federation effects', () => {
   it('uses exact terminal handles instead of display titles for setup identity', () => {

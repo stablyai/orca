@@ -2,19 +2,19 @@ import type { Store } from '../../persistence/loading-store/store'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { Project } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import {
   findLocalFolderWorkspaceRuntimeRepo,
   resolveQualifiedFolderWorkspace
-} from '../../../shared/folder-workspace-execution-host'
+} from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime/runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../../runtime/orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+import { getWorkspaceRuntimePreference } from '../../../shared/execution-host/project-runtime-preference'
 import {
-  getWorkspaceRuntimePreference,
   resolveProjectExecutionRuntime,
   type ProjectExecutionRuntimeResolution
-} from '../../../shared/project-execution-runtime'
+} from '../../../shared/execution-host/project-execution-runtime'
 import {
   getCachedWslAvailability,
   hasCachedWslAvailability
@@ -36,7 +36,10 @@ export type ProjectRuntimeResolutionStore = {
   getProjects?: Store['getProjects']
   getRepo?: Store['getRepo']
   getSettings?: () => Partial<
-    Pick<GlobalSettings, 'localWindowsRuntimeDefault' | 'experimentalWslHosts'>
+    Pick<
+      GlobalSettings,
+      'localWindowsRuntimeDefault' | 'experimentalWslHosts' | 'agentCmdOverrides'
+    >
   >
 }
 

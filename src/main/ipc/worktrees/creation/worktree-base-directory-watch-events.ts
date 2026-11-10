@@ -9,8 +9,8 @@ import {
 import {
   invalidateActiveGitStatusRefResolution,
   invalidateGitStatusRefResolutionForPaths
-} from '../../worktree-git-status-ref-watch'
-import type { WorktreeWatcherFailureRefreshCooldown } from '../../worktree-watcher-failure-refresh-cooldown'
+} from '../git/worktree-git-status-ref-watch'
+import type { WorktreeWatcherFailureRefreshCooldown } from './worktree-watcher-failure-refresh-cooldown'
 
 export type ActiveWatch = WorktreeBaseNotificationWatch & {
   subscription: { unsubscribe: () => Promise<void> }

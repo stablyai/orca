@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { structuredRunningChildWork } from '../../shared/agent-child-work-listing'
-import type { AgentHookServer } from '../agent-hooks/server'
-import type { StructuredAgentSessionJournalProjections } from '../native-chat/agent-session-wire/structured-agent-session-status-journal-projection'
-import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
+import { structuredRunningChildWork } from '../../shared/agent-status/child-work/agent-child-work-listing'
+import type { AgentHookServer } from '../agent-hooks/server/agent-hook-server'
+import type { StructuredAgentSessionJournalProjections } from '../native-chat/agent-session-wire/observations/structured-agent-session-status-journal-projection'
+import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/observations/structured-agent-session-status-feed'
 import type { CapturedFrame } from './claude-captured-frame-builders.test-fixture'
 import { backgroundWakeCapture } from './claude-captured-fold-steer-frames.test-fixture'
 import { MOVED_TO_BACKGROUND } from './claude-captured-task-frames.test-fixture'
 import { hostWithParent, parent, producer } from './claude-child-work-producer-harness.test-fixture'
 import { PROVIDER_SESSION_ID } from './structured/claude-structured-session-test-support'
-import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => ({})) }))
@@ -30,6 +30,15 @@ async function wiredSession() {
     item: (itemId: string): ReturnType<Journal['item']> => {
       const item = run.journalItems.get(itemId)
       return item ? { ...item, revision: 1, observedAt: run.now() } : null
+    },
+    statusRead(): ReturnType<Journal['statusRead']> {
+      return this.snapshot()
+    },
+    inputOrder: {
+      inputCount: () => submissions.length,
+      inputOrdinal: (id: string) => submissions.findIndex((s) => s.clientMessageId === id),
+      recoverableSubmissions: () =>
+        submissions.filter((s) => s.dispatchState === 'pending' || s.dispatchState === 'unknown')
     },
     context: { floor: () => null },
     stopMarks: { latest: () => null, revision: () => 0 },

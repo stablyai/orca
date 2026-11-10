@@ -1,12 +1,12 @@
 import type { z } from 'zod'
-import { agentHookServer } from '../../../../agent-hooks/server'
+import { agentHookServer } from '../../../../agent-hooks/server/agent-hook-server'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { TerminalSend } from '../../../../../shared/rpc-contract/terminal-unary-params'
 import {
   isPotentialQuestionAnsweredSubmitInput,
   isQuestionAnsweredSubmitInput,
   type AgentQuestionAnsweredInferenceRequest
-} from '../../../../../shared/agent-question-answered-intent'
+} from '../../../../../shared/agent-status/lifecycle/agent-question-answered-intent'
 
 /** Snapshot before the write so a hook racing the answer wins over inference, as on desktop. */
 function captureQuestionAnsweredBaseline(

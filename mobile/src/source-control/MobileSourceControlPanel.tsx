@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { useHostConnectionInputs } from '../transport/connection/client-context-connection-metrics'
 import { View } from 'react-native'
 import { GitBranch, RefreshCw } from 'lucide-react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -9,7 +10,7 @@ import {
 } from '../components/MobileStateView'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { connectionRetryAction } from '../transport/connection-retry-action'
+import { connectionRetryAction } from '../transport/connection/connection-retry-action'
 import { useMobileSourceControlState } from './use-mobile-source-control-state'
 import { useMobileSourceControlRefresh } from './use-mobile-source-control-refresh'
 import { useMobileSourceControlActionSheet } from './use-mobile-source-control-action-sheet'
@@ -34,8 +35,7 @@ import {
   type SourceControlHubRouteTab
 } from './mobile-source-control-hub-tab'
 import { groupMobileSourceControlMenu } from './mobile-source-control-actions'
-import { useMobilePrSidebarController } from '../session/use-mobile-pr-sidebar-controller'
-import { prSidebarDetailsNeedFetch } from '../session/mobile-pr-sidebar-state'
+import { useMobilePrSidebarController } from './review/use-mobile-pr-sidebar-controller'
 import { MobilePrTabBody } from '../components/MobilePRSidebar'
 import { MobilePrTabSheets } from '../components/pr-sidebar/MobilePrTabSheets'
 import { PrTabScreenView } from '../components/pr-sidebar/PrTabScreenView'
@@ -51,6 +51,8 @@ export type MobileSourceControlPanelProps = {
   name?: string
   embedded?: boolean
   initialTab?: SourceControlHubRouteTab
+  /** Back for a hub shown over another screen in place; a route's Back pops it. */
+  backInPlace?: { onPress: () => void; label: string }
   onRequestClose?: () => void
 }
 
@@ -60,6 +62,7 @@ export function MobileSourceControlPanel({
   name = '',
   embedded = false,
   initialTab = 'changes',
+  backInPlace,
   onRequestClose
 }: MobileSourceControlPanelProps) {
   useMobileColorScheme()
@@ -122,12 +125,15 @@ export function MobileSourceControlPanel({
   }, [statusBranch, statusHead])
   const prBranch = status ? statusBranch : lastPrBranchRef.current
   const prHeadSha = statusHead ?? lastPrHeadRef.current
+  // The hub always shows the PR's summary; its body and comments load once the PR tab or Comments is up.
   const prController = useMobilePrSidebarController({
+    hostId,
     client,
     connState,
     worktreeId,
     branch: prBranch,
-    headSha: prHeadSha
+    headSha: prHeadSha,
+    demand: activeTab === 'pr' || hubScreens.page === 'comments' ? 'details' : 'summary'
   })
   const prSidebarState = prController.prSidebarState
   const review = useMemo(
@@ -154,22 +160,10 @@ export function MobileSourceControlPanel({
   )
   const isHostedRepo = prController.prSidebarIsGithubRepo
   const prSidebarKind = prController.prSidebarState.kind
-  const refetchPr = prController.refetchPRSidebar
-  const ensurePrDetails = prController.ensurePrSidebarDetails
-  // Keep tab effects stable when soft-refresh load changes with headSha.
-  const refetchPrRef = useRef(refetchPr)
-  refetchPrRef.current = refetchPr
-  const ensurePrDetailsRef = useRef(ensurePrDetails)
-  ensurePrDetailsRef.current = ensurePrDetails
-
-  useEffect(() => {
-    if (activeTab === 'pr') {
-      return
-    }
-    if (prBranch && isHostedRepo && prSidebarKind === 'hidden') {
-      void refetchPrRef.current({ includeDetails: false })
-    }
-  }, [activeTab, prBranch, isHostedRepo, prSidebarKind])
+  // Keep the push effect stable when the PR read changes with headSha.
+  const rereadPrAfterPush = useEffectEvent((includeDetails: boolean) => {
+    void prController.refetchPRSidebar({ includeDetails })
+  })
 
   // A push leaves HEAD where it was, so reread the PR once it lands: its checks moved to the pushed head.
   const aheadOfUpstream = status?.upstreamStatus?.ahead ?? 0
@@ -178,28 +172,9 @@ export function MobileSourceControlPanel({
     const pushed = lastAheadRef.current > 0 && aheadOfUpstream === 0
     lastAheadRef.current = aheadOfUpstream
     if (pushed && isHostedRepo && prBranch && prSidebarKind === 'ready') {
-      void refetchPrRef.current({ includeDetails: activeTab === 'pr' })
+      rereadPrAfterPush(activeTab === 'pr')
     }
   }, [aheadOfUpstream, activeTab, isHostedRepo, prBranch, prSidebarKind])
-
-  const prDetailsMissingFor =
-    prController.prSidebarState.kind === 'ready' &&
-    prSidebarDetailsNeedFetch(prController.prSidebarState.data.details)
-      ? prController.prSidebarState.data.pr.number
-      : null
-
-  useEffect(() => {
-    if (activeTab !== 'pr' || !isHostedRepo || !prBranch) {
-      return
-    }
-    if (prSidebarKind === 'hidden') {
-      void refetchPrRef.current({ includeDetails: true })
-      return
-    }
-    if (prDetailsMissingFor != null) {
-      void ensurePrDetailsRef.current()
-    }
-  }, [activeTab, isHostedRepo, prBranch, prSidebarKind, prDetailsMissingFor])
 
   const nextStep = useMobileSourceControlNextStep({
     worktreeId,
@@ -208,7 +183,7 @@ export function MobileSourceControlPanel({
     review,
     prState: prController.prSidebarState,
     reviewsSupported: isHostedRepo && prBranch !== null,
-    rereadPr: prController.rereadPRSidebarAfterWrite,
+    rereadPr: prController.rereadPRSlices,
     headSha: prHeadSha,
     showWorkflowErrors: activeTab !== 'changes',
     onMerge: openMergeSheet
@@ -220,8 +195,6 @@ export function MobileSourceControlPanel({
       : Math.max(barHeight, insets.bottom)
 
   const onRefresh = useMobileSourceControlRefresh({
-    client,
-    worktreeId,
     loadStatus,
     prController,
     includeDetails: activeTab === 'pr'
@@ -243,10 +216,12 @@ export function MobileSourceControlPanel({
     ],
     [gitMenu, ioBusy, onRefresh, t]
   )
+  const hostConnection = useHostConnectionInputs(hostId)
   const { prTab, prMenuGroups, branchCompare } = useMobileSourceControlPrTab({
     state,
     activeTab,
     hubPage: hubScreens.page,
+    hostId,
     worktreeId,
     prController,
     prBranch,
@@ -256,6 +231,7 @@ export function MobileSourceControlPanel({
     onRefresh,
     openersRef: prOpeners,
     openScreen: openHubScreen,
+    hostConnection,
     shared: nextStep
   })
 
@@ -275,7 +251,10 @@ export function MobileSourceControlPanel({
       embedded={embedded}
       worktreeLabel={worktreeLabel}
       ioBusy={ioBusy}
+      // Only Changes reads through the query layer so far; the PR tab keeps its own loading UI.
+      refreshing={activeTab === 'changes' && state.refreshing}
       onBack={onBack}
+      backInPlace={backInPlace}
       onClose={onClose}
       onRefresh={onRefresh}
       menuGroups={
@@ -343,6 +322,7 @@ export function MobileSourceControlPanel({
         <View style={activeTab === 'changes' ? hubStyles.tabBody : hubStyles.tabBodyHidden}>
           <MobileSourceControlContent
             state={state}
+            stageAllInBar={nextStep.view.kind === 'composer' && primaryAction.kind === 'stage'}
             bottomInset={barInset}
             onOpenCommits={openCommitsScreen}
           />

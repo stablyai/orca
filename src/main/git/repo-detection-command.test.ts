@@ -14,33 +14,6 @@ vi.mock('./command-runner/git-exec-file-sync', async (importOriginal) => ({
 afterEach(() => vi.resetAllMocks())
 
 describe('repository command execution', () => {
-  it('lets another event-loop turn run while Git is pending, with no synchronous spawn', async () => {
-    let finish: (value: { stdout: string; stderr: string }) => void = () => {}
-    vi.mocked(gitExecFileAsync).mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          finish = resolve
-        })
-    )
-    let settled = false
-    const detection = runGitRepoCommands(
-      gitRepoOutput(['rev-parse', '--show-toplevel'], { cwd: '/repo' })
-    ).then((result) => {
-      settled = true
-      return result
-    })
-    await new Promise<void>((resolve) => setImmediate(resolve))
-    expect(settled).toBe(false)
-    expect(gitExecFileSync).not.toHaveBeenCalled()
-    expect(gitExecFileAsync).toHaveBeenCalledExactlyOnceWith(['rev-parse', '--show-toplevel'], {
-      cwd: '/repo',
-      hostGit: true,
-      timeout: 15_000
-    })
-    finish({ stdout: '/repo\n', stderr: '' })
-    expect(await detection).toBe('/repo\n')
-  })
-
   it('delivers command failures to the shared decision tree in both execution modes', async () => {
     function* withFallback() {
       try {

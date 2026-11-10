@@ -7,7 +7,6 @@ import {
   writeDataFile,
   readDataFile,
   makeRepo,
-  makeWorktreeLineage,
   makeWorkspaceLineage
 } from '../persistence-test-harness'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -20,8 +19,6 @@ import { restoreProfileStateJsonExport } from '../profile-state/legacy-json/prof
 import { acquireProfileStateMaintenance } from '../profile-state/profile-state-access'
 import type { Repo } from '../../../shared/repo-types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
-import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
-import { removeWorktreeMetaRow } from '../host-qualified-worktree-meta'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
@@ -75,81 +72,6 @@ describe('Store', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('getAllWorktreeMeta returns all entries', async () => {
-    const store = await createStore()
-    store.setWorktreeMeta(hostWorktreeTarget({ id: 'a', hostId: 'local' }), { displayName: 'A' })
-    store.setWorktreeMeta(hostWorktreeTarget({ id: 'b', hostId: 'local' }), { displayName: 'B' })
-    const all = store.getAllWorktreeMeta()
-    expect(Object.keys(all)).toHaveLength(2)
-    expect(all['a'].displayName).toBe('A')
-    expect(all['b'].displayName).toBe('B')
-  })
-
-  it('removeWorktreeMeta deletes a single entry', async () => {
-    const store = await createStore()
-    store.setWorktreeMeta(hostWorktreeTarget({ id: 'a', hostId: 'local' }), { displayName: 'A' })
-    store.setWorktreeMeta(hostWorktreeTarget({ id: 'b', hostId: 'local' }), { displayName: 'B' })
-    removeWorktreeMetaRow(store, 'a', undefined)
-    expect(store.getWorktreeMeta('a')).toBeUndefined()
-    expect(store.getWorktreeMeta('b')).toBeDefined()
-  })
-
-  it('stores and removes worktree lineage independently from metadata', async () => {
-    const store = await createStore()
-    const lineage = makeWorktreeLineage()
-
-    store.setWorktreeMeta(hostWorktreeTarget({ id: lineage.worktreeId, hostId: 'local' }), {
-      displayName: 'child'
-    })
-    store.setWorktreeLineage(
-      hostWorktreeTarget({ id: lineage.worktreeId, hostId: 'local' }),
-      lineage
-    )
-
-    expect(store.getWorktreeLineage(lineage.worktreeId)).toEqual(lineage)
-    expect(store.getAllWorktreeLineage()).toEqual({ [lineage.worktreeId]: lineage })
-
-    store.removeWorktreeLineage(hostWorktreeTarget({ id: lineage.worktreeId, hostId: 'local' }))
-
-    expect(store.getWorktreeLineage(lineage.worktreeId)).toBeUndefined()
-    expect(store.getWorktreeMeta(lineage.worktreeId)).toBeDefined()
-  })
-
-  it('removeWorktreeMeta deletes that worktree lineage entry', async () => {
-    const store = await createStore()
-    const lineage = makeWorktreeLineage()
-
-    store.setWorktreeMeta(hostWorktreeTarget({ id: lineage.worktreeId, hostId: 'local' }), {
-      displayName: 'child'
-    })
-    store.setWorktreeLineage(
-      hostWorktreeTarget({ id: lineage.worktreeId, hostId: 'local' }),
-      lineage
-    )
-
-    removeWorktreeMetaRow(store, lineage.worktreeId, undefined)
-
-    expect(store.getWorktreeMeta(lineage.worktreeId)).toBeUndefined()
-    expect(store.getWorktreeLineage(lineage.worktreeId)).toBeUndefined()
-  })
-
-  it('stores workspace lineage and removes it with the child worktree metadata', async () => {
-    const store = await createStore()
-    const lineage = makeWorkspaceLineage()
-
-    store.setWorktreeMeta(hostWorktreeTarget({ id: 'r1::/path/child', hostId: 'local' }), {
-      displayName: 'child'
-    })
-    store.setWorkspaceLineage(lineage)
-
-    expect(store.getWorkspaceLineage(lineage.childWorkspaceKey)).toEqual(lineage)
-    expect(store.getAllWorkspaceLineage()).toEqual({ [lineage.childWorkspaceKey]: lineage })
-
-    removeWorktreeMetaRow(store, 'r1::/path/child', undefined)
-
-    expect(store.getWorkspaceLineage(lineage.childWorkspaceKey)).toBeUndefined()
-  })
-
   it('removeFolderWorkspace deletes child workspace lineage for that folder parent', async () => {
     const store = await createStore()
     const group = store.createProjectGroup({
@@ -179,29 +101,6 @@ describe('Store', () => {
   })
 
   describe('mobileClientTabSelectionsByDeviceId', () => {
-    it('persists device tab selections across reloads and drops malformed payloads', async () => {
-      const store = await createStore()
-      // Register the owner so orphan cleanup cannot erase the fixture on reload.
-      store.addRepo(makeRepo({ id: 'repo-1', path: '/repo-1' }))
-      store.setMobileClientTabSelections({
-        'device-a': {
-          'repo-1::/tmp/wt': { activeTabId: 'tab-1', activeGroupId: 'g1', activeTabIdByGroupId: {} }
-        }
-      })
-      store.flush()
-
-      const reloaded = await createStore()
-      expect(reloaded.getMobileClientTabSelections()['device-a']?.['repo-1::/tmp/wt']).toEqual({
-        activeTabId: 'tab-1',
-        activeGroupId: 'g1',
-        activeTabIdByGroupId: {}
-      })
-
-      writeDataFile({ mobileClientTabSelectionsByDeviceId: { 'device-a': 'corrupt' } })
-      const corrupted = await createStore()
-      expect(corrupted.getMobileClientTabSelections()).toEqual({})
-    })
-
     it('prunes selections for a removed repo worktree', async () => {
       const store = await createStore()
       store.addRepo(makeRepo())

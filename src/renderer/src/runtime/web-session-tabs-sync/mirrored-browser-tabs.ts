@@ -1,17 +1,16 @@
-import type {
-  RuntimeMobileSessionBrowserTab,
-  RuntimeMobileSessionTabsResult
-} from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { WebSessionTabsSyncState, MirroredBrowserTab } from './state'
-import { readBrowserClientHostId } from '../browser-client-host-identity'
-import { peekWebSessionBrowserPlacementGroup } from '../web-session-browser-placement'
+import { readBrowserClientHostId } from '../browser/client-hosting/browser-client-host-identity'
+import { peekWebSessionBrowserPlacementGroup } from '../browser/placement/web-session-browser-placement'
 import { browserPageEqual } from './state-equality-tabs'
 import { sameStringArray } from './state-equality-core'
 import { collectLayoutGroupIds } from './tab-group-layout-tree'
 import { buildBrowserUnifiedTab } from './tab-builders'
 import { isReadyBrowserTab } from './terminal-surfaces'
+import { isBrowserPageOfAnotherHost } from './mirror-row-ownership'
 
 export function findBrowserWorkspaceForRemotePage(
   state: WebSessionTabsSyncState,
@@ -37,6 +36,28 @@ export function findBrowserWorkspaceForRemotePage(
     }
   }
   return null
+}
+
+/** A row naming our own or a live peer's page is an echo from a server we serve, not its tab (#38136). */
+function namesTabOfAnotherHost(
+  state: WebSessionTabsSyncState,
+  worktreeId: string,
+  environmentId: string,
+  tab: RuntimeMobileSessionBrowserTab
+): boolean {
+  const workspaces = state.browserTabsByWorktree[worktreeId] ?? []
+  const page = workspaces
+    .flatMap((workspace) => state.browserPagesByWorkspace[workspace.id] ?? [])
+    .find((candidate) => candidate.id === tab.browserPageId)
+  if (page) {
+    return isBrowserPageOfAnotherHost(state, page, environmentId)
+  }
+  return (
+    workspaces.some((workspace) => workspace.id === tab.browserWorkspaceId) &&
+    (state.browserPagesByWorkspace[tab.browserWorkspaceId] ?? []).some((candidate) =>
+      isBrowserPageOfAnotherHost(state, candidate, environmentId)
+    )
+  )
 }
 
 export function browserWorkspaceHasRemoteEnvironmentPage(
@@ -93,14 +114,15 @@ export function clientHostsMirroredBrowserPage(tab: RuntimeMobileSessionBrowserT
 export function resolveMirroredBrowserPageContent(
   tab: RuntimeMobileSessionBrowserTab,
   existingPage: BrowserPage | undefined
-): Pick<BrowserPage, 'url' | 'title' | 'loading' | 'canGoBack' | 'canGoForward'> {
+): Pick<BrowserPage, 'url' | 'title' | 'loading' | 'canGoBack' | 'canGoForward' | 'faviconUrl'> {
   if (clientHostsMirroredBrowserPage(tab) && existingPage) {
     return {
       url: existingPage.url,
       title: existingPage.title,
       loading: existingPage.loading,
       canGoBack: existingPage.canGoBack,
-      canGoForward: existingPage.canGoForward
+      canGoForward: existingPage.canGoForward,
+      faviconUrl: existingPage.faviconUrl
     }
   }
   return {
@@ -108,7 +130,9 @@ export function resolveMirroredBrowserPageContent(
     title: resolveMirroredBrowserTitle(tab, existingPage),
     loading: tab.loading,
     canGoBack: tab.canGoBack,
-    canGoForward: tab.canGoForward
+    canGoForward: tab.canGoForward,
+    // Old hosts omit the field; keep what this client already has.
+    faviconUrl: tab.faviconUrl === undefined ? (existingPage?.faviconUrl ?? null) : tab.faviconUrl
   }
 }
 
@@ -125,13 +149,16 @@ export function buildMirroredBrowserTabs(
   const clientGroupIds = new Set(
     (state.groupsByWorktree[snapshot.worktree] ?? []).map((group) => group.id)
   )
-  return snapshot.tabs.filter(isReadyBrowserTab).map((tab, index) => {
+  return snapshot.tabs.filter(isReadyBrowserTab).flatMap((tab, index) => {
     const existing = findBrowserWorkspaceForRemotePage(
       state,
       snapshot.worktree,
       environmentId,
       tab.browserPageId
     )
+    if (!existing && namesTabOfAnotherHost(state, snapshot.worktree, environmentId, tab)) {
+      return []
+    }
     const workspaceId = existing?.workspace.id ?? tab.browserWorkspaceId
     const pageId = existing?.page.id ?? tab.browserPageId
     const createdAt = existing?.page.createdAt ?? now + sortOffset + index
@@ -161,7 +188,6 @@ export function buildMirroredBrowserTabs(
       workspaceId,
       worktreeId: snapshot.worktree,
       ...content,
-      faviconUrl: existing?.page.faviconUrl ?? null,
       // Guest owns client-hosted loadError; host omission must not clear it.
       loadError:
         (tab.placement?.kind === 'client' ? existing?.page.loadError : tab.loadError) ?? null,

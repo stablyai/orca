@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../../../shared/git-fetch-auto-maintenance'
+import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../../../shared/git/fetch/git-fetch-auto-maintenance'
 import {
   measureRetargetDivergence,
   RETARGET_MAX_COMMIT_DIVERGENCE

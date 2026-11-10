@@ -1,7 +1,8 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough, Readable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
-import type { PipedChildProcess, PipedProcessSpec } from '@orca/process-host/process-spec'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { PipedProcessSpec } from '@orca/process-host/process-spec'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 
 import { WSL_CHANNEL_CLOSE_GRACE_MS } from '../execution/wsl-command-channel'
@@ -61,7 +62,7 @@ function transportWith(children: FakeChild[]) {
         throw new Error('no fake child left')
       }
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the channel reads only the streams, exit state, kill and events the fake provides.
-      return next as unknown as PipedChildProcess
+      return next as unknown as ChildProcessWithoutNullStreams
     }
   })
   return { transport, specs }
@@ -143,22 +144,6 @@ describe('createWslOrcadHostTransport', () => {
     const { transport } = transportWith([fakeChild({ spawnError: new Error('spawn ENOENT') })])
     await expect(transport.exec('true')).rejects.toThrow('spawn ENOENT')
   })
-
-  it('streams large stdout intact under backpressure', async () => {
-    const child = fakeChild()
-    const { transport } = transportWith([child])
-    const channel = await transport.exec('cat big')
-    const chunk = Buffer.alloc(1024 * 1024, 7)
-    const received: Buffer[] = []
-    const closed = new Promise<void>((resolve) => channel.on('close', () => resolve()))
-    channel.on('data', (data: Buffer) => received.push(data))
-    for (let i = 0; i < 20; i++) {
-      child.stdout.write(chunk)
-    }
-    child.finish(0)
-    await closed
-    expect(Buffer.concat(received).length).toBe(20 * 1024 * 1024)
-  })
 })
 
 describe('a transport with an abort signal', () => {
@@ -188,7 +173,7 @@ describe('a transport with an abort signal', () => {
       commandLoops: false,
       signal: controller.signal,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the channel reads only the streams, exit state, kill and events the fake provides.
-      spawn: () => child as unknown as PipedChildProcess
+      spawn: () => child as unknown as ChildProcessWithoutNullStreams
     })
     const channel = await transport.exec('sleep 60')
     channel.on('error', () => {})

@@ -1,21 +1,9 @@
-import {
-  AssignmentRequestSchema,
-  IdleRegionalRehomeRequestSchema,
-  type IdleRegionalRehomeRequest,
-  type IdleRegionalRehomeResult,
-  type RegionCorrectionResponse,
-  isRelayCellConnectionHardCap,
-  RELAY_ADMISSION_BUDGETS,
-  RELAY_DEFAULT_REGION,
-  RELAY_MAX_CELL_CONNECTION_UNOBSERVED_BOUND,
-  RELAY_PROTOCOL_LIMITS,
-  RelayRegionSchema,
-  ResolveRequestSchema,
-  cellPlacementCeiling,
-  relayCellAdmissionBounds,
-  type RelayCellConnectionHardCap,
-  type RelayRegion
-} from '@orca-cloud/relay-contract'
+import { AssignmentRequestSchema, ResolveRequestSchema } from '@orca-cloud/relay-contract/director-messages'
+import { IdleRegionalRehomeRequestSchema, type IdleRegionalRehomeRequest, type IdleRegionalRehomeResult } from '@orca-cloud/relay-contract/idle-regional-rehome'
+import type { RegionCorrectionResponse } from '@orca-cloud/relay-contract/region-correction'
+import { isRelayCellConnectionHardCap, RELAY_ADMISSION_BUDGETS, RELAY_MAX_CELL_CONNECTION_UNOBSERVED_BOUND, cellPlacementCeiling, relayCellAdmissionBounds, type RelayCellConnectionHardCap } from '@orca-cloud/relay-contract/admission-budgets'
+import { RELAY_DEFAULT_REGION, RelayRegionSchema, type RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
+import { RELAY_PROTOCOL_LIMITS } from '@orca-cloud/relay-contract/protocol-limits'
 import { Hono, type Context } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
 import { SignJWT } from 'jose'
@@ -27,7 +15,7 @@ import {
   createRegionalRehomeRuntimeTokenVerifier,
   createRegionalRehomeTokenVerifier,
   createRuntimeTokenVerifier
-} from './admin-token-verifier.js'
+} from './authentication/admin-token-verifier.js'
 import {
   RelayAssignmentRowBusyError,
   RelayCellInReserveModeError,
@@ -41,54 +29,63 @@ import {
 } from './assignment/assignment-store.js'
 import { ASSIGNMENT_LEASE_AUDIENCE, assignmentLeaseKeyId } from './assignment/assignment-lease.js'
 import { AssignmentRejectionLogWindow } from './assignment/assignment-rejection-log-window.js'
-import { CELL_ADMISSION_STATES } from './cell-admission-selector.js'
-import { registerCellSeatFeedRoute } from './cell-seat-feed-route.js'
-import { ReservePaceError, type ReserveAssignment, type ReservePlan } from './reserve-assignment.js'
-import { CELL_RESERVE_ROUTE_PATHS, registerCellReserveRoutes } from './cell-reserve-routes.js'
-import type { DemoteRequest, ReserveOutcome, ReserveRequest } from './cell-reserve-contract.js'
-import type { CellSeatFeedPage } from './cell-seat-log.js'
-import { type CellFlags, supportedCellFlags } from './cell-flags.js'
-import type { AppliedControlFlags } from './relay-control-flag-channel.js'
+import { CELL_ADMISSION_STATES } from './cell/admission/cell-admission-selector.js'
+import { registerCellSeatFeedRoute } from './cell/seats/cell-seat-feed-route.js'
+import { ReservePaceError, type ReserveAssignment, type ReservePlan } from './assignment/reserve-placement/reserve-assignment.js'
+import { CELL_RESERVE_ROUTE_PATHS, registerCellReserveRoutes } from './cell/reservations/cell-reserve-routes.js'
+import type { DemoteRequest, ReserveOutcome, ReserveRequest } from './cell/reservations/cell-reserve-contract.js'
+import type { CellSeatFeedPage } from './cell/seats/cell-seat-log.js'
+import { type CellFlags, supportedCellFlags } from './cell/control-flags/cell-flags.js'
+import type { AppliedControlFlags } from './cell/control-flags/relay-control-flag-channel.js'
 import { RELAY_MAX_CELL_CAPACITY_REQUESTS, type RelayConfig } from './config.js'
-import type { RelayCredentialStore } from './credential-store.js'
-import { isRelayDatabaseTransientError } from './database.js'
+import type { RelayCredentialStore } from './credentials/credential-store.js'
+import { isRelayDatabaseTransientError } from './database/database.js'
+import {
+  EDGE_CELL_ID,
+  EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS,
+  EdgeMoveDeferredError,
+  EdgeMoveBusyError,
+  inEdgeCohort,
+  mapEpochFloor,
+  type EdgeAssignments
+} from './edge-relay.js'
 import {
   DRAIN_RETURN_MIN_RETRY_AFTER_SECONDS,
   RelayDrainReturnAdmission
-} from './drain-return-admission.js'
-import { googleMetadataIdentityToken } from './google-metadata-identity-token.js'
+} from './assignment/public-admission/drain-return-admission.js'
+import { googleMetadataIdentityToken } from './authentication/google-metadata-identity-token.js'
 import {
   RelayPublicAssignmentAdmission,
   type AssignmentAdmissionRejection
-} from './public-assignment-admission.js'
-import { relayHostLogDigest } from './relay-host-log-digest.js'
-import type { RelayLocalReadinessVerdict } from './relay-local-readiness.js'
+} from './assignment/public-admission/public-assignment-admission.js'
+import { relayHostLogDigest } from './observability/relay-host-log-digest.js'
+import type { RelayLocalReadinessVerdict } from './process-lifecycle/relay-local-readiness.js'
 import {
   classifyShadowSeat,
   type ShadowCompareDatabaseAnswer,
   type ShadowCompareRoute
-} from './shadow-directory-compare.js'
-import type { ShadowSeatDirectory } from './shadow-seat-directory.js'
-import type { RelayReadinessDependency } from './relay-readiness.js'
+} from './cell/seats/shadow-directory-compare.js'
+import type { ShadowSeatDirectory } from './cell/seats/shadow-seat-directory.js'
+import type { RelayReadinessDependency } from './process-lifecycle/relay-readiness.js'
 import type {
   AssignmentAdmissionLane,
   AssignmentAdmissionOutcome,
   AssignmentUnavailableCause,
   RegionalRehomeSafetySnapshot,
   RelayRuntimeCounts
-} from './relay-observability.js'
+} from './observability/relay-observability.js'
 import {
   isRegionalRehomeTrustProbe,
   probeRegionalRehomeTrust
-} from './regional-rehome-trust-probe.js'
-import { createRelayTokenVerifier, readBearer } from './relay-token-verifier.js'
-import type { RelayJWKSet } from './stale-if-error-jwks.js'
-import { stagingAsiaProofMembership } from './staging-asia-proof-admission.js'
+} from './assignment/regional-rehome/regional-rehome-trust-probe.js'
+import { createRelayTokenVerifier, readBearer } from './authentication/relay-token-verifier.js'
+import type { RelayJWKSet } from './authentication/stale-if-error-jwks.js'
+import { stagingAsiaProofMembership } from './cell/admission/staging-asia-proof-admission.js'
 import {
   runInStickySlot,
   StickySlotStatements,
   type StickySlotSample
-} from './sticky-slot-statements.js'
+} from './database/sticky-slot-statements.js'
 
 const RelayCellConnectionHardCapSchema = z.custom<RelayCellConnectionHardCap>(
   isRelayCellConnectionHardCap
@@ -140,6 +137,8 @@ export function createRelayApp(
     cellFlags?: () => AppliedControlFlags<CellFlags>
     // Step 5 on directors; absent keeps today's path for every request.
     reservePlacement?: ReserveAssignment
+    // Relay edge on directors; absent (no edge URL) keeps today's path for every request.
+    edgeAssignments?: EdgeAssignments
     cellReserve?: (request: ReserveRequest) => ReserveOutcome[]
     cellDemote?: (request: DemoteRequest) => string
     cellReserverPoll?: () => void
@@ -454,7 +453,17 @@ export function createRelayApp(
         selectedRegion: assignment.region,
         fallback: placed && assignment.region !== targetRegion
       })
-    const signAssignment = async (assignment: RelayAssignment) =>
+    // Set when this ask took the host's data back from the relay edge: the first answer elsewhere
+    // fences the edge (its phones then get WRONG_CELL).
+    let leftEdge = false
+    const signAssignment = async (assignment: RelayAssignment) => {
+      if (leftEdge && assignment.cellId !== EDGE_CELL_ID) {
+        leftEdge = false
+        await operations.edgeAssignments?.fenceAway(identity, assignment.cellId, assignment.assignmentEpoch)
+      }
+      return await signLease(assignment)
+    }
+    const signLease = async (assignment: RelayAssignment) =>
       await new SignJWT({
         purpose: 'cell-assignment',
         cellId: assignment.cellId,
@@ -469,6 +478,75 @@ export function createRelayApp(
         .setIssuedAt()
         .setExpirationTime('5m')
         .sign(config.assignmentSigningKey)
+    // Relay edge: a host in the cohort is moved (or kept) there before any other lane, since the
+    // sticky and reserve lanes would read the edge row as not live and re-place the host.
+    const edge = operations.edgeAssignments
+    const toEdge =
+      edge?.ready === true &&
+      body.data.regionCorrection?.action !== 'report' &&
+      inEdgeCohort(edge.config, claims.relayHostId, requestedRegion, claims.sub)
+    if (edge?.pushes && !toEdge) {
+      // Any lane below may re-place a host whose row is on the edge; its devices come back first.
+      try {
+        leftEdge = await edge.leaveEdge(identity)
+      } catch (error) {
+        if (!(error instanceof EdgeMoveBusyError) && !isRelayDatabaseTransientError(error)) {
+          throw error
+        }
+        logAssignmentRejection({
+          route: 'assign',
+          lane: 'none',
+          hinted: Boolean(body.data.reconnect),
+          relayHostId: claims.relayHostId,
+          reason: operationError(error)
+        })
+        context.header('Retry-After', String(EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS))
+        return context.json({ error: 'assignment_temporarily_unavailable' }, 503)
+      }
+    }
+    if (edge && toEdge) {
+      let moved: RelayAssignment | null
+      try {
+        moved = await edge.moveToEdge(
+          identity,
+          Math.max(
+            mapEpochFloor(operations.shadowSeats, identity, Date.now()),
+            operations.reservePlacement?.rowEpochFloor(identity) ?? 0
+          ),
+          requestedRegion
+        )
+      } catch (error) {
+        if (error instanceof EdgeMoveDeferredError) {
+          // Nothing moved (old-cell units still held, or the edge did not take the push): today's
+          // path below keeps the host where it is, and a later ask moves it. Never a 503 loop.
+          console.warn(JSON.stringify({ event: 'orca_relay_edge_move_deferred', reason: error.message }))
+          moved = null
+        } else {
+          if (!(error instanceof EdgeMoveBusyError) && !isRelayDatabaseTransientError(error)) {
+            throw error
+          }
+          logAssignmentRejection({
+            route: 'assign',
+            lane: 'none',
+            hinted: Boolean(body.data.reconnect),
+            relayHostId: claims.relayHostId,
+            reason: operationError(error)
+          })
+          context.header('Retry-After', String(EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS))
+          return context.json({ error: 'assignment_temporarily_unavailable' }, 503)
+        }
+      }
+      if (moved) {
+        // Any later re-placement off the edge (rollback) mints above the edge epoch.
+        operations.reservePlacement?.raiseEpochFloor(identity, moved.assignmentEpoch)
+        return context.json({
+          v: 1,
+          cellUrl: moved.cellUrl,
+          assignmentEpoch: moved.assignmentEpoch,
+          lease: await signAssignment(moved)
+        })
+      }
+    }
     // Step 5: switched-on cells answer from the map; anything else keeps today's path below.
     let step5: Pick<AssignOptions, 'epochFloor' | 'placeFresh' | 'regionReserve' | 'reserveSpill'> = {}
     if (operations.reservePlacement && body.data.regionCorrection?.action !== 'report') {
@@ -740,6 +818,16 @@ export function createRelayApp(
       const identity = {
         userId: resolved.userId,
         relayHostId: body.data.relayHostId
+      }
+      // A host on the relay edge: the liveness rule below would read its row as no answer.
+      const onEdge = await operations.edgeAssignments?.edgeAssignment(identity)
+      if (onEdge) {
+        return context.json({
+          v: 1,
+          cellUrl: onEdge.cellUrl,
+          assignmentEpoch: onEdge.assignmentEpoch,
+          leaseExpiresAt: onEdge.leaseExpiresAt
+        })
       }
       // This also migrates credentials created by the staging-only combined service.
       const resolvedAssignment = await operations.assignments.resolve(identity)

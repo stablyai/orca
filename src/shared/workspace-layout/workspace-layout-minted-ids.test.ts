@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isTerminalLeafId } from '../stable-pane-id'
+import { isTerminalLeafId } from './stable-pane-id'
 import { nameBasedUuid } from './workspace-layout-minted-ids'
 
 describe('nameBasedUuid', () => {
