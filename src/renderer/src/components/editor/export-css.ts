@@ -1,8 +1,4 @@
-// Why: this stylesheet targets the *exported* PDF document, not the live Orca
-// pane. In-app CSS assumes sticky UI chrome, hover affordances, and app-shell
-// spacing that would look wrong when flattened to paper. Keeping export CSS
-// separate also means a future UI refactor can move live classes without
-// silently breaking PDF output.
+// Export needs paper layouts without sticky chrome or hover affordances; keep it independent of live app styles.
 export const EXPORT_CSS = `
 * { box-sizing: border-box; }
 
@@ -59,6 +55,29 @@ html, body {
   color: #57606a;
   border-left: 0.25em solid #d0d7de;
 }
+
+.orca-export-root [data-callout] {
+  margin: 0 0 1em;
+  padding: 0 1em;
+  border-left: 0.25em solid var(--callout);
+}
+
+.orca-export-root [data-callout] > :first-child {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  margin-bottom: 0.25em;
+  color: var(--callout);
+  font-weight: 600;
+}
+
+.orca-export-root [data-callout] > :first-child svg { width: 1em; height: 1em; }
+
+.orca-export-root [data-callout="note"] { --callout: #0969da; }
+.orca-export-root [data-callout="tip"] { --callout: #1a7f37; }
+.orca-export-root [data-callout="important"] { --callout: #8250df; }
+.orca-export-root [data-callout="warning"] { --callout: #9a6700; }
+.orca-export-root [data-callout="caution"] { --callout: #cf222e; }
 
 .orca-export-root code,
 .orca-export-root pre {

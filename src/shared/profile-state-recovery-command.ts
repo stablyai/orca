@@ -6,17 +6,33 @@ export const PROFILE_STATE_RECOVERY_RESULT_PREFIX = '[profile-state-recovery] '
 export const PROFILE_STATE_DESKTOP_RECOVERY_FLAG = '--profile-state-desktop-recovery'
 
 const positiveInteger = z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
+const backupRepairSectionSchema = z
+  .object({ domain: z.string(), backupId: z.string().min(1).nullable() })
+  .strict()
+const currentRepairSectionSchema = z
+  .object({ domain: z.literal('automationRuns'), source: z.literal('current') })
+  .strict()
+const repairSectionSchema = z.union([backupRepairSectionSchema, currentRepairSectionSchema])
 const selectorSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('json'), revision: positiveInteger }).strict(),
   z.object({ kind: z.literal('current-json') }).strict(),
   z.object({ kind: z.literal('current-sqlite') }).strict(),
-  z.object({ kind: z.literal('sqlite'), backupId: z.string().min(1) }).strict()
+  z.object({ kind: z.literal('latest-json') }).strict(),
+  z.object({ kind: z.literal('sqlite'), backupId: z.string().min(1) }).strict(),
+  // Sections: the plan the user approved; omitted, the CLI repairs whatever it finds.
+  z
+    .object({ kind: z.literal('repair'), sections: z.array(repairSectionSchema).optional() })
+    .strict()
 ])
 
 export const profileStateRecoveryRequestSchema = z
   .object({
     userDataPath: z.string().min(1),
-    selector: selectorSchema
+    selector: selectorSchema,
+    profileId: z
+      .string()
+      .regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/)
+      .optional()
   })
   .strict()
 
@@ -36,7 +52,16 @@ const rollbackSchema = exportsSchema.extend({
   removedDatabaseFiles: z.array(z.string()).readonly(),
   storage: z.enum(['json', 'sqlite']),
   restoredPath: z.string(),
-  backupId: z.string().optional()
+  backupId: z.string().optional(),
+  repairedSections: z
+    .array(
+      z.union([
+        backupRepairSectionSchema.extend({ backupCreatedAtMs: positiveInteger.optional() }),
+        currentRepairSectionSchema
+      ])
+    )
+    .readonly()
+    .optional()
 })
 
 export const profileStateRecoveryResponseSchema = z.discriminatedUnion('ok', [
@@ -49,10 +74,19 @@ export const profileStateRecoveryResponseSchema = z.discriminatedUnion('ok', [
 ])
 
 export type ProfileStateRecoverySelector = z.infer<typeof selectorSchema>
+export type ProfileStateRecoveryRepairSection = z.infer<typeof repairSectionSchema>
 export type ProfileStateRecoveryRequest = z.infer<typeof profileStateRecoveryRequestSchema>
 export type ProfileStateRecoveryResponse = z.infer<typeof profileStateRecoveryResponseSchema>
 export type ProfileStateExportsResult = z.infer<typeof exportsSchema>
 export type ProfileStateRollbackResult = z.infer<typeof rollbackSchema>
+
+export function profileStateRepairSectionApproval(
+  section: ProfileStateRecoveryRepairSection
+): ProfileStateRecoveryRepairSection {
+  return 'source' in section
+    ? { domain: section.domain, source: section.source }
+    : { domain: section.domain, backupId: section.backupId }
+}
 
 export class ProfileStateRecoveryCommandError extends Error {
   constructor(

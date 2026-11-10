@@ -1,13 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { RepoIcon } from '../../../src/shared/repo-icon'
-import { NODE_PLATFORM_NAMES } from '../transport/mobile-runtime-host-platform'
 import {
   hostPlatformSchema,
   hostRepoCatalogSchema,
   hostSshTargetSummariesSchema,
-  hostViewSettingsSchema,
-  WORKSPACE_GROUP_BY_ARMS,
-  WORKSPACE_SORT_BY_ARMS
+  hostViewSettingsSchema
 } from './host-screen-reply-schema'
 
 describe('host screen reply schemas', () => {
@@ -34,8 +30,7 @@ describe('host screen reply schemas', () => {
     const unknown = hostRepoCatalogSchema.parse({
       repos: [{ id: 'r', displayName: 'o', repoIcon: { type: 'svg', markup: '<svg/>' } }]
     })
-    // The row survives and draws the Folder default MobileRepoIcon already drew for an arm it
-    // could not match.
+    // Unknown icon arms retain the row and use MobileRepoIcon’s Folder default.
     expect(unknown[0]?.id).toBe('r')
     expect(unknown[0]?.repoIcon).toBeUndefined()
   })
@@ -55,8 +50,7 @@ describe('host screen reply schemas', () => {
         }
       ]
     })
-    // MobileRepoIcon reads src and label and never source, so narrowing source would have drawn a
-    // Folder where main drew the image. The member itself still reaches the row.
+    // MobileRepoIcon ignores source; constraining it would drop images from newer hosts for a member the renderer never reads.
     expect(repo?.repoIcon).toEqual({
       type: 'image',
       src: 'https://example.invalid/a.png',
@@ -83,9 +77,22 @@ describe('host screen reply schemas', () => {
     ).toEqual([{ id: 't', label: 'T' }])
   })
 
+  it('keeps SSH lifecycle fields raw and drops a malformed one without losing the target', () => {
+    expect(
+      hostSshTargetSummariesSchema.parse({
+        targets: [
+          { id: 't', label: 'T', connected: false, connectionStatus: 'hibernating' },
+          { id: 'u', label: 'U', connected: 'no', connectionStatus: 7 }
+        ]
+      })
+    ).toEqual([
+      { id: 't', label: 'T', connected: false, connectionStatus: 'hibernating' },
+      { id: 'u', label: 'U' }
+    ])
+  })
+
   it('answers the empty target list for a reply that is no object at all', () => {
-    // Why: the label write runs before the platform write in the same sequence, so a throw here
-    // would take the platform down with it. readSshTargets answered [] for every one of these.
+    // Label writes precede platform writes; malformed targets must degrade to [] rather than skip both.
     for (const payload of [null, undefined, 'nope', 42, []]) {
       expect(hostSshTargetSummariesSchema.parse(payload)).toEqual([])
     }
@@ -132,6 +139,26 @@ describe('host screen reply schemas', () => {
     expect(parsed.workspaceStatuses).toEqual([{ id: 'active', label: 'Active' }])
   })
 
+  it('reads every Workspace options value the desktop mirrors to its phone', () => {
+    const ui = {
+      hideAutomationGeneratedWorkspaces: true,
+      hideCliCreatedWorkspaces: false,
+      hideDetachedHeadWorkspaces: true,
+      hideWorkspacesFromOtherDevices: true,
+      projectOrderBy: 'recent',
+      worktreeCardProperties: ['status', 'a-property-from-a-newer-desktop'],
+      agentActivityDisplayMode: 'full'
+    }
+    expect(hostViewSettingsSchema.parse({ ui })).toEqual(ui)
+  })
+
+  it('reads a desktop that predates them as absent, which keeps the local value', () => {
+    const parsed = hostViewSettingsSchema.parse({
+      ui: { groupBy: 'repo', projectOrderBy: 'alphabetical', agentActivityDisplayMode: 7 }
+    })
+    expect(parsed).toEqual({ groupBy: 'repo' })
+  })
+
   it('salvages a non-array status catalog rather than handing a string to the group lookups', () => {
     expect(
       hostViewSettingsSchema.parse({ ui: { workspaceStatuses: 'active' } }).workspaceStatuses
@@ -139,37 +166,11 @@ describe('host screen reply schemas', () => {
   })
 })
 
-describe('the closed arm sets are the desktop unions', () => {
-  // The arm lists are pinned to the desktop unions in the schema modules, where tsc looks; these
-  // loops prove every pinned arm survives the parse, not just the ones the tests above pick.
-  it('keeps every platform Node can report', () => {
-    for (const platform of NODE_PLATFORM_NAMES) {
-      expect(hostPlatformSchema.parse({ platform })).toBe(platform)
-    }
-  })
-
-  it('keeps every grouping and sort arm the desktop persists', () => {
-    for (const groupBy of WORKSPACE_GROUP_BY_ARMS) {
-      for (const sortBy of WORKSPACE_SORT_BY_ARMS) {
-        expect(hostViewSettingsSchema.parse({ ui: { groupBy, sortBy } })).toMatchObject({
-          groupBy,
-          sortBy
-        })
-      }
-    }
-  })
-
-  it('keeps every repo icon arm the desktop draws', () => {
-    const icons: Record<RepoIcon['type'], Record<string, string>> = {
-      lucide: { type: 'lucide', name: 'Folder' },
-      emoji: { type: 'emoji', emoji: '🐳' },
-      image: { type: 'image', src: 'data:,x' }
-    }
-    for (const repoIcon of Object.values(icons)) {
-      const [row] = hostRepoCatalogSchema.parse({
-        repos: [{ id: 'r', displayName: 'r', repoIcon }]
-      })
-      expect(row?.repoIcon).toMatchObject({ type: repoIcon.type })
-    }
+describe('repo icon payloads', () => {
+  it('preserves the lucide icon name the row renders', () => {
+    const [row] = hostRepoCatalogSchema.parse({
+      repos: [{ id: 'r', displayName: 'r', repoIcon: { type: 'lucide', name: 'Terminal' } }]
+    })
+    expect(row?.repoIcon).toEqual({ type: 'lucide', name: 'Terminal' })
   })
 })

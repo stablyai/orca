@@ -1,4 +1,4 @@
-import { isSettledBackgroundTaskState } from '../../shared/native-chat-background-task-row'
+import { isSettledBackgroundTaskState } from '../../shared/native-chat/input/native-chat-background-task-row'
 import { classifyClaudeBackgroundTaskKind } from './claude-background-task-frames'
 import {
   claudeBackgroundTaskToolUseId,
@@ -12,7 +12,7 @@ import {
 } from './claude-background-task-memory'
 import { isClaudeSubagentTask } from './claude-subagent-task-frames'
 
-export function observeClaudeBackgroundTaskStart(input: {
+type ClaudeBackgroundTaskStartInput = {
   id: string
   message: Record<string, unknown>
   rows: Map<string, ClaudeBackgroundTaskRow>
@@ -20,7 +20,14 @@ export function observeClaudeBackgroundTaskStart(input: {
   isForwardedParentTool: (toolUseId: string) => boolean
   openRow: (id: string, message: Record<string, unknown>) => void
   maxRows: number
-}): boolean {
+}
+
+export function observeClaudeBackgroundTaskStart(
+  input: ClaudeBackgroundTaskStartInput & {
+    owned: boolean
+    refresh: (id: string, row: ClaudeBackgroundTaskRow) => void
+  }
+): boolean {
   const { id, message, rows, ledgers } = input
   if (ledgers.fallbackTaskIds.has(id)) {
     if (ledgers.terminalTaskIds.has(id)) {
@@ -39,10 +46,6 @@ export function observeClaudeBackgroundTaskStart(input: {
       return false
     }
   }
-  if (message.ambient === true || message.skip_transcript === true) {
-    ledgers.rememberForeign(id, 'ambient')
-    return true
-  }
   if (isClaudeSubagentTask(message)) {
     ledgers.rememberForeign(id, 'roster')
     return true
@@ -57,6 +60,7 @@ export function observeClaudeBackgroundTaskStart(input: {
     ledgers.foreign.delete(id)
     // A live task's duplicate announcement is redelivery, not a new run.
     if (!isSettledBackgroundTaskState(existing.block.state)) {
+      input.refresh(id, existing)
       return true
     }
     if (shouldRestartClaudeBackgroundTaskRow(existing, message)) {
@@ -81,7 +85,7 @@ export function observeClaudeBackgroundTaskStart(input: {
   ledgers.foreign.delete(id)
   const toolUseId = claudeBackgroundTaskToolUseId(message)
   // Absence of a parent is not evidence of an unforwarded parent.
-  if (toolUseId !== undefined && !input.isForwardedParentTool(toolUseId)) {
+  if (toolUseId !== undefined && !input.owned && !input.isForwardedParentTool(toolUseId)) {
     ledgers.rememberForeign(id, 'sidechain')
     return true
   }

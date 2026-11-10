@@ -1,0 +1,160 @@
+import { stripLeadingAgentTitleDecorationOrEmpty } from '../../../../src/shared/agent-status/title/agent-title-decoration'
+import { isClaudeManagementTitle } from '../../../../src/shared/agent-status/title/agent-title-core'
+import { isShellProcess } from '../../../../src/shared/agent-status/process/shell-process-detection'
+import { agentTypeToIconAgent } from '../../../../src/shared/agent-status/presentation/agent-type-icon-agent'
+import { resolveTabAgentFromSignalSnapshot } from '../../../../src/shared/tab-agent-from-signals'
+import { resolveTabNameSource } from '../../../../src/shared/tab-title-resolution'
+import type { AgentStatusEntry } from '../../../../src/shared/agent-status/contracts/agent-status-types'
+import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../src/shared/runtime-mobile-session-tab-contracts'
+import {
+  resolveAgentSmartKeys,
+  type AgentSmartKeySet
+} from '../../../../src/shared/terminal/input/agent-smart-keys'
+import { isBlankBrowserUrl } from '../../browser/browser-url'
+import { translate } from '../../i18n/mobile-i18n'
+import type { MobileSessionTab } from '../../session/tabs/mobile-session-tabs'
+
+export type MobileTerminalTabAgentIdentity = Partial<
+  Pick<
+    RuntimeMobileSessionTerminalTab,
+    'customTitle' | 'quickCommandLabel' | 'aiVaultTitle' | 'generatedTitle'
+  >
+> & {
+  title: string
+  agentStatus?: {
+    agentType?: AgentStatusEntry['agentType'] | null
+    state?: AgentStatusEntry['state']
+  } | null
+  launchAgent?: TuiAgent | null
+}
+
+export function getMobileTerminalTabHostAgentIdentity(
+  tab: MobileSessionTab,
+  terminals: readonly { handle: string; agentIdentity?: string }[]
+): string | undefined {
+  if (tab.type !== 'terminal' || !tab.terminal) {
+    return undefined
+  }
+  return terminals.find((terminal) => terminal.handle === tab.terminal)?.agentIdentity
+}
+
+// Cursor imports Claude hooks; older hosts still report them as claude, so the host identity corrects that.
+function correctCursorImportedHookAgent(
+  hookAgentType: string | null | undefined,
+  hostAgentIdentity: string | null | undefined
+): string | null | undefined {
+  return hookAgentType === 'claude' && hostAgentIdentity === 'cursor' ? 'cursor' : hookAgentType
+}
+
+export function resolveMobileTerminalTabOwnedAgentId(
+  tab: MobileTerminalTabAgentIdentity,
+  hostAgentIdentity?: string | null
+): string | null {
+  const hookAgentType = tab.agentStatus?.agentType?.trim()
+  if (hookAgentType && hookAgentType !== 'unknown') {
+    return correctCursorImportedHookAgent(hookAgentType, hostAgentIdentity) ?? null
+  }
+  if (tab.launchAgent) {
+    return tab.launchAgent
+  }
+  return null
+}
+
+// An agent's tab stays an agent tab until the agent reports done and the title is a shell again. Launch hints count before status arrives.
+export function isMobileTerminalTabRunningAgent(tab: MobileTerminalTabAgentIdentity): boolean {
+  if (
+    tab.agentStatus?.state === 'done' &&
+    (isShellProcess(tab.title) || isClaudeManagementTitle(tab.title))
+  ) {
+    return false
+  }
+  return resolveMobileTerminalTabOwnedAgentId(tab) !== null
+}
+
+// The host publishes a tab's name in place of its live title; a name is not the agent's own title, so it can't identify the agent.
+function agentTitleEvidence(tab: MobileTerminalTabAgentIdentity): string {
+  const name = resolveTabNameSource(
+    {
+      customTitle: tab.customTitle,
+      quickCommandLabel: tab.quickCommandLabel,
+      liveTitle: '',
+      sessionTitle: tab.aiVaultTitle,
+      generatedTitle: tab.generatedTitle
+    },
+    // Hosts send generatedTitle only while generated names are shown.
+    true
+  )
+  return name && name === tab.title.trim() ? '' : tab.title
+}
+
+// Phones get no process, sleeping-session or sibling signals; host Cursor identity stands in for an unowned pane's process, since terminal.list can keep it after the pane is reused.
+export function resolveMobileTerminalTabAgentId(
+  tab: MobileTerminalTabAgentIdentity,
+  hostAgentIdentity?: string | null
+): string | null {
+  const status = tab.agentStatus
+  const hookAgent = agentTypeToIconAgent(
+    correctCursorImportedHookAgent(status?.agentType, hostAgentIdentity)
+  )
+  return resolveTabAgentFromSignalSnapshot({
+    title: agentTitleEvidence(tab),
+    hookAgent: status?.state === 'done' ? null : hookAgent,
+    focusedCompletedHookAgent: status?.state === 'done' ? hookAgent : null,
+    processAgent:
+      hostAgentIdentity === 'cursor' && !resolveMobileTerminalTabOwnedAgentId(tab)
+        ? 'cursor'
+        : null,
+    launchAgent: tab.launchAgent ?? undefined
+  })
+}
+
+export function getMobileSessionTabTitle(
+  tab: MobileSessionTab,
+  hostAgentIdentity?: string | null
+): string {
+  if (tab.type === 'browser') {
+    const title = tab.title.trim()
+    if (title && !isBlankBrowserUrl(title)) {
+      return title
+    }
+    if (isBlankBrowserUrl(tab.url)) {
+      return translate('session.terminalTabAgent.newBrowser', 'New Browser')
+    }
+    return translate('session.terminalTabAgent.browser', 'Browser')
+  }
+  if (tab.type === 'markdown') {
+    return tab.title || translate('session.terminalTabAgent.markdown', 'Markdown')
+  }
+  if (tab.type === 'file') {
+    return tab.title || translate('session.terminalTabAgent.file', 'File')
+  }
+  if (tab.type === 'agent-session') {
+    return tab.title || translate('session.terminalTabAgent.chat', 'Chat')
+  }
+  // Strip status glyphs when showing provider icons; glyph-only iOS titles otherwise leave stray colored boxes.
+  if (resolveMobileTerminalTabAgentId(tab, hostAgentIdentity)) {
+    return (
+      stripLeadingAgentTitleDecorationOrEmpty(tab.title) ||
+      translate('session.terminalTabAgent.terminal', 'Terminal')
+    )
+  }
+  return tab.title || translate('session.terminalTabAgent.terminal', 'Terminal')
+}
+
+/** The keys for what the tab's agent is doing now, or null for a shell, an unknown agent or state. */
+export function resolveMobileTerminalTabSmartKeys(
+  tab: MobileSessionTab | null | undefined,
+  terminals: readonly { handle: string; agentIdentity?: string }[]
+): AgentSmartKeySet | null {
+  if (tab?.type !== 'terminal' || !isMobileTerminalTabRunningAgent(tab)) {
+    return null
+  }
+  return resolveAgentSmartKeys(
+    resolveMobileTerminalTabOwnedAgentId(
+      tab,
+      getMobileTerminalTabHostAgentIdentity(tab, terminals)
+    ),
+    tab.agentStatus
+  )
+}

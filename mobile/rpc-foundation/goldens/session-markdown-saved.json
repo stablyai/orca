@@ -4,7 +4,12 @@
   "family": "session.markdown-save",
   "namedDeltas": [],
   "values": {
-    "36de5fd645a3": {
+    "48e7060a8031": {
+      "name": "markdown.saveTab#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.saveTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\",\"baseVersion\":\"v1\",\"content\":\"# b\"}}"
+    },
+    "7fadfe6b63b6": {
       "markdown": {
         "tab-md": {
           "baseVersion": "v2",
@@ -12,14 +17,10 @@
           "editable": true,
           "isDirty": false,
           "localContent": "# b",
+          "localRevision": 2,
           "status": "ready"
         }
       }
-    },
-    "48e7060a8031": {
-      "name": "markdown.saveTab#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.saveTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\",\"baseVersion\":\"v1\",\"content\":\"# b\"}}"
     },
     "807e68f28cfd": {
       "name": "toast",
@@ -87,7 +88,7 @@
           "settlements": {
             "save": "eb79a9b3682a"
           },
-          "state": "36de5fd645a3",
+          "state": "7fadfe6b63b6",
           "effects": ["807e68f28cfd"]
         }
       }

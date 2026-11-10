@@ -1,3 +1,4 @@
+import type { GhAccountBinding } from '../../shared/github/account-binding'
 import { ipcRenderer } from 'electron'
 import type { GitHubCommentResult } from '../../shared/github/comment-types'
 import type { GitHubAssignableUser, GitHubOwnerRepo } from '../../shared/github/pull-request-types'
@@ -7,7 +8,7 @@ import type {
   GhAccountBindingValidationResult,
   GhAuthDiagnostic
 } from '../../shared/github/auth-types'
-import type { TaskSourceContext } from '../../shared/task-source-context'
+import type { TaskSourceContext } from '../../shared/work-items/task-source-context'
 import type {
   GetProjectViewTableResult,
   GitHubProjectCommentMutationResult,
@@ -93,8 +94,9 @@ export const ghMutationsAndProjectsApi = {
     sourceContext?: TaskSourceContext | null
     number: number
     updates: unknown
-  }): Promise<{ ok: true } | { ok: false; error: string }> =>
-    ipcRenderer.invoke('gh:updateIssue', args),
+  }): Promise<
+    { ok: true; bodyImageUrls?: Record<string, string> } | { ok: false; error: string }
+  > => ipcRenderer.invoke('gh:updateIssue', args),
   addIssueComment: (args: {
     repoPath: string
     repoId?: string | null
@@ -129,11 +131,15 @@ export const ghMutationsAndProjectsApi = {
     body: string
   }): Promise<GitHubCommentResult> => ipcRenderer.invoke('gh:addPRReviewComment', args),
   listLabels: (args: {
+    ownerRepo?: GitHubOwnerRepo
+    expectedGhAccount?: GhAccountBinding | null
     repoPath: string
     repoId?: string | null
     sourceContext?: TaskSourceContext | null
   }): Promise<string[]> => ipcRenderer.invoke('gh:listLabels', args),
   listAssignableUsers: (args: {
+    ownerRepo?: GitHubOwnerRepo
+    expectedGhAccount?: GhAccountBinding | null
     repoPath: string
     repoId?: string | null
     sourceContext?: TaskSourceContext | null

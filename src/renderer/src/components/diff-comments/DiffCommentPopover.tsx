@@ -1,3 +1,4 @@
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { CornerDownLeft } from 'lucide-react'
 import { toast } from 'sonner'
@@ -6,8 +7,8 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
-} from '@/lib/comment-body-submit-state'
-import { translate } from '@/i18n/i18n'
+} from '@/lib/source-control/review/comments/comment-body-submit-state'
+import { useTranslate } from '@/i18n/use-translate'
 import { installOpenDraftAddReviewNoteGuard } from '../editor/editor-shortcuts'
 import { resolveDiffCommentPopoverTop } from './diff-comment-popover-position'
 
@@ -39,12 +40,22 @@ export function DiffCommentPopover({
   left,
   lineHeight = 0,
   title,
-  placeholder = 'Add note for the AI',
-  submitLabel = 'Add note',
-  submittingLabel = 'Saving…',
+  placeholder: placeholderOverride,
+  submitLabel: submitLabelOverride,
+  submittingLabel: submittingLabelOverride,
   onCancel,
   onSubmit
 }: Props): React.JSX.Element {
+  const t = useTranslate()
+  const placeholder =
+    placeholderOverride ??
+    t('auto.components.diff.comments.DiffCommentPopover.f6c449191e', 'Add note for the AI')
+  const submitLabel =
+    submitLabelOverride ??
+    t('auto.components.diff.comments.DiffCommentPopover.5fa4bfebaa', 'Add note')
+  const submittingLabel =
+    submittingLabelOverride ??
+    t('auto.components.diff.comments.DiffCommentCard.bb0a55f856', 'Saving…')
   const [body, setBody] = useState('')
   // Why: mirror the draft into a ref so the mousedown listener reads it fresh without re-registering each keystroke.
   const bodyRef = useRef(body)
@@ -56,7 +67,6 @@ export function DiffCommentPopover({
   // Why: keep onCancel in a ref so the mousedown listener reads it fresh without re-attaching when parents pass a new callback each render.
   const onCancelRef = useRef(onCancel)
   onCancelRef.current = onCancel
-  // Why: stable per-instance id so coexisting popovers don't collide on aria-labelledby references.
   const labelId = useId()
   // Why: seed at `top` for a correct first paint when there's room below; the layout effect flips it above the line if clipped.
   const [resolvedTop, setResolvedTop] = useState(top)
@@ -103,7 +113,6 @@ export function DiffCommentPopover({
   }, [measureResolvedTop])
 
   const focusTextareaRef = useCallback((textarea: HTMLTextAreaElement | null): void => {
-    // Why: focus on mount via the ref callback so no post-render Effect is needed.
     textarea?.focus()
   }, [])
 
@@ -129,7 +138,6 @@ export function DiffCommentPopover({
       if (hasDraftText(bodyRef.current)) {
         return
       }
-      // Why: read the latest onCancel from the ref so the listener isn't re-registered on every parent render (see onCancelRef above).
       onCancelRef.current()
     }
     document.addEventListener('mousedown', onDocumentMouseDown)
@@ -153,7 +161,7 @@ export function DiffCommentPopover({
     }
     if (bodyState.status === 'too-large-leading-whitespace') {
       toast.error(
-        translate(
+        t(
           'auto.components.diff.comments.DiffCommentPopover.commentTooLarge',
           'Comment is too large to submit safely.'
         )
@@ -187,18 +195,18 @@ export function DiffCommentPopover({
         <div id={labelId} className="orca-diff-comment-popover-label">
           {title ??
             (startLine && startLine !== lineNumber
-              ? translate(
+              ? t(
                   'auto.components.diff.comments.DiffCommentPopover.c845170b3b',
                   'Lines {{value0}}-{{value1}}',
                   { value0: startLine, value1: lineNumber }
                 )
-              : translate(
+              : t(
                   'auto.components.diff.comments.DiffCommentPopover.e05063cfc1',
                   'Line {{value0}}',
                   { value0: lineNumber }
                 ))}
         </div>
-        <textarea
+        <ImeTextarea
           ref={focusTextareaRef}
           className="orca-diff-comment-popover-textarea"
           placeholder={placeholder}
@@ -226,7 +234,7 @@ export function DiffCommentPopover({
         />
         <div className="orca-diff-comment-popover-footer">
           <Button variant="ghost" size="sm" onClick={onCancel}>
-            {translate('auto.components.diff.comments.DiffCommentPopover.2b3ce6d394', 'Cancel')}
+            {t('auto.components.diff.comments.DiffCommentPopover.2b3ce6d394', 'Cancel')}
           </Button>
           <Button size="sm" onClick={handleSubmit} disabled={submitting || !canSubmitComment}>
             {submitting ? submittingLabel : submitLabel}

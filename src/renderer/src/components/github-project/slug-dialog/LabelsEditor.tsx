@@ -1,9 +1,9 @@
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import React, { useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useRepoLabelsBySlug } from '@/hooks/useGitHubSlugMetadata'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function LabelsEditor({
   owner,
@@ -11,7 +11,7 @@ export function LabelsEditor({
   host,
   selected,
   disabled,
-  sourceSettings,
+  sourceTarget,
   onChange
 }: {
   owner: string
@@ -19,16 +19,12 @@ export function LabelsEditor({
   host?: string
   selected: string[]
   disabled?: boolean
-  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  sourceTarget: RuntimeClientTarget
   onChange: (add: string[], remove: string[]) => void | Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
-  const metadata = useRepoLabelsBySlug(
-    open ? owner : null,
-    open ? repo : null,
-    sourceSettings,
-    host
-  )
+  const metadata = useRepoLabelsBySlug(open ? owner : null, open ? repo : null, sourceTarget, host)
   return (
     <Popover open={open} onOpenChange={(o) => !disabled && setOpen(o)}>
       <PopoverTrigger asChild>
@@ -37,25 +33,16 @@ export function LabelsEditor({
           disabled={disabled}
           className="rounded-md border border-border/50 bg-muted/30 px-2 py-0.5 text-[11px] hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-muted/30"
         >
-          {translate(
-            'auto.components.github.project.slug.dialog.LabelsEditor.a7b182fcda',
-            'Labels:'
-          )}
+          {t('auto.components.github.project.slug.dialog.LabelsEditor.a7b182fcda', 'Labels:')}
           {selected.length === 0
-            ? translate(
-                'auto.components.github.project.slug.dialog.LabelsEditor.1a5366b5be',
-                'none'
-              )
+            ? t('auto.components.github.project.slug.dialog.LabelsEditor.1a5366b5be', 'none')
             : selected.join(', ')}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1">
         {metadata.loading ? (
           <div className="px-2 py-1 text-xs text-muted-foreground">
-            {translate(
-              'auto.components.github.project.slug.dialog.LabelsEditor.34dd57d6c8',
-              'Loading…'
-            )}
+            {t('auto.components.github.project.slug.dialog.LabelsEditor.34dd57d6c8', 'Loading…')}
           </div>
         ) : (
           metadata.data.map((name) => {

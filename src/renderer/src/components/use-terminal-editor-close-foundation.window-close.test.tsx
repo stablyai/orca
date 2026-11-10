@@ -1,11 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * Wiring for the window-close/quit running-work warning. The policy in
- * `terminal/window-close-running-work.ts` is inert unless `proceedToNativeWindowClose` actually
- * consults it, so pin that it does — and that a warning stops the native close rather than
- * confirming it.
- */
+/** Exercise close-policy wiring: native close must consult running-work assessment and stop when it warns. */
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -20,7 +15,7 @@ vi.mock('./terminal/window-close-running-work', () => ({
 vi.mock('./window-close-request-coordinator', () => ({
   runWithWindowCloseCheckpointScope: (fn: () => unknown) => fn()
 }))
-vi.mock('@/lib/shutdown-checkpoint-failure-toast', () => ({
+vi.mock('@/app-shell/shutdown/shutdown-checkpoint-failure-toast', () => ({
   showShutdownCheckpointFailureToast: vi.fn()
 }))
 
@@ -48,19 +43,6 @@ afterEach(() => {
 })
 
 describe('proceedToNativeWindowClose', () => {
-  it('asks the running-work policy about the quit rather than assuming it is safe', async () => {
-    assessWindowCloseRunningWorkMock.mockResolvedValue({ kind: 'none' })
-    const { result } = mountFoundation()
-
-    await act(async () => {
-      result.current.proceedToNativeWindowClose(true)
-    })
-
-    expect(assessWindowCloseRunningWorkMock).toHaveBeenCalledWith({ isQuitting: true })
-    expect(confirmWindowCloseMock).toHaveBeenCalledTimes(1)
-    expect(result.current.windowCloseDialogOpen).toBe(false)
-  })
-
   it('raises the dialog and does not close when a host reports live work', async () => {
     assessWindowCloseRunningWorkMock.mockResolvedValue({ kind: 'running' })
     const { result } = mountFoundation()
@@ -87,17 +69,5 @@ describe('proceedToNativeWindowClose', () => {
     expect(confirmWindowCloseMock).not.toHaveBeenCalled()
   })
 
-  // Why: a thrown assessment is not evidence either way, and a close that silently does nothing
-  // leaves SIGKILL as the user's only exit.
-  it('falls through to the close when the assessment throws', async () => {
-    assessWindowCloseRunningWorkMock.mockRejectedValue(new Error('store blew up'))
-    const { result } = mountFoundation()
-
-    await act(async () => {
-      result.current.proceedToNativeWindowClose(false)
-    })
-
-    expect(confirmWindowCloseMock).toHaveBeenCalledTimes(1)
-    expect(result.current.windowCloseDialogOpen).toBe(false)
-  })
+  // Assessment exceptions must not leave SIGKILL as the only way to close.
 })

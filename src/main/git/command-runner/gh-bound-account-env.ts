@@ -2,6 +2,7 @@ import { normalizeGhAccountBinding } from '../../../shared/github/account-bindin
 import type { GhExecOptions } from './gh-exec-file'
 import { collectGhArgvHostSignals } from './gh-host-args'
 import type { ResolvedCommand } from './wsl-command-resolution'
+import type { GhCaptureLifetimeHooks } from './gh-capture-lifetime'
 
 const GH_BOUND_ACCOUNT_ERROR_CODES = new Set([
   'gh_bound_account_unavailable',
@@ -20,20 +21,18 @@ export function isGhBoundAccountError(error: unknown): boolean {
   )
 }
 
-/**
- * Child env for a bound gh call: pins the host, resolves the bound login's
- * token, and injects it into this child only — never process-wide.
- */
+/** Pin the host and inject the bound account token into this child only. */
 export async function resolveBoundGhExecEnv(
   options: GhExecOptions,
   resolved: ResolvedCommand,
-  args: readonly string[]
+  args: readonly string[],
+  hooks?: GhCaptureLifetimeHooks
 ): Promise<NodeJS.ProcessEnv | undefined> {
   const binding = options.ghAccount
   if (!binding || args[0] === 'auth') {
     return options.env
   }
-  // Why: dynamic import avoids a load-time cycle (command runner ↔ github token module).
+  // Dynamic import breaks the runner/token-module load cycle.
   const {
     buildBoundGhChildEnv,
     createGhBoundAccountHostMismatchError,
@@ -53,10 +52,10 @@ export async function resolveBoundGhExecEnv(
       throw createGhBoundAccountHostMismatchError(normalized, host)
     }
   }
-  const token = await resolveGhAccountToken(normalized, {
-    cwd: options.cwd,
-    wslDistro: resolved.wsl?.distro ?? options.wslDistro
-  })
+  const target = { cwd: options.cwd, wslDistro: resolved.wsl?.distro ?? options.wslDistro }
+  const token = hooks
+    ? await resolveGhAccountToken(normalized, target, undefined, hooks)
+    : await resolveGhAccountToken(normalized, target)
   return buildBoundGhChildEnv({
     baseEnv: options.env ?? process.env,
     binding: normalized,

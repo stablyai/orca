@@ -2,10 +2,16 @@ import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
 import { publishProfileStateDatabase } from './profile-state-database-publication'
+import { ensureProfileStateAuthorityMarker } from './profile-state-authority-marker'
 import type { ProfileStateAuthorityInitialState } from '../loading-store/profile-state-authority'
 import { isProfileStateSqliteAvailable, openProfileStateDatabase } from './profile-state-database'
 import { ProfileStateDatabaseOpenError } from './profile-state-database-errors'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
+import { ProfileStateDocumentCorruptionError } from './profile-state-document-validation'
+import {
+  planProfileStateSectionRepair,
+  type ProfileStateRepairSection
+} from './profile-state-section-repair'
 import { migrateProfileStateToSqlite } from './profile-state-migration'
 import { prepareLegacyProfileState } from './legacy-json/profile-state-legacy-import'
 import {
@@ -38,14 +44,14 @@ export type ProfileStateAuthorityBootstrapResult = {
 )
 
 export type ProfileStateAuthorityBootstrapOptions = {
+  userDataPath?: string
   dataFile: string
   databaseFile: string
   profileId: string
-  /** Establish empty profiles before their first Store write. */
+  /** Admit empty profiles before their first Store write. */
   allowEmptyProfileState?: boolean
 }
 
-/** Normalize legacy state once, then hand one validated authority to Store. */
 export function bootstrapProfileStateAuthority(
   options: ProfileStateAuthorityBootstrapOptions
 ): ProfileStateAuthorityBootstrapResult {
@@ -88,6 +94,7 @@ export function bootstrapProfileStateAuthority(
         'diverged-json'
       )
     }
+    ensureProfileStateAuthorityMarker(options.databaseFile)
     return { classification, authority, initialState, migrated: false }
   } catch (error) {
     authority.close()
@@ -97,7 +104,25 @@ export function bootstrapProfileStateAuthority(
     ) {
       throw error
     }
-    throw new ProfileStateRecoveryRequiredError(options, error)
+    throw new ProfileStateRecoveryRequiredError(
+      options,
+      error,
+      error instanceof ProfileStateDocumentCorruptionError
+        ? findRepairableSections(options)
+        : undefined
+    )
+  }
+}
+
+/** Diagnostic failure retains whole-file recovery guidance. */
+function findRepairableSections(
+  options: ProfileStateAuthorityBootstrapOptions
+): readonly ProfileStateRepairSection[] | undefined {
+  try {
+    return planProfileStateSectionRepair(options)?.sections
+  } catch (error) {
+    console.warn('[profile-state] Could not tell which profile sections are damaged:', error)
+    return undefined
   }
 }
 

@@ -3,17 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
-vi.mock('@electron-toolkit/utils', async () =>
-  (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
-)
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
-vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harness')).appIconMock())
-vi.mock('../browser/browser-manager', async () =>
+vi.mock('./desktop-integration/app-icon', async () =>
+  (await import('./createMainWindow-test-harness')).appIconMock()
+)
+vi.mock('../browser/guest-lifecycle/manager/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
-vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
+vi.mock('../browser/client-pages/renderer/browser-client-page-renderer-runtime', async () => {
   const harness = await import('./createMainWindow-test-harness')
   return {
     attachBrowserClientPageRenderer: harness.attachClientPageRendererMock,
@@ -82,7 +81,6 @@ async function runOomSequence(
     withPlatform(platform, () => windowHandlers['render-process-gone']?.({}, OOM))
     await vi.advanceTimersByTimeAsync(250)
   }
-  // Minus the initial load.
   return {
     reloads: browserWindowInstance.loadFile.mock.calls.length - 1,
     onRendererRecoveryExhausted
@@ -114,7 +112,6 @@ describe('Windows renderer OOM recovery under exhausted commit', () => {
       EXHAUSTED_COMMIT_MB,
       EXHAUSTED_COMMIT_MB
     ])
-    // The first OOM and the one 14 min later each still get their automatic reload.
     expect(reloads).toBe(2)
     expect(onRendererRecoveryExhausted).toHaveBeenCalledOnce()
     expect(onRendererRecoveryExhausted).toHaveBeenCalledWith(
@@ -130,7 +127,7 @@ describe('Windows renderer OOM recovery under exhausted commit', () => {
     )
   })
 
-  // The common field case: the 10 s sampler has no tick in the 3.458 s between the two OOMs.
+  // Reproduce the 3.458s OOM gap with no intervening 10s sampler tick.
   it('reads commit at gone time when no sampler tick landed since the previous OOM', async () => {
     const { reloads, onRendererRecoveryExhausted } = await runOomSequence('win32', [
       HEALTHY_FIRST_OOM_COMMIT_MB,

@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault-search-settings'
-import type { AiVaultSearchStatus } from '../../../../shared/ai-vault-search-types'
+import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault/search/ai-vault-search-settings'
+import type { AiVaultSearchStatus } from '../../../../shared/ai-vault/search/ai-vault-search-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import {
   isSessionSearchIndexReady,
   sessionSearchStatusMessage
-} from '@/components/settings/session-history-status-copy'
-import { useSessionSearchStatus } from '@/components/settings/use-session-search-status'
+} from '@/components/session-search/session-search-status'
+import { useSessionSearchStatus } from '@/components/session-search/use-session-search-status'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 
 export type SessionSearchTipStage = 'offer' | 'indexing' | 'ready'
@@ -20,16 +21,13 @@ export type SessionSearchTipSetup = {
   enable: () => Promise<void>
 }
 
-/**
- * The tip's view of local session search, read from the setting and the index itself so a
- * build started from Settings shows the same progress. The feature-tips modal stays mounted
- * after it closes, so a build the user left mid-index is still watched and toasts once ready.
- */
+/** Watch the live index even after dismissal so builds started elsewhere stay in sync and dismissed builds can toast when ready. */
 export function useSessionSearchTipSetup({
   dialogOpen
 }: {
   dialogOpen: boolean
 }): SessionSearchTipSetup {
+  const t = useTranslate()
   const showAiVaultSearch = useAppStore((s) => s.showAiVaultSearch)
   const searchEnabled = useAppStore((s) => resolveAiVaultSearchSettings(s.settings).enabled)
   const [wasOpen, setWasOpen] = useState(dialogOpen)
@@ -83,7 +81,7 @@ export function useSessionSearchTipSetup({
         })
       } catch {
         toast.error(
-          translate(
+          t(
             'featureTips.sessionSearch.enableFailed',
             'Could not turn on session search. Try again.'
           )

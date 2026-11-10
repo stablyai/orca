@@ -1,12 +1,11 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TooltipProvider } from '@/components/ui/tooltip'
-import type { BrowserPageAnnotation } from '../../../../../shared/browser-grab-types'
-import { createTestStore } from '@/store/slices/browser-slice-test-harness'
-import type { OpenAgentSendPopoverTargetModeArgs } from '@/store/slices/ui'
-import { BrowserPageAnnotationTray } from './browser-page-annotation-tray'
+
+import type { BrowserPageAnnotation } from '../../../../../shared/browser/element-grab/browser-grab-types'
+import { createTestStore } from '@/store/slices/browser/browser-slice-test-harness'
+
 import { useBrowserPageAnnotationSend } from './use-browser-page-annotation-send'
 
 const state = vi.hoisted((): { store?: ReturnType<typeof createTestStore> } => ({}))
@@ -21,11 +20,6 @@ vi.mock('@/store', () => ({
   }
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('./BrowserAnnotationSendMenuContent', () => ({
-  BrowserAnnotationSendMenuContent: ({ onPromptDelivered }: { onPromptDelivered?: () => void }) => (
-    <button onClick={onPromptDelivered}>Complete delivery</button>
-  )
-}))
 
 function makeAnnotation(pageId: string, id = 'annotation-1'): BrowserPageAnnotation {
   return {
@@ -87,21 +81,14 @@ function makeAnnotation(pageId: string, id = 'annotation-1'): BrowserPageAnnotat
 }
 
 let store: ReturnType<typeof createTestStore>
-let mode: OpenAgentSendPopoverTargetModeArgs | undefined
 
 beforeEach(() => {
   store = createTestStore()
   state.store = store
-  mode = undefined
   store.setState({
-    activeGroupIdByWorktree: {},
-    openAgentSendPopoverTargetMode: (next) => {
-      mode = next
-    },
     closeAgentSendPopoverTargetMode: vi.fn()
   })
   store.getState().addBrowserPageAnnotation(makeAnnotation('page-1'))
-  store.getState().addBrowserPageAnnotation(makeAnnotation('page-2', 'other'))
 })
 afterEach(cleanup)
 
@@ -114,103 +101,32 @@ function notes(page = 'page-1') {
   return store.getState().browserAnnotationsByPageId[page] ?? []
 }
 
-function AnnotationTrayHarness(): React.JSX.Element | null {
-  const annotationSend = useBrowserPageAnnotationSend({
-    browserTabId: 'page-1',
-    worktreeId: 'folder-1'
-  })
-  if (annotationSend.browserAnnotations.length === 0) {
-    return null
-  }
-  return (
-    <TooltipProvider>
-      <BrowserPageAnnotationTray {...annotationSend} annotationTraySendOpen worktreeId="folder-1" />
-    </TooltipProvider>
-  )
-}
-
-describe('website annotation delivery', () => {
-  it('removes the annotation tray only after its prompt is delivered', () => {
-    render(<AnnotationTrayHarness />)
-
-    expect(screen.getByText('Fix this button')).toBeVisible()
-    expect(screen.getByRole('button', { name: 'Complete delivery' })).toBeVisible()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Complete delivery' }))
-
-    expect(screen.queryByText('Fix this button')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Complete delivery' })).not.toBeInTheDocument()
-    expect(notes('page-2')).toHaveLength(1)
+describe('website annotations handed to a send', () => {
+  const second = (): BrowserPageAnnotation => ({
+    ...makeAnnotation('page-1', 'second'),
+    comment: 'Second note'
   })
 
-  it.each(['banner', 'tray'] as const)(
-    'captures the %s sidebar prompt and keeps later edits and additions',
-    (surface) => {
-      store.getState().addBrowserPageAnnotation(makeAnnotation('page-1', 'unchanged'))
-      const view = mount()
-      act(() => {
-        if (surface === 'banner') {
-          view.result.current.handleAnnotationBannerSendOpenChange(true)
-        } else {
-          view.result.current.handleAnnotationTraySendOpenChange(true)
-        }
-      })
-      const delivery = mode
-      expect(delivery?.prompt).toContain('Fix this button')
-      expect(delivery?.onPromptDelivered).toBeTypeOf('function')
-      act(() => {
-        store.getState().updateBrowserPageAnnotation('page-1', 'annotation-1', {
-          comment: 'New edit',
-          intent: 'change'
-        })
-        store.getState().addBrowserPageAnnotation(makeAnnotation('page-1', 'new'))
-      })
-      act(() => delivery?.onPromptDelivered?.())
-      expect(notes().map((note) => note.id)).toEqual(['annotation-1', 'new'])
-      expect(notes()[0].comment).toBe('New edit')
-      act(() => delivery?.onPromptDelivered?.())
-      expect(notes()).toHaveLength(2)
-    }
-  )
-
-  it('preserves later notes when a menu send finishes after unmount', () => {
+  it('sends only an annotation added while an earlier send is still on its way', async () => {
     const view = mount()
-    const delivered = view.result.current.handleBrowserAnnotationsSentToAgent
-    act(() => store.getState().addBrowserPageAnnotation(makeAnnotation('page-1', 'new')))
-    view.unmount()
-    act(delivered)
-    expect(notes().map((note) => note.id)).toEqual(['new'])
-  })
+    const firstDelivered = view.result.current.handleBrowserAnnotationsSentToAgent
+    let deliverFirst!: (result: { delivered: boolean }) => void
+    act(() =>
+      view.result.current.handleBrowserAnnotationsHandedOff(
+        new Promise((resolve) => (deliverFirst = resolve))
+      )
+    )
+    expect(view.result.current.browserAnnotationsPrompt).toBe('')
 
-  it('keeps copied notes until delivery is acknowledged', () => {
-    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: { ui: { writeClipboardText } }
-    })
-    const view = mount()
-    act(() => view.result.current.handleCopyBrowserAnnotations())
-    expect(writeClipboardText).toHaveBeenCalledWith(view.result.current.browserAnnotationsPrompt)
-    expect(notes()).toHaveLength(1)
-  })
+    act(() => store.getState().addBrowserPageAnnotation(second()))
+    expect(view.result.current.browserAnnotationsPrompt).toContain('Second note')
+    expect(view.result.current.browserAnnotationsPrompt).not.toContain('Fix this button')
+    const secondDelivered = view.result.current.handleBrowserAnnotationsSentToAgent
 
-  it('does not erase replacement notes after a navigation clears the original page', () => {
-    const view = mount()
-    const delivered = view.result.current.handleBrowserAnnotationsSentToAgent
-    act(() => {
-      store.getState().clearBrowserPageAnnotations('page-1')
-      store.getState().addBrowserPageAnnotation(makeAnnotation('page-1'))
-    })
-    act(delivered)
-    expect(notes()).toHaveLength(1)
-  })
-
-  it('preserves notes when a picker closes without delivery and still supports Clear all', () => {
-    const view = mount()
-    act(() => view.result.current.handleAnnotationTraySendOpenChange(true))
-    act(() => view.result.current.handleAnnotationTraySendOpenChange(false))
-    expect(notes()).toHaveLength(1)
-    act(() => view.result.current.handleClearBrowserAnnotations())
+    act(firstDelivered)
+    await act(async () => deliverFirst({ delivered: true }))
+    expect(notes().map((note) => note.id)).toEqual(['second'])
+    act(secondDelivered)
     expect(notes()).toEqual([])
   })
 })

@@ -1,3 +1,5 @@
+import { agentVerdictDisplayMark } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import type { AppState } from '@/store/types'
 import {
   DASHBOARD_MAX_MAP_WORKSPACES,
@@ -6,7 +8,7 @@ import {
   type DashboardWorkspace
 } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   resolveDashboardCardTerminalInput,
   type DashboardCardTerminalInputState
@@ -14,15 +16,16 @@ import {
 import { readDashboardClientHost } from './dashboard-client-host'
 import { dashboardCardParentPaneKey } from './agent-row-lineage'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
-import { selectTerminalLayoutsForWorktree } from '../sidebar/worktree-agent-row-selectors'
-import { EMPTY_WORKTREE_AGENT_ORCHESTRATION } from '../sidebar/worktree-agent-orchestration-batch'
+import { selectTerminalLayoutsForWorktree } from '../sidebar/workspace-card/activity/worktree-agent-row-selectors'
+import '../sidebar/workspace-card/activity/worktree-agent-orchestration-batch'
+import { EMPTY_WORKTREE_AGENT_ORCHESTRATION } from '../sidebar/workspace-card/activity/worktree-agent-orchestration-index'
 import {
   finishWorktreeAgentRowsCachePass,
   selectWorktreeAgentRowsCached,
   startWorktreeAgentRowsCachePass,
   type WorktreeAgentRowsCache
 } from './worktree-agent-rows-cache'
-import { selectRuntimePaneTitlesForWorktree } from '../sidebar/worktree-card-status-inputs'
+import { selectRuntimePaneTitlesForWorktree } from '../sidebar/workspace-card/activity/worktree-card-status-inputs'
 import {
   resolveDashboardCardContext,
   type DashboardCardContextState
@@ -38,17 +41,13 @@ import {
   rowConversationName,
   rowTask
 } from './dashboard-card-labels'
-import {
-  buildDashboardWorktreeLaunchOptions,
-  type DashboardLaunchDetectionState
-} from './dashboard-worktree-launch-options'
 import { buildDashboardSnapshotFilterOptions } from './dashboard-snapshot-filter-options'
 import { groupSubagentsByParentPaneKey } from './dashboard-subagent-cards'
 import { selectDashboardOrchestration } from './dashboard-orchestration-selection'
-import { dashboardRowBucketProjection } from './dashboard-row-bucket'
+import { dashboardRowBucketProjection, readAgentRowTurnRecords } from './dashboard-row-bucket'
+import type { Translate } from '@/i18n/use-translate'
 
-/** The store slices the snapshot builder reads. Kept as a Pick so unit tests
- *  can pass a partial store without constructing the whole AppState. */
+/** Keep builder inputs as a Pick so tests need only construct the store slices read here. */
 export type DashboardSnapshotState = Pick<
   AppState,
   | 'repos'
@@ -67,29 +66,31 @@ export type DashboardSnapshotState = Pick<
   DashboardCardContextState &
   Partial<
     DashboardCardTerminalInputState &
-      DashboardLaunchDetectionState &
-      Pick<AppState, 'runtimeEnvironments' | 'sshTargetLabels' | 'unifiedTabsByWorktree'>
+      Pick<
+        AppState,
+        | 'runtimeEnvironments'
+        | 'sshTargetLabels'
+        | 'unifiedTabsByWorktree'
+        | 'activeWorktreeId'
+        | 'activeWorkspaceExecutionHostId'
+      >
   >
 
-/**
- * Derive the serializable dashboard snapshot from the live renderer store.
- * Reuses the exact per-worktree row machinery the sidebar uses
- * (buildWorktreeAgentRows + the indexed selectors), then flattens every
- * worktree's rows into presentational cards. Provider subagents without their
- * own terminal stay folded into their spawning card.
- */
+export type DashboardSnapshotInput = DashboardSnapshotState & { chatNames: StructuredChatTabNames }
+
+/** Reuse sidebar row/index derivation for serializable cards; fold terminal-less subagents into their spawning card. */
 export function buildDashboardSnapshot(
-  state: DashboardSnapshotState,
+  state: DashboardSnapshotInput,
   now: number,
   options: {
     includeCardDetails?: boolean
     includeFilterOptions?: boolean
-    /** Optional per-worktree row-pipeline reuse; card assembly always runs fresh
-     *  because cards also read review/host/status slices the cache does not key. */
+    /** Cache only row derivation; review/host/status inputs still require fresh card assembly. */
     rowsCache?: WorktreeAgentRowsCache
     /** Freshness token for rowsCache (agentStatusEpoch); required for the cache to be safe. */
     rowsGeneration?: unknown
-  } = {}
+  } = {},
+  t?: Translate
 ): DashboardSnapshot {
   const cards: DashboardCard[] = []
   const workspaces: DashboardWorkspace[] | undefined =
@@ -99,6 +100,7 @@ export function buildDashboardSnapshot(
   const includeCardDetails = options.includeCardDetails !== false
   const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
   const showIdle = state.settings?.experimentalAgentDashboardShowIdle === true
+  const turnRecords = readAgentRowTurnRecords(state)
   const activeWorktrees = collectActiveDashboardWorkspaces(state, includeCardDetails)
   const filterOptions =
     options.includeFilterOptions === false
@@ -134,7 +136,7 @@ export function buildDashboardSnapshot(
       ? groupSubagentsByParentPaneKey(rows)
       : undefined
     const context = includeCardDetails
-      ? resolveDashboardCardContext(state, repo, worktree)
+      ? resolveDashboardCardContext(state, repo, worktree, t)
       : undefined
     if (workspaces && workspaces.length < DASHBOARD_MAX_MAP_WORKSPACES) {
       const hostMetadata = dashboardCardMapWorkspaceMetadata(
@@ -163,28 +165,21 @@ export function buildDashboardSnapshot(
       if (row.rowSource === 'subagent') {
         continue
       }
-      // Title-derived rows (a live pane read only from its terminal title, no
-      // agent-hook status) carry synthetic prompt/lastAssistantMessage — the
-      // agent LABEL and a status word like "Idle". They're marked by
-      // startedAt === 0, and must NOT be shown as real conversation.
+      // Title-derived rows contain synthetic prompt/message labels, not real conversation; startedAt=0 distinguishes them.
       const { isTitleDerived, dotState, workingMode, unseen, bucket } =
-        dashboardRowBucketProjection(row, state.acknowledgedAgentsByPaneKey)
+        dashboardRowBucketProjection(row, turnRecords)
       const routingPaneKey = row.activationPaneKey ?? row.paneKey
       const parsed = parsePaneKey(routingPaneKey)
       const tabId = parsed?.tabId ?? row.tab.id
       const leafId = parsed?.leafId ?? null
       const layoutPtyId =
         (leafId ? terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId] : undefined) ?? null
-      // Layout entries survive app restarts, but their PTYs may not (parked
-      // tabs keep the pre-restart id). Only advertise a pty the terminal
-      // preview can actually serialize — ptyIdsByTabId is the liveness truth.
+      // Layouts survive restarts; advertise preview PTYs only when the live ptyIdsByTabId set still contains them.
       const ptyId =
         layoutPtyId && (state.ptyIdsByTabId?.[tabId] ?? []).includes(layoutPtyId)
           ? layoutPtyId
           : null
-      // Why: only a live pty can open a preview terminal, and only a
-      // card-rendering caller can open one — the sidebar's bucket counts must
-      // not pay host resolution on every agent-status tick.
+      // Only live preview-capable cards need host resolution; count-only sidebar rebuilds must skip that cost.
       const terminalInput =
         ptyId && includeCardDetails
           ? resolveDashboardCardTerminalInput(state, {
@@ -217,6 +212,7 @@ export function buildDashboardSnapshot(
         agentType: row.agentType,
         bucket,
         dotState,
+        verdict: agentVerdictDisplayMark(row.entry) ?? undefined,
         ...(workingMode ? { workingMode } : {}),
         task: isTitleDerived ? '' : rowTask(row),
         repoId: workspace.projectId,
@@ -244,8 +240,6 @@ export function buildDashboardSnapshot(
         finishedAt,
         stateChangedAt: row.entry.stateStartedAt || row.startedAt,
         statusUpdatedAt: row.entry.updatedAt,
-        // Same derivation as WorktreeCardAgents' unvisitedByPaneKey, so the
-        // board and the sidebar bold/mute the same agents at the same time.
         unseen,
         askSummary: bucket === 'attention' ? (row.entry.interactivePrompt ?? undefined) : undefined,
         conversationName: boundedLabelOrUndefined(
@@ -253,7 +247,9 @@ export function buildDashboardSnapshot(
             row,
             generatedTitlesEnabled,
             terminalLayoutsByTabId[row.tab.id],
-            paneTitlesByTabId[row.tab.id]
+            paneTitlesByTabId[row.tab.id],
+            state.chatNames,
+            state.unifiedTabsByWorktree
           )
         ),
         ...(terminalInput ? { terminalInput } : {})
@@ -271,17 +267,6 @@ export function buildDashboardSnapshot(
     ...(workspaces ? { workspaces } : {}),
     showIdle,
     filterOptions,
-    // Only the dashboard surfaces offer a launcher; the count-only rebuild that
-    // feeds the sidebar must not pay for host-detection lookups.
-    ...(includeCardDetails
-      ? {
-          launchableAgentsByWorktreeId: buildDashboardWorktreeLaunchOptions(
-            state,
-            cards,
-            workspaces
-          )
-        }
-      : {}),
     repoIconsByRepoId
   }
 }

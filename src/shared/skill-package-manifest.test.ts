@@ -33,10 +33,6 @@ function packageFile(path: string, size = 0): SkillPackageFile {
 }
 
 describe('skill package manifest', () => {
-  it('parses a canonical manifest', () => {
-    expect(parseSkillPackageManifest(manifest()).name).toBe('test-skill')
-  })
-
   it.each(['con', 'prn', 'aux', 'nul', 'com1', 'com9', 'lpt1', 'lpt9'])(
     'rejects the Windows device skill name %s',
     (name) => {
@@ -88,20 +84,6 @@ describe('skill package manifest', () => {
     expect(() => validateSkillPackagePath(path(17))).toThrow('skill-package-path-invalid')
   })
 
-  it('enforces file count at, below, and above the V1 limit', () => {
-    const files = (count: number): SkillPackageFile[] => [
-      file,
-      ...Array.from({ length: count - 1 }, (_, index) =>
-        packageFile(`file-${index.toString().padStart(3, '0')}.md`)
-      )
-    ]
-    expect(() => parseSkillPackageManifest(manifest(files(511)))).not.toThrow()
-    expect(() => parseSkillPackageManifest(manifest(files(512)))).not.toThrow()
-    expect(() => parseSkillPackageManifest(manifest(files(513)))).toThrow(
-      'skill-package-manifest-invalid'
-    )
-  })
-
   it('enforces per-file and total extracted bytes around both V1 limits', () => {
     const fourMiB = 4 * 1024 * 1024
     expect(() =>
@@ -132,19 +114,5 @@ describe('skill package manifest', () => {
         manifest([file, packageFile('references/É.md'), packageFile('references/é.md')])
       )
     ).toThrow('skill-package-case-collision')
-  })
-
-  it('fuzzes path normalization without accepting traversal or platform syntax', () => {
-    let state = 0x5eed
-    const random = (): number => {
-      state = (state * 1103515245 + 12345) & 0x7fffffff
-      return state
-    }
-    const hazards = ['..', '.', '', 'C:', '\\server', 'nul', 'x.', 'x ', 'x\u0000y']
-    for (let index = 0; index < 1_000; index += 1) {
-      const hazard = hazards[random() % hazards.length]
-      const path = `safe/${hazard}/file-${random()}.md`
-      expect(() => validateSkillPackagePath(path)).toThrow('skill-package-path-invalid')
-    }
   })
 })

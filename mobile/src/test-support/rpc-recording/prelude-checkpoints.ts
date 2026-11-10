@@ -10,11 +10,7 @@ function stepsKey(steps: readonly ScenarioStep[]): string {
   )
 }
 
-/**
- * A checkpoint before a variant's divergence observes steps identical to the base, so every variant
- * would record the same value. Record those once in a prelude and let each variant start at its own
- * divergence; checkpoints that merely happen to be equal are left alone.
- */
+// Hoist only checkpoints before the distinguishing input; coincidentally equal later checkpoints still belong to each variant.
 export function hoistPreludeCheckpoints(
   base: RecordingScenario,
   variants: readonly DivergingScenario[]
@@ -37,6 +33,7 @@ export function hoistPreludeCheckpoints(
       ...base,
       id: `${base.id}.prelude`,
       schedules: ['prelude'],
+      ...(base.lineage ? { lineage: { ...base.lineage, role: 'prelude' } } : {}),
       steps: preludeSteps
     })
   }

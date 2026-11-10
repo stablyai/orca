@@ -1,13 +1,7 @@
-/**
- * A shell that stages media the way the real one does, for the page-side seam tests.
- *
- * Only what the seam can observe: a handle per picked item, a ranged read bounded by the same cap
- * the verb schema holds a page to, `eof` on the last chunk, and a refusal for a handle that has
- * been released. Everything the device half owns — pickers, permissions, the cache directory — is
- * the `native-media.ts` suite's, and duplicating it here would be a second shell to keep true.
- */
+// Model only observable staging/read/eof/release behavior with real verb schemas; native-media tests own device and cache details.
 import {
   BRIDGE_MEDIA_READ_MAX_BYTES,
+  mediaNameParamsSchema,
   mediaPickParamsSchema,
   mediaReadParamsSchema,
   mediaReleaseParamsSchema,
@@ -21,18 +15,16 @@ export type StagedTestMedia = {
   readonly mime?: string
   readonly width?: number
   readonly height?: number
+  readonly name?: string
 }
 
 export type MediaTestShell = {
-  /** Every verb call the page made, in order, as `verb offset:length` where a read says so. */
   readonly calls: string[]
-  /** Handles this shell no longer holds, in release order. */
   readonly released: string[]
   readonly serveNativeVerb: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>
 }
 
-/** Deterministic bytes: a run of the file's own offsets, so a chunk assembled out of order or a
- *  boundary dropped shows up as a different byte rather than a different length. */
+// Offset-derived bytes expose reordered chunks and dropped boundaries without relying on length.
 export function stagedTestBytes(byteLength: number): Uint8Array {
   const bytes = new Uint8Array(byteLength)
   for (let index = 0; index < byteLength; index += 1) {
@@ -50,16 +42,11 @@ export function encodeTestBase64(bytes: Uint8Array): string {
 }
 
 export function createMediaTestShell(options: {
-  /** What each `pick` answers, by source. A source with no entry answers nothing, which is the
-   *  cancelled picker. */
   readonly staged: Readonly<Partial<Record<string, readonly StagedTestMedia[]>>>
-  /** Refuses the pick instead of answering it, for the arms where the shell says no. */
   readonly refusePick?: BridgeNativeVerbRefusedError
-  /** Answers at most this many bytes per read, whatever was asked. A shell is only promised to
-   *  report `eof` honestly, so a page must read a short chunk as a short chunk. */
+  // Short reads are legal; only eof promises completion.
   readonly chunkBytes?: number
-  /** Reports `eof` after this many bytes, short of what `pick` declared: a staged file the shell
-   *  lost track of, which a page must name rather than upload half of. */
+  // Simulate premature eof so callers cannot silently upload a truncated file.
   readonly endAt?: number
 }): MediaTestShell {
   const calls: string[] = []
@@ -83,8 +70,7 @@ export function createMediaTestShell(options: {
     released,
     serveNativeVerb: (verb, params) => {
       if (verb === 'native.media.pick') {
-        // Parsed with the verb's own schema, as the device handler does: a page that sent a
-        // param shape the shell would have refused must not be served here either.
+        // Parse the real verb schema so this fake cannot accept params the device would refuse.
         const { source, multiple } = mediaPickParamsSchema.parse(params)
         calls.push(`pick ${source} ${multiple ? 'multiple' : 'single'}`)
         if (options.refusePick) {
@@ -115,6 +101,11 @@ export function createMediaTestShell(options: {
           base64: encodeTestBase64(record.bytes.subarray(offset, end)),
           eof: end >= last
         })
+      }
+      if (verb === 'native.media.name') {
+        const { handle } = mediaNameParamsSchema.parse(params)
+        calls.push(`name ${handle}`)
+        return Promise.resolve({ name: hold(handle).name ?? null })
       }
       const { handle } = mediaReleaseParamsSchema.parse(params)
       calls.push(`release ${handle}`)

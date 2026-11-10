@@ -1,8 +1,7 @@
 import { z } from 'zod'
 import { SkillDiscoveryTargetSchema } from './skills'
 
-/** Why a closed vocabulary: the result band groups skips by reason, and a remote
- *  host cannot localize free-text prose for the client that renders it. */
+/** Reason codes let clients localize remote results and group skips. */
 export const SKILL_DELETE_BLOCK_REASONS = [
   'bundled',
   'plugin',
@@ -18,15 +17,14 @@ export type SkillDeletePlacementKind = (typeof SKILL_DELETE_PLACEMENT_KINDS)[num
 export const SKILL_DELETE_STATUSES = ['deleted', 'skipped', 'partial', 'failed', 'busy'] as const
 export type SkillDeleteStatus = (typeof SKILL_DELETE_STATUSES)[number]
 
-/** One page of rows; a selection larger than this is not a thing the UI offers. */
+/** One UI page is the largest offered selection. */
 export const MAX_SKILL_DELETE_BATCH = 512
 
 const SkillPathSchema = z.string().min(1).max(4096)
 
 const SkillDeleteTargetSkillSchema = z
   .object({
-    /** `DiscoveredSkill.id` — identity, so host and client agree without
-     *  re-deriving it from a path that may have just been renamed. */
+    /** Use DiscoveredSkill.id; paths may have changed since the scan. */
     id: z.string().min(1).max(128),
     directoryPath: SkillPathSchema,
     skillFilePath: SkillPathSchema,
@@ -36,12 +34,11 @@ const SkillDeleteTargetSkillSchema = z
   })
   .strict()
 
-/** Strict on purpose (matching `SkillInstallRequestSchema`): an old host must
- *  reject a field that would change what gets deleted, not ignore it. */
+/** Strict so old hosts reject unknown delete-affecting fields instead of silently ignoring them. */
 export const SkillDeleteRequestSchema = z
   .object({
     operationId: z.string().min(1).max(128),
-    // Send exactly what the scan sent — usually nothing.
+    // Preserve the scan’s target exactly, including absence.
     target: SkillDiscoveryTargetSchema.optional(),
     skills: z.array(SkillDeleteTargetSkillSchema).min(1).max(MAX_SKILL_DELETE_BATCH)
   })
@@ -59,7 +56,7 @@ export type SkillDeletePlacement = {
 export type SkillDeletePlanEntry = {
   id: string
   name: string
-  /** realpath of `skillFilePath`. NOT the lock key — see the delete service. */
+  /** Realpath of skillFilePath, not the deletion lock key (see delete service). */
   canonicalPath: string
   placements: SkillDeletePlacement[]
   blocked?: SkillDeleteBlockReason

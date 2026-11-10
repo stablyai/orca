@@ -1,8 +1,7 @@
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 
-// Why: mirrors FLOATING_TERMINAL_WORKTREE_ID in src/shared/constants.ts.
-// E2E specs avoid importing renderer/shared modules into the Playwright runner.
+// Mirror FLOATING_TERMINAL_WORKTREE_ID without loading renderer/shared modules into Playwright.
 const FLOATING_WORKTREE_ID = 'global-floating-terminal'
 const PANEL_SELECTOR = '[data-floating-terminal-panel]'
 const OPEN_PANEL_SELECTOR = `${PANEL_SELECTOR}[aria-hidden="false"]`
@@ -65,8 +64,7 @@ async function seedFloatingSimulatorTab(page: Page): Promise<SeededSimulatorTab>
     refreshedState.activateTab(tab.id)
     return { id: tab.id }
   }, FLOATING_WORKTREE_ID)
-  // Why: the toggle listener closes over floatingTerminalEnabled; wait for
-  // React to commit the enabled floating panel before dispatching the event.
+  // Wait for React to commit enabled state before its closure-backed toggle listener runs.
   await page.waitForFunction(
     (panelSelector) => Boolean(document.querySelector(panelSelector)),
     PANEL_SELECTOR,

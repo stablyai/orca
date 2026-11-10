@@ -2,38 +2,30 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
-} from '../../../shared/workspace-session-state-types'
+} from '../../../shared/workspace-session/workspace-session-state-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session-browser-history'
+import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session/workspace-session-browser-history'
 
 import { workspaceSessionPatchNeedsFullNormalization } from './terminal-session-cleanup'
 
 import { setLocalWorkspaceSession } from './workspace-session-snapshot-publication'
-import type { StoreRuntimeState } from './store-runtime-state'
-import type { SessionHostPartitionOperations } from './session-host-partitions'
 import type { TerminalBindingRecoveryOperations } from './terminal-binding-recovery'
-import type { WriteSchedulingOperations } from './write-scheduling'
-import { resolveHostId, setHostWorkspaceSession } from './session-host-partitions'
-import { scheduleSave } from './write-scheduling'
+import {
+  sessionSnapshotOperationsContext,
+  type SessionSnapshotOperationsContext,
+  type SessionSnapshotOperationsRuntime
+} from './session-snapshot-operations-context'
 
-type SessionSnapshotOperationsRuntime = Pick<
-  StoreRuntimeState,
-  | 'durableMutationPhase'
-  | 'pendingSnapshotFileWork'
-  | 'profileMaintenancePending'
-  | 'quitFlushStarted'
-  | 'state'
-  | 'terminalScrollbackSnapshotStorage'
-  | 'writesFrozen'
->
-
-const sessionSnapshotOperationsContext = Symbol('SessionSnapshotOperations')
-type SessionSnapshotOperationsContext = {
-  runtime: SessionSnapshotOperationsRuntime
-  sessions: SessionHostPartitionOperations
-  bindingRecovery: TerminalBindingRecoveryOperations
-  scheduling: WriteSchedulingOperations
-}
+import {
+  type SessionHostPartitionOperations,
+  resolveHostId,
+  setHostWorkspaceSession,
+  withRequiredWorkspaceSessionMaps
+} from './session-host-partitions'
+import { dropClosedTerminalTabs } from '../closed-terminal-tab-write-fence'
+import { keepWslMoveFrozenSessionsForStore } from '../moving-wsl-projects/wsl-move-session-freeze'
+import { type WriteSchedulingOperations, scheduleSave } from './write-scheduling'
+import { orderTerminalRowsByTabGroups } from '../../../shared/workspace-layout/terminal-row-order'
 
 export class SessionSnapshotOperations {
   readonly [sessionSnapshotOperationsContext]: SessionSnapshotOperationsContext
@@ -53,7 +45,12 @@ export class SessionSnapshotOperations {
     if (runtime.durableMutationPhase === 'rollback') {
       this.assertSnapshotAdmission(true)
       // The fieldwise rollback already preserves newer edits; renderer rebasing would undo it.
-      this.publishSession(session, resolved)
+      this.publishSession(
+        resolved === LOCAL_EXECUTION_HOST_ID
+          ? keepWslMoveFrozenSessionsForStore(session, runtime.state.workspaceSession)
+          : session,
+        resolved
+      )
       return
     }
     if (resolved === LOCAL_EXECUTION_HOST_ID) {
@@ -79,7 +76,7 @@ export class SessionSnapshotOperations {
 
   patchWorkspaceSession(patch: WorkspaceSessionPatch, hostId?: string | null): void {
     const resolved = resolveHostId(hostId)
-    // Why: the debounced hot path sends only changed slices; scalar/UI patches skip terminal normalization, topology patches keep stale-PTY protections.
+    // Scalar patches skip topology work; membership patches retain stale-binding protections.
     let next: WorkspaceSessionState = {
       ...this[sessionSnapshotOperationsContext].sessions.getWorkspaceSession(resolved),
       ...patch
@@ -91,22 +88,32 @@ export class SessionSnapshotOperations {
     if (Object.hasOwn(patch, 'browserUrlHistory')) {
       next = pruneWorkspaceSessionBrowserHistory(next)
     }
+    // Unified-tab patches bypass full normalization but still need close tombstones.
+    if (Object.hasOwn(patch, 'unifiedTabs')) {
+      next = dropClosedTerminalTabs(next)
+    }
+    if (resolved === LOCAL_EXECUTION_HOST_ID) {
+      const { state } = this[sessionSnapshotOperationsContext].runtime
+      next = keepWslMoveFrozenSessionsForStore(next, state.workspaceSession)
+    }
     this.publishSession(next, resolved)
   }
 
   private publishSession(session: WorkspaceSessionState, hostId: ExecutionHostId): void {
+    session = orderTerminalRowsByTabGroups(session)
     const { runtime, scheduling } = this[sessionSnapshotOperationsContext]
     if (hostId === LOCAL_EXECUTION_HOST_ID) {
       runtime.state.workspaceSession = session
     } else {
       runtime.state.workspaceSessionsByHostId = {
         ...runtime.state.workspaceSessionsByHostId,
-        [hostId]: session
+        [hostId]: withRequiredWorkspaceSessionMaps(session)
       }
     }
     scheduleSave(
       scheduling,
-      hostId === LOCAL_EXECUTION_HOST_ID ? ['workspaceSession'] : ['workspaceSessionsByHostId']
+      hostId === LOCAL_EXECUTION_HOST_ID ? ['workspaceSession'] : ['workspaceSessionsByHostId'],
+      hostId
     )
   }
 
@@ -120,17 +127,4 @@ export class SessionSnapshotOperations {
       throw new Error('Profile maintenance or finalization is blocking new terminal snapshot work')
     }
   }
-}
-
-export function getSessionSnapshotOperationsContext(owner: SessionSnapshotOperations) {
-  return owner[sessionSnapshotOperationsContext]
-}
-
-export function installSessionSnapshotOperationsContext(
-  target: SessionSnapshotOperations,
-  source: SessionSnapshotOperations
-): void {
-  Object.defineProperty(target, sessionSnapshotOperationsContext, {
-    value: source[sessionSnapshotOperationsContext]
-  })
 }

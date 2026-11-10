@@ -1,20 +1,8 @@
 name: Windows Update-Survival E2E
 
-# Why: proves what happens to terminal sessions across a real Windows app update
-# by installing one released version, updating to another, and asserting on the
-# packaged artifacts (daemon survival, terminal interactivity, zero console
-# flashes). This MUST run on a disposable CI Windows: electron-builder's oneClick
-# installer uninstalls the registry-registered copy of the app before every
-# install, so running the harness on a machine with a real Orca install would
-# delete it. A fresh runner has no Orca registered, so it is the only safe home
-# for install-based testing. Manual dispatch only.
+# Install/update two released Windows builds and prove daemon/input/no-flash behavior on disposable CI only. oneClick uninstalls registry-selected app, so a real workstation install could be deleted.
 
-# Why: workflow_dispatch only works once a workflow is on the default branch.
-# To exercise this from the unmerged feature branch WITHOUT touching main, a
-# push trigger scoped to that exact branch runs the workflow from the branch's
-# own tree. The paths filter keeps it to harness/workflow edits so ordinary
-# commits don't spend 30 min of Windows runner time. Push runs have no inputs,
-# so every parameter falls back to a default below.
+# Feature-branch push enables pre-merge workflow testing before dispatch exists on default; path-filter it to avoid 30min runs on unrelated changes. Push inputs use defaults.
 on:
   push:
     branches:
@@ -83,6 +71,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
 
       - name: Setup pnpm
         uses: pnpm/setup@v2
@@ -112,10 +101,7 @@ jobs:
           "FROM_EXE=$($from.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "TO_EXE=$($to.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      # Why: no --install-dir here. A CI runner has no real Orca registered, so
-      # the harness installs to the default per-user location and owns it — the
-      # isolated-install machinery exists only to (imperfectly) protect a real
-      # developer install, which does not apply on a throwaway runner.
+      # Own default per-user install on disposable CI; no real install needs the imperfect isolated-mode protection.
       - name: Run update-survival harness
         id: harness
         shell: pwsh

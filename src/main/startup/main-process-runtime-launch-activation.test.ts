@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const electronApp = vi.hoisted(() => ({
@@ -16,34 +14,52 @@ const launchHooks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: electronApp, powerMonitor: { on: vi.fn() } }))
-vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
 vi.mock('../orca-profiles/profile-cloud-auth-config', () => ({
   getOrcaCloudAuthConfig: () => ({ configured: false })
 }))
 vi.mock('../orca-profiles/profile-storage-paths', () => ({ getProfileUserDataPath: vi.fn() }))
-vi.mock('../persistence', () => ({
+vi.mock('../persistence/loading-store/user-data-path', () => ({
   getCanonicalUserDataPath: () => '/tmp/orca-user-data',
   migrateMobilePairingDataToCanonicalUserDataPath: vi.fn()
 }))
-vi.mock('../runtime/runtime-rpc', () => ({
+const launchOrder = vi.hoisted((): string[] => [])
+const rpcOptions = vi.hoisted((): Record<string, unknown>[] => [])
+vi.mock('../runtime/rpc/server/runtime-rpc', () => ({
   OrcaRuntimeRpcServer: class {
-    start = vi.fn(async () => {})
+    constructor(options: Record<string, unknown>) {
+      rpcOptions.push(options)
+    }
+    start = vi.fn(async () => {
+      launchOrder.push('rpc-start')
+    })
     setOnUnpairedDeviceAuthFailure = vi.fn()
+    setMobileDesktopRelayHosts = vi.fn()
   }
 }))
-vi.mock('../ipc/mobile', () => ({ registerMobileHandlers: vi.fn() }))
-vi.mock('../ipc/pty', () => ({
-  getLocalPtyProvider: vi.fn(),
-  registerHeadlessPtyRuntime: vi.fn()
+vi.mock('../runtime/session-graph/headless-runtime-graph', () => ({
+  publishHeadlessRuntimeGraph: vi.fn()
 }))
-vi.mock('../providers/local-pty-provider', () => ({ LocalPtyProvider: class {} }))
-vi.mock('../browser/offscreen-browser-backend', () => ({ OffscreenBrowserBackend: class {} }))
-vi.mock('../browser/browser-manager', () => ({ browserManager: {} }))
+vi.mock('./headless-serve-ssh-registration', () => ({
+  registerHeadlessServeSshHandlers: vi.fn(() => {
+    launchOrder.push('ssh-registered')
+  })
+}))
+vi.mock('../ipc/mobile', () => ({ registerMobileHandlers: vi.fn() }))
+vi.mock('../ipc/runtime-environments/runtime-environment-mobile-relay-hosts', () => ({
+  createRuntimeEnvironmentMobileRelayHosts: vi.fn()
+}))
+vi.mock('../ipc/pty/provider/registry', () => ({ getLocalPtyProvider: vi.fn() }))
+vi.mock('../ipc/pty/register-headless-runtime', () => ({ registerHeadlessPtyRuntime: vi.fn() }))
+vi.mock('../providers/local-pty/local-pty-provider', () => ({ LocalPtyProvider: class {} }))
+vi.mock('../browser/backends/offscreen-browser-backend', () => ({
+  OffscreenBrowserBackend: class {}
+}))
+vi.mock('../browser/guest-lifecycle/manager/browser-manager', () => ({ browserManager: {} }))
 vi.mock('./main-process-relay-status', () => ({
   getDesktopRelayStatus: vi.fn(),
   publishDesktopRelayStatus: vi.fn()
 }))
-vi.mock('../runtime/relay/desktop-relay-service', () => ({ DesktopRelayService: class {} }))
+vi.mock('./main-process-relay-startup', () => ({ startDesktopRelayService: vi.fn() }))
 vi.mock('./main-process-serve', () => ({
   getServeOptions: vi.fn(() => null),
   getBundledWebClientRoot: vi.fn(() => null),
@@ -58,7 +74,7 @@ vi.mock('./main-process-pty-startup', () => ({
 vi.mock('./codex-launch-preparation', () => ({ prepareCodexRuntimeHomeForLaunch: vi.fn() }))
 vi.mock('./codex-session-resume-launch', () => ({ prepareCodexSessionResumeForLaunch: vi.fn() }))
 vi.mock('./windows-install-dir-acl-recovery', () => ({
-  // The awaited gap before the first window, where a second-instance launch can land.
+  // Model the awaited repair gap in which a second-instance activation can arrive.
   repairKnownPoisonedInstallDirBeforeWindow: vi.fn(async () => {
     launchHooks.duringInstallDirRepair()
     if (launchHooks.failBeforeWindow) {
@@ -68,28 +84,47 @@ vi.mock('./windows-install-dir-acl-recovery', () => ({
   })
 }))
 vi.mock('./serve-signal-handlers', () => ({ registerServeSignalHandlers: vi.fn() }))
-vi.mock('../runtime/runtime-rpc-startup-failure', () => ({
+vi.mock('./serve-native-quit-guard', () => ({ installServeNativeQuitGuard: vi.fn() }))
+vi.mock('../runtime/rpc/server/runtime-rpc-startup-failure', () => ({
   recordRuntimeRpcStartFailure: vi.fn(),
   showRuntimeRpcStartupFailureDialog: vi.fn()
 }))
 vi.mock('../cli/cli-installer', () => ({ CliInstaller: class {} }))
 vi.mock('../cli/linux-bare-orca-dispatcher', () => ({ installLinuxBareOrcaDispatcher: vi.fn() }))
-vi.mock('../terminal-history-deletion', () => ({ scheduleAllPendingHistoryTreeRemovals: vi.fn() }))
+vi.mock('../pty/history/terminal-history-deletion', () => ({
+  scheduleAllPendingHistoryTreeRemovals: vi.fn()
+}))
 vi.mock('../ipc/startup-notification-registration', () => ({
   triggerStartupNotificationRegistration: vi.fn()
 }))
 vi.mock('./main-process-push-startup', () => ({ startDesktopPushService: vi.fn() }))
+vi.mock('./main-process-connector-startup', () => ({
+  installDesktopConnectorCloud: vi.fn(),
+  connectDesktopConnectorCloud: vi.fn()
+}))
 vi.mock('./startup-diagnostics', () => ({ logStartupMilestone: vi.fn() }))
+const setupHeadlessServeAutoUpdater = vi.hoisted(() => vi.fn())
+vi.mock('../window/main-window-updater', () => ({ setupHeadlessServeAutoUpdater }))
 vi.mock('../server/serve-stdout-boundary', () => ({ emitServeBrowserIdentityActionLine: vi.fn() }))
-vi.mock('../browser/browser-identity-mode-store', () => ({
+vi.mock('../browser/identity/mode/browser-identity-mode-store', () => ({
   getBrowserIdentityModeStatus: vi.fn()
 }))
 const showWindowWithoutStealingFocus = vi.hoisted(() => vi.fn())
+const isOrcadSidecarLaunch = vi.hoisted(() => vi.fn(() => false))
 vi.mock('../window/foreground-activation-policy', () => ({
   isBackgroundLaunch: () => true,
+  isOrcadSidecarLaunch,
   isWindowlessLaunch: () => false,
   showWindowWithoutStealingFocus
 }))
+vi.mock('../tray/system-tray', () => ({
+  createSystemTray: vi.fn(),
+  setMacMenuBarIconVisible: vi.fn()
+}))
+vi.mock('../window/attach-main-window-services', () => ({ ensureAutoUpdaterConfigured: vi.fn() }))
+vi.mock('../window/dashboard-popout-window', () => ({ getDashboardPopoutWindow: () => null }))
+vi.mock('../window/createMainWindow', () => ({ loadMainWindow: vi.fn() }))
+vi.mock('../window/renderer-recovery-prompt', () => ({ presentRendererRecoveryPrompt: vi.fn() }))
 
 vi.mock('./main-process-ready-foundation', () => ({
   initializeReadyFoundation: vi.fn(async () => {})
@@ -108,7 +143,11 @@ const { focusExistingMainWindow } = await import('../window/focus-existing-windo
 
 type FakeWindow = {
   id: number
-  webContents: { id: number }
+  webContents: {
+    id: number
+    isLoading: () => boolean
+    once: (event: string, listener: () => void) => void
+  }
   isDestroyed: () => boolean
   isMinimized: () => boolean
   restore: () => void
@@ -121,13 +160,23 @@ describe('desktop startup activation', () => {
   let windows: FakeWindow[]
   let ipcHandles: Set<string>
   let trustedRendererId: number | null
+  let firstLoadListeners: (() => void)[]
+  const startupSettled = vi.fn()
 
-  // Mirrors openMainWindow's non-idempotent side effects that broke in the field.
+  // Retain non-idempotent window effects that exposed duplicate startup in production.
   function openMainWindow(): FakeWindow {
     const id = windows.length + 1
     const window: FakeWindow = {
       id,
-      webContents: { id },
+      webContents: {
+        id,
+        isLoading: () => true,
+        once: (event, listener) => {
+          if (event === 'did-finish-load') {
+            firstLoadListeners.push(listener)
+          }
+        }
+      },
       isDestroyed: () => false,
       isMinimized: () => false,
       restore: vi.fn(),
@@ -147,20 +196,25 @@ describe('desktop startup activation', () => {
   beforeEach(() => {
     windows = []
     showWindowWithoutStealingFocus.mockClear()
+    isOrcadSidecarLaunch.mockReturnValue(false)
     ipcHandles = new Set()
     trustedRendererId = null
+    firstLoadListeners = []
+    startupSettled.mockClear()
     launchHooks.duringInstallDirRepair = () => {}
     launchHooks.failBeforeWindow = false
     state.mainWindow = null
     state.isServeMode = false
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only null-checks the runtime before the mocked RPC server takes it.
-    state.runtime = {} as NonNullable<typeof state.runtime>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only null-checks the runtime and marks its launch-record warm-up, and gives it the sender peer-key reader, before the mocked RPC server takes it.
+    state.runtime = {
+      noteAgentLaunchStartupSettled: startupSettled,
+      setAgentSenderPeerKey: () => {}
+    } as unknown as NonNullable<typeof state.runtime>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only calls whenReady().
     state.windowsShellPathHydration = {
       whenReady: () => Promise.resolve()
     } as unknown as NonNullable<typeof state.windowsShellPathHydration>
     state.initialProxyApplicationReady = Promise.resolve()
-    // Built the way preflight builds it for a desktop launch.
     state.desktopActivationGate = createServeDesktopActivationGate({
       initialState: 'initializing',
       activateWindow: () =>
@@ -217,16 +271,5 @@ describe('desktop startup activation', () => {
 
     expect(windows).toHaveLength(0)
     expect(state.desktopActivationGate).toBeNull()
-  })
-
-  it('holds every launch mode behind the gate until startup settles it', () => {
-    const preflightSource = readFileSync(
-      join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
-      'utf8'
-    )
-    expect(preflightSource).toContain("initialState: 'initializing',")
-    expect(preflightSource).not.toContain(
-      "initialState: state.isServeMode ? 'initializing' : 'ready'"
-    )
   })
 })

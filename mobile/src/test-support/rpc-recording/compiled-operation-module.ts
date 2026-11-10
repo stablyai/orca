@@ -1,15 +1,21 @@
 import { compileFunction } from 'node:vm'
-import ts from 'typescript'
+import ts from 'typescript-api'
 
-const compiled = new Map<string, ReturnType<typeof compileFunction>>()
+type CompiledModule = {
+  source: string
+  evaluate: ReturnType<typeof compileFunction>
+}
+
+const compiled = new Map<string, Map<string, CompiledModule>>()
+const insertionOrder = new Map<CompiledModule, string>()
 const MAX_COMPILED_MODULES = 512
 
 /** Only code is shared: each invocation receives a fresh require closure and exports object. */
 export function compiledOperationModule(file: string, source: string, exposure: string) {
-  const key = JSON.stringify([file, source, exposure])
-  const cached = compiled.get(key)
+  const key = JSON.stringify([file, exposure])
+  const cached = compiled.get(key)?.get(source)
   if (cached) {
-    return cached
+    return cached.evaluate
   }
   const output = ts.transpileModule(source, {
     compilerOptions: {
@@ -20,12 +26,22 @@ export function compiledOperationModule(file: string, source: string, exposure: 
     }
   }).outputText
   const evaluate = compileFunction(output + exposure, ['require', 'exports'], { filename: file })
-  if (compiled.size >= MAX_COMPILED_MODULES) {
-    const oldest = compiled.keys().next().value
+  if (insertionOrder.size >= MAX_COMPILED_MODULES) {
+    const oldest = insertionOrder.entries().next().value
     if (oldest !== undefined) {
-      compiled.delete(oldest)
+      const [entry, variantKey] = oldest
+      insertionOrder.delete(entry)
+      const entries = compiled.get(variantKey)
+      entries?.delete(entry.source)
+      if (!entries?.size) {
+        compiled.delete(variantKey)
+      }
     }
   }
-  compiled.set(key, evaluate)
+  const entry = { source, evaluate }
+  const entries = compiled.get(key) ?? new Map<string, CompiledModule>()
+  entries.set(source, entry)
+  compiled.set(key, entries)
+  insertionOrder.set(entry, key)
   return evaluate
 }

@@ -3,9 +3,10 @@ import { access, mkdir, open, realpath, rm, stat } from 'node:fs/promises'
 import { basename, dirname, resolve } from 'node:path'
 import Database from '../../sqlite/sync-database'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
-import { durableWriteTempPath, renameDurable } from '../../durable-file-write'
+import { durableWriteTempPath, renameDurable } from '../../filesystem/durable-file-write'
+import { refreshStaleProfileStateLegacyDocuments } from './profile-state-legacy-document-refresh'
 
-/** The caller owns the destination and keeps the source open until this backup settles. */
+/** Caller owns the destination and keeps the source connection open until completion. */
 export async function writeProfileStateDatabaseSnapshotAsync(
   db: Database.Database,
   targetPath: string,
@@ -27,17 +28,20 @@ export async function writeProfileStateDatabaseSnapshotAsync(
   let published = false
   let created = false
   try {
-    // Pre-create privately: the native backup otherwise creates a world-readable temporary file.
+    // Native backup would otherwise create a world-readable temporary file.
     const temporary = await open(temporaryPath, 'wx', 0o600)
     created = true
     await temporary.close()
     await db.backup(temporaryPath)
-    // The native copy preserves WAL mode; snapshots must not create sidecars when opened read-only.
+    // Clear inherited WAL mode so read-only snapshots cannot create sidecars.
     const snapshot = new Database(temporaryPath, { fileMustExist: true })
     try {
       if (snapshot.pragma('journal_mode = DELETE', { simple: true }) !== 'delete') {
         throw new Error('Profile state snapshot could not become a self-contained database')
       }
+      // A restored snapshot outlives any later refresh of the live copy, so older builds
+      // reading it must already see current legacy rows.
+      refreshStaleProfileStateLegacyDocuments(snapshot)
     } finally {
       snapshot.close()
     }
@@ -85,7 +89,7 @@ async function assertSnapshotTargetIsSeparate(
     if (profileStateDatabaseFiles(source).includes(target)) {
       throw new Error('Profile state snapshot cannot replace a source database or its sidecars')
     }
-    // realpath preserves case aliases on macOS; file identity also protects absent sidecar names.
+    // macOS realpath retains case aliases; inode checks also protect absent sidecar names.
     const sourceInfo = await stat(source, { bigint: true })
     for (const candidate of new Set([target, target.replace(/-(?:wal|shm|journal)$/i, '')])) {
       const targetInfo = await stat(candidate, { bigint: true }).catch((error: unknown) => {

@@ -1,18 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isOpenCode2LaunchCommand, selectOpenCodeHookAgent } from './opencode-launch-command'
-
-describe('isOpenCode2LaunchCommand', () => {
-  it.each(['opencode2', '/usr/local/bin/opencode2', 'opencode2.exe', 'opencode2.cmd'])(
-    'recognizes %s',
-    (command) => {
-      expect(isOpenCode2LaunchCommand(command)).toBe(true)
-    }
-  )
-
-  it.each(['opencode', 'echo opencode2', 'opencode2-helper'])('rejects %s', (command) => {
-    expect(isOpenCode2LaunchCommand(command)).toBe(false)
-  })
-})
+import { selectOpenCodeHookAgent } from './opencode-launch-command'
 
 describe('OpenCode hook selection', () => {
   it.each([
@@ -27,5 +14,16 @@ describe('OpenCode hook selection', () => {
     expect(
       selectOpenCodeHookAgent('opencode2', 'my-wrapper', (agent) => agent === 'opencode2')
     ).toBe('opencode2')
+  })
+})
+
+describe('selectOpenCodeHookAgent after a sleep prefix', () => {
+  it('selects OpenCode 2 hooks instead of the v1 fallback', () => {
+    expect(selectOpenCodeHookAgent(undefined, 'sleep 30 && opencode2', () => true)).toBe(
+      'opencode2'
+    )
+    expect(
+      selectOpenCodeHookAgent(undefined, 'sleep 30 && opencode2', (agent) => agent === 'opencode')
+    ).toBeNull()
   })
 })

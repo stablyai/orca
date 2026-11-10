@@ -9,6 +9,7 @@ import { useTerminalParkingPass } from './use-terminal-parking-pass'
 import { useTerminalBrowserRetention } from './use-terminal-browser-retention'
 import { applyTerminalColdActivation } from './terminal-cold-activation'
 import { useActivationDeferredTabAdmission } from './terminal/use-activation-deferred-tab-admission'
+import { useTerminalWorktreePrewarm } from './terminal/use-terminal-worktree-prewarm'
 import { useTerminalWatcherEffects } from './use-terminal-watcher-effects'
 import { useTerminalCreateActions } from './use-terminal-create-actions'
 import { useTerminalCloseActions } from './use-terminal-close-actions'
@@ -30,6 +31,7 @@ export function useTerminalController() {
   const coldActivation = Object.assign(parking, applyTerminalColdActivation(parking))
   useTerminalWatcherEffects(coldActivation)
   useActivationDeferredTabAdmission(coldActivation)
+  useTerminalWorktreePrewarm(coldActivation)
   const create = Object.assign(coldActivation, useTerminalCreateActions(coldActivation))
   const close = Object.assign(create, useTerminalCloseActions(create))
   const bulkClose = Object.assign(close, useTerminalBulkCloseActions(close))

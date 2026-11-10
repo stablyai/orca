@@ -1,18 +1,18 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { ArrowRight, ChevronDown, CircleDashed, CircleDot, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
-import { useImmediateMutation, useRepoAssignees, useRepoLabels } from '@/hooks/useIssueMetadata'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
+import { useImmediateMutation } from '@/hooks/useIssueMetadata'
+import { useRepoAssignees, useRepoLabels } from '@/hooks/useGitHubRepoMetadata'
 import { useRepoAssigneesBySlug, useRepoLabelsBySlug } from '@/hooks/useGitHubSlugMetadata'
-import { getTaskSourceRuntimeSettings } from '../../../../../shared/task-source-context'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
 import { getStateLabel } from '@/components/github/work-item-state-presentation'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { PullRequestPageProjectOrigin } from '../page-types'
 import { getStateTone } from '../presentation/state-badge'
 import { changeIssueState, toggleIssueAssignee, toggleIssueLabel } from './issue-updates'
@@ -40,11 +40,12 @@ export function GHEditSection({
   localLabels: string[]
   onStateChange: (state: GitHubWorkItem['state']) => void
   onLabelsChange: (labels: string[]) => void
-  /** Called after a successful issue mutation so the parent can invalidate its details cache; otherwise a reopen within FRESH_MS paints pre-mutation data. */
+  /** Invalidate details after mutation so fresh-cache reopen cannot paint pre-mutation data. */
   onMutated: () => void
   assignees: string[]
   onUse: (item: GitHubWorkItem) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const [labelPopoverOpen, setLabelPopoverOpen] = useState(false)
   const [assigneePopoverOpen, setAssigneePopoverOpen] = useState(false)
   const [localAssignees, setLocalAssignees] = useState<string[]>(assignees)
@@ -52,21 +53,11 @@ export function GHEditSection({
   const assigneesItemKey = `${item.repoId}\0${item.id}`
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
-  const repoOwnerSettings = useAppStore(
-    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null))
-  )
-  const sourceSettings = useMemo(
-    () =>
-      sourceContext?.provider === 'github'
-        ? ({
-            ...repoOwnerSettings,
-            ...getTaskSourceRuntimeSettings(sourceContext)
-          } as typeof repoOwnerSettings)
-        : repoOwnerSettings,
-    [repoOwnerSettings, sourceContext]
+  const ownerTarget = useAppStore(
+    useShallow((s) => getGitHubRepoRoutingTarget(s, item.repoId ?? repoId ?? null, sourceContext))
   )
   const { isPending, run } = useImmediateMutation()
-  // Why: patchWorkItem only updates workItemsCache; Project-view rows also need projectViewCache patched or the table stays stale. See docs/design/github-project-view-tasks.md.
+  // Patch Project-view cache too; updating workItemsCache alone leaves table rows stale (docs/design/github-project-view-tasks.md).
   const patchProjectRowIfNeeded = useCallback(
     (patch: Parameters<typeof patchProjectRowContent>[2]) => {
       if (!projectOrigin) {
@@ -77,36 +68,36 @@ export function GHEditSection({
     [projectOrigin, patchProjectRowContent]
   )
 
-  // Why: with projectOrigin set, read labels/assignees from the row's repo (not workspace path) so popovers match where writes target.
+  // Project rows use their own repo for labels/assignees, matching write routing.
   const slugOwner = projectOrigin?.owner ?? null
   const slugRepo = projectOrigin?.repo ?? null
   const repoLabelsByPath = useRepoLabels(
     projectOrigin ? null : repoPath,
     projectOrigin ? null : repoId,
-    sourceSettings
+    { target: ownerTarget }
   )
   const repoLabelsBySlug = useRepoLabelsBySlug(
     slugOwner,
     slugRepo,
-    sourceSettings,
+    ownerTarget,
     projectOrigin?.host
   )
   const repoLabels = projectOrigin ? repoLabelsBySlug : repoLabelsByPath
   const repoAssigneesByPath = useRepoAssignees(
     projectOrigin ? null : repoPath,
     projectOrigin ? null : repoId,
-    sourceSettings
+    { target: ownerTarget }
   )
   const repoAssigneesBySlug = useRepoAssigneesBySlug(
     slugOwner,
     slugRepo,
     assignees,
-    sourceSettings,
+    ownerTarget,
     projectOrigin?.host
   )
   const repoAssignees = projectOrigin ? repoAssigneesBySlug : repoAssigneesByPath
 
-  // Why: sync local assignees on item change / detail resolve, but skip if the user made an optimistic edit so we don't clobber in-flight changes.
+  // Sync resolved assignees unless an optimistic edit is still in flight.
   useEffect(() => {
     if (editedAssigneesItemKeyRef.current === assigneesItemKey) {
       return
@@ -132,7 +123,6 @@ export function GHEditSection({
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/60 px-4 py-2.5">
-      {/* State */}
       <Popover>
         <PopoverTrigger asChild>
           <button
@@ -142,7 +132,7 @@ export function GHEditSection({
               getStateTone({ ...item, state: localState })
             )}
           >
-            {getStateLabel({ ...item, state: localState })}
+            {getStateLabel({ ...item, state: localState }, t)}
             <ChevronDown className="size-2.5 opacity-50" />
           </button>
         </PopoverTrigger>
@@ -170,7 +160,7 @@ export function GHEditSection({
             )}
           >
             <CircleDot className="size-3 text-emerald-500" />
-            {translate('auto.components.PullRequestPage.7b8f6bf6d8', 'Open')}
+            {t('auto.components.PullRequestPage.7b8f6bf6d8', 'Open')}
           </button>
           <button
             type="button"
@@ -195,12 +185,11 @@ export function GHEditSection({
             )}
           >
             <CircleDashed className="size-3 text-rose-500" />
-            {translate('auto.components.PullRequestPage.b936cc51a4', 'Closed')}
+            {t('auto.components.PullRequestPage.b936cc51a4', 'Closed')}
           </button>
         </PopoverContent>
       </Popover>
 
-      {/* Labels */}
       <Popover open={labelPopoverOpen} onOpenChange={setLabelPopoverOpen}>
         <PopoverTrigger asChild>
           <button
@@ -210,7 +199,7 @@ export function GHEditSection({
           >
             {localLabels.length === 0 ? (
               <span className="text-muted-foreground">
-                {translate('auto.components.PullRequestPage.bc215fea4d', '+ Label')}
+                {t('auto.components.PullRequestPage.bc215fea4d', '+ Label')}
               </span>
             ) : (
               localLabels.map((name) => (
@@ -272,7 +261,6 @@ export function GHEditSection({
         </PopoverContent>
       </Popover>
 
-      {/* Assignees */}
       <Popover open={assigneePopoverOpen} onOpenChange={setAssigneePopoverOpen}>
         <PopoverTrigger asChild>
           <button
@@ -282,7 +270,7 @@ export function GHEditSection({
           >
             {localAssignees.length === 0 ? (
               <span className="text-muted-foreground">
-                {translate('auto.components.PullRequestPage.14c9fc70ed', '+ Assignee')}
+                {t('auto.components.PullRequestPage.14c9fc70ed', '+ Assignee')}
               </span>
             ) : (
               localAssignees.map((login) => (
@@ -356,12 +344,9 @@ export function GHEditSection({
         size="sm"
         onClick={() => onUse(item)}
         className="ml-auto gap-2"
-        aria-label={translate(
-          'auto.components.PullRequestPage.61452f2143',
-          'Start workspace from issue'
-        )}
+        aria-label={t('auto.components.PullRequestPage.61452f2143', 'Start workspace from issue')}
       >
-        {translate('auto.components.PullRequestPage.61452f2143', 'Start workspace from issue')}
+        {t('auto.components.PullRequestPage.61452f2143', 'Start workspace from issue')}
         <ArrowRight className="size-4" />
       </Button>
     </div>

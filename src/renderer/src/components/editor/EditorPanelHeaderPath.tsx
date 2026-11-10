@@ -1,5 +1,6 @@
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import { useEffect, useRef, useState } from 'react'
-import { Copy, ExternalLink, Eye, Pencil } from 'lucide-react'
+import { Eye, Pencil } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,31 +10,15 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
-import { translate } from '@/i18n/i18n'
-import type { OpenFile } from '@/store/slices/editor'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '../tab-bar/SortableTab'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
+import { useTranslate } from '@/i18n/use-translate'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { useEditorHeaderFileRename } from './editor-header-file-rename'
 import { getEditorHeaderCopyState } from './editor-header'
 import { splitPathForDisplay } from './editor-path-display'
-
-const isMac = navigator.userAgent.includes('Mac')
-const isLinux = navigator.userAgent.includes('Linux')
-
-/** Platform-appropriate label: macOS -> Finder, Windows -> File Explorer, Linux -> Files */
-function getRevealLabel(): string {
-  return isMac
-    ? translate('auto.components.editor.EditorPanelHeader.revealInFinder', 'Reveal in Finder')
-    : isLinux
-      ? translate(
-          'auto.components.editor.EditorPanelHeader.openContainingFolder',
-          'Open Containing Folder'
-        )
-      : translate(
-          'auto.components.editor.EditorPanelHeader.revealInFileExplorer',
-          'Reveal in File Explorer'
-        )
-}
+import { EditorFileLocationMenuItems } from './EditorFileLocationMenuItems'
 
 type EditorPanelHeaderPathProps = {
   activeFile: OpenFile
@@ -41,7 +26,6 @@ type EditorPanelHeaderPathProps = {
   canShowMarkdownPreview: boolean
   onCopyPath: () => void
   onOpenMarkdownPreview: () => void
-  onOpenContainingFolder: () => void
 }
 
 export function EditorPanelHeaderPath({
@@ -49,16 +33,17 @@ export function EditorPanelHeaderPath({
   copiedPathVisible,
   canShowMarkdownPreview,
   onCopyPath,
-  onOpenMarkdownPreview,
-  onOpenContainingFolder
+  onOpenMarkdownPreview
 }: EditorPanelHeaderPathProps): React.JSX.Element {
+  const t = useTranslate()
   const [pathMenuOpen, setPathMenuOpen] = useState(false)
   const [pathMenuPoint, setPathMenuPoint] = useState({ x: 0, y: 0 })
   const skipMenuFocusRestoreRef = useRef(false)
-  const headerCopyState = getEditorHeaderCopyState(activeFile)
+  const headerCopyState = getEditorHeaderCopyState(activeFile, t)
   const displayPath = splitPathForDisplay(headerCopyState.pathLabel)
   const canCopyHeaderPath = headerCopyState.copyText !== null
-  const isVirtualEditorTab = activeFile.mode === 'check-details'
+  // Why: virtual editor tabs use synthetic ids instead of on-disk paths.
+  const isVirtualEditorTab = isVirtualEditorFile(activeFile)
   const markdownPreviewShortcutLabel = useShortcutLabel('editor.markdownPreview')
   const {
     canRename,
@@ -88,17 +73,16 @@ export function EditorPanelHeaderPath({
         }}
       >
         {isRenaming ? (
-          <input
+          <ImeInput
             ref={renameInputRef}
             data-editor-header-rename-input="true"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.editor.EditorPanelHeader.1bb1e226ec',
               'Rename file {{value0}}',
               { value0: currentFileName }
             )}
             defaultValue={currentFileName}
-            // Why: the field spans the header rather than sizing to the name —
-            // a long path is exactly when the rename field needs the room.
+            // Span header for long-path rename space instead of sizing to filename.
             className="h-6 w-full min-w-0 max-w-full rounded-md border border-accent/40 bg-input/40 px-1.5 font-mono text-xs text-foreground outline-none focus:border-accent focus:ring-1 focus:ring-ring"
             spellCheck={false}
             onPointerDown={(event) => event.stopPropagation()}
@@ -106,8 +90,7 @@ export function EditorPanelHeaderPath({
             onClick={(event) => event.stopPropagation()}
             onDoubleClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => {
-              // Why: an Enter that only confirms a CJK IME candidate must not
-              // commit the rename; wait for a non-composition Enter.
+              // IME candidate-confirming Enter must not commit rename; wait until composition ends.
               if (isImeCompositionKeyDown(event)) {
                 return
               }
@@ -135,9 +118,7 @@ export function EditorPanelHeaderPath({
             <span className="editor-header-path-file">{displayPath.fileName}</span>
           </button>
         )}
-        {/* Why: the toast is opacity-0 rather than display-none, so leaving it
-            mounted reserves ~100px of the row from the rename field for a
-            message that cannot fire while renaming. */}
+        {/* Unmount opacity-hidden toast while renaming or it reserves ~100px for an impossible message. */}
         {!isRenaming && (
           <span
             className={`editor-header-copy-toast${copiedPathVisible ? ' is-visible' : ''}`}
@@ -157,7 +138,7 @@ export function EditorPanelHeaderPath({
           />
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          className="w-56"
+          className="min-w-56"
           sideOffset={0}
           align="start"
           onCloseAutoFocus={(event) => {
@@ -176,49 +157,21 @@ export function EditorPanelHeaderPath({
             }}
           >
             <Pencil className="w-3.5 h-3.5 mr-1.5" />
-            {translate('auto.components.editor.EditorPanelHeader.84cdc0794b', 'Rename')}
+            {t('auto.components.editor.EditorPanelHeader.84cdc0794b', 'Rename')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {!isVirtualEditorTab && (
-            <>
-              <DropdownMenuItem
-                onSelect={() => {
-                  void window.api.ui.writeClipboardText(activeFile.filePath)
-                }}
-              >
-                <Copy className="w-3.5 h-3.5 mr-1.5" />
-                {translate('auto.components.editor.EditorPanelHeader.7c08a1f990', 'Copy Path')}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => {
-                  void window.api.ui.writeClipboardText(activeFile.relativePath)
-                }}
-              >
-                <Copy className="w-3.5 h-3.5 mr-1.5" />
-                {translate(
-                  'auto.components.editor.EditorPanelHeader.269ce4842b',
-                  'Copy Relative Path'
-                )}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-            </>
+            <EditorFileLocationMenuItems file={activeFile} onCopyPath={onCopyPath} />
           )}
           {canShowMarkdownPreview && (
-            <DropdownMenuItem onSelect={onOpenMarkdownPreview}>
-              <Eye className="w-3.5 h-3.5 mr-1.5" />
-              {translate(
-                'auto.components.editor.EditorPanelHeader.4157f3cbf3',
-                'Open Markdown Preview'
-              )}
-              <DropdownMenuShortcut>{markdownPreviewShortcutLabel}</DropdownMenuShortcut>
-            </DropdownMenuItem>
-          )}
-          {canShowMarkdownPreview && <DropdownMenuSeparator />}
-          {!isVirtualEditorTab && (
-            <DropdownMenuItem onSelect={onOpenContainingFolder}>
-              <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-              {getRevealLabel()}
-            </DropdownMenuItem>
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={onOpenMarkdownPreview}>
+                <Eye className="w-3.5 h-3.5 mr-1.5" />
+                {t('auto.components.editor.EditorPanelHeader.4157f3cbf3', 'Open Markdown Preview')}
+                <DropdownMenuShortcut>{markdownPreviewShortcutLabel}</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            </>
           )}
         </DropdownMenuContent>
       </DropdownMenu>

@@ -1,20 +1,20 @@
 import { useCallback, useEffect } from 'react'
-import { useCreatePullRequestDialogFields } from '../useCreatePullRequestDialogFields'
-import { useHostedReviewStackParent } from '../useHostedReviewStackParent'
-import { shouldHydratePullRequestGenerationResult } from '@/store/slices/pull-request-generation'
+import { useCreatePullRequestDialogFields } from '../hosted-review/creation/useCreatePullRequestDialogFields'
+import { useHostedReviewStackParent } from '../hosted-review/provider-actions/useHostedReviewStackParent'
+import { shouldHydratePullRequestGenerationResult } from '@/store/slices/hosted-review/generation/pull-request-generation'
 import {
   checksPanelAsyncResultKey,
   checksPanelHostedReviewAsyncResultKey,
   shouldCommitChecksPanelAsyncResult
-} from '../checks-panel-async-result-key'
+} from './refresh/checks-panel-async-result-key'
 import type { ChecksPanelContextState } from './use-checks-panel-context-state'
 import type { ChecksPanelReviewState } from './use-checks-panel-review-state'
 import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
-import type { ChecksPanelGenerationState } from './use-checks-panel-generation'
+import type { ChecksPanelGenerationState } from './review-actions/use-checks-panel-generation'
 import {
   checksPanelReviewStableKey,
   clearPendingPRCommentAiAck
-} from '../pr-comments-ai-launch-ack'
+} from './comments/pr-comments-ai-launch-ack'
 
 type ChecksPanelComposerStateInput = Pick<
   ChecksPanelContextState,
@@ -33,6 +33,7 @@ type ChecksPanelComposerStateInput = Pick<
   > &
   Pick<
     ChecksPanelControllerState,
+    | 'activeWorktree'
     | 'activeWorktreeId'
     | 'activeWorktreePath'
     | 'agentComposerState'
@@ -44,6 +45,7 @@ type ChecksPanelComposerStateInput = Pick<
     | 'setAgentComposerState'
     | 'setCreatePrError'
     | 'ownerSettings'
+    | 'ownerTarget'
     | 'pendingCommentResolutionRef'
     | 'claimedCommentResolutionRef'
     | 'commentResolutionLaunchAcceptedRef'
@@ -63,6 +65,7 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
     activePullRequestGenerationRecord,
     activePullRequestGenerationSeedRestoreKey,
     activeWorktreeId,
+    activeWorktree,
     activeWorktreePath,
     agentComposerState,
     asyncResultKeyRef,
@@ -85,6 +88,7 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
     setCreatePrError,
     sourceControlAiActionsVisible,
     ownerSettings,
+    ownerTarget,
     pendingCommentResolutionRef,
     claimedCommentResolutionRef,
     commentResolutionLaunchAcceptedRef,
@@ -96,10 +100,15 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
     setBase: setPrBase,
     title: prTitle,
     setTitle: setPrTitle,
+    imageUploadPending: prImageUploadPending,
+    imageUploadPendingRef: prImageUploadPendingRef,
+    onImageUploadPending: onPrImageUploadPending,
     body: prBody,
     setBody: setPrBody,
     draft: prDraft,
     setDraft: setPrDraft,
+    fieldRevisions: prFieldRevisions,
+    fieldsAreSeedPlaceholders: prFieldsAreSeedPlaceholders,
     stackedCreationSupported: prStackedCreationSupported,
     repoDefaultBaseRef: prRepoDefaultBaseRef,
     baseQuery: prBaseQuery,
@@ -122,9 +131,11 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
     worktreeId: activeWorktreeId,
     worktreePath: activeWorktreePath ?? '',
     branch,
+    workspace: activeWorktree,
     eligibility: hostedReviewCreation,
     repo,
     settings: ownerSettings,
+    target: ownerTarget,
     submitting: isCreatingPr,
     prCreationDefaults,
     sourceControlAiActionsVisible,
@@ -134,12 +145,16 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
       generating: activePullRequestGenerationRecord?.status === 'running',
       generateError: activePullRequestGenerationRecord?.error ?? null,
       seedRestoreKey: activePullRequestGenerationSeedRestoreKey,
-      seed: activePullRequestGenerationRecord?.seed ?? null,
-      seedFieldRevisions: activePullRequestGenerationRecord?.seedFieldRevisions ?? null,
+      seed:
+        activePullRequestGenerationRecord?.editedFields?.fields ??
+        activePullRequestGenerationRecord?.seed ??
+        null,
+      seedFieldRevisions:
+        activePullRequestGenerationRecord?.editedFields?.revisions ??
+        activePullRequestGenerationRecord?.seedFieldRevisions ??
+        null,
       onSeedRestored: handlePullRequestGenerationSeedRestored,
-      onGenerate: (fields, fieldRevisions, overrides) => {
-        void handleGeneratePullRequestFieldsForActive(fields, fieldRevisions, overrides)
-      },
+      onGenerate: handleGeneratePullRequestFieldsForActive,
       onCancelGenerate: handleCancelGeneratePullRequestFieldsForActive
     }
   })
@@ -148,14 +163,13 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
     repoPath: repo?.path ?? '',
     repoId: repo?.id ?? null,
     base: prBase,
-    // Why: the repo default, not eligibility's defaultBaseRef — that one resolves to
-    // the worktree's own base, which is exactly the branch a stacked PR targets.
+    // Use the repo default; eligibility's default may be the stacked worktree's parent branch.
     repoDefaultBase: prRepoDefaultBaseRef,
     head: branch,
     fetchHostedReviewForBranch
   })
   useEffect(() => {
-    // Why: PR generation can finish while this composer is hidden by a worktree switch; hydrate once the original composer is visible again.
+    // Generation can finish while hidden after a workspace switch; hydrate when its composer returns.
     if (
       !activePullRequestGenerationKey ||
       !activePullRequestGenerationRecord ||
@@ -230,7 +244,7 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
     [asyncResultKeyRef]
   )
   useEffect(() => {
-    // Why: compare without headSha — PR head can move while the agent is still starting.
+    // Ignore headSha because the PR head can move while the agent starts.
     if (
       agentComposerState?.commentResolution &&
       checksPanelReviewStableKey(agentComposerState.commentResolution.reviewContextKey) !==
@@ -257,10 +271,15 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
     setPrBase,
     prTitle,
     setPrTitle,
+    prImageUploadPending,
+    prImageUploadPendingRef,
+    onPrImageUploadPending,
     prBody,
     setPrBody,
     prDraft,
     setPrDraft,
+    prFieldRevisions,
+    prFieldsAreSeedPlaceholders,
     prStackedCreationSupported,
     prRepoDefaultBaseRef,
     prBaseQuery,

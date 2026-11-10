@@ -18,6 +18,7 @@ import type {
   BitbucketConnectResult,
   BitbucketConnectionStatus
 } from '../../shared/bitbucket-credentials'
+import { bitbucketConnectFailure } from '../../shared/bitbucket-credentials'
 
 export type { BitbucketConnectArgs, BitbucketConnectResult, BitbucketConnectionStatus }
 
@@ -37,32 +38,18 @@ function buildCandidateConfig(input: BitbucketConnectArgs): BitbucketAuthConfig 
   }
 }
 
-// Verifying against `/user` before persisting keeps the stored "connected
-// account" honest and lets the dialog reject a dead token inline.
 export async function connectBitbucket(
   input: BitbucketConnectArgs
 ): Promise<BitbucketConnectResult> {
   const config = buildCandidateConfig(input)
   if (!hasAuth(config)) {
-    return {
-      ok: false,
-      error:
-        input.authMode === 'token'
-          ? 'Enter an access token.'
-          : 'Enter both an email and an API token.'
-    }
+    return bitbucketConnectFailure(
+      input.authMode === 'token' ? 'accessTokenRequired' : 'emailAndApiTokenRequired'
+    )
   }
   const result = await fetchBitbucketUserResult(config, VERIFY_TIMEOUT_MS)
   if (!result.ok) {
-    return {
-      ok: false,
-      // Why (STA-3944): telling someone their token is invalid when the network
-      // is down sends them to regenerate a credential that was fine.
-      error:
-        result.reason === 'rejected'
-          ? 'Bitbucket rejected these credentials. Check the email and token, then try again.'
-          : 'Could not reach Bitbucket. Check your connection or the API base URL, then try again.'
-    }
+    return bitbucketConnectFailure(result.reason === 'rejected' ? 'rejected' : 'unreachable')
   }
   const account = accountNameFromUser(result.user)
   saveBitbucketCredential({
@@ -80,8 +67,7 @@ export function disconnectBitbucket(): void {
   clearStoredBitbucketCredential()
 }
 
-// Reads env vars and plaintext metadata only — never decrypts — so the Settings
-// card can call it on every open without a keychain prompt.
+// Status reads must avoid keychain prompts.
 export function getBitbucketConnectionStatus(): BitbucketConnectionStatus {
   const env = getEnvAuthConfig()
   if (hasAuth(env)) {

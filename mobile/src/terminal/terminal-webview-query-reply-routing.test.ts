@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TerminalWebView } from './TerminalWebView'
+import { findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 vi.mock('react-native', () => ({
   Platform: { OS: 'ios' },
@@ -37,7 +38,7 @@ function postWebViewMessage(payload: Record<string, unknown>): void {
   if (!renderer) {
     throw new Error('TerminalWebView did not render')
   }
-  const webView = renderer.root.findByType('WebView')
+  const webView = findByHostType(renderer.root, 'WebView')
   act(() => {
     webView.props.onMessage({ nativeEvent: { data: JSON.stringify(payload) } })
   })

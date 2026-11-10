@@ -1,7 +1,8 @@
 import { Server } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import type { DashboardCardHostKind } from '../../../../shared/dashboard-snapshot'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 
@@ -25,23 +26,26 @@ function fallbackHostLabel(executionHostId: ExecutionHostId | undefined): string
   return null
 }
 
-export function dashboardHostTooltipLabel({
-  hostKind,
-  executionHostId,
-  hostLabel
-}: Pick<DashboardHostBadgeProps, 'hostKind' | 'executionHostId' | 'hostLabel'>): string | null {
+export function dashboardHostTooltipLabel(
+  {
+    hostKind,
+    executionHostId,
+    hostLabel
+  }: Pick<DashboardHostBadgeProps, 'hostKind' | 'executionHostId' | 'hostLabel'>,
+  t: Translate = translate
+): string | null {
   if (hostKind !== 'ssh' && hostKind !== 'remote') {
     return null
   }
   const label = hostLabel?.trim() || fallbackHostLabel(executionHostId)
   if (hostKind === 'ssh') {
     return label
-      ? translate('dashboardPopout.host.sshNamed', 'SSH host · {{host}}', { host: label })
-      : translate('dashboardPopout.host.ssh', 'SSH host')
+      ? t('dashboardPopout.host.sshNamed', 'SSH host · {{host}}', { host: label })
+      : t('dashboardPopout.host.ssh', 'SSH host')
   }
   return label
-    ? translate('dashboardPopout.host.remoteNamed', 'Remote Orca host · {{host}}', { host: label })
-    : translate('dashboardPopout.host.remote', 'Remote Orca host')
+    ? t('dashboardPopout.host.remoteNamed', 'Remote Orca host · {{host}}', { host: label })
+    : t('dashboardPopout.host.remote', 'Remote Orca host')
 }
 
 export function DashboardHostBadge({
@@ -52,7 +56,8 @@ export function DashboardHostBadge({
   className,
   iconClassName
 }: DashboardHostBadgeProps): React.JSX.Element | null {
-  const tooltipLabel = dashboardHostTooltipLabel({ hostKind, executionHostId, hostLabel })
+  const t = useTranslate()
+  const tooltipLabel = dashboardHostTooltipLabel({ hostKind, executionHostId, hostLabel }, t)
   if (!tooltipLabel) {
     return null
   }

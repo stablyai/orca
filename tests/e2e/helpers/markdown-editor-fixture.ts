@@ -137,3 +137,33 @@ export async function closeActiveEditorTab(page: Page, filePath: string): Promis
     timeout: 10_000
   })
 }
+
+export async function expectSettledInViewport(target: Locator): Promise<void> {
+  let previousTop: number | undefined
+  let stableSince = 0
+  await expect
+    .poll(
+      async () => {
+        const geometry = await target.evaluate((element) => {
+          const viewport = element.closest('.markdown-preview')!.getBoundingClientRect()
+          const bounds = element.getBoundingClientRect()
+          return {
+            top: bounds.top,
+            visible: bounds.top < viewport.bottom && bounds.bottom > viewport.top
+          }
+        })
+        const now = performance.now()
+        if (
+          !geometry.visible ||
+          previousTop === undefined ||
+          Math.abs(geometry.top - previousTop) > 1
+        ) {
+          stableSince = now
+        }
+        previousTop = geometry.top
+        return geometry.visible && now - stableSince >= 500
+      },
+      { intervals: [100], timeout: 25_000 }
+    )
+    .toBe(true)
+}

@@ -1,7 +1,8 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
+import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import type { NestedRepoScanResult, ProjectGroup } from '../../../shared/project-group-types'
 import { notifyReposChanged } from './repos-changed-notification'
 import {
@@ -11,12 +12,18 @@ import {
   ProjectGroupScanNestedArgs,
   ProjectGroupSelectorArgs,
   ProjectGroupUpdateArgs,
+  ProjectGroupUpdateManyArgs,
   parseProjectGroupIpcArgs
 } from './repo-ipc-arg-schemas'
+import {
+  assertWslMoveProjectWritable,
+  assertWslMoveRepoWritable
+} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import { activeNestedRepoScans, runNestedRepoScanForIpc } from './nested-repo-scan-ipc'
+import { visibleProjectGroups } from '../../persistence/migrating-orcad-catalog/orcad-source-visibility'
 
 export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: Store): void {
-  ipcMain.handle('projectGroups:list', () => store.getProjectGroups())
+  ipcMain.handle('projectGroups:list', () => visibleProjectGroups(store))
 
   ipcMain.handle('projectGroups:create', (_event, rawArgs: unknown): ProjectGroup => {
     const args = parseProjectGroupIpcArgs(
@@ -48,6 +55,19 @@ export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: S
     return updated
   })
 
+  ipcMain.handle('projectGroups:updateMany', (_event, rawArgs: unknown): ProjectGroup[] | null => {
+    const args = parseProjectGroupIpcArgs(
+      ProjectGroupUpdateManyArgs,
+      rawArgs,
+      'invalid_project_group_update_many_args'
+    )
+    const updated = store.updateProjectGroups(args.mutations)
+    if (updated?.length) {
+      notifyReposChanged(mainWindow)
+    }
+    return updated
+  })
+
   ipcMain.handle('projectGroups:delete', (_event, rawArgs: unknown): boolean => {
     const args = parseProjectGroupIpcArgs(
       ProjectGroupSelectorArgs,
@@ -67,7 +87,16 @@ export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: S
       rawArgs,
       'invalid_project_group_move_repo_args'
     )
-    const moved = store.moveProjectToGroup(args.projectId, args.groupId, args.order)
+    const target: RepoHostTarget | undefined = args.hostId
+      ? { id: args.projectId, executionHostId: args.hostId }
+      : store.getRepo(args.projectId)
+    if (!target) {
+      assertWslMoveProjectWritable(store, { repoId: args.projectId })
+      return null
+    }
+    // Fence the selected host only; a WSL move must not block its SSH sibling.
+    assertWslMoveRepoWritable(store, target)
+    const moved = store.moveProjectToGroup(target, args.groupId, args.order)
     if (moved) {
       notifyReposChanged(mainWindow)
     }

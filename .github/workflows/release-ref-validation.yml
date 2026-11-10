@@ -2,12 +2,13 @@ name: Release ref validation
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - '.github/workflows/adhoc-mac-build.yml'
       - '.github/workflows/dev-channel-win-build.yml'
       - '.github/workflows/release-ref-validation.yml'
-      - 'config/scripts/workflow-ref-reachability.test.mjs'
-      - 'config/scripts/workflow-ref-mirror-case-safety.test.mjs'
+      - 'config/scripts/ci/workflow-contracts/workflow-ref-reachability.test.mjs'
+      - 'config/scripts/ci/workflow-contracts/workflow-ref-mirror-case-safety.test.mjs'
   workflow_dispatch:
 
 permissions:
@@ -19,6 +20,7 @@ concurrency:
 
 jobs:
   validate:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     strategy:
       fail-fast: false
       matrix:
@@ -33,6 +35,5 @@ jobs:
       - name: Verify case-twin refs and release trust boundary
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
-          config/scripts/workflow-ref-reachability.test.mjs
-          config/scripts/workflow-ref-mirror-case-safety.test.mjs
-          config/scripts/dev-channel-windows-workflow-contract.test.mjs
+          config/scripts/ci/workflow-contracts/workflow-ref-reachability.test.mjs
+          config/scripts/ci/workflow-contracts/workflow-ref-mirror-case-safety.test.mjs

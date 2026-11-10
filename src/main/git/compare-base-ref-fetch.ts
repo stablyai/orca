@@ -1,17 +1,6 @@
-// Why: PR (GitHub) and MR (GitLab) base resolution both need this exact
-// trade-off, and both regressed the same way before; one copy keeps them from
-// drifting on the next fix.
-
 type CompareBaseGitExec = (args: string[]) => Promise<{ stdout: string }>
 
-/**
- * Refresh the compare base ref, reporting whether callers may keep it.
- *
- * Why: dropping compareBaseRef on any fetch failure makes worktree create fall
- * back to the base branch — the review head itself for fork reviews — so Source
- * Control diffs the worktree against itself. Keep the base whenever the local
- * ref still resolves; only truly missing/absent refs lose it.
- */
+/** Keep a locally resolvable base after fetch failure; dropping it can make fork reviews diff against themselves. */
 export async function fetchCompareBaseRefWithLocalFallback(options: {
   compareBaseRef: string | undefined
   fetchCompareBaseRef: (compareBaseRef: string) => Promise<void>

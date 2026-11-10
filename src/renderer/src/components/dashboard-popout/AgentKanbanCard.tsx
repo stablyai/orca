@@ -7,50 +7,50 @@ import {
   GitPullRequestClosed,
   GitPullRequestDraft
 } from 'lucide-react'
-import { AgentIcon } from '@/lib/agent-catalog'
-import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
+import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   dashboardCardDisplayState,
   type DashboardCard
 } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { DashboardHostBadge } from './DashboardHostBadge'
+import { AgentCardLastMessages, hasAgentCardLastMessages } from './AgentCardLastMessages'
 
-/** Compact "started N ago" (the card is glanceable — coarse units are fine). */
-function formatStartedAgo(startedAt: number, now: number): string {
+function formatStartedAgo(startedAt: number, now: number, t: Translate = translate): string {
   const seconds = Math.max(0, Math.floor((now - startedAt) / 1000))
   if (seconds < 60) {
-    return translate('dashboardPopout.card.time.justNow', 'just now')
+    return t('dashboardPopout.card.time.justNow', 'just now')
   }
   const minutes = Math.floor(seconds / 60)
   if (minutes < 60) {
-    return translate('dashboardPopout.card.time.minutes', '{{count}}m', { count: minutes })
+    return t('dashboardPopout.card.time.minutes', '{{count}}m', { count: minutes })
   }
   const hours = Math.floor(minutes / 60)
   if (hours < 24) {
-    return translate('dashboardPopout.card.time.hours', '{{count}}h', { count: hours })
+    return t('dashboardPopout.card.time.hours', '{{count}}h', { count: hours })
   }
-  return translate('dashboardPopout.card.time.days', '{{count}}d', {
+  return t('dashboardPopout.card.time.days', '{{count}}d', {
     count: Math.floor(hours / 24)
   })
 }
 
-/** The timestamp the card's time column counts from: since it finished when the
- *  agent has completed, else since it started — parity with the worktree sidebar. */
+/** Count from completion when present, otherwise start, matching the worktree sidebar. */
 function displayTimestamp(card: DashboardCard): number {
   return card.finishedAt ?? card.startedAt
 }
 
-function formatSubagentCount(count: number): string {
-  return count === 1
-    ? translate('dashboardPopout.card.subagents_one', '{{count}} subagent', { count })
-    : translate('dashboardPopout.card.subagents_other', '{{count}} subagents', { count })
+function formatSubagentCount(count: number, t: Translate = translate): string {
+  return t('dashboardPopout.card.subagents', '{{count}} subagents', {
+    count,
+    defaultValue_one: '{{count}} subagent'
+  })
 }
 
 function sameSubagents(a: DashboardCard['subagents'], b: DashboardCard['subagents']): boolean {
@@ -88,6 +88,7 @@ function sameCard(a: DashboardCard, b: DashboardCard): boolean {
     a.bucket === b.bucket &&
     a.dotState === b.dotState &&
     a.workingMode === b.workingMode &&
+    a.verdict === b.verdict &&
     a.task === b.task &&
     a.lastUserMessage === b.lastUserMessage &&
     a.lastAgentMessage === b.lastAgentMessage &&
@@ -133,6 +134,7 @@ const REVIEW_PRESENTATION = {
 } as const
 
 function ReviewPill({ card }: { card: DashboardCard }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!card.review) {
     return null
   }
@@ -141,13 +143,13 @@ function ReviewPill({ card }: { card: DashboardCard }): React.JSX.Element | null
   const title = (() => {
     switch (card.review.state) {
       case 'open':
-        return translate('dashboardPopout.card.review.open', 'Open review')
+        return t('dashboardPopout.card.review.open', 'Open review')
       case 'draft':
-        return translate('dashboardPopout.card.review.draft', 'Draft review')
+        return t('dashboardPopout.card.review.draft', 'Draft review')
       case 'merged':
-        return translate('dashboardPopout.card.review.merged', 'Merged review')
+        return t('dashboardPopout.card.review.merged', 'Merged review')
       case 'closed':
-        return translate('dashboardPopout.card.review.closed', 'Closed review')
+        return t('dashboardPopout.card.review.closed', 'Closed review')
     }
   })()
   return (
@@ -164,8 +166,7 @@ function ReviewPill({ card }: { card: DashboardCard }): React.JSX.Element | null
   )
 }
 
-/** Structural — the icon arrives inside a fresh structured clone each publish,
- *  so identity alone would re-render every card several times a second. */
+/** Compare icon values; fresh structured clones would otherwise re-render every card on each publish. */
 function sameRepoIcon(a: RepoIcon | null | undefined, b: RepoIcon | null | undefined): boolean {
   if (a === b) {
     return true
@@ -188,13 +189,10 @@ type AgentKanbanCardProps = {
   /** The card repo's icon. null renders the default folder glyph. */
   repoIcon?: RepoIcon | null
   now: number
-  /** Opens the board-level terminal dialog. The dialog is NOT owned by the
-   *  card: bucket moves remount the card, and an embedded dialog would close
-   *  the chat mid-conversation. */
+  /** Host dialogs on the board because bucket moves remount cards and would close an embedded conversation. */
   onOpenTerminal: (card: DashboardCard) => void
 }
 
-/** One agent on the kanban board. Clicking opens the board's live terminal dialog. */
 export const AgentKanbanCard = memo(
   function AgentKanbanCard({
     card,
@@ -202,25 +200,20 @@ export const AgentKanbanCard = memo(
     now,
     onOpenTerminal
   }: AgentKanbanCardProps): React.JSX.Element {
+    const t = useTranslate()
     useTranslation()
     const [subagentsOpen, setSubagentsOpen] = useState(false)
-    // Why: the two outcomes worth scanning for get a tinted card — the
-    // --agent-question accent for "answer me", green for "finished, look at
-    // it". Everything else stays neutral so the tint keeps meaning something.
+    // Tint only attention and done so scan-worthy outcomes retain distinct meaning.
     const needsYou = card.bucket === 'attention'
     const displayState = dashboardCardDisplayState(card)
     const isDone = displayState === 'done'
-    // Why: the session's own name heads the card. Without one the worktree is
-    // the best heading left — and then the footer drops it rather than say it
-    // twice.
+    // Prefer the conversation heading; otherwise use the worktree once and omit its duplicate footer.
     const heading = card.conversationName ?? card.worktreeName
     const worktreeInFooter = card.conversationName !== undefined
 
     return (
       <div
-        // Why: a stable per-agent view-transition-name lets the browser morph
-        // the card from its old column to its new one when its bucket changes.
-        // paneKey has ':'/'/' which aren't valid in a custom-ident, so slugify.
+        // Stable view-transition names animate bucket moves; escape paneKey characters forbidden in custom-ident.
         style={{ viewTransitionName: `agentcard-${card.paneKey.replace(/[^a-zA-Z0-9]/g, '-')}` }}
         className={cn(
           'group flex w-full flex-col gap-1.5 rounded-lg border p-2.5 text-left transition-colors',
@@ -239,7 +232,7 @@ export const AgentKanbanCard = memo(
           <div className="flex w-full items-center gap-1.5">
             {/* Why: a bare <svg> flex item shrinks with the row. */}
             <span className="inline-flex shrink-0">
-              <AgentIcon agent={agentTypeToIconAgent(card.agentType)} size={14} />
+              <AgentTypeIcon agentType={card.agentType} size={14} />
             </span>
             <span
               className={cn(
@@ -252,25 +245,8 @@ export const AgentKanbanCard = memo(
             {card.askSummary ? null : <AgentStateDot state={displayState} className="ml-auto" />}
           </div>
 
-          {card.lastUserMessage || card.lastAgentMessage ? (
-            <div className="flex w-full flex-col gap-0.5">
-              {card.lastUserMessage ? (
-                <div className="line-clamp-1 text-[11px] leading-snug text-muted-foreground">
-                  <span className="font-medium text-foreground/45">
-                    {translate('dashboardPopout.card.you', 'You')}
-                  </span>{' '}
-                  {card.lastUserMessage}
-                </div>
-              ) : null}
-              {card.lastAgentMessage ? (
-                <div className="line-clamp-2 text-xs leading-snug text-foreground/90">
-                  <span className="font-medium text-foreground/45">
-                    {formatAgentTypeLabel(card.agentType)}
-                  </span>{' '}
-                  {card.lastAgentMessage}
-                </div>
-              ) : null}
-            </div>
+          {hasAgentCardLastMessages(card) ? (
+            <AgentCardLastMessages card={card} clamp />
           ) : card.task ? (
             <div className="line-clamp-2 w-full text-xs leading-snug text-foreground/90">
               {card.task}
@@ -296,7 +272,7 @@ export const AgentKanbanCard = memo(
               <ChevronRight
                 className={cn('size-3 transition-transform', subagentsOpen && 'rotate-90')}
               />
-              {formatSubagentCount(card.subagents.length)}
+              {formatSubagentCount(card.subagents.length, t)}
             </button>
             {subagentsOpen ? (
               <div className="ml-1 flex flex-col gap-1 border-l border-border pl-2">
@@ -342,7 +318,7 @@ export const AgentKanbanCard = memo(
           <ReviewPill card={card} />
           {displayTimestamp(card) > 0 ? (
             <span className="ml-auto shrink-0 pl-1 tabular-nums">
-              {formatStartedAgo(displayTimestamp(card), now)}
+              {formatStartedAgo(displayTimestamp(card), now, t)}
             </span>
           ) : null}
         </button>

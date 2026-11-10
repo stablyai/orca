@@ -1,13 +1,17 @@
-import { getAdvancedPaneSearchEntries } from '@/components/settings/advanced-search'
-import { getDeveloperPermissionsPaneSearchEntries } from '@/components/settings/developer-permissions-search'
-import { getExperimentalPaneSearchEntries } from '@/components/settings/experimental-search'
-import { getPluginsPaneSearchEntries } from '@/components/settings/plugins-search'
-import { getPrivacyPaneSearchEntries } from '@/components/settings/privacy-search'
-import { getRepositoryPaneSearchEntries } from '@/components/settings/repository-search'
-import { buildSettingsProjectList } from '@/components/settings/settings-project-list'
-import { getSshPaneSearchEntries } from '@/components/settings/ssh-search'
+import { getAdvancedPaneSearchEntries } from '@/components/settings/advanced/advanced-search'
+import { getDeveloperPermissionsPaneSearchEntries } from '@/components/settings/developer-permissions/developer-permissions-search'
+import { getExperimentalPaneSearchEntries } from '@/components/settings/advanced/experimental-search'
+import {
+  getPluginsPaneSearchEntries,
+  getPluginsSectionPresentation
+} from '@/components/settings/plugins/plugins-search'
+import { getPrivacyPaneSearchEntries } from '@/components/settings/privacy/privacy-search'
+import { getRepositoryPaneSearchEntries } from '@/components/settings/repository/repository-search'
+import { buildSettingsProjectList } from '@/components/settings/navigation/settings-project-list'
+import { getSshPaneSearchEntries } from '@/components/settings/ssh/ssh-search'
 import { translate } from '@/i18n/i18n'
-import type { SettingsNavSection } from '@/lib/settings-navigation-types'
+import type { Translate } from '@/i18n/use-translate'
+import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
 import { getRepoKindLabel } from '../../../shared/repo-kind'
 import type { Repo } from '../../../shared/repo-types'
 import {
@@ -24,9 +28,17 @@ import {
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 
 export function buildRemoteSettingsSections(
-  { isMac, isWindowsTerminalHost, isWebClient, isDev, repos }: SettingsNavigationBuildOptions,
+  {
+    isMac,
+    isWindowsTerminalHost,
+    isWebClient,
+    isDev,
+    repos,
+    projectGrouping
+  }: SettingsNavigationBuildOptions,
   runtimeEnvironmentsSearchEntry: SettingsNavSection['searchEntries'][number],
-  reposById: ReadonlyMap<string, Repo>
+  reposById: ReadonlyMap<string, Repo>,
+  t: Translate = translate
 ): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
   return [
@@ -34,8 +46,8 @@ export function buildRemoteSettingsSections(
       ? [
           {
             id: 'ssh',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.94a5afe910', 'SSH Hosts'),
-            description: translate(
+            title: t('auto.hooks.useSettingsNavigationMetadata.94a5afe910', 'SSH Hosts'),
+            description: t(
               'auto.hooks.useSettingsNavigationMetadata.31e57d1c70',
               'Use existing machines over SSH for files, terminals, Git, and workspaces.'
             ),
@@ -47,27 +59,20 @@ export function buildRemoteSettingsSections(
       : []),
     {
       id: 'servers',
-      title: translate(
-        'auto.hooks.useSettingsNavigationMetadata.de0c2907a1',
-        'Remote Orca Servers'
-      ),
+      title: t('auto.hooks.useSettingsNavigationMetadata.de0c2907a1', 'Remote Orca Servers'),
       description: isWebClient
         ? 'Connect this browser to a saved Orca server.'
-        : 'Pair remote Orca runtimes for persistent sessions, richer remote state, and web or mobile handoff.',
+        : 'Run Orca on another machine and work on it from here.',
       icon: Server,
       searchEntries: [runtimeEnvironmentsSearchEntry],
-      group: 'remote',
-      badge: translate('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
+      group: 'remote'
     },
     ...(showDesktopOnlySettings && isMac
       ? [
           {
             id: 'developer-permissions',
-            title: translate(
-              'auto.hooks.useSettingsNavigationMetadata.d91ae31fbd',
-              'macOS Permissions'
-            ),
-            description: translate(
+            title: t('auto.hooks.useSettingsNavigationMetadata.d91ae31fbd', 'macOS Permissions'),
+            description: t(
               'auto.hooks.useSettingsNavigationMetadata.65ec7d1968',
               'macOS privacy access for terminal-launched developer tools.'
             ),
@@ -79,11 +84,8 @@ export function buildRemoteSettingsSections(
       : []),
     {
       id: 'privacy',
-      title: translate(
-        'auto.hooks.useSettingsNavigationMetadata.3618579df6',
-        'Privacy & Telemetry'
-      ),
-      description: translate(
+      title: t('auto.hooks.useSettingsNavigationMetadata.3618579df6', 'Privacy & Telemetry'),
+      description: t(
         'auto.hooks.useSettingsNavigationMetadata.8400cfe1c1',
         'Anonymous usage data and telemetry controls.'
       ),
@@ -95,8 +97,8 @@ export function buildRemoteSettingsSections(
       ? [
           {
             id: 'advanced',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.580a04cd81', 'Advanced'),
-            description: translate(
+            title: t('auto.hooks.useSettingsNavigationMetadata.580a04cd81', 'Advanced'),
+            description: t(
               'auto.hooks.useSettingsNavigationMetadata.e338c507c1',
               'Low-level compatibility settings for troubleshooting.'
             ),
@@ -106,30 +108,28 @@ export function buildRemoteSettingsSections(
           }
         ]
       : []),
-    // Why: dev tooling must not be reachable from packaged/web builds even if
-    // this pure metadata builder is called manually with isDev=true.
+    // Packaged/web builds must reject dev navigation even when callers pass isDev=true.
     ...(showDesktopOnlySettings && import.meta.env.DEV && isDev
       ? [
           {
             id: 'dev',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.dev', 'Dev Tools'),
-            description: translate(
+            title: t('auto.hooks.useSettingsNavigationMetadata.dev', 'Dev Tools'),
+            description: t(
               'auto.hooks.useSettingsNavigationMetadata.devDescription',
               'Dev-only tools for exercising UI states.'
             ),
-            // Why: distinct from the sibling Advanced section's Wrench so the two
-            // entries in the same 'advanced' group stay visually distinguishable.
+            // Use a distinct icon from sibling Advanced settings so adjacent rows remain distinguishable.
             icon: Bug,
-            searchEntries: getDevToolsPaneSearchEntries(),
+            searchEntries: getDevToolsPaneSearchEntries(t),
             group: 'advanced',
-            badge: translate('auto.hooks.useSettingsNavigationMetadata.devBadge', 'Dev')
+            badge: t('auto.hooks.useSettingsNavigationMetadata.devBadge', 'Dev')
           }
         ]
       : []),
     {
       id: 'experimental',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.225071c560', 'Experimental'),
-      description: translate(
+      title: t('auto.hooks.useSettingsNavigationMetadata.225071c560', 'Experimental'),
+      description: t(
         'auto.hooks.useSettingsNavigationMetadata.4a728cd56b',
         'New features that are still taking shape. Give them a try.'
       ),
@@ -141,64 +141,65 @@ export function buildRemoteSettingsSections(
       ? [
           {
             id: 'plugins',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.pluginsTitle', 'Plugins'),
-            description: translate(
+            title: t('auto.hooks.useSettingsNavigationMetadata.pluginsTitle', 'Plugins'),
+            description: t(
               'auto.hooks.useSettingsNavigationMetadata.pluginsDescription',
-              'Install and manage experimental Orca plugins.'
+              'Install and manage Orca plugins (Alpha).'
             ),
             icon: Blocks,
             searchEntries: getPluginsPaneSearchEntries(),
-            group: 'experimental'
+            group: 'experimental',
+            badge: getPluginsSectionPresentation(t).badge
           }
         ]
       : []),
-    // Why: one nav row per project, not per repo row — a project set up on
-    // multiple hosts (local + a Remote Orca Server, or two clones) collapses to
-    // a single entry. Derived from repos alone so this list matches the panes.
-    ...buildSettingsProjectList(repos).map(({ project, representativeRepoId, setups }) => {
+    // Collapse host-specific repo rows to one project entry using the same inputs as settings panes.
+    ...buildSettingsProjectList(repos, projectGrouping).map((settingsProject) => {
+      const { project, representativeRepoId, setups, checkoutLabel } = settingsProject
       const representativeRepo = reposById.get(representativeRepoId) ?? repos[0]
       const hostSummary =
         setups.length > 1
-          ? translate(
-              'auto.hooks.useSettingsNavigationMetadata.projectHostsSummary',
-              '{{value0}} hosts',
-              { value0: setups.length }
-            )
+          ? t('auto.hooks.useSettingsNavigationMetadata.projectHostsSummary', '{{value0}} hosts', {
+              value0: setups.length
+            })
           : (setups[0]?.path ?? representativeRepo.path)
       return {
         id: `repo-${representativeRepoId}`,
-        title: project.displayName,
+        title: checkoutLabel ?? project.displayName,
         description: `${getRepoKindLabel(project)} • ${hostSummary}`,
         icon: SlidersHorizontal,
-        searchEntries: getRepositoryPaneSearchEntries(representativeRepo, {
-          windowsRuntimeSupported: isWindowsTerminalHost
-        }),
+        searchEntries: getRepositoryPaneSearchEntries(
+          representativeRepo,
+          {
+            windowsRuntimeSupported: isWindowsTerminalHost
+          },
+          t
+        ),
         group: 'repositories'
       }
     })
   ]
 }
 
-function getDevToolsPaneSearchEntries(): SettingsNavSection['searchEntries'] {
+function getDevToolsPaneSearchEntries(
+  t: Translate = translate
+): SettingsNavSection['searchEntries'] {
   return [
     {
-      title: translate(
+      title: t(
         'auto.hooks.useSettingsNavigationMetadata.devSearchNotificationPlayground',
         'Notification playground'
       ),
-      description: translate(
+      description: t(
         'auto.hooks.useSettingsNavigationMetadata.devSearchNotificationPlaygroundDescription',
         'Trigger representative toast and notification UI states.'
       ),
       keywords: [
-        translate('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordDev', 'dev'),
-        translate('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordToast', 'toast'),
-        translate('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordSonner', 'sonner'),
-        translate('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordError', 'error'),
-        translate(
-          'auto.hooks.useSettingsNavigationMetadata.devSearchKeywordNotification',
-          'notification'
-        )
+        t('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordDev', 'dev'),
+        t('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordToast', 'toast'),
+        t('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordSonner', 'sonner'),
+        t('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordError', 'error'),
+        t('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordNotification', 'notification')
       ]
     }
   ]

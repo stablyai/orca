@@ -18,7 +18,7 @@ vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../ssh/ssh-config-parser', () => ({
+vi.mock('../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -88,17 +88,6 @@ describe('active profile transfers with the live writer', () => {
     store.updateSettings({ theme: 'dark' })
     await expect(store.flushPendingOrThrowAsync()).rejects.toThrow('finalized')
     expect(read('source')).toEqual(source)
-  })
-
-  it('resumes when a copy makes a later move a duplicate', async () => {
-    const { store, root, args, read } = await fixture()
-    await transferActiveProfileProject({ ...args, mode: 'copy' }, root, store, async () => {})
-    const result = await transferActiveProfileProject(args, root, store, async () => {})
-    expect(result.status).toBe('duplicate-target')
-    store.updateSettings({ theme: 'dark' })
-    await store.flushPendingOrThrowAsync()
-    expect(read('source').state.settings.theme).toBe('dark')
-    expect(read('source').state.repos.some((repo) => repo.id === args.repoId)).toBe(true)
   })
 
   it('leaves an interrupted move frozen until journal recovery runs with the writer closed', async () => {

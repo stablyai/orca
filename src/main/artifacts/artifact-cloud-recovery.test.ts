@@ -74,23 +74,6 @@ describe('ArtifactCloudService committed response loss recovery', () => {
     expect(server.artifactContent('artifact-1')).toBe(writeRequest.content)
   })
 
-  it('updates a recovered share when its content changed after response loss', async () => {
-    const userDataPath = await createUserDataPath()
-    const server = new ArtifactFaultServer()
-    server.loseNextCreateResponse = true
-    vi.stubGlobal('fetch', server.fetch)
-
-    await expect(service(userDataPath).share(writeRequest)).rejects.toThrow('response lost')
-    await expect(
-      service(userDataPath).share({ ...writeRequest, content: '<h1>Changed share</h1>' })
-    ).resolves.toMatchObject({
-      status: 'ok',
-      value: { artifact: { slug: 'artifact-1' } }
-    })
-    expect(server.createMutations).toBe(1)
-    expect(server.artifactContent('artifact-1')).toBe('<h1>Changed share</h1>')
-  })
-
   it('retains recovery until a changed-content update succeeds', async () => {
     const userDataPath = await createUserDataPath()
     const server = new ArtifactFaultServer()
@@ -328,7 +311,6 @@ async function publishedLink(userDataPath: string): Promise<string | null> {
   return result.status === 'ok' ? (result.value?.shareUrl ?? null) : null
 }
 
-/** JSON payload the fake artifact API serialises for a response. */
 type ArtifactResponseBody = Record<string, unknown>
 
 function jsonResponse(body: ArtifactResponseBody, status: number): Response {

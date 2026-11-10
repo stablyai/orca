@@ -1,6 +1,8 @@
 import type { AppState } from '@/store/types'
-import { getIndexedRepoMap, getIndexedWorktreeMap } from '@/store/worktree-repo-index'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
+import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { isFolderRepo } from '../../../shared/repo-kind'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type ActiveView = AppState['activeView']
 
@@ -17,6 +19,25 @@ const RIGHT_SIDEBAR_SUPPRESSED_VIEWS = new Set<ActiveView>([
 
 export function canShowRightSidebarForView(activeView: ActiveView): boolean {
   return !RIGHT_SIDEBAR_SUPPRESSED_VIEWS.has(activeView)
+}
+
+/** The toggle button, its shortcut and the menu item share this rule, so none hides what another opens. */
+export function canToggleRightSidebar(activeView: ActiveView): boolean {
+  return canShowRightSidebarForView(activeView)
+}
+
+/** Workspace and creation surfaces have no titlebar strip, so the closed sidebar needs its own toggle there. */
+export function showsFloatingRightSidebarToggle(layout: {
+  activeView: ActiveView
+  workspaceChromeActive: boolean
+  creationLayoutActive: boolean
+  rightSidebarOpen: boolean
+}): boolean {
+  return (
+    (layout.workspaceChromeActive || layout.creationLayoutActive) &&
+    !layout.rightSidebarOpen &&
+    canToggleRightSidebar(layout.activeView)
+  )
 }
 
 export function rightSidebarShowsPullRequestData(
@@ -39,7 +60,7 @@ export function rightSidebarShowsPullRequestData(
   }
 
   const activeWorktree = state.activeWorktreeId
-    ? getIndexedWorktreeMap(state.worktreesByRepo).get(state.activeWorktreeId)
+    ? getIndexedWorktreeMap(selectWorktreesByRepo(state)).get(state.activeWorktreeId)
     : undefined
   const activeRepo = activeWorktree
     ? getIndexedRepoMap(state.repos).get(activeWorktree.repoId)

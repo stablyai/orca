@@ -1,7 +1,3 @@
-/**
- * Read-side probes for one split's browser guest: its URL, zoom, and how many loads it started.
- */
-
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
 
@@ -55,10 +51,7 @@ export async function navigateGuest(page: Page, browserTabId: string, url: strin
   await waitForGuestUrl(page, browserTabId, url)
 }
 
-/**
- * Counts `did-start-loading` on the guest element from now on. A load start fires as soon as a
- * stray goBack/reload is issued, so a zero count is not waiting on a slow page to finish.
- */
+// Count load starts immediately so a stray back/reload cannot hide behind a slow page completion.
 export async function recordGuestLoadStarts(page: Page, browserTabIds: string[]): Promise<void> {
   await page.evaluate((selectors) => {
     for (const selector of selectors) {

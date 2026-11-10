@@ -1,8 +1,23 @@
 {
   "id": "codex",
   "engineVersion": 1,
-  "profile": { "screenSource": "live" },
+  "profile": { "screenSource": "live", "hooks": "turn-end" },
   "anchors": [
+    {
+      "id": "plan_implement_menu",
+      "why": "A Plan-mode turn ends in this menu after Codex's Stop hook fired, and it owns the keyboard, so text sent to the pane picks a choice. Codex paints it by cell diff, which drops spaces from the text copy, and leaves it in the tail once answered, so the key row must end the tail.",
+      "when": {
+        "region": "text",
+        "find": { "lastOf": "implement this plan?" },
+        "after": {
+          "all": [
+            { "regex": "no,\\s*stay\\s*in\\s*plan\\s*mode" },
+            { "regex": "enter\\s*select\\s*·\\s*esc\\s*back\\s*$" }
+          ]
+        }
+      },
+      "answer": { "state": "blocked", "reason": "agent-interactive-prompt" }
+    },
     {
       "id": "ready_header",
       "why": "The startup header with its model and directory labels is the stable ready text across versions; Codex prints permissions only in YOLO mode. Its last occurrence counts, so a header repainted after a dialog proves the dialog was answered.",

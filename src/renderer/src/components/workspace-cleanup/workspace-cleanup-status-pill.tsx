@@ -1,5 +1,5 @@
 import React from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { StatusPillTone } from './workspace-cleanup-candidate-row-data'
 
 export function StatusPill({
@@ -19,7 +19,8 @@ export function StatusPill({
         tone === 'neutral' && 'border-border bg-background text-muted-foreground',
         tone === 'ready' &&
           'border-status-success-border bg-status-success-background text-status-success',
-        tone === 'review' && 'border-border bg-muted text-foreground',
+        tone === 'review' &&
+          'border-status-warning-border bg-status-warning-background text-status-warning-text',
         tone === 'destructive' && 'border-destructive/30 text-destructive',
         toneClassName
       )}

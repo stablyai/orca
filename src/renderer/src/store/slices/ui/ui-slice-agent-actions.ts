@@ -1,11 +1,12 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
-import { formatAgentTypeLabel, agentKindForAgentType } from '../../../lib/agent-status'
+import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
+import { agentKindForAgentType } from '../../../lib/agent-status/aggregation/worktree-agent-status'
 import {
   deriveRunningAgentSendTargets,
   resolveRunningAgentSendTarget,
   runningAgentMessageTarget,
   runningAgentSendTargetAgentType
-} from '../../../lib/running-agent-targets'
+} from '../../../lib/agent-session/messaging/running-agent-targets'
 import { translate } from '@/i18n/i18n'
 import { createUiActivityActions } from './ui-slice-activity-actions'
 
@@ -76,6 +77,8 @@ export function createUiAgentActions(
         targets.some((target) => target.status === 'eligible') &&
         (previousMode?.id !== args.id || previousMode.worktreeId !== args.worktreeId)
       ) {
+        // Why switch: the send targets render on workspace cards, not activity rows.
+        get().setSidebarBody('workspaces')
         get().revealWorktreeInSidebar(args.worktreeId, { behavior: 'auto', highlight: true })
       }
     },
@@ -120,7 +123,8 @@ export function createUiAgentActions(
       }),
     sendPromptToSidebarAgentTarget: async (paneKey) => {
       const mode = get().agentSendPopoverTargetMode
-      if (!mode || mode.status === 'sending') {
+      // An empty prompt has nothing to send: every note may already be on its way.
+      if (!mode || mode.status === 'sending' || !mode.prompt.trim()) {
         return false
       }
 
@@ -150,11 +154,12 @@ export function createUiAgentActions(
 
       const agentType = runningAgentSendTargetAgentType(target)
       const label = formatAgentTypeLabel(agentType)
-      const [{ activeAgentNotesSendFailureMessage }, { sendMessageToAgent }] = await Promise.all([
-        import('@/lib/active-agent-note-send'),
-        import('@/lib/agent-message-send')
+      const [, { activeAgentNotesSendFailureMessage }, { sendMessageToAgent }] = await Promise.all([
+        import('@/lib/agent-session/messaging/terminal/active-agent-note-send'),
+        import('@/lib/agent-session/messaging/terminal/active-agent-note-send-result'),
+        import('@/lib/agent-session/messaging/agent-message-send')
       ])
-      const result = await sendMessageToAgent({
+      const sending = sendMessageToAgent({
         worktreeId: mode.worktreeId,
         prompt: mode.prompt,
         target: runningAgentMessageTarget(target)
@@ -164,6 +169,8 @@ export function createUiAgentActions(
         })
         return { status: 'status-unavailable' as const, code: 'runtime-unverifiable' as const }
       })
+      mode.onPromptHandedOff?.(sending)
+      const result = await sending
 
       const stillCurrent = (): boolean => {
         const current = get().agentSendPopoverTargetMode
@@ -201,12 +208,11 @@ export function createUiAgentActions(
         return false
       }
 
-      // Delivery ack, telemetry, and toast belong to the completed send, not to the
-      // picker that launched it; only the close below is scoped to this instance.
+      // Completed-send delivery/telemetry/toast outlive the picker; only closing it is scoped to this instance.
       mode.onPromptDelivered?.()
       const [{ toast }, { track }] = await Promise.all([
         import('sonner'),
-        import('@/lib/telemetry')
+        import('@/diagnostics/telemetry/telemetry')
       ])
       track('agent_prompt_sent', {
         agent_kind: agentKindForAgentType(agentType),

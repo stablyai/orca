@@ -2,11 +2,10 @@ import type * as React from 'react'
 import type { RefObject } from 'react'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { OrcaHooks, SetupAgentStartupPolicy } from '../../../../shared/orca-yaml-hook-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { GitHubRepositoryIdentity } from '../../../../shared/github/pull-request-types'
-import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
-import type { IssueCommandReadResult } from '@/runtime/runtime-hooks-client'
-import type { SmartGitHubPrStartPointSelection } from './source-selection-decisions'
+import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace/creation/workspace-create-error-format'
+import type { IssueCommandReadResult } from '@/runtime/repo-hooks/runtime-hooks-client'
+import type { SmartSourceSelection } from './source-selection-decisions'
 
 export type ComposerAsyncModel = {
   yamlHooks: OrcaHooks | null
@@ -17,7 +16,6 @@ export type ComposerAsyncModel = {
   setLoadedIssueCommand: React.Dispatch<
     React.SetStateAction<{ contextKey: string; result: IssueCommandReadResult } | null>
   >
-  currentIssueCommand: IssueCommandReadResult | null
   issueCommandTemplate: string
   hasLoadedIssueCommand: boolean
   setupDecision: 'skip' | 'run' | null
@@ -42,6 +40,9 @@ export type ComposerAsyncModel = {
   setCreateMultiple: React.Dispatch<React.SetStateAction<boolean>>
   advancedOpen: boolean
   setAdvancedOpen: React.Dispatch<React.SetStateAction<boolean>>
+  setupChoiceRevealRequest: number
+  revealSetupChoice: () => void
+  clearSetupChoiceReveal: () => void
   sparseEnabled: boolean
   setSparseEnabled: React.Dispatch<React.SetStateAction<boolean>>
   sparseDirectories: string
@@ -67,7 +68,7 @@ export type ComposerAsyncModel = {
   branchAutoNameRef: RefObject<string>
   lastAutoNoteRef: RefObject<string>
   noteRef: RefObject<string>
-  smartGitHubPrStartPointSelectionRef: RefObject<SmartGitHubPrStartPointSelection | null>
+  smartSourceSelectionRef: RefObject<SmartSourceSelection | null>
   composerRef: RefObject<HTMLDivElement | null>
   promptTextareaRef: RefObject<HTMLTextAreaElement | null>
   promptCaretFrameRef: RefObject<number | null>
@@ -79,5 +80,4 @@ export type ComposerAsyncModel = {
   setSelectedRepoSlug: React.Dispatch<React.SetStateAction<GitHubRepositoryIdentity | null>>
   selectedRepoPath: string | undefined
   selectedRepoPathRef: RefObject<string | undefined>
-  selectedRepoSettingsRef: RefObject<Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null>
 }

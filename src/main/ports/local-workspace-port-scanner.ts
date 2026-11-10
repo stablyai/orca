@@ -1,9 +1,10 @@
 import type { WorkspacePortProbe, WorkspacePortScanResult } from '../../shared/workspace-ports'
 import { advertisedUrlWatcher, type AdvertisedUrlWatcher } from './advertised-url-watcher'
 import {
+  attributePortsToWorkspaces,
   compareWorkspacePorts,
   enrichPort,
-  normalizeWorkspacePortProbes,
+  resolveWorkspacePortProbes,
   reconcileAdvertisedUrls
 } from './local-workspace-port-attribution'
 import { scanPlatformListeningPorts } from './local-workspace-platform-port-scanner'
@@ -20,7 +21,7 @@ const MAX_PORTS = 200
 
 export async function scanWorkspacePorts(
   worktrees: WorkspacePortProbe[],
-  urlWatcher: Pick<AdvertisedUrlWatcher, 'lookup' | 'reconcileScan'> = advertisedUrlWatcher,
+  urlWatcher: Pick<AdvertisedUrlWatcher, 'lookup' | 'reconcileWorkspaces'> = advertisedUrlWatcher,
   options: WorkspacePortScanOptions = {}
 ): Promise<WorkspacePortScanResult> {
   const cooldown = getWorkspacePortScanCooldown()
@@ -35,15 +36,17 @@ export async function scanWorkspacePorts(
   try {
     const { ports: rawPorts, metadataAvailable } = await scanPlatformListeningPorts(options)
     recordWorkspacePortScanSuccess()
-    const normalizedWorktrees = normalizeWorkspacePortProbes(worktrees)
-    // Why (#11161): without cwd/command-line every port looks unattributed, and
-    // reconciling that would read as "the listener vanished" and evict cached
-    // advertised URLs that only live PTY output can ever restore.
-    if (metadataAvailable) {
-      reconcileAdvertisedUrls(rawPorts, normalizedWorktrees, urlWatcher)
+    const { probes: normalizedWorktrees, complete } = await resolveWorkspacePortProbes(
+      worktrees,
+      options.requireMetadata
+    )
+    const attributedPorts = attributePortsToWorkspaces(rawPorts, normalizedWorktrees)
+    // Missing metadata cannot prove listener loss; eviction would discard URLs only PTY output can restore (#11161).
+    if (metadataAvailable && complete) {
+      reconcileAdvertisedUrls(attributedPorts, normalizedWorktrees, urlWatcher)
     }
-    const ports = rawPorts
-      .map((port) => enrichPort(port, normalizedWorktrees, urlWatcher))
+    const ports = attributedPorts
+      .map((port) => enrichPort(port, urlWatcher))
       .sort(compareWorkspacePorts)
       .slice(0, MAX_PORTS)
     return { platform: process.platform, scannedAt: Date.now(), ports }

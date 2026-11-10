@@ -1,7 +1,7 @@
 import React, { useCallback } from 'react'
 import { ChevronDown, Send, X } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { DashboardAgentChildDisclosure } from './DashboardAgentChildDisclosure'
 
 type DashboardAgentRowTrailingControlsProps = {
@@ -12,8 +12,7 @@ type DashboardAgentRowTrailingControlsProps = {
   relativeTimestamp: string | null
   expanded: boolean
   hideExpand: boolean
-  /** Subagent child rows have no store entry of their own to dismiss —
-   *  offering the X would be a silent no-op. */
+  /** Subagents have no dismissible store entry; hide the otherwise inert control. */
   hideDismiss?: boolean
   sendTargetStatus?: 'eligible' | 'disabled' | 'sending'
   onDismiss: (paneKey: string) => void
@@ -35,8 +34,8 @@ export function DashboardAgentRowTrailingControls({
   onToggleExpanded,
   onSendTargetClick
 }: DashboardAgentRowTrailingControlsProps): React.JSX.Element {
-  // Why: stop propagation so clicking nested row controls does not also
-  // activate the agent row or parent worktree card.
+  const t = useTranslate()
+  // Nested controls must not activate the agent row or enclosing worktree card.
   const stopMouseDown = useCallback((event: React.MouseEvent) => {
     event.stopPropagation()
   }, [])
@@ -72,15 +71,17 @@ export function DashboardAgentRowTrailingControls({
   )
 
   const hasChildDisclosure = Boolean(childAgentCount && onToggleChildAgents)
+  const hasSendTargetButton = sendTargetStatus === 'eligible' || sendTargetStatus === 'sending'
 
   return (
     <span
       className={cn(
-        'relative ml-auto flex shrink-0 items-center justify-end',
-        hasChildDisclosure ? 'h-5 gap-1' : 'h-3.5 w-12'
+        // Reserve the disclosure height even when there are no children.
+        'relative ml-auto flex h-5 shrink-0 items-center justify-end',
+        hasChildDisclosure ? 'gap-1' : hasSendTargetButton ? 'min-w-12' : 'w-12'
       )}
     >
-      {(sendTargetStatus === 'eligible' || sendTargetStatus === 'sending') && (
+      {hasSendTargetButton && (
         <button
           type="button"
           onClick={handleInlineSendTargetClick}
@@ -88,21 +89,17 @@ export function DashboardAgentRowTrailingControls({
           onKeyDown={stopKeyDown}
           disabled={sendTargetStatus === 'sending'}
           className={cn(
-            'worktree-agent-send-target-button absolute right-0 top-1/2 z-10 inline-flex h-5 -translate-y-1/2 items-center gap-1 rounded-md border px-1.5 text-[10px] font-medium leading-none transition-[background-color,border-color,color,opacity]',
-            hasChildDisclosure && 'static translate-y-0',
+            'worktree-agent-send-target-button z-10 inline-flex h-5 items-center gap-1 rounded-md border px-1.5 text-[10px] font-medium leading-none transition-[background-color,border-color,color,opacity] whitespace-nowrap',
             sendTargetStatus === 'sending' && 'cursor-progress opacity-75'
           )}
-          aria-label={translate(
+          aria-label={t(
             'auto.components.dashboard.DashboardAgentRow.0272969e28',
             'Send to this agent'
           )}
-          title={translate(
-            'auto.components.dashboard.DashboardAgentRow.0272969e28',
-            'Send to this agent'
-          )}
+          title={t('auto.components.dashboard.DashboardAgentRow.0272969e28', 'Send to this agent')}
         >
           <Send className="size-3" />
-          <span>{translate('auto.components.dashboard.DashboardAgentRow.912e136cd9', 'Send')}</span>
+          <span>{t('auto.components.dashboard.DashboardAgentRow.912e136cd9', 'Send')}</span>
         </button>
       )}
       {!hasChildDisclosure && !sendTargetStatus && hideDismiss && relativeTimestamp !== null && (
@@ -113,8 +110,7 @@ export function DashboardAgentRowTrailingControls({
           {relativeTimestamp}
         </span>
       )}
-      {/* Why: timestamp and dismiss-X share one slot. On no-hover devices the X
-          is visible by default, so the timestamp must yield there too. */}
+      {/* Timestamp and dismiss share a slot; always-visible dismiss controls on touch must hide the timestamp too. */}
       {!hasChildDisclosure && !sendTargetStatus && !hideDismiss && relativeTimestamp !== null && (
         <span className="relative grid grid-cols-1 grid-rows-1 shrink-0 items-center justify-items-end">
           <span
@@ -137,11 +133,11 @@ export function DashboardAgentRowTrailingControls({
               'can-hover:opacity-0 transition-opacity duration-150',
               'group-hover/agent-row:opacity-100 focus-visible:opacity-100'
             )}
-            aria-label={translate(
+            aria-label={t(
               'auto.components.dashboard.DashboardAgentRow.b06e13fcf7',
               'Dismiss agent'
             )}
-            title={translate('auto.components.dashboard.DashboardAgentRow.5ae84475cc', 'Dismiss')}
+            title={t('auto.components.dashboard.DashboardAgentRow.5ae84475cc', 'Dismiss')}
           >
             <X className="size-3.5" />
           </button>
@@ -158,11 +154,8 @@ export function DashboardAgentRowTrailingControls({
             'can-hover:opacity-0 transition-opacity duration-150',
             'group-hover/agent-row:opacity-100 focus-visible:opacity-100'
           )}
-          aria-label={translate(
-            'auto.components.dashboard.DashboardAgentRow.b06e13fcf7',
-            'Dismiss agent'
-          )}
-          title={translate('auto.components.dashboard.DashboardAgentRow.5ae84475cc', 'Dismiss')}
+          aria-label={t('auto.components.dashboard.DashboardAgentRow.b06e13fcf7', 'Dismiss agent')}
+          title={t('auto.components.dashboard.DashboardAgentRow.5ae84475cc', 'Dismiss')}
         >
           <X className="size-3.5" />
         </button>
@@ -188,14 +181,8 @@ export function DashboardAgentRowTrailingControls({
           className="inline-flex shrink-0 items-center justify-center text-muted-foreground/60 hover:text-foreground"
           aria-label={
             expanded
-              ? translate(
-                  'auto.components.dashboard.DashboardAgentRow.a41fb5376e',
-                  'Collapse details'
-                )
-              : translate(
-                  'auto.components.dashboard.DashboardAgentRow.a743da52ff',
-                  'Expand details'
-                )
+              ? t('auto.components.dashboard.DashboardAgentRow.a41fb5376e', 'Collapse details')
+              : t('auto.components.dashboard.DashboardAgentRow.a743da52ff', 'Expand details')
           }
           aria-expanded={expanded}
         >

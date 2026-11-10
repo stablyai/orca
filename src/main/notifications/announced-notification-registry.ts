@@ -1,22 +1,59 @@
-/**
- * The notification ids main actually announced — a desktop banner shown or a mobile alert sent —
- * per subject pane, until an acknowledgement of that subject retires them.
- *
- * Why by subject rather than by an id the renderer rebuilds: an id is minted from the status row's
- * `stateStartedAt`, and that field moves after the fact (settling pushes the working start into
- * history, and a settled structured row is re-stamped by later journal rows such as a cancel's
- * status note). Main is where the announcement happens, so main is where the record belongs.
- *
- * In memory only, like the banner registry it sits beside; after a restart the renderer's id
- * rebuilt from the current row is the fallback.
- */
+// Track pending and delivered announcements: journal updates can change renderer-reconstructed IDs.
+// Memory-only; after restart, the current status row supplies the fallback ID.
+import type { StructuredAttentionOrigin } from '../../shared/agent-session/agent-session-attention'
+import type {
+  NotificationAttentionAcknowledgement,
+  NotificationDispatchRequest,
+  StructuredNotificationRead
+} from '../../shared/notification-settings-types'
+import {
+  NotificationAttentionReadFrontiers,
+  notificationWasAcknowledged
+} from '../../shared/notification-attention-acknowledgement'
 const DEFAULT_MAX_SUBJECTS = 256
 const DEFAULT_MAX_IDS_PER_SUBJECT = 20
 
+export type AnnouncedNotification = {
+  id: string
+  origin?: StructuredAttentionOrigin
+  paneKey?: string
+  pendingOnly?: true
+} & Pick<NotificationDispatchRequest, 'worktreeId' | 'executionHost' | 'workspaceExecutionHostId'>
+
 export type AnnouncedNotificationRegistry = {
-  record: (paneKey: string, notificationId: string) => void
-  /** Every id announced for this subject since the last take; the entry is dropped. */
-  take: (paneKey: string) => readonly string[]
+  record: (
+    paneKey: string,
+    notificationId: string,
+    origin?: StructuredAttentionOrigin,
+    workspace?: Pick<
+      NotificationDispatchRequest,
+      'worktreeId' | 'executionHost' | 'workspaceExecutionHostId'
+    >
+  ) => readonly AnnouncedNotification[]
+  reserveNative: (
+    paneKey: string,
+    notificationId: string,
+    origin?: StructuredAttentionOrigin,
+    workspace?: Pick<
+      NotificationDispatchRequest,
+      'worktreeId' | 'executionHost' | 'workspaceExecutionHostId'
+    >
+  ) => {
+    evicted: readonly AnnouncedNotification[]
+    isCurrent: () => boolean
+    release: () => void
+  }
+  takeAcknowledged: (
+    acknowledgement: NotificationAttentionAcknowledgement,
+    executionHost?: NotificationDispatchRequest['executionHost']
+  ) => readonly AnnouncedNotification[]
+  hasAnnouncement: (request: Pick<NotificationDispatchRequest, 'notificationId'>) => boolean
+  wasRead: (request: NotificationDispatchRequest) => boolean
+  hasUnpositionedSubject: (paneKey: string) => boolean
+  /** Journal-positioned announcements require a covering read to retire. */
+  isBounded: (notificationId: string) => boolean
+  /** Take unpositioned announcements and those covered by this read. */
+  take: (paneKey: string, read?: StructuredNotificationRead) => readonly AnnouncedNotification[]
 }
 
 export function createAnnouncedNotificationRegistry(limits?: {
@@ -25,26 +62,101 @@ export function createAnnouncedNotificationRegistry(limits?: {
 }): AnnouncedNotificationRegistry {
   const maxSubjects = limits?.maxSubjects ?? DEFAULT_MAX_SUBJECTS
   const maxIdsPerSubject = limits?.maxIdsPerSubject ?? DEFAULT_MAX_IDS_PER_SUBJECT
-  const idsBySubject = new Map<string, string[]>()
+  const idsBySubject = new Map<string, AnnouncedNotification[]>()
+
+  const frontiers = new NotificationAttentionReadFrontiers()
+  const takeSelected = (paneKey: string, selects: (entry: AnnouncedNotification) => boolean) => {
+    const ids = idsBySubject.get(paneKey) ?? []
+    const selected = ids.filter(selects)
+    const kept = ids.filter((entry) => !selects(entry))
+    if (kept.length > 0) {
+      idsBySubject.set(paneKey, kept)
+    } else {
+      idsBySubject.delete(paneKey)
+    }
+    return selected
+  }
+  const record = (
+    paneKey: string,
+    notificationId: string,
+    origin?: StructuredAttentionOrigin,
+    workspace?: Pick<
+      NotificationDispatchRequest,
+      'worktreeId' | 'executionHost' | 'workspaceExecutionHostId'
+    >,
+    pendingOnly?: true
+  ) => {
+    const ids = (idsBySubject.get(paneKey) ?? []).filter((entry) => entry.id !== notificationId)
+    const { worktreeId, executionHost, workspaceExecutionHostId } = workspace ?? {}
+    const entry: AnnouncedNotification = {
+      id: notificationId,
+      paneKey,
+      origin,
+      worktreeId,
+      executionHost,
+      workspaceExecutionHostId,
+      ...(pendingOnly ? { pendingOnly } : {})
+    }
+    ids.push(entry)
+    const evicted = ids.slice(0, Math.max(0, ids.length - maxIdsPerSubject))
+    // Reinsertion evicts the least recently announced subject.
+    idsBySubject.delete(paneKey)
+    idsBySubject.set(paneKey, ids.slice(-maxIdsPerSubject))
+    if (idsBySubject.size > maxSubjects) {
+      const oldest = idsBySubject.keys().next().value
+      if (oldest !== undefined) {
+        evicted.push(...(idsBySubject.get(oldest) ?? []))
+        idsBySubject.delete(oldest)
+      }
+    }
+    return { entry, evicted }
+  }
 
   return {
-    record: (paneKey, notificationId) => {
-      const ids = (idsBySubject.get(paneKey) ?? []).filter((id) => id !== notificationId)
-      ids.push(notificationId)
-      // Re-insert so eviction drops the subject least recently announced, not the first ever seen.
-      idsBySubject.delete(paneKey)
-      idsBySubject.set(paneKey, ids.slice(-maxIdsPerSubject))
-      if (idsBySubject.size > maxSubjects) {
-        const oldest = idsBySubject.keys().next().value
-        if (oldest !== undefined) {
-          idsBySubject.delete(oldest)
+    hasUnpositionedSubject: (paneKey) =>
+      idsBySubject.get(paneKey)?.some((entry) => !entry.origin && !entry.pendingOnly) ?? false,
+    hasAnnouncement: (request) =>
+      !request.notificationId ||
+      [...idsBySubject.values()].some((entries) =>
+        entries.some((entry) => entry.id === request.notificationId)
+      ),
+    wasRead: (request) => frontiers.covers({ ...request, origin: request.structuredOrigin }),
+    takeAcknowledged: (acknowledgement, executionHost) => {
+      frontiers.accept(acknowledgement, executionHost)
+      return [...idsBySubject.keys()].flatMap((paneKey) =>
+        takeSelected(paneKey, (entry) =>
+          notificationWasAcknowledged(entry, acknowledgement, executionHost)
+        )
+      )
+    },
+    record: (paneKey, notificationId, origin, workspace) =>
+      record(paneKey, notificationId, origin, workspace).evicted,
+    reserveNative: (paneKey, notificationId, origin, workspace) => {
+      const existing = idsBySubject.get(paneKey)?.find((entry) => entry.id === notificationId)
+      const pendingOnly = existing && !existing.pendingOnly ? undefined : true
+      const { entry, evicted } = record(paneKey, notificationId, origin, workspace, pendingOnly)
+      return {
+        evicted,
+        isCurrent: () => idsBySubject.get(paneKey)?.includes(entry) ?? false,
+        release: () => {
+          takeSelected(paneKey, (candidate) => candidate === entry && !!candidate.pendingOnly)
         }
       }
     },
-    take: (paneKey) => {
-      const ids = idsBySubject.get(paneKey) ?? []
-      idsBySubject.delete(paneKey)
-      return ids
+    isBounded: (notificationId) =>
+      [...idsBySubject.values()].some((entries) =>
+        entries.some((entry) => entry.id === notificationId && entry.origin !== undefined)
+      ),
+    take: (paneKey, read) => {
+      if (read) {
+        frontiers.accept({ reads: [read] }, read.executionHost)
+      }
+      return takeSelected(
+        paneKey,
+        (entry) =>
+          !entry.origin ||
+          Boolean(read && notificationWasAcknowledged(entry, { reads: [read] }, read.executionHost))
+      )
     }
   }
 }

@@ -1,12 +1,14 @@
 import React from 'react'
-import type { ActiveRightSidebarTab, ActivityBarPosition } from '@/store/slices/editor'
-import type { CheckStatus } from '../../../../shared/github/pull-request-types'
-import { cn } from '@/lib/utils'
+import type { ActiveRightSidebarTab } from '../../../../shared/ui-chrome-types'
+import type { ActivityBarPosition } from '@/store/slices/editor/types/open-file'
+import type { CheckStatus as CoarseCheckStatus } from '../../../../shared/github/pull-request-types'
+type CheckStatus = CoarseCheckStatus | 'cancelled'
+import { cn } from '@/lib/class-names'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { ActivityBarButton, TopActivityOverflowMenu } from './activity-bar-buttons'
 import type { ActivityBarItem } from './activity-bar-buttons'
-import { ActivityBarPositionMenu } from './activity-bar-position-menu'
+import { ActivityBarPositionMenu, useActivityBarContextPlugin } from './activity-bar-position-menu'
 import {
   RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME,
   RIGHT_SIDEBAR_TOP_ACTIVITY_STRIP_CLASS_NAME,
@@ -34,22 +36,23 @@ export function RightSidebarTopActivityBar({
   activityBarPosition: ActivityBarPosition
   onChangeActivityBarPosition: (pos: ActivityBarPosition) => void
 }): React.JSX.Element {
+  const contextPlugin = useActivityBarContextPlugin()
   return (
-    /* ── Top activity bar: horizontal icon row ── */
     <ContextMenu>
       <div className="flex h-[36px] min-h-[36px] items-center border-b border-border right-sidebar-header-inset right-sidebar-header-drag overflow-hidden">
         {!hasDesktopWindowChrome && (
-          <TooltipProvider delayDuration={400}>
-            <ContextMenuTrigger asChild>
+          <TooltipProvider>
+            <ContextMenuTrigger
+              asChild
+              onContextMenu={contextPlugin.onContextMenu}
+              onPointerDown={contextPlugin.onPointerDown}
+            >
               <div
                 ref={topActivityStripRef}
                 className={RIGHT_SIDEBAR_TOP_ACTIVITY_STRIP_CLASS_NAME}
               >
                 <div className={cn('flex min-w-0 shrink', RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME)}>
-                  {/* Why: the top strip shares a narrow titlebar with the close
-                      button and desktop window controls. Overflow goes
-                      behind More instead of creating a horizontally
-                      scrollable toolbar. */}
+                  {/* Use More for overflow because this narrow titlebar also holds close/window controls. */}
                   <div className="flex min-w-0 shrink">
                     {topActivityLayout.visibleItems.map((item) => (
                       <ActivityBarButton
@@ -84,7 +87,7 @@ export function RightSidebarTopActivityBar({
           </TooltipProvider>
         )}
         {hasDesktopWindowChrome && (
-          <TooltipProvider delayDuration={400}>
+          <TooltipProvider>
             <div
               className={cn(
                 'ml-auto flex shrink-0 items-center pr-1',
@@ -97,16 +100,17 @@ export function RightSidebarTopActivityBar({
         )}
       </div>
       {hasDesktopWindowChrome && (
-        <TooltipProvider delayDuration={400}>
-          <ContextMenuTrigger asChild>
+        <TooltipProvider>
+          <ContextMenuTrigger
+            asChild
+            onContextMenu={contextPlugin.onContextMenu}
+            onPointerDown={contextPlugin.onPointerDown}
+          >
             <div
               ref={topActivityStripRef}
               className={RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_CLASS_NAME}
             >
-              {/* Why: custom desktop chrome has fixed native-style controls
-                  in the titlebar area; keep sidebar navigation in the
-                  sidebar body so the titlebar stays visually native
-                  instead of crowded. */}
+              {/* Keep navigation in the body so custom desktop titlebars remain visually native and uncrowded. */}
               <div className="flex min-w-0 flex-1 shrink">
                 {topActivityLayout.visibleItems.map((item) => (
                   <ActivityBarButton
@@ -134,6 +138,7 @@ export function RightSidebarTopActivityBar({
       <ActivityBarPositionMenu
         currentPosition={activityBarPosition}
         onChangePosition={onChangeActivityBarPosition}
+        pluginKey={contextPlugin.pluginKey}
       />
     </ContextMenu>
   )

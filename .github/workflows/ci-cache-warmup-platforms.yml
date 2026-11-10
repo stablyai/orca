@@ -1,0 +1,84 @@
+name: Warm shared CI platform caches
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ci-cache-warmup.yml'
+      - '.github/workflows/ci-cache-warmup-platform-jobs.yml'
+      - '.github/workflows/ci-cache-warmup-platforms.yml'
+      - '.github/actions/install-node-dependencies/**'
+      - '.github/actions/restore-pnpm-verification/**'
+      - '.github/actions/prepare-native-runtime/**'
+      - '.github/actions/prepare-windows-cli-launcher/**'
+      - '.github/actions/prepare-windows-agent-hook/**'
+      - 'config/scripts/native-build/windows/windows-rust-build-scope.mjs'
+      - '.github/actions/prepare-orcad-prebuilds/**'
+      - 'config/scripts/native-build/node-addons/native-dependency-lock-digest.mjs'
+      - 'config/scripts/orcad-distribution/prebuilds/orcad-windows-prebuild-cache.mjs'
+      - 'config/scripts/native-build/node-addons/shared-native-build.mjs'
+      - 'config/scripts/artifact-storage/atomic-publication/shared-tree-publish.mjs'
+      - 'config/scripts/native-build-entry*.cjs'
+      - 'config/scripts/native-build/node-addons/native-build-entry*.cjs'
+      - 'config/scripts/orcad-distribution/prebuilds/orcad-prebuild-node-gyp.mjs'
+      - 'config/scripts/native-build/windows/msbuild-file-tracking.mjs'
+      - 'config/scripts/native-build/windows/windows-pe-imports.mjs'
+      - 'config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs'
+      - 'config/scripts/orcad-distribution/prebuilds/orcad-prebuild-slot-contents.mjs'
+      - 'config/scripts/orcad-distribution/prebuilds/pinned-node-downloads.mjs'
+      - 'config/scripts/node-runtime/archive-identity/update-node-runtime-pin.mjs'
+      - 'config/scripts/workspace-package-build/build-workspace-packages.mjs'
+      - 'src/shared/node-runtime-pin.ts'
+      - 'src/packages/process-host/**'
+      - '.github/actions/prepare-git-compatibility/**'
+      - '.github/actions/prepare-linux-package-fixture/**'
+      - 'config/docker/headless-serve-shutdown/**'
+      - 'config/docker/cli-launch-contract/**'
+      - 'config/docker/daemon-shutdown-descendants/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - '.npmrc'
+      - 'config/pnpmfile.cjs'
+      - 'config/scripts/native-build/node-addons/ensure-native-runtime.mjs'
+      - 'config/scripts/native-build/windows/initialize-windows-native-toolchain.mjs'
+      - 'config/scripts/native-build/windows/capture-windows-native-environment.cmd'
+      - 'config/scripts/native-build/node-addons/rebuild-native-deps.mjs'
+      - 'config/scripts/native-build/node-addons/node-pty-job-ownership.cjs'
+      - 'config/scripts/native-build/windows/windows-pe-machine.cjs'
+      - 'config/scripts/native-build/windows/windows-process-tree-gyp-rebuild.mjs'
+      - 'config/scripts/native-build/windows/windows-process-tree-creation-time.cjs'
+      - 'config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs'
+      - 'config/scripts/electron-installation/platform-layout/electron-platform-path.mjs'
+      - 'config/scripts/zip-extractor-command.mjs'
+      - 'src/shared/zip-extractor-command.ts'
+      - 'config/scripts/electron-installation/shared-dist-cache/shared-electron-dist-cache.mjs'
+      - 'config/scripts/artifact-storage/reflink-copy/space-sharing-copy.mjs'
+      - 'config/patches/**'
+      - 'native/windows-registry/**'
+      - 'native/windows-security/**'
+      - 'native/windows-cli-launcher/**'
+      - 'native/windows-agent-hook/**'
+      - 'config/scripts/native-build/windows/build-windows-cli-launcher.mjs'
+      - 'config/scripts/native-build/windows/build-windows-agent-hook.mjs'
+      - 'config/scripts/native-build/windows/windows-rust-executable-build.mjs'
+      - 'resources/build/icon.ico'
+      - 'mobile/Gemfile'
+      - 'mobile/Gemfile.lock'
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    paths:
+      - '.github/workflows/ci-cache-warmup-platforms.yml'
+      - '.github/workflows/ci-cache-warmup-platform-jobs.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-cache-warmup-platforms-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  warm-platforms:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    uses: ./.github/workflows/ci-cache-warmup-platform-jobs.yml

@@ -1,6 +1,3 @@
-// Pure parsing/arg-building for the `adb` CLI. No process execution here:
-// the caller prepends the resolved adb binary path to every arg array.
-
 export type AndroidAdbDeviceState =
   | 'device'
   | 'offline'
@@ -20,11 +17,6 @@ export type AndroidAdbDevice = {
 
 const DEVICES_HEADER = 'List of devices attached'
 
-/**
- * Parses `adb devices -l` stdout. Skips the header and blank lines. Each device
- * line is `<serial>\s+<state>[ key:value ...]`; `model`/`product` come from the
- * trailing `-l` tokens when present.
- */
 export function parseAdbDevices(stdout: string): AndroidAdbDevice[] {
   const devices: AndroidAdbDevice[] = []
 
@@ -40,8 +32,7 @@ export function parseAdbDevices(stdout: string): AndroidAdbDevice[] {
       continue
     }
 
-    // `no permissions` is the only two-word state adb emits; every other state
-    // is a single token, so the key:value tokens start one position later.
+    // "no permissions" occupies two state tokens before the key:value metadata.
     let state: AndroidAdbDeviceState
     let tokenStart: number
     if (tokens[1] === 'no' && tokens[2] === 'permissions') {
@@ -78,10 +69,7 @@ export function parseAdbDevices(stdout: string): AndroidAdbDevice[] {
   return devices
 }
 
-/**
- * Parses `adb shell wm size` stdout. An `Override size:` line reflects the
- * active resolution, so it wins over `Physical size:` when both are present.
- */
+// Override size is the active resolution when both sizes are reported.
 export function parseWmSize(stdout: string): { width: number; height: number } | null {
   const override = /Override size:\s*(\d+)x(\d+)/.exec(stdout)
   const physical = /Physical size:\s*(\d+)x(\d+)/.exec(stdout)
@@ -92,7 +80,6 @@ export function parseWmSize(stdout: string): { width: number; height: number } |
   return { width: Number(match[1]), height: Number(match[2]) }
 }
 
-/** `adb shell getprop sys.boot_completed` prints `1` once the framework is up. */
 export function isBootCompleted(getpropStdout: string): boolean {
   return getpropStdout.trim() === '1'
 }

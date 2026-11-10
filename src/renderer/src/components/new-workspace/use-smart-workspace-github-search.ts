@@ -1,16 +1,18 @@
 import { useEffect, useMemo } from 'react'
-import { normalizeGitHubLinkQuery, parseGitHubIssueOrPRLink } from '@/lib/github-links'
+import { useAppStore } from '@/store'
+import { normalizeGitHubLinkQuery } from '../../../../shared/new-workspace/github-links'
+import { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
 import {
   lookupGitHubWorkItemByOwnerRepoForSource,
   lookupGitHubWorkItemForSource
-} from '@/lib/github-work-item-source-lookup'
-import { lookupSmartGitHubSubmitItem } from '@/lib/smart-github-submit'
+} from '@/lib/work-items/github/github-work-item-source-lookup'
+import { lookupSmartGitHubSubmitItem } from '@/lib/work-items/github/smart-github-submit'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { RESULT_LIMIT } from './smart-workspace-name-field-model'
 import { resolveSmartWorkspaceGithubDirectLink } from './smart-workspace-github-direct-link'
-import type { useSmartWorkspaceNameFieldFoundation } from './use-smart-workspace-name-field-foundation'
+import type { useWorkItemSourceFoundation } from './use-work-item-source-foundation'
 
-type Foundation = ReturnType<typeof useSmartWorkspaceNameFieldFoundation>
+type Foundation = ReturnType<typeof useWorkItemSourceFoundation>
 
 export function useSmartWorkspaceGithubSearch({
   foundation,
@@ -36,7 +38,6 @@ export function useSmartWorkspaceGithubSearch({
     fetchWorkItemsAcrossRepos,
     setGithubItems,
     setGithubLoading,
-    setOpen,
     setCrossRepoPrompt
   } = foundation
   const normalizedGhQuery = useMemo(
@@ -50,6 +51,7 @@ export function useSmartWorkspaceGithubSearch({
 
   useEffect(() => {
     if (disabled || !shouldQueryGithub) {
+      setCrossRepoPrompt(null)
       setGithubItems([])
       setGithubLoading(false)
       return
@@ -80,7 +82,6 @@ export function useSmartWorkspaceGithubSearch({
           }
           setGithubItems(result.items)
           if (result.prompt) {
-            setOpen(false)
             setCrossRepoPrompt(result.prompt)
           }
         })
@@ -151,6 +152,14 @@ export function useSmartWorkspaceGithubSearch({
 
     const trimmed = normalizedGhQuery.query.trim()
     const query = trimmed ? normalizedGhQuery.query : ''
+    // Why: a search held by a pending source save is obsolete, not empty; re-read once it settles, unless cleaned up.
+    const controller = new AbortController()
+    const readCurrent = <T>(read: () => Promise<T | undefined>) =>
+      useAppStore.getState().githubSourceCollections.readCurrent(
+        repoBackedSearchTargets.map((target) => target.repo),
+        read,
+        controller.signal
+      )
     if (repoBackedSearchTargets.length === 1) {
       const target = repoBackedSearchTargets[0]
       const cached = getCachedWorkItems(
@@ -166,11 +175,13 @@ export function useSmartWorkspaceGithubSearch({
       } else {
         setGithubLoading(true)
       }
-      void fetchWorkItems(target.repo.id, target.repo.path, RESULT_LIMIT, query, {
-        sourceContext: target.githubSourceContext
-      })
+      void readCurrent(() =>
+        fetchWorkItems(target.repo.id, target.repo.path, RESULT_LIMIT, query, {
+          sourceContext: target.githubSourceContext
+        })
+      )
         .then((items) => {
-          if (!stale) {
+          if (!stale && items) {
             setGithubItems(items.slice(0, RESULT_LIMIT))
           }
         })
@@ -186,19 +197,21 @@ export function useSmartWorkspaceGithubSearch({
         })
     } else {
       setGithubLoading(true)
-      void fetchWorkItemsAcrossRepos(
-        repoBackedSearchTargets.map((target) => ({
-          repoId: target.repo.id,
-          path: target.repo.path,
-          executionHostId: target.repo.executionHostId,
-          sourceContext: target.githubSourceContext
-        })),
-        RESULT_LIMIT,
-        RESULT_LIMIT,
-        query
+      void readCurrent(() =>
+        fetchWorkItemsAcrossRepos(
+          repoBackedSearchTargets.map((target) => ({
+            repoId: target.repo.id,
+            path: target.repo.path,
+            executionHostId: target.repo.executionHostId,
+            sourceContext: target.githubSourceContext
+          })),
+          RESULT_LIMIT,
+          RESULT_LIMIT,
+          query
+        )
       )
         .then((result) => {
-          if (!stale) {
+          if (!stale && result) {
             setGithubItems(result.items)
           }
         })
@@ -215,6 +228,7 @@ export function useSmartWorkspaceGithubSearch({
     }
     return () => {
       stale = true
+      controller.abort()
     }
   }, [
     debouncedQuery,
@@ -234,7 +248,6 @@ export function useSmartWorkspaceGithubSearch({
     repoSlugCacheRef,
     setCrossRepoPrompt,
     setGithubItems,
-    setGithubLoading,
-    setOpen
+    setGithubLoading
   ])
 }

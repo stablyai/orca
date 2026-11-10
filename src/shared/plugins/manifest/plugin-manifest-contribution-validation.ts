@@ -1,0 +1,277 @@
+import type { RefinementCtx } from 'zod'
+import { isPluginCommandAliasActionId } from '../contributions/plugin-command-actions'
+import { getKeybindingConflictIdentity } from '../../keybindings'
+import {
+  PLUGIN_EVENT_CAPABILITY,
+  type PluginEventName
+} from '../contributions/plugin-event-contribution'
+import type { PluginFileMatch } from '../contributions/plugin-file-match'
+import { validatePluginStatusBarItems } from '../contributions/plugin-status-bar-item-contribution'
+
+type IdentifiedContribution = { id: string }
+type PathContribution = { path: string }
+
+type ContributionValidationManifest = {
+  main?: string
+  contributes: {
+    panels: IdentifiedContribution[]
+    commands: (IdentifiedContribution & {
+      action?: string
+      replaces?: string
+      when?: 'global' | 'workspace'
+    })[]
+    events: { on: PluginEventName }[]
+    hooks: { event: string }[]
+    languagePacks: { locale: string }[]
+    keybindings: { command: string; key: string; when?: 'global' | 'workspace' }[]
+    vmRecipes: PathContribution[]
+    themes: IdentifiedContribution[]
+    terminalThemes: IdentifiedContribution[]
+    iconThemes: IdentifiedContribution[]
+    fonts: { family: string }[]
+    syntaxes: (IdentifiedContribution & PluginFileMatch & { scopeName: string })[]
+    customEditors: (IdentifiedContribution & PluginFileMatch)[]
+    newFiles: IdentifiedContribution[]
+    settings: { key: string }[]
+    statusBarItems: { id: string; command?: string }[]
+  }
+  capabilities: { kind: string }[]
+}
+
+function rejectDuplicateValues(
+  entries: readonly unknown[],
+  valueOf: (entry: unknown) => string,
+  path: string,
+  label: string,
+  ctx: RefinementCtx
+): void {
+  const seen = new Set<string>()
+  for (const [index, entry] of entries.entries()) {
+    const value = valueOf(entry)
+    if (seen.has(value)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['contributes', path, index],
+        message: `duplicate ${label}: ${value}`
+      })
+    }
+    seen.add(value)
+  }
+}
+
+export function validatePluginManifestContributions(
+  manifest: ContributionValidationManifest,
+  ctx: RefinementCtx
+): void {
+  for (const path of [
+    'panels',
+    'commands',
+    'themes',
+    'terminalThemes',
+    'iconThemes',
+    'syntaxes',
+    'customEditors',
+    'newFiles'
+  ] as const) {
+    rejectDuplicateValues(
+      manifest.contributes[path],
+      (entry) => (entry as IdentifiedContribution).id,
+      path,
+      `${path} id`,
+      ctx
+    )
+  }
+  rejectDuplicateValues(
+    manifest.contributes.syntaxes.map((syntax) => syntax.scopeName),
+    String,
+    'syntaxes',
+    'syntax scope name',
+    ctx
+  )
+  for (const point of ['syntaxes', 'customEditors'] as const) {
+    for (const [index, item] of manifest.contributes[point].entries()) {
+      for (const field of ['extensions', 'filenames'] as const) {
+        const values = item[field].map((value) => value.toLowerCase())
+        if (new Set(values).size !== values.length) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['contributes', point, index, field],
+            message: `duplicate ${field === 'extensions' ? 'extension' : 'file name'}`
+          })
+        }
+      }
+    }
+  }
+  for (const [index, editor] of manifest.contributes.customEditors.entries()) {
+    if (editor.extensions.length === 0 && editor.filenames.length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['contributes', 'customEditors', index, 'extensions'],
+        message: 'must list at least one extension or file name'
+      })
+    }
+  }
+  rejectDuplicateValues(
+    manifest.contributes.languagePacks,
+    (entry) => (entry as { locale: string }).locale.toLowerCase(),
+    'languagePacks',
+    'language pack locale',
+    ctx
+  )
+  rejectDuplicateValues(
+    manifest.contributes.fonts.map((font) => font.family.toLowerCase()),
+    String,
+    'fonts',
+    'font family',
+    ctx
+  )
+  rejectDuplicateValues(
+    manifest.contributes.settings.map((setting) => setting.key),
+    String,
+    'settings',
+    'setting key',
+    ctx
+  )
+  if (
+    manifest.contributes.settings.length > 0 &&
+    !manifest.capabilities.some((capability) => capability.kind === 'settings:own')
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['contributes', 'settings'],
+      message: 'needs the "settings:own" capability, which is how the plugin reads them'
+    })
+  }
+  rejectDuplicateValues(
+    manifest.contributes.vmRecipes,
+    (entry) => (entry as PathContribution).path,
+    'vmRecipes',
+    'vmRecipes path',
+    ctx
+  )
+  const keybindingIdentities = new Set<string>()
+  for (const [index, keybinding] of manifest.contributes.keybindings.entries()) {
+    const identities = (['darwin', 'linux', 'win32'] as const).map((platform) =>
+      getKeybindingConflictIdentity(keybinding.key, platform)
+    )
+    if (identities.some((identity) => keybindingIdentities.has(identity))) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['contributes', 'keybindings', index],
+        message: `duplicate keybinding: ${keybinding.key.toLowerCase()}`
+      })
+    }
+    identities.forEach((identity) => keybindingIdentities.add(identity))
+  }
+
+  validatePluginStatusBarItems(manifest.contributes, ctx)
+  const commands = new Map(manifest.contributes.commands.map((command) => [command.id, command]))
+  for (const [index, command] of manifest.contributes.commands.entries()) {
+    if (command.action !== undefined && !isPluginCommandAliasActionId(command.action)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['contributes', 'commands', index, 'action'],
+        message: `unknown built-in action: ${command.action}`
+      })
+    }
+  }
+  validateCommandReplacements(manifest.contributes.commands, ctx)
+  for (const [index, keybinding] of manifest.contributes.keybindings.entries()) {
+    const command = commands.get(keybinding.command)
+    if (!command) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['contributes', 'keybindings', index, 'command'],
+        message: `unknown contributed command: ${keybinding.command}`
+      })
+      continue
+    }
+    const commandWhen = command.when ?? 'global'
+    if (keybinding.when !== undefined && keybinding.when !== commandWhen) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['contributes', 'keybindings', index, 'when'],
+        message: "must match its command's when"
+      })
+    }
+  }
+
+  if (
+    !manifest.main &&
+    manifest.contributes.commands.some((command) => command.action === undefined)
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['main'],
+      message: 'required when contributes.commands contains a worker command'
+    })
+  }
+  rejectDuplicateValues(
+    manifest.contributes.hooks.map((hook) => hook.event),
+    String,
+    'hooks',
+    'hook',
+    ctx
+  )
+  if (!manifest.main && manifest.contributes.hooks.length > 0) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['main'],
+      message: 'required when contributes.hooks is non-empty'
+    })
+  }
+  if (!manifest.main && manifest.contributes.events.length > 0) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['main'],
+      message: 'required when contributes.events is non-empty'
+    })
+  }
+  for (const [index, subscription] of manifest.contributes.events.entries()) {
+    const required = PLUGIN_EVENT_CAPABILITY[subscription.on]
+    if (
+      required !== null &&
+      !manifest.capabilities.some((capability) => capability.kind === required)
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['contributes', 'events', index, 'on'],
+        message: `${subscription.on} requires the ${required} capability`
+      })
+    }
+  }
+}
+
+/** A replacement runs worker code in place of a built-in, so it cannot also be a built-in alias. */
+function validateCommandReplacements(
+  commands: readonly { replaces?: string; action?: string }[],
+  ctx: RefinementCtx
+): void {
+  const replaced = new Set<string>()
+  for (const [index, command] of commands.entries()) {
+    if (command.replaces === undefined) {
+      continue
+    }
+    const path = ['contributes', 'commands', index, 'replaces']
+    if (!isPluginCommandAliasActionId(command.replaces)) {
+      ctx.addIssue({
+        code: 'custom',
+        path,
+        message: `unknown built-in action: ${command.replaces}`
+      })
+    } else if (command.action !== undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path,
+        message: 'a replacing command runs the worker; drop action'
+      })
+    } else if (replaced.has(command.replaces)) {
+      ctx.addIssue({
+        code: 'custom',
+        path,
+        message: `another command already replaces ${command.replaces}`
+      })
+    }
+    replaced.add(command.replaces)
+  }
+}

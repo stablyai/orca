@@ -1,7 +1,7 @@
 import {
   isEventTargetInsideFloatingWorkspacePanel,
   isFloatingWorkspaceTerminalInputTarget
-} from '@/lib/floating-workspace-terminal-actions'
+} from '@/components/floating-terminal/floating-workspace-terminal-actions'
 
 let lastReportedFloatingFocus: { panelFocused: boolean; terminalFocused: boolean } | null = null
 let lastReportedFloatingFocusFn: unknown = null
@@ -28,9 +28,4 @@ export function reportFloatingFocus(next: EventTarget | null, release = false): 
   }
   lastReportedFloatingFocus = { panelFocused, terminalFocused }
   setFloatingFocus({ panelFocused, terminalFocused })
-}
-
-export function clearReportedFloatingFocusCache(): void {
-  lastReportedFloatingFocus = null
-  lastReportedFloatingFocusFn = null
 }

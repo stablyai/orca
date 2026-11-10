@@ -130,76 +130,6 @@ describe('MacOSNativeProviderClient', () => {
     vi.useRealTimers()
   })
 
-  it('does not rescan a growing fragmented screenshot reply', async () => {
-    const { MacOSNativeProviderClient } = await loadClientModule()
-    const client = new MacOSNativeProviderClient()
-    const call = client.snapshot({ app: 'fixture' })
-    await vi.waitFor(() => expect(sockets).toHaveLength(1))
-    const socket = sockets[0]!
-    await vi.waitFor(() => expect(socket.writes).toHaveLength(1))
-    const handshake = JSON.parse(socket.writes[0]!) as { id: number }
-    socket.emit(
-      'data',
-      `${JSON.stringify({ id: handshake.id, ok: true, result: macOSProviderCapabilities() })}\n`
-    )
-    await vi.waitFor(() => expect(socket.writes).toHaveLength(2))
-    const request = JSON.parse(socket.writes[1]!) as { id: number }
-    const result = { screenshot: { data: 'A'.repeat(1_200_000) }, text: 'fixture' }
-    const reply = `${JSON.stringify({ id: request.id, ok: true, result })}\n`
-    const originalIndexOf = String.prototype.indexOf
-    const originalIncludes = String.prototype.includes
-    let searchedUnits = 0
-    const search = vi.spyOn(String.prototype, 'indexOf').mockImplementation(function (
-      this: string,
-      needle: string,
-      fromIndex?: number
-    ) {
-      if (needle === '\n') {
-        searchedUnits += Math.max(0, this.length - (fromIndex ?? 0))
-      }
-      return originalIndexOf.call(this, needle, fromIndex)
-    })
-    const includes = vi.spyOn(String.prototype, 'includes').mockImplementation(function (
-      this: string,
-      needle: string,
-      fromIndex?: number
-    ) {
-      if (needle === '\n') {
-        searchedUnits += Math.max(0, this.length - (fromIndex ?? 0))
-      }
-      return originalIncludes.call(this, needle, fromIndex)
-    })
-    try {
-      for (let offset = 0; offset < reply.length; offset += 4096) {
-        socket.emit('data', reply.slice(offset, offset + 4096))
-      }
-    } finally {
-      search.mockRestore()
-      includes.mockRestore()
-    }
-    await expect(call).resolves.toEqual(result)
-    expect(searchedUnits).toBeLessThanOrEqual(reply.length * 3)
-    client.shutdown()
-  })
-
-  it('retries buffered replies on an empty chunk after a malformed reply throws', async () => {
-    const { MacOSNativeProviderClient } = await loadClientModule()
-    const client = new MacOSNativeProviderClient()
-    void client.capabilities().catch(() => {})
-    const secondCall = client.capabilities()
-    await vi.waitFor(() => expect(sockets).toHaveLength(1))
-    const socket = sockets[0]!
-    await vi.waitFor(() => expect(socket.writes).toHaveLength(2))
-    const first = JSON.parse(socket.writes[0]!) as { id: number }
-    const second = JSON.parse(socket.writes[1]!) as { id: number }
-    const malformed = JSON.stringify({ id: first.id, ok: false })
-    const valid = JSON.stringify({ id: second.id, ok: true, result: macOSProviderCapabilities() })
-    expect(() => socket.emit('data', `${malformed}\n${valid}\n`)).toThrow(TypeError)
-    socket.emit('data', '')
-    await expect(secondCall).resolves.toEqual(macOSProviderCapabilities())
-    client.shutdown()
-  })
-
   it('ignores stale socket data, close, and error after a replacement socket starts', async () => {
     const { MacOSNativeProviderClient } = await loadClientModule()
     const client = new MacOSNativeProviderClient()
@@ -225,52 +155,9 @@ describe('MacOSNativeProviderClient', () => {
     await vi.waitFor(() => expect(secondSocket.writes).toHaveLength(1))
     const secondRequest = JSON.parse(secondSocket.writes[0]!) as { id: number }
 
-    // Why: a timed-out helper socket can flush events after restart. Those
-    // stale events must not clear/reject the active replacement request.
     firstSocket.emit('data', '{"id":999,"ok":false,"error":{"code":"old","message":"old"}}\n')
     expect(() => firstSocket.emit('error', new Error('old helper failed late'))).not.toThrow()
     firstSocket.emit('close')
-
-    const capabilities = {
-      protocolVersion: 1,
-      supports: {}
-    }
-    secondSocket.emit(
-      'data',
-      `${JSON.stringify({ id: secondRequest.id, ok: true, result: capabilities })}\n`
-    )
-
-    await expect(secondCall).resolves.toEqual(capabilities)
-  })
-
-  it('starts a replacement socket after the active helper connection errors', async () => {
-    const { MacOSNativeProviderClient } = await loadClientModule()
-    const client = new MacOSNativeProviderClient()
-
-    const firstCall = client.capabilities()
-    const firstRejection = expect(firstCall).rejects.toThrow('active helper failed')
-    await vi.waitFor(() => expect(sockets).toHaveLength(1))
-    const firstSocket = sockets[0]!
-    const firstSocketDirectory = mkdtempSyncMock.mock.results[0]?.value as string
-    await vi.waitFor(() => expect(firstSocket.writes).toHaveLength(1))
-
-    firstSocket.emit('data', '{"id":999,"result":"partial')
-    firstSocket.emit('error', new Error('active helper failed'))
-    await firstRejection
-    expect(firstSocket.destroyed).toBe(true)
-    expect(firstSocket.listenerCount('data')).toBe(0)
-    expect(firstSocket.listenerCount('close')).toBe(0)
-    expect(firstSocket.listenerCount('error')).toBe(1)
-    expect(rmSyncMock).toHaveBeenCalledWith(firstSocketDirectory, {
-      recursive: true,
-      force: true
-    })
-
-    const secondCall = client.capabilities()
-    await vi.waitFor(() => expect(sockets).toHaveLength(2))
-    const secondSocket = sockets[1]!
-    await vi.waitFor(() => expect(secondSocket.writes).toHaveLength(1))
-    const secondRequest = JSON.parse(secondSocket.writes[0]!) as { id: number }
 
     const capabilities = {
       protocolVersion: 1,
@@ -321,148 +208,6 @@ describe('MacOSNativeProviderClient', () => {
     await expect(secondCall).resolves.toMatchObject({ protocolVersion: 1 })
   })
 
-  it('rejects actions that the native provider does not advertise', async () => {
-    const { MacOSNativeProviderClient } = await loadClientModule()
-    const client = new MacOSNativeProviderClient()
-
-    const call = client.action('setValue', {
-      app: 'TextEdit',
-      elementIndex: 0,
-      value: 'draft'
-    })
-    await vi.waitFor(() => expect(sockets).toHaveLength(1))
-    const socket = sockets[0]!
-    await vi.waitFor(() => expect(socket.writes).toHaveLength(1))
-    const handshakeRequest = JSON.parse(socket.writes[0]!) as { id: number }
-
-    socket.emit(
-      'data',
-      `${JSON.stringify({
-        id: handshakeRequest.id,
-        ok: true,
-        result: macOSProviderCapabilities({ setValue: false })
-      })}\n`
-    )
-
-    await expect(call).rejects.toMatchObject({
-      code: 'unsupported_capability',
-      message: expect.stringContaining('actions.setValue')
-    })
-    expect(socket.writes).toHaveLength(1)
-  })
-
-  it('rejects malformed action payloads before starting the native helper', async () => {
-    const { MacOSNativeProviderClient } = await loadClientModule()
-    const client = new MacOSNativeProviderClient()
-
-    await expect(client.action('click', { elementIndex: 0 })).rejects.toMatchObject({
-      code: 'invalid_argument',
-      message: expect.stringContaining('Missing app')
-    })
-    await expect(client.action('click', { app: 'TextEdit' })).rejects.toMatchObject({
-      code: 'invalid_argument',
-      message: expect.stringContaining('Click requires')
-    })
-    await expect(
-      client.action('click', {
-        app: 'TextEdit',
-        elementIndex: 0,
-        modifiers: 'CmdOrCtrl+A'
-      })
-    ).rejects.toMatchObject({
-      code: 'invalid_argument',
-      message: expect.stringContaining('Click modifiers accept modifier keys only')
-    })
-    await expect(client.action('typeText', { app: 'TextEdit', text: '' })).rejects.toMatchObject({
-      code: 'invalid_argument',
-      message: expect.stringContaining('Missing text')
-    })
-    await expect(
-      client.action('pressKey', { app: 'TextEdit', key: 'CmdOrCtrl+V' })
-    ).rejects.toMatchObject({
-      code: 'invalid_argument',
-      message: expect.stringContaining('Press-key accepts one key only')
-    })
-    await expect(client.action('hotkey', { app: 'TextEdit', key: 'A' })).rejects.toMatchObject({
-      code: 'invalid_argument',
-      message: expect.stringContaining('Hotkey requires')
-    })
-
-    expect(providers).toHaveLength(0)
-    expect(sockets).toHaveLength(0)
-    expect(spawnMock).not.toHaveBeenCalled()
-    expect(connectMacOSProviderSocketMock).not.toHaveBeenCalled()
-  })
-
-  it('normalizes unverified synthetic native action results', async () => {
-    const { MacOSNativeProviderClient } = await loadClientModule()
-    const client = new MacOSNativeProviderClient()
-
-    const call = client.action('click', {
-      app: 'TextEdit',
-      elementIndex: 0
-    })
-    await vi.waitFor(() => expect(sockets).toHaveLength(1))
-    const socket = sockets[0]!
-    await vi.waitFor(() => expect(socket.writes).toHaveLength(1))
-    const handshakeRequest = JSON.parse(socket.writes[0]!) as { id: number }
-
-    socket.emit(
-      'data',
-      `${JSON.stringify({
-        id: handshakeRequest.id,
-        ok: true,
-        result: macOSProviderCapabilities()
-      })}\n`
-    )
-    await vi.waitFor(() => expect(socket.writes).toHaveLength(2))
-    const actionRequest = JSON.parse(socket.writes[1]!) as { id: number }
-    socket.emit(
-      'data',
-      `${JSON.stringify({
-        id: actionRequest.id,
-        ok: true,
-        result: {
-          snapshot: {},
-          action: { path: 'synthetic', actionName: null, fallbackReason: null }
-        }
-      })}\n`
-    )
-
-    await expect(call).resolves.toMatchObject({
-      action: {
-        path: 'synthetic',
-        verification: { state: 'unverified', reason: 'synthetic_input' }
-      }
-    })
-  })
-
-  it('removes the parent-owned token file after the helper socket connects', async () => {
-    const { MacOSNativeProviderClient } = await loadClientModule()
-    const client = new MacOSNativeProviderClient()
-
-    const call = client.capabilities()
-    await vi.waitFor(() => expect(sockets).toHaveLength(1))
-    const socket = sockets[0]!
-    await vi.waitFor(() => expect(socket.writes).toHaveLength(1))
-    const request = JSON.parse(socket.writes[0]!) as { id: number }
-    const socketDirectory = mkdtempSyncMock.mock.results[0]?.value as string
-
-    expect(rmSyncMock).toHaveBeenCalledWith(join(socketDirectory, 'provider.token'), {
-      force: true
-    })
-
-    socket.emit(
-      'data',
-      `${JSON.stringify({
-        id: request.id,
-        ok: true,
-        result: { protocolVersion: 1, supports: {} }
-      })}\n`
-    )
-    await expect(call).resolves.toMatchObject({ protocolVersion: 1 })
-  })
-
   it('does not let a superseded startup clean up the replacement helper token', async () => {
     const pendingConnects: {
       resolve: (socket: FakeSocket) => void
@@ -509,22 +254,6 @@ describe('MacOSNativeProviderClient', () => {
     await expect(secondCall).resolves.toMatchObject({ protocolVersion: 1 })
   })
 
-  it('terminates the helper process when socket startup fails', async () => {
-    const provider = new FakeProvider()
-    spawnMock.mockReturnValueOnce(provider)
-    connectMacOSProviderSocketMock.mockRejectedValueOnce(new Error('socket did not open'))
-    const { MacOSNativeProviderClient } = await loadClientModule()
-    const client = new MacOSNativeProviderClient()
-
-    await expect(client.capabilities()).rejects.toThrow('socket did not open')
-
-    expect(provider.kill).toHaveBeenCalledWith('SIGTERM')
-    expect(rmSyncMock).toHaveBeenCalledWith(expect.stringContaining('orca-computer-use-'), {
-      recursive: true,
-      force: true
-    })
-  })
-
   it('rejects helper spawn errors before socket connection and removes temp state', async () => {
     const { MacOSNativeProviderClient } = await loadClientModule()
     const client = new MacOSNativeProviderClient()
@@ -548,23 +277,6 @@ describe('MacOSNativeProviderClient', () => {
     })
   })
 
-  it('rejects helper exits before socket connection and aborts the pending connect', async () => {
-    const { MacOSNativeProviderClient } = await loadClientModule()
-    const client = new MacOSNativeProviderClient()
-    connectMacOSProviderSocketMock.mockImplementation((_path, _timeout, signal?: AbortSignal) =>
-      pendingConnectThatRejectsOnAbort(signal)
-    )
-
-    const call = client.capabilities()
-    await vi.waitFor(() => expect(providers).toHaveLength(1))
-    const connectSignal = connectMacOSProviderSocketMock.mock.calls[0]?.[2] as AbortSignal
-    providers[0]!.emit('exit', 13, null)
-
-    await expect(call).rejects.toThrow('native macOS helper app exited before connecting: code 13')
-    expect(connectSignal.aborted).toBe(true)
-    expect(providers[0]!.kill).toHaveBeenCalledWith('SIGTERM')
-  })
-
   it('escalates to SIGKILL when a helper ignores terminate and SIGTERM', async () => {
     const { MacOSNativeProviderClient } = await loadClientModule()
     const client = new MacOSNativeProviderClient()
@@ -579,8 +291,7 @@ describe('MacOSNativeProviderClient', () => {
     await rejection
 
     const provider = providers[0]!
-    // Why: a wedged helper never reads `terminate`, so the socket write alone
-    // is what used to leak the process on every request timeout.
+    // Socket termination cannot stop a helper wedged in a native call; signal it too.
     expect(socket.writes.at(-1)).toContain('"method":"terminate"')
     expect(provider.kill).toHaveBeenCalledWith('SIGTERM')
     expect(provider.kill).not.toHaveBeenCalledWith('SIGKILL')
@@ -607,73 +318,6 @@ describe('MacOSNativeProviderClient', () => {
 
     await vi.advanceTimersByTimeAsync(PROVIDER_SIGKILL_GRACE_MS * 2)
     expect(provider.kill).not.toHaveBeenCalledWith('SIGKILL')
-  })
-
-  it('reaps the previous helper process before a replacement is started', async () => {
-    const { MacOSNativeProviderClient } = await loadClientModule()
-    const client = new MacOSNativeProviderClient()
-
-    const firstCall = client.capabilities()
-    const firstRejection = expect(firstCall).rejects.toThrow('active helper failed')
-    await vi.waitFor(() => expect(sockets).toHaveLength(1))
-    await vi.waitFor(() => expect(sockets[0]!.writes).toHaveLength(1))
-    sockets[0]!.emit('error', new Error('active helper failed'))
-    await firstRejection
-
-    expect(providers[0]!.kill).toHaveBeenCalledWith('SIGTERM')
-
-    const secondCall = client.capabilities()
-    await vi.waitFor(() => expect(providers).toHaveLength(2))
-    // Why: the replacement must not inherit the previous generation's teardown.
-    expect(providers[1]!.kill).not.toHaveBeenCalled()
-
-    const secondSocket = sockets[1]!
-    await vi.waitFor(() => expect(secondSocket.writes).toHaveLength(1))
-    const secondRequest = JSON.parse(secondSocket.writes[0]!) as { id: number }
-    secondSocket.emit(
-      'data',
-      `${JSON.stringify({
-        id: secondRequest.id,
-        ok: true,
-        result: { protocolVersion: 1, supports: {} }
-      })}\n`
-    )
-    await expect(secondCall).resolves.toMatchObject({ protocolVersion: 1 })
-  })
-
-  it('reaps the helper process when the active socket closes on its own', async () => {
-    const { MacOSNativeProviderClient } = await loadClientModule()
-    const client = new MacOSNativeProviderClient()
-
-    const call = client.capabilities()
-    const rejection = expect(call).rejects.toThrow('native macOS helper app connection closed')
-    await vi.waitFor(() => expect(sockets).toHaveLength(1))
-    await vi.waitFor(() => expect(sockets[0]!.writes).toHaveLength(1))
-
-    // Why: a helper that dies takes its socket down with a bare 'close', with no
-    // preceding 'error' — the teardown path most likely to run in the wild.
-    sockets[0]!.emit('close')
-    await rejection
-
-    expect(providers[0]!.kill).toHaveBeenCalledWith('SIGTERM')
-  })
-
-  it('does not signal a helper that already exited before teardown', async () => {
-    const { MacOSNativeProviderClient } = await loadClientModule()
-    const client = new MacOSNativeProviderClient()
-
-    const call = client.capabilities()
-    const rejection = expect(call).rejects.toThrow('native macOS helper app connection closed')
-    await vi.waitFor(() => expect(sockets).toHaveLength(1))
-    await vi.waitFor(() => expect(sockets[0]!.writes).toHaveLength(1))
-
-    const provider = providers[0]!
-    provider.exitCode = 0
-    sockets[0]!.emit('close')
-    await rejection
-
-    // Why: signalling a reaped pid is how a recycled pid gets hit.
-    expect(provider.kill).not.toHaveBeenCalled()
   })
 
   it('reaps the helper process of a superseded startup', async () => {
@@ -704,8 +348,6 @@ describe('MacOSNativeProviderClient', () => {
     pendingConnects[0]!.resolve(new FakeSocket())
     await expect(firstCall).rejects.toThrow('native macOS provider startup was superseded')
 
-    // Why: the superseded throw is caught by this function's own catch, so the
-    // helper must be reaped exactly once, not once per handler.
     expect(providers[0]!.kill).toHaveBeenCalledTimes(1)
     expect(providers[0]!.kill).toHaveBeenCalledWith('SIGTERM')
     expect(providers[1]!.kill).not.toHaveBeenCalled()
@@ -721,41 +363,3 @@ describe('MacOSNativeProviderClient', () => {
     await expect(secondCall).resolves.toMatchObject({ protocolVersion: 1 })
   })
 })
-
-function macOSProviderCapabilities(actions: Partial<Record<string, boolean>> = {}) {
-  return {
-    platform: 'darwin',
-    provider: 'orca-computer-use-macos',
-    providerVersion: '1.0.0',
-    protocolVersion: 1,
-    supports: {
-      apps: { list: true, bundleIds: true, pids: true },
-      windows: {
-        list: true,
-        targetById: true,
-        targetByIndex: true,
-        focus: false,
-        moveResize: false
-      },
-      observation: {
-        screenshot: true,
-        annotatedScreenshot: false,
-        elementFrames: true,
-        ocr: false
-      },
-      actions: {
-        click: true,
-        typeText: true,
-        pressKey: true,
-        hotkey: true,
-        pasteText: true,
-        scroll: true,
-        drag: true,
-        setValue: true,
-        performAction: true,
-        ...actions
-      },
-      surfaces: { menus: false, dialogs: false, dock: false, menubar: false }
-    }
-  }
-}

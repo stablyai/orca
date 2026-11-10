@@ -1,6 +1,10 @@
 import { realpathSync } from 'node:fs'
 import { join } from 'node:path'
-import { isPlainObject, readHooksJson, writeHooksJson } from '../agent-hooks/installer-utils'
+import {
+  isPlainObject,
+  readHooksJson
+} from '../agent-hooks/installation/configuration/hooks-json-read'
+import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
 
 // Qoder 1.1.64 writes this exact shape after accepting its folder-trust prompt.
 export function withQoderTrustedWorkspace(
@@ -24,14 +28,18 @@ export function withQoderTrustedWorkspace(
   }
 }
 
-export function markQoderWorkspaceTrusted(workspacePath: string, home: string): void {
+export function markQoderWorkspaceTrusted(
+  workspacePath: string,
+  home: string,
+  configDirName: '.qoder' | '.qoder-cn' = '.qoder'
+): void {
   let canonicalPath = workspacePath
   try {
     canonicalPath = realpathSync.native(workspacePath)
   } catch {
-    /* Keep the supplied path when absent. */
+    // Missing paths retain their supplied spelling.
   }
-  const configPath = join(home, '.qoder', 'settings.json')
+  const configPath = join(home, configDirName, 'settings.json')
   const config = readHooksJson(configPath)
   if (!config) {
     return

@@ -44,6 +44,26 @@ export class RepoMaintenanceSchedule {
     this.refCooldownUntil.set(key, this.now() + cooldownMs)
   }
 
+  async probeOptOut(
+    target: RepoRefMaintenanceTarget,
+    signal: AbortSignal,
+    span: RefMaintenanceSpan,
+    canWrite: () => boolean
+  ): Promise<boolean | { error: unknown }> {
+    try {
+      if (!(await target.isOptedOut?.(signal)) || signal.aborted || !canWrite()) {
+        return false
+      }
+      this.postponeIndex(target.key, REF_MAINTENANCE_CLEAN_COOLDOWN_MS)
+      this.settleRefs(target.key, span, 'opted_out', REF_MAINTENANCE_CLEAN_COOLDOWN_MS)
+      return true
+    } catch (error) {
+      span.setAttribute('repo.maintenance_error', String(error))
+      span.setAttribute('repo.maintenance_outcome', 'failed' satisfies RefMaintenanceOutcome)
+      return { error }
+    }
+  }
+
   async maintain(
     target: RepoRefMaintenanceTarget,
     signal: AbortSignal,
@@ -56,6 +76,9 @@ export class RepoMaintenanceSchedule {
     const outcome = await target.maintainPackIndex(signal, span, canWrite)
     if (signal.aborted || outcome === 'deferred') {
       return outcome
+    }
+    if (outcome !== 'written' && !canWrite()) {
+      return 'deferred'
     }
     const cooldown =
       outcome === 'failed'

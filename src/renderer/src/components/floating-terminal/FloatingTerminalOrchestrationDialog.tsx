@@ -6,23 +6,18 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { AgentSkillSetupPanel } from '@/components/settings/AgentSkillSetupPanel'
+import { AgentSkillSetupPanel } from '@/components/skills/setup/AgentSkillSetupPanel'
 import { IntegrationStatusPill } from '@/components/integration-status-pill'
-import { SkillFreshnessStatusPill } from '@/components/skills/SkillFreshnessStatusPill'
-import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
-import {
-  ORCHESTRATION_SKILL_INSTALL_COMMAND,
-  ORCHESTRATION_SKILL_UPDATE_COMMAND
-} from '@/lib/orchestration-install-command'
+import { SkillFreshnessStatusPill } from '@/components/skills/freshness/SkillFreshnessStatusPill'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
-import { refreshSkillFreshness } from '@/hooks/useSkillFreshness'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
+import { refreshSkillFreshness } from '@/hooks/skills/freshness/useSkillFreshness'
 import { useAppStore } from '@/store'
-import { buildSkillCommandForRuntime } from '@/components/settings/CliSkillRuntimeSetup'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type FloatingTerminalOrchestrationDialogProps = {
   open: boolean
@@ -35,19 +30,8 @@ export function FloatingTerminalOrchestrationDialog({
   onOpenChange,
   onSetupStateChange
 }: FloatingTerminalOrchestrationDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const activeSkillRuntime = useActiveProjectSkillRuntime()
-  const installCommand = !activeSkillRuntime.installDisabledReason
-    ? buildSkillCommandForRuntime(
-        ORCHESTRATION_SKILL_INSTALL_COMMAND,
-        activeSkillRuntime.agentRuntime
-      )
-    : ORCHESTRATION_SKILL_INSTALL_COMMAND
-  const updateCommand = !activeSkillRuntime.installDisabledReason
-    ? buildSkillCommandForRuntime(
-        ORCHESTRATION_SKILL_UPDATE_COMMAND,
-        activeSkillRuntime.agentRuntime
-      )
-    : ORCHESTRATION_SKILL_UPDATE_COMMAND
   const {
     installed: orchestrationSkillDetected,
     loading: orchestrationSkillLoading,
@@ -59,8 +43,7 @@ export function FloatingTerminalOrchestrationDialog({
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
 
-  // Why: detecting the installed skill marks setup complete; refresh the banner
-  // so it hides once the same quick-install flow used in Settings/CLI tips lands.
+  // Refresh setup completion after installation so the orchestration banner hides.
   useEffect(() => {
     if (orchestrationSkillDetected) {
       onSetupStateChange()
@@ -69,7 +52,7 @@ export function FloatingTerminalOrchestrationDialog({
 
   const recheckOrchestrationSkill = async (): Promise<boolean> => {
     const installed = await refreshOrchestrationSkill()
-    if (activeSkillRuntime.canUseLocalSkillFreshness) {
+    if (activeSkillRuntime.bundledSkillTarget) {
       await refreshSkillFreshness()
     }
     return installed
@@ -79,28 +62,27 @@ export function FloatingTerminalOrchestrationDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="gap-4 sm:max-w-[620px]">
         <DialogHeader>
-          {/* Why: the panel renders with hideHeader, so the modal owns the title
-              and status pill — avoiding a duplicate heading inside the modal. */}
+          {/* The panel hides its header, so the modal owns the title and status. */}
           <div className="flex flex-wrap items-center gap-2 pr-6">
             <DialogTitle>
-              {translate(
+              {t(
                 'auto.components.floating.terminal.FloatingTerminalOrchestrationDialog.543f325a14',
                 'Enable orchestration'
               )}
             </DialogTitle>
             {orchestrationSkillLoading && !orchestrationSkillDetected ? (
               <IntegrationStatusPill tone="neutral">
-                {translate(
+                {t(
                   'auto.components.floating.terminal.FloatingTerminalOrchestrationDialog.dfd021ce46',
                   'Checking...'
                 )}
               </IntegrationStatusPill>
             ) : orchestrationSkillDetected ? (
-              activeSkillRuntime.canUseLocalSkillFreshness ? (
+              activeSkillRuntime.canUseSkillFreshness ? (
                 <SkillFreshnessStatusPill skillName={ORCHESTRATION_SKILL_NAME} />
               ) : (
                 <IntegrationStatusPill tone="connected">
-                  {translate(
+                  {t(
                     'auto.components.floating.terminal.FloatingTerminalOrchestrationDialog.630c0ac8c8',
                     'Installed'
                   )}
@@ -108,7 +90,7 @@ export function FloatingTerminalOrchestrationDialog({
               )
             ) : (
               <IntegrationStatusPill tone="attention">
-                {translate(
+                {t(
                   'auto.components.floating.terminal.FloatingTerminalOrchestrationDialog.05d7aabc20',
                   'Not installed'
                 )}
@@ -116,7 +98,7 @@ export function FloatingTerminalOrchestrationDialog({
             )}
           </div>
           <DialogDescription className="sr-only">
-            {translate(
+            {t(
               'auto.components.floating.terminal.FloatingTerminalOrchestrationDialog.6f0aed26b8',
               'Install the Orca CLI and orchestration skill so agents can coordinate through Orca.'
             )}
@@ -124,32 +106,23 @@ export function FloatingTerminalOrchestrationDialog({
         </DialogHeader>
 
         <AgentSkillSetupPanel
-          title={translate(
+          title={t(
             'auto.components.floating.terminal.FloatingTerminalOrchestrationDialog.1cd3f8af64',
             'Orchestration skill'
           )}
-          description={translate(
+          description={t(
             'auto.components.floating.terminal.FloatingTerminalOrchestrationDialog.f726054620',
             'Enables agents to hand off context and coordinate work through Orca.'
           )}
-          command={installCommand}
-          installedCommand={updateCommand}
-          terminalTitle="Orchestration setup"
-          terminalAriaLabel="Orchestration skill install terminal"
-          terminalWorktreeId="floating-terminal-orchestration-skill-terminal"
-          terminalShellOverride={activeSkillRuntime.terminalShellOverride}
-          terminalRuntime={activeSkillRuntime.agentRuntime}
+          skillNames={[ORCHESTRATION_SKILL_NAME]}
           installed={orchestrationSkillDetected}
           loading={orchestrationSkillLoading}
           error={activeSkillRuntime.installDisabledReason ?? orchestrationSkillError}
           installDisabled={Boolean(activeSkillRuntime.installDisabledReason)}
           variant="inline"
           hideHeader
-          installLabel={translate(
-            'auto.components.skills.SkillInstallDialog.39acb9e8f4',
-            'Install skill'
-          )}
-          onBeforeOpenTerminal={() => {
+          installLabel={t('auto.components.skills.SkillInstallDialog.39acb9e8f4', 'Install skill')}
+          onBeforeInstall={() => {
             useAppStore.getState().recordFeatureInteraction('agent-orchestration-setup')
           }}
           onRecheck={recheckOrchestrationSkill}

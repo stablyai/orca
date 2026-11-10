@@ -1,9 +1,12 @@
+import type { AppState } from '@/store/types'
+import { useOwnedDiffComments } from '../../../diff-comments/use-diff-comment-owner'
+import { withoutMarkdownReviewNotes } from '@/lib/editor/markdown/review-notes/markdown-review-notes-setting'
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { formatDiffComments } from '@/lib/diff-comments-format'
-import { describeClipboardWriteFailure } from '@/lib/clipboard-write-failure'
-import type { DiffCommentsClearOptions } from '@/store/slices/diffComments'
+import { useTranslate } from '@/i18n/use-translate'
+import { formatDiffComments } from '../../../../../../shared/diff-comments-format'
+import { describeClipboardWriteFailure } from '@/lib/clipboard/clipboard-write-failure'
 import { useVisibleWorktreeDiffComments } from '../../../diff-comments/use-visible-worktree-diff-comments'
 import {
   countPendingDiffCommentsClear,
@@ -13,27 +16,20 @@ import {
 } from './diff-comments-clear-dialog-state'
 import { useCopyFeedbackState } from './copy-feedback'
 
-/**
- * Owns the diff-comment ("notes") shelf state for the active worktree: the comment projection, the
- * clipboard copy affordance and the clear-notes confirmation lifecycle.
- */
 export function useSourceControlDiffCommentNotes({
   activeWorktreeId,
   clearDiffComments,
   clearDiffCommentsForFile
 }: {
   activeWorktreeId: string | null
-  clearDiffComments: (worktreeId: string, options?: DiffCommentsClearOptions) => Promise<boolean>
-  clearDiffCommentsForFile: (
-    worktreeId: string,
-    filePath: string,
-    options?: DiffCommentsClearOptions
-  ) => Promise<boolean>
+  clearDiffComments: AppState['clearDiffComments']
+  clearDiffCommentsForFile: AppState['clearDiffCommentsForFile']
 }) {
+  const t = useTranslate()
   const { comments: diffCommentsForActive, markdownReviewNotesEnabled } =
-    useVisibleWorktreeDiffComments(activeWorktreeId)
+    useVisibleWorktreeDiffComments(activeWorktreeId, 'selection')
   const diffCommentCount = diffCommentsForActive.length
-  // Why: compute per-file comment counts once per render so rows don't each re-filter the full list.
+  // Index counts once so each row need not refilter every comment.
   const diffCommentCountByPath = useMemo(() => {
     const map = new Map<string, number>()
     for (const c of diffCommentsForActive) {
@@ -50,7 +46,7 @@ export function useSourceControlDiffCommentNotes({
   const [pendingDiffCommentsClear, setPendingDiffCommentsClear] =
     useState<PendingDiffCommentsClear | null>(null)
   const [isClearingDiffComments, setIsClearingDiffComments] = useState(false)
-  // Why: reset during render so a worktree switch never paints the previous confirmation.
+  // Reset during render so workspace switches cannot paint the old confirmation.
   const [notesWorktreeId, setNotesWorktreeId] = useState(activeWorktreeId)
   if (notesWorktreeId !== activeWorktreeId) {
     setNotesWorktreeId(activeWorktreeId)
@@ -65,8 +61,7 @@ export function useSourceControlDiffCommentNotes({
       await window.api.ui.writeClipboardText(diffCommentsPrompt)
       showDiffCommentsCopied(true)
     } catch (error) {
-      // Why report: the write can reject (untrusted sender, 16MiB size guard) and silence here
-      // reads as a successful copy — the user finds out on paste.
+      // Report rejected writes (sender/size guards) so failed copies cannot look successful until paste.
       toast.error(
         translate(
           'auto.components.right.sidebar.SourceControl.diffCommentNotesCopyFailed',
@@ -77,13 +72,21 @@ export function useSourceControlDiffCommentNotes({
     }
   }, [diffCommentsForActive, diffCommentsPrompt, showDiffCommentsCopied])
 
+  // Count the captured copy's notes, whichever twin is selected now; a copy gone since opening keeps its count so confirming reports the failure.
+  const ownedComments = useOwnedDiffComments(pendingDiffCommentsClear?.owner ?? null)
   const pendingDiffCommentsClearCount = useMemo(() => {
+    if (!pendingDiffCommentsClear || pendingDiffCommentsClear.worktreeId !== activeWorktreeId) {
+      return 0
+    }
+    if (!ownedComments) {
+      return pendingDiffCommentsClear.count
+    }
     return countPendingDiffCommentsClear(
       pendingDiffCommentsClear,
       activeWorktreeId,
-      diffCommentsForActive
+      markdownReviewNotesEnabled ? ownedComments : withoutMarkdownReviewNotes(ownedComments)
     )
-  }, [activeWorktreeId, diffCommentsForActive, pendingDiffCommentsClear])
+  }, [activeWorktreeId, markdownReviewNotesEnabled, ownedComments, pendingDiffCommentsClear])
 
   const resolvedPendingDiffCommentsClear = resolvePendingDiffCommentsClear({
     activeWorktreeId,
@@ -92,13 +95,14 @@ export function useSourceControlDiffCommentNotes({
     pendingCount: pendingDiffCommentsClearCount
   })
   if (resolvedPendingDiffCommentsClear !== pendingDiffCommentsClear) {
-    // Why: the confirmation is local UI state; clear impossible ones before children observe a stale open dialog.
+    // Clear impossible local confirmations before children see a stale dialog.
     setPendingDiffCommentsClear(resolvedPendingDiffCommentsClear)
   }
 
   const pendingDiffCommentsClearDescription = formatPendingDiffCommentsClearDescription(
     resolvedPendingDiffCommentsClear,
-    pendingDiffCommentsClearCount
+    pendingDiffCommentsClearCount,
+    t
   )
 
   const handleConfirmDiffCommentsClear = useCallback(async (): Promise<void> => {
@@ -115,8 +119,8 @@ export function useSourceControlDiffCommentNotes({
     try {
       const ok =
         pending.kind === 'all'
-          ? await clearDiffComments(pending.worktreeId, clearOptions)
-          : await clearDiffCommentsForFile(pending.worktreeId, pending.filePath, clearOptions)
+          ? await clearDiffComments(pending.owner, clearOptions)
+          : await clearDiffCommentsForFile(pending.owner, pending.filePath, clearOptions)
       if (ok) {
         setPendingDiffCommentsClear(null)
       } else {

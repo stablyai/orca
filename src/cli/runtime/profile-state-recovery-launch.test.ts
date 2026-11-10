@@ -10,8 +10,8 @@ import {
 } from './profile-state-recovery-launch'
 
 const mocks = vi.hoisted(() => ({ run: vi.fn() }))
-vi.mock('../../shared/child-process/run-process', () => ({ runProcess: mocks.run }))
-vi.mock('./launch', () => ({
+vi.mock('@orca/process-host', () => ({ runProcess: mocks.run }))
+vi.mock('./orca-app-executable', () => ({
   resolveForegroundOrcaExecutable: () => '/packaged/Orca',
   resolveAppRoot: () => '/application',
   getExecutableAppArgs: () => ['/application'],
@@ -47,7 +47,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs())
 
 describe('profile-state recovery launch', () => {
-  it('preserves direct participation only for plain Node without an explicit Electron executable', () => {
+  it('requires an app executable or Electron Node mode to launch recovery', () => {
     vi.stubEnv('ELECTRON_RUN_AS_NODE', undefined)
     vi.stubEnv('ORCA_APP_EXECUTABLE', undefined)
     expect(canLaunchProfileStateRecovery()).toBe(false)
@@ -105,6 +105,13 @@ describe('profile-state recovery launch', () => {
       code: 'invalid_argument',
       message: 'Backup unavailable'
     })
+  })
+
+  it('round-trips latest JSON selection and the exported SQLite revision', async () => {
+    expect(
+      await launchProfileStateRecovery({ userDataPath: '.', selector: { kind: 'latest-json' } })
+    ).toEqual(result)
+    expect(mocks.run.mock.calls[0][0].args.at(-1)).toContain('"kind":"latest-json"')
   })
 
   it.each([

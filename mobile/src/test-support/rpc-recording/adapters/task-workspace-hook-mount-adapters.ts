@@ -5,16 +5,10 @@ import type { operationModuleLoader } from '../operation-module-loader'
 
 const REPO = 'repo-1'
 
-/**
- * The workspace-create drawer's three model-chained hooks, mounted the way the settings adapters
- * mount theirs: a fixture model supplying only the members the hook destructures, with every setter
- * recorded as an effect.
- */
 export function taskWorkspaceHookMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
-  // The drawer's SSH hook. `connectionId` picks the arm the detection effect takes: a repo on
-  // an SSH connection detects remote agents, one without it detects local agents.
+  // A connectionId selects remote detection; omission selects local preflight.
   function sshStateAdapter(connectionId: string | undefined): MountAdapter {
     return (context) => {
       const useSsh = modules.load<
@@ -187,7 +181,6 @@ export function taskWorkspaceHookMountAdapters(
       }
     },
     'tasks.workspace-ssh': sshStateAdapter('ssh-1'),
-    // The local arm: no connectionId, so the effect calls preflight.detectAgents.
     'tasks.workspace-ssh-local': sshStateAdapter(undefined)
   }
 }

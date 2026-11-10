@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import { TERMINAL_METHODS } from './methods/terminal'
-import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
+import type { RuntimeTerminalWait } from '../../../shared/runtime-terminal-contracts'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -11,14 +11,10 @@ import {
   decodeTerminalStreamText,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 
-// An untagged SnapshotRequest is the client's frame-drop resync: its reply
-// resets the client terminal to the snapshot's output high-water. Output
-// buffered while the snapshot serialized is already inside that snapshot up to
-// its seq, so replaying the covered bytes afterward renders the recovered tail
-// twice. A tagged (requestId) snapshot feeds a side consumer instead — the
-// live view still needs every buffered chunk, so that replay must stay whole.
+// Untagged resync resets live high-water, so trim buffered bytes covered by its seq or render them twice.
+// Tagged requestId snapshots feed side consumers; live view still needs every buffered chunk.
 
 type OutputMeta = { seq?: number; rawLength?: number }
 
@@ -52,8 +48,11 @@ async function setupMultiplexStream(): Promise<{
     return { data: snapshot.data, cols: 80, rows: 24, seq: snapshot.seq }
   })
 
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This partial runtime supplies the terminal RPC methods these tests invoke.
   const runtime = {
     getRuntimeId: () => 'test-runtime',
+    getPtyExecutionHostMetadata: () => ({ incarnationId: 'test-incarnation' }),
+    getTerminalLaunchResult: () => undefined,
     resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
     readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
     serializeTerminalBuffer: serializeSnapshot,
@@ -62,6 +61,7 @@ async function setupMultiplexStream(): Promise<{
     getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
     getLayout: vi.fn().mockReturnValue({ seq: 1 }),
     registerRemoteTerminalViewSubscriber: vi.fn(() => () => {}),
+    isSoleRemoteTerminalQueryOwner: () => false,
     subscribeToTerminalData: vi.fn(
       (_ptyId: string, cb: (data: string, meta?: OutputMeta) => void) => {
         emitOutput = cb

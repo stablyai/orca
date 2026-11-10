@@ -1,10 +1,11 @@
 import { useMemo } from 'react'
-import type { OpenFile } from '@/store/slices/editor'
-import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
 import type { useAppStore } from '../../store'
+import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 
 type TabGroupAppState = ReturnType<typeof useAppStore.getState>
 
@@ -13,7 +14,7 @@ export type TabGroupWorktreeSnapshot = {
   unifiedTabs: readonly Tab[]
   terminalTabs: readonly TerminalTab[]
   openFiles: TabGroupAppState['openFiles']
-  browserTabs: readonly BrowserTabState[]
+  browserTabs: readonly BrowserWorkspace[]
   expandedPaneByTabId: TabGroupAppState['expandedPaneByTabId']
   terminalLayoutsByTabId: NonNullable<TabGroupAppState['terminalLayoutsByTabId']>
   generatedTabTitlesEnabled: boolean
@@ -21,7 +22,7 @@ export type TabGroupWorktreeSnapshot = {
 }
 
 export type GroupEditorItem = OpenFile & { tabId: string }
-export type GroupBrowserItem = BrowserTabState & { tabId: string }
+export type GroupBrowserItem = BrowserWorkspace & { tabId: string }
 export type GroupAgentSessionItem = Tab & { contentType: 'agent-session' }
 
 type TerminalTabItem = TerminalTab & { unifiedTabId: string }
@@ -50,9 +51,7 @@ export function useTabGroupItemProjections({
     () => new Map(worktreeState.terminalTabs.map((item) => [item.id, item])),
     [worktreeState.terminalTabs]
   )
-  // Why indexed like the terminal tabs above: `openFiles` is the global list across every
-  // worktree and `tabOrder` is as long as the group, so the per-tab `.find` scans below were
-  // quadratic in tab count on a path that reruns whenever any unified tab is written.
+  // Index global openFiles once; scanning it per group tab made unified-tab updates quadratic.
   const openFileById = useMemo(
     () => new Map(worktreeState.openFiles.map((item) => [item.id, item])),
     [worktreeState.openFiles]
@@ -86,6 +85,8 @@ export function useTabGroupItemProjections({
             defaultTitle: terminalTab?.defaultTitle,
             quickCommandLabel: terminalTab?.quickCommandLabel ?? item.quickCommandLabel ?? null,
             generatedTitle: terminalTab?.generatedTitle ?? item.generatedLabel ?? null,
+            // Why: the strip re-resolves this title; without the session title the first-prompt title wins.
+            aiVaultTitle: item.aiVaultTitle ?? terminalTab?.aiVaultTitle ?? null,
             customTitle: item.customLabel ?? terminalTab?.customTitle ?? null,
             color: item.color ?? terminalTab?.color ?? null,
             sortOrder: item.sortOrder,
@@ -104,16 +105,10 @@ export function useTabGroupItemProjections({
   const editorItems = useMemo<GroupEditorItem[]>(
     () =>
       groupTabs
-        .filter(
-          (item) =>
-            item.contentType === 'editor' ||
-            item.contentType === 'diff' ||
-            item.contentType === 'conflict-review' ||
-            item.contentType === 'check-details'
-        )
-        .map((item) => {
+        .filter((item) => isEditorTabContentType(item.contentType))
+        .map((item): GroupEditorItem | null => {
           const file = openFileById.get(item.entityId)
-          return file ? { ...file, tabId: item.id } : null
+          return file ? { ...file, isPreview: item.isPreview, tabId: item.id } : null
         })
         .filter((item): item is GroupEditorItem => item !== null),
     [groupTabs, openFileById]

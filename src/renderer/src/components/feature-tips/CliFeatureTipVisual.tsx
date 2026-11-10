@@ -5,7 +5,7 @@ import {
   ORCHESTRATION_CLI_COMMAND_TIMINGS_MS
 } from '@/components/feature-wall/agents-orchestration/orchestration-types'
 import { usePrefersReducedMotion } from '@/components/feature-wall/feature-wall-modal-helpers'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const CLI_AGENT_COMMANDS = [
   'orca worktree create --name auth-pr-1',
@@ -15,10 +15,10 @@ const CLI_AGENT_COMMANDS = [
 ]
 
 export function CliFeatureTipVisual(): JSX.Element {
+  const t = useTranslate()
   const reducedMotion = usePrefersReducedMotion()
   const [animatedVisibleCommandCount, setAnimatedVisibleCommandCount] = useState(0)
-  // Why: reduced-motion users should see the static completed state without a
-  // post-render state repair; only the animated path needs timer-backed state.
+  // Show the reduced-motion end state directly; only animation needs timer-backed state.
   const visibleCommandCount = reducedMotion
     ? CLI_AGENT_COMMANDS.length
     : animatedVisibleCommandCount
@@ -34,8 +34,7 @@ export function CliFeatureTipVisual(): JSX.Element {
       timeouts.push(window.setTimeout(() => !cancelled && fn(), ms))
     }
 
-    // Why: terminal lines mirror the orchestration tour beat timings so the
-    // shell shows each command as the parent agent runs it.
+    // Keep terminal commands aligned with the parent agent’s tour beats.
     const runOnce = (): void => {
       setAnimatedVisibleCommandCount(0)
       ORCHESTRATION_CLI_COMMAND_TIMINGS_MS.forEach((ms, index) => {
@@ -65,7 +64,7 @@ export function CliFeatureTipVisual(): JSX.Element {
         <div className="space-y-1.5 px-3 py-3 font-mono text-[10.5px] leading-[1.35] text-foreground">
           <div className="truncate text-muted-foreground">
             <span className="mr-1.5 text-foreground">●</span>
-            {translate(
+            {t(
               'auto.components.feature.tips.CliFeatureTipVisual.22e62f3bab',
               'Claude Code session started'
             )}
@@ -79,7 +78,7 @@ export function CliFeatureTipVisual(): JSX.Element {
                 className={`truncate ${isVisible ? 'animate-cli-tip-command-line' : 'invisible'}`}
               >
                 <span className="text-foreground">
-                  {translate('auto.components.feature.tips.CliFeatureTipVisual.badb4fc342', '>')}
+                  {t('auto.components.feature.tips.CliFeatureTipVisual.badb4fc342', '>')}
                 </span>
                 <span>{command}</span>
                 {isCurrentLine ? (

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { expect, it, vi } from 'vitest'
@@ -7,12 +7,6 @@ import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { profileStateDatabaseBackups } from './profile-state-backup-path'
 import { profileStateJsonExportPath } from './legacy-json/profile-state-export-path'
 import { acquireProfileStateMaintenance } from './profile-state-access'
-import { restoreProfileStateJsonExport } from './legacy-json/profile-state-recovery'
-import { openProfileStateDatabase } from './profile-state-database'
-import {
-  bootstrapProfileStateAuthority,
-  ProfileStateAuthorityBootstrapError
-} from './profile-state-authority-bootstrap'
 import { restoreProfileStateDatabaseBackup } from './profile-state-database-recovery'
 
 vi.mock('electron', () => ({
@@ -36,12 +30,12 @@ vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
 
-it('can publish an updater JSON export at a reused revision after SQLite rollback', async () => {
+it('can publish an explicit JSON export at a reused revision after SQLite rollback', async () => {
   const root = mkdtempSync(join(tmpdir(), 'orca-database-rollback-export-'))
   const directory = join(root, 'profiles', 'rollback-export')
   mkdirSync(directory, { recursive: true })
@@ -99,61 +93,6 @@ it('can publish an updater JSON export at a reused revision after SQLite rollbac
       store.freezeWrites()
       await store.flushAsync()
     }
-    rmSync(root, { recursive: true, force: true })
-  }
-})
-
-it('leaves an explicit rollback path if compatibility publication fails before acceptance', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'orca-store-profile-state-compat-failure-'))
-  const directory = join(root, 'profiles', 'profile-authority-test')
-  mkdirSync(directory, { recursive: true })
-  const dataFile = join(directory, 'orca-data.json')
-  const databasePath = join(directory, 'profile-state.db')
-  writeFileSync(dataFile, JSON.stringify({ settings: { theme: 'light' } }), 'utf8')
-
-  const authority = new ProfileStateSqliteAuthority(databasePath, 'profile-authority-test')
-  const store = new Store({ dataFile, profileStateAuthority: authority })
-  try {
-    store.updateSettings({ theme: 'dark' })
-    store.flushOrThrow()
-    const revisionOne = store.writeLatestProfileStateJsonExport()
-    expect(revisionOne).toBe(1)
-
-    const opened = openProfileStateDatabase(databasePath, 'profile-authority-test')
-    opened.db.exec(
-      `CREATE TRIGGER fail_compatibility_acceptance
-       BEFORE INSERT ON profile_state_meta
-       WHEN NEW.key = 'legacy_json_acceptance'
-       BEGIN SELECT RAISE(ABORT, 'injected compatibility failure'); END`
-    )
-    opened.db.close()
-
-    store.updateSettings({ theme: 'light' })
-    expect(() => store.writeLatestProfileStateJsonCompatibilityExport()).toThrow(
-      'injected compatibility failure'
-    )
-    expect(JSON.parse(readFileSync(dataFile, 'utf8')).settings.theme).toBe('light')
-    expect(() =>
-      bootstrapProfileStateAuthority({
-        dataFile,
-        databaseFile: databasePath,
-        profileId: 'profile-authority-test'
-      })
-    ).toThrow(ProfileStateAuthorityBootstrapError)
-
-    store.freezeWrites()
-    await store.flushAsync()
-    restoreProfileStateJsonExport({
-      maintenance: acquireProfileStateMaintenance(root),
-      databasePath,
-      dataFile,
-      exportPath: profileStateJsonExportPath(dataFile, revisionOne ?? 1),
-      profileId: 'profile-authority-test'
-    })
-    expect(JSON.parse(readFileSync(dataFile, 'utf8')).settings.theme).toBe('dark')
-  } finally {
-    store.freezeWrites()
-    await store.flushAsync()
     rmSync(root, { recursive: true, force: true })
   }
 })

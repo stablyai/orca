@@ -1,1 +1,0 @@
-export const BOTTOM_DRAWER_HIDE_DURATION_MS = 150

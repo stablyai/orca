@@ -26,13 +26,6 @@ afterEach(async () => {
   await index.close()
 })
 
-it('reads an unsafe INTEGER through the append cursor lookup', () => {
-  index.db
-    .prepare('INSERT INTO files(path, dev, ino, byte_offset, mtime_ms) VALUES (?, 1, ?, 100, 0)')
-    .run(SYNTHETIC_TRANSCRIPT, BigInt(LARGE_ID))
-  expect(store.indexedFile(SYNTHETIC_TRANSCRIPT, { dev: 1, ino: LARGE_ID })?.byteOffset).toBe(100)
-})
-
 it.each([
   { dev: 1, ino: LARGE_ID },
   { dev: LARGE_ID, ino: 1 },
@@ -55,7 +48,11 @@ it.each([
   expect(sessionSearchReadDecision({ candidate, row, cursor, cutoffMs: null })).toBe('skip')
 
   const consumer = new SessionSearchIndexConsumer(store)
-  const append = consumer.beginRead({ candidate, mode: 'append', previousByteOffset: 4096 })
+  const append = consumer.beginRead({
+    candidate: syntheticCandidate({ ...identity, sizeBytes: 8192 }),
+    mode: 'append',
+    previousByteOffset: 4096
+  })
   expect(append).not.toBeNull()
   append?.finish({ session: syntheticSession(), byteOffset: 8192, incomplete: false })
   expect(store.indexedFile(SYNTHETIC_TRANSCRIPT, identity)?.byteOffset).toBe(8192)

@@ -84,8 +84,7 @@ export function getDefaultFloatingTerminalCommittedBounds(): FloatingTerminalAnc
 
 export function getDefaultFloatingTerminalBounds(): FloatingTerminalPanelBounds {
   const viewport = getViewport()
-  // Why: the floating panel may touch the renderer titlebar, but must not
-  // overlap it or the native window controls above it.
+  // Leave the renderer titlebar and native window controls unobstructed.
   const safeTop = TITLEBAR_SAFE_TOP
   const width = Math.min(DEFAULT_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, viewport.width - 48))
   const height = Math.min(DEFAULT_PANEL_HEIGHT, Math.max(MIN_PANEL_HEIGHT, viewport.height - 96))

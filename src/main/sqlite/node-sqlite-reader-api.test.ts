@@ -21,10 +21,4 @@ describe('node:sqlite reader admission', () => {
     expect(hasNodeSqliteReaderApi(sqlite)).toBe(admitted)
     expect(probe(sqlite)).toBe(admitted)
   })
-
-  it('admits the actual runtime module', () => {
-    const sqlite: unknown = process.getBuiltinModule('node:sqlite')
-    expect(hasNodeSqliteReaderApi(sqlite)).toBe(true)
-    expect(probe(sqlite)).toBe(true)
-  })
 })

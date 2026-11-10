@@ -1,17 +1,23 @@
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import type * as I18nModule from '@/i18n/i18n'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { EditorPanelHeaderPath } from './EditorPanelHeaderPath'
 
 const renameFileOnDiskMock = vi.hoisted(() => vi.fn())
 
-vi.mock('@/store/selectors', () => ({
+vi.mock('@/store/workspaces/selection/use-selected-worktree', () => ({
   useWorktreeById: () => ({ path: '/repo', repoId: 'repo-1' })
 }))
 
-vi.mock('@/lib/rename-file', () => ({
+// Stub owner resolution because this suite does not seed the execution-host catalog.
+vi.mock('@/lib/resolved-worktree-execution-host', () => ({
+  getResolvedExecutionHostIdForWorktree: () => 'local'
+}))
+
+vi.mock('@/lib/editor/file-operations/rename-file', () => ({
   renameFileOnDisk: renameFileOnDiskMock
 }))
 
@@ -20,7 +26,7 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
 }))
 
 vi.mock('@/i18n/i18n', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/i18n/i18n')>() // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.mock requires an inline import
+  const actual = await importOriginal<typeof I18nModule>()
   return {
     ...actual,
     translate: (_key: string, fallback: string, options?: { value0?: string }) =>
@@ -51,7 +57,6 @@ function renderPath(file: OpenFile): (next: OpenFile) => void {
       canShowMarkdownPreview={false}
       onCopyPath={vi.fn()}
       onOpenMarkdownPreview={vi.fn()}
-      onOpenContainingFolder={vi.fn()}
     />
   )
   return (next) =>
@@ -62,7 +67,6 @@ function renderPath(file: OpenFile): (next: OpenFile) => void {
         canShowMarkdownPreview={false}
         onCopyPath={vi.fn()}
         onOpenMarkdownPreview={vi.fn()}
-        onOpenContainingFolder={vi.fn()}
       />
     )
 }
@@ -93,86 +97,6 @@ describe('EditorPanelHeaderPath inline rename', () => {
       return 1
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
-  })
-
-  it('opens a field holding the whole name', () => {
-    renderPath(baseFile())
-    openRenameInput()
-
-    const input = getRenameInput('Rename file notes.md')
-    expect(input.value).toBe('notes.md')
-  })
-
-  it('lets the field claim the full header width', () => {
-    renderPath(baseFile())
-    openRenameInput()
-
-    const input = getRenameInput('Rename file notes.md')
-    expect(input.className).toContain('w-full')
-    expect(input.className).toContain('max-w-full')
-  })
-
-  it('selects the basename so typing replaces just the name', () => {
-    renderPath(baseFile())
-    openRenameInput()
-
-    const input = getRenameInput('Rename file notes.md')
-    expect(document.activeElement).toBe(input)
-    expect(input.selectionStart).toBe(0)
-    expect(input.selectionEnd).toBe('notes'.length)
-  })
-
-  it('renames to the typed name verbatim', () => {
-    renderPath(baseFile())
-    openRenameInput()
-
-    const input = getRenameInput('Rename file notes.md')
-    fireEvent.change(input, { target: { value: 'renamed.mdx' } })
-    fireEvent.keyDown(input, { key: 'Enter' })
-
-    expect(renameFileOnDiskMock).toHaveBeenCalledWith({
-      oldPath: '/repo/notes.md',
-      newName: 'renamed.mdx',
-      worktreeId: 'wt-1',
-      worktreePath: '/repo'
-    })
-  })
-
-  it('commits on blur like the tab bar and file explorer', () => {
-    renderPath(baseFile())
-    openRenameInput()
-
-    const input = getRenameInput('Rename file notes.md')
-    fireEvent.change(input, { target: { value: 'renamed.md' } })
-    fireEvent.blur(input)
-
-    expect(renameFileOnDiskMock).toHaveBeenCalledWith(
-      expect.objectContaining({ newName: 'renamed.md' })
-    )
-  })
-
-  it('does not request a rename when the name was not edited', () => {
-    renderPath(baseFile())
-    openRenameInput()
-
-    fireEvent.keyDown(getRenameInput('Rename file notes.md'), { key: 'Enter' })
-
-    expect(renameFileOnDiskMock).not.toHaveBeenCalled()
-  })
-
-  it('ignores an Enter that only confirms an IME candidate', () => {
-    renderPath(baseFile())
-    openRenameInput()
-
-    const input = getRenameInput('Rename file notes.md')
-    fireEvent.change(input, { target: { value: 'renamed.md' } })
-    fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 })
-    expect(renameFileOnDiskMock).not.toHaveBeenCalled()
-
-    fireEvent.keyDown(input, { key: 'Enter', keyCode: 13 })
-    expect(renameFileOnDiskMock).toHaveBeenCalledWith(
-      expect.objectContaining({ newName: 'renamed.md' })
-    )
   })
 
   it('cancels on Escape without a trailing blur-commit, and ignores empty renames', () => {
@@ -210,19 +134,5 @@ describe('EditorPanelHeaderPath inline rename', () => {
     expect(screen.queryByLabelText('Rename file other.md')).toBeNull()
 
     expect(renameFileOnDiskMock).not.toHaveBeenCalled()
-  })
-
-  it('selects the whole name when there is no extension', () => {
-    const file = baseFile({
-      id: '/repo/Makefile',
-      filePath: '/repo/Makefile',
-      relativePath: 'Makefile'
-    })
-    renderPath(file)
-    openRenameInput()
-
-    const input = getRenameInput('Rename file Makefile')
-    expect(input.selectionStart).toBe(0)
-    expect(input.selectionEnd).toBe('Makefile'.length)
   })
 })

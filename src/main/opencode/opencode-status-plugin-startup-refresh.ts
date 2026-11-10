@@ -1,9 +1,8 @@
-import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-status-hooks-setting'
-import type { ManagedHookDetectionSettings } from '../agent-hooks/managed-hook-detection-commands'
+import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
+import type { ManagedHookDetectionSettings } from '../agent-hooks/installation/managed-hook-detection-commands'
 import { openCode2HookService, openCodeHookService } from './hook-service'
 
-// Why: an Orca upgrade must reach an OpenCode 2 service that is already running, which reloads a
-// changed plugin file, instead of waiting for the next pane spawn to rewrite it.
+// Refresh running OpenCode 2 services on upgrade without waiting for a pane to rewrite the plugin.
 export function refreshInstalledOpenCodeStatusPlugins(
   settings: ManagedHookDetectionSettings
 ): void {

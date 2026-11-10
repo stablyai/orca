@@ -2,18 +2,7 @@ import type { ModelManager } from './model-manager'
 import type { SttService } from './stt-service'
 import type { VoiceSettings } from '../../shared/speech-types'
 
-/**
- * Lazy accessors for the speech services.
- *
- * Why the construction is injected: `ModelManager` downloads models through Electron's
- * streaming `net.request` — byte-range resume, progress events, a manual idle timeout —
- * and `SttService` resolves paths inside the packaged app. Importing either for its
- * *type* is free; constructing one is what pulls Electron in.
- *
- * The desktop installs the factories. A host without them rejects per call rather than
- * returning a stub that silently does nothing: speech is a desktop feature, and a
- * headless host saying so is more useful than one that appears to transcribe.
- */
+/** Hosts inject Chromium/Node download factories; missing services reject per call rather than appearing to transcribe. */
 
 type SpeechSettingsStore = {
   getSettings(): {
@@ -23,7 +12,8 @@ type SpeechSettingsStore = {
 
 export type SpeechServiceFactories = {
   createModelManager(customModelsDir: string | undefined): ModelManager
-  createSttService(models: ModelManager): SttService
+  /** `gpuEnabled` reads the user's Voice setting at each recognizer start. */
+  createSttService(models: ModelManager, gpuEnabled: () => boolean): SttService
 }
 
 let factories: SpeechServiceFactories | null = null
@@ -54,7 +44,15 @@ export function getSpeechModelManager(store: SpeechSettingsStore): ModelManager 
 
 export function getSpeechSttService(store: SpeechSettingsStore): SttService {
   if (!sttService) {
-    sttService = requireFactories().createSttService(getSpeechModelManager(store))
+    sttService = requireFactories().createSttService(
+      getSpeechModelManager(store),
+      () => store.getSettings().voice?.speechGpu !== 'off'
+    )
   }
+  return sttService
+}
+
+/** The service only if something already created it, so a host with voice off never builds one. */
+export function findSpeechSttService(): SttService | null {
   return sttService
 }

@@ -4,6 +4,9 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { getMonacoCodebaseSearchQuery } from './monaco-codebase-search'
+import { formatSelectionReference } from './selection-copy'
+import { openAddToChatMenuAt } from '../native-chat/selection-quotes/add-to-chat-point-menu'
+import { formatNativeChatQuote } from '../native-chat/selection-quotes/native-chat-quote-selection'
 import { getDiffCommentPopoverLeft } from '../diff-comments/diff-comment-popover-position'
 import {
   installEditorAddReviewNoteShortcut,
@@ -13,9 +16,9 @@ import {
 import {
   getMonacoMarkdownSelectionAnnotationTarget,
   type MonacoMarkdownSelectionAnnotationTarget
-} from './monaco-markdown-selection-annotation'
-import { handleMonacoLargeTextPaste } from './monaco-large-text-paste'
-import type { MarkdownCommentPopoverState } from './use-monaco-markdown-annotations'
+} from './markdown-source-tools/monaco/monaco-markdown-selection-annotation'
+import { handleMonacoLargeTextPaste, MONACO_PASTE_MAX_BYTES } from './monaco-large-text-paste'
+import type { MarkdownCommentPopoverState } from './markdown-source-tools/monaco/use-monaco-markdown-annotations'
 import type { MonacoEditorPropsRef } from './monaco-editor-mount-params'
 
 type MonacoEditorInputBindingsParams = {
@@ -24,8 +27,6 @@ type MonacoEditorInputBindingsParams = {
   editorContainerRef: MutableRefObject<HTMLDivElement | null>
   propsRef: MonacoEditorPropsRef
   readOnlyRef: MutableRefObject<boolean>
-  lastSyncedContentRef: MutableRefObject<string>
-  isApplyingLargePasteRef: MutableRefObject<boolean>
   commentPopoverRef: MutableRefObject<MarkdownCommentPopoverState | null>
   shouldShowMarkdownAnnotationsRef: MutableRefObject<boolean>
   setCommentPopover: Dispatch<SetStateAction<MarkdownCommentPopoverState | null>>
@@ -34,7 +35,7 @@ type MonacoEditorInputBindingsParams = {
   >
 }
 
-// Why: save/find/review-note chords, the context-menu action, and the large-paste capture share one teardown so onDidDispose keeps their original order.
+// Share teardown so editor disposal preserves shortcut and paste cleanup order.
 export function installMonacoEditorInputBindings(params: MonacoEditorInputBindingsParams): {
   disposeInputBindings: () => void
 } {
@@ -44,8 +45,6 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
     editorContainerRef,
     propsRef,
     readOnlyRef,
-    lastSyncedContentRef,
-    isApplyingLargePasteRef,
     commentPopoverRef,
     shouldShowMarkdownAnnotationsRef,
     setCommentPopover,
@@ -53,21 +52,21 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
   } = params
 
   const editorDomNode = editorInstance.getContainerDomNode()
+  const pasteCaptureNode = editorContainerRef.current ?? editorDomNode
   const cleanupSaveShortcut = installEditorSaveShortcut(editorDomNode, () => {
     const value = editorInstance.getValue()
     propsRef.current.onSave(value)
   })
   const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
-  // Opens the same composer as the selection "+" button.
   const cleanupAddReviewNoteShortcut = installEditorAddReviewNoteShortcut(editorDomNode, () => {
-    // Why: keep an open draft instead of remounting, to avoid same-tick chord races before the composer guard runs.
+    // Preserve open drafts during same-tick chords before the composer guard mounts.
     if (commentPopoverRef.current) {
       return true
     }
     if (!shouldShowMarkdownAnnotationsRef.current) {
       return false
     }
-    // Why: the rendered target ref lags selection by a render, so read Monaco's live selection to avoid opening on a stale one.
+    // Read the live selection because the rendered annotation target lags by one render.
     const target = getMonacoMarkdownSelectionAnnotationTarget(
       editorInstance,
       editorInstance.getSelection(),
@@ -102,19 +101,53 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
       state.showRightSidebarSearch({ query })
     }
   })
+  const addToChatAction = editorInstance.addAction({
+    id: 'orca.addSelectionToChat',
+    label: translate('components.native-chat.addSelectionToChat', 'Add to chat'),
+    precondition: 'editorHasSelection',
+    contextMenuGroupId: '9_cutcopypaste',
+    contextMenuOrder: 5,
+    run: () => {
+      const model = editorInstance.getModel()
+      // Every cursor's range, in document order, so a multi-cursor or column selection keeps them all.
+      const selections = (editorInstance.getSelections() ?? [])
+        .filter((selection) => !selection.isEmpty())
+        .sort((a, b) => a.startLineNumber - b.startLineNumber || a.startColumn - b.startColumn)
+      const last = selections.at(-1)
+      if (!worktreeId || !model || !last) {
+        return
+      }
+      const reference = selections
+        .map((selection) =>
+          formatSelectionReference({
+            relativePath: propsRef.current.relativePath,
+            language: propsRef.current.language,
+            selection,
+            selectedText: model.getValueInRange(selection)
+          })
+        )
+        .join('\n\n')
+      // The target list opens under the end of the last range, where the user's eye already is.
+      const visible = editorInstance.getScrolledVisiblePosition(last.getEndPosition())
+      const box = editorDomNode.getBoundingClientRect()
+      openAddToChatMenuAt({
+        worktreeId,
+        quote: formatNativeChatQuote(reference),
+        launchSource: 'native_chat',
+        x: box.left + (visible?.left ?? 0),
+        y: box.top + (visible ? visible.top + visible.height : 0)
+      })
+    }
+  })
   const onLargeTextPaste = (event: ClipboardEvent): void => {
+    if (!event.composedPath().includes(editorDomNode)) {
+      return
+    }
+    // Why: chunking re-serializes the document per chunk via @monaco-editor/react's onChange, so only enforce the cap.
     handleMonacoLargeTextPaste(editorInstance, event, {
       readOnly: readOnlyRef.current,
-      onPasteStart: () => {
-        isApplyingLargePasteRef.current = true
-      },
+      directMaxBytes: MONACO_PASTE_MAX_BYTES,
       onPasteResult: (result) => {
-        isApplyingLargePasteRef.current = false
-        if (result.status === 'pasted' || result.status === 'cancelled') {
-          const value = editorInstance.getValue()
-          lastSyncedContentRef.current = value
-          propsRef.current.onContentChange(value)
-        }
         if (result.status === 'rejected' && result.reason === 'too-large') {
           toast.error(
             translate(
@@ -126,15 +159,16 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
       }
     })
   }
-  editorDomNode.addEventListener('paste', onLargeTextPaste, { capture: true })
+  pasteCaptureNode.addEventListener('paste', onLargeTextPaste, { capture: true })
 
   return {
     disposeInputBindings: () => {
       cleanupSaveShortcut()
       cleanupFindShortcut()
       cleanupAddReviewNoteShortcut()
-      editorDomNode.removeEventListener('paste', onLargeTextPaste, { capture: true })
+      pasteCaptureNode.removeEventListener('paste', onLargeTextPaste, { capture: true })
       searchInFilesAction.dispose()
+      addToChatAction.dispose()
     }
   }
 }

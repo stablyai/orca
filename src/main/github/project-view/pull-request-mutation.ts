@@ -1,3 +1,4 @@
+import { githubBodyImageUrls, githubBodyMediaHeaders } from '../body-image-urls'
 import { assertPositiveInt, projectGhExecOptions, runRest, validateSlugArgs } from './internals'
 import type { GitHubProjectMutationResult } from '../../../shared/github/project-result-types'
 import type { UpdatePullRequestBySlugArgs } from '../../../shared/github/project-request-types'
@@ -14,7 +15,10 @@ export async function updatePullRequestBySlug(
     return { ok: false, error: number.error }
   }
   if (!args.updates || typeof args.updates !== 'object') {
-    return { ok: false, error: { type: 'validation_error', message: 'Updates required.' } }
+    return {
+      ok: false,
+      error: { type: 'validation_error', message: 'Updates required.', reason: 'updates_required' }
+    }
   }
   const patchArgs: string[] = [
     '-X',
@@ -27,7 +31,11 @@ export async function updatePullRequestBySlug(
     fieldCount++
   }
   if (args.updates.body !== undefined) {
-    patchArgs.push('--raw-field', `body=${args.updates.body}`)
+    patchArgs.push(
+      ...githubBodyMediaHeaders(args.updates.body),
+      '--raw-field',
+      `body=${args.updates.body}`
+    )
     fieldCount++
   }
   if (args.updates.state !== undefined) {
@@ -37,11 +45,19 @@ export async function updatePullRequestBySlug(
   if (fieldCount === 0) {
     return { ok: true }
   }
-  const result = await runRest<unknown>(
+  const result = await runRest<{ body?: string; body_html?: string }>(
     patchArgs,
     undefined,
     'core',
     projectGhExecOptions(args.host)
   )
-  return result.ok ? { ok: true } : { ok: false, error: result.error }
+  return result.ok
+    ? {
+        ok: true,
+        bodyImageUrls:
+          args.updates.body !== undefined
+            ? githubBodyImageUrls(result.data?.body ?? args.updates.body, result.data?.body_html)
+            : undefined
+      }
+    : { ok: false, error: result.error }
 }

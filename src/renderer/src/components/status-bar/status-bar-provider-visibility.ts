@@ -1,5 +1,6 @@
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { hasUsageData } from '../../../../shared/usage-provider-windows'
 
 export type UsageProviderSettings = Pick<
   GlobalSettings,
@@ -8,17 +9,14 @@ export type UsageProviderSettings = Pick<
   | 'opencodeSessionCookie'
   | 'geminiCliOAuthEnabled'
 > & {
-  // Why: Antigravity has no separate persisted usage credential in Orca. The
-  // checked status-bar item is the durable user signal; StatusBar only sets
-  // this after PATH detection says the agent is available. Durability further
-  // requires geminiCliOAuthEnabled — the snapshot mirrors the Gemini fetch,
-  // which never yields data while that opt-in is off.
+  // Antigravity setup is a checked item plus PATH detection; agy usage needs no Gemini OAuth.
   antigravityUsageConfigured: boolean
   // Why: MiniMax/Grok sign-in live on disk, not in settings; main sets these each poll.
   minimaxCookieConfigured: boolean
   minimaxApiKeyConfigured: boolean
-  // Why: the OpenCode Go key can live in OPENCODE_API_KEY or in OpenCode's own
-  // store, neither of which the renderer can see; main reports presence.
+  // Main reports safeStorage plan-key presence so ZCode survives reload before the first poll.
+  zcodePlanApiKeyConfigured: boolean
+  // Main reports OpenCode key presence because the renderer cannot inspect its environment or CLI store.
   opencodeGoApiKeyConfigured: boolean
   grokAuthConfigured: boolean
   cursorAuthConfigured: boolean
@@ -35,35 +33,20 @@ type UsageProviderSnapshots = {
   grok: ProviderRateLimits | null | undefined
   cursor: ProviderRateLimits | null | undefined
   zcode?: ProviderRateLimits | null
+  muse?: ProviderRateLimits | null
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
-
-function hasUsageData(provider: ProviderRateLimits): boolean {
-  return Boolean(
-    provider.session ||
-    provider.weekly ||
-    provider.fableWeekly ||
-    provider.monthly ||
-    (provider.buckets && provider.buckets.length > 0)
-  )
-}
 
 function isProviderSnapshotPending(provider: ProviderRateLimits | null | undefined): boolean {
   return provider == null || (provider.status === 'fetching' && !hasUsageData(provider))
 }
 
-// Why: a provider that returns `unavailable` is explicitly not configured
-// (Gemini OAuth off, OpenCode Go cookie unset, Claude on API-key billing). Its
-// fetch object is non-null, so a bare `!== null` check still renders a "--"
-// bar for a provider the user never set up. `error` is kept visible on purpose
-// — that's a *configured* provider failing transiently, and hiding it would
-// make the bar flap on every refresh hiccup.
+// Hide unavailable/unproven snapshots; retain configured providers through transient errors to avoid flicker.
 export function isProviderConfigured(
   provider: ProviderRateLimits | null | undefined
 ): provider is ProviderRateLimits {
-  // Why: renderer HMR can briefly run against an older main process whose rate-limit
-  // payload predates newer provider keys, so missing snapshots arrive as undefined.
+  // Older main processes may omit newer provider keys during HMR.
   if (provider == null || provider.status === 'unavailable') {
     return false
   }
@@ -82,12 +65,12 @@ export function hasUsageProviderSettings(
     settings?.geminiCliOAuthEnabled === true ||
     Boolean(settings?.opencodeSessionCookie?.trim()) ||
     settings?.opencodeGoApiKeyConfigured === true ||
-    // Antigravity's durable signal requires geminiCliOAuthEnabled, so it is
-    // already covered by the gemini term above.
+    settings?.antigravityUsageConfigured === true ||
     settings?.minimaxCookieConfigured === true ||
     settings?.minimaxApiKeyConfigured === true ||
     settings?.grokAuthConfigured === true ||
-    settings?.cursorAuthConfigured === true
+    settings?.cursorAuthConfigured === true ||
+    settings?.zcodePlanApiKeyConfigured === true
   )
 }
 
@@ -114,10 +97,8 @@ export function hasUsageProviderSettingsForProvider(
     )
   }
   if (providerId === 'antigravity') {
-    // Why: the Antigravity snapshot mirrors the Gemini fetch, which stays
-    // 'unavailable' until the user opts into Gemini CLI OAuth. Without that
-    // gate the default-on checked item would pin a permanently dead bar.
-    return settings.antigravityUsageConfigured === true && settings.geminiCliOAuthEnabled === true
+    // The agy probe needs only the PATH-gated checked item, independent of Gemini OAuth.
+    return settings.antigravityUsageConfigured === true
   }
   if (providerId === 'minimax') {
     return settings.minimaxCookieConfigured === true || settings.minimaxApiKeyConfigured === true
@@ -128,17 +109,19 @@ export function hasUsageProviderSettingsForProvider(
   if (providerId === 'cursor') {
     return settings.cursorAuthConfigured === true
   }
+  if (providerId === 'zcode') {
+    return settings.zcodePlanApiKeyConfigured === true
+  }
   return false
 }
 
-function createPendingProviderSnapshot(providerId: UsageProviderId): ProviderRateLimits {
+export function createPendingProviderSnapshot(providerId: UsageProviderId): ProviderRateLimits {
   return {
     provider: providerId,
     session: null,
     weekly: null,
     ...(providerId === 'opencode-go' ? { monthly: null } : {}),
-    // Why antigravity joins these: it reports one pool per model group, so its pending skeleton
-    // has to be bucket-shaped too or the segment changes shape once the first reading lands.
+    // Bucket-backed providers need bucket-shaped pending skeletons to avoid layout changes on their first reading.
     ...(providerId === 'gemini' || providerId === 'cursor' || providerId === 'antigravity'
       ? { buckets: [] }
       : {}),
@@ -166,14 +149,11 @@ export function isUsageEmptyState(
   providers: UsageProviderSnapshots,
   settings: Partial<UsageProviderSettings> | null | undefined
 ): boolean {
-  // Why: settings are the durable source for managed accounts. Until they
-  // hydrate, avoid showing a setup CTA that can contradict connected accounts.
+  // Wait for settings hydration before offering setup that could contradict saved accounts.
   if (!settings) {
     return false
   }
-  // Why: system-default Claude/Codex accounts have no persisted account row;
-  // their first durable signal is the usage snapshot, so wait for snapshots to
-  // settle before teaching the user to connect an account.
+  // System-default Claude/Codex have no saved account row; wait for snapshots before proposing setup.
   const antigravitySnapshotPending =
     hasUsageProviderSettingsForProvider('antigravity', settings) &&
     isProviderSnapshotPending(providers.antigravity)
@@ -187,7 +167,8 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.minimax) ||
     isProviderSnapshotPending(providers.grok) ||
     isProviderSnapshotPending(providers.cursor) ||
-    (providers.zcode !== undefined && isProviderSnapshotPending(providers.zcode))
+    (providers.zcode !== undefined && isProviderSnapshotPending(providers.zcode)) ||
+    (providers.muse !== undefined && isProviderSnapshotPending(providers.muse))
   ) {
     return false
   }
@@ -202,6 +183,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.minimax) &&
     !isProviderConfigured(providers.grok) &&
     !isProviderConfigured(providers.cursor) &&
-    !isProviderConfigured(providers.zcode)
+    !isProviderConfigured(providers.zcode) &&
+    !isProviderConfigured(providers.muse)
   )
 }

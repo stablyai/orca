@@ -1,8 +1,8 @@
 import React from 'react'
 import { GitPullRequest, Lock } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import { chipStyle, labelChipColors, singleSelectChipColors } from './project-cell-chip-colors'
 import { formatRoadmapSpan } from './roadmap-tick-format'
 import type { RoadmapSpan } from '../../../../shared/github/project-roadmap-timeline'
@@ -30,21 +30,21 @@ export default function ProjectRoadmapBar({
   locale,
   onOpen
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   const colors = chipColor ? singleSelectChipColors(chipColor) : labelChipColors('')
   const interactive = row.itemType !== 'REDACTED' && row.itemType !== 'DRAFT_ISSUE'
   const dates = formatRoadmapSpan(span, locale)
-  // Why: shared by the visible text, aria-label, and tooltip — a redacted row
-  // must never announce or render an empty name.
+  // Share the restricted-item fallback across visible text and accessible labels.
   const title =
     row.itemType === 'REDACTED'
-      ? translate('auto.components.github.project.ProjectRoadmapBar.7d1220d979', 'Restricted item')
+      ? t('auto.components.github.project.ProjectRoadmapBar.7d1220d979', 'Restricted item')
       : row.content.title
   const bar = (
     <button
       type="button"
       aria-disabled={interactive ? undefined : true}
       onClick={interactive ? onOpen : undefined}
-      aria-label={translate(
+      aria-label={t(
         'auto.components.github.project.ProjectRoadmapBar.cd68ccc17a',
         '{{value0}} — {{value1}}',
         { value0: title, value1: dates }
@@ -54,8 +54,7 @@ export default function ProjectRoadmapBar({
         'text-[var(--github-project-chip-fg-light)] dark:text-[var(--github-project-chip-fg-dark)]',
         interactive ? 'cursor-pointer hover:brightness-110' : 'cursor-default',
         row.itemType === 'REDACTED' && 'opacity-60',
-        // Why: a point marker sizes to its own label instead of the span, so
-        // a single-date item stays readable rather than collapsing to a sliver.
+        // Single-date points need label width instead of a near-zero date span.
         span.point && 'max-w-60'
       )}
       style={{

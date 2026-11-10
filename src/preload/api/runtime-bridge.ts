@@ -1,12 +1,12 @@
 import { ipcRenderer } from 'electron'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
+import type { SidebarInputsChangedEvent } from '../../shared/sidebar-list/sidebar-inputs-feed-contract'
 import type {
-  RuntimeBrowserDriverState,
   RuntimeRendererSyncWindowGraph,
   RuntimeStatus,
-  RuntimeSyncWindowGraphResult,
-  RuntimeTerminalDriverState
+  RuntimeSyncWindowGraphResult
 } from '../../shared/runtime-types'
+import type { RuntimeTerminalDriverState } from '../../shared/runtime-session-contracts'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { RuntimeEnvironmentSubscriptionHandle } from '../runtime-environment-subscriptions'
 import type { PreloadApi } from '../api-types'
@@ -54,7 +54,7 @@ export const runtimeApi = {
   getBrowserDrivers: (): Promise<
     {
       browserPageId: string
-      driver: RuntimeBrowserDriverState
+      driver: RuntimeTerminalDriverState
     }[]
   > => ipcRenderer.invoke('runtime:getBrowserDrivers'),
   getBrowserRemoteViewerPages: (): Promise<string[]> =>
@@ -109,13 +109,13 @@ export const runtimeApi = {
     return () => ipcRenderer.removeListener('runtime:nativeChatLaunchDraftResolved', listener)
   },
   onBrowserDriverChanged: (
-    callback: (event: { browserPageId: string; driver: RuntimeBrowserDriverState }) => void
+    callback: (event: { browserPageId: string; driver: RuntimeTerminalDriverState }) => void
   ): (() => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,
       data: {
         browserPageId: string
-        driver: RuntimeBrowserDriverState
+        driver: RuntimeTerminalDriverState
       }
     ) => callback(data)
     ipcRenderer.on('runtime:browserDriverChanged', listener)
@@ -141,5 +141,11 @@ export const runtimeApi = {
       callback(data)
     ipcRenderer.on('runtime:clientHostedBrowserRowsChanged', listener)
     return () => ipcRenderer.removeListener('runtime:clientHostedBrowserRowsChanged', listener)
+  },
+  onSidebarInputsChanged: (callback: (event: SidebarInputsChangedEvent) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: SidebarInputsChangedEvent) =>
+      callback(data)
+    ipcRenderer.on('runtime:sidebarInputsChanged', listener)
+    return () => ipcRenderer.removeListener('runtime:sidebarInputsChanged', listener)
   }
 } satisfies PreloadApi['runtime']

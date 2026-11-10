@@ -3,13 +3,15 @@ import {
   applyBinderOwnerships,
   defaultOpenCodeDbPath,
   listBinderPaneSnapshots,
-  listOpenCodeDbSessions,
   OPENCODE_SESSION_CURSOR_START,
   runOpenCodeBinderRound,
-  type BinderPaneSnapshot,
-  type BinderSessionRow,
-  type OpenCodeSessionCursor
+  type BinderPaneSnapshot
 } from '../../opencode/opencode-session-binder'
+import type {
+  BinderSessionRow,
+  OpenCodeSessionCursor
+} from '../../foreign-sqlite-readers/opencode-binder-sessions-result'
+import { readOpenCodeBinderSessions } from '../../foreign-sqlite-readers/foreign-sqlite-reader-spawn'
 import {
   sweepProcessIdentities,
   type ProcessIdentityRow
@@ -17,32 +19,23 @@ import {
 import { lookupOpenCodeSessionPane } from '../../../shared/agent-hook-listener/opencode-session-registry'
 import { AgentHookServerPersistence } from './server-persistence'
 
-/** Poll cadence; hook-triggered kicks cover births between polls. */
 const OPENCODE_BINDER_INTERVAL_MS = 60_000
 const OPENCODE_BINDER_KICK_DEBOUNCE_MS = 10_000
-/** Unbound sessions get re-correlated this long (pane inventory may lag births). */
+// Pane inventory can lag session births; retry unbound sessions within this window.
 const OPENCODE_BINDER_UNBOUND_RETRY_MS = 10 * 60_000
 const OPENCODE_BINDER_PARENTS_MAX = 2_000
 const OPENCODE_BINDER_UNBOUND_MAX = 500
 
-/** Injectable I/O for the binder loop; real singletons by default, fakes in tests. */
 export type OpenCodeBinderLoopDeps = {
   now: () => number
   dbPath: () => string
-  listSessions: (dbPath: string, cursor: OpenCodeSessionCursor) => BinderSessionRow[]
+  /** The default reader resolves [] when the store or worker cannot answer. */
+  listSessions: (dbPath: string, cursor: OpenCodeSessionCursor) => Promise<BinderSessionRow[]>
   listPanes: () => BinderPaneSnapshot[]
   sweep: () => Promise<ProcessIdentityRow[]>
 }
 
-/**
- * Session→pane binder loop for the OpenCode 1 `serve` process shared by
- * `attach` panes (#21359). OpenCode-1-only: remove with OpenCode 1 support.
- *
- * Sits just above persistence in the chain so ingest layers can kick a round
- * when a birth arrives early, and lifecycle can start/stop the timer. All
- * I/O rides injectable deps (real singletons by default) so tests drive the
- * whole loop without touching the user's opencode.db or process table.
- */
+/** Bind shared OpenCode 1 serve sessions to attach panes; remove with OpenCode 1 support (#21359). */
 export abstract class AgentHookServerOpenCodeBinder extends AgentHookServerPersistence {
   private openCodeBinderTimer: ReturnType<typeof setInterval> | null = null
   private openCodeBinderKickTimer: ReturnType<typeof setTimeout> | null = null
@@ -54,17 +47,16 @@ export abstract class AgentHookServerOpenCodeBinder extends AgentHookServerPersi
   private openCodeBinderDeps: OpenCodeBinderLoopDeps = {
     now: () => Date.now(),
     dbPath: () => defaultOpenCodeDbPath(),
-    listSessions: (dbPath, sinceMs) => listOpenCodeDbSessions(dbPath, sinceMs),
+    listSessions: (dbPath, cursor) => readOpenCodeBinderSessions(dbPath, cursor),
     listPanes: () => listBinderPaneSnapshots(),
     sweep: () => sweepProcessIdentities()
   }
 
-  /** Test seam: drive the loop without the user's database or process table. */
+  /** Keep tests away from the user's database and process table. */
   protected _setOpenCodeBinderDepsForTests(deps: Partial<OpenCodeBinderLoopDeps>): void {
     this.openCodeBinderDeps = { ...this.openCodeBinderDeps, ...deps }
   }
 
-  /** Start the 60s poll loop plus one immediate round, idempotently. */
   protected startOpenCodeBinderLoop(): void {
     if (this.openCodeBinderTimer) {
       return
@@ -75,15 +67,12 @@ export abstract class AgentHookServerOpenCodeBinder extends AgentHookServerPersi
     if (this.openCodeBinderTimer.unref) {
       this.openCodeBinderTimer.unref()
     }
-    // Why immediately: existing sessions would otherwise keep the frozen
-    // stamp for up to a full interval after launch or restart.
+    // Bind existing sessions immediately instead of leaving their initial stamp for a full interval.
     void this.runOpenCodeBinderRoundOnce()
   }
 
-  /** Stop timers and drop ephemeral binder state; in-flight rounds are discarded by generation. */
   protected stopOpenCodeBinderLoop(): void {
-    // Why the generation bump: a round awaiting the process sweep must not
-    // apply ownerships — or resurrect the watermark — after the loop stopped.
+    // Invalidate in-flight rounds so they cannot restore stopped state.
     this.openCodeBinderGeneration += 1
     if (this.openCodeBinderTimer) {
       clearInterval(this.openCodeBinderTimer)
@@ -99,11 +88,7 @@ export abstract class AgentHookServerOpenCodeBinder extends AgentHookServerPersi
     this.openCodeBinderUnbound.clear()
   }
 
-  /**
-   * A birth may have arrived (opencode SessionStart): run one round soon so
-   * the session binds before its first busy stretch, instead of waiting out
-   * the poll interval. Trailing-edge debounced; concurrent rounds collapse.
-   */
+  /** Coalesce birth-triggered kicks so new sessions bind before the next poll. */
   protected kickOpenCodeBinder(): void {
     if (this.openCodeBinderKickTimer) {
       return
@@ -117,21 +102,21 @@ export abstract class AgentHookServerOpenCodeBinder extends AgentHookServerPersi
     }
   }
 
-  /** Run one correlate-and-bind round; returns applied binding count. */
   protected async runOpenCodeBinderRoundOnce(): Promise<number> {
     if (this.openCodeBinderRunning) {
       return 0
     }
     this.openCodeBinderRunning = true
-    // Why capture before the try: if stop() lands while the sweep is in
-    // flight and a restart begins a new round, the obsolete round must not
-    // clear the new round's running flag (or two rounds overlap and apply
-    // ownership snapshots out of order).
+    // An obsolete round's finally must not clear a restarted loop's running flag.
     const generation = this.openCodeBinderGeneration
     try {
       const deps = this.openCodeBinderDeps
       const nowMs = deps.now()
-      const fresh = deps.listSessions(deps.dbPath(), this.openCodeBinderWatermark)
+      const fresh = await deps.listSessions(deps.dbPath(), this.openCodeBinderWatermark)
+      // Stop resets state and watermark while the worker may still be reading.
+      if (generation !== this.openCodeBinderGeneration) {
+        return 0
+      }
       const sessions = [...fresh]
       for (const [id, entry] of this.openCodeBinderUnbound) {
         if (nowMs - entry.firstSeenMs > OPENCODE_BINDER_UNBOUND_RETRY_MS) {
@@ -188,9 +173,7 @@ export abstract class AgentHookServerOpenCodeBinder extends AgentHookServerPersi
           this.openCodeBinderUnbound.set(session.id, { row: session, firstSeenMs: nowMs })
         }
       }
-      // Why from handled rows only: a session the full map could not track
-      // must stay re-listable next round instead of being silently passed by
-      // the watermark.
+      // Untracked rows must remain before the watermark so the next round can retry them.
       this.openCodeBinderWatermark = advanceBinderCursor({
         fresh,
         isHandled: (sessionId) =>
@@ -201,8 +184,7 @@ export abstract class AgentHookServerOpenCodeBinder extends AgentHookServerPersi
       })
       return applied
     } catch (err) {
-      // Why swallow: a binder failure must never break hook serving; the next
-      // round retries, and unbound sessions keep today's stamped behavior.
+      // Binder failure must not break hook serving; the next round retries.
       console.warn('[opencode-binder] round failed; keeping stamped attribution', err)
       return 0
     } finally {

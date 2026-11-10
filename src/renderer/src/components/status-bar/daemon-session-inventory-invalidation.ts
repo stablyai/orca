@@ -1,5 +1,4 @@
-// Why: daemon-session kills routed through pty:management:* emit no pty:exit,
-// so the status-bar inventory needs an explicit signal to stop showing a stale count.
+// Management kills emit no pty:exit, so explicitly invalidate the status-bar session count.
 const listeners = new Set<() => void>()
 
 export function subscribeDaemonSessionInventoryInvalidated(listener: () => void): () => void {

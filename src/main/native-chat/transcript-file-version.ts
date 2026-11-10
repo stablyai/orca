@@ -1,6 +1,15 @@
-import { readTranscriptSlice, wslGatedStat } from './wsl-transcript-fs-access'
+import { readTranscriptSlice, transcriptFileStat } from './wsl-transcript-fs-access'
 
 const BOUNDARY_FINGERPRINT_BYTES = 64
+
+export function extendTranscriptBoundary(previous: Buffer, chunk: Buffer): Buffer {
+  const chunkBytes = Math.min(chunk.length, BOUNDARY_FINGERPRINT_BYTES)
+  const previousBytes = Math.min(previous.length, BOUNDARY_FINGERPRINT_BYTES - chunkBytes)
+  const boundary = Buffer.allocUnsafeSlow(previousBytes + chunkBytes)
+  previous.copy(boundary, 0, previous.length - previousBytes)
+  chunk.copy(boundary, previousBytes, chunk.length - chunkBytes)
+  return boundary
+}
 
 export type TranscriptFileVersion = {
   identity: string
@@ -13,7 +22,7 @@ export async function readTranscriptFileVersion(
   filePath: string,
   signal?: AbortSignal
 ): Promise<TranscriptFileVersion> {
-  const value = await wslGatedStat(filePath, 'exact', signal)
+  const value = await transcriptFileStat(filePath, 'exact', signal)
   return {
     identity: `${value.dev}:${value.ino}`,
     size: value.size,
@@ -45,4 +54,24 @@ export function transcriptFileVersionChanged(
     current.mtimeMs !== previous.mtimeMs ||
     current.ctimeMs !== previous.ctimeMs
   )
+}
+
+export function transcriptFileReplacement(
+  current: TranscriptFileVersion,
+  watchedVersion: TranscriptFileVersion | null,
+  state: { offset: number; boundary: Buffer },
+  currentBoundary: string
+): { identityChanged: boolean; contentReplaced: boolean } {
+  const identityChanged = watchedVersion !== null && current.identity !== watchedVersion.identity
+  const sameSizeVersionChanged =
+    watchedVersion !== null &&
+    current.identity === watchedVersion.identity &&
+    current.size === watchedVersion.size &&
+    transcriptFileVersionChanged(current, watchedVersion)
+  const contentReplaced =
+    identityChanged ||
+    sameSizeVersionChanged ||
+    current.size < state.offset ||
+    (state.offset > 0 && state.boundary.toString('base64') !== currentBoundary)
+  return { identityChanged, contentReplaced }
 }

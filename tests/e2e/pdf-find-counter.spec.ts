@@ -129,12 +129,15 @@ test.describe('PDF in a folder workspace', () => {
           parentPath: folderPath,
           createdFrom: 'folder-scan'
         })
-        await state.fetchProjectGroups()
-        const folder = await state.createFolderWorkspace({
-          projectGroupId: group.id,
-          name: 'PDF documents',
-          folderPath
-        })
+        await state.fetchProjectGroups({ runtimeEnvironmentId: null, throwOnError: true })
+        const folder = await state.createFolderWorkspace(
+          {
+            projectGroupId: group.id,
+            name: 'PDF documents',
+            folderPath
+          },
+          { runtimeEnvironmentId: null }
+        )
         if (!folder) {
           throw new Error('Missing fixture folder')
         }

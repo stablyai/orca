@@ -1,21 +1,14 @@
 import type { ExecutionHostId } from './execution-host'
 import type { GlobalSettings } from './global-settings-types'
 
-/** Per-host overrides for client preferences that genuinely vary by execution
- *  host. NARROW by design: only settings whose value is meaningless to share
- *  across hosts belong here.
- *  - `displayLabel`: a client-side rename for the host shown in sidebar/pickers.
- *  - `defaultWorktreeLocation`: the host's root worktree directory; a remote
- *    SSH/runtime host has a different filesystem layout than the local Mac, so
- *    the client `workspaceDir` default cannot apply unchanged. */
+/** Limit per-host preferences to host-specific values: client-side display labels and filesystem worktree roots.
+ * Remote hosts cannot reuse a local workspaceDir unchanged. */
 export type HostSettingOverrides = {
   displayLabel?: string
   defaultWorktreeLocation?: string
 }
 
-// Why: per-host preferences follow `effective = host override ?? client default`.
-// These pure helpers centralize that rule so the UI, registry, and tests share a
-// single implementation instead of re-deriving the fallback at each call site.
+// Share host override ?? client default across UI/registry/tests.
 
 export type HostSettingOverrideKey = keyof HostSettingOverrides
 
@@ -45,8 +38,7 @@ export function getEffectiveHostSetting(
   return getHostSettingOverride(settings, hostId, key) ?? clientDefault
 }
 
-/** Pure update: returns the next `hostSettingOverrides` map with the override set.
- *  An empty/whitespace value clears the key instead of persisting blank text. */
+/** Return the updated override map; empty/whitespace clears instead of persisting blanks. */
 export function setHostSettingOverride(
   settings: HostSettingsSlice | null | undefined,
   hostId: ExecutionHostId,
@@ -64,8 +56,7 @@ export function setHostSettingOverride(
   }
 }
 
-/** Pure update: returns the next map with the key removed, dropping the host
- *  entry entirely once it has no remaining overrides. */
+/** Remove a key and drop host entries with no remaining overrides. */
 export function clearHostSettingOverride(
   settings: HostSettingsSlice | null | undefined,
   hostId: ExecutionHostId,

@@ -1,16 +1,18 @@
 import React from 'react'
-import { ExternalLink, LoaderCircle } from 'lucide-react'
+import { AlertTriangle, ExternalLink, LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type {
   GitLabAssignableUser,
   GitLabPipelineJob,
   GitLabWorkItem,
   MRComment
 } from '../../../shared/gitlab-types'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export type JobTraceState = {
   loading: boolean
@@ -18,7 +20,6 @@ export type JobTraceState = {
   error?: string
 }
 
-// Why: GitLab MR / issue states map onto a coarser palette than GitHub.
 export const STATE_TONE: Record<GitLabWorkItem['state'], string> = {
   opened: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
   closed: 'bg-rose-500/15 text-rose-700 dark:text-rose-300',
@@ -27,9 +28,7 @@ export const STATE_TONE: Record<GitLabWorkItem['state'], string> = {
   draft: 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
 }
 
-// Why: pipeline job statuses map to one of four visual buckets — keep
-// the mapping local so the renderer doesn't depend on the backend's
-// shared mapper module (which is main-process only).
+// Keep status tones in the renderer to avoid importing the main-process mapper.
 export function jobStatusTone(status: string): string {
   switch (status) {
     case 'success':
@@ -43,6 +42,7 @@ export function jobStatusTone(status: string): string {
     case 'waiting_for_resource':
     case 'scheduled':
       return 'bg-sky-500/15 text-sky-700 dark:text-sky-300'
+    case 'warning':
     case 'manual':
       return 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
     case 'canceled':
@@ -129,6 +129,8 @@ export function CommentCard({
   resolving?: boolean
   onResolve?: (threadId: string, resolved: boolean) => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const hasThread = Boolean(comment.threadId)
   return (
     <div className="rounded-md border border-border/40 bg-muted/30 p-3">
@@ -147,7 +149,7 @@ export function CommentCard({
           <span className="font-medium text-foreground">{comment.author}</span>
           {comment.isResolved ? (
             <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
-              {translate('auto.components.GitLabItemDialog.f23ea85341', 'resolved')}
+              {t('auto.components.GitLabItemDialog.f23ea85341', 'resolved')}
             </span>
           ) : null}
         </div>
@@ -163,11 +165,13 @@ export function CommentCard({
             >
               {resolving ? <LoaderCircle className="size-3 animate-spin" /> : null}
               {comment.isResolved
-                ? translate('auto.components.GitLabItemDialog.65e784c1f1', 'Reopen')
-                : translate('auto.components.GitLabItemDialog.4168eb2c51', 'Resolve')}
+                ? t('auto.components.GitLabItemDialog.65e784c1f1', 'Reopen')
+                : t('auto.components.GitLabItemDialog.4168eb2c51', 'Resolve')}
             </Button>
           ) : null}
-          <span>{comment.createdAt ? new Date(comment.createdAt).toLocaleDateString() : ''}</span>
+          <span>
+            {comment.createdAt ? new Date(comment.createdAt).toLocaleDateString(intlLocale) : ''}
+          </span>
         </div>
       </div>
       {comment.path ? (
@@ -200,12 +204,15 @@ export function PipelineJobRow({
   onToggleTrace: (job: GitLabPipelineJob) => void
   onRetry: (job: GitLabPipelineJob) => void
 }): React.JSX.Element {
-  const canRetry = ['failed', 'canceled', 'cancelled'].includes(job.status)
+  const t = useTranslate()
+  const allowedFailure = job.status === 'failed' && job.allowFailure === true
+  const canRetry = job.id > 0 && ['failed', 'canceled', 'cancelled'].includes(job.status)
   return (
     <div className="rounded-md">
-      <div className="grid w-full grid-cols-[minmax(0,2fr)_minmax(0,1fr)_80px_64px_96px] items-center gap-3 px-3 py-2 text-left text-sm hover:bg-muted/40">
+      <div className="grid w-full grid-cols-[minmax(0,2fr)_minmax(0,1fr)_160px_64px_96px] items-center gap-3 px-3 py-2 text-left text-sm hover:bg-muted/40">
         <button
           type="button"
+          disabled={job.id <= 0}
           onClick={() => onToggleTrace(job)}
           className="min-w-0 truncate text-left font-medium"
         >
@@ -214,15 +221,14 @@ export function PipelineJobRow({
         <span className="min-w-0 truncate text-xs text-muted-foreground">{job.stage}</span>
         <span
           className={cn(
-            'rounded-full px-2 py-0.5 text-center text-[10px] font-medium uppercase tracking-wide',
-            jobStatusTone(job.status)
+            'flex items-center gap-1 rounded-full px-2 py-0.5 text-center text-[10px] font-medium uppercase tracking-wide',
+            jobStatusTone(allowedFailure ? 'warning' : job.status)
           )}
         >
-          {job.status}
+          {allowedFailure ? <AlertTriangle className="size-3 shrink-0" /> : null}
+          {allowedFailure ? t('checks.gitlabAllowedFailure', 'Allowed to fail') : job.status}
         </span>
         <span className="text-right text-[11px] text-muted-foreground">
-          {/* Why: durations come back as seconds; show "Nm Ns" for >60s
-              and "Ns" otherwise. null = job hasn't finished. */}
           {typeof job.duration === 'number'
             ? job.duration >= 60
               ? `${Math.floor(job.duration / 60)}m ${Math.floor(job.duration % 60)}s`
@@ -240,7 +246,7 @@ export function PipelineJobRow({
               className="h-6"
             >
               {retrying ? <LoaderCircle className="size-3 animate-spin" /> : null}
-              {translate('auto.components.GitLabItemDialog.fa3e042203', 'Retry')}
+              {t('auto.components.GitLabItemDialog.fa3e042203', 'Retry')}
             </Button>
           ) : null}
           {job.webUrl ? (
@@ -248,8 +254,8 @@ export function PipelineJobRow({
               type="button"
               variant="ghost"
               size="icon-xs"
-              onClick={() => void window.api.shell.openUrl(job.webUrl)}
-              title={translate('auto.components.GitLabItemDialog.032ae1312b', 'Open job in GitLab')}
+              onClick={(event) => openAppHttpLink(job.webUrl, { event })}
+              title={t('auto.components.GitLabItemDialog.032ae1312b', 'Open job in GitLab')}
             >
               <ExternalLink className="size-3" />
             </Button>
@@ -259,15 +265,15 @@ export function PipelineJobRow({
       {expanded ? (
         <div className="mx-3 mb-2 rounded-md border border-border/50 bg-muted/20">
           <div className="flex items-center justify-between border-b border-border/40 px-2.5 py-1.5 text-[11px] text-muted-foreground">
-            <span>{translate('auto.components.GitLabItemDialog.2f9b27f838', 'Job log')}</span>
+            <span>{t('auto.components.GitLabItemDialog.2f9b27f838', 'Job log')}</span>
             <Button type="button" variant="ghost" size="xs" onClick={() => onToggleTrace(job)}>
-              {translate('auto.components.GitLabItemDialog.028bde664e', 'Hide')}
+              {t('auto.components.GitLabItemDialog.028bde664e', 'Hide')}
             </Button>
           </div>
           {traceState?.loading ? (
             <div className="flex items-center gap-2 px-2.5 py-3 text-xs text-muted-foreground">
               <LoaderCircle className="size-3.5 animate-spin" />
-              {translate('auto.components.GitLabItemDialog.d600c2619a', 'Loading log')}
+              {t('auto.components.GitLabItemDialog.d600c2619a', 'Loading log')}
             </div>
           ) : traceState?.error ? (
             <div className="px-2.5 py-3 text-xs text-destructive">{traceState.error}</div>
@@ -275,7 +281,7 @@ export function PipelineJobRow({
             <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words px-2.5 py-2 font-mono text-[11px] leading-4 text-foreground scrollbar-sleek">
               {traceState?.trace?.trim()
                 ? traceState.trace
-                : translate('auto.components.GitLabItemDialog.32f8bef818', 'No log output.')}
+                : t('auto.components.GitLabItemDialog.32f8bef818', 'No log output.')}
             </pre>
           )}
         </div>

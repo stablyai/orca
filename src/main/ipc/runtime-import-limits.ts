@@ -1,6 +1,4 @@
-// Why: staging streams slices at upload time and never holds a whole file, so
-// these are user-safety ceilings on an unattended transfer, not memory guards.
-// They stay until the drop UI can show progress and cancel a running upload.
+// Streaming bounds memory; these caps bound unattended transfers until the UI offers progress and cancellation.
 export const REMOTE_IMPORT_MAX_FILE_BYTES = 2 * 1024 * 1024 * 1024
 export const REMOTE_IMPORT_MAX_TOTAL_BYTES = 8 * 1024 * 1024 * 1024
 

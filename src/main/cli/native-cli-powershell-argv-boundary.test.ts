@@ -2,9 +2,9 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { runProcess } from '../../shared/child-process/run-process'
-import { windowsPowerShellPath } from '../../shared/child-process/windows-system-binary'
-import { parseOrchestrationTaskDepsFlag } from '../runtime/orchestration/task-deps-flag'
+import { runProcess } from '@orca/process-host'
+import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
+import { parseOrchestrationTaskDepsFlag } from '../runtime/orchestration/coordinator/dispatch/task-deps-flag'
 
 const PARENT_TASK_ID = 'task_b2a580db74d8'
 

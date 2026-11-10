@@ -1,12 +1,12 @@
-import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { focusRuntimeTerminalSurface } from '@/runtime/sync-runtime-graph'
-import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-types'
+import '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
+import { focusRuntimeTerminalSurface } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
+import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-terminal-contracts'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
-} from '../../../../shared/terminal-tab-types'
-import type { AppState } from '../../store/types'
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 
 export function resolveTerminalPresentation(data: {
   presentation?: RuntimeTerminalPresentation
@@ -32,15 +32,6 @@ export function focusTerminalInitiatedTab(
 ): void {
   if (!focusRuntimeTerminalSurface(tabId, leafId, worktreeId)) {
     focusTerminalTabSurface(tabId, leafId)
-  }
-}
-
-export function activateTerminalInitiatedWorktree(store: AppState, worktreeId: string): void {
-  store.setActiveView('terminal')
-  store.setActiveWorktree(worktreeId)
-  store.markWorktreeVisited(worktreeId)
-  if (!store.isNavigatingHistory) {
-    store.recordWorktreeVisit(worktreeId)
   }
 }
 
@@ -87,7 +78,7 @@ export function addSplitLeafToLayout(
   activateNewLeaf = true
 ): TerminalLayoutSnapshot {
   const root = layout?.root ?? { type: 'leaf', leafId: sourceLeafId }
-  const existingLeafIds = collectLeafIdsInOrder(root)
+  const existingLeafIds = collectLayoutLeafIdsInOrder(root)
   const nextActiveLeafId =
     activateNewLeaf || !layout?.activeLeafId || !existingLeafIds.includes(layout.activeLeafId)
       ? newLeafId
@@ -123,7 +114,7 @@ export function activateExistingLeafInLayout(
   ptyId: string,
   title?: string | null
 ): TerminalLayoutSnapshot | null {
-  if (!layout?.root || !collectLeafIdsInOrder(layout.root).includes(leafId)) {
+  if (!layout?.root || !collectLayoutLeafIdsInOrder(layout.root).includes(leafId)) {
     return null
   }
   return {

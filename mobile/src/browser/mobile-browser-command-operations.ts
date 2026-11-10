@@ -1,23 +1,14 @@
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import type { RpcMethodName } from '../transport/rpc-params-contract'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
-import type { RpcCompatibleReader } from '../transport/rpc-operation-contract'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import type { RpcMethodName } from '../../../src/shared/rpc-contract/rpc-params-catalog.generated'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
+import type { RpcCompatibleReader } from '../transport/rpc/rpc-operation-contract'
 import {
   browserCommandUnreadReplySchema,
   browserNavigationSettledSchema
 } from './browser-command-reply-schema'
 
-/**
- * Every command the phone sends to a hosted browser page.
- *
- * All of them share one acceptance because the screen treats them alike: a refusal is raised with
- * the host's own message, which the caller then either shows or swallows as a transient automation
- * failure. What differs between them is the copy a message-less refusal falls back to, and that
- * stays at the call site. None reads the reply beyond `browser.goto`'s settled URL.
- *
- * These are mutations against a live page, so a lost reply is unknown rather than failed: no call
- * site retries one, and the delivery-unknown mark on a transport rejection is left intact.
- */
+// Hosted-page commands share refusal policy: raise host message, leave fallback copy at caller; only goto reads payload URL.
+// Mutations with lost replies remain delivery-unknown and must not be retried; preserve transport rejection marker.
 function browserPageCommandReading<Method extends RpcMethodName, Variant extends string, Value>(
   name: string,
   method: Method,

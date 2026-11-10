@@ -1,31 +1,48 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TerminalRunFactsRegister } from '../../../runtime/terminal-run-facts'
+import { TerminalRunFactsRegister } from '../../../runtime/terminal/lifecycle/terminal-run-facts'
 import { ptyOwnership } from '../provider/ownership-state'
 import { createPtyWriteInput } from './write-input'
+
+import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
 const PTY_ID = 'pty-user-input'
 
 const { provider } = vi.hoisted(() => ({
-  provider: { write: vi.fn(), hasPty: vi.fn(() => true) }
+  provider: {
+    write: vi.fn(),
+    hasPty: vi.fn(() => true),
+    writeWithSettlement:
+      vi.fn<(id: string, data: string) => WriteSettlement | Promise<WriteSettlement>>()
+  }
 }))
 
 vi.mock('../provider/registry', () => ({
   tryGetProviderForPty: (id: string) => (id === PTY_ID ? provider : undefined)
 }))
 
-function createWriteInput(facts: TerminalRunFactsRegister) {
-  const runtime = { getDriver: () => ({ kind: 'desktop' }), terminalRunFacts: facts }
+function createWriteInput(
+  facts: TerminalRunFactsRegister,
+  observeClaudeTerminalEvidence = vi.fn()
+) {
+  const runtime = {
+    getDriver: () => ({ kind: 'desktop' }),
+    terminalRunFacts: facts,
+    observeClaudeTerminalEvidence,
+    noteRemoteDesktopHostInput: vi.fn()
+  }
   const mainWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: write input reads only getDriver and terminalRunFacts from the runtime, and isDestroyed/webContents from the window.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stubs implement every runtime and window member this writer reads.
   return createPtyWriteInput({ mainWindow: mainWindow as never, runtime: runtime as never })
 }
 
 beforeEach(() => {
-  ptyOwnership.set(PTY_ID, null)
+  ptyOwnership.set(PTY_ID, 'local')
   provider.write.mockReset()
+  provider.writeWithSettlement.mockReset()
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
   ptyOwnership.delete(PTY_ID)
 })
 

@@ -1,3 +1,4 @@
+import type * as MobileFileTapOpenModule from '../../../files/session-documents/mobile-file-tap-open'
 import type { MountAdapter } from '../recording-scenario'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -6,21 +7,14 @@ const HOST = 'host-1'
 const WORKSPACE = 'workspace-1'
 const TERMINAL = 'terminal-1'
 
-/**
- * Tapping a path a terminal printed: the host resolve, then the worktree open it may lead to.
- *
- * The entry point is fire-and-forget (`void ... .catch`), so the recording observes the two sends,
- * the route it pushed and the miss callback rather than a returned value. Its three delayed
- * activation attempts run on the scenario's own clock, which is what makes the tab-switch order
- * observable at all.
- */
+// Observe sends/routes/misses from the fire-and-forget opener; use scenario time to expose delayed tab-activation ordering.
 export function fileTapOpenMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
   return {
     'files.terminal-path-tap': ({ client, effect }) => {
-      const open = modules.load<typeof import('../../../session/mobile-file-tap-open')>(
-        'mobile/src/session/mobile-file-tap-open.ts'
+      const open = modules.load<typeof MobileFileTapOpenModule>(
+        'mobile/src/files/session-documents/mobile-file-tap-open.ts'
       ).openMobileFileTap
       type Tab = { id: string; relativePath?: string }
       const timers: ReturnType<typeof setTimeout>[] = []
@@ -44,10 +38,14 @@ export function fileTapOpenMountAdapters(
               worktreeId: WORKSPACE,
               worktreeName: 'workspace',
               terminalHandle: TERMINAL,
-              pathText: String(args.pathText ?? 'src/app.ts'),
               cwd: '/repo',
-              line: args.line === undefined ? null : Number(args.line),
-              column: null,
+              candidates: [
+                {
+                  pathText: String(args.pathText ?? 'src/app.ts'),
+                  line: args.line === undefined ? null : Number(args.line),
+                  column: null
+                }
+              ],
               pushPreviewRoute: (href) => effect('push-preview-route', href),
               openBrowser: (url: string) => effect('open-browser', { url }),
               triggerOpenFeedback: () => effect('open-feedback', {}),

@@ -5,13 +5,19 @@ import type { CreateWorktreeResult } from '../../../../shared/worktree/create-ty
 import type { Store } from '../../../persistence/loading-store/store'
 import type { CreateWorktreeArgsWithSystemProvenance } from '../ipc-context-schemas'
 import { getFolderWorkspaceInstanceId, mergeFolderWorkspace } from '../folder-workspace-model'
-import { resolveWorktreeCreateDisplayNameRequest } from '../../worktree-logic'
+import { resolveWorktreeCreateDisplayNameRequest } from '../../worktree-display-name'
+import { hostWorktreeTargetForRepo } from '../../../persistence/host-qualified-worktree-meta'
+import {
+  isPreparedFolderSetup,
+  prepareFolderWorktreeSetup
+} from '../../../runtime/workspaces/creation/runtime-folder-worktree-setup'
+import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 
-export function createFolderWorkspace(
+export async function createFolderWorkspace(
   args: CreateWorktreeArgsWithSystemProvenance,
   repo: Repo,
   store: Store
-): CreateWorktreeResult {
+): Promise<CreateWorktreeResult> {
   const now = Date.now()
   const instanceId = randomUUID()
   const worktreeId = getFolderWorkspaceInstanceId(repo, instanceId)
@@ -22,7 +28,7 @@ export function createFolderWorkspace(
     args.cliProvenance?.kind === 'created-by-cli',
     args.nameWasGenerated === true
   )
-  const meta = store.setWorktreeMeta(worktreeId, {
+  const meta = store.setWorktreeMeta(hostWorktreeTargetForRepo(worktreeId, repo), {
     instanceId,
     ...(store.getProjectHostSetups
       ? getProjectHostSetupWorktreeMeta(store.getProjectHostSetups(), repo)
@@ -58,9 +64,27 @@ export function createFolderWorkspace(
       : {}),
     ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
     ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
+    ...(args.linkedItems !== undefined ? { linkedItems: args.linkedItems } : {}),
     ...(args.linkedTaskSourceContext !== undefined
       ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
       : {})
   })
-  return { worktree: mergeFolderWorkspace(repo, worktreeId, meta) }
+  const worktree = mergeFolderWorkspace(repo, worktreeId, meta)
+  // The window opens the Setup tab from `setup`, as for a new worktree.
+  const prepared = await prepareFolderWorktreeSetup({
+    // A desktop create is the user's act, as for a new worktree.
+    request: { ...args, wslUserAct: true },
+    repo,
+    worktree,
+    settings: store.getSettings(),
+    runtimeTarget: () => getLocalProjectWorktreeGitOptions(store, repo),
+    shouldUseSetupRunner: true
+  })
+  const setup = isPreparedFolderSetup(prepared) ? prepared : undefined
+  return {
+    worktree,
+    ...(setup?.setup ? { setup: setup.setup } : {}),
+    ...(setup?.setupTrustMismatch ? { setupTrustMismatch: setup.setupTrustMismatch } : {}),
+    ...(prepared?.warning ? { warning: prepared.warning } : {})
+  }
 }

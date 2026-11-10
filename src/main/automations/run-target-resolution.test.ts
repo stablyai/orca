@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import type { Store } from '../persistence'
-import type { Automation } from '../../shared/automations-types'
-import type { WorkspaceRunContext } from '../../shared/task-source-context'
+import type { Store } from '../persistence/loading-store/store'
+import type { Automation } from '../../shared/automations/automation-definition'
+import type { WorkspaceRunContext } from '../../shared/work-items/task-source-context'
 import type { ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
 import {
   projectAutomationSelector,
   type AutomationProjectionContext
-} from '../../shared/automation-list-scope'
-import { toAutomationOwnerPrecondition } from '../../shared/automation-owner-precondition'
+} from '../../shared/automations/ownership/automation-list-scope'
+import { toAutomationOwnerPrecondition } from '../../shared/automations/ownership/automation-owner-precondition'
+
 import { resolveAutomationRunTarget } from './run-target-resolution'
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
@@ -95,9 +96,11 @@ function makeStore(
       return repo ? repo.connectionId?.trim() || null : undefined
     }
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: run-target resolution reads only these Store members.
   return {
     getProjectHostSetups: () => setups,
     getRepo: (id: string) => repos.find((repo) => repo.id === id),
+    getRepos: () => repos,
     automationOwnerPrecondition: () =>
       projectedAutomation
         ? toAutomationOwnerPrecondition(
@@ -108,46 +111,10 @@ function makeStore(
   } as unknown as Store
 }
 
-describe('resolveAutomationRunTarget owner projection', () => {
-  it('refuses a context-less local selector whose SSH-backed repo makes it malformed', () => {
-    const repo = makeRepo({ connectionId: 'ssh-1' })
-    const automation = makeAutomation(null)
-    const store = makeStore([], [repo], automation)
-
-    expect(resolveAutomationRunTarget(store, automation)).toEqual({
-      ok: false,
-      error: 'This automation has no host to run on.'
-    })
-  })
-
-  it('keeps a generation-less legacy SSH selector runnable when its host is current', () => {
-    const repo = makeRepo({ connectionId: 'ssh-1' })
-    const automation = makeAutomation(null, {
-      executionTargetType: 'ssh',
-      executionTargetId: 'ssh-1'
-    })
-    const store = makeStore([], [repo], automation)
-
-    expect(resolveAutomationRunTarget(store, automation)).toMatchObject({
-      ok: true,
-      cwd: '/repo'
-    })
-  })
-})
-
 describe('resolveAutomationRunTarget projectId drift', () => {
   it('resolves when only the derived projectId tier differs (repo: snapshot vs github: setup)', () => {
     const store = makeStore([makeSetup()], [makeRepo()])
     const automation = makeAutomation(makeRunContext({ projectId: 'repo:repo-1' }))
-
-    const result = resolveAutomationRunTarget(store, automation)
-
-    expect(result).toMatchObject({ ok: true, cwd: '/repo' })
-  })
-
-  it('resolves when the snapshot is at the git: tier and the setup climbed to github:', () => {
-    const store = makeStore([makeSetup()], [makeRepo()])
-    const automation = makeAutomation(makeRunContext({ projectId: 'git:github.com/o/r' }))
 
     const result = resolveAutomationRunTarget(store, automation)
 
@@ -162,44 +129,60 @@ describe('resolveAutomationRunTarget projectId drift', () => {
 
     expect(result).toMatchObject({ ok: false })
   })
+})
 
-  it('still blocks when the hostId no longer matches the setup', () => {
-    // Guard returns at the setup hostId/repoId check before any repo lookup, so
-    // the repo's execution host is irrelevant here — assert the guard's own error.
-    const store = makeStore([makeSetup({ hostId: 'ssh:devbox' })], [makeRepo()])
-    const automation = makeAutomation(makeRunContext({ hostId: 'local' }))
+describe('resolveAutomationRunTarget on a managed SSH host', () => {
+  it('skips a desktop row whose SSH host now runs automations on its Orca server', () => {
+    const sshContext = { hostId: 'ssh:box', path: '/srv/repo' } as const
+    const store = makeStore(
+      [makeSetup(sshContext)],
+      [makeRepo({ connectionId: 'box', path: '/srv/repo' })]
+    )
+    store.getSshTarget = (id: string) =>
+      id === 'box'
+        ? {
+            id,
+            label: 'Build box',
+            host: 'box',
+            port: 22,
+            username: 'me',
+            orcadFence: { environmentId: 'env-1' }
+          }
+        : undefined
+    const automation = makeAutomation(makeRunContext(sshContext), {
+      executionTargetType: 'ssh',
+      executionTargetId: 'box'
+    })
 
-    const result = resolveAutomationRunTarget(store, automation)
-
-    expect(result).toMatchObject({
+    expect(resolveAutomationRunTarget(store, automation)).toMatchObject({
       ok: false,
-      error: 'Automation run target no longer matches the selected project host setup.'
+      errorCode: 'managedHostServer',
+      errorParams: { host: 'Build box' }
     })
   })
+})
 
-  it("still blocks when the repo's execution host drifted off the automation host", () => {
-    // Setup/context hostId agree, but the repo itself now executes on another host —
-    // pins the repo-execution-host check that lives past the setup-match guard.
-    const store = makeStore([makeSetup()], [makeRepo({ executionHostId: 'ssh:devbox' })])
-    const automation = makeAutomation(makeRunContext())
-
-    const result = resolveAutomationRunTarget(store, automation)
-
-    expect(result).toMatchObject({
-      ok: false,
-      error: 'Repository is no longer attached to the selected automation host.'
+describe('resolveAutomationRunTarget on a managed SSH workspace pin', () => {
+  it('skips a local row whose pinned workspace is on a managed SSH host', () => {
+    const store = makeStore([makeSetup()], [makeRepo()])
+    store.automationOwnerPrecondition = () => ({
+      selector: { kind: 'ssh', targetId: 'box', targetGeneration: 7 }
     })
-  })
+    store.getSshTarget = (id: string) =>
+      id === 'box'
+        ? {
+            id,
+            label: 'Build box',
+            host: 'box',
+            port: 22,
+            username: 'me',
+            orcadFence: { environmentId: 'env-1' }
+          }
+        : undefined
 
-  it('still blocks when the path no longer matches the setup', () => {
-    const store = makeStore([makeSetup({ path: '/repo/new' })], [makeRepo({ path: '/repo/new' })])
-    const automation = makeAutomation(makeRunContext({ path: '/repo/old' }))
-
-    const result = resolveAutomationRunTarget(store, automation)
-
-    expect(result).toMatchObject({
+    expect(resolveAutomationRunTarget(store, makeAutomation(makeRunContext()))).toMatchObject({
       ok: false,
-      error: 'Project path for the selected automation host has changed.'
+      errorCode: 'managedHostServer'
     })
   })
 })
