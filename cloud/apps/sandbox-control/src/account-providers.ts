@@ -20,6 +20,11 @@ export type AccountProvider = {
   format(credential: string): string
   /** Extra headers derived from the real credential (e.g. Codex's ChatGPT account id). */
   extraHeaders?(credential: string): Record<string, string>
+  /**
+   * The provider answered 401 to this credential. Default (absent): mark it revoked. Codex instead
+   * kicks a single-flight lease refresh, which marks it expired/revoked itself if the refresh token is dead.
+   */
+  onUnauthorized?(ctx: { db: D1Database; keyring: Keyring; userId: string; now: number; waitUntil: (work: Promise<unknown>) => void }): Promise<void>
   /** The real value for this person, or null (none, expired, revoked). */
   credential(db: D1Database, keyring: Keyring, userId: string, now: number): Promise<string | null>
 }

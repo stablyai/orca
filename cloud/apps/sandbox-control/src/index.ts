@@ -347,7 +347,11 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
               if (status === 401) {
                 // The provider no longer accepts it (revoked at the source): stop using it until renewed.
                 const now = (deps.now ?? Date.now)()
-                const work = markAgentCredentialRevoked(env.SANDBOX_DB, row.user_id, agent, now).then(() => {
+                const waitUntil = (work: Promise<unknown>) => (deps.waitUntil ? deps.waitUntil(work.catch(() => undefined)) : void work.catch(() => undefined))
+                const handled = provider.onUnauthorized
+                  ? keyring.then((ring) => provider.onUnauthorized!({ db: env.SANDBOX_DB, keyring: ring, userId: row.user_id, now, waitUntil }))
+                  : markAgentCredentialRevoked(env.SANDBOX_DB, row.user_id, agent, now)
+                const work = handled.then(() => {
                   forgetAccountCredential(row.user_id, agent)
                   scheduleEnvRefresh(env, deps, row)
                 })
