@@ -6,7 +6,8 @@ import { sessionTabCreateTerminal } from '../../session/tabs/mobile-session-tab-
 export type MobileSessionTerminalCreateOptions = MobileQuickCommandLaunch['options'] & {
   onPromptSent?: () => void
   errorToast?: string
-  sourceChatFork?: { sessionId: string; agent: string }
+  /** With throughEntryId, a terminal Claude chat's fork cut at that transcript entry. */
+  sourceChatFork?: { sessionId: string; agent: string; throughEntryId?: string }
   /** Show the tab as a terminal even when the agent it runs would open as a chat. */
   terminalView?: boolean
 }
@@ -18,7 +19,7 @@ export function requestMobileSessionTerminalCreate(args: {
   clientMutationId: string
   agent?: MobileNewTabAgentOption['agent']
   options?: MobileQuickCommandLaunch['options']
-  sourceChatFork?: { sessionId: string }
+  sourceChatFork?: { sessionId: string; throughEntryId?: string }
 }) {
   const { client, worktreeId, afterTabId, clientMutationId, agent, options, sourceChatFork } = args
   const params = {

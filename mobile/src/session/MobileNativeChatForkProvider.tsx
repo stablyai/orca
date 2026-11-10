@@ -38,9 +38,23 @@ export function MobileNativeChatForkProvider({
   useLayoutEffect(() => {
     latestController.current = controller
   })
+  const terminal = controller.activeSessionTab?.type === 'terminal'
   const createFork = useCallback(
-    (agent: TuiAgent, forkFrom: StructuredAgentSessionForkSource) =>
-      forkMobileStructuredChat(latestController.current, agent, forkFrom),
+    async (agent: TuiAgent, forkFrom: StructuredAgentSessionForkSource) => {
+      const current = latestController.current
+      // A terminal chat forks into a new terminal resuming a cut copy of its transcript.
+      if (current.activeSessionTab?.type === 'terminal') {
+        await current.handleCreateTerminal(undefined, {
+          sourceChatFork: {
+            sessionId: forkFrom.sessionId,
+            agent,
+            throughEntryId: forkFrom.throughItemId
+          }
+        })
+        return
+      }
+      return forkMobileStructuredChat(current, agent, forkFrom)
+    },
     []
   )
   const executionHost = useWorkspaceExecutionHost()
@@ -50,6 +64,7 @@ export function MobileNativeChatForkProvider({
       const current = latestController.current
       return forkMobileStructuredChatIntoWorktree({
         mode,
+        terminal: current.activeSessionTab?.type === 'terminal',
         sourceLabel: current.activeSessionTab?.title || undefined,
         client: current.client,
         sourceWorktreeId: current.worktreeId,
@@ -79,7 +94,8 @@ export function MobileNativeChatForkProvider({
     agentWorking: chat.nativeChatTurnActive,
     sessionForkSupport: chat.nativeChatForkSupport,
     createFork,
-    createWorktreeFork
+    createWorktreeFork,
+    terminal
   })
   const showNothingToFork = useCallback(
     () =>

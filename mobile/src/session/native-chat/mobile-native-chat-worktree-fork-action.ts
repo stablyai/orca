@@ -1,3 +1,4 @@
+import { AI_VAULT_TERMINAL_FORK_CUT_CAPABILITY } from '../../../../src/shared/ai-vault/resume/ai-vault-resume-preparation'
 import { AGENT_SESSION_CREATE_FORK_WORKTREE_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-session/agent-session-create-capabilities'
 import type { ActionSheetAction } from '../../components/ActionSheetModal'
 import type { MobileSessionController } from '../use-mobile-session-controller'
@@ -20,8 +21,13 @@ export function mobileWorktreeForkAction(
   onDismiss?: () => void,
   mode: MobileWorktreeForkMode = 'worktree'
 ): ActionSheetAction | null {
+  const terminal = tab?.type === 'terminal'
   if (
-    tab?.type !== 'agent-session' ||
+    !tab ||
+    (tab.type !== 'agent-session' && !terminal) ||
+    (terminal &&
+      (mode === 'subagent' ||
+        !controller.hostCapabilities?.includes(AI_VAULT_TERMINAL_FORK_CUT_CAPABILITY))) ||
     controller.isFloatingWorkspaceRoute ||
     !controller.hostCapabilities?.includes(AGENT_SESSION_CREATE_FORK_WORKTREE_RUNTIME_CAPABILITY) ||
     (mode === 'subagent' && !mobileSubagentForkAvailable(controller.hostCapabilities))

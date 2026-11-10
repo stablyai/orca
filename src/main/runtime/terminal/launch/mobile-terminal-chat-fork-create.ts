@@ -9,6 +9,7 @@ import {
   prepareStructuredChatCliFork,
   isStructuredChatCliForkSourceCurrent
 } from '../../../ai-vault/structured-chat-cli-fork'
+import { prepareTerminalChatForkForWorkspace } from '../../../ai-vault/terminal-chat-fork-cut'
 import { buildMobileTerminalChatFork } from './mobile-terminal-chat-fork'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -74,17 +75,24 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
     const store = this.store
     const preflight = await (async () => {
       try {
-        await this.ensureStructuredAgentSessionHost()
-        const prepared = await prepareStructuredChatCliFork(
-          { sourceChat: { sessionId: sourceId, workspaceId: worktreeId }, fork: true },
-          (prepareArgs) => this.aiVault.prepare(prepareArgs)
-        )
+        const throughEntryId = opts.sourceChatFork?.throughEntryId
+        // A terminal Claude chat: cut its own transcript; the copy lands in this worktree's project.
+        const prepared = throughEntryId
+          ? await prepareTerminalChatForkForWorkspace(sourceId, throughEntryId, workspace.path)
+          : await (async () => {
+              await this.ensureStructuredAgentSessionHost()
+              return prepareStructuredChatCliFork(
+                { sourceChat: { sessionId: sourceId, workspaceId: worktreeId }, fork: true },
+                (prepareArgs) => this.aiVault.prepare(prepareArgs)
+              )
+            })()
         this.assertStableReadyGraph(graphEpoch)
         if (
-          !isStructuredChatCliForkSourceCurrent(sourceId, worktreeId) ||
-          !this.mobileSessionTabsByWorktree
-            .get(worktreeId)
-            ?.tabs.some((tab) => tab.type === 'agent-session' && tab.sessionId === sourceId)
+          !throughEntryId &&
+          (!isStructuredChatCliForkSourceCurrent(sourceId, worktreeId) ||
+            !this.mobileSessionTabsByWorktree
+              .get(worktreeId)
+              ?.tabs.some((tab) => tab.type === 'agent-session' && tab.sessionId === sourceId))
         ) {
           throw new Error('chat_fork_source_unavailable')
         }

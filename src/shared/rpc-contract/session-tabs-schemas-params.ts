@@ -150,7 +150,11 @@ export const SetTabProps = WorktreeTabSelector.extend({
 
 export const CreateTerminalTab = WorktreeTabSelector.extend({
   sourceChatFork: z
-    .object({ sessionId: z.string().min(1) })
+    .object({
+      sessionId: z.string().min(1),
+      // A terminal Claude chat's fork stops at this transcript entry; absent, a chat session's fork.
+      throughEntryId: z.string().min(1).max(512).optional()
+    })
     .strict()
     .optional(),
   afterTabId: z.string().optional(),

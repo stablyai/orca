@@ -14,6 +14,8 @@ import { sessionWorktreeRecordRead } from '../worktree/session-worktree-record-o
 import { createWorktreeWithNameRetry } from '../tasks/worktree-create-retry'
 import type { WorktreeCreateIdempotencyProbe } from '../tasks/worktree-create-idempotency-policy'
 import { createMobileStructuredAgentSession } from './native-chat/agent-session/mobile-structured-agent-session-launch'
+import { sessionTabCreateTerminal } from './tabs/mobile-session-tab-write-operations'
+import { randomV4Uuid } from '../platform/random-v4-uuid'
 
 /** A worktree you drive, or a background subagent that reports back to the chat it came from. */
 export type MobileWorktreeForkMode = 'worktree' | 'subagent'
@@ -114,6 +116,8 @@ export async function forkMobileStructuredChatIntoWorktree(input: {
   agent: TuiAgent
   forkFrom: StructuredAgentSessionForkSource
   mode?: MobileWorktreeForkMode
+  /** A terminal chat: the host cuts its transcript and resumes the copy in a terminal there. */
+  terminal?: boolean
   /** The chat a subagent reports back to, by name. */
   sourceLabel?: string
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
@@ -143,7 +147,7 @@ export async function forkMobileStructuredChatIntoWorktree(input: {
   if (!base) {
     return
   }
-  const subagent = input.mode === 'subagent'
+  const subagent = input.mode === 'subagent' && input.terminal !== true
   const task = subagent ? await askMobileSubagentTask() : null
   if (subagent && !task) {
     return
@@ -172,6 +176,34 @@ export async function forkMobileStructuredChatIntoWorktree(input: {
   }))
   if ('error' in created) {
     report(created.error)
+    return
+  }
+  if (input.terminal) {
+    const opened = await sessionTabCreateTerminal
+      .request(
+        client,
+        {
+          worktree: `id:${created.worktreeId}`,
+          clientMutationId: randomV4Uuid(),
+          sourceChatFork: {
+            sessionId: input.forkFrom.sessionId,
+            throughEntryId: input.forkFrom.throughItemId
+          },
+          activate: false,
+          select: true,
+          navigation: 'caller' as const
+        },
+        { timeoutMs: 120_000 }
+      )
+      .then(
+        (response) => sessionTabCreateTerminal.interpret(response),
+        () => null
+      )
+      .catch(() => null)
+    input.openWorktree(created.worktreeId, created.name, created.warning)
+    if (!opened) {
+      report(mobileWorktreeForkCopy.unconfirmed(agentName))
+    }
     return
   }
   const result = await createMobileStructuredAgentSession(

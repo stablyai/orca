@@ -1,3 +1,4 @@
+import { AI_VAULT_TERMINAL_FORK_CUT_CAPABILITY } from '../../../../src/shared/ai-vault/resume/ai-vault-resume-preparation'
 import { useRegisteredAgent } from './use-mobile-registered-fork-agent'
 import type { MobileWorktreeForkMode } from '../mobile-structured-chat-worktree-fork'
 import { createContext, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -64,6 +65,8 @@ export function useMobileNativeChatFork(input: {
   /** The chat's options read on its installed agent; the host's own discovery owns it. */
   sessionForkSupport: AgentSessionOptionsResult['forkSupport']
   createFork: (agent: TuiAgent, forkFrom: StructuredAgentSessionForkSource) => Promise<void>
+  /** A terminal chat: forks cut its own transcript on the host, offered on each finished reply. */
+  terminal?: boolean
   createWorktreeFork: (
     agent: TuiAgent,
     forkFrom: StructuredAgentSessionForkSource,
@@ -87,7 +90,10 @@ export function useMobileNativeChatFork(input: {
     [host, registered, input.sessionForkSupport, inheritedOriginal]
   )
   const worktreeForkSupported =
-    input.hostCapabilities?.includes(AGENT_SESSION_CREATE_FORK_WORKTREE_RUNTIME_CAPABILITY) === true
+    input.hostCapabilities?.includes(AGENT_SESSION_CREATE_FORK_WORKTREE_RUNTIME_CAPABILITY) ===
+      true &&
+    (input.terminal !== true ||
+      input.hostCapabilities.includes(AI_VAULT_TERMINAL_FORK_CUT_CAPABILITY))
   const { messages, turnJournal, agentWorking, sessionId, agent, createFork, createWorktreeFork } =
     input
   const turns = useMemo(() => {
@@ -107,6 +113,27 @@ export function useMobileNativeChatFork(input: {
     () => nativeChatForkInventory(turnJournal?.items ?? []),
     [turnJournal]
   )
+  const terminal = input.terminal === true
+  const terminalForkSupported =
+    terminal && input.hostCapabilities?.includes(AI_VAULT_TERMINAL_FORK_CUT_CAPABILITY) === true
+  // A terminal chat has no session journal: a reply ends where the next message is yours.
+  const terminalForkPoints = useMemo(() => {
+    const ids = new Set<string>()
+    messages.forEach((message, index) => {
+      const next = messages[index + 1]
+      const last = index === messages.length - 1
+      if (
+        message.role === 'assistant' &&
+        message.source === 'transcript' &&
+        !message.agentStart &&
+        (next ? next.role === 'user' : !agentWorking) &&
+        (!last || !agentWorking)
+      ) {
+        ids.add(message.id)
+      }
+    })
+    return ids
+  }, [agentWorking, messages])
   // Reserved at the press, before any await, so a second press never starts a second fork.
   const inFlight = useRef(false)
   const [pending, setPending] = useState(false)
@@ -114,6 +141,15 @@ export function useMobileNativeChatFork(input: {
     (message: NativeChatMessage): MobileNativeChatForkOffer => {
       if (!mobileNativeChatRowHoldsForkSlot(message)) {
         return 'hidden'
+      }
+      if (terminal) {
+        return !terminalForkSupported || !sessionId || agent !== 'claude'
+          ? 'hidden'
+          : !terminalForkPoints.has(message.id)
+            ? 'reserved'
+            : pending
+              ? 'disabled'
+              : 'available'
       }
       const turnKey = turns.keyById.get(message.id)
       const offered =
@@ -143,6 +179,9 @@ export function useMobileNativeChatFork(input: {
       pending,
       sessionId,
       support,
+      terminal,
+      terminalForkPoints,
+      terminalForkSupported,
       turns
     ]
   )
