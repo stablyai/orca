@@ -65,19 +65,13 @@ const serverAutomationCatalogQuery = defineHostQuery<typeof NO_INPUT, Automation
 export function restoreAutomationCatalog(
   queryClient: QueryClient,
   hostId: string,
-  snapshot: { result: string; readAt: number }
+  snapshot: { result: unknown; readAt: number }
 ): void {
   const queryKey = hostQueryKey(hostId, automationCatalogQuery.family, PAIRED_TARGET, NO_INPUT)
   if (queryClient.getQueryData(queryKey) !== undefined) {
     return
   }
-  let result: unknown
-  try {
-    result = JSON.parse(snapshot.result)
-  } catch {
-    return
-  }
-  const parsed = automationListSchema.safeParse(result)
+  const parsed = automationListSchema.safeParse(snapshot.result)
   if (parsed.success) {
     queryClient.setQueryData<AutomationCatalog>(
       queryKey,

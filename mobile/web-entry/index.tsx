@@ -16,7 +16,11 @@ import {
   stampPageMountState,
   type PageMountTarget
 } from '../src/mobile-web-shell/bridge/page-bootstrap'
-import { storageReadResultSchema } from '../src/mobile-web-shell/bridge/bridge-native-verbs'
+import {
+  automationCatalogReadResultSchema,
+  BRIDGE_AUTOMATION_CATALOG_VERB,
+  storageReadResultSchema
+} from '../src/mobile-web-shell/bridge/bridge-native-verbs'
 import { BRIDGE_HOST_CATALOGS_GRANT } from '../src/mobile-web-shell/bridge/bridge-frame-fields'
 import {
   publishPageStorage,
@@ -198,15 +202,22 @@ bootstrapShellPage({
     // An open-target boot paints the shell's target first, so that is the screen to preload and restore.
     const route = bootRoute(session.route?.params?.[BRIDGE_OPEN_ROUTE_PARAM])
     const queryClient = createOrcaQueryClient()
-    const { host, automationCatalog } = session
+    const { host } = session
     const automationRestore =
       host &&
-      automationCatalog &&
+      client.getState() !== 'connected' &&
+      session.grants.native.includes(BRIDGE_AUTOMATION_CATALOG_VERB) &&
       route.pathname === `/h/${encodeURIComponent(host.id)}/automations`
-        ? import('../src/automations/use-automation-catalog')
-            .then(({ restoreAutomationCatalog }) =>
-              restoreAutomationCatalog(queryClient, host.id, automationCatalog)
-            )
+        ? Promise.all([
+            import('../src/automations/use-automation-catalog'),
+            client.callNativeVerb(BRIDGE_AUTOMATION_CATALOG_VERB, {})
+          ])
+            .then(([{ restoreAutomationCatalog }, reply]) => {
+              const snapshot = automationCatalogReadResultSchema.parse(reply.result)
+              if (snapshot) {
+                restoreAutomationCatalog(queryClient, host.id, snapshot)
+              }
+            })
             .catch(() => {})
         : null
     // One store read for the first screen's stored data, alongside the catalog and route loads.
@@ -224,8 +235,10 @@ bootstrapShellPage({
     })
     const bootRoutes = preloadBootRoutes(route.pathname)
     // Activation settles to English on failure and preloads settle either way, so the page always mounts.
-    void Promise.all([settleLatest(() => uiLocaleActivation), bootRoutes, automationRestore])
-      .then(() => awaitFirstPaintRestore(firstPaintRestore))
+    void Promise.all([settleLatest(() => uiLocaleActivation), bootRoutes])
+      .then(() =>
+        awaitFirstPaintRestore(Promise.all([firstPaintRestore, automationRestore]).then(() => {}))
+      )
       .then(() =>
         createRoot(container).render(
           // Catch outside ExpoRoot so route-resolution/import failures cannot bypass the page boundary.

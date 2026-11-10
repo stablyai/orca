@@ -164,7 +164,7 @@ export class DesktopConnection {
 
   rememberAutomationCatalog(client: SpikeRpcClient, result: string): void {
     if (this.client === client) {
-      this.automationCatalog = result.length <= 256 * 1024 ? { result: result, readAt: Date.now() } : null;
+      this.automationCatalog = result.length <= 8 * 1024 * 1024 ? { result: result, readAt: Date.now() } : null;
     }
   }
 

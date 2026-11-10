@@ -39,7 +39,6 @@ export type BridgeShellSession = {
   ownsHostArea: boolean
   /** The shell's proven host status at this init, unvalidated; null from shells that send none. */
   hostStatus: unknown
-  automationCatalog: { result: string; readAt: number } | null
 }
 
 // Normalize the wire’s absent route to one client-side shape; undefined and missing serialize identically.
@@ -64,7 +63,6 @@ export function readShellSession(
     storage: message.storage ?? {},
     storageOversize: message.storageOversize ?? [],
     ownsHostArea: message.ownsHostArea === true,
-    hostStatus: message.hostStatus ?? null,
-    automationCatalog: message.automationCatalog ?? null
+    hostStatus: message.hostStatus ?? null
   }
 }

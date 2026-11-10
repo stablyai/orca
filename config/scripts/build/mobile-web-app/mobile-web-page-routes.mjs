@@ -28,7 +28,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   {
     pathname: '/h/[hostId]/automations',
     grants: ['navigate', 'storage', 'externalLink', 'haptics'],
-    optionalGrants: [DEVICE_STORE_GRANT]
+    optionalGrants: [DEVICE_STORE_GRANT, 'native.automation.catalog.read']
   },
   // Accounts needs navigate/storage/externalLink for Back/shared layout wall; haptics census requires seam grant.
   {

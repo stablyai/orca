@@ -37,6 +37,7 @@ import { parseTerminalRailClaim, terminalRailKeyEnabled, TerminalRailClaim } fro
  */
 
 const BRIDGE_PROTOCOL_VERSION = 1;
+const AUTOMATION_CATALOG_VERB = 'native.automation.catalog.read';
 const MAX_PENDING_REQUESTS = 64;
 const MAX_SUBSCRIPTIONS = 32;
 // src/shared/mobile-bridge-frame-bytes.ts
@@ -146,7 +147,6 @@ interface BridgeInitWire {
   host: BridgeInitHostWire;
   storage: Record<string, string>;
   storageOversize: string[];
-  automationCatalog?: DesktopAutomationCatalog;
   refreshTerminalShortcuts?: boolean;
   ownsHostArea: boolean;
   safeAreaInsets: BridgeSafeAreaInsets;
@@ -562,6 +562,9 @@ export class BridgeHost {
    * keeps their storage/navigate/verb grants alive on a single Web instance.
    */
   private supportsGrant(grant: string): boolean {
+    if (grant === AUTOMATION_CATALOG_VERB) {
+      return this.readAutomationCatalog !== null && this.entryPathname === `/h/${this.meta.id}/automations`;
+    }
     if (grant === 'fault') { return this.faultSink !== null; }
     if (grant === 'externalLink') { return this.externalLink !== null; }
     if (grant === 'externalNavigation') { return this.externalNavigationEnabled; }
@@ -1187,6 +1190,19 @@ export class BridgeHost {
   /** Phone-only native verbs are served on-device; the desktop never sees them. */
   private serveNativeRequest(msg: ESObject, id: string, method: string, streaming: boolean): void {
     if (streaming) { this.sendLocalNativeError(id, 'native_verb_not_a_stream', 'Native methods are not streams'); return; }
+    if (method === AUTOMATION_CATALOG_VERB) {
+      if (this.routePathname !== `/h/${this.meta.id}/automations` || !this.routeGrants().includes(method)) {
+        this.sendLocalNativeError(id, 'native_verb_ungranted', 'Automation catalog is not granted'); return;
+      }
+      let params: ESObject = msg['params'];
+      if (!params || typeof params !== 'object' || Array.isArray(params) || Object.keys(params).length > 0) {
+        this.sendLocalNativeError(id, 'native_verb_params', 'Automation catalog does not take parameters'); return;
+      }
+      let catalog = this.client ? null : this.readAutomationCatalog?.();
+      let result = catalog ? `{"readAt":${catalog.readAt},"result":${catalog.result}}` : 'null';
+      this.sendReply(id, new RpcSuccess(id, result));
+      return;
+    }
     if (method === 'native.store.rows') {
       if (!this.routeGrants().includes(method)) { this.sendLocalNativeError(id, 'native_verb_ungranted', 'Device store not granted'); return; }
       if (!this.storageStore) { this.sendLocalNativeError(id, 'native_verb_failed', 'Device store unavailable'); return; }
@@ -1432,15 +1448,7 @@ export class BridgeHost {
       foldDivision: this.foldDivision,
       terminalKeyRail: this.railKeys
     };
-    if (!this.client && route.pathname === `${hostRoot}/automations`) {
-      init.automationCatalog = this.readAutomationCatalog?.() ?? undefined;
-    }
-    let frame = JSON.stringify(init);
-    if (init.automationCatalog && utf8Encode(frame).length > BRIDGE_MAX_FRAME_BYTES) {
-      init.automationCatalog = undefined;
-      frame = JSON.stringify(init);
-    }
-    this.pushFrame(frame);
+    this.pushFrame(JSON.stringify(init));
     this.log(`init sent (v1) grants=${grants.length} storage=${count}`);
   }
 

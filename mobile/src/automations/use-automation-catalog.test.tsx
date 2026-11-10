@@ -59,7 +59,7 @@ describe('automation catalog', () => {
     const port = automationClient((method) =>
       method === 'status.get' ? { capabilities: [] } : listReply('Box nightly')
     )
-    const saved = { result: JSON.stringify(listReply('Box review')), readAt: 1_000 }
+    const saved = { result: listReply('Box review'), readAt: 1_000 }
     port.state('disconnected')
     restoreAutomationCatalog(queryClient, 'desktop', saved)
     const states: ReturnType<typeof useAutomationCatalog>[] = []

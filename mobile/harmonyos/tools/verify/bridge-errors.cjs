@@ -46,6 +46,46 @@ function post(bridge, message) {
   bridge.onClientMessage(JSON.stringify({ v: 1, type: 'request', ...message }))
 }
 
+test('the offline Automations page reads a catalog larger than one frame without granting it to the host page', () => {
+  const BridgeHost = bridgeClass(createRpcPeer())
+  const verb = 'native.automation.catalog.read'
+  const root = `/h/${hostId}`
+  const catalog = {
+    automations: [{ id: 'scheduled', prompt: '测试🙂'.repeat(75_000) }],
+    items: [{ automationId: 'scheduled', selector: { kind: 'self' } }]
+  }
+  const build = {
+    ...manifest,
+    routes: [
+      ...manifest.routes,
+      { pathname: '/h/[hostId]/automations', grants: [], optionalGrants: [verb] }
+    ]
+  }
+  const run = (pathname) => {
+    const frames = []
+    const view = {
+      runJavaScript(script) {
+        frames.push(JSON.parse(JSON.parse(script.slice('window.__orcaNativePush('.length, -1))))
+        return Promise.resolve()
+      }
+    }
+    const bridge = new BridgeHost(null, view, build, { id: hostId }, pathname)
+    bridge.setAutomationCatalog(() => ({ result: JSON.stringify(catalog), readAt: 1_000 }))
+    bridge.onPushChannelReady()
+    post(bridge, { type: 'ready' })
+    post(bridge, { id: 'read-automation', method: verb, params: {} })
+    bridge.dispose()
+    return frames.filter((frame) => frame.id === 'read-automation')
+  }
+  const parts = run(`${root}/automations`)
+  assert.ok(parts.every((frame) => frame.part && frame.type === 'reply'))
+  assert.deepEqual(JSON.parse(parts.map((frame) => frame.chunk).join('')).result, {
+    readAt: 1_000,
+    result: catalog
+  })
+  assert.equal(run(root)[0].error.code, 'native_verb_ungranted')
+})
+
 test('only a live page that negotiated app inactivity receives the save signal', () => {
   const peer = createRpcPeer()
   const { bridge, frames } = createBridge(peer, null)
