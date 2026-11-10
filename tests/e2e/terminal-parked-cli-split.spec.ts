@@ -243,25 +243,12 @@ test('CLI splits an exact cold-parked tab without stealing the active tab or foc
   )
   expect(mountedBefore).not.toContain(targetTabId)
 
-  const splitPromise = runParkedSplitCli(userDataDir, sourceTerminal.handle)
-  let mountedDuringSplit: string[] = []
-  await expect
-    .poll(
-      async () => {
-        mountedDuringSplit = await orcaPage.evaluate(() =>
-          Array.from(window.__paneManagers?.keys() ?? []).sort()
-        )
-        return mountedDuringSplit.includes(targetTabId)
-      },
-      { timeout: HISTORICAL_SPLIT_TIMEOUT_MS, message: 'CLI did not remount its parked target' }
-    )
-    .toBe(true)
-  const splitRun = await splitPromise
-
-  expect(mountedDuringSplit.filter((tabId) => !mountedBefore.includes(tabId))).toEqual([
-    targetTabId
-  ])
-  expect(mountedBefore.filter((tabId) => !mountedDuringSplit.includes(tabId))).toEqual([])
+  const splitRun = await runParkedSplitCli(userDataDir, sourceTerminal.handle)
+  const mountedAfterSplit = await orcaPage.evaluate(() =>
+    Array.from(window.__paneManagers?.keys() ?? []).sort()
+  )
+  // Main-owned splits need no renderer mount; only the target may mount on the legacy path.
+  expect(mountedAfterSplit.filter((tabId) => tabId !== targetTabId)).toEqual(mountedBefore)
   expect(splitRun.elapsedMs).toBeLessThan(HISTORICAL_SPLIT_TIMEOUT_MS)
   expect(splitRun.response).toMatchObject({
     ok: true,
