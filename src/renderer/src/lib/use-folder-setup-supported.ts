@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import type { Repo } from '../../../shared/repo-types'
@@ -25,33 +25,44 @@ function folderSetupHost(repo: Repo | null | undefined): FolderSetupHost {
     : { kind: 'known', supported: true }
 }
 
-// Every answer, from the composer's probe or a Create retry, reaches all mounted consumers.
-const folderSetupAnswers = new Map<string, boolean>()
-// Hosts come and go in a session; keep the most recent answers, as the compatibility cache does.
-const FOLDER_SETUP_ANSWERS_MAX = 32
-const folderSetupListeners = new Set<() => void>()
-
-function subscribeFolderSetupAnswers(listener: () => void): () => void {
-  folderSetupListeners.add(listener)
-  return () => folderSetupListeners.delete(listener)
+type FolderSetupObservation = {
+  answer: boolean | undefined
+  listeners: Set<() => void>
+  probe?: Promise<boolean>
 }
 
-async function probeFolderSetup(environmentId: string): Promise<boolean> {
-  const supported = await runtimeEnvironmentSupportsCapability(
+// Active readers own answers; the runtime compatibility cache handles reuse after they leave.
+const folderSetupObservations = new Map<string, FolderSetupObservation>()
+
+function probeFolderSetup(environmentId: string): Promise<boolean> {
+  const observation = folderSetupObservations.get(environmentId)
+  if (observation?.probe) {
+    return observation.probe
+  }
+  const probe = runtimeEnvironmentSupportsCapability(
     environmentId,
     WORKTREE_FOLDER_SETUP_RUNTIME_CAPABILITY
   )
-  const changed = folderSetupAnswers.get(environmentId) !== supported
-  folderSetupAnswers.delete(environmentId)
-  folderSetupAnswers.set(environmentId, supported)
-  const oldest = folderSetupAnswers.keys().next().value
-  if (folderSetupAnswers.size > FOLDER_SETUP_ANSWERS_MAX && oldest !== undefined) {
-    folderSetupAnswers.delete(oldest)
+    .then((supported) => {
+      if (
+        observation &&
+        folderSetupObservations.get(environmentId) === observation &&
+        observation.answer !== supported
+      ) {
+        observation.answer = supported
+        observation.listeners.forEach((listener) => listener())
+      }
+      return supported
+    })
+    .finally(() => {
+      if (observation?.probe === probe) {
+        observation.probe = undefined
+      }
+    })
+  if (observation) {
+    observation.probe = probe
   }
-  if (changed) {
-    folderSetupListeners.forEach((listener) => listener())
-  }
-  return supported
+  return probe
 }
 
 /** Folder setup runs only on hosts that report it; older hosts would save scripts that never run. Rejects when the host can't answer. */
@@ -65,8 +76,31 @@ export function resolveFolderSetupSupported(repo: Repo | null | undefined): Prom
 export function useFolderSetupSupport(repo: Repo | null | undefined): FolderSetupSupport {
   const host = folderSetupHost(repo)
   const environmentId = host.kind === 'runtime' ? host.environmentId : null
-  const answer = useSyncExternalStore(subscribeFolderSetupAnswers, () =>
-    environmentId ? folderSetupAnswers.get(environmentId) : undefined
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      if (!environmentId) {
+        return () => {}
+      }
+      let observation = folderSetupObservations.get(environmentId)
+      if (!observation) {
+        observation = { answer: undefined, listeners: new Set() }
+        folderSetupObservations.set(environmentId, observation)
+      }
+      observation.listeners.add(listener)
+      return () => {
+        observation.listeners.delete(listener)
+        if (
+          observation.listeners.size === 0 &&
+          folderSetupObservations.get(environmentId) === observation
+        ) {
+          folderSetupObservations.delete(environmentId)
+        }
+      }
+    },
+    [environmentId]
+  )
+  const answer = useSyncExternalStore(subscribe, () =>
+    environmentId ? folderSetupObservations.get(environmentId)?.answer : undefined
   )
   useEffect(() => {
     // Re-asked on mount so an in-place host upgrade shows; a failure stays pending for Create to retry.
