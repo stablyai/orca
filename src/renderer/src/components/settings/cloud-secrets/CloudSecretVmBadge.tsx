@@ -1,7 +1,9 @@
-import { TriangleAlert } from 'lucide-react'
+import { KeyRound, TriangleAlert } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cloudSecretStoredOnVm } from '../../../../../shared/cloud-secrets/cloud-secret-rules'
+import type { CloudSecretKind } from '../../../../../shared/cloud-secrets/cloud-secrets-wire'
 import { Badge } from '../../ui/badge'
+import { cloudSecretKindLabel } from './cloud-secrets-copy'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 
 /**
@@ -46,4 +48,31 @@ export function cloudSecretVmWarning(t: ReturnType<typeof useTranslate>, name: s
         'cloudSecrets.vm.warningKey',
         'Orca can’t swap this key at the network edge, so cloud workspaces get the real value. Anything running in the sandbox can read it.'
       )
+}
+
+/** The chips on a secret's row, on their own line under the name: Agent key, or Real value in sandbox. */
+export function CloudSecretChips({
+  name,
+  kind
+}: {
+  name: string
+  kind: CloudSecretKind
+}): React.JSX.Element | null {
+  const t = useTranslate()
+  const inFull = cloudSecretStoredOnVm(name)
+  if (kind !== 'agent_key' && !inFull) {
+    return null
+  }
+  return (
+    <span className="flex flex-wrap items-center gap-1.5">
+      {inFull ? (
+        <CloudSecretVmBadge name={name} />
+      ) : (
+        <Badge variant="referenceLabel">
+          <KeyRound />
+          {cloudSecretKindLabel(name, t)}
+        </Badge>
+      )}
+    </span>
+  )
 }
