@@ -27,10 +27,11 @@ function build(overrides: Partial<DropdownActionInputs>) {
 }
 
 describe('dropdown row status', () => {
-  it('moves counts out of labels and disables only the local push no-ops', () => {
+  it('moves counts out of labels and keeps idle rows clickable', () => {
     const upToDate = build({})
-    expect(upToDate.push).toMatchObject({ label: 'Push', status: 'Up to date', disabled: true })
-    expect(upToDate.forcePush).toMatchObject({ status: 'Up to date', disabled: true })
+    // pushRemote can target a fork that tracked-upstream counts do not describe.
+    expect(upToDate.push).toMatchObject({ label: 'Push', status: 'Up to date', disabled: false })
+    expect(upToDate.forcePush).toMatchObject({ status: 'Up to date', disabled: false })
     // Counts can be stale until a fetch, so fetching actions stay clickable.
     expect(upToDate.pull).toMatchObject({ status: 'Up to date', idle: true, disabled: false })
     expect(upToDate.sync).toMatchObject({ status: 'Up to date', idle: true, disabled: false })
@@ -43,6 +44,18 @@ describe('dropdown row status', () => {
     expect(diverged.pull).toMatchObject({ label: 'Pull', status: '↓3' })
     expect(diverged.fastForward.status).toBe('May fail')
     expect(diverged.sync).toMatchObject({ label: 'Sync', status: '↓3 ↑1' })
+  })
+
+  it('lets force push roll back remote-only commits when nothing is ahead', () => {
+    const items = build({
+      upstreamStatus: { hasUpstream: true, upstreamName: 'origin/feature', ahead: 0, behind: 2 }
+    })
+    expect(items.forcePush).toMatchObject({
+      status: 'Replaces ↓2',
+      statusTone: 'warning',
+      disabled: false
+    })
+    expect(items.push.disabled).toBe(false)
   })
 
   it('explains unpublished branches with staged files', () => {
