@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, rmSync, truncateSync, unlinkSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  truncateSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs'
 
 import { tmpdir } from 'node:os'
 
@@ -156,6 +164,24 @@ describe('an install that carries a mobile web bundle', () => {
       MobileWebBundleManifestResultSchema.parse(manifest.ok && manifest.result).manifest.buildId
     ).toBe(replacement.buildId)
     expect(errorMessage(fresh)).toBeUndefined()
+  })
+
+  // A newer release written in place may add schema-v1 fields this host predates; it serves only the ones it knows.
+  it('serves a replacement manifest that carries fields this host does not know', async () => {
+    rmSync(join(scratch, 'out', 'mobile-web'), { recursive: true, force: true })
+    const replacement = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 5)
+    const manifestPath = join(replacement.root, 'manifest.json')
+    const written = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    written.assets[0].laterAssetField = 1
+    written.laterManifestField = true
+    writeFileSync(manifestPath, JSON.stringify(written), 'utf8')
+
+    const response = await call('mobileWeb.bundle.manifest')
+
+    const manifest = MobileWebBundleManifestResultSchema.parse(
+      response.ok && response.result
+    ).manifest
+    expect(manifest.buildId).toBe(replacement.buildId)
   })
 
   // A path survives rebuild; key verdicts by build too so an old failure cannot poison new bytes.

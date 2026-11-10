@@ -62,24 +62,24 @@ export const MobileWebBundleAssetPathSchema = z
     'asset path segment must be portable across macOS, Linux, and Windows'
   )
 
-export const MobileWebBundleAssetSchema = z
-  .object({
-    path: MobileWebBundleAssetPathSchema,
-    sha256: z.string().regex(SHA256_PATTERN),
-    byteLength: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES),
-    contentType: z.string().min(1).max(MAX_CONTENT_TYPE_LENGTH).regex(CONTENT_TYPE_PATTERN),
-    /** Length of the brotli copy at `mobileWebBundleBrotliPath(path)`, present only where it is smaller.
-     *  Outside buildId, so phones keep caching and reusing by the raw bytes. */
-    brotliByteLength: z
-      .number()
-      .int()
-      .nonnegative()
-      .max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES)
-      .optional(),
-    /** A language-catalog chunk: shells that read catalogs from the host skip it; outside buildId. */
-    kind: z.literal('catalog').optional()
-  })
-  .strict()
+const assetFields = {
+  path: MobileWebBundleAssetPathSchema,
+  sha256: z.string().regex(SHA256_PATTERN),
+  byteLength: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES),
+  contentType: z.string().min(1).max(MAX_CONTENT_TYPE_LENGTH).regex(CONTENT_TYPE_PATTERN),
+  /** Length of the brotli copy at `mobileWebBundleBrotliPath(path)`, present only where it is smaller.
+   *  Outside buildId, so phones keep caching and reusing by the raw bytes. */
+  brotliByteLength: z
+    .number()
+    .int()
+    .nonnegative()
+    .max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES)
+    .optional(),
+  /** A language-catalog chunk: shells that read catalogs from the host skip it; outside buildId. */
+  kind: z.literal('catalog').optional()
+}
+
+export const MobileWebBundleAssetSchema = z.object(assetFields).strict()
 
 export type MobileWebBundleAsset = z.infer<typeof MobileWebBundleAssetSchema>
 
@@ -91,14 +91,14 @@ export function mobileWebBundleBrotliPath(assetPath: string): string {
 export const MobileWebBundleCatalogLocaleSchema = z.string().max(32).regex(UI_LOCALE_PATTERN)
 
 /** A UI-language catalog the host serves on request; phones never download it with the build. */
-export const MobileWebBundleCatalogSchema = z
-  .object({
-    locale: MobileWebBundleCatalogLocaleSchema,
-    path: MobileWebBundleAssetPathSchema,
-    sha256: z.string().regex(SHA256_PATTERN),
-    byteLength: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES)
-  })
-  .strict()
+const catalogFields = {
+  locale: MobileWebBundleCatalogLocaleSchema,
+  path: MobileWebBundleAssetPathSchema,
+  sha256: z.string().regex(SHA256_PATTERN),
+  byteLength: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES)
+}
+
+export const MobileWebBundleCatalogSchema = z.object(catalogFields).strict()
 
 export type MobileWebBundleCatalog = z.infer<typeof MobileWebBundleCatalogSchema>
 
@@ -135,20 +135,20 @@ export function computeMobileWebBundleId(assets: readonly HashedAsset[]): string
  * Optional grants enrich a complete screen (ruling 37); only session grants combine both lists. Older desktops omit them and older shells gate required grants alone.
  * Old phone pageRouteSchema is z.looseObject (verified zod 4.4.3), so unknown keys survive. Publish strict bridge pairs via page-route-policy.ts routeViewOf,
  * never forward manifest entries: optional keys would reject the entire strict pair/session. */
-export const MobileWebBundleRouteSchema = z
-  .object({
-    pathname: z.string().min(1).max(MAX_ROUTE_PATHNAME_LENGTH).regex(ROUTE_PATHNAME_PATTERN),
-    grants: z.array(MobileWebBundleGrantNameSchema).max(MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS),
-    optionalGrants: z
-      .array(MobileWebBundleGrantNameSchema)
-      .max(MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS)
-      .optional(),
-    /** The page can draw the wide host area, sidebar included, when `init` says it owns it. */
-    canOwnHostArea: z.literal(true).optional(),
-    /** This page also renders the narrow host area; legacy ownership remains wide-only. */
-    canOwnHostAreaAcrossLayouts: z.literal(true).optional()
-  })
-  .strict()
+const routeFields = {
+  pathname: z.string().min(1).max(MAX_ROUTE_PATHNAME_LENGTH).regex(ROUTE_PATHNAME_PATTERN),
+  grants: z.array(MobileWebBundleGrantNameSchema).max(MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS),
+  optionalGrants: z
+    .array(MobileWebBundleGrantNameSchema)
+    .max(MOBILE_WEB_BUNDLE_MAX_ROUTE_GRANTS)
+    .optional(),
+  /** The page can draw the wide host area, sidebar included, when `init` says it owns it. */
+  canOwnHostArea: z.literal(true).optional(),
+  /** This page also renders the narrow host area; legacy ownership remains wide-only. */
+  canOwnHostAreaAcrossLayouts: z.literal(true).optional()
+}
+
+export const MobileWebBundleRouteSchema = z.object(routeFields).strict()
 
 export type MobileWebBundleRoute = z.infer<typeof MobileWebBundleRouteSchema>
 
@@ -238,27 +238,39 @@ function validateManifestInvariants(
   }
 }
 
+const manifestFields = {
+  schemaVersion: z.literal(MOBILE_WEB_BUNDLE_SCHEMA_VERSION),
+  buildId: z.string().regex(SHA256_PATTERN),
+  /** The app version that produced the bundle; the update wall's only honest age source. */
+  desktopVersion: z.string().min(1).max(MAX_DESKTOP_VERSION_LENGTH),
+  minCompatibleRuntimeProtocolVersion: z.number().int().nonnegative(),
+  runtimeProtocolVersion: z.number().int().nonnegative(),
+  /** `MOBILE_WEB_PAGE_VERSION` at build time; absent from a desktop older than the field. */
+  pageVersion: z.number().int().nonnegative().optional(),
+  entrypoint: z.literal(MOBILE_WEB_BUNDLE_ENTRYPOINT),
+  totalBytes: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES),
+  assets: z.array(MobileWebBundleAssetSchema).min(1).max(MOBILE_WEB_BUNDLE_MAX_ASSETS),
+  /** Outside buildId’s asset hash; routes derive from the same source tree as the script, so identical assets imply identical routes. */
+  routes: z.array(MobileWebBundleRouteSchema).max(MOBILE_WEB_BUNDLE_MAX_ROUTES),
+  /** The same catalogs as JSON for `mobileWeb.bundle.localeCatalog`; host-only, outside `assets` and buildId. */
+  catalogs: z.array(MobileWebBundleCatalogSchema).max(MOBILE_WEB_BUNDLE_MAX_CATALOGS).optional()
+}
+
 /** Strict desktop writer with literal schemaVersion; loose, version-unpinned phone readers allow additive optional fields
  * (docs/reference/remote-wire-compatibility.md). Unknown keys may survive loose reads; removals or meaning changes require a schemaVersion bump. */
 export const MobileWebBundleManifestSchema = z
-  .object({
-    schemaVersion: z.literal(MOBILE_WEB_BUNDLE_SCHEMA_VERSION),
-    buildId: z.string().regex(SHA256_PATTERN),
-    /** The app version that produced the bundle; the update wall's only honest age source. */
-    desktopVersion: z.string().min(1).max(MAX_DESKTOP_VERSION_LENGTH),
-    minCompatibleRuntimeProtocolVersion: z.number().int().nonnegative(),
-    runtimeProtocolVersion: z.number().int().nonnegative(),
-    /** `MOBILE_WEB_PAGE_VERSION` at build time; absent from a desktop older than the field. */
-    pageVersion: z.number().int().nonnegative().optional(),
-    entrypoint: z.literal(MOBILE_WEB_BUNDLE_ENTRYPOINT),
-    totalBytes: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_TOTAL_BYTES),
-    assets: z.array(MobileWebBundleAssetSchema).min(1).max(MOBILE_WEB_BUNDLE_MAX_ASSETS),
-    /** Outside buildId’s asset hash; routes derive from the same source tree as the script, so identical assets imply identical routes. */
-    routes: z.array(MobileWebBundleRouteSchema).max(MOBILE_WEB_BUNDLE_MAX_ROUTES),
-    /** The same catalogs as JSON for `mobileWeb.bundle.localeCatalog`; host-only, outside `assets` and buildId. */
-    catalogs: z.array(MobileWebBundleCatalogSchema).max(MOBILE_WEB_BUNDLE_MAX_CATALOGS).optional()
-  })
+  .object(manifestFields)
   .strict()
   .superRefine(validateManifestInvariants)
 
 export type MobileWebBundleManifest = z.infer<typeof MobileWebBundleManifestSchema>
+
+/** The running host's reader: a newer install updated in place may add schema-v1 fields, which it drops so it serves only what it supports. */
+export const InstalledMobileWebBundleManifestSchema = z
+  .object({
+    ...manifestFields,
+    assets: z.array(z.object(assetFields)).min(1).max(MOBILE_WEB_BUNDLE_MAX_ASSETS),
+    routes: z.array(z.object(routeFields)).max(MOBILE_WEB_BUNDLE_MAX_ROUTES),
+    catalogs: z.array(z.object(catalogFields)).max(MOBILE_WEB_BUNDLE_MAX_CATALOGS).optional()
+  })
+  .superRefine(validateManifestInvariants)

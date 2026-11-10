@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getAppEnvironment, hasAppEnvironment } from '../../../../../shared/app-environment'
 import {
-  MobileWebBundleManifestSchema,
+  InstalledMobileWebBundleManifestSchema,
   type MobileWebBundleManifest
 } from '../../../../../shared/mobile-web-bundle/manifest-contract'
 
@@ -80,7 +80,7 @@ function parseBundledMobileWebBundle(
     console.warn(`[mobile-web-bundle] ${manifestPath} is not valid JSON:`, error)
     return null
   }
-  const manifest = MobileWebBundleManifestSchema.safeParse(parsed)
+  const manifest = InstalledMobileWebBundleManifestSchema.safeParse(parsed)
   if (!manifest.success) {
     // Bad dev/hand-edited bundles must degrade to absent, not crash a phone-accessible path.
     console.warn(`[mobile-web-bundle] ${manifestPath} does not match the manifest contract:`, {
