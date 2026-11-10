@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react'
-import { useAppStore } from '@/store'
+import { readAppState } from '@/store'
 import { getEditorFileReadContext } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import { captureEditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import {
@@ -53,7 +53,7 @@ export function useSourceControlReview(worktreeId: string | null, worktreePath: 
       return null
     }
     try {
-      const state = useAppStore.getState()
+      const state = readAppState()
       const operationProvenance = captureEditorFileOperationProvenance(
         state,
         worktreeId,

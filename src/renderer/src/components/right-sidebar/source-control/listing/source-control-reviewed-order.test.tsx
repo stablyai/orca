@@ -62,7 +62,7 @@ it.each([
     )
     const key = diffReviewKey(owner, 'a.ts', 'unstaged')
     const record = {
-      viewedAt: Date.now(),
+      viewedAt: 1,
       modifiedTime: 123,
       contentSignature: 'reviewed-content',
       entrySignature: '["modified",null,1,1]'

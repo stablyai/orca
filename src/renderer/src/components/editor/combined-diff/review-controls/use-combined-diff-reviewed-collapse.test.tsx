@@ -95,7 +95,7 @@ function useViewAll() {
 function mark(path: string, scope: string): void {
   const owner = getEditorFileReadContext(useAppStore.getState(), file, '/repo')
   setDiffReviewed(diffReviewKey(owner, path, scope), {
-    viewedAt: Date.now(),
+    viewedAt: 1,
     modifiedTime: 123,
     contentSignature: 'reviewed bytes',
     entrySignature: '["modified",null,1,1]'

@@ -18,7 +18,7 @@ import type { DiffSection } from '../../diff/sections/diff-section-types'
 import type { CombinedDiffEntrySet } from '../resolve-changes/use-combined-diff-entry-set'
 import { getCombinedDiffFileTreeSectionKey } from '../resolve-changes/combined-diff-section-identity'
 import { combinedDiffReviewIdentity } from './combined-diff-review-identity'
-import { useAppStore } from '@/store'
+import { readAppState } from '@/store'
 import { getEditorFileReadContext } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import { useRevalidateSourceControlReviews } from '@/components/right-sidebar/source-control/listing/use-source-control-review'
 
@@ -38,7 +38,7 @@ export function useCombinedDiffReviewedCollapse({
   const { entries, treeMode } = entrySet
   const owner = useMemo(() => {
     try {
-      return getEditorFileReadContext(useAppStore.getState(), file, file.filePath)
+      return getEditorFileReadContext(readAppState(), file, file.filePath)
     } catch {
       return null
     }

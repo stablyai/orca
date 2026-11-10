@@ -18,6 +18,64 @@ import { useDiffReviewReadInvalidation } from '../../diff/review/use-diff-review
 import type { DiffSection } from '../../diff/sections/diff-section-types'
 import { combinedDiffReviewIdentity } from './combined-diff-review-identity'
 
+// Module-scope body: React Compiler cannot lower component-scope try/finally here.
+async function requestCombinedViewedMark({
+  file,
+  section,
+  signature,
+  isCurrentSection,
+  isMounted,
+  setPending,
+  setSections,
+  onFailure
+}: {
+  file: OpenFile
+  section: DiffSection
+  signature: string
+  isCurrentSection: (modifiedTime: number | null | undefined) => boolean
+  isMounted: () => boolean
+  setPending: (pending: boolean) => void
+  setSections: Dispatch<SetStateAction<DiffSection[]>>
+  onFailure: () => void
+}): Promise<void> {
+  try {
+    const { operation, key } = combinedDiffReviewIdentity(file, section)
+    const modifiedTime = await statRuntimePath(
+      operation.context,
+      joinPath(file.filePath, section.path)
+    ).then(
+      (stat) => stat.mtime,
+      (error: unknown) => {
+        if (isMissingRuntimePathError(error)) {
+          return null
+        }
+        throw error
+      }
+    )
+    operation.assertCurrent()
+    if (!isMounted() || !isCurrentSection(modifiedTime)) {
+      return
+    }
+    setDiffReviewed(key, {
+      viewedAt: Date.now(),
+      modifiedTime,
+      contentSignature: signature,
+      entrySignature: reviewEntrySignature(section)
+    })
+    setSections((sections) =>
+      sections.map((current) =>
+        current.key === section.key && !current.dirty ? { ...current, collapsed: true } : current
+      )
+    )
+  } catch {
+    onFailure()
+  } finally {
+    if (isMounted()) {
+      setPending(false)
+    }
+  }
+}
+
 export function CombinedDiffViewedControl({
   file,
   section,
@@ -30,8 +88,10 @@ export function CombinedDiffViewedControl({
   const t = useTranslate()
   const records = useReviewedDiffs()
   const [pending, setPending] = useState(false)
-  const latest = useRef(section)
-  latest.current = section
+  const latest = useRef<DiffSection>(section)
+  useEffect(() => {
+    latest.current = section
+  }, [section])
   const mounted = useRef(false)
   useEffect(() => {
     mounted.current = true
@@ -91,44 +151,23 @@ export function CombinedDiffViewedControl({
       return
     }
     setPending(true)
-    try {
-      const { operation, key } = combinedDiffReviewIdentity(file, section)
-      const modifiedTime = await statRuntimePath(
-        operation.context,
-        joinPath(file.filePath, section.path)
-      ).then(
-        (stat) => stat.mtime,
-        (error: unknown) => {
-          if (isMissingRuntimePathError(error)) {
-            return null
-          }
-          throw error
-        }
-      )
-      operation.assertCurrent()
-      const current = latest.current
-      if (
-        !mounted.current ||
-        current.dirty ||
-        current.saveConflict ||
-        current.diffResult !== section.diffResult ||
-        current.reviewModifiedTime !== modifiedTime
-      ) {
-        return
-      }
-      setDiffReviewed(key, {
-        viewedAt: Date.now(),
-        modifiedTime,
-        contentSignature: signature!,
-        entrySignature: reviewEntrySignature(section)
-      })
-      setSections((sections) =>
-        sections.map((current) =>
-          current.key === section.key && !current.dirty ? { ...current, collapsed: true } : current
+    await requestCombinedViewedMark({
+      file,
+      section,
+      signature: signature!,
+      isCurrentSection: (modifiedTime) => {
+        const current = latest.current
+        return (
+          !current.dirty &&
+          !current.saveConflict &&
+          current.diffResult === section.diffResult &&
+          current.reviewModifiedTime === modifiedTime
         )
-      )
-    } catch {
-      if (mounted.current) {
+      },
+      isMounted: () => mounted.current,
+      setPending,
+      setSections,
+      onFailure: () => {
         toast.error(
           t(
             'diffReview.failed',
@@ -136,11 +175,7 @@ export function CombinedDiffViewedControl({
           )
         )
       }
-    } finally {
-      if (mounted.current) {
-        setPending(false)
-      }
-    }
+    })
   }
   return (
     <div onClick={(event) => event.stopPropagation()}>
