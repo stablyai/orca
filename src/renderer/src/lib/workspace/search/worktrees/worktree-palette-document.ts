@@ -26,7 +26,7 @@ import type { HostedReviewInfo } from '../../../../../../shared/source-control/h
 import type { Repo } from '../../../../../../shared/repo-types'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
-import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
 import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
 import {
   getPaletteWorktreeIdentity,
@@ -99,6 +99,7 @@ function resolveReviewSource(
 
 function resolveIssueTitle(
   worktree: Worktree,
+  attachments: readonly WorkspaceAttachment[],
   repo: Repo | undefined,
   sources: WorktreePaletteDocumentSources
 ): string {
@@ -121,7 +122,7 @@ function resolveIssueTitle(
   // The link's saved title covers an issue whose card never rendered to fill the cache.
   return (
     cached ||
-    getWorkspaceAttachments({ linkedItems: worktree.linkedItems }).find(
+    attachments.find(
       (item) =>
         item.provider === 'github' && item.type === 'issue' && item.number === worktree.linkedIssue
     )?.title ||
@@ -140,6 +141,7 @@ function buildEvidence(
   }
 
   const ports = sources.workspacePortsByWorktreeId?.get(worktree.id) ?? []
+  const attachments = getWorkspaceAttachments({ linkedItems: worktree.linkedItems })
   const units = [
     comment,
     buildWorktreeAutomationEvidence(worktree),
@@ -147,9 +149,9 @@ function buildEvidence(
     buildWorktreeReviewEvidence(resolveReviewSource(worktree, repo, sources)),
     buildWorktreeIssueEvidence({
       number: worktree.linkedIssue,
-      title: resolveIssueTitle(worktree, repo, sources)
+      title: resolveIssueTitle(worktree, attachments, repo, sources)
     }),
-    ...getWorkspaceAttachments({ linkedItems: worktree.linkedItems }).map((item) => {
+    ...attachments.map((item) => {
       const evidence = buildWorktreeAttachmentEvidence(item)
       return evidence ? { ...evidence, id: `attachment:${getWorkspaceAttachmentKey(item)}` } : null
     }),
