@@ -11,6 +11,7 @@ import {
   TaskListParams
 } from '../../../../../../shared/rpc-contract/orchestration-params'
 import { TaskUpdateParams } from './task-update-params'
+import { forwardRemoteTaskUpdate } from '../../../../orchestration/federation/remote-owned/remote-owned-task-update'
 
 export const ORCHESTRATION_MESSAGE_METHODS = [
   ORCHESTRATION_REPLY_METHOD,
@@ -125,8 +126,24 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
       targets: { id: 'task', run: 'run' },
       rule: taskUpdateAccess
     },
-    handler: (params, { runtime }) => {
+    handler: async (params, { orchestrationCaller, orchestrationMutation, runtime }) => {
       const db = runtime.getOrchestrationDb()
+      // The server sees every caller here as one pairing; the caller's own identity scopes its retry key.
+      const callerNamespace =
+        orchestrationCaller?.orcaSessionId ??
+        (params.callerTerminalHandle
+          ? runtime.getTerminalPaneKey(params.callerTerminalHandle)
+          : null)
+      const forwarded = await forwardRemoteTaskUpdate(
+        runtime,
+        params,
+        callerNamespace && orchestrationMutation
+          ? { callerNamespace, requestId: orchestrationMutation.requestId }
+          : undefined
+      )
+      if (forwarded) {
+        return forwarded
+      }
       const task = db.updateTaskStatus(params.id, params.status, params.result)
       if (!task) {
         throw new Error(`Task not found: ${params.id}`)

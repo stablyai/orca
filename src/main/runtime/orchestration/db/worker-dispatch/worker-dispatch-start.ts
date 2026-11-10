@@ -7,10 +7,8 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { insertStartingDispatchContextRow } from '../dispatch-row-writer'
 import { recordedCreatorIdentity, type DispatchCreator } from '../dispatch-depth'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
-import {
-  taskNotFoundError,
-  taskNotStartableError
-} from '../../coordinator/dispatch/task-dispatch-refusal'
+import { taskNotFoundError } from '../../coordinator/dispatch/task-dispatch-refusal'
+import { claimTaskForStart } from '../tasks/task-start-claim'
 import { getFollowUpDispatch, takeFollowUpMail } from '../dispatch-context/worker-follow-up-lineage'
 
 export function createStartingWorkerDispatch(
@@ -127,47 +125,7 @@ export function createStartingWorkerDispatch(
         { effectsApplied: false }
       )
     }
-    let priorFailures = 0
-    if (params.retryOf) {
-      const prior = this.getDispatchContextById(params.retryOf)
-      const priorWorker = this.getWorkerDispatch(params.retryOf)
-      const latest = this.getDispatchContext(task.id)
-      if (prior?.task_id === task.id && prior.status === 'circuit_broken') {
-        throw taskNotStartableError(
-          this,
-          `Task ${task.id} failed ${prior.failure_count} times, so Orca will not retry it again (last error: ${prior.last_failure ?? 'unknown'}). Report the failure to the user instead of retrying.`,
-          task,
-          params.retryOf,
-          prior.failure_count
-        )
-      }
-      // Context-only Dispatches have no worker row; read settlement from the Dispatch itself.
-      const priorSettled = priorWorker
-        ? ['failed', 'stopped', 'abandoned'].includes(priorWorker.state)
-        : prior?.status === 'failed'
-      if (
-        !prior ||
-        prior.task_id !== task.id ||
-        latest?.id !== prior.id ||
-        !priorSettled ||
-        !['failed', 'blocked'].includes(task.status)
-      ) {
-        throw taskNotStartableError(
-          this,
-          `Task ${task.id} cannot retry from Dispatch ${params.retryOf}.`,
-          task,
-          params.retryOf
-        )
-      }
-      // Only a retry chain inherits failures; a fresh start after a worker exit keeps its own count.
-      priorFailures = prior.failure_count
-    } else if (task.status !== 'ready') {
-      throw taskNotStartableError(
-        this,
-        `Task ${task.id} is ${task.status}; only a ready Task can start.`,
-        task
-      )
-    }
+    const { priorFailures } = claimTaskForStart(this, task, { retryOf: params.retryOf })
 
     const id = generateId('ctx')
     const creatorDispatchId = this.resolveCreatorDispatchId(params.creator)

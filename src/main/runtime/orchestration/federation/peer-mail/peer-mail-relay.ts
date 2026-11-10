@@ -7,6 +7,15 @@ import type { MessageRow } from '../../db/orchestration-records'
 import { federationRelayRetryDelayMs } from '../relay/federation-relay-scheduler'
 import type { OrchestrationEnvironmentTransport } from '../environment-transport'
 import { peerMailLocalRecipient } from './peer-mail-delivery'
+import { presentImportedPeerItem } from '../../mailbox/formatting/imported-peer-item-presentation'
+import { importRemoteOwnedItem } from '../../db/remote-owned/remote-owned-import'
+import {
+  getRemoteRunLink,
+  listLiveRemoteRunLinkEnvironments,
+  noteRemoteRunLinkError,
+  remoteServerPin
+} from '../../db/remote-owned/remote-run-links'
+import { resendOwedRemoteActions } from '../remote-owned/remote-owed-actions'
 
 // Under the relay edge's idle cutoff, so an idle pull ends by itself instead of being dropped.
 const PULL_WAIT_MS = 20_000
@@ -18,15 +27,25 @@ const PulledPeerMail = z.object({
       conversationId: z.string(),
       sequence: z.number().int().positive(),
       messageId: z.string(),
+      kind: z.string().optional(),
       payload: z.string()
     })
   )
 })
 
-type Loop = { db: OrchestrationDb; stopped: boolean }
+type Loop = {
+  db: OrchestrationDb
+  stopped: boolean
+  orphansLookedUpAt: number
+  resending: boolean
+}
 
-/** One pull loop per paired server this Orca opened conversations with. The server never dials
- *  back: each pull waits there for a reply, stores it as local mail, then acknowledges it. */
+// A lost start answer is rare; asking the server about it more often only adds load there.
+const ORPHAN_LOOKUP_INTERVAL_MS = 30_000
+
+/** One pull loop per paired server this Orca opened conversations with or coordinates Runs on. The
+ *  server never dials back: each pull waits there for queued items, imports them, then acknowledges
+ *  them. Stops and cancels this Orca owes the server go out on the same loop. */
 export class PeerMailRelay {
   private readonly loops = new Map<string, Loop>()
 
@@ -40,12 +59,16 @@ export class PeerMailRelay {
       return
     }
     const db = this.runtime.getOrchestrationDb()
-    for (const environmentId of db.listHomePeerMailEnvironments()) {
+    const environments = new Set([
+      ...db.listHomePeerMailEnvironments(),
+      ...listLiveRemoteRunLinkEnvironments(db)
+    ])
+    for (const environmentId of environments) {
       const current = this.loops.get(environmentId)
       if (current && !current.stopped && current.db === db) {
         continue
       }
-      const loop: Loop = { db, stopped: false }
+      const loop: Loop = { db, stopped: false, orphansLookedUpAt: 0, resending: false }
       this.loops.set(environmentId, loop)
       void this.run(environmentId, loop)
     }
@@ -98,6 +121,7 @@ export class PeerMailRelay {
   }
 
   private async pullOnce(environmentId: string, loop: Loop): Promise<void> {
+    this.resendOwed(environmentId, loop)
     const response = await this.runtime.callOrchestrationWorkerServer(
       environmentId,
       'orchestration.peerMailPull',
@@ -112,28 +136,83 @@ export class PeerMailRelay {
       return
     }
     const through = new Map<string, number>()
+    const stuck = new Map<string, unknown>()
     for (const item of items) {
-      const stored = this.importReply(loop.db, environmentId, item)
-      // Wake before the ack: a replay after a failed ack finds the row stored and stays quiet.
-      if (stored) {
-        this.runtime.notifyMessageArrived(stored.to_handle, stored.type)
+      // An item that cannot be read holds back its own conversation only; the others keep moving.
+      if (stuck.has(item.conversationId)) {
+        continue
+      }
+      try {
+        const stored = this.importItem(loop.db, environmentId, item)
+        // Wake before the ack: a replay after a failed ack finds the row stored and stays quiet.
+        if (stored) {
+          this.runtime.notifyMessageArrived(stored.to, stored.type)
+        }
+      } catch (error) {
+        stuck.set(item.conversationId, error)
+        noteRemoteRunLinkError(loop.db, item.conversationId, error)
+        continue
       }
       through.set(
         item.conversationId,
         Math.max(through.get(item.conversationId) ?? 0, item.sequence)
       )
     }
-    await this.runtime.callOrchestrationWorkerServer(
-      environmentId,
-      'orchestration.peerMailAck',
-      {
-        acknowledgments: [...through].map(([conversationId, throughSequence]) => ({
-          conversationId,
-          throughSequence
-        }))
-      },
-      15_000
-    )
+    if (through.size > 0) {
+      await this.runtime.callOrchestrationWorkerServer(
+        environmentId,
+        'orchestration.peerMailAck',
+        {
+          acknowledgments: [...through].map(([conversationId, throughSequence]) => ({
+            conversationId,
+            throughSequence
+          }))
+        },
+        15_000
+      )
+    }
+    const [failure] = stuck.values()
+    if (failure !== undefined) {
+      console.warn(
+        `[orchestration] Stopped reading ${stuck.size} conversation(s) from ${environmentId}:`,
+        failure instanceof Error ? failure.message : failure
+      )
+      // Backs the loop off, so a server that keeps returning the same unreadable item is not re-pulled hot.
+      throw failure
+    }
+  }
+
+  /** Stops and cancels owed to the server go out beside the pull, one batch at a time, so a slow answer never holds mail back. */
+  private resendOwed(environmentId: string, loop: Loop): void {
+    if (loop.resending) {
+      return
+    }
+    const lookUpOrphans = Date.now() - loop.orphansLookedUpAt >= ORPHAN_LOOKUP_INTERVAL_MS
+    if (lookUpOrphans) {
+      loop.orphansLookedUpAt = Date.now()
+    }
+    loop.resending = true
+    void resendOwedRemoteActions(this.runtime, loop.db, environmentId, { lookUpOrphans })
+      .catch((error: unknown) => {
+        console.warn(`[orchestration] Owed actions for ${environmentId} failed:`, error)
+      })
+      .finally(() => {
+        loop.resending = false
+      })
+  }
+
+  /** A Run this Orca coordinates there owns its conversation's items; any other is a peer-mail reply. */
+  private importItem(
+    db: OrchestrationDb,
+    environmentId: string,
+    item: z.infer<typeof PulledPeerMail>['items'][number]
+  ): { to: string; type: MessageRow['type'] } | undefined {
+    if (getRemoteRunLink(db, item.conversationId)) {
+      const server = this.runtime.resolveOrchestrationWorkerServer(environmentId)
+      return importRemoteOwnedItem(db, remoteServerPin(server), item)
+    }
+    const stored = this.importReply(db, environmentId, item)
+    return stored ? { to: stored.to_handle, type: stored.type } : undefined
   }
 
   /** Stores a pulled reply once; a replay after a crash before the ack finds the stored row. */
@@ -157,15 +236,20 @@ export class PeerMailRelay {
     }
     const handle = peerMailLocalRecipient(this.runtime, conversation)
     const recipient = resolveBareOrchestrationRecipient({ runtime: this.runtime, db, handle })
+    const presented = presentImportedPeerItem({
+      kind: 'peer_mail',
+      senderLabel: payload.data.senderLabel,
+      body: payload.data.body
+    })
     const stored = db.insertPeerMailMessage({
       conversationId: conversation.conversation_id,
       remoteParty: payload.data.fromAddress,
       message: {
         id: item.messageId,
-        from: payload.data.senderLabel,
+        from: presented.from,
         to: recipient.ok ? recipient.to : handle,
         subject: payload.data.subject,
-        body: payload.data.body,
+        body: presented.body,
         threadId: payload.data.threadId ?? undefined,
         runId: recipient.ok ? recipient.runId : undefined
       }
