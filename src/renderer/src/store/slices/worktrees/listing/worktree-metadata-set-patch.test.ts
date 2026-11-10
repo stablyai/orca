@@ -9,24 +9,26 @@ import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-rec
 import { patchWorktreeMetadataSet, reapplyPendingIssueTitles } from './worktree-metadata-set-patch'
 
 const ID = 'repo-1::/work/orca'
-const titled = (title: string): WorkspaceAttachment[] => [
-  { provider: 'github', type: 'issue', number: 42, title }
+const issue = (title?: string): WorkspaceAttachment[] => [
+  { provider: 'github', type: 'issue', number: 42, ...(title ? { title } : {}) }
 ]
+const local = { kind: 'local' as const }
 
-function state() {
+function state(linkedItems: WorkspaceAttachment[] = issue()) {
+  const linkedIssue = linkedItems.length > 0 ? 42 : null
   return {
     ...useAppStore.getInitialState(),
     repos: [makeRepo()],
     worktreesByRepo: {
       'repo-1': [
-        makeWorktree(ID, 'local orca', { hostId: 'local', linkedIssue: 42 }),
-        makeWorktree(ID, 'ssh orca', { hostId: 'ssh:build-box', linkedIssue: 42 })
+        makeWorktree(ID, 'local orca', { hostId: 'local', linkedIssue, linkedItems }),
+        makeWorktree(ID, 'ssh orca', { hostId: 'ssh:build-box', linkedIssue, linkedItems })
       ]
     }
   }
 }
 
-function record(seq: number, title: string, epoch = 'e1') {
+function record(seq: number, title: string, epoch: string) {
   return {
     kind: 'set' as const,
     domain: 'workspaceMetadata' as const,
@@ -37,7 +39,7 @@ function record(seq: number, title: string, epoch = 'e1') {
     repoId: 'repo-1',
     worktreeId: ID,
     row: {
-      linkedItems: titled(title),
+      linkedItems: issue(title),
       linkedWorkItem: null,
       linkedIssue: 42,
       linkedTaskSourceContext: null
@@ -45,42 +47,35 @@ function record(seq: number, title: string, epoch = 'e1') {
   }
 }
 
-describe('addressed workspace metadata records', () => {
-  it('update only the named host row and ignore a replayed older record', () => {
-    const first = patchWorktreeMetadataSet(
-      state(),
-      record(2, 'Repair authentication'),
-      'ssh:build-box'
-    )
-    const rows = selectWorktreesByRepo({ ...state(), ...first })['repo-1']
-    expect(rows.find((row) => row.hostId === 'ssh:build-box')?.linkedItems).toEqual(
-      titled('Repair authentication')
-    )
-    expect(rows.find((row) => row.hostId === 'local')?.linkedItems).toBeUndefined()
+function sshRowLinks(value: ReturnType<typeof state>) {
+  return selectWorktreesByRepo(value)['repo-1'].find((row) => row.hostId === 'ssh:build-box')
+    ?.linkedItems
+}
 
-    const applied = { ...state(), ...first }
-    expect(patchWorktreeMetadataSet(applied, record(1, 'Old title'), 'ssh:build-box')).toBe(applied)
+describe('addressed workspace metadata records', () => {
+  it('title only the named host row and ignore a replayed older record', () => {
+    const titled = {
+      ...state(),
+      ...patchWorktreeMetadataSet(state(), record(2, 'Fix login', 'e1'), local)
+    }
+    expect(sshRowLinks(titled)).toEqual(issue('Fix login'))
+    expect(
+      selectWorktreesByRepo(titled)['repo-1'].find((row) => row.hostId === 'local')?.linkedItems
+    ).toEqual(issue())
+    expect(patchWorktreeMetadataSet(titled, record(1, 'Old title', 'e1'), local)).toBe(titled)
   })
 
-  it('refills a title a late listing dropped, but never restores a link removed after the record', () => {
-    const titledState = {
+  it('refills a title a late listing dropped, and never brings back an unlinked issue', () => {
+    const titled = {
       ...state(),
-      ...patchWorktreeMetadataSet(state(), record(5, 'Fix login', 'e2'), 'ssh:build-box')
+      ...patchWorktreeMetadataSet(state(), record(5, 'Fix login', 'e2'), local)
     }
     // A listing that read metadata before the title was saved lands afterwards with the bare link.
-    const lateListing = { ...titledState, worktreesByRepo: state().worktreesByRepo }
-    const refilled = { ...lateListing, ...reapplyPendingIssueTitles(lateListing) }
-    expect(
-      selectWorktreesByRepo(refilled)['repo-1'].find((row) => row.hostId === 'ssh:build-box')
-        ?.linkedItems
-    ).toEqual(titled('Fix login'))
+    const late = { ...titled, worktreesByRepo: state().worktreesByRepo }
+    expect(sshRowLinks({ ...late, ...reapplyPendingIssueTitles(late) })).toEqual(issue('Fix login'))
 
-    const unlinked = {
-      ...refilled,
-      worktreesByRepo: {
-        'repo-1': [makeWorktree(ID, 'ssh orca', { hostId: 'ssh:build-box', linkedItems: [] })]
-      }
-    }
-    expect(reapplyPendingIssueTitles(unlinked)).toBe(unlinked)
+    // The user unlinked the issue before a record for it arrived.
+    const unlinked = state([])
+    expect(patchWorktreeMetadataSet(unlinked, record(1, 'Fix login', 'e3'), local)).toBe(unlinked)
   })
 })

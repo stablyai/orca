@@ -1,10 +1,12 @@
-import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-exit-deferral'
+import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import { readWorkspaceMetadataSet } from '../../../../shared/worktree/workspace-metadata-set'
 import { useAppStore } from '../../store'
 import {
   hasPendingIssueTitles,
   patchWorktreeMetadataSet,
-  reapplyPendingIssueTitles
+  reapplyPendingIssueTitles,
+  type MetadataSetSource
 } from '../../store/slices/worktrees/listing/worktree-metadata-set-patch'
 
 let listingWatch: (() => void) | null = null
@@ -18,21 +20,35 @@ function watchListings(): void {
   })
 }
 
-function apply(record: unknown, hostIdFor: (recordHostId: ExecutionHostId) => ExecutionHostId) {
+function apply(record: unknown, source: MetadataSetSource): void {
   const set = readWorkspaceMetadataSet(record)
   if (!set) {
     return
   }
   watchListings()
-  useAppStore.setState((state) => patchWorktreeMetadataSet(state, set, hostIdFor(set.hostId)))
+  useAppStore.setState((state) => patchWorktreeMetadataSet(state, set, source))
 }
 
 /** This app's own host: the record names the host its row lives on. */
 export function applyLocalWorktreeMetadataSet(record: unknown): void {
-  apply(record, (recordHostId) => recordHostId)
+  apply(record, { kind: 'local' })
 }
 
-/** A paired host's record: its rows live here under that environment's host id. */
-export function applyEnvironmentWorktreeMetadataSet(environmentId: string, record: unknown): void {
-  apply(record, () => toRuntimeExecutionHostId(environmentId))
+/**
+ * A paired host's per-workspace row events, after the bridge's connection-generation check.
+ * Returns false for any other event.
+ */
+export function applyHostWorkspaceRowEvent(
+  environmentId: string,
+  event: RuntimeClientEvent
+): boolean {
+  if (event.type === 'worktreeTerminalSleepState') {
+    applyHostWorktreeTerminalSleepState(environmentId, event)
+    return true
+  }
+  if (event.type === 'workspaceMetadataSet') {
+    apply(event, { kind: 'environment', environmentId })
+    return true
+  }
+  return false
 }

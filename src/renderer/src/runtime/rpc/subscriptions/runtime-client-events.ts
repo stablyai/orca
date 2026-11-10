@@ -1,4 +1,3 @@
-import { applyEnvironmentWorktreeMetadataSet } from '../../../hooks/ipc-events/worktree-metadata-set-events'
 import type {
   RuntimeClientEvent,
   RuntimeClientEventStreamMessage
@@ -78,10 +77,6 @@ function handleRuntimeClientEventResponse(
   if (message.type === 'end') {
     return
   }
-  if (message.type === 'workspaceMetadataSet') {
-    applyEnvironmentWorktreeMetadataSet(environmentId, message)
-    return
-  }
   if (message.type === 'browserHostRequested') {
     void answerBrowserClientHostRequest(environmentId, message.requestId)
     return
@@ -108,6 +103,7 @@ function isRuntimeClientEvent(
       isNotificationAttentionAcknowledgement(message.acknowledgement)) ||
     message.type === 'reposChanged' ||
     message.type === 'worktreesChanged' ||
+    message.type === 'workspaceMetadataSet' ||
     message.type === 'nativeChatLaunchDraftResolved' ||
     message.type === 'terminalSideEffects' ||
     message.type === 'sshStateChanged' ||
