@@ -2,6 +2,8 @@ import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 import type { AccountsSnapshot } from '../../../accounts/accounts-snapshot'
+import type * as AccountsSnapshotModule from '../../../accounts/accounts-snapshot'
+import type * as CodexResetCreditModule from '../../../accounts/usage/codex-reset-credit'
 
 const ACCOUNT_REVISION = 1_700_000_000_000
 
@@ -34,13 +36,11 @@ export function codexResetCreditMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'accounts.codex-reset-credit': ({ client }) => {
-      const credit = modules.load<typeof import('../../../accounts/usage/codex-reset-credit')>(
+      const credit = modules.load<typeof CodexResetCreditModule>(
         'mobile/src/accounts/usage/codex-reset-credit.ts'
       )
       const snapshot = modules
-        .load<typeof import('../../../accounts/accounts-snapshot')>(
-          'mobile/src/accounts/accounts-snapshot.ts'
-        )
+        .load<typeof AccountsSnapshotModule>('mobile/src/accounts/accounts-snapshot.ts')
         .decodeAccountsSnapshot(CODEX_ACCOUNTS)
       let settled: unknown = null
       return {
