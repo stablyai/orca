@@ -46,6 +46,13 @@ import {
   wslDistroNotRunningForScanFailure
 } from './wsl-stopped-worktree-listing'
 
+// Partial stores (tests, embedders) may not publish workspace metadata; their listings carry no stamp.
+function readWorkspaceMetadataCursor(store: {
+  getWorkspaceMetadataCursor?: () => { epoch: string; seq: number }
+}): { epoch: string; seq: number } | undefined {
+  return store.getWorkspaceMetadataCursor?.()
+}
+
 export async function listDetectedWorktreesForCapturedRepo(
   store: Store,
   repo: Repo,
@@ -59,6 +66,8 @@ export async function listDetectedWorktreesForCapturedRepo(
       ? ({ providerAbortStatus: providerAbort.status() } as const)
       : undefined
   const allMeta = isFolderRepo(repo) ? undefined : readAllWorktreeMetaForRepo(store, repo)
+  // Read with the metadata, so clients can tell which published metadata records this listing includes.
+  const workspaceMetadata = readWorkspaceMetadataCursor(store)
 
   try {
     // Folder rows are read synchronously, leaving no mutation window that needs a re-scan.
@@ -166,6 +175,7 @@ export async function listDetectedWorktreesForCapturedRepo(
       authoritative: true,
       source: 'git',
       catalogVersion: localWorktreeCatalogVersionAt(scan.generation),
+      ...(workspaceMetadata ? { workspaceMetadata } : {}),
       worktrees: projectPendingWorktreeRemovals(
         buildDetectedGitWorktrees(store, repo, localRows, allMeta),
         (worktree) => worktree.id,
@@ -196,7 +206,8 @@ export async function listDetectedWorktreesForCapturedRepo(
         unavailableReason,
         failureKind,
         wslDistroStopped,
-        catalogVersion: getLocalWorktreeCatalogVersion(repo.id)
+        catalogVersion: getLocalWorktreeCatalogVersion(repo.id),
+        ...(workspaceMetadata ? { workspaceMetadata } : {})
       }
     }
     warnOnce(

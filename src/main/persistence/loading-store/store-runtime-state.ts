@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { removeStaleDurableWriteTempFiles } from '../../filesystem/durable-file-write'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -115,6 +116,8 @@ export class StoreRuntimeState {
   readonly layoutEditorViews = new Map<ExecutionHostId, PartitionEditorViews>()
   readonly stateWriteListeners = new Set<StateWriteListener>()
   readonly worktreeMetaWriteListeners = new Set<WorktreeMetaWriteListener>()
+  // This store's workspaceMetadata position: a new epoch per process, one seq per published record.
+  readonly workspaceMetadataCursor = { epoch: randomUUID(), seq: 0 }
   projectHostOperations: ProjectHostPersistenceOperations | null = null
   projectGroupOperations: ProjectGroupPersistenceOperations | null = null
   folderWorkspaceOperations: FolderWorkspacePersistenceOperations | null = null

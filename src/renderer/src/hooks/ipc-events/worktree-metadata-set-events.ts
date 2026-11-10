@@ -1,51 +1,64 @@
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-exit-deferral'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import { readWorkspaceMetadataSet } from '../../../../shared/worktree/workspace-metadata-set'
 import { useAppStore } from '../../store'
-import { selectWorktreesByRepo } from '../../store/workspaces/catalog/workspace-record-fields'
-import { getRuntimeEnvironmentRevision } from '../../runtime/rpc/environment-revisions/runtime-environment-revision'
-import { getRuntimeEnvironmentConnectionGeneration } from '../../store/slices/runtime-status/runtime-status-connection-generation'
 import {
-  hasPendingIssueTitles,
+  noteWorkspaceMetadataRecord,
+  requireWorkspaceMetadataCoverage,
+  workspaceMetadataProducerKey
+} from '../../store/slices/worktrees/listing/workspace-metadata-coverage'
+import { requestWorkspaceMetadataRecovery } from '../../store/slices/worktrees/listing/workspace-metadata-recovery'
+import {
   patchWorktreeMetadataSet,
-  reapplyPendingIssueTitles,
-  takeEvictedTitleListings,
   type MetadataSetSource
 } from '../../store/slices/worktrees/listing/worktree-metadata-set-patch'
+import type { WorktreeFetchOptions } from '../../store/slices/worktrees/listing/worktree-fetch-options'
 
-let listingWatch: (() => void) | null = null
-
-// A listing that read metadata before a record's write may land after it; refill its titles then.
-function watchListings(): void {
-  listingWatch ??= useAppStore.subscribe((state, previous) => {
-    if (
-      selectWorktreesByRepo(state) !== selectWorktreesByRepo(previous) &&
-      hasPendingIssueTitles()
-    ) {
-      // Updater form: another subscriber may have written since this notification's snapshot.
-      useAppStore.setState((current) => reapplyPendingIssueTitles(current, previous))
-    }
-  })
-}
+const fetchWorktrees = (repoId: string, options: WorktreeFetchOptions): Promise<unknown> =>
+  useAppStore.getState().fetchWorktrees(repoId, options)
 
 function apply(record: unknown, source: MetadataSetSource): void {
   const set = readWorkspaceMetadataSet(record)
   if (!set) {
     return
   }
-  watchListings()
-  useAppStore.setState((state) => patchWorktreeMetadataSet(state, set, source))
-  // Rare (more titles in flight than the cap): a listing begun after their writes carries them.
-  for (const evicted of takeEvictedTitleListings()) {
-    void useAppStore
+  // The listing owner for this record's repo: this app (local and SSH rows) or the paired environment.
+  const listingHost: ExecutionHostId =
+    source.kind === 'environment' ? toRuntimeExecutionHostId(source.environmentId) : set.hostId
+  const producerKey = workspaceMetadataProducerKey(listingHost)
+  const { replayed, gap } = noteWorkspaceMetadataRecord(producerKey, set.epoch, set.seq, set.repoId)
+  if (replayed) {
+    return
+  }
+  let applied = false
+  useAppStore.setState((state) => {
+    const result = patchWorktreeMetadataSet(state, set, source)
+    applied = result.applied
+    return result.patch ?? state
+  })
+  if (gap) {
+    // A missed record names no repo: list every repo this producer owns here, each once.
+    const repos = useAppStore
       .getState()
-      .fetchWorktrees(
-        evicted.repoId,
-        evicted.source.kind === 'environment'
-          ? { executionHostId: toRuntimeExecutionHostId(evicted.source.environmentId) }
-          : { forceLocalOwner: true }
+      .repos.filter(
+        (repo) =>
+          workspaceMetadataProducerKey(getRepoExecutionHostId(repo) ?? LOCAL_EXECUTION_HOST_ID) ===
+          producerKey
       )
+    const repoHosts = new Map(repos.map((repo) => [repo.id, getRepoExecutionHostId(repo)]))
+    requireWorkspaceMetadataCoverage(producerKey, repoHosts.keys())
+    for (const [repoId, hostId] of repoHosts) {
+      requestWorkspaceMetadataRecovery(repoId, hostId, fetchWorktrees)
+    }
+  } else if (!applied) {
+    // The row or link isn't listed yet; a listing begun now includes this record.
+    requestWorkspaceMetadataRecovery(set.repoId, listingHost, fetchWorktrees)
   }
 }
 
@@ -67,16 +80,7 @@ export function applyHostWorkspaceRowEvent(
     return true
   }
   if (event.type === 'workspaceMetadataSet') {
-    const revision = getRuntimeEnvironmentRevision(environmentId)
-    const generation = getRuntimeEnvironmentConnectionGeneration(environmentId)
-    apply(event, {
-      kind: 'environment',
-      environmentId,
-      // A re-pair or reconnect retires these titles; the new producer sends its own.
-      isCurrent: () =>
-        getRuntimeEnvironmentRevision(environmentId) === revision &&
-        getRuntimeEnvironmentConnectionGeneration(environmentId) === generation
-    })
+    apply(event, { kind: 'environment', environmentId })
     return true
   }
   return false

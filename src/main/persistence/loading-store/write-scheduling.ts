@@ -40,6 +40,7 @@ type WriteSchedulingOperationsRuntime = Pick<
   | 'workspaceSessionOperationListeners'
   | 'stateWriteListeners'
   | 'worktreeMetaWriteListeners'
+  | 'workspaceMetadataCursor'
   | 'ptyBindingGenerations'
   | 'layoutEditorViews'
   | 'state'
@@ -96,6 +97,19 @@ export class WriteSchedulingOperations {
     return () => {
       runtime.stateWriteListeners.delete(listener)
     }
+  }
+
+  /** The workspaceMetadata position a listing records when it reads metadata. */
+  getWorkspaceMetadataCursor(): { epoch: string; seq: number } {
+    const { epoch, seq } = this[writeSchedulingOperationsContext].runtime.workspaceMetadataCursor
+    return { epoch, seq }
+  }
+
+  /** Advances the position for one published record; call in the same turn as its metadata write. */
+  advanceWorkspaceMetadataCursor(): { epoch: string; seq: number } {
+    const cursor = this[writeSchedulingOperationsContext].runtime.workspaceMetadataCursor
+    cursor.seq += 1
+    return { epoch: cursor.epoch, seq: cursor.seq }
   }
 
   /** Observe each host-qualified worktree metadata write; callbacks must not throw, block or write. */

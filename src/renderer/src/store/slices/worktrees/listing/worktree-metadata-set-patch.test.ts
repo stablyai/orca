@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { WorkspaceAttachment } from '../../../../../../shared/worktree/types'
 import type { AppState } from '../../../types'
 import { useAppStore } from '../../..'
@@ -7,7 +7,9 @@ import {
   makeWorktree
 } from '../../../../components/worktree-jump/worktree-jump-palette-test-fixtures'
 import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
-import { patchWorktreeMetadataSet, reapplyPendingIssueTitles } from './worktree-metadata-set-patch'
+import { patchWorktreeMetadataSet } from './worktree-metadata-set-patch'
+import { listingMetadataCoverage, noteWorkspaceMetadataRecord } from './workspace-metadata-coverage'
+import type { AdmittedDetectedWorktreeRefresh } from './worktree-slice-types'
 
 const ID = 'repo-1::/work/orca'
 const issue = (title?: string): WorkspaceAttachment[] => [
@@ -15,7 +17,7 @@ const issue = (title?: string): WorkspaceAttachment[] => [
 ]
 const local = { kind: 'local' as const }
 
-function state(linkedItems: WorkspaceAttachment[] = issue()) {
+function state(linkedItems: WorkspaceAttachment[] = issue()): AppState {
   const linkedIssue = linkedItems.length > 0 ? 42 : null
   return {
     ...useAppStore.getInitialState(),
@@ -29,18 +31,18 @@ function state(linkedItems: WorkspaceAttachment[] = issue()) {
   }
 }
 
-function record(seq: number, title: string, epoch: string) {
+function record(seq: number, epoch: string, hostId: 'local' | 'ssh:build-box' = 'ssh:build-box') {
   return {
     kind: 'set' as const,
     domain: 'workspaceMetadata' as const,
-    hostId: 'ssh:build-box' as const,
+    hostId,
     epoch,
     seq,
-    id: `ssh:build-box::${ID}`,
+    id: `${hostId}::${ID}`,
     repoId: 'repo-1',
     worktreeId: ID,
     row: {
-      linkedItems: issue(title),
+      linkedItems: issue('Fix login'),
       linkedWorkItem: null,
       linkedIssue: 42,
       linkedTaskSourceContext: null
@@ -48,47 +50,62 @@ function record(seq: number, title: string, epoch: string) {
   }
 }
 
-function sshRowLinks(value: AppState) {
-  return selectWorktreesByRepo(value)['repo-1'].find((row) => row.hostId === 'ssh:build-box')
-    ?.linkedItems
-}
+const linksOn = (value: AppState, hostId: string) =>
+  selectWorktreesByRepo(value)['repo-1'].find((row) => row.hostId === hostId)?.linkedItems
 
 describe('addressed workspace metadata records', () => {
-  it('title only the named host row and ignore a replayed older record', () => {
-    const titled = {
-      ...state(),
-      ...patchWorktreeMetadataSet(state(), record(2, 'Fix login', 'e1'), local)
-    }
-    expect(sshRowLinks(titled)).toEqual(issue('Fix login'))
-    expect(
-      selectWorktreesByRepo(titled)['repo-1'].find((row) => row.hostId === 'local')?.linkedItems
-    ).toEqual(issue())
-    expect(patchWorktreeMetadataSet(titled, record(1, 'Old title', 'e1'), local)).toBe(titled)
+  it('title only the named host row, and never bring back an unlinked issue', () => {
+    const { patch, applied } = patchWorktreeMetadataSet(state(), record(1, 'e1'), local)
+    const titled = { ...state(), ...patch }
+    expect(applied).toBe(true)
+    expect(linksOn(titled, 'ssh:build-box')).toEqual(issue('Fix login'))
+    expect(linksOn(titled, 'local')).toEqual(issue())
+
+    expect(patchWorktreeMetadataSet(state([]), record(2, 'e1'), local)).toEqual({
+      patch: null,
+      applied: false
+    })
   })
 
-  it('refills a title a late listing dropped, and never brings back an unlinked issue', () => {
-    const titled = {
+  it('keeps a shown title through a listing that predates it, then lists the repo afresh', () => {
+    noteWorkspaceMetadataRecord('local', 'e2', 7, 'repo-1')
+    const shown = {
       ...state(),
-      ...patchWorktreeMetadataSet(state(), record(5, 'Fix login', 'e2'), local)
+      ...patchWorktreeMetadataSet(state(), record(7, 'e2', 'local'), local).patch
     }
-    // A listing that read metadata before the title was saved lands afterwards with the bare link.
-    const late = { ...titled, worktreesByRepo: state().worktreesByRepo }
-    expect(sshRowLinks({ ...late, ...reapplyPendingIssueTitles(late, titled) })).toEqual(
-      issue('Fix login')
-    )
+    const listing = (seq: number): AdmittedDetectedWorktreeRefresh => ({
+      status: 'admitted',
+      executionHostId: 'local',
+      result: {
+        repoId: 'repo-1',
+        authoritative: true,
+        source: 'git',
+        workspaceMetadata: { epoch: 'e2', seq },
+        worktrees: [
+          {
+            ...makeWorktree(ID, 'local orca', { linkedIssue: 42, linkedItems: issue() }),
+            ownership: 'orca-managed',
+            selectedCheckout: false,
+            visible: true
+          }
+        ]
+      }
+    })
+    const fetchWorktrees = vi.fn(async () => true)
 
-    // The user unlinked the issue before a record for it arrived.
-    const unlinked = state([])
-    expect(patchWorktreeMetadataSet(unlinked, record(1, 'Fix login', 'e3'), local)).toBe(unlinked)
-  })
+    const stale = listingMetadataCoverage(shown, 'repo-1', 'local', listing(6))
+    expect(stale.refresh.result.worktrees[0].linkedItems).toEqual(issue('Fix login'))
+    stale.settle(fetchWorktrees)
+    expect(fetchWorktrees).toHaveBeenCalledWith('repo-1', {
+      forceLocalOwner: true,
+      forceFresh: true
+    })
 
-  it('titles a link that the row lists only after its record arrived', () => {
-    // The record beats the listing that adds the link to an existing row.
-    const before = state([])
-    expect(patchWorktreeMetadataSet(before, record(1, 'Fix login', 'e4'), local)).toBe(before)
-    const listed = state()
-    expect(sshRowLinks({ ...listed, ...reapplyPendingIssueTitles(listed, before) })).toEqual(
-      issue('Fix login')
-    )
+    const covering = listingMetadataCoverage(shown, 'repo-1', 'local', listing(7))
+    expect(covering.refresh.result.worktrees[0].linkedItems).toEqual(issue())
+    covering.settle(fetchWorktrees)
+    // Settled: an older listing no longer owes anything and passes through untouched.
+    const after = listing(6)
+    expect(listingMetadataCoverage(shown, 'repo-1', 'local', after).refresh).toBe(after)
   })
 })

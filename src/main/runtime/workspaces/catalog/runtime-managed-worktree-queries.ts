@@ -1,3 +1,4 @@
+import { readRuntimeListingMetadata } from './runtime-listing-metadata'
 import type { RuntimeManagedWorktreeQueryDependencies } from './runtime-managed-worktree-query-dependencies'
 import { resolveWorktreeHostRouting } from './worktree-launch-host-repo'
 import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
@@ -137,8 +138,7 @@ export class RuntimeManagedWorktreeQueries {
     const visibilitySettings = { ...settings, worktreeVisibilityDefaults: visibilityDefaults }
     if (isFolderRepo(repo)) {
       const worktrees = listRuntimeFolderWorkspaces(store, repo)
-      const metaById = store.getAllWorktreeMeta()
-      const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
+      const { metaById, repoOwnerCount } = readRuntimeListingMetadata(store, repo)
       const matcher = createWorktreeVisibilitySourceMatcher(
         [repo.path, ...worktrees.map((worktree) => worktree.path)],
         resolveCustomWorktreeVisibilitySources(repo, visibilityDefaults),
@@ -185,8 +185,7 @@ export class RuntimeManagedWorktreeQueries {
       resolveConfiguredWorktreeBasePaths(repo)
     )
     const expectedHostId = getRepoExecutionHostId(repo)
-    const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
-    const metaById = store.getAllWorktreeMeta()
+    const { metaById, repoOwnerCount, workspaceMetadata } = readRuntimeListingMetadata(store, repo)
     const detected = scan.worktrees.map((gitWorktree) => {
       const id = `${repo.id}::${gitWorktree.path}`
       const meta =
@@ -210,6 +209,7 @@ export class RuntimeManagedWorktreeQueries {
       repoId: repo.id,
       authoritative: scan.ok && !scan.superseded,
       source: scan.ok ? 'git' : 'metadata-fallback',
+      workspaceMetadata,
       // Stamp the scan's starting generation: that is the catalog its rows describe.
       catalogVersion: localWorktreeCatalogVersionAt(scan.scanGeneration),
       worktrees: projectWorktreeLineageWithHostPeers(store, repo, detected)

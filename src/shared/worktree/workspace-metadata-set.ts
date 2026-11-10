@@ -4,6 +4,9 @@ import { normalizeWorkspaceAttachments } from '../workspace-attachments/workspac
 import { normalizeWorkspaceLinkedItem } from '../workspace-attachments/workspace-linked-item'
 import type { WorktreeMeta } from './meta-types'
 
+/** A producer's `workspaceMetadata` position: records with `seq` at or below it are in what it read. */
+export type WorkspaceMetadataCursor = { epoch: string; seq: number }
+
 /** The workspace-metadata fields a producer publishes today; the row widens without changing the envelope. */
 export type WorkspaceMetadataSetRow = Pick<
   WorktreeMeta,

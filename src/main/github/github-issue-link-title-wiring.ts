@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import type { Repo } from '../../shared/repo-types'
 import { composeWorktreeHostIdentity } from '../../shared/worktree/host-qualified-identity'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
@@ -71,9 +70,6 @@ export function wireGitHubIssueLinkTitleFill(
     publishWorkspaceMetadataSet: (set: WorkspaceMetadataSet) => void
   }
 ): () => void {
-  // This host's workspaceMetadata domain: a new epoch per start, one seq per published record.
-  const epoch = randomUUID()
-  let seq = 0
   return installGitHubIssueLinkTitleFill({
     store,
     // Background reads never start a stopped WSL distro; the link just stays untitled.
@@ -89,12 +85,14 @@ export function wireGitHubIssueLinkTitleFill(
     publish: ({ worktreeId, hostId, meta }) => {
       // Resolved rows embed metadata; refresh them so the next listing read agrees.
       runtime.invalidateResolvedWorktreeCache()
+      // Same turn as the title write, so a listing either read it or carries an older seq.
+      const { epoch, seq } = store.advanceWorkspaceMetadataCursor()
       runtime.publishWorkspaceMetadataSet({
         kind: 'set',
         domain: 'workspaceMetadata',
         hostId,
         epoch,
-        seq: ++seq,
+        seq,
         id: composeWorktreeHostIdentity(hostId, worktreeId),
         repoId: getRepoIdFromWorktreeId(worktreeId),
         worktreeId,
