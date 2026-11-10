@@ -1,6 +1,5 @@
 import React from 'react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { maskedHint } from '@/components/settings/cloud-secrets/CloudSecretList'
@@ -310,9 +309,9 @@ export function CloudEnvironmentPanelSection({
               row.kind === 'set' ? (
                 <li key={row.name} className="flex min-w-0 flex-wrap items-center gap-2 py-2.5">
                   <code className="truncate font-mono text-xs text-foreground">{row.name}</code>
-                  <Badge variant="outline" className="font-normal text-muted-foreground">
+                  <span className="inline-flex shrink-0 items-center rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
                     {cloudSecretScopeLabel(row.scope, t)}
-                  </Badge>
+                  </span>
                   {row.overrides.length > 0 ? (
                     <span className="text-xs text-muted-foreground">
                       {t('agentHostPanel.env.overrides', 'overrides {{scopes}}', {

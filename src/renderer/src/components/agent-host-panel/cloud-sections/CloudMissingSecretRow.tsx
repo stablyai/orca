@@ -1,7 +1,6 @@
 import React from 'react'
 import { Loader2 } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import {
@@ -82,12 +81,9 @@ export function CloudMissingSecretRow({
     <li className="flex flex-col gap-2 py-2.5">
       <div className="flex min-w-0 items-center gap-2">
         <code className="truncate font-mono text-xs text-foreground">{name}</code>
-        <Badge
-          variant="outline"
-          className="border-status-warning/40 bg-status-warning-background text-status-warning-text"
-        >
+        <span className="inline-flex shrink-0 items-center rounded-full border border-status-warning/40 bg-status-warning-background px-2 py-0.5 text-xs font-medium text-status-warning-text">
           {t('agentHostPanel.env.missing', 'Missing')}
-        </Badge>
+        </span>
         {expanded ? null : !canAdd ? (
           <span className="ms-auto text-end text-xs text-muted-foreground">
             {data.sharing?.ownerName
