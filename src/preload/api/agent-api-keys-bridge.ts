@@ -21,6 +21,8 @@ export type AgentApiKeysApi = {
   /** Keys this computer already uses: names, sources and last fours only. */
   scanThisComputer?: () => Promise<AgentApiKeysScanResult>
   importFromThisComputer?: (names: string[]) => Promise<AgentApiKeysImportResult>
+  /** Main re-synced or reconnected: re-read `list`. Returns the unsubscribe. */
+  onChanged?: (listener: () => void) => () => void
 }
 
 export const agentApiKeysApi: AgentApiKeysApi = {
@@ -29,6 +31,11 @@ export const agentApiKeysApi: AgentApiKeysApi = {
   remove: (request) => ipcRenderer.invoke('agentApiKeys:remove', request),
   saveToAccount: (id) => ipcRenderer.invoke('agentApiKeys:saveToAccount', id),
   scanThisComputer: () => ipcRenderer.invoke('agentApiKeys:scanThisComputer'),
+  onChanged: (listener) => {
+    const handler = (): void => listener()
+    ipcRenderer.on('agentApiKeys:changed', handler)
+    return () => ipcRenderer.removeListener('agentApiKeys:changed', handler)
+  },
   importFromThisComputer: (names) =>
     ipcRenderer.invoke('agentApiKeys:importFromThisComputer', names)
 }

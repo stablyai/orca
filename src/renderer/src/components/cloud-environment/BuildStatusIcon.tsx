@@ -38,18 +38,18 @@ export function BuildStatusIcon({
         <>
           <Loader2
             aria-hidden
-            className={cn(base, 'animate-spin text-callout-note motion-reduce:hidden')}
+            className={cn(base, 'animate-spin text-muted-foreground motion-reduce:hidden')}
           />
           <CircleDot
             aria-hidden
-            className={cn(base, 'hidden text-callout-note motion-reduce:block')}
+            className={cn(base, 'hidden text-muted-foreground motion-reduce:block')}
           />
         </>
       )
     case 'paused':
       return <Pause aria-hidden className={cn(base, 'text-muted-foreground')} />
     case 'succeeded':
-      return <CircleCheck aria-hidden className={cn(base, 'text-status-success')} />
+      return <CircleCheck aria-hidden className={cn(base, 'text-muted-foreground')} />
     case 'failed':
       return <CircleX aria-hidden className={cn(base, 'text-destructive')} />
     case 'canceled':

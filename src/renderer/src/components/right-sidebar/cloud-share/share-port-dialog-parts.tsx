@@ -8,6 +8,17 @@ import {
 } from '../../../../../shared/hosted-sandbox/hosted-sandbox-share-wire'
 import { CopyShareLinkButton, ShareAudienceIcon } from './share-link-row'
 import { formatShareTimeLeft } from './share-link-status'
+import { getIntlLocale } from '@/i18n/i18n'
+
+/** At most this many listening ports are offered as one-click choices. */
+const MAX_PORT_CHOICES = 5
+
+/** "2222, 6080, 6768 and 6769" from the reserved list, so the copy never drifts from it. */
+function reservedPortList(intlLocale: string = getIntlLocale()): string {
+  return new Intl.ListFormat(intlLocale, { style: 'long', type: 'conjunction' }).format(
+    SHARE_RESERVED_PORTS.map(String)
+  )
+}
 
 /** Port field for "Share a port", with the listening ports as one-click choices. */
 export function PortPicker({
@@ -56,7 +67,7 @@ export function PortPicker({
           >
             {detectedPorts
               .filter((detected) => !SHARE_RESERVED_PORTS.includes(detected))
-              .slice(0, 5)
+              .slice(0, MAX_PORT_CHOICES)
               .map((detected) => (
                 <RadioGroupItem key={detected} variant="pill" value={String(detected)}>
                   {detected}
@@ -71,8 +82,9 @@ export function PortPicker({
       >
         {invalid
           ? t(
-              'auto.components.right.sidebar.CloudShare.portInvalid',
-              'Enter a port from 1 to 65535. Ports 2222, 6768 and 6769 are used by Orca.'
+              'auto.components.right.sidebar.CloudShare.portInvalidReserved',
+              'Enter a port from 1 to 65535. Ports {{ports}} are used by Orca.',
+              { ports: reservedPortList() }
             )
           : detectedPorts.length > 0
             ? t(

@@ -255,3 +255,28 @@ export const cloudStaleFailed = defineFixture({
     />
   )
 })
+
+/** Removing a key this computer saved to the Orca account asks about that copy. */
+export const removePrompt = defineFixture({
+  width: 720,
+  render: () => (
+    <AgentApiKeysPane model={model(SIGNED_IN)} hosts={HOSTS} initiallyRemoving="synced" />
+  )
+})
+
+/** Signed in, but Orca can't be reached: last-known state, no account actions. */
+export const cloudUnreachable = defineFixture({
+  width: 720,
+  render: () => (
+    <AgentApiKeysPane
+      model={model(
+        {
+          ...SIGNED_IN,
+          cloud: { signedIn: true, unreachable: true, synced: ['synced'], managed: ['synced'] }
+        },
+        { cloudFailures: { local: 'unavailable' } }
+      )}
+      hosts={HOSTS}
+    />
+  )
+})

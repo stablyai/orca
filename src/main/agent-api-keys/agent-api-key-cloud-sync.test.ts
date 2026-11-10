@@ -41,9 +41,15 @@ function setup(accountId: string | null = 'user-a', vault: AgentApiKeySummary[] 
     return { accountId: id, client, isCurrent: () => generation === at }
   }
   let current: AgentApiKeyCloudConnection | null = accountId ? connect(accountId) : null
+  let offline = false
   const sync = new AgentApiKeyCloudSync({
     ledgerPath: join(root, 'ledger.json'),
-    connection: async () => current,
+    link: async () =>
+      !current
+        ? { kind: 'signed-out' }
+        : offline
+          ? { kind: 'unreachable', accountId: current.accountId }
+          : { kind: 'connected', connection: current },
     valueOf: async () => VALUE,
     listKeys: async () => vault,
     now: () => 100
@@ -54,6 +60,9 @@ function setup(accountId: string | null = 'user-a', vault: AgentApiKeySummary[] 
     signInAs: (id: string | null) => {
       generation++
       current = id ? connect(id) : null
+    },
+    setOffline: (next: boolean) => {
+      offline = next
     }
   }
 }
@@ -106,7 +115,12 @@ describe('AgentApiKeyCloudSync', () => {
     expect(outcome).toEqual({ kind: 'failed', error: 'unavailable', keyId: 'k1' })
     expect(JSON.stringify(outcome)).not.toContain(VALUE)
     expect(JSON.stringify(warn.mock.calls)).not.toContain(VALUE)
-    expect(await sync.state([key()])).toEqual({ signedIn: true, synced: [], managed: [] })
+    expect(await sync.state([key()])).toEqual({
+      signedIn: true,
+      synced: [],
+      managed: [],
+      pending: ['k1']
+    })
     warn.mockRestore()
   })
 
@@ -116,7 +130,12 @@ describe('AgentApiKeyCloudSync', () => {
     client.put.mockRejectedValueOnce(new EnvironmentProviderError('timeout', 'slow'))
     const edited = key({ updatedAt: 2, hint: 'zzzz' })
     await sync.push(edited)
-    expect(await sync.state([edited])).toEqual({ signedIn: true, synced: [], managed: ['k1'] })
+    expect(await sync.state([edited])).toEqual({
+      signedIn: true,
+      synced: [],
+      managed: ['k1'],
+      pending: ['k1']
+    })
   })
 
   it('keeps one ledger per Orca account', async () => {
@@ -256,5 +275,66 @@ describe('AgentApiKeyCloudSync', () => {
         managed: []
       }
     )
+  })
+
+  it('shows the last-known state while Orca is unreachable, and nothing for an account never connected here', async () => {
+    const { sync, setOffline } = setup()
+    setOffline(true)
+    expect(await sync.state([key()])).toEqual({ signedIn: false, synced: [], managed: [] })
+    setOffline(false)
+    await sync.push(key())
+    setOffline(true)
+    expect(await sync.state([key()])).toEqual({
+      signedIn: true,
+      unreachable: true,
+      synced: ['k1'],
+      managed: ['k1']
+    })
+    const ledger = await readFile(join(root, 'ledger.json'), 'utf8')
+    expect(ledger).not.toContain(VALUE)
+  })
+
+  it('queues a save made while offline and sends it when Orca is back, once', async () => {
+    const edited = key({ updatedAt: 2 })
+    const { client, sync, setOffline } = setup('user-a', [edited])
+    await sync.push(key())
+    setOffline(true)
+    expect(await sync.push(edited)).toEqual({ kind: 'failed', error: 'unavailable', keyId: 'k1' })
+    expect(await sync.state([edited])).toMatchObject({ unreachable: true, pending: ['k1'] })
+    expect(sync.hasPending()).toBe(true)
+    expect(await sync.flushPending()).toBe(false)
+    setOffline(false)
+    expect(await sync.flushPending()).toBe(true)
+    expect(client.put).toHaveBeenCalledTimes(2)
+    expect(await sync.state([edited])).toEqual({ signedIn: true, synced: ['k1'], managed: ['k1'] })
+    expect(await sync.flushPending()).toBe(false)
+    expect(client.put).toHaveBeenCalledTimes(2)
+  })
+
+  it('retries a failed request, but drops keys edited or removed since and non-transient failures', async () => {
+    const other = key({ id: 'k2', envName: 'OPENAI_API_KEY' })
+    const vault = [key(), other]
+    const { client, sync } = setup('user-a', vault)
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    client.put.mockRejectedValueOnce(new EnvironmentProviderError('timeout', 'slow'))
+    client.put.mockRejectedValueOnce(new EnvironmentProviderError('timeout', 'slow'))
+    await sync.push(key())
+    await sync.push(other)
+    expect(await sync.state(vault)).toMatchObject({ pending: ['k1', 'k2'] })
+    // k1 was edited since its failed save: the user's newer save decides, not the retry.
+    vault[0] = key({ updatedAt: 9 })
+    expect(await sync.flushPending()).toBe(true)
+    expect(client.put).toHaveBeenCalledTimes(3)
+    expect(client.put).toHaveBeenLastCalledWith({ scope: 'personal' }, 'OPENAI_API_KEY', VALUE)
+    expect(sync.hasPending()).toBe(false)
+    vi.mocked(console.warn).mockRestore()
+  })
+
+  it('never queues keys saved while signed out', async () => {
+    const { client, sync, signInAs } = setup(null, [key()])
+    await sync.push(key())
+    signInAs('user-a')
+    expect(await sync.flushPending()).toBe(false)
+    expect(client.put).not.toHaveBeenCalled()
   })
 })

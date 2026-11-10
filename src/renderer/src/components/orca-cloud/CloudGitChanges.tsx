@@ -113,10 +113,10 @@ export function CloudGitChanges({
       </div>
       {data.changes.length > 0 ? (
         <div className="flex flex-col gap-1">
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-2xs text-muted-foreground">
             {t('orcaCloudWorkspace.archived.uncommitted', 'Uncommitted changes')}
           </span>
-          <ul className="flex flex-col font-mono text-[11px]">
+          <ul className="flex flex-col font-mono text-2xs">
             {data.changes.slice(0, MAX_CHANGES).map((change) => {
               const kind = changeKind(change.status)
               return (
@@ -141,7 +141,7 @@ export function CloudGitChanges({
             })}
           </ul>
           {totalChanges > MAX_CHANGES ? (
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-2xs text-muted-foreground">
               {t('orcaCloudWorkspace.archived.moreChanges', '{{count}} more', {
                 count: totalChanges - MAX_CHANGES
               })}
@@ -158,11 +158,11 @@ export function CloudGitChanges({
                 aria-hidden="true"
               />
               <span className="min-w-0 flex-1 truncate text-foreground">{commit.subject}</span>
-              <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+              <span className="shrink-0 font-mono text-2xs text-muted-foreground">
                 {commit.sha.slice(0, 7)}
               </span>
               {commit.at ? (
-                <span className="shrink-0 text-[11px] text-muted-foreground">
+                <span className="shrink-0 text-2xs text-muted-foreground">
                   {formatRelative(commit.at, now)}
                 </span>
               ) : null}

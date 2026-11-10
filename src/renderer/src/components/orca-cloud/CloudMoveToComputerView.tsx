@@ -100,16 +100,16 @@ export function CloudMoveToComputerView({
               node:
                 known && known.chats > 0
                   ? t(
-                      'orcaCloudMove.confirm.chatsCount',
-                      '{{count}} agent chats, so agents can resume here',
+                      'orcaCloudMove.confirm.chatsContinue',
+                      '{{count}} agent chats, so you can continue them here',
                       {
                         count: known.chats,
-                        defaultValue_one: '{{count}} agent chat, so the agent can resume here'
+                        defaultValue_one: '{{count}} agent chat, so you can continue it here'
                       }
                     )
                   : t(
-                      'orcaCloudMove.confirm.chats',
-                      'Claude and Codex chats, so agents can resume here'
+                      'orcaCloudMove.confirm.chatsContinueAny',
+                      'Claude and Codex chats, so you can continue them here'
                     )
             }
           ]}
