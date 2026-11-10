@@ -4,7 +4,7 @@ import { hasUnreadAgentSessionTab } from './unread-agent-session-membership'
 
 describe('unread agent-session membership', () => {
   it('keeps eligible duplicates until their last workspace membership leaves', () => {
-    const initial = {
+    const initial: Record<string, { id: string; contentType?: string }[]> = {
       first: [
         { id: 'same-bucket' },
         { id: 'same-bucket', contentType: 'agent-session' },
