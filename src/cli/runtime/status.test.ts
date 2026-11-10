@@ -86,7 +86,7 @@ describe.skipIf(process.platform === 'win32')('CLI runtime status', () => {
 
       const status = await new RuntimeClient(userDataPath).getCliStatus()
 
-      expect(Reflect.get(status.result.runtime, 'workspaceLineagePolicy')).toBe(expected)
+      expect(status.result.runtime.workspaceLineagePolicy).toBe(expected)
       expect(Object.hasOwn(status.result.runtime, 'workspaceLineagePolicy')).toBe(
         expected !== undefined
       )
@@ -236,7 +236,7 @@ describe('environment CLI lineage policy status', () => {
       try {
         const status = await client.getCliStatus()
         expect(status.result.target?.kind).toBe('environment')
-        expect(Reflect.get(status.result.runtime, 'workspaceLineagePolicy')).toBe(expected)
+        expect(status.result.runtime.workspaceLineagePolicy).toBe(expected)
         expect(Object.hasOwn(status.result.runtime, 'workspaceLineagePolicy')).toBe(
           expected !== undefined
         )
