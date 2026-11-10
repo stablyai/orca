@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/class-names'
 import type { SidebarHostOption } from '../../worktree-list/controls/sidebar-host-options'
 import {
+  getSidebarHostHealthDotClass,
   getSidebarHostHealthLabel,
   shouldShowHostScopeControls
 } from '../../worktree-list/controls/sidebar-host-options'
@@ -45,6 +46,26 @@ function getHostStatusDetail(host: SidebarHostOption, t?: Translate): string {
   }
   const detail = host.failureReason ?? host.detail
   return `${getSidebarHostHealthLabel(host.health, host.blockedReason, t, host.vmState)}${detail ? ` - ${detail}` : ''}`
+}
+
+function HostHealthDot({
+  health,
+  className
+}: {
+  health: SidebarHostOption['health']
+  className?: string
+}): React.JSX.Element {
+  // Why aria-hidden: the worded health label beside the host already names the state.
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        'size-1.5 shrink-0 rounded-full',
+        getSidebarHostHealthDotClass(health),
+        className
+      )}
+    />
+  )
 }
 
 export function AddRepoHostSelector({
@@ -86,6 +107,7 @@ export function AddRepoHostSelector({
             aria-expanded={open}
             className="h-7 min-w-0 max-w-[18rem] gap-1.5 rounded-md border border-border bg-muted/30 px-2 text-xs font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
           >
+            <HostHealthDot health={selectedHost.health} />
             <span className="min-w-0 truncate">{selectedHost.label}</span>
             {selectedHost.health !== 'local' ? (
               <span
@@ -99,7 +121,9 @@ export function AddRepoHostSelector({
                   selectedHost.vmState
                 )}
               </span>
-            ) : null}
+            ) : (
+              <span className="sr-only">{getSidebarHostHealthLabel(selectedHost.health)}</span>
+            )}
             <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
@@ -264,6 +288,8 @@ export function AddRepoHostSelector({
                         selected ? 'opacity-70' : 'opacity-0'
                       )}
                     />
+                    {/* Why mt-[5px]: centers the dot on the first text line, like the Check icon. */}
+                    <HostHealthDot health={host.health} className="mt-[5px]" />
                     <span className="min-w-0 flex-1">
                       <span className="flex min-w-0 items-center gap-2">
                         <span className="truncate font-medium">{host.label}</span>
@@ -277,9 +303,9 @@ export function AddRepoHostSelector({
                     {canConnectHost ? (
                       <Button
                         type="button"
-                        variant="link"
+                        variant="outline"
                         size="xs"
-                        className="ml-2 h-auto w-[5.75rem] shrink-0 justify-end gap-1 self-center px-0 py-0 text-[11px] font-normal text-muted-foreground hover:text-foreground hover:no-underline"
+                        className="ml-2 w-[5.75rem] shrink-0 self-center"
                         disabled={isConnecting}
                         onClick={(event) => {
                           event.preventDefault()
