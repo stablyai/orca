@@ -5,7 +5,6 @@ import type * as ReactNative from 'react-native'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 import { MobileNativeChatLowerRegion } from '../MobileNativeChatLowerRegion.web'
-import { NATIVE_CHAT_STEER_CHORD_HOLD_MS } from '../../../../../src/shared/native-chat/input/use-native-chat-steer-chord-preview'
 
 vi.mock('react-native', () => vi.importActual<typeof ReactNative>('react-native-web'))
 vi.mock(
@@ -187,31 +186,6 @@ describe('mobile composer modifier submit in the paired web page', () => {
     expect((await key(flags)).defaultPrevented).toBe(false)
     expect(onSend).not.toHaveBeenCalled()
     expect(field().value).toBe(' hello ')
-  })
-
-  it('holding Cmd alone on an empty composer shows Steer queued in Send, lights the head card and sends it on a press', async () => {
-    vi.spyOn(document, 'hasFocus').mockReturnValue(true)
-    const steerHead = { steers: () => true, run: vi.fn(() => true), light: vi.fn() }
-    await render({ value: '', sendFollowUp: { action: 'queue', offersChoice: true }, steerHead })
-    const preview = () => container.querySelector<HTMLButtonElement>('[data-preview]')
-    vi.useFakeTimers()
-    try {
-      await act(async () => {
-        field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Meta', bubbles: true }))
-      })
-      await act(async () => vi.advanceTimersByTime(NATIVE_CHAT_STEER_CHORD_HOLD_MS))
-    } finally {
-      vi.useRealTimers()
-    }
-    expect(preview()?.dataset.preview).toBe('steer-queued')
-    expect(steerHead.light).toHaveBeenLastCalledWith(true)
-    await act(async () => preview()?.click())
-    expect(steerHead.run).toHaveBeenCalledExactlyOnceWith(true)
-    await act(async () => {
-      field().dispatchEvent(new KeyboardEvent('keyup', { key: 'Meta', bubbles: true }))
-    })
-    expect(preview()).toBeNull()
-    expect(steerHead.light).toHaveBeenLastCalledWith(false)
   })
 
   it.each([

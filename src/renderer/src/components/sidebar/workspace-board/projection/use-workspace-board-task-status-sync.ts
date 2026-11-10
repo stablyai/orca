@@ -6,7 +6,7 @@ import {
   type WorkspaceRecordState
 } from '@/store/workspaces/selection/workspace-host-target'
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
-import { getRuntimeTargetForWorktreeOwner } from '@/lib/file-owner-runtime-target'
+import { getRuntimeTargetForWorktreeOwner } from '@/lib/files/access/file-owner-runtime-target'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { warnAmbiguousOwnerOnce } from '@/lib/ambiguous-owner-warning'

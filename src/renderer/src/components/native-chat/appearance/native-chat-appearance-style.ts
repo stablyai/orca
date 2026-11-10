@@ -5,13 +5,13 @@ import type { GlobalSettings } from '../../../../../shared/global-settings-types
 import { resolveNativeChatAppearanceSettings } from '../../../../../shared/native-chat/native-chat-appearance-settings'
 import { resolveConfiguredTerminalColors } from '../../../../../shared/terminal-themes/terminal-theme-selection'
 import { MATCH_TERMINAL_APP_THEME } from '../../../../../shared/plugin-theme-settings'
-import { buildFontFamily } from '@/lib/monospace-font-family'
-import { buildAppFontFamily } from '@/lib/app-font-family'
-import { resolveEditorFontStack } from '@/lib/editor/appearance/editor-typography'
+import { buildFontFamily } from '../../../../../shared/monospace-font-family'
+import { buildAppFontFamily } from '@/app-shell/appearance/app-font-family'
+import { resolveEditorFontStack } from '../../../../../shared/editor/editor-typography'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import { isTerminalBackgroundLight } from '../../../../../shared/terminal-themes/terminal-title-contrast'
 import { useSystemPrefersDark } from '../../../hooks/theme/use-system-prefers-dark'
-import { terminalChatSelectionMix } from '@/lib/chat-selection-mix'
+import { terminalChatSelectionMix } from '@/app-shell/appearance/chat-selection-mix'
 
 export const NATIVE_CHAT_APPEARANCE_ROOT_CLASS = 'native-chat-appearance bg-chat-canvas'
 // Bottom padding clears 20px control overhang; rail padding also covers its 34px overlay on macOS without scrollbar gutters.

@@ -554,7 +554,18 @@
     },
     "announce": {
       "typedInto": "Typed into {{target}}",
-      "insertedIn": "Inserted in {{target}}"
+      "insertedIn": "Inserted in {{target}}",
+      "listeningOnPhone": "Listening. Transcribing on this phone.",
+      "listeningOn": "Listening. Transcribing on {{computer}}.",
+      "listeningOnComputer": "Listening. Transcribing on the computer.",
+      "finishing": "Finishing.",
+      "inserted": "Inserted.",
+      "cancelled": "Dictation cancelled.",
+      "movedTo": "This phone stopped transcribing. Continuing on {{computer}}.",
+      "movedToComputer": "This phone stopped transcribing. Continuing on the computer.",
+      "stoppedKept": "Dictation stopped. {{reason}}. Your recording is kept.",
+      "stoppedKeptGeneric": "Dictation stopped. Your recording is kept.",
+      "stillListening": "Still listening."
     },
     "pill": {
       "open": "Open",
@@ -650,8 +661,8 @@
       "openAccountsHint": "Opens this desktop’s accounts",
       "emptyTitle": "No usage yet"
     },
-    "needsYou": {
-      "heading": "Needs you",
+    "activeAgents": {
+      "heading": "Active",
       "seeAll": "See all agents"
     }
   },
@@ -1485,6 +1496,15 @@
     },
     "offlineAsOfTime": {
       "yesterday": "yesterday, {{time}}"
+    },
+    "newWorkspaceCreateSubmit": {
+      "uncertainFolderCreate": "This worktree may have been created. Check the folder before creating another.",
+      "uncertainCreate": "This workspace may have been created. Check your workspaces before creating another.",
+      "folderCreateBusy": "A worktree in this repository is still being created or checked. It shows in the folder once it lands."
+    },
+    "smartRailRow": {
+      "title": "Smart rail",
+      "subtitle": "Shows keys for what your agent is doing"
     }
   },
   "pullRequest": {
@@ -2168,10 +2188,10 @@
       "renameTerminal": "Rename Terminal",
       "renameTerminalFailed": "Couldn't rename the terminal. {{reason}}",
       "terminalName": "Terminal name",
-      "allowAutoClose": "Allow Auto-Close"
+      "allowAutoClose": "Allow Auto-Close",
+      "agents": "Agents"
     },
     "tabStrip": {
-      "tabStatus": "{{title}}, {{status}}",
       "newTab": "New tab",
       "quickCommandsUpdateRequired": "Desktop update required for quick commands",
       "checkingCapabilities": "Checking desktop capabilities — try again in a moment"
@@ -2392,8 +2412,8 @@
       "insertFailedCopied": "Couldn't insert dictation, so it was copied to the clipboard",
       "insertFailed": "Couldn't insert dictation",
       "inserted": "Dictation inserted",
-      "stoppedAfterSilence": "Stopped after a minute of silence",
-      "stoppedAtCloudLimit": "Dictation stopped at the 10-minute cloud limit."
+      "stoppedAtCloudLimit": "Dictation stopped at the 10-minute cloud limit.",
+      "stoppedAfterSilenceSeconds": "Stopped after {{seconds}} seconds of silence"
     },
     "quickCommandLaunch": {
       "editBeforeRunning": "Edit this quick command before running it",
@@ -2873,8 +2893,6 @@
     },
     "presentation": {
       "loadingTabs": "Loading tabs",
-      "oneTab": "1 tab",
-      "tabCount": "{{tabCount}} tabs",
       "tapToRetry": "{{status}} — tap to retry"
     },
     "documentReaders": {
@@ -2893,6 +2911,48 @@
     },
     "usePrTextAction": {
       "updateFailed": "Failed to update pull request."
+    },
+    "smartKeys": {
+      "always": "Always",
+      "answer": "Answer",
+      "background": "Background",
+      "cancel": "Cancel",
+      "confirm": "Confirm",
+      "edit": "Edit",
+      "history": "History",
+      "keyLabel": "{{word}}, sends {{combo}}",
+      "mode": "Mode",
+      "no": "No",
+      "queue": "Queue",
+      "reject": "Reject",
+      "rewind": "Rewind",
+      "sendNow": "Send now",
+      "skip": "Skip",
+      "stop": "Stop",
+      "yes": "Yes"
+    },
+    "tabsSheet": {
+      "needsYou": "Needs you",
+      "working": "Working",
+      "everythingElse": "Everything else",
+      "open": "Open",
+      "closeTab": "Close {{title}}"
+    },
+    "tabRows": {
+      "browser": "Browser",
+      "markdown": "Markdown note",
+      "file": "File",
+      "chat": "Chat",
+      "terminal": "Terminal"
+    },
+    "tabBar": {
+      "oneTab": "1 tab",
+      "tabCount": "{{count}} tabs",
+      "anotherNeedsYou": "another tab needs you",
+      "actionsHint": "Shows actions for this tab",
+      "next": "Next tab",
+      "previous": "Previous tab",
+      "hint": "Shows all tabs"
     }
   },
   "chat": {
@@ -3645,7 +3705,17 @@
       "emptyTitle": "No attached worktrees yet",
       "emptyCopy": "Worktrees created from this workspace will show up here.",
       "statusUnavailable": "Unavailable",
-      "backToFolder": "Back to folder"
+      "backToFolder": "Back to folder",
+      "createSection": "Create a worktree",
+      "createIn": "Create a worktree in {{repo}}",
+      "created": "Created worktree {{name}} in {{repo}}",
+      "createdNamed": "Created worktree {{name}}",
+      "createFailed": "Could not create a worktree in {{repo}}.",
+      "loadReposRetry": "Load repositories",
+      "setupChoiceTitle": "Retry without setup?",
+      "setupChoiceMessage": "Orca couldn't confirm the last create in {{repo}}. Retrying it needs a setup choice; it will be created without running the repository's setup.",
+      "setupChoiceSkip": "Retry without setup",
+      "checking": "A worktree from {{repo}} may already have been created. Checking the folder…"
     },
     "hostedReviewCopy": {
       "updatingBranch": "Updating branch...",

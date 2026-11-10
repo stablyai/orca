@@ -25,7 +25,7 @@ import { ProjectSectionCatalogSchema } from '../../../src/shared/project-section
 vi.mock('expo-router', () => ({}))
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('../storage/preferences', () => ({ savePinnedIds: async () => {} }))
-vi.mock('../transport/hosts/host-removal-lifecycle', () => ({
+vi.mock('../host-catalog/host-removal-lifecycle', () => ({
   removeHostAndCloseClient: async () => {}
 }))
 vi.mock('../host-route-exit', () => ({ leaveHostRoute: () => {} }))

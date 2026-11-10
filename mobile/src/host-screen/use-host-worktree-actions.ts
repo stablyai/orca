@@ -1,3 +1,4 @@
+import { workspaceRename } from './workspace-rename-mutation'
 import type { HostWorktreeActionsArgs } from './host-worktree-actions-contract'
 import { PERSONAL_PROJECT_ORDER_CAPABILITY } from '../../../src/shared/personal-project-order'
 
@@ -12,47 +13,20 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-
 import { floatingWorkspaceSessionPath } from '../session/floating-workspace'
 import { holdSessionLeave } from '../session/session-leave-guard'
 import { savePinnedIds } from '../storage/preferences'
-import type { useForgetHostClient } from '../transport/connection/host-client-hooks'
-import { removeHostAndCloseClient } from '../transport/hosts/host-removal-lifecycle'
-import { isPageHostRemovalUnavailable } from '../transport/hosts/page-host-removal-refusal'
-import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { removeHostAndCloseClient } from '../host-catalog/host-removal-lifecycle'
+import { isPageHostRemovalUnavailable } from '../host-catalog/page-host-removal-refusal'
 import {
   rpcClientForExecutionHost,
   workspaceRouteExecutionHost
 } from '../worktree/execution-host-scoped-rpc-client'
 import { serverUpdateNeededNotice } from '../host-route-notice'
-import type { ConnectionState } from '../transport/connection/connection-state'
 import { leaveHostRoute } from '../host-route-exit'
 import { getWorktreeRowIdentity, isSameWorktreeRow } from '../worktree/worktree-host-row-identity'
 import { noteLastVisitedWorktree } from '../worktree/last-visited-worktree-by-host'
 import { isWorktreePinned, type Worktree } from '../worktree/workspace-list-sections'
-import {
-  worktreeActivate,
-  worktreeDisplayNameWrite,
-  worktreePinWrite,
-  worktreeSleep
-} from './host-screen-operations'
+import { worktreeActivate, worktreePinWrite, worktreeSleep } from './host-screen-operations'
 import { useHostWorktreeDelete } from './use-host-worktree-delete'
-import { defineHostMutation, useHostMutation, type HostMutationPhase } from '../query/host-mutation'
-
-async function sendWorkspaceRename(
-  client: RpcClient,
-  vars: { worktreeId: string; displayName: string }
-): Promise<void> {
-  worktreeDisplayNameWrite.interpret(
-    await worktreeDisplayNameWrite.request(client, {
-      worktree: `id:${vars.worktreeId}`,
-      displayName: vars.displayName
-    })
-  )
-}
-
-const workspaceRename = defineHostMutation({
-  offline: 'draft',
-  send: sendWorkspaceRename,
-  // Renaming is idempotent, so a lost reply is settled by sending the same name again.
-  confirm: sendWorkspaceRename
-})
+import { useHostMutation, type HostMutationPhase } from '../query/host-mutation'
 
 export function useHostWorktreeActions(args: HostWorktreeActionsArgs) {
   const {

@@ -1,4 +1,4 @@
-import { agentSessionSignInFor } from './lifecycle/agent-session-sign-in'
+import { agentSessionSetupFor } from './lifecycle/agent-session-setup-commands'
 
 export type AgentSessionAccountKind = 'managed' | 'system'
 
@@ -26,7 +26,7 @@ export function readAgentSessionUnavailable(value: unknown): AgentSessionUnavail
 }
 
 export function agentSessionSignInCopyId(provider: string, account?: AgentSessionAccountKind) {
-  const signIn = agentSessionSignInFor(provider)
+  const signIn = agentSessionSetupFor(provider)
   return signIn?.agent === 'claude'
     ? account === 'managed'
       ? 'claudeManagedNotSignedIn'

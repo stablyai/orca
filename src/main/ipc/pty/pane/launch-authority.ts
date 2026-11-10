@@ -1,3 +1,4 @@
+import type { DaemonLaunchNote } from '../../../daemon/protocol/daemon-launch-note-protocol'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -13,7 +14,7 @@ export function admitRendererAgentLaunchAuthority(args: {
   isReattach: boolean
   hasStablePaneOwner: boolean
   incarnationId: unknown
-}): { launchToken: string; launchAgent: TuiAgent } | null {
+}): { launchToken: string; launchAgent: TuiAgent; launchConfig: SleepingAgentLaunchConfig } | null {
   if (
     args.isReattach ||
     args.hasStablePaneOwner ||
@@ -27,7 +28,22 @@ export function admitRendererAgentLaunchAuthority(args: {
   ) {
     return null
   }
-  return { launchToken: args.launchToken, launchAgent: args.launchAgent }
+  return {
+    launchToken: args.launchToken,
+    launchAgent: args.launchAgent,
+    launchConfig: args.launchConfig
+  }
+}
+
+/** A reattach's binding: its host's launch note, none when the host keeps no notes (an older daemon, SSH). */
+export function reattachLaunchBinding(result: {
+  isReattach?: boolean
+  launchNote?: DaemonLaunchNote | null
+}): { reattach?: { launchNote?: DaemonLaunchNote | null } } {
+  if (!result.isReattach) {
+    return {}
+  }
+  return { reattach: result.launchNote !== undefined ? { launchNote: result.launchNote } : {} }
 }
 
 export function admitProviderReattachLaunchIdentity(args: {
