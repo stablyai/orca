@@ -166,6 +166,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
               env: params.env,
               telemetrySource: params.telemetrySource,
               retrySplit: params.retrySplit,
+              activate: false,
               wslUserAct: true
             })
     })

@@ -16,7 +16,7 @@ import { agentNoUpdateLabel } from '../../../../../../shared/agent-status/presen
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
-import { formatShortTimeAgo } from '@/lib/short-time-ago'
+import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { agentVerdictStatusLine } from '@/lib/agent-status/presentation/agent-verdict-status-line'
 import { agentRowStoppingLabel } from '@/lib/agent-status/presentation/agent-row-stopping-label'
 import { getCompactAgentLineOrder } from './worktree-card-compact-agent-line-order'

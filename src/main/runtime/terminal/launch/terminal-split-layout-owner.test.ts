@@ -11,6 +11,8 @@ import {
 import { createMobileCreateTestNotifier } from '../../orca-runtime-tests/orca-runtime-test-scenario-builders.spec'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
 import { ProvisioningRuntime } from '../../orca-runtime-tests/orca-runtime-layout-owner-start-fixture'
+import { RpcDispatcher } from '../../rpc/dispatcher'
+import { TERMINAL_LIFECYCLE_METHODS } from '../../rpc/methods/terminal/terminal-lifecycle-methods'
 import {
   committingSpawn,
   registerBoundPty
@@ -135,6 +137,23 @@ describe('a split of a pane the window draws, in a layout-owner build', () => {
 
     const shown = await runtime.splitTerminal(handle, { direction: 'horizontal' })
     expect((await listed()).activeTabId).toBe(`${TAB_ID}::${shown.leafId}`)
+  })
+
+  it('a handle split through RPC creates the pane without selecting it on the host', async () => {
+    const { runtime, handle, leafIds } = setup()
+    const before = (await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).activeTabId
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_LIFECYCLE_METHODS })
+
+    const response = await dispatcher.dispatch({
+      id: 'split-cli',
+      authToken: 'test',
+      method: 'terminal.split',
+      params: { terminal: handle, direction: 'vertical' }
+    })
+
+    expect(response).toMatchObject({ ok: true })
+    expect(leafIds()).toHaveLength(2)
+    expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).activeTabId).toBe(before)
   })
 
   it('a window split whose terminal fails to start keeps its pane, showing why', async () => {
