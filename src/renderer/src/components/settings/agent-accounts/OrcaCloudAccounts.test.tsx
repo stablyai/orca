@@ -124,10 +124,17 @@ describe('OrcaCloudAccountsView', () => {
     expect(screen.getByText(/right now/)).toBeTruthy()
     cleanup()
     // Flag off: same title, but never worded as paused ("right now", "until it’s back").
-    view({ claude: { kind: 'unavailable' }, codex: { kind: 'unavailable' } })
-    expect(screen.getAllByText(/isn’t available in Orca Cloud yet/)).toHaveLength(2)
+    view({ claude: { kind: 'unavailable' }, codex: NOT_SET_UP })
+    expect(screen.getByText(/isn’t available in Orca Cloud yet/)).toBeTruthy()
     expect(screen.queryByText(/right now|until it’s back/)).toBeNull()
-    expect(screen.queryByRole('button', { name: /Set up|Renew/ })).toBeNull()
+    cleanup()
+    // Both off: one muted line under the heading, no rows and no actions.
+    view({ claude: { kind: 'unavailable' }, codex: { kind: 'unavailable' } })
+    expect(
+      screen.getByText('Claude and Codex sign in for each cloud workspace for now.')
+    ).toBeTruthy()
+    expect(screen.queryByText(/isn’t available in Orca Cloud yet/)).toBeNull()
+    expect(screen.queryByRole('button')).toBeNull()
     cleanup()
     const handlers = actions()
     render(

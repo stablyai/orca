@@ -85,6 +85,20 @@ export function OrcaCloudAccountsView({
   if (load.kind === 'unavailable') {
     return null
   }
+  if (rows && ORCA_CLOUD_ACCOUNT_AGENTS.every((agent) => rows[agent].kind === 'unavailable')) {
+    // Neither provider is offered on this server: one muted line keeps the section findable.
+    return (
+      <section id={ORCA_CLOUD_ACCOUNTS_SECTION_ID} className="space-y-3">
+        <SettingsGroupHeader
+          title={t('orcaCloudAccounts.title', 'Orca Cloud')}
+          description={t(
+            'orcaCloudAccounts.allUnavailable',
+            'Claude and Codex sign in for each cloud workspace for now.'
+          )}
+        />
+      </section>
+    )
+  }
   const signedOut = load.kind === 'failed' && load.error === 'signed_out'
   let body: React.JSX.Element
   if (load.kind === 'loading' || (load.kind === 'ready' && !rows)) {

@@ -162,6 +162,12 @@ export const unavailable = fixture({
   codex: { kind: 'unavailable' }
 })
 
+/** Neither provider offered: the section collapses to one muted line. */
+export const allUnavailable = fixture({
+  claude: { kind: 'unavailable' },
+  codex: { kind: 'unavailable' }
+})
+
 export const setupFailed = fixture({
   claude: { kind: 'failed', error: 'denied' },
   codex: { kind: 'failed', error: 'code_expired' }
