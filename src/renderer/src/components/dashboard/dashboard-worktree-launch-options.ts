@@ -120,11 +120,13 @@ export function buildDashboardWorktreeLaunchOptions(
   }
 
   const result: Record<string, TuiAgent[]> = {}
+  let worktreeCount = 0
   for (const [worktreeId, repoId] of repoIdByWorktreeId) {
     // Bound launch options before validation would reject the entire snapshot.
-    if (Object.keys(result).length >= DASHBOARD_MAX_LAUNCH_WORKTREES) {
+    if (worktreeCount >= DASHBOARD_MAX_LAUNCH_WORKTREES) {
       break
     }
+    worktreeCount += 1
     const worktreeCards = cardsByWorktreeId.get(worktreeId) ?? []
     const detected = detectedAgentsForWorktree(state, worktreeId, repoId, catalog)
     const available = new Set<TuiAgent>(
