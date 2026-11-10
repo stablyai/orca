@@ -66,6 +66,7 @@ describe('isRecipeEnvNamePassed', () => {
     expect(isRecipeEnvNamePassed('CLOUDSDK_CORE_PROJECT', passEnv, 'linux')).toBe(true)
     expect(isRecipeEnvNamePassed('GITHUB_TOKEN', passEnv, 'linux')).toBe(false)
     expect(isRecipeEnvNamePassed('gh_token', passEnv, 'linux')).toBe(false)
+    expect(isRecipeEnvNamePassed('path', passEnv, 'linux')).toBe(false)
   })
 
   it('matches names case-insensitively on Windows', () => {
@@ -151,9 +152,9 @@ describe('orca.yaml passEnv', () => {
     expect(parseOrcaYaml(recipeYaml(''))?.environmentRecipes?.[0]).not.toHaveProperty('passEnv')
   })
 
-  it('drops a recipe with a malformed passEnv instead of widening its environment', () => {
+  it('keeps a recipe with a malformed passEnv but limits it to the base environment', () => {
     const hooks = parseOrcaYaml(recipeYaml('GH_TOKEN'))
-    expect(hooks?.environmentRecipes ?? []).toEqual([])
+    expect(hooks?.environmentRecipes?.[0]?.passEnv).toEqual([])
     expect(hooks?.environmentRecipeDiagnostics).toEqual([
       expect.objectContaining({ index: 0, field: 'passEnv' })
     ])

@@ -106,7 +106,7 @@ function RecipeEnvExposure({
             )
           : t(
               'auto.components.settings.EphemeralVmRecipeRow.envExposedAll',
-              'Scripts run on this computer with your full environment, including {{names}}. Add passEnv to this recipe in orca.yaml to pass only what it needs.',
+              'Scripts run on this computer with your full environment, including {{names}}. Set passEnv on the recipe to pass only what it needs.',
               { names }
             )}
       </span>

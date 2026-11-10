@@ -183,16 +183,18 @@ function normalizeVmRecipes(value: unknown): VmRecipeParseResult {
           message: `Recipe "${id}" ${timeouts.message} Steps keep no time limit.`
         })
       }
-      const passEnv = record.passEnv === undefined ? undefined : parseRecipePassEnv(record.passEnv)
-      if (passEnv === null) {
-        // Why: a typo must not silently widen the environment back to everything.
+      const parsedPassEnv =
+        record.passEnv === undefined ? undefined : parseRecipePassEnv(record.passEnv)
+      if (parsedPassEnv === null) {
+        // Why: a typo must not widen the environment back to everything, and dropping the recipe
+        // would let a same-id plugin recipe or a stored snapshot run with the full environment.
         diagnostics.push({
           index,
           field: 'passEnv',
-          message: `Recipe "${id}" passEnv must be a list of environment variable names (a trailing * matches a prefix).`
+          message: `Recipe "${id}" passEnv must be a list of environment variable names (a trailing * matches a prefix). Scripts only receive basic variables until it is fixed.`
         })
-        return null
       }
+      const passEnv = parsedPassEnv === null ? [] : parsedPassEnv
       return {
         id,
         name,

@@ -72,11 +72,11 @@ export function isRecipeEnvNamePassed(
   if (!passEnv) {
     return true
   }
-  // Base names are matched case-insensitively so Windows `Path`/`SystemRoot` survive.
-  if (BASE_ENV_NAME_SET.has(name.toUpperCase()) || name.startsWith('LC_')) {
+  const target = normalizeEnvName(name, platform)
+  // On Windows this is case-insensitive so `Path`/`SystemRoot` survive.
+  if (BASE_ENV_NAME_SET.has(target) || target.startsWith('LC_')) {
     return true
   }
-  const target = normalizeEnvName(name, platform)
   return passEnv.some((entry) => {
     const pattern = normalizeEnvName(entry, platform)
     return pattern.endsWith('*') ? target.startsWith(pattern.slice(0, -1)) : target === pattern

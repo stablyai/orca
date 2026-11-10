@@ -174,7 +174,7 @@ describe('EphemeralVmsPane', () => {
         'ANTHROPIC_API_KEY, GITHUB_TOKEN'
       )
     )
-    expect(container.textContent).toContain('Add passEnv to this recipe')
+    expect(container.textContent).toContain('Set passEnv on the recipe')
   })
 
   it('lists only allowlisted credentials when the recipe sets passEnv', async () => {

@@ -305,8 +305,8 @@ Recipe scripts inherit Orca's whole environment by default, including any API ke
 it. Set `passEnv` to pass only the variables the scripts need, as exact names or a prefix ending in
 `*`; `PATH`, `HOME`, `USER`, `SHELL`, `LANG`, `TMPDIR` and similar basics are always kept, and the
 `ORCA_*` recipe variables are always set. Recipes that use an SSH agent also need `SSH_AUTH_SOCK`,
-and provider CLIs need their own credential or config variables. A malformed `passEnv` drops the
-recipe with a diagnostic.
+and provider CLIs need their own credential or config variables. A malformed `passEnv` is reported
+and limits the scripts to the basic variables until it is fixed.
 
 ```yaml
 passEnv: [GH_TOKEN, GITHUB_TOKEN, 'CLOUDSDK_*']
