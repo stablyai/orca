@@ -10,6 +10,8 @@ import { selectColumns, TASK_COLUMNS } from '../row-column-lists'
 export function createTask(
   this: OrchestrationDb,
   task: {
+    /** Set only for a Task placed on a paired server: one ID for it here and there, from the start's retry key. */
+    id?: string
     spec: string
     taskTitle?: string
     displayName?: string
@@ -39,7 +41,7 @@ export function createTask(
       throw new Error(`Dependency task ${depId} must belong to run ${runId}`)
     }
   }
-  const id = generateId('task')
+  const id = task.id ?? generateId('task')
   const depsJson = JSON.stringify(task.deps ?? [])
   const display = buildOrchestrationTaskDisplayMetadata({
     spec: task.spec,

@@ -1,9 +1,9 @@
 import type { RuntimeMobileSessionTabMove } from '../../../../shared/runtime-types'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { isWebRuntimeSessionActive } from '../../runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { moveWebRuntimeSessionTab } from '../../runtime/web-session-tabs-sync/actions/web-runtime-session-tab-move'
-import { isDesktopCreatedTabInFrameDrawnServerWorkspace } from '@/lib/frame-drawn-desktop-created-tabs'
+import { isDesktopCreatedTabInFrameDrawnServerWorkspace } from '@/store/workspace-layout/frames/frame-drawn-desktop-created-tabs'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export function mirrorWebRuntimeTabMove(

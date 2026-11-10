@@ -22,7 +22,7 @@ import {
   supportsStructuredAgentSessionCreateMessage
 } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import type { StructuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
-import { withFrameDrawnChatTabPlacement } from '../../frame-drawn-chat-tab-placement'
+import { withFrameDrawnChatTabPlacement } from '../../../store/workspace-layout/frames/frame-drawn-chat-tab-placement'
 import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
 import { askHostCreateSupport } from './structured-agent-session-host-admission'
 import { readStructuredChatHostPermissionVerdict } from '@/runtime/native-chat/host-capabilities/structured-chat-host-permission'

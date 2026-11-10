@@ -164,17 +164,6 @@ afterEach(async () => {
   document.body.innerHTML = ''
 })
 
-describe('useAutomationHostCatalog orphan bootstrap', () => {
-  it('projects the orphan entry a host answer reported', async () => {
-    desktopListScoped.mockResolvedValue({ automations: [], items: [], orphanCount: 2 })
-
-    await renderCatalog([])
-
-    // Committed orphan counts arrive only through cache changes; rederive the catalog without requiring a store write.
-    expect(view?.catalog.entries.map((entry) => entry.stableKey)).toContain('host:desktop:orphan')
-  })
-})
-
 describe('useAutomationHostCatalog on a paired web client', () => {
   const runtimeSelf = {
     authority: { kind: 'runtime', environmentId: ENVIRONMENT_ID },

@@ -2509,6 +2509,7 @@
       "useIpcEvents": {
         "0e3cf53060": "Browser tab {{value0}} not found",
         "2f6637fe6c": "Browser tab {{value0}} is pinned",
+        "unsent_notes_close_canceled": "Browser tab {{value0}} has unsent notes, and the user kept it open",
         "a8d2bf8e9e": "No active browser tab to close",
         "f000b2ff76": "No active worktree",
         "7a64b31991": "Local terminal creation is unavailable while a remote runtime is active",
@@ -4739,7 +4740,9 @@
             "0d1963f4a6": "This tab is pinned. Are you sure you want to close it?",
             "dont_ask_again": "Don't ask again for pinned tabs",
             "0b38ee2f86": "Cancel",
-            "c337c9d75c": "Close"
+            "c337c9d75c": "Close",
+            "unsent_notes_title": "Discard unsent notes?",
+            "unsent_notes_description": "This tab has notes you haven't sent. Closing it discards them."
           },
           "TerminalSshReconnectOverlay": {
             "authFailed": "Authentication failed for {{value0}}. Connect again to continue this terminal session.",
@@ -19210,6 +19213,8 @@
           "reloaded": "Reloaded"
         },
         "FolderWorkspaceSourceControl": {
+          "changeCount_one": "{{count}} change",
+          "changeCount_other": "{{count}} changes",
           "openWorktree": "Open this worktree",
           "reconnect": "Reconnect to see this worktree’s changes."
         },

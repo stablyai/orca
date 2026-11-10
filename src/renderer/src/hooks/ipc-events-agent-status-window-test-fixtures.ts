@@ -160,7 +160,7 @@ export function stubReactSyncEffect(): void {
 }
 
 export function stubAuxiliaryModules(): void {
-  vi.doMock('@/lib/ui-zoom', () => ({ applyUIZoom: vi.fn() }))
+  vi.doMock('@/app-shell/chrome/ui-zoom', () => ({ applyUIZoom: vi.fn() }))
   vi.doMock('../lib/workspace/activation/worktree-activation', () => ({
     activateAndRevealWorktree: vi.fn(),
     ensureWorktreeHasInitialTerminal: vi.fn()
@@ -174,5 +174,5 @@ export function stubAuxiliaryModules(): void {
     UI_ZOOM_MIN: -3,
     UI_ZOOM_MAX: 3
   }))
-  vi.doMock('@/lib/zoom-events', () => ({ dispatchZoomLevelChanged: vi.fn() }))
+  vi.doMock('@/app-shell/chrome/zoom-events', () => ({ dispatchZoomLevelChanged: vi.fn() }))
 }

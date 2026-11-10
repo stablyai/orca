@@ -2,7 +2,7 @@ import { joinPath } from '@/lib/path'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { areLocalWindowsWslPathAliases } from '../../../../../shared/cross-platform-path'
 import { externalChangePathKeyFor } from '@/store/slices/editor/buffers/editor-buffer-identity'
-import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
+import { isLocalWindowsDesktopClient } from '@/app-shell/chrome/desktop-window-chrome'
 import {
   DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
   MAX_EDITOR_AUTO_SAVE_DELAY_MS,

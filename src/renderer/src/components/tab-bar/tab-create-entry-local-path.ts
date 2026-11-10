@@ -4,9 +4,9 @@ import {
   getLocalPathOpenOwnerForRoute,
   isLocalPathOpenBlocked
 } from '@/lib/files/os-open/local-path-open-guard'
-import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
-import type { useAppStore } from '@/store'
+import type { useAppStore } from '@/store/index'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { selectFileListWorktree } from '@/store/workspaces/selection/known-worktree-selection'

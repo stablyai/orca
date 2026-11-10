@@ -8,11 +8,11 @@ import {
   GitPullRequestDraft
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { findGithubPrWorkspaceAttachment } from '@/lib/work-items/github/github-work-item-workspace-attachment'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
-import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
+import { getWorktreeAttachmentLabel } from '@/lib/workspace/display/worktree-attachment-label'
 import {
   clearGitHubLinkCopied,
   createGitHubLinkCopyState,
