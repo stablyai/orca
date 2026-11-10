@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useUsageObservation } from '../../store/slices/usage/use-usage-observation'
 import {
   Activity,
   Coins,
@@ -61,16 +61,14 @@ export function ClaudeUsagePane(): React.JSX.Element {
   const recentSessions = useAppStore((state) => state.claudeUsageRecentSessions)
   const scope = useAppStore((state) => state.claudeUsageScope)
   const range = useAppStore((state) => state.claudeUsageRange)
-  const fetchClaudeUsage = useAppStore((state) => state.fetchClaudeUsage)
+  const observeClaudeUsage = useAppStore((state) => state.observeClaudeUsage)
   const setClaudeUsageEnabled = useAppStore((state) => state.setClaudeUsageEnabled)
   const refreshClaudeUsage = useAppStore((state) => state.refreshClaudeUsage)
   const setClaudeUsageScope = useAppStore((state) => state.setClaudeUsageScope)
   const setClaudeUsageRange = useAppStore((state) => state.setClaudeUsageRange)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
-  useEffect(() => {
-    void fetchClaudeUsage()
-  }, [fetchClaudeUsage])
+  useUsageObservation(observeClaudeUsage)
 
   const handleSetEnabled = (enabled: boolean): void => {
     recordFeatureInteraction('usage-tracking')

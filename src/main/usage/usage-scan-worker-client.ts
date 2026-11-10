@@ -47,6 +47,7 @@ export class UsageScanWorkerClient {
       factory: () => createUsageScanWorkerTransport(options.workerFactory),
       idleTeardownMs: IDLE_TEARDOWN_MS,
       awaitRetirement: true,
+      strictRetirement: true,
       maxConsecutiveDeaths: MAX_CONSECUTIVE_DEATHS,
       createUnavailableError: (message) => new UsageScanWorkerUnavailableError(message),
       isProgress: isUsageScanWorkerProgress,

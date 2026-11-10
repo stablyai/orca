@@ -6,7 +6,7 @@ import { setAppEnvironment } from '../../shared/app-environment'
 import { agentTokenUsageSchema } from '../../shared/telemetry-agent-token-usage-schema'
 import { backendMessagePort, type BackendNativePort } from './backend-message-port'
 import { createNodeServiceEnvironment } from './node-service-environment'
-import { BackendServiceLifetime } from './service-composition'
+import { BackendServiceLifetime, activateBackendServices } from './service-composition'
 import { acquireOrcadInstanceLock } from '../orcad/orcad-instance-lock'
 import { OrcadInstanceLockError } from '../orcad/orcad-data-root-privacy'
 import { ORCAD_SHUTDOWN_DEADLINE_MS } from '../orcad/orcad-stop-deadlines'
@@ -14,7 +14,6 @@ import { clearWindowsStdHandleInheritance } from '../startup/windows-std-handle-
 import { installWindowsIsolatedSpawner } from '../startup/windows-isolated-spawner'
 import { dropE2eSpawnLogOutsideE2e } from '../startup/e2e-spawn-log-env'
 import { ignoreInheritedWslHostsGateState } from '../../shared/wsl-host-internal-gate'
-import { startOrcadEventLoopWatchdog } from '../orcad/orcad-event-loop-watchdog'
 import type { createUsageService } from './usage-service'
 import type { UsageWorktreeCatalog } from '../usage/usage-store-host'
 
@@ -72,6 +71,7 @@ async function acquireServiceLock(userDataPath: string) {
     try {
       return acquireOrcadInstanceLock(join(userDataPath, 'backend-service'), {
         role: 'orcad',
+        enforcePrivateDataRoot: false,
         onExclusivityLost: () => {
           void stop()
         }
@@ -99,7 +99,7 @@ async function bootstrap(raw: unknown, port: BackendNativePort): Promise<void> {
   const config = BackendBootstrapSchema.parse(raw)
   if (
     config.requiredCapabilities.some(
-      (capability) => !(BACKEND_CAPABILITIES as readonly string[]).includes(capability)
+      (capability) => !BACKEND_CAPABILITIES.some((offered) => offered === capability)
     )
   ) {
     throw new Error('Backend contract is unsupported.')
@@ -138,26 +138,32 @@ async function bootstrap(raw: unknown, port: BackendNativePort): Promise<void> {
   })
   abort.signal.throwIfAborted()
   lifetime.add(() => host.runQuitHandlers())
-  const watchdog = startOrcadEventLoopWatchdog({ supervised: true })
-  lifetime.add(() => watchdog?.stop())
-  const { createUsageService } = await import('./usage-service')
-  abort.signal.throwIfAborted()
-  const call = async (method: string, params?: unknown): Promise<unknown> => {
-    return control!.call(method, params)
-  }
-  usage = createUsageService({
-    signal: abort.signal,
-    userDataPath: config.paths.userData,
-    readCatalog: async () => (await call('usage.catalog')) as UsageWorktreeCatalog,
-    claudeProfileDirs: async () => (await call('usage.claudeProfileDirs')) as string[],
-    telemetry: {
-      isEnabled: async () => (await call('usage.telemetry.enabled')) === true,
-      capture: async (snapshot) =>
-        (await call('usage.telemetry.capture', agentTokenUsageSchema.parse(snapshot))) === true
+  await activateBackendServices({
+    supervised: true,
+    registerCleanup: (cleanup) => lifetime.add(cleanup),
+    activate: async (registerCleanup) => {
+      const { createUsageService } = await import('./usage-service')
+      abort.signal.throwIfAborted()
+      const call = async (method: string, params?: unknown): Promise<unknown> => {
+        return control!.call(method, params)
+      }
+      usage = createUsageService({
+        signal: abort.signal,
+        userDataPath: config.paths.userData,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The private control peer returns the catalog directly from its typed Store adapter.
+        readCatalog: async () => (await call('usage.catalog')) as UsageWorktreeCatalog,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The private control peer returns the account owner's typed string array.
+        claudeProfileDirs: async () => (await call('usage.claudeProfileDirs')) as string[],
+        telemetry: {
+          isEnabled: async () => (await call('usage.telemetry.enabled')) === true,
+          capture: async (snapshot) =>
+            (await call('usage.telemetry.capture', agentTokenUsageSchema.parse(snapshot))) === true
+        }
+      })
+      registerCleanup(() => usage!.stop())
+      await usage.ready
     }
   })
-  lifetime.add(() => usage!.stop())
-  await usage.ready
   abort.signal.throwIfAborted()
   parent!.postMessage({
     type: 'ready',
@@ -169,6 +175,7 @@ async function bootstrap(raw: unknown, port: BackendNativePort): Promise<void> {
 }
 
 parent.on('message', (event) => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only the owning desktop can send parent messages; every consumed field is validated below.
   const message = event.data as { type?: unknown; config?: unknown; token?: unknown }
   const [port, ...surplus] = event.ports
   for (const extra of surplus) {

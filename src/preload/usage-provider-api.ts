@@ -18,6 +18,7 @@ export function createUsageProviderApi(
   },
   prefix: UsageProviderApiKey
 ): UsageProviderApi {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The prefix selects its typed service methods; only the transport boundary erases their return types.
   return {
     ...(ipc.onConnectionChanged ? { onConnectionChanged: ipc.onConnectionChanged } : {}),
     getScanState: () => ipc.invoke(`${prefix}:getScanState`),

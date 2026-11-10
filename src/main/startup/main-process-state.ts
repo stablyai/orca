@@ -64,6 +64,14 @@ function createInitialProfileStateAdmission(): ProfileStateRuntimeAdmission | un
   return undefined
 }
 
+function createInitialBackendServices(): {
+  backend: BackendSupervisor | null
+  claudeUsage: AutomationUsageClient | null
+  codexUsage: AutomationUsageClient | null
+} {
+  return { backend: null, claudeUsage: null, codexUsage: null }
+}
+
 /** Mutable composition-root state shared by startup, window, serve, and quit phases. */
 const desktopRelayStatus: MobileRelayStatusDetail = { status: 'offline' }
 
@@ -77,9 +85,7 @@ export const mainProcessState = {
   profileStateStartup: createInitialProfileStateStartup(),
   profileStateAdmission: createInitialProfileStateAdmission(),
   stats: null as StatsCollector | null,
-  backend: null as BackendSupervisor | null,
-  claudeUsage: null as AutomationUsageClient | null,
-  codexUsage: null as AutomationUsageClient | null,
+  ...createInitialBackendServices(),
   codexAccounts: null as CodexAccountService | null,
   codexRuntimeHome: null as CodexRuntimeHomeService | null,
   codexSessionMigration: null as ReturnType<typeof createCodexSessionMigrationScheduler> | null,

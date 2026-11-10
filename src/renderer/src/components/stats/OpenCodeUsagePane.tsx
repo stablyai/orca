@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useUsageObservation } from '../../store/slices/usage/use-usage-observation'
 import { Activity, Brain, Coins, DatabaseZap, FolderKanban, Sparkles } from 'lucide-react'
 import type {
   OpenCodeUsageRange,
@@ -57,16 +57,14 @@ export function OpenCodeUsagePane(): React.JSX.Element {
   const recentSessions = useAppStore((state) => state.openCodeUsageRecentSessions)
   const scope = useAppStore((state) => state.openCodeUsageScope)
   const range = useAppStore((state) => state.openCodeUsageRange)
-  const fetchOpenCodeUsage = useAppStore((state) => state.fetchOpenCodeUsage)
+  const observeOpenCodeUsage = useAppStore((state) => state.observeOpenCodeUsage)
   const setOpenCodeUsageEnabled = useAppStore((state) => state.setOpenCodeUsageEnabled)
   const refreshOpenCodeUsage = useAppStore((state) => state.refreshOpenCodeUsage)
   const setOpenCodeUsageScope = useAppStore((state) => state.setOpenCodeUsageScope)
   const setOpenCodeUsageRange = useAppStore((state) => state.setOpenCodeUsageRange)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
-  useEffect(() => {
-    void fetchOpenCodeUsage()
-  }, [fetchOpenCodeUsage])
+  useUsageObservation(observeOpenCodeUsage)
 
   const handleSetEnabled = (enabled: boolean): void => {
     recordFeatureInteraction('usage-tracking')

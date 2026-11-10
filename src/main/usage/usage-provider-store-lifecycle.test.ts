@@ -1,4 +1,4 @@
-import type { UsageTelemetryHost } from './usage-store-host'
+import type { UsageStoreHost, UsageTelemetryHost } from './usage-store-host'
 import { createTestUsageStoreHost } from './usage-store-host-test-fixture'
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
@@ -112,7 +112,8 @@ class TestUsageStore extends UsageProviderStoreLifecycle<
     cacheFile: string,
     scan: TestScan,
     splitCacheFile: TestSplit,
-    capture: ReturnType<typeof vi.fn<UsageTelemetryHost['capture']>>
+    capture: ReturnType<typeof vi.fn<UsageTelemetryHost['capture']>>,
+    readCatalog?: UsageStoreHost['readCatalog']
   ) {
     super(
       {
@@ -120,7 +121,8 @@ class TestUsageStore extends UsageProviderStoreLifecycle<
           userDataPath: dirname(cacheFile),
           telemetryEnabled: true,
           capture
-        })
+        }),
+        ...(readCatalog ? { readCatalog } : {})
       },
       {
         tokenUsage: {
@@ -188,6 +190,49 @@ describe('UsageProviderStoreLifecycle', () => {
     await Promise.all(stores.map((store) => store.flush()))
     rmSync(tempDirectory, { recursive: true, force: true })
     vi.restoreAllMocks()
+  })
+
+  it.each([100, 1000])('uses one consistent catalog per refresh at %i worktrees', async (count) => {
+    const worktrees = Array.from({ length: count }, (_, i) => ({
+      worktreeId: `repo::/work/${i}`,
+      path: `/work/${i}`,
+      displayName: `Work ${i}`
+    }))
+    const readCatalog = vi.fn<UsageStoreHost['readCatalog']>().mockResolvedValue({
+      repoIds: ['repo'],
+      worktreesByRepo: [['repo', worktrees]]
+    })
+    const store = new TestUsageStore(
+      join(tempDirectory, 'catalog.json'),
+      scan,
+      split,
+      capture,
+      readCatalog
+    )
+    stores.push(store)
+    await store.whenLoaded()
+    await store.refresh(true)
+    expect(readCatalog).not.toHaveBeenCalled()
+    await store.setEnabled(true)
+    const blocked = createDeferred<TestScanResult>()
+    scan.mockReturnValueOnce(blocked.promise)
+    const first = store.refresh(true)
+    const second = store.refresh(true)
+    await vi.waitFor(() => expect(scan).toHaveBeenCalledTimes(1))
+    expect(readCatalog).toHaveBeenCalledTimes(2)
+    expect(scan.mock.calls[0][0]).toHaveLength(count)
+    expect(scan.mock.calls[0][0][0]).toMatchObject({ path: '/work/0' })
+    blocked.resolve({ sessions: [{ id: 'catalog-result' }], dailyAggregates: [] })
+    await Promise.all([first, second])
+    expect(store.getState().sessions).toEqual([{ id: 'catalog-result' }])
+    readCatalog.mockClear()
+    await store.refresh()
+    expect(readCatalog).toHaveBeenCalledTimes(1)
+    expect(scan).toHaveBeenCalledTimes(1)
+    store.stopScanAdmission()
+    readCatalog.mockClear()
+    await store.refresh(true)
+    expect(readCatalog).not.toHaveBeenCalled()
   })
 
   it('retries saved revisions when the usage cache is rebuilt', async () => {

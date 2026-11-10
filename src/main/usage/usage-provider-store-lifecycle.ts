@@ -103,7 +103,9 @@ export abstract class UsageProviderStoreLifecycle<
     if (this.stopping || !this.state.scanState.enabled) {
       return this.getScanState()
     }
-    const currentWorktreeFingerprint = await this.getCurrentWorktreeFingerprint()
+    const catalog = await this.host.readCatalog()
+    this.host.signal.throwIfAborted()
+    const currentWorktreeFingerprint = getUsageWorktreeFingerprint(new Map(catalog.worktreesByRepo))
     if (!force && this.state.scanState.lastScanCompletedAt) {
       const ageMs = Date.now() - this.state.scanState.lastScanCompletedAt
       if (ageMs < STALE_MS && this.state.worktreeFingerprint === currentWorktreeFingerprint) {
@@ -113,7 +115,7 @@ export abstract class UsageProviderStoreLifecycle<
     if (this.stopping) {
       return this.getScanState()
     }
-    await this.runScan()
+    await this.runScan(catalog)
     return this.getScanState()
   }
 
@@ -224,7 +226,9 @@ export abstract class UsageProviderStoreLifecycle<
     })
   }
 
-  private async runScan(): Promise<void> {
+  private async runScan(
+    catalog: Awaited<ReturnType<UsageStoreHost['readCatalog']>>
+  ): Promise<void> {
     if (this.scanPromise) {
       await this.scanPromise
       return
@@ -236,7 +240,7 @@ export abstract class UsageProviderStoreLifecycle<
     // Assign before yielding so concurrent refreshes share one scan.
     this.scanPromise = (async () => {
       try {
-        const { repoIds, worktreesByRepo: entries } = await this.host.readCatalog()
+        const { repoIds, worktreesByRepo: entries } = catalog
         this.host.signal.throwIfAborted()
         const worktreesByRepo = new Map(entries)
         const worktreeFingerprint = getUsageWorktreeFingerprint(worktreesByRepo)
@@ -298,11 +302,6 @@ export abstract class UsageProviderStoreLifecycle<
         '[agent-token-usage] Could not report token usage; will retry after the next scan'
       )
     }
-  }
-
-  private async getCurrentWorktreeFingerprint(): Promise<string> {
-    const { worktreesByRepo } = await this.host.readCatalog()
-    return getUsageWorktreeFingerprint(new Map(worktreesByRepo))
   }
 }
 

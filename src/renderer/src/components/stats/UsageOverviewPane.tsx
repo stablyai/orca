@@ -1,4 +1,5 @@
-import { useEffect, useMemo } from 'react'
+import { useUsageObservation } from '../../store/slices/usage/use-usage-observation'
+import { useMemo } from 'react'
 import { Activity, CalendarDays, Coins, DatabaseZap, RefreshCw, Sparkles } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { Badge } from '../ui/badge'
@@ -48,10 +49,10 @@ export function UsageOverviewPane(): React.JSX.Element {
   const museScanState = useAppStore((state) => state.museUsageScanState)
   const museSummary = useAppStore((state) => state.museUsageSummary)
   const museDaily = useAppStore((state) => state.museUsageDaily)
-  const fetchClaudeUsage = useAppStore((state) => state.fetchClaudeUsage)
-  const fetchCodexUsage = useAppStore((state) => state.fetchCodexUsage)
-  const fetchOpenCodeUsage = useAppStore((state) => state.fetchOpenCodeUsage)
-  const fetchMuseUsage = useAppStore((state) => state.fetchMuseUsage)
+  const observeClaudeUsage = useAppStore((state) => state.observeClaudeUsage)
+  const observeCodexUsage = useAppStore((state) => state.observeCodexUsage)
+  const observeOpenCodeUsage = useAppStore((state) => state.observeOpenCodeUsage)
+  const observeMuseUsage = useAppStore((state) => state.observeMuseUsage)
   const refreshClaudeUsage = useAppStore((state) => state.refreshClaudeUsage)
   const refreshCodexUsage = useAppStore((state) => state.refreshCodexUsage)
   const refreshOpenCodeUsage = useAppStore((state) => state.refreshOpenCodeUsage)
@@ -62,12 +63,10 @@ export function UsageOverviewPane(): React.JSX.Element {
   const enableMuseUsage = useAppStore((state) => state.enableMuseUsage)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
-  useEffect(() => {
-    void fetchClaudeUsage()
-    void fetchCodexUsage()
-    void fetchOpenCodeUsage()
-    void fetchMuseUsage()
-  }, [fetchClaudeUsage, fetchCodexUsage, fetchOpenCodeUsage, fetchMuseUsage])
+  useUsageObservation(observeClaudeUsage)
+  useUsageObservation(observeCodexUsage)
+  useUsageObservation(observeOpenCodeUsage)
+  useUsageObservation(observeMuseUsage)
 
   const overview = useMemo(
     () =>

@@ -90,11 +90,7 @@ export async function collectAutomationRunUsage({
         completedAt: collectedAt
       })
       .catch(() =>
-        unavailable(
-          'claude',
-          'scan_failed',
-          'Claude usage is unavailable. Try again after Orca reconnects.'
-        )
+        unavailable('claude', 'scan_failed', 'Claude usage was unavailable when this run finished.')
       )
   }
   if (automation.agentId === 'codex') {
@@ -109,11 +105,7 @@ export async function collectAutomationRunUsage({
         completedAt: collectedAt
       })
       .catch(() =>
-        unavailable(
-          'codex',
-          'scan_failed',
-          'Codex usage is unavailable. Try again after Orca reconnects.'
-        )
+        unavailable('codex', 'scan_failed', 'Codex usage was unavailable when this run finished.')
       )
   }
   return unavailable(null, 'provider_unsupported', 'This agent does not report usage to Orca yet.')

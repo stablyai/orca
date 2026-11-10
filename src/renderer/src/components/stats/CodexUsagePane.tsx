@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useUsageObservation } from '../../store/slices/usage/use-usage-observation'
 import { Activity, Brain, Coins, DatabaseZap, FolderKanban, Sparkles } from 'lucide-react'
 import type { CodexUsageRange, CodexUsageScope } from '../../../../shared/codex-usage-types'
 import { useAppStore } from '../../store'
@@ -53,16 +53,14 @@ export function CodexUsagePane(): React.JSX.Element {
   const recentSessions = useAppStore((state) => state.codexUsageRecentSessions)
   const scope = useAppStore((state) => state.codexUsageScope)
   const range = useAppStore((state) => state.codexUsageRange)
-  const fetchCodexUsage = useAppStore((state) => state.fetchCodexUsage)
+  const observeCodexUsage = useAppStore((state) => state.observeCodexUsage)
   const setCodexUsageEnabled = useAppStore((state) => state.setCodexUsageEnabled)
   const refreshCodexUsage = useAppStore((state) => state.refreshCodexUsage)
   const setCodexUsageScope = useAppStore((state) => state.setCodexUsageScope)
   const setCodexUsageRange = useAppStore((state) => state.setCodexUsageRange)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
-  useEffect(() => {
-    void fetchCodexUsage()
-  }, [fetchCodexUsage])
+  useUsageObservation(observeCodexUsage)
 
   const handleSetEnabled = (enabled: boolean): void => {
     recordFeatureInteraction('usage-tracking')

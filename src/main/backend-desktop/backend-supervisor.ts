@@ -7,6 +7,7 @@ import {
   type WebFrameMain
 } from 'electron'
 import { join } from 'node:path'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { pathToFileURL } from 'node:url'
 import { BackendPortRpc } from '../../shared/backend-port-rpc'
 import {
@@ -70,42 +71,38 @@ export class BackendSupervisor {
         }
         this.documents.delete(sender.id)
         this.child?.postMessage({ type: 'retire', token: document.token })
-        sender.off('did-start-navigation', navigation)
+        sender.off('did-frame-navigate', navigation)
         sender.off('destroyed', retire)
         sender.off('render-process-gone', retire)
       }
       const navigation = (
         _event: unknown,
         _url: string,
-        sameDocument: boolean,
+        _httpCode: number,
+        _httpStatus: string,
         mainFrame: boolean
       ): void => {
-        if (mainFrame && !sameDocument) {
+        if (mainFrame) {
           retire()
         }
       }
       document.retire = retire
       this.documents.set(sender.id, document)
-      sender.on('did-start-navigation', navigation)
+      sender.on('did-frame-navigate', navigation)
       sender.once('destroyed', retire)
       sender.once('render-process-gone', retire)
-      try {
-        await this.ensureReady(true)
-        if (
-          this.documents.get(sender.id) !== document ||
-          sender.isDestroyed() ||
-          sender.mainFrame !== senderFrame
-        ) {
-          throw new Error('The document was replaced before Orca connected.')
-        }
-        const { port1, port2 } = new MessageChannelMain()
-        this.child!.postMessage({ type: 'client', token: document.token }, [port1])
-        senderFrame.postMessage(BACKEND_PORT_DELIVERY, { token: document.token }, [port2])
-        return document.token
-      } catch (error) {
-        retire()
-        throw error
+      await this.ensureReady(true)
+      if (
+        this.documents.get(sender.id) !== document ||
+        sender.isDestroyed() ||
+        sender.mainFrame !== senderFrame
+      ) {
+        throw new Error('The document was replaced before Orca connected.')
       }
+      const { port1, port2 } = new MessageChannelMain()
+      this.child!.postMessage({ type: 'client', token: document.token }, [port1])
+      senderFrame.postMessage(BACKEND_PORT_DELIVERY, { token: document.token }, [port2])
+      return document.token
     })
     void this.ensureReady(false).catch(() => {})
   }
@@ -114,6 +111,7 @@ export class BackendSupervisor {
     return {
       getAutomationRunUsage: async (input) => {
         await this.ensureReady(true)
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The private usage service returns its typed automation result for this provider method.
         return (await this.control!.call(`${provider}:getAutomationRunUsage`, input)) as Awaited<
           ReturnType<AutomationUsageClient['getAutomationRunUsage']>
         >
@@ -218,6 +216,11 @@ export class BackendSupervisor {
         throw new Error('This desktop capability is not supported.')
       }
     )
+    let childPid = child.pid
+    child.once('spawn', () => {
+      childPid = child.pid
+    })
+    let incarnation: string | undefined
     let settleExit!: () => void
     this.exited = new Promise<void>((resolve) => {
       settleExit = resolve
@@ -227,7 +230,12 @@ export class BackendSupervisor {
       failed = reject
       child.on(
         'message',
-        (message: { type?: string; protocol?: number; capabilities?: string[] }) => {
+        (message: {
+          type?: string
+          protocol?: number
+          capabilities?: string[]
+          incarnation?: string
+        }) => {
           if (this.child !== child) {
             return
           }
@@ -236,6 +244,7 @@ export class BackendSupervisor {
             message.protocol === 1 &&
             message.capabilities?.includes('usage')
           ) {
+            incarnation = message.incarnation
             clearTimeout(startupDeadline)
             resolve()
             this.notify(true)
@@ -260,7 +269,13 @@ export class BackendSupervisor {
     child.on('error', () => {
       failed(new Error('Usage could not start. Try refreshing the usage view.'))
     })
-    child.once('exit', () => {
+    child.once('exit', (code) => {
+      recordDurableCrashBreadcrumb('backend_process_exited', {
+        pid: childPid ?? null,
+        incarnation: incarnation ?? null,
+        exitCode: code,
+        expected: !this.desiredRunning
+      })
       clearTimeout(startupDeadline)
       failed(new Error('Usage disconnected. Try again after it reconnects.'))
       if (this.child === child) {

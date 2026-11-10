@@ -12,6 +12,26 @@ let pendingPort:
   | { token: string; resolve(client: BackendPortRpc): void; reject(error: Error): void }
   | undefined
 const connectionListeners = new Set<(connected: boolean) => void>()
+let connected: boolean | undefined
+
+function publishConnection(next: boolean): void {
+  if (connected === next) {
+    return
+  }
+  connected = next
+  if (!next) {
+    const previous = connection
+    connection = undefined
+    connecting = undefined
+    const attempt = pendingPort
+    pendingPort = undefined
+    previous?.close()
+    attempt?.reject(new Error('Usage disconnected. Try again after it reconnects.'))
+  }
+  for (const listener of connectionListeners) {
+    listener(next)
+  }
+}
 
 ipcRenderer.on(BACKEND_PORT_DELIVERY, (event, data: { token?: string }) => {
   const [port, ...surplus] = event.ports
@@ -36,26 +56,36 @@ ipcRenderer.on(BACKEND_PORT_DELIVERY, (event, data: { token?: string }) => {
     },
     close: () => port.close()
   }
-  connection?.close()
-  connection = new BackendPortRpc(
+  const previous = connection
+  connection = undefined
+  previous?.close()
+  const client = new BackendPortRpc(
     adapter,
     'renderer',
     async () => {
       throw new Error('Renderer capabilities are not available on this port.')
     },
     () => {
-      connection = undefined
+      if (connection === client) {
+        publishConnection(false)
+      }
     }
   )
-  pendingPort.resolve(connection)
+  connection = client
+  const attempt = pendingPort
   pendingPort = undefined
+  attempt.resolve(client)
+  publishConnection(true)
 })
 
 function connect(): Promise<BackendPortRpc> {
   if (connection) {
     return Promise.resolve(connection)
   }
-  connecting ??= new Promise<BackendPortRpc>((resolve, reject) => {
+  if (connecting) {
+    return connecting
+  }
+  const attemptPromise = new Promise<BackendPortRpc>((resolve, reject) => {
     const attempt = { token: crypto.randomUUID(), resolve, reject }
     pendingPort = attempt
     void ipcRenderer.invoke(BACKEND_PORT_REQUEST, attempt.token).catch((error: Error) => {
@@ -64,22 +94,18 @@ function connect(): Promise<BackendPortRpc> {
         pendingPort = undefined
       }
     })
-  }).finally(() => {
-    connecting = undefined
   })
-  return connecting
+  const result = attemptPromise.finally(() => {
+    if (connecting === result) {
+      connecting = undefined
+    }
+  })
+  connecting = result
+  return result
 }
 
 ipcRenderer.on(BACKEND_CONNECTION_CHANGED, (_event, state: { connected: boolean }) => {
-  if (!state.connected) {
-    connection?.close()
-    connection = undefined
-    pendingPort?.reject(new Error('Usage disconnected. Try again after it reconnects.'))
-    pendingPort = undefined
-  }
-  for (const listener of connectionListeners) {
-    listener(state.connected)
-  }
+  publishConnection(state.connected)
 })
 
 export const backendUsageTransport = {

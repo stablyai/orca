@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useUsageObservation } from '../../store/slices/usage/use-usage-observation'
 import { Activity, Brain, DatabaseZap, FolderKanban, Sigma, Sparkles } from 'lucide-react'
 import type { MuseUsageRange, MuseUsageScope } from '../../../../shared/muse-usage-types'
 import { useAppStore } from '../../store'
@@ -52,16 +52,14 @@ export function MuseUsagePane(): React.JSX.Element {
   const recentSessions = useAppStore((state) => state.museUsageRecentSessions)
   const scope = useAppStore((state) => state.museUsageScope)
   const range = useAppStore((state) => state.museUsageRange)
-  const fetchMuseUsage = useAppStore((state) => state.fetchMuseUsage)
+  const observeMuseUsage = useAppStore((state) => state.observeMuseUsage)
   const setMuseUsageEnabled = useAppStore((state) => state.setMuseUsageEnabled)
   const refreshMuseUsage = useAppStore((state) => state.refreshMuseUsage)
   const setMuseUsageScope = useAppStore((state) => state.setMuseUsageScope)
   const setMuseUsageRange = useAppStore((state) => state.setMuseUsageRange)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
-  useEffect(() => {
-    void fetchMuseUsage()
-  }, [fetchMuseUsage])
+  useUsageObservation(observeMuseUsage)
 
   const handleSetEnabled = (enabled: boolean): void => {
     recordFeatureInteraction('usage-tracking')

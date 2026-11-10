@@ -18,7 +18,7 @@ const automationSchema = z.object({
   startedAt: z.number().nullable(),
   completedAt: z.number().nullable()
 })
-type Handler = (params: unknown) => unknown | Promise<unknown>
+type Handler = (params: unknown) => unknown
 
 type QueryStore<Scope, Range, Kind> = {
   whenLoaded(): Promise<void>
@@ -41,6 +41,7 @@ function registerUsageQueries<Scope extends string, Range extends string, Kind e
     (fn: (scope: Scope, range: Range, limit?: number) => unknown): Handler =>
     (raw) => {
       const args = rangeSchema.parse(raw)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Each registered provider uses the same public scope/range contract; the generic preserves its query signature.
       return fn(args.scope as Scope, args.range as Range, args.limit)
     }
   handlers.set(`${prefix}:getScanState`, () => store.getScanState())
@@ -68,6 +69,7 @@ function registerUsageQueries<Scope extends string, Range extends string, Kind e
   )
   handlers.set(`${prefix}:getBreakdown`, (raw) => {
     const args = rangeSchema.extend({ kind: z.string().max(128) }).parse(raw)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: These are the provider API arguments shared by all four registered query stores.
     return store.getBreakdown(args.scope as Scope, args.range as Range, args.kind as Kind)
   })
 }

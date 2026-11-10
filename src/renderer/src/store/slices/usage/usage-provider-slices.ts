@@ -1,112 +1,23 @@
 import type { StateCreator } from 'zustand'
 import type {
-  ClaudeUsageRange,
-  ClaudeUsageScope,
-  ClaudeUsageSnapshot
-} from '../../../../../shared/claude-usage-types'
-import type {
-  CodexUsageRange,
-  CodexUsageScope,
-  CodexUsageSnapshot
-} from '../../../../../shared/codex-usage-types'
-import type {
-  OpenCodeUsageRange,
-  OpenCodeUsageScope,
-  OpenCodeUsageSnapshot
-} from '../../../../../shared/opencode-usage-types'
-import type {
-  MuseUsageRange,
-  MuseUsageScope,
-  MuseUsageSnapshot
-} from '../../../../../shared/muse-usage-types'
+  ClaudeUsageTypes,
+  CodexUsageTypes,
+  OpenCodeUsageTypes,
+  MuseUsageTypes,
+  UsageData,
+  UsageApi,
+  ProviderUsageSlice,
+  UsageProviderConfig
+} from './usage-provider-slice-contract'
 import type { AppState } from '../../types'
 
 import type { UsageSnapshot, UsageProviderTypes } from './usage-provider-types'
 
-type UsageData<T extends UsageProviderTypes<string, string, UsageSnapshot>> = {
-  scope: T['scope']
-  range: T['range']
-  scanState: T['snapshot']['scanState'] | null
-  summary: T['snapshot']['summary'] | null
-  daily: T['snapshot']['daily']
-  modelBreakdown: T['snapshot']['modelBreakdown']
-  projectBreakdown: T['snapshot']['projectBreakdown']
-  recentSessions: T['snapshot']['recentSessions']
-}
-
-type UsageApi<T extends UsageProviderTypes<string, string, UsageSnapshot>> = {
-  onConnectionChanged?: (listener: (connected: boolean) => void) => () => void
-  getScanState: () => Promise<T['snapshot']['scanState']>
-  setEnabled: (args: { enabled: boolean }) => Promise<T['snapshot']['scanState']>
-  refresh: (args?: { force?: boolean }) => Promise<T['snapshot']['scanState']>
-  getSnapshot: (args: {
-    scope: T['scope']
-    range: T['range']
-    limit?: number
-  }) => Promise<T['snapshot']>
-}
-
-type ProviderUsageSlice<
-  Prefix extends string,
-  Name extends string,
-  T extends UsageProviderTypes<string, string, UsageSnapshot>
-> = {
-  [K in keyof UsageData<T> as `${Prefix}Usage${Capitalize<K & string>}`]: UsageData<T>[K]
-} & Record<`set${Name}UsageEnabled`, (enabled: boolean) => Promise<void>> &
-  Record<`set${Name}UsageScope`, (scope: T['scope']) => Promise<void>> &
-  Record<`set${Name}UsageRange`, (range: T['range']) => Promise<void>> &
-  Record<`fetch${Name}Usage`, (opts?: { forceRefresh?: boolean }) => Promise<void>> &
-  Record<`enable${Name}Usage`, () => Promise<void>> &
-  Record<`refresh${Name}Usage`, () => Promise<void>>
-
-type UsageProviderConfig<
-  Prefix extends string,
-  Name extends string,
-  T extends UsageProviderTypes<string, string, UsageSnapshot>
-> = {
-  prefix: Prefix
-  name: Name
-  initialScope: T['scope']
-  initialRange: T['range']
-  getApi: () => UsageApi<T>
-  hasCachedData: (scanState: T['snapshot']['scanState']) => boolean
-}
-
-const usageDataFields = [
-  'scope',
-  'range',
-  'scanState',
-  'summary',
-  'daily',
-  'modelBreakdown',
-  'projectBreakdown',
-  'recentSessions'
-] as const satisfies readonly (keyof UsageData<UsageProviderTypes<string, string, UsageSnapshot>>)[]
-
-function usageDataKey(prefix: string, field: string): string {
-  return `${prefix}Usage${field[0].toUpperCase()}${field.slice(1)}`
-}
-
-function readUsageData<T extends UsageProviderTypes<string, string, UsageSnapshot>>(
-  state: AppState,
-  prefix: string
-): UsageData<T> {
-  const values = state as unknown as Record<string, unknown>
-  return Object.fromEntries(
-    usageDataFields.map((field) => [field, values[usageDataKey(prefix, field)]])
-  ) as UsageData<T>
-}
-
-function createUsagePatch<T extends UsageProviderTypes<string, string, UsageSnapshot>>(
-  prefix: string,
-  patch: Partial<UsageData<T>>
-): Partial<AppState> {
-  return Object.fromEntries(
-    usageDataFields
-      .filter((field) => field in patch)
-      .map((field) => [usageDataKey(prefix, field), patch[field]])
-  ) as Partial<AppState>
-}
+import {
+  readUsageData,
+  createUsagePatch,
+  createInitialUsageData
+} from './usage-provider-slice-state'
 
 function createUsageProviderSlice<
   Prefix extends string,
@@ -127,83 +38,159 @@ function createUsageProviderSlice<
       }
     }
 
-    const fetchUsage = async (opts?: { forceRefresh?: boolean }): Promise<void> => {
-      try {
-        const api = config.getApi()
-        const scanState = (await api.getScanState()) as T['snapshot']['scanState'] | undefined
-        // Desktop-only usage APIs resolve undefined in paired web clients.
-        if (!scanState) {
-          return
-        }
-
-        const current = read()
-        const preserveLoading =
-          opts?.forceRefresh === true &&
-          current.scanState?.enabled === true &&
-          current.summary === null
-        update({
-          scanState: preserveLoading
-            ? {
-                ...scanState,
-                isScanning: true,
-                lastScanCompletedAt: null,
-                lastScanError: null
-              }
-            : scanState
-        })
-        if (!scanState.enabled) {
-          return
-        }
-
-        const selection = read()
-        const snapshot = await api.getSnapshot({
-          scope: selection.scope,
-          range: selection.range,
-          limit: 10
-        })
-        if (
-          snapshot.scanState.lastScanCompletedAt !== null ||
-          config.hasCachedData(snapshot.scanState)
-        ) {
-          update({
-            ...snapshot,
-            scanState:
-              opts?.forceRefresh === true
-                ? { ...snapshot.scanState, isScanning: true }
-                : snapshot.scanState
-          })
-        } else {
-          update({ scanState: { ...scanState, isScanning: true, lastScanError: null } })
-        }
-
-        await api.refresh({ force: opts?.forceRefresh ?? false })
-        const refreshedSelection = read()
-        update(
-          await api.getSnapshot({
-            scope: refreshedSelection.scope,
-            range: refreshedSelection.range,
-            limit: 10
-          })
-        )
-      } catch (error) {
-        stopLoading()
-        console.error(`Failed to fetch ${config.name} usage:`, error)
+    type Intent = 0 | 1 | 2
+    type Operation = {
+      intent: Intent
+      phase: 'reading' | 'refreshing' | 'projecting'
+      disconnected: boolean
+      readOnFailure: boolean
+      promise: Promise<void>
+    }
+    let operation: Operation | null = null
+    let pending: Intent | null = null
+    const queueIntent = (intent: Intent): void => {
+      pending = pending === null || intent > pending ? intent : pending
+    }
+    const markLoading = (): void => {
+      const state = read().scanState
+      if (state?.enabled) {
+        update({ scanState: { ...state, isScanning: true } })
       }
     }
-
-    config.getApi()?.onConnectionChanged?.((connected) => {
-      if (read().scanState === null) {
+    const project = async (
+      api: UsageApi<T>,
+      current: Operation,
+      loading: boolean
+    ): Promise<void> => {
+      while (!current.disconnected) {
+        const { scope, range } = read()
+        const snapshot = await api.getSnapshot({ scope, range, limit: 10 })
+        if (current.disconnected) {
+          return
+        }
+        if (scope !== read().scope || range !== read().range) {
+          continue
+        }
+        if (
+          loading &&
+          snapshot.scanState.lastScanCompletedAt === null &&
+          !config.hasCachedData(snapshot.scanState)
+        ) {
+          update({ scanState: { ...snapshot.scanState, isScanning: true, lastScanError: null } })
+        } else {
+          update({
+            ...snapshot,
+            scanState: loading ? { ...snapshot.scanState, isScanning: true } : snapshot.scanState
+          })
+        }
         return
       }
-      if (connected) {
-        void fetchUsage()
-      } else {
-        const state = read().scanState
-        if (state) {
-          update({ scanState: { ...state, isScanning: false } })
-        }
+    }
+    const request = (intent: Intent, recovery = false): Promise<void> => {
+      if (intent > 0) {
+        markLoading()
       }
-    })
+      if (operation) {
+        if (recovery) {
+          operation.readOnFailure = true
+          if (operation.disconnected) {
+            queueIntent(0)
+          }
+        } else if (
+          operation.disconnected ||
+          intent > operation.intent ||
+          (intent > 0 && operation.phase === 'projecting')
+        ) {
+          queueIntent(intent)
+        }
+        return operation.promise
+      }
+      const current: Operation = {
+        intent,
+        phase: 'reading',
+        disconnected: false,
+        readOnFailure: false,
+        promise: Promise.resolve()
+      }
+      operation = current
+      const unsubscribe = config.getApi()?.onConnectionChanged?.((connected) => {
+        if (!connected && operation === current) {
+          current.disconnected = true
+          current.readOnFailure = false
+          pending = null
+          stopLoading()
+        }
+      })
+      // Publish the operation before the first port handshake can notify mounted readers.
+      current.promise = Promise.resolve()
+        .then(async () => {
+          let next: Intent | null = intent
+          while (next !== null) {
+            current.intent = next
+            current.phase = 'reading'
+            current.disconnected = false
+            current.readOnFailure = false
+            pending = null
+            try {
+              const api = config.getApi()
+              const state = await api.getScanState()
+              if (current.disconnected) {
+                throw new Error('Usage disconnected.')
+              }
+              if (state) {
+                update({
+                  scanState: next > 0 && state.enabled ? { ...state, isScanning: true } : state
+                })
+                if (state.enabled) {
+                  await project(api, current, next > 0)
+                  if (current.disconnected) {
+                    throw new Error('Usage disconnected.')
+                  }
+                  if (next > 0) {
+                    current.phase = 'refreshing'
+                    await api.refresh({ force: next === 2 })
+                    if (current.disconnected) {
+                      throw new Error('Usage disconnected.')
+                    }
+                    current.phase = 'projecting'
+                    await project(api, current, false)
+                  }
+                }
+              }
+            } catch (error) {
+              stopLoading()
+              if (current.readOnFailure) {
+                queueIntent(0)
+              }
+              console.error(`Failed to fetch ${config.name} usage:`, error)
+            }
+            next = pending
+          }
+          if (operation === current) {
+            operation = null
+          }
+        })
+        .finally(() => {
+          unsubscribe?.()
+          if (operation === current) {
+            operation = null
+          }
+        })
+      return current.promise
+    }
+    const fetchUsage = (opts?: { forceRefresh?: boolean }): Promise<void> =>
+      request(opts?.forceRefresh ? 2 : 1)
+    const observeUsage = (): (() => void) => {
+      const unsubscribe = config.getApi()?.onConnectionChanged?.((connected) => {
+        if (connected) {
+          void request(0, true)
+        } else {
+          stopLoading()
+        }
+      })
+      void fetchUsage()
+      return () => unsubscribe?.()
+    }
 
     const setEnabled = async (enabled: boolean): Promise<void> => {
       try {
@@ -237,19 +224,12 @@ function createUsageProviderSlice<
       }
     }
 
-    const initialData: UsageData<T> = {
-      scope: config.initialScope,
-      range: config.initialRange,
-      scanState: null,
-      summary: null,
-      daily: [],
-      modelBreakdown: [],
-      projectBreakdown: [],
-      recentSessions: []
-    }
-
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The configured prefix/name maps the declared data and action keys for this provider.
     return {
-      ...createUsagePatch(config.prefix, initialData),
+      ...createUsagePatch(
+        config.prefix,
+        createInitialUsageData<T>(config.initialScope, config.initialRange)
+      ),
       [`set${config.name}UsageEnabled`]: setEnabled,
       [`set${config.name}UsageScope`]: async (scope: T['scope']) => {
         update({ scope })
@@ -260,26 +240,19 @@ function createUsageProviderSlice<
         await fetchUsage()
       },
       [`fetch${config.name}Usage`]: fetchUsage,
+      [`observe${config.name}Usage`]: observeUsage,
       [`enable${config.name}Usage`]: () => setEnabled(true),
       [`refresh${config.name}Usage`]: () => fetchUsage({ forceRefresh: true })
     } as ProviderUsageSlice<Prefix, Name, T>
   }
 }
 
-type ClaudeUsageTypes = UsageProviderTypes<ClaudeUsageScope, ClaudeUsageRange, ClaudeUsageSnapshot>
-type CodexUsageTypes = UsageProviderTypes<CodexUsageScope, CodexUsageRange, CodexUsageSnapshot>
-type OpenCodeUsageTypes = UsageProviderTypes<
-  OpenCodeUsageScope,
-  OpenCodeUsageRange,
-  OpenCodeUsageSnapshot
->
-
-type MuseUsageTypes = UsageProviderTypes<MuseUsageScope, MuseUsageRange, MuseUsageSnapshot>
-
-export type ClaudeUsageSlice = ProviderUsageSlice<'claude', 'Claude', ClaudeUsageTypes>
-export type CodexUsageSlice = ProviderUsageSlice<'codex', 'Codex', CodexUsageTypes>
-export type OpenCodeUsageSlice = ProviderUsageSlice<'openCode', 'OpenCode', OpenCodeUsageTypes>
-export type MuseUsageSlice = ProviderUsageSlice<'muse', 'Muse', MuseUsageTypes>
+export type {
+  ClaudeUsageSlice,
+  CodexUsageSlice,
+  OpenCodeUsageSlice,
+  MuseUsageSlice
+} from './usage-provider-slice-contract'
 
 export const createClaudeUsageSlice = createUsageProviderSlice<
   'claude',
