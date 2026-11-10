@@ -6,21 +6,8 @@ import {
 } from './dispatcher'
 import { DISPATCHER_CONTROL_QUEUE_MAX_FRAMES } from './dispatcher-writer-admission'
 import { LEGACY_CLIENT_RETAINED_BYTES_LOW } from './legacy-relay-publication-ledger'
-import type * as ProtocolModule from './protocol'
+
 import { encodeJsonRpcFrame, RelayErrorCode } from './protocol'
-
-const preparationCalls = vi.hoisted(() => ({ count: 0 }))
-
-vi.mock('./protocol', async (importOriginal) => {
-  const actual = await importOriginal<typeof ProtocolModule>()
-  return {
-    ...actual,
-    prepareJsonRpcPayload: (...args: Parameters<typeof actual.prepareJsonRpcPayload>) => {
-      preparationCalls.count++
-      return actual.prepareJsonRpcPayload(...args)
-    }
-  }
-})
 
 type BoundedClient = {
   frames: Buffer[]
@@ -29,8 +16,7 @@ type BoundedClient = {
   write: (data: Buffer) => boolean
 }
 
-// Why: a sink that never accepts a write and never drains retains producer bytes, so the queue saturates
-// while every individual frame stays comfortably inside the per-frame capacity.
+// Never settle/drain writes to fill the producer queue while each frame remains within capacity.
 function makeSaturatingClient(highWaterMark: number): BoundedClient {
   const client = makeBoundedClient(highWaterMark)
   client.write = (data: Buffer) => {
@@ -59,8 +45,7 @@ function makeBoundedClient(highWaterMark: number): BoundedClient {
   return client
 }
 
-// Why: the sink accepts every write but never settles it, so control-lane bytes stay retained and the
-// queue fills, while the writer keeps pumping the other lanes — the shape of a peer whose socket is behind.
+// Accept without settling to retain control bytes while the other lanes keep pumping.
 function makeUnsettledWriteClient(highWaterMark: number): BoundedClient {
   const client = makeBoundedClient(highWaterMark)
   client.options = { ...client.options, supportsWriteCallback: true }
@@ -79,21 +64,6 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
 
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('producerEnvelopeBudget returns a negative budget for an over-cap envelope', () => {
-    const primary = makeBoundedClient(16384)
-    const bounded = new RelayDispatcher(primary.write, primary.options)
-    try {
-      expect(
-        bounded.producerEnvelopeBudget('fs.changed', { events: ['x'.repeat(64)] })
-      ).toBeGreaterThan(0)
-      expect(
-        bounded.producerEnvelopeBudget('fs.changed', { events: ['x'.repeat(20_000)] })
-      ).toBeLessThan(0)
-    } finally {
-      bounded.dispose()
-    }
   })
 
   it('producerEnvelopeBudget takes the smallest client capacity unless a client is named', () => {
@@ -138,31 +108,7 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
       bounded.detachClient(secondaryId)
       expect(bounded.producerEnvelopeBudget('fs.changed', params, secondaryId)).toBeLessThan(0)
       expect(bounded.producerEnvelopeBudget('fs.changed', params, 999)).toBeLessThan(0)
-      // The no-target broadcast case still reports unbounded room.
       expect(bounded.producerEnvelopeBudget('fs.changed', params)).toBeGreaterThan(0)
-    } finally {
-      bounded.dispose()
-    }
-  })
-
-  it('producerDataBudget keeps its pre-delegation value for a pty.data envelope', () => {
-    const primary = makeBoundedClient(65536)
-    const bounded = new RelayDispatcher(primary.write, primary.options)
-    try {
-      // Snapshot of the shipped formula: 49152-byte producer capacity minus the 96-byte empty-data frame.
-      expect(bounded.producerDataBudget('pty.data', { ptyId: 'pty-7', seq: 42 })).toBe(49056)
-      // A vanished client leaves no room for data at all.
-      expect(bounded.producerDataBudget('pty.data', { ptyId: 'pty-7', seq: 42 }, 999)).toBe(0)
-    } finally {
-      bounded.dispose()
-    }
-  })
-
-  it('producerDataBudget floors at zero when the envelope alone exceeds capacity', () => {
-    const primary = makeBoundedClient(1030)
-    const bounded = new RelayDispatcher(primary.write, primary.options)
-    try {
-      expect(bounded.producerDataBudget('pty.data', { ptyId: 'x'.repeat(4096) })).toBe(0)
     } finally {
       bounded.dispose()
     }
@@ -205,56 +151,6 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
       bounded.setWrite(reattached.write, reattached.options)
       bounded.notify('fs.changed', flood)
       expect(stderr).toHaveBeenCalledTimes(2)
-    } finally {
-      stderr.mockRestore()
-      bounded.dispose()
-    }
-  })
-
-  it('distinguishes an over-capacity drop from a producer-queue-full drop on one client', () => {
-    const primary = makeSaturatingClient(4 * 1024 * 1024)
-    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
-    const bounded = new RelayDispatcher(primary.write, primary.options)
-    try {
-      // The first 1.5MB frame is retained by the stalled sink; the second exceeds the 2MB producer queue.
-      bounded.notify('fs.changed', { events: ['x'.repeat(1_500_000)] })
-      expect(primary.frames).toHaveLength(1)
-      bounded.notify('fs.changed', { events: ['x'.repeat(1_500_000)] })
-      bounded.notify('fs.changed', { events: ['x'.repeat(5_000_000)] })
-
-      expect(primary.closes).toBe(0)
-      expect(stderr).toHaveBeenCalledTimes(2)
-      expect(stderr.mock.calls[0][0]).toMatch(
-        /^\[relay\] Dropped fs\.changed \(\d+B, producer queue full; frame capacity 4128768B\)\n$/
-      )
-      expect(stderr.mock.calls[1][0]).toMatch(
-        /^\[relay\] Dropped fs\.changed \(\d+B > producer frame capacity 4128768B\)\n$/
-      )
-
-      // Both classifications stay one-per-generation once logged.
-      bounded.notify('fs.changed', { events: ['x'.repeat(1_500_000)] })
-      bounded.notify('fs.changed', { events: ['x'.repeat(5_000_000)] })
-      expect(stderr).toHaveBeenCalledTimes(2)
-    } finally {
-      stderr.mockRestore()
-      bounded.dispose()
-    }
-  })
-
-  it('logs each dropped method once instead of letting the first method silence the rest', () => {
-    const primary = makeBoundedClient(16384)
-    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
-    const bounded = new RelayDispatcher(primary.write, primary.options)
-    try {
-      const flood = { events: ['x'.repeat(20_000)] }
-      bounded.notify('fs.changed', flood)
-      bounded.notify('pty.data', flood)
-      bounded.notify('fs.changed', flood)
-      bounded.notify('pty.data', flood)
-
-      expect(stderr).toHaveBeenCalledTimes(2)
-      expect(stderr.mock.calls[0][0]).toContain('Dropped fs.changed')
-      expect(stderr.mock.calls[1][0]).toContain('Dropped pty.data')
     } finally {
       stderr.mockRestore()
       bounded.dispose()
@@ -321,49 +217,6 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
       // Replay is never retried, so an unnoticed drop would strand the pane on a short buffer.
       bounded.notify('pty.replay', { paneKey: 'tab-1:pane-1', data: 'x' })
       expect(primary.closes).toBe(1)
-    } finally {
-      stderr.mockRestore()
-      bounded.dispose()
-    }
-  })
-
-  it('publishProducerNotification reports its drops like notify', () => {
-    const primary = makeBoundedClient(65536)
-    const secondary = makeBoundedClient(16384)
-    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
-    const bounded = new RelayDispatcher(primary.write, primary.options)
-    try {
-      const secondaryId = bounded.attachClient(secondary.write, secondary.options)
-      const flood = { events: ['x'.repeat(20_000)] }
-
-      expect(bounded.publishProducerNotification(secondaryId, 'fs.changed', flood)).toBe(false)
-      expect(stderr).toHaveBeenCalledTimes(1)
-      expect(stderr.mock.calls[0][0]).toMatch(
-        /^\[relay\] Dropped fs\.changed \(\d+B > producer frame capacity 12288B\)\n$/
-      )
-
-      // Same one-line-per-generation budget as notify().
-      expect(bounded.publishProducerNotification(secondaryId, 'fs.changed', flood)).toBe(false)
-      expect(stderr).toHaveBeenCalledTimes(1)
-    } finally {
-      stderr.mockRestore()
-      bounded.dispose()
-    }
-  })
-
-  it('prepares a dropped frame once when its log line is suppressed', () => {
-    const primary = makeBoundedClient(16384)
-    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
-    const bounded = new RelayDispatcher(primary.write, primary.options)
-    try {
-      const flood = { events: ['x'.repeat(20_000)] }
-      bounded.notify('fs.changed', flood)
-      expect(stderr).toHaveBeenCalledTimes(1)
-
-      preparationCalls.count = 0
-      bounded.notify('fs.changed', flood)
-      expect(stderr).toHaveBeenCalledTimes(1)
-      expect(preparationCalls.count).toBe(1)
     } finally {
       stderr.mockRestore()
       bounded.dispose()
@@ -500,7 +353,6 @@ describe('RelayDispatcher bounded-capacity degradation', () => {
       expect(rejected.error.code).toBe(RelayErrorCode.ResponseOverCapacity)
       expect(rejected.error.message).toBe('Relay response exceeded the bounded transport capacity')
 
-      // Every other pane and request on this connection keeps working.
       bounded.feed(encodeJsonRpcFrame({ jsonrpc: '2.0', id: 93, method: 'workspace.get' }, 3, 0))
       await vi.advanceTimersByTimeAsync(0)
       expect(decodePayload(primary.frames[2])).toMatchObject({

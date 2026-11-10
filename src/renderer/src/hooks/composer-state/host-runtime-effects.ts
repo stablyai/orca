@@ -27,10 +27,18 @@ type HostRuntimeEffectsInput = Pick<
 >
 
 import { useEffect, useCallback } from 'react'
-import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import {
+  readWorkspaceSetupInspection,
+  getComposerSetupInspectionCommit
+} from '@/lib/workspace/creation/setup/workspace-setup-preparation'
+import {
+  filterEnabledTuiAgents,
+  isTuiAgentEnabled
+} from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { useAppStore } from '@/store'
-import { isSshConnectInProgress } from '@/lib/new-workspace-ssh-gate'
+import '@/lib/workspace/creation/new-workspace-ssh-gate'
+import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 import {
   connectRepoSshConnection,
   getRepoSshConnection,
@@ -66,7 +74,7 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
     tuiAgent
   } = input
 
-  // Why: re-detect agents when the selected repo changes so the list matches the correct host (local runs once, deduped by the store).
+  // Detect agents on the selected repo’s host when it changes; local inventory is store-deduplicated.
   useEffect(() => {
     if (isRemote && selectedRepoSshStatus !== 'connected') {
       return
@@ -106,7 +114,6 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
     setTuiAgent
   ])
 
-  // Per-repo: load yaml hooks.
   useEffect(() => {
     if (!repoId || !selectedRepoIsGit || !selectedRepoHookContextKey) {
       return
@@ -114,17 +121,16 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
 
     let cancelled = false
 
-    void loadHookCheckForRepo(repoId)
-      .then((result) => {
-        if (!cancelled) {
-          commitHookCheckIfCurrent(selectedRepoHookContextKey, result.hooks)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          commitHookCheckIfCurrent(selectedRepoHookContextKey, null)
-        }
-      })
+    // Opening the composer is not a user act on the repo's WSL distro; Create checks again.
+    void readWorkspaceSetupInspection(
+      () => loadHookCheckForRepo(repoId, { background: true }),
+      () => cancelled
+    ).then((outcome) => {
+      const commit = getComposerSetupInspectionCommit(outcome, 'background')
+      if (commit && !cancelled) {
+        commitHookCheckIfCurrent(selectedRepoHookContextKey, commit.hooks)
+      }
+    })
 
     return () => {
       cancelled = true
@@ -155,7 +161,7 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
       return
     }
     const liveStatus = selectRepoSshGateInput(liveState, liveRepo).status
-    if (liveStatus === 'connected' || isSshConnectInProgress(liveStatus)) {
+    if (liveStatus === 'connected' || isConnectingSshStatus(liveStatus)) {
       return
     }
 
@@ -177,7 +183,7 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
     const liveStatus = useAppStore
       .getState()
       .sshConnectionStates.get(folderTargetConnectionId)?.status
-    if (liveStatus === 'connected' || isSshConnectInProgress(liveStatus ?? null)) {
+    if (liveStatus === 'connected' || isConnectingSshStatus(liveStatus ?? null)) {
       return
     }
     try {

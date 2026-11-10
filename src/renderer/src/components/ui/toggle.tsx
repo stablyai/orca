@@ -14,7 +14,10 @@ const toggleVariants = cva(
           'border border-input bg-transparent shadow-xs hover:bg-accent hover:text-accent-foreground',
         // Why not bg-accent: on a light popover it is nearly the surface colour (STYLEGUIDE, list rows).
         segmented:
-          'bg-transparent text-muted-foreground transition-[color,background-color,box-shadow] hover:bg-foreground/6 hover:text-foreground data-[state=on]:bg-foreground/12 data-[state=on]:text-foreground dark:hover:bg-accent/50 dark:data-[state=on]:bg-accent'
+          'bg-transparent text-muted-foreground transition-[color,background-color,box-shadow] hover:bg-foreground/6 hover:text-foreground data-[state=on]:bg-foreground/12 data-[state=on]:text-foreground dark:hover:bg-accent/50 dark:data-[state=on]:bg-accent',
+        // An outlined segmented toggle that stands alone; pressed trades its border for the fill.
+        // data-pressed lets a menu trigger, whose data-state names open, show the same pressed fill.
+        chip: 'border border-input bg-transparent text-muted-foreground transition-[color,background-color,box-shadow] hover:bg-foreground/6 hover:text-foreground data-[pressed=true]:border-transparent data-[pressed=true]:bg-foreground/12 data-[pressed=true]:text-foreground data-[state=on]:border-transparent data-[state=on]:bg-foreground/12 data-[state=on]:text-foreground dark:hover:bg-accent/50 dark:data-[pressed=true]:bg-accent dark:data-[state=on]:bg-accent'
       },
       size: {
         default: 'h-9 min-w-9 px-2',

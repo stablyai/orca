@@ -6,7 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { csvSelectionBounds, type CsvCellSelection } from './csv-cell-selection'
 import type { CsvTableMutation } from './csv-text-document'
 import type { CsvInspectionSort } from './csv-inspection'
@@ -48,6 +48,7 @@ export function CsvTableToolbar({
   onCopy: () => void
   onPaste: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const column = selection?.focus.column ?? 0
   const row = Math.max(1, sourceRow)
   const blankRow = () => Array.from({ length: columnCount }, () => '')
@@ -63,32 +64,32 @@ export function CsvTableToolbar({
     <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
       <div className="min-w-0 flex-1 max-w-xs">
         <Input
-          aria-label={translate('csv.filterRows', 'Filter rows')}
-          placeholder={translate('csv.filterRows', 'Filter rows')}
+          aria-label={t('csv.filterRows', 'Filter rows')}
+          placeholder={t('csv.filterRows', 'Filter rows')}
           value={filter}
           onChange={(event) => onFilter(event.target.value)}
         />
       </div>
       <Button variant="ghost" size="xs" disabled={!selection || !canEdit} onClick={onEdit}>
-        {translate('csv.edit', 'Edit cell')}
+        {t('csv.edit', 'Edit cell')}
       </Button>
       <Button variant="ghost" size="xs" disabled={!selection} onClick={onCopy}>
-        {translate('csv.copy', 'Copy')}
+        {t('csv.copy', 'Copy')}
       </Button>
       <Button variant="ghost" size="xs" disabled={!selection || !canEdit} onClick={onPaste}>
-        {translate('csv.paste', 'Paste')}
+        {t('csv.paste', 'Paste')}
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="xs" disabled={!canEdit || !columnCount}>
-            {translate('csv.rows', 'Rows')}
+            {t('csv.rows', 'Rows')}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent>
           <DropdownMenuItem
             onSelect={() => onApply({ kind: 'insert-rows', at: row, rows: [blankRow()] })}
           >
-            {translate('csv.insertRowAbove', 'Insert row above')}
+            {t('csv.insertRowAbove', 'Insert row above')}
           </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() =>
@@ -99,7 +100,7 @@ export function CsvTableToolbar({
               })
             }
           >
-            {translate('csv.insertRowBelow', 'Insert row below')}
+            {t('csv.insertRowBelow', 'Insert row below')}
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={!selection || csvSelectionBounds(selection).lastRow === 0}
@@ -107,14 +108,14 @@ export function CsvTableToolbar({
               onApply({ kind: 'delete-rows', rows: getSelectedRows().filter((row) => row > 0) })
             }
           >
-            {translate('csv.deleteRows', 'Delete selected rows')}
+            {t('csv.deleteRows', 'Delete selected rows')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="xs" disabled={!canEdit}>
-            {translate('csv.columns', 'Columns')}
+            {t('csv.columns', 'Columns')}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent>
@@ -123,69 +124,69 @@ export function CsvTableToolbar({
               onApply({
                 kind: 'insert-column',
                 at: column,
-                label: translate('csv.newColumn', 'Column {{column}}', { column: columnCount + 1 })
+                label: t('csv.newColumn', 'Column {{column}}', { column: columnCount + 1 })
               })
             }
           >
-            {translate('csv.insertColumnBefore', 'Insert column before')}
+            {t('csv.insertColumnBefore', 'Insert column before')}
           </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() =>
               onApply({
                 kind: 'insert-column',
                 at: Math.min(columnCount, column + 1),
-                label: translate('csv.newColumn', 'Column {{column}}', { column: columnCount + 1 })
+                label: t('csv.newColumn', 'Column {{column}}', { column: columnCount + 1 })
               })
             }
           >
-            {translate('csv.insertColumnAfter', 'Insert column after')}
+            {t('csv.insertColumnAfter', 'Insert column after')}
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={!selection || column === 0}
             onSelect={() => onApply({ kind: 'move-column', from: column, to: column - 1 })}
           >
-            {translate('csv.moveColumnLeft', 'Move column left')}
+            {t('csv.moveColumnLeft', 'Move column left')}
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={!selection || column >= columnCount - 1}
             onSelect={() => onApply({ kind: 'move-column', from: column, to: column + 1 })}
           >
-            {translate('csv.moveColumnRight', 'Move column right')}
+            {t('csv.moveColumnRight', 'Move column right')}
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={!selection}
             onSelect={() => onApply({ kind: 'delete-columns', columns: deleteColumns() })}
           >
-            {translate('csv.deleteColumns', 'Delete selected columns')}
+            {t('csv.deleteColumns', 'Delete selected columns')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="xs" disabled={!columnCount}>
-            {translate('csv.sort', 'Sort')}
+            {t('csv.sort', 'Sort')}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent>
           <DropdownMenuItem onSelect={() => onSort({ column, direction: 'ascending' })}>
-            {translate('csv.sortAscending', 'Sort selected column ascending')}
+            {t('csv.sortAscending', 'Sort selected column ascending')}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => onSort({ column, direction: 'descending' })}>
-            {translate('csv.sortDescending', 'Sort selected column descending')}
+            {t('csv.sortDescending', 'Sort selected column descending')}
           </DropdownMenuItem>
           <DropdownMenuItem disabled={!sort} onSelect={() => onSort(null)}>
-            {translate('csv.originalOrder', 'Original row order')}
+            {t('csv.originalOrder', 'Original row order')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       {canSave && (
         <Button variant="outline" size="xs" disabled={saving} aria-busy={saving} onClick={onSave}>
-          {translate('csv.save', 'Save')}
+          {t('csv.save', 'Save')}
         </Button>
       )}
       {(filter || sort) && (
         <span className="text-xs text-muted-foreground">
-          {translate('csv.inspectionOnly', 'Inspection only · File row order unchanged')}
+          {t('csv.inspectionOnly', 'Inspection only · File row order unchanged')}
         </span>
       )}
     </div>

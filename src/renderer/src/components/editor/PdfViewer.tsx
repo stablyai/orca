@@ -1,4 +1,3 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: PDF loading drives pdf.js document/viewer instances and decode errors through an external worker lifecycle. */
 import { type JSX, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Image as ImageIcon, RotateCcw, Search, ZoomIn, ZoomOut } from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
@@ -14,7 +13,7 @@ import { useAppStore } from '@/store'
 import { usePdfViewerFindShortcut } from './use-pdf-viewer-find-shortcut'
 
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { createPdfDocumentLoader, type PdfDocumentLoader } from './pdf-document-loader'
 import { createPdfViewerSession } from './pdf-viewer-session'
 import {
@@ -24,7 +23,7 @@ import {
 } from './pdf-scale-preference'
 import { readPdfScalePreference, writePdfScalePreference } from './pdf-scale-preference-storage'
 import { EditorCommandOwnerContext } from './editor-command-owner-context'
-import { listenForPdfZoomRequests } from './pdf-zoom-request'
+import { listenForViewerZoomRequests } from './viewer-zoom-request'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -34,13 +33,16 @@ const SCALE_STEP = 1.25
 const SCALE_BOUNDS = { min: MIN_SCALE, max: MAX_SCALE, step: SCALE_STEP }
 
 type PdfViewerProps = {
+  /** Base64 bytes, for git blobs, diffs and the web client. */
   content: string
+  /** An orca-media URL pdf.js reads by range; wins over `content`. */
+  src?: string
+  /** The file's size, which pdf.js needs to read `src` by range. */
+  byteSize?: number
   filePath: string
-  // Why: callers that do not have an owner identity (for example diff and
-  // conflict panes) must not persist a preference under a path-only key.
+  // Persist zoom only with owner-qualified identity; diff/conflict callers must not use a path-only key.
   preferenceKey?: string | null
-  // Why: absent means "no scroll memory" — the diff and conflict-review callers
-  // mount several viewers on one path, so a shared key would cross-write.
+  // Omit scroll memory for diff/conflict surfaces that can mount several viewers on the same path.
   scrollCacheKey?: string | null
 }
 
@@ -55,10 +57,13 @@ export default function PdfViewer(props: PdfViewerProps): JSX.Element {
 
 function PdfDocumentViewer({
   content,
+  src,
+  byteSize,
   filePath,
   preferenceKey = null,
   scrollCacheKey = null
 }: PdfViewerProps): JSX.Element {
+  const t = useTranslate()
   const rootRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerDivRef = useRef<HTMLDivElement>(null)
@@ -72,15 +77,13 @@ function PdfDocumentViewer({
   const eventBusRef = useRef<InstanceType<typeof EventBus> | null>(null)
   const findControllerRef = useRef<InstanceType<typeof PDFFindController> | null>(null)
   const pdfViewerRef = useRef<InstanceType<typeof PdfJsViewer> | null>(null)
-  // Why: content reloads rebuild the pdf.js viewer; keep zoom across updates of
-  // the same file and restore the durable preference after a remount or restart.
+  // Retain zoom through viewer rebuilds; durable preferences restore it after remount or restart.
   const scalePreferenceRef = useRef<PdfScalePreference>('page-width')
 
   const filename = useMemo(() => filePath.split(/[/\\]/).pop() || filePath, [filePath])
   const cleanedContent = useMemo(() => content.replace(/\s/g, ''), [content])
 
-  // Why: every zoom entry point (toolbar, app zoom command, wheel/pinch) must record the
-  // scale preference so the next content reload restores it (see scalePreferenceRef).
+  // All zoom entry points must record preferences so content reloads restore the chosen scale.
   const recordScalePreference = useCallback(
     (preference: PdfScalePreference) => {
       scalePreferenceRef.current = preference
@@ -110,7 +113,7 @@ function PdfDocumentViewer({
           viewerDiv,
           doc,
           scrollCacheKey,
-          scalePreference: scalePreferenceRef.current,
+          getScalePreference: () => scalePreferenceRef.current,
           scaleBounds: SCALE_BOUNDS,
           onScaleChanging: setScale,
           onWheelZoom: recordScalePreference
@@ -138,9 +141,9 @@ function PdfDocumentViewer({
   }, [filePath, preferenceKey, recordScalePreference, scrollCacheKey])
 
   useEffect(() => {
-    loaderRef.current?.load(cleanedContent)
-    // Why: owner changes must load again even when the bytes are identical.
-  }, [cleanedContent, filePath, preferenceKey, scrollCacheKey])
+    loaderRef.current?.load(src ? { url: src, length: byteSize } : { base64: cleanedContent })
+    // Identical bytes still require reload when ownership changes.
+  }, [byteSize, cleanedContent, filePath, preferenceKey, scrollCacheKey, src])
 
   const closeFindBar = useCallback(() => {
     const eventBus = eventBusRef.current
@@ -179,8 +182,9 @@ function PdfDocumentViewer({
     if (!isCommandOwner) {
       return
     }
-    return listenForPdfZoomRequests((direction) =>
-      direction === 'reset' ? zoomReset() : stepZoom(direction)
+    return listenForViewerZoomRequests(
+      (direction) => (direction === 'reset' ? zoomReset() : stepZoom(direction)),
+      rootRef
     )
   }, [isCommandOwner, stepZoom, zoomReset])
 
@@ -193,10 +197,7 @@ function PdfDocumentViewer({
     <div ref={rootRef} className="flex h-full min-h-0 flex-col">
       <div className="relative flex flex-1 flex-col overflow-hidden">
         <PdfFind isOpen={findOpen} onClose={closeFindBar} eventBusRef={eventBusRef} />
-        {/* Why: PDFViewer requires its container to be position:absolute.
-            The outer div uses all:revert to prevent Tailwind Preflight from
-            cascading into pdf.js DOM (text layer misalignment). The inner div
-            carries positioning and background since all:revert nullifies classes. */}
+        {/* PDFViewer needs absolute positioning; isolate pdf.js DOM from Preflight with all:revert, then apply layout on the inner container. */}
         <div style={{ all: 'revert' }}>
           <div
             ref={containerRef}
@@ -229,7 +230,7 @@ function PdfDocumentViewer({
             className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
             onClick={zoomOut}
             disabled={scale <= MIN_SCALE}
-            title={translate('auto.components.editor.PdfViewer.fa5d096b00', 'Zoom out')}
+            title={t('auto.components.editor.PdfViewer.fa5d096b00', 'Zoom out')}
           >
             <ZoomOut size={14} />
           </button>
@@ -237,7 +238,7 @@ function PdfDocumentViewer({
             type="button"
             className="rounded p-1 hover:bg-accent hover:text-foreground"
             onClick={zoomReset}
-            title={translate('auto.components.editor.PdfViewer.c0119616d6', 'Fit to width')}
+            title={t('auto.components.editor.PdfViewer.c0119616d6', 'Fit to width')}
           >
             <RotateCcw size={14} />
           </button>
@@ -246,7 +247,7 @@ function PdfDocumentViewer({
             className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
             onClick={zoomIn}
             disabled={scale >= MAX_SCALE}
-            title={translate('auto.components.editor.PdfViewer.2b6eb1ccd6', 'Zoom in')}
+            title={t('auto.components.editor.PdfViewer.2b6eb1ccd6', 'Zoom in')}
           >
             <ZoomIn size={14} />
           </button>
@@ -256,18 +257,16 @@ function PdfDocumentViewer({
           type="button"
           className="rounded p-1 hover:bg-accent hover:text-foreground"
           onClick={() => setFindOpen(true)}
-          title={translate(
-            'auto.components.editor.PdfViewer.069ff59932',
-            'Find in PDF ({{value0}})',
-            { value0: findShortcutLabel }
-          )}
+          title={t('auto.components.editor.PdfViewer.069ff59932', 'Find in PDF ({{value0}})', {
+            value0: findShortcutLabel
+          })}
         >
           <Search size={14} />
         </button>
         <span className="min-w-0 truncate" title={filename}>
           {filename}
         </span>
-        <span>{translate('auto.components.editor.PdfViewer.3e98d500d2', 'PDF preview')}</span>
+        <span>{t('auto.components.editor.PdfViewer.3e98d500d2', 'PDF preview')}</span>
       </div>
     </div>
   )

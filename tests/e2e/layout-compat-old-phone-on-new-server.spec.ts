@@ -1,11 +1,5 @@
-/**
- * Layout rework P3 baseline: an old phone paired straight to the current `orca serve`. Not the
- * released app: a capability-list client that advertises mobile-android-v0.0.52's capabilities
- * and sends that release's request shapes. It creates, activates, renames, focuses and closes
- * terminals (one of them pinned on the host), opens a file, and reads its own selection again
- * after the server restarts. Each step records the phone's and
- * the server's tab lists; the shapes are compared with main's.
- */
+// P3 baseline: emulate mobile-android-v0.0.52 capabilities and request shapes against current serve, not a released app.
+// Record terminal/file operations, pin handling and selection across restart against main’s shapes.
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
@@ -45,7 +39,7 @@ const OLD_PHONE_CAPABILITIES: readonly RuntimeCapability[] = [
   'agent.launch.v2'
 ]
 
-// A layout-owner build's main opens the file itself, so the open succeeds and the tab is listed.
+// A layout-owner build's main opens the file itself, so the open succeeds and its tab is listed.
 const LAYOUT_OWNER_BUILD = existsSync(
   path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
 )
@@ -189,9 +183,17 @@ test('old-phone-on-new-server: create, activate, rename, focus, close, open a fi
     })
     await record('phone closes the pinned tab', closedPinned)
 
-    // A headless server refuses with runtime_error "renderer_unavailable" (no window to open in),
-    // except in a layout-owner build, whose main opens it: the README tab is listed from the restart.
+    // Windowless main opens a Markdown row; rebuilt session rows name tab2 Terminal 2. Layout-owner builds list it immediately.
     const opened = await reply(phone, 'files.open', { worktree, relativePath: 'README.md' })
+    if (LAYOUT_OWNER_BUILD) {
+      const listed = await phone.call<RuntimeMobileSessionTabsResult>('session.tabs.list', {
+        worktree
+      })
+      expect(
+        listed.tabs.some((tab) => 'filePath' in tab && tab.filePath.endsWith('README.md')),
+        'the phone lists the file it just opened'
+      ).toBe(true)
+    }
     await record('phone opens a file', opened)
 
     const selectedBefore = sessionTabsBaseline(await firstSnapshot(phone, worktree), labels)

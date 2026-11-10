@@ -13,17 +13,7 @@ import {
   type LazyChunkRecoveryReloadOutcome
 } from './lazy-chunk-recovery-reload'
 
-/**
- * Resilient replacement for React.lazy.
- *
- * Why: a stale, corrupt, or truncated lazy chunk parses as invalid JavaScript and
- * rejects its dynamic import() with a native SyntaxError (e.g. "Unexpected token
- * ']'"). React.lazy permanently caches that rejection, so the error boundary's
- * "Retry" — which just re-renders the same Lazy — can never recover it; the
- * surface stays dead and reports a react-error-boundary crash. This wrapper first
- * retries transient failures, then requests one restart-prepared reload before
- * falling through to the error boundary.
- */
+/** React.lazy caches rejected imports permanently; retry transient failures, then request a guarded restart-prepared reload so stale/corrupt chunks can recover before the boundary. */
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- mirror React.lazy's own ComponentType<any> constraint so every existing call site type-checks unchanged.
 type AnyComponent = ComponentType<any>
@@ -55,8 +45,7 @@ export function isLazyChunkLoadError(error: unknown): error is LazyChunkLoadErro
   return error instanceof LazyChunkLoadError
 }
 
-// The session guard survives a landed reload to prevent loops, but a surviving
-// document clears its own token so a later failure can retry recovery.
+// Keep the session guard across landed reloads, but let a surviving document clear its own token for another bounded attempt.
 const RELOAD_GUARD_KEY = 'orca:lazy-chunk-reload-attempted'
 // Reloading reevaluates this fallback, giving the new document a different token.
 const FALLBACK_RELOAD_TOKEN = `doc-${Math.random().toString(36).slice(2)}`
@@ -80,8 +69,7 @@ function readChunkReloadGuardState(): ReloadGuardState {
     }
     return stored === currentDocumentReloadToken() ? 'reload-not-landed' : 'reload-landed'
   } catch {
-    // Why: when storage is blocked we cannot prove a reload happened, but still
-    // fail closed on reloads so a broken chunk never loops.
+    // Blocked storage cannot prove prior recovery; refuse reload to prevent corrupt-chunk loops.
     return 'unavailable'
   }
 }
@@ -122,9 +110,7 @@ function recordReloadBreadcrumb(
   message: string,
   outcome?: string
 ): void {
-  // Inlined rather than importing crash-diagnostics so this low-level recovery
-  // primitive stays free of the renderer/webview module graph (keeps it SSR- and
-  // unit-test-friendly). Mirrors crash-diagnostics' best-effort breadcrumb call.
+  // Inline best-effort breadcrumbs to keep low-level recovery free of renderer/webview imports for SSR and unit tests.
   try {
     const api = (window as Window & { api?: Window['api'] }).api
     api?.crashReports.recordBreadcrumb({
@@ -154,15 +140,7 @@ function isKnownDynamicImportFailure(error: unknown): boolean {
     return true
   }
 
-  // Why: a stale/truncated/corrupt chunk parses as invalid JS, so import()
-  // rejects with a native SyntaxError ("Unexpected token '}'", "Unexpected
-  // string", "Illegal return statement", …  — all four observed in shipped
-  // reports). That reaches this catch only from the chunk's fetch+parse phase.
-  // Trade-off: a SyntaxError thrown while *evaluating* a lazily imported module
-  // (e.g. a top-level JSON.parse) is indistinguishable here by message, so it is
-  // contained too. Stack-frame discrimination was tried and rejected: parser
-  // errors carry no frames today, but that is not guaranteed across V8 versions
-  // and a false negative silently restores the crash this guards against.
+  // Contain import-time SyntaxError from corrupt chunks; top-level evaluation errors such as JSON.parse are indistinguishable. Stack-frame heuristics vary by V8 and could silently restore crashes.
   if (error.name === 'SyntaxError') {
     return true
   }
@@ -223,8 +201,7 @@ export async function loadLazyWithRetry<T extends AnyComponent>(
       clearChunkReloadGuard()
       recordReloadBreadcrumb('lazy_chunk_reload_vetoed', reloadKey, failureMessage, outcome)
     }
-    // The reload was this document's last recovery step for this chunk, whether it
-    // was refused outright or simply never navigated.
+    // This was the document’s final recovery for the chunk even if reload was refused or never navigated.
     throw containedChunkFailure(lastError, reloadKey)
   }
 
@@ -233,8 +210,7 @@ export async function loadLazyWithRetry<T extends AnyComponent>(
   }
 
   if (reloadGuardState === 'reload-not-landed') {
-    // A sibling failing under a pending reload must not clear the guard, and an
-    // unrelated failure must not clear a guard it did not set.
+    // Only this request may clear its guard; sibling failures during pending reload cannot reset it.
     if (!reloadRequestInFlight && isKnownDynamicImportFailure(lastError)) {
       // Record the veto before the ring can evict it; the failure is then contained.
       clearChunkReloadGuard()
@@ -253,8 +229,7 @@ export async function loadLazyWithRetry<T extends AnyComponent>(
     throw containedChunkFailure(lastError, reloadKey)
   }
 
-  // No window or no usable storage: recovery was never attempted, so preserve
-  // normal error reporting instead of containing a failure we never acted on.
+  // Without window/storage, no recovery was attempted; retain normal error reporting.
   throw lastError
 }
 
@@ -270,11 +245,7 @@ export type PreloadableLazyComponent<T extends AnyComponent> = ComponentType<Com
   preload: () => void
 }
 
-/**
- * lazyWithRetry plus preload(). Once preloaded, the component renders the loaded module
- * directly instead of through React.lazy, so its first render never suspends: React holds
- * a newly resolved Suspense reveal for up to 300 ms, which is what made first opens slow.
- */
+/** Preload resolved modules directly so first render avoids React.lazy’s new Suspense reveal delay (up to 300ms). */
 export function lazyWithPreload<T extends AnyComponent>(
   factory: LazyFactory<T>,
   options?: LazyWithRetryOptions
@@ -289,7 +260,7 @@ export function lazyWithPreload<T extends AnyComponent>(
     options
   )
   function PreloadableComponent(props: ComponentProps<T>): ReactNode {
-    // Why: pinned per mount so a module resolving mid-life cannot swap the element type and remount the subtree.
+    // Pin element type per mount or resolution mid-life would remount the subtree.
     const [Component] = useState(() => loaded ?? LazyComponent)
     return createElement(Component, props)
   }

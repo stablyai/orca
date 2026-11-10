@@ -23,9 +23,8 @@ export type ProgramStatusFacet = {
 
 const PROGRAM_STATUS_MESSAGE_MAX_LENGTH = 400
 
-// Why: messages are shown outside the terminal grid, where bidi overrides and invisible formatting
-// could disguise what a program claims (spec: Security).
-const INVISIBLE_FORMATTING_RE = /[​-‏‪-‮⁠-⁩﻿]/g
+// Strip bidi/invisible formatting because program messages outside the terminal grid could disguise claims (spec Security).
+const INVISIBLE_FORMATTING_RE = /[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g
 
 /** A program-supplied string made safe and bounded for display, or undefined when empty. */
 export function programStatusDisplayText(text: string | undefined): string | undefined {

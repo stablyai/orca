@@ -1,7 +1,4 @@
-/**
- * POSIX-only measurement: a PATH-injected git fixture exercises the real spawn path.
- * Timing distributions are reported for field comparison; CI assertions stay structural.
- */
+// PATH-injected POSIX fixture: report timings, but assert only structure in CI.
 import { chmod, mkdtemp, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -9,11 +6,13 @@ import { afterEach, expect } from 'vitest'
 import { gitExecFileAsync } from './git-exec-file'
 import {
   GIT_ADMISSION_AGING_MS,
-  GitAdmissionScheduler,
   MAX_GIT_CHILDREN,
-  _gitAdmissionSnapshotForTests,
-  _resetGitAdmissionForTests,
   type GitAdmissionEvent
+} from '../../../shared/git/admission/git-admission-state'
+import { GitAdmissionScheduler } from '../../../shared/git/admission/git-admission-scheduler'
+import {
+  _gitAdmissionSnapshotForTests,
+  _resetGitAdmissionForTests
 } from './git-subprocess-admission'
 
 type StormMeasurement = {

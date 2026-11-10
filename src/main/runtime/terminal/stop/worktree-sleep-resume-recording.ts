@@ -1,4 +1,7 @@
+import { sleepingRecordsEquivalentIgnoringCaptureTime } from '../../../../shared/agent-session/lifecycle/agent-resume-record-equivalence'
 import { OrcaRuntimeWithStopTerminalsForWorktree } from './worktree-terminal-stop'
+import { launchStatement } from '../launch/launch-evidence'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import {
   applyWorktreeSleepResumeRecords,
   captureWorktreeSleepResumeRecords,
@@ -10,20 +13,84 @@ import {
   resumeStatusFromHookRow,
   type PaneLaunchConfigOf
 } from './hook-status-resume-records'
-import type { ResumeRecordStatus } from '../../../../shared/agent-resume-record-from-status'
-import { applyWindowLayoutCommand } from '../../runtime-layout-apply'
+import type { ResumeRecordStatus } from '../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
+import { applyWindowLayoutCommand } from '../layout/runtime-layout-apply'
 import type {
   AgentStatusClearIpcPayload,
-  AgentStatusIpcPayload
-} from '../../../../shared/agent-status-ipc-payload'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+  AgentStatusIpcPayload,
+  RefusedPaneResume
+} from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import {
+  agentProviderSessionsEqual,
+  type SleepingAgentSessionRecord
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+
+import { type ExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
 export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRuntimeWithStopTerminalsForWorktree {
+  /** Capture after earlier status writes so their saved copy participates in exact cleanup. */
+  readSavedResumeSource(
+    worktreeId: string,
+    paneKey: string
+  ): Promise<SleepingAgentSessionRecord | undefined> {
+    return this.inResumeRecordOrder(
+      async () =>
+        this.store?.getWorkspaceSession?.(this.getWorkspaceSessionHostIdForWorktree(worktreeId))
+          ?.sleepingAgentSessionsByPaneKey?.[paneKey]
+    )
+  }
+
+  /** Forgets a pane's saved resume the host refused because a chat is its conversation's home,
+   *  as a window does for its own panes; a host with no window has no one else to. */
+  async forgetRefusedSavedResume(
+    worktreeId: string,
+    paneKey: string,
+    refused: RefusedPaneResume,
+    source?: SleepingAgentSessionRecord
+  ): Promise<void> {
+    await this.inResumeRecordOrder(() =>
+      this.commitWorkspaceSessionEdit(
+        this.getWorkspaceSessionHostIdForWorktree(worktreeId),
+        (session) => {
+          const saved = session.sleepingAgentSessionsByPaneKey?.[paneKey]
+          if (
+            !source ||
+            !refused.expectedSavedRecord ||
+            saved?.paneKey !== refused.expectedSavedRecord.paneKey ||
+            saved.capturedAt !== refused.expectedSavedRecord.capturedAt ||
+            saved.updatedAt !== refused.expectedSavedRecord.updatedAt ||
+            saved.connectionId !== source.connectionId ||
+            !sleepingRecordsEquivalentIgnoringCaptureTime(saved, source) ||
+            saved.agent !== refused.agent ||
+            !agentProviderSessionsEqual(
+              refused.agent,
+              saved.providerSession,
+              refused.providerSession
+            )
+          ) {
+            return null
+          }
+          const { [paneKey]: _refused, ...kept } = session.sleepingAgentSessionsByPaneKey ?? {}
+          return { ...session, sleepingAgentSessionsByPaneKey: kept }
+        }
+      )
+    )
+    const previous = this.previousHookStatusByPaneKey.get(paneKey)
+    if (
+      previous &&
+      refused.expectedStatus &&
+      previous.updatedAt <= refused.expectedStatus.receivedAt &&
+      previous.stateStartedAt === refused.expectedStatus.stateStartedAt &&
+      previous.agentType === refused.agent &&
+      agentProviderSessionsEqual(refused.agent, previous.providerSession, refused.providerSession)
+    ) {
+      this.previousHookStatusByPaneKey.delete(paneKey)
+    }
+  }
+
   protected readonly sleepResumeRecords: WorktreeSleepResumeRecorder = {
     capture: (worktreeId, ptyIds) =>
       captureWorktreeSleepResumeRecords({
@@ -31,12 +98,7 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
         paneKeysByPtyId: new Map(
           [...ptyIds].map((ptyId) => [ptyId, this.collectAgentStatusPaneKeysForPty(ptyId)])
         ),
-        launchByPtyId: new Map(
-          [...ptyIds].map((ptyId) => {
-            const pty = this.ptysById.get(ptyId)
-            return [ptyId, { agent: pty?.launchAgent ?? null, config: pty?.launchConfig ?? null }]
-          })
-        ),
+        launchByPtyId: new Map([...ptyIds].map((ptyId) => [ptyId, this.ptysById.get(ptyId)])),
         readRows: () => this.getAgentProviderSessionSnapshotFn?.() ?? [],
         checkAgentPresence: this.checkHookAgentPresenceFn,
         capturedAt: Date.now()
@@ -58,29 +120,28 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
   }
 
   /** Each pane's last hook status, which a status without a provider session inherits it from. */
-  private readonly previousHookStatusByPaneKey = new Map<string, ResumeRecordStatus>()
+  private readonly previousHookStatusByPaneKey = new Map<
+    string,
+    ResumeRecordStatus & { stateStartedAt?: number }
+  >()
   private hookStatusResumeWrites: Promise<void> = Promise.resolve()
 
-  private readonly paneLaunchConfigOf: PaneLaunchConfigOf = (paneKey, agent) => {
-    for (const pty of this.ptysById.values()) {
-      if (pty.paneKey === paneKey && pty.launchConfig && pty.launchAgent === agent) {
-        return pty.launchConfig
-      }
-    }
-    return undefined
-  }
+  protected abstract getPtyRecordForPaneKey(paneKey: string): RuntimePtyWorktreeRecord | null
 
-  /**
-   * A layout-owner build's resume record of a pane main holds, from the hook status main accepted:
-   * the window's rule, so a pane the window never opened still resumes after a quit. In order, so
-   * each status reads the record the one before it wrote.
-   */
+  /** Main's word on the Orca launch running in this pane now; the one check every saved note passes. */
+  getLaunchStatementForPaneKey: PaneLaunchConfigOf = (paneKey, agent) =>
+    launchStatement(this.getPtyRecordForPaneKey(paneKey), agent)
+
+  // Main records accepted status for its panes even without windows, preserving window resume rules; serialize writes so statuses read prior records.
   recordHookStatusResume(row: AgentStatusIpcPayload): void {
     const status = resumeStatusFromHookRow(row, this.previousHookStatusByPaneKey.get(row.paneKey))
     if (!status) {
       return
     }
-    this.previousHookStatusByPaneKey.set(row.paneKey, status)
+    this.previousHookStatusByPaneKey.set(row.paneKey, {
+      ...status,
+      stateStartedAt: row.stateStartedAt
+    })
     this.inResumeRecordOrder(() => this.writeHookStatusResume(status)).catch((error) =>
       console.warn('[runtime] could not record an agent resume record', error)
     )
@@ -100,7 +161,19 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
   forgetHookStatusResume(clear: AgentStatusClearIpcPayload): void {
     for (const [paneKey, status] of this.previousHookStatusByPaneKey) {
       if (
-        'paneKey' in clear ? paneKey === clear.paneKey : status.connectionId === clear.connectionId
+        'paneKey' in clear
+          ? paneKey === clear.paneKey &&
+            (!clear.refusedResume ||
+              (!!clear.refusedResume.expectedStatus &&
+                status.updatedAt <= clear.refusedResume.expectedStatus.receivedAt &&
+                status.stateStartedAt === clear.refusedResume.expectedStatus.stateStartedAt &&
+                status.agentType === clear.refusedResume.agent &&
+                agentProviderSessionsEqual(
+                  status.agentType,
+                  status.providerSession,
+                  clear.refusedResume.providerSession
+                )))
+          : status.connectionId === clear.connectionId
       ) {
         this.previousHookStatusByPaneKey.delete(paneKey)
       }
@@ -124,7 +197,7 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
       status,
       session: this.store.getWorkspaceSession(hostId),
       worktreeId,
-      launchConfigOf: this.paneLaunchConfigOf
+      launchConfigOf: this.getLaunchStatementForPaneKey
     })
     if (command) {
       // Not this.applyLayoutCommand: this runs inside the resume-record queue, which that would await.
@@ -142,7 +215,7 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
       statuses,
       session,
       worktreeIdOf: (paneKey) => this.getTerminalWorktreeIdForPaneKey(paneKey),
-      launchConfigOf: this.paneLaunchConfigOf,
+      launchConfigOf: this.getLaunchStatementForPaneKey,
       capturedAt: Date.now()
     })
   }

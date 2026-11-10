@@ -1,12 +1,9 @@
 import type { JSX } from 'react'
 import { cn } from '@/lib/utils'
 import { HUNKS, tokenize, type DiffLine } from './review-animated-visual-shared'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
-// Why: pre-flatten hunks into rows with computed line numbers so the
-// imperative animation loop only mutates classes/inline styles, never DOM
-// structure. Lives in its own module to keep ReviewNotesAnimatedVisual under
-// the per-file line-length lint cap.
+// Precompute row geometry so the animation mutates styles rather than DOM structure.
 
 type DiffRow = {
   key: string
@@ -63,6 +60,7 @@ function buildDiffRows(): DiffRow[] {
 }
 
 export function ReviewDiffRows(): JSX.Element {
+  const t = useTranslate()
   const rows = buildDiffRows()
   return (
     <>
@@ -82,7 +80,7 @@ export function ReviewDiffRows(): JSX.Element {
             <div key={r.key} className="ravs-note-row" data-hunk-slot={r.hunk}>
               <div className="ravs-note-card">
                 <div className="ravs-note-meta">
-                  {translate(
+                  {t(
                     'auto.components.feature.wall.review.notes.diff.rows.f621c734f8',
                     'Note · line'
                   )}{' '}

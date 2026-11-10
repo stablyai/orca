@@ -2,6 +2,7 @@ import type SyncDatabase from '../sqlite/sync-database'
 
 const GENERATION_KEY = 'index_generation'
 const INCARNATION_KEY = 'index_incarnation'
+const MAINTENANCE_KEY = 'index_maintenance_generation'
 
 export const SESSION_SEARCH_GENERATION_TRIGGERS = [
   'search_generation_file_insert',
@@ -13,10 +14,7 @@ export const SESSION_SEARCH_GENERATION_TRIGGERS = [
 const BUMP = `INSERT INTO meta(key, value) VALUES ('${GENERATION_KEY}', '1')
     ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1;`
 
-/**
- * Triggers commit the generation with writes from any connection.
- * Orphan reclamation also changes the vocabulary used for typo suggestions.
- */
+/** Bump atomically across connections, including orphan reclamation that changes typo vocabulary. */
 export const SESSION_SEARCH_GENERATION_SQL = `
 CREATE TRIGGER IF NOT EXISTS search_generation_file_insert AFTER INSERT ON files BEGIN
   ${BUMP}
@@ -40,6 +38,25 @@ export function readIndexGeneration(db: SyncDatabase): number {
     | undefined
   const parsed = row ? Number(row.value) : Number.NaN
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0
+}
+
+/** Invisible-row cleanup changes raw generation for legacy clients without invalidating frozen hits. */
+export function readIndexContentRevision(
+  db: SyncDatabase,
+  generation = readIndexGeneration(db)
+): number {
+  const row = db.prepare('SELECT value FROM meta WHERE key = ?').get(MAINTENANCE_KEY)
+  const maintenance = Number(row?.value ?? 0)
+  return generation - (Number.isSafeInteger(maintenance) && maintenance >= 0 ? maintenance : 0)
+}
+
+export function recordIndexMaintenance(db: SyncDatabase, before: number): void {
+  const delta = readIndexGeneration(db) - before
+  db.prepare(`INSERT INTO meta(key, value) VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + excluded.value`).run(
+    MAINTENANCE_KEY,
+    String(delta)
+  )
 }
 
 export function readIndexIncarnation(db: SyncDatabase): string {

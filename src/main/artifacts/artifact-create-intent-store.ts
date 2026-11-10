@@ -6,8 +6,11 @@ import {
   ARTIFACT_MAX_REQUEST_BYTES,
   artifactContentByteLength,
   artifactWriteRequestByteLength
-} from '../../shared/artifacts'
-import { bestEffortFsyncDirectorySync, writeSecureFile } from '../../shared/secure-file'
+} from '../../shared/artifacts/artifacts'
+import {
+  bestEffortFsyncDirectorySync,
+  writeSecureFile
+} from '../../shared/secure-storage/secure-file'
 import { getOrcaProfileDirectory } from '../orca-profiles/profile-storage-paths'
 import type { ArtifactWriteBody } from './artifact-cloud-request'
 import type { ArtifactShareScope } from './artifact-share-record-store'
@@ -207,7 +210,7 @@ export function removeArtifactCreateIntent(
   try {
     matches = readIntent(path).idempotencyKey === expectedIdempotencyKey
   } catch {
-    // An unreadable record cannot be replayed, so a completed mutation may discard it safely.
+    // Unreadable intents cannot be replayed and may be discarded after completion.
   }
   if (matches) {
     rmSync(path, { force: true })

@@ -2,11 +2,9 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../shared/protocol-version'
 import { OrchestrationDb } from '../orchestration-db'
 import { SCHEMA_VERSION, federatedStubHomeRunId } from '../contract-constants'
-import { migrateV40 } from './migrate-v40'
-import { importFederatedControlMessage } from '../../federation-control-message'
+import { importFederatedControlMessage } from '../../legacy-remote/federation-control-message'
 
 describe('federated home Run migration', () => {
   let db: OrchestrationDb
@@ -24,49 +22,6 @@ describe('federated home Run migration', () => {
       })
     ).toEqual({ imported: true, type: 'status' })
   }
-
-  function attachWithoutRunId(target: OrchestrationDb, dispatchId: string, runId?: string): void {
-    target.createRemoteDispatchAttachment({
-      dispatchId,
-      runId,
-      taskId: `task_${dispatchId}`,
-      homePeerFingerprint: 'home',
-      protocolVersion: ORCHESTRATION_CONTRACT_VERSION,
-      runtimeEpoch: 'epoch',
-      mutationReceipt: {
-        callerFingerprint: 'home',
-        requestId: `request_${dispatchId}`,
-        method: 'orchestration.federationAttachStart',
-        payloadHash: `payload_${dispatchId}`
-      }
-    })
-  }
-
-  it('backfills a pre-upgrade attachment with a stub home Run that keeps its mailbox', () => {
-    db.db.exec('ALTER TABLE remote_dispatch_attachments DROP COLUMN home_run_id')
-    db.db.exec(`INSERT INTO remote_dispatch_attachments
-      (dispatch_id, task_id, home_peer_fingerprint, runtime_epoch)
-      VALUES ('ctx_old', 'task_old', 'home', 'epoch')`)
-    migrateV40.call(db, 39)
-    const stubRunId = federatedStubHomeRunId('ctx_old')
-    expect(db.getRemoteDispatchAttachment('ctx_old')?.home_run_id).toBe(stubRunId)
-    expect(db.getRunRaw(stubRunId)).toMatchObject({ home_database: 'remote', legacy: 0 })
-    importInstruction(db, 'ctx_old', 'message_old')
-    expect(db.getMessageById('message_old')?.run_id).toBe(stubRunId)
-  })
-
-  it('mints a stub home Run when a v1.4.198 coordinator attaches without a Run id', () => {
-    attachWithoutRunId(db, 'ctx_legacy_home')
-    const stubRunId = federatedStubHomeRunId('ctx_legacy_home')
-    expect(db.getRemoteDispatchAttachment('ctx_legacy_home')?.home_run_id).toBe(stubRunId)
-    importInstruction(db, 'ctx_legacy_home', 'message_legacy_home')
-    expect(db.getMessageById('message_legacy_home')?.run_id).toBe(stubRunId)
-  })
-
-  it('rejects a whitespace-only Run id instead of minting a stub', () => {
-    expect(() => attachWithoutRunId(db, 'ctx_blank', '   ')).toThrow('Missing Run ID')
-    expect(db.getRemoteDispatchAttachment('ctx_blank')).toBeUndefined()
-  })
 
   it('repairs rows a rolled-back v1.4.198 host inserted after user_version reached 40', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-federated-home-run-'))

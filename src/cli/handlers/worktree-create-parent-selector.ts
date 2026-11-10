@@ -1,11 +1,14 @@
 import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import { getOptionalStringFlag } from '../flags'
 import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
-import { getOptionalWorktreeSelector } from '../selectors'
+import { getOptionalParentSelector } from '../caller-folder-workspace'
+import { resolveParentEnvironment, type ParentEnvironment } from './worktree-parent-environment'
 
 export type CreateParentSelector = {
   parentWorktree?: string
   parentWorkspace?: string
+  /** The parent is in another environment than the child, resolved there and sent as a ref. */
+  parentEnvironment?: ParentEnvironment
 }
 
 const CREATE_PARENT_CONFLICT_MESSAGE = 'Choose either one parent selector or --no-parent.'
@@ -26,7 +29,7 @@ export function assertWorktreeParentFlagsCompatible(
   }
 }
 
-function getWorkspaceKeyParentSelector(selector: string): string | undefined {
+export function getWorkspaceKeyParentSelector(selector: string): string | undefined {
   const rawSelector = selector.startsWith('id:') ? selector.slice('id:'.length) : selector
   return isWorkspaceKey(rawSelector) ? rawSelector : undefined
 }
@@ -36,24 +39,27 @@ export async function resolveCreateParentSelector(
   cwd: string,
   client: RuntimeClient
 ): Promise<CreateParentSelector> {
+  const parentEnvironment = resolveParentEnvironment(flags, client)
   const rawParentWorktree = getOptionalStringFlag(flags, 'parent-worktree')
   if (!rawParentWorktree) {
     return {}
   }
+  if (parentEnvironment) {
+    return { parentWorktree: rawParentWorktree, parentEnvironment }
+  }
 
   const parentWorkspace = getWorkspaceKeyParentSelector(rawParentWorktree)
   if (parentWorkspace) {
-    // Why: create exposes one public parent flag, while the runtime still needs
-    // workspace keys to preserve folder/worktree lineage accurately.
+    // The public parent flag can name either kind; runtime workspace keys preserve folder lineage.
     return { parentWorkspace }
   }
 
-  const parentWorktree = await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client)
+  const parentWorktree = await getOptionalParentSelector(flags, cwd, client)
   const resolvedParentWorkspace = parentWorktree
     ? getWorkspaceKeyParentSelector(parentWorktree)
     : undefined
   if (resolvedParentWorkspace) {
-    // Why: active/current may resolve to a folder workspace pseudo-worktree id.
+    // active/current can resolve to a folder workspace.
     return { parentWorkspace: resolvedParentWorkspace }
   }
 

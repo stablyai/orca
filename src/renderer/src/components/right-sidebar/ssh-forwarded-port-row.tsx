@@ -2,13 +2,13 @@ import React, { useCallback, useState } from 'react'
 import { Copy, ExternalLink, Pencil, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { getPortOpenBrowserTooltipLabel } from '@/lib/workspace-port-actions'
+import { getPortOpenBrowserTooltipLabel } from '@/lib/workspace-ports/workspace-port-actions'
 import {
   addressForPortForwardEntry,
   advertisedBrowserUrlForForwardedRow
-} from '@/lib/workspace-port-urls'
+} from '@/lib/workspace-ports/workspace-port-urls'
 import type { PortForwardEntry } from '../../../../shared/ssh-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function SshForwardedPortRow({
   entry,
@@ -19,6 +19,7 @@ export function SshForwardedPortRow({
   onEdit: () => void
   onOpenInBrowser: (event?: React.MouseEvent<HTMLButtonElement>) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [removing, setRemoving] = useState(false)
   const mountedRef = useMountedRef()
   const forwardedAddress = addressForPortForwardEntry(entry)
@@ -27,9 +28,7 @@ export function SshForwardedPortRow({
     setRemoving(true)
     try {
       await window.api.ssh.removePortForward({ id: entry.id })
-    } catch {
-      // broadcast will update state
-    }
+    } catch {}
     if (mountedRef.current) {
       setRemoving(false)
     }
@@ -58,8 +57,7 @@ export function SshForwardedPortRow({
 
   const handleOpenBrowserButtonClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
-      // Why: keyboard activations have detail=0; only pointer clicks carry
-      // the modifier intent for the system-browser escape hatch.
+      // Keyboard activations have detail=0; only pointer clicks express system-browser modifier intent.
       handleOpenBrowser(event.detail > 0 ? event : undefined)
       if (event.detail > 0) {
         event.currentTarget.blur()
@@ -89,19 +87,15 @@ export function SshForwardedPortRow({
   )
 
   const advertisedBrowserUrl = advertisedBrowserUrlForForwardedRow(entry)
-  const openBrowserLabel = translate(
+  const openBrowserLabel = t(
     'auto.components.right.sidebar.PortsPanel.b22b128b2a',
     'Open in Browser'
   )
   const openBrowserTitle = getPortOpenBrowserTooltipLabel(
     advertisedBrowserUrl
-      ? translate(
-          'auto.components.right.sidebar.PortsPanel.75aeea592f',
-          'Open {{value0}} in Browser',
-          {
-            value0: advertisedBrowserUrl
-          }
-        )
+      ? t('auto.components.right.sidebar.PortsPanel.75aeea592f', 'Open {{value0}} in Browser', {
+          value0: advertisedBrowserUrl
+        })
       : openBrowserLabel
   )
 
@@ -123,7 +117,7 @@ export function SshForwardedPortRow({
         </div>
         {advertisedBrowserUrl && (
           <div className="text-[11px] text-muted-foreground/70 truncate">
-            {translate('auto.components.right.sidebar.PortsPanel.de349d4560', 'opens {{value0}}', {
+            {t('auto.components.right.sidebar.PortsPanel.de349d4560', 'opens {{value0}}', {
               value0: advertisedBrowserUrl
             })}
           </div>
@@ -142,11 +136,9 @@ export function SshForwardedPortRow({
           type="button"
           className="p-1 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
           onClick={handleCopyButtonClick}
-          title={translate(
-            'auto.components.right.sidebar.PortsPanel.1004af16ab',
-            'Copy {{value0}}',
-            { value0: forwardedAddress }
-          )}
+          title={t('auto.components.right.sidebar.PortsPanel.1004af16ab', 'Copy {{value0}}', {
+            value0: forwardedAddress
+          })}
         >
           <Copy size={13} />
         </button>
@@ -154,7 +146,7 @@ export function SshForwardedPortRow({
           type="button"
           className="p-1 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
           onClick={handleEditButtonClick}
-          title={translate('auto.components.right.sidebar.PortsPanel.b3548e59f4', 'Edit')}
+          title={t('auto.components.right.sidebar.PortsPanel.b3548e59f4', 'Edit')}
         >
           <Pencil size={13} />
         </button>
@@ -166,7 +158,7 @@ export function SshForwardedPortRow({
           )}
           onClick={handleRemoveButtonClick}
           disabled={removing}
-          title={translate('auto.components.right.sidebar.PortsPanel.e740075063', 'Remove')}
+          title={t('auto.components.right.sidebar.PortsPanel.e740075063', 'Remove')}
         >
           <Trash2 size={13} />
         </button>

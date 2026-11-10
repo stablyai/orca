@@ -13,13 +13,12 @@ import {
 import { ReviewNotesVisualStyles } from './review-animated-visual-notes-styles'
 import { ReviewDiffRows } from './review-notes-diff-rows'
 import { resetTerminal, runTerminalPhase } from './review-notes-terminal-phase'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { forceLayoutReflow } from '@/lib/force-layout-reflow'
 
-// Why: this visual mirrors the imperative-DOM pattern used by
-// EditorAnimatedVisual / WorkbenchAnimatedVisual so the loop reads like the
-// reference HTML mock (docs/feature-wall-review-tile-mock.html) instead of
-// fighting React reconciliation across timed beats.
+// The animation owns timed DOM mutations to avoid React overwriting intermediate beats.
 export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JSX.Element {
+  const t = useTranslate()
   const { reducedMotion } = props
   const rootRef = useRef<HTMLDivElement | null>(null)
 
@@ -60,9 +59,7 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
     ) {
       return
     }
-    // Re-bind to non-null locals so closures across `await` keep their
-    // narrowed types — TS flow analysis drops narrowing through async
-    // boundaries.
+    // Capture narrowed DOM nodes in locals so async closures retain non-null types.
     const rootEl: HTMLDivElement = root
     const cursor: HTMLDivElement = cursorMaybe
     const popover: HTMLDivElement = popoverMaybe
@@ -122,9 +119,7 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
     }
 
     async function fillPopoverInput(text: string): Promise<void> {
-      // Why: clear the popover input to a bare typed-span before the cursor
-      // lands so the placeholder doesn't flash between the click and the
-      // generated note text. Mock: docs/feature-wall-review-tile-mock.html.
+      // Clear the placeholder before cursor arrival so it cannot flash before typing starts.
       popInput.innerHTML = '<span data-pop-typed></span><span class="ravs-caret"></span>'
       const typed = popInput.querySelector<HTMLSpanElement>('[data-pop-typed]')
       if (!typed) {
@@ -160,7 +155,6 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
     function resetState(): void {
       rootEl.querySelectorAll('[data-hunk-slot]').forEach((el) => el.classList.remove('is-visible'))
       popover.classList.remove('is-visible')
-      // Empty the input so no placeholder flashes between resets.
       popInput.innerHTML = ''
       addBtn.classList.remove('is-visible')
       sendChip.classList.remove('is-visible')
@@ -173,7 +167,7 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
       cursor.classList.remove('is-visible', 'is-clicking')
       cursor.style.transition = 'none'
       cursor.style.transform = 'translate(-30px, 220px)'
-      void cursor.offsetWidth
+      forceLayoutReflow(cursor)
       cursor.style.transition = ''
     }
 
@@ -221,8 +215,7 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
           addBtn.classList.remove('is-visible')
           const lns = row.querySelectorAll('.ravs-ln')
           popLine.textContent = lns[1]?.textContent ?? ''
-          // Empty the input before showing the popover so no placeholder
-          // flashes between the click and the typed text.
+          // Clear before showing the popover to prevent a placeholder flash.
           popInput.innerHTML = ''
           anchorPopoverTo(row)
           popover.classList.add('is-visible')
@@ -333,7 +326,7 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
 
     return () => {
       cancelled = true
-      timers.forEach((t) => window.clearTimeout(t))
+      timers.forEach((timer) => window.clearTimeout(timer))
     }
   }, [reducedMotion])
 
@@ -341,7 +334,7 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
     <div ref={rootRef} className="ravs-window" data-page="notes">
       <div className="ravs-difftoolbar">
         <span className="ravs-diff-path">
-          {translate(
+          {t(
             'auto.components.feature.wall.ReviewNotesAnimatedVisual.1eee3a397e',
             'src/server/migrate.ts (diff)'
           )}
@@ -349,10 +342,7 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
         <span className="ravs-ai-chip" data-ai-notes-chip>
           <button type="button" className="ravs-count-btn">
             <MessageIcon />{' '}
-            {translate(
-              'auto.components.feature.wall.ReviewNotesAnimatedVisual.5cb213f967',
-              'AI notes'
-            )}{' '}
+            {t('auto.components.feature.wall.ReviewNotesAnimatedVisual.5cb213f967', 'AI notes')}{' '}
             <span className="ravs-count-num" data-ai-count>
               0
             </span>
@@ -381,29 +371,23 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
         </button>
         <div className="ravs-popover" data-note-popover>
           <div className="ravs-pop-label">
-            {translate('auto.components.feature.wall.ReviewNotesAnimatedVisual.a7a89d8f94', 'Line')}{' '}
+            {t('auto.components.feature.wall.ReviewNotesAnimatedVisual.a7a89d8f94', 'Line')}{' '}
             <span data-pop-line>?</span>
           </div>
           <div className="ravs-pop-input" data-pop-input />
           <div className="ravs-pop-footer">
             <button type="button" className="ravs-pop-btn is-cancel">
-              {translate(
-                'auto.components.feature.wall.ReviewNotesAnimatedVisual.271ea0cbf3',
-                'Cancel'
-              )}
+              {t('auto.components.feature.wall.ReviewNotesAnimatedVisual.271ea0cbf3', 'Cancel')}
             </button>
             <button type="button" className="ravs-pop-btn is-add">
-              {translate(
-                'auto.components.feature.wall.ReviewNotesAnimatedVisual.ea4e45b71b',
-                'Add note'
-              )}
+              {t('auto.components.feature.wall.ReviewNotesAnimatedVisual.ea4e45b71b', 'Add note')}
               <CornerEnterIcon />
             </button>
           </div>
         </div>
         <div className="ravs-send-menu" data-send-menu>
           <div className="ravs-menu-section">
-            {translate(
+            {t(
               'auto.components.feature.wall.ReviewNotesAnimatedVisual.294aaff104',
               'Send notes to'
             )}
@@ -411,7 +395,7 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
           <div className="ravs-menu-row" data-send-row="claude">
             <ClaudeLogo />
             <span>
-              {translate(
+              {t(
                 'auto.components.feature.wall.ReviewNotesAnimatedVisual.09094f25e2',
                 'Claude Code'
               )}
@@ -420,10 +404,7 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
           <div className="ravs-menu-row" data-send-row="codex">
             <CodexLogo />
             <span>
-              {translate(
-                'auto.components.feature.wall.ReviewNotesAnimatedVisual.5dbd27c4c2',
-                'Codex'
-              )}
+              {t('auto.components.feature.wall.ReviewNotesAnimatedVisual.5dbd27c4c2', 'Codex')}
             </span>
           </div>
         </div>

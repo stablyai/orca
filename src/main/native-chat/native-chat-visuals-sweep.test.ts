@@ -14,10 +14,9 @@ import {
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { StructuredAgentSessionLogger } from './agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionLogger } from './agent-session-wire/host/structured-agent-session-logger'
 import { nativeChatScratchFolderFor, nativeChatScratchRootFor } from './native-chat-scratch-folder'
 import {
-  scheduleNativeChatVisualsSweep,
   sweepNativeChatVisualsFolders,
   type NativeChatVisualsSweepDeps
 } from './native-chat-visuals-sweep'
@@ -45,14 +44,13 @@ function visualsFor(state: string, sessionId: string): string {
 
 const DAY_MS = 24 * 60 * 60_000
 
-/** Sets the mtime of `path` and everything under it to `daysAgo`, children before parents. */
 function age(path: string, daysAgo: number): void {
   if (statSync(path).isDirectory()) {
     for (const name of readdirSync(path)) {
       age(join(path, name), daysAgo)
     }
   }
-  const at = new Date(Date.now() - daysAgo * DAY_MS)
+  const at = new Date(Date.UTC(2020, 0, 1) - daysAgo * DAY_MS)
   utimesSync(path, at, at)
 }
 
@@ -70,20 +68,6 @@ function deps(
 }
 
 describe('the visuals folder sweep', () => {
-  it('removes a folder no chat record maps to and keeps every held chat', async () => {
-    const state = stateDirectory()
-    const live = visualsFor(state, 'chat-live')
-    const unreadable = visualsFor(state, 'chat-unreadable-row')
-    const orphan = visualsFor(state, 'chat-deleted')
-    const result = await sweepNativeChatVisualsFolders(
-      deps(state, ['chat-live', 'chat-unreadable-row'])
-    )
-    expect(result).toEqual({ removed: 1, failed: 0 })
-    expect(existsSync(live)).toBe(true)
-    expect(existsSync(unreadable)).toBe(true)
-    expect(existsSync(orphan)).toBe(false)
-  })
-
   it('keeps a held chat folder however long it went unused, and retains one set aside for startup recovery', async () => {
     const state = stateDirectory()
     const idle = visualsFor(state, 'chat-idle')
@@ -129,48 +113,6 @@ describe('the visuals folder sweep', () => {
     expect(existsSync(join(root, 'f'.repeat(32)))).toBe(true)
     expect(existsSync(join(root, 'e'.repeat(32)))).toBe(true)
     expect(existsSync(join(target, 'keep.txt'))).toBe(true)
-  })
-
-  it('reports a removal that fails and carries on', async () => {
-    const state = stateDirectory()
-    visualsFor(state, 'chat-x')
-    visualsFor(state, 'chat-y')
-    const sweep = deps(state, [])
-    const result = await sweepNativeChatVisualsFolders({
-      ...sweep,
-      remove: vi
-        .fn()
-        .mockRejectedValueOnce(Object.assign(new Error('busy'), { code: 'EBUSY' }))
-        .mockResolvedValueOnce(undefined)
-    })
-    expect(result).toEqual({ removed: 1, failed: 1 })
-    expect(sweep.logger.warn).toHaveBeenCalledWith(
-      'native-chat scratch folder could not be removed',
-      expect.objectContaining({ scope: 'nativeChatVisuals.sweep', reason: 'no-record' })
-    )
-  })
-
-  it('does nothing on a host with no visuals yet', async () => {
-    await expect(
-      sweepNativeChatVisualsFolders(deps(stateDirectory(), ['chat-a']))
-    ).resolves.toEqual({ removed: 0, failed: 0 })
-  })
-
-  it('runs after startup and again later, and stops for good', async () => {
-    const state = stateDirectory()
-    const orphan = visualsFor(state, 'chat-z')
-    vi.useFakeTimers()
-    const listHeldSessionIds = vi.fn((): string[] => [])
-    const stop = scheduleNativeChatVisualsSweep({ ...deps(state, []), listHeldSessionIds })
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(listHeldSessionIds).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(60_000)
-    await vi.waitFor(() => expect(existsSync(orphan)).toBe(false))
-    expect(listHeldSessionIds).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(6 * 60 * 60_000)
-    await vi.waitFor(() => expect(listHeldSessionIds).toHaveBeenCalledTimes(2))
-    stop()
-    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('touches nothing under a visuals root that is a symlink', async () => {

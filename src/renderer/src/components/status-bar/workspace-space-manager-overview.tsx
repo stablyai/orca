@@ -1,8 +1,8 @@
 import { AlertTriangle, HardDrive, Loader2, RefreshCw, X } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
-import { formatBytes } from './workspace-space-format'
-import { translate } from '@/i18n/i18n'
+import { formatBytes, getWorkspaceSpaceScanningFallbackLabel } from './workspace-space-format'
+import { useTranslate } from '@/i18n/use-translate'
 import { Metric, UpdatedMetric } from './workspace-space-metrics'
 import { WorkspaceSpaceTreemap } from './workspace-space-treemap'
 import { WorkspaceSpaceBreakdownList } from './workspace-space-breakdown-list'
@@ -16,6 +16,7 @@ export function WorkspaceSpaceManagerOverview({
 }: {
   model: WorkspaceSpaceManagerModel
 }): React.JSX.Element {
+  const t = useTranslate()
   const {
     analysis,
     cancelScan,
@@ -40,10 +41,10 @@ export function WorkspaceSpaceManagerOverview({
           <HardDrive className="size-6 text-muted-foreground" />
         </div>
         <h2 className="text-lg font-semibold text-foreground">
-          {translate('workspaceSpace.empty.title', 'See where workspace storage goes')}
+          {t('workspaceSpace.empty.title', 'See where workspace storage goes')}
         </h2>
         <p className="mt-2 max-w-md text-sm text-muted-foreground">
-          {translate(
+          {t(
             'workspaceSpace.empty.description',
             'Scan your workspaces to compare sizes, inspect their largest folders, and review space you can reclaim.'
           )}
@@ -51,7 +52,7 @@ export function WorkspaceSpaceManagerOverview({
         {scanError ? <p className="mt-4 max-w-md text-sm text-destructive">{scanError}</p> : null}
         <Button variant="default" size="sm" onClick={refresh} className="mt-6">
           <RefreshCw className="size-4" />
-          {translate('workspaceSpace.empty.scan', 'Scan workspaces')}
+          {t('workspaceSpace.empty.scan', 'Scan workspaces')}
         </Button>
       </div>
     )
@@ -61,19 +62,16 @@ export function WorkspaceSpaceManagerOverview({
       <div className="flex min-w-0 items-center rounded-lg border border-border/65 bg-background/35">
         <div className="grid min-w-0 flex-1 grid-cols-4 divide-x divide-border/60">
           <Metric
-            label={translate(
-              'auto.components.status.bar.WorkspaceSpaceManagerPanel.09960d86bd',
-              'Scanned'
-            )}
+            label={t('auto.components.status.bar.WorkspaceSpaceManagerPanel.09960d86bd', 'Scanned')}
             value={analysis ? formatBytes(analysis.totalSizeBytes) : '—'}
           />
           <Metric
-            label={translate('workspaceSpace.metric.linkedWorktrees', 'Linked worktrees')}
-            shortLabel={translate('workspaceSpace.compact.linked', 'Linked')}
+            label={t('workspaceSpace.metric.linkedWorktrees', 'Linked worktrees')}
+            shortLabel={t('workspaceSpace.compact.linked', 'Linked')}
             value={analysis ? formatBytes(analysis.reclaimableBytes) : '—'}
           />
           <Metric
-            label={translate(
+            label={t(
               'auto.components.status.bar.WorkspaceSpaceManagerPanel.43171f3e60',
               'Workspaces'
             )}
@@ -105,23 +103,11 @@ export function WorkspaceSpaceManagerOverview({
           )}
           {isScanning
             ? progress?.state === 'cancelling'
-              ? translate(
-                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.1fce91d1b9',
-                  'Stopping'
-                )
-              : translate(
-                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.8dc9ddac8a',
-                  'Cancel'
-                )
+              ? t('auto.components.status.bar.WorkspaceSpaceManagerPanel.1fce91d1b9', 'Stopping')
+              : t('auto.components.status.bar.WorkspaceSpaceManagerPanel.8dc9ddac8a', 'Cancel')
             : analysis
-              ? translate(
-                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.508673bac0',
-                  'Refresh'
-                )
-              : translate(
-                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.8c7c57fbf8',
-                  'Scan'
-                )}
+              ? t('auto.components.status.bar.WorkspaceSpaceManagerPanel.508673bac0', 'Refresh')
+              : t('auto.components.status.bar.WorkspaceSpaceManagerPanel.8c7c57fbf8', 'Scan')}
         </Button>
       </div>
 
@@ -130,15 +116,19 @@ export function WorkspaceSpaceManagerOverview({
           <Loader2 className="size-4 shrink-0 animate-spin" />
           <span className="truncate">
             {analysis
-              ? translate(
+              ? t(
                   'auto.components.status.bar.WorkspaceSpaceManagerPanel.34174bd83d',
                   '{{value0}}. You can leave this page; the last result stays visible.',
-                  { value0: progressLabel ?? 'Scanning workspace sizes' }
+                  {
+                    value0: progressLabel ?? getWorkspaceSpaceScanningFallbackLabel(t)
+                  }
                 )
-              : translate(
+              : t(
                   'auto.components.status.bar.WorkspaceSpaceManagerPanel.265d956765',
                   '{{value0}}. You can leave this page.',
-                  { value0: progressLabel ?? 'Scanning workspace sizes' }
+                  {
+                    value0: progressLabel ?? getWorkspaceSpaceScanningFallbackLabel(t)
+                  }
                 )}
           </span>
         </div>
@@ -150,7 +140,7 @@ export function WorkspaceSpaceManagerOverview({
           <span className="min-w-0 break-words">
             {scanError}
             {analysis
-              ? translate(
+              ? t(
                   'auto.components.status.bar.WorkspaceSpaceManagerPanel.20a4204dce',
                   'Last successful results remain visible.'
                 )
@@ -173,7 +163,7 @@ export function WorkspaceSpaceManagerOverview({
                     <Button
                       variant="ghost"
                       size="xs"
-                      aria-label={translate(
+                      aria-label={t(
                         'workspaceSpace.scan.moreErrors',
                         '{{value0}} more scan errors',
                         { value0: repoErrors.length - 1 }

@@ -1,9 +1,9 @@
 import type { AppState } from '../../../types'
 import type { ProjectHostSetup } from '../../../../../../shared/project-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
-import { findRepoForHost } from '../../repo-host-identity'
-import { reuseEqualCatalogRows } from '../../worktree-catalog-reconciliation'
-import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import { findRepoForHost } from '../../../repos/repo-host-identity'
+import { reuseEqualCatalogRows } from '../../../../lib/catalog-reconciliation/catalog-row-reconciliation'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -15,6 +15,10 @@ import {
 import { toVisibleWorktree } from './worktree-catalog-visibility'
 import { getPairedWebClientEnvironmentId } from '@/lib/paired-web-client-host'
 import type { WorktreeHostMatchOptions, RepoHostSummary } from './worktree-slice-types'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '../../../workspaces/catalog/workspace-record-fields'
 
 export function withRepoHostOwnership<
   T extends {
@@ -247,7 +251,7 @@ export function getKnownWorktreeIdsForPurge(
   repoId: string,
   hostId: ExecutionHostId
 ): string[] {
-  const detected = state.detectedWorktreesByRepo[repoId]
+  const detected = selectDetectedWorktreesByRepo(state)[repoId]
   const knownIds = new Set<string>()
   const matchOptions = worktreeHostMatchOptions(state, repoId, hostId)
   if (detected?.authoritative === true) {
@@ -257,7 +261,7 @@ export function getKnownWorktreeIdsForPurge(
       }
     }
   } else {
-    for (const worktree of state.worktreesByRepo[repoId] ?? []) {
+    for (const worktree of selectWorktreesByRepo(state)[repoId] ?? []) {
       if (worktreeMatchesHost(worktree, hostId, matchOptions)) {
         knownIds.add(worktree.id)
       }

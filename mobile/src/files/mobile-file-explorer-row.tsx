@@ -1,4 +1,4 @@
-import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
+import { classifyMobileArtifact } from './mobile-artifact-kind'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import {
   ChevronDown,
@@ -8,51 +8,97 @@ import {
   Folder,
   Image as ImageIcon
 } from 'lucide-react-native'
-import { triggerSelection } from '../platform/haptics'
+import { triggerMediumImpact, triggerSelection } from '../platform/haptics'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, spacing } from '../theme/mobile-theme'
-import { type FileExplorerRow, isMarkdownPath, type TreeNode } from './file-tree'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import {
+  DIRECTORY_PAGE_SIZE,
+  type FileExplorerRow,
+  type FolderPagingNode,
+  isMarkdownPath,
+  type TreeNode
+} from './file-tree'
+import type { FolderPagingStatus } from './use-mobile-file-explorer-paging'
+import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
 import { canPreviewMobileFileRow } from './mobile-file-preview-navigation'
 
 type Props = {
   item: FileExplorerRow
+  maximumIndentation: number
   expanded: ReadonlySet<string>
   onPreviewFile: (relativePath: string, displayName: string) => void
   onRetryDirectory: (relativePath: string) => void
   onToggleDirectory: (relativePath: string) => void
+  onOpenActions: (node: TreeNode) => void
+  folderPaging: ReadonlyMap<string, FolderPagingStatus>
+  onShowMore: (relativePath: string) => void
+  onSearchAll: (relativePath: string) => void
+}
+
+function formatCount(count: number): string {
+  return count.toLocaleString(getUiIntlLocale())
 }
 
 export function MobileFileExplorerRow(props: Props) {
-  const { item, expanded, onPreviewFile, onRetryDirectory, onToggleDirectory } = props
+  const t = useMobileTranslation()
+  useMobileColorScheme()
+  const {
+    item,
+    maximumIndentation,
+    expanded,
+    onPreviewFile,
+    onRetryDirectory,
+    onToggleDirectory,
+    onOpenActions,
+    folderPaging,
+    onShowMore,
+    onSearchAll
+  } = props
+  const paddingLeft = spacing.lg + Math.min(item.depth * 18, maximumIndentation)
 
   if (item.kind === 'loading') {
     return (
-      <View style={[styles.inlineStatusRow, { paddingLeft: spacing.lg + item.depth * 18 }]}>
+      <View style={[styles.inlineStatusRow, { paddingLeft }]}>
         <View style={styles.chevronSpacer} />
         <ActivityIndicator size="small" color={colors.textSecondary} />
-        <Text style={styles.inlineStatusText}>Loading...</Text>
+        <Text style={styles.inlineStatusText}>
+          {t('files.fileExplorerRow.loading', 'Loading...')}
+        </Text>
       </View>
     )
   }
 
   if (item.kind === 'error') {
     return (
-      <View style={[styles.inlineStatusRow, { paddingLeft: spacing.lg + item.depth * 18 }]}>
+      <View style={[styles.inlineStatusRow, { paddingLeft }]}>
         <View style={styles.chevronSpacer} />
         <Text style={styles.inlineErrorText} numberOfLines={1}>
-          {item.message || 'Unable to load folder'}
+          {item.message || t('files.fileExplorerRow.loadFolderFailed', 'Unable to load folder')}
         </Text>
         <Pressable
           style={({ pressed }) => [styles.inlineRetryButton, pressed && styles.rowPressed]}
-          onPress={() => {
-            triggerSelection()
-            onRetryDirectory(item.relativePath)
-          }}
-          accessibilityLabel={`Retry loading ${item.relativePath}`}
+          onPress={() => onRetryDirectory(item.relativePath)}
+          accessibilityLabel={t('files.fileExplorerRow.retryLoading', 'Retry loading {{path}}', {
+            path: item.relativePath
+          })}
         >
-          <Text style={styles.inlineRetryText}>Retry</Text>
+          <Text style={styles.inlineRetryText}>{t('common.retry', 'Retry')}</Text>
         </Pressable>
       </View>
+    )
+  }
+
+  if (item.kind === 'more' || item.kind === 'searched') {
+    return (
+      <FolderPagingRow
+        item={item}
+        paddingLeft={paddingLeft}
+        status={folderPaging.get(item.relativePath)}
+        onShowMore={onShowMore}
+        onSearchAll={onSearchAll}
+      />
     )
   }
 
@@ -60,14 +106,125 @@ export function MobileFileExplorerRow(props: Props) {
     return (
       <TreeRow
         item={item}
+        paddingLeft={paddingLeft}
         expanded={expanded}
         onPreviewFile={onPreviewFile}
         onToggleDirectory={onToggleDirectory}
+        onOpenActions={onOpenActions}
       />
     )
   }
 
   return null
+}
+
+function FolderPagingRow(props: {
+  item: FolderPagingNode
+  paddingLeft: number
+  status: FolderPagingStatus | undefined
+  onShowMore: (relativePath: string) => void
+  onSearchAll: (relativePath: string) => void
+}) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
+  const { item, paddingLeft, status, onShowMore, onSearchAll } = props
+  const counts = { loaded: formatCount(item.loaded), total: formatCount(item.total) }
+  const folder = item.relativePath.split('/').pop() || '/'
+  const load = item.kind === 'more' ? onShowMore : onSearchAll
+  // Either read extends the same listing, so both rows wait while one runs.
+  const busy = status === 'loading' || status === 'searching'
+
+  if (status === 'failed') {
+    return (
+      <View style={[styles.inlineStatusRow, { paddingLeft }]}>
+        <View style={styles.chevronSpacer} />
+        <Text style={styles.inlineErrorText} numberOfLines={1}>
+          {t('files.fileExplorerRow.loadFolderFailed', 'Unable to load folder')}
+        </Text>
+        <Pressable
+          style={({ pressed }) => [styles.inlineRetryButton, pressed && styles.rowPressed]}
+          onPress={() => load(item.relativePath)}
+          accessibilityLabel={t('files.fileExplorerRow.retryLoading', 'Retry loading {{path}}', {
+            path: item.relativePath
+          })}
+        >
+          <Text style={styles.inlineRetryText}>{t('common.retry', 'Retry')}</Text>
+        </Pressable>
+      </View>
+    )
+  }
+
+  if (item.kind === 'searched') {
+    return (
+      <View style={[styles.inlineStatusRow, { paddingLeft }]}>
+        <View style={styles.chevronSpacer} />
+        {busy ? (
+          <>
+            <ActivityIndicator size="small" color={colors.textSecondary} />
+            <Text style={styles.inlineStatusFill} numberOfLines={1}>
+              {t(
+                'files.fileExplorerRow.searching',
+                'Searching {{folder}}… {{loaded}} of {{total}}',
+                {
+                  folder,
+                  ...counts
+                }
+              )}
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.inlineStatusFill} numberOfLines={2}>
+              {t(
+                'files.fileExplorerRow.searched',
+                'Searched {{loaded}} of {{total}} in {{folder}}.',
+                {
+                  folder,
+                  ...counts
+                }
+              )}
+            </Text>
+            <Pressable
+              style={({ pressed }) => [styles.inlineRetryButton, pressed && styles.rowPressed]}
+              onPress={() => onSearchAll(item.relativePath)}
+              accessibilityLabel={t(
+                'files.fileExplorerRow.searchAllIn',
+                'Search all of {{folder}}',
+                {
+                  folder
+                }
+              )}
+            >
+              <Text style={styles.searchAllText}>
+                {t('files.fileExplorerRow.searchAll', 'Search all')}
+              </Text>
+            </Pressable>
+          </>
+        )}
+      </View>
+    )
+  }
+
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.row, { paddingLeft }, pressed && styles.rowPressed]}
+      disabled={busy}
+      onPress={() => onShowMore(item.relativePath)}
+    >
+      <View style={styles.chevronSpacer} />
+      {busy ? <ActivityIndicator size="small" color={colors.textSecondary} /> : null}
+      <Text style={[styles.rowTextBlock, styles.showMoreText]} numberOfLines={1}>
+        {busy
+          ? t('files.fileExplorerRow.loading', 'Loading...')
+          : t('files.fileExplorerRow.showMore', 'Show {{rows}} more', {
+              rows: formatCount(Math.min(DIRECTORY_PAGE_SIZE, item.total - item.loaded))
+            })}
+      </Text>
+      <Text style={styles.entryCount}>
+        {t('files.fileExplorerRow.loadedOfTotal', '{{loaded}} of {{total}}', counts)}
+      </Text>
+    </Pressable>
+  )
 }
 
 function isTreeNode(item: FileExplorerRow): item is TreeNode {
@@ -76,11 +233,15 @@ function isTreeNode(item: FileExplorerRow): item is TreeNode {
 
 function TreeRow(props: {
   item: TreeNode
+  paddingLeft: number
   expanded: ReadonlySet<string>
   onPreviewFile: (relativePath: string, displayName: string) => void
   onToggleDirectory: (relativePath: string) => void
+  onOpenActions: (node: TreeNode) => void
 }) {
-  const { item, expanded, onPreviewFile, onToggleDirectory } = props
+  const t = useMobileTranslation()
+  useMobileColorScheme()
+  const { item, paddingLeft, expanded, onPreviewFile, onToggleDirectory, onOpenActions } = props
   const isDirectory = item.kind === 'directory'
   const isExpanded = expanded.has(item.relativePath)
   const previewable =
@@ -94,14 +255,21 @@ function TreeRow(props: {
     <Pressable
       style={({ pressed }) => [
         styles.row,
-        { paddingLeft: spacing.lg + item.depth * 18 },
+        { paddingLeft },
         pressed && !disabled && styles.rowPressed,
         disabled && styles.rowDisabled
       ]}
-      disabled={disabled}
+      // Unpreviewable files still long-press for their actions, so the row stays enabled.
+      accessibilityState={{ disabled }}
+      onLongPress={() => {
+        triggerMediumImpact()
+        onOpenActions(item)
+      }}
+      delayLongPress={400}
       onPress={() => {
-        triggerSelection()
         if (isDirectory) {
+          // Expanding a folder toggles in place; opening a file navigates and stays quiet.
+          triggerSelection()
           onToggleDirectory(item.relativePath)
         } else if (!disabled) {
           onPreviewFile(item.relativePath, item.name)
@@ -109,10 +277,12 @@ function TreeRow(props: {
       }}
       accessibilityLabel={
         isDirectory
-          ? `Open folder ${item.name}`
+          ? t('files.fileExplorerRow.openFolder', 'Open folder {{name}}', { name: item.name })
           : disabled
-            ? `${item.name} unavailable on mobile`
-            : `Preview file ${item.name}`
+            ? t('files.fileExplorerRow.fileUnavailable', '{{name}} unavailable on mobile', {
+                name: item.name
+              })
+            : t('files.fileExplorerRow.previewFile', 'Preview file {{name}}', { name: item.name })
       }
     >
       {isDirectory ? (
@@ -137,8 +307,15 @@ function TreeRow(props: {
         <Text style={[styles.rowTitle, disabled && styles.rowTitleDisabled]} numberOfLines={1}>
           {item.name}
         </Text>
-        {disabled ? <Text style={styles.rowMeta}>Unavailable on mobile</Text> : null}
+        {disabled ? (
+          <Text style={styles.rowMeta}>
+            {t('files.fileExplorerRow.unavailable', 'Unavailable on mobile')}
+          </Text>
+        ) : null}
       </View>
+      {item.entryCount !== undefined ? (
+        <Text style={styles.entryCount}>{formatCount(item.entryCount)}</Text>
+      ) : null}
     </Pressable>
   )
 }

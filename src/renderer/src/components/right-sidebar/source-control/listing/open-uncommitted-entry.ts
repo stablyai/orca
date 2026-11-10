@@ -1,13 +1,10 @@
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { AppState } from '@/store/types'
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { joinPath } from '@/lib/path'
 
 export function openUncommittedEntry(
-  state: Pick<
-    AppState,
-    'trackConflictPath' | 'openConflictFile' | 'openFile' | 'setEditorViewMode' | 'openDiff'
-  >,
+  state: Pick<AppState, 'trackConflictPath' | 'openConflictFile' | 'openFile' | 'openDiff'>,
   worktreeId: string,
   worktreePath: string,
   entry: GitStatusEntry,
@@ -22,13 +19,26 @@ export function openUncommittedEntry(
     return
   }
   const filePath = joinPath(worktreePath, entry.path)
-  if (language === 'markdown' && entry.area === 'unstaged') {
+  if (
+    language === 'markdown' &&
+    entry.area !== 'staged' &&
+    (entry.status === 'added' || entry.status === 'untracked')
+  ) {
     state.openFile(
-      { filePath, relativePath: entry.path, worktreeId, language, mode: 'edit' },
+      {
+        filePath,
+        relativePath: entry.path,
+        worktreeId,
+        language,
+        mode: 'edit',
+        runtimeEnvironmentId: options.runtimeEnvironmentId
+      },
       options
     )
-    state.setEditorViewMode(filePath, 'changes')
     return
   }
-  state.openDiff(worktreeId, filePath, entry.path, language, entry.area === 'staged', options)
+  state.openDiff(worktreeId, filePath, entry.path, language, entry.area === 'staged', {
+    ...options,
+    ...(entry.area === 'staged' && entry.status === 'renamed' ? { oldPath: entry.oldPath } : {})
+  })
 }

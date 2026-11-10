@@ -2,13 +2,13 @@ import { mkdtemp, rm, writeFile, appendFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
+import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
 import {
   registerTranscriptConsumer,
   resetTranscriptConsumersForTests,
   type TranscriptSessionIdentity
-} from '../ai-vault/session-transcript-consumers'
-import { requestWholeTranscriptRead } from '../ai-vault/session-transcript-reader'
+} from '../ai-vault/transcripts/session-transcript-consumers'
+import { requestWholeTranscriptRead } from '../ai-vault/transcripts/session-transcript-reader'
 import SyncDatabase from '../sqlite/sync-database'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
 import { SessionSearchStore } from './session-search-store'
@@ -24,7 +24,6 @@ import {
 
 let tempRoots: string[] = []
 let store: SessionSearchStore
-// The store keeps its connection private, so row assertions need a second one.
 let reader: SyncDatabase
 let errors: unknown[]
 
@@ -52,7 +51,6 @@ async function makeTempDir(): Promise<string> {
   return root
 }
 
-/** Sessions a query would return for one FTS term, read on a second handle. */
 function sessionsMatching(term: string): string[] {
   return (
     reader
@@ -79,22 +77,19 @@ it('indexes a Claude transcript through the reader and resumes on append', async
   await parseTranscript(path)
   expect(errors).toEqual([])
   expect(sessionsMatching('reattach')).toEqual([SESSION_ID])
-  // The identifier column shadows a camel-case symbol into its pieces.
   expect(sessionsMatching('terminal')).toEqual([SESSION_ID])
 
   await appendFile(path, `${assistantRecord(2, 'the zygomorphic follow-up landed')}\n`)
   const resumed = await parseTranscript(path)
-  // The reader resumed, so the index saw an `append`, not a whole re-read.
   expect(resumed.stats).toMatchObject({ incremental: 1, fullParses: 0 })
   expect(errors).toEqual([])
   expect(sessionsMatching('zygomorphic')).toEqual([SESSION_ID])
-  // An append extends one session rather than creating a second.
   expect(reader.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({
     n: 1
   })
 })
 
-it('keeps a tool result searchable but out of the conversation half', async () => {
+it('keeps the prompt searchable while excluding tool results', async () => {
   const root = await makeTempDir()
   const codexHome = await makeTempDir()
   const path = join(root, CODEX_ROLLOUT_FILE)
@@ -109,18 +104,15 @@ it('keeps a tool result searchable but out of the conversation half', async () =
   await parseTranscript(path, 'codex', codexHome)
   expect(errors).toEqual([])
 
-  expect(sessionsMatching('pericardium')).toHaveLength(1)
-  // The prompt is conversation; the command output is not, and the column
-  // filter is what tells them apart.
-  expect(sessionsMatching('outputonly')).toHaveLength(1)
+  expect(sessionsMatching('pericardium')).toHaveLength(0)
+  expect(sessionsMatching('outputonly')).toHaveLength(0)
   expect(sessionsMatching('tailonly')).toHaveLength(0)
-  expect(sessionsMatching('rg')).toHaveLength(1)
+  expect(sessionsMatching('rg')).toHaveLength(0)
   expect(sessionsMatching('{user_text assistant_text}: promptonly')).toHaveLength(1)
   expect(sessionsMatching('{user_text assistant_text}: outputonly')).toHaveLength(0)
   expect(sessionsMatching('{user_text assistant_text}: rg')).toHaveLength(0)
 })
 
-/** What `start.identity()` returns at each message of one read. */
 function recordIdentityPerMessage(): (TranscriptSessionIdentity | null)[] {
   const seen: (TranscriptSessionIdentity | null)[] = []
   registerTranscriptConsumer({
@@ -147,8 +139,6 @@ it('names the session mid-read, before the reader has finished the file', async 
   const seen = recordIdentityPerMessage()
   await parseTranscript(path)
 
-  // A chunked read commits partway through a file this size or larger, so what
-  // it can name the session with is exactly this.
   expect(seen.length).toBeGreaterThan(0)
   expect(seen[0]).toMatchObject({
     sessionId: SESSION_ID,
@@ -168,8 +158,7 @@ it('names a Codex session mid-read from its own opening record', async () => {
   const seen = recordIdentityPerMessage()
   await parseTranscript(path, 'codex', codexHome)
 
-  // Codex builds its own resumable state rather than the shared accumulator
-  // fold, so it is the other half of the surface a chunked commit depends on.
+  // Exercise Codex’s separate resumable parser as well as the shared accumulator.
   expect(seen[0]).toMatchObject({
     sessionId: CODEX_SESSION_ID,
     cwd: '/repo/app'
@@ -181,8 +170,7 @@ it('indexes a file the session list already read past, once a whole read is aske
   const path = join(root, `${SESSION_ID}.jsonl`)
   await writeFile(path, `${userRecord(0, 'the opening prompt')}\n`)
 
-  // The state on first enablement inside a running app: the session list has
-  // read this file, so the parse cache is warm, while the index is empty.
+  // Simulate first enablement with a warm session-list cache and an empty index.
   resetTranscriptConsumersForTests()
   await parseTranscript(path)
   registerSessionSearchIndexConsumer(store)
@@ -190,12 +178,9 @@ it('indexes a file the session list already read past, once a whole read is aske
   await appendFile(path, `${assistantRecord(1, 'a zygomorphic reply')}\n`)
   const appended = await parseTranscript(path)
   expect(appended.stats).toMatchObject({ incremental: 1, fullParses: 0 })
-  // The append continued from a byte offset the index never saw, so it declined.
+  // The index never saw the preceding bytes, so it must decline this append.
   expect(sessionsMatching('zygomorphic')).toEqual([])
 
-  // The index holds no row for this file at all, and that is the record: a
-  // path the file table does not name is read from the start by the next pass,
-  // which is what asks the reader to drop the session list's resume point.
   expect(store.files()).toEqual([])
   requestWholeTranscriptRead(path)
 

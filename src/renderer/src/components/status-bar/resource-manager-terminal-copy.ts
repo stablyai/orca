@@ -1,105 +1,102 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
-export function formatTerminalSessionCount(count: number): string {
-  return count === 1
-    ? translate(
-        'auto.components.status.bar.resource.manager.terminal.copy.terminalSessionCount_one',
-        '{{count}} terminal session',
-        { count }
-      )
-    : translate(
-        'auto.components.status.bar.resource.manager.terminal.copy.terminalSessionCount_other',
-        '{{count}} terminal sessions',
-        { count }
-      )
+export function formatTerminalSessionCount(count: number | null, t: Translate = translate): string {
+  if (count === null) {
+    return t('resourceManager.countUnavailable', 'terminal count unavailable')
+  }
+  return t(
+    'auto.components.status.bar.resource.manager.terminal.copy.terminalSessionCount',
+    '{{count}} terminal sessions',
+    { count, defaultValue_one: '{{count}} terminal session' }
+  )
 }
 
-function spaceScanReadyLabel(): string {
-  return translate(
+function spaceScanReadyLabel(t: Translate = translate): string {
+  return t(
     'auto.components.status.bar.resource.manager.terminal.copy.spaceScanReady',
     'Space scan ready'
   )
 }
 
-/**
- * `emphasized` marks the space-scan row the tooltip tints. The segment used to
- * recognize that row by comparing it against the English text, which stops
- * matching the moment the copy comes from the catalog.
- *
- * `id` names the row's role. Each role appears at most once per tooltip, so it is
- * a unique React key that survives locale switches and memory/count updates —
- * unlike the translated text, which locales are free to duplicate across rows.
- */
+/** Use stable role IDs for React keys and emphasis flags instead of locale-dependent text matching. */
 export type ResourceManagerTooltipLine = {
   id: 'summary' | 'space-scan' | 'sessions-hint'
   text: string
   emphasized: boolean
 }
 
-export function getResourceManagerTooltipLines(args: {
-  memoryLabel: string
-  sessionCount: number
-  spaceScanReady: boolean
-}): ResourceManagerTooltipLine[] {
+export function getResourceManagerTooltipLines(
+  args: {
+    memoryLabel: string
+    sessionCount: number | null
+    spaceScanReady: boolean
+  },
+  t: Translate = translate
+): ResourceManagerTooltipLine[] {
   const rawMemoryLabel = args.memoryLabel.trim()
   const memoryLabel =
     rawMemoryLabel === '' || rawMemoryLabel === '-' || rawMemoryLabel === '—'
-      ? translate(
+      ? t(
           'auto.components.status.bar.resource.manager.terminal.copy.memoryUnavailable',
           'memory unavailable'
         )
       : rawMemoryLabel
-  // Why: whole lines are single keys — locales reorder the summary and repunctuate
-  // its separators, so it can't be concatenated from translated fragments here.
+  // Translate whole summary lines so locales can reorder fields and separators.
   const lines: ResourceManagerTooltipLine[] = [
     {
       id: 'summary',
-      text: translate(
+      text: t(
         'auto.components.status.bar.resource.manager.terminal.copy.tooltipSummary',
         'Resource Manager - {{memory}} - {{sessions}}',
-        { memory: memoryLabel, sessions: formatTerminalSessionCount(args.sessionCount) }
+        { memory: memoryLabel, sessions: formatTerminalSessionCount(args.sessionCount, t) }
       ),
       emphasized: false
     }
   ]
 
   if (args.spaceScanReady) {
-    lines.push({ id: 'space-scan', text: spaceScanReadyLabel(), emphasized: true })
+    lines.push({ id: 'space-scan', text: spaceScanReadyLabel(t), emphasized: true })
   }
 
   lines.push({
     id: 'sessions-hint',
     text:
-      args.sessionCount > 0
-        ? translate(
-            'auto.components.status.bar.resource.manager.terminal.copy.sessionsGroupedByWorkspace',
-            'Terminal sessions are grouped by workspace.'
-          )
-        : translate(
-            'auto.components.status.bar.resource.manager.terminal.copy.noTerminalSessions',
-            'No terminal sessions yet.'
-          ),
+      args.sessionCount === null
+        ? t('resourceManager.openToObserve', 'Open Resources to observe terminal sessions.')
+        : args.sessionCount !== null && args.sessionCount > 0
+          ? t(
+              'auto.components.status.bar.resource.manager.terminal.copy.sessionsGroupedByWorkspace',
+              'Terminal sessions are grouped by workspace.'
+            )
+          : t(
+              'auto.components.status.bar.resource.manager.terminal.copy.noTerminalSessions',
+              'No terminal sessions yet.'
+            ),
     emphasized: false
   })
 
   return lines
 }
 
-export function getResourceManagerAriaLabel(args: {
-  sessionCount: number
-  spaceScanReady: boolean
-}): string {
-  const sessions = formatTerminalSessionCount(args.sessionCount)
+export function getResourceManagerAriaLabel(
+  args: {
+    sessionCount: number | null
+    spaceScanReady: boolean
+  },
+  t: Translate = translate
+): string {
+  const sessions = formatTerminalSessionCount(args.sessionCount, t)
 
   if (args.spaceScanReady) {
-    return translate(
+    return t(
       'auto.components.status.bar.resource.manager.terminal.copy.ariaLabelWithSpaceScan',
       'Resource Manager, {{sessions}}, {{spaceScan}}',
-      { sessions, spaceScan: spaceScanReadyLabel() }
+      { sessions, spaceScan: spaceScanReadyLabel(t) }
     )
   }
 
-  return translate(
+  return t(
     'auto.components.status.bar.resource.manager.terminal.copy.ariaLabel',
     'Resource Manager, {{sessions}}',
     { sessions }

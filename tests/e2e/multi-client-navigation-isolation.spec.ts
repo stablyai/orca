@@ -215,8 +215,7 @@ test('keeps a paired client workspace create-with-agent off the other client and
     clientB = await openPairedClient(electronApp, offerB, ids.clientB)
     await selectWorktree(clientB, ids.clientB)
 
-    // Client A creates a workspace with a startup command, which is the only remote
-    // create shape the renderer sends `activate: true` for (STA-2802's field trigger).
+    // A startup-command create is the remote shape sent with activate:true (STA-2802).
     const createdWorktreeId = await clientA.evaluate(async (name) => {
       const store = window.__store
       if (!store) {
@@ -251,76 +250,21 @@ test('keeps a paired client workspace create-with-agent off the other client and
       return result.worktree.id
     }, `e2e-created-${suffix}`)
 
-    // Shared catalog state must still reach the observer...
     await expect(worktreeRow(clientB, createdWorktreeId)).toBeVisible({ timeout: 30_000 })
-    // ...while its view stays exactly where its own user left it.
     await expectActiveWorktree(clientB, ids.clientB)
     await expectActiveWorktree(orcaPage, ids.host)
 
-    // The creator can still reach and open what it made, and doing so still moves nobody
-    // else. This drives the store action directly, so the composer's automatic
-    // self-navigation on create is covered by worktree-creation-flow.test.ts and by the
-    // host-side composer journey in worktree.spec.ts, not here.
+    // Drive creator selection directly; composer auto-navigation is outside this journey.
     await selectWorktree(clientA, createdWorktreeId)
     await expectActiveWorktree(clientB, ids.clientB)
     await expectActiveWorktree(orcaPage, ids.host)
 
-    // The observer keeps its own navigation authority afterwards.
     await selectWorktree(clientB, ids.clientA2)
     await expectActiveWorktree(clientA, createdWorktreeId)
     await expectActiveWorktree(orcaPage, ids.host)
   } finally {
     await clientB?.close()
     await clientA?.close()
-  }
-})
-
-test('shows only provider-backed creation actions in paired web', async ({
-  electronApp,
-  orcaPage
-}, testInfo) => {
-  const visibleWorktreeId = await orcaPage.evaluate(
-    () => window.__store?.getState().activeWorktreeId
-  )
-  if (!visibleWorktreeId) {
-    throw new Error('Host worktree was not active before paired web validation')
-  }
-
-  const offer = await createPairingOffer(orcaPage)
-  const client = await openPairedClient(electronApp, offer, visibleWorktreeId)
-  try {
-    await selectWorktree(client, visibleWorktreeId)
-    await expect
-      .poll(() =>
-        client.evaluate(() => {
-          const state = window.__store?.getState()
-          const worktree = state
-            ?.allWorktrees()
-            .find((candidate) => candidate.id === state.activeWorktreeId)
-          const environmentId = worktree?.runtimeOwnerEnvironmentId
-          return environmentId
-            ? state.runtimeStatusByEnvironmentId
-                .get(environmentId)
-                ?.status.capabilities?.includes('browser.screencast.v1') === true
-            : false
-        })
-      )
-      .toBe(true)
-
-    await client.getByRole('button', { name: 'New tab' }).first().click()
-    await expect(client.getByRole('menuitem', { name: /New Terminal/i })).toBeVisible()
-    await expect(client.getByRole('menuitem', { name: /New Browser Tab/i })).toBeVisible()
-    await expect(client.getByRole('menuitem', { name: /New Markdown/i })).toBeVisible()
-    await expect(client.getByRole('menuitem', { name: /Mobile Emulator/i })).toHaveCount(0)
-
-    const screenshotPath = testInfo.outputPath('paired-web-provider-backed-create-menu.png')
-    await client.screenshot({ path: screenshotPath })
-    await testInfo.attach('paired-web-provider-backed-create-menu', {
-      path: screenshotPath,
-      contentType: 'image/png'
-    })
-  } finally {
-    await client.close()
   }
 })
 

@@ -1,4 +1,5 @@
 import { PROFILE_STATE_DOCUMENT_VERSION } from './profile-state-database-schema'
+import { isProfileStateSplitDomain } from './profile-state-document-parts'
 import { hashProfileStateJson } from './profile-state-documents'
 import type { AutomationRunsWritePreparation } from './profile-state-automation-runs'
 import type {
@@ -9,8 +10,10 @@ import type {
 export type PreparedProfileStateMutation = ProfileStateDomainMutation & {
   domainVersion: number
   payloadHash: string | null
-  // Keep the checked history value only for this write so normalization does not parse it again.
+  // Retain the checked history only for this write to avoid reparsing during normalization.
   automationRunsValue?: unknown
+  /** Parsed payload of a split domain, so storing its parts does not parse it again. */
+  splitDomainValue?: unknown
   automationRuns?: AutomationRunsWritePreparation
 }
 
@@ -58,7 +61,8 @@ export function prepareProfileStateDomainMutation(
     now: replacement.now,
     domainVersion: replacement.domainVersion ?? PROFILE_STATE_DOCUMENT_VERSION,
     payloadHash,
-    automationRunsValue: replacement.domain === 'automationRuns' ? parsed : undefined
+    automationRunsValue: replacement.domain === 'automationRuns' ? parsed : undefined,
+    splitDomainValue: isProfileStateSplitDomain(replacement.domain) ? parsed : undefined
   }
 }
 

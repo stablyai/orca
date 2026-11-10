@@ -1,4 +1,4 @@
-import { isKnownRasterImageMimeType } from '../../../shared/raster-image-preview-limits'
+import { isKnownRasterImageMimeType } from '../../../shared/file-preview/raster-image-preview-limits'
 
 export const REPO_ICON_FETCH_MAX_BYTES = 64 * 1024
 export const REPO_ICON_FETCH_MAX_REDIRECTS = 3
@@ -50,10 +50,7 @@ async function readCappedBody(response: Response): Promise<Uint8Array | null> {
   return Buffer.concat(chunks)
 }
 
-/**
- * GETs an https icon without cookies, following at most three https redirects, reading at most
- * 64 KiB, all within one deadline. Null on any failure: the caller falls back, never retries here.
- */
+/** Fetch HTTPS without cookies, at most three HTTPS redirects and 64KiB under one deadline. Failure returns null for fallback, without retry. */
 export async function fetchRemoteRepoIcon(
   rawUrl: string,
   fetch: RepoIconFetch,

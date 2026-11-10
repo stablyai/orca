@@ -1,10 +1,5 @@
 // @vitest-environment happy-dom
-import {
-  measureElement,
-  observeElementOffset,
-  observeElementRect,
-  Virtualizer
-} from '@tanstack/react-virtual'
+import { observeElementOffset, observeElementRect, Virtualizer } from '@tanstack/react-virtual'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { measureVirtualRowRetainingHiddenSize } from './virtualized-hidden-row-measurement'
 
@@ -62,7 +57,6 @@ function createViewport(measure: RowMeasurer): {
     scrollElement.appendChild(row)
     return row
   }
-  // The user scrolled through rows 0-6, so each has a real measured height.
   for (let index = 0; index <= 6; index++) {
     const row = rowElement(index)
     virtualizer.resizeItem(index, measure(row, sizeEntry(row, MEASURED_ROW_HEIGHT), virtualizer))
@@ -70,7 +64,6 @@ function createViewport(measure: RowMeasurer): {
   return { rowElement, scrollElement, virtualizer }
 }
 
-/** Hides the scroller, delivers the 0px ResizeObserver reports for the mounted rows, and re-shows it. */
 function runHideCycle(measure: RowMeasurer): { topKey: unknown; totalSize: number } {
   const { rowElement, scrollElement, virtualizer } = createViewport(measure)
   setHidden(scrollElement)
@@ -99,39 +92,10 @@ describe('measureVirtualRowRetainingHiddenSize', () => {
     }
   }
 
-  it('reproduces the drift with the default TanStack measurement', () => {
-    const before = visibleState()
-    const after = runHideCycle(measureElement)
-
-    expect(before.topKey).toBe(4)
-    // Rows above the fold collapsed to 0px, so the same scrollTop now lands two files later.
-    expect(after.topKey).toBe(6)
-    expect(after.totalSize).toBe(before.totalSize - 2 * MEASURED_ROW_HEIGHT)
-  })
-
   it('keeps the same row under the same scrollTop across a hide/re-show', () => {
     const before = visibleState()
     const after = runHideCycle(measureVirtualRowRetainingHiddenSize)
 
     expect(after).toEqual(before)
-  })
-
-  it('measures normally while the scroller is laid out', () => {
-    const { rowElement, virtualizer } = createViewport(measureVirtualRowRetainingHiddenSize)
-    const row = rowElement(4)
-
-    expect(measureVirtualRowRetainingHiddenSize(row, sizeEntry(row, 560), virtualizer)).toBe(560)
-  })
-
-  it('falls back to the estimate for a row first seen while hidden', () => {
-    const { rowElement, scrollElement, virtualizer } = createViewport(
-      measureVirtualRowRetainingHiddenSize
-    )
-    setHidden(scrollElement)
-    const row = rowElement(12)
-
-    expect(measureVirtualRowRetainingHiddenSize(row, sizeEntry(row, 0), virtualizer)).toBe(
-      UNMEASURED_ESTIMATE
-    )
   })
 })

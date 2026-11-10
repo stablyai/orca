@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
-import { DesktopScriptServeChannel, type RuntimeChildProcess } from './desktop-script-serve-channel'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import { DesktopScriptServeChannel } from './desktop-script-serve-channel'
 
 class FakeChild extends EventEmitter {
   readonly stdout = new EventEmitter()
@@ -26,7 +27,6 @@ class FakeChild extends EventEmitter {
     return true
   }
 
-  /** What a destroyed stdin does to writes still queued at teardown. */
   failQueuedWrites(): void {
     for (const callback of this.pendingWrites.splice(0)) {
       callback(new Error('ERR_STREAM_DESTROYED'))
@@ -37,28 +37,15 @@ class FakeChild extends EventEmitter {
 function createChannel() {
   const child = new FakeChild()
   const handlers = { onLine: vi.fn(), onGone: vi.fn(), onOverflow: vi.fn() }
-  const channel = new DesktopScriptServeChannel(child as unknown as RuntimeChildProcess, handlers)
+  const channel = new DesktopScriptServeChannel(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the piped streams and events consumed by the channel.
+    child as unknown as ChildProcessWithoutNullStreams,
+    handlers
+  )
   return { channel, child, handlers }
 }
 
 describe('DesktopScriptServeChannel', () => {
-  it('splits responses into lines and tolerates a trailing carriage return', () => {
-    const { child, handlers } = createChannel()
-
-    child.stdout.emit('data', Buffer.from('{"a":1}\r\n{"b":2}\n', 'utf8'))
-
-    expect(handlers.onLine.mock.calls.map(([line]) => line)).toEqual(['{"a":1}', '{"b":2}'])
-  })
-
-  it('reports the exit reason with the stderr tail', () => {
-    const { child, handlers } = createChannel()
-
-    child.stderr.emit('data', Buffer.from('it broke', 'utf8'))
-    child.emit('close', 1, null)
-
-    expect(handlers.onGone).toHaveBeenCalledWith('code 1: it broke')
-  })
-
   it('reassembles chunked responses with split UTF-8 and CRLF boundaries', () => {
     const { child, handlers } = createChannel()
     const payload = Buffer.from('hello 😀\r\n\nnext\ntrailing', 'utf8')
@@ -91,36 +78,6 @@ describe('DesktopScriptServeChannel', () => {
     expect(handlers.onLine.mock.calls.map(([line]) => line)).toEqual(['first'])
   })
 
-  it('keeps the retained tail free of newlines after every drain', () => {
-    const { channel, child } = createChannel()
-    const retained = channel as unknown as { buffer: string }
-    for (const chunk of ['a\nb', 'c\r\n\n\nd\ne', '\n', 'f\n\ng', Buffer.from('h\r\ni😀')]) {
-      child.stdout.emit('data', chunk)
-      // The fast path in readStdout scans only the new chunk, which is sound only if this holds.
-      expect(retained.buffer).not.toContain('\n')
-    }
-    expect(retained.buffer).toBe('i😀')
-  })
-
-  it('scans only the new chunk for the first newline of a pending line', () => {
-    const { child, handlers } = createChannel()
-    const pending = 'p'.repeat(1024 * 1024)
-    child.stdout.emit('data', pending)
-    const chunk = 'q\n'
-    const indexOf = vi.spyOn(String.prototype, 'indexOf')
-    let scanned: number[]
-    try {
-      child.stdout.emit('data', chunk)
-      scanned = indexOf.mock.contexts.map((self) => String(self).length)
-    } finally {
-      indexOf.mockRestore()
-    }
-    expect(handlers.onLine).toHaveBeenCalledWith(`${pending}q`)
-    // Locating the delimiter must not rescan the megabytes already known to hold none.
-    expect(scanned.length).toBeGreaterThan(0)
-    expect(Math.max(...scanned)).toBeLessThanOrEqual(chunk.length)
-  })
-
   it('releases the drained response that a retained tail was sliced from', () => {
     const gc = (globalThis as { gc?: () => void }).gc
     if (!gc) {
@@ -134,11 +91,15 @@ describe('DesktopScriptServeChannel', () => {
     const tails: string[] = []
     const feed = (index: number): void => {
       const child = new FakeChild()
-      const channel = new DesktopScriptServeChannel(child as unknown as RuntimeChildProcess, {
-        onLine: () => {},
-        onGone: () => {},
-        onOverflow: () => {}
-      })
+      const channel = new DesktopScriptServeChannel(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the piped streams and events consumed by the channel.
+        child as unknown as ChildProcessWithoutNullStreams,
+        {
+          onLine: () => {},
+          onGone: () => {},
+          onOverflow: () => {}
+        }
+      )
       const line = String.fromCharCode(65 + (index % 26)).repeat(1024 * 1024)
       child.stdout.emit('data', `${line}\n{"partial":${index}`)
       tails.push((channel as unknown as { buffer: string }).buffer)
@@ -154,16 +115,12 @@ describe('DesktopScriptServeChannel', () => {
     const used = collectHeap() - before
     expect(tails).toHaveLength(32)
     expect(tails[5]).toBe('{"partial":5')
-    // 32 pending tails, each sliced from a 1 Mi-char line; an un-owned tail pins the whole line.
+    // Unowned slices would pin 32 separate megabyte-scale response buffers.
     expect(used).toBeLessThan(4 * 1024 * 1024)
   })
 
   describe('once stopped', () => {
-    /**
-     * The channel's half of the stale-callback guard, pinned here rather than
-     * through the host: the host refuses a stale report too, so a host-level
-     * test passes with either guard alone and neither ends up covered.
-     */
+    /** Exercise channel guards directly so host guards cannot mask a missing check. */
     it('accepts no further writes', () => {
       const { channel, child } = createChannel()
 

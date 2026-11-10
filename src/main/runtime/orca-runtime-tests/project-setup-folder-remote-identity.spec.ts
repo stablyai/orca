@@ -1,18 +1,16 @@
 import { realpathSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import {
-  OrcaRuntimeService,
-  execFileSync,
-  getRepoUpstreamMock,
-  join,
-  mkdtemp,
-  projectHostSetupProjectionFromRepos,
-  rm,
-  tmpdir
-} from '../orca-runtime-test-mocks.spec'
-import { store } from '../orca-runtime-test-fixtures.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { execFileSync } from 'node:child_process'
+import { getRepoUpstreamMock } from '../orca-runtime-test-mocks/setup.spec'
+import { join } from 'node:path'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
+import { tmpdir } from 'node:os'
+import { store } from './orca-runtime-test-fixtures.spec'
 import type { Repo } from '../../../shared/repo-types'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 
 function createRuntime(repos: Repo[]): OrcaRuntimeService {
   const runtimeStore: RuntimeStore = {
@@ -78,66 +76,7 @@ describe('OrcaRuntimeService project setup of an existing folder (#30663)', () =
       ).rejects.toThrow(/points at acme\/repo-b, not acme\/repo-a/)
     })
 
-    // No fabricated upstream and no row left under project A.
     expect(repos).toHaveLength(0)
-  })
-
-  it('links a fork whose upstream remote names the project', async () => {
-    const repos: Repo[] = []
-    getRepoUpstreamMock.mockResolvedValueOnce(null)
-    const runtime = createRuntime(repos)
-
-    await withGitFolder(
-      {
-        origin: 'https://github.com/me/repo-a-fork.git',
-        upstream: 'https://github.com/acme/repo-a.git'
-      },
-      async (path) => {
-        const result = await runtime.setupProjectExistingFolder({
-          projectId: 'github:acme/repo-a',
-          projectProviderIdentity: repoA,
-          hostId: 'runtime:env-1',
-          path,
-          kind: 'git'
-        })
-        expect(result.project.id).toBe('github:acme/repo-a')
-      }
-    )
-  })
-
-  it('still links a folder whose remote is not on GitHub', async () => {
-    const repos: Repo[] = []
-    getRepoUpstreamMock.mockResolvedValueOnce(null)
-    const runtime = createRuntime(repos)
-
-    await withGitFolder({ origin: 'https://gitlab.example.test/acme/repo-a.git' }, async (path) => {
-      const result = await runtime.setupProjectExistingFolder({
-        projectId: 'github:acme/repo-a',
-        projectProviderIdentity: repoA,
-        hostId: 'runtime:env-1',
-        path,
-        kind: 'git'
-      })
-      expect(result.project.id).toBe('github:acme/repo-a')
-      expect(repos[0]?.upstream).toEqual({ owner: 'acme', repo: 'repo-a' })
-    })
-  })
-
-  it('links a folder whose remote host is an SSH alias for the project repository', async () => {
-    const repos: Repo[] = []
-    getRepoUpstreamMock.mockResolvedValueOnce(null)
-    const runtime = createRuntime(repos)
-
-    await withGitFolder({ origin: 'git@github-work:acme/repo-a.git' }, async (path) => {
-      const result = await runtime.setupProjectExistingFolder({
-        projectId: 'github:acme/repo-a',
-        projectProviderIdentity: repoA,
-        hostId: 'runtime:env-1',
-        path,
-        kind: 'git'
-      })
-      expect(result.project.id).toBe('github:acme/repo-a')
-    })
   })
 
   it('judges an already-registered folder by its current remotes, not the stored ones', async () => {

@@ -1,22 +1,20 @@
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
-import {
-  findTabAndWorktree,
-  findTabByEntityInGroup,
-  pushRecentTabId,
-  sanitizeRecentTabIds
-} from '../tab-group-state'
+import { findTabAndWorktree, findTabByEntityInGroup } from './tab-group-state'
+import { pushRecentTabId, sanitizeRecentTabIds } from './tab-selection-history'
+import { selectActiveTabForWorktree } from './active-tab-selection'
 import type { Tab } from '../../../../../shared/tab-types'
 import type { AppState } from '../../types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
-import { recordPromotedEditorTabsInLayoutOwner } from '../editor/tabs/editor-tab-layout-owner'
 import { withPreviewEnded } from './tab-preview-flag'
+import { endsPreviewHere, promotePreviewTabsThroughLayoutOwner } from './preview-tab-promotion'
+import { replaceRecordEntries, replaceTabBuckets } from '../../keyed-record-transitions'
 
-/** Activation ends a preview unless it preserves it. */
-function withPreviewOnActivation(tab: Tab, preservePreview: boolean): Tab {
+/** Activation ends a preview unless it preserves it; main's frame ends one main owns. */
+function withPreviewOnActivation(tab: Tab, preservePreview: boolean, endsHere: boolean): Tab {
   if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
     return { ...tab, isPreview: preservePreview ? tab.isPreview : false }
   }
-  return preservePreview ? tab : withPreviewEnded(tab)
+  return preservePreview || !endsHere ? tab : withPreviewEnded(tab)
 }
 
 type ActivationState = Pick<
@@ -24,46 +22,51 @@ type ActivationState = Pick<
   'unifiedTabsByWorktree' | 'groupsByWorktree' | 'activeGroupIdByWorktree'
 >
 
-/** The store update that makes `tab` its group's active tab and its group the active one. */
+/** The store update that makes `tab` its group's active tab and its group the active one;
+ *  `endsPreview` is `endsPreviewHere` for the tab's workspace. */
 export function tabActivationPatch(
   state: ActivationState,
   tab: Tab,
   worktreeId: string,
-  opts?: { preservePreview?: boolean; recordFocus?: boolean }
+  opts: { preservePreview?: boolean; recordFocus?: boolean } | undefined,
+  endsPreview: boolean
 ): ActivationState {
   const tabId = tab.id
   return {
-    unifiedTabsByWorktree: {
-      ...state.unifiedTabsByWorktree,
-      [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((item) =>
-        item.id === tabId
-          ? {
-              ...withPreviewOnActivation(item, opts?.preservePreview === true),
-              ...(opts?.recordFocus === false ? {} : { lastFocusedAt: Date.now() })
-            }
-          : item
-      )
-    },
-    groupsByWorktree: {
-      ...state.groupsByWorktree,
-      [worktreeId]: (state.groupsByWorktree[worktreeId] ?? []).map((group) =>
-        group.id === tab.groupId
-          ? {
-              ...group,
-              activeTabId: tabId,
-              // Why: track every activation in the group's MRU so closeUnifiedTab returns to the previous tab; sanitize to prune removed ids.
-              recentTabIds: pushRecentTabId(
-                sanitizeRecentTabIds(group.recentTabIds, group.tabOrder),
-                tabId
-              )
-            }
-          : group
-      )
-    },
-    activeGroupIdByWorktree: {
-      ...state.activeGroupIdByWorktree,
-      [worktreeId]: tab.groupId
-    }
+    unifiedTabsByWorktree: replaceTabBuckets(state.unifiedTabsByWorktree, [
+      [
+        worktreeId,
+        (state.unifiedTabsByWorktree[worktreeId] ?? []).map((item) =>
+          item.id === tabId
+            ? {
+                ...withPreviewOnActivation(item, opts?.preservePreview === true, endsPreview),
+                ...(opts?.recordFocus === false ? {} : { lastFocusedAt: Date.now() })
+              }
+            : item
+        )
+      ]
+    ]),
+    groupsByWorktree: replaceRecordEntries(state.groupsByWorktree, [
+      [
+        worktreeId,
+        (state.groupsByWorktree[worktreeId] ?? []).map((group) =>
+          group.id === tab.groupId
+            ? {
+                ...group,
+                activeTabId: tabId,
+                // Track MRU for close-time selection, pruning removed IDs.
+                recentTabIds: pushRecentTabId(
+                  sanitizeRecentTabIds(group.recentTabIds, group.tabOrder),
+                  tabId
+                )
+              }
+            : group
+        )
+      ]
+    ]),
+    activeGroupIdByWorktree: replaceRecordEntries(state.activeGroupIdByWorktree, [
+      [worktreeId, tab.groupId]
+    ])
   }
 }
 
@@ -75,21 +78,7 @@ export function createTabsFocusActions(
   return {
     getTab: (tabId) => findTabAndWorktree(get().unifiedTabsByWorktree, tabId)?.tab ?? null,
 
-    getActiveTab: (worktreeId) => {
-      const state = get()
-      const groupId = state.activeGroupIdByWorktree[worktreeId]
-      const group = (state.groupsByWorktree[worktreeId] ?? []).find(
-        (candidate) => candidate.id === groupId
-      )
-      if (!group?.activeTabId) {
-        return null
-      }
-      return (
-        (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
-          (tab) => tab.id === group.activeTabId
-        ) ?? null
-      )
-    },
+    getActiveTab: (worktreeId) => selectActiveTabForWorktree(get(), worktreeId),
 
     findTabForEntityInGroup: (worktreeId, groupId, entityId, contentType) =>
       findTabByEntityInGroup(
@@ -121,11 +110,11 @@ export function createTabsFocusActions(
         if (ORCA_LAYOUT_OWNER_IS_MAIN && tab.isPreview && !opts?.preservePreview) {
           promoted.push(tab)
         }
-        return tabActivationPatch(state, tab, worktreeId, opts)
+        return tabActivationPatch(state, tab, worktreeId, opts, endsPreviewHere(state, worktreeId))
       })
-      // Switch point: main records that activating a preview made it permanent.
+      // Switch point: main makes the activated preview permanent; its frame clears the flag.
       if (ORCA_LAYOUT_OWNER_IS_MAIN && promoted.length > 0) {
-        recordPromotedEditorTabsInLayoutOwner(get(), promoted)
+        promotePreviewTabsThroughLayoutOwner(get(), set, promoted)
       }
     }
   }

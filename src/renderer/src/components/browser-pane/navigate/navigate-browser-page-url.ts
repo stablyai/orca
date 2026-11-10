@@ -1,14 +1,18 @@
-import { detectLanguage } from '@/lib/language-detect'
-import { getConnectionId } from '@/lib/connection-context'
-import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
+import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
+import {
+  isPathInsideWorktree,
+  toWorktreeRelativePath
+} from '../../../../../shared/terminal/links/terminal-links'
 import { useAppStore } from '@/store'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
 } from '../../../../../shared/browser-url'
 import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import '../../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-guest-recovery'
 import {
   getBrowserDisplayTitle,
@@ -21,8 +25,8 @@ import type {
   BrowserTabPageState
 } from '../describe-page/browser-page-types'
 import type { MutableRefObject } from 'react'
-import { statUserOpenedPath } from '@/lib/user-opened-local-path'
-import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
+import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
+import { requireRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 
 export type NavigateBrowserPageToUrlArgs = {
   url: string
@@ -30,7 +34,6 @@ export type NavigateBrowserPageToUrlArgs = {
   worktreeId: string
   activeLoadFailureRef: MutableRefObject<BrowserLoadError | null>
   lastKnownWebviewUrlRef: MutableRefObject<string | null>
-  trackNextLoadingEventRef: MutableRefObject<boolean>
   recoveryNavigationValidationRef: MutableRefObject<BrowserPageRecoveryNavigationValidation | null>
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   onSetUrlRef: MutableRefObject<BrowserPageUrlSetter>
@@ -46,7 +49,6 @@ export function navigateBrowserPageToUrl({
   worktreeId,
   activeLoadFailureRef,
   lastKnownWebviewUrlRef,
-  trackNextLoadingEventRef,
   recoveryNavigationValidationRef,
   webviewRef,
   onSetUrlRef,
@@ -76,7 +78,6 @@ export function navigateBrowserPageToUrl({
     if (!webview) {
       return
     }
-    trackNextLoadingEventRef.current = targetUrl !== ORCA_BROWSER_BLANK_URL
     lastKnownWebviewUrlRef.current = normalizedBrowserModelUrl
     recoveryNavigationValidationRef.current = recoveryLoadError
       ? { committed: false, started: false, targetUrl: normalizedBrowserModelUrl }

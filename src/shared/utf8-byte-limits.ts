@@ -8,14 +8,7 @@ export type Utf8TextTail = {
   bytes: number
 }
 
-/**
- * Bounds-safe replacement for `String.prototype.codePointAt`.
- *
- * Why: once V8 optimizes the calling function, `codePointAt` on a sliced string pairs a
- * trailing high surrogate with the code unit that follows the SLICE inside its parent, so a
- * prefix slice cut mid-pair reports a code point the string does not contain (and one byte
- * too many). `charCodeAt` stays bounds-correct in every tier, so pair the units explicitly.
- */
+/** Pair charCodeAt units explicitly: optimized V8 codePointAt can read beyond a sliced string’s trailing high surrogate, overcounting UTF-8 by one byte. */
 export function readUtf8CodePointAt(text: string, index: number): number {
   const leadUnit = text.charCodeAt(index)
   if (leadUnit < 0xd800 || leadUnit > 0xdbff || index + 1 >= text.length) {
@@ -51,10 +44,7 @@ export function getUtf8ByteLength(text: string): number {
   return measureUtf8ByteLength(text).byteLength
 }
 
-// Why a native encode: the per-code-unit JS scan walks whole terminal scrollback buffers on the
-// session-write path. `encodeInto` answers "does this fit in maxBytes?" in C++ — it stops at the
-// destination's end, so `read < text.length` means the text needs more than maxBytes. The scratch
-// buffer is reused across calls and grows to the largest limit asked for, up to this cap.
+// encodeInto checks scrollback limits natively and stops at destination capacity; unread units mean overflow. Reuse scratch up to the cap.
 const MAX_UTF8_SCRATCH_BYTES = 1024 * 1024
 const utf8Encoder = new TextEncoder()
 let utf8Scratch = new Uint8Array(0)

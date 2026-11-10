@@ -8,7 +8,9 @@ import {
   githubProjectHost,
   githubProjectKey,
   parseProjectInput,
-  useCallback
+  toGitHubProjectIdentity,
+  useCallback,
+  useRef
 } from './mobile-tasks-dependencies'
 import type { GitHubProjectTable } from './mobile-tasks-legacy-foundation'
 import {
@@ -47,6 +49,8 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
     taskStateHydrated,
     tasksSupported
   } = model
+  // Each pick bumps this, so a late views reply for an earlier pick cannot overwrite a newer one.
+  const projectSelectionRef = useRef(0)
   const loadGitHubProjects = useCallback(async (): Promise<void> => {
     if (!client || connState !== 'connected' || !tasksSupported) {
       return
@@ -80,9 +84,7 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
         throw new Error(result.error.message)
       }
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires the `id` a view is selected by and types `number`/`name`/`layout` without requiring them, because a layout arm this build has not heard of must reach the "no supported views" test rather than drop the row.
-      const views = result.views as GitHubProjectViewSummary[]
-      setGithubProjectViews(views)
-      return views
+      return result.views as GitHubProjectViewSummary[]
     },
     [client, connState, taskStateHydrated, tasksSupported]
   )
@@ -153,19 +155,23 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
   )
 
   const commitGitHubProjectView = useCallback(
-    (project: GitHubProjectRef, viewId: string): void => {
-      const projectKey = githubProjectKey(project)
+    (project: GitHubProjectRef, viewId: string, views?: GitHubProjectViewSummary[]): void => {
+      const ref = toGitHubProjectIdentity(project)
+      const projectKey = githubProjectKey(ref)
       const nextSettings: GitHubProjectSettings = {
         ...githubProjectSettings,
         recent: [
-          { ...project, lastOpenedAt: new Date().toISOString() },
+          { ...ref, lastOpenedAt: new Date().toISOString() },
           ...githubProjectSettings.recent.filter((entry) => githubProjectKey(entry) !== projectKey)
         ].slice(0, 10),
         lastViewByProject: {
           ...githubProjectSettings.lastViewByProject,
           [projectKey]: { viewId }
         },
-        activeProject: project
+        activeProject: ref
+      }
+      if (views) {
+        setGithubProjectViews(views)
       }
       persistGitHubProjectSettings(nextSettings)
       setAppliedGithubProjectSearch(undefined)
@@ -180,53 +186,47 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
       if (!tasksSupported || !taskStateHydrated) {
         return
       }
+      const selection = ++projectSelectionRef.current
       setGithubProjectLoading(true)
       setGithubProjectError('')
       try {
         const views = await loadGitHubProjectViews(project)
-        const projectKey = githubProjectKey(project)
-        const rememberedView = githubProjectSettings.lastViewByProject[projectKey]?.viewId
+        if (selection !== projectSelectionRef.current) {
+          return
+        }
         const explicitView =
           typeof options.viewNumber === 'number'
             ? views.find((view) => view.number === options.viewNumber)
             : undefined
-        if (options.viewNumber !== undefined && !explicitView) {
-          // Why: desktop treats stale /views/{n} URLs as a prompt to choose a
-          // replacement view, not as a failed project selection.
-          const supportedViews = views.filter((view) => view.layout === 'TABLE_LAYOUT')
-          if (supportedViews.length === 0) {
-            throw new Error('This project has no supported views.')
-          }
-          setPendingGitHubProjectViewSelection(project)
-          setShowGitHubProjectViewPicker(true)
-          return
-        }
         if (explicitView && explicitView.layout !== 'TABLE_LAYOUT') {
           throw new Error("Orca doesn't support this GitHub Project layout yet.")
         }
-        if (!explicitView && !rememberedView) {
-          // Why: desktop asks which Project view to open the first time a project
-          // is selected. Mobile should not silently choose the first table view.
-          const supportedViews = views.filter((view) => view.layout === 'TABLE_LAYOUT')
-          if (supportedViews.length === 0) {
-            throw new Error('This project has no supported views.')
-          }
-          setPendingGitHubProjectViewSelection(project)
-          setShowGitHubProjectViewPicker(true)
-          return
-        }
+        // A remembered Board or Roadmap view (desktop renders those) cannot open here.
+        const rememberedViewId =
+          options.viewNumber === undefined
+            ? githubProjectSettings.lastViewByProject[githubProjectKey(project)]?.viewId
+            : undefined
         const selectedView =
           explicitView ??
-          views.find((view) => view.id === rememberedView && view.layout === 'TABLE_LAYOUT') ??
-          undefined
-        if (!selectedView) {
+          views.find((view) => view.id === rememberedViewId && view.layout === 'TABLE_LAYOUT')
+        if (selectedView) {
+          commitGitHubProjectView(project, selectedView.id, views)
+          return
+        }
+        if (!views.some((view) => view.layout === 'TABLE_LAYOUT')) {
           throw new Error('This project has no supported views.')
         }
-        commitGitHubProjectView(project, selectedView.id)
+        // Ask for a view, matching desktop: never silently choose the first table.
+        setPendingGitHubProjectViewSelection({ project, views })
+        setShowGitHubProjectViewPicker(true)
       } catch (err) {
-        setGithubProjectError(err instanceof Error ? err.message : 'Failed to select project')
+        if (selection === projectSelectionRef.current) {
+          setGithubProjectError(err instanceof Error ? err.message : 'Failed to select project')
+        }
       } finally {
-        setGithubProjectLoading(false)
+        if (selection === projectSelectionRef.current) {
+          setGithubProjectLoading(false)
+        }
       }
     },
     [
@@ -286,8 +286,7 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
     tasksSupported
   ])
 
-  // Why: a refresh must re-read the host, not replay the cached list, or a repo
-  // added since this screen mounted can never appear.
+  // Refresh must bypass cached repos so newly added repos can appear.
   const refreshTasks = useCallback(() => {
     void repoListReload().catch(() => {})
     void loadTasks({ silent: true })

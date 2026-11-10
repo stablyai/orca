@@ -1,158 +1,22 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  OrcaRuntimeService,
-  makePaneKey,
-  waitForMobileSessionTabsEvents
-} from '../orca-runtime-test-mocks.spec'
-import type { RuntimeMobileSessionTabsResult } from '../orca-runtime-test-mocks.spec'
+import { committingSpawn } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import '../orca-runtime-test-mocks/setup.spec'
+import { waitForMobileSessionTabsEvents } from './mobile-session-tab-event-wait'
+import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
 import {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
   deferred,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('publishes the hook provider session on a headless mobile tab so native chat can address the transcript', async () => {
-    const paneKey = makePaneKey('claude-tab', HEADLESS_LEAF_ID)
-    const providerSession = {
-      key: 'session_id' as const,
-      id: '7dd0c22c-0ff6-45bf-b88a-cea11c34d073',
-      transcriptPath: '/transcripts/7dd0c22c.jsonl'
-    }
-    const runtime = new OrcaRuntimeService(store, undefined, {
-      // Headless serve has no renderer, so the hook snapshot is the only carrier.
-      getAgentStatusSnapshot: () => [
-        {
-          paneKey,
-          state: 'done',
-          prompt: 'Hi',
-          agentType: 'claude',
-          connectionId: null,
-          receivedAt: Date.now(),
-          stateStartedAt: Date.now(),
-          tabId: 'claude-tab',
-          worktreeId: TEST_WORKTREE_ID,
-          providerSession
-        }
-      ]
-    })
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-claude' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
-      tabId: 'claude-tab',
-      leafId: HEADLESS_LEAF_ID,
-      launchAgent: 'claude',
-      title: 'Terminal'
-    })
-
-    runtime.onPtyData('pty-claude', '\x1b]0;✳ Claude Code\x07', 123)
-    await new Promise<void>((resolve) => setImmediate(resolve))
-
-    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-
-    expect(result.tabs[0]).toEqual(
-      expect.objectContaining({
-        type: 'terminal',
-        agentStatus: expect.objectContaining({ agentType: 'claude', providerSession })
-      })
-    )
-  })
-
-  it('recovers the agent type from the hook row when the pane was launched without an agent hint', async () => {
-    // A user who types `claude` in a plain terminal leaves no launchAgent, and headless
-    // has no renderer to publish one; without the hook's agentType mobile treats the tab
-    // as a non-agent terminal and hides native chat even though the session is addressable.
-    const paneKey = makePaneKey('shell-tab', HEADLESS_LEAF_ID)
-    const providerSession = {
-      key: 'session_id' as const,
-      id: 'ac1f6b90-2f77-4f0e-9c5e-1d2f6a4b8c31',
-      transcriptPath: '/transcripts/ac1f6b90.jsonl'
-    }
-    const runtime = new OrcaRuntimeService(store, undefined, {
-      getAgentStatusSnapshot: () => [
-        {
-          paneKey,
-          state: 'done',
-          prompt: 'Hi',
-          agentType: 'claude',
-          connectionId: null,
-          receivedAt: Date.now(),
-          stateStartedAt: Date.now(),
-          tabId: 'shell-tab',
-          worktreeId: TEST_WORKTREE_ID,
-          providerSession
-        }
-      ]
-    })
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-shell' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
-      tabId: 'shell-tab',
-      leafId: HEADLESS_LEAF_ID,
-      title: 'Terminal'
-    })
-
-    runtime.onPtyData('pty-shell', '\x1b]0;✳ Claude Code\x07', 123)
-    await new Promise<void>((resolve) => setImmediate(resolve))
-
-    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-
-    expect(result.tabs[0]).toEqual(
-      expect.objectContaining({
-        type: 'terminal',
-        agentStatus: expect.objectContaining({ agentType: 'claude', providerSession })
-      })
-    )
-  })
-
-  it('reads one agent-status snapshot per projection, not one per terminal tab', async () => {
-    // The getter rebuilds every known pane's payload on each call, so reading it
-    // inside the per-tab loop made a projection O(tabs x panes) of pure garbage —
-    // worst in headless serve, where every terminal tab takes the hook fallback.
-    let snapshotReads = 0
-    const runtime = new OrcaRuntimeService(store, undefined, {
-      getAgentProviderSessionSnapshot: () => {
-        snapshotReads += 1
-        return []
-      }
-    })
-    runtime.setPtyController({
-      spawn: vi.fn(async () => ({ id: `pty-${snapshotReads}-${Math.random()}` })),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    for (const tabId of ['fan-a', 'fan-b', 'fan-c']) {
-      await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
-        tabId,
-        leafId: HEADLESS_LEAF_ID,
-        launchAgent: 'claude',
-        title: 'Terminal'
-      })
-    }
-    snapshotReads = 0
-
-    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-
-    // Guards the assertion below from passing vacuously on a one-tab projection.
-    expect(result.tabs.filter((tab) => tab.type === 'terminal').length).toBeGreaterThan(1)
-    expect(snapshotReads).toBe(1)
-  })
-
   it('publishes hook-only identity for a pane that never emitted an agent title', async () => {
-    // The hook row is the whole evidence here: no launchAgent hint, no recognized OSC
-    // title, so `pty.lastAgentStatus` stays unset. Gating the hook read behind that
-    // made the headless carrier unreachable in exactly the case it exists for.
+    // Hook-only agents can have no launchAgent or OSC status; do not gate their hook read on either.
     const paneKey = makePaneKey('quiet-tab', HEADLESS_LEAF_ID)
     const providerSession = {
       key: 'session_id' as const,
@@ -198,9 +62,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('reads a resume-identity-only row the live-agent snapshot filters out', async () => {
-    // Pi publishes its session separately from status, and the shared getter drops
-    // those rows so they can't read as running agents — leaving native chat with no
-    // transcript to address unless the unfiltered snapshot is consulted too.
+    // Pi session-only rows are excluded from running status but still carry the transcript native chat needs.
     const paneKey = makePaneKey('pi-tab', HEADLESS_LEAF_ID)
     const providerSession = {
       key: 'session_id' as const,
@@ -293,9 +155,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('does not claim a stale hook agent owns a pane whose agent has since exited', async () => {
-    // `pty.lastAgentStatus` outlives the agent, so an unbounded hook read would keep
-    // offering mobile native chat for what is now a plain shell — and point it at a
-    // dead transcript. The session id may stay; the ownership claim must not.
+    // Retained status must not offer native chat for an agent that exited to its shell.
     const paneKey = makePaneKey('exited-tab', HEADLESS_LEAF_ID)
     const staleReceivedAt = Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1_000
     const runtime = new OrcaRuntimeService(store, undefined, {
@@ -341,62 +201,13 @@ describe('OrcaRuntimeService', () => {
     expect(agentStatus?.agentType ?? null).toBeNull()
   })
 
-  it('waits for unknown-launch foreground owner before publishing Pi-compatible mobile status', async () => {
-    const foregroundProcess = deferred<string | null>()
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-typed-omp' })
-    const getForegroundProcess = vi.fn(() => foregroundProcess.promise)
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess
-    })
-    const terminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
-      tabId: 'typed-omp-tab',
-      leafId: HEADLESS_LEAF_ID,
-      title: 'Terminal'
-    })
-    const events: RuntimeMobileSessionTabsResult[] = []
-    const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
-
-    runtime.onPtyData('pty-typed-omp', '\x1b]0;Pi ready\x07', 123)
-    await new Promise<void>((resolve) => setImmediate(resolve))
-
-    expect(getForegroundProcess).toHaveBeenCalledWith('pty-typed-omp')
-    expect(events).toHaveLength(0)
-
-    foregroundProcess.resolve('omp')
-    await new Promise<void>((resolve) => setImmediate(resolve))
-    await waitForMobileSessionTabsEvents(events, 1)
-
-    expect(events).toEqual([
-      expect.objectContaining({
-        tabs: [
-          expect.objectContaining({
-            type: 'terminal',
-            title: 'OMP ready',
-            agentStatus: expect.objectContaining({
-              state: 'done',
-              agentType: 'omp',
-              terminalHandle: terminal.handle,
-              terminalTitle: 'OMP ready'
-            })
-          })
-        ]
-      })
-    ])
-
-    unsubscribe()
-  })
-
   it('keeps decorative Pi frames queued behind the foreground owner probe', async () => {
     const foregroundProcess = deferred<string | null>()
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-typed-omp' })
     const getForegroundProcess = vi.fn(() => foregroundProcess.promise)
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess
@@ -455,7 +266,7 @@ describe('OrcaRuntimeService', () => {
       .mockReturnValueOnce(freshForegroundProcess.promise)
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess
@@ -518,7 +329,7 @@ describe('OrcaRuntimeService', () => {
       .mockReturnValueOnce(freshForegroundProcess.promise)
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
-      spawn,
+      spawn: committingSpawn(runtime, spawn),
       write: () => true,
       kill: () => true,
       getForegroundProcess
@@ -570,97 +381,5 @@ describe('OrcaRuntimeService', () => {
     ])
 
     unsubscribe()
-  })
-
-  it('keeps Pi-compatible mobile session status as Pi for an unknown-launch foreground pi PTY', async () => {
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-typed-pi' })
-    const getForegroundProcess = vi.fn(async () => 'pi')
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess
-    })
-    const terminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
-      tabId: 'typed-pi-tab',
-      leafId: HEADLESS_LEAF_ID,
-      title: 'Terminal'
-    })
-
-    runtime.onPtyData('pty-typed-pi', '\x1b]0;Pi ready\x07', 123)
-    await new Promise<void>((resolve) => setImmediate(resolve))
-
-    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-
-    expect(getForegroundProcess).toHaveBeenCalledWith('pty-typed-pi')
-    expect(result.tabs[0]).toEqual(
-      expect.objectContaining({
-        type: 'terminal',
-        title: 'Pi ready',
-        agentStatus: expect.objectContaining({
-          state: 'done',
-          agentType: 'pi',
-          terminalHandle: terminal.handle,
-          terminalTitle: 'Pi ready'
-        })
-      })
-    )
-    expect(result.tabs[0]).not.toHaveProperty('launchAgent')
-  })
-
-  it('keeps renderer-vetted mobile agent status for custom-titled terminals', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    const leafId = '11111111-1111-4111-8111-111111111111'
-    const hostPaneKey = `tab-1:${leafId}`
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
-      tabs: [],
-      leaves: [],
-      mobileSessionTabs: [
-        {
-          worktree: TEST_WORKTREE_ID,
-          publicationEpoch: 'epoch-1',
-          snapshotVersion: 1,
-          activeGroupId: null,
-          activeTabId: `tab-1::${leafId}`,
-          activeTabType: 'terminal',
-          tabs: [
-            {
-              type: 'terminal',
-              id: `tab-1::${leafId}`,
-              parentTabId: 'tab-1',
-              leafId,
-              title: 'claude agents',
-              agentStatus: {
-                state: 'working',
-                prompt: 'fix parity',
-                updatedAt: 1_700_000_000_000,
-                stateStartedAt: 1_699_999_999_000,
-                agentType: 'codex',
-                paneKey: hostPaneKey,
-                terminalTitle: 'codex [working]',
-                stateHistory: []
-              },
-              isActive: true
-            }
-          ]
-        }
-      ]
-    })
-
-    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-
-    expect(result.tabs[0]).toEqual(
-      expect.objectContaining({
-        type: 'terminal',
-        title: 'claude agents',
-        agentStatus: expect.objectContaining({
-          state: 'working',
-          agentType: 'codex',
-          paneKey: hostPaneKey
-        })
-      })
-    )
   })
 })

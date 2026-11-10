@@ -1,6 +1,5 @@
 import { z } from 'zod'
 
-// Minimal schemas for emulator commands (loose for initial testing; can be tightened like browser-schemas).
 export const WorktreeParam = z.object({ worktree: z.string().optional() }).partial()
 
 export const TapParams = z.object({
@@ -126,6 +125,7 @@ export const LogcatParams = z.object({
 })
 
 export const AttachParams = z.object({
+  userInitiated: z.boolean().optional(),
   device: z.string().optional(),
   worktree: z.string().optional(),
   focus: z.boolean().optional()

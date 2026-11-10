@@ -35,8 +35,11 @@ export function parseGlibcVersion(output: string): GlibcVersion | null {
   return match ? { major: Number(match[1]), minor: Number(match[2]) } : null
 }
 
+/** The first probe, which answers on nearly every glibc or musl host; callers may run it early. */
+export const LINUX_LIBC_FIRST_PROBE = 'LC_ALL=C ldd --version 2>&1 || true'
+
 const PROBES = [
-  'LC_ALL=C ldd --version 2>&1 || true',
+  LINUX_LIBC_FIRST_PROBE,
   'LC_ALL=C getconf GNU_LIBC_VERSION 2>/dev/null || true',
   // Appliances may omit both tools; newer GNU loaders can report their own version.
   'for loader in /lib/ld-linux-x86-64.so.2 /lib64/ld-linux-x86-64.so.2 /lib/ld-linux-aarch64.so.1; do ' +

@@ -1,21 +1,18 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { colors, concentricRadius, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet } from '../../theme/themed-styles'
 
-// Styles for the PR comments timeline (body + audience tabs + comment cards +
-// reactions). Split out of mobile-pr-sidebar-styles to keep that file under the
-// 300-line cap. Muted/monochrome to match the rest of the PR sidebar.
-export const prCommentsStyles = StyleSheet.create({
+export const prCommentsStyles = themedStyleSheet(() => ({
   noDescription: {
     color: colors.textSecondary,
     fontSize: typography.metaSize,
     fontStyle: 'italic'
   },
-  // Comments header trailing count chip.
   countChip: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 1
   },
@@ -24,12 +21,11 @@ export const prCommentsStyles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600'
   },
-  // Audience segmented control (All / Humans / Bots).
   audienceTabs: {
     flexDirection: 'row',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
+    borderRadius: radii.control,
     backgroundColor: colors.bgBase,
     padding: 2,
     gap: 2
@@ -41,7 +37,7 @@ export const prCommentsStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    borderRadius: radii.row - 2
+    borderRadius: concentricRadius(radii.control, 2)
   },
   audienceTabActive: {
     backgroundColor: colors.bgRaised
@@ -63,7 +59,7 @@ export const prCommentsStyles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.control,
     backgroundColor: colors.bgPanel
   },
   showMoreText: {
@@ -77,7 +73,7 @@ export const prCommentsStyles = StyleSheet.create({
   card: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel,
     overflow: 'hidden'
   },
@@ -99,7 +95,7 @@ export const prCommentsStyles = StyleSheet.create({
   avatar: {
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: radii.pill,
     backgroundColor: colors.bgRaised
   },
   author: {
@@ -125,7 +121,7 @@ export const prCommentsStyles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 1
   },
@@ -159,13 +155,12 @@ export const prCommentsStyles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised,
-    borderRadius: 999
+    borderRadius: radii.pill
   },
   reactionText: {
     color: colors.textPrimary,
     fontSize: typography.metaSize
   },
-  // Collapsible header for a resolved thread/comment group.
   resolvedHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -174,7 +169,7 @@ export const prCommentsStyles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel
   },
   resolvedHeaderText: {
@@ -186,13 +181,12 @@ export const prCommentsStyles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderStyle: 'dashed',
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xl,
     color: colors.textSecondary,
     fontSize: 13
   },
-  // Reply / Resolve toggle row under a comment body.
   actionsRow: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -206,7 +200,7 @@ export const prCommentsStyles = StyleSheet.create({
     gap: 4,
     minHeight: 28,
     paddingHorizontal: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised
@@ -219,12 +213,10 @@ export const prCommentsStyles = StyleSheet.create({
     fontSize: typography.metaSize,
     fontWeight: '600'
   },
-  // Inline reply composer mounted inside a comment card.
   composer: {
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.md
   },
-  // Root-comment composer at the foot of the timeline (open PRs only).
   rootComposer: {
     gap: spacing.sm
   },
@@ -232,4 +224,4 @@ export const prCommentsStyles = StyleSheet.create({
     color: colors.statusRed,
     fontSize: typography.metaSize
   }
-})
+}))

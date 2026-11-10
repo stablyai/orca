@@ -1,9 +1,5 @@
-/**
- * Layout rework P3 baseline, regression #23429 (fixed by #26022): terminals whose PTY ids carry
- * `@@` (daemon-minted: the paired desktop's own tab and a CLI `terminal.create`) stay listed after
- * `orca serve` restarts, beside a serve-minted one. Records the server's tab list, live terminals
- * and published layout before and after the restart, and what the desktop draws once reconnected.
- */
+// P3/#23429 (fixed by #26022): retain desktop/CLI daemon @@ PTYs beside a serve-minted PTY across serve restart.
+// Compare host inventory/layout and the reconnected desktop against the baseline.
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
 import { launchPairedElectronClient } from './helpers/paired-electron-client'
@@ -103,15 +99,12 @@ test('serve-restart-keeps-@@-terminals: desktop, CLI and serve terminals survive
         })
         .toBe(before.terminals.length)
       const settled = await readSettled(read)
-      // Bug on main: the order changes on restart. Repeated macOS runs saw session.tabs.list in
-      // four of the six orders, and the published layout with the CLI's tab (tab2) second or
-      // last. So the list must hold the same tabs in any order, the published layout one of those
-      // two orders; both are recorded in creation order. Any other change still fails.
+      // Main changes order on restart: accept identical tabs in any list order and either observed published order.
+      // Canonicalize only those observed variations; other changes must fail.
       expect(settled.server.groups).toHaveLength(1)
       const canonicalSelection = before.server.groups[0]!.active
       expect(settled.server.groups[0]!.tabs.toSorted()).toEqual(RESTART_ORDERS[0])
-      // The list's selected tab follows that order: it is whichever tab comes first. The group's
-      // selection is the desktop's tab or, like the list's, the first listed.
+      // Selection follows the first listed tab; group selection may also retain the desktop’s tab.
       const firstListed = settled.server.groups[0]!.tabs[0]
       expect(settled.server.activeTab).toBe(firstListed)
       expect([canonicalSelection, firstListed]).toContain(settled.server.groups[0]!.active)

@@ -1,18 +1,16 @@
-// Layout-owner build: what main itself restores at startup and window load, with or without a
-// window: the live terminals no pane shows, and what the next startup reconnects.
+// Main restores unshown live terminals and reconnect facts at startup/window load, including headless hosts.
 
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import { worktreeIdentityKey } from '../../../../shared/worktree/id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { worktreeIdentityKey, worktreeIdsEqual } from '../../../../shared/worktree/id'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { getSshConnectionManager } from '../../../ssh/targets/ssh-target-registry'
 import {
   recordPtySurface,
   SURFACE_CLAIM_WITHOUT_STANDING
-} from '../../pty-recorded-surface-topology'
+} from '../../terminal/surface/pty-recorded-surface-topology'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import type { WindowLayoutCommand } from '../../runtime-layout-apply'
+import type { WindowLayoutCommand } from '../../terminal/layout/runtime-layout-apply'
 import {
   placeUnshownLiveTerminals,
   placeUnshownLiveTerminalsBestEffort,
@@ -23,47 +21,50 @@ import {
   deriveShutdownReconnectFacts,
   type ShutdownReconnectFacts
 } from '../../terminal/recovery/shutdown-reconnect-facts'
-import { OrcaRuntimeWithAutomationOperations } from './automation-operations'
+import { LegacyWorkerRuntimeRecovery } from '../../orchestration/terminal-authority/legacy-worker-runtime-recovery'
 import {
   panesBoundToAnotherWorkspace,
   panesBoundToGoneLocalTerminals
 } from '../../terminal/recovery/foreign-pane-bindings'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { type ExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { getExplicitWorktreeIdSelector } from '../catalog/runtime-worktree-selection'
+import { followExportedPaneKeys } from '../../terminal/identity/exported-pane-key-follow'
 
-/** The longest a workspace's first surface waits for main's placement pass. */
 export const FIRST_SURFACE_PLACEMENT_WAIT_MS = 500
 
-export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends OrcaRuntimeWithAutomationOperations {
+export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends LegacyWorkerRuntimeRecovery {
   abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
-  /** Shows a restored pane whose terminal is gone as sleeping, unless it already has a status. */
   protected abstract notePaneSleeping(paneKey: string): void
 
   private placementRun: Promise<LiveTerminalPlacement> | null = null
-  private placementAgain = false
-  /** The one pass running now, without the passes queued behind it. */
-  private placementPass: Promise<LiveTerminalPlacement> | null = null
+  private placementQueued: 'all' | Set<string> | null = null
+  private placementPass: {
+    run: Promise<LiveTerminalPlacement>
+    scope: 'all' | ReadonlySet<string>
+  } | null = null
   private stopFollowingProviderRebinds: (() => void) | null = null
 
-  /**
-   * Layout-owner build: shows every live local terminal no pane shows. Runs at startup, window
-   * load and client attach, and after the terminal service is replaced. One pass at a time: a call
-   * during a pass runs one more pass after it, so a terminal seen late is still placed.
-   */
-  placeUnshownLiveTerminals(): Promise<LiveTerminalPlacement> {
+  /** Serialize startup, window, attach and provider-rebind placement; a call during a pass queues another so late terminals are included. Optional workspace scope supports sweeps. */
+  placeUnshownLiveTerminals(worktreeId?: string): Promise<LiveTerminalPlacement> {
     this.stopFollowingProviderRebinds ??= onLocalPtyProviderRebound(
       () => void placeUnshownLiveTerminalsBestEffort(this)
     )
+    const queued = this.placementQueued
+    this.placementQueued =
+      worktreeId === undefined || queued === 'all'
+        ? 'all'
+        : new Set([...(queued ?? []), worktreeId])
     if (this.placementRun) {
-      this.placementAgain = true
       return this.placementRun
     }
     const run = async (): Promise<LiveTerminalPlacement> => {
       let placement: LiveTerminalPlacement
       do {
-        this.placementAgain = false
-        this.placementPass = this.placeUnshownLiveTerminalsOnce()
-        placement = await this.placementPass
-      } while (this.placementAgain)
+        const scope = this.placementQueued ?? 'all'
+        this.placementQueued = null
+        this.placementPass = { run: this.placeUnshownLiveTerminalsOnce(scope), scope }
+        placement = await this.placementPass.run
+      } while (this.placementQueued)
       return placement
     }
     this.placementRun = run().finally(() => {
@@ -73,30 +74,52 @@ export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends OrcaRunti
     return this.placementRun
   }
 
-  /**
-   * A workspace's first surface waits out the placement pass running when it arrives, not the
-   * passes queued behind it: a live terminal that pass is placing is the workspace's tab, not room
-   * for a fresh shell. At most FIRST_SURFACE_PLACEMENT_WAIT_MS, so opening a workspace stays quick;
-   * a pass slower than that may leave an extra tab beside the restored terminal. Null when there
-   * is nothing to wait for.
-   */
+  /** Place this workspace's unshown terminals before the window sweep reads its listing. */
+  async placeUnshownLiveTerminalsOf(worktreeSelector: string): Promise<void> {
+    const worktreeId = getExplicitWorktreeIdSelector(worktreeSelector)
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN || !worktreeId) {
+      return
+    }
+    try {
+      await this.placeUnshownLiveTerminals(worktreeId)
+    } catch (error) {
+      console.warn('[layout] showing live terminals failed:', error)
+    }
+  }
+
+  /** First-surface creation waits for the current applicable pass, excluding queued passes. Cap at FIRST_SURFACE_PLACEMENT_WAIT_MS; slower placement may leave an extra tab. */
   protected livePlacementSettledFor(command: WindowLayoutCommand): Promise<unknown> | null {
     const pass = this.placementPass
     if (!ORCA_LAYOUT_OWNER_IS_MAIN || !('initial' in command) || !command.initial || !pass) {
+      return null
+    }
+    // A sweep's pass places only its own workspace's terminals: another workspace waits for none.
+    const { scope } = pass
+    if (
+      scope !== 'all' &&
+      ![...scope].some((worktreeId) => worktreeIdsEqual(worktreeId, command.workspace))
+    ) {
       return null
     }
     let timer: NodeJS.Timeout | undefined
     const cap = new Promise<void>((resolve) => {
       timer = setTimeout(resolve, FIRST_SURFACE_PLACEMENT_WAIT_MS)
     })
-    return Promise.race([pass.catch(() => {}), cap]).finally(() => clearTimeout(timer))
+    return Promise.race([pass.run.catch(() => {}), cap]).finally(() => clearTimeout(timer))
   }
 
-  private async placeUnshownLiveTerminalsOnce(): Promise<LiveTerminalPlacement> {
-    await this.unbindPanesFromOtherWorkspacesTerminals()
+  private async placeUnshownLiveTerminalsOnce(
+    scope: 'all' | ReadonlySet<string>
+  ): Promise<LiveTerminalPlacement> {
+    // A sweep's pass leaves other workspaces, and their panes, as they are.
+    if (scope === 'all') {
+      await this.unbindPanesFromOtherWorkspacesTerminals()
+    }
     // A host that keeps no local terminals across restarts has none to find.
     if (!this.canRecoverPersistentLocalPtysFn()) {
-      this.markDeadBoundPanesSleeping()
+      if (scope === 'all') {
+        this.markDeadBoundPanesSleeping()
+      }
       return { placed: [], declined: [] }
     }
     let censusRead = false
@@ -119,9 +142,16 @@ export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends OrcaRunti
         censusRead = inventory !== null
         return inventory && { ...inventory, workspaceIds }
       },
-      ptys: () => this.ptysById.values(),
-      // A window spawn holds its workspace's lock until its pane is recorded (spawn-run.ts).
+      ptys: () =>
+        scope === 'all'
+          ? this.ptysById.values()
+          : [...this.ptysById.values()].filter((pty) =>
+              [...scope].some((worktreeId) => worktreeIdsEqual(worktreeId, pty.worktreeId))
+            ),
+      paneOf: (pty) => this.paneOfPty(pty),
+      // Window spawns hold the workspace lock through pane recording; pending registration also reserves its binding.
       isStillBinding: (pty) =>
+        this.pendingPtyRegistrationIncarnations.has(pty.ptyId) ||
         this.terminalMutationLock.hasActiveSpawns(worktreeIdentityKey(pty.worktreeId)),
       hostIds: () => this.store?.getWorkspaceSessionHostIds?.() ?? [],
       session: (hostId) => this.store?.getWorkspaceSession?.(hostId),
@@ -130,19 +160,25 @@ export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends OrcaRunti
         const pty = this.ptysById.get(ptyId)
         const pane = parsePaneKey(paneKey)
         if (pty && pane) {
-          // No graph standing: a window's graph that later shows otherwise still wins.
-          recordPtySurface(pty, pane.tabId, paneKey, SURFACE_CLAIM_WITHOUT_STANDING)
+          // This claim has no graph standing; a later window graph wins.
+          recordPtySurface(
+            this.terminalIdentity,
+            pty,
+            pane.tabId,
+            paneKey,
+            SURFACE_CLAIM_WITHOUT_STANDING
+          )
+          followExportedPaneKeys(this.ptysById.values(), (record) => this.paneOfPty(record).paneKey)
         }
       }
     })
     // Only a census that answered proves a terminal gone; an unread one leaves panes as they are.
-    if (censusRead) {
+    if (censusRead && scope === 'all') {
       this.markDeadBoundPanesSleeping()
     }
     return placement
   }
 
-  /** Each local pane bound to a terminal the host no longer runs restores from it when started. */
   private markDeadBoundPanesSleeping(): void {
     const session = this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)
     for (const paneKey of session
@@ -179,7 +215,6 @@ export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends OrcaRunti
     }
   }
 
-  /** Layout-owner build: what the next startup reconnects for `session`, from main's own state. */
   shutdownReconnectFactsFor(
     session: WorkspaceSessionState,
     partition: ExecutionHostId

@@ -40,8 +40,7 @@ export async function resolveMergeBase(
   return stdout.trim()
 }
 
-// Why: `--left-right --count` on the symmetric range answers both directions in one
-// rev-list walk; a rebased branch is usually ahead AND behind its base.
+// One symmetric rev-list walk counts both directions, including rebased branches.
 export async function countCompareDivergence(
   worktreePath: string,
   baseOid: string,

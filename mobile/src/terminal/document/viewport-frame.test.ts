@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { startTerminalDocument, stopTerminalDocument } from './create-terminal-document'
 import { createTerminalDocumentScope, type TerminalDocumentScope } from './document-scope'
 import type { TerminalDocumentHost, TerminalViewportChange } from './document-host-seams'
@@ -11,15 +11,12 @@ import { TERMINAL_DOCUMENT_MARKUP } from '../terminal-webview-html/document-mark
 import { viewportToCell } from './viewport-cell'
 import { computeFitScale } from './viewport-transform'
 
-/** The session header above the page's terminal, in CSS px; the WebView has none above it. */
 const HEADER = 82
 const CELL = { width: 7.5, height: 15 }
 
-/** A scope with a laid-out 55x40 grid, hosted however the case says. */
 function scopeWithGrid(host: TerminalDocumentHost = {}): TerminalDocumentScope {
   const scope = createTerminalDocumentScope(host)
   const terminal = terminalDocumentDouble().terminal
-  // Cells scale with the font as xterm's do, so a text-scale change moves the fit.
   const cell = () => {
     const k = terminal.options.fontSize / 13
     return { width: CELL.width * k, height: CELL.height * k }
@@ -45,14 +42,18 @@ function scopeWithGrid(host: TerminalDocumentHost = {}): TerminalDocumentScope {
 
 const started: TerminalDocumentScope[] = []
 
+beforeEach(() => {
+  vi.useFakeTimers()
+})
+
 afterEach(() => {
   while (started.length > 0) {
     stopTerminalDocument(started.pop()!)
   }
   vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
-/** A started document over a grid, with the page's seams the case names. */
 function startedWithGrid(host: TerminalDocumentHost): TerminalDocumentScope {
   document.body.innerHTML = TERMINAL_DOCUMENT_MARKUP
   const grid = scopeWithGrid().term!
@@ -68,10 +69,8 @@ function startedWithGrid(host: TerminalDocumentHost): TerminalDocumentScope {
   return scope
 }
 
-/** One frame after everything already queued: happy-dom runs frames in order. */
-const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+const nextFrame = () => vi.advanceTimersToNextFrame()
 
-/** Frame by frame until the document has done what the case waits on; init chains a few. */
 async function framesUntil(done: () => boolean, { required = true } = {}) {
   for (let frame = 0; frame < 30 && !done(); frame++) {
     await nextFrame()
@@ -89,7 +88,6 @@ const pageHost = (): TerminalDocumentHost => ({
 
 describe("the document's frame on the page", () => {
   it('maps a tap below a header to the cell the WebView reports for the same spot', () => {
-    // Row 10, column 4 of the grid: at (30, 150) in the WebView, and HEADER lower on the page.
     const native = viewportToCell(scopeWithGrid(), 30, 150)
     const page = viewportToCell(scopeWithGrid(pageHost()), 30, 150 + HEADER)
     expect(native).toEqual({ col: 4, row: 10 })
@@ -104,7 +102,7 @@ describe("the document's frame on the page", () => {
   })
 
   it('keeps the fit at 1 while the host is hidden and measures 0x0', () => {
-    // react-native-screens hides an inactive screen with display:none, so its host has no box.
+    // Inactive react-native-screens routes use display:none and have no measurable host box.
     const scope = scopeWithGrid({
       viewportRect: () => ({ left: 0, top: 0, width: 0, height: 0 })
     })
@@ -112,8 +110,7 @@ describe("the document's frame on the page", () => {
   })
 
   it('commits no fit before the host has a box, and one once it has', async () => {
-    // A page host mounted under a hidden screen has no box until RN lays it out; hide and show after
-    // that are the mount's to absorb (terminal-web-document-mount.test.ts).
+    // Initial hidden mounts wait for real RN layout; subsequent hide/show is handled by the mount adapter.
     let box = { left: 0, top: 0, width: 0, height: 0 }
     const widthsRead: number[] = []
     const changes: ((change: TerminalViewportChange) => void)[] = []
@@ -137,19 +134,16 @@ describe("the document's frame on the page", () => {
       }
       write.call(style, name, value, priority)
     })
-    // The fit's attempt ran and read the hidden host, and committed nothing.
     await framesUntil(() => widthsRead.includes(0))
     await nextFrame()
     expect(scales).toEqual([])
     box = { left: 0, top: 0, width: 390, height: 600 }
     changes.forEach((onChange) => onChange('resized'))
     await framesUntil(() => scales.length === 2)
-    // The refit repaints at the scale it has, then the fit commits once: 390 / (7.5 x 55).
     expect(scales).toEqual(['1', String(FIT_390)])
   })
 
   it("edge-scrolls at the host's own edges, not the window's", () => {
-    // Host top 100, height 600: its bottom edge band is 660-700 in client Y, not 560-600.
     const scope = startedWithGrid({
       viewportRect: () => ({ left: 0, top: 100, width: 412, height: 600 })
     })

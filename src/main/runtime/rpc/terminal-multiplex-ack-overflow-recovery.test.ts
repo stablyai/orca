@@ -1,8 +1,7 @@
-import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
-import { TERMINAL_METHODS } from './methods/terminal'
-import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
+import type { RuntimeTerminalWait } from '../../../shared/runtime-terminal-contracts'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -11,7 +10,7 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   makeRequest,
   sendDesktopMultiplexSubscribe,
@@ -138,7 +137,7 @@ describe('terminal multiplex RPC', () => {
           enter: false,
           interrupt: false
         },
-        { inputKind: 'driving' }
+        { inputKind: 'driving', inputSource: 'desktop' }
       )
     )
 
@@ -179,13 +178,12 @@ describe('terminal multiplex RPC', () => {
       (frame) => frame?.opcode === TerminalStreamOpcode.Output
     )
     expect(recoveryStartIndex).toBeGreaterThanOrEqual(0)
-    // Why: clients discard truncated snapshots; a usable recovery snapshot
-    // must not be marked truncated or the dropped output gap is permanent.
+    // Clients discard truncated snapshots; mark usable recovery complete or the gap stays permanent.
     expect(
       decodeTerminalStreamJson<{ truncated?: boolean }>(drainFrames[recoveryStartIndex]!.payload)
         ?.truncated
     ).toBe(false)
-    // P2-5: the client's history ends before the dropped output, so recovery must carry history to replace it.
+    // Recovery must replace history that ends before dropped output.
     expect(runtime.serializeTerminalBuffer).toHaveBeenLastCalledWith('pty-1', {
       scrollbackRows: 1000
     })
@@ -304,8 +302,7 @@ describe('terminal multiplex RPC', () => {
       serializeTerminalBuffer: vi
         .fn()
         .mockResolvedValueOnce({ data: 'initial snapshot', cols: 120, rows: 40 })
-        // Why: the recovery snapshot seq covers the entire flood, so every
-        // retained pending chunk is already contained in the snapshot.
+        // Recovery seq covers the flood, so all retained chunks already appear in the snapshot.
         .mockResolvedValue({ data: 'recovered snapshot', cols: 120, rows: 40, seq: floodedChars }),
       getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
       getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
@@ -411,8 +408,7 @@ describe('terminal multiplex RPC', () => {
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
         .join('')
     ).toBe('recovered snapshot')
-    // Why: every retained chunk is covered by the recovery snapshot seq;
-    // replaying any of them would duplicate snapshot content.
+    // Covered chunks would duplicate recovered snapshot content.
     expect(
       framesAfterRecovery.filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
     ).toEqual([])
@@ -434,5 +430,82 @@ describe('terminal multiplex RPC', () => {
 
     runtime.cleanupSubscription('terminal-multiplex:conn-ack-trim')
     await dispatchPromise
+  })
+
+  it('sends the next overflow recovery only after output sent ahead of the previous one is acknowledged', async () => {
+    const dataListenerRef: {
+      current?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
+    } = {}
+    let seq = 0
+    const serializeTerminalBuffer = vi.fn(async () => ({
+      data: 'recovered',
+      cols: 120,
+      rows: 40,
+      seq
+    }))
+    const harness = startDesktopMultiplexSubscribe({
+      serializeTerminalBuffer,
+      subscribeToTerminalData: vi.fn(
+        (
+          _: string,
+          listener: (data: string, meta?: { seq?: number; rawLength?: number }) => void
+        ) => {
+          dataListenerRef.current = listener
+          return vi.fn()
+        }
+      )
+    })
+    await vi.waitFor(() =>
+      expect(harness.messages.some((message) => JSON.parse(message).result?.type === 'ready')).toBe(
+        true
+      )
+    )
+    sendDesktopMultiplexSubscribe(harness.handlers)
+    await vi.waitFor(() =>
+      expect(
+        harness.messages.some((message) => JSON.parse(message).result?.type === 'subscribed')
+      ).toBe(true)
+    )
+    const flood = (): void => {
+      const output = 'x'.repeat(3 * 1024 * 1024)
+      seq += output.length
+      dataListenerRef.current?.(output, { seq, rawLength: output.length })
+    }
+    const ack = (bytes: number): void =>
+      harness.handlers.get(7)?.(
+        decodeTerminalStreamFrame(
+          encodeTerminalStreamFrame({
+            opcode: TerminalStreamOpcode.Ack,
+            streamId: 7,
+            seq: 0,
+            payload: encodeTerminalStreamJson({ bytes })
+          })
+        )!
+      )
+    const recoveries = (): number =>
+      harness.binaryFrames
+        .map((bytes) => decodeTerminalStreamFrame(bytes))
+        .filter(
+          (frame) =>
+            frame?.opcode === TerminalStreamOpcode.SnapshotStart &&
+            decodeTerminalStreamJson<{ reason?: string }>(frame.payload)?.reason ===
+              'ack-pending-overflow'
+        ).length
+
+    flood()
+    ack(64 * 1024)
+    await vi.waitFor(() => expect(recoveries()).toBe(1))
+    // 448KB sent before the first image is still unacknowledged, so a second flood must not stack another image behind it.
+    const serializeCalls = serializeTerminalBuffer.mock.calls.length
+    flood()
+    ack(64 * 1024)
+    await Promise.resolve()
+    expect(serializeTerminalBuffer).toHaveBeenCalledTimes(serializeCalls)
+
+    ack(384 * 1024)
+    await vi.waitFor(() => expect(recoveries()).toBe(2))
+
+    harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
+    await harness.dispatchPromise
   })
 })

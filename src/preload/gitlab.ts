@@ -1,9 +1,6 @@
-/* GitLab preload bindings — split out of `src/preload/index.ts` so
-   adding or changing a `gl.*` channel doesn't surface as a merge
-   conflict on every upstream sync of the much larger central preload
-   file. Composed back into `api.gl` from `index.ts`. */
 import { ipcRenderer } from 'electron'
-import type { TaskSourceContext } from '../shared/task-source-context'
+import type { GitLabMRInvolvement } from '../shared/gitlab-types'
+import type { TaskSourceContext } from '../shared/work-items/task-source-context'
 
 type GitLabRepoSelectorArgs = {
   repoPath: string
@@ -34,6 +31,7 @@ export const glApi = {
       page?: number
       perPage?: number
       query?: string
+      involvement?: GitLabMRInvolvement
     }
   ) => ipcRenderer.invoke('gitlab:listMRs', args),
 
@@ -90,6 +88,7 @@ export const glApi = {
       iid: number
       type: 'issue' | 'mr'
       includeReviewDetails?: boolean
+      background?: boolean
     }
   ) => ipcRenderer.invoke('gitlab:workItemDetails', args),
 

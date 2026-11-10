@@ -1,11 +1,12 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { SessionMemory, WorktreeMemory } from '../../../../shared/process-stats-types'
 import type { RuntimeHostResourceSample } from './resource-usage-merge-types'
 
 export type RuntimeHostResourceResult =
   | { status: 'sampled'; worktrees: WorktreeMemory[] }
-  // Why: a server that never answered is unverifiable, so the panel names it instead of showing it idle.
+  // An unanswered server is unverifiable, not idle.
   | { status: 'unreachable' }
   | { status: 'update-required' }
 
@@ -58,12 +59,13 @@ export function toRuntimeHostResourceSamples(
 
 export function getRuntimeHostResourceNotices(
   results: Readonly<Record<string, RuntimeHostResourceResult>>,
-  hostLabel: (environmentId: string) => string
+  hostLabel: (environmentId: string) => string,
+  t: Translate = translate
 ): string[] {
   return Object.entries(results).flatMap(([environmentId, result]) => {
     if (result.status === 'unreachable') {
       return [
-        translate(
+        t(
           'auto.components.status.bar.ResourceUsageStatusSegment.8a0472ab54',
           "Couldn't reach {{value0}}; its resources are unknown.",
           { value0: hostLabel(environmentId) }
@@ -72,7 +74,7 @@ export function getRuntimeHostResourceNotices(
     }
     if (result.status === 'update-required') {
       return [
-        translate(
+        t(
           'auto.components.status.bar.ResourceUsageStatusSegment.1ea066b73f',
           'Update {{value0}} to see its resources.',
           { value0: hostLabel(environmentId) }
@@ -95,7 +97,7 @@ function finiteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
-// Why: servers ship independently; keep well-formed rows and drop the rest rather than trusting the shape.
+// Independently updated servers may send mixed shapes; keep valid rows and reject malformed data.
 function parseSnapshotWorktrees(value: unknown): WorktreeMemory[] | null {
   if (!isRecord(value) || !Array.isArray(value.worktrees)) {
     return null

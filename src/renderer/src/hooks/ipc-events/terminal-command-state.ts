@@ -1,11 +1,11 @@
-import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { focusRuntimeTerminalSurface } from '@/runtime/mounted-terminal-tab-registry'
-import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-types'
+import { collectLeafIdsInOrder } from '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
+import { focusRuntimeTerminalSurface } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
+import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-terminal-contracts'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
-} from '../../../../shared/terminal-tab-types'
+} from '../../../../shared/workspace-layout/terminal-tab-types'
 
 export function resolveTerminalPresentation(data: {
   presentation?: RuntimeTerminalPresentation

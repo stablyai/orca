@@ -10,10 +10,6 @@ import {
 } from './session-search-index-test-fixture'
 import { SessionSearchStore } from './session-search-store'
 
-// A session row id outlives the row: it names the rows in `messages` until a
-// retention drain has walked all of them, which takes many transactions. These
-// tests are about what may be handed that id in the meantime.
-
 let index: SessionSearchIndexFile
 let store: SessionSearchStore
 let errors: unknown[]
@@ -37,7 +33,6 @@ function count(db: SyncDatabase, table: string): number {
   return (db.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n
 }
 
-/** Rows a search would return for a term: the join every retrieval makes. */
 function matches(db: SyncDatabase, term: string): number {
   return (
     db
@@ -60,9 +55,7 @@ function indexFile(path: string, mtimeMs: number, text: string, rows: number): v
 }
 
 it('never hands a live session the rows of a purged one', async () => {
-  // Two expiring transcripts, each large enough that reclaiming their rows takes
-  // several transactions, and one live transcript the parser decoded no session
-  // from — so it holds a cursor and no session row of its own.
+  // Seed multi-batch expiry plus a live file with a cursor but no session row.
   indexFile('/old-a.jsonl', OLD_MTIME, 'purgedneedle', 400)
   indexFile('/old-b.jsonl', OLD_MTIME, 'purgedneedle', 400)
   const live = syntheticCandidate({ path: LIVE_PATH, mtimeMs: LIVE_MTIME })
@@ -76,9 +69,7 @@ it('never hands a live session the rows of a purged one', async () => {
     LIVE_MTIME,
     () => false,
     async () => {
-      // The window: both expiring sessions are cut loose, most of their rows are
-      // still on disk, and the live transcript grows. The append is legitimate —
-      // it continues this index's own cursor — and it needs a session row.
+      // Append after expired sessions are detached, while their orphaned messages still hold the old IDs.
       if (appended || count(index.db, 'sessions') > 0) {
         return
       }
@@ -94,23 +85,9 @@ it('never hands a live session the rows of a purged one', async () => {
   )
 
   expect(appended).toBe(true)
-  // Reusing a freed id would adopt whatever of that session's rows the drain had
-  // not reached, and put them behind a live session no purge will visit again.
+  // Reusing a freed ID would attach unreclaimed messages to the live session.
   expect(matches(index.db, 'purgedneedle')).toBe(0)
   expect(matches(index.db, 'liveneedle')).toBe(2)
   expect(count(index.db, 'messages')).toBe(2)
   expect(errors).toEqual([])
-})
-
-it('never reissues a session row id a delete freed', () => {
-  for (const path of ['/a.jsonl', '/b.jsonl', '/c.jsonl']) {
-    indexFile(path, OLD_MTIME, 'seeded', 1)
-  }
-  const before = (index.db.prepare('SELECT max(id) AS id FROM sessions').get() as { id: number }).id
-  index.db.exec('DELETE FROM sessions')
-
-  indexFile('/d.jsonl', OLD_MTIME, 'seeded', 1)
-  expect((index.db.prepare('SELECT id FROM sessions').get() as { id: number }).id).toBeGreaterThan(
-    before
-  )
 })

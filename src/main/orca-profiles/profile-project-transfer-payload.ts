@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'
 import type { SshTarget } from '../../shared/ssh-types'
-import type { WorkspaceKey } from '../../shared/folder-workspace-types'
+import type { WorkspaceKey } from '../../shared/workspace-scope'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import type { Repo } from '../../shared/repo-types'
 import type { SparsePreset } from '../../shared/worktree/create-types'
@@ -11,21 +11,28 @@ import {
   extractRetiredNameRegistriesByNamespace,
   mergeRetiredNameRegistryMaps
 } from './profile-project-retired-name-transfer'
-import type { TransferProfileState } from './profile-project-state-file'
-import { rebuildRepoBackedProjectState } from './profile-project-state-file'
+
+import {
+  type TransferProfileState,
+  rebuildRepoBackedProjectState
+} from './profile-project-state-file'
 import { mergeHostWorkspaceSessions, mergeWorkspaceSessions } from './profile-project-session-state'
 import {
   extractHostSessionsForTransfer,
   extractSessionForTransfer
 } from './profile-project-session-transfer'
 import { collectTransferWorktreeIds } from './profile-project-transfer-worktree-ids'
-import { rekeyWorktreeId, rekeyWorkspaceKey } from './profile-project-worktree-identity'
+import {
+  ownerKeyBelongsToRepo,
+  rekeyWorktreeId,
+  rekeyWorkspaceKey
+} from './profile-project-worktree-identity'
+import { assertNoCrossStoreLinkedWorkspaceInMove } from '../../shared/worktree/cross-store-lineage-move-refusal'
 
 export type TransferPayload = {
   repo: Repo
   sparsePresets: SparsePreset[]
-  /** Generated names already spent for this repo, compacted. Carried so the destination profile
-   *  does not reissue a name whose old directory still holds agent state. */
+  /** Preserve spent names so the destination cannot reuse directories still holding agent state. */
   retiredNameRegistry: RetiredNameRegistry | undefined
   retiredNameRegistriesByNamespace: Record<string, RetiredNameRegistry>
   worktreeMeta: PersistedState['worktreeMeta']
@@ -123,6 +130,15 @@ function rekeyWorkspaceLineageRecord(
   return next
 }
 
+export function assertRepoHasNoCrossStoreLinkedWorkspace(
+  state: TransferProfileState,
+  repoId: string
+): void {
+  assertNoCrossStoreLinkedWorkspaceInMove(state, (childKey) =>
+    ownerKeyBelongsToRepo(childKey, repoId)
+  )
+}
+
 export function createTransferPayload(args: {
   sourceState: TransferProfileState
   sourceRepo: Repo
@@ -132,6 +148,7 @@ export function createTransferPayload(args: {
   const { sourceState, sourceRepo, targetRepo, includeSessions } = args
   const oldRepoId = sourceRepo.id
   const newRepoId = targetRepo.id
+  assertRepoHasNoCrossStoreLinkedWorkspace(sourceState, oldRepoId)
   const worktreeIds = collectTransferWorktreeIds(sourceState, oldRepoId)
   const targetProjection = projectHostSetupProjectionFromRepos([targetRepo])
   const targetProjectId =

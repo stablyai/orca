@@ -90,7 +90,6 @@ describe('the cell box xterm laid out', () => {
   })
 
   it('fits each box the document reports, and refits only when the document says so', () => {
-    // The document holds the grid and decides; its tests pin the one-refit bound.
     const { handle, notify, onCellBoxChange } = mount()
     notify({ type: 'web-ready', cellBox: cellAt(scale) })
     notify(cellBoxNotify(7.9, false))
@@ -111,7 +110,6 @@ describe('the cell box xterm laid out', () => {
 
   it("fits only from a ready box at the app's text scale", () => {
     const { handle, notify, webView } = mount(1.5)
-    // A document built at mount keeps that scale; a reload after a text-size change reports it.
     notify({ type: 'web-ready', cellBox: cellAt(1) })
     expect(handle().fitDimensions(FRAME)).toBeNull()
     act(() => webView().props.onLoadStart())
@@ -177,7 +175,7 @@ describe('the cell box xterm laid out', () => {
     const html: string = webView().props.source.html
     const start = html.indexOf('window.__orcaTerminalTextScale = 1.25;')
     expect(start).toBeGreaterThan(-1)
-    // Ahead of the document script, in the page itself, so no platform can run it late.
+    // Put initial settings in page source so no platform can inject them after document startup.
     expect(start).toBeLessThan(html.indexOf('startTerminalDocument'))
   })
 

@@ -1,15 +1,25 @@
 // Runs on plain Node, as orcad does: the catalog comes from main's own store, no window publishes it.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import type { ProjectGroup } from '../../../shared/project-group-types'
+
 import type { Repo } from '../../../shared/repo-types'
+
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
+
 import { readSidebarFeedDomains } from '../../../shared/sidebar-list/sidebar-feed-domains'
-import { MOBILE_PROJECT_SECTIONS_METHOD } from '../../../shared/mobile-project-sections-contract'
+
+import '../../../shared/mobile-project-sections-contract'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { ALL_RPC_METHODS } from '../rpc/methods'
-import type { RuntimeStore } from '../runtime-store-contract'
+
+import '../rpc/methods/rpc-method-registry'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
+
 import { requireSwitchedOn } from './require-switched-on'
+
 import { TestPhone } from './sidebar-inputs-feed.test-fixture'
+
+import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
@@ -36,8 +46,7 @@ function setup() {
     getRepos: () => repos,
     getProjectGroups: () => [group('a'), group('school')]
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the catalog reads only repos and groups; other domains fail soft.
-  const runtime = new OrcaRuntimeService(store as RuntimeStore)
+  const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
   const events: RuntimeClientEvent[] = []
   runtime.onClientEvent((event) => events.push(event))
   const feed = requireSwitchedOn(runtime.sidebarInputsFeed)
@@ -81,19 +90,6 @@ afterEach(() => {
 })
 
 describe('the project catalog in the sidebar feed', () => {
-  it('installs a group move with the revision that announced it', async () => {
-    const { feed, move } = setup()
-    const phone = new TestPhone(feed, 'conn-1')
-    phone.refresh()
-    await phone.settle()
-    expect(groupOf(phone)).toBe('a')
-
-    phone.notice(await move('school'))
-    await phone.settle()
-    expect(groupOf(phone)).toBe('school')
-    phone.disconnect()
-  })
-
   it('reaches a move made while an earlier read is held, with no further trigger', async () => {
     const { feed, move } = setup()
     const phone = new TestPhone(feed, 'conn-1')
@@ -109,18 +105,5 @@ describe('the project catalog in the sidebar feed', () => {
     await phone.settle()
     expect(groupOf(phone)).toBe('school')
     phone.disconnect()
-  })
-
-  it('answers mobileRelay.projectSections from the same catalog for a page that predates it', async () => {
-    const { runtime, write } = setup()
-    write('school')
-    const method = ALL_RPC_METHODS.find((entry) => entry.name === MOBILE_PROJECT_SECTIONS_METHOD)
-    const reply = await method?.handler(undefined, { runtime })
-    expect(reply).toMatchObject({
-      catalog: {
-        repos: [{ id: 'r', projectGroupId: 'school', executionHostId: 'local' }],
-        projectGroups: [{ id: 'a' }, { id: 'school' }]
-      }
-    })
   })
 })

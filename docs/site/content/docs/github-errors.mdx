@@ -9,14 +9,14 @@ This page covers the errors you’ll see most often and how to fix them.
 
 ## Quick triage
 
-| What you see                                                      | Likely cause                                               | First thing to try                                                                                               |
-| ----------------------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| “GitHub is rate-limiting requests” / “rate limit exceeded (core)” | GitHub REST (core) quota exhausted for your user           | Wait for reset; stop extra `gh` / agent / Orca usage; check [Settings → Git → GitHub API Budget](/docs/settings) |
-| “GitHub authentication is unavailable” / `gh auth` prompts        | `gh` not logged in, expired token, or bad `GITHUB_TOKEN`   | `gh auth status`, then `gh auth login`                                                                           |
-| “GitHub did not allow access” / HTTP 403 (not rate limit)         | Missing scopes or no access to the repo                    | Re-auth with `repo` (and needed org SSO); confirm you can open the PR in the browser                             |
-| “repository is unavailable” / HTTP 404                            | Wrong remote, private repo without access, or renamed repo | Check `git remote -v` and browser access                                                                         |
-| “GitHub is unreachable” / timeouts                                | Network, proxy, VPN, or GitHub outage                      | Check [githubstatus.com](https://www.githubstatus.com/); retry off VPN                                           |
-| “GitHub CLI is unavailable”                                       | `gh` missing from PATH Orca uses                           | Install `gh` and restart Orca                                                                                    |
+| What you see                                                                     | Likely cause                                                | First thing to try                                                                                               |
+| -------------------------------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| “GitHub is rate-limiting requests” / “rate limit exceeded (core)” or “(graphql)” | GitHub REST (core) or GraphQL quota exhausted for your user | Wait for reset; stop extra `gh` / agent / Orca usage; check [Settings → Git → GitHub API Budget](/docs/settings) |
+| “GitHub authentication is unavailable” / `gh auth` prompts                       | `gh` not logged in, expired token, or bad `GITHUB_TOKEN`    | `gh auth status`, then `gh auth login`                                                                           |
+| “GitHub did not allow access” / HTTP 403 (not rate limit)                        | Missing scopes or no access to the repo                     | Re-auth with `repo` (and needed org SSO); confirm you can open the PR in the browser                             |
+| “repository is unavailable” / HTTP 404                                           | Wrong remote, private repo without access, or renamed repo  | Check `git remote -v` and browser access                                                                         |
+| “GitHub is unreachable” / timeouts                                               | Network, proxy, VPN, or GitHub outage                       | Check [githubstatus.com](https://www.githubstatus.com/); retry off VPN                                           |
+| “GitHub CLI is unavailable”                                                      | `gh` missing from PATH Orca uses                            | Install `gh` and restart Orca                                                                                    |
 
 ## Rate limits (most common)
 
@@ -24,13 +24,13 @@ GitHub gives each **authenticated user** a shared hourly budget. **Every tool on
 
 ### Buckets Orca cares about
 
-| Bucket          | What it covers                                                               | Typical limit (authenticated) |
-| --------------- | ---------------------------------------------------------------------------- | ----------------------------- |
-| **REST (core)** | Most PR/issue/API calls (`gh pr view`, checks metadata, many REST endpoints) | 5,000 / hour                  |
-| **GraphQL**     | Project/Tasks and some richer PR queries                                     | 5,000 points / hour           |
-| **Search**      | Search-driven lists                                                          | 30 / minute                   |
+| Bucket          | What it covers                                                                                                            | Typical limit (authenticated) |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| **REST (core)** | `gh api` REST endpoints: PR lookup for a branch, check runs, PR files, issue comments, labels                             | 5,000 / hour                  |
+| **GraphQL**     | `gh pr view` / `list` / `checks` / `merge` / `edit`, `gh issue view` / `close` / `reopen` / `edit`, Project/Tasks queries | 5,000 points / hour           |
+| **Search**      | Search-driven lists                                                                                                       | 30 / minute                   |
 
-When a primary bucket is exhausted, GitHub returns HTTP **403** with a message like `API rate limit exceeded`. Orca classifies that as rate-limited, keeps the last known PR status when it can, and **stops spawning more `gh` calls** for a short window so a single limit doesn’t turn into a storm of failures.
+When a primary bucket is exhausted, REST calls fail with HTTP **403** and `API rate limit exceeded`, and GraphQL calls fail with `API rate limit already exceeded`. Orca classifies either as rate-limited, keeps the last known PR status when it can, and **stops spawning more `gh` calls** for a short window so a single limit doesn’t turn into a storm of failures.
 
 ### Why Settings can look “OK” while the PR panel is blocked
 
@@ -50,11 +50,14 @@ Also don’t confuse **GitHub API Budget** with **Claude / Codex / Grok usage** 
 # Probe (does not consume quota; can look healthier than reality)
 gh api rate_limit --jq '.resources | {core, graphql, search}'
 
-# Real REST call — this is what PR refresh depends on
+# Real REST call — PR refresh, check runs, PR files, and comments depend on this
 gh api user -i 2>&1 | head -40
+
+# Real GraphQL call — PR details, PR lists, merges, and issue close/reopen depend on this
+gh api graphql -f query='{ viewer { login } }'
 ```
 
-If `gh api user` returns **403** with `API rate limit exceeded` and `X-Ratelimit-Remaining: 0`, the account is blocked for REST until `X-Ratelimit-Reset` (Unix epoch seconds).
+If `gh api user` returns **403** with `API rate limit exceeded` and `X-Ratelimit-Remaining: 0`, the account is blocked for REST until `X-Ratelimit-Reset` (Unix epoch seconds). If the GraphQL call fails with `API rate limit already exceeded`, the GraphQL bucket is the one exhausted.
 
 ### What usually burns the quota
 

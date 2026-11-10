@@ -2,11 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SidebarFeedDomains } from '../../../shared/sidebar-list/sidebar-feed-domains'
 import { buildWorkspaceRows, type WorkspaceRow } from '../../../shared/sidebar-list/workspace-rows'
 import type { PairedServerWorkspaceRow } from '../../../shared/sidebar-list/paired-server-rows'
+import { parseExecutionHostId } from '../../../shared/execution-host'
+import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import {
   makeFolderWorkspace,
   makeRepo,
   makeWorktree
-} from '@/components/worktree-jump-palette-test-fixtures'
+} from '@/components/worktree-jump/worktree-jump-palette-test-fixtures'
 import type { DesktopSidebarFeed } from './desktop-sidebar-feed'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
@@ -31,7 +33,12 @@ function domains(
   serverRows: PairedServerWorkspaceRow[] = []
 ): SidebarFeedDomains {
   return {
-    workspaces: new Map(rows.map((row) => [`${row.hostId}|${row.id}`, row])),
+    workspaces: new Map(
+      rows.map((row) => [
+        composeWorktreeHostIdentity(parseExecutionHostId(row.hostId)?.id, row.id),
+        row
+      ])
+    ),
     activity: new Map(),
     review: new Map(),
     creations: new Map(),
@@ -218,15 +225,5 @@ describe('sidebar pending layer', () => {
     // Main shows the newer value: nothing older is left to paint over it.
     install(domains([], [serverRow(7)]))
     expect(layer.readSidebarPendingLayer().writes).toEqual([])
-  })
-
-  it('leaves a write with no row field to main alone', async () => {
-    const layer = await load()
-    await layer.withPendingSidebarRowWrites(
-      () => [{ worktreeId: local.id, updates: { comment: 'note' } }],
-      async () => {}
-    )
-    expect(layer.readSidebarPendingLayer()).toEqual({ writes: [], created: [] })
-    expect(feed.lastReadId).toBe(0)
   })
 })

@@ -1,14 +1,13 @@
 import type SyncDatabase from '../sqlite/sync-database'
-import type { TranscriptMessageRole } from '../ai-vault/session-transcript-consumers'
+import type { TranscriptMessageRole } from '../ai-vault/transcripts/session-transcript-consumers'
 import { sliceAtCodeUnitLimit } from '../ai-vault/session-scanner-text-normalization'
 import {
   hasAiVaultSearchQueryOperators,
   splitAiVaultSearchQuery,
   type AiVaultSearchQuerySplit
-} from '../../shared/ai-vault-search-query-operators'
-import { matchesAiVaultQueryOperators } from '../../shared/ai-vault-session-filters'
+} from '../../shared/ai-vault/search/ai-vault-search-query-operators'
+import { matchesAiVaultQueryOperators } from '../../shared/ai-vault/session-display/ai-vault-session-filters'
 import {
-  resolveSessionSearchLimit,
   SESSION_SEARCH_QUERY_MAX_LENGTH,
   type SessionSearchHit,
   type SessionSearchRequest,
@@ -16,7 +15,12 @@ import {
   type SessionSearchScope,
   type SessionSearchSourcePresence
 } from './session-search-engine-types'
-import { readIndexGeneration, readIndexIncarnation } from './session-search-index-generation'
+import { resolveSessionSearchLimit } from '../../shared/ai-vault/search/ai-vault-search-limit'
+import {
+  readIndexContentRevision,
+  readIndexGeneration,
+  readIndexIncarnation
+} from './session-search-index-generation'
 import {
   rankSessionHits,
   type MessageRow,
@@ -24,11 +28,16 @@ import {
   type SessionRow
 } from './session-search-hit-ranking'
 import {
-  SessionSearchCursorError,
   decodeSessionSearchCursor,
   encodeSessionSearchCursor,
   sessionSearchPageKey
 } from './session-search-page-cursor'
+import {
+  SESSION_SEARCH_MAX_CANDIDATES,
+  decodeRankedSessionSearchCursor,
+  encodeRankedSessionSearchCursor,
+  type SessionSearchRankedCursor
+} from './session-search-ranked-cursor'
 import { planSessionSearchQuery } from './session-search-query-planner'
 import {
   SessionSearchRetrieval,
@@ -40,39 +49,25 @@ import { ensureSessionSearchQuerySchema } from './session-search-query-schema'
 import { EMPTY_SNIPPET, sessionSearchSnippet } from './session-search-snippet'
 import { sessionSourcePresence } from './session-search-source-presence'
 
-/**
- * Sessions retrieved before ranking cuts the page.
- *
- * Not a fixed constant (the reviewer's F13): it is the knob that trades page
- * completeness for retrieval cost, and the right value depends on index size.
- * Measurements behind this default, and what changing it costs, are in
- * docs/reference/agent-session-search-query-tuning.md.
- */
+/** Candidate-limit tuning and measurements: docs/reference/agent-session-search-query-tuning.md. */
 export const SESSION_SEARCH_CANDIDATE_LIMIT_DEFAULT = 600
 
-/** One ranked list plus what produced it; a page is a slice of `ranked`. */
+type SnippetPlan = Pick<Retrieved, 'plan' | 'route' | 'repairedTerms'>
+
 type RankedPage = {
   ranked: RankedSession[]
-  /** Null when no text was searched, so there is nothing to snippet from. */
   retrieved: Retrieved | null
-  /**
-   * Retrieval may have missed a session: a cap ended it, not the data. True
-   * whether the candidate limit filled or the operator walk gave up scanning.
-   */
+  /** Retrieval stopped at a candidate or operator-scan limit. */
   incomplete: boolean
 }
 
 export type SessionSearchEngineOptions = {
   sessionCandidateLimit?: number
-  /** Oldest transcript mtime a hit may come from; PR 3 derives it from retention. */
+  /** Oldest eligible transcript mtime, derived from retention. */
   retentionCutoffMs?: number | null
 }
 
-/**
- * Synchronous searches use independent statements to avoid pinning the WAL.
- * Generation checks bracket all content reads; concurrent writes reject the page.
- * The connection's owner handles index rebuilds and engine reconstruction.
- */
+/** One page reads one WAL snapshot; later page requests still validate their generation. */
 export class SessionSearchEngine {
   private readonly retrieval: SessionSearchRetrieval
   private readonly candidateLimit: number
@@ -81,10 +76,11 @@ export class SessionSearchEngine {
     private readonly db: SyncDatabase,
     private readonly options: SessionSearchEngineOptions = {}
   ) {
-    this.candidateLimit = options.sessionCandidateLimit ?? SESSION_SEARCH_CANDIDATE_LIMIT_DEFAULT
-    // Installed here and not on the first search, so the generation triggers are
-    // watching before anything this engine will be asked to page over is
-    // written, and so retrieval below prepares against tables that exist.
+    this.candidateLimit = Math.min(
+      SESSION_SEARCH_MAX_CANDIDATES,
+      options.sessionCandidateLimit ?? SESSION_SEARCH_CANDIDATE_LIMIT_DEFAULT
+    )
+    // Install tables and generation triggers before preparing retrieval or accepting writes.
     ensureSessionSearchQuerySchema(this.db)
     this.retrieval = new SessionSearchRetrieval(this.db)
   }
@@ -94,14 +90,24 @@ export class SessionSearchEngine {
   }
 
   search(request: SessionSearchRequest): SessionSearchResponse {
+    this.db.exec('BEGIN')
+    try {
+      const result = this.readPage(request)
+      this.db.exec('COMMIT')
+      return result
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  private readPage(request: SessionSearchRequest): SessionSearchResponse {
     const startedAt = performance.now()
     ensureSessionSearchQuerySchema(this.db)
     const generation = readIndexGeneration(this.db)
     const incarnation = readIndexIncarnation(this.db)
     const scope = request.scope ?? 'all'
     const sort = request.filters?.sort ?? 'relevance'
-    // Not a bare `slice`: cutting between a surrogate pair leaves a lone half
-    // that no tokenizer can match and that a caller cannot echo back.
     const capped = sliceAtCodeUnitLimit(request.query, SESSION_SEARCH_QUERY_MAX_LENGTH)
     const split = splitAiVaultSearchQuery(capped)
     const retrievalScope: RetrievalScope = {
@@ -111,9 +117,25 @@ export class SessionSearchEngine {
       matchesOperators: operatorPredicate(split),
       candidateLimit: this.candidateLimit
     }
-    // Decoded before any retrieval: a cursor the engine will refuse must not
-    // cost a query, and the caller has to hear about it either way.
+    // Reject invalid cursors before paying for retrieval.
     const pageKey = sessionSearchPageKey(request)
+    const frozen = request.cursor
+      ? decodeRankedSessionSearchCursor(
+          request.cursor,
+          generation,
+          readIndexContentRevision(this.db, generation),
+          pageKey,
+          incarnation
+        )
+      : null
+    if (frozen) {
+      const limit = resolveSessionSearchLimit(request.limit)
+      const page = this.retrieval.hydrate(
+        frozen.hits.slice(frozen.o, frozen.o + limit),
+        retrievalScope
+      )
+      return this.frozenPage(frozen, page, scope, limit, startedAt)
+    }
     const offset = request.cursor
       ? decodeSessionSearchCursor(request.cursor, generation, pageKey, incarnation)
       : 0
@@ -125,48 +147,78 @@ export class SessionSearchEngine {
         : this.text(plan, retrievalScope, sort)
 
     const limit = resolveSessionSearchLimit(request.limit)
-    const page = ranked.slice(offset, offset + limit)
-    const hits = this.hits(page, scope, retrieved)
-    const actualGeneration = readIndexGeneration(this.db)
-    if (actualGeneration !== generation) {
-      throw new SessionSearchCursorError('stale-generation', actualGeneration, generation)
+    const snapshot: SessionSearchRankedCursor = {
+      v: 2,
+      i: incarnation,
+      g: generation,
+      r: readIndexContentRevision(this.db, generation),
+      k: pageKey,
+      o: offset,
+      hits: ranked.map((entry) => ({
+        s: entry.session.id,
+        m: entry.message?.rowid ?? null,
+        score: entry.score,
+        d: entry.duplicateCount
+      })),
+      retrieval: retrieved
+        ? {
+            plan: retrieved.plan,
+            route: retrieved.route,
+            ...(retrieved.repairedTerms ? { repairedTerms: retrieved.repairedTerms } : {})
+          }
+        : null,
+      incomplete,
+      queryTruncated: capped.length < request.query.length || plan.truncated
     }
-    const hasMore = ranked.length > offset + limit
-    const response: SessionSearchResponse = {
+    return this.frozenPage(
+      snapshot,
+      ranked.slice(offset, offset + limit),
+      scope,
+      limit,
+      startedAt,
+      !!request.cursor
+    )
+  }
+
+  private frozenPage(
+    frozen: SessionSearchRankedCursor,
+    page: RankedSession[],
+    scope: SessionSearchScope,
+    limit: number,
+    startedAt: number,
+    legacy = false
+  ): SessionSearchResponse {
+    const hits = this.hits(page, scope, frozen.retrieval)
+    const next = frozen.o + limit
+    const hasMore = next < frozen.hits.length
+    return {
       hits,
       planner: {
-        route: retrieved?.route ?? 'or',
+        route: frozen.retrieval?.route ?? 'or',
         tier: scope,
-        ...(retrieved?.repairedTerms ? { repairedTerms: retrieved.repairedTerms } : {})
+        ...(frozen.retrieval?.repairedTerms
+          ? { repairedTerms: frozen.retrieval.repairedTerms }
+          : {})
       },
       page: {
         hasMore,
         cursor: hasMore
-          ? encodeSessionSearchCursor(generation, offset + limit, pageKey, incarnation)
+          ? legacy
+            ? encodeSessionSearchCursor(frozen.g, next, frozen.k, frozen.i)
+            : encodeRankedSessionSearchCursor({ ...frozen, o: next })
           : null
       },
       truncated: {
-        // Decided by retrieval, which is the only layer that knows whether a cap
-        // ended it. Deriving it from the hits cannot work: an operator walk that
-        // gave up at its scan ceiling returns no hits, and so does a search that
-        // genuinely matched nothing.
-        candidates: incomplete,
-        snippets: hits.filter((hit) => hit.evidence?.snippetTruncated).length,
-        query: capped.length < request.query.length || plan.truncated
+        candidates: frozen.incomplete,
+        query: frozen.queryTruncated,
+        snippets: hits.filter((hit) => hit.evidence?.snippetTruncated).length
       },
-      generation,
+      generation: frozen.g,
       durationMs: performance.now() - startedAt
     }
-    return response
   }
 
-  /**
-   * Operators with no free text still name a scope, so the answer is the newest
-   * sessions inside it. Ranked through the same path as a text query, because
-   * forks must fold here exactly as they do there or the same sessions answer
-   * `repo:x` and `word repo:x` differently. There is no relevance signal
-   * without text, so the order is always newest.
-   */
+  /** Operator-only queries use newest order and the same fork folding as text queries. */
   private operatorOnly(split: AiVaultSearchQuerySplit, scope: RetrievalScope): RankedPage {
     if (!hasAiVaultSearchQueryOperators(split)) {
       return { ranked: [], retrieved: null, incomplete: false }
@@ -181,20 +233,30 @@ export class SessionSearchEngine {
     sort: 'relevance' | 'newest'
   ): RankedPage {
     const retrieved = this.retrieval.run(plan, scope)
-    // `match` already grouped to one best row per session.
-    const best = new Map<number, MessageRow>(retrieved.rows.map((row) => [row.session_row_id, row]))
+    const best = new Map<number, MessageRow>()
+    for (const row of retrieved.rows) {
+      const previous = best.get(row.session_row_id)
+      if (
+        !previous ||
+        row.score > previous.score ||
+        (row.score === previous.score && row.rowid < previous.rowid)
+      ) {
+        best.set(row.session_row_id, row)
+      }
+    }
+    const ranked = rankSessionHits(retrieved.sessions, best, sort)
     return {
-      ranked: rankSessionHits(retrieved.sessions, best, sort),
+      ranked: ranked.slice(0, this.candidateLimit),
       retrieved,
-      incomplete: retrieved.incomplete
+      incomplete: retrieved.incomplete || ranked.length >= this.candidateLimit
     }
   }
 
-  /** Snippets and source presence are paid for by the page, never by the list. */
+  /** Fetch snippets and presence only for the requested page. */
   private hits(
     page: readonly RankedSession[],
     scope: SessionSearchScope,
-    retrieved: Retrieved | null
+    retrieved: SnippetPlan | null
   ): SessionSearchHit[] {
     const presence = sessionSourcePresence(
       this.db,
@@ -206,7 +268,7 @@ export class SessionSearchEngine {
   private hit(
     entry: RankedSession,
     scope: SessionSearchScope,
-    retrieved: Retrieved | null,
+    retrieved: SnippetPlan | null,
     presence: ReadonlyMap<number, SessionSearchSourcePresence>
   ): SessionSearchHit {
     const { session, message } = entry
@@ -231,12 +293,7 @@ export class SessionSearchEngine {
   }
 }
 
-/**
- * The one reading of `repo:` / `path:`: the sessions panel's own predicate, over
- * the columns the index stores. The engine has no project map, so a session's
- * repo label falls back to its folder label, which is what the panel does for
- * every session it cannot resolve a project for.
- */
+/** Reuse panel operator matching; repo labels fall back to folder labels without a project map. */
 function operatorPredicate(split: AiVaultSearchQuerySplit): (session: SessionRow) => boolean {
   if (!hasAiVaultSearchQueryOperators(split)) {
     return () => true

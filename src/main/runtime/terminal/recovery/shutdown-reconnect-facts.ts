@@ -1,12 +1,11 @@
-// Layout-owner build: what the next startup reconnects, derived by main from its own layout, its
-// terminal records and its SSH connections, never taken from a window's save. The rules are the
-// window's (buildTerminalSessionData, buildActiveConnectionIdsAtShutdown), read from main's state.
+// Derive shutdown reconnect facts from main-owned layout, terminal records and SSH connections, matching window capture rules without depending on window saves.
 
+import { isPaneSleepRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isOwnedSshTargetId } from '../../../../shared/execution-host'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
 export type ShutdownReconnectFacts = Pick<
   WorkspaceSessionState,
@@ -28,14 +27,19 @@ function tabPtyIds(session: WorkspaceSessionState, tabId: string, tabPtyId: stri
   const layout = session.terminalLayoutsByTabId[tabId]
   const byLeaf = layout?.ptyIdsByLeafId ?? {}
   const leafIds = collectLayoutLeafIdsInOrder(layout?.root ?? null)
-  const sleeping = session.sleepingAgentSessionsByPaneKey ?? {}
+  const records = session.sleepingAgentSessionsByPaneKey ?? {}
+  // A running agent's live or quit resume record is not a sleep.
+  const slept = (leafId: string | undefined): boolean => {
+    const record = leafId ? records[`${tabId}:${leafId}`] : undefined
+    return record !== undefined && isPaneSleepRecord(record)
+  }
   const panes = leafIds.flatMap((leafId) => {
     const ptyId = byLeaf[leafId]
-    return ptyId ? [{ ptyId, sleeping: Boolean(sleeping[`${tabId}:${leafId}`]) }] : []
+    return ptyId ? [{ ptyId, sleeping: slept(leafId) }] : []
   })
   // A tab-level id is its single pane's: slept when that pane is.
   if (tabPtyId && !panes.some((pane) => pane.ptyId === tabPtyId)) {
-    const solePaneSleeping = leafIds.length === 1 && Boolean(sleeping[`${tabId}:${leafIds[0]}`])
+    const solePaneSleeping = leafIds.length === 1 && slept(leafIds[0])
     panes.push({ ptyId: tabPtyId, sleeping: solePaneSleeping })
   }
   return panes

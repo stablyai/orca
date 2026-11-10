@@ -1,6 +1,6 @@
 import type { OrcadOptions } from './orcad-start-contract'
-import { DEFAULT_WS_PORT } from '../runtime/runtime-rpc/runtime-rpc-pairing-types'
-import { ORCAD_LOOPBACK_BIND_HOST } from './orcad-bind-address'
+import { DEFAULT_WS_PORT } from '../runtime/rpc/server/runtime-rpc-pairing-types'
+import { ORCAD_LOOPBACK_BIND_HOST } from '../../shared/orcad-bind-address'
 import { getServeOptionValidationError } from '../../shared/serve-option-validation'
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -17,6 +17,12 @@ Options:
                            Use an SSH port-forward or a network IP for remote access.
   --pairing-address <addr> Address advertised in pairing offers when different
                            from the bind address (for example, a public hostname).
+  --allow-public           Accept clients from public addresses. Without it only
+                           localhost, LAN and Tailscale addresses connect, unless a
+                           paired device has already connected from a public one.
+  --refuse-public          Refuse public addresses even when older pairings, a
+                           remembered public connection or --pairing-address
+                           would accept them.
   --json                   Print the one-line server readiness JSON to stdout.
   --no-pairing             Do not create a client pairing offer at startup.
   --mobile-pairing         Create a mobile-scoped pairing offer with a QR code.
@@ -26,6 +32,10 @@ Options:
   --project-root <dir>     Existing absolute project directory for --recipe-json.
   --web-client-root <dir>  Serve the browser client from this directory (holds web-index.html).
   --help, -h               Print this text and exit without starting the server.
+  --reclaim-stale-lock [--yes]
+                           Without starting the server, check whether this data root's
+                           instance lock belongs to an orcad that stopped (same host,
+                           an earlier boot, nothing answering) and, with --yes, clear it.
 
 Environment:
   ORCA_USER_DATA           Data directory for this instance's profile and state.
@@ -33,11 +43,7 @@ Environment:
 
 type OrcadCommandArguments = OrcadOptions & { help?: boolean }
 
-/**
- * orcad's flags. A value-taking flag consumes the next token whatever it looks
- * like, so `--bind --json` binds to the literal `--json`; only a missing token
- * is an error. Pinned by orcad-launch-contract.test.ts.
- */
+/** Value-taking flags consume the next token even if it resembles another flag. */
 export function parseArgs(argv: string[]): OrcadCommandArguments {
   const options: OrcadCommandArguments = {}
   for (let i = 0; i < argv.length; i += 1) {
@@ -54,6 +60,10 @@ export function parseArgs(argv: string[]): OrcadCommandArguments {
       i += 1
     } else if (arg === '--json') {
       options.json = true
+    } else if (arg === '--allow-public') {
+      options.allowPublic = true
+    } else if (arg === '--refuse-public') {
+      options.refusePublic = true
     } else if (arg === '--no-pairing') {
       options.noPairing = true
     } else if (arg === '--mobile-pairing') {
@@ -95,9 +105,12 @@ export function parseArgs(argv: string[]): OrcadCommandArguments {
     }
   }
   const validationError = getServeOptionValidationError({
+    bind: options.bind,
     noPairing: options.noPairing === true,
     mobilePairing: options.mobilePairing === true,
     grantDesktopControl: options.grantDesktopControl,
+    allowPublic: options.allowPublic,
+    refusePublic: options.refusePublic,
     recipeJson: options.recipeJson === true,
     projectRoot: options.projectRoot
   })
@@ -107,10 +120,7 @@ export function parseArgs(argv: string[]): OrcadCommandArguments {
   return options
 }
 
-/**
- * The `--web-client-root` orcad may serve, or undefined. A root without its index is refused up
- * front: serving it would 404 every browser while the pairing offer advertised a web client URL.
- */
+/** Reject web roots without an index before pairing can advertise a broken URL. */
 export function resolveOrcadWebClientRoot(
   requested: string | undefined,
   warn: (message: string) => void = console.warn

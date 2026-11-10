@@ -1,30 +1,32 @@
-import { hasClosedTerminalTabRecord } from '../../../shared/closed-terminal-tab-tombstones'
+import { hasClosedTerminalTabRecord } from '../../../shared/workspace-layout/closed-terminal-tab-tombstones'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../shared/workspace-scope'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { keepUnsavedDrafts } from '../../../shared/workspace-session-draft-retention'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { keepUnsavedDrafts } from '../../../shared/workspace-session/workspace-session-draft-retention'
 import {
   withoutWorkspaces,
   workspaceIdsNamedByPartition,
   workspacesTheHostSupersedes
-} from '../../../shared/workspace-session-stranded-partition-adoption'
+} from '../../../shared/workspace-session/workspace-session-stranded-partition-adoption'
 import { sessionPartitions } from './orcad-source-workspace-session-fragments'
 import {
   orcadMigrationOwnerMatchesScope,
   orcadMigrationPartitionScope,
+  orcadMigrationScopeOwnsWholeHost,
   type OrcadMigrationSourceScope
 } from './orcad-source-scope'
 
-/**
- * The partitions as the app itself reads them: the shared adoption rule decides where the host's
- * copy supersedes an older local one (#12723). Everywhere else both copies export and must agree.
- */
+/** Match app adoption (#12723); other duplicate partition copies must agree before export. */
 export function orcadMigrationSessionPartitions(
   state: PersistedState,
   scope: OrcadMigrationSourceScope
 ): [string, WorkspaceSessionState][] {
   const partitions = sessionPartitions(state, LOCAL_EXECUTION_HOST_ID)
+  // A WSL move's host is `local` itself: no second copy to reconcile with.
+  if (!orcadMigrationScopeOwnsWholeHost(scope)) {
+    return partitions
+  }
   const host = partitions.find(([hostId]) => hostId === scope.hostId)?.[1]
   if (!host) {
     return partitions
@@ -57,7 +59,7 @@ export function orcadMigrationSessionPartitions(
   })
 }
 
-/** Workspaces the local copy must keep: a worker fence, or a close record for a tab the host lists. */
+/** Retain local copies with worker fences or closes contradicting the host's tabs. */
 function copiesThatStillDisagree(
   local: WorkspaceSessionState,
   host: WorkspaceSessionState

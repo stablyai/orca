@@ -1,21 +1,27 @@
-// The paired desktop's servers (`mobileRelay.hosts.list`), one feed per desktop client: the host
-// list's poll and every open server workspace share one read, so two readers never double the
-// desktop's load. The host list reads without subscribing, so its badge may trail a workspace by a tick.
+// Share reads per desktop across its host list and open server workspaces to avoid multiplying poll load.
 
 import { useCallback, useSyncExternalStore } from 'react'
 import { AppState } from 'react-native'
-import type { MobileRelayHost } from '../../../src/shared/mobile-relay-hosts-contract'
-import type { RpcClient } from '../transport/rpc-client'
+import { MOBILE_RELAY_HOSTS_CHANGED_EVENT_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
+import { readViewBase } from '../query/host-read-client'
+import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import {
+  subscribeSharedClientEvents,
+  type SharedClientEvent
+} from '../transport/connection/shared-client-events'
 import { relayHostsListRead } from './server-workspace-operations'
 
-// The host list's own poll cadence, counted from when the last read finished.
+// Count polling cadence from the last completed read.
 const RELAY_HOSTS_POLL_MS = 3000
+// With relayHostsChanged heard on a live stream, the poll only backs up a lost notice.
+const RELAY_HOSTS_BACKSTOP_POLL_MS = 60_000
 
 export type RelayHostsFeed = {
-  subscribe: (listener: () => void) => () => void
-  /** The last answer on this connection; null before one lands. */
+  /** `pushed`: the desktop publishes relayHostsChanged, so the feed may wait for it instead of polling. */
+  subscribe: (listener: () => void, pushed: boolean) => () => void
   getSnapshot: () => readonly MobileRelayHost[] | null
-  /** Reads now, or joins the read in flight; null when the desktop did not answer. */
+  /** Answers from the snapshot while the desktop's notices keep it current; reads otherwise. */
   read: () => Promise<readonly MobileRelayHost[] | null>
 }
 
@@ -28,7 +34,23 @@ function createFeed(client: RpcClient): RelayHostsFeed {
   // Bumped on every drop, so a read from an earlier connection never lands.
   let generation = 0
   let timer: ReturnType<typeof setTimeout> | null = null
-  const listeners = new Set<() => void>()
+  // Each listener with whether its desktop publishes relayHostsChanged.
+  const listeners = new Map<() => void, boolean>()
+  let stopEvents: (() => void) | null = null
+  let streamLive = false
+  // The last read failed, or a notice came during it, so its answer may already be old.
+  let lastReadDoubtful = false
+  let changedDuringRead = false
+  // A read went out after this feed joined the event stream, so a notice for any later change will come.
+  let readSinceJoining = false
+
+  // The desktop will tell this feed when its snapshot goes out of date.
+  const current = (): boolean =>
+    stopEvents !== null &&
+    streamLive &&
+    snapshot !== null &&
+    !lastReadDoubtful &&
+    Number.isFinite(lastReadAt)
 
   const publish = (next: readonly MobileRelayHost[] | null): void => {
     // Why: an unchanged poll keeps its identity, so readers do not re-render every tick.
@@ -36,7 +58,7 @@ function createFeed(client: RpcClient): RelayHostsFeed {
       return
     }
     snapshot = next
-    for (const listener of listeners) {
+    for (const listener of listeners.keys()) {
       listener()
     }
   }
@@ -46,13 +68,13 @@ function createFeed(client: RpcClient): RelayHostsFeed {
       timer = null
     }
   }
-  // Timed reads run only while someone subscribes and the desktop is connected.
   const schedule = (): void => {
     stopTimer()
     if (listeners.size === 0 || client.getState() !== 'connected') {
       return
     }
-    const delay = lastReadAt + RELAY_HOSTS_POLL_MS - Date.now()
+    const pollMs = current() ? RELAY_HOSTS_BACKSTOP_POLL_MS : RELAY_HOSTS_POLL_MS
+    const delay = lastReadAt + pollMs - Date.now()
     if (delay <= 0) {
       tick()
       return
@@ -62,7 +84,8 @@ function createFeed(client: RpcClient): RelayHostsFeed {
   const tick = (): void => {
     timer = null
     if (AppState.currentState === 'active') {
-      void read()
+      // The poll (or backstop) always asks the desktop, even while the snapshot is current.
+      void refresh()
       return
     }
     timer = setTimeout(tick, RELAY_HOSTS_POLL_MS)
@@ -70,7 +93,6 @@ function createFeed(client: RpcClient): RelayHostsFeed {
   const fetchHosts = async (readGeneration: number): Promise<readonly MobileRelayHost[] | null> => {
     try {
       const listed = relayHostsListRead.interpret(await relayHostsListRead.request(client))
-      // A reply from before a drop is not this connection's answer.
       if (!listed.accepted || readGeneration !== generation) {
         return null
       }
@@ -80,20 +102,68 @@ function createFeed(client: RpcClient): RelayHostsFeed {
       return null
     }
   }
-  const read = (): Promise<readonly MobileRelayHost[] | null> => {
+  // A read that landed within a poll interval is as fresh as the poll would make it.
+  const fresh = (): boolean =>
+    snapshot !== null && !lastReadDoubtful && Date.now() - lastReadAt < RELAY_HOSTS_POLL_MS
+  const read = (): Promise<readonly MobileRelayHost[] | null> =>
+    inFlight === null && (current() || fresh()) ? Promise.resolve(snapshot) : refresh()
+  const refresh = (): Promise<readonly MobileRelayHost[] | null> => {
     if (inFlight) {
       return inFlight
     }
     const readGeneration = generation
-    inFlight = fetchHosts(readGeneration).finally(() => {
+    changedDuringRead = false
+    readSinceJoining = stopEvents !== null
+    inFlight = fetchHosts(readGeneration).then((hosts) => {
       if (readGeneration === generation) {
         inFlight = null
-        // Why: scheduling from the finish, so a read slower than the poll still gets a next one.
-        lastReadAt = Date.now()
+        lastReadDoubtful = hosts === null || changedDuringRead
+        // Schedule after completion so reads slower than the interval still get a next poll.
+        lastReadAt = changedDuringRead ? Number.NEGATIVE_INFINITY : Date.now()
         schedule()
       }
+      return hosts
     })
     return inFlight
+  }
+
+  // The list may have changed since the last read: read again as soon as the page is active.
+  const changed = (): void => {
+    if (inFlight) {
+      changedDuringRead = true
+      return
+    }
+    lastReadAt = Number.NEGATIVE_INFINITY
+    schedule()
+  }
+  const onEvent = (event: SharedClientEvent): void => {
+    if (event.type === 'ready') {
+      streamLive = true
+      // A stream live before this feed joined covers reads sent since; any other ready may follow missed notices.
+      if (!('joined' in event) || !readSinceJoining) {
+        changed()
+      } else {
+        schedule()
+      }
+    } else if (event.type === 'end' || event.type === 'error') {
+      // The shared stream opens again by itself; until its ready, poll as an older desktop.
+      streamLive = false
+      schedule()
+    } else if (event.type === 'relayHostsChanged') {
+      changed()
+    }
+  }
+  // Only while a listener's desktop publishes the notice: older desktops keep the plain poll.
+  const syncEvents = (): void => {
+    const wanted = [...listeners.values()].includes(true)
+    if (wanted && !stopEvents) {
+      readSinceJoining = false
+      stopEvents = subscribeSharedClientEvents(client, onEvent)
+    } else if (!wanted && stopEvents) {
+      stopEvents()
+      stopEvents = null
+      streamLive = false
+    }
   }
 
   client.onStateChange((state) => {
@@ -101,16 +171,19 @@ function createFeed(client: RpcClient): RelayHostsFeed {
       generation += 1
       inFlight = null
       lastReadAt = Number.NEGATIVE_INFINITY
+      streamLive = false
       publish(null)
     }
     schedule()
   })
   return {
-    subscribe: (listener) => {
-      listeners.add(listener)
+    subscribe: (listener, pushedByDesktop) => {
+      listeners.set(listener, pushedByDesktop)
+      syncEvents()
       schedule()
       return () => {
         listeners.delete(listener)
+        syncEvents()
         if (listeners.size === 0) {
           stopTimer()
         }
@@ -122,22 +195,27 @@ function createFeed(client: RpcClient): RelayHostsFeed {
 }
 
 export function relayHostsFeed(client: RpcClient): RelayHostsFeed {
-  let feed = feeds.get(client)
+  // A query's fail-fast view shares the feed its connection's screens already hold.
+  const owner = readViewBase(client)
+  let feed = feeds.get(owner)
   if (!feed) {
-    feed = createFeed(client)
-    feeds.set(client, feed)
+    feed = createFeed(owner)
+    feeds.set(owner, feed)
   }
   return feed
 }
 
 const noSubscription = (): (() => void) => () => {}
 
-/** The desktop's servers from the shared feed while `client` is set; null before it answers. */
-export function useRelayHosts(client: RpcClient | null): readonly MobileRelayHost[] | null {
+export function useRelayHosts(
+  client: RpcClient | null,
+  hostCapabilities: readonly string[]
+): readonly MobileRelayHost[] | null {
   const feed = client ? relayHostsFeed(client) : null
+  const pushed = hostCapabilities.includes(MOBILE_RELAY_HOSTS_CHANGED_EVENT_RUNTIME_CAPABILITY)
   const subscribe = useCallback(
-    (listener: () => void) => (feed ? feed.subscribe(listener) : noSubscription()),
-    [feed]
+    (listener: () => void) => (feed ? feed.subscribe(listener, pushed) : noSubscription()),
+    [feed, pushed]
   )
   const readHosts = () => feed?.getSnapshot() ?? null
   return useSyncExternalStore(subscribe, readHosts, readHosts)

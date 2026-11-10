@@ -1,4 +1,4 @@
-import type { AutomationRunUsage } from '../../shared/automations-types'
+import type { AutomationRunUsage } from '../../shared/automations/history/automation-run'
 import type { CodexUsagePersistedState } from './types'
 import { estimateCostUsd } from './codex-usage-cost-estimate'
 import { shouldForceAutomationUsageScan } from '../usage/automation-usage-scan-forcing'
@@ -13,7 +13,7 @@ export type AutomationUsageLookupInput = {
 }
 
 type CodexAutomationAttributionDeps = {
-  /** Callback, not a snapshot: refresh mutates persisted state in place. */
+  /** Read state after refresh, which may replace the persisted snapshot. */
   getState: () => CodexUsagePersistedState
   refresh: (force: boolean) => Promise<{ lastScanError: string | null }>
   isScanning: () => boolean
@@ -158,9 +158,7 @@ export async function resolveCodexAutomationRunUsage(
     estimatedCostUsd: hasKnownCost ? estimatedCostUsd : null,
     estimatedCostSource: hasKnownCost ? 'api_equivalent' : null,
     providerSessionId: session.sessionId,
-    // Why: Orca terminal tab ids and Codex usage session ids are different
-    // systems today, so attribution is intentionally limited to one local
-    // provider session in the run's worktree/time window.
+    // Terminal IDs differ from provider IDs, so require a unique worktree/time-window match.
     attribution: 'provider_session_time_window',
     collectedAt,
     unavailableReason: null,

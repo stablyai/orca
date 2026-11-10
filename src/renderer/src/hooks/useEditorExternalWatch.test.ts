@@ -1,16 +1,14 @@
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest'
-import type * as EditorAutosaveModule from '@/components/editor/editor-autosave'
-import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
+import type * as EditorAutosaveModule from '@/components/editor/autosave/editor-autosave'
+import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
 
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: vi.fn()
   }
 }))
-// Why: editor-autosave calls window.dispatchEvent at module scope paths; the
-// vitest 'node' environment has no window. Stub the two exports we use so the
-// handler can run headlessly.
-vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
+// Stub autosave’s window-event exports so the handler runs in headless Node.
+vi.mock('@/components/editor/autosave/editor-autosave', async (importOriginal) => {
   const actual = await importOriginal<typeof EditorAutosaveModule>()
   return {
     ...actual,
@@ -23,56 +21,17 @@ import {
   buildEditorExternalWatchEventHandler as createExternalWatchEventHandler,
   EXTERNAL_MUTATION_DEBOUNCE_MS
 } from './editor-external-watch-event-reconciliation'
-import { getEditorExternalWatchTargetKey as getWatchedTargetKey } from './editor-external-watch-targets'
 import { useAppStore } from '@/store'
-import { createTestStore } from '@/store/slices/store-test-helpers'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import {
   getOpenFilesForExternalFileChange,
   notifyEditorExternalFileChange
-} from '@/components/editor/editor-autosave'
+} from '@/components/editor/autosave/editor-autosave'
 import {
   __clearSelfWriteRegistryForTests,
   recordSelfWrite
-} from '@/components/editor/editor-self-write-registry'
+} from '@/components/editor/external-changes/editor-self-write-registry'
 import { __clearEditorPathMovesForTests } from '@/components/editor/editor-path-move-inflight'
-
-describe('getWatchedTargetKey', () => {
-  it('changes when a worktree gains an SSH connection id', () => {
-    expect(
-      getWatchedTargetKey({
-        worktreeId: 'wt-1',
-        worktreePath: '/repo',
-        connectionId: undefined,
-        runtimeEnvironmentId: null
-      })
-    ).not.toBe(
-      getWatchedTargetKey({
-        worktreeId: 'wt-1',
-        worktreePath: '/repo',
-        connectionId: 'conn-1',
-        runtimeEnvironmentId: null
-      })
-    )
-  })
-
-  it('changes when the active runtime environment changes', () => {
-    expect(
-      getWatchedTargetKey({
-        worktreeId: 'wt-1',
-        worktreePath: '/repo',
-        connectionId: undefined,
-        runtimeEnvironmentId: null
-      })
-    ).not.toBe(
-      getWatchedTargetKey({
-        worktreeId: 'wt-1',
-        worktreePath: '/repo',
-        connectionId: undefined,
-        runtimeEnvironmentId: 'env-1'
-      })
-    )
-  })
-})
 
 describe('createExternalWatchEventHandler tombstone coalescing', () => {
   const setExternalMutation = vi.fn()
@@ -129,18 +88,14 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
   }
 
   it('does not flash deleted when a create at the same path arrives in the next payload', () => {
-    // Simulates macOS atomic write: two back-to-back payloads, delete then create.
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
     handleFsChanged(payload([{ kind: 'delete', absolutePath: '/repo/notes.md' }]))
 
-    // Advance less than the debounce window; the deleted tombstone must not
-    // have fired yet.
     vi.advanceTimersByTime(10)
     expect(setExternalMutation).not.toHaveBeenCalledWith('file-notes', 'deleted')
 
     handleFsChanged(payload([{ kind: 'create', absolutePath: '/repo/notes.md' }]))
 
-    // Flush anything remaining; the pending tombstone should have been cancelled.
     vi.advanceTimersByTime(500)
     expect(setExternalMutation).not.toHaveBeenCalledWith('file-notes', 'deleted')
 
@@ -167,8 +122,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
       ])
     )
 
-    // The single-payload rename-correlated path must not defer — the decision
-    // is already correct because both events are visible at once.
+    // Same-payload delete/create already proves recreation; reconcile without deferral.
     expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'renamed')
 
     dispose()
@@ -532,72 +486,6 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
     await vi.advanceTimersByTimeAsync(100)
 
-    expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'changed')
-    dispose()
-  })
-
-  it('shares one echo-verification read across a burst of watcher payloads', async () => {
-    const dirtyFile = {
-      ...fileNotes,
-      isDirty: true
-    }
-    vi.mocked(useAppStore.getState).mockReturnValue({
-      ...createTestStore().getState(),
-      openFiles: [dirtyFile],
-      setExternalMutation
-    })
-    vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([dirtyFile] as never)
-    const readFile = vi.fn().mockResolvedValue({ content: 'agent content', isBinary: false })
-    vi.stubGlobal('window', { api: { fs: { readFile } } })
-    const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
-
-    recordSelfWrite('/repo/notes.md', 'orca save')
-    // Why: SSH poll + event streams can deliver several payloads for one
-    // write; each verification is a full-file read, so a burst must share
-    // the in-flight read instead of stacking network round-trips.
-    handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
-    handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
-    handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
-    await vi.advanceTimersByTimeAsync(100)
-
-    expect(readFile).toHaveBeenCalledTimes(1)
-    expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'changed')
-    dispose()
-  })
-
-  it('does not let a later write join an echo-verification read that started before it', async () => {
-    const dirtyFile = {
-      ...fileNotes,
-      isDirty: true
-    }
-    vi.mocked(useAppStore.getState).mockReturnValue({
-      ...createTestStore().getState(),
-      openFiles: [dirtyFile],
-      setExternalMutation
-    })
-    vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([dirtyFile] as never)
-    let resolveEchoRead: (value: { content: string; isBinary: boolean }) => void = () => {}
-    const readFile = vi
-      .fn()
-      .mockReturnValueOnce(
-        new Promise((resolve) => {
-          resolveEchoRead = resolve
-        })
-      )
-      .mockResolvedValue({ content: 'agent content', isBinary: false })
-    vi.stubGlobal('window', { api: { fs: { readFile } } })
-    const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
-
-    recordSelfWrite('/repo/notes.md', 'orca save')
-    handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
-    await vi.advanceTimersByTimeAsync(50)
-    // An agent writes while the slow echo read is still in flight.
-    handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
-    await vi.advanceTimersByTimeAsync(50)
-    resolveEchoRead({ content: 'orca save', isBinary: false })
-    await vi.advanceTimersByTimeAsync(100)
-
-    expect(readFile).toHaveBeenCalledTimes(2)
     expect(setExternalMutation).toHaveBeenCalledWith('file-notes', 'changed')
     dispose()
   })

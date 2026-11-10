@@ -1,5 +1,5 @@
-import type { AppState } from '@/store'
-import { getWorktreeIdFromVisitKey } from '@/lib/worktree-visit-recency'
+import type { AppState } from '@/store/types'
+import { getWorktreeIdFromVisitKey } from '@/lib/workspace/activation/worktree-visit-recency'
 
 // Why: recently used workspaces keep their watch so switching back needs no re-read.
 export const WARM_RECURSIVE_WATCH_WORKSPACE_COUNT = 3
@@ -16,9 +16,10 @@ function mostRecent(
     .slice(0, count)
 }
 
-/** Workspaces whose open tabs keep a native watch: the active one, the most recently visited, and a few showing a deleted/renamed tab. */
+/** Watch active/recent workspaces plus bounded deleted/renamed-tab pins. */
 export function selectWatchEligibleWorkspaceIds(args: {
   activeWorktreeId: string | null
+  sourceControlWorkspaceIds?: readonly string[]
   lastVisitedAtByWorktreeId: Readonly<Record<string, number>> | undefined
   openFiles: AppState['openFiles']
   exists: (workspaceId: string) => boolean
@@ -33,9 +34,14 @@ export function selectWatchEligibleWorkspaceIds(args: {
     const id = getWorktreeIdFromVisitKey(key)
     visitedAtById.set(id, Math.max(visitedAtById.get(id) ?? 0, visitedAt))
   }
+  // Why outside the budget: displayed Source Control sections never take a recently used workspace's slot.
+  const sectionIds = new Set(args.sourceControlWorkspaceIds ?? [])
+  for (const id of sectionIds) {
+    ids.add(id)
+  }
   const warmCandidates = [...visitedAtById.keys()].filter(
     // Why: `exists` keeps deleted workspaces from holding warm slots.
-    (id) => id !== args.activeWorktreeId && args.exists(id)
+    (id) => !sectionIds.has(id) && id !== args.activeWorktreeId && args.exists(id)
   )
   for (const id of mostRecent(
     warmCandidates,

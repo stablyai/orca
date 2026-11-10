@@ -106,7 +106,7 @@ describe.runIf(process.platform !== 'win32')('provider group orphan guard', () =
   it('kills the provider group a SIGKILLed supervisor leaves behind', async () => {
     const { supervisor, proven, swept, pids } = launch()
     const { provider, grandchild } = await pids
-    // A start in the read's own second is re-read after it, so this can take over a second.
+    // Second-resolution start times require a reread after their second ends.
     expect(await waitFor(proven, IDENTITY_TIMEOUT_MS)).toBe(true)
 
     supervisor.kill('SIGKILL')

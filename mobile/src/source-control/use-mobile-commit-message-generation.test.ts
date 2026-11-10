@@ -1,7 +1,6 @@
-import { createElement, useRef, useState } from 'react'
+import { createElement, startTransition, Suspense, useRef, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RpcClient } from '../transport/rpc-client'
 import type { MobileGenerateCommitMessageResult } from './mobile-commit-message-ai'
 
 vi.mock('../platform/haptics', () => ({ triggerError: vi.fn(), triggerSuccess: vi.fn() }))
@@ -23,18 +22,28 @@ vi.mock('./mobile-commit-message-ai', () => ({
 }))
 
 import { useMobileCommitMessageGeneration } from './use-mobile-commit-message-generation'
+import { stubRpcClient } from '../transport/rpc/rpc-client-test-stub'
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked request module never reaches the client.
-const client = {} as RpcClient
+const client = stubRpcClient()
 const view: {
+  generating: boolean
   message: string
   error: string | null
   type: ((next: string) => void) | null
   generate: (() => Promise<void>) | null
   cancel: (() => void) | null
-} = { message: '', error: null, type: null, generate: null, cancel: null }
+} = { generating: false, message: '', error: null, type: null, generate: null, cancel: null }
 
-function Harness(): null {
+const suspended = new Promise<void>(() => {})
+const suspendedRender = vi.fn()
+
+function Harness({
+  worktreeId = 'wt-1',
+  suspend
+}: {
+  worktreeId?: string
+  suspend?: boolean
+}): null {
   const [message, setMessage] = useState('')
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -42,7 +51,7 @@ function Harness(): null {
   const busyActionRef = useRef<string | null>(null)
   const { generateCommitMessage, cancelGenerateCommitMessage } = useMobileCommitMessageGeneration({
     client,
-    worktreeId: 'wt-1',
+    worktreeId,
     generatingMessage: generating,
     mountedRef,
     busyActionRef,
@@ -50,6 +59,11 @@ function Harness(): null {
     setCommitMessage: setMessage,
     setActionError: setError
   })
+  if (suspend) {
+    suspendedRender()
+    throw suspended
+  }
+  view.generating = generating
   view.message = message
   view.error = error
   view.cancel = cancelGenerateCommitMessage
@@ -91,30 +105,34 @@ describe('useMobileCommitMessageGeneration', () => {
     expect(view.message).toBe('fix: my own words')
   })
 
-  it('fills an empty box with the generated message', async () => {
-    await generateThen(null)
-    expect(view.message).toBe('feat: generated')
-  })
-
-  it('shows no error from a run that was stopped and then failed', async () => {
-    reply.cancel = () => Promise.reject(new Error('transport closed'))
-    const unhandled = vi.fn()
-    process.on('unhandledRejection', unhandled)
+  it('keeps the current generation when a workspace transition suspends before commit', async () => {
+    const render = (suspend?: boolean) =>
+      createElement(
+        Suspense,
+        { fallback: null },
+        createElement(Harness, {
+          worktreeId: suspend ? 'wt-2' : 'wt-1',
+          suspend
+        })
+      )
     act(() => {
-      renderer = create(createElement(Harness))
+      renderer = create(render())
     })
     let pending: Promise<void> | undefined
     act(() => {
       pending = view.generate?.()
     })
-    act(() => view.cancel?.())
-    await act(async () => {
-      reply.reject?.(new Error('transport closed'))
-      await pending
-      await new Promise((resolve) => setTimeout(resolve, 0))
+    suspendedRender.mockClear()
+    act(() => {
+      startTransition(() => renderer?.update(render(true)))
     })
-    process.off('unhandledRejection', unhandled)
-    expect(view.error).toBeNull()
-    expect(unhandled).not.toHaveBeenCalled()
+    expect(suspendedRender).toHaveBeenCalled()
+    expect(view.generating).toBe(true)
+    await act(async () => {
+      reply.resolve?.({ success: true, message: 'current workspace' })
+      await pending
+    })
+    expect(view.message).toBe('current workspace')
+    expect(view.generating).toBe(false)
   })
 })

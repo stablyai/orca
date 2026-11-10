@@ -1,15 +1,16 @@
-import { getArtifactsSettingsSearchEntries } from '@/components/settings/artifacts-settings-search'
-import { getAutomationsSettingsSearchEntries } from '@/components/settings/automations-settings-search'
-import { getBrowserPaneCombinedSearchEntries } from '@/components/settings/browser-pane-search'
-import { getCommitMessageAiPaneSearchEntries } from '@/components/settings/commit-message-ai-search'
-import { getFloatingWorkspaceSearchEntries } from '@/components/settings/floating-workspace-search'
-import { getGitProviderApiBudgetSearchEntries } from '@/components/settings/git-provider-api-budget-search'
-import { getGitPaneSearchEntries } from '@/components/settings/git-search'
-import { getMobileEmulatorSearchEntries } from '@/components/settings/mobile-emulator-search'
-import { getQuickCommandsPaneSearchEntries } from '@/components/settings/quick-commands-search'
-import { getShareSkillsSettingsSearchEntries } from '@/components/settings/share-skills-settings-search'
-import { getTasksPaneSearchEntries } from '@/components/settings/tasks-search'
+import { getArtifactsSettingsSearchEntries } from '@/components/settings/artifacts/artifacts-settings-search'
+import { getAutomationsSettingsSearchEntries } from '@/components/settings/automations/automations-settings-search'
+import { getBrowserPaneCombinedSearchEntries } from '@/components/settings/browser/browser-pane-search'
+import { getCommitMessageAiPaneSearchEntries } from '@/components/settings/source-control/commit-message-ai-search'
+import { getFloatingWorkspaceSearchEntries } from '@/components/settings/floating-workspaces/floating-workspace-search'
+import { getGitProviderApiBudgetSearchEntries } from '@/components/settings/source-control/git-provider-api-budget-search'
+import { getGitPaneSearchEntries } from '@/components/settings/source-control/git-search'
+import { getMobileEmulatorSearchEntries } from '@/components/settings/mobile/emulator/mobile-emulator-search'
+import { getQuickCommandsPaneSearchEntries } from '@/components/settings/quick-commands/quick-commands-search'
+import { getShareSkillsSettingsSearchEntries } from '@/components/settings/skills/sharing/share-skills-settings-search'
+import { getTasksPaneSearchEntries } from '@/components/settings/tasks/tasks-search'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import {
   BookOpen,
@@ -28,14 +29,15 @@ import type { SettingsNavigationBuildOptions } from './settings-navigation-build
 
 export function buildWorkflowSettingsSections(
   { isWebClient }: SettingsNavigationBuildOptions,
-  terminalPaneSearchEntries: SettingsNavSection['searchEntries']
+  terminalPaneSearchEntries: SettingsNavSection['searchEntries'],
+  t: Translate = translate
 ): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
   return [
     {
       id: 'automations',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.automationsTitle', 'Automations'),
-      description: translate(
+      title: t('auto.hooks.useSettingsNavigationMetadata.automationsTitle', 'Automations'),
+      description: t(
         'auto.hooks.useSettingsNavigationMetadata.automationsDescription',
         'Schedule agent work and choose whether Automations appears in the sidebar.'
       ),
@@ -45,42 +47,41 @@ export function buildWorkflowSettingsSections(
     },
     {
       id: 'artifacts',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.artifactsTitle', 'Artifacts'),
-      description: translate(
+      title: t('auto.hooks.useSettingsNavigationMetadata.artifactsTitle', 'Artifacts'),
+      description: t(
         'auto.hooks.useSettingsNavigationMetadata.artifactsDescription',
         'Share HTML and Markdown files with your team and manage their public links.'
       ),
       icon: Files,
       searchEntries: getArtifactsSettingsSearchEntries(),
       group: 'workflows',
-      badge: translate('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
+      badge: t('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
     },
     {
       id: 'share-skills',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.shareSkillsTitle', 'Share Skills'),
-      description: translate(
+      title: t('auto.hooks.useSettingsNavigationMetadata.shareSkillsTitle', 'Share Skills'),
+      description: t(
         'auto.hooks.useSettingsNavigationMetadata.shareSkillsDescription',
         'Share your skills with an unlisted link. Anyone who has it can install them.'
       ),
-      // Why: the sidebar entry and the page header both use BookOpen for
-      // skills, so the settings row that opens them matches.
+      // Match the skills sidebar/page icon in its settings entry.
       icon: BookOpen,
       searchEntries: getShareSkillsSettingsSearchEntries(),
       group: 'workflows',
-      badge: translate('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
+      badge: t('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
     },
     {
       id: 'session-history',
-      title: translate('sessionHistory.settings.title', 'Agent Session Search'),
-      description: translate(
+      title: t('sessionHistory.settings.title', 'Agent Session Search'),
+      description: t(
         'sessionHistory.settings.description',
         'Search everything your agents have said and done, on this computer and on any paired Orca server.'
       ),
       icon: History,
       searchEntries: [
         {
-          title: translate('sessionHistory.settings.indexComputers', 'Search inside sessions'),
-          description: translate(
+          title: t('sessionHistory.settings.indexComputers', 'Search inside sessions'),
+          description: t(
             'sessionHistory.settings.searchDescription',
             'Turn on session search for this computer and paired servers, or clear search data.'
           )
@@ -90,17 +91,13 @@ export function buildWorkflowSettingsSections(
     },
     {
       id: 'git',
-      title: translate(
-        'auto.hooks.useSettingsNavigationMetadata.09607cb0fe',
-        'Git & Source Control'
-      ),
-      description: translate(
+      title: t('auto.hooks.useSettingsNavigationMetadata.09607cb0fe', 'Git & Source Control'),
+      description: t(
         'auto.hooks.useSettingsNavigationMetadata.ab4b21b58e',
         'Branch naming, base refs, and Git AI Author.'
       ),
       icon: GitBranch,
-      // Why: Git AI Author is rendered inside Git, so shared
-      // metadata must search both surfaces wherever Git appears.
+      // Git AI Author lives inside Git, so search metadata covers both surfaces.
       searchEntries: [
         ...getGitPaneSearchEntries(),
         ...getCommitMessageAiPaneSearchEntries(),
@@ -110,8 +107,8 @@ export function buildWorkflowSettingsSections(
     },
     {
       id: 'tasks',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.85f4fd7710', 'Task Sources'),
-      description: translate(
+      title: t('auto.hooks.useSettingsNavigationMetadata.85f4fd7710', 'Task Sources'),
+      description: t(
         'auto.hooks.useSettingsNavigationMetadata.tasksDescription',
         'Connect providers, install the Linear skill, and choose what appears in Tasks.'
       ),
@@ -121,8 +118,8 @@ export function buildWorkflowSettingsSections(
     },
     {
       id: 'terminal',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.a9fb10afca', 'Terminal'),
-      description: translate(
+      title: t('auto.hooks.useSettingsNavigationMetadata.a9fb10afca', 'Terminal'),
+      description: t(
         'auto.hooks.useSettingsNavigationMetadata.c33bfd664c',
         'Shells, renderer, sessions, and terminal behavior.'
       ),
@@ -132,8 +129,8 @@ export function buildWorkflowSettingsSections(
     },
     {
       id: 'quick-commands',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.3fc3db144f', 'Quick Commands'),
-      description: translate(
+      title: t('auto.hooks.useSettingsNavigationMetadata.3fc3db144f', 'Quick Commands'),
+      description: t(
         'auto.hooks.useSettingsNavigationMetadata.42ae40842f',
         'Saved terminal commands, scoped globally or per project.'
       ),
@@ -145,8 +142,8 @@ export function buildWorkflowSettingsSections(
       ? [
           {
             id: 'browser',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.8c197f74a1', 'Browser'),
-            description: translate(
+            title: t('auto.hooks.useSettingsNavigationMetadata.8c197f74a1', 'Browser'),
+            description: t(
               'auto.hooks.useSettingsNavigationMetadata.e815fd01bd',
               'Home page, link routing, and session cookies.'
             ),
@@ -160,11 +157,8 @@ export function buildWorkflowSettingsSections(
       ? [
           {
             id: 'mobile-emulator',
-            title: translate(
-              'auto.hooks.useSettingsNavigationMetadata.1e761cff2b',
-              'Mobile Emulator'
-            ),
-            description: translate(
+            title: t('auto.hooks.useSettingsNavigationMetadata.1e761cff2b', 'Mobile Emulator'),
+            description: t(
               'auto.hooks.useSettingsNavigationMetadata.3d65d3f1b9',
               'Configure mobile emulator support for Orca and coding agents.'
             ),
@@ -176,13 +170,13 @@ export function buildWorkflowSettingsSections(
       : []),
     {
       id: 'floating-workspace',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.65b19f5bde', 'Floating Workspace'),
+      title: t('auto.hooks.useSettingsNavigationMetadata.65b19f5bde', 'Floating Workspace'),
       description: showDesktopOnlySettings
-        ? translate(
+        ? t(
             'auto.hooks.useSettingsNavigationMetadata.2d0659f6f0',
             'Global terminal, browser, and markdown tabs.'
           )
-        : translate(
+        : t(
             'auto.hooks.useSettingsNavigationMetadata.floatingWorkspaceWebDescription',
             'Global terminal and markdown tabs.'
           ),

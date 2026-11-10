@@ -1,0 +1,14 @@
+diff --git a/ios/LinkPreview/LinkPreviewNativeActionView.swift b/ios/LinkPreview/LinkPreviewNativeActionView.swift
+index 3884b7844b99484f705632100134a16547e0bf0f..af749936ffc60f54f560fcb84bd6ad4067c746a4 100644
+--- a/ios/LinkPreview/LinkPreviewNativeActionView.swift
++++ b/ios/LinkPreview/LinkPreviewNativeActionView.swift
+@@ -137,7 +137,8 @@ class LinkPreviewNativeActionView: RouterViewWithLogger, LinkPreviewMenuUpdatabl
+     baseUiAction.attributes = attributes
+     baseUiAction.state = isOn == true ? .on : .off
+ 
+-    if let subtitle = subtitle {
++    // Orca: the iOS 27.1 SDK marks UIAction.subtitle iOS 16+, which fails the iOS 15.1 build.
++    if let subtitle = subtitle, #available(iOS 16.0, *) {
+       baseUiAction.subtitle = subtitle
+     }
+     if let label = discoverabilityLabel {

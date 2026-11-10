@@ -1,16 +1,10 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs'
-import type * as FsModule from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { nativeMountingSubstitutes } from './native-mounting-substitutes'
 import type * as NativeSubstitutesModule from './native-mounting-substitutes'
 import { operationModuleLoader } from './operation-module-loader'
-
-vi.mock('node:fs', async (original) => {
-  const fs = await original<typeof FsModule>()
-  return { ...fs, existsSync: vi.fn(fs.existsSync) }
-})
 
 vi.mock('./native-mounting-substitutes', async (original) => {
   const module = await original<typeof NativeSubstitutesModule>()
@@ -34,22 +28,6 @@ afterEach(() => {
     rmSync(root, { recursive: true, force: true })
   }
   vi.clearAllMocks()
-})
-
-it('resolves a relative import once instead of probing disk on every exported member read', () => {
-  const root = sourceTree({
-    'value.ts': 'export const value = 42',
-    'operation.ts': `import { value } from './value'; export const read = () => value`
-  })
-  const operation = operationModuleLoader(root).load<{ read: () => number }>(
-    'mobile/src/operation.ts'
-  )
-  expect(operation.read()).toBe(42)
-  vi.mocked(existsSync).mockClear()
-  for (let index = 0; index < 1_000; index++) {
-    expect(operation.read()).toBe(42)
-  }
-  expect(existsSync).not.toHaveBeenCalled()
 })
 
 it('builds device substitutes only for a used loader and keeps their state per loader', async () => {

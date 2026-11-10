@@ -1,17 +1,8 @@
-/**
- * Carries a host-rejected paired-runtime write the whole way: the real
- * terminal.multiplex dispatcher rejects the authoritative PTY write, the real
- * renderer multiplexer and remote transport decode the WriteUnavailable frame,
- * and pty-connection must turn it into an actual tab remount.
- *
- * Every other test for this signal stops at a transport callback, so the last
- * hop was unproven — and that hop is where it died: pane recovery probes
- * `pty:hasPty`, which owns no registry entry for a `remote:` id. The parametrized
- * liveness answers below cover every reply main can produce for one.
- */
+// Carry real host PTY write refusal through dispatcher → WriteUnavailable → renderer transport → pty-connection remount.
+// Main has no local registry for remote: ids; cover every liveness reply so that final recovery hop cannot drop refusal.
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
-import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal'
+import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal/terminal'
 import type { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import {
   TerminalStreamOpcode,
@@ -19,12 +10,9 @@ import {
   decodeTerminalStreamJson,
   encodeTerminalStreamJson,
   type TerminalStreamFrame
-} from '../../src/shared/terminal-stream-protocol'
+} from '../../src/shared/terminal/stream/terminal-stream-protocol'
 
-/**
- * Why: a refusal reaches the remount only on a stream that did not negotiate sequenced input (an
- * older peer); a sequenced stream keeps its journal and resends on the same stream instead.
- */
+// Only older, unsequenced streams remount; sequenced input retains its journal and resends on the same stream.
 function withoutInputAck(frame: TerminalStreamFrame): TerminalStreamFrame {
   if (frame.opcode !== TerminalStreamOpcode.Subscribe) {
     return frame
@@ -66,10 +54,14 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
+  scheduleRuntimeGraphSync: vi.fn()
+}))
 vi.mock('sonner', () => ({ toast: { info: vi.fn() } }))
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep: vi.fn() }))
-vi.mock('@/runtime/web-runtime-session-snapshot', () => ({
+vi.mock('@/lib/agent-session/accounts/codex/codex-stale-pane-sweep', () => ({
+  notifyCodexPaneBoundForStaleSweep: vi.fn()
+}))
+vi.mock('@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot', () => ({
   refreshWebRuntimeSessionTabsSnapshot: vi.fn(async () => {})
 }))
 
@@ -91,10 +83,12 @@ function startHost(): {
   hostOpcodes: number[]
 } {
   const hostOpcodes: number[] = []
-  // The host's whole reason to emit the opcode: the PTY refused the bytes.
   const sendTerminal = vi.fn().mockResolvedValue({ accepted: false })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This partial runtime supplies the terminal RPC methods these tests invoke.
   const runtime = {
     getRuntimeId: () => 'test-runtime',
+    getPtyExecutionHostMetadata: () => ({ incarnationId: 'test-incarnation' }),
+    getTerminalLaunchResult: () => undefined,
     registerRemoteTerminalViewSubscriber: () => () => {},
     resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
     requestRendererTerminalTabMount: vi.fn().mockReturnValue(true),
@@ -235,7 +229,6 @@ function createManager() {
   return {
     setPaneGpuRendering: vi.fn(),
     markPaneHasComplexScriptOutput: vi.fn(),
-    rebuildPaneWebgl: vi.fn(),
     hasWebglRenderer: vi.fn(() => false),
     getPanes: vi.fn(() => panes),
     closePane: vi.fn(),
@@ -301,6 +294,7 @@ describe('host-rejected paired-runtime input reaches a pane remount', () => {
     mockStoreState = {
       activeWorktreeId: 'wt-1',
       activeWorkspaceExecutionHostId: `runtime:${ENVIRONMENT_ID}`,
+      unifiedTabsByWorktree: {},
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: REMOTE_PTY_ID }] },
       ptyIdsByTabId: { 'tab-1': [REMOTE_PTY_ID] },
       terminalLayoutsByTabId: {
@@ -415,9 +409,10 @@ describe('host-rejected paired-runtime input reaches a pane remount', () => {
         removeEventListener: vi.fn()
       }
 
-      const { connectPanePty } = await import('@/components/terminal-pane/pty-connection')
+      const { connectPanePty } =
+        await import('@/components/terminal-pane/pty-connection/connect-pane-pty')
       const { _resetTerminalPaneRecoveryForTests } =
-        await import('@/components/terminal-pane/terminal-pane-recovery')
+        await import('@/components/terminal-pane/render-health/recovery/terminal-pane-recovery')
       _resetTerminalPaneRecoveryForTests()
 
       const pane = createPane()
@@ -427,12 +422,9 @@ describe('host-rejected paired-runtime input reaches a pane remount', () => {
         expect(deps.paneTransportsRef.current.get(1)?.getPtyId()).toBe(REMOTE_PTY_ID)
       })
 
-      // The user types; the host accepts the frame and the PTY refuses the bytes.
       sendTerminalInput(pane, 'ls\r')
       await vi.waitFor(() => expect(sendTerminal).toHaveBeenCalled())
-      // Hop 1: the host turned the refusal into the negotiated frame.
       await vi.waitFor(() => expect(hostOpcodes).toContain(TerminalStreamOpcode.WriteUnavailable))
-      // Hop 2 (the one that was missing): it survives pane recovery as a remount.
       await vi.waitFor(() =>
         expect(remountTerminalTabForRecovery).toHaveBeenCalledWith(
           'tab-1',

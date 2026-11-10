@@ -5,7 +5,7 @@ import { constants } from 'node:fs'
 import { copyFile, lstat, mkdir, mkdtemp, readdir, rename, rmdir, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
-import type { StructuredAgentSessionLogger } from './agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionLogger } from './agent-session-wire/host/structured-agent-session-logger'
 import {
   isNativeChatScratchFolderName,
   nativeChatScratchRootFor
@@ -16,7 +16,7 @@ const SCOPE = 'nativeChatVisuals.migration'
 
 type Presence = 'absent' | 'directory' | 'other'
 
-/** What sits at `path` without following it: a link is never a place this host moves files into. */
+/** Never move into symlinks. */
 async function presenceOf(path: string): Promise<Presence> {
   try {
     return (await lstat(path)).isDirectory() ? 'directory' : 'other'

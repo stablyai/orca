@@ -1,14 +1,5 @@
-/**
- * A phone subscribing to an idle terminal after a relaunch must get its first snapshot on its grid.
- *
- * After a relaunch the daemon PTY is reattached with no host model, and an idle program never
- * paints a byte that would hydrate one. With the pane hidden behind another tab, the host used to
- * serve the pane's desktop-sized screen, and the phone gave up after three mismatched frames.
- *
- * Run:
- *   npx playwright test tests/e2e/mobile-subscribe-idle-hidden-pane-fit.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// Require the first phone snapshot on its own grid after relaunch with the pane hidden.
+// An idle PTY emits nothing to hydrate main’s missing model; the old desktop-sized replay exhausted three phone fit attempts.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
@@ -22,17 +13,15 @@ import {
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
 import { createRuntimeDesktopPairingOffer } from './helpers/paired-electron-client'
-import { decodePairingOffer } from '../../src/shared/pairing'
-import { pairedRuntimeConnectionFromOffer } from '../../src/shared/paired-runtime-connection'
-import {
-  sendRemoteRuntimeRequest,
-  subscribeRemoteRuntimeRequest
-} from '../../src/shared/remote-runtime-client'
+import { decodePairingOffer } from '../../src/shared/remote-runtime/pairing/pairing'
+import { pairedRuntimeConnectionFromOffer } from '../../src/shared/remote-runtime/pairing/paired-runtime-connection'
+import { sendRemoteRuntimeRequestOnSocket } from '../../src/shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../src/shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
   decodeTerminalStreamJson
-} from '../../src/shared/terminal-stream-protocol'
+} from '../../src/shared/terminal/stream/terminal-stream-protocol'
 
 const PHONE = { cols: 47, rows: 40 }
 
@@ -139,9 +128,20 @@ test('phone subscribe to an idle relaunched terminal behind another tab fits the
     await expect
       .poll(
         async () => {
-          const list = await sendRemoteRuntimeRequest<{
+          const list = await sendRemoteRuntimeRequestOnSocket<{
             terminals: { handle: string; ptyId: string | null }[]
-          }>(connection, 'terminal.list', {}, 15_000)
+          }>(
+            connection,
+            'terminal.list',
+            {},
+            15_000,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined
+          )
           if (!list.ok) {
             return JSON.stringify(list)
           }
@@ -153,7 +153,7 @@ test('phone subscribe to an idle relaunched terminal behind another tab fits the
       .toBe('listed')
 
     const seen: { snapshot: { cols: number; rows: number } | null } = { snapshot: null }
-    const subscription = await subscribeRemoteRuntimeRequest(
+    const subscription = await subscribeRemoteRuntimeTransport(
       connection,
       'terminal.subscribe',
       {

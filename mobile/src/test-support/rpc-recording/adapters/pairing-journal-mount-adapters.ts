@@ -1,4 +1,6 @@
-import type { MobileRelayPairingJournal } from '../../../transport/mobile-relay-pairing-journal'
+import type * as MobileRelayPairingRecoveryModule from '../../../pairing/mobile-relay-pairing-recovery'
+import type * as PreProfilePairingCoordinatorModule from '../../../pairing/pre-profile-pairing-coordinator'
+import type { MobileRelayPairingJournal } from '../../../pairing/mobile-relay-pairing-journal'
 import type { MountAdapter, MountContext } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 import {
@@ -11,19 +13,15 @@ import {
   pairingRelay
 } from '../relay-pairing-fixtures'
 
-/**
- * The two senders that run before a host profile exists: first pairing, and the startup recovery
- * that reconciles a journal a crash or a lost reply left behind. Both race or retry candidates and
- * advance only on an authoritative install status, which is what the recordings have to show.
- */
+// Pairing/recovery may advance only on authoritative install status; record candidate races and lost-reply recovery before profiles exist.
 export function pairingJournalMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
   return {
     'relay.pairing-recovery': ({ client, effect }: MountContext) => {
-      const recovery = modules.load<
-        typeof import('../../../transport/mobile-relay-pairing-recovery')
-      >('mobile/src/transport/mobile-relay-pairing-recovery.ts')
+      const recovery = modules.load<typeof MobileRelayPairingRecoveryModule>(
+        'mobile/src/pairing/mobile-relay-pairing-recovery.ts'
+      )
       let journal: MobileRelayPairingJournal | null = pairingJournal(credentialHash(modules))
       let outcome: unknown = 'unrecovered'
       return {
@@ -75,9 +73,9 @@ export function pairingJournalMountAdapters(
       }
     },
     'pairing.pre-profile': ({ client, effect }: MountContext) => {
-      const start = modules.load<
-        typeof import('../../../transport/pre-profile-pairing-coordinator')
-      >('mobile/src/transport/pre-profile-pairing-coordinator.ts').startPreProfilePairing
+      const start = modules.load<typeof PreProfilePairingCoordinatorModule>(
+        'mobile/src/pairing/pre-profile-pairing-coordinator.ts'
+      ).startPreProfilePairing
       let outcome: unknown = 'unpaired'
       let attempt: ReturnType<typeof start> | null = null
       let savedHost: unknown = null

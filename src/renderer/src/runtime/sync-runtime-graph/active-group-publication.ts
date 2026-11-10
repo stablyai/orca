@@ -1,5 +1,4 @@
-// The window's active tab group per workspace, a view fact main opens CLI and phone files into:
-// only what changed since main last accepted it, null for a workspace that no longer shows one.
+// Publish changed shown groups since main’s last acknowledgment so CLI/phone files land in view; null clears absent workspace groups.
 
 export function changedActiveGroups(
   current: Readonly<Record<string, string>>,

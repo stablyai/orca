@@ -1,8 +1,7 @@
-// Test fixtures: builds the sealed challenge the push gateway would issue, so the
-// proof answerer and the gateway client can both be exercised against a real box.
+// Build real sealed gateway challenges for proof-answerer and client tests.
 import { createHmac, randomBytes } from 'node:crypto'
 import nacl from 'tweetnacl'
-import type { E2EEKeypair } from '../e2ee-keypair'
+import type { E2EEKeypair } from '../rpc/server/pairing/e2ee-keypair'
 import type { PushHostChallenge, PushHostProofContext } from './push-host-proof'
 
 const encoder = new TextEncoder()

@@ -3,7 +3,7 @@ import { CircleAlert, Loader2, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import type { WindowsMobileFirewallStatus } from '../../../../shared/windows-mobile-firewall'
 import { useMountedRef } from '../../hooks/useMountedRef'
-import { translate } from '../../i18n/i18n'
+import { useTranslate } from '../../i18n/use-translate'
 import { Button } from '../ui/button'
 import { cn } from '../../lib/utils'
 
@@ -21,14 +21,14 @@ export function WindowsFirewallNotice({
   usingRelay = false,
   className
 }: WindowsFirewallNoticeProps): React.JSX.Element | null {
+  const t = useTranslate()
   const [status, setStatus] = useState<WindowsMobileFirewallStatus | null>(null)
   const [repairing, setRepairing] = useState(false)
   const mountedRef = useMountedRef()
   const inspectIdRef = useRef(0)
 
   const inspect = useCallback(async (): Promise<WindowsMobileFirewallStatus | null> => {
-    // Why: UAC elevation steals and returns window focus, so a focus-triggered
-    // inspection can race the post-repair one; only the latest result may win.
+    // UAC focus changes can race post-repair inspection; publish only the latest result.
     const inspectId = ++inspectIdRef.current
     if (!pairingReady) {
       setStatus(null)
@@ -82,8 +82,7 @@ export function WindowsFirewallNotice({
         return
       }
       if (result.ok) {
-        // Why: elevation success only confirms the script ran; managed policy
-        // can still leave an overriding Block rule in effect.
+        // Successful elevation proves execution, not that managed policy removed overriding Block rules.
         const next = await inspect()
         if (!mountedRef.current) {
           return
@@ -94,7 +93,7 @@ export function WindowsFirewallNotice({
             (next.ruleAllowed && !next.blockingRuleDetected && next.inspectionAvailable))
         ) {
           toast.success(
-            translate(
+            t(
               'auto.components.mobile.WindowsFirewallNotice.repair-success',
               'Windows Firewall now allows Orca Mobile on private networks'
             )
@@ -105,7 +104,7 @@ export function WindowsFirewallNotice({
           setStatus(firewallStatus)
         }
         toast.error(
-          translate(
+          t(
             'auto.components.mobile.WindowsFirewallNotice.repair-unverified',
             'Windows Firewall access could not be verified'
           )
@@ -114,7 +113,7 @@ export function WindowsFirewallNotice({
       }
       if (result.reason !== 'cancelled') {
         toast.error(
-          translate(
+          t(
             'auto.components.mobile.WindowsFirewallNotice.repair-failed',
             'Could not update the Windows Firewall rules'
           )
@@ -123,7 +122,7 @@ export function WindowsFirewallNotice({
     } catch {
       if (mountedRef.current) {
         toast.error(
-          translate(
+          t(
             'auto.components.mobile.WindowsFirewallNotice.repair-failed',
             'Could not update the Windows Firewall rules'
           )
@@ -144,33 +143,33 @@ export function WindowsFirewallNotice({
           <div className="space-y-1">
             <p className="text-sm font-medium">
               {networkIsPublic
-                ? translate(
+                ? t(
                     'auto.components.mobile.WindowsFirewallNotice.public-title',
                     'Windows marks this network as public'
                   )
                 : blockingRuleDetected
-                  ? translate(
+                  ? t(
                       'auto.components.mobile.WindowsFirewallNotice.blocked-title',
                       'Windows may be blocking Orca Mobile'
                     )
-                  : translate(
+                  : t(
                       'auto.components.mobile.WindowsFirewallNotice.missing-title',
                       'Allow phone connections through Windows Firewall'
                     )}
             </p>
             <p className="text-xs text-muted-foreground">
               {networkIsPublic
-                ? translate(
+                ? t(
                     'auto.components.mobile.WindowsFirewallNotice.public-description',
                     'Change this trusted Wi-Fi network to Private before allowing Orca Mobile connections.'
                   )
                 : blockingRuleDetected
-                  ? translate(
+                  ? t(
                       'auto.components.mobile.WindowsFirewallNotice.blocked-description',
                       'An existing inbound Block rule can override the pairing exception. Repair removes conflicting TCP rules for this Orca app, then allows port {{port}} on Private networks.',
                       { port: firewallStatus.port }
                     )
-                  : translate(
+                  : t(
                       'auto.components.mobile.WindowsFirewallNotice.missing-description',
                       'Windows may block the pairing server. Add a rule for this Orca app and TCP port {{port}} on Private networks.',
                       { port: firewallStatus.port }
@@ -178,7 +177,7 @@ export function WindowsFirewallNotice({
             </p>
             {usingRelay ? (
               <p className="text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.mobile.WindowsFirewallNotice.relay-note',
                   'Pairing still works over Orca Relay — allowing this only adds the faster local connection.'
                 )}
@@ -192,7 +191,7 @@ export function WindowsFirewallNotice({
               variant="outline"
               onClick={() => void window.api.mobile.openWindowsNetworkSettings()}
             >
-              {translate(
+              {t(
                 'auto.components.mobile.WindowsFirewallNotice.open-settings',
                 'Open network settings'
               )}
@@ -205,16 +204,13 @@ export function WindowsFirewallNotice({
                 <ShieldCheck aria-hidden="true" />
               )}
               {repairing
-                ? translate(
-                    'auto.components.mobile.WindowsFirewallNotice.waiting',
-                    'Waiting for Windows…'
-                  )
+                ? t('auto.components.mobile.WindowsFirewallNotice.waiting', 'Waiting for Windows…')
                 : blockingRuleDetected
-                  ? translate(
+                  ? t(
                       'auto.components.mobile.WindowsFirewallNotice.repair',
                       'Repair firewall access'
                     )
-                  : translate(
+                  : t(
                       'auto.components.mobile.WindowsFirewallNotice.allow',
                       'Allow phone connections'
                     )}

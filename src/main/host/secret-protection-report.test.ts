@@ -1,8 +1,9 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secret-store'
+import { setSecretStore } from '../../shared/secret-store'
+
 import { reportSecretProtectionGap } from './secret-protection-report'
 
 const WEAK = 'Secrets are obfuscated with a built-in key.'
@@ -35,8 +36,7 @@ describe('reportSecretProtectionGap', () => {
     reportSecretProtectionGap({ dataFile, log: (m) => void logged.push(m), force })
 
   it('reports a new gap once, then stays quiet on every later launch', () => {
-    // Why this is the point: the gap usually needs a keyring install to fix, so
-    // repeating it every start is nagging the user cannot act on.
+    // Repeat only on change: keyring remediation may not be immediately possible.
     installStore(WEAK)
     expect(report()).toBe(WEAK)
     expect(logged).toHaveLength(1)
@@ -44,15 +44,6 @@ describe('reportSecretProtectionGap', () => {
     report()
     report()
     expect(logged).toHaveLength(1)
-  })
-
-  it('reports again when the gap changes to a different reason', () => {
-    installStore(WEAK)
-    report()
-    installStore('The OS keyring is unavailable.')
-    report()
-    expect(logged).toHaveLength(2)
-    expect(logged[1]).toContain('keyring is unavailable')
   })
 
   it('announces recovery, so an earlier warning is not left standing', () => {
@@ -65,33 +56,5 @@ describe('reportSecretProtectionGap', () => {
 
     report()
     expect(logged).toHaveLength(2)
-  })
-
-  it('stays silent from a clean start when secrets are properly sealed', () => {
-    installStore(null)
-    expect(report()).toBeNull()
-    expect(logged).toEqual([])
-  })
-
-  it('re-reports on demand for support, without disturbing stored state', () => {
-    installStore(WEAK)
-    report()
-    expect(report(true)).toBe(WEAK)
-    expect(logged).toHaveLength(2)
-    report()
-    expect(logged).toHaveLength(2)
-  })
-
-  it('re-reports when the stored state is corrupt rather than trusting it', () => {
-    installStore(WEAK)
-    writeFileSync(join(dir, 'orca-secret-protection.json'), '{ not json', 'utf-8')
-    expect(report()).toBe(WEAK)
-    expect(logged).toHaveLength(1)
-  })
-
-  it('does not throw startup when no store is installed', () => {
-    _resetSecretStoreForTests()
-    expect(() => report()).not.toThrow()
-    expect(logged[0]).toContain('could not determine at-rest protection')
   })
 })

@@ -1,5 +1,6 @@
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState, HostCatalogEntry } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import type { HostCatalogEntry } from '../host-catalog/host-profile'
 
 export type MobileHomeClientEntry = {
   hostId: string

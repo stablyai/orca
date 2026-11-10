@@ -11,12 +11,7 @@ type QueuedRun<T> = {
   result: Promise<T>
 }
 
-/**
- * At most one run per key at a time, in arrival order. A caller joins a queued, not yet started
- * run with the same `shareKey`, which then uses the latest joiner's `work`; otherwise it queues a
- * new run. So every result comes from a run of the caller's own `shareKey`, and a burst costs at
- * most one run per distinct `shareKey` beyond the one in flight.
- */
+/** Serialize runs per key in arrival order. Same-shareKey callers join queued work using the latest callback; results retain caller shareKey, with at most one pending run per distinct shareKey beyond in-flight work. */
 export function createCoalescingKeyedRunner<T>(): CoalescingKeyedRunner<T> {
   const queues = new Map<string, QueuedRun<T>[]>()
 

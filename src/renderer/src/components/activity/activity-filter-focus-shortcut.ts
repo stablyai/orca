@@ -15,7 +15,7 @@ export function shouldIgnoreActivityFilterFocusShortcutTarget(
   if (!target) {
     return false
   }
-  // Why: workspace terminal stays mounted while Activity is open; only the Activity-portaled terminal keeps Cmd/Ctrl+F for terminal search.
+  // Only Activity-portaled terminals retain terminal Find; hidden workspace terminals stay mounted too.
   return terminalPortalTargets.some((portalTarget) => portalTarget?.contains(target) ?? false)
 }
 
@@ -52,7 +52,7 @@ export function handleActivityFilterFocusShortcut({
     return false
   }
   event.preventDefault()
-  // Why: hidden workspace xterms can retain focus behind Activity; stop the chord before xterm forwards it to a local/SSH PTY.
+  // Stop Find before hidden focused xterms can forward it to a local/SSH PTY.
   event.stopPropagation()
   event.stopImmediatePropagation()
   input.focus()

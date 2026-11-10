@@ -1,86 +1,111 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
+import type { DocPreviewExternalLink } from '../../../../../shared/document-preview/doc-preview-scheme'
+import type { DocPreviewGrantOwner } from '../../../../../preload/api/doc-preview-api'
+import {
+  registerHttpLinkStoreAccessor,
+  registerWorkspaceHttpLinkBrowserOpener
+} from '@/lib/browser/navigation/http-link-routing'
 
-const mocks = vi.hoisted(() => ({
-  toastError: vi.fn(),
-  openBrowserProfileTabInActiveWorkspace: vi.fn()
-}))
-
+const mocks = vi.hoisted(() => ({ getState: vi.fn(), toastError: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => ({
-      openBrowserProfileTabInActiveWorkspace: mocks.openBrowserProfileTabInActiveWorkspace
-    })
-  }
-}))
+vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.getState() } }))
 
 import { subscribeDocPreviewExternalLinkConfirmation } from './doc-preview-external-link-confirmation'
 
-function installSubscription(confirm: ConfirmationDialogContextValue): (url: string) => void {
-  let listener: ((payload: { url: string }) => void) | null = null
+const openUrl = vi.fn()
+const openBrowser = vi.fn(async () => 'opened-page')
+const state = {
+  repos: [],
+  endpointProjects: [],
+  endpointProjectHostSetups: [],
+  activeWorktreeId: 'unrelated-workspace',
+  settings: { openLinksInApp: true, openLinksInAppModifierInverts: false },
+  setActiveWorktree: vi.fn(),
+  createBrowserTab: vi.fn(),
+  unifiedTabsByWorktree: {
+    'source-workspace': [
+      {
+        id: 'source-wrapper',
+        entityId: 'browser-1',
+        contentType: 'browser' as const,
+        groupId: 'source-group'
+      }
+    ]
+  }
+}
+const runtimeOwner: DocPreviewGrantOwner = {
+  kind: 'runtime',
+  environmentId: 'source-server',
+  worktreeSelector: 'id:source-workspace',
+  worktreeRoot: '/repo'
+}
+
+function installSubscription(
+  confirm: ConfirmationDialogContextValue,
+  owner: DocPreviewGrantOwner = runtimeOwner
+) {
+  let listener: ((payload: DocPreviewExternalLink) => void) | undefined
+  const unsubscribe = vi.fn()
   vi.stubGlobal('window', {
     api: {
+      shell: { openUrl },
       docPreview: {
-        onExternalLink: (callback: (payload: { url: string }) => void): (() => void) => {
+        onExternalLink: (callback: (payload: DocPreviewExternalLink) => void) => {
           listener = callback
-          return () => {}
+          return unsubscribe
         }
       }
     }
   })
-  subscribeDocPreviewExternalLinkConfirmation(confirm)
-  if (!listener) {
-    throw new Error('external-link confirmation did not subscribe')
+  const dispose = subscribeDocPreviewExternalLinkConfirmation(confirm, {
+    grantId: 'source-grant',
+    owner,
+    worktreeId: 'source-workspace',
+    browserWorkspaceId: 'browser-1'
+  })
+  return {
+    emit: (payload: Partial<DocPreviewExternalLink> = {}) =>
+      listener?.({
+        url: 'https://example.com/docs?source=preview',
+        grantId: 'source-grant',
+        ...payload
+      }),
+    dispose,
+    unsubscribe
   }
-  return (url) => listener?.({ url })
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.openBrowserProfileTabInActiveWorkspace.mockResolvedValue(true)
+  openUrl.mockResolvedValue(undefined)
+  openBrowser.mockResolvedValue('opened-page')
+  state.settings = { openLinksInApp: true, openLinksInAppModifierInverts: false }
+  mocks.getState.mockReturnValue(state)
+  registerHttpLinkStoreAccessor(() => state)
+  registerWorkspaceHttpLinkBrowserOpener(openBrowser)
+  vi.stubGlobal('navigator', { userAgent: 'Mac' })
+})
+afterEach(() => {
+  registerWorkspaceHttpLinkBrowserOpener(null)
+  vi.unstubAllGlobals()
 })
 
 describe('document preview external-link confirmation', () => {
-  it('shows the exact destination and opens only after confirmation', async () => {
-    const confirm = vi.fn<ConfirmationDialogContextValue>().mockResolvedValue(true)
-    const emit = installSubscription(confirm)
-
-    emit('https://example.com/docs?source=preview')
-
-    await vi.waitFor(() => expect(confirm).toHaveBeenCalledOnce())
-    expect(confirm).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'Open link to example.com?',
-        description: 'https://example.com/docs?source=preview'
-      })
+  it('opens nothing when the reader cancels or the preview is disposed while confirming', async () => {
+    const cancelled = installSubscription(
+      vi.fn<ConfirmationDialogContextValue>().mockResolvedValue(false)
     )
-    await vi.waitFor(() =>
-      expect(mocks.openBrowserProfileTabInActiveWorkspace).toHaveBeenCalledWith(
-        'https://example.com/docs?source=preview',
-        null
-      )
-    )
-  })
-
-  it('opens nothing when the reader cancels', async () => {
-    const confirm = vi.fn<ConfirmationDialogContextValue>().mockResolvedValue(false)
-    const emit = installSubscription(confirm)
-
-    emit('https://example.com/docs')
-
-    await vi.waitFor(() => expect(confirm).toHaveBeenCalledOnce())
-    expect(mocks.openBrowserProfileTabInActiveWorkspace).not.toHaveBeenCalled()
-  })
-
-  it('surfaces a confirmed link that the browser refuses', async () => {
-    mocks.openBrowserProfileTabInActiveWorkspace.mockResolvedValue(false)
-    const emit = installSubscription(
+    cancelled.emit()
+    const disposed = installSubscription(
       vi.fn<ConfirmationDialogContextValue>().mockResolvedValue(true)
     )
-
-    emit('https://example.com/docs')
-
-    await vi.waitFor(() => expect(mocks.toastError).toHaveBeenCalledOnce())
+    disposed.emit()
+    disposed.dispose()
+    await Promise.resolve()
+    expect(disposed.unsubscribe).toHaveBeenCalledOnce()
+    expect(openBrowser).not.toHaveBeenCalled()
+    expect(openUrl).not.toHaveBeenCalled()
   })
 })

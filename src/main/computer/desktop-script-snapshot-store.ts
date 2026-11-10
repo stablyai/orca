@@ -25,8 +25,7 @@ export class DesktopScriptSnapshotStore {
       return
     }
 
-    // Why: cached snapshots only supply element identity for follow-up actions;
-    // retaining PNG base64 across agent loops grows the long-lived sidecar.
+    // Follow-up actions need element identity, not retained PNG data.
     const cachedSnapshot = snapshotWithoutScreenshot(snapshot)
     const entry = { snapshot: cachedSnapshot, keys, createdAtMs: Date.now() }
     this.snapshotEntries.push(entry)
@@ -84,8 +83,7 @@ export class DesktopScriptSnapshotStore {
         return
       }
       for (const key of expired.keys) {
-        // Why: newer snapshots can reuse the same alias; only remove aliases
-        // that still point at the large snapshot payload being evicted.
+        // A newer snapshot may have reused this alias; evict only aliases still owned by the old one.
         if (this.snapshots.get(key) === expired.snapshot) {
           this.snapshots.delete(key)
         }

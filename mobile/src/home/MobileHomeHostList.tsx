@@ -1,81 +1,81 @@
-import { memo, useCallback, type ReactElement } from 'react'
-import { FlatList, StyleSheet, View } from 'react-native'
-import type { ListRenderItemInfo } from 'react-native'
-import { MobileHostCard } from '../components/MobileHostCard'
-import type { HomeStatsSummary } from '../stats/home-stats-total'
-import { spacing } from '../theme/mobile-theme'
-import { classifyConnection } from '../transport/connection-health'
-import { resolveHomeHostConnectionState } from '../transport/home-host-auto-connect'
-import type { ConnectionState, HostCatalogEntry } from '../transport/types'
+import { Plus } from 'lucide-react-native'
+import { Fragment, memo, useCallback } from 'react'
+import { Pressable, Text, View } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { classifyConnection } from '../transport/connection/connection-health'
+import { resolveHomeHostConnectionState } from '../transport/hosts/home-host-auto-connect'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import type { HostCatalogEntry } from '../host-catalog/host-profile'
 import type { HostWorktreeInfo } from '../worktree/home-worktree-info'
 import type { HomeHostConnections } from './home-host-connection-projection'
-import { MobileHomeListHeader } from './MobileHomeListHeader'
+import { homeListStyles } from './home-list-styles'
+import { MobileHomeDesktopRow } from './MobileHomeDesktopRow'
+import { MobileHomeSectionHeading } from './MobileHomeSectionHeading'
 
 type MobileHomeHostListProps = {
   autoConnectHostIds: string[]
-  bottomInset: number
-  contentMaxWidth: number
-  footer: ReactElement
+  first: boolean
   hostAttempts: Record<string, number>
   hostLastConnected: Record<string, number | null>
   hostConnections: HomeHostConnections
   hosts: HostCatalogEntry[]
   hostStates: Record<string, ConnectionState>
-  isWideLayout: boolean
-  stats: HomeStatsSummary | null
+  /** Agents waiting on the user, per desktop. */
+  needsYouByHost: Readonly<Record<string, number>>
   worktreeInfo: Record<string, HostWorktreeInfo>
   onOpen: (host: HostCatalogEntry) => void
-  onLongPress: (host: HostCatalogEntry) => void
   onOpenActions: (host: HostCatalogEntry) => void
+  onPairDesktop: () => void
 }
 
+/** Home's Desktops section: one row per paired desktop, then "Pair a desktop". */
 export function MobileHomeHostList(props: MobileHomeHostListProps) {
-  const renderHost = useCallback(
-    ({ item }: ListRenderItemInfo<HostCatalogEntry>) => (
-      <MobileHomeHostRow
-        item={item}
-        autoConnectHostIds={props.autoConnectHostIds}
-        hostAttempts={props.hostAttempts}
-        hostLastConnected={props.hostLastConnected}
-        hostConnections={props.hostConnections}
-        hostStates={props.hostStates}
-        worktreeInfo={props.worktreeInfo}
-        onOpen={props.onOpen}
-        onLongPress={props.onLongPress}
-        onOpenActions={props.onOpenActions}
-      />
-    ),
-    [
-      props.autoConnectHostIds,
-      props.hostAttempts,
-      props.hostLastConnected,
-      props.hostConnections,
-      props.hostStates,
-      props.onLongPress,
-      props.onOpen,
-      props.onOpenActions,
-      props.worktreeInfo
-    ]
-  )
-
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   return (
-    <FlatList
-      data={props.hosts}
-      keyExtractor={(host) => host.id}
-      contentContainerStyle={[
-        styles.list,
-        { paddingBottom: spacing.xl + props.bottomInset },
-        props.isWideLayout && {
-          maxWidth: props.contentMaxWidth,
-          width: '100%',
-          alignSelf: 'center'
-        }
-      ]}
-      ListHeaderComponent={<MobileHomeListHeader stats={props.stats} />}
-      ItemSeparatorComponent={CardGap}
-      renderItem={renderHost}
-      ListFooterComponent={props.footer}
-    />
+    <>
+      <MobileHomeSectionHeading
+        title={t('home.listHeader.desktopsHeading', 'Desktops')}
+        first={props.first}
+      />
+      <View style={homeListStyles.group}>
+        {props.hosts.map((host, index) => (
+          <Fragment key={host.id}>
+            <MobileHomeHostRow
+              item={host}
+              autoConnectHostIds={props.autoConnectHostIds}
+              hostAttempts={props.hostAttempts}
+              hostLastConnected={props.hostLastConnected}
+              hostConnections={props.hostConnections}
+              hostStates={props.hostStates}
+              needsYou={props.needsYouByHost[host.id] ?? 0}
+              worktreeInfo={props.worktreeInfo}
+              onOpen={props.onOpen}
+              onOpenActions={props.onOpenActions}
+            />
+            <View
+              style={[
+                homeListStyles.separator,
+                homeListStyles.tileSeparator,
+                index === props.hosts.length - 1 && homeListStyles.fullSeparator
+              ]}
+            />
+          </Fragment>
+        ))}
+        <Pressable
+          accessibilityRole="button"
+          style={({ pressed }) => [homeListStyles.actionRow, pressed && homeListStyles.rowPressed]}
+          onPress={props.onPairDesktop}
+        >
+          <Plus size={18} color={colors.accentBlue} />
+          <Text style={homeListStyles.actionLabel}>
+            {t('home.desktops.pairDesktop', 'Pair a desktop')}
+          </Text>
+        </Pressable>
+      </View>
+    </>
   )
 }
 
@@ -88,12 +88,11 @@ type MobileHomeHostRowProps = Pick<
   | 'hostStates'
   | 'worktreeInfo'
   | 'onOpen'
-  | 'onLongPress'
   | 'onOpenActions'
-> & { item: HostCatalogEntry }
+> & { item: HostCatalogEntry; needsYou: number }
 
 const MobileHomeHostRow = memo(function MobileHomeHostRow(props: MobileHomeHostRowProps) {
-  const { item, onLongPress, onOpen, onOpenActions } = props
+  const { item, onOpen, onOpenActions } = props
   const state = resolveHomeHostConnectionState(
     item.id,
     props.hostStates[item.id],
@@ -111,29 +110,19 @@ const MobileHomeHostRow = memo(function MobileHomeHostRow(props: MobileHomeHostR
     hostName: item.name
   })
   const open = useCallback(() => onOpen(item), [item, onOpen])
-  const longPress = useCallback(() => onLongPress(item), [item, onLongPress])
   const openActions = useCallback(() => onOpenActions(item), [item, onOpenActions])
 
   return (
-    <MobileHostCard
+    <MobileHomeDesktopRow
       host={item}
       credentialStatus={item.credentialStatus}
       state={state}
       verdict={verdict}
       path={connection?.path ?? 'lan'}
       worktreeInfo={props.worktreeInfo[item.id]}
+      needsYou={props.needsYou}
       onPress={open}
-      onLongPress={longPress}
-      onOpenActions={openActions}
+      onLongPress={openActions}
     />
   )
-})
-
-function CardGap() {
-  return <View style={styles.cardGap} />
-}
-
-const styles = StyleSheet.create({
-  list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
-  cardGap: { height: spacing.sm }
 })

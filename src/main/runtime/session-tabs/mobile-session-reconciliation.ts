@@ -1,12 +1,46 @@
+import { reconcileChatTabIdentities } from '../agent-session/agent-session-tab-identity'
+import { preserveTerminalRetirementProofs } from '../terminal/surface/mobile-session-terminal-retirement-proof'
+import { stampMobileSnapshotVersion } from './mobile-session-snapshot-version'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
+import {
+  headlessMobileSnapshotContentUnchanged,
+  mobileSnapshotIdentityUnchanged
+} from './mobile-session-snapshot-equality'
 import type { OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs as MergePreservedHeadlessMobileSessionTabsMethods } from './mobile-session-preservation'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as StoredMobileSnapshotHasStalePreservedTabMethods } from './mobile-session-publication-preservation'
-/* eslint-disable unicorn/no-useless-spread */
 import { OrcaRuntimeWithWriteOrchestrationPointerPty } from '../orchestration/terminal-authority/write-orchestration-pointer-pty'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { getMobileSessionSnapshotTabIdentityKeys } from '../mobile-session-tab-merge'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { getMobileSessionSnapshotTabIdentityKeys } from '../session-lifecycle/projection/mobile-session-tab-merge'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 
 export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOrchestrationPointerPty {
+  storeMobileSessionSnapshot(
+    worktreeId: string,
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ): RuntimeMobileSessionTabsSnapshot {
+    const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+    snapshot = reconcileChatTabIdentities(snapshot, existing)
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      const merged = startedMainTerminalSurfaces(this)?.withMainOrder(snapshot) ?? snapshot
+      // Main-order-only rebuilds are no-ops unless occupant/publication/retirement evidence changed.
+      if (
+        existing &&
+        mobileSnapshotIdentityUnchanged(existing, snapshot) &&
+        headlessMobileSnapshotContentUnchanged(existing, merged) &&
+        !headlessMobileSnapshotContentUnchanged(snapshot, merged)
+      ) {
+        return existing
+      }
+      snapshot = merged
+    }
+    snapshot = preserveTerminalRetirementProofs(snapshot, existing)
+    const stamped = stampMobileSnapshotVersion(snapshot, existing)
+    this.mobileSessionTabsByWorktree.set(worktreeId, stamped)
+    return stamped
+  }
+
   protected abstract buildPreservedHeadlessMobileSessionSnapshot(
     ...args: Parameters<
       MergePreservedHeadlessMobileSessionTabsMethods['buildPreservedHeadlessMobileSessionSnapshot']
@@ -45,16 +79,14 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
     snapshots: RuntimeMobileSessionTabsSnapshot[] | undefined,
     unchangedWorktreeIds?: string[],
     resyncWorktreeIds = new Set<string>(),
-    rendererGeneration?: string | null
+    rendererGeneration?: string | null,
+    publishedSnapshots?: RuntimeMobileSessionTabsSnapshot[]
   ): Set<string> {
     const changedWorktreeIds = new Set<string>()
     if (snapshots === undefined) {
       return changedWorktreeIds
     }
-    // Why: snapshots are immutable — every writer replaces the map entry with a
-    // new object, and the accept gate below drops semantically-unchanged
-    // renderer resends before they replace an entry — so reference identity
-    // before/after detects exactly the entries that actually changed.
+    // Immutable snapshots and the accept gate make reference identity detect actual changes without rebroadcasting unchanged resends.
     const blockedRecreatedWorktreeIds = new Set<string>()
     const acceptedSnapshots = snapshots.filter((snapshot) => {
       const fence = this.removedMobileSessionWorktreeIds.get(snapshot.worktree)
@@ -71,19 +103,15 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
         return reject()
       }
       if (snapshot.worktreeInstanceId !== undefined) {
-        // Why: every catalog row carries an instanceId, so a mismatch against the
-        // live meta is exactly "not the current occupant" — no removed-id memory needed.
+        // Catalog instanceId mismatch proves this is not the current occupant; no removed-id memory is needed.
         if (snapshot.worktreeInstanceId !== currentMeta.instanceId) {
           return reject()
         }
-        // Why: the successor's identity proves the race window closed; the
-        // instanceId mismatch alone fences any later frame from the old occupant.
+        // Successor identity closes the race; instanceId mismatch then fences old-occupant frames.
         this.removedMobileSessionWorktreeIds.delete(snapshot.worktree)
         return true
       }
-      // Identity-less frame: only the live renderer generation can speak for the
-      // successor, and the generation that published the removed occupant never
-      // can — a same-generation recreate stays fenced until the renderer reloads.
+      // Identity-less successor frames require a new live renderer generation; same-generation recreate remains fenced.
       if (
         (typeof rendererGeneration === 'string' &&
           snapshot.publicationEpoch !== rendererGeneration) ||
@@ -98,7 +126,7 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
       missingSnapshotOnly: true,
       notify: false
     })
-    // Why: graph sync must scan each persisted host session once, not once per workspace.
+    // Scan each persisted host partition once per graph sync, not once per workspace.
     const worktreeSessionsToHydrate = new Map<string, WorkspaceSessionState | null>(
       this.getWorkspaceSessionHydrationTargets(Boolean(this.offscreenBrowserBackend))
     )
@@ -109,7 +137,7 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
         }
       }
     }
-    // Why: an empty renderer publication after HUB restart must not hide SSH panes persisted in this HUB's host partition.
+    // Empty renderer frames after HUB restart must retain SSH panes saved in this host partition.
     for (const [worktreeId, workspaceSession] of worktreeSessionsToHydrate) {
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
         allowAttachedWindow: true,
@@ -122,18 +150,14 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
     for (const worktreeId of blockedRecreatedWorktreeIds) {
       nextWorktrees.add(worktreeId)
     }
-    // Why: the renderer withholds unchanged snapshots to keep the graph payload
-    // small, so these worktrees are still live and must not fall into the prune
-    // below. Ask for a republish when main no longer holds that accepted renderer
-    // publication or a formerly-preserved runtime tab has gone stale.
+    // Renderers omit unchanged snapshots; keep them live unless accepted state is missing or preserved runtime rows went stale, then request republish.
     for (const worktreeId of unchangedWorktreeIds ?? []) {
       const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
       const accepted = this.acceptedRendererMobileSnapshotByWorktree.get(worktreeId)
       if (existing) {
         nextWorktrees.add(worktreeId)
       }
-      // Why: a fenced frame stays "published" renderer-side; asking for a
-      // republish would only be fenced again on every sync.
+      // Do not request republish for fenced frames; every sync would request another equally fenced frame.
       if (!existing && this.removedMobileSessionWorktreeIds.get(worktreeId)?.rejectedPublication) {
         nextWorktrees.add(worktreeId)
         continue
@@ -155,31 +179,19 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
       if (!incomingWorktreeIds.has(worktreeId)) {
         resyncWorktreeIds.add(worktreeId)
       }
-      // Why: the accept gate compares against the renderer's last accepted pair,
-      // which outlives the dropped snapshot and would reject the republish.
+      // Clear accepted pairs before republish or the still-retained accept gate rejects its frame.
       this.acceptedRendererMobileSnapshotByWorktree.delete(worktreeId)
     }
     for (const snapshot of acceptedSnapshots) {
       nextWorktrees.add(snapshot.worktree)
       const existing = this.mobileSessionTabsByWorktree.get(snapshot.worktree)
-      // Why: judge renderer publication ordering against the renderer's own
-      // last-accepted (epoch, version) — the renderer reuses one pair for
-      // byte-identical content, so a same-epoch version <= the accepted one is
-      // a no-op resend (or a stale frame) and must be skipped. Never compare
-      // against the stored snapshot's version: main-local touches bump it
-      // independently and would reject genuinely newer renderer revisions.
+      // Order renderer frames by their own accepted pair; main-local version bumps must not reject newer renderer revisions.
       const accepted = this.acceptedRendererMobileSnapshotByWorktree.get(snapshot.worktree)
       if (
         accepted &&
         accepted.publicationEpoch === snapshot.publicationEpoch &&
         snapshot.snapshotVersion <= accepted.rendererVersion &&
-        // Why: preservation is main-only state — a serve/SSH binding (or live
-        // browser page) can disappear without the renderer bumping its version,
-        // so a resend of the EXACT accepted revision (content-identical to the
-        // accepted publication, safe to re-merge) must still fall through to
-        // the merge, which prunes stale preserved tabs. Strictly-older frames
-        // stay skipped: their content is outdated, and the next accepted-pair
-        // resend performs the prune.
+        // Re-merge the exact accepted revision to prune stale host-only preservation; skip strictly older frames until a current resend.
         !(
           existing &&
           snapshot.snapshotVersion === accepted.rendererVersion &&
@@ -193,10 +205,7 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
       const fencedSnapshot = this.applyMobileSessionRetirementFences(launchDraftFencedSnapshot)
       this.releaseRuntimeSessionOwnershipForRendererRetiredTabs(fencedSnapshot, existing)
       const nextSnapshot = this.mergePreservedHeadlessMobileSessionTabs(fencedSnapshot, existing)
-      // Why: clients drop same-epoch frames whose version isn't strictly newer,
-      // and main-local touches may already have emitted a higher version than
-      // the renderer's counter — keep the stored version strictly monotonic so
-      // the accepted content is never discarded as stale downstream.
+      // Keep stored versions strictly increasing past main-local bumps or clients discard accepted renderer content as stale.
       const storedVersion = existing
         ? Math.max(nextSnapshot.snapshotVersion, existing.snapshotVersion + 1)
         : nextSnapshot.snapshotVersion
@@ -212,17 +221,32 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
         rendererTabCount: fencedSnapshot.tabs.length,
         rendererTabIdentityKeys: new Set(
           fencedSnapshot.tabs.flatMap((tab) => getMobileSessionSnapshotTabIdentityKeys(tab))
-        )
+        ),
+        ...(this.authoritativeWindowId !== null &&
+        this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID &&
+        typeof rendererGeneration === 'string'
+          ? {
+              titlePublisher: {
+                windowId: this.authoritativeWindowId,
+                rendererGeneration,
+                // Main's merge can add rows the window never published or resolved.
+                surfaceIds: new Set(
+                  publishedSnapshots
+                    ?.find((published) => published.worktree === snapshot.worktree)
+                    ?.tabs.flatMap((tab) =>
+                      tab.type === 'terminal' && tab.resolvesSessionTitle ? [tab.id] : []
+                    ) ?? []
+                )
+              }
+            }
+          : {})
       })
     }
-    for (const [worktreeId, existing] of [...this.mobileSessionTabsByWorktree.entries()]) {
+    for (const [worktreeId, existing] of Array.from(this.mobileSessionTabsByWorktree)) {
       if (!nextWorktrees.has(worktreeId)) {
         const preserved = this.buildPreservedHeadlessMobileSessionSnapshot(existing)
         if (preserved) {
-          // Why: preservation filters existing.tabs in place (same objects) and
-          // the merge epoch hashes the preserved identities idempotently, so an
-          // equal epoch with every tab object retained means the recomputation
-          // was a no-op — keep the entry so no-op syncs don't fan out.
+          // Equal publisher epoch and identical retained tab objects mean no content change; keep the entry to avoid no-op fanout.
           const preservedIsNoOp =
             preserved.publicationEpoch === existing.publicationEpoch &&
             preserved.tabs.length === existing.tabs.length &&
@@ -230,15 +254,14 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
           if (!preservedIsNoOp) {
             this.storeMobileSessionSnapshot(worktreeId, preserved)
           }
-          // Why: the stored entry is no longer the renderer's publication, so a
-          // future renderer frame must be re-merged even if it reuses the pair.
+          // Preserved entries are no longer renderer publications; the next renderer frame must re-merge even with a reused pair.
           this.acceptedRendererMobileSnapshotByWorktree.delete(worktreeId)
           nextWorktrees.add(worktreeId)
         } else {
           this.mobileSessionTabsByWorktree.delete(worktreeId)
           this.mobileSessionTabsAgentStatusHeartbeat.removeWorktree(worktreeId)
           this.acceptedRendererMobileSnapshotByWorktree.delete(worktreeId)
-          // Why: drop any pending coalesced notify so a stale snapshot can't land after the removed frame.
+          // Cancel pending notices so an old snapshot cannot follow the removal frame.
           this.cancelScheduledMobileSessionTabsChanged(worktreeId)
           this.notifyMobileSessionTabsRemoved(worktreeId)
         }

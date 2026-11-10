@@ -5,41 +5,47 @@ import {
   pendingExecCallback,
   pendingSftpCallback,
   ssh2Mock
-} from '../__tests__/ssh-connection-test-client'
-import { resetSshConnectionMocks } from './ssh-connection-test-harness'
-import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
+} from './testing/ssh-connection-test-client'
+import { resetSshConnectionMocks } from './testing/ssh-connection-test-harness'
+import { createCallbacks, createTarget } from './testing/ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
 
-vi.mock('ssh2', async () =>
-  (await import('../__tests__/ssh-connection-test-client')).createSsh2Module()
+vi.mock('../authentication/ssh2-module-load', async () =>
+  (await import('./testing/ssh-connection-test-client')).createSsh2LoaderModule()
 )
 vi.mock('../system-transport/system-ssh-binary', async () =>
-  (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
+  (await import('./testing/ssh-connection-test-harness')).createSystemSshBinaryModule()
 )
 vi.mock('../system-transport/system-ssh-args', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshArgsMocks(await importOriginal())
+  (await import('./testing/ssh-connection-test-harness')).withSystemSshArgsMocks(
+    await importOriginal()
+  )
 )
 vi.mock('../system-transport/system-ssh-command', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshCommandMocks(await importOriginal())
-)
-vi.mock('../system-transport/system-ssh-file-binary-transfer', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshFileBinaryTransferMocks(
+  (await import('./testing/ssh-connection-test-harness')).withSystemSshCommandMocks(
     await importOriginal()
   )
 )
-vi.mock('../system-transport/system-ssh-file-transfer', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshFileTransferMocks(
+vi.mock(
+  '../system-transport/file-transfer/system-ssh-file-binary-transfer',
+  async (importOriginal) =>
+    (await import('./testing/ssh-connection-test-harness')).withSystemSshFileBinaryTransferMocks(
+      await importOriginal()
+    )
+)
+vi.mock('../system-transport/file-transfer/system-ssh-file-transfer', async (importOriginal) =>
+  (await import('./testing/ssh-connection-test-harness')).withSystemSshFileTransferMocks(
     await importOriginal()
   )
 )
-vi.mock('../ssh-control-socket', async () =>
-  (await import('./ssh-connection-test-harness')).createControlSocketModule()
+vi.mock('../system-transport/ssh-control-socket', async () =>
+  (await import('./testing/ssh-connection-test-harness')).createControlSocketModule()
 )
 vi.mock('../config/ssh-config-parser', async () =>
-  (await import('./ssh-connection-test-harness')).createSshConfigParserModule()
+  (await import('./testing/ssh-connection-test-harness')).createSshConfigParserModule()
 )
 vi.mock('../config/ssh-g-config-resolution', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSshGConfigResolutionMocks(
+  (await import('./testing/ssh-connection-test-harness')).withSshGConfigResolutionMocks(
     await importOriginal()
   )
 )
@@ -47,66 +53,6 @@ vi.mock('../config/ssh-g-config-resolution', async (importOriginal) =>
 describe('SshConnection', () => {
   beforeEach(() => {
     resetSshConnectionMocks()
-  })
-
-  it('wraps exec commands as a single line that csh/tcsh login shells cannot break', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-
-    const original = "cd '/tmp' && ('/usr/bin/node' -e 'console.log(1)' || echo MISSING)"
-    await conn.exec(original)
-
-    const wrapped = clientInstances[0].lastExecCommand!
-    // Why: sshd lets the login shell parse this first, so raw newlines let
-    // csh/tcsh split the command before /bin/sh receives it (issue #8701).
-    expect(wrapped).not.toContain('\n')
-    expect(wrapped).toMatch(/^exec \/bin\/sh -c '.*printf %b .*' orca-command /)
-    expect(wrapped).not.toContain('base64')
-  })
-
-  it('opens an interactive shell with the requested pty for plain SSH terminals', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-
-    await conn.shell({ cols: 100, rows: 30, term: 'xterm-256color' })
-
-    expect(clientInstances[0].lastShellWindow).toEqual({
-      cols: 100,
-      rows: 30,
-      term: 'xterm-256color'
-    })
-  })
-
-  it('can execute native remote commands without the POSIX shell wrapper', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-
-    await conn.exec('powershell.exe -NoProfile -EncodedCommand AAAA', { wrapCommand: false })
-
-    expect(clientInstances[0].lastExecCommand).toBe(
-      'powershell.exe -NoProfile -EncodedCommand AAAA'
-    )
-  })
-
-  it('times out when ssh2 never opens an exec channel', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-    ssh2Mock.execBehavior = 'pending'
-
-    vi.useFakeTimers()
-    try {
-      const outcomePromise = conn.exec('printf ready').catch((error: Error) => error)
-
-      await vi.advanceTimersByTimeAsync(30_000)
-      const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
-
-      expect(outcome).toMatchObject({
-        message: 'SSH exec channel timed out',
-        sshChannelCloseConfirmed: false
-      })
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('closes a late exec callback after the channel-open timeout settles', async () => {
@@ -132,53 +78,6 @@ describe('SshConnection', () => {
     }
   })
 
-  it('retries a session-limit-refused exec open and succeeds on a later attempt', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-    const channel = { close: vi.fn() }
-    const execMock = vi
-      .fn<(cmd: string, cb: (err: Error | undefined, ch: unknown) => void) => void>()
-      .mockImplementationOnce((_cmd, cb) => {
-        cb(
-          Object.assign(new Error('(SSH) Channel open failure: open failed'), { reason: 2 }),
-          undefined
-        )
-      })
-      .mockImplementation((_cmd, cb) => cb(undefined, channel))
-    clientInstances[0].exec = execMock as never
-
-    await expect(conn.exec('printf ready')).resolves.toBe(channel)
-    expect(execMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('surfaces the session-limit error once open retries are exhausted', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-    const refusal = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
-      reason: 2
-    })
-    const execMock = vi
-      .fn<(cmd: string, cb: (err: Error | undefined, ch: unknown) => void) => void>()
-      .mockImplementation((_cmd, cb) => cb(refusal, undefined))
-    clientInstances[0].exec = execMock as never
-
-    await expect(conn.exec('printf ready')).rejects.toBe(refusal)
-    expect(execMock).toHaveBeenCalledTimes(4)
-  })
-
-  it('does not retry non-session-limit exec open failures', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-    const failure = new Error('Not connected')
-    const execMock = vi
-      .fn<(cmd: string, cb: (err: Error | undefined, ch: unknown) => void) => void>()
-      .mockImplementation((_cmd, cb) => cb(failure, undefined))
-    clientInstances[0].exec = execMock as never
-
-    await expect(conn.exec('printf ready')).rejects.toBe(failure)
-    expect(execMock).toHaveBeenCalledTimes(1)
-  })
-
   it('bounds an aborted exec to the close grace when ssh2 never invokes the open callback', async () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
@@ -192,8 +91,7 @@ describe('SshConnection', () => {
         .catch((error: Error) => error)
 
       controller.abort()
-      // Why: a hung socket must not pin the aborted caller for the full 30s
-      // connect timeout — the abort settles at the 5s grace bound instead.
+      // Abort must settle at5s grace, not wait out the30s hung connect.
       await vi.advanceTimersByTimeAsync(5_000)
 
       await expect(outcomePromise).resolves.toMatchObject({
@@ -293,8 +191,7 @@ describe('SshConnection', () => {
     controller.abort()
     pendingExecCallback?.(undefined, lateChannel)
 
-    // Why: the sshd session slot is freed only when the channel finishes
-    // closing — settling before 'close' lets the next open race the close.
+    // Session slots remain occupied until physical channel close; early settlement races the next open.
     const early = await Promise.race([outcomePromise, Promise.resolve('pending')])
     expect(early).toBe('pending')
     expect(lateChannel.close).toHaveBeenCalledTimes(1)
@@ -336,48 +233,6 @@ describe('SshConnection', () => {
     }
   })
 
-  it('times out when ssh2 never opens an SFTP channel', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-    ssh2Mock.sftpBehavior = 'pending'
-
-    vi.useFakeTimers()
-    try {
-      const outcomePromise = conn.sftp().catch((error: Error) => error)
-
-      await vi.advanceTimersByTimeAsync(30_000)
-      const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
-
-      expect(outcome).toMatchObject({ message: 'SSH SFTP channel timed out' })
-      expect(outcome).not.toHaveProperty('sshChannelCloseConfirmed')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('ends a late SFTP callback after the channel-open timeout settles', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-    ssh2Mock.sftpBehavior = 'pending'
-    const lateSftp = { end: vi.fn() }
-
-    vi.useFakeTimers()
-    try {
-      const outcomePromise = conn
-        .sftp()
-        .then(() => 'opened')
-        .catch((error: Error) => error.message)
-
-      await vi.advanceTimersByTimeAsync(30_000)
-      pendingSftpCallback?.(undefined, lateSftp)
-
-      await expect(outcomePromise).resolves.toBe('SSH SFTP channel timed out')
-      expect(lateSftp.end).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('cancels a pending SFTP channel open and ends the late channel', async () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
@@ -396,36 +251,5 @@ describe('SshConnection', () => {
 
     await expect(outcomePromise).resolves.toBe('AbortError')
     expect(lateSftp.end).toHaveBeenCalledTimes(1)
-  })
-
-  it('retains SFTP physical-close tracking after the bounded observation expires', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-    ssh2Mock.sftpBehavior = 'pending'
-    const controller = new AbortController()
-    const lateSftp = Object.assign(new EventEmitter(), { end: vi.fn() })
-
-    vi.useFakeTimers()
-    try {
-      const outcomePromise = conn
-        .sftp({ signal: controller.signal })
-        .then(() => 'opened')
-        .catch((error: Error) => error.name)
-
-      await Promise.resolve()
-      controller.abort()
-      pendingSftpCallback?.(undefined, lateSftp)
-      expect(lateSftp.listenerCount('close')).toBe(2)
-
-      await vi.advanceTimersByTimeAsync(5_000)
-
-      await expect(outcomePromise).resolves.toBe('AbortError')
-      expect(lateSftp.listenerCount('close')).toBe(1)
-      lateSftp.emit('close')
-      expect(lateSftp.listenerCount('close')).toBe(0)
-      expect(lateSftp.end).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
   })
 })

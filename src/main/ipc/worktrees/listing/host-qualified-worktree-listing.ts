@@ -1,6 +1,5 @@
 import {
-  getRepoExecutionHostId,
-  getSshTargetIdForExecutionHost,
+  getRepoDialableSshTargetId,
   parseExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
 } from '../../../../shared/execution-host'
@@ -11,7 +10,7 @@ import type {
   HostQualifiedDetectedWorktreeResult,
   DirectSshDetectedWorktreeRequest
 } from '../../../../shared/detected-worktree-provider-contract'
-import { isCurrentSshProviderAuthority } from '../../../ssh/ssh-provider-authority'
+import { isCurrentSshProviderAuthority } from '../../../ssh/connection/authority/ssh-provider-authority'
 import {
   hasValidDirectSshAuthority,
   listDetectedWorktreesForCapturedRepo
@@ -69,7 +68,7 @@ export async function listHostQualifiedDetectedWorktrees(
   if (!repo) {
     return rejected('ambiguous-owner')
   }
-  const connectionId = getSshTargetIdForExecutionHost(getRepoExecutionHostId(repo))
+  const connectionId = getRepoDialableSshTargetId(repo)
   if (
     (parsedHost.kind === 'local' && connectionId) ||
     (parsedHost.kind === 'ssh' && connectionId !== parsedHost.targetId)

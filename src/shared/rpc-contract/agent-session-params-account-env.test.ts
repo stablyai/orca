@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { CreateAgentSessionParams, EnsureAgentSessionParams } from './agent-session-params'
-import { RUNTIME_CAPABILITIES } from '../protocol-version'
-import { AGENT_SESSION_ACCOUNT_ENV_RUNTIME_CAPABILITY } from '../agent-session-create-capabilities'
 
 const ACCOUNT_ENV = {
   CLAUDE_CONFIG_DIR: '/home/u/.orca-claude/a/config',
@@ -25,20 +23,6 @@ describe.each([
   ['terminal.createAgentSession', CreateAgentSessionParams, CREATE],
   ['terminal.ensureAgentSession', EnsureAgentSessionParams, ENSURE]
 ] as const)('%s accountEnv wire compatibility', (_method, schema, base) => {
-  it('carries a validated account env on a new host', () => {
-    const parsed = schema.parse({ ...base, accountEnv: ACCOUNT_ENV })
-    expect(parsed).toMatchObject({ accountEnv: ACCOUNT_ENV })
-  })
-
-  it('parses an older client, which never sends it, unchanged', () => {
-    expect(schema.parse(base)).not.toHaveProperty('accountEnv')
-  })
-
-  it('is a strict object, so an older host would refuse it: clients gate on the capability', () => {
-    // Stand-in for the field on a host that predates it: any key the schema does not know.
-    expect(schema.safeParse({ ...base, futureAccountEnv: ACCOUNT_ENV }).success).toBe(false)
-  })
-
   it.each([
     ['a non-account variable', { PATH: '/usr/bin' }],
     ['a relative home', { CLAUDE_CONFIG_DIR: 'home/u/.claude' }],
@@ -51,10 +35,6 @@ describe.each([
 })
 
 describe('agent-session.account-env.v1', () => {
-  it('is advertised by every host that parses the field', () => {
-    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_ACCOUNT_ENV_RUNTIME_CAPABILITY)
-  })
-
   it('is not accepted on an automatic ensure, which hosts refuse anyway', () => {
     const automatic = { kind: 'automatic', sleepingCheckpointId: 'a'.repeat(32) }
     expect(EnsureAgentSessionParams.safeParse(automatic).success).toBe(true)

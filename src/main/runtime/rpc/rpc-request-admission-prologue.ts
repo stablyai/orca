@@ -31,7 +31,7 @@ type RpcRequestAdmissionDeps = {
   pinnedCallerScope?: RpcCallerScope
 }
 
-// Why: both transports must reject and resolve a request in the same order before any handler runs.
+// Both transports must admit/refuse and resolve callers in identical order before handlers.
 export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
   { runtime, registry, meta, pinnedCallerScope }: RpcRequestAdmissionDeps,
   rawRequest: RpcRequest,
@@ -76,10 +76,12 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
     }
     return { method, request, caller, params: parsedParams.value }
   }
-  // Why: before params parse and the unary/streaming split, so both branches see one caller.
-  return needsOrchestrationCallerResolution(rawRequest)
-    ? resolveOrchestrationSessionCaller(runtime, rawRequest, options).then(admitResolved, (error) =>
-        reject(mapDispatcherError(rawRequest, meta, error))
+  // Resolve once before parse and unary/streaming branching so both see the same caller.
+  const callerField = method.orchestrationAccess?.caller
+  return needsOrchestrationCallerResolution(rawRequest, callerField)
+    ? resolveOrchestrationSessionCaller(runtime, rawRequest, options, callerField).then(
+        admitResolved,
+        (error) => reject(mapDispatcherError(rawRequest, meta, error))
       )
     : admitResolved({ request: rawRequest })
 }

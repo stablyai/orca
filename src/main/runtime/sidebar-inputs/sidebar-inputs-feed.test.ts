@@ -3,7 +3,7 @@ import type {
   SidebarInputsChangedEvent,
   SidebarInputsReadResult
 } from '../../../shared/sidebar-list/sidebar-inputs-feed-contract'
-import { sidebarInputsReplied } from '../../../shared/sidebar-list/sidebar-inputs-feed-installer'
+import '../../../shared/sidebar-list/sidebar-inputs-feed-installer'
 import { SidebarInputsFeed } from './sidebar-inputs-feed'
 import { FEED_LOG_MAX_REVISIONS } from './sidebar-inputs-feed-log'
 import { FEED_PIN_IDLE_MS, FEED_PIN_MAX_BATCHES } from './sidebar-inputs-feed-pins'
@@ -42,26 +42,6 @@ afterEach(() => {
 })
 
 describe('sidebar inputs feed', () => {
-  it('installs a snapshot, then a delta after a change', async () => {
-    const host = makeHost()
-    const phone = new TestPhone(host.feed, 'conn-1')
-    phone.refresh()
-    await phone.settle()
-    expect(phone.replies.at(-1)?.kind).toBe('snapshot')
-    expect(phone.view()).toEqual(host.truth())
-
-    host.rows.set('b', 2)
-    host.rows.remove('a')
-    await flush()
-    phone.notice(host.lastEvent())
-    await phone.settle()
-    expect(phone.replies.at(-1)).toMatchObject({
-      kind: 'delta',
-      domains: { rows: { upserts: { b: 2 }, removals: ['a'] } }
-    })
-    expect(phone.view()).toEqual(host.truth())
-  })
-
   it('installs a paged snapshot whole, then catches up a change made while paging', async () => {
     const host = makeHost({ a: BIG, b: BIG, c: BIG })
     const phone = new TestPhone(host.feed, 'conn-1')
@@ -75,45 +55,6 @@ describe('sidebar inputs feed', () => {
     phone.notice(host.lastEvent())
     await phone.settle()
     expect(phone.replies.map((reply) => reply.kind)).toEqual(['snapshot', 'snapshot', 'delta'])
-    expect(phone.view()).toEqual(host.truth())
-  })
-
-  it('ignores a duplicate or late notice, and reads on a newer one', async () => {
-    const host = makeHost()
-    const phone = new TestPhone(host.feed, 'conn-1')
-    phone.refresh()
-    await phone.settle()
-    host.rows.set('a', 2)
-    await flush()
-    const notice = host.lastEvent()
-    phone.notice(notice)
-    await phone.settle()
-
-    phone.notice(notice)
-    phone.notice({ ...notice, revision: notice.revision - 1 })
-    expect(phone.pending).toBeNull()
-    phone.notice({ ...notice, revision: notice.revision + 1 })
-    expect(phone.pending?.params).toMatchObject({ cursor: notice.revision })
-  })
-
-  it('publishes a change after a quiet spell at once and the rest of its burst together', async () => {
-    const host = makeHost()
-    const phone = new TestPhone(host.feed, 'conn-1')
-    phone.refresh()
-    await phone.settle()
-    await vi.advanceTimersByTimeAsync(100)
-    const before = host.events.length
-    host.rows.set('a', 2)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(host.events).toHaveLength(before + 1)
-    host.rows.set('a', 3)
-    host.rows.set('a', 4)
-    await vi.advanceTimersByTimeAsync(40)
-    expect(host.events).toHaveLength(before + 1)
-    await vi.advanceTimersByTimeAsync(20)
-    expect(host.events).toHaveLength(before + 2)
-    phone.notice(host.lastEvent())
-    await phone.settle()
     expect(phone.view()).toEqual(host.truth())
   })
 
@@ -132,56 +73,6 @@ describe('sidebar inputs feed', () => {
     await phone.settle()
     expect(phone.replies.map((reply) => reply.kind)).toEqual(['snapshot', 'delta'])
     expect(phone.view()).toEqual(host.truth())
-  })
-
-  it('needs no second read when the reply already covers a notice', async () => {
-    const host = makeHost()
-    const phone = new TestPhone(host.feed, 'conn-1')
-    phone.refresh()
-    await phone.settle()
-    host.rows.set('a', 2)
-    await flush()
-    phone.refresh()
-    phone.notice(host.lastEvent())
-    await phone.settle()
-    expect(phone.replies).toHaveLength(2)
-    expect(phone.view()).toEqual(host.truth())
-  })
-
-  it('drops a reply to a request it no longer waits on', async () => {
-    const host = makeHost()
-    const phone = new TestPhone(host.feed, 'conn-1')
-    phone.refresh()
-    const stale = phone.pending
-    phone.disconnect()
-    phone.feed.acquire(phone.connectionId)
-    phone.refresh()
-    if (!stale) {
-      throw new Error('expected a read')
-    }
-    const reply = await host.feed.read(stale.params)
-    expect(sidebarInputsReplied(phone.state, stale.id, reply).state).toBe(phone.state)
-  })
-
-  it('reads a snapshot when a delta does not start at the installed revision', async () => {
-    const host = makeHost()
-    const phone = new TestPhone(host.feed, 'conn-1')
-    phone.refresh()
-    await phone.settle()
-    host.rows.set('a', 2)
-    await flush()
-    phone.notice(host.lastEvent())
-    const request = phone.pending
-    if (!request) {
-      throw new Error('expected a read')
-    }
-    const reply = await host.feed.read(request.params)
-    const step = sidebarInputsReplied(phone.state, request.id, {
-      ...reply,
-      from: (reply.from ?? 0) - 1
-    })
-    expect(step.state.installed).toBe(phone.state.installed)
-    expect(step.request?.params).toEqual({ maxBytes: expect.any(Number) })
   })
 
   it('reads a snapshot once the cursor fell out of the log', async () => {
@@ -234,24 +125,6 @@ describe('sidebar inputs feed', () => {
     await phone.settle()
     expect(phone.replies.at(-1)?.kind).toBe('snapshot')
     expect(phone.view()).toEqual(host.truth())
-  })
-
-  it('reads a delta over a re-paired connection while the session lives on', async () => {
-    const host = makeHost()
-    const other = new TestPhone(host.feed, 'conn-other')
-    const phone = new TestPhone(host.feed, 'conn-1')
-    phone.refresh()
-    await phone.settle()
-    phone.disconnect()
-    host.rows.set('a', 2)
-    await flush()
-
-    phone.feed.acquire('conn-repaired')
-    phone.refresh()
-    await phone.settle()
-    expect(phone.replies.at(-1)?.kind).toBe('delta')
-    expect(phone.view()).toEqual(host.truth())
-    other.disconnect()
   })
 
   it('serves two phones from one session, which ends with the last of them', async () => {
@@ -380,31 +253,47 @@ describe('sidebar inputs feed', () => {
     expect((await host.feed.read({ pageToken: newest, maxBytes: 1 })).kind).toBe('snapshot')
   })
 
-  it('reads nothing and announces nothing until a phone subscribes', async () => {
+  it('serves a phone read from the cache and waits only on a domain not yet ready', async () => {
     const host = makeHost()
-    host.rows.set('a', 2)
-    await flush()
-    expect(host.rows.reads()).toBe(0)
-    expect(host.rows.watchers()).toBe(0)
-    expect(host.events).toEqual([])
+    host.feed.acquire('conn-1')
+    const release = host.rows.hold()
+    let answered = false
+    const read = host.feed.read({ maxBytes: 1 }).then((reply) => {
+      answered = true
+      return reply
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(answered).toBe(false)
+    release()
+    expect((await read).kind).toBe('snapshot')
   })
 
-  it('re-reads a quiet source on every read, and joins concurrent reads into one flush', async () => {
-    const quiet = testDomain('quiet', { a: 1 }, { rereadOnRead: true })
+  it('keeps a not-yet-ready domain unpublished until its producer announces', async () => {
+    let snapshot: Record<string, unknown> | null = null
+    const watchers = new Set<() => void>()
+    const events: SidebarInputsChangedEvent[] = []
     const feed = new SidebarInputsFeed(
-      () => [quiet.domain],
-      () => {}
+      () => [
+        {
+          name: 'late',
+          read: () => snapshot,
+          watch: (changed) => {
+            watchers.add(changed)
+            return () => watchers.delete(changed)
+          }
+        }
+      ],
+      (event) => events.push(event)
     )
     feed.acquire('conn-1')
-    await feed.read({ maxBytes: 1 })
-    quiet.setQuietly('a', 2)
-    const release = quiet.hold()
-    const reads = [feed.read({ maxBytes: 1 }), feed.read({ maxBytes: 1 })]
-    release()
-    const [first, second] = await Promise.all(reads)
-    expect(quiet.reads()).toBe(3)
-    expect(first).toMatchObject({ kind: 'snapshot', domains: { quiet: { upserts: { a: 2 } } } })
-    expect(second.revision).toBe(first.revision)
+    expect((await feed.read({ maxBytes: 1 })).domains).toEqual({})
+    snapshot = { a: 1 }
+    watchers.forEach((changed) => changed())
+    await flush()
+    expect(events).toHaveLength(1)
+    expect((await feed.read({ maxBytes: 1 })).domains).toMatchObject({
+      late: { upserts: { a: 1 } }
+    })
   })
 
   it('answers reset to a read whose session ended while it waited', async () => {

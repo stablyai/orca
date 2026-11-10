@@ -2,11 +2,7 @@ import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { createWslMoveStringNormalizer } from './wsl-move-canonical-form'
 import type { WslMoveProjectionScope } from './wsl-move-state-projection'
 
-/**
- * Source worktree ids the destination cannot resolve any more: every moved UNC id must stay in
- * its Linux row's `priorWorktreeIds` (item 14), so a straggler that still names it finds the row.
- * The projection treats that alias as noise, so this checks it on its own.
- */
+/** Verify moved UNC IDs remain resolvable via priorWorktreeIds; projection normalization hides alias loss. */
 export function findMissingWslMoveAliases(
   sourceWorktreeIds: readonly string[],
   destinationMeta: Readonly<Record<string, WorktreeMeta>>,

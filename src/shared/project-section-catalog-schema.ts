@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { normalizeExecutionHostId } from './execution-host'
 import type { ProjectHostSetupMethod } from './project-types'
 import type { ProjectGroup, ProjectGroupCreatedFrom } from './project-group-types'
@@ -6,8 +6,7 @@ import type { RepoKind } from './repo-types'
 import type { ProjectOrderBy } from './ui-chrome-types'
 import { hostUnionArms, salvagedOptional, salvagingArray } from './zod-salvage'
 
-// The sidebar's project catalog as a reader parses it, from mobileRelay.projectSections or the
-// sidebar feed's projectCatalog domain (MobileProjectSectionCatalog is what a host sends).
+// Read sidebar-feed/mobileRelay.projectSections catalogs; MobileProjectSectionCatalog is the sender shape.
 
 const SETUP_METHOD_ARMS = hostUnionArms<ProjectHostSetupMethod>({
   'legacy-repo': true,
@@ -72,6 +71,7 @@ export const ProjectGroupSchema = z.object({
   parentGroupId: z.string().nullable(),
   createdFrom: z.enum(PROJECT_GROUP_CREATED_FROM_ARMS).catch('manual'),
   tabOrder: z.number(),
+  rootProjectOrder: salvagedOptional('rootProjectOrder', z.number().finite()),
   isCollapsed: z.boolean(),
   color: z.string().nullable(),
   createdAt: z.number(),

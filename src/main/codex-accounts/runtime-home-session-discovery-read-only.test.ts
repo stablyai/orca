@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { existsSync, readdirSync, rmSync } from 'node:fs'
 import type * as NodeOs from 'node:os'
 import { join } from 'node:path'
@@ -64,7 +64,7 @@ describe('Codex session discovery on a transcript lookup miss', () => {
     configureHostReadableTranscriptPathSources({
       getAdditionalCodexHomePaths: () => service.getHostCodexHomePathsForSessionDiscovery()
     })
-    // A user who never ran Codex through Orca: neither the mirror nor any account home exists.
+
     rmSync(join(testState.userDataDir, 'codex-runtime-home'), { recursive: true, force: true })
     rmSync(join(testState.userDataDir, 'codex-accounts'), { recursive: true, force: true })
     const before = readdirSync(testState.userDataDir).sort()
@@ -76,7 +76,7 @@ describe('Codex session discovery on a transcript lookup miss', () => {
 
       expect(existsSync(getRuntimeCodexHomePath())).toBe(false)
       expect(readdirSync(testState.userDataDir).sort()).toEqual(before)
-      // The ownership check warns on every missing account home; the poll must not reach it.
+
       expect(warn).not.toHaveBeenCalled()
       expect(service.getHostCodexHomePathsForSessionDiscovery()).toContain(
         getRuntimeCodexHomePath()

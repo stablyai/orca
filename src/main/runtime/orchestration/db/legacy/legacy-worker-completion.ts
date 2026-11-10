@@ -3,7 +3,7 @@ import type {
   LegacyCompatibilityPrincipalRow,
   LegacyPrincipalRole,
   LegacyOperationReceiptRow
-} from '../../types'
+} from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { exposeMessageTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -83,13 +83,16 @@ export function setLegacyCompatibilityPrincipalStatus(
   id: string,
   status: 'settled' | 'revoked'
 ): LegacyCompatibilityPrincipalRow | undefined {
-  this.db
+  const changed = this.db
     .prepare(
       `UPDATE legacy_compatibility_principals
        SET status = ?
        WHERE id = ? AND status = 'committed'`
     )
     .run(status, id)
+  if (changed.changes) {
+    this.crewChanges.notify(new Set(['topology']))
+  }
   return this.getLegacyCompatibilityPrincipal(id)
 }
 

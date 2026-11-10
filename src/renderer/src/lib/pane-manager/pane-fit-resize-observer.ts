@@ -76,8 +76,7 @@ function flushStableFitCallbacks(pane: StableFitPane): void {
 
 function finishStableFit(pane: StableFitPane): void {
   setPendingObservedFitRafId(pane, null)
-  // Why: an equal grid still proves a restored pane is measurable, so it must
-  // release reattach continuations that were parked while the tab was hidden.
+  // An equal grid still proves measurability and must release hidden reattach continuations.
   safeFitAndThen(pane, 'stable-pane-fit', () => flushStableFitCallbacks(pane))
 }
 
@@ -90,12 +89,7 @@ export function requestStablePaneFit(pane: StableFitPane, onSettled?: () => void
     stableFitCallbacks.delete(pane)
     return
   }
-  // Why: keep xterm fit work off the divider pointermove hot path and let
-  // the browser coalesce drag-driven size changes the same way Superset does.
-  //
-  // Windows can report a short-lived one-column anchor/scrollbar wobble when
-  // the right sidebar is open. Requiring a stable proposed grid before fitting
-  // prevents Codex from receiving a rapid SIGWINCH loop and visibly vibrating.
+  // Coalesce divider fits off pointermove; require a stable grid to avoid Windows sidebar/scrollbar wobble causing Codex SIGWINCH loops.
   let previous = getProposedDimensions(pane)
   let frameCount = 0
   const waitForStableGrid = (): void => {
