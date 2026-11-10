@@ -578,7 +578,9 @@ export function resolveMobileWebPageRoutes(routeKeys, declared = MOBILE_WEB_PAGE
 export async function buildMobileWebAppBundle({
   appDir,
   outDir = defaultOutDir,
-  pageRoutes = MOBILE_WEB_PAGE_ROUTES
+  pageRoutes = MOBILE_WEB_PAGE_ROUTES,
+  // Only the shipped tree pays for brotli-11; tests and verify's scratch builds read raw assets.
+  brotli = false
 } = {}) {
   const [
     desktopVersion,
@@ -624,7 +626,8 @@ export async function buildMobileWebAppBundle({
     written: [indexAsset, ...written],
     desktopVersion,
     protocolWindow,
-    routes: resolveMobileWebPageRoutes(routeKeys, pageRoutes)
+    routes: resolveMobileWebPageRoutes(routeKeys, pageRoutes),
+    brotli
   })
   return {
     manifest,
@@ -649,7 +652,7 @@ if (isDirectInvocation(import.meta.url, process.argv[1])) {
   }
   try {
     const { manifest, outDir, routeKeys, entryStaticBytes, chunkCount } =
-      await buildMobileWebAppBundle()
+      await buildMobileWebAppBundle({ brotli: true })
     console.log(
       `[build-mobile-web-app-bundle] OK — ${String(routeKeys.length)} route(s), ` +
         `${String(chunkCount)} chunk(s), ${String(entryStaticBytes)} bytes before the first route, ` +

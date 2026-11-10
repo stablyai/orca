@@ -6,7 +6,7 @@ import { webRuntimeState } from '@/web/preload-api/web-runtime-session'
 import { useAppStore } from '@/store'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
-import { resolveGitHubRepoOperationOwner } from '@/lib/github-source-runtime-context'
+import { resolveGitHubRepoOperationOwner } from '@/lib/work-items/github/github-source-runtime-context'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 

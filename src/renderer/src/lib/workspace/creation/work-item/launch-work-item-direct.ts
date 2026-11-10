@@ -17,7 +17,7 @@ import {
   getDirectWorkItemIdentity,
   getDirectWorkItemWorkspaceNames
 } from '@/lib/workspace/creation/work-item/launch-work-item-direct-draft'
-import { getLaunchableWorkItemDraftContent } from '@/lib/linked-work-item-context'
+import { getLaunchableWorkItemDraftContent } from '@/lib/work-items/linked-work-item-context'
 import {
   directWorkItemAgentArgsError,
   resolveDirectPrStartPoint,

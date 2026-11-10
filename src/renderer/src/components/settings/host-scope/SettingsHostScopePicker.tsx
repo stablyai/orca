@@ -67,9 +67,10 @@ export function SettingsHostScopePicker({
     })
   }
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-8 py-2 text-xs">
-      <span className="font-medium text-foreground">{label}</span>
+    <div className="flex min-w-0 items-center text-settings-detail">
+      <span className="sr-only">{label}</span>
       <SettingsSearchableSelect
+        compact
         ariaLabel={label}
         value={value}
         groups={[{ key: 'settings-hosts', options }]}
@@ -88,12 +89,6 @@ export function SettingsHostScopePicker({
           )
         }
       />
-      <span className="text-muted-foreground">
-        {t(
-          'auto.components.settings.SettingsHostScopePicker.description',
-          'Accounts, detected agents and terminal options below are for this host.'
-        )}
-      </span>
     </div>
   )
 }

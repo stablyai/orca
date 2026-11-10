@@ -1,7 +1,10 @@
-import { readPRCheckRefreshOwner } from '@/lib/pr-check-refresh-owner'
+import { readPRCheckRefreshOwner } from '@/lib/source-control/checks/pr-check-refresh-owner'
 import { toast } from 'sonner'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { getGitHubRuntimeRepoId, type GitHubRuntimeHost } from '@/lib/github-source-runtime-context'
+import {
+  getGitHubRuntimeRepoId,
+  type GitHubRuntimeHost
+} from '@/lib/work-items/github/github-source-runtime-context'
 import {
   resetGitHubChecksTabForSource,
   updateGitHubChecksTabLocalChecks,

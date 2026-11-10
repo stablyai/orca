@@ -1,9 +1,9 @@
 import { githubCandidateOwner } from '@/store/github/sources/source-preference-ownership'
-import { getTaskPageRepoSourceContext } from '@/lib/task-repo-source-context'
+import { getTaskPageRepoSourceContext } from '@/lib/work-items/task-repo-source-context'
 export {
   getTaskPageRepoSourceContext,
   buildGitLabProviderIdentity
-} from '@/lib/task-repo-source-context'
+} from '@/lib/work-items/task-repo-source-context'
 import type {
   GitLabTaskFilter,
   GitLabIssueFilter
@@ -17,7 +17,7 @@ import {
   getLinkedWorkItemWorkspaceName,
   getLinkedWorkItemSuggestedName
 } from '../../../../shared/workspace-name'
-import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
+import { getJiraIssueKeyCasingSeedOptions } from '@/lib/work-items/jira/jira-issue-key-casing'
 import {
   type TaskSourceContext,
   getTaskSourceCacheScope

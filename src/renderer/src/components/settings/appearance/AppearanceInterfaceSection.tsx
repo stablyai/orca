@@ -293,13 +293,13 @@ export function AppearanceInterfaceSection({
       ) : null}
 
       <SearchableSetting
-        title={t('auto.components.settings.AppearancePane.5e6d7aba8d', 'UI Zoom')}
+        title={t('auto.components.settings.AppearancePane.173edfb768', 'UI zoom')}
         description={zoomEntry?.description}
         keywords={zoomEntry?.keywords ?? ['zoom', 'scale', 'shortcut']}
         forceVisible={forceVisiblePrimary}
       >
         <SettingsRow
-          label={t('auto.components.settings.AppearancePane.5e6d7aba8d', 'UI Zoom')}
+          label={t('auto.components.settings.AppearancePane.173edfb768', 'UI zoom')}
           // Explain the shortcut and terminal exception; the zoom buttons already explain scaling.
           description={
             <>
@@ -316,13 +316,13 @@ export function AppearanceInterfaceSection({
       </SearchableSetting>
 
       <SearchableSetting
-        title={t('auto.components.settings.AppearancePane.102d6b5f9b', 'IDE Font')}
+        title={t('auto.components.settings.AppearancePane.657a7230a2', 'IDE font')}
         description={typographyEntry?.description}
         keywords={typographyEntry?.keywords ?? ['font', 'typeface', 'typography']}
         forceVisible={forceVisiblePrimary}
       >
         <SettingsRow
-          label={t('auto.components.settings.AppearancePane.102d6b5f9b', 'IDE Font')}
+          label={t('auto.components.settings.AppearancePane.657a7230a2', 'IDE font')}
           control={
             <FontAutocomplete
               value={settings.appFontFamily}
@@ -341,12 +341,12 @@ export function AppearanceInterfaceSection({
         <AppearanceAdvancedDisclosure showTopBorder={false}>
           <div className="divide-y divide-border/40">
             <SearchableSetting
-              title={t('auto.components.settings.AppearancePane.9868f39007', 'Titlebar App Name')}
+              title={t('auto.components.settings.AppearancePane.8063dd3b6b', 'Titlebar app name')}
               description={titlebarEntry?.description}
               keywords={titlebarEntry?.keywords ?? ['titlebar', 'orca', 'app', 'name']}
             >
               <SettingsSwitchRow
-                label={t('auto.components.settings.AppearancePane.9868f39007', 'Titlebar App Name')}
+                label={t('auto.components.settings.AppearancePane.8063dd3b6b', 'Titlebar app name')}
                 checked={settings.showTitlebarAppName}
                 onChange={() =>
                   updateSettings({ showTitlebarAppName: !settings.showTitlebarAppName })
@@ -363,16 +363,16 @@ export function AppearanceInterfaceSection({
             {isDesktopWindows ? (
               <SearchableSetting
                 title={t(
-                  'auto.components.settings.AppearancePane.2edf606c46',
-                  'Minimize to Tray on Close'
+                  'auto.components.settings.AppearancePane.95a5581f66',
+                  'Minimize to tray on close'
                 )}
                 description={systemTrayEntry?.description}
                 keywords={systemTrayEntry?.keywords ?? ['tray', 'minimize', 'close']}
               >
                 <SettingsSwitchRow
                   label={t(
-                    'auto.components.settings.AppearancePane.2edf606c46',
-                    'Minimize to Tray on Close'
+                    'auto.components.settings.AppearancePane.95a5581f66',
+                    'Minimize to tray on close'
                   )}
                   // Explain the non-obvious platform restriction and keep-running consequence.
                   description={t(
@@ -389,12 +389,12 @@ export function AppearanceInterfaceSection({
 
             {isDesktopMac ? (
               <SearchableSetting
-                title={t('settings.appearance.menuBarIcon.title', 'Show Menu Bar Icon')}
+                title={t('settings.appearance.menuBarIcon.026624e2ec', 'Show menu bar icon')}
                 description={menuBarIconEntry?.description}
                 keywords={menuBarIconEntry?.keywords ?? ['menu bar', 'status item', 'activity']}
               >
                 <SettingsSwitchRow
-                  label={t('settings.appearance.menuBarIcon.title', 'Show Menu Bar Icon')}
+                  label={t('settings.appearance.menuBarIcon.026624e2ec', 'Show menu bar icon')}
                   // Hiding the status item preserves Dock activation and close-keeps-running behavior.
                   description={t(
                     'settings.appearance.menuBarIcon.description',

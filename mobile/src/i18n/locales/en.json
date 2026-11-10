@@ -1493,6 +1493,11 @@
     "offlineAsOfTime": {
       "yesterday": "yesterday, {{time}}"
     },
+    "newWorkspaceCreateSubmit": {
+      "uncertainFolderCreate": "This worktree may have been created. Check the folder before creating another.",
+      "uncertainCreate": "This workspace may have been created. Check your workspaces before creating another.",
+      "folderCreateBusy": "A worktree in this repository is still being created or checked. It shows in the folder once it lands."
+    },
     "smartRailRow": {
       "title": "Smart rail",
       "subtitle": "Shows keys for what your agent is doing"
@@ -3675,7 +3680,17 @@
       "emptyTitle": "No attached worktrees yet",
       "emptyCopy": "Worktrees created from this workspace will show up here.",
       "statusUnavailable": "Unavailable",
-      "backToFolder": "Back to folder"
+      "backToFolder": "Back to folder",
+      "createSection": "Create a worktree",
+      "createIn": "Create a worktree in {{repo}}",
+      "created": "Created worktree {{name}} in {{repo}}",
+      "createdNamed": "Created worktree {{name}}",
+      "createFailed": "Could not create a worktree in {{repo}}.",
+      "loadReposRetry": "Load repositories",
+      "setupChoiceTitle": "Retry without setup?",
+      "setupChoiceMessage": "Orca couldn't confirm the last create in {{repo}}. Retrying it needs a setup choice; it will be created without running the repository's setup.",
+      "setupChoiceSkip": "Retry without setup",
+      "checking": "A worktree from {{repo}} may already have been created. Checking the folder…"
     },
     "hostedReviewCopy": {
       "updatingBranch": "Updating branch...",

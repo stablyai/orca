@@ -120,6 +120,30 @@ describe('Codex async questions', () => {
     expect(steered?.interactivePrompt).toBeUndefined()
   })
 
+  it('keeps a compacted question with its session and releases it on replacement', () => {
+    const pane = codexPane()
+    pane.report({ hook_event_name: 'UserPromptSubmit', turn_id: 'turn-1', prompt: 'Set up a db' })
+    pane.report(ASK)
+    expect(pane.report(ACCEPTED).main).toMatchObject(waitingOnQuestion)
+    expect(pane.report({ hook_event_name: 'SessionStart', source: 'compact' }).main).toMatchObject(
+      waitingOnQuestion
+    )
+    const replacement = pane.report({
+      hook_event_name: 'SessionStart',
+      source: 'startup',
+      session_id: 'replacement'
+    }).main
+    expect(replacement).toMatchObject({ state: 'done', providerSession: { id: 'replacement' } })
+    expect(replacement?.interactivePrompt).toBeUndefined()
+    const working = pane.report({
+      hook_event_name: 'PostToolUse',
+      session_id: 'replacement',
+      tool_name: 'Bash'
+    }).main
+    expect(working).toMatchObject({ state: 'working' })
+    expect(working?.interactivePrompt).toBeUndefined()
+  })
+
   it('drops an unanswered question when the turn ends', () => {
     const pane = codexPane()
     pane.report({ hook_event_name: 'UserPromptSubmit', turn_id: 'turn-1', prompt: 'Set up a db' })
