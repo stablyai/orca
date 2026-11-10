@@ -13,7 +13,14 @@ export type AiVaultPrepareSessionResumeArgs = Pick<
     /** A fork only reads the conversation, so a native chat that owns it does not refuse it.
      *  Older hosts drop the field and refuse as for a resume. */
     fork?: boolean
+    /** With fork, a terminal chat's copy stops at this transcript entry (Claude only). */
+    forkThroughEntryId?: string
+    /** With fork, the copy goes where Claude resumes it in this folder (another worktree). */
+    destinationCwd?: string
   }
+
+/** A host that cuts a terminal chat's fork at an entry and places it for another worktree. */
+export const AI_VAULT_TERMINAL_FORK_CUT_CAPABILITY = 'ai-vault.terminal-fork-cut.v1' as const
 
 export const AI_VAULT_CHAT_FORK_SOURCE_CAPABILITY = 'ai-vault.chat-fork-source.v1' as const
 

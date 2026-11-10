@@ -96,10 +96,12 @@ export function NativeChatForkAction({
           <GitBranchPlus className="size-3.5" />
           {t('components.native-chat.fork.menuWorktree', 'Into a new worktree…')}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => openWorktreeFork(itemId, 'subagent')}>
-          <Bot className="size-3.5" />
-          {t('components.native-chat.fork.menuSubagent', 'As a background subagent…')}
-        </DropdownMenuItem>
+        {fork.subagentOffered === false ? null : (
+          <DropdownMenuItem onSelect={() => openWorktreeFork(itemId, 'subagent')}>
+            <Bot className="size-3.5" />
+            {t('components.native-chat.fork.menuSubagent', 'As a background subagent…')}
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

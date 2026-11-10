@@ -20972,7 +20972,9 @@
         "fromMessageTooltip": "Fork from here: a new chat up to this message, with it as an unsent draft you can edit.",
         "fromMessageNothing": "There’s no response before this message to fork from.",
         "fromMessageTab": "Edit in a new tab",
-        "fromMessageWorktree": "Edit in a new worktree…"
+        "fromMessageWorktree": "Edit in a new worktree…",
+        "terminalFailed": "Couldn’t fork this chat",
+        "terminalHostTooOld": "Update Orca on the host that runs this chat, then fork again."
       },
       "usage": {
         "description": "Show usage for this chat’s Codex account",

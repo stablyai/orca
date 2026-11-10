@@ -11,7 +11,7 @@ import { encodeClaudeProjectPath } from '../ai-vault/scanners/claude/claude-proj
 const CLAUDE_PLAIN_BUCKET_NAME_MAX_LENGTH = 200
 
 /** Claude resumes a chat only from its working folder's bucket, so a copy for another worktree goes there. */
-function claudeDestinationBucket(destinationCwd: string | undefined): string | null {
+export function claudeDestinationBucket(destinationCwd: string | undefined): string | null {
   if (destinationCwd === undefined) {
     return null
   }

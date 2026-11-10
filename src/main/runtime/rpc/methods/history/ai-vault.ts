@@ -1,3 +1,4 @@
+import { copyTerminalChatForkCut } from '../../../../ai-vault/terminal-chat-fork-cut'
 import { prepareStructuredChatCliFork } from '../../../../ai-vault/structured-chat-cli-fork'
 import {
   AiVaultSearchRequestSchema,
@@ -147,10 +148,16 @@ export const AI_VAULT_METHODS = [
         agent: params.agent,
         ...(params.sessionId ? { sessionId: params.sessionId } : {}),
         ...(params.fork ? { fork: true } : {}),
+        ...(params.forkThroughEntryId ? { forkThroughEntryId: params.forkThroughEntryId } : {}),
+        ...(params.destinationCwd ? { destinationCwd: params.destinationCwd } : {}),
         filePath: params.filePath,
         codexHome: params.codexHome,
         // This host owns the transcripts; never echo a client-supplied runtime/SSH owner stamp.
         executionHostId: LOCAL_EXECUTION_HOST_ID
+      }
+      const cut = await copyTerminalChatForkCut(args)
+      if (cut) {
+        return cut
       }
       if (!isWslUncPath(args.filePath)) {
         const ensureHost = () => runtime.ensureStructuredAgentSessionHost()

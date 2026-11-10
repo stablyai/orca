@@ -1,3 +1,4 @@
+import type { NativeChatMessageSlot } from '../../conversation/slots/native-chat-transcript-slots'
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useHostStructuredAgent } from '@/runtime/native-chat/agent-catalogs/use-host-structured-agent'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
@@ -61,6 +62,8 @@ export type NativeChatForkRowAction = {
     mode?: NativeChatWorktreeForkMode,
     draft?: string
   ) => void
+  /** False where a fork cannot be handed a task to start in the background (terminal chats). */
+  subagentOffered?: boolean
   /** The response a fork from one of your messages copies through: the last one before it. */
   forkPointBefore?: (messageItemId: string) => string | undefined
 }
@@ -81,6 +84,8 @@ export type NativeChatWorktreeForkDialog = {
 export type NativeChatForkLatestOutcome = 'started' | 'pending' | 'none'
 
 export type NativeChatForkSurface = NativeChatForkRowAction & {
+  /** Overrides which rows offer Fork, for chats without a session journal (terminal chats). */
+  offersRow?: (slot: NativeChatMessageSlot) => boolean
   contextFloorSequence: number
   forkableItemIds: ReadonlySet<string>
   inheritedThroughSequence?: number
