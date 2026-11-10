@@ -118,8 +118,8 @@ export function AppearancePane({
   const interfaceTitle = t('auto.components.settings.AppearancePane.interfaceTitle', 'Interface')
   const terminalTitle = t('auto.components.settings.AppearancePane.terminalTitle', 'Terminal')
   const windowSidebarTitle = t(
-    'auto.components.settings.AppearancePane.windowSidebarTitle',
-    'Window & Sidebar'
+    'auto.components.settings.AppearancePane.e90c5d745a',
+    'Window & sidebar'
   )
   const windowSidebarSummary = t(
     'auto.components.settings.AppearancePane.windowSidebarSummary',
@@ -267,7 +267,7 @@ export function AppearancePane({
       {appIconMatches ? (
         <SettingsGroup>
           <SearchableSetting
-            title={t('auto.components.settings.AppearancePane.ca1590d42f', 'App Icon')}
+            title={t('auto.components.settings.AppearancePane.907888cd09', 'App icon')}
             description={t(
               'auto.components.settings.AppearancePane.0cd9b8228f',
               'Choose the app icon shown in the Dock and window switcher.'

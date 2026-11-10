@@ -26,10 +26,8 @@ import { withFrameDrawnChatTabPlacement } from '../../frame-drawn-chat-tab-place
 import { publishStructuredAgentSessionCreateHydration } from './structured-agent-session-create-hydration'
 import { askHostCreateSupport } from './structured-agent-session-host-admission'
 import { readStructuredChatHostPermissionVerdict } from '@/runtime/native-chat/host-capabilities/structured-chat-host-permission'
-import {
-  abandonStructuredAgentSessionLaunchIntent,
-  type StructuredAgentSessionLaunchIntent
-} from '../../launch-structured-agent-session'
+import type { StructuredAgentSessionLaunchIntent } from '../../launch-structured-agent-session'
+import { abandonStructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-abandon'
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
 import {
   StructuredAgentSessionCreateError,

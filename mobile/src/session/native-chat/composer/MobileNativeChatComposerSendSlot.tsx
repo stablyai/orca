@@ -16,6 +16,7 @@ import {
 } from './MobileNativeChatSendButton'
 import type { MobileNativeChatSteerHead } from './use-mobile-native-chat-composer-tray'
 import { useMobileNativeChatSteerChordPreview } from './use-mobile-native-chat-steer-chord-preview'
+import { useMobileNativeChatDictationFailed } from './MobileNativeChatDictationLeading'
 
 /** Send's slot outside a queued edit: Send, Stop where Send can't deliver, or what a held Cmd/Ctrl would do. */
 export function MobileNativeChatComposerSendSlot({
@@ -51,7 +52,8 @@ export function MobileNativeChatComposerSendSlot({
   attaching: boolean
   stop: { onStop?: () => void; held: boolean } | null
   onSend: (intent?: MobileNativeChatSendIntent, keepFocus?: boolean) => void
-}): React.JSX.Element {
+}): React.JSX.Element | null {
+  const dictationFailed = useMobileNativeChatDictationFailed()
   const steerChord = useMobileNativeChatSteerChordPreview({
     fieldRef,
     hasDraft: value.trim() !== '' || attachmentCount > 0,
@@ -83,6 +85,10 @@ export function MobileNativeChatComposerSendSlot({
     draft: value,
     attachmentCount
   })
+  // A dictation kept for Retry takes Send's room; a running agent keeps its Stop.
+  if (dictationFailed && !(showsStop && stop)) {
+    return null
+  }
   if (steerChord.preview && (steerChord.preview === 'steer-queued' || canSend)) {
     // As desktop, the preview takes Send's slot at once, with no ease.
     return (

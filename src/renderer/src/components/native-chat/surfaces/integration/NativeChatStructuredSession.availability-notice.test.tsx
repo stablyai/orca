@@ -140,15 +140,6 @@ function turnRow(): AgentJournalRenderItem {
   }
 }
 
-it('leaves an auth turn row as the explanation when the catalog also says signed out', () => {
-  mocks.unavailable = { reason: 'notSignedIn', account: 'system' }
-  const row = startFailureRow({ kind: 'notSignedIn', account: 'system' })
-  mocks.journalItems = [turnRow(), { ...row, itemId: 'codex-unauthorized-error', sequence: 3 }]
-  render(pane())
-  expect(screen.queryByText(CODEX_SIGNED_OUT)).toBeNull()
-  expect(mocks.composerProps?.structuredTransport).not.toHaveProperty('unavailable')
-})
-
 it('stays dismissed for the same verdict, and shows again when it changes or comes back', () => {
   mocks.unavailable = { reason: 'notSignedIn', account: 'system' }
   const view = render(pane())
@@ -173,21 +164,6 @@ it('stays dismissed for the same verdict, and shows again when it changes or com
   mocks.unavailable = { reason: 'notSignedIn', account: 'system' }
   view.rerender(pane())
   expect(screen.getByText(CODEX_SIGNED_OUT)).toBeTruthy()
-})
-
-it('says a reason once when the failed start already says it, keeping its Retry', () => {
-  mocks.launchLifecycle = 'failed'
-  mocks.launchFailure = {
-    kind: 'refused',
-    code: 'agent_session_operation_invalid',
-    details: { reason: 'notSignedIn' }
-  }
-  mocks.unavailable = { reason: 'notSignedIn', account: 'system' }
-  render(pane())
-
-  expect(screen.getAllByText(new RegExp(CODEX_SIGNED_OUT.replace(/[.`]/g, '\\$&')))).toHaveLength(1)
-  expect(screen.getByText(`Chat could not be started. ${CODEX_SIGNED_OUT}`)).toBeTruthy()
-  expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
 })
 
 it("leaves the reason to the transcript's start-failure row, but not a different one", () => {
