@@ -20,8 +20,6 @@ export type WorkerThreadRequestQueueOptions<TRequest> = {
   onUnavailable: (error: unknown) => void
   /** Refuse new work until the terminated worker exits; native calls can delay its exit. */
   awaitRetirement?: boolean
-  /** Wait through retirement and require exit proof for usage's service-owned work. */
-  strictRetirement?: boolean
 }
 
 export type WorkerThreadRequestOwner = { readonly signal: AbortSignal }
@@ -49,7 +47,6 @@ export class WorkerThreadRequestQueue<
   private readonly ownerFailures = new WeakMap<WorkerThreadRequestOwner, OwnerFailures>()
   private nextId = 1
   private disposed = false
-  private retirementWait: Promise<void> | null = null
   private readonly host: LazyWorkerThreadHost<TResponse>
 
   constructor(private readonly options: WorkerThreadRequestQueueOptions<TRequest>) {
@@ -61,8 +58,7 @@ export class WorkerThreadRequestQueue<
       onExit: (code) => this.onWorkerExit(code),
       isIdle: () => !this.active && this.queue.length === 0,
       onUnavailable: options.onUnavailable,
-      awaitRetirement: options.awaitRetirement,
-      strictRetirement: options.strictRetirement
+      awaitRetirement: options.awaitRetirement
     })
   }
 
@@ -152,26 +148,6 @@ export class WorkerThreadRequestQueue<
     }
     if (this.queue.length === 0) {
       this.host.scheduleIdleTeardown()
-      return
-    }
-    if (this.options.strictRetirement && this.host.isRetiring) {
-      if (!this.retirementWait) {
-        this.retirementWait = this.host.retired().then(
-          () => {
-            this.retirementWait = null
-            this.pump()
-          },
-          (error: unknown) => {
-            this.retirementWait = null
-            const pending = this.queue.splice(0)
-            for (const call of pending) {
-              this.settle(call, () =>
-                call.reject(error instanceof Error ? error : new Error(String(error)))
-              )
-            }
-          }
-        )
-      }
       return
     }
     const worker = this.host.ensure()

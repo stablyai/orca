@@ -65,13 +65,11 @@ function makeQueue(
   workers: FakeWorker[],
   options: {
     awaitRetirement?: boolean
-    strictRetirement?: boolean
     makeWorker?: () => FakeWorker
   } = {}
 ): WorkerThreadRequestQueue<Request, Response> {
   return new WorkerThreadRequestQueue<Request, Response>({
     awaitRetirement: options.awaitRetirement,
-    strictRetirement: options.strictRetirement,
     factory: () => {
       const worker = options.makeWorker?.() ?? new FakeWorker()
       workers.push(worker)
@@ -428,82 +426,6 @@ describe('WorkerThreadRequestQueue', () => {
       workers[1].respond()
       await expect(recovered).resolves.toMatchObject({ label: 'recovered' })
       queue.dispose()
-    })
-
-    it('dispatches parked calls once the timed-out worker exits', async () => {
-      vi.useFakeTimers()
-      const workers: FakeWorker[] = []
-      const stalled = stalledExit()
-      const queue = makeQueue(workers, {
-        awaitRetirement: true,
-        strictRetirement: true,
-        makeWorker: () => (workers.length === 0 ? stalled.worker : new FakeWorker())
-      })
-
-      const first = settle(send(queue, 'stuck'))
-      await vi.advanceTimersByTimeAsync(TIMEOUT_MS)
-      expect(await first).toMatchObject({ message: `timed out after ${TIMEOUT_MS}ms` })
-
-      const pending = ['a', 'b', 'c'].map((label) => send(queue, label))
-      expect(workers).toHaveLength(1)
-      stalled.finish(1)
-      await vi.advanceTimersByTimeAsync(0)
-      for (const response of pending) {
-        workers[1].respond()
-        await response
-      }
-      const recovered = send(queue, 'recovered')
-      expect(workers).toHaveLength(2)
-      workers[1].respond()
-      await expect(recovered).resolves.toMatchObject({ label: 'recovered' })
-      queue.dispose()
-    })
-
-    it('requires exact exit after a strict termination failure, preserving the fence', async () => {
-      vi.useFakeTimers()
-      const workers: FakeWorker[] = []
-      const queue = makeQueue(workers, { awaitRetirement: true, strictRetirement: true })
-      const first = settle(send(queue, 'stuck'))
-      workers[0].terminate = () => Promise.reject(new Error('termination failed'))
-      await vi.advanceTimersByTimeAsync(TIMEOUT_MS)
-      await first
-      await expect(queue.retired()).rejects.toThrow('termination failed')
-      await expect(send(queue, 'blocked')).rejects.toThrow('termination failed')
-      expect(workers).toHaveLength(1)
-      workers[0].emit('exit', 1)
-      await queue.retired()
-      const next = send(queue, 'after-proof')
-      workers[1].respond()
-      await expect(next).resolves.toMatchObject({ label: 'after-proof' })
-      queue.dispose()
-    })
-
-    it('does not spawn after disposal while parked behind retirement', async () => {
-      vi.useFakeTimers()
-      const workers: FakeWorker[] = []
-      const stalled = stalledExit()
-      const queue = makeQueue(workers, {
-        awaitRetirement: true,
-        strictRetirement: true,
-        makeWorker: () => stalled.worker
-      })
-      const first = send(queue, 'first')
-      stalled.worker.respond()
-      await first
-      await vi.advanceTimersByTimeAsync(IDLE_TEARDOWN_MS)
-      const cancel = new AbortController()
-      const cancelled = settle(
-        queue.dispatch((id) => ({ id, label: 'cancelled' }), TIMEOUT_MS, cancel.signal)
-      )
-      cancel.abort(new Error('cancel parked work'))
-      expect(await cancelled).toMatchObject({ message: 'cancel parked work' })
-      const parked = settle(send(queue, 'parked'))
-      queue.dispose()
-      expect(await parked).toMatchObject({ message: 'Worker request queue disposed' })
-      stalled.finish(0)
-      await queue.retired()
-      await vi.advanceTimersByTimeAsync(0)
-      expect(workers).toHaveLength(1)
     })
 
     it('does not latch spawning off when termination rejects', async () => {
