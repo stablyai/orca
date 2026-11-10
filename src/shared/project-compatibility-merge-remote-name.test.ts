@@ -22,7 +22,7 @@ function project(displayName: string, sourceRepoIds: string[]): Project {
     badgeColor: '#888888',
     createdAt: 1,
     updatedAt: 1
-  } as Project
+  }
 }
 
 const reposById = new Map<string, readonly Repo[]>([

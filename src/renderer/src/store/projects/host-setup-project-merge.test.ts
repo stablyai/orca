@@ -11,7 +11,7 @@ function project(overrides: Partial<Project>): Project {
     createdAt: 1,
     updatedAt: 1,
     ...overrides
-  } as Project
+  }
 }
 
 describe('upsertHostSetupProject', () => {
