@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog'
 import { InlineError } from '@/components/ui/inline-error'
 import { OrcaSignInButton } from '@/components/OrcaSignInProgress'
+import { signInAgainActionLabel } from '@/lib/orca-cloud/orca-sign-in-again'
 import { SettingsSegmentedControl } from '@/components/settings/form-controls/SettingsSegmentedControl'
 import { Switch } from '@/components/ui/switch'
 import { useTranslate } from '@/i18n/use-translate'
@@ -297,7 +298,7 @@ export function SharePortDialog({
             )}
             {error?.signedOut && (
               <OrcaSignInButton variant="outline" size="xs">
-                {t('auto.components.right.sidebar.CloudShare.signIn', 'Sign in to Orca')}
+                {signInAgainActionLabel(t)}
               </OrcaSignInButton>
             )}
             {alreadyShared.length > 0 && (

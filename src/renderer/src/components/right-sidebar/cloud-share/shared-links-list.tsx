@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
 import { OrcaSignInButton } from '@/components/OrcaSignInProgress'
+import { signInAgainActionLabel } from '@/lib/orca-cloud/orca-sign-in-again'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type { ShareLink } from '../../../../../shared/hosted-sandbox/hosted-sandbox-share-wire'
@@ -151,7 +152,7 @@ export function SharedLinksList({
           {status === 'error' && needsSignIn && (
             <div className="mb-1">
               <OrcaSignInButton variant="outline" size="xs">
-                {t('auto.components.right.sidebar.CloudShare.signIn', 'Sign in to Orca')}
+                {signInAgainActionLabel(t)}
               </OrcaSignInButton>
             </div>
           )}

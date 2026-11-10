@@ -92,6 +92,7 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-text: var(--destructive-text);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -452,6 +453,8 @@
   color-scheme: light;
   --destructive: #e40014;
   --destructive-foreground: #fff;
+  /* Why: raw red on its own 10% tint is ~4.1:1; small red text on a tint needs the darker mix. */
+  --destructive-text: color-mix(in srgb, var(--destructive) 85%, var(--foreground));
   --status-success: #147638;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
@@ -490,6 +493,7 @@
   --destructive: #ff6568;
   /* Dark --destructive is a light red, so its label needs dark ink to clear AA. */
   --destructive-foreground: #450a0a;
+  --destructive-text: var(--destructive);
   --status-success: #86efac;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);

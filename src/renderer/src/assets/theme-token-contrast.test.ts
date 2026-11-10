@@ -63,3 +63,27 @@ describe.each([':root', '.dark'] as const)('built-in %s token pairs', (selector)
     expect(contrastRatio(token('--status-success'), surface)).toBeGreaterThanOrEqual(4.5)
   })
 })
+
+const destructiveTextMix = Number(
+  css.match(
+    /--destructive-text: color-mix\(in srgb, var\(--destructive\) (\d+)%, var\(--foreground\)\)/
+  )?.[1]
+)
+
+// The destructive chip paints its text on bg-destructive/10 (and /15 on hover) over the page.
+describe.each([0.1, 0.15])('destructive chip text on a %s tint', (amount) => {
+  it('meets WCAG AA in the light theme', () => {
+    const light = themeTokens(':root')
+    const destructive = light.get('--destructive')!
+    const text = tint(destructive, destructiveTextMix / 100, light.get('--foreground')!)
+    const surface = tint(destructive, amount, light.get('--background')!)
+    expect(contrastRatio(text, surface)).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('meets WCAG AA in the dark theme', () => {
+    const dark = themeTokens('.dark')
+    const destructive = dark.get('--destructive')!
+    const surface = tint(destructive, amount, dark.get('--background')!)
+    expect(contrastRatio(destructive, surface)).toBeGreaterThanOrEqual(4.5)
+  })
+})

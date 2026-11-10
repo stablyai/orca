@@ -12,6 +12,7 @@ import { InlineError } from '@/components/ui/inline-error'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useTranslate } from '@/i18n/use-translate'
+import { signInAgainActionLabel } from '@/lib/orca-cloud/orca-sign-in-again'
 import { describeInlineError } from './cloud-workspace-errors'
 
 /** The list failed to load. An expired session offers Sign in; anything else offers Retry. */
@@ -35,9 +36,7 @@ export function ErrorState({
       className="m-1"
       title={describeInlineError(error, reason, t)}
       retryLabel={
-        signIn
-          ? t('auto.components.cloudWorkspaces.signIn', 'Sign in')
-          : t('auto.components.cloudWorkspaces.retry', 'Retry')
+        signIn ? signInAgainActionLabel(t) : t('auto.components.cloudWorkspaces.retry', 'Retry')
       }
       retrying={retrying}
       onRetry={signIn ? onSignIn : onRetry}
