@@ -4,7 +4,10 @@ import { closeTerminalTab } from '@/components/terminal/tab-lifecycle/terminal-t
 import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 import { followWorkspaceSleep } from '@/components/sidebar/workspace-actions/sleep/workspace-sleep-follower'
 import { createProjectMovePauseFollower } from '@/components/sidebar/workspace-actions/sleep/project-move-pause-follower'
-import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/browser/documents/file-preview'
+import {
+  getWorkspaceFilePreviewPlan,
+  openFileInBrowserTab
+} from '@/lib/browser/documents/file-preview'
 import { getConnectionIdForFileFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { isHtmlFilePath } from '@/components/terminal-pane/links/files/local-html-file-destinations'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
