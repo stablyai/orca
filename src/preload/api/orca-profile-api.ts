@@ -96,6 +96,8 @@ export type OrcaProfileApi = {
   orgCreate: (args: OrcaProfileOrgCreateArgs) => Promise<OrcaProfileOrgCreateResult>
   /** Fires when the browser comes back from Stripe Checkout or the Portal (orca:// link). */
   onBillingReturn: (callback: (event: OrcaBillingReturn) => void) => () => void
+  /** Main asks for a billing re-read (cloud workspace created/woken, or the usage poll). */
+  onBillingRefreshRequested: (callback: () => void) => () => void
   /** Fires when the setup done page opens orca://cloud/setup/return?session=… (N9). */
   onCloudSetupReturn: (callback: (event: OrcaCloudSetupReturn) => void) => () => void
   /** Plan & billing for the signed-in account (Orca Cloud billing service). */

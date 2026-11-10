@@ -226,6 +226,9 @@ export function isOrcaBillingInterval(value: unknown): value is OrcaBillingInter
 /** Where Stripe's hosted pages send the browser back: the Worker's return page opens this link. */
 export const ORCA_BILLING_RETURN_CHANNEL = 'billing:return'
 
+/** Main asks the main window to re-read billing (cloud workspace created/woken, or the 30-min poll). */
+export const ORCA_BILLING_REFRESH_CHANNEL = 'billing:refreshRequested'
+
 /** Target sent with `ui:openSettings` to land on Settings › Orca account (Plan & billing). */
 export const ORCA_PLAN_BILLING_SETTINGS_TARGET = { pane: 'orca-account' } as const
 export type OrcaOpenSettingsTarget = typeof ORCA_PLAN_BILLING_SETTINGS_TARGET

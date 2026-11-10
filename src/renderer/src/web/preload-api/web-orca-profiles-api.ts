@@ -74,6 +74,7 @@ export function createWebOrcaProfilesApi(): Partial<PreloadApi> {
       orgLeave: async () => ({ status: 'unconfigured' }),
       orgCreate: async () => ({ status: 'unconfigured' }),
       onBillingReturn: () => () => {},
+      onBillingRefreshRequested: () => () => {},
       onCloudSetupReturn: () => () => {},
       billingStatus: async () => ({ status: 'unconfigured' }),
       billingOpenCheckout: async () => ({ status: 'unconfigured' }),
