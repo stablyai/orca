@@ -284,7 +284,7 @@ async function stopRemoteWorker(
 
 /** A Dispatch the server's answer names (a follow-up it started) is its; record it so commands about it route there. */
 function seedNamedDispatches(db: OrchestrationDb, link: RemoteRunLinkRow, answer: unknown): void {
-  const named = answer && typeof answer === 'object' ? (answer as Values) : {}
+  const named: Values = answer && typeof answer === 'object' ? { ...answer } : {}
   const dispatchId = stringField(named, 'dispatchId')
   const taskId = stringField(named, 'taskId')
   if (!dispatchId || !taskId || getRemoteDispatch(db, dispatchId)) {
