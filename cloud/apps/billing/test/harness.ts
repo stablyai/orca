@@ -5,6 +5,7 @@ import { createStripeClient } from '../src/stripe'
 import type { OrgMemberCheck } from '../src/team-plans'
 import { createFakeD1 } from './d1-fake'
 import { createFakeStripe, signStripePayload } from './stripe-fake'
+import type { TrialPort } from '../src/cloud-setup-trial'
 
 export const WEBHOOK_SECRET = 'whsec_test_local_fixture_secret'
 export const CONTROL_TOKEN = 'cp_test_0123456789abcdef0123456789abcdef'
@@ -35,6 +36,8 @@ export async function createHarness(overrides: Partial<Env> = {}) {
   let membership: (orgId: string) => Promise<number | null> = async () => null
   // Auth's live org-member check (cloud start B2); null = auth unavailable (the default).
   let orgMember: OrgMemberCheck = async () => null
+  let trial: TrialPort | undefined
+  let outboundFetch: typeof fetch | undefined
   const waits: Promise<unknown>[] = []
   const ctx = { waitUntil: (promise: Promise<unknown>) => waits.push(promise), passThroughOnException() {} } as unknown as ExecutionContext
 
@@ -48,7 +51,9 @@ export async function createHarness(overrides: Partial<Env> = {}) {
       stripe: createStripeClient(env, stripe.fetchImpl),
       now: () => now,
       membership: (orgId) => membership(orgId),
-      orgMember: (orgId, billingToken) => orgMember(orgId, billingToken)
+      orgMember: (orgId, billingToken) => orgMember(orgId, billingToken),
+      ...(trial ? { trial } : {}),
+      ...(outboundFetch ? { fetch: outboundFetch } : {})
     })
     await Promise.all(waits.splice(0))
     return { status: response.status, body: (await response.json()) as Record<string, any> }
@@ -67,6 +72,12 @@ export async function createHarness(overrides: Partial<Env> = {}) {
     },
     setOrgMember(check: OrgMemberCheck) {
       orgMember = check
+    },
+    setTrial(port: TrialPort) {
+      trial = port
+    },
+    setFetch(impl: typeof fetch) {
+      outboundFetch = impl
     },
     async desktopToken(claims: { sub: string; org?: string; orgRole?: string; email?: string; orgMembers?: number }, options: { audience?: string; purpose?: string; ageSeconds?: number } = {}) {
       const iat = Math.floor(now / 1000) - (options.ageSeconds ?? 0)

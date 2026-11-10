@@ -61,4 +61,10 @@ export type Env = {
   // Auth origin serving POST /v1/internal/billing/org-members. Unset: seats come from pushes and the
   // Checkout request only (local dev).
   AUTH_INTERNAL_URL?: string
+
+  // Cloud setup sessions (cloud-setup.ts). Origin of the setup pages on Orca Cloud auth
+  // (https://auth.onorca.dev, staging https://auth-staging.onorca.dev); Checkout returns there.
+  CLOUD_SETUP_PAGES_URL?: string
+  // Control plane origin billing asks for a repository's GitHub install URL (CONTROL_PLANE_TOKEN).
+  SANDBOX_CONTROL_URL?: string
 }
