@@ -201,7 +201,9 @@
     "noMatch": {
       "title": "No matches",
       "clearSearch": "Clear search"
-    }
+    },
+    "loading": "Loading…",
+    "tryAgain": "Try again"
   },
   "host": {
     "edit": {
@@ -4862,6 +4864,189 @@
     "activity": {
       "needsWindow": "Couldn’t update. Open Orca on {{desktop}}.",
       "failed": "Couldn’t update the agent list."
+    }
+  },
+  "cloud": {
+    "access": {
+      "revokeFailed": "Couldn’t remove that phone. Try again.",
+      "title": "Orca Cloud access",
+      "disconnectTitle": "Disconnect this phone?",
+      "removeTitle": "Remove {{device}}?",
+      "disconnectMessage": "This phone loses access to your cloud workspaces right away. They keep running.",
+      "removeMessage": "That phone loses access to your cloud workspaces on its next request.",
+      "disconnect": "Disconnect",
+      "remove": "Remove",
+      "thisPhone": "This phone",
+      "thisPhoneNote": "It signs its own requests with a key that never leaves it. No password or token is stored.",
+      "connectedVia": "Connected {{date}} through {{desktop}}",
+      "since": "Connected {{date}}",
+      "notConnected": "Not connected to Orca Cloud.",
+      "otherPhones": "Other phones",
+      "noOthers": "No other phones have access.",
+      "lastUsed": "Last used {{date}}",
+      "removeLabel": "Remove {{device}}",
+      "disconnectThis": "Disconnect this phone"
+    },
+    "agent": {
+      "label": "Agent"
+    },
+    "started": {
+      "title": "{{agent}} started with your prompt",
+      "signIn": "If {{agent}} isn’t signed in on this sandbox yet, it asks in its terminal. Your prompt is saved and runs once you sign in.",
+      "openTerminal": "Open terminal to sign in"
+    },
+    "step": {
+      "create": "Start the sandbox and clone the repo",
+      "wake": "Wake the sandbox",
+      "grant": "Give this phone its own access",
+      "pair": "Connect, end-to-end encrypted",
+      "deliver": "Start the agent with your prompt"
+    },
+    "prompt": {
+      "placeholder": "Describe the task",
+      "label": "Prompt",
+      "wakeSend": "Wake and send",
+      "send": "Send",
+      "wakingCaption": "Sends when it’s awake.",
+      "wakeCaption": "Sending wakes the sandbox first.",
+      "queued": "Waiting to send",
+      "notSent": "Not sent: {{reason}}",
+      "delivering": "Sending…",
+      "waitingConnect": "Waiting to connect",
+      "waiting": "Sends when the workspace wakes",
+      "remove": "Remove",
+      "queuedNote": "Kept on this phone until the workspace is awake, then sent end-to-end encrypted.",
+      "heading": "Ask an agent",
+      "errorProject": "The workspace’s project isn’t ready yet",
+      "errorTransport": "The connection dropped while sending",
+      "errorNotConnected": "This phone couldn’t reach the workspace",
+      "errorAgent": "That agent isn’t installed in this workspace",
+      "errorLaunch": "The agent didn’t start"
+    },
+    "spend": {
+      "asleep": "{{cost}} so far · no sandbox hours while asleep",
+      "runningLarge": "{{cost}} so far · uses sandbox hours at 2× the rate",
+      "running": "{{cost}} so far · uses sandbox hours while running"
+    },
+    "status": {
+      "waking": "Waking",
+      "cantConnect": "Can’t connect",
+      "archived": "Archived",
+      "creating": "Starting",
+      "running": "Running",
+      "stopping": "Going to sleep",
+      "sleeping": "Asleep",
+      "failed": "Couldn’t start"
+    },
+    "actions": {
+      "sleep": "Sleep",
+      "sleepCaption": "Sandbox hours stop. Files are kept; agents restart when it wakes.",
+      "archive": "Archive"
+    },
+    "sleep": {
+      "title": "Sleep {{title}}?",
+      "message": "Running agents stop now and restart when you wake it. Files are kept.",
+      "confirm": "Sleep"
+    },
+    "archive": {
+      "title": "Archive {{title}}?",
+      "message": "It goes to sleep and keeps a snapshot you can unarchive. Unpushed work stays in that snapshot.",
+      "confirm": "Archive"
+    },
+    "error": {
+      "queueFull": "Too many prompts are waiting. Send or remove some first.",
+      "generic": "Something went wrong. Your files are safe.",
+      "archiveUnavailable": "Archiving isn’t available yet. Put it to sleep instead.",
+      "archived": "This workspace is archived. Unarchive it on your computer first.",
+      "wakeTimeout": "The sandbox is taking longer than usual to wake. Your files are safe.",
+      "grant": "This phone couldn’t get access to the workspace. Your files are safe.",
+      "pairing": "The workspace is running, but this phone couldn’t connect to it. Your files are safe.",
+      "failed": "The workspace couldn’t start. Try again, or open it on your desktop.",
+      "revoked": "This phone’s Orca Cloud access ended. Connect it again from Home.",
+      "entitlement": "Out of sandbox hours. Ask an owner or admin to add hours, then try again.",
+      "network": "Couldn’t reach Orca Cloud. Check your connection and try again.",
+      "concurrency": "You’re at your team’s limit of running sandboxes. Put one to sleep or delete it, then try again.",
+      "clone": "Couldn’t clone the repository. Check the name and that the Orca Cloud GitHub app can see it. Nothing was created, and you weren’t charged.",
+      "createUnknown": "Lost the connection while starting it. It may still appear in your list. Try again to pick it up.",
+      "rateLimited": "Too many new workspaces at once. Wait a minute, then try again.",
+      "create": "Couldn’t start your cloud workspace. Nothing was created, and you weren’t charged.",
+      "deliver": "The workspace is running, but a prompt didn’t start. Your files are safe."
+    },
+    "workspace": {
+      "title": "Cloud workspace",
+      "missing": "This workspace is gone or you no longer have access."
+    },
+    "action": {
+      "openSession": "Open session",
+      "settingUp": "Starting…",
+      "open": "Open workspace",
+      "wakeOpen": "Wake and open workspace"
+    },
+    "phase": {
+      "delivering": "Starting your agent",
+      "waking": "Waking the sandbox",
+      "granting": "Getting this phone access",
+      "pairing": "Connecting securely",
+      "connected": "Connected"
+    },
+    "details": {
+      "heading": "Details",
+      "repo": "Repository",
+      "machine": "Sandbox size"
+    },
+    "size": {
+      "large": "Large (8 vCPU · 16 GB)",
+      "standard": "Standard (4 vCPU · 8 GB)",
+      "standardShort": "Standard",
+      "largeShort": "Large",
+      "standardSpec": "4 vCPU · 8 GB",
+      "largeSpec": "8 vCPU · 16 GB",
+      "largeNote": "Large uses sandbox hours at 2× the rate."
+    },
+    "new": {
+      "title": "Create workspace",
+      "repoHeading": "Repository",
+      "repoInvalid": "Use a GitHub repository, like owner/repo.",
+      "repoNote": "Private repos need the Orca Cloud GitHub app, connected once from Orca on your computer. Leave empty for a blank project.",
+      "repoPlaceholder": "owner/repo",
+      "repoLabel": "GitHub repository",
+      "branchLabel": "Branch",
+      "branchPlaceholder": "Default branch",
+      "agentHeading": "First task",
+      "promptPlaceholder": "Optional. What should the agent start on?",
+      "sizeHeading": "Sandbox size",
+      "creating": "Starting your cloud workspace",
+      "createAndStart": "Start workspace and agent",
+      "create": "Start workspace"
+    },
+    "line": {
+      "runningFor": "Up {{elapsed}}. Agents keep working when you close the app.",
+      "running": "Agents keep working when you close the app.",
+      "sleeping": "Files are kept, and waking takes about 5 seconds.",
+      "creating": "Starting the sandbox and cloning the repository.",
+      "waking": "Starting up. This usually takes about 5 seconds.",
+      "stopping": "Files are kept.",
+      "archived": "Unarchive it on your computer to work in it again.",
+      "failed": "The sandbox couldn’t start. Your files are safe."
+    },
+    "home": {
+      "heading": "Cloud",
+      "manage": "Manage",
+      "loading": "Loading cloud workspaces…",
+      "retry": "Couldn’t reach Orca Cloud. Try again",
+      "emptyTitle": "No cloud workspaces yet",
+      "emptyDetail": "Start one here. It keeps running while this phone and your computer sleep.",
+      "new": "New cloud workspace",
+      "createdAgo": "Created {{ago}} ago",
+      "openWorkspace": "Open {{title}}, {{detail}}"
+    },
+    "connect": {
+      "signedOut": "Sign in to Orca on {{desktop}}, then try again.",
+      "notOffered": "{{desktop}} doesn’t have Orca Cloud yet. Update Orca there, then try again.",
+      "unreachable": "Couldn’t reach Orca Cloud through {{desktop}}. Try again.",
+      "subtitle": "Open cloud workspaces from this phone, even when {{desktop}} is off. Uses its Orca sign-in once.",
+      "noDesktop": "Open Orca on a computer you’re signed in to, then connect from here.",
+      "title": "Connect Orca Cloud"
     }
   }
 }
