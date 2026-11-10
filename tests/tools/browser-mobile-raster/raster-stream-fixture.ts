@@ -56,6 +56,7 @@ app
         })
       let observed = waitForFrame()
       const stream = await startBrowserScreencast(wc, {
+        holdPaint: () => () => {},
         format: 'jpeg',
         quality: 72,
         maxWidth,

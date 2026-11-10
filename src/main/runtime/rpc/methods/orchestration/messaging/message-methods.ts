@@ -18,16 +18,18 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
     name: 'orchestration.inbox',
     permission: 'workspace',
     params: InboxParams,
-    access: { kind: 'reads', targets: { terminal: 'party' }, collection: true },
+    access: { kind: 'reads', targets: { terminal: 'party', run: 'run' }, collection: true },
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       // Return empty for stale/unknown handles because historical mail outlives handle deletion (design doc §3.3).
       const messages = params.terminal
         ? db.getAllMessagesForHandle(
             resolveOrchestrationParty(params.terminal, db).address,
-            params.limit
+            params.limit,
+            undefined,
+            params.run
           )
-        : db.getInbox(params.limit)
+        : db.getInbox(params.limit, params.run)
       return {
         messages: messages.map(({ answer_sender_snapshot: _answer, ...message }) => message),
         count: messages.length

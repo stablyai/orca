@@ -11,7 +11,10 @@ import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-addres
 import { isOrcaSessionId, parseOrcaSessionAddress } from '../../../shared/orca-session-address'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shared/orchestration/orchestration-session-caller-codes'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import type { OrchestrationSessionCaller } from '../orchestration/addressing/orchestration-caller-identity'
+import type {
+  OrchestrationEntryCaller,
+  OrchestrationSessionCaller
+} from '../orchestration/addressing/orchestration-caller-identity'
 import { OrchestrationError } from '../orchestration/orchestration-error'
 import { canonicalOrcaSessionId } from '../orchestration/addressing/session-lineage/canonical-orca-session-id'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
@@ -36,7 +39,7 @@ export type OrchestrationRequestRoute = {
 export type ResolvedOrchestrationRequest = {
   /** The request with its declared caller bound to the session and its evidence reduced to it. */
   request: RpcRequest
-  caller?: OrchestrationSessionCaller
+  caller?: OrchestrationEntryCaller
 }
 
 const NO_EFFECTS = { effectsApplied: false } as const

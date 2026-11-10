@@ -1,7 +1,11 @@
 import { Buffer } from 'node:buffer'
 import { nativeImage, type Debugger, type NativeImage, type WebContents } from 'electron'
 import { readBrowserScreencastImageSize } from './browser-screencast-image-size'
-import { sendDebuggerCommand } from './browser-screencast-debugger-command'
+import { runDebuggerCommandWithTimeout } from './browser-screencast-debugger-command'
+import {
+  holdPaintUntilCdpCaptureSettles,
+  holdPaintUntilSettled
+} from '../debugger/guest-paint-hold'
 import type {
   BrowserScreencastOptions,
   PendingScreencastFrame
@@ -39,6 +43,7 @@ export function createBrowserScreencastSnapshotCapture(
     const capture = scaleSnapshotToFit(image, options)
     return options.format === 'png' ? capture.toPNG() : capture.toJPEG(options.quality)
   }
+  const { holdPaint } = options
 
   let snapshotGeneration = 0
   let navigationCaptureTimer: ReturnType<typeof setTimeout> | null = null
@@ -85,7 +90,9 @@ export function createBrowserScreencastSnapshotCapture(
         try {
           // Prefer capturePage to avoid CDP tiling; stopped compositing can leave it pending.
           const nativeImage = await withTimeout(
-            webContents.capturePage({ x: 0, y: 0, width: viewportWidth, height: viewportHeight }),
+            holdPaintUntilSettled(holdPaint, () =>
+              webContents.capturePage({ x: 0, y: 0, width: viewportWidth, height: viewportHeight })
+            ),
             SNAPSHOT_CAPTURE_TIMEOUT_MS,
             null
           )
@@ -103,7 +110,7 @@ export function createBrowserScreencastSnapshotCapture(
         }
       }
       if (!image) {
-        const result = await sendDebuggerCommand(dbg, 'Page.captureScreenshot', {
+        const screenshotParams = {
           format: options.format,
           ...(options.format === 'jpeg' ? { quality: options.quality } : {}),
           ...(viewportWidth && viewportHeight
@@ -119,7 +126,12 @@ export function createBrowserScreencastSnapshotCapture(
               }
             : {}),
           captureBeyondViewport: false
-        })
+        }
+        const result = await runDebuggerCommandWithTimeout('Page.captureScreenshot', () =>
+          holdPaintUntilCdpCaptureSettles(webContents, holdPaint, () =>
+            dbg.sendCommand('Page.captureScreenshot', screenshotParams)
+          )
+        )
         if (isSnapshotStale(initialOnly, generation)) {
           return
         }
