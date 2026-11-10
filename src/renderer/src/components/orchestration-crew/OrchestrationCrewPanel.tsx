@@ -5,7 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import { formatStateCount } from '@/components/sidebar/workspace-card/activity/worktree-card-agent-summary'
-import type { WorktreeStatus } from '@/lib/worktree-status'
+import type { WorktreeStatus } from '../../../../shared/worktree-status-rollup'
 import type {
   OrchestrationCrewRow,
   OrchestrationCrewSnapshot

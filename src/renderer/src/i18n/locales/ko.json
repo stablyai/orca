@@ -4459,8 +4459,15 @@
             "readAgo": "{{time}}에 조회",
             "notRead": "사용량을 알 수 없음: 아직 조회하지 않음"
           },
+          "AccountSwitchList": {
+            "used": "사용량",
+            "left": "남음",
+            "reset": "초기화"
+          },
           "InlineUsageBars": {
-            "resetsAt": "{{when}}에 초기화"
+            "now": "지금",
+            "resetsNow": "지금 초기화",
+            "resetsIn": "{{duration}} 후 초기화"
           }
         }
       },

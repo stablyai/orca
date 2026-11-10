@@ -280,11 +280,15 @@ export function useWorktreeJumpPaletteSelectionActions({
         handleSelectTask(item.result)
       } else if (item.type === 'settings') {
         handleSelectSettings(item.result)
+      } else if (item.type === 'extra') {
+        dismissForSelection()
+        item.result.onSelect()
       } else {
         handleSelectQuickAction(item.result)
       }
     },
     [
+      dismissForSelection,
       handleSelectTask,
       handleSelectBrowserPage,
       handleSelectProjectTarget,
@@ -297,7 +301,3 @@ export function useWorktreeJumpPaletteSelectionActions({
   )
   return { handleSelectItem, handleSelectTask }
 }
-
-export type WorktreeJumpPaletteSelectionActions = ReturnType<
-  typeof useWorktreeJumpPaletteSelectionActions
->

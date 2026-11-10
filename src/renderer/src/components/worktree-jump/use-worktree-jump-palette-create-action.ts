@@ -4,7 +4,7 @@ import type { WorktreeJumpPaletteFilter } from './use-worktree-jump-palette-filt
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
 import type { WorktreeJumpPaletteQuickActions } from './use-worktree-jump-palette-quick-actions'
 import type { WorktreeJumpPaletteSections } from './use-worktree-jump-palette-sections'
-import type { WorktreeJumpPaletteSelectionActions } from './use-worktree-jump-palette-selection-actions'
+import type { useWorktreeJumpPaletteSelectionActions } from './use-worktree-jump-palette-selection-actions'
 import type { WorktreeJumpPaletteSelectionLifecycle } from './use-worktree-jump-palette-selection-lifecycle'
 import type { WorktreeJumpPaletteStoreState } from './use-worktree-jump-palette-store-state'
 import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
@@ -16,7 +16,7 @@ type WorktreeJumpPaletteCreateActionInput = WorktreeJumpPaletteStoreState &
   WorktreeJumpPaletteFilter &
   WorktreeJumpPaletteQuickActions &
   WorktreeJumpPaletteSections &
-  WorktreeJumpPaletteSelectionActions &
+  ReturnType<typeof useWorktreeJumpPaletteSelectionActions> &
   WorktreeJumpPaletteSelectionLifecycle &
   WorktreeJumpPaletteTaskUrl &
   Pick<WorktreeJumpPaletteWorktrees, 'hasQuery'>

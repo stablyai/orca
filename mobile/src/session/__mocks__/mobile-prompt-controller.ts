@@ -2,7 +2,7 @@ import './mobile-prompt-render-mocks'
 import { createElement } from 'react'
 import { Pressable } from 'react-native'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
-import type { MobileNativeChatSendOutcome } from '../native-chat/mobile-native-chat-send'
+import type { MobileNativeChatSendOutcome } from '../native-chat/composer/mobile-native-chat-send'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import type { ConnectionState } from '../../transport/connection/connection-state'
@@ -55,7 +55,7 @@ vi.mock('../use-mobile-session-view-mode', () => ({
   })
 }))
 // The chat's per-connection CI setting read isn't a prompt write; these tests count only those.
-vi.mock('../use-mobile-native-chat-ci-result-lines', () => ({
+vi.mock('../native-chat/preferences/use-mobile-native-chat-ci-result-lines', () => ({
   useMobileNativeChatCiResultLines: () => false
 }))
 vi.mock('../native-chat/use-mobile-native-chat-session-lane', () => ({

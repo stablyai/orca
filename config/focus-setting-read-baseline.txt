@@ -19,10 +19,10 @@
 1 src/renderer/src/components/activity/use-agent-pane-thread-store-data.ts
 1 src/renderer/src/components/activity/use-agent-pane-threads.ts
 4 src/renderer/src/components/agent/AgentSettingsDialog.tsx
-1 src/renderer/src/components/automations/automation-host-client.ts
+1 src/renderer/src/components/automations/hosts/automation-host-client.ts
 1 src/renderer/src/components/automations/automations-page-fixtures.ts
 1 src/renderer/src/components/automations/use-automations-page-controller.ts
-1 src/renderer/src/components/automations/use-automations-page-destination-form.ts
+1 src/renderer/src/components/automations/authoring/use-automations-page-destination-form.ts
 1 src/renderer/src/components/browser-pane/ReopenBrowserPageOnServerButton.tsx
 1 src/renderer/src/components/browser-pane/browser-reopen-on-server.ts
 1 src/renderer/src/components/browser-pane/stream-remote/use-remote-browser-page-stream.ts

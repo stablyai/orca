@@ -121,6 +121,9 @@ validation-screenshots/
 test-results/
 playwright-report/
 
+# Claude Code settings are machine-local.
+**/.claude/settings.local.json
+
 # Agent skills are installed per machine.
 /.claude/skills/
 /.agents/skills/
