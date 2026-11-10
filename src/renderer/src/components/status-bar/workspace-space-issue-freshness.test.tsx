@@ -1,0 +1,58 @@
+// @vitest-environment happy-dom
+
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
+import { WorkspaceSpaceIssueFreshness } from './workspace-space-issue-freshness'
+
+let container: HTMLDivElement
+let root: Root
+const fetchIssue = vi.fn(async () => null)
+
+function linkIssue(linkedIssue: number | null): void {
+  useAppStore.setState({
+    repos: [{ id: 'repo-1', path: '/repos/one', displayName: 'one', kind: 'git' }],
+    worktreesByRepo: {
+      'repo-1': [{ id: 'repo-1::/wt/a', repoId: 'repo-1', path: '/wt/a', branch: 'a', linkedIssue }]
+    },
+    fetchIssue
+  } as unknown as Partial<AppState>)
+}
+
+beforeEach(() => {
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  fetchIssue.mockClear()
+  container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+})
+
+afterEach(() => {
+  act(() => root.unmount())
+  container.remove()
+  Reflect.deleteProperty(window, 'api')
+})
+
+it('reads the live linked issue while open, following a late and a changed link', () => {
+  linkIssue(null)
+  act(() => root.render(<WorkspaceSpaceIssueFreshness worktreeId="repo-1::/wt/a" />))
+  expect(fetchIssue).not.toHaveBeenCalled()
+
+  act(() => linkIssue(91))
+  expect(fetchIssue).toHaveBeenLastCalledWith('/repos/one', 91, { repoId: 'repo-1' })
+
+  act(() => linkIssue(92))
+  expect(fetchIssue).toHaveBeenLastCalledWith('/repos/one', 92, { repoId: 'repo-1' })
+})
+
+it('asks the main window, which owns the issue cache, from the desktop Space window', () => {
+  const requestIssueRefresh = vi.fn(async () => {})
+  Object.assign(window, { api: { workspaceSpace: { requestIssueRefresh } } })
+  linkIssue(91)
+  act(() => root.render(<WorkspaceSpaceIssueFreshness worktreeId="repo-1::/wt/a" />))
+
+  expect(requestIssueRefresh).toHaveBeenCalledWith('repo-1::/wt/a', undefined)
+  expect(fetchIssue).not.toHaveBeenCalled()
+})
