@@ -1,3 +1,5 @@
+import { listDaemonSessions } from './daemon-session-inventory-request'
+import { parseDaemonLaunchNoteChange } from '../protocol/daemon-launch-note-protocol'
 import { handleDaemonTerminalKill } from './daemon-terminal-kill'
 import { handleDaemonFencedTermination } from './daemon-fenced-termination'
 import { performance } from 'node:perf_hooks'
@@ -146,6 +148,13 @@ export class DaemonRequestRouter {
         return {
           confirmed: await this.options.host.confirmShellForeground(request.payload.sessionId)
         }
+      case 'setLaunchNote': {
+        const change = parseDaemonLaunchNoteChange(request.payload.change)
+        if (change) {
+          this.options.host.setLaunchNote(request.payload.sessionId, change)
+        }
+        return {}
+      }
       case 'clearScrollback':
         this.options.host.clearScrollback(request.payload.sessionId)
         return {}
@@ -156,16 +165,7 @@ export class DaemonRequestRouter {
         this.options.host.reportFocusLost(request.payload.sessionId)
         return {}
       case 'listSessions':
-        return {
-          sessions: this.options.host.listSessions(),
-          ...(request.payload?.includeReservations === true
-            ? {
-                reservations: this.options.host.listReservations(
-                  this.options.preparations.reservedSessionIds()
-                )
-              }
-            : {})
-        }
+        return listDaemonSessions(this.options, request.payload?.includeReservations === true)
       case 'shutdownIfIdle':
         return this.shutdownIfIdle(clientId, request.id)
       case 'getSnapshot':

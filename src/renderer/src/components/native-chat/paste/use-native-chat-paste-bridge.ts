@@ -2,17 +2,17 @@ import { nativeChatComposerDestination } from '../composer/focus/native-chat-com
 import { useCallback, useEffect, type RefObject } from 'react'
 
 import { toast } from 'sonner'
-import { isEditableTarget } from '@/lib/editable-target'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import {
   NativeChatPasteRequest,
   findNativeChatPasteField,
   nativeChatPasteUnavailableNotice,
   NATIVE_CHAT_PASTE_REQUEST_EVENT
 } from '@/components/native-chat/paste/native-chat-paste-request'
-import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
+import { APP_MENU_PASTE_EVENT } from '@/lib/clipboard/menu/app-menu-paste'
 import { isWebClientLocation } from '@/lib/web-client-location'
-import { pasteTextIntoTextControl } from '@/lib/text-control-paste'
-import { TEXT_CONTROL_PASTE_MAX_BYTES } from '@/lib/text-control-paste-model'
+import { pasteTextIntoTextControl } from '@/lib/text-input/paste/text-control-paste'
+import { TEXT_CONTROL_PASTE_MAX_BYTES } from '@/lib/text-input/paste/text-control-paste-model'
 import type { NativeChatComposerHandle } from '../composer/native-chat-composer-types'
 
 type NativeChatPasteBridgeRefs = {

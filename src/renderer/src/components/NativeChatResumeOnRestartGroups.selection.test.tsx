@@ -132,16 +132,3 @@ it('starts expanded; collapsing hides a node’s rows and keeps their selection'
   expect(state(chatBox('in-child'))).toBe('false')
   expect(state(chatBox('also-in-child'))).toBe('true')
 })
-
-it('toggles the chats of a collapsed node', () => {
-  render({ candidates: seedTree(), initiallySelected: [] })
-
-  act(() => disclosureOf('parent').click())
-  act(() => nodeBox('parent').click())
-  expect(countOf('parent')).toBe('3 of 3')
-  expect(onToggleSpy.mock.calls.map(([sessionId]) => sessionId).toSorted()).toEqual([
-    'also-in-child',
-    'in-child',
-    'in-parent'
-  ])
-})

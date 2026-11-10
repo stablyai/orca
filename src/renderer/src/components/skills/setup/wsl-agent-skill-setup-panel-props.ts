@@ -3,7 +3,7 @@ import type { ComponentProps, ReactNode } from 'react'
 import type { Button } from '../../ui/button'
 import type { LocalAgentRuntime } from '../../../lib/skill-runtime-command'
 
-type AgentSkillSetupPanelVariant = 'card' | 'inline'
+type AgentSkillSetupPanelVariant = 'card' | 'inline' | 'row'
 type SkillPrerequisiteStatus = Awaited<ReturnType<typeof window.api.cli.getInstallStatus>>
 
 export type WslAgentSkillSetupPanelProps = {

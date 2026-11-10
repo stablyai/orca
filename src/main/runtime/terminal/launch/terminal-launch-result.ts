@@ -5,6 +5,7 @@ import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-c
 import type { TerminalCreateOptions } from './terminal-create-options'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { recordFreshLaunch } from './launch-evidence'
 import {
   copySleepingAgentLaunchConfig,
   resolveLaunchCommandPaneAgent,
@@ -57,8 +58,8 @@ export function recordTerminalLaunchMetadata(
   command: string | undefined
 ): TuiAgent | null {
   if (launch.adoptedStablePane) {
-    // A lower owner can supply facts before this runtime has a launch record.
-    if (!pty.launchConfig && result.launchConfig) {
+    // A lower owner can supply facts before this runtime has a launch record, unless its launch ended.
+    if (!pty.launchConfig && result.launchConfig && pty.launchEvidence?.kind !== 'gone') {
       pty.launchConfig = copySleepingAgentLaunchConfig(result.launchConfig)
     }
     pty.launchToken ??= result.launchToken ?? null
@@ -72,6 +73,11 @@ export function recordTerminalLaunchMetadata(
   pty.launchToken = launch.launchToken ?? null
   pty.launchIncarnationId = launch.launchToken ? pty.incarnationId : null
   pty.launchAgent = launch.launchAgent ?? null
+  recordFreshLaunch(pty, {
+    agent: pty.launchAgent ?? undefined,
+    token: pty.launchToken ?? undefined,
+    config: pty.launchConfig ?? undefined
+  })
   if (result.agentResumeRefused) {
     pty.launchCommandAgent = null
     return null

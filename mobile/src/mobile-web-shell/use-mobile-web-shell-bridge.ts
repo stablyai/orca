@@ -69,6 +69,8 @@ export type MobileWebShellBridgeView = {
    * serves never said it takes one — the caller then leaves the key to the navigator.
    */
   readonly sendBack: () => boolean
+  /** Tells the mounted page the app is leaving the foreground; nothing with no host or an older page. */
+  readonly sendAppInactive: () => void
 }
 
 export type MobileWebShellBridgeArgs = {
@@ -342,6 +344,10 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
     sendBack: useCallback(() => {
       const mounted = hostRef.current
       return mounted !== null && mounted.sessionId === sessionId && mounted.host.sendBack()
+    }, [sessionId]),
+    sendAppInactive: useCallback(() => {
+      const mounted = hostRef.current
+      return mounted?.sessionId === sessionId ? mounted.host.sendAppInactive() : undefined
     }, [sessionId])
   }
 }

@@ -1,5 +1,5 @@
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import { githubTaskIdentity } from '@/lib/github-task-target'
+import { githubTaskIdentity } from '@/lib/work-items/github/github-task-target'
 import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'

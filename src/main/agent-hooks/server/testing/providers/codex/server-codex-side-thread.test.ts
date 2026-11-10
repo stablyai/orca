@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { AgentHookServer } from '../../../agent-hook-server'
+import { RelayAgentHookServer } from '../../../../../../wsl-guest/agent-hook-server'
 import { buildBody, postHookEvent } from '../../server.test-fixtures'
 
 // Shapes captured from Codex 0.164: a /side fork is its own session with no rollout.
@@ -148,24 +149,79 @@ it.each([
   }
 })
 
-it('lets a new ephemeral Codex conversation take over a row still working, without its old prompt', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'codex-side-thread-'))
-  dirs.push(dir)
-  const server = new AgentHookServer()
-  await server.start({ env: 'production' })
-  const post = (payload: Record<string, unknown>): Promise<Response> =>
-    postHookEvent(server, buildBody(payload), '/hook/codex')
-  try {
-    const main = { session_id: MAIN, transcript_path: join(dir, 'rollout-main.jsonl') }
-    await post({ ...main, hook_event_name: 'UserPromptSubmit', prompt: 'main task' })
-    await post({ ...TITLE_THREAD, hook_event_name: 'SessionStart', source: 'startup' })
-    await post({ ...TITLE_THREAD, hook_event_name: 'UserPromptSubmit', prompt: 'next task' })
-    expect(server.getStatusSnapshot()[0]).toMatchObject({
-      state: 'working',
-      prompt: 'next task',
-      providerSession: { id: SIDE }
-    })
-  } finally {
-    server.stop()
+it.each(['local', 'relay', 'relay-done'])(
+  'lets a submitted Codex conversation take over without its old prompt: %s',
+  async (route) => {
+    const dir = mkdtempSync(join(tmpdir(), 'codex-side-thread-'))
+    dirs.push(dir)
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    const relay =
+      route === 'local'
+        ? undefined
+        : new RelayAgentHookServer({
+            endpointDir: dir,
+            forward: (event) => server.ingestRemote(event, 'ssh-connection')
+          })
+    await relay?.start()
+    const post = (payload: Record<string, unknown>): Promise<Response> => {
+      const coordinates = relay?.getCoordinates()
+      return coordinates
+        ? fetch(`http://127.0.0.1:${coordinates.port}/hook/codex`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Connection: 'close',
+              'X-Orca-Agent-Hook-Token': coordinates.token
+            },
+            body: JSON.stringify(buildBody(payload))
+          })
+        : postHookEvent(server, buildBody(payload), '/hook/codex')
+    }
+    try {
+      const main = { session_id: MAIN, transcript_path: join(dir, 'rollout-main.jsonl') }
+      await post({ ...main, hook_event_name: 'UserPromptSubmit', prompt: 'main task' })
+      await post({ ...main, hook_event_name: 'SubagentStart', agent_id: 'old-child' })
+      if (route === 'relay') {
+        for (const [session_id, prompt] of [
+          ['01a16f91-0000-4000-8000-000000000001', TITLE_PROMPT],
+          [
+            '01a16f91-0000-4000-8000-000000000002',
+            'Write a brief catch-up for a user returning to this task.'
+          ]
+        ]) {
+          const hidden = { session_id, transcript_path: null }
+          await post({ ...hidden, hook_event_name: 'SessionStart', source: 'startup' })
+          expect(server.getStatusSnapshot()[0]).toMatchObject({
+            prompt: 'main task',
+            providerSession: { id: MAIN }
+          })
+          await post({ ...hidden, hook_event_name: 'UserPromptSubmit', prompt })
+          await post({ ...hidden, hook_event_name: 'Stop' })
+          expect(server.getStatusSnapshot()[0]).toMatchObject({
+            state: 'working',
+            prompt: 'main task',
+            providerSession: { id: MAIN },
+            subagents: [{ id: 'old-child', state: 'working' }]
+          })
+        }
+      }
+      if (route === 'relay-done') {
+        await post({ ...main, hook_event_name: 'Stop' })
+      }
+      await post({ ...TITLE_THREAD, hook_event_name: 'SessionStart', source: 'startup' })
+      await post({ ...TITLE_THREAD, hook_event_name: 'UserPromptSubmit', prompt: 'next task' })
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        state: 'working',
+        prompt: 'next task',
+        providerSession: { id: SIDE }
+      })
+      expect(server.getStatusSnapshot()[0].subagents).toBeUndefined()
+      await post({ ...TITLE_THREAD, hook_event_name: 'Stop' })
+      expect(server.getStatusSnapshot()[0].state).toBe('done')
+    } finally {
+      relay?.stop()
+      server.stop()
+    }
   }
-})
+)

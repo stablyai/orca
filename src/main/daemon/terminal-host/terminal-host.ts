@@ -1,3 +1,4 @@
+import type { DaemonLaunchNoteChange } from '../protocol/daemon-launch-note-protocol'
 import { terminalSessionExitCode } from './terminal-host-returned-process'
 import { runTerminalCreation, type PendingTerminalCreation } from './terminal-creation-work'
 import { beginTerminalHostFencedTermination } from './terminal-host-fenced-termination'
@@ -11,7 +12,10 @@ import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import type { TerminalHostOptions } from './terminal-host-options'
 import { recordTerminalHostSessionExit } from './terminal-host-session-exit'
 import { disposeTerminalHostSessions, killLiveSessionGroupsSync } from './terminal-host-disposal'
-import { getAliveTerminalHostSession } from './terminal-host-session-access'
+import {
+  getAliveTerminalHostSession,
+  assertTerminalHostCreateAllowed
+} from './terminal-host-session-access'
 import { writeSessionInput } from '../sessions/session-input-path'
 import { TerminalSessionTeardown } from './terminal-session-teardown'
 import { ClaimedAgentPtyOwnerRegistry } from '../../../shared/claimed-agent-pty-owner'
@@ -29,7 +33,6 @@ import {
   hasLiveTerminalHostSessions
 } from './terminal-host-session-listing'
 import { createOrAttachTerminalSession } from './terminal-host-session-create'
-import { TerminalAttachCanceledError } from '../protocol/daemon-errors'
 import { randomUUID } from 'node:crypto'
 import {
   inspectTerminalHostSession,
@@ -45,8 +48,6 @@ import {
   getTerminalHostSnapshot,
   takeTerminalHostPendingOutput
 } from './terminal-host-session-inspection-operations'
-
-const DEFAULT_MAX_TOMBSTONES = 1000
 
 export class TerminalHost {
   private sessions = new Map<string, Session>()
@@ -74,7 +75,7 @@ export class TerminalHost {
     this.onSessionReaped = opts.onSessionReaped
     this.reportReadinessEvent = opts.reportReadinessEvent
     this.onFinalCheckpoint = opts.onFinalCheckpoint
-    this.killedTombstones = new TerminalHostTombstones(opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES)
+    this.killedTombstones = new TerminalHostTombstones(opts.maxTombstones ?? 1000)
   }
 
   createOrAttach(opts: InternalCreateOrAttachOptions): Promise<CreateOrAttachResult> {
@@ -136,12 +137,7 @@ export class TerminalHost {
   }
 
   private assertCreateOrAttachAllowed(opts: InternalCreateOrAttachOptions): void {
-    if (this.creationFenced) {
-      throw new Error('Terminal host is shutting down')
-    }
-    if (opts.isCanceled?.()) {
-      throw new TerminalAttachCanceledError(opts.sessionId)
-    }
+    assertTerminalHostCreateAllowed(this.creationFenced, opts)
   }
 
   write(sessionId: string, data: string): void {
@@ -260,6 +256,10 @@ export class TerminalHost {
     return confirmTerminalHostShellForeground(this.sessions.get(sessionId), () =>
       this.sessions.get(sessionId)
     )
+  }
+
+  setLaunchNote(sessionId: string, change: DaemonLaunchNoteChange): void {
+    this.sessions.get(sessionId)?.launchNote.change(change)
   }
 
   clearScrollback(sessionId: string): void {

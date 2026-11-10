@@ -272,6 +272,8 @@ _Or via a package manager:_
 brew install --cask stablyai/orca/orca
 # Upgrade an existing install
 brew upgrade --cask stablyai/orca/orca
+# Release candidates (conflicts with the stable cask; uninstall it first)
+brew install --cask stablyai/orca/orca@rc
 
 # Arch Linux (AUR) — or stably-orca-git to build from source
 yay -S stably-orca-bin

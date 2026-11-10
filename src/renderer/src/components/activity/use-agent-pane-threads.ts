@@ -67,6 +67,7 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
         )
       ) {
         eventBuildCacheRef.current.panes.clear()
+        eventBuildCacheRef.current.tabs = undefined
         return EMPTY_ACTIVITY_BUILD
       }
       // Global history caps affect live-thread unread and search state.

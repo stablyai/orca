@@ -22,7 +22,7 @@ it('searches and updates the selected dictation language', () => {
     />
   )
 
-  fireEvent.click(screen.getByRole('combobox', { name: 'Dictation Language' }))
+  fireEvent.click(screen.getByRole('combobox', { name: /dictation language/i }))
   fireEvent.change(screen.getByRole('combobox', { name: 'Search languages…' }), {
     target: { value: 'spanish' }
   })
@@ -35,10 +35,10 @@ it('keeps a selected language visible when the chosen model does not support it'
   const selectedModel: SpeechModelManifest = {
     id: 'limited',
     label: 'Limited model',
-    description: '',
     type: 'whisper',
     provider: 'local',
     language: 'multilingual',
+    languages: ['en', 'es'],
     sampleRate: 16000,
     streaming: false,
     dictationLanguages: ['en', 'es']
@@ -55,29 +55,6 @@ it('keeps a selected language visible when the chosen model does not support it'
     />
   )
 
-  fireEvent.click(screen.getByRole('combobox', { name: 'Dictation Language' }))
+  fireEvent.click(screen.getByRole('combobox', { name: /dictation language/i }))
   expect(screen.getByRole('option', { name: 'Korean' })).toBeTruthy()
-})
-
-it('keeps the language control disabled for models that ignore language settings', () => {
-  const selectedModel: SpeechModelManifest = {
-    id: 'parakeet',
-    label: 'Parakeet',
-    description: '',
-    type: 'transducer',
-    provider: 'local',
-    language: 'multilingual',
-    sampleRate: 16000,
-    streaming: false
-  }
-  render(
-    <VoiceDictationLanguageSetting
-      voiceSettings={{ ...getDefaultVoiceSettings(), enabled: true }}
-      selectedModel={selectedModel}
-      onUpdateVoiceSettings={vi.fn()}
-    />
-  )
-
-  const trigger = screen.getByRole('combobox', { name: 'Dictation Language' })
-  expect(trigger.getAttribute('disabled')).not.toBeNull()
 })

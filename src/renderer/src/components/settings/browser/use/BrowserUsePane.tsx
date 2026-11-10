@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ORCA_CLI_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+import { ORCA_CLI_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser/browser-use-setup-state'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
@@ -91,7 +91,7 @@ export function BrowserUseSetup({
       <div className="flex items-center justify-between gap-4 py-3">
         <div className="space-y-0.5">
           <p className="text-sm font-medium">
-            {t('auto.components.settings.BrowserUsePane.b8a1f2d84d', 'Agent Browser Use')}
+            {t('auto.components.settings.BrowserUsePane.507fdae102', 'Agent browser use')}
           </p>
           <p className="text-xs text-muted-foreground">
             {t(
@@ -113,7 +113,7 @@ export function BrowserUseSetup({
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-0.5">
           <p className="text-sm font-semibold">
-            {t('auto.components.settings.BrowserUsePane.b8a1f2d84d', 'Agent Browser Use')}
+            {t('auto.components.settings.BrowserUsePane.507fdae102', 'Agent browser use')}
           </p>
           <p className="text-xs text-muted-foreground">
             {t(
@@ -146,8 +146,8 @@ export function BrowserUseSetup({
       {showSkillStep ? (
         <SearchableSetting
           title={t(
-            'auto.components.settings.BrowserUsePane.2d6ead9ab2',
-            'Install Browser Use Skill'
+            'auto.components.settings.BrowserUsePane.4451b3c0a6',
+            'Install browser use skill'
           )}
           description={t(
             'auto.components.settings.BrowserUsePane.68ea76eb71',
