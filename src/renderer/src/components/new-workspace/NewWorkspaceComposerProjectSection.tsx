@@ -101,6 +101,8 @@ export function NewWorkspaceComposerProjectSection({
   orcaCloudAccess,
   cloudStart = null
 }: NewWorkspaceComposerProjectSectionProps): React.JSX.Element {
+  const cloudOnly =
+    selectedEphemeralVmRecipeId === ORCA_CLOUD_RECIPE_ID ? cloudStart?.cloudOnly : undefined
   const t = useTranslate()
   const orcaCloudOffered = shouldShowRunTargetPicker && ephemeralVmRecipes.some(isOrcaCloudRecipe)
   // Shared with the picker; mounting the composer prefetches it so the row rarely shows a skeleton.
@@ -146,9 +148,18 @@ export function NewWorkspaceComposerProjectSection({
                 selectedProjectHostSetupId,
                 selectedRepoExecutionHostId
               )}
-              onValueChange={onProjectChange}
+              onValueChange={(projectId) => {
+                cloudOnly?.clear()
+                onProjectChange(projectId)
+              }}
               onValueSelected={focusNameInput}
               onAddProject={onAddProject}
+              // D4: while Orca Cloud is picked, GitHub repositories with no clone here.
+              cloudRepos={cloudOnly?.repos ?? null}
+              cloudRepoValue={cloudOnly?.picked?.fullName ?? null}
+              onCloudRepoSelected={cloudOnly?.pick}
+              onMoreCloudAccess={cloudOnly?.moreAccess}
+              onShowMoreCloudRepos={cloudOnly?.showMore ?? null}
               placeholder={
                 projectPlaceholder ??
                 t('auto.components.NewWorkspaceComposerCard.dccd26d4e4', 'Choose project')
@@ -179,6 +190,7 @@ export function NewWorkspaceComposerProjectSection({
             </label>
             {cloudStart ? (
               <RunOnSegmentedControl
+                cloudOnlyRepo={Boolean(cloudOnly?.picked)}
                 hostOptions={projectHostSetupOptions ?? []}
                 hostValue={selectedProjectHostSetupId ?? null}
                 hostExecutionHostId={selectedRepoExecutionHostId}

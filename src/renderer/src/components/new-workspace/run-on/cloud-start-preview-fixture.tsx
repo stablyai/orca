@@ -17,6 +17,7 @@ import {
 import type { CloudStartView } from './use-cloud-start-composer'
 import { getCloudPrimaryLabel } from './cloud-start-actions'
 import { decorateCloudSetupStep } from './use-cloud-start-steps'
+import type { OrcaCloudGitHubRepository } from '@/lib/orca-cloud/use-orca-cloud-github-repositories'
 
 const projects: NewWorkspaceProjectOption[] = [
   {
@@ -65,7 +66,9 @@ export function ComposerPreview({
   steps: pinnedSteps,
   github = null,
   allSet = false,
-  prompt = 'Fix the flaky login test in e2e/auth.spec.ts and open a PR.'
+  prompt = 'Fix the flaky login test in e2e/auth.spec.ts and open a PR.',
+  cloudRepos,
+  pickedCloudRepo = null
 }: {
   availability: OrcaCloudAvailability
   access: OrcaCloudRunTargetAccess
@@ -75,7 +78,11 @@ export function ComposerPreview({
   github?: CloudSetupStep | null
   allSet?: boolean
   prompt?: string
+  /** D4: GitHub repositories with no clone here. */
+  cloudRepos?: OrcaCloudGitHubRepository[]
+  pickedCloudRepo?: string | null
 }): React.JSX.Element {
+  const [picked, setPicked] = useState<string | null>(pickedCloudRepo)
   const [host, setHost] = useState('local')
   const [recipe, setRecipe] = useState<string | null>(cloudSelected ? 'cloud' : null)
   const signedOut = availability === 'needs-sign-in' || access.state === 'signed-out'
@@ -91,6 +98,20 @@ export function ComposerPreview({
     allSet,
     onSelectOrcaCloud: () => setRecipe('cloud'),
     onUserPick: () => {},
+    ...(cloudRepos
+      ? {
+          cloudOnly: {
+            repos: cloudRepos,
+            showMore: () => {},
+            picked: cloudRepos.find((repo) => repo.fullName === picked) ?? null,
+            githubStep: null,
+            pick: setPicked,
+            clear: () => setPicked(null),
+            moreAccess: () => {},
+            start: async () => true
+          }
+        }
+      : {}),
     ...(panelVisible && !allSet && action !== 'useThisComputer'
       ? { onUseThisComputer: () => setRecipe(null) }
       : {})

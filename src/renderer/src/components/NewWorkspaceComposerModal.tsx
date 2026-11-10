@@ -270,7 +270,8 @@ function QuickTabBody({
     quickAgent,
     handleCreate,
     createDisabled,
-    recordCreatedRef
+    recordCreatedRef,
+    onClose
   })
   // Layer Add Project without replacing the composer. Retain it for close animation and clone/scan cancellation; folder/non-Git navigation still tears down the modal.
   const [addProjectOpen, setAddProjectOpen] = useState(false)

@@ -23132,6 +23132,18 @@
         "memberTitle": "{{team}}’s trial is used up",
         "memberTitleNoTeam": "Your team’s trial is used up",
         "askForPlan": "Ask for a Team plan"
+      },
+      "cloudOnly": {
+        "heading": "On GitHub · Orca Cloud only",
+        "detail": "Orca Cloud clones it. No copy on this computer needed.",
+        "moreAccess": "Give Orca Cloud access to more repositories…",
+        "notOnThisComputer": "Not on this computer · Orca Cloud only",
+        "startFailed": "Couldn’t start the cloud workspace. Nothing was created, and you weren’t charged.",
+        "starting": "Starting {{repo}} in Orca Cloud…",
+        "openLater": "Your cloud workspace started, but this computer couldn’t open it yet. Open it from Cloud workspaces.",
+        "private": "{{owner}} · Private",
+        "public": "{{owner}} · Public",
+        "showMore": "Show more repositories…"
       }
     },
     "JiraIssueWorkspace": {

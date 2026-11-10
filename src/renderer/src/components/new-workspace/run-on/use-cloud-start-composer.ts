@@ -35,6 +35,7 @@ import {
 import { getOrcaCloudStartToast } from './orca-cloud-hours-copy'
 import { useCloudStartSteps } from './use-cloud-start-steps'
 import { useRunOnDefault } from './use-run-on-default'
+import { useCloudOnlyCreate, useCloudOnlyRepo } from './use-cloud-only-repo'
 import { prefersReducedMotion, type CloudStartView } from './cloud-start-view'
 
 export type { CloudStartView } from './cloud-start-view'
@@ -50,7 +51,8 @@ export function useCloudStartComposer({
   prompt,
   agent,
   initialTargetFixed,
-  onCreate,
+  onCreate: createWorkspace,
+  onClose,
   accessOverride
 }: {
   active: boolean
@@ -65,6 +67,8 @@ export function useCloudStartComposer({
   /** The composer was opened on an explicit target (Landing card, a recovery). */
   initialTargetFixed: boolean
   onCreate: () => void
+  /** Closes the composer once a cloud-only repository has started (D4). */
+  onClose?: () => void
   /** Fixtures pin the account's access. */
   accessOverride?: OrcaCloudRunTargetAccess
 }): {
@@ -83,6 +87,19 @@ export function useCloudStartComposer({
   const cloudSelected = selectedRecipeId === ORCA_CLOUD_RECIPE_ID
   const fetched = useOrcaCloudRunTargetAccess(segment === 'enabled' && !accessOverride)
   const access = accessOverride ?? fetched
+  const cloudOnly = useCloudOnlyRepo({
+    enabled: cloudSelected && segment === 'enabled',
+    signedIn: availability !== 'needs-sign-in' && access.state !== 'signed-out'
+  })
+  const onCreate = useCloudOnlyCreate({
+    cloudOnly,
+    createWorkspace,
+    prompt,
+    agent,
+    profileId,
+    hoursToast: getOrcaCloudStartToast(access, translate, navigator.language),
+    onClose
+  })
   const [startedSessionId, setSetupSessionId] = useState<string | null>(null)
   // A composer reopened after setup (e.g. the Checkout return) resumes its saved draft: derived,
   // not copied into state, so it is right on the first render.
@@ -108,6 +125,7 @@ export function useCloudStartComposer({
     agent,
     cloudSelected,
     setupSessionId,
+    githubOverride: cloudOnly.githubStep,
     onGranted: (repoName) => {
       // D2: an owner approved on GitHub. Setup already running starts by itself; otherwise ask.
       if (setupStartedRef.current) {
@@ -171,9 +189,9 @@ export function useCloudStartComposer({
   useEffect(() => {
     if (localSubmitPendingRef.current && !cloudSelected) {
       localSubmitPendingRef.current = false
-      onCreate()
+      createWorkspace()
     }
-  }, [cloudSelected, onCreate])
+  }, [cloudSelected, createWorkspace])
 
   // Setup started from this composer (or its restored draft): when every required row is done,
   // hold "All set", then submit as if ⌘↵ had been pressed (O4).
@@ -276,7 +294,8 @@ export function useCloudStartComposer({
     allSet,
     onSelectOrcaCloud,
     onUserPick: markTouched,
-    ...(panelVisible && localOption && action !== 'useThisComputer'
+    cloudOnly,
+    ...(panelVisible && localOption && action !== 'useThisComputer' && !cloudOnly.picked
       ? { onUseThisComputer: useThisComputer }
       : {})
   }
