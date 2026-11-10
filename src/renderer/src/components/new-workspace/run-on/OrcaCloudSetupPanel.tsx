@@ -118,14 +118,28 @@ function planDetail(step: CloudSetupStep, t: Translate): string | null {
       return (
         t('components.newWorkspace.cloudSetup.planEnded', 'Your Team plan ended.') + memberSuffix
       )
+    // Members read who fixes it and how, per cause (glossary), not a generic "fix it".
     case 'hours':
-      return (
-        t('components.newWorkspace.cloudSetup.outOfHours', 'Out of sandbox hours.') + memberSuffix
-      )
+      return step.canFix === false
+        ? t(
+            'components.newWorkspace.cloudSetup.outOfHoursMember',
+            'Out of sandbox hours. Ask an owner or admin to add hours.'
+          )
+        : t('components.newWorkspace.cloudSetup.outOfHours', 'Out of sandbox hours.')
     case 'spend-cap':
-      return t('components.newWorkspace.cloudSetup.spendCap', 'Spend cap reached.') + memberSuffix
+      return step.canFix === false
+        ? t(
+            'components.newWorkspace.cloudSetup.spendCapMember',
+            'Spend cap reached. Ask an owner or admin to raise the spend cap.'
+          )
+        : t('components.newWorkspace.cloudSetup.spendCap', 'Spend cap reached.')
     case 'payment':
-      return t('components.newWorkspace.cloudSetup.paymentFailed', 'Payment failed.') + memberSuffix
+      return step.canFix === false
+        ? t(
+            'components.newWorkspace.cloudSetup.paymentFailedMember',
+            'Payment failed. Ask an owner or admin to update the payment method.'
+          )
+        : t('components.newWorkspace.cloudSetup.paymentFailed', 'Payment failed.')
     case 'github':
       return t(
         'components.newWorkspace.cloudSetup.githubNeeded',
@@ -226,15 +240,21 @@ export function OrcaCloudSetupPanel({
                   'components.newWorkspace.cloudSetup.subtitleNeedsRepository',
                   'Orca Cloud needs a GitHub repository. Your prompt stays here.'
                 )
-              : cloudSetupNeedsPlan(steps)
+              : // A member can't fix billing, and no browser trip will.
+                steps.some((step) => step.state === 'needed' && step.canFix === false)
                 ? t(
-                    'components.newWorkspace.cloudSetup.subtitleChoosePlan',
-                    'One visit to your browser to choose a plan. Your prompt stays here and starts when you’re done.'
+                    'components.newWorkspace.cloudSetup.subtitleOwnerFixes',
+                    'An owner or admin needs to fix this. Your prompt stays here.'
                   )
-                : t(
-                    'components.newWorkspace.cloudSetup.subtitleNoCard',
-                    'One visit to your browser, no card. Your prompt stays here and starts when you’re done.'
-                  )))}
+                : cloudSetupNeedsPlan(steps)
+                  ? t(
+                      'components.newWorkspace.cloudSetup.subtitleChoosePlan',
+                      'One visit to your browser to choose a plan. Your prompt stays here and starts when you’re done.'
+                    )
+                  : t(
+                      'components.newWorkspace.cloudSetup.subtitleNoCard',
+                      'One visit to your browser, no card. Your prompt stays here and starts when you’re done.'
+                    )))}
       </p>
       {/* One polite announcement per row change ("Team plan, done"). */}
       <ul aria-live="polite" className="mt-2 space-y-1.5">

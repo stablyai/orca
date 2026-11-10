@@ -23131,7 +23131,11 @@
         "trialOffer_one": "{{hours}} sandbox hour to try Orca Cloud",
         "trialOffer_other": "{{hours}} sandbox hours to try Orca Cloud",
         "subtitleChoosePlan": "One visit to your browser to choose a plan. Your prompt stays here and starts when you’re done.",
-        "subtitleNeedsRepository": "Orca Cloud needs a GitHub repository. Your prompt stays here."
+        "subtitleNeedsRepository": "Orca Cloud needs a GitHub repository. Your prompt stays here.",
+        "outOfHoursMember": "Out of sandbox hours. Ask an owner or admin to add hours.",
+        "spendCapMember": "Spend cap reached. Ask an owner or admin to raise the spend cap.",
+        "paymentFailedMember": "Payment failed. Ask an owner or admin to update the payment method.",
+        "subtitleOwnerFixes": "An owner or admin needs to fix this. Your prompt stays here."
       },
       "runOn": {
         "thisComputer": "This computer",
