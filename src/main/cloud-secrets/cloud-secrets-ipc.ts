@@ -17,6 +17,7 @@ import { getOrcaCloudAvailability } from '../hosted-sandbox/hosted-sandbox-insta
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import {
   cloudSecretNameError,
+  cloudSecretSwapped,
   cloudSecretValueError
 } from '../../shared/cloud-secrets/cloud-secret-rules'
 import { desktopKeyValueForCloud } from '../hosted-sandbox/cloud-desktop-keys'

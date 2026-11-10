@@ -93,7 +93,7 @@ export function isOrcaCloudSshConnection(connectionId: string | null | undefined
   if (!connectionId) {
     return false
   }
-  const target = getSshTargetRegistryStore()?.getSshTarget(connectionId)
+  const target = getSshTargetRegistryStore()?.getTarget(connectionId)
   if (!target) {
     return false
   }

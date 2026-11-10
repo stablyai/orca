@@ -32,7 +32,7 @@ const sshTargets = new Map<
   { host: string; label: string; configHost?: string; proxyCommand?: string }
 >()
 vi.mock('../ssh/targets/ssh-target-registry', () => ({
-  getSshTargetRegistryStore: () => ({ getSshTarget: (id: string) => sshTargets.get(id) })
+  getSshTargetRegistryStore: () => ({ getTarget: (id: string) => sshTargets.get(id) })
 }))
 
 const { desktopKeyValueForCloud, isOrcaCloudRuntimeEnvironment } =
