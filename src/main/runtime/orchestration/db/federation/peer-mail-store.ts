@@ -118,6 +118,14 @@ export function insertPeerMailMessage(
   | { message: MessageRow | undefined; duplicate: true } {
   this.db.exec('SAVEPOINT peer_mail_insert')
   try {
+    // A peer Run's conversation keeps its own queue sequence, so it never carries peer mail.
+    if (this.getPeerRunForConversation(params.conversationId)) {
+      throw new OrchestrationError(
+        'request_mismatch',
+        `Conversation ${params.conversationId} belongs to a coordinated Run. Nothing was delivered.`,
+        { effectsApplied: false }
+      )
+    }
     if (params.peerFingerprint !== undefined) {
       const conversation = this.getPeerMailConversation(params.conversationId)
       if (

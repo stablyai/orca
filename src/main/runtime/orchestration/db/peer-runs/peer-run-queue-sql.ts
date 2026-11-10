@@ -25,6 +25,12 @@ CREATE TABLE IF NOT EXISTS federation_relay_sequences (
   PRIMARY KEY (dispatch_id, direction)
 );
 
+-- A Dispatch whose report owner's correction is being written: its edges queue nothing until the
+-- row is removed, which queues the corrected state once, flagged.
+CREATE TABLE IF NOT EXISTS peer_run_corrections (
+  dispatch_id TEXT PRIMARY KEY
+);
+
 CREATE TABLE IF NOT EXISTS message_dispatch_provenance (
   message_id  TEXT PRIMARY KEY,
   dispatch_id TEXT NOT NULL,
@@ -70,7 +76,7 @@ function queueItemStatements(rows: string, kind: string): [string, string] {
 /** One `worker_state` item for a peer-Run Dispatch; its ID is the sequence it is queued under. */
 export function peerRunDispatchStateStatements(
   dispatchId: string,
-  corrected: string,
+  corrected: boolean,
   removed: string
 ): [string, string] {
   return queueItemStatements(
@@ -79,7 +85,7 @@ export function peerRunDispatchStateStatements(
          'v', ${REMOTE_OWNED_WIRE_VERSION}, 'id', 'state_' || ${SEQUENCE},
          'homeRunId', home_run_id, 'peerRunId', peer_run_id,
          'dispatch', json(dispatch_json), 'task', json(task_json),
-         'correctedUnobservedPrompt', json(CASE WHEN ${corrected} THEN 'true' ELSE 'false' END),
+         'correctedUnobservedPrompt', json('${corrected}'),
          'removed', ${removed}
        ) AS payload
      FROM peer_run_dispatch_state WHERE dispatch_id = ${dispatchId}`,
@@ -116,12 +122,15 @@ function peerRunMailStatements(row: string): [string, string] {
 const LATEST_TASK_DISPATCH = (taskId: string) =>
   `(SELECT id FROM dispatch_contexts WHERE task_id = ${taskId} ORDER BY rowid DESC LIMIT 1)`
 
+const NOT_CORRECTING = (dispatchId: string) =>
+  `NOT EXISTS (SELECT 1 FROM peer_run_corrections WHERE dispatch_id = ${dispatchId})`
+
 const trigger = (statements: [string, string]) => `BEGIN ${statements.join(';\n')}; END;`
 
 /**
  * Every final message of a peer Run's mailbox and every lifecycle change of its Dispatches, their
  * workers and their Tasks queue home in the transaction that made them. Rebuilt on every open.
- * The lifecycle graph moves out of `failed` only through the report owner's unobserved-prompt correction.
+ * The report owner's unobserved-prompt correction queues once, flagged, after all its writes.
  */
 export function createPeerRunQueueTriggers(db: Database.Database): void {
   db.exec('BEGIN IMMEDIATE')
@@ -134,6 +143,7 @@ export function createPeerRunQueueTriggers(db: Database.Database): void {
       DROP TRIGGER IF EXISTS trg_peer_run_dispatch_status;
       DROP TRIGGER IF EXISTS trg_peer_run_worker_state;
       DROP TRIGGER IF EXISTS trg_peer_run_task_status;
+      DROP TRIGGER IF EXISTS trg_peer_run_correction;
       CREATE TRIGGER trg_peer_run_mail_insert AFTER INSERT ON messages
       WHEN NEW.to_handle LIKE 'run:%' AND NEW.type <> 'heartbeat'
       ${trigger(peerRunMailStatements('NEW'))}
@@ -141,28 +151,18 @@ export function createPeerRunQueueTriggers(db: Database.Database): void {
       WHEN NEW.to_handle LIKE 'run:%' AND NEW.to_handle <> OLD.to_handle AND NEW.type <> 'heartbeat'
       ${trigger(peerRunMailStatements('NEW'))}
       CREATE TRIGGER trg_peer_run_dispatch_insert AFTER INSERT ON dispatch_contexts
-      ${trigger(peerRunDispatchStateStatements('NEW.id', '0', 'NULL'))}
+      ${trigger(peerRunDispatchStateStatements('NEW.id', false, 'NULL'))}
       CREATE TRIGGER trg_peer_run_dispatch_status AFTER UPDATE OF status ON dispatch_contexts
-      WHEN NEW.status <> OLD.status
-      ${trigger(
-        peerRunDispatchStateStatements(
-          'NEW.id',
-          "OLD.status IN ('failed', 'circuit_broken') AND NEW.status = 'completed'",
-          'NULL'
-        )
-      )}
+      WHEN NEW.status <> OLD.status AND ${NOT_CORRECTING('NEW.id')}
+      ${trigger(peerRunDispatchStateStatements('NEW.id', false, 'NULL'))}
       CREATE TRIGGER trg_peer_run_worker_state AFTER UPDATE OF state ON worker_dispatches
-      WHEN NEW.state <> OLD.state
-      ${trigger(
-        peerRunDispatchStateStatements(
-          'NEW.dispatch_id',
-          "OLD.state = 'failed' AND NEW.state = 'succeeded'",
-          'NULL'
-        )
-      )}
+      WHEN NEW.state <> OLD.state AND ${NOT_CORRECTING('NEW.dispatch_id')}
+      ${trigger(peerRunDispatchStateStatements('NEW.dispatch_id', false, 'NULL'))}
       CREATE TRIGGER trg_peer_run_task_status AFTER UPDATE OF status ON tasks
-      WHEN NEW.status <> OLD.status
-      ${trigger(peerRunDispatchStateStatements(LATEST_TASK_DISPATCH('NEW.id'), '0', 'NULL'))}
+      WHEN NEW.status <> OLD.status AND ${NOT_CORRECTING(LATEST_TASK_DISPATCH('NEW.id'))}
+      ${trigger(peerRunDispatchStateStatements(LATEST_TASK_DISPATCH('NEW.id'), false, 'NULL'))}
+      CREATE TRIGGER trg_peer_run_correction AFTER DELETE ON peer_run_corrections
+      ${trigger(peerRunDispatchStateStatements('OLD.dispatch_id', true, 'NULL'))}
     `)
     db.exec('COMMIT')
   } catch (error) {

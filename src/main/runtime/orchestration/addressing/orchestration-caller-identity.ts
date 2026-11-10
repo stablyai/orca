@@ -42,7 +42,13 @@ export type OrchestrationEntryCaller = OrchestrationSessionCaller | Orchestratio
 
 /** The address, and Run binding key, of the paired Orca coordinating a conversation's Run here. */
 export function peerCoordinatorAddress(conversationId: string): string {
-  return `peer:${conversationId}`
+  return `${PEER_ADDRESS_PREFIX}${conversationId}`
+}
+
+const PEER_ADDRESS_PREFIX = 'peer:'
+
+export function isPeerCoordinatorAddress(value: string | null | undefined): boolean {
+  return !!value?.startsWith(PEER_ADDRESS_PREFIX)
 }
 
 export function peerCoordinatorCaller(peerRun: PeerRunRow): OrchestrationPeerCaller {

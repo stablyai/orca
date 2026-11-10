@@ -31,11 +31,11 @@ export function admitPeerRun(
   try {
     const conversation = this.getPeerMailConversation(peerRun.conversationId)
     const existing = this.getPeerRunForConversation(peerRun.conversationId)
+    // A peer-mail conversation keeps its own queue sequence, so it never becomes a peer Run's.
     if (
-      (conversation &&
-        (conversation.role !== 'peer' || conversation.peer_fingerprint !== peerFingerprint)) ||
-      (existing &&
-        (existing.peer_fingerprint !== peerFingerprint || existing.home_run_id !== peerRun.runId))
+      existing
+        ? existing.peer_fingerprint !== peerFingerprint || existing.home_run_id !== peerRun.runId
+        : conversation
     ) {
       throw new OrchestrationError(
         'request_mismatch',
@@ -44,6 +44,11 @@ export function admitPeerRun(
       )
     }
     const runId = existing?.run_id ?? generateId('run')
+    if (existing && existing.home_label !== peerRun.label) {
+      this.db
+        .prepare('UPDATE peer_runs SET home_label = ? WHERE run_id = ?')
+        .run(peerRun.label, runId)
+    }
     if (!existing) {
       this.db
         .prepare(
@@ -61,7 +66,7 @@ export function admitPeerRun(
     if (!this.getRunRaw(runId)) {
       const coordinator = peerCoordinatorAddress(peerRun.conversationId)
       this.insertRunRow(runId, {
-        objective: `Coordinated from ${existing?.home_label ?? peerRun.label}`,
+        objective: `Coordinated from ${peerRun.label}`,
         coordinatorHandle: coordinator,
         coordinatorPaneKey: coordinator
       })
@@ -79,6 +84,10 @@ export function getPeerRun(this: OrchestrationDb, runId: string): PeerRunRow | u
   return this.db.prepare('SELECT * FROM peer_runs WHERE run_id = ?').get(runId) as
     | PeerRunRow
     | undefined
+}
+
+export function hasPeerRuns(this: OrchestrationDb): boolean {
+  return this.db.prepare('SELECT 1 FROM peer_runs LIMIT 1').get() !== undefined
 }
 
 export function getPeerRunForConversation(
@@ -100,7 +109,7 @@ export function closePeerRun(this: OrchestrationDb, runId: string): void {
 export function queueRemovedPeerRunDispatches(this: OrchestrationDb, reason: string): void {
   const [allocate, queue] = peerRunDispatchStateStatements(
     '?1',
-    '0',
+    false,
     `json_object('reason', ?2)`
   ).map((sql) => this.db.prepare(sql))
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT of one column returns exactly that column.
@@ -119,6 +128,7 @@ export type PeerRunStoreMethods = {
   admitPeerRun: typeof admitPeerRun
   getPeerRun: typeof getPeerRun
   getPeerRunForConversation: typeof getPeerRunForConversation
+  hasPeerRuns: typeof hasPeerRuns
   closePeerRun: typeof closePeerRun
   queueRemovedPeerRunDispatches: typeof queueRemovedPeerRunDispatches
 }
@@ -128,6 +138,7 @@ export function attachPeerRunStore(ctor: { prototype: object }): void {
     admitPeerRun,
     getPeerRun,
     getPeerRunForConversation,
+    hasPeerRuns,
     closePeerRun,
     queueRemovedPeerRunDispatches
   })

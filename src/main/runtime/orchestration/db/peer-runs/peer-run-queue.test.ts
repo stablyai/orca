@@ -5,6 +5,7 @@ import {
   RemoteOwnedWorkerMail,
   RemoteOwnedWorkerState
 } from '../../../../../shared/orchestration/remote-owned-wire'
+import { AGENT_PROMPT_STALLED_ERROR } from '../../../terminal/input/agent-prompt-submission-verification'
 import type { PeerRunRow } from './peer-run-store'
 
 describe("a paired Orca's Run: its queue home", () => {
@@ -74,25 +75,46 @@ describe("a paired Orca's Run: its queue home", () => {
     }
   })
 
-  it("carries the report owner's unobserved-prompt correction as its flag", () => {
+  it("queues the report owner's unobserved-prompt correction once, flagged, with its result", () => {
     const { dispatch, task } = start()
     fail(dispatch.id, task.id)
     db.transitionLifecycle({
       entity: 'dispatch',
       id: dispatch.id,
       from: 'failed',
-      to: 'completed',
-      correction: 'unobserved_prompt_report'
+      to: 'failed',
+      projection: { last_failure: AGENT_PROMPT_STALLED_ERROR }
+    })
+    const before = states().length
+
+    db.settleWorkerReport({
+      taskId: task.id,
+      dispatchId: dispatch.id,
+      outcome: 'succeeded',
+      result: 'actually done'
     })
 
-    expect(states().map((state) => state.correctedUnobservedPrompt)).toEqual([
-      false,
-      false,
-      false,
-      false,
-      false,
-      true
+    expect(states().slice(before)).toEqual([
+      expect.objectContaining({
+        correctedUnobservedPrompt: true,
+        dispatch: expect.objectContaining({ status: 'completed', workerState: 'succeeded' }),
+        task: { status: 'completed', result: 'actually done' }
+      })
     ])
+  })
+
+  it("queues a worker's question with its thread, so the coordinator can answer in it", () => {
+    const { dispatch } = start()
+    const { message } = db.createQuestion({
+      runId: peerRun.run_id,
+      dispatchId: dispatch.id,
+      askerHandle: 'term_w',
+      question: 'Which branch?'
+    })
+    const queued = pending().find((item) => item.message_id === message.id)!
+    expect(RemoteOwnedWorkerMail.parse(JSON.parse(queued.payload)).message.threadId).toBe(
+      message.id
+    )
   })
 
   it('never reuses a sequence after a reset, and a reset tells the coordinator what it removed', () => {
@@ -102,7 +124,7 @@ describe("a paired Orca's Run: its queue home", () => {
     db.resetTasks()
     const removed = states().filter((state) => state.removed)
     expect(removed.map((state) => [state.dispatch.id, state.removed?.reason])).toEqual([
-      [first.dispatch.id, 'reset on this server']
+      [first.dispatch.id, 'reset on the server running it']
     ])
     start()
     db.acknowledgeFederationRelay({
@@ -162,6 +184,38 @@ describe("a paired Orca's Run: its queue home", () => {
     expect(again.task.id).toBe('task_home1')
     expect(again.dispatch.id).not.toBe(first.dispatch.id)
     expect(() => start({ adoptTaskId: 'task_home1' })).toThrow(/only a ready Task can start/)
+  })
+
+  it('keeps a peer Run conversation and a peer-mail conversation apart, so their sequences never collide', () => {
+    const mailConversation = generateId('peerconv')
+    db.insertPeerMailMessage({
+      conversationId: mailConversation,
+      peerFingerprint: 'fingerprint_a',
+      remoteParty: null,
+      message: { id: generateId('msg'), from: 'devA:term_x', to: 'term_w', subject: 'hi' }
+    })
+    expect(() =>
+      db.admitPeerRun({
+        peerFingerprint: 'fingerprint_a',
+        peerRun: { runId: 'run_home2', conversationId: mailConversation, label: 'devA' }
+      })
+    ).toThrow(expect.objectContaining({ code: 'request_mismatch' }))
+    expect(() =>
+      db.insertPeerMailMessage({
+        conversationId: peerRun.conversation_id,
+        peerFingerprint: 'fingerprint_a',
+        remoteParty: null,
+        message: { id: generateId('msg'), from: 'devA:term_x', to: 'term_w', subject: 'hi' }
+      })
+    ).toThrow(expect.objectContaining({ code: 'request_mismatch' }))
+  })
+
+  it("follows a rename of the coordinating Orca's machine", () => {
+    const renamed = db.admitPeerRun({
+      peerFingerprint: 'fingerprint_a',
+      peerRun: { runId: 'run_home', conversationId: peerRun.conversation_id, label: 'devA2' }
+    })
+    expect(renamed.home_label).toBe('devA2')
   })
 
   it('admits no start into a Run its coordinator cancelled', () => {

@@ -1,5 +1,8 @@
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
-import type { OrchestrationPeerCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import {
+  isPeerCoordinatorAddress,
+  type OrchestrationPeerCaller
+} from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { parseOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
 import type { RpcContext } from '../../../core'
@@ -113,7 +116,7 @@ export function resolveSubjectRunId(
     case 'gate':
       return db.getGate(subject)?.run_id
     case 'request':
-      // Receipts are keyed by the caller's own pairing, so they are its alone.
+      // Receipts are keyed by the pairing, so they are its own; the same paired Orca may read another of its Runs' receipts.
       return peer.peerRun.run_id
     case 'worker':
     case 'session':
@@ -157,6 +160,18 @@ function assigneeRunId(db: OrchestrationDb, subject: string): string | undefined
   return row?.run_id
 }
 
+/** Only a paired Orca's own frames speak as it: its address is predictable, so no other caller may
+ *  declare it as its handle or pane and read or bind its Run's mail. */
+export function refusePeerAddressClaim(declared: string | undefined): void {
+  if (isPeerCoordinatorAddress(declared)) {
+    throw new OrchestrationError(
+      'forbidden',
+      `${declared} is a paired Orca's coordinator address, and only that Orca can act as it. No effects were applied.`,
+      NO_EFFECTS
+    )
+  }
+}
+
 /** Pairing is one-way: work running in a paired Orca's Run, its helpers' included, never calls on
  *  to another server, and neither does that Orca through this one. */
 export function refuseServerCallFromPeerRun(
@@ -165,15 +180,13 @@ export function refuseServerCallFromPeerRun(
 ): void {
   const db = ctx.runtime.getOrchestrationDb()
   const caller = ctx.orchestrationCaller
-  const workRunId =
+  // Most servers coordinate no paired Orca's Run, and then the creator lookup (which can refuse) is skipped.
+  const peerRun =
     caller?.kind === 'peer'
-      ? caller.peerRun.run_id
-      : (() => {
-          const creator = resolveDispatchCreator(ctx.runtime, callerHandle, caller)
-          const dispatchId = db.resolveCreatorDispatchId(creator)
-          return dispatchId ? db.getDispatchContextById(dispatchId)?.run_id : undefined
-        })()
-  const peerRun = workRunId ? db.getPeerRun(workRunId) : undefined
+      ? caller.peerRun
+      : db.hasPeerRuns()
+        ? peerRunOfCallerWork(ctx, db, callerHandle)
+        : undefined
   if (peerRun) {
     throw new OrchestrationError(
       'forbidden',
@@ -181,4 +194,15 @@ export function refuseServerCallFromPeerRun(
       NO_EFFECTS
     )
   }
+}
+
+function peerRunOfCallerWork(
+  ctx: RpcContext,
+  db: OrchestrationDb,
+  callerHandle: string | undefined
+): ReturnType<OrchestrationDb['getPeerRun']> {
+  const creator = resolveDispatchCreator(ctx.runtime, callerHandle, ctx.orchestrationCaller)
+  const dispatchId = db.resolveCreatorDispatchId(creator)
+  const runId = dispatchId ? db.getDispatchContextById(dispatchId)?.run_id : undefined
+  return runId ? db.getPeerRun(runId) : undefined
 }

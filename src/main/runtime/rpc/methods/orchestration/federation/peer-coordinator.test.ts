@@ -212,6 +212,30 @@ describe('a paired Orca coordinating its Run on this server', () => {
     expect(db.getRun(peerRunId())?.coordinator_handle).toBe(`peer:${conversationId}`)
   })
 
+  it('cannot be impersonated by a local caller declaring its address', async () => {
+    await twoRuns()
+    const address = `peer:${conversationId}`
+    const mail = db.insertMessage({
+      from: 'term_w',
+      to: address,
+      subject: 'done',
+      runId: peerRunId()
+    })
+    const check = await localCall('orchestration.check', {
+      terminal: address,
+      terminalPaneKey: address
+    })
+    expect(refused(check)).toBe('forbidden')
+    expect(db.getMessageById(mail.id)?.read).toBe(0)
+    const send = await localCall('orchestration.send', {
+      from: 'term_l',
+      senderPaneKey: address,
+      to: 'term_w',
+      subject: 'hi'
+    })
+    expect(refused(send)).toBe('forbidden')
+  })
+
   it('keeps work in its Run, helpers included, from calling on to another server', async () => {
     const { localRun } = await twoRuns()
     const helperTask = db.createTask({ spec: 'helper', runId: peerRunId() })
@@ -294,6 +318,35 @@ describe('a paired Orca coordinating its Run on this server', () => {
     expect(items.items.filter((item) => item.conversationId === other)).toEqual([
       expect.objectContaining({ kind: 'worker_mail' })
     ])
+  })
+
+  it('rotates the page when more conversations are pending than it holds, so none starves', async () => {
+    const conversations = Array.from({ length: 51 }, () => generateId('peerconv'))
+    for (const conversation of conversations) {
+      await peerCall('orchestration.runCurrent', {}, { conversation })
+      const runId = db.getPeerRunForConversation(conversation)!.run_id
+      db.insertMessage({ from: 'term_w', to: `run:${runId}`, subject: 'stuck', runId })
+    }
+    const seen = new Set<string>()
+    for (const id of ['pull_1', 'pull_2']) {
+      const pulled = await dispatcher.dispatch(
+        {
+          id,
+          authToken: 'token',
+          method: 'orchestration.peerMailPull',
+          params: {},
+          orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION
+        },
+        PAIRED
+      )
+      const page = (pulled.ok ? pulled.result : { items: [] }) as {
+        items: { conversationId: string }[]
+      }
+      for (const item of page.items) {
+        seen.add(item.conversationId)
+      }
+    }
+    expect(seen.size).toBe(51)
   })
 
   it('wakes a waiting pull when a worker in its Run changes state', async () => {

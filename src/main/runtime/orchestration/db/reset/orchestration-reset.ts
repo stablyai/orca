@@ -19,7 +19,7 @@ export function runResetTransaction(
     const watermark = readRemovedWorkWatermark(this.db)
     if (removesDispatches) {
       // Their paired coordinator learns of it from its queue, which the reset keeps.
-      this.queueRemovedPeerRunDispatches('reset on this server')
+      this.queueRemovedPeerRunDispatches('reset on the server running it')
     }
     this.db.exec(statements)
     this.db.exec('COMMIT')

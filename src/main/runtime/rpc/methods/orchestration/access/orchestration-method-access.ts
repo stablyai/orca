@@ -3,7 +3,11 @@
 import { types } from 'node:util'
 import type { ZodType } from 'zod'
 import type { RpcContext, RpcTypedMethod, RpcTypedStreamingMethod } from '../../../core'
-import { checkPeerAccess, refuseServerCallFromPeerRun } from './peer-run-access'
+import {
+  checkPeerAccess,
+  refusePeerAddressClaim,
+  refuseServerCallFromPeerRun
+} from './peer-run-access'
 
 type ParsedParams<TSchema extends ZodType | null> = TSchema extends ZodType
   ? TSchema['_output']
@@ -76,6 +80,10 @@ export function checkOrchestrationAccess<P, G>(
   ctx: RpcContext
 ): { params: P; grant: G } {
   const caller = ctx.orchestrationCaller
+  if (caller?.kind !== 'peer') {
+    refusePeerAddressClaim(access.caller && fieldValue(access.caller, params))
+    refusePeerAddressClaim(access.callerPane && fieldValue(access.callerPane, params))
+  }
   const scoped =
     caller?.kind === 'peer'
       ? checkPeerAccess(access, params, ctx.runtime.getOrchestrationDb(), caller)

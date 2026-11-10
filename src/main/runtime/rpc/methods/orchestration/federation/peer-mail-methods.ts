@@ -35,6 +35,9 @@ function requireRuntimePairing(
   return ctx.authenticatedCallerFingerprint
 }
 
+// Where each pairing's next page starts when more conversations are pending than a page holds.
+const pullRotation = new Map<string, number>()
+
 /** Every conversation with pending items gets an equal share of the page, so an item the paired Orca
  *  cannot import yet, which stays at its conversation's head, never starves another conversation. */
 function pendingReplies(db: OrchestrationDb, peerFingerprint: string): FederationRelayItemRow[] {
@@ -42,7 +45,9 @@ function pendingReplies(db: OrchestrationDb, peerFingerprint: string): Federatio
     .listPeerConversationIds(peerFingerprint)
     .filter((id) => db.listPendingFederationRelay(id, 'to_home', 1).length > 0)
   const share = Math.max(1, Math.ceil(PULL_PAGE_SIZE / pending.length))
-  return pending
+  const start = pending.length > PULL_PAGE_SIZE ? (pullRotation.get(peerFingerprint) ?? 0) : 0
+  pullRotation.set(peerFingerprint, (start + PULL_PAGE_SIZE) % Math.max(1, pending.length))
+  return [...pending.slice(start), ...pending.slice(0, start)]
     .slice(0, PULL_PAGE_SIZE)
     .flatMap((id) => db.listPendingFederationRelay(id, 'to_home', share))
     .slice(0, PULL_PAGE_SIZE)
