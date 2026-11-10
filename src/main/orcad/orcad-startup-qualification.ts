@@ -11,6 +11,11 @@ import { listOrcadArtifactFilenames } from './orcad-artifact-identity'
 import { detectNativeHostAbi } from './native-host-abi'
 
 export const ORCAD_STARTUP_QUALIFIED_FILENAME = '.orcad-startup-qualified'
+/**
+ * A writable directory for the marker of a slot installed read-only (the Orca Cloud image). The
+ * launcher opts in by setting it, so every boot from the image skips the disposable preflight.
+ */
+export const ORCAD_STARTUP_QUALIFICATION_DIR_ENV = 'ORCA_ORCAD_STARTUP_QUALIFICATION_DIR'
 const ARTIFACT_STAT_CONCURRENCY = 16
 
 // Launch environment that changes how Node, its native modules or the probe's temp files behave.
@@ -21,16 +26,26 @@ const ORCAD_STARTUP_QUALIFICATION_ENV = [
   'TMPDIR'
 ] as const
 
+function qualificationDirOverride(env: NodeJS.ProcessEnv): string | null {
+  const directory = env[ORCAD_STARTUP_QUALIFICATION_DIR_ENV]
+  return directory && isAbsolute(directory) ? directory : null
+}
+
+function markerPath(directory: string, env: NodeJS.ProcessEnv): string {
+  return join(qualificationDirOverride(env) ?? directory, ORCAD_STARTUP_QUALIFIED_FILENAME)
+}
+
 /**
- * Only a slot a client materialized and launched as managed (SSH, WSL) may hold the marker; app
- * bundles and resources stay unwritten, as with the compile cache.
+ * Only a slot a client materialized and launched as managed (SSH, WSL), or one whose launcher
+ * names a marker directory, may be qualified; app bundles and resources stay unwritten, as with
+ * the compile cache.
  */
 export function isQualifiableOrcadSlot(
   directory: string,
   env: NodeJS.ProcessEnv = process.env,
   resourcesPath: string | undefined = process.resourcesPath
 ): boolean {
-  if (!env[ORCAD_MANAGED_ACTIVATION_ROOT_ENV]) {
+  if (!env[ORCAD_MANAGED_ACTIVATION_ROOT_ENV] && !qualificationDirOverride(env)) {
     return false
   }
   if (!resourcesPath) {
@@ -83,9 +98,10 @@ export async function orcadStartupQualificationKey(
  */
 export async function consumeOrcadStartupQualification(
   directory: string,
-  key: string
+  key: string,
+  env: NodeJS.ProcessEnv = process.env
 ): Promise<boolean> {
-  const marker = join(directory, ORCAD_STARTUP_QUALIFIED_FILENAME)
+  const marker = markerPath(directory, env)
   try {
     if ((await readFile(marker, 'utf8')) !== key) {
       return false
@@ -99,16 +115,20 @@ export async function consumeOrcadStartupQualification(
 }
 
 /** A failed preflight voids any marker, including one a concurrent launch is about to rely on. */
-export async function discardOrcadStartupQualification(directory: string): Promise<void> {
-  await unlink(join(directory, ORCAD_STARTUP_QUALIFIED_FILENAME)).catch(() => {})
+export async function discardOrcadStartupQualification(
+  directory: string,
+  env: NodeJS.ProcessEnv = process.env
+): Promise<void> {
+  await unlink(markerPath(directory, env)).catch(() => {})
 }
 
 /** Written only after readiness; temp + rename so a torn write never matches. Fails open. */
 export async function recordOrcadStartupQualification(
   directory: string,
-  key: string
+  key: string,
+  env: NodeJS.ProcessEnv = process.env
 ): Promise<void> {
-  const marker = join(directory, ORCAD_STARTUP_QUALIFIED_FILENAME)
+  const marker = markerPath(directory, env)
   const temporary = `${marker}.${randomUUID()}.tmp`
   try {
     await writeFile(temporary, key, { mode: 0o600 })

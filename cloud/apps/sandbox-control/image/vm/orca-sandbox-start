@@ -158,7 +158,7 @@ system_node="$(command -v node 2>/dev/null || echo "$node")"
 env -i HOME="$HOME" USER="$(id -un)" LANG=C.UTF-8 TERM=xterm-256color \
   PATH="$ORCA_HOME/tools/bin:$ORCA_HOME/bin:$(dirname "$system_node"):/usr/local/bin:/usr/bin:/bin" \
   ORCA_USER_DATA="$HOME/.orcad-data" ORCA_SANDBOX_ID="$ORCA_SANDBOX_ID" "${managed_env[@]}" \
-  NODE_COMPILE_CACHE="$ORCA_HOME/compile-cache" \
+  NODE_COMPILE_CACHE="$ORCA_HOME/compile-cache" ORCA_ORCAD_STARTUP_QUALIFICATION_DIR="$ORCA_HOME/startup-qualification" \
   ORCA_SESSION_ENV_NAMES="${secret_names[*]}" "${agent_env[@]}" \
   setsid nohup "$node" "$ORCA_HOME/runtime/orcad/orcad-server.js" \
   --port 6768 --bind 0.0.0.0 --pairing-address "$ORCA_PUBLIC_WSS" \
