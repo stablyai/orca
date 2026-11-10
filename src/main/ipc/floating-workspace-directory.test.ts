@@ -109,6 +109,6 @@ describe('floating workspace directory', () => {
     const canonicalElsewhere = await realpath(elsewhere)
     expect(store.settings.floatingTerminalTrustedCwds).not.toContain(canonicalElsewhere)
     store.settings = { ...store.settings, floatingTerminalCwd: canonicalElsewhere }
-    expect(getFloatingWorkspaceFileRoots(store).exactRoots).toEqual([])
+    expect((await getFloatingWorkspaceFileRoots(store)).exactRoots).toEqual([])
   })
 })

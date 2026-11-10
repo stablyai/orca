@@ -1,4 +1,4 @@
-import { constants as fsConstants, realpathSync } from 'node:fs'
+import { constants as fsConstants } from 'node:fs'
 import { access, mkdir, realpath, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
@@ -53,28 +53,30 @@ export function getDefaultFloatingWorkspacePath(): string {
   return path.join(getAppEnvironment().getPath('userData'), FLOATING_WORKSPACE_DIRNAME)
 }
 
-let resolvedHomeCache: { home: string; real: string } | null = null
+type ResolvedHome = { home: string; real: string }
+
+let resolvedHomeCache: { home: string; real: Promise<string> } | null = null
 
 /** Home as spelled and as resolved through any link (e.g. /home -> /var/home), resolved once per home. */
-function resolvedHome(): { home: string; real: string } {
+async function resolvedHome(): Promise<ResolvedHome> {
   const home = path.resolve(getAppEnvironment().getPath('home'))
   if (resolvedHomeCache?.home !== home) {
-    let real = home
-    try {
-      real = path.resolve(realpathSync.native(home))
-    } catch {
+    resolvedHomeCache = {
+      home,
       // An unreadable home keeps its spelled path.
+      real: realpath(home).then(
+        (real) => path.resolve(real),
+        () => home
+      )
     }
-    resolvedHomeCache = { home, real }
   }
-  return resolvedHomeCache
+  return { home, real: await resolvedHomeCache.real }
 }
 
 /** A folder above home (such as `/`) was never what trusting a cwd meant; home itself, trusted explicitly, is. */
-function isAboveHomeDirectory(dir: string): boolean {
+function isAboveHomeDirectory(dir: string, { home: spelled, real }: ResolvedHome): boolean {
   const fold = (value: string): string =>
     process.platform === 'linux' ? value : value.toLowerCase()
-  const { home: spelled, real } = resolvedHome()
   return [spelled, real].some((home) => {
     const rel = path.relative(fold(dir), fold(home))
     return rel !== '' && rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel)
@@ -82,24 +84,26 @@ function isAboveHomeDirectory(dir: string): boolean {
 }
 
 /** Roots the floating workspace owns for file access; an untrusted cwd, or one above home, adds none. */
-export function getFloatingWorkspaceFileRoots(store: {
+export async function getFloatingWorkspaceFileRoots(store: {
   getSettings(): FloatingWorkspaceSettings
-}): {
+}): Promise<{
   extraRoots: string[]
   exactRoots: string[]
-} {
+}> {
   const settings = store.getSettings()
   const configuredPath =
     typeof settings.floatingTerminalCwd === 'string' ? settings.floatingTerminalCwd.trim() : ''
+  if (!configuredPath) {
+    return { extraRoots: [getDefaultFloatingWorkspacePath()], exactRoots: [] }
+  }
+  const home = await resolvedHome()
   // Canonical home: trust entries are canonical, so `~` must expand to the spelling they store.
-  const cwd = configuredPath
-    ? resolveFloatingWorkspacePath(configuredPath, resolvedHome().real)
-    : null
+  const cwd = resolveFloatingWorkspacePath(configuredPath, home.real)
   return {
     extraRoots: [getDefaultFloatingWorkspacePath()],
     // Exact: trusted entries are canonical, so a trusted cwd later replaced by a link fails closed.
     exactRoots:
-      cwd && isTrustedFloatingWorkspaceDirectory(cwd, settings) && !isAboveHomeDirectory(cwd)
+      isTrustedFloatingWorkspaceDirectory(cwd, settings) && !isAboveHomeDirectory(cwd, home)
         ? [cwd]
         : []
   }
