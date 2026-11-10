@@ -208,8 +208,7 @@ describe('switching back to a workspace that was not watched', () => {
         gitStatusSignature: 'g',
         sections: [section('clean.ts', false), section('dirty.ts', true)],
         sectionHeights: {},
-        loadedIndices: [0, 1],
-        sideBySide: false
+        loadedIndices: [0, 1]
       }
     })
     harness.readRuntimeFileContent.mockResolvedValue({ content: 'v1', isBinary: false })

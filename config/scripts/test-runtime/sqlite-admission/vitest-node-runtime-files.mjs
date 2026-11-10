@@ -118,7 +118,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/browser/cookies/sources/browser-cookie-import-undecryptable.test.ts',
   'src/main/browser/cookies/sources/browser-cookie-source-partition.test.ts',
   // Playwright's CDP transport needs Node's WebSocket implementation.
-  'src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-adapter-compatibility.electron.test.ts',
   'src/main/browser/guest-lifecycle/popups/presentation/popup-origin-chrome.electron.test.ts',
   'src/main/browser/guest-lifecycle/navigation/browser-link-materialization.electron.test.ts',
   'src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-compatibility.electron.test.ts',

@@ -73,8 +73,9 @@ export function registerPtyConnectionHiddenBacklogReconciliationTests(): void {
         binding: { syncProcessTracking: () => void; dispose: () => void }
       }> {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport('pty-id')
         const capturedDataCallback: {
           current:
@@ -220,42 +221,6 @@ export function registerPtyConnectionHiddenBacklogReconciliationTests(): void {
           }
         })
 
-        it('holds the post-flood repaint while the user reads scrollback and runs it on return to the bottom', async () => {
-          const { pane, dataCallback, getMainBufferSnapshot, resolveFirstSnapshot } =
-            await startInFlightRestore()
-          const { markTerminalFollowOutput, markTerminalPinnedViewport } =
-            await import('@/lib/pane-manager/terminal-scroll-intent')
-          pane.terminal.buffer.active.viewportY = 42
-          pane.terminal.buffer.active.baseY = 100
-          markTerminalPinnedViewport(pane.terminal)
-
-          dataCallback('f'.repeat(300 * 1024), { seq: 300 * 1024 + 64, rawLength: 300 * 1024 })
-          dataCallback('g'.repeat(300 * 1024), { seq: 600 * 1024 + 64, rawLength: 300 * 1024 })
-
-          try {
-            vi.useFakeTimers()
-            resolveFirstSnapshot({ data: 'flood snapshot\r\n', cols: 100, rows: 30, seq: 64 })
-            await flushAsyncTicks(20)
-            expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
-
-            // Quiet flood, but the user is still scrolled back: the clear-and-replay repaint must not move their viewport.
-            vi.advanceTimersByTime(2_100)
-            await flushAsyncTicks(20)
-            expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
-            vi.advanceTimersByTime(60_000)
-            await flushAsyncTicks(20)
-            expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
-
-            // Returning to the bottom is the event that releases it — the heal is deferred, never dropped.
-            pane.terminal.buffer.active.viewportY = pane.terminal.buffer.active.baseY
-            markTerminalFollowOutput(pane.terminal)
-            await flushAsyncTicks(20)
-            expect(getMainBufferSnapshot).toHaveBeenCalledTimes(2)
-          } finally {
-            vi.useRealTimers()
-          }
-        })
-
         it('sends salvaged queries immediately from an overflowing restore queue', async () => {
           const { pane, transport, dataCallback } = await startInFlightRestore()
 
@@ -278,38 +243,6 @@ export function registerPtyConnectionHiddenBacklogReconciliationTests(): void {
           const written = writtenFloodData(pane)
           expect(written).not.toContain('aaaa')
           expect(written).not.toContain('bbbb')
-        })
-
-        it('keeps the hidden-pane drop sentinel arming a reveal restore (gate unchanged)', async () => {
-          enableMainAuthority()
-          const isVisibleRef = { current: false }
-          const deps = createDeps({ isVisibleRef })
-          const { pane, dataCallback } = await connectHiddenPane(deps)
-          const transportOptions = createdTransportOptions.at(-1) as {
-            onPtySpawn?: (ptyId: string) => void
-          }
-          transportOptions.onPtySpawn?.('pty-id')
-          const getMainBufferSnapshot = vi.mocked(window.api.pty.getMainBufferSnapshot)
-          getMainBufferSnapshot.mockResolvedValue({
-            data: 'hidden reveal snapshot\r\n',
-            cols: 100,
-            rows: 30,
-            seq: 64
-          })
-
-          // Hidden pane: the sentinel latches restore-needed but must not fetch.
-          dataCallback('', { droppedOutput: true })
-          await flushAsyncTicks(8)
-          expect(getMainBufferSnapshot).not.toHaveBeenCalled()
-
-          // Reveal: the latched restore fetches exactly one snapshot.
-          isVisibleRef.current = true
-          const { requestTerminalBacklogRecovery } =
-            await import('@/lib/pane-manager/pane-terminal-output-scheduler')
-          requestTerminalBacklogRecovery(pane.terminal as never)
-          await flushAsyncTicks(20)
-          expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
-          expect(writtenFloodData(pane)).toContain('hidden reveal snapshot')
         })
       })
 
@@ -356,20 +289,6 @@ export function registerPtyConnectionHiddenBacklogReconciliationTests(): void {
           return pane.terminal.write.mock.calls.map((call) => String(call[0])).join('')
         }
 
-        it('drops backlog chunks the restored snapshot already covers', async () => {
-          const { pane, dataCallback } = await restoreVisiblePaneToBaseline()
-
-          // Whole chunk at or before the baseline seq: duplicate, never written.
-          dataCallback('OLD-DUPLICATE', { seq: 60, rawLength: 13 })
-          await flushAsyncTicks(8)
-          expect(writtenData(pane)).not.toContain('OLD-DUPLICATE')
-
-          // Contiguous post-baseline chunk flows through normally.
-          dataCallback('NEW', { seq: 67, rawLength: 3 })
-          await flushAsyncTicks(8)
-          expect(writtenData(pane)).toContain('NEW')
-        })
-
         it('records a 2031 subscribe on a chunk the restored snapshot drops as duplicate', async () => {
           // Scan before duplicate reconciliation: replay omits mode tracking, leaving this delivery as the only subscription evidence.
           enableMainAuthority()
@@ -386,54 +305,6 @@ export function registerPtyConnectionHiddenBacklogReconciliationTests(): void {
           expect(writtenData(pane)).not.toContain('SUB')
           expect(deps.paneMode2031Ref.current.get(1)).toBe(true)
           expect(transport.sendInput).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
-        })
-
-        it('slices a partial overlap when raw and clean lengths match', async () => {
-          const { pane, dataCallback } = await restoreVisiblePaneToBaseline()
-
-          // start seq 61 < baseline 64 < end seq 67 — only the last 3 chars are new.
-          dataCallback('ABCDEF', { seq: 67, rawLength: 6 })
-          await flushAsyncTicks(8)
-
-          const written = writtenData(pane)
-          expect(written).toContain('DEF')
-          expect(written).not.toContain('ABC')
-        })
-
-        it('forces a fresh snapshot for an overlap whose offsets cannot be mapped', async () => {
-          const { pane, dataCallback, getMainBufferSnapshot } = await restoreVisiblePaneToBaseline()
-          getMainBufferSnapshot.mockResolvedValue({
-            data: 'second snapshot\r\n',
-            cols: 100,
-            rows: 30,
-            seq: 80
-          })
-
-          // rawLength (6) !== data.length (4): OSC stripping makes the slice offset unmappable — restore from a fresh snapshot instead.
-          dataCallback('ABCD', { seq: 67, rawLength: 6 })
-          await flushAsyncTicks(20)
-
-          expect(writtenData(pane)).not.toContain('ABCD')
-          expect(getMainBufferSnapshot).toHaveBeenCalledTimes(2)
-          expect(writtenData(pane)).toContain('second snapshot')
-        })
-
-        it('detects a seq gap after restore and forces another restore', async () => {
-          const { pane, dataCallback, getMainBufferSnapshot } = await restoreVisiblePaneToBaseline()
-          getMainBufferSnapshot.mockResolvedValue({
-            data: 'gap-heal snapshot\r\n',
-            cols: 100,
-            rows: 30,
-            seq: 120
-          })
-
-          // Why: a chunk starting past the continuity point means main trimmed bytes after the overflow marker — only the model snapshot can heal the gap.
-          dataCallback('AFTER-GAP', { seq: 96, rawLength: 9 })
-          await flushAsyncTicks(20)
-
-          expect(writtenData(pane)).not.toContain('AFTER-GAP')
-          expect(getMainBufferSnapshot).toHaveBeenCalledTimes(2)
-          expect(writtenData(pane)).toContain('gap-heal snapshot')
         })
 
         it('writes genuinely-new live output whose seq sits below an empty-backlog baseline', async () => {

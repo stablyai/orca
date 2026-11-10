@@ -65,7 +65,9 @@ vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-verified-input', () =
 vi.mock('@/runtime/hosted-terminals/streams/runtime-terminal-data-subscription', () => ({
   subscribeToRuntimeTerminalData: vi.fn()
 }))
-vi.mock('@/lib/agent-ready-wait', () => ({ waitForAgentReady: async () => ({ ready: false }) }))
+vi.mock('@/lib/agent-session/messaging/paste/agent-ready-wait', () => ({
+  waitForAgentReady: async () => ({ ready: false })
+}))
 vi.mock('@/lib/telemetry', () => ({ track: vi.fn(), tuiAgentToAgentKind: mockLaunchAgentKind }))
 const mockLaunchAgentKind = vi.hoisted(() => () => 'claude')
 vi.mock('../../src/shared/agent-kind', async (importOriginal) => ({
@@ -314,7 +316,11 @@ describe('a pane that starts its own agent launch', () => {
     const env = providerSpawn.mock.calls[0]?.[0]?.env ?? {}
     expect(env.ORCA_AGENT_LAUNCH_TOKEN).toMatch(/.+/)
     expect(JSON.stringify(runtime.registerPty.mock.calls)).toContain(
-      JSON.stringify({ launchToken: env.ORCA_AGENT_LAUNCH_TOKEN, launchAgent: 'claude' })
+      JSON.stringify({
+        launchToken: env.ORCA_AGENT_LAUNCH_TOKEN,
+        launchAgent: 'claude',
+        launchConfig: { agentArgs: '', agentEnv: {} }
+      })
     )
   })
 

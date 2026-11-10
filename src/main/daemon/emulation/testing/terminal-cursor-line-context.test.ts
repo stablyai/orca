@@ -119,6 +119,32 @@ describe('readTerminalCursorLineContext', () => {
   })
 
   it.each([
+    { typed: '', caret: 'T', dim: 'ry "how do I log an error?"', draft: null, typedText: '' },
+    { typed: '', caret: 'f', dim: 'ix the login bug', draft: 'fix the login bug', typedText: '' },
+    { typed: '', caret: 'a', dim: ' quick fix', draft: 'a quick fix', typedText: '' },
+    { typed: '/mo', caret: 'd', dim: 'el', draft: '/model', typedText: '/mo' },
+    { typed: '/commi', caret: 't', dim: ' [message]', draft: '/commit', typedText: '/commit' }
+  ])(
+    "reads Claude's caret glyph $caret after '$typed' before dim '$dim'",
+    ({ typed, caret, dim, draft, typedText }) => {
+      const cols = 80
+      const terminal = new Terminal({ cols, rows: 8, allowProposedApi: true })
+      try {
+        writeSync(
+          terminal,
+          `\x1b[?25l${'─'.repeat(cols)}\r\n❯ ${typed}\x1b7\x1b[7m${caret}\x1b[27m\x1b[2m${dim}\x1b[22m\r\n${'─'.repeat(cols)}\x1b8`
+        )
+        const context = readTerminalCursorLineContext(terminal, terminal.rows)
+        expect(context).toMatchObject({ cursorHidden: true, cursorInverse: true })
+        expect(detectTerminalComposerDraft(context)?.text ?? null).toBe(draft)
+        expect(readTerminalComposerTypedText(context)).toBe(typedText)
+      } finally {
+        terminal.dispose()
+      }
+    }
+  )
+
+  it.each([
     { cols: 19, cursorRowTail: 'proceed with the ', continuation: 'release' },
     { cols: 18, cursorRowTail: 'proceed with the', continuation: ' release' }
   ])(

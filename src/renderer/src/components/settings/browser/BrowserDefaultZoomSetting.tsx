@@ -22,7 +22,7 @@ export function BrowserDefaultZoomSetting({
 
   return (
     <SearchableSetting
-      title={t('auto.components.settings.BrowserDefaultZoomSetting.265597101f', 'Default Zoom')}
+      title={t('auto.components.settings.BrowserDefaultZoomSetting.f3d989184e', 'Default zoom')}
       description={t(
         'auto.components.settings.BrowserDefaultZoomSetting.siteDefault',
         "Zoom for sites you haven't zoomed."
@@ -32,7 +32,7 @@ export function BrowserDefaultZoomSetting({
     >
       <div className="space-y-0.5">
         <Label>
-          {t('auto.components.settings.BrowserDefaultZoomSetting.265597101f', 'Default Zoom')}
+          {t('auto.components.settings.BrowserDefaultZoomSetting.f3d989184e', 'Default zoom')}
         </Label>
         <p className="text-xs text-muted-foreground">
           {t(

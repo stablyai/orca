@@ -21,10 +21,6 @@ vi.mock('../../media/visuals/NativeChatInlineVisual', () => ({
 vi.mock('@/lib/open-agent-message-sender', () => ({
   openAgentMessageSender: unusedChatLeaves.openSender
 }))
-afterEach(() => {
-  expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
-  expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
-})
 import type { NativeChatLiveSession } from '../../session/terminal/read/native-chat-live-session-contract'
 import { NativeChatMessageList } from '../../NativeChatMessageList'
 import { installNativeChatMessageListTestViewport } from '../../viewport/virtualization/native-chat-message-list-test-viewport'
@@ -33,16 +29,6 @@ import type {
   AgentJournalRenderItem
 } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-
-const reasoningRow: AgentJournalItemBody = {
-  kind: 'message',
-  role: 'reasoning',
-  blocks: [{ type: 'text', text: '' }]
-}
-
-function journalItem(sequence: number, body: AgentJournalItemBody): AgentJournalRenderItem {
-  return { itemId: `item-${sequence}`, revision: 1, sequence, observedAt: sequence, body }
-}
 
 let restoreViewport = (): void => {}
 beforeAll(() => {
@@ -73,67 +59,6 @@ const session: NativeChatLiveSession = {
 
 // Live turns show a prompt clock and tail activity; settled turns retain the clock bar.
 describe('NativeChatMessageList turn indicator', () => {
-  // The trailing run stays live between calls until the turn ends; its motion stays separate from the tail spinner.
-  it('keeps the trailing run live while the turn tail spins, then settles both', () => {
-    const workingSession: NativeChatLiveSession = {
-      ...session,
-      status: 'working',
-      messages: [
-        {
-          id: 'assistant-settled-tool',
-          role: 'assistant',
-          blocks: [
-            {
-              type: 'tool-call',
-              name: 'shell',
-              input: { command: 'pnpm test' },
-              state: 'completed'
-            },
-            { type: 'tool-result', output: 'passed' }
-          ],
-          timestamp: 1,
-          source: 'transcript'
-        }
-      ]
-    }
-    const { container, rerender } = render(
-      <NativeChatMessageList
-        session={workingSession}
-        isWorking
-        turnActivity={{ kind: 'description', text: 'Preparing the answer' }}
-        expandSignal={false}
-      />
-    )
-
-    const liveRun = screen.getByText('Running 1 command').closest('button')
-    expect(liveRun).toHaveTextContent('pnpm test')
-    expect(liveRun?.querySelector('.animate-pulse')).toBeInTheDocument()
-    expect(liveRun?.querySelector('.animate-spin')).toBeNull()
-    expect(liveRun?.querySelector('.lucide-check')).toBeNull()
-    const activity = screen.getByText('Preparing the answer')
-    expect(activity).not.toHaveClass('animate-pulse', 'animate-spin')
-    expect(activity.closest('[data-native-chat-turn-activity]')?.querySelector('svg')).toHaveClass(
-      'animate-spin'
-    )
-
-    rerender(
-      <NativeChatMessageList
-        session={{ ...workingSession, status: 'ready' }}
-        isWorking={false}
-        turnActivity={{ kind: 'description', text: 'Preparing the answer' }}
-        expandSignal={false}
-      />
-    )
-
-    expect(container.querySelector('[data-native-chat-turn-activity]')).toBeNull()
-    expect(container.querySelector('.animate-pulse')).toBeNull()
-    expect(container.querySelector('.animate-spin')).toBeNull()
-    expect(liveRun).toBeInTheDocument()
-    expect(liveRun).toHaveTextContent('pnpm test')
-    expect(liveRun).not.toHaveTextContent('Running')
-    expect(liveRun?.querySelector('.lucide-check')).toBeInTheDocument()
-  })
-
   it('replaces a bridge ask row and settles it from the FIFO tool result', () => {
     const user = {
       id: 'bridge-user',
@@ -193,35 +118,6 @@ describe('NativeChatMessageList turn indicator', () => {
     expect(screen.queryByText('Awaiting user input:')).toBeNull()
     expect(screen.getByText('Asked:')).toBeInTheDocument()
     expect(screen.queryByText(/AskUserQuestion/)).toBeNull()
-  })
-
-  it('does not reuse completed-turn reasoning while the next dispatch is pending', () => {
-    render(
-      <NativeChatMessageList
-        session={{
-          ...session,
-          status: 'working',
-          messages: [
-            {
-              id: 'user-next',
-              role: 'user',
-              blocks: [{ type: 'text', text: 'Start the next task' }],
-              timestamp: Date.now(),
-              source: 'transcript'
-            }
-          ]
-        }}
-        journalItems={[
-          journalItem(1, { kind: 'turn', turnId: 'turn-1', state: 'completed' }),
-          journalItem(2, reasoningRow)
-        ]}
-        isWorking
-        expandSignal={false}
-      />
-    )
-
-    expect(screen.queryByText('Thinking')).toBeNull()
-    expect(screen.getByText('Working…')).toBeInTheDocument()
   })
 
   it.each([

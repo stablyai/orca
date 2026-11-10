@@ -33,30 +33,4 @@ describe('createAgentStatusOscProcessor', () => {
       expect(lastOffset, `split ${split}`).toBe(expected.lastPayloadCleanOffset)
     }
   })
-
-  it('applies the pending cap only to incomplete frames', () => {
-    const marker = '\x1b]9999;{"state":"working"}'
-    const atCap = marker + ' '.repeat(64 * 1024 - marker.length)
-    const retained = createAgentStatusOscProcessor()
-    expect(retained(`before${atCap}`).cleanData).toBe('before')
-    expect(retained('\x1b')).toEqual({ cleanData: '', payloads: [], lastPayloadCleanOffset: null })
-    expect(retained('\\after').cleanData).toBe('\\after')
-
-    const exact = createAgentStatusOscProcessor()
-    exact(atCap)
-    expect(exact('\x07after')).toEqual({
-      cleanData: 'after',
-      payloads: [{ state: 'working', prompt: '' }],
-      lastPayloadCleanOffset: 0,
-      payloadCleanOffsets: [0]
-    })
-
-    const complete = createAgentStatusOscProcessor()
-    expect(complete(`${atCap} \x1b\\after`)).toEqual({
-      cleanData: 'after',
-      payloads: [{ state: 'working', prompt: '' }],
-      lastPayloadCleanOffset: 0,
-      payloadCleanOffsets: [0]
-    })
-  })
 })

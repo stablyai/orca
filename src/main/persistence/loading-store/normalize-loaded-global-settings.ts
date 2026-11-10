@@ -17,7 +17,7 @@ import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/s
 import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/native-chat/native-chat-shell-environment'
 import { publishedLegacyChatPermissionMode } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
-  expandWorkspaceDirHome,
+  normalizeLoadedWorkspaceDirSetting,
   stripRetiredGlobalSettings
 } from '../applying-settings/terminal-settings-migrations'
 import { readLegacySidekickFlag } from '../applying-settings/onboarding-normalization'
@@ -88,7 +88,10 @@ export function normalizeLoadedGlobalSettings(
   return {
     ...defaults.settings,
     // Legacy stored booleans cannot distinguish opt-in from the old default; retain explicit true.
-    ...expandWorkspaceDirHome(stripRetiredGlobalSettings(parsed.settings)),
+    ...normalizeLoadedWorkspaceDirSetting(
+      stripRetiredGlobalSettings(parsed.settings),
+      defaults.settings
+    ),
     agentDefaultSurface: normalizeAgentDefaultSurface(parsed.settings?.agentDefaultSurface),
     nativeChatAppearance: normalizeNativeChatAppearanceSettings(
       parsed.settings?.nativeChatAppearance

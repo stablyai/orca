@@ -1,5 +1,6 @@
 import { Check } from 'lucide-react'
-import { AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
+import type { AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { cn } from '@/lib/utils'
 
 export function AgentSectionHeader({

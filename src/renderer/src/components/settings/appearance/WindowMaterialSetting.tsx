@@ -133,7 +133,7 @@ export function WindowMaterialSetting({
   const t = useTranslate()
   const host = rendererWindowMaterialHost()
   const selectable = selectableWindowMaterials(host)
-  const label = t('settings.windowMaterial.title', 'Window Material')
+  const label = t('settings.windowMaterial.fc2ba9b528', 'Window material')
   // Why compare resolved values: opacity and Reduce Visual Effects also decide the material.
   const restartPending =
     resolveWindowMaterial(settings, host, readPrefersReducedTransparency()) !==

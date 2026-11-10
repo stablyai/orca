@@ -80,8 +80,9 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       // The completion settings subscription is shared per module load.
       await loadFreshTerminalModules()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-hook')
       transportFactoryQueue.push(transport)
       enableActiveRuntimeEnvironment()
@@ -188,8 +189,9 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       )
       await loadFreshTerminalModules()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-crashed-codex')
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
@@ -282,8 +284,9 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
 
     it('drops an exited agent completion when a replacement agent hook row is active', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks5 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-replaced-codex')
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()
@@ -355,8 +358,9 @@ export function registerPtyConnectionHookCompletionSideEffectsTests(): void {
       const { dispatchAgentHookTerminalLifecycle } =
         await import('../../agent-completion/agent-hook-terminal-lifecycle')
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks7 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-replaced-codex')
       transportFactoryQueue.push(transport)
       vi.useFakeTimers()

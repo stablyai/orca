@@ -11,7 +11,7 @@ import {
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { buildAgentResumeStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-resume-startup'
 import { buildAgentStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-startup'
-import { resolveResumeLaunchRecipe } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { resolveResumeLaunchRecipe } from '../../../../shared/agent-launch/choices/resume-launch-recipe'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import {
   resolveWslHostAgentLaunchInputs,
@@ -91,7 +91,7 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
       agent: record.agent,
       providerSession,
       cmdOverrides: settings.agentCmdOverrides ?? {},
-      ...resolveResumeLaunchRecipe(launchConfig),
+      ...resolveResumeLaunchRecipe(launchConfig, record.agent, providerSession),
       platform: launchRuntime.platform,
       shell: agentLaunchQuotingShell(launchRuntime),
       isRemote: Boolean(workspace.connectionId),

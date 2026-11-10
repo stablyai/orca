@@ -3,12 +3,15 @@
 // Main frames draw editor tabs; opens carry view data for diff/preview/conflict in layout-owner builds.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import { remapOpenEditorTabsForPathChange } from '@/lib/remap-open-editor-tabs-for-path-change'
+import { remapOpenEditorTabsForPathChange } from '@/lib/editor/file-operations/remap-open-editor-tabs-for-path-change'
 import type { AppState } from '@/store/types'
 import type { LayoutCommand } from '../../../../../../shared/workspace-layout/workspace-layout-command-types'
 import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
-import { editorMoveOwnerFromContext, type EditorMoveOwner } from '@/lib/open-editor-move-owner'
+import {
+  editorMoveOwnerFromContext,
+  type EditorMoveOwner
+} from '@/lib/editor/file-operations/open-editor-move-owner'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain

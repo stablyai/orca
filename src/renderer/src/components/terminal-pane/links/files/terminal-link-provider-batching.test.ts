@@ -21,7 +21,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/language-detect', () => ({
+vi.mock('../../../../../../shared/editor-language/editor-language-detect', () => ({
   detectLanguage: (filePath: string) => (filePath.endsWith('.md') ? 'markdown' : 'plaintext')
 }))
 

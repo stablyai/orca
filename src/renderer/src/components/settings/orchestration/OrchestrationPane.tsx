@@ -2,9 +2,9 @@ import type { BundledSkillPlan } from '../../../../../shared/bundled-skill-plan'
 import { useCallback, useState } from 'react'
 import { OrchestrationSkillPromptDialog } from './OrchestrationSkillPromptDialog'
 import { buildSkillCommandForRuntime } from '../../../lib/skill-runtime-command'
-import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
+import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/skills/installation/agent-feature-install-commands'
 import { ArrowRightLeft, GitBranch, ListChecks, Workflow, type LucideIcon } from 'lucide-react'
-import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
 import type { SkillUsageExample } from '@/lib/skill-usage-example'
 import { getOrchestrationUsageExamples } from '@/lib/orchestration-usage-examples'
 import {
@@ -99,7 +99,7 @@ export function OrchestrationPane({
 
   return (
     <SearchableSetting
-      title={t('auto.components.settings.OrchestrationPane.191ac34567', 'Agent Orchestration')}
+      title={t('auto.components.settings.OrchestrationPane.8a94078d05', 'Agent orchestration')}
       description={t(
         'auto.components.settings.OrchestrationPane.2aacdb0517',
         'Coordinate coding agents across handoffs, worktree handovers, and child-agent work.'

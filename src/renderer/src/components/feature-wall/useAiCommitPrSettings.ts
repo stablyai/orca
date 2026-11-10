@@ -11,7 +11,7 @@ import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../../../../shared/source-control
 import { getDefaultSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { getTextGenerationModels } from '../../../../shared/source-control/ai/settings/source-control-ai-model-selection'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { useAppStore } from '@/store/index'
 import type {
   AgentPickerDraft,

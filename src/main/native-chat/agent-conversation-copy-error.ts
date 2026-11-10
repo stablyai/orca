@@ -8,6 +8,8 @@ import type { AgentSessionRefusalDetailsByCode } from '../../shared/agent-sessio
 /** Only copy errors authored here may pass through the host's generic provider failure. */
 export class AgentConversationCopyError extends Error {}
 
+export class AgentConversationCopyStartError extends AgentConversationCopyError {}
+
 export function agentConversationCopyRefusal<C extends AgentSessionWireRefusalCode>(
   code: C,
   details: NoInfer<AgentSessionRefusalDetailsByCode[C]>,
