@@ -61,7 +61,13 @@ describe('structured canonical production slice', () => {
       providerSession: { key: 'session_id', id: 'resume-only' },
       launchedAt: 100
     })
-    expect(deps.getAgentStatusSnapshotForPane(PANE)).toEqual([])
+    expect(deps.getPublicAgentStatusSnapshotForPane(PANE)).toEqual([])
+    expect(deps.getAgentStatusSnapshotForPane(PANE)).toEqual([
+      expect.objectContaining({
+        providerSessionOnly: true,
+        providerSession: { key: 'session_id', id: 'resume-only' }
+      })
+    ])
     expect(deps.getAgentProviderSessionRowsForPane(PANE)).toEqual([
       expect.objectContaining({
         providerSessionOnly: true,
@@ -78,7 +84,7 @@ describe('structured canonical production slice', () => {
     expect(deps.getAgentStatusSnapshotForPane(PANE).map(({ state }) => state)).toEqual(['working'])
     expect(
       deps
-        .getAgentStatusSnapshotForPane(PANE_KEY)
+        .getPublicAgentStatusSnapshotForPane(PANE_KEY)
         .map(({ agentType, state }) => ({ agentType, state }))
     ).toEqual([
       { agentType: 'codex', state: 'working' },

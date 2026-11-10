@@ -51,7 +51,7 @@ export abstract class OrcaRuntimeWithAgentOrchestrationDependencies extends Orca
       getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle),
       getAgentStatusSnapshot: () => this.getOrchestrationFleetAgentStatusSnapshot(),
       getAgentStatusForPaneKey: (paneKey, contextForPane) =>
-        (this.getAgentStatusSnapshotForPaneFn?.(paneKey) ?? []).map((entry) =>
+        (this.publicPaneStatusFn?.(paneKey) ?? []).map((entry) =>
           mintAgentStatusFleetEvidence(
             entry,
             {

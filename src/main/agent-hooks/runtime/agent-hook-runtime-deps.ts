@@ -18,7 +18,9 @@ export function agentHookRuntimeDeps(
       server.observeClaudeTerminalEvidence(paneKey, evidence),
     getAgentStatusSnapshot: () =>
       server.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
-    getAgentStatusSnapshotForPane: (paneKey) => server.getPublicStatusSnapshotForPane(paneKey),
+    getAgentStatusSnapshotForPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),
+    getPublicAgentStatusSnapshotForPane: (paneKey) =>
+      server.getPublicStatusSnapshotForPane(paneKey),
     // Include resume identities so mobile can locate provider transcripts, including Pi sessions.
     getAgentProviderSessionSnapshot: (tabId) =>
       tabId === undefined
