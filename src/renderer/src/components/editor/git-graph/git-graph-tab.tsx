@@ -78,7 +78,7 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
     setWidth: commitGraphWidth,
     onDraftWidthChange: setDraftGraphWidth
   })
-  const columns = `160px ${draftGraphWidth}px minmax(200px,1fr) 120px 100px`
+  const columns = `${draftGraphWidth}px minmax(520px,1fr) 120px 100px`
   const scroll = useRef<HTMLDivElement>(null)
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -142,9 +142,8 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
         <div className="flex min-w-0 flex-1 flex-col overflow-x-auto scrollbar-sleek">
           <div
             className="grid h-7 shrink-0 items-center border-b border-border px-3 text-2xs text-muted-foreground"
-            style={{ gridTemplateColumns: columns, minWidth: draftGraphWidth + 604 }}
+            style={{ gridTemplateColumns: columns, minWidth: draftGraphWidth + 764 }}
           >
-            <span>{t('gitGraph.branchTag', 'Branch / Tag')}</span>
             <div ref={graphHeader} className="relative flex h-full items-center">
               <span>{t('gitGraph.graph', 'Graph')}</span>
               <div
@@ -177,7 +176,9 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
                 }}
               />
             </div>
-            <span>{t('gitGraph.message', 'Message')}</span>
+            <span>
+              {t('gitGraph.branchTag', 'Branch / Tag')} · {t('gitGraph.message', 'Message')}
+            </span>
             <span>{t('gitGraph.author', 'Author')}</span>
             <span>{t('gitGraph.date', 'Date')}</span>
           </div>
@@ -200,7 +201,7 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
           >
             <div
               className="relative min-w-max"
-              style={{ height: virtualizer.getTotalSize(), minWidth: draftGraphWidth + 604 }}
+              style={{ height: virtualizer.getTotalSize(), minWidth: draftGraphWidth + 764 }}
             >
               {virtualizer.getVirtualItems().map((virtualRow) => {
                 const viewModel = rows[virtualRow.index]!
@@ -220,28 +221,31 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
                         data-current={selected?.id === item.id}
                         onClick={() => controller.select(item.id)}
                       >
-                        <div className="flex min-w-0 gap-1 overflow-hidden pr-2">
-                          <GitGraphRefs
-                            controller={controller.actions}
-                            support={commitActionSupport}
-                            onCheckout={(ref) => controller.actions.requestBranch(item, ref)}
-                            workspaces={workspaces}
-                            references={item.references ?? []}
-                            onSwitch={controller.switchToWorkspace}
-                            currentRefId={result?.currentRef?.id}
-                          />
-                        </div>
                         <div className="min-w-0 overflow-hidden">
                           <GitHistoryGraphSvg viewModel={viewModel} />
                         </div>
-                        <button
-                          className="min-w-0 truncate pr-3 text-left"
-                          title={item.message}
-                          onClick={() => controller.select(item.id)}
-                          onDoubleClick={() => void actions.openHistoryCommitDiff(item)}
-                        >
-                          {item.subject}
-                        </button>
+                        {/* Refs lead the subject so a branch name is not cut to fit a fixed column. */}
+                        <div className="flex min-w-0 items-center gap-1.5 pr-3">
+                          {item.references?.length ? (
+                            <GitGraphRefs
+                              controller={controller.actions}
+                              support={commitActionSupport}
+                              onCheckout={(ref) => controller.actions.requestBranch(item, ref)}
+                              workspaces={workspaces}
+                              references={item.references}
+                              onSwitch={controller.switchToWorkspace}
+                              currentRefId={result?.currentRef?.id}
+                            />
+                          ) : null}
+                          <button
+                            className="min-w-0 flex-1 truncate text-left"
+                            title={item.message}
+                            onClick={() => controller.select(item.id)}
+                            onDoubleClick={() => void actions.openHistoryCommitDiff(item)}
+                          >
+                            {item.subject}
+                          </button>
+                        </div>
                         <span className="truncate pr-2 text-muted-foreground">{item.author}</span>
                         <span className="truncate text-2xs text-muted-foreground">
                           {formatGitHistoryTimestamp(item.timestamp, intlLocale)}
