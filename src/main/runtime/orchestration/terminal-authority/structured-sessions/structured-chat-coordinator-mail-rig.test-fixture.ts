@@ -96,7 +96,7 @@ export function connectionFor(sessionId: string): FakeConnection {
   // A cleared context starts on its first message; its record then names its new thread.
   const record = host.deps.store.getRecord(sessionId)
   const head = record ? activeProviderContext(record).head : null
-  const thread = threadBySession.get(sessionId) ?? head?.handle.nativeId
+  const thread = head?.handle.nativeId ?? threadBySession.get(sessionId)
   const connection = codex.connections.findLast((candidate) => candidate.threadId === thread)
   if (!connection) {
     throw new Error(`no app-server for ${sessionId}`)
@@ -265,7 +265,8 @@ beforeEach(async () => {
       runtime.onStructuredSessionStatusForMail(summary)
     },
     onSessionTabHidden: (sessionId) => runtime.onStructuredSessionTabHidden(sessionId),
-    queuedAgentMessageOwed: (sessionId, from) => runtime.structuredChatMailOwed(sessionId, from)
+    queuedAgentMessageOwed: (sessionId, from, peek) =>
+      runtime.structuredChatMailOwed(sessionId, from, peek)
   })
   dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
 })
