@@ -69,13 +69,15 @@ export function buildHydratedEditorSessionState(
       const legacyId = legacyFileIndex.resolve(pf, worktreeId)
       // Floating/runtime IDs must survive peers disappearing; collision-derived IDs drift when other paths close.
       const ownedId = buildOwnedEditorFileId(pf.filePath, worktreeId, pf.runtimeEnvironmentId)
-      const id =
+      const computedId =
         shouldHydrateWithOwnedEditorFileId(worktreeId, pf.runtimeEnvironmentId) ||
         usedOpenFileIds.has(pf.filePath) ||
         // Why: a tab Orca moved to the workspace owning its file names it by its owned id (F42).
         savedTabEntityIds(worktreeId).has(ownedId)
           ? ownedId
           : pf.filePath
+      // Why: reuse a persisted id so restart does not mint a new identity for the same path.
+      const id = pf.id || computedId
       // Schema permits duplicate owner/path tuples; restore only one or owned IDs collide.
       if (usedOpenFileIds.has(id)) {
         continue
