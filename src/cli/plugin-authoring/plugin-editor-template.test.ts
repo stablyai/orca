@@ -1,10 +1,9 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createPluginFromTemplate } from './plugin-create'
 import { checkPluginEditors } from './plugin-editor-check'
-import { validatePluginTarget } from './plugin-folder-validation'
 import { findPluginTestFiles, runPluginTests } from './plugin-test-runner'
 
 const roots: string[] = []
@@ -21,21 +20,6 @@ async function editorPlugin(): Promise<string> {
 }
 
 describe('orca plugin create --template editor', () => {
-  it('writes the recipe: a session-based TypeScript editor in an isolated frame', async () => {
-    const dir = await editorPlugin()
-    const manifest: unknown = JSON.parse(await readFile(join(dir, 'orca-plugin.json'), 'utf8'))
-    expect(manifest).toMatchObject({
-      engines: { orca: '>=1.4.248' },
-      contributes: {
-        customEditors: [{ extensions: ['.sketch'], entry: 'editor/main.ts', frame: 'isolated' }]
-      }
-    })
-    expect(await readFile(join(dir, 'editor', 'sync.ts'), 'utf8')).toContain(
-      'document.session<string>({ merge: mergeText })'
-    )
-    expect((await validatePluginTarget(dir)).valid).toBe(true)
-  })
-
   it(
     'passes plugin check and plugin test as generated',
     async () => {

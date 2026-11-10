@@ -36,7 +36,9 @@ it('uses the shared AI-author picker without saving on cancel and preserves Cust
   fireEvent.click(screen.getByRole('button', { name: 'Configure Codex' }))
   fireEvent.click(screen.getByRole('option', { name: 'GPT-5.4' }))
   fireEvent.keyDown(screen.getByLabelText('Search models'), { key: 'Escape' })
-  fireEvent.keyDown(screen.getByPlaceholderText('Search agents and setups…'), { key: 'Escape' })
+  fireEvent.keyDown(screen.getByPlaceholderText('Search, e.g. Opus 5.5…'), {
+    key: 'Escape'
+  })
   expect(persist).not.toHaveBeenCalled()
   expect(useAppStore.getState().settings?.commitMessageAi?.selectedModelByAgent.codex).toBe(
     'gpt-5.5'

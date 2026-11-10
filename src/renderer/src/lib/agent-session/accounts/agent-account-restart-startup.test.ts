@@ -5,7 +5,7 @@ import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-
 import { getDefaultSettings } from '../../../../../shared/constants'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
 import type * as localPreflightContext from '@/lib/local-preflight-context'
-import { resolveAgentResumeLaunchTarget } from '@/lib/agent-resume-launch-target'
+import { resolveAgentResumeLaunchTarget } from '@/lib/agent-session/resume/agent-resume-launch-target'
 import { makeTerminalTab } from '@/store/terminals/terminal-row.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
@@ -16,7 +16,7 @@ import {
 
 let projectRuntimeContext: ProjectExecutionRuntimeResolution | undefined
 
-vi.mock('@/lib/agent-resume-launch-target', { spy: true })
+vi.mock('@/lib/agent-session/resume/agent-resume-launch-target', { spy: true })
 
 vi.mock('@/lib/local-preflight-context', async (importOriginal) => ({
   ...(await importOriginal<typeof localPreflightContext>()),

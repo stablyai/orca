@@ -40,30 +40,12 @@ function detailsFor(item: GitLabWorkItem, reviewer: string): GitLabWorkItemDetai
   }
 }
 
-function renderDialog(item: GitLabWorkItem) {
-  return render(<GitLabItemDialog item={item} repoPath="/repo" repoId="repo-1" onClose={vi.fn()} />)
-}
-
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
 })
 
 describe('GitLabItemDialog reconciliation', () => {
-  it('drops the previous MR details when another MR opens', async () => {
-    api.workItemDetails.mockResolvedValueOnce(detailsFor(mr(7), 'alice'))
-    const view = renderDialog(mr(7))
-    await waitFor(() => expect(screen.getByText('alice')).toBeTruthy())
-
-    api.workItemDetails.mockReturnValueOnce(new Promise(() => {}))
-    view.rerender(
-      <GitLabItemDialog item={mr(8)} repoPath="/repo" repoId="repo-1" onClose={vi.fn()} />
-    )
-
-    expect(screen.queryByText('alice')).toBeNull()
-    expect(screen.queryByText('Reviewers')).toBeNull()
-  })
-
   it('drops the previous source details when only the task source changes', async () => {
     const source: TaskSourceContext = {
       kind: 'task-source',

@@ -6,7 +6,7 @@ import type {
   BrowserTabListResult,
   BrowserTabShowResult,
   BrowserTabSwitchResult
-} from '../../shared/runtime-types'
+} from '../../shared/browser/runtime/runtime-browser-contracts'
 import { browserUnavailableError } from '../runtime/browser/installation/runtime-browser-commands-factory'
 import { browserTabCreateClientPageStartsActive } from '../runtime/browser/tabs/browser-tab-create-publication'
 import {

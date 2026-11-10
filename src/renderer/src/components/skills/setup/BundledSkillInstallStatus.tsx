@@ -5,7 +5,7 @@ import { skillInstallResultLine } from './bundled-skill-setup-result-copy'
 import {
   bundledSkillInstallNeedsAttention,
   type BundledSkillInstall
-} from '@/hooks/use-bundled-skill-install'
+} from '@/hooks/skills/installation/use-bundled-skill-install'
 import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
 

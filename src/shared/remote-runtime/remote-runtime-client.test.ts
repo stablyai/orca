@@ -18,7 +18,7 @@ import {
 import { sendRemoteRuntimeRequestOnSocket } from './requests/remote-runtime-request-socket'
 import { subscribeRemoteRuntimeTransport } from './requests/remote-runtime-subscription-transport'
 import { remoteRuntimeClientCapabilities } from './remote-runtime-client-capabilities'
-import { BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY } from '../browser-runtime-capabilities'
+import { BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY } from '../browser/runtime/browser-runtime-capabilities'
 
 const servers: WebSocketServer[] = []
 

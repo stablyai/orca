@@ -1,4 +1,4 @@
-import { nonRefusedAgentLaunch } from '@/lib/agent-tab-launch-outcome.test-fixture'
+import { nonRefusedAgentLaunch } from '@/lib/agent-session/launch/new-tab/agent-tab-launch-outcome.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   FLOATING_TERMINAL_WORKTREE_ID,
@@ -102,7 +102,8 @@ describe('launchAgentInNewTab main-window surface', () => {
     const { settleAgentTabLaunch } = await import('./launch-agent-in-new-tab-host-agents')
     const { activateAndRevealWorkspaceWithOutcome } =
       await import('@/lib/workspace/activation/worktree-activation')
-    const { reportAgentWorkspaceActivation } = await import('@/lib/worktree-activation-outcome')
+    const { reportAgentWorkspaceActivation } =
+      await import('@/lib/workspace/activation/worktree-activation-outcome')
     const reveal = vi.fn(() =>
       reportAgentWorkspaceActivation(
         activateAndRevealWorkspaceWithOutcome(id, {

@@ -104,6 +104,23 @@ describe('ephemeral VM runtime store', () => {
     expect(recovered.cleanupLastError).toBeUndefined()
   })
 
+  it('records a lifecycle failure with an empty message instead of rejecting the write', () => {
+    const userDataPath = makeUserDataPath()
+    const record = upsertEphemeralVmRuntime(userDataPath, runtimeRecord())
+
+    const failed = updateEphemeralVmRuntimeStatus(userDataPath, record.id, {
+      status: 'resume_failed',
+      lifecycleLastError: { error: '' }
+    })
+    expect(failed).toMatchObject({ status: 'resume_failed', lifecycleLastError: 'Unknown error.' })
+
+    const resumed = updateEphemeralVmRuntimeStatus(userDataPath, record.id, {
+      status: 'running',
+      lifecycleLastError: null
+    })
+    expect(resumed.lifecycleLastError).toBeUndefined()
+  })
+
   it('rejects an oversized write without publishing a partial runtime record', () => {
     const userDataPath = makeUserDataPath()
 

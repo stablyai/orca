@@ -117,9 +117,11 @@ function startHostEventRouter(
     if (!readsNow(query) || floorTimers.has(query.queryHash)) {
       return
     }
-    // Change events can come per agent step; keep reads `floorMs` apart, polls and reads in flight included.
+    // Change events can come per agent step; keep reads `floorMs` apart, polls, failed reads and reads in flight included.
     const lastReadAt =
-      query.state.fetchStatus === 'fetching' ? Date.now() : query.state.dataUpdatedAt
+      query.state.fetchStatus === 'fetching'
+        ? Date.now()
+        : Math.max(query.state.dataUpdatedAt, query.state.errorUpdatedAt)
     const wait = lastReadAt + (signalOf(query)?.floorMs ?? 0) - Date.now()
     if (wait <= 0) {
       refetchHostQueryAfterInFlight(queryClient, query)
@@ -137,9 +139,16 @@ function startHostEventRouter(
   }
 
   // Reads again (or marks stale, when no one watches) every answer older than `readSince`.
+  // `readSince` Infinity is a stream reopened on the same connection: a read already out may predate the gap.
   const catchUp = (readSince: number): void => {
     for (const query of signalledQueries(() => true)) {
-      if (query.state.fetchStatus === 'fetching' || query.state.dataUpdatedAt >= readSince) {
+      if (query.state.fetchStatus === 'fetching') {
+        if (readSince === Infinity) {
+          onChange(query)
+        }
+        continue
+      }
+      if (query.state.dataUpdatedAt >= readSince) {
         continue
       }
       if (readsNow(query)) {
@@ -206,7 +215,7 @@ type Router = { holders: number; handle: RouterHandle }
 const routers = new WeakMap<QueryClient, Map<RpcClient, Router>>()
 
 // One router per world per host client, however many screens read that host.
-function retainHostEventRouter(
+export function retainHostEventRouter(
   queryClient: QueryClient,
   hostId: string,
   client: RpcClient

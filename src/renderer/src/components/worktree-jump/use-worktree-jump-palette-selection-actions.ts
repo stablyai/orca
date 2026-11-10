@@ -4,12 +4,12 @@ import type { WorktreeJumpPaletteTaskSearch } from './use-worktree-jump-palette-
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { activateBrowserPagePaletteResult } from '@/lib/browser/palette/browser-page-palette-activation'
-import { activateSimulatorTabPaletteResult } from '@/lib/simulator-tab-palette-activation'
+import { activateSimulatorTabPaletteResult } from '@/lib/simulator/tabs/simulator-tab-palette-activation'
 import { activateWorkspaceTabPaletteResult } from '@/lib/workspace/search/tabs/workspace-tab-palette-activation'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace/activation/workspace-activation-terminal-focus'
 import type { BrowserPaletteSearchResult } from '@/lib/browser/palette/browser-palette-search'
-import type { SimulatorPaletteSearchResult } from '@/lib/simulator-palette-search-types'
+import type { SimulatorPaletteSearchResult } from '@/lib/simulator/search/simulator-palette-search-types'
 import type { WorkspaceTabPaletteSearchResult } from '@/lib/workspace/search/tabs/workspace-tab-palette-results'
 import type { CmdJActionResult, CmdJSettingsResult } from '@/components/cmd-j/palette-results'
 import type { CmdJProjectSearchResult } from '@/components/cmd-j/palette-project-results'
@@ -280,11 +280,15 @@ export function useWorktreeJumpPaletteSelectionActions({
         handleSelectTask(item.result)
       } else if (item.type === 'settings') {
         handleSelectSettings(item.result)
+      } else if (item.type === 'extra') {
+        dismissForSelection()
+        item.result.onSelect()
       } else {
         handleSelectQuickAction(item.result)
       }
     },
     [
+      dismissForSelection,
       handleSelectTask,
       handleSelectBrowserPage,
       handleSelectProjectTarget,
@@ -297,7 +301,3 @@ export function useWorktreeJumpPaletteSelectionActions({
   )
   return { handleSelectItem, handleSelectTask }
 }
-
-export type WorktreeJumpPaletteSelectionActions = ReturnType<
-  typeof useWorktreeJumpPaletteSelectionActions
->

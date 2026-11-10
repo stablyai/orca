@@ -32,20 +32,6 @@
 <tr>
 <td width="50%" valign="middle">
 
-### Orchestrate Agents
-
-Hand a big task to one agent. It splits the work, starts worker agents in their own workspaces, and brings their results back to you.
-
-[Docs →](https://www.onorca.dev/docs/cli/orchestration)
-
-</td>
-<td width="50%">
-  <a href="https://www.onorca.dev/docs/cli/orchestration"><picture><source srcset="docs/assets/readme-features/orchestration.webp" type="image/webp"><img src="docs/assets/readme-features/orchestration.poster.jpg" alt="A coordinator agent splitting a task between two worker agents and reporting their results" width="100%" /></picture></a>
-</td>
-</tr>
-<tr>
-<td width="50%" valign="middle">
-
 ### Chat or Terminal
 
 Run any agent in Chat UI or as the raw CLI, and move a conversation between the two without losing context.
@@ -55,6 +41,20 @@ Run any agent in Chat UI or as the raw CLI, and move a conversation between the 
 </td>
 <td width="50%">
   <a href="https://www.onorca.dev/docs/agents/native-chat"><picture><source srcset="docs/assets/readme-features/chat-or-terminal.webp" type="image/webp"><img src="docs/assets/readme-features/chat-or-terminal.poster.jpg" alt="The same agent conversation in Chat UI and in the terminal, side by side" width="100%" /></picture></a>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="middle">
+
+### Orchestrate Agents
+
+Hand a big task to one agent. It splits the work, starts worker agents in their own workspaces, and brings their results back to you.
+
+[Docs →](https://www.onorca.dev/docs/cli/orchestration)
+
+</td>
+<td width="50%">
+  <a href="https://www.onorca.dev/docs/cli/orchestration"><picture><source srcset="docs/assets/readme-features/orchestration.webp" type="image/webp"><img src="docs/assets/readme-features/orchestration.poster.jpg" alt="A coordinator agent splitting a task between two worker agents and reporting their results" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -272,6 +272,8 @@ _Or via a package manager:_
 brew install --cask stablyai/orca/orca
 # Upgrade an existing install
 brew upgrade --cask stablyai/orca/orca
+# Release candidates (conflicts with the stable cask; uninstall it first)
+brew install --cask stablyai/orca/orca@rc
 
 # Arch Linux (AUR) — or stably-orca-git to build from source
 yay -S stably-orca-bin
@@ -290,11 +292,9 @@ Pair with your desktop app to monitor and steer your agents from your phone.
 
 - **Discord:** Join the community on **[Discord](https://discord.gg/fzjDKHxv8Q)**.
 - **Twitter / X:** Follow **[@orca_build](https://x.com/orca_build)** for updates and announcements.
-- **WeChat:** Scan to join an Orca community WeChat group. If one group is full, join another.
+- **WeChat:** Scan to join an Orca community WeChat group.
 
-  <img src="docs/assets/wechat-qr-group14.jpg" alt="WeChat QR code for the Orca community" width="160" />
-  <img src="docs/assets/wechat-qr-group15.jpg" alt="WeChat QR code for the Orca community" width="160" />
-  <img src="docs/assets/wechat-qr-group16.jpg" alt="WeChat QR code for the Orca community" width="160" />
+  <img src="docs/assets/wechat-qr.jpg" alt="WeChat QR code for the Orca community" width="160" />
 
 - **Feedback &amp; Ideas:** We ship fast. Missing something? [Request a new feature](https://github.com/stablyai/orca/issues).
 - **Privacy:** See the [privacy &amp; telemetry docs](https://www.onorca.dev/docs/telemetry) for what anonymous usage data Orca collects and how to opt out.
