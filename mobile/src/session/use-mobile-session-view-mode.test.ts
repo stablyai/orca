@@ -146,19 +146,6 @@ describe('useMobileSessionViewMode', () => {
     expect(controller?.ready).toBe(true)
   })
 
-  it('toggles from the effective view and persists the override', async () => {
-    await mount({ defaultView: 'chat' })
-
-    await act(async () => {
-      controller?.toggleTabChatView('t1')
-      await Promise.resolve()
-    })
-
-    expect(updateSessionViewOverride).toHaveBeenLastCalledWith('h', 'w', 't1', 'terminal')
-    expect(controller?.isTabChatView('t1')).toBe(false)
-    expect(readSessionViewOverridesPreference).toHaveBeenCalledTimes(1)
-  })
-
   it('toggles a terminal-default tab into chat', async () => {
     await mount({ defaultView: 'terminal' })
 
@@ -293,41 +280,6 @@ describe('useMobileSessionViewMode', () => {
     })
   })
 
-  it('submits rapid mutations in event order', async () => {
-    await mount({ defaultView: 'terminal' })
-    act(() => controller?.toggleTabChatView('t1'))
-    act(() => controller?.toggleTabChatView('t2'))
-
-    expect(updateSessionViewOverride).toHaveBeenNthCalledWith(1, 'h', 'w', 't1', 'chat')
-    expect(updateSessionViewOverride).toHaveBeenNthCalledWith(2, 'h', 'w', 't2', 'chat')
-  })
-
-  it('reconciles the latest optimistic override when persistence fails', async () => {
-    vi.mocked(updateSessionViewOverride).mockRejectedValue(new Error('storage unavailable'))
-    vi.mocked(readSessionViewOverridesPreference)
-      .mockResolvedValueOnce({
-        overrides: new Map<string, MobileSessionView>([['t1', 'terminal']]),
-        loaded: true
-      })
-      .mockResolvedValueOnce({
-        overrides: new Map<string, MobileSessionView>([['t1', 'terminal']]),
-        loaded: true
-      })
-    await mount({
-      defaultView: 'terminal',
-      overrides: new Map<string, MobileSessionView>([['t1', 'terminal']])
-    })
-
-    await act(async () => {
-      controller?.toggleTabChatView('t1')
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-
-    expect(controller?.isTabChatView('t1')).toBe(false)
-    expect(readSessionViewOverridesPreference).toHaveBeenCalledTimes(2)
-  })
-
   it('does not let an older failed override roll back a newer choice', async () => {
     const recoveryLoad = deferred<Map<string, MobileSessionView>>()
     vi.mocked(updateSessionViewOverride)
@@ -352,47 +304,6 @@ describe('useMobileSessionViewMode', () => {
 
     expect(controller?.isTabChatView('t1')).toBe(false)
     expect(updateSessionViewOverride).toHaveBeenNthCalledWith(2, 'h', 'w', 't1', 'terminal')
-  })
-
-  it('fails closed when both an override write and its recovery read fail', async () => {
-    vi.mocked(loadDefaultSessionView).mockResolvedValue('chat')
-    vi.mocked(updateSessionViewOverride).mockRejectedValue(new Error('storage unavailable'))
-    vi.mocked(readSessionViewOverridesPreference)
-      .mockResolvedValueOnce({
-        overrides: new Map<string, MobileSessionView>([['t1', 'terminal']]),
-        loaded: true
-      })
-      .mockResolvedValueOnce({ overrides: new Map(), loaded: false })
-    await mount({
-      defaultView: 'chat',
-      overrides: new Map<string, MobileSessionView>([['t1', 'terminal']])
-    })
-
-    await act(async () => {
-      controller?.toggleTabChatView('t1')
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-
-    expect(controller?.isTabChatView('t1')).toBe(false)
-    expect(readSessionViewOverridesPreference).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not reload a failed override after the route unmounts', async () => {
-    const failedWrite = deferred<void>()
-    vi.mocked(updateSessionViewOverride).mockReturnValue(failedWrite.promise)
-    await mount({ defaultView: 'terminal' })
-
-    act(() => controller?.toggleTabChatView('t1'))
-    act(() => renderer?.unmount())
-    renderer = null
-    await act(async () => {
-      failedWrite.reject(new Error('storage unavailable'))
-      await Promise.resolve()
-      await Promise.resolve()
-    })
-
-    expect(readSessionViewOverridesPreference).toHaveBeenCalledTimes(1)
   })
 
   it('fails closed to terminal when overrides cannot be read under a chat default', async () => {

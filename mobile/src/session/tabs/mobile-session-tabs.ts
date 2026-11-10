@@ -42,6 +42,10 @@ export type MobileSessionTab =
           RuntimeMobileSessionTerminalTab,
           | 'parentTabId'
           | 'leafId'
+          | 'customTitle'
+          | 'quickCommandLabel'
+          | 'aiVaultTitle'
+          | 'generatedTitle'
           | 'agentStatus'
           | 'launchAgent'
           | 'launchDraft'

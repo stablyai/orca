@@ -29,7 +29,7 @@ import { buildWorktreePurgeState } from '../teardown/worktree-purge-state'
 import { flushPurgedWorkspaceEdits } from '../teardown/removed-workspace-unsaved-files'
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import { isDisplayNamePersistencePending } from '../metadata/worktree-meta-persist'
-import { branchName } from '@/lib/git-utils'
+import { branchName } from '@/lib/source-control/branches/branch-name'
 import {
   forgetAuthoritativelyRemovedWorktrees,
   forgetPersistedWorktreeMetaForRemovals,
@@ -194,6 +194,7 @@ export function mergeFetchedWorktrees(
       requestStarted: args.requestStartedWorktrees,
       current: s.worktreesByRepo[args.repoId],
       incoming,
+      refreshHostId: args.hostId,
       matchesRefreshHost: (worktree) => worktreeMatchesHost(worktree, args.hostId, matchOptions),
       hasBranchScopedReviewContext: hasBranchScopedHostedReviewContext,
       updateWorktreeGitIdentity: s.updateWorktreeGitIdentity

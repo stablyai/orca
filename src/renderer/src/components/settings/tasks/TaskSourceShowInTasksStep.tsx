@@ -74,7 +74,7 @@ export function TaskSourceShowInTasksStep({
     <TaskSourceStepRow
       index={index}
       state={visible ? 'done' : 'pending'}
-      title={t('auto.components.settings.TaskSourceShowInTasksStep.title', 'Show in Tasks')}
+      title={t('auto.components.settings.TaskSourceShowInTasksStep.8f0bb9edf3', 'Show in tasks')}
       description={
         description ??
         t(

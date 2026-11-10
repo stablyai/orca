@@ -1,4 +1,4 @@
-import { buildLinearIssueLinkedWorkItem } from '@/lib/linear-linked-work-item'
+import { buildLinearIssueLinkedWorkItem } from '@/lib/work-items/linear/linear-linked-work-item'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
 import type { AppState } from '../../store/types'

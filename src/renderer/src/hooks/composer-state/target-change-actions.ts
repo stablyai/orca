@@ -40,7 +40,7 @@ import { useCallback } from 'react'
 import {
   isLinearLinkedWorkItem,
   getLinearLinkedWorkItemBranchName
-} from '@/lib/linear-linked-work-item'
+} from '@/lib/work-items/linear/linear-linked-work-item'
 import { shouldPreserveWorkspaceSourceOnRepoChange } from '../../../../shared/new-workspace/workspace-source'
 import {
   buildProjectHostSetupOptions,

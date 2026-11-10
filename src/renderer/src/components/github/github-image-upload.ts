@@ -10,7 +10,7 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { readStoredWebRuntimeEnvironment } from '@/web/web-runtime-environment'
-import { blobToBase64 } from '@/lib/image-blob-png'
+import { blobToBase64 } from '@/lib/clipboard/images/image-blob-png'
 
 export type GitHubImageUploadAddress = {
   runtime: RuntimeClientTarget

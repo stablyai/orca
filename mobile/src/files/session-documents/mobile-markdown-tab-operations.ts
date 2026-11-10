@@ -19,13 +19,6 @@ export const sessionMarkdownNoteCreate = bindDeferredRpcOperation(
 
 import '../../terminal/terminal-reply-schema'
 import { markdownTabDocumentSchema } from './mobile-markdown-tab-reply-schema'
-import '../../session/agent-launch/mobile-agent-detection-reply-schema'
-
-import '../../terminal/session/mobile-session-terminal-reply-schema'
-import '../../worktree/session-worktree-record-reply-schema'
-import '../../session/native-chat/composer/mobile-native-chat-skill-reply-schema'
-import '../../terminal/quick-commands/mobile-quick-command-reply-schema'
-import '../workspace-file-paths-reply-schema'
 
 // Inspect renderer_unavailable before interpretation so headless hosts can fall back to disk.
 export const markdownTabRead = bindDeferredRpcOperation(
@@ -37,8 +30,6 @@ export const markdownTabRead = bindDeferredRpcOperation(
     read: rpcResultVariant('markdown-tab-doc', markdownTabDocumentSchema)
   })
 )
-
-import '../../session/tabs/mobile-session-tab-write-reply-schema'
 
 import '../../terminal/quick-commands/mobile-quick-command-operations'
 
