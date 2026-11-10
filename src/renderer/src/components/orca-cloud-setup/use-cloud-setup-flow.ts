@@ -33,15 +33,42 @@ import { cloudSetupPageModel, sessionNeedsFrom, type CloudSetupPageModel } from 
 /** Billing rows re-read this often while the page waits on a browser step (focus also re-reads). */
 const BILLING_POLL_MS = 4_000
 
-/** Main's availability is a snapshot from Start; once billing answers for a signed-in account, it wins. */
-export function effectiveAvailability(
-  requested: OrcaCloudAvailability,
-  access: OrcaCloudRunTargetAccess
+/**
+ * Main's Orca Cloud availability for the project (needs-sign-in, needs-capability, offered), read
+ * the way the composer reads it and re-read while the page waits, so a sign-in in the browser (or
+ * the dev sign-in) moves the page on. Starts from the composer's answer at Start.
+ */
+function useLiveAvailability(
+  repoId: string,
+  initial: OrcaCloudAvailability,
+  enabled: boolean
 ): OrcaCloudAvailability {
-  if (requested === 'needs-sign-in' && access.state !== 'signed-out' && access.state !== 'loading') {
-    return 'offered'
-  }
-  return requested
+  const [availability, setAvailability] = useState(initial)
+  useEffect(() => {
+    if (!enabled) {
+      return
+    }
+    let cancelled = false
+    const read = (): void => {
+      void Promise.resolve()
+        .then(() => window.api.ephemeralVm.listRecipes({ repoId }))
+        .then((result) => {
+          if (!cancelled && result.orcaCloud) {
+            setAvailability(result.orcaCloud)
+          }
+        })
+        .catch(() => undefined)
+    }
+    read()
+    const timer = window.setInterval(read, BILLING_POLL_MS)
+    window.addEventListener('focus', read)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+      window.removeEventListener('focus', read)
+    }
+  }, [enabled, repoId])
+  return availability
 }
 
 export type CloudSetupFlow = CloudSetupPageModel & {
@@ -69,7 +96,8 @@ export function useCloudSetupFlow(
 ): CloudSetupFlow {
   const fetched = useOrcaCloudRunTargetAccess(!accessOverride)
   const access = accessOverride ?? fetched
-  const availability = effectiveAvailability(request.availability, access)
+  const [settled, setSettled] = useState(false)
+  const availability = useLiveAvailability(request.repoId, request.availability, !settled && !accessOverride)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [inBrowser, setInBrowser] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -89,6 +117,11 @@ export function useCloudSetupFlow(
   })
   const { steps, held: switchTeam } = useSwitchTeamSteps(rowSteps, !session)
   const model = cloudSetupPageModel(steps, { agentSkipped, teamSwitch: switchTeam !== null })
+  useEffect(() => {
+    if (model.action === 'done') {
+      setSettled(true)
+    }
+  }, [model.action])
   const error = useMemo(() => {
     const parsed = parseCloudSetupError(session?.error)
     return parsed && session?.teamName ? { ...parsed, teamName: session.teamName } : parsed

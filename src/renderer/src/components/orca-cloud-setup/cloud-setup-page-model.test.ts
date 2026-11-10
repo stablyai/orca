@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CloudSetupStep } from '@/components/new-workspace/run-on/cloud-start-model'
 import { actionForStep, cloudSetupPageModel, sessionNeedsFrom } from './cloud-setup-page-model'
-import { effectiveAvailability } from './use-cloud-setup-flow'
 
 describe('cloudSetupPageModel', () => {
   it('walks one step at a time: the first unfinished step is current', () => {
@@ -42,16 +41,5 @@ describe('cloudSetupPageModel', () => {
       'switch-team'
     )
     expect(actionForStep({ id: 'github', state: 'loading' })).toBe('checking')
-  })
-})
-
-describe('effectiveAvailability', () => {
-  it('a sign-in that lands upgrades the snapshot from Start', () => {
-    expect(effectiveAvailability('needs-sign-in', { state: 'signed-out' })).toBe('needs-sign-in')
-    expect(effectiveAvailability('needs-sign-in', { state: 'loading' })).toBe('needs-sign-in')
-    expect(
-      effectiveAvailability('needs-sign-in', { state: 'entitled', remainingSeconds: 60 })
-    ).toBe('offered')
-    expect(effectiveAvailability('offered', { state: 'signed-out' })).toBe('offered')
   })
 })

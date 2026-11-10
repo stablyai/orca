@@ -12,6 +12,7 @@ import type { CloudSetupStep } from '@/components/new-workspace/run-on/cloud-sta
 import { CloudSetupErrorNotice } from '@/components/new-workspace/cloud-setup/CloudSetupErrorNotice'
 import { sessionDetailCopy } from '@/components/new-workspace/run-on/cloud-setup-session-copy'
 import type { CloudSetupFlow } from './use-cloud-setup-flow'
+import { openOrcaCloudAgentAccounts } from '@/components/new-workspace/OrcaCloudAgentSetupRow'
 
 export type CloudSetupPageProps = {
   flow: CloudSetupFlow
@@ -286,11 +287,9 @@ function StepActions({ flow }: { flow: CloudSetupFlow }): React.JSX.Element | nu
     case 'agent':
       return (
         <div className="flex flex-wrap items-center gap-2">
-          {flow.current?.action ? (
-            <Button type="button" onClick={flow.current.action.onClick}>
-              {flow.current.action.label}
-            </Button>
-          ) : null}
+          <Button type="button" onClick={flow.current?.action?.onClick ?? openOrcaCloudAgentAccounts}>
+            {flow.current?.action?.label ?? t('cloudSetupPage.agent.setUp', 'Set up once')}
+          </Button>
           <Button type="button" variant="ghost" onClick={flow.skipAgent}>
             {t('cloudSetupPage.agent.skip', 'Skip for now')}
           </Button>
