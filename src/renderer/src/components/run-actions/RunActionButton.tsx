@@ -24,11 +24,14 @@ function useWorktreeRunActions(worktreeId: string): WorktreeRunActions | null {
   useEffect(() => {
     let cancelled = false
     const load = (): void => {
-      void loadWorktreeRunActions(worktreeId, { background: true }).then((value) => {
-        if (!cancelled && value) {
-          setConfig({ worktreeId, value })
-        }
-      })
+      void loadWorktreeRunActions(worktreeId, { background: true })
+        .then((value) => {
+          if (!cancelled && value) {
+            setConfig({ worktreeId, value })
+          }
+        })
+        // A workspace that can't be resolved yet simply shows no Run button.
+        .catch(() => {})
     }
     load()
     window.addEventListener('focus', load)
@@ -45,7 +48,7 @@ function useWorktreePorts(worktreeId: string): WorkspacePort[] {
   return useAppStore((s) =>
     target
       ? (getWorkspacePortsByWorktreeId(
-          s.workspacePortScansByKey[workspacePortScanKeyForTarget(target)]
+          s.workspacePortScansByKey?.[workspacePortScanKeyForTarget(target)]
         ).get(worktreeId) ?? EMPTY_PORTS)
       : EMPTY_PORTS
   )
