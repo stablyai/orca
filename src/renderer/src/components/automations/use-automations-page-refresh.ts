@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { AUTOMATIONS_CHANGED_EVENT } from '@/lib/automations-changed-window-event'
 import {
   getAutomationHostTargetKey,
   getAutomationListedTargetFromHostId,
   listAutomationsForTarget
-} from './automation-host-client'
-import { automationAuthorityCatalogKey } from './automation-host-catalog-types'
-import { useSelectedAutomationRunHistory } from './use-selected-automation-run-history'
-import type { AutomationsPageDestinationState } from './use-automations-page-destination-state'
-import type { AutomationsPageListState } from './use-automations-page-list-state'
+} from './hosts/automation-host-client'
+import { automationAuthorityCatalogKey } from './hosts/automation-host-catalog-types'
+import { useSelectedAutomationRunHistory } from './runs/use-selected-automation-run-history'
+import type { AutomationsPageDestinationState } from './authoring/use-automations-page-destination-state'
+import type { AutomationsPageListState } from './listing/use-automations-page-list-state'
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'
 import type { AutomationsPageStoreState } from './use-automations-page-store-state'
 
