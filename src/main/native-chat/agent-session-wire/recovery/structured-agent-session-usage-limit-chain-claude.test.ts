@@ -1,3 +1,4 @@
+import { followTestSinkSnapshots } from '../host/testing/structured-agent-session-direct-sink.test-fixture'
 import { readTestJournalSnapshot } from '../../agent-session-journal/journal-observation.test-support'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -86,6 +87,7 @@ it('counts a host continue whose recorded Claude echo opens the turn under its p
     sessionId: identity.sessionId,
     logger: { warn: () => {}, error: () => {} }
   })
+  await followTestSinkSnapshots(sink, journal)
   sink.bind({ journal, fence: 7, publish: () => {} })
   const settlements: Promise<unknown>[] = []
   const adapter = new ClaudeStructuredSessionAdapter({

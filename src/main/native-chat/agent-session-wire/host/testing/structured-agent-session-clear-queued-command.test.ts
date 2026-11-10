@@ -103,7 +103,7 @@ it('clear removes command cards from history and connected and reconnecting clie
   expect(await rig.drafts()).toEqual(expected)
   expect(await rig.queuePause()).toBeNull()
   expect(
-    rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal.queuedMessages.pauses()
+    await rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal.queuedMessages.pauses()
   ).toContainEqual(expect.objectContaining({ reason: 'cleared', messageIds: [first.id, last.id] }))
   for (const events of [connected, reconnecting]) {
     await eventually(() => {

@@ -124,16 +124,18 @@ describe('conversation command admission reads the work the provider reported', 
     )
 
     report([devServer()])
-    expect(stripRows()).toEqual([
-      { description: 'npm run dev', membership: 'live', stoppable: true, providerId: 'task-dev' }
-    ])
+    await vi.waitFor(() =>
+      expect(stripRows()).toEqual([
+        { description: 'npm run dev', membership: 'live', stoppable: true, providerId: 'task-dev' }
+      ])
+    )
     expect(await state.host.conversationCommand(CALLER, compactParams())).toMatchObject({
       ok: false,
       refusal: { message: 'Stop background tasks before using this command.' }
     })
 
     report([devServer({ state: 'done', membership: 'settled', outcome: 'succeeded' })])
-    expect(strip.at(-1)).toBeNull()
+    await vi.waitFor(() => expect(strip.at(-1)).toBeNull())
     expect(stripRows()).toEqual([])
     expect(await state.host.conversationCommand(CALLER, compactParams())).toMatchObject({
       ok: true

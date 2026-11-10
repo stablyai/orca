@@ -32,8 +32,11 @@ it.each(['beginTeardown', 'captureBeforeStop', 'recordMarkers'] as const)(
     try {
       await expect(host.flushAllStreamedEvents()).resolves.toBeUndefined()
       expect(operation).toHaveBeenCalledOnce()
-      expect(warning).toHaveBeenCalledOnce()
-      expect(warning.mock.calls[0]?.[0]).toBe(
+      expect(warning.mock.calls).toHaveLength(2)
+      expect(warning.mock.calls.map(([message]) => message)).toContain(
+        '[agent-session] queued-drain: draining queued messages failed'
+      )
+      expect(warning.mock.calls.map(([message]) => message)).toContain(
         {
           beginTeardown:
             '[agent-session] teardown-recovery-witnesses: capturing recovery witnesses for teardown failed',
@@ -53,7 +56,7 @@ it.each(['beginTeardown', 'captureBeforeStop', 'recordMarkers'] as const)(
       )
       expect(inspect(log.entries, { depth: 8 })).not.toContain('/private/account')
       expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
-      await expect(await readTestHostJournal(host, SESSION)).rejects.toThrow(
+      await expect(readTestHostJournal(host, SESSION)).rejects.toThrow(
         'agent_session_ownership_unknown'
       )
     } finally {

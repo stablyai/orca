@@ -1,3 +1,4 @@
+import { followTestSinkSnapshots } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-direct-sink.test-fixture'
 import { readTestJournalItems } from '../native-chat/agent-session-journal/journal-observation.test-support'
 // Real CLI captures verify waiting children have durable cards and child waits do not alter parent status.
 
@@ -183,6 +184,7 @@ async function pipeline() {
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging(SESSION))
   const publishStatus = () => feed.publish(SESSION, journal)
   const target = { journal, fence: FENCE, publish: publishStatus }
+  await followTestSinkSnapshots(deferred, journal)
   deferred.bind(target)
   let queued = false
   journal.observeCommits(() => {

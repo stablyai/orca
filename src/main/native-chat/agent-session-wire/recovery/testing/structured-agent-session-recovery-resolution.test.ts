@@ -1,14 +1,14 @@
-import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabase,
+  closeTestJournalHostDatabases
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionOwnerProbe } from '../../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
-import {
-  openTestAgentSessionRecordStore,
-  seedTestAgentSessionRecordStore
-} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   resolveStructuredSessionRecovery,
   type StructuredSessionRecoveryResolutionDeps
@@ -95,11 +95,14 @@ async function liveOwner(store: AgentSessionRecordStore, pid = 4242) {
 
 async function latch(store: AgentSessionRecordStore) {
   const directory = directories.get(store)!
-  const record = store.getRecord(SESSION)!
-  await seedTestAgentSessionRecordStore(directory, {
-    records: [{ ...record, lease: { ...record.lease, handoffStage: 'recovering' } }]
+  await closeTestJournalHostDatabase(directory)
+  const reopened = await openStore(directory)
+  await reopened.reconcileOnRestart({
+    sessionId: SESSION,
+    probe: async () => ({ outcome: 'indeterminate', reason: 'test owner awaits recovery' }),
+    now: NOW
   })
-  return openStore(directory)
+  return reopened
 }
 
 function deps(

@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { describe, expect, it, vi } from 'vitest'
 import { dispatch as dispatchCommand } from '../../../../../cli/dispatch'
 import { orchestrationTestContext } from '../../../../../cli/handlers/orchestration-handler-test-context'
@@ -64,7 +65,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
 
   /** The operation ids the coordinator's journal recorded for whole-mail turns. */
   async function mailSends(): Promise<string[]> {
-    const snapshot = await host.journalSnapshot(COORDINATOR)
+    const snapshot = await readTestHostJournal(host, COORDINATOR)
     return snapshot.submissions
       .filter((submission) =>
         snapshot.items.some(
@@ -294,7 +295,9 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     const open = (host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> })
       .sessions
     const fence = host.deps.store.getRecord(COORDINATOR)!.lease.runtimeFence
-    await open.get(COORDINATOR)!.journal.replaceEpochItems('handle_forked', fence, [])
+    await open
+      .get(COORDINATOR)!
+      .journal.write({ kind: 'epoch-replace', reason: 'handle_forked', fence, items: [] })
     expect(await mailSends()).toEqual([])
 
     providerFaults.crashOnTurnStart = 'off'
@@ -363,7 +366,7 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     runtime.deliverPendingMessagesForHandle(`run:${runId}`)
     await observationClock.edgesAnswered(runtime, WAIT)
     expect(chat.steers).toHaveLength(1)
-    const sent = (await host.journalSnapshot(COORDINATOR)).items.find(
+    const sent = (await readTestHostJournal(host, COORDINATOR)).items.find(
       (item) => item.body.kind === 'message' && item.body.from
     )
     expect(sent?.body).toMatchObject({

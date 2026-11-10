@@ -1,3 +1,4 @@
+import { followTestSinkSnapshots } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-direct-sink.test-fixture'
 import { readTestJournalItems } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -114,9 +115,10 @@ async function openJournal(): Promise<AgentSessionJournal> {
   })
 }
 
-function acquire(journal: AgentSessionJournal) {
+async function acquire(journal: AgentSessionJournal) {
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   const translator = createClaudeJournalTranslator({ sink: deferred.sink, coalesceMs: 0 })
+  await followTestSinkSnapshots(deferred, journal)
   deferred.bind({ journal, fence: 1, publish: () => {} })
   const answers: ((value: unknown) => void)[] = []
   const unbind = bindClaudeContextUsageCapture(
@@ -148,7 +150,7 @@ const ring = async (journal: AgentSessionJournal) =>
 describe('context usage across a restart', () => {
   it('resets the ring at a /compact that is the first thing after a restart, then reads the fresh report', async () => {
     const journal = await openJournal()
-    const before = acquire(journal)
+    const before = await acquire(journal)
     before.translator.handle(initFrame(900))
     before.translator.handle(userFrame('turn-a', 1_000))
     before.translator.handle(assistantFrame('reply-a', 2_000, 150_000))
@@ -157,7 +159,7 @@ describe('context usage across a restart', () => {
     expect(await ring(journal)).toMatchObject({ usedTokens: 150_000, windowTokens: 1_000_000 })
     before.release()
 
-    const after = acquire(journal)
+    const after = await acquire(journal)
     after.translator.handle(compactBoundary(10_000))
     await after.settle()
     expect(await ring(journal)).toBeNull()
@@ -178,7 +180,7 @@ describe('context usage across a restart', () => {
 
   it('never brings a settled turn back to running with a context write that ran late', async () => {
     const journal = await openJournal()
-    const live = acquire(journal)
+    const live = await acquire(journal)
     live.translator.handle(initFrame(900))
     live.translator.handle(userFrame('turn-a', 1_000))
     live.translator.handle(assistantFrame('reply-a', 2_000, 20_000))

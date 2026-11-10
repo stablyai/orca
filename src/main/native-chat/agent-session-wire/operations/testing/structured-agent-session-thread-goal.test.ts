@@ -1,3 +1,4 @@
+import { testJournalWorkReader } from '../../../agent-session-journal/journal-current-work.test-fixture'
 import { readTestJournalItems } from '../../../agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -52,6 +53,7 @@ function context(
     logger: createStructuredAgentSessionLogger(),
     sessionId: 'session-1',
     journal,
+    readWork: testJournalWorkReader(journal, 1),
     fence: 1,
     adapter,
     agents: claudeAndCodexAgents(adapter),

@@ -111,8 +111,10 @@ describe('codex turn lifecycle rows', () => {
         }
       }
     ])
-    expect(c.journal['state'].tombstones.size).toBe(0)
     const rows = await readTestJournalItems(c.journal)
+    for (const row of rows) {
+      expect(await c.journal.reads.presentationRemoved(row.itemId)).toBe(false)
+    }
     await c.reopen()
     expect(await readTestJournalItems(c.journal)).toEqual(rows)
   })

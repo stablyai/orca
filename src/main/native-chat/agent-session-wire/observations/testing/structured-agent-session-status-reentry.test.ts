@@ -69,7 +69,7 @@ async function createFeed() {
     now: () => 1_000,
     statusSink: () => statusSink
   })
-  feed.publish(SESSION)
+  await feed.publish(SESSION)
   expect(server.getCanonicalStatusSnapshot().parents).toHaveLength(1)
   return { session, sessions, server, statusSink, feed }
 }
@@ -83,7 +83,7 @@ describe('structured status canonical owner re-entry', () => {
     const publishedBeforeReentry = vi.mocked(statusSink.publish).mock.calls.length
     sessions.set(SESSION, session)
 
-    feed.publish(SESSION)
+    await feed.publish(SESSION)
 
     expect(statusSink.publish).toHaveBeenCalledTimes(publishedBeforeReentry + 1)
     expect(server.getCanonicalStatusSnapshot().parents).toHaveLength(1)
@@ -102,7 +102,7 @@ describe('structured status canonical owner re-entry', () => {
       }
     })
 
-    feed.publish(SESSION)
+    await feed.publish(SESSION)
 
     expect(statusSink.forget).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ executionHostId: 'local', sessionId: SESSION })

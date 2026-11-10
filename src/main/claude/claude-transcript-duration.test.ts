@@ -302,17 +302,17 @@ describe('Claude historical cycle duration', () => {
         turnItemId: second.itemId
       }
     })
-    expect(isStructuredRewindTarget(c.journal, queuedItem.itemId)).toBe(false)
-    expect(isStructuredRewindTarget(c.journal, key('37adf9f0-c934-4a98-8a8f-34cfacb53fce'))).toBe(
-      true
-    )
+    expect(await isStructuredRewindTarget(c.journal, queuedItem.itemId)).toBe(false)
+    expect(
+      await isStructuredRewindTarget(c.journal, key('37adf9f0-c934-4a98-8a8f-34cfacb53fce'))
+    ).toBe(true)
     for (const item of before.items) {
       expect(await c.journal.reads.item(item.itemId)).toEqual(item)
     }
     expect(snapshot.submissions).toEqual(before.submissions)
     expect(c.identity.providerHandle).toEqual(handle)
     expect(await c.journal.reads.canonicalItemId(alias)).toBe(canonical)
-    expect(c.rows()).toContain('user:<local-command-stdout>See ya!</local-command-stdout>')
+    expect(await c.rows()).toContain('user:<local-command-stdout>See ya!</local-command-stdout>')
     const exits = turns.filter(
       (item) =>
         item !== first &&

@@ -19,6 +19,7 @@ import { releaseStoredAgentSessionOwnerAfterSurfaceClose } from '../../../src/ma
 import {
   closeTestAgentSessionDatabase,
   openTestAgentSessionRecordStore,
+  seedTestAgentSessionRecordStore,
   storedTestAgentSessionRecord
 } from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
@@ -85,9 +86,12 @@ test(`${RELEASE_REF} keeps the converted records readable and writable; the upgr
         .prepare('SELECT record_json FROM agent_session_records WHERE session_id = ?')
         .get(sessionId)?.record_json
     )
-    await closeTestJournalHostDatabase(directory)
 
-    const current = await openTestAgentSessionRecordStore(directory)
+    await closeTestJournalHostDatabase(directory)
+    await openTestAgentSessionRecordStore(directory)
+    // Admit this fixture's live owner after installation invalidates previously saved authority.
+    await seedTestAgentSessionRecordStore(directory, { records: [live] })
+    const current = await openTestAgentSessionRecordStore(directory, { mode: 'observe' })
     expect(current.getRecord(sessionId)?.lease.runtimeFence).toBe(7)
     await releaseStoredAgentSessionOwnerAfterSurfaceClose(current, {
       sessionId,
@@ -168,6 +172,11 @@ test(`${RELEASE_REF} keeps the converted records readable and writable; the upgr
     expect(agentModelCatalogReleasedOwner(conversation)).toBe(true)
     expect(turnVerdictFromDeathEvidence(restored.lease.deathEvidence, 7)).toMatchObject({
       state: 'interrupted'
+    })
+    await upgraded.reconcileOnRestart({
+      sessionId,
+      probe: async () => ({ outcome: 'exit-observed' }),
+      now: 60_000
     })
     await upgradeStoredStructuredAgentSessionOwnerExitEvidence(
       upgraded,

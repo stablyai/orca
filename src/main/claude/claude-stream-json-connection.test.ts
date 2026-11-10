@@ -1,3 +1,4 @@
+import { followTestSinkSnapshots } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-direct-sink.test-fixture'
 import { readTestJournalItems } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { openTestAgentSessionDatabase } from '../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { execFileSync, type ChildProcess } from 'node:child_process'
@@ -281,6 +282,7 @@ describe('Claude stream-json connection', () => {
       mintEpoch: () => 'epoch-1'
     })
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+    await followTestSinkSnapshots(deferred, journal)
     deferred.bind({ journal, fence: 1, publish: vi.fn() })
     const translator = createClaudeJournalTranslator({ sink: deferred.sink })
     let settled = false

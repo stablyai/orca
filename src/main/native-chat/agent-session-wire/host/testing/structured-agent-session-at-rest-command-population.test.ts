@@ -27,7 +27,9 @@ it.each([
         expect((await fixture.read()).commands?.some((row) => row.name === 'fast')).toBe(true)
       }
       await fixture.retire(true)
-      expect(frames.some((event) => event.type !== 'end' && event.commandsChanged)).toBe(true)
+      await vi.waitFor(() =>
+        expect(frames.some((event) => event.type !== 'end' && event.commandsChanged)).toBe(true)
+      )
       expect(fixture.starts()).toBe(pending ? 0 : 1)
       expect((await fixture.read()).commands?.some((row) => row.name === 'fast')).toBe(true)
       expect(fixture.starts()).toBe(pending ? 1 : 2)

@@ -115,14 +115,14 @@ describe('a proof written after an unverifiable settle', () => {
     ])
 
     await settle(2, null)
-    expect(turnState('turn-1')).toBe('unverifiable')
-    expect(callLifecycle('turn-1', 1)).toBe('failed')
+    expect(await turnState('turn-1')).toBe('unverifiable')
+    expect(await callLifecycle('turn-1', 1)).toBe('failed')
 
     await settle(3, proofFor(1))
-    expect(turnState('turn-1')).toBe('interrupted')
-    expect(callLifecycle('turn-1', 1)).toBe('interrupted')
-    expect(callLifecycle('turn-1', 2)).toBe('failed')
-    expect(callLifecycle('turn-1', 3)).toBe('completed')
+    expect(await turnState('turn-1')).toBe('interrupted')
+    expect(await callLifecycle('turn-1', 1)).toBe('interrupted')
+    expect(await callLifecycle('turn-1', 2)).toBe('failed')
+    expect(await callLifecycle('turn-1', 3)).toBe('completed')
 
     const corrected = journal.cursor()
     await expect(settle(4, proofFor(1))).resolves.toBe(0)
@@ -134,7 +134,7 @@ describe('a proof written after an unverifiable settle', () => {
     await settle(2, null)
     await seedTurn('turn-2', 2)
     await settle(3, null)
-    expect(callLifecycle('turn-2', 1)).toBe('failed')
+    expect(await callLifecycle('turn-2', 1)).toBe('failed')
 
     const unrevised = journal.cursor()
     // Other-owner and legacy ownerless proof cannot settle this generation.
@@ -143,8 +143,8 @@ describe('a proof written after an unverifiable settle', () => {
     expect(journal.cursor()).toEqual(unrevised)
 
     await settle(4, proofFor(1))
-    expect(callLifecycle('turn-1', 1)).toBe('interrupted')
-    expect(turnState('turn-2')).toBe('unverifiable')
-    expect(callLifecycle('turn-2', 1)).toBe('failed')
+    expect(await callLifecycle('turn-1', 1)).toBe('interrupted')
+    expect(await turnState('turn-2')).toBe('unverifiable')
+    expect(await callLifecycle('turn-2', 1)).toBe('failed')
   })
 })
