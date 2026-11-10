@@ -30,7 +30,7 @@ vi.mock('../../../components/bottom-drawer/keyed-bottom-drawer', () => ({
 }))
 vi.mock('../../../components/nav-bar/SheetHeader', () => ({
   SheetHeader: ({ onClose }: { onClose: () => void }) =>
-    createElement('Pressable', { accessibilityLabel: 'Close viewer', onPress: onClose })
+    createElement('button', { accessibilityLabel: 'Close viewer', onPress: onClose })
 }))
 
 let renderer: ReactTestRenderer
@@ -52,7 +52,9 @@ function prompt(multiSelect = false): AskPrompt {
   }
 }
 function buttons(): ReactTestInstance[] {
-  return renderer.root.findAllByType('Pressable')
+  return renderer.root.findAll(
+    (node) => String(node.type) === 'Pressable' || String(node.type) === 'button'
+  )
 }
 function button(label: string): ReactTestInstance {
   return buttons().find((node) => node.props.accessibilityLabel === label)!
@@ -64,7 +66,9 @@ function row(index: number): ReactTestInstance {
 }
 function textAction(label: string): ReactTestInstance {
   return buttons().find((node) =>
-    node.findAllByType('Text').some((text) => text.children.includes(label))
+    node
+      .findAll((child) => String(child.type) === 'Text')
+      .some((text) => text.children.includes(label))
   )!
 }
 function press(node: ReactTestInstance): void {
@@ -97,7 +101,9 @@ it('inspects every preview without choosing, and keeps the original option when 
     )!
   )
   expect(
-    renderer.root.findAllByType('Text').some((node) => node.children.includes(compactedPreview))
+    renderer.root
+      .findAll((node) => String(node.type) === 'Text')
+      .some((node) => node.children.includes(compactedPreview))
   ).toBe(true)
   press(button('Close viewer'))
   act(() => vi.runAllTimers())
@@ -130,13 +136,13 @@ it('preserves generic multi choices while inspecting and choosing, with row chec
   expect(onAnswer).toHaveBeenCalledWith([{ indices: [2] }], expect.any(Function))
 })
 
-it('retains automatic answer for an ordinary question and disables the viewer choice while pending', () => {
+it('retains automatic answer for an ordinary question and disables the viewer choice while pending', async () => {
   vi.useFakeTimers()
   const plain = prompt()
   plain.questions[0]!.options = [{ label: 'Plain' }]
   const onAnswer = mount(plain)
   press(row(0))
-  act(() => vi.runAllTimers())
+  await act(async () => vi.runAllTimers())
   expect(onAnswer).toHaveBeenCalledWith([{ indices: [0] }], expect.any(Function))
   act(() => renderer.unmount())
   act(() => {
