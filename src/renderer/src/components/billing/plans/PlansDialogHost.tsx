@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
 import { Dialog } from '@/components/ui/dialog'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
@@ -7,7 +7,8 @@ import { CheckoutPanel } from '../checkout/CheckoutPanel'
 import { useCheckoutFlow } from '../checkout/use-checkout-flow'
 import { openFailureCopy } from '../plan-billing-copy'
 import type { PlanBillingNotice } from '../PlanBillingSection'
-import { openTeamPage } from '../team/team-page-store'
+import { returnAfterPaidCheckout } from '../checkout/checkout-return'
+import { cancelOrcaCloudAfterCheckout } from '@/lib/orca-cloud-after-checkout'
 import { useOrcaBillingStatus } from '../use-orca-billing-status'
 import { PlansDialogContent } from './PlansDialogContent'
 import { closePlansPage, usePlansPageState } from './plans-page-store'
@@ -17,7 +18,7 @@ import { useOrgSeatCount } from './use-org-seat-count'
  * The plans page. A dialog because choosing a plan is a decision step in front of Checkout;
  * it reads the billing service's offers, so prices and limits are never hardcoded here.
  * Checkout itself runs on Stripe's hosted page in the browser; this dialog follows it and,
- * once paid, hands over to the Team page.
+ * once paid, returns to the Orca Cloud wall that opened it, or hands over to the Team page.
  */
 export function PlansDialogHost(): React.JSX.Element {
   const t = useTranslate()
@@ -29,11 +30,7 @@ export function PlansDialogHost(): React.JSX.Element {
   const [notice, setNotice] = useState<PlanBillingNotice | null>(null)
   const [orderedAt, setOrderedAt] = useState(0)
 
-  const onPaid = useCallback((paidSeats: number) => {
-    closePlansPage()
-    openTeamPage({ kind: 'checkout-success', seats: paidSeats })
-  }, [])
-  const checkout = useCheckoutFlow({ onPaid })
+  const checkout = useCheckoutFlow({ onPaid: returnAfterPaidCheckout })
 
   const openPortal = async (): Promise<void> => {
     setBusy(true)
@@ -69,6 +66,8 @@ export function PlansDialogHost(): React.JSX.Element {
           // Closing ends the watch: polling stops and the next open starts from the plans.
           checkout.reset()
           closePlansPage()
+          // Leaving without paying: nothing to return to Orca Cloud for.
+          cancelOrcaCloudAfterCheckout()
           setNotice(null)
         }
       }}

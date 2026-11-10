@@ -80,8 +80,8 @@ export function vmBuildFailureCopy(
               'Cloud workspaces are part of the Team plan. Nothing was created, and you weren’t charged.'
             )
           : t(
-              'auto.components.worktree.creation.VmBuildFailureCard.planBodyMember2',
-              'Ask an owner or admin to choose a Team plan. Nothing was created, and you weren’t charged.'
+              'auto.components.worktree.creation.VmBuildFailureCard.planBodyMember3',
+              'Nothing was created, and you weren’t charged. Ask an owner or admin to choose a Team plan.'
             )
       }
     case 'hoursUsed':
@@ -96,8 +96,8 @@ export function vmBuildFailureCopy(
               'Your team has used this month’s sandbox hours. Turn on overage to keep starting sandboxes. Nothing was created, and you weren’t charged.'
             )
           : t(
-              'auto.components.worktree.creation.VmBuildFailureCard.outOfHoursBodyMember',
-              'Your team has used this month’s sandbox hours. Ask an owner or admin to add hours. Nothing was created, and you weren’t charged.'
+              'auto.components.worktree.creation.VmBuildFailureCard.outOfHoursBodyMember2',
+              'Your team has used this month’s sandbox hours. Nothing was created, and you weren’t charged. Ask an owner or admin to add hours.'
             )
       }
     case 'spendCap':
@@ -112,8 +112,8 @@ export function vmBuildFailureCopy(
               'Your team has reached this month’s spend cap. Raise it to keep starting sandboxes. Nothing was created, and you weren’t charged.'
             )
           : t(
-              'auto.components.worktree.creation.VmBuildFailureCard.spendCapReachedBodyMember2',
-              'Your team has reached this month’s spend cap. Ask an owner or admin to raise the spend cap. Nothing was created, and you weren’t charged.'
+              'auto.components.worktree.creation.VmBuildFailureCard.spendCapReachedBodyMember3',
+              'Your team has reached this month’s spend cap. Nothing was created, and you weren’t charged. Ask an owner or admin to raise the spend cap.'
             )
       }
     case 'payment':
@@ -128,8 +128,8 @@ export function vmBuildFailureCopy(
               'New sandboxes can’t start until the payment goes through. Nothing was created, and you weren’t charged.'
             )
           : t(
-              'auto.components.worktree.creation.VmBuildFailureCard.paymentFailedBodyMember',
-              'New sandboxes can’t start until the payment goes through. Ask an owner or admin to update the payment method. Nothing was created, and you weren’t charged.'
+              'auto.components.worktree.creation.VmBuildFailureCard.paymentFailedBodyMember2',
+              'New sandboxes can’t start until the payment goes through. Nothing was created, and you weren’t charged. Ask an owner or admin to update the payment method.'
             )
       }
     case 'concurrency':
