@@ -48,6 +48,8 @@ export function cloudPanelSectionsData(args: {
   }
 }
 
+const NOT_CONFIGURED: CloudSecretsErrorCode = 'not_configured'
+
 export type CloudPanelSectionsLoad =
   | { status: 'loading' }
   | { status: 'failed'; error: CloudSecretsErrorCode }
@@ -73,7 +75,7 @@ export function useCloudPanelSections(args: {
   useEffect(() => {
     const secrets = window.api.cloudSecrets
     if (!secrets) {
-      setLoad({ status: 'failed', error: 'not_configured' })
+      setLoad({ status: 'failed', error: NOT_CONFIGURED })
       return
     }
     let cancelled = false

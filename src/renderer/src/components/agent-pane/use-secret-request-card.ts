@@ -158,12 +158,6 @@ export function useSecretRequestCard(args: {
     return () => window.clearTimeout(timer)
   }, [environmentId, requestId, event.expiresAt, local])
 
-  useEffect(() => {
-    if (local === 'expired') {
-      setValue('')
-    }
-  }, [local])
-
   // D3 hold: touch now (if a minute has passed) and every minute while focused or holding a value.
   const holding = (focused || value.length > 0) && local === null
   useEffect(() => {
@@ -264,7 +258,8 @@ export function useSecretRequestCard(args: {
       suggestedRepo: event.scope === 'repo',
       scopes,
       scope: effectiveScope,
-      value,
+      // An expired request shows no field, and what was typed doesn't come back.
+      value: local === 'expired' ? '' : value,
       phase,
       fieldError,
       more,

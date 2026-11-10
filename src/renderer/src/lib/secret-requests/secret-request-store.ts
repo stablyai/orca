@@ -26,8 +26,6 @@ export type SecretRequestEntry = {
   receivedAt: number
   /** When this window last sent touchRequest (D3: at most once a minute, across card remounts). */
   touchedAt: number
-  /** The stream reconnected and orcad hasn't replayed this request yet; dropped if it never does. */
-  stale: boolean
 }
 
 type State = { entries: ReadonlyMap<string, SecretRequestEntry> }
@@ -71,9 +69,11 @@ export function applySecretRequested(
     settled: existing?.settled ?? null,
     local: existing?.local ?? null,
     receivedAt: existing?.receivedAt ?? now,
-    touchedAt: existing?.touchedAt ?? 0,
-    stale: false
+    touchedAt: existing?.touchedAt ?? 0
   })
+  const seen = seenSinceReady.get(environmentId) ?? new Set<string>()
+  seen.add(event.requestId)
+  seenSinceReady.set(environmentId, seen)
   commit(next)
 }
 
@@ -85,43 +85,25 @@ export function applySecretRequestUpdated(
   setSecretRequestExpiry(environmentId, event.requestId, event.expiresAt)
 }
 
-/** A request this window can no longer act on stays only while it shows what the person did. */
-const REPLAY_GRACE_MS = 5_000
-const staleTimers = new Map<string, ReturnType<typeof setTimeout>>()
+// Requests seen on each host's stream since its last 'ready'. orcad replays every pending request
+// right before 'ready', so at 'ready' anything unresolved and unseen was settled while we were away.
+const seenSinceReady = new Map<string, Set<string>>()
 
-/**
- * The stream (re)attached: orcad replays every request still pending right after. Requests it
- * settled while this window was away aren't replayed, so whatever isn't replayed soon is dropped.
- */
-export function markSecretRequestsReplaying(environmentId: string): void {
-  let changed = false
-  const next = new Map(state.entries)
-  for (const [key, entry] of next) {
-    if (entry.environmentId === environmentId && entry.local === null && entry.settled === null) {
-      next.set(key, { ...entry, stale: true })
-      changed = true
-    }
-  }
-  if (!changed) {
-    return
-  }
-  commit(next)
-  clearTimeout(staleTimers.get(environmentId))
-  staleTimers.set(
-    environmentId,
-    setTimeout(() => {
-      staleTimers.delete(environmentId)
-      const pruned = new Map(
-        [...state.entries].filter(
-          ([, entry]) =>
-            !(entry.environmentId === environmentId && entry.stale && entry.local === null)
-        )
-      )
-      if (pruned.size !== state.entries.size) {
-        commit(pruned)
-      }
-    }, REPLAY_GRACE_MS)
+/** The stream sent 'ready': drop requests orcad no longer has (unless this window is showing a result). */
+export function pruneSecretRequestsOnReady(environmentId: string): void {
+  const seen = seenSinceReady.get(environmentId) ?? new Set<string>()
+  seenSinceReady.set(environmentId, new Set())
+  const pruned = new Map(
+    [...state.entries].filter(
+      ([, entry]) =>
+        entry.environmentId !== environmentId ||
+        entry.local !== null ||
+        seen.has(entry.event.requestId)
+    )
   )
+  if (pruned.size !== state.entries.size) {
+    commit(pruned)
+  }
 }
 
 export function setSecretRequestTouched(
@@ -236,10 +218,7 @@ export function readSecretRequests(): readonly SecretRequestEntry[] {
 }
 
 export function resetSecretRequestStoreForTests(): void {
-  for (const timer of staleTimers.values()) {
-    clearTimeout(timer)
-  }
-  staleTimers.clear()
+  seenSinceReady.clear()
   state = { entries: new Map() }
   cachedFor = null
   cachedList = EMPTY

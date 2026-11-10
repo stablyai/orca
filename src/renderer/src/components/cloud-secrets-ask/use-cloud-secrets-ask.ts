@@ -15,6 +15,9 @@ import {
   type CloudSecretsAskData
 } from './cloud-secrets-ask-model'
 
+const UNAVAILABLE: CloudSecretsErrorCode = 'unavailable'
+const NOT_CONFIGURED: CloudSecretsErrorCode = 'not_configured'
+
 export type CloudSecretsAskLoad =
   | { status: 'loading' }
   /** No Cloud, no environment for this repo, or nothing declared: S2 stays hidden. */
@@ -51,7 +54,7 @@ export function useCloudSecretsAskLoad(repoKey: string | null): {
       }
       // A list that failed isn't "no environment": the caller must not take it as nothing missing.
       if (!list || !list.ok) {
-        setLoad({ status: 'failed', error: 'unavailable' })
+        setLoad({ status: 'failed', error: UNAVAILABLE })
         return
       }
       const environment = environmentForRepo(list.data.environments, repoKey)
@@ -97,7 +100,7 @@ export async function saveMissingSecrets(args: {
 }): Promise<CloudSecretsSaveResult> {
   const api = window.api.cloudSecrets
   if (!api) {
-    return { ok: false, error: 'not_configured' }
+    return { ok: false, error: NOT_CONFIGURED }
   }
   const byScope = new Map<CloudSecretScope, Record<string, string>>()
   for (const [name, value] of Object.entries(args.values)) {

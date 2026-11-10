@@ -92,12 +92,12 @@ export function SecretRequestCard({
   const ownRef = React.useRef<HTMLDivElement>(null)
   const focusedWithin = React.useRef(false)
 
-  // When the form gives way to the result, focus that was in it lands on the result's first action
-  // instead of falling to the page.
+  // When the form gives way to the result, focus that was in it lands on Dismiss (never Restart, so a
+  // second Enter can't relaunch the agent) instead of falling to the page.
   React.useLayoutEffect(() => {
     const root = ownRef.current
     if (done && focusedWithin.current && root && !root.contains(document.activeElement)) {
-      root.querySelector<HTMLElement>('button')?.focus()
+      root.querySelector<HTMLElement>('[data-secret-request-dismiss]')?.focus()
     }
   }, [done])
 
@@ -294,7 +294,7 @@ export function SecretRequestCard({
                   type="button"
                   variant="ghost"
                   size="xs"
-                  className="ms-auto aria-disabled:opacity-50"
+                  className="ms-auto"
                   aria-disabled={saving || undefined}
                   onClick={saving ? undefined : actions.onNotNow}
                 >
@@ -306,7 +306,6 @@ export function SecretRequestCard({
                   aria-disabled={!canSave || undefined}
                   aria-busy={saving || undefined}
                   onClick={canSave ? actions.onAdd : undefined}
-                  className="aria-disabled:opacity-50"
                 >
                   {saving ? <Loader2 aria-hidden className="motion-safe:animate-spin" /> : null}
                   {t('secretRequest.add', 'Add secret')}

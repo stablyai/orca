@@ -155,7 +155,7 @@ export function SecretRequestPanePortals({
 }: {
   controller: TerminalPaneController
 }): React.JSX.Element {
-  const { managedPanes, tabId, activePane, isActive, worktreeId } = controller
+  const { managedPanes, tabId, activePane, isActive, isRendererVisible, worktreeId } = controller
   return (
     <>
       {managedPanes.map((pane) => (
@@ -164,7 +164,8 @@ export function SecretRequestPanePortals({
           pane={pane}
           tabId={tabId}
           worktreeId={worktreeId}
-          visible={isActive}
+          // On screen, even in a split group that isn't the active one.
+          visible={isRendererVisible}
           primary={isActive && activePane?.id === pane.id}
         />
       ))}

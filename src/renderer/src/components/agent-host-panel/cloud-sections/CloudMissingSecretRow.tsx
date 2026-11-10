@@ -91,7 +91,7 @@ export function CloudMissingSecretRow({
         {expanded ? null : !canAdd ? (
           <span className="ms-auto text-end text-xs text-muted-foreground">
             {data.sharing?.ownerName
-              ? t('agentHostPanel.env.askOwner', 'Ask {{owner}} or an admin to add it.', {
+              ? t('agentHostPanel.env.askOwner', 'Ask {{owner}}, an owner or an admin to add it.', {
                   owner: data.sharing.ownerName
                 })
               : t('agentHostPanel.keys.askAdmin', 'Ask an owner or admin to add one.')}
@@ -149,7 +149,7 @@ export function CloudMissingSecretRow({
               >
                 <SelectTrigger
                   size="sm"
-                  className="w-32 shrink-0 text-xs"
+                  className="w-32 shrink-0"
                   aria-label={t('cloudSecretsAsk.scopeLabel', 'Scope for {{name}}', { name })}
                 >
                   <SelectValue />
@@ -203,7 +203,6 @@ export function CloudMissingSecretRow({
                 aria-disabled={!value || saving || undefined}
                 aria-busy={saving || undefined}
                 onClick={value && !saving ? () => void save() : undefined}
-                className="aria-disabled:opacity-50"
               >
                 {saving ? <Loader2 aria-hidden className="motion-safe:animate-spin" /> : null}
                 {t('agentHostPanel.env.save', 'Save')}

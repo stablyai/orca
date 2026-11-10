@@ -1510,6 +1510,14 @@
       "lines_other": "Multi-line value · {{count}} lines"
     }
   },
+  "cloudSecretsAsk": {
+    "buildTeamOnly_one": "The environment build only uses team values. Ask an owner or admin to add {{name}} as a team secret.",
+    "buildTeamOnly_other": "The environment build only uses team values. Ask an owner or admin to add {{name}} as team secrets.",
+    "missing_one": "{{count}} secret missing",
+    "missing_other": "{{count}} secrets missing",
+    "save_one": "Save secret",
+    "save_other": "Save {{count}} secrets"
+  },
   "codeHost": {
     "bitbucketConnect": {
       "accessTokenRequired": "Enter an access token.",
@@ -2356,6 +2364,10 @@
         "unknown": "Restart Orca to try again."
       }
     }
+  },
+  "secretRequest": {
+    "more_one": "{{count}} more request",
+    "more_other": "{{count}} more requests"
   },
   "sessionSearch": {
     "panel": {

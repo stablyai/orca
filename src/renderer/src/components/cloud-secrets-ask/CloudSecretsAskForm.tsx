@@ -4,7 +4,6 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { getIntlLocale } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
-import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Select,
@@ -215,14 +214,14 @@ export function CloudSecretsAskForm({
       ) : null}
       {state.pasteOpen ? (
         <div className="flex flex-col gap-1.5 ps-7">
-          <Label htmlFor={`${id}-paste`} className="text-xs text-muted-foreground">
+          <label htmlFor={`${id}-paste`} className="text-xs text-muted-foreground">
             {t('cloudSecretsAsk.pasteLabel', 'Paste the contents of a .env file')}
-          </Label>
+          </label>
           <Textarea
             id={`${id}-paste`}
             variant="code"
             value=""
-            placeholder="STRIPE_TEST_KEY=sk_test_…"
+            placeholder={t('cloudSecretsAsk.pastePlaceholder', 'NAME=value')}
             spellCheck={false}
             autoComplete="off"
             data-1p-ignore=""
@@ -254,13 +253,13 @@ export function CloudSecretsAskForm({
               key={name}
               className="grid grid-cols-[minmax(0,11rem)_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1"
             >
-              <Label
+              <label
                 htmlFor={`${id}-${name}`}
                 className="h-8 min-w-0 truncate font-mono text-xs leading-8 font-normal text-foreground"
                 title={name}
               >
                 {name}
-              </Label>
+              </label>
               <div
                 className="min-w-0"
                 onKeyDown={(event) => {
@@ -288,7 +287,7 @@ export function CloudSecretsAskForm({
                 >
                   <SelectTrigger
                     size="sm"
-                    className="w-32 text-xs"
+                    className="w-32"
                     aria-label={t('cloudSecretsAsk.scopeLabel', 'Scope for {{name}}', { name })}
                   >
                     <SelectValue />
@@ -359,7 +358,6 @@ export function CloudSecretsAskForm({
             aria-disabled={!canSave || undefined}
             aria-busy={saving || undefined}
             onClick={canSave ? actions.onSave : undefined}
-            className="aria-disabled:opacity-50"
           >
             {saving ? <Loader2 aria-hidden className="motion-safe:animate-spin" /> : null}
             {filled.length === 0

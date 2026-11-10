@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { SecretRequestedEvent } from '../../../../shared/secret-request-contract'
 import {
   applySecretRequested,
@@ -6,7 +6,7 @@ import {
   dismissSecretRequest,
   readSecretRequests,
   resetSecretRequestStoreForTests,
-  markSecretRequestsReplaying,
+  pruneSecretRequestsOnReady,
   setSecretRequestExpiry,
   setSecretRequestLocal
 } from './secret-request-store'
@@ -80,26 +80,18 @@ describe('secret request store', () => {
     expect(readSecretRequests()[0].event.expiresAt).toBe(99_000_000)
   })
 
-  it('drops what orcad no longer replays after the stream reconnects', () => {
-    vi.useFakeTimers()
+  it('on ready, drops what orcad no longer replays (it replays pending requests before ready)', () => {
     applySecretRequested('env', requested())
     applySecretRequested('env', requested({ requestId: 'sr_bbbbbbbb', name: 'B' }))
+    applySecretRequested('env', requested({ requestId: 'sr_cccccccc', name: 'C' }))
+    pruneSecretRequestsOnReady('env')
+    expect(readSecretRequests()).toHaveLength(3)
     setSecretRequestLocal('env', 'sr_bbbbbbbb', 'saved')
-    markSecretRequestsReplaying('env')
-    vi.advanceTimersByTime(6_000)
-    // The settled one is gone; the one this window finished stays until dismissed.
-    expect(readSecretRequests().map((entry) => entry.event.name)).toEqual(['B'])
-    vi.useRealTimers()
-  })
-
-  it('keeps a request orcad replays after a reconnect', () => {
-    vi.useFakeTimers()
-    applySecretRequested('env', requested())
-    markSecretRequestsReplaying('env')
-    applySecretRequested('env', requested())
-    vi.advanceTimersByTime(6_000)
-    expect(readSecretRequests()).toHaveLength(1)
-    vi.useRealTimers()
+    // Reconnect: only C is still pending in orcad and replayed, then ready.
+    applySecretRequested('env', requested({ requestId: 'sr_cccccccc', name: 'C' }))
+    pruneSecretRequestsOnReady('env')
+    // A was settled while away; B is kept because this window is showing its result.
+    expect(readSecretRequests().map((entry) => entry.event.name)).toEqual(['B', 'C'])
   })
 
   it('keeps requests from different hosts apart', () => {

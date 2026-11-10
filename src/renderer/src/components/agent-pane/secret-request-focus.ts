@@ -86,7 +86,10 @@ function onKeyDown(event: KeyboardEvent): void {
   const target =
     inside ??
     all.find((record) => active !== null && record.container.contains(active)) ??
-    all.find((record) => record.primary)
+    // From the terminal or nowhere only: inside Settings or a modal, F6 belongs to that surface.
+    (active === null || active === document.body || active.closest('.xterm') !== null
+      ? all.find((record) => record.primary)
+      : undefined)
   if (!target) {
     return
   }

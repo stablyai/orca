@@ -27,14 +27,15 @@ export function SecretRequestTitle({
   const text = agent
     ? t('secretRequest.title', '{{agent}} asked for {{name}}', { agent, name: NAME_SLOT })
     : t('secretRequest.titleUnknown', 'An agent asked for {{name}}', { name: NAME_SLOT })
+  const at = text.indexOf(NAME_SLOT)
+  if (at === -1) {
+    return <>{text}</>
+  }
   return (
     <>
-      {text.split(NAME_SLOT).map((part, index) => (
-        <React.Fragment key={index}>
-          {index > 0 ? <code className="font-mono text-[0.95em]">{name}</code> : null}
-          {part}
-        </React.Fragment>
-      ))}
+      {text.slice(0, at)}
+      <code className="font-mono text-[0.95em]">{name}</code>
+      {text.slice(at + NAME_SLOT.length)}
     </>
   )
 }
@@ -119,7 +120,7 @@ export function SecretRequestScopeControl({
     >
       <SelectTrigger
         size="sm"
-        className="w-32 shrink-0 text-xs"
+        className="w-32 shrink-0"
         aria-label={t('secretRequest.scopeLabel', 'Scope for {{name}}', { name })}
       >
         <SelectValue />
@@ -200,7 +201,13 @@ export function SecretRequestDone({
             {t('secretRequest.restart', 'Restart {{agent}}', { agent: agentName })}
           </Button>
         ) : null}
-        <Button type="button" variant="ghost" size="xs" onClick={onDismiss}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="xs"
+          data-secret-request-dismiss=""
+          onClick={onDismiss}
+        >
           {t('secretRequest.dismiss', 'Dismiss')}
         </Button>
       </div>

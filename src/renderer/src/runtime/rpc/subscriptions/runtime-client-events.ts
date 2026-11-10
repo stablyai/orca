@@ -18,7 +18,7 @@ import {
   applySecretRequested,
   applySecretRequestSettled,
   applySecretRequestUpdated,
-  markSecretRequestsReplaying
+  pruneSecretRequestsOnReady
 } from '@/lib/secret-requests/secret-request-store'
 import {
   isSecretRequestedEvent,
@@ -80,8 +80,8 @@ function handleRuntimeClientEventResponse(
   }
   const message = response.result as RuntimeClientEventStreamMessage
   if (message.type === 'ready') {
-    // orcad replays pending secret requests right after this; ones it doesn't replay are gone.
-    markSecretRequestsReplaying(environmentId)
+    // orcad replays pending secret requests just before this; ones it didn't replay are gone.
+    pruneSecretRequestsOnReady(environmentId)
     for (const sshState of message.snapshot?.sshStates ?? []) {
       const state = admitSshConnectionState(sshState.state, sshState.targetId)
       if (state) {

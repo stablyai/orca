@@ -27137,11 +27137,11 @@
       "memberHelp": "Saved to your personal Cloud secrets, so only your workspaces get it.",
       "cancel": "Cancel",
       "save": "Save",
-      "guestOwner": "Personal values come from {{owner}}, who owns this workspace.",
-      "guest": "Personal values come from the person who owns this workspace.",
+      "guestOwner": "In a shared workspace, Personal values come from its owner, {{owner}}, not from you.",
+      "guest": "In a shared workspace, Personal values come from its owner, not from you.",
       "empty": "No variables from Cloud secrets yet.",
       "overrides": "overrides {{scopes}}",
-      "askOwner": "Ask {{owner}} or an admin to add it."
+      "askOwner": "Ask {{owner}}, an owner or an admin to add it."
     },
     "keys": {
       "askAdmin": "Ask an owner or admin to add one.",
@@ -27181,7 +27181,6 @@
     "saved": "Secrets saved",
     "savedDetail": "New terminals and agents in this workspace get them within a few seconds.",
     "pasteEnv": "Paste .env",
-    "buildTeamOnly": "The environment build only uses team values. Ask an owner or admin to add {{name}} as a team secret.",
     "pasteLabel": "Paste the contents of a .env file",
     "pasteFound": "Found {{matched}} of {{count}}. {{ignored}} other lines ignored.",
     "valuePlaceholder": "Value",
@@ -27200,7 +27199,8 @@
     "dialogTitle": "Add missing secrets",
     "dialogDetail": "Values go to your Cloud secrets. New terminals and agents in this workspace get them within a few seconds.",
     "buildTeamOnly_one": "The environment build only uses team values. Ask an owner or admin to add {{name}} as a team secret.",
-    "buildTeamOnly_other": "The environment build only uses team values. Ask an owner or admin to add {{name}} as team secrets."
+    "buildTeamOnly_other": "The environment build only uses team values. Ask an owner or admin to add {{name}} as team secrets.",
+    "pastePlaceholder": "NAME=value"
   },
   "cloudAgents": {
     "source": {
@@ -27244,6 +27244,8 @@
     "announce": "{{title}}. Press F6 to answer.",
     "expand": "Show request",
     "collapse": "Hide request",
-    "unseen": "Open that workspace to answer. The request waits up to 15 minutes."
+    "unseen": "Open that workspace to answer. The request waits up to 15 minutes.",
+    "unseenIn": "In {{workspace}}. The request waits up to 15 minutes.",
+    "openWorkspace": "Open"
   }
 }

@@ -44,7 +44,11 @@ function ownerLabel(owner: CloudKeyOwner, t: Translate): string {
       return 'AWS'
     case 'other':
       return t('agentHostPanel.keys.other', 'Other')
-    default:
+    case 'claude':
+    case 'codex':
+    case 'gemini':
+    case 'cursor':
+    case 'copilot':
       return OWNER_LABEL[owner]
   }
 }
@@ -226,12 +230,15 @@ export function CloudEnvironmentPanelSection({
   onRetry,
   onAdd,
   focusSecret,
-  initialExpanded = null
+  initialExpanded = null,
+  showLoadError = true
 }: {
   load: CloudPanelSectionsLoad
   number?: React.ReactNode
   onRetry: () => void
   onAdd: CloudPanelAddSecret
+  /** Off when section 2 already shows the shared read's error. */
+  showLoadError?: boolean
   /** Deep link `{ secret: NAME }`: that missing row opens with its field focused. */
   focusSecret?: string
   /** Fixtures only: a row shown already expanded. */
@@ -276,12 +283,14 @@ export function CloudEnvironmentPanelSection({
       {load.status === 'loading' ? (
         <LoadingRows />
       ) : load.status === 'failed' ? (
-        <InlineError
-          density="compact"
-          title={cloudPanelLoadErrorTitle(load.error, t)}
-          retryLabel={t('agentHostPanel.retry', 'Try again')}
-          onRetry={onRetry}
-        />
+        showLoadError ? (
+          <InlineError
+            density="compact"
+            title={cloudPanelLoadErrorTitle(load.error, t)}
+            retryLabel={t('agentHostPanel.retry', 'Try again')}
+            onRetry={onRetry}
+          />
+        ) : null
       ) : rows.length === 0 ? (
         <p className="text-xs text-muted-foreground">
           {t('agentHostPanel.env.empty', 'No variables from Cloud secrets yet.')}
@@ -356,20 +365,6 @@ export function CloudPanelSections({
   initialExpanded?: string | null
   className?: string
 }): React.JSX.Element {
-  const t = useTranslate()
-  if (load.status === 'failed') {
-    // One read feeds both sections, so one error (and one announcement) covers them.
-    return (
-      <div className={cn('px-5 py-4', className)}>
-        <InlineError
-          density="compact"
-          title={cloudPanelLoadErrorTitle(load.error, t)}
-          retryLabel={t('agentHostPanel.retry', 'Try again')}
-          onRetry={onRetry}
-        />
-      </div>
-    )
-  }
   return (
     <div className={cn('flex flex-col divide-y divide-border', className)}>
       <CloudAgentKeysSection
@@ -387,6 +382,8 @@ export function CloudPanelSections({
         onAdd={onAdd}
         focusSecret={focusSecret}
         initialExpanded={initialExpanded}
+        // One read feeds both sections, so section 2 alone shows (and announces) its error.
+        showLoadError={false}
       />
     </div>
   )
