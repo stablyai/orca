@@ -25,6 +25,7 @@ import {
 
 class DocumentGuest extends DestroyedGuestTestContents {
   readonly mainFrame = { frames: [], send: vi.fn<(channel: string, generation: string) => void>() }
+  readonly navigationHistory = { length: () => 1 }
   audible = true
 
   constructor(
