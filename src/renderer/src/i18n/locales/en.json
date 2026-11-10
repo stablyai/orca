@@ -27899,7 +27899,6 @@
   "agentSignInStrip": {
     "sandbox": "the sandbox",
     "queued": "Queued prompt: {{prompt}}",
-    "copyCode": "Copy code",
     "pasteLabel": "Code from claude.ai",
     "continue": "Continue",
     "otherWays": "Other ways",
@@ -27921,7 +27920,6 @@
     "waitingAnnounce": "Waiting for you to approve in your browser.",
     "deviceTitle": "Enter this code on auth.openai.com",
     "deviceGuard": "Only continue if you started this sign-in in Orca.",
-    "openPage": "Open page",
     "deviceAnnounce": "Enter the code on auth.openai.com.",
     "pasteTitle": "Paste the code from claude.ai",
     "pasteAnnounce": "Paste the code from claude.ai.",
@@ -27938,6 +27936,10 @@
     "declined": "Sign-in was declined on {{site}}",
     "offline": "Can’t reach {{host}}",
     "portBusy": "The browser sign-in couldn’t start here",
-    "failed": "{{agent}} couldn’t finish signing in"
+    "failed": "{{agent}} couldn’t finish signing in",
+    "queuedPrefix": "Queued:",
+    "pasteInstead": "Paste a code instead",
+    "cancelSignIn": "Cancel sign-in",
+    "copyAndOpen": "Copy code and open"
   }
 }

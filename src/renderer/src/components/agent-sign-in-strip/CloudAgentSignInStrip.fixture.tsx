@@ -15,7 +15,7 @@ const noop = (): void => {}
 const ACTIONS: CloudStripActions = {
   primary: noop,
   submitCode: noop,
-  copyCode: noop,
+  pasteCode: noop,
   useCode: noop,
   useApiKey: noop,
   cancel: noop

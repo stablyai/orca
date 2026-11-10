@@ -121,7 +121,10 @@ function CloudStripPortal({
           gateActions.signIn()
           return
         case 'openAgain':
-        case 'openPage':
+          gateActions.openLink(action.url)
+          return
+        case 'copyAndOpen':
+          gateActions.copyText(action.code)
           gateActions.openLink(action.url)
           return
         case 'retry':
@@ -133,7 +136,7 @@ function CloudStripPortal({
       }
     },
     submitCode: gateActions.submitCode,
-    copyCode: gateActions.copyText,
+    pasteCode: gateActions.useCode,
     useCode: gateActions.useCode,
     useApiKey: () => openSettings('cloud-secrets'),
     cancel: () => (hold ? releaseCloudAgentHold(key, 'cancel') : gateActions.cancel())

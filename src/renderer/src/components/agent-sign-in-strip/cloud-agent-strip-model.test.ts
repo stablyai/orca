@@ -39,6 +39,10 @@ describe('cloudAgentStripModel', () => {
     })
     expect(device).toMatchObject({
       code: 'ABCD-1234',
+      primary: {
+        label: 'Copy code and open',
+        action: { kind: 'copyAndOpen', url: 'https://auth.openai.com/d', code: 'ABCD-1234' }
+      },
       detail: 'Only continue if you started this sign-in in Orca.'
     })
     const error = cloudAgentStripModel({

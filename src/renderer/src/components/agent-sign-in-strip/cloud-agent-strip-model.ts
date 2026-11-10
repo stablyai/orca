@@ -13,7 +13,7 @@ export type CloudStripPrimary =
   | { kind: 'renew' }
   | { kind: 'signIn' }
   | { kind: 'openAgain'; url: string }
-  | { kind: 'openPage'; url: string }
+  | { kind: 'copyAndOpen'; url: string; code: string }
   | { kind: 'submitCode' }
   | { kind: 'retry' }
   | { kind: 'useDeviceCode' }
@@ -31,6 +31,8 @@ export type CloudStripModel = {
   paste: { submitting: boolean; refusal: string | null } | null
   /** "Other ways" under ⋯: the code fallback and the key path. */
   otherWays: boolean
+  /** Already on a code: ⋯ offers the paste fallback and Cancel instead of "Use a code". */
+  codeStep?: boolean
   /** One sentence for the polite region. */
   announcement: string
 }
@@ -141,10 +143,12 @@ export function cloudAgentStripModel(args: {
           'Only continue if you started this sign-in in Orca.'
         ),
         description: null,
+        // One primary, like S0 and the build-sheet row (Neil): copy the code, then open the page.
         primary: {
-          label: t('agentSignInStrip.openPage', 'Open page'),
-          action: { kind: 'openPage', url: view.url }
+          label: t('agentSignInStrip.copyAndOpen', 'Copy code and open'),
+          action: { kind: 'copyAndOpen', url: view.url, code: view.userCode }
         },
+        codeStep: true,
         code: view.userCode,
         announcement: t('agentSignInStrip.deviceAnnounce', 'Enter the code on auth.openai.com.')
       }

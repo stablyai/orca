@@ -6,7 +6,6 @@ import {
   CircleAlert,
   CircleCheck,
   CircleDashed,
-  Copy,
   Loader2,
   MoreHorizontal,
   TriangleAlert,
@@ -38,8 +37,9 @@ export function cloudStripWidth(paneWidth: number): CloudStripWidth {
 export type CloudStripActions = {
   primary: (action: CloudStripPrimary) => void
   submitCode: (code: string) => void
-  copyCode: (code: string) => void
   useCode: () => void
+  /** From a device code to pasting a code (the gate's code fallback). */
+  pasteCode: () => void
   useApiKey: () => void
   cancel: () => void
 }
@@ -128,9 +128,12 @@ export function CloudAgentSignInStrip({
               <span
                 tabIndex={0}
                 aria-label={t('agentSignInStrip.queued', 'Queued prompt: {{prompt}}', { prompt })}
-                className="truncate rounded-md border border-border px-2 py-1 text-xs text-muted-foreground"
+                className="truncate rounded-md border border-border px-2 py-1 text-xs text-foreground"
               >
-                {prompt}
+                <span aria-hidden className="text-muted-foreground">
+                  {t('agentSignInStrip.queuedPrefix', 'Queued:')}{' '}
+                </span>
+                <span aria-hidden>{prompt}</span>
               </span>
             </TooltipTrigger>
             <TooltipContent className="max-w-80 whitespace-pre-wrap">{prompt}</TooltipContent>
@@ -141,20 +144,9 @@ export function CloudAgentSignInStrip({
       ) : null}
       <div data-strip-actions className="flex h-8 min-w-0 items-center justify-end gap-1.5">
         {model.code ? (
-          <span className="flex min-w-0 items-center gap-1">
-            <code className="select-all rounded bg-muted px-1.5 font-mono text-xs tracking-wider">
-              {model.code}
-            </code>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              aria-label={t('agentSignInStrip.copyCode', 'Copy code')}
-              onClick={() => model.code && actions.copyCode(model.code)}
-            >
-              <Copy aria-hidden />
-            </Button>
-          </span>
+          <code className="shrink-0 select-all rounded bg-muted px-1.5 font-mono text-xs tracking-wider">
+            {model.code}
+          </code>
         ) : null}
         {model.paste ? (
           <form
@@ -209,9 +201,20 @@ export function CloudAgentSignInStrip({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={actions.useCode}>
-                {t('agentSignInStrip.useCodeInstead', 'Use a code instead')}
-              </DropdownMenuItem>
+              {model.codeStep ? (
+                <>
+                  <DropdownMenuItem onSelect={actions.pasteCode}>
+                    {t('agentSignInStrip.pasteInstead', 'Paste a code instead')}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={actions.cancel}>
+                    {t('agentSignInStrip.cancelSignIn', 'Cancel sign-in')}
+                  </DropdownMenuItem>
+                </>
+              ) : (
+                <DropdownMenuItem onSelect={actions.useCode}>
+                  {t('agentSignInStrip.useCodeInstead', 'Use a code instead')}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onSelect={actions.useApiKey}>
                 {t('agentSignInStrip.useApiKey', 'Use an API key instead')}
               </DropdownMenuItem>
