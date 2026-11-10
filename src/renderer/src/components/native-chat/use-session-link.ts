@@ -1,4 +1,4 @@
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { executeSessionLinkMutation, type LinkMutation } from './session-link-mutation'
 import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'

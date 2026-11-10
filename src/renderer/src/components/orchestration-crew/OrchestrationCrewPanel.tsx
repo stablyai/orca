@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { PanelRight, PanelRightClose, Workflow } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import { formatStateCount } from '@/components/sidebar/workspace-card/activity/worktree-card-agent-summary'
 import type { WorktreeStatus } from '../../../../shared/worktree-status-rollup'

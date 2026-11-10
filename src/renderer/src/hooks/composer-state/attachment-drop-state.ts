@@ -22,9 +22,9 @@ import { translate } from '@/i18n/i18n'
 import { joinPath } from '@/lib/path'
 import { DROP_STAGING_RELATIVE_DIR } from '../../../../shared/drop-staging-ignore'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
-import { readIpcErrorMessage } from '@/lib/ipc-error'
+import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { showComposerDropFailureToast } from '../composer-drop-failure-toast'
 import {
   collectComposerDropResult,

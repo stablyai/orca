@@ -3,7 +3,7 @@ import { useManagedRuntimeInstallCard } from '@/components/managed-runtime/use-m
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { NativeChatInstallSlotInstall } from './NativeChatInstallSlot'
 import { NativeChatInstallTile } from './NativeChatInstallTile'
 

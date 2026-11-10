@@ -9,9 +9,9 @@ import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { getUiLanguageNativeLabel } from '@/i18n/supported-languages'
 import { useLanguageReadiness } from '@/i18n/language-readiness'
-import { track } from '@/lib/telemetry'
-import { isWebClientLocation } from '@/lib/web-client-location'
-import { useAppStore } from '@/store'
+import { track } from '@/diagnostics/telemetry/telemetry'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { useAppStore } from '@/store/index'
 import {
   SUPPORTED_UI_LOCALES,
   type SupportedUiLocale,

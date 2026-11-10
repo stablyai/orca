@@ -1,4 +1,4 @@
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 /** Opening identity survives animated content; dismissal retires it synchronously. */

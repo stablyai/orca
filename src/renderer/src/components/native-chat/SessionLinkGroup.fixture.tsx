@@ -24,7 +24,9 @@ const gemini = SessionLinkParticipant.parse({
 })
 function setup(group: boolean) {
   const settings = useAppStore.getState().settings
-  if (settings) useAppStore.setState({ settings: { ...settings, uiLanguage: 'en' } })
+  if (settings) {
+    useAppStore.setState({ settings: { ...settings, uiLanguage: 'en' } })
+  }
   void i18n.changeLanguage('en')
   setLocalRuntimeCapabilitiesForTests([
     SESSION_LINK_CAPABILITY,
