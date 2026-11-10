@@ -1,14 +1,34 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import type { RpcCallerIdentity } from './rpc-caller-identity'
+import { isOrcaSessionId } from '../../../shared/orca-session-address'
+import { isAgentRpcCaller, type RpcCallerIdentity } from './rpc-caller-identity'
+
+type ActiveRpcCall = {
+  caller: RpcCallerIdentity | undefined
+  agentSessionId: string | undefined
+}
 
 // Lets code far below a handler tell an agent's CLI call from a person's relayed input.
-const activeCaller = new AsyncLocalStorage<RpcCallerIdentity | undefined>()
+const activeCall = new AsyncLocalStorage<ActiveRpcCall>()
 
-export function runWithActiveRpcCaller<T>(caller: RpcCallerIdentity | undefined, run: () => T): T {
-  return activeCaller.run(caller, run)
+export function runWithActiveRpcCaller<T>(
+  caller: RpcCallerIdentity | undefined,
+  run: () => T,
+  claimedAgentSessionId?: string
+): T {
+  // Only this host's CLI can name a chat here; as in the handoff card, other callers act for a person.
+  const agentSessionId =
+    isAgentRpcCaller(caller) && claimedAgentSessionId && isOrcaSessionId(claimedAgentSessionId)
+      ? claimedAgentSessionId
+      : undefined
+  return activeCall.run({ caller, agentSessionId }, run)
 }
 
 /** The caller of the RPC handler this code runs under; undefined outside any handler. */
 export function getActiveRpcCaller(): RpcCallerIdentity | undefined {
-  return activeCaller.getStore()
+  return activeCall.getStore()?.caller
+}
+
+/** The chat whose agent sent this call, as its CLI claims it: display attribution, never authority. */
+export function getActiveRpcAgentSessionId(): string | undefined {
+  return activeCall.getStore()?.agentSessionId
 }
