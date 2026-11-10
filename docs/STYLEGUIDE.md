@@ -45,7 +45,6 @@ Tokens pair a **surface** with a **foreground** that meets contrast on it; alway
 - Use Tailwind's scale. Common: 14px body/default buttons, 13px sidebar items and dense rows, 12px sub-text and paths, 11px uppercase meta/captions.
 - Use `text-2xs` (11px) and `text-3xs` (10px), not `text-[11px]` / `text-[10px]`.
 - Category labels: 11px, `font-semibold`, `uppercase`, `tracking-wider` (0.05em).
-- Usage analytics follows the existing Comfortable / Wide / Full content-width selection and adapts its cards to the available column width.
 - Native chat has its own lint-enforced scale and colours: see [native-chat.md](./styleguide/native-chat.md).
 
 ## Radius and elevation
