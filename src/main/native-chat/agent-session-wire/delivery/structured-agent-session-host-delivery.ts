@@ -220,6 +220,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     stopping: input.clientDelivery.readStopping,
     now: () => deps.now?.() ?? Date.now(),
     acquireAborts: input.acquireAborts,
+    resolveWorkspacePath: deps.resolveWorkspacePath,
     recordRanOptions: (sessionId, fence) =>
       createStructuredAgentSessionRanRecorder(
         { deps, sessions, now: () => deps.now?.() ?? Date.now() },

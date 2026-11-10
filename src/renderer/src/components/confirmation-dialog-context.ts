@@ -23,13 +23,24 @@ export type ConfirmationDialogOptions = {
   cancelVariant?: 'outline' | 'ghost'
   /** A notice, not a question: only the confirm button shows, and it settles true. */
   acknowledgeOnly?: boolean
-  initialFocus?: 'confirm'
+  initialFocus?: 'confirm' | 'cancel'
   /** The short close-prompt look: small title, text and buttons. */
   compact?: boolean
   /** Ignore repeated Enter and the opening double-click’s second click; fresh presses and Escape still settle the prompt. */
   ignoresOpeningGesture?: boolean
   /** Renders a "Don't ask again" checkbox. `onConfirmed` runs only when the user confirms with it checked. */
   dontAskAgain?: { label?: string; onConfirmed: () => void }
+  /** Renders a checkbox for an optional part of the action, with an optional line under it.
+   *  `onConfirmed` gets the box's state, only on confirm. */
+  option?: {
+    label: string
+    /** Describes the outcome while checked (or always, without `uncheckedDetail`). */
+    detail?: string
+    uncheckedDetail?: string
+    defaultChecked: boolean
+    disabled?: boolean
+    onConfirmed: (checked: boolean) => void
+  }
   /** Runs when the cancel button settles the prompt, unlike Esc, an outside press or an abort. */
   onCancelClicked?: () => void
   /** Renders text inputs; Enter in one confirms. `onConfirmed` gets their values, only on confirm. */

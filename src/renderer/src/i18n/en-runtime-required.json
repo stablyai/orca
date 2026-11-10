@@ -2040,6 +2040,12 @@
         "waitForStart": "Wait for the agent to finish starting.",
         "waitForTurn": "Wait for the agent to finish responding, or stop it.",
         "waitMoment": "Wait a moment."
+      },
+      "rewind": {
+        "restoreChangedFiles_one": "Also restore {{count}} changed file",
+        "restoreChangedFiles_other": "Also restore {{count}} changed files",
+        "restoredFiles_one": "Restored {{count}} file",
+        "restoredFiles_other": "Restored {{count}} files"
       }
     },
     "onboarding": {
