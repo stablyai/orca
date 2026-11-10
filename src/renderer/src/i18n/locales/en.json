@@ -3022,7 +3022,6 @@
         "connectingHost": "Connecting…",
         "connectHost": "Connect",
         "setLocation": "Set project location",
-        "setLocationOnHost": "Set project location on {{host}}",
         "setLocationTooltip": "Choose a folder or clone this project onto {{host}}.",
         "addHost": "Add host",
         "addSshHost": "Add SSH host",

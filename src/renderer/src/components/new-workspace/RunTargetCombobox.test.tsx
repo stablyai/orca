@@ -96,6 +96,7 @@ function render(
   })
   act(() => {
     input().focus()
+    input().click()
   })
 }
 

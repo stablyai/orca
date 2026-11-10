@@ -27,7 +27,11 @@ const options: ProjectHostSetupOption[] = [
       detail: 'Project location not set',
       isAvailable: true,
       attention: false,
-      canSetLocation: true
+      canSetLocation: true,
+      // A disconnected host shows Connect inside its option (DS-22 nested-interactive check).
+      ...(name === 'gpu-box'
+        ? { connectAction: { kind: 'ssh' as const, targetId: 'gpu-box' }, attention: true }
+        : {})
     })
   )
 ]
@@ -86,7 +90,9 @@ function input(frame: HTMLElement): HTMLInputElement | null {
   return frame.querySelector<HTMLInputElement>('[aria-label="Run on"][role="combobox"]')
 }
 const open = (frame: HTMLElement): void => {
+  // Focus alone never opens the list (DS-22); a click does.
   input(frame)?.focus()
+  input(frame)?.click()
 }
 /** Opens the list, then drives it with keys so the keyboard-armed submenu row is captured. */
 const pressKeys =
@@ -268,4 +274,10 @@ export const orcaCloudCapReachedMember = defineFixture({
     />
   ),
   interact: open
+})
+
+/** Arms a needs-setup row so its Set project location action shows, next to a Connect row. */
+export const rowActions = defineFixture({
+  ...vmSelectedClosed,
+  interact: pressKeys('ArrowDown', 'ArrowDown')
 })

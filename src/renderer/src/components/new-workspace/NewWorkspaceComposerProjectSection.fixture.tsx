@@ -160,13 +160,19 @@ export const folderOnly = defineFixture({
 export const projectMenu = defineFixture({
   ...closed,
   interact: (frame) => {
-    frame.querySelector<HTMLInputElement>('[aria-label="Project"][role="combobox"]')?.focus()
+    // Focus alone never opens the list (DS-22); a click does.
+    const field = frame.querySelector<HTMLInputElement>('[aria-label="Project"][role="combobox"]')
+    field?.focus()
+    field?.click()
   }
 })
 export const hostMenu = defineFixture({
   ...closed,
   interact: (frame) => {
-    frame.querySelector<HTMLInputElement>('[aria-label="Run on"][role="combobox"]')?.focus()
+    // Focus alone never opens the list (DS-22); a click does.
+    const field = frame.querySelector<HTMLInputElement>('[aria-label="Run on"][role="combobox"]')
+    field?.focus()
+    field?.click()
   }
 })
 

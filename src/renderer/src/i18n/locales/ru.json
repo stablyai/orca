@@ -2616,7 +2616,6 @@
         "connectingHost": "Подключение…",
         "connectHost": "Подключиться",
         "setLocation": "Задать расположение проекта",
-        "setLocationOnHost": "Задать расположение проекта на {{host}}",
         "setLocationTooltip": "Выберите папку или клонируйте этот проект на {{host}}.",
         "addHost": "Добавить сервер",
         "addSshHost": "Добавить SSH-сервер",

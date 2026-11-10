@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 
 import { useTranslation } from 'react-i18next'
 import { Check, ChevronsUpDown, GitBranch } from 'lucide-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Button } from '@/components/ui/button'
 import { Command, CommandInput, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
@@ -30,7 +29,7 @@ import {
   getLineageChildrenByParentId,
   getLineageChildWorktree
 } from '@/components/right-sidebar/folder-workspace-attached-worktrees'
-import { COMBOBOX_POPOVER_SURFACE } from './type-ahead-combobox-styles'
+import { COMBOBOX_FIELD_SHELL, COMBOBOX_POPOVER_SURFACE } from './type-ahead-combobox-styles'
 import {
   sharesWorktreeLineageBoundary,
   type WorktreeLineageBoundary
@@ -127,21 +126,24 @@ function ComposerParentWorktreePickerImpl({
       </span>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button
+          {/* A field, not a <Button>: the shared combobox shell draws the --focus-ring (DS-22). */}
+          <button
             type="button"
-            variant="outline"
             role="combobox"
             aria-expanded={open}
             aria-labelledby={labelId}
             disabled={disabled}
-            className="h-9 w-full justify-between border-input px-3 text-sm font-normal text-foreground focus:border-ring focus:ring-[3px] focus:ring-ring/50"
+            className={cn(
+              COMBOBOX_FIELD_SHELL,
+              'cursor-pointer justify-between text-left text-sm text-foreground outline-none disabled:cursor-not-allowed disabled:opacity-50'
+            )}
           >
             <span className="truncate">
               {parentName ??
                 t('auto.components.ComposerParentWorktreePicker.noParent', 'No parent')}
             </span>
             <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
-          </Button>
+          </button>
         </PopoverTrigger>
         <PopoverContent
           align="start"

@@ -76,6 +76,7 @@ function field(): HTMLInputElement {
 function openList(): void {
   act(() => {
     field().focus()
+    field().click()
   })
 }
 

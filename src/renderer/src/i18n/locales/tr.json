@@ -2534,7 +2534,6 @@
         "connectingHost": "Bağlanıyor…",
         "connectHost": "Bağlan",
         "setLocation": "Proje konumunu ayarla",
-        "setLocationOnHost": "{{host}} üzerinde proje konumunu ayarla",
         "setLocationTooltip": "Bir klasör seçin veya bu projeyi {{host}} üzerine clone'layın.",
         "addHost": "Sunucu ekle",
         "addSshHost": "SSH sunucusu ekle",

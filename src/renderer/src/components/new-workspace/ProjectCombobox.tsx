@@ -225,7 +225,6 @@ export default function ProjectCombobox({
                     setQuery(event.target.value)
                     setOpen(true)
                   }}
-                  onFocus={() => setOpen(true)}
                   onBlur={(event) => {
                     const next = event.relatedTarget
                     // A parent dialog's trap can refocus this field as a nested dialog mounts; Radix misses focus that leaves before the list mounts.

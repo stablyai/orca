@@ -2558,7 +2558,6 @@
         "connectingHost": "Verbindung wird hergestellt…",
         "connectHost": "Verbinden",
         "setLocation": "Projektpfad festlegen",
-        "setLocationOnHost": "Projektpfad auf {{host}} festlegen",
         "setLocationTooltip": "Einen Ordner auswählen oder dieses Projekt auf {{host}} klonen.",
         "addHost": "Host hinzufügen",
         "addSshHost": "SSH-Host hinzufügen",

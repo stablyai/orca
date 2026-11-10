@@ -2078,7 +2078,6 @@
         "hostConnectionFailed": "Connection failed",
         "defaultBranchUpdateFailed": "无法更新项目默认分支。再试一次。",
         "setLocation": "设置项目位置",
-        "setLocationOnHost": "将项目位置设置为 {{host}}",
         "setLocationTooltip": "选择一个文件夹或将此项目克隆到 {{host}} 上。",
         "connect": "连接",
         "reconnect": "重新连接",

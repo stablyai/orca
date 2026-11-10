@@ -66,7 +66,7 @@ export function NewWorkspaceComposerFooter({
             role="switch"
             aria-checked={createMultiple}
             onClick={() => onCreateMultipleChange?.(!createMultiple)}
-            className="group flex w-fit cursor-pointer items-center gap-2 rounded-md text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            className="group flex w-fit cursor-pointer items-center gap-2 rounded-md text-xs outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid focus-visible:outline-focus-ring"
           >
             <SwitchIndicator checked={createMultiple} />
             <span className="text-muted-foreground transition-colors group-hover:text-foreground">

@@ -17753,7 +17753,6 @@
         "connectingHost": "Conectando…",
         "connectHost": "Conectar",
         "setLocation": "Definir local do projeto",
-        "setLocationOnHost": "Definir local do projeto em {{host}}",
         "setLocationTooltip": "Escolha uma pasta ou clone este projeto em {{host}}.",
         "addHost": "Adicionar host",
         "addSshHost": "Adicionar host SSH",

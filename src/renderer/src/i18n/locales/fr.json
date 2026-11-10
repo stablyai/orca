@@ -2350,7 +2350,6 @@
         "connectingHost": "Connexion…",
         "connectHost": "Se connecter",
         "setLocation": "Définir l'emplacement du projet",
-        "setLocationOnHost": "Définir l'emplacement du projet sur {{host}}",
         "setLocationTooltip": "Choisissez un dossier ou clonez ce projet sur {{host}}.",
         "addHost": "Ajouter un hôte",
         "addSshHost": "Ajouter un hôte SSH",

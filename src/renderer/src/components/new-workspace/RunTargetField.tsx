@@ -90,7 +90,6 @@ export default function RunTargetField({
                       )
                 }
                 onChange={(event) => onQueryChange(event.target.value)}
-                onFocus={onOpenRequest}
                 onKeyDown={onKeyDown}
                 className={cn(
                   'w-full min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground',

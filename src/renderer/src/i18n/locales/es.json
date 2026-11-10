@@ -2112,7 +2112,6 @@
         "hostConnectionFailed": "Connection failed",
         "defaultBranchUpdateFailed": "No se pudo actualizar la rama predeterminada del proyecto. Inténtalo de nuevo.",
         "setLocation": "Establecer ubicación del proyecto",
-        "setLocationOnHost": "Establecer ubicación del proyecto en {{host}}",
         "setLocationTooltip": "Elige una carpeta o clona este proyecto en {{host}}.",
         "connect": "Conectar",
         "reconnect": "Reconectar",

@@ -1,6 +1,7 @@
 import React from 'react'
 import { AlertTriangle, LoaderCircle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
@@ -33,13 +34,16 @@ export function ConnectHostButton({
   onConnect: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  // A row inside role="option" can't hold a focusable button (axe nested-interactive, DS-22): a
+  // button-styled span keeps the pointer action; the option itself is what the keyboard reaches.
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="xs"
-      disabled={connecting}
-      className="ml-1 shrink-0 gap-1 self-center text-muted-foreground/70 hover:text-foreground"
+    <span
+      aria-disabled={connecting || undefined}
+      className={cn(
+        buttonVariants({ variant: 'ghost', size: 'xs' }),
+        'ml-1 shrink-0 gap-1 self-center text-muted-foreground/70 hover:text-foreground',
+        connecting && 'pointer-events-none opacity-50'
+      )}
       onMouseDown={(event) => {
         event.preventDefault()
         event.stopPropagation()
@@ -47,6 +51,9 @@ export function ConnectHostButton({
       onClick={(event) => {
         event.preventDefault()
         event.stopPropagation()
+        if (connecting) {
+          return
+        }
         // Keep the picker open so connection progress and resolved host state remain visible.
         onConnect()
       }}
@@ -59,7 +66,7 @@ export function ConnectHostButton({
       ) : (
         t('auto.components.NewWorkspaceComposerCard.connectHost', 'Connect')
       )}
-    </Button>
+    </span>
   )
 }
 
@@ -75,15 +82,10 @@ export function SetLocationButton({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          className="ml-auto shrink-0 self-center"
-          aria-label={t(
-            'auto.components.NewWorkspaceComposerCard.setLocationOnHost',
-            'Set project location on {{host}}',
-            { host: hostLabel }
+        <span
+          className={cn(
+            buttonVariants({ variant: 'ghost', size: 'xs' }),
+            'ml-auto shrink-0 self-center'
           )}
           onMouseDown={(event) => {
             event.preventDefault()
@@ -96,7 +98,7 @@ export function SetLocationButton({
           }}
         >
           {label}
-        </Button>
+        </span>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={6}>
         {t(
