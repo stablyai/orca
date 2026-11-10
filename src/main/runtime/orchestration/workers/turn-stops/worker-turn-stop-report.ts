@@ -251,14 +251,19 @@ export function reportWorkerApprovalClosed(
   db: OrchestrationDb,
   dispatch: DispatchContextRow,
   closed: { from: string; approval: WorkerApprovalPayload },
-  deps: Pick<WorkerTurnStopReportDeps, 'notify'>
+  deps: Pick<WorkerTurnStopReportDeps, 'notify'>,
+  /** Names how an already-closed prompt closed: its card's receipt changes, the coordinator is not woken. */
+  refines = false
 ): void {
   const { approval } = closed
   escalateWorkerFailure(
     db,
     dispatch,
     {
-      id: stopReportId(dispatch.id, `approval:${approval.approvalId}:closed`),
+      id: stopReportId(
+        dispatch.id,
+        `approval:${approval.approvalId}:${refines ? 'refined' : 'closed'}`
+      ),
       from: closed.from,
       mailbox: () => dispatchReportMailbox(db, dispatch),
       describe: () => ({
@@ -273,6 +278,6 @@ export function reportWorkerApprovalClosed(
       },
       notice: true
     },
-    deps.notify
+    refines ? () => {} : deps.notify
   )
 }

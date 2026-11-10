@@ -40,6 +40,8 @@ export type TerminalWorkerApprovalHold = {
   /** Compare-and-set: only the step out of `open` may write a decision to the hook. */
   state: 'open' | 'answering' | 'answered' | 'closed'
   dialogSeen: boolean
+  /** Its card already closed; the tool's result may still name how, without waking anyone. */
+  refinable: boolean
   /** Its PostToolUse arrived while an answer was in flight: the tool ran. */
   ranSeen: boolean
   expiresAt?: string

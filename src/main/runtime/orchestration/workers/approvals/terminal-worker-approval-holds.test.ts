@@ -12,6 +12,7 @@ import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 import { TerminalWorkerApprovalHolds } from './terminal-worker-approval-holds'
+import { closeOrphanedTerminalApprovals } from './terminal-approval-orphans'
 import type { ClaudeToolResult } from './claude-tool-result-close'
 
 const PANE = makePaneKey('tab-worker', '11111111-1111-4111-8111-111111111111')
@@ -21,6 +22,19 @@ const HANDLE = 'term_worker'
 const DIALOG = [
   ' Bash command',
   ' │ rm -rf build',
+  ' ⚠ Claude Code will automatically block this request in 1:42, to avoid holding up an unattended session',
+  ' Do you want to proceed?',
+  ' ❯ 1. Yes',
+  '   2. No',
+  ' Esc to cancel · Tab to amend'
+]
+const WARNED = [
+  ' Bash command',
+  ' ╌╌╌╌╌╌╌╌',
+  ' │ rm -rf build',
+  ' ╌╌╌╌╌╌╌╌',
+  ' │ Dangerous rm operation not ruled out — the shell may read this',
+  ' │ command differently than it was parsed',
   ' ⚠ Claude Code will automatically block this request in 1:42, to avoid holding up an unattended session',
   ' Do you want to proceed?',
   ' ❯ 1. Yes',
@@ -92,7 +106,7 @@ function setup(options: { canAnswer?: boolean } = {}) {
       .getUnreadRunMailbox(run.id, 100)
       .filter((message) => message.type === 'status')
       .map((message) => message.body)
-  return { dispatch, screen, holds, tick, closing }
+  return { db, dispatch, screen, holds, tick, closing }
 }
 
 function hook(
@@ -255,7 +269,7 @@ describe('terminal worker approval holds', () => {
     expect(ctx.closing()).toEqual([expect.stringContaining("Denied in the worker's terminal")])
   })
 
-  it("names a close from a tool_result written only by the lead's Stop", async () => {
+  it("closes the card when the dialog leaves, and names it from a result read on the lead's Stop", async () => {
     const ctx = setup()
     await opened(ctx, hook('tool-1'))
     ctx.screen.lines = AFTER
@@ -270,9 +284,13 @@ describe('terminal worker approval holds', () => {
       hookEventName: 'Stop',
       payload: { state: 'done', prompt: '', agentType: 'claude' }
     })
-    await vi.waitFor(() => expect(ctx.closing()).toHaveLength(1))
+    await vi.waitFor(() => expect(ctx.closing()).toHaveLength(2))
 
-    expect(ctx.closing()).toEqual([expect.stringContaining("Denied in the worker's terminal")])
+    // The card closed when the dialog left; the late result only names how.
+    expect(ctx.closing()).toEqual([
+      expect.stringContaining('Closed without an answer Orca can name'),
+      expect.stringContaining("Denied in the worker's terminal")
+    ])
   })
 
   it('treats a killed hook with the dialog still up as answerable only in the terminal', async () => {
@@ -284,6 +302,39 @@ describe('terminal worker approval holds', () => {
     await ctx.tick(80)
     expect(ctx.closing()).toEqual([
       expect.stringContaining("a person must answer it in the worker's terminal")
+    ])
+  })
+  it("carries the warning Claude prints under a flagged command as the card's reason", () => {
+    const ctx = setup()
+    ctx.screen.lines = WARNED
+    ctx.holds.admit(hook('tool-1').request)
+    expect(ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id)?.summary.reason).toBe(
+      'Dangerous rm operation not ruled out — the shell may read this command differently than it was parsed'
+    )
+    const plain = setup()
+    plain.holds.admit(hook('tool-1').request)
+    expect(plain.holds.takeOpenApproval(PANE, plain.dispatch.id)?.summary.reason).toBeNull()
+  })
+
+  it('closes a prompt left open by an earlier run, once, when the database opens', () => {
+    const ctx = setup()
+    ctx.holds.admit(hook('tool-1').request)
+    const approval = ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id)!
+    ctx.db.insertMessage({
+      from: HANDLE,
+      to: 'term_coordinator',
+      subject: 'Worker is waiting on approval',
+      type: 'escalation',
+      payload: JSON.stringify({ handle: HANDLE, dispatchId: ctx.dispatch.id, approval }),
+      runId: ctx.dispatch.run_id
+    })
+
+    closeOrphanedTerminalApprovals(ctx.db)
+    closeOrphanedTerminalApprovals(ctx.db)
+    expect(ctx.closing()).toEqual([
+      expect.stringContaining(
+        `Closed without an answer Orca can name: approval ${approval.approvalId}`
+      )
     ])
   })
 })

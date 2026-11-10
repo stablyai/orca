@@ -60,3 +60,28 @@ export function claudeDialogExpiresAt(
   }
   return undefined
 }
+
+// Why String.raw: the orcad bundle must stay ASCII (see CURSORED_OPTION_RE).
+const DASHED_RULE_RE = new RegExp(String.raw`^\s*╌`)
+const BOX_LINE_RE = new RegExp(String.raw`^\s*│ ?`)
+const PROCEED_RE = /Do you want to proceed\?/
+
+/** The warning Claude prints under a command it flagged, the paragraph after the command's own
+ *  dashed box and before the countdown; null when the dialog has none. */
+export function claudeDialogWarning(lines: readonly string[] | null): string | null {
+  const region = (lines ?? []).filter((row) => row.trim() !== '').slice(-DIALOG_REGION_LINES * 2)
+  const proceed = region.findLastIndex((line) => PROCEED_RE.test(line))
+  const rules = region
+    .slice(0, Math.max(proceed, 0))
+    .flatMap((line, index) => (DASHED_RULE_RE.test(line) ? [index] : []))
+  // The first rule opens the command's box, the second closes it; a warning follows the second.
+  if (proceed === -1 || rules.length < 2) {
+    return null
+  }
+  const warning = region
+    .slice((rules.at(-1) ?? 0) + 1, proceed)
+    .filter((line) => BOX_LINE_RE.test(line))
+    .map((line) => line.replace(BOX_LINE_RE, '').trim())
+    .join(' ')
+  return warning || null
+}

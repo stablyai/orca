@@ -10,6 +10,7 @@ import type {
 import type { AgentHookEventPayload } from '../../../../../shared/agent-hook-listener/listener-event'
 import {
   claudeDialogExpiresAt,
+  claudeDialogWarning,
   showsClaudeDialog
 } from '../../../terminal/wait/claude-open-dialog-hold'
 import { claudeToolClose } from './claude-tool-result-close'
@@ -90,6 +91,7 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
       channel: request.openChannel(),
       state: 'open',
       dialogSeen: false,
+      refinable: false,
       ranSeen: false,
       reported: false,
       timer: null
@@ -139,8 +141,8 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
       return null
     }
     hold.reported = true
-    // The escalation usually goes out before the first poll, so read the countdown here too.
-    hold.expiresAt ??= claudeDialogExpiresAt(this.deps.readScreen(paneKey), this.deps.now())
+    // The escalation usually goes out before the first poll, so read the dialog here too.
+    this.readDialog(hold, this.deps.readScreen(paneKey))
     return this.payload(hold)
   }
 
@@ -197,7 +199,7 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
         return
       }
       hold.dialogSeen ||= shown === true
-      hold.expiresAt ??= claudeDialogExpiresAt(lines, this.deps.now())
+      this.readDialog(hold, lines)
       this.watchDialog(hold)
     }, DIALOG_POLL_MS)
   }
@@ -233,15 +235,22 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
     }
   }
 
+  /** Closes the card at once; the tool's result, if it comes, only names how in a second line. */
   private closeAwaitingEvidence(hold: Hold): void {
-    hold.state = 'closed'
-    this.release(hold)
-    void hold.channel.answer(null)
-    if (!hold.reported) {
+    const reported = hold.reported
+    this.close(hold, null)
+    if (!reported) {
       return
     }
+    hold.refinable = true
     this.closingByToolUseId.set(hold.toolUseId, hold)
     hold.timer = this.deps.setTimer(() => this.close(hold, null), CLOSE_EVIDENCE_MS)
+  }
+
+  /** Claude's countdown and its warning, from the first screen that shows them. */
+  private readDialog(hold: Hold, lines: readonly string[] | null): void {
+    hold.expiresAt ??= claudeDialogExpiresAt(lines, this.deps.now())
+    hold.summary.reason ??= claudeDialogWarning(lines)
   }
 
   /** Ends a record not answered through Orca; a reported one gets its one closing line. */
@@ -253,7 +262,9 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
     this.release(hold)
     this.closingByToolUseId.delete(hold.toolUseId)
     void hold.channel.answer(null)
-    if (!hold.reported) {
+    const refines = hold.refinable
+    hold.refinable = false
+    if (!(hold.reported || (refines && how))) {
       return
     }
     hold.reported = false
@@ -269,7 +280,8 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
           reasonDelivered: true
         })
       },
-      this.deps
+      this.deps,
+      refines
     )
   }
 

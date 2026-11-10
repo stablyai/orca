@@ -6,8 +6,8 @@ export const WorkerApprovalDecisionSchema = z.enum(['allow', 'deny'])
 export type WorkerApprovalDecision = z.infer<typeof WorkerApprovalDecisionSchema>
 
 /** Who settled it: a person (in Orca), the coordinator agent, someone in the worker's own chat or
- *  terminal, the agent's own timeout, or no one Orca can name. `terminal-only`: still open, but only
- *  a person at the worker's terminal can answer it now. */
+ *  terminal, the agent's own timeout, or no one Orca can name. `terminal-only`: closed for Orca while
+ *  the prompt is still up; only a person at the worker's terminal can answer it. */
 export const WorkerApprovalAnswererSchema = z.enum([
   'person',
   'coordinator',
