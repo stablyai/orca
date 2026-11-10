@@ -199,7 +199,7 @@ export type PluginsApi = {
     sessionToken: string
     environmentId: string
   }) => Promise<PluginRemotePanelBinding>
-  unbindRemotePanel?: (args: { sessionToken: string }) => Promise<void>
+  unbindRemotePanel?: (args: { sessionToken: string; bindingId: number }) => Promise<void>
   /** Hears the session token of a bound panel whose host went away. Returns unsubscribe. */
   onRemotePanelClosed?: (listener: (sessionToken: string) => void) => () => void
   /** The settings a plugin declares and their current values; null when it declares none. */

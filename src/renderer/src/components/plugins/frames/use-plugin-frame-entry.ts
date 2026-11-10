@@ -73,7 +73,9 @@ export function usePluginFrameEntry(
       }
       void pending?.then((binding) => {
         if (binding.bound) {
-          void pluginsApi.unbindRemotePanel?.({ sessionToken }).catch(() => undefined)
+          void pluginsApi
+            .unbindRemotePanel?.({ sessionToken, bindingId: binding.bindingId })
+            .catch(() => undefined)
         }
       })
     }

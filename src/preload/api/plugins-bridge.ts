@@ -71,7 +71,7 @@ export const pluginsApi = {
     sessionToken: string
     environmentId: string
   }): Promise<PluginRemotePanelBinding> => ipcRenderer.invoke('plugins:bindRemotePanel', args),
-  unbindRemotePanel: (args: { sessionToken: string }): Promise<void> =>
+  unbindRemotePanel: (args: { sessionToken: string; bindingId: number }): Promise<void> =>
     ipcRenderer.invoke('plugins:unbindRemotePanel', args),
   onRemotePanelClosed: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, closed: unknown): void => {

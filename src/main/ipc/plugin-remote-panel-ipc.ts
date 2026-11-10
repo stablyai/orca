@@ -28,10 +28,13 @@ const bindArgsSchema = z
     environmentId: z.string().min(1).max(256)
   })
   .strict()
-const unbindArgsSchema = z.object({ sessionToken: panelSessionTokenSchema }).strict()
+const unbindArgsSchema = z
+  .object({ sessionToken: panelSessionTokenSchema, bindingId: z.number().int().positive() })
+  .strict()
 const callSchema = z.object({ sessionToken: panelSessionTokenSchema }).passthrough()
 
 type RemotePanel = {
+  id: number
   sender: WebContents
   sessionToken: string
   environmentId: string
@@ -73,8 +76,15 @@ export function registerPluginRemotePanelHandlers(
 ): RemotePluginPanels {
   const panels = new Map<string, RemotePanel>()
   const watchedSenders = new WeakSet<WebContents>()
+  let nextBindingId = 0
 
-  const end = (key: string, panel: RemotePanel, reason: string | null): void => {
+  // `notify`: the host went away, so the frame must re-read rather than fall back to this computer.
+  const end = (
+    key: string,
+    panel: RemotePanel,
+    reason: string | null,
+    notify = reason !== null
+  ): void => {
     if (panel.closed) {
       return
     }
@@ -87,8 +97,11 @@ export function registerPluginRemotePanelHandlers(
       panel.settle({ bound: false, reason: reason ?? 'closed' })
       return
     }
-    // An explicit unbind needs no notice; a lost host does, so the panel re-reads.
-    if (reason !== null && !panel.sender.isDestroyed()) {
+    // An unbind or a move needs no notice; a lost host does, so the panel re-reads. Its old token
+    // is revoked so a call still in flight fails instead of reaching this computer's worker; the
+    // re-read gets a new one.
+    if (notify && !panel.sender.isDestroyed()) {
+      pluginService.panels.revokeSession(rendererPanelOwner(panel.sender.id), panel.sessionToken)
       panel.sender.send(PLUGIN_REMOTE_PANEL_CLOSED_CHANNEL, {
         sessionToken: panel.sessionToken,
         reason
@@ -119,7 +132,7 @@ export function registerPluginRemotePanelHandlers(
   // Ready once the host named its session and the stream that carries its calls is in hand.
   const settleIfReady = (panel: RemotePanel): void => {
     if (!panel.closed && panel.hostToken && panel.subscription) {
-      panel.settle({ bound: true, hostName: panel.hostName })
+      panel.settle({ bound: true, hostName: panel.hostName, bindingId: panel.id })
     }
   }
 
@@ -229,7 +242,7 @@ export function registerPluginRemotePanelHandlers(
         return existing.ready
       }
       if (existing) {
-        end(key, existing, `the panel moved to another host`)
+        end(key, existing, 'the panel moved to another host', false)
       }
       watch(sender)
       let settle: RemotePanel['settle'] = () => undefined
@@ -237,6 +250,7 @@ export function registerPluginRemotePanelHandlers(
         settle = resolve
       })
       const panel: RemotePanel = {
+        id: ++nextBindingId,
         sender,
         sessionToken,
         environmentId,
@@ -264,7 +278,8 @@ export function registerPluginRemotePanelHandlers(
     const parsed = unbindArgsSchema.safeParse(args)
     const key = parsed.success ? panelKey(event.sender.id, parsed.data.sessionToken) : null
     const panel = key ? panels.get(key) : undefined
-    if (key && panel && --panel.refs <= 0) {
+    // A late unbind from an earlier binding of this token must not release the current one.
+    if (key && panel && parsed.success && panel.id === parsed.data.bindingId && --panel.refs <= 0) {
       end(key, panel, null)
     }
   })

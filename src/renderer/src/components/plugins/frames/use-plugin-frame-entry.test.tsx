@@ -48,7 +48,7 @@ describe('usePluginFrameEntry on a paired host', () => {
     // A plugin change starts a second read while the first bind is still in flight.
     refresh()
     await read
-    finishBind({ bound: true, hostName: 'work-mac' })
+    finishBind({ bound: true, hostName: 'work-mac', bindingId: 1 })
 
     await waitFor(() =>
       expect(result.current.entry).toMatchObject({
@@ -59,5 +59,6 @@ describe('usePluginFrameEntry on a paired host', () => {
     expect(bindRemotePanel).toHaveBeenCalledTimes(1)
     unmount()
     await waitFor(() => expect(unbindRemotePanel).toHaveBeenCalledTimes(1))
+    expect(unbindRemotePanel).toHaveBeenCalledWith({ sessionToken: TOKEN, bindingId: 1 })
   })
 })
