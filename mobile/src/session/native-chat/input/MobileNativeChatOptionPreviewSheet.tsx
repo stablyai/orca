@@ -8,7 +8,7 @@ import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { optionPreviewFont, prepareOptionPreview } from './mobile-native-chat-option-preview'
+import { optionPreviewFont } from './mobile-native-chat-option-preview'
 
 const sheetKey = () => 'option-preview'
 
@@ -101,12 +101,11 @@ export function MobileNativeChatOptionPreviewSheet({
 
 function ReadablePreview({ preview }: { preview: string }): React.JSX.Element {
   useMobileColorScheme()
-  const text = useMemo(() => prepareOptionPreview(preview).lines.join('\n'), [preview])
   return (
     <ScrollView style={styles.preview} showsVerticalScrollIndicator nestedScrollEnabled>
       <ScrollView horizontal showsHorizontalScrollIndicator nestedScrollEnabled>
         <Text selectable style={styles.text}>
-          {text}
+          {preview}
         </Text>
       </ScrollView>
     </ScrollView>

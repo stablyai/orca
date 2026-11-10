@@ -43,7 +43,7 @@ function prompt(multiSelect = false): AskPrompt {
         header: 'Layout',
         multiSelect,
         options: [
-          { label: 'First', preview: 'left | right' },
+          { label: 'First', preview: 'A\t|\n𠀀\t|' },
           { label: 'No preview' },
           { label: 'Last', preview: compactedPreview }
         ]
@@ -95,6 +95,7 @@ it('inspects every preview without choosing, and keeps the original option when 
   expect(button('Last preview')).toBeDefined()
   expect(row(2).props.accessibilityState.checked).toBe(false)
   press(button('First preview'))
+  expect(renderer.root.findByProps({ selectable: true }).props.children).toBe('A\t|\n𠀀\t|')
   // Paging crosses the option with no preview; inspection does not change the answer.
   press(
     buttons().find(
