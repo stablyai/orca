@@ -18,10 +18,12 @@ const deadline = setTimeout(() => app.exit(2), 30000)
 app
   .whenReady()
   .then(async () => {
-    const backend = new OffscreenBrowserBackend({
+    const registration = {
       registerOffscreenGuest: () => true,
       unregisterGuest: () => {}
-    } as never)
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This fixture replaces only registration; windows and screencasts use real Electron.
+    const backend = new OffscreenBrowserBackend(registration as never)
     const { browserPageId } = await backend.createTab({
       url: 'about:blank',
       worktreeId: 'raster-fixture'
@@ -70,7 +72,9 @@ app
           sizes.push(nativeImage.createFromBuffer(buffer).getSize())
           changed ||= firstImage !== null && !firstImage.equals(buffer)
           firstImage ??= buffer
-          if (changed) {onObserved?.()}
+          if (changed) {
+            onObserved?.()
+          }
         },
         onError: (message) => errors.push(message)
       })
