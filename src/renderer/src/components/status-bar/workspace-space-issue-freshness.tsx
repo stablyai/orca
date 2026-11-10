@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { findWorktreeReviewOwner } from '@/store/github/refresh/worktree-refresh'
@@ -20,20 +20,16 @@ export function refreshLinkedIssueForWorktree(
 /** Mounted only inside an open decision hover: that hover owns its linked issue's freshness. */
 export function WorkspaceSpaceIssueFreshness({
   worktreeId,
-  executionHostId
+  executionHostId,
+  issueCacheKey
 }: {
   worktreeId: string
   executionHostId?: ExecutionHostId
+  // Why a prop: the row projection already resolves it per snapshot; re-resolving here would rescan the catalog.
+  issueCacheKey: string | null
 }): null {
-  const demandKey = useAppStore((state) => {
-    const owner = findWorktreeReviewOwner(state, worktreeId, executionHostId)
-    const issueNumber = owner?.worktree.linkedIssue
-    return owner && issueNumber
-      ? `${getRepoExecutionHostId(owner.repo)}::${owner.repo.id}::${issueNumber}`
-      : null
-  })
   useEffect(() => {
-    if (!demandKey) {
+    if (!issueCacheKey) {
       return
     }
     // Why: the separate Space window shows the main window's published issueCache, so the main window does the read.
@@ -47,6 +43,6 @@ export function WorkspaceSpaceIssueFreshness({
           : refreshLinkedIssueForWorktree(worktreeId, executionHostId),
       intervalMs: 5 * 60_000
     })
-  }, [demandKey, worktreeId, executionHostId])
+  }, [issueCacheKey, worktreeId, executionHostId])
   return null
 }

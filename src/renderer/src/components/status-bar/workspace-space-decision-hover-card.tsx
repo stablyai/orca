@@ -85,6 +85,7 @@ export function WorkspaceDecisionHoverCard({
       <WorkspaceSpaceIssueFreshness
         worktreeId={worktree.worktreeId}
         executionHostId={worktree.executionHostId}
+        issueCacheKey={details.issueCacheKey}
       />
       <div className="border-b border-border/60 px-4 py-3">
         <div className="flex min-w-0 items-start justify-between gap-3">

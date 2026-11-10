@@ -39,14 +39,22 @@ afterEach(() => {
 it('reads the live linked issue while open, following a late and a changed link', () => {
   const requestIssueRefresh = vi.fn(async () => {})
   Object.assign(window, { api: { workspaceSpace: { requestIssueRefresh } } })
+  const show = (issueCacheKey: string | null): void =>
+    act(() =>
+      root.render(
+        <WorkspaceSpaceIssueFreshness worktreeId="repo-1::/wt/a" issueCacheKey={issueCacheKey} />
+      )
+    )
   linkIssue(null)
-  act(() => root.render(<WorkspaceSpaceIssueFreshness worktreeId="repo-1::/wt/a" />))
+  show(null)
   expect(fetchIssue).not.toHaveBeenCalled()
 
-  act(() => linkIssue(91))
+  linkIssue(91)
+  show('repo-1::91')
   expect(fetchIssue).toHaveBeenLastCalledWith('/repos/one', 91, { repoId: 'repo-1' })
 
-  act(() => linkIssue(92))
+  linkIssue(92)
+  show('repo-1::92')
   expect(fetchIssue).toHaveBeenLastCalledWith('/repos/one', 92, { repoId: 'repo-1' })
   expect(requestIssueRefresh).not.toHaveBeenCalled()
 })
@@ -56,7 +64,11 @@ it('asks the main window, which owns the issue cache, from the desktop Space win
   Object.assign(window, { api: { workspaceSpace: { requestIssueRefresh } } })
   window.history.replaceState(null, '', '/space.html')
   linkIssue(91)
-  act(() => root.render(<WorkspaceSpaceIssueFreshness worktreeId="repo-1::/wt/a" />))
+  act(() =>
+    root.render(
+      <WorkspaceSpaceIssueFreshness worktreeId="repo-1::/wt/a" issueCacheKey="repo-1::91" />
+    )
+  )
 
   expect(requestIssueRefresh).toHaveBeenCalledWith('repo-1::/wt/a', undefined)
   expect(fetchIssue).not.toHaveBeenCalled()
