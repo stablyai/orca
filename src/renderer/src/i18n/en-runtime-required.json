@@ -32,6 +32,9 @@
       "updateRequired": "OpenCode cannot safely start with a chosen model on this version. Update OpenCode to a supported release, or omit the model choice."
     }
   },
+  "agentSources": {
+    "shared": "Personal accounts aren’t used in shared workspaces."
+  },
   "aiVault": {
     "scanIssues": {
       "invalidResultsSkipped_one": "Skipped {{count}} invalid Agent Session History result entry.",

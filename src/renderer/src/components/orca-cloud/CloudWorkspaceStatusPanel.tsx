@@ -35,6 +35,7 @@ import {
 } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import { CloudStateDot } from './CloudStateDot'
 import { CloudSecretsMissingNotice } from '../cloud-secrets-ask/CloudSecretsMissingNotice'
+import { CloudAgentsAndSecretsLink } from '../agent-host-panel/CloudAgentsAndSecretsLink'
 import { cloudStateDetail, cloudStateLabel } from './cloud-state-copy'
 
 export type CloudPanelActions = {
@@ -231,6 +232,7 @@ export function CloudWorkspaceStatusPanel({
       </div>
 
       {state === 'archived' ? null : <CloudSecretsMissingNotice workspaceId={workspaceId} />}
+      <CloudAgentsAndSecretsLink workspaceId={workspaceId} />
 
       {unavailable ? (
         <InlineError

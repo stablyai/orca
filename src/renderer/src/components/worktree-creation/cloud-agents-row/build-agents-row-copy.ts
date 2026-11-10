@@ -142,7 +142,7 @@ export function buildAgentsRowText(
           model.reason === 'paused'
             ? t('vmBuildAgents.paused', 'Orca account sign-in is paused')
             : t('vmBuildAgents.notOffered', 'Signs in for each cloud workspace for now'),
-        detail: t('vmBuildAgents.pausedDetail', 'This sign-in stays with this workspace')
+        detail: t('vmBuildAgents.pausedDetail', 'This sign-in stays with this workspace.')
       }
     case 'desktopKey':
       return {
