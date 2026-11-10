@@ -68,7 +68,8 @@ export default function NewWorkspaceComposerModal(): React.JSX.Element | null {
     )
   }
 
-  return <ComposerModalBody modalData={modalData ?? {}} onClose={closeModal} />
+  const remountKey = `${modalData?.prefilledName ?? ''}\0${modalData?.initialRepoId ?? ''}\0${modalData?.initialBaseBranch ?? ''}`
+  return <ComposerModalBody key={remountKey} modalData={modalData ?? {}} onClose={closeModal} />
 }
 
 function ComposerModalBody({
