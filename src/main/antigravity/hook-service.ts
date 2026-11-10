@@ -5,33 +5,31 @@ import type {
   AgentHookInstallState,
   AgentHookInstallStatus
 } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
-import {
-  getSharedManagedScriptPath,
-  readHooksJson,
-  wrapPosixHookCommand,
-  writeHooksJson,
-  writeManagedScript,
-  type HookDefinition
-} from '../agent-hooks/installer-utils'
+import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
+import { readHooksJson } from '../agent-hooks/installation/configuration/hooks-json-read'
+import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
+import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
+import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
+import type { HookDefinition } from '../agent-hooks/installation/configuration/hook-config-schema'
 import {
   readHooksJsonRemote,
-  writeHooksJsonRemote,
-  writeManagedScriptRemote
-} from '../agent-hooks/installer-utils-remote'
-import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
+  writeHooksJsonRemote
+} from '../agent-hooks/installation/configuration/hooks-json-remote'
+import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
 import { WINDOWS_ANTIGRAVITY_JSON_POST_SCRIPT } from './windows-hook-json-post'
 import {
   restoreManagedScript,
   refreshManagedScriptIfPresent,
   scriptStillExists
-} from '../agent-hooks/managed-hook-script-refresh'
+} from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
 import {
   ANTIGRAVITY_EVENTS,
   ANTIGRAVITY_PRE_TOOL_USE_DECISION,
   type AntigravityEvent
 } from './hook-events'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
-import { HOOK_PARENT_CAPTURE } from '../agent-hooks/hook-process-capture'
+import { HOOK_PARENT_CAPTURE } from '../agent-hooks/installation/scripts/hook-process-capture'
 import { getManagedScript, getWindowsWrapperScript } from './hook-script'
 import {
   buildInstalledConfig,

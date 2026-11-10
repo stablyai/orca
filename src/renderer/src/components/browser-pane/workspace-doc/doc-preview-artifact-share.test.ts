@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { DocPreviewGrantLocation } from '@/lib/doc-preview-grants'
+import type { DocPreviewGrantLocation } from '@/lib/browser/documents/doc-preview-grants'
 import type { TerminalArtifactGrantTarget } from '@/runtime/files/grants/runtime-terminal-artifact-grant'
 import { readDocPreviewArtifactRequest } from './doc-preview-artifact-share'
 

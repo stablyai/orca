@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { CookieClearIdentity } from './browser-cookie-import-clear'
+import type { CookieClearIdentity } from './storage/cookie-store-contracts'
 import type { SourcePartitionRead } from './sources/browser-cookie-source-partition'
 import { writeImportedCookies, type SourceCookieToWrite } from './browser-cookie-import-write'
 

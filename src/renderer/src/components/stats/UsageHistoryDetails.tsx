@@ -11,7 +11,7 @@ import { formatUsageCost, formatUsageTokens } from './usage-overview-model'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { usageHistoryAccountLabel } from './usage-history-accounts'
-import { getAgentLabel } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 
 export { UsageHistoryDailyChart } from './UsageHistoryDailyChart'
 

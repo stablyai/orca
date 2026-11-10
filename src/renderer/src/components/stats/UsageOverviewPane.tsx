@@ -20,7 +20,7 @@ import {
 import { formatUsageCost, formatUsageTokens } from './usage-overview-model'
 import { useUsageHistory } from './use-usage-history'
 import { usageHistoryAccountLabels } from './usage-history-accounts'
-import { getAgentLabel } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 const PROVIDERS: readonly { value: UsageHistoryProvider; label: string }[] = [

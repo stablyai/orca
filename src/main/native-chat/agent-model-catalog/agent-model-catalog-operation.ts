@@ -12,7 +12,7 @@ export type AgentModelCatalogReadOperation = {
   deadline?: number
   retirement: number
   signal: AbortSignal
-  current: () => boolean
+  current: (options?: { ignoreDeadline: true }) => boolean
   controller: AbortController
 }
 
@@ -35,9 +35,9 @@ export function captureAgentModelCatalogRead(
     retirement,
     signal,
     controller,
-    current: () =>
+    current: (options) =>
       !signal.aborted &&
-      (deadline === undefined || Date.now() < deadline) &&
+      (options?.ignoreDeadline || deadline === undefined || Date.now() < deadline) &&
       deps.store.retirementRevision(params.agent) === retirement &&
       agentModelCatalogRequestKey(deps, original) === identity
   }

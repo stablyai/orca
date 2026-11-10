@@ -2,7 +2,7 @@ import type { GlobalSettings } from '../../../../../../shared/global-settings-ty
 import { useTranslate } from '@/i18n/use-translate'
 import { Label } from '../../../ui/label'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { SettingsSwitch } from '../../form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 import { getWslHostsExperimentalSearchEntry } from './wsl-hosts-experimental-search'
 import { useWslHostServerFilesMissing } from '../../../sidebar/use-wsl-hosts-enabled'
 import { getWslHostServerFilesMissingLabel } from '../../../sidebar/wsl-host-row-status'
@@ -33,13 +33,13 @@ export function WslHostsExperimentalSetting({
           <p className="text-xs text-destructive">{getWslHostServerFilesMissingLabel(t)}</p>
         ) : null}
       </div>
-      <SettingsSwitch
+      <Switch
         checked={enabled}
-        ariaLabel={t(
+        aria-label={t(
           'auto.components.settings.wslHostsExperimental.toggleLabel',
           'Toggle WSL distros as hosts'
         )}
-        onChange={() => updateSettings({ experimentalWslHosts: !enabled })}
+        onCheckedChange={() => updateSettings({ experimentalWslHosts: !enabled })}
       />
     </SearchableSetting>
   )

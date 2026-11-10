@@ -11,7 +11,8 @@ import type {
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 import type {
   AgentPickerEntry,
-  AgentPickerDraft
+  AgentPickerDraft,
+  AgentPickerModel
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { agentPickerPanelArguments } from '../../../../shared/agent-launch/picker/agent-launch-picker-arguments'
 
@@ -142,7 +143,9 @@ export function agentLaunchSetupOptionRows(
                       : []),
                     ...option.kind.choices
                   ]
-                : current && !option.kind.choices.some((choice) => choice.value === current)
+                : option.id !== 'serviceTier' &&
+                    current &&
+                    !option.kind.choices.some((choice) => choice.value === current)
                   ? [...option.kind.choices, { value: current, label: current }]
                   : option.kind.choices,
               currentValue: effortInArguments ? 'arguments' : current
@@ -241,4 +244,27 @@ export function agentLaunchSetupCatalogState(
                       })
                     : null
   return { hasModels, catalogPending, catalogMessage }
+}
+
+/** Visible model rows, plus the model the list starts on. */
+export function agentLaunchSetupModelRows(
+  models: readonly AgentPickerModel[],
+  currentModel: string | undefined,
+  query: string,
+  legacy: boolean,
+  modelInArguments: boolean
+) {
+  const rows: { id: string; label: string; unlisted?: true }[] = models.filter(
+    (model) =>
+      !model.hidden && (model.id === currentModel || query || Boolean(model.isLegacy) === legacy)
+  )
+  // Why one keyed list: when the catalog later lists an unlisted current model, its row keeps
+  // its identity, so the highlight stays on it instead of jumping to the first model.
+  if (currentModel && !models.some((model) => model.id === currentModel)) {
+    rows.push({ id: currentModel, label: currentModel, unlisted: true })
+  }
+  // An Arguments-owned text action has no current model row, so it starts on its default as before.
+  const start =
+    !modelInArguments && rows.some((row) => row.id === currentModel) ? currentModel : undefined
+  return { rows, start }
 }

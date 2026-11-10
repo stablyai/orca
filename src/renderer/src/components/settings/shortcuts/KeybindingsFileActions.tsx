@@ -163,7 +163,7 @@ export function KeybindingsFileActions(): React.JSX.Element {
         onClick={() => void editKeybindingsInOrca()}
       >
         <FileText className="size-3" />
-        {t('auto.components.settings.KeybindingsFileActions.1c2be2b2c6', 'Edit File in Orca')}
+        {t('auto.components.settings.KeybindingsFileActions.ad58206841', 'Edit file in Orca')}
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -184,8 +184,8 @@ export function KeybindingsFileActions(): React.JSX.Element {
           <DropdownMenuItem onSelect={() => void openKeybindingsFile()}>
             <ExternalLink className="size-3.5" />
             {t(
-              'auto.components.settings.KeybindingsFileActions.98f1a23e1c',
-              'Open with Default App'
+              'auto.components.settings.KeybindingsFileActions.4bfe7a2e43',
+              'Open with default app'
             )}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => void openKeybindingsInExternalEditor('vscode')}>
@@ -200,13 +200,13 @@ export function KeybindingsFileActions(): React.JSX.Element {
           <DropdownMenuItem onSelect={() => void revealKeybindingsFile()}>
             <FolderOpen className="size-3.5" />
             {t(
-              'auto.components.settings.KeybindingsFileActions.a8a8d6b9d3',
-              'Reveal in File Manager'
+              'auto.components.settings.KeybindingsFileActions.c322555264',
+              'Reveal in file manager'
             )}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => void reloadKeybindings()}>
             <RefreshCw className="size-3.5" />
-            {t('auto.components.settings.KeybindingsFileActions.abc49853fb', 'Reload from Disk')}
+            {t('auto.components.settings.KeybindingsFileActions.5b639aea5c', 'Reload from disk')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

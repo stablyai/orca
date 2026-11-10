@@ -5,8 +5,8 @@ import '../../../../../src/shared/agent-launch/startup/agent-tui-input-clear'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import type { RpcResponse, RpcSuccess } from '../../../transport/rpc/rpc-wire-types'
-import { resetMobileNativeChatStaleInputForTests } from '../mobile-native-chat-stale-input'
-import { resetMobileNativeChatTerminalWritesForTests } from '../mobile-native-chat-terminal-write-lock'
+import { resetMobileNativeChatStaleInputForTests } from './mobile-native-chat-stale-input'
+import { resetMobileNativeChatTerminalWritesForTests } from './mobile-native-chat-terminal-write-lock'
 import { useMobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 
 // Stub the media seam so direct Expo imports would expose unsupported Flow syntax and fail the transform.

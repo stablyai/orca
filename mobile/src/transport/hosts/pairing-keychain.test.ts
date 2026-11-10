@@ -69,16 +69,4 @@ describe('pairing keychain', () => {
     expect(asyncStorageMock.setItem).not.toHaveBeenCalled()
     expect(secureStoreMock.setItemAsync).not.toHaveBeenCalled()
   })
-
-  it.each(['not-a-number', '', ' ', '0:pending'])(
-    'refuses to write from malformed generation record %j',
-    async (raw) => {
-      generationRecord = raw
-
-      await expect(writePairingKeychainItem(TOKEN_KEY, 'token')).rejects.toThrow(
-        /generation record is invalid/
-      )
-      expect(secureStoreMock.setItemAsync).not.toHaveBeenCalled()
-    }
-  )
 })

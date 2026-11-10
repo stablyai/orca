@@ -1,11 +1,10 @@
-import React, { useMemo } from 'react'
+import React, { useId, useMemo } from 'react'
 import { ArrowDownUp, ArrowUp, Check, CloudUpload, GitPullRequestArrow, Plus } from 'lucide-react'
 import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   hasExpandedCommitFailureDetails,
@@ -81,6 +80,7 @@ export function CommitArea({
   onDropdownAction
 }: CommitAreaProps): React.JSX.Element {
   const t = useTranslate()
+  const actionDescriptionId = useId()
   // Cap rows so long messages scroll internally instead of pushing Commit offscreen.
   const rows = getCommitMessageTextareaRows(commitMessage)
   // Spin the primary only for its matching operation; Fetch uses the chevron and commits use isCommitting.
@@ -173,41 +173,41 @@ export function CommitArea({
     'More commit and remote actions'
   )
   const dropdownMenuContent = (
-    <DropdownMenuContent align="end" className="min-w-[14rem]">
+    <DropdownMenuContent align="end" className="w-72 max-w-[calc(100vw-1rem)]">
       {dropdownItems.map((entry) =>
         entry.kind === 'separator' ? (
           <DropdownMenuSeparator key={entry.id} />
         ) : (
-          <Tooltip key={entry.kind}>
-            <TooltipTrigger asChild>
-              <div className="block">
-                <DropdownMenuItem
-                  disabled={entry.disabled}
-                  variant={entry.variant}
-                  className="w-full"
-                  onSelect={(event) => {
-                    if (entry.disabled) {
-                      event.preventDefault()
-                      return
-                    }
-                    onDropdownAction(entry.kind)
-                  }}
-                >
-                  <span className="flex min-w-0 flex-col">
-                    <span>{entry.label}</span>
-                    {entry.hint ? (
-                      <span className="truncate text-[10px] text-muted-foreground">
-                        {entry.hint}
-                      </span>
-                    ) : null}
-                  </span>
-                </DropdownMenuItem>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="left" sideOffset={8} className="max-w-72">
-              {entry.title}
-            </TooltipContent>
-          </Tooltip>
+          <div key={entry.kind}>
+            <DropdownMenuItem
+              aria-disabled={entry.disabled || undefined}
+              variant={entry.variant}
+              textValue={entry.label}
+              aria-describedby={entry.disabled ? `${actionDescriptionId}-${entry.kind}` : undefined}
+              onSelect={(event) => {
+                if (entry.disabled) {
+                  event.preventDefault()
+                  return
+                }
+                onDropdownAction(entry.kind)
+              }}
+            >
+              <span className="flex min-w-0 flex-col break-words">
+                <span>{entry.label}</span>
+                {!entry.disabled && (
+                  <span className="text-2xs text-muted-foreground">{entry.title}</span>
+                )}
+              </span>
+            </DropdownMenuItem>
+            {entry.disabled && (
+              <p
+                id={`${actionDescriptionId}-${entry.kind}`}
+                className="px-2.5 pb-1 text-2xs text-muted-foreground break-words"
+              >
+                {entry.title}
+              </p>
+            )}
+          </div>
         )
       )}
     </DropdownMenuContent>

@@ -1,5 +1,8 @@
 import { jiraCredentialStorageCopy } from './jira-credential-storage-copy'
-import { taskProviderErrorMessage, taskProviderErrorText } from '@/lib/task-provider-error-copy'
+import {
+  taskProviderErrorMessage,
+  taskProviderErrorText
+} from '@/lib/work-items/task-provider-error-copy'
 import { useId, useState } from 'react'
 import { LoaderCircle, Lock } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -20,7 +23,7 @@ import { cn } from '@/lib/utils'
 import {
   getProviderRuntimeContextKey,
   isEnvironmentRuntimeContextKey
-} from '@/lib/provider-runtime-context'
+} from '@/runtime/hosts/observations/provider-runtime-context'
 import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
 import { useTranslate } from '@/i18n/use-translate'
 import { JiraConnectCredentialGuide } from './jira-connect-credential-guide'

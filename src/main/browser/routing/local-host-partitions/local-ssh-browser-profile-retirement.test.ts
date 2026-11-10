@@ -60,13 +60,13 @@ vi.mock('../../cookies/staging/browser-session-cookie-staging', () => ({
   applyPendingBrowserCookieImports() {},
   clearPendingBrowserCookieImport() {}
 }))
-vi.mock('../../sessions/browser-session-partition-policies', () => ({
+vi.mock('../../sessions/partition-policies/browser-session-partition-policies', () => ({
   installBrowserSessionPartitionPolicies: state.policy,
   clearBrowserSessionPartitionPolicies: state.clearPolicy,
   forgetBrowserSessionPartitionConfiguration() {},
   retireBrowserSessionUserAgentPolicy() {}
 }))
-vi.mock('../../sessions/browser-session-proxy', () => ({
+vi.mock('../../sessions/proxy/browser-session-proxy', () => ({
   invalidateBrowserSessionProxyApplication() {}
 }))
 vi.mock('../../../network/proxy-settings', () => ({ async retireProxySessionApplication() {} }))
@@ -80,13 +80,15 @@ vi.mock('../../extensions/profile-sessions/browser-extension-session-loader', ()
 vi.mock('../../../persistence/loading-store/user-data-path', () => ({
   getCanonicalUserDataPath: () => state.directory
 }))
-vi.mock('../../identity/browser-identity-mode-store', () => ({
+vi.mock('../../identity/mode/browser-identity-mode-store', () => ({
   async markBrowserIdentityMigrationNoticePending() {}
 }))
-vi.mock('../../site-settings/browser-site-permission-store', () => ({
+vi.mock('../../site-settings/permissions/browser-site-permission-store', () => ({
   forgetBrowserSitePermissions() {}
 }))
-vi.mock('../../site-settings/browser-site-display-store', () => ({ forgetBrowserSiteDisplay() {} }))
+vi.mock('../../site-settings/display/browser-site-display-store', () => ({
+  forgetBrowserSiteDisplay() {}
+}))
 vi.mock('../../network/egress/browser-route-webrtc-policy', () => ({
   enforceBrowserRouteWebRtcPolicy() {}
 }))
@@ -97,7 +99,7 @@ vi.mock('./local-ssh-browser-route', () => ({
 }))
 
 import { session } from 'electron'
-import { browserSessionRegistry as registry } from '../../sessions/browser-session-registry'
+import { browserSessionRegistry as registry } from '../../sessions/profiles/browser-session-registry'
 import {
   configureBrowserRoutePartitionBindingsForOrcaProfile,
   currentBrowserRoutePartitionBindingStore

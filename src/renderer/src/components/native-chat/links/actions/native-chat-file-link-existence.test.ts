@@ -12,7 +12,7 @@ const connection = vi.hoisted(() => ({
   currentOwnerResolved: true
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   isWorktreeConnectionResolved: () => connection.resolved
 }))
 

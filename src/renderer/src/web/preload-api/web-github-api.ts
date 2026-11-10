@@ -1,6 +1,7 @@
 import { callGitHubTargetOperation } from '@/lib/work-items/github/github-work-item-target-request'
 import { requireActiveEnvironment } from './web-runtime-session'
 import { requireGitHubWorkItemTargetDetails } from '../../../../shared/github/work-item-target'
+import { shouldAcceptMergedFallbackPR } from '../../../../shared/github/pr-branch-fallback-rule'
 import type { PreloadApi } from '../../../../preload/api-types'
 import {
   GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,
@@ -28,10 +29,7 @@ export function createGitHubApi(): WebGitHubApi {
     prForBranch: ({ wakeWslDistro: _wake, ...args }) =>
       route<WebGitHubResult<'prForBranch'>>(GITHUB_WEB_RPC_METHODS.prForBranch, args),
     refreshPRNow: async ({ candidate, reason, userRefresh }) => {
-      const acceptMergedFallbackPR =
-        candidate.linkedPRNumber == null &&
-        candidate.fallbackPRNumber != null &&
-        candidate.fallbackPRSource != null
+      const acceptMergedFallbackPR = shouldAcceptMergedFallbackPR(candidate)
       const pr = await route<WebGitHubResult<'prForBranch'>>(GITHUB_WEB_RPC_METHODS.prForBranch, {
         repoPath: candidate.repoPath,
         repoId: candidate.repoId,

@@ -264,7 +264,8 @@ afterEach(async () => {
 
 async function mount(
   store: GenerationStore,
-  setForegroundTimer?: MobileWebShellRuntime['setForegroundTimer']
+  setForegroundTimer?: MobileWebShellRuntime['setForegroundTimer'],
+  claimSpareSessionId: MobileWebShellRuntime['claimSpareSessionId'] = async () => null
 ): Promise<Mounted> {
   const timers = createTimerSeam()
   // Mint distinct ids so a remount's replacement view can be told from the one it retires.
@@ -297,6 +298,7 @@ async function mount(
       runtime: {
         createStore: () => store,
         mintSessionId: () => `session-${++minted}`,
+        claimSpareSessionId,
         now: () => 0,
         setForegroundTimer: setForegroundTimer ?? timers.setTimer
       }
@@ -374,6 +376,19 @@ describe('the wait for the page to speak', () => {
     expect(mounted.states().at(-1)?.kind).toBe('ready')
   })
 
+  it('opens a page Home booted under its session id, and remounts under a fresh one', async () => {
+    const fake = createFakeStore()
+    const mounted = await mount(fake.store, undefined, async () => 'home-spare')
+    fake.settleCacheRead(activeGeneration())
+    await flush()
+    expect(mounted.states().at(-1)).toMatchObject({ kind: 'ready', sessionId: 'home-spare' })
+    await act(async () => {
+      mounted.shellFailed('document-load-failed')
+    })
+    await flush()
+    expect(mounted.states().at(-1)).toMatchObject({ kind: 'ready', sessionId: 'session-1' })
+  })
+
   it('stays ready when the page speaks after document load and the timers fire', async () => {
     const mounted = await ready()
     await act(async () => {
@@ -401,6 +416,7 @@ describe('the wait for the page to speak', () => {
         runtime: {
           createStore: () => fake.store,
           mintSessionId: () => 'session-id',
+          claimSpareSessionId: async () => null,
           now: () => 0,
           setForegroundTimer: createTimerSeam().setTimer
         }

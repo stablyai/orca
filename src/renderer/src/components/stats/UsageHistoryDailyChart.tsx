@@ -14,7 +14,7 @@ import {
 import { formatUsageCost, formatUsageTokens } from './usage-overview-model'
 import { formatUsageDayLabel } from './usage-formatters'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { getAgentLabel } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 
 export function UsageHistoryDailyChart({
   rows,
@@ -47,7 +47,8 @@ export function UsageHistoryDailyChart({
     (max, line) => line.points.reduce((value, point) => Math.max(value, point.amount ?? 0), max),
     0
   )
-  const magnitude = 10 ** Math.floor(Math.log10(largest || 1))
+  const exponent = Math.log10(largest || 1)
+  const magnitude = 10 ** Math.floor(exponent)
   const max = Math.ceil((largest || 1) / magnitude) * magnitude
   const x = (index: number) => ((index + 0.5) / days.length) * 1000
   const y = (amount: number) => 192 - (amount / max) * 184

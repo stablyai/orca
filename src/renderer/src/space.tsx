@@ -84,7 +84,7 @@ function SpaceWindowRoot(): React.JSX.Element {
         'Close and reopen Space to try again.'
       )}
     >
-      <TooltipProvider delayDuration={400}>
+      <TooltipProvider>
         <ConfirmationDialogProvider>
           <div className="app-layout">
             <WorkspaceSpacePage />

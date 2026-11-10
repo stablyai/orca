@@ -190,8 +190,8 @@ async function resetSharedTerminalModuleState(): Promise<void> {
     paneRecovery
   ] = await Promise.all([
     import('@/lib/pane-manager/pane-terminal-output-queue-registry'),
-    import('@/lib/agent-startup-delayed-delivery'),
-    import('@/lib/agent-startup-delivery-guards'),
+    import('@/lib/agent-session/launch/startup/agent-startup-delayed-delivery'),
+    import('@/lib/agent-session/launch/startup/agent-startup-delivery-guards'),
     import('@/lib/hook-command-delayed-delivery'),
     import('../../agent-completion/agent-completion-identity-store'),
     import('../../agent-completion/command-code/command-code-done-settle'),

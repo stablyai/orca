@@ -38,7 +38,7 @@ import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import { getLinkedWorkItemSuggestedName, getLinkedWorkItemWorkspaceName } from '@/lib/new-workspace'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { shouldApplyWorkspaceSourceAutoName } from '../../../../shared/new-workspace/workspace-source'
-import { isLinearLinkedWorkItem } from '@/lib/linear-linked-work-item'
+import { isLinearLinkedWorkItem } from '@/lib/work-items/linear/linear-linked-work-item'
 import { resolveComposerManualBranchNameChange } from '../composer-branch-selection'
 
 export function useSourceIdentityActions(input: SourceIdentityActionsInput) {

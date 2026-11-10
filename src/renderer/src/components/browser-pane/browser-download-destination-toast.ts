@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import type { BrowserDownloadFinishedEvent } from '../../../../shared/browser-guest-events'
+import type { BrowserDownloadFinishedEvent } from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import { translate } from '@/i18n/i18n'
 
 export function formatBrowserRemoteDownloadMessage(destination: {

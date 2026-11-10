@@ -63,6 +63,10 @@ import type { AgentSessionSwitchResult } from '../../../../shared/agent-session/
 export type StructuredAgentSessionCaller = {
   callerKey: string
   clientKind?: 'mobile' | 'runtime'
+  /** Proven by the caller's transport, never inferred from an unnamed/runtime client. */
+  userClient?: 'desktop' | 'mobile'
+  /** Consent-owning paired desktop, including the authenticated parent of a delegated phone. */
+  telemetryOwnerKey?: string
   readsOptionsWithoutModel?: boolean
 }
 
@@ -241,6 +245,10 @@ export type SetUserConversationName = StructuredAgentSessionConversationNaming['
 export type StructuredChatNamingFailure = AgentSessionNamingError & { forName: string }
 
 export type StructuredAgentSessionConversationNaming = {
+  captureTitleSourceUnavailable?: (
+    sessionId: string,
+    journal: AgentSessionJournal
+  ) => (() => void) | undefined
   publishName: (workspaceId: string, sessionId: string) => void
   activeSessionIds: () => string[]
   failure: (sessionId: string) => StructuredChatNamingFailure | undefined

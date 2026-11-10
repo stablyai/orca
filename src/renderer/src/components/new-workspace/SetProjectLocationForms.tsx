@@ -1,4 +1,6 @@
 import { ArrowLeft, FolderOpen, LoaderCircle } from 'lucide-react'
+import { CloneFolderNameField } from '../sidebar/project-admission/clone-folder/CloneFolderNameField'
+import type { CloneFolderOverride } from '../sidebar/project-admission/clone-folder/use-clone-folder-override'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -103,6 +105,8 @@ export function CloneForm({
   onBack,
   onCloneUrlChange,
   onCloneDestinationChange,
+  cloneFolder,
+  onCloneFolderNameChange,
   onBrowse,
   onSubmit
 }: {
@@ -112,6 +116,8 @@ export function CloneForm({
   onBack: () => void
   onCloneUrlChange: (value: string) => void
   onCloneDestinationChange: (value: string) => void
+  cloneFolder: CloneFolderOverride | null
+  onCloneFolderNameChange: (name: string) => void
   onBrowse: () => void
   onSubmit: () => void
 }): React.JSX.Element {
@@ -157,11 +163,23 @@ export function CloneForm({
           <FolderOpen className="size-4" />
         </Button>
       </div>
+      {cloneFolder ? (
+        <CloneFolderNameField
+          cloneFolder={cloneFolder}
+          disabled={isSubmitting}
+          onChange={onCloneFolderNameChange}
+        />
+      ) : null}
       <div className="flex justify-end">
         <Button
           type="button"
           size="sm"
-          disabled={!cloneUrl.trim() || !cloneDestination.trim() || isSubmitting}
+          disabled={
+            !cloneUrl.trim() ||
+            !cloneDestination.trim() ||
+            cloneFolder?.name.trim() === '' ||
+            isSubmitting
+          }
           onClick={onSubmit}
         >
           {isSubmitting ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
