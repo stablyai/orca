@@ -10,6 +10,7 @@ export type TerminalLinkStoreSettings = {
 
 export type TerminalLinkStoreState = {
   settings: TerminalLinkStoreSettings | undefined
+  activeWorktreeId: string | null
   setActiveWorktree: Mock
   createBrowserTab: Mock
   openFile: Mock
@@ -100,6 +101,7 @@ export function createTerminalLinkTestDoubles(): TerminalLinkTestDoubles {
   )
   const storeState: TerminalLinkStoreState = {
     settings: undefined as TerminalLinkStoreSettings | undefined,
+    activeWorktreeId: null,
     setActiveWorktree: setActiveWorktreeMock,
     createBrowserTab: createBrowserTabMock,
     openFile: openFileMock,
