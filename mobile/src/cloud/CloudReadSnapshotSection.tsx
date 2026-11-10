@@ -14,9 +14,11 @@ import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { formatTimeAgo } from '../worktree/agent-row-display'
 import { CloudErrorBanner } from './CloudErrorBanner'
+import { CloudStatusDot } from './CloudStatusDot'
 import { CloudReadSnapshotSessions } from './CloudReadSnapshotSessions'
-import type { CloudReadSnapshotResult } from './cloud-read-snapshot'
+import { CloudReadSnapshotRollbackError, type CloudReadSnapshotResult } from './cloud-read-snapshot'
 import { readSnapshotStyles as styles } from './cloud-read-snapshot-styles'
+import { cloudStatusLabel } from './cloud-workspace-display'
 import { cloudWorkspaceScreenStyles as screen } from './cloud-workspace-screen-styles'
 
 const GIT_PATHS_SHOWN = 5
@@ -48,6 +50,8 @@ export function CloudReadSnapshotSection(props: {
   /** When the result was fetched: the clock "As of" counts from (no impure clock read in render). */
   fetchedAt: number
   loading: boolean
+  /** Wake was tapped: the header says Waking (the copy stays readable until it is open). */
+  waking: boolean
   onRetry: () => void
 }) {
   useMobileColorScheme()
@@ -59,9 +63,17 @@ export function CloudReadSnapshotSection(props: {
   }
   return (
     <View style={screen.section}>
-      <Text style={screen.sectionHeading} accessibilityRole="header">
-        {t('cloud.snapshot.heading', 'Latest from this workspace')}
-      </Text>
+      <View style={styles.headingRow}>
+        <Text style={[screen.sectionHeading, styles.headingText]} accessibilityRole="header">
+          {t('cloud.snapshot.heading', 'Latest from this workspace')}
+        </Text>
+        <View style={styles.headingState} accessible accessibilityLiveRegion="polite">
+          <CloudStatusDot status={props.waking ? 'waking' : 'sleeping'} size={8} />
+          <Text style={styles.headingStateText}>
+            {cloudStatusLabel(props.waking ? 'waking' : 'sleeping', t)}
+          </Text>
+        </View>
+      </View>
       {props.loading || !result ? (
         <SnapshotSkeleton />
       ) : result.state === 'ready' ? (
@@ -79,6 +91,15 @@ export function CloudReadSnapshotSection(props: {
             'cloud.snapshot.notSealedForKey',
             'This device was added after the workspace went to sleep. Wake it once to read it here.'
           )}
+        />
+      ) : result.state === 'error' && result.error instanceof CloudReadSnapshotRollbackError ? (
+        // Trying again cannot help: the newer copy only comes back from the workspace itself.
+        <CloudErrorBanner
+          message={t(
+            'cloud.snapshot.rollback',
+            'Orca Cloud sent an older copy than the one you last saw, so it isn’t shown. Wake the workspace to see it as it is now.'
+          )}
+          onRetry={null}
         />
       ) : (
         <CloudErrorBanner

@@ -1,6 +1,10 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { ReadSnapshot } from '../../../../../shared/cloud-workspaces/read-snapshot'
-import { CloudReadSnapshotView, type CloudReadViewState } from './CloudReadSnapshotView'
+import {
+  CloudReadSnapshotView,
+  type CloudReadViewState,
+  type CloudReadWake
+} from './CloudReadSnapshotView'
 
 const NOW = 1_794_230_000_000
 const MIN = 60_000
@@ -111,7 +115,10 @@ const snapshot: ReadSnapshot = {
 
 const noop = (): void => {}
 
-function view(state: CloudReadViewState, extra: { waking?: boolean; retrying?: boolean } = {}) {
+function view(
+  state: CloudReadViewState,
+  extra: { wake?: CloudReadWake; retrying?: boolean; linux?: boolean } = {}
+) {
   return (
     <div className="bg-background p-6">
       <CloudReadSnapshotView
@@ -119,9 +126,10 @@ function view(state: CloudReadViewState, extra: { waking?: boolean; retrying?: b
         state={state}
         now={NOW}
         onWake={noop}
-        waking={extra.waking ?? false}
+        wake={extra.wake ?? null}
         onRetry={noop}
         retrying={extra.retrying ?? false}
+        linux={extra.linux ?? false}
       />
     </div>
   )
@@ -172,7 +180,31 @@ export const error = defineFixture({
   render: () => view({ kind: 'error', message: "Couldn't reach Orca Cloud. Your files are safe." })
 })
 
-export const waking = defineFixture({
+/** Keychain missing on Linux: also names the keyring to set up. */
+export const keychainUnavailableLinux = defineFixture({
   width: WIDTH,
-  render: () => view({ kind: 'ready', snapshot }, { waking: true })
+  render: () => view({ kind: 'unavailable', message: 'no keychain' }, { linux: true })
 })
+
+/** "Wake to continue" pressed 3 s ago: Waking dot, elapsed time on the busy button. */
+export const waking3s = defineFixture({
+  width: WIDTH,
+  render: () =>
+    view({ kind: 'ready', snapshot }, { wake: { phase: 'waking', startedAt: Date.now() - 3_000 } })
+})
+
+/** Past 10 s: the "Taking longer than usual" line under the header. */
+export const waking12s = defineFixture({
+  width: WIDTH,
+  render: () =>
+    view({ kind: 'ready', snapshot }, { wake: { phase: 'waking', startedAt: Date.now() - 12_000 } })
+})
+
+/** The wake failed: shared "Couldn't wake" copy with Try again; the copy stays readable. */
+export const wakeFailed = defineFixture({
+  width: WIDTH,
+  render: () => view({ kind: 'ready', snapshot }, { wake: { phase: 'failed' } })
+})
+
+/** A rollback was refused. */
+export const stale = defineFixture({ width: WIDTH, render: () => view({ kind: 'stale' }) })

@@ -3,7 +3,11 @@ import { Loader2, Moon, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
+import { formatElapsedTime } from '@/components/worktree-creation/worktree-creation-clock'
+import { useNow } from '@/hooks/use-now'
 import { useTranslate } from '@/i18n/use-translate'
+import { isLinuxUserAgent } from '@/lib/user-agent-platform'
+import { WAKE_SLOW_S } from '../CloudWakingOverlay'
 import type { ReadSnapshot } from '../../../../../shared/cloud-workspaces/read-snapshot'
 import { CloudGitChanges } from '../CloudGitChanges'
 import { CloudWorkspaceHeader } from '../CloudWorkspaceHeader'
@@ -27,13 +31,21 @@ export type CloudReadSnapshotViewProps = {
   title: string
   state: CloudReadViewState
   now: number
-  /** Wakes, then the normal open. */
+  /** Wakes, then the normal open (and the live workspace replaces this view). */
   onWake: () => void
-  waking: boolean
+  /** A wake started here: in flight since `startedAt`, or failed. */
+  wake?: CloudReadWake | null
   onRetry: () => void
   retrying: boolean
   headingRef?: React.Ref<HTMLHeadingElement>
+  /** Linux names the keyring to set up; defaults to this renderer's platform. */
+  linux?: boolean
 }
+
+export type CloudReadWake =
+  | { phase: 'waking'; startedAt: number }
+  /** `message`: why, when the open flow said (e.g. the team's running limit). */
+  | { phase: 'failed'; message?: string }
 
 function LoadingBody(): React.JSX.Element {
   const t = useTranslate()
@@ -115,6 +127,15 @@ export function CloudReadSnapshotView(props: CloudReadSnapshotViewProps): React.
   const t = useTranslate()
   const { state, now } = props
   const asOf = state.kind === 'ready' ? asOfParts(state.snapshot.capturedAt, now) : null
+  const waking = props.wake?.phase === 'waking' ? props.wake : null
+  const failed = props.wake?.phase === 'failed' ? props.wake : null
+  const clock = useNow(1_000, waking !== null)
+  const elapsedMs = waking ? Math.max(0, clock - waking.startedAt) : 0
+  const slow = waking !== null && elapsedMs >= WAKE_SLOW_S * 1_000
+  const lifecycle = waking
+    ? t('orcaCloudWorkspace.state.waking', 'Waking')
+    : t('components.orcaCloud.read.asleep', 'Asleep')
+  const linux = props.linux ?? isLinuxUserAgent()
   return (
     <section
       className="flex min-h-0 w-full flex-col gap-5"
@@ -124,13 +145,14 @@ export function CloudReadSnapshotView(props: CloudReadSnapshotViewProps): React.
       <CloudWorkspaceHeader
         icon={Moon}
         title={props.title}
-        state="sleeping"
+        state={waking ? 'waking' : 'sleeping'}
         stateLine={
           asOf
-            ? t('components.orcaCloud.read.asOf', 'Asleep · As of {{when}}', {
+            ? t('components.orcaCloud.read.stateAsOf', '{{state}} · As of {{when}}', {
+                state: lifecycle,
                 when: asOf.relative
               })
-            : t('components.orcaCloud.read.asleep', 'Asleep')
+            : lifecycle
         }
         stateTitle={asOf?.absolute}
         note={
@@ -142,15 +164,48 @@ export function CloudReadSnapshotView(props: CloudReadSnapshotViewProps): React.
         action={
           <Button
             size="sm"
-            onClick={props.waking ? undefined : props.onWake}
-            aria-disabled={props.waking || undefined}
-            aria-busy={props.waking || undefined}
+            onClick={waking ? undefined : props.onWake}
+            aria-disabled={waking ? true : undefined}
+            aria-busy={waking ? true : undefined}
+            className="aria-disabled:pointer-events-none"
           >
-            {props.waking ? <Loader2 className="motion-safe:animate-spin" aria-hidden /> : <Play />}
-            {t('components.orcaCloud.read.wakeToContinue', 'Wake to continue')}
+            {waking ? <Loader2 className="motion-safe:animate-spin" aria-hidden /> : <Play />}
+            {waking ? (
+              <span className="tabular-nums">
+                {t('components.orcaCloud.read.wakingElapsed', 'Waking… {{elapsed}}', {
+                  elapsed: formatElapsedTime(elapsedMs)
+                })}
+              </span>
+            ) : (
+              t('components.orcaCloud.read.wakeToContinue', 'Wake to continue')
+            )}
           </Button>
         }
       />
+      {/* Announced once when the wake crosses the slow mark (the text changes only then). */}
+      <p role="status" className={slow ? '-mt-3 pl-6 text-xs text-muted-foreground' : 'sr-only'}>
+        {slow
+          ? t(
+              'orcaCloudWorkspace.overlay.slow',
+              'Taking longer than usual. Your files and chats are safe.'
+            )
+          : ''}
+      </p>
+      {failed ? (
+        <InlineError
+          title={t('orcaCloudWorkspace.overlay.failedTitle', 'Couldn’t wake {{name}}', {
+            name: props.title
+          })}
+          detail={
+            <>
+              {t('orcaCloudWorkspace.overlay.failedDetail', 'Your files and chats are saved.')}
+              {failed.message ? <span className="block">{failed.message}</span> : null}
+            </>
+          }
+          retryLabel={t('orcaCloudWorkspace.overlay.tryAgain', 'Try again')}
+          onRetry={props.onWake}
+        />
+      ) : null}
       {state.kind === 'loading' ? <LoadingBody /> : null}
       {state.kind === 'ready' ? <ReadyBody snapshot={state.snapshot} now={now} /> : null}
       {state.kind === 'no_snapshot' ? (
@@ -175,8 +230,8 @@ export function CloudReadSnapshotView(props: CloudReadSnapshotViewProps): React.
         <InlineError
           tone="neutral"
           title={t(
-            'components.orcaCloud.read.stale',
-            'Orca Cloud returned an older copy than the one already shown here, so it is hidden. Wake the workspace to see it as it is now.'
+            'components.orcaCloud.read.staleCopy',
+            'Orca Cloud sent an older copy than the one you last saw, so it isn’t shown. Wake the workspace to see it as it is now.'
           )}
         />
       ) : null}
@@ -193,9 +248,17 @@ export function CloudReadSnapshotView(props: CloudReadSnapshotViewProps): React.
         <InlineError
           tone="neutral"
           title={t(
-            'components.orcaCloud.read.unavailable',
-            'Reading a sleeping workspace needs the OS keychain on this computer.'
+            'components.orcaCloud.read.keychainUnavailable',
+            'Orca can’t open the saved copy because this computer’s keychain isn’t available. Wake the workspace to see it.'
           )}
+          detail={
+            linux
+              ? t(
+                  'components.orcaCloud.read.keychainLinux',
+                  'Or set up a keyring (like GNOME Keyring) and reopen Orca.'
+                )
+              : undefined
+          }
         />
       ) : null}
       {state.kind === 'error' ? (

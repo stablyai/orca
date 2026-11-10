@@ -5166,6 +5166,7 @@
       "empty": "Nothing saved yet. Orca saves a read-only copy each time this workspace goes to sleep.",
       "notSealedForKey": "This device was added after the workspace went to sleep. Wake it once to read it here.",
       "error": "Couldn’t load the latest from this workspace. Your files are safe.",
+      "rollback": "Orca Cloud sent an older copy than the one you last saw, so it isn’t shown. Wake the workspace to see it as it is now.",
       "asOf": "As of {{ago}} ago",
       "asOfJustNow": "As of just now",
       "asOfExact": "As of {{time}}",

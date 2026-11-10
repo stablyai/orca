@@ -7,7 +7,14 @@ import type {
   ReadSnapshotAgentStatus,
   ReadSnapshotSession
 } from '../../../../../shared/cloud-workspaces/read-snapshot'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import type { TerminalAgent } from '../../../../../shared/agent-status/identity/terminal-agent'
 import { agentStatusLabel } from './cloud-read-snapshot-format'
+
+/** The app's agent names ("Claude", "Codex"); an id it does not know is shown as sent. */
+function agentDisplayName(agent: string): string {
+  return getAgentLabel(agent as TerminalAgent)
+}
 
 /** Messages shown before "Show more": enough to see where the agent left off. */
 const COLLAPSED_MESSAGES = 2
@@ -38,9 +45,7 @@ function SessionCard({ session }: { session: ReadSnapshotSession }): React.JSX.E
         <Bot className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
         <span className="min-w-0 flex-1 truncate font-medium text-foreground">{title}</span>
         {session.agent ? (
-          <span className="shrink-0 rounded-sm bg-muted px-1.5 py-0.5 font-mono text-2xs text-muted-foreground">
-            {session.agent}
-          </span>
+          <span className="shrink-0 text-muted-foreground">{agentDisplayName(session.agent)}</span>
         ) : null}
         <span className={cn('shrink-0', STATUS_TONE[session.status])}>
           {agentStatusLabel(session.status, session.turnOutcome, t)}

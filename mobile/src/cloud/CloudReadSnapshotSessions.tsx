@@ -10,6 +10,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileNativeChatMarkdown } from '../session/native-chat/MobileNativeChatMarkdown'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { cloudAgentLabel } from './CloudAgentPicker'
 import { readSnapshotStyles as styles } from './cloud-read-snapshot-styles'
 import { cloudWorkspaceScreenStyles as screen } from './cloud-workspace-screen-styles'
 
@@ -31,11 +32,10 @@ export function readSnapshotSessionStatus(
   }
 }
 
+/** The product name ("Claude Code", "Codex") from the app's one agent-name table, never the raw id. */
 function agentName(agent: string | null, t: Translate): string {
   const trimmed = agent?.trim()
-  return trimmed
-    ? trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
-    : t('cloud.snapshot.agentFallback', 'Agent')
+  return trimmed ? cloudAgentLabel(trimmed) : t('cloud.snapshot.agentFallback', 'Agent')
 }
 
 /** Agents as they were when the workspace went to sleep; each opens to the tail of its chat. */

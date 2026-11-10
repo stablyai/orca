@@ -1,6 +1,6 @@
 // Home: the org's cloud workspaces (registry on the control plane), filterable by who owns them,
 // which repo they are in, Mine/Team and archived, grouped by section, with live presence and cost.
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
@@ -18,6 +18,7 @@ import { ANY, CloudWorkspacesToolbar, type CloudWorkspacesFilters } from './Clou
 import { EmptyState, ErrorState, NewSectionDialog, SkeletonRows } from './CloudWorkspacesStates'
 import { CloudWorkspaceConfirmDialog, type PendingConfirm } from './CloudWorkspaceConfirmDialog'
 import { CloudReadSnapshotSheet } from './CloudReadSnapshotSheet'
+import type { CloudReadWake } from '../orca-cloud/read-snapshot/CloudReadSnapshotView'
 import { formatUsdMicros, type MemberDirectory } from './cloud-workspace-format'
 import { refreshCloudMessageSenders } from '@/lib/cloud-message-sender'
 import { describeError } from './cloud-workspace-errors'
@@ -87,7 +88,21 @@ export function CloudWorkspacesHome({
   const [sectionFor, setSectionFor] = useState<CloudWorkspace | null>(null)
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null)
   // The Asleep workspace whose read-only copy is open (never wakes it).
-  const [readingId, setReadingId] = useState<string | null>(null)
+  const [readingId, setReadingIdState] = useState<string | null>(null)
+  // A wake started from the read panel: shown there (elapsed, slow, failed) until it opens.
+  const [readWake, setReadWake] = useState<CloudReadWake | null>(null)
+  const readingRef = useRef<string | null>(null)
+  const setReadingId = useCallback(
+    (next: string | null | ((id: string | null) => string | null)) => {
+      const value = typeof next === 'function' ? next(readingRef.current) : next
+      if (value !== readingRef.current) {
+        setReadWake(null)
+      }
+      readingRef.current = value
+      setReadingIdState(value)
+    },
+    []
+  )
   const signIn = useAppStore((s) => s.connectCurrentOrcaProfile)
   const scope = orgId ? filters.scope : 'mine'
   const { state, stale, reading, refresh, replace } = useCloudWorkspaces(
@@ -168,23 +183,35 @@ export function CloudWorkspacesHome({
   const totalCost = visible.reduce((sum, w) => sum + w.cost.totalUsdMicros, 0)
 
   /** Opens the workspace, then (going to a teammate's chat) the chat they have in front. */
-  const open = useCallback(async (w: CloudWorkspace, chatId?: string | null) => {
-    setOpening(w.id)
-    try {
-      const outcome = await openCloudWorkspace(w)
-      if (!outcome.ok) {
-        toast.error(outcome.message)
-        return
+  const open = useCallback(
+    async (w: CloudWorkspace, chatId?: string | null) => {
+      setOpening(w.id)
+      const fromPanel = readingRef.current === w.id
+      if (fromPanel) {
+        setReadWake({ phase: 'waking', startedAt: Date.now() })
       }
-      // Woken from its read-only copy: the live workspace replaces it.
-      setReadingId((current) => (current === w.id ? null : current))
-      if (chatId) {
-        await focusCloudChat(outcome.worktreeId, chatId)
+      try {
+        const outcome = await openCloudWorkspace(w)
+        if (!outcome.ok) {
+          if (fromPanel && readingRef.current === w.id) {
+            // The panel shows the failure in place (with the reason) instead of a toast.
+            setReadWake({ phase: 'failed', message: outcome.message })
+          } else {
+            toast.error(outcome.message)
+          }
+          return
+        }
+        // Woken from its read-only copy: the live workspace replaces it.
+        setReadingId((current) => (current === w.id ? null : current))
+        if (chatId) {
+          await focusCloudChat(outcome.worktreeId, chatId)
+        }
+      } finally {
+        setOpening((current) => (current === w.id ? null : current))
       }
-    } finally {
-      setOpening((current) => (current === w.id ? null : current))
-    }
-  }, [])
+    },
+    [setReadingId]
+  )
 
   const patch = useCallback(
     async (w: CloudWorkspace, change: CloudWorkspacePatch, confirmed = false) => {
@@ -248,7 +275,7 @@ export function CloudWorkspacesHome({
       goToChat: (w: CloudWorkspace, member: CloudWorkspacePresence) => void open(w, member.chatId),
       patch: (w: CloudWorkspace, change: CloudWorkspacePatch) => void patch(w, change)
     }),
-    [open, patch]
+    [open, patch, setReadingId]
   )
 
   // Nothing (not even a skeleton) until we know this build has a control plane and you are in.
@@ -368,7 +395,7 @@ export function CloudWorkspacesHome({
       <CloudReadSnapshotSheet
         // The list row (refreshed by polling) so a wake elsewhere shows up; gone rows close it.
         workspace={readingId ? (all.find((w) => w.id === readingId) ?? null) : null}
-        waking={opening !== null && opening === readingId}
+        wake={readWake}
         onWake={(w) => void open(w)}
         onClose={() => setReadingId(null)}
       />

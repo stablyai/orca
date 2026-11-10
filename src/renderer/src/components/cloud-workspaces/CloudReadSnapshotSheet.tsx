@@ -5,19 +5,22 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
-import { CloudReadSnapshotView } from '../orca-cloud/read-snapshot/CloudReadSnapshotView'
+import {
+  CloudReadSnapshotView,
+  type CloudReadWake
+} from '../orca-cloud/read-snapshot/CloudReadSnapshotView'
 import { cloudWorkspaceTitle } from './open-cloud-workspace'
 import { useCloudReadSnapshot } from './use-cloud-read-snapshot'
 
 export function CloudReadSnapshotSheet({
   workspace,
-  waking,
+  wake,
   onWake,
   onClose
 }: {
   /** Null keeps the sheet closed. */
   workspace: CloudWorkspace | null
-  waking: boolean
+  wake: CloudReadWake | null
   onWake: (w: CloudWorkspace) => void
   onClose: () => void
 }): React.JSX.Element {
@@ -52,7 +55,7 @@ export function CloudReadSnapshotSheet({
               title={title}
               state={state}
               now={now}
-              waking={waking}
+              wake={wake}
               onWake={() => onWake(workspace)}
               onRetry={retry}
               retrying={retrying}

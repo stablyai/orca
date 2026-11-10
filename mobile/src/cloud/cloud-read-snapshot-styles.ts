@@ -4,6 +4,16 @@ import { themedStyleSheet } from '../theme/themed-styles'
 
 // The asleep workspace's read-only "Latest from this workspace" area; scheme-aware like every cloud card.
 export const readSnapshotStyles = themedStyleSheet(() => ({
+  headingRow: { flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm },
+  headingText: { flex: 1 },
+  headingState: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.xs
+  },
+  headingStateText: { fontSize: 13, color: colors.textSecondary },
   asOf: {
     fontSize: 13,
     lineHeight: 18,

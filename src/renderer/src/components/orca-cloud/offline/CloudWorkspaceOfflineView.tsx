@@ -73,7 +73,7 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
         action={
           <Button size="sm" onClick={props.onWake}>
             <Play />
-            {t('components.orcaCloud.offline.wake', 'Wake')}
+            {t('components.orcaCloud.read.wakeToContinue', 'Wake to continue')}
           </Button>
         }
       />

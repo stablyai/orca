@@ -43,7 +43,7 @@ import {
   cloudWorkspaceScreenStyles as styles
 } from './cloud-workspace-screen-styles'
 import { useCloudReadSnapshot } from './use-cloud-read-snapshot'
-import { useCloudWorkspaceRun } from './use-cloud-workspace-run'
+import { useCloudWorkspaceRun, type CloudWorkspaceRun } from './use-cloud-workspace-run'
 import {
   useCloudEnrollment,
   useCloudWorkspace,
@@ -75,6 +75,10 @@ export function CloudWorkspaceScreen({
     workspace
   )
   const [queue, setQueue] = useState<QueuedCloudPrompt[]>([])
+  // The run as it was when wake was tapped: until the run moves on (start() first reads the
+  // keychain), the button already reads Waking rather than keeping "Wake to continue".
+  const [wakeTappedAt, setWakeTappedAt] = useState<CloudWorkspaceRun | null>(null)
+  const wakePending = wakeTappedAt !== null && wakeTappedAt === run
   const [busyAction, setBusyAction] = useState<'sleep' | 'archive' | null>(null)
 
   useEffect(() => {
@@ -188,8 +192,17 @@ export function CloudWorkspaceScreen({
     workspace.status === 'creating' ||
     workspace.status === 'stopping' ||
     workspace.status === 'archived'
-  const primaryLabel =
-    run.kind === 'launched'
+  const waking =
+    wakePending ||
+    run.kind === 'attaching' ||
+    run.kind === 'delivering' ||
+    workspace.status === 'waking'
+  // Asleep, or waking from it: the read-only copy stays readable (header says Waking) until it opens.
+  const showSnapshot = asleep || (waking && !awake && snapshot.data !== undefined)
+  const busy = active || wakePending
+  const primaryLabel = wakePending
+    ? phaseLabel('waking', t)
+    : run.kind === 'launched'
       ? t('cloud.action.openSession', 'Open session')
       : run.kind === 'attaching'
         ? phaseLabel(run.phase, t)
@@ -204,7 +217,7 @@ export function CloudWorkspaceScreen({
                 : asleep
                   ? t('cloud.action.wakeToContinue', 'Wake to continue')
                   : t('cloud.action.wakeOpen', 'Wake and open workspace')
-  const primaryDisabled = active || unavailable
+  const primaryDisabled = busy || unavailable
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -240,8 +253,9 @@ export function CloudWorkspaceScreen({
               onRetry={run.retry ? () => void start(run.retry ?? 'open') : null}
             />
           ) : null}
-          {asleep ? (
+          {showSnapshot ? (
             <CloudReadSnapshotSection
+              waking={waking}
               result={snapshot.data}
               fetchedAt={snapshot.dataUpdatedAt}
               loading={
@@ -301,18 +315,25 @@ export function CloudWorkspaceScreen({
         <View style={[styles.actionBar, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
           <Pressable
             accessibilityRole="button"
-            accessibilityState={{ disabled: primaryDisabled, busy: active }}
+            accessibilityState={{ disabled: primaryDisabled, busy }}
             disabled={primaryDisabled}
-            onPress={() => (run.kind === 'launched' ? openSession('chat') : void start('open'))}
+            onPress={() => {
+              if (run.kind === 'launched') {
+                openSession('chat')
+                return
+              }
+              setWakeTappedAt(run)
+              void start('open').finally(() => setWakeTappedAt(null))
+            }}
             style={({ pressed }) => [
               styles.primary,
-              primaryDisabled && !active && styles.primaryDisabled,
+              primaryDisabled && !busy && styles.primaryDisabled,
               pressed && styles.pressed
             ]}
           >
-            {active ? <ActivityIndicator size="small" color={colors.bgBase} /> : null}
+            {busy ? <ActivityIndicator size="small" color={colors.bgBase} /> : null}
             <Text
-              style={[styles.primaryText, primaryDisabled && !active && styles.primaryTextDisabled]}
+              style={[styles.primaryText, primaryDisabled && !busy && styles.primaryTextDisabled]}
             >
               {primaryLabel}
             </Text>

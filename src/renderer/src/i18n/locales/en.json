@@ -23142,7 +23142,6 @@
         "composerLabel": "Message to queue",
         "sendAndWake": "Send and wake",
         "region": "Asleep workspace (read-only)",
-        "wake": "Wake",
         "emptyBody": "Orca keeps a copy of chats, terminals and changes once you have used this workspace while it was awake.",
         "tabChat": "Chat",
         "tabTerminals": "Terminals",
@@ -23174,7 +23173,6 @@
         "asleep": "Asleep",
         "empty": "Nothing saved yet. Orca saves a read-only copy each time this workspace goes to sleep.",
         "notSealedForKey": "This device was added after the workspace went to sleep. Wake it once to read it here.",
-        "unavailable": "Reading a sleeping workspace needs the OS keychain on this computer.",
         "tryAgain": "Try again",
         "checksPassed": "Checks passed",
         "checksFailed": "Checks failed",
@@ -23189,7 +23187,11 @@
         "prDraft": "Draft",
         "prMerged": "Merged",
         "prClosed": "Closed",
-        "stale": "Orca Cloud returned an older copy than the one already shown here, so it is hidden. Wake the workspace to see it as it is now."
+        "stateAsOf": "{{state}} · As of {{when}}",
+        "wakingElapsed": "Waking… {{elapsed}}",
+        "staleCopy": "Orca Cloud sent an older copy than the one you last saw, so it isn’t shown. Wake the workspace to see it as it is now.",
+        "keychainUnavailable": "Orca can’t open the saved copy because this computer’s keychain isn’t available. Wake the workspace to see it.",
+        "keychainLinux": "Or set up a keyring (like GNOME Keyring) and reopen Orca."
       }
     },
     "runtimeDownload": {
