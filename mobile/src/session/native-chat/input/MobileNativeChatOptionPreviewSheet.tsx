@@ -56,7 +56,7 @@ export function MobileNativeChatOptionPreviewSheet({
               })}
               onClose={onClose}
             />
-            <ReadablePreview key={index} preview={option.preview ?? ''} />
+            <ReadablePreview key={`${index}:${option.label}`} preview={option.preview ?? ''} />
             {previews.length > 1 ? (
               <ScrollView
                 horizontal

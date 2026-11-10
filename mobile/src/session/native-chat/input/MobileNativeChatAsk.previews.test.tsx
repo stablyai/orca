@@ -1,6 +1,6 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi, type Mock } from 'vitest'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 
@@ -74,8 +74,9 @@ function textAction(label: string): ReactTestInstance {
 function press(node: ReactTestInstance): void {
   act(() => node.props.onPress())
 }
-function mount(value: AskPrompt): ReturnType<typeof vi.fn> {
-  const onAnswer = vi.fn(async () => true)
+type Answer = Parameters<typeof MobileNativeChatAsk>[0]['onAnswer']
+function mount(value: AskPrompt): Mock<Answer> {
+  const onAnswer = vi.fn<Answer>(async () => true)
   act(() => {
     renderer = create(createElement(MobileNativeChatAsk, { prompt: value, onAnswer }))
   })
@@ -106,12 +107,16 @@ it('inspects every preview without choosing, and keeps the original option when 
       .some((node) => node.children.includes(compactedPreview))
   ).toBe(true)
   press(button('Close viewer'))
-  act(() => vi.runAllTimers())
+  act(() => {
+    vi.runAllTimers()
+  })
   expect(onAnswer).not.toHaveBeenCalled()
   expect(row(2).props.accessibilityState.checked).toBe(false)
   press(button('Last preview'))
   press(button('Choose this'))
-  act(() => vi.runAllTimers())
+  act(() => {
+    vi.runAllTimers()
+  })
   expect(row(2).props.accessibilityState.checked).toBe(true)
   expect(onAnswer).not.toHaveBeenCalled()
   press(button('Last preview'))
@@ -142,7 +147,9 @@ it('retains automatic answer for an ordinary question and disables the viewer ch
   plain.questions[0]!.options = [{ label: 'Plain' }]
   const onAnswer = mount(plain)
   press(row(0))
-  await act(async () => vi.runAllTimers())
+  await act(async () => {
+    vi.runAllTimers()
+  })
   expect(onAnswer).toHaveBeenCalledWith([{ indices: [0] }], expect.any(Function))
   act(() => renderer.unmount())
   act(() => {
