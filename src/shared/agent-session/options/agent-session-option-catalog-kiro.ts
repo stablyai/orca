@@ -17,7 +17,7 @@ const KIRO_EFFORT_LEVELS: SessionOptionSelectChoice[] = [
   { value: 'max', label: 'Max' }
 ]
 
-// Levels and defaults each model reports in a fresh kiro-cli 2.29.1 V3 session.
+// Levels and defaults each model reports in a fresh kiro-cli 3.1.0 V3 session.
 function kiroEffort(defaultValue: 'medium' | 'high', offersNone = false): CatalogOption {
   return {
     id: 'effort',

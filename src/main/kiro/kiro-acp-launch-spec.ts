@@ -24,14 +24,14 @@ export const KIRO_LAUNCH_SPEC: AcpLaunchSpec = {
   env: {},
   dialect: KIRO_ACP_DIALECT,
   loginCommand: agentSessionSetupFor('kiro')?.loginCommand ?? [],
-  // V3 ignores KIRO_HOME and reads its sign-in from the CLI store; the default home matches V2.
+  // V3 reads hooks, settings and sessions from KIRO_HOME but its sign-in from the CLI store.
   account: directoryAccountBinding('KIRO_HOME', (homePath) => join(homePath, '.kiro')),
   installDirectories: ({ env, homePath }) => [
     join(homePath, '.local', 'bin'),
     ...(env.LOCALAPPDATA ? [join(env.LOCALAPPDATA, 'Kiro-Cli')] : [])
   ],
-  // First release verified to serve the V3 engine over ACP.
-  minimumVersions: ['2.29.1'],
+  // Older V3 engines ignore KIRO_HOME, so a pinned home's hooks would silently not run.
+  minimumVersions: ['2.31.0'],
   // The listing's default is the CLI's own; whether a new V3 session runs it is unverified.
   modelDiscovery: {
     kind: 'command',
