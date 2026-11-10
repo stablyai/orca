@@ -275,4 +275,18 @@ describe('setup session with the real trial module', () => {
     })
     expect(again.body).toEqual({ ok: true, trial: 'unavailable' })
   })
+
+  it('grants the trial to the desktop’s active team when setup starts on it (no Checkout)', async () => {
+    const h = await createHarness({ MEMBERSHIP_SYNC_TOKEN: SYNC, CLOUD_SETUP_PAGES_URL: 'https://auth.test' })
+    const owner = { authorization: `Bearer ${await h.desktopToken({ sub: 'u7', org: 'o_live', orgRole: 'owner', email: 'o@acme.dev' })}` }
+    const id = (await h.call('POST', '/v1/cloud-setup/sessions', { body: { needs: ['plan'] }, headers: owner })).body.id
+    const view = (await h.call('GET', `/v1/cloud-setup/sessions/${id}`, { headers: owner })).body
+    expect(view.plan).toBe('trial')
+    expect(view.steps).toEqual([
+      { id: 'account', state: 'done' },
+      { id: 'team', state: 'done' },
+      { id: 'plan', state: 'done', detail: 'trial' }
+    ])
+    expect(view.finished).toBe(true)
+  })
 })
