@@ -115,7 +115,7 @@ export function buildRemoteDropdownItems(
           ? copy.unpublishedForcePush(branchCommitsAhead)
           : !hasUpstream
             ? copy.unpublishedForcePush(branchCommitsAhead)
-            : pushLabelCount === 0
+            : pushLabelCount === 0 && behind === 0
               ? upstreamStatus?.upstreamName
                 ? copy.nothingToForcePushTo(upstreamStatus.upstreamName)
                 : copy.nothingToForcePush

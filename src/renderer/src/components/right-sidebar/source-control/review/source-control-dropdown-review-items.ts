@@ -126,7 +126,15 @@ export function buildHostedReviewDropdownItems(
           'auto.components.right.sidebar.source.control.dropdown.items.statusNotPublished',
           'Not published'
         )
-      default:
+      case 'auth_required':
+      case 'base_not_on_remote':
+      case 'default_branch':
+      case 'fork_head_unsupported':
+      case 'needs_push':
+      case 'needs_sync':
+      case 'unsupported_provider':
+      case null:
+      case undefined:
         return undefined
     }
   })()
