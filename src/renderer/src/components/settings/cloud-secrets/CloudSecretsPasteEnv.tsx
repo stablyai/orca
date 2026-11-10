@@ -117,11 +117,12 @@ export function CloudSecretsPasteEnv({
     }
     setSaving(true)
     setFailure(null)
-    // Rows this save settles (sent, or a duplicate of a sent name), as they were when sent.
+    // Rows this save settles, as they were when sent: the sent row carries any server error, and a
+    // duplicate it overrode leaves with it either way.
     const settled = new Map(
       rows.flatMap((row, index) =>
         issues[index] === null || issues[index] === 'overridden'
-          ? [[row.id, `${row.name}=${row.value}`] as const]
+          ? [[row.id, { as: `${row.name}=${row.value}`, sent: issues[index] === null }] as const]
           : []
       )
     )
@@ -138,11 +139,11 @@ export function CloudSecretsPasteEnv({
     // pasted or edited while the request was out.
     setRows((current) =>
       current.flatMap((row) => {
-        const sentAs = settled.get(row.id)
-        if (sentAs === undefined || sentAs !== `${row.name}=${row.value}`) {
+        const sent = settled.get(row.id)
+        if (sent === undefined || sent.as !== `${row.name}=${row.value}`) {
           return [row]
         }
-        const error = errors.get(row.name)
+        const error = sent.sent ? errors.get(row.name) : undefined
         return error ? [{ ...row, serverError: error }] : []
       })
     )

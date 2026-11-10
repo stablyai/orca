@@ -172,6 +172,10 @@ export function CloudAgentSetupView({
   // A stray Escape must not throw away a key that was typed or pasted: ask first.
   const typedKey = KEY_OPTIONS.some((entry) => drafts[entry].key.trim() !== '')
   const [askedToDiscard, setConfirmDiscard] = useState(false)
+  // A cleared key ends the question, so typing again does not bring it back unasked.
+  if (askedToDiscard && !typedKey) {
+    setConfirmDiscard(false)
+  }
   // The question lapses with what it guards: a cleared key, or a save under way.
   const confirmDiscard = askedToDiscard && typedKey && !saving
   const returnFocus = useRef<HTMLElement | null>(null)
