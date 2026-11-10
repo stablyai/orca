@@ -720,7 +720,7 @@
         "remotePairingUnreachable": "{{endpoint}}의 Orca에 연결할 수 없습니다.",
         "remotePairingInvalidDetails": "이 액세스 링크에 잘못된 연결 정보가 포함되어 있습니다.",
         "remotePairingSaveFailed": "Orca가 호스트를 확인했지만 저장할 수 없습니다. 브라우저 저장 공간을 확인하고 다시 시도하세요.",
-        "remotePairingRepairUnavailable": "Re-pairing is not available in the browser. Pair this browser with the server again."
+        "remotePairingRepairUnavailable": "브라우저에서는 재페어링이 불가능합니다. 이 브라우저를 서버와 다시 페어링하세요."
       },
       "web": {
         "preload": {
@@ -759,7 +759,7 @@
         "browser": {
           "d175274b6d": "새 브라우저 탭",
           "08fc23631d": "브라우저",
-          "remoteCookieImportUnavailable": "Manual cookie file import is unavailable while a remote runtime is active."
+          "remoteCookieImportUnavailable": "원격 런타임이 활성화되어 있는 동안에는 수동 쿠키 파일 가져오기를 사용할 수 없습니다."
         },
         "editor": {
           "dcb521ed29": "이 파일은 충돌 상태에 있지만 편집할 수 있는 작업 트리 파일이 없습니다.",
@@ -1001,7 +1001,7 @@
               "8d6eedf97e": "PATH에 Orca CLI를 등록하지 못했습니다.",
               "0f116999f1": "설정하기 전에 셸을 다시 시작하거나 Orca CLI 디렉터리를 PATH에 추가하세요.",
               "15cbedc3e3": "agent 스킬 설정을 실행하기 전에 Orca CLI를 설치하십시오.",
-              "windowsPathUnknown": "Orca could not check your Windows user PATH",
+              "windowsPathUnknown": "Orca에서 Windows 사용자 PATH를 확인하지 못했습니다",
               "refreshCliRegistration": "CLI 등록 상태를 새로 고친 후 다시 시도하세요."
             }
           }
@@ -1267,21 +1267,21 @@
       "linear": {
         "usage": {
           "examples": {
-            "readTicket": "Read the linked ticket",
-            "postUpdate": "Post a progress update",
-            "moveState": "Move the ticket forward",
+            "readTicket": "연결된 티켓을 읽어보세요",
+            "postUpdate": "진행 상황 업데이트 게시",
+            "moveState": "티켓을 앞으로 이동하세요",
             "attachPr": "리뷰 링크 첨부",
-            "triageFollowups": "Triage and create follow-ups",
-            "readTicketSummary": "Pull the linked Linear issue's full context before starting work.",
-            "readTicketPrompt": "Use {{value0}} to read the linked Linear issue for this worktree, then summarize the goal and acceptance criteria before you start.",
-            "postUpdateSummary": "Comment progress or a completion summary back to the Linear issue.",
-            "postUpdatePrompt": "Use {{value0}} to post a completion update on the linked Linear issue with what changed and how it was verified.",
-            "moveStateSummary": "Advance the Linear workflow state as the work progresses.",
-            "moveStatePrompt": "Use {{value0}} to move the linked Linear issue to In Review now that the change is ready.",
+            "triageFollowups": "후속 조치 분류 및 생성",
+            "readTicketSummary": "작업을 시작하기 전에 연결된 Linear 이슈의 전체 맥락을 확인하세요.",
+            "readTicketPrompt": "{{value0}}을 사용하여 이 작업 트리에 연결된 Linear 이슈를 읽고, 시작하기 전에 목표와 수락 기준을 요약하세요.",
+            "postUpdateSummary": "Linear 이슈에 진행 상황이나 완료 요약을 댓글로 남기세요.",
+            "postUpdatePrompt": "{{value0}}을 사용하여 연결된 Linear 이슈에 변경 내용과 검증 방법을 포함한 완료 업데이트를 게시하세요.",
+            "moveStateSummary": "작업 진행에 맞춰 Linear 워크플로 상태를 변경하세요.",
+            "moveStatePrompt": "변경이 준비되었으므로 {{value0}}을 사용하여 연결된 Linear 이슈를 리뷰 중 상태로 이동하세요.",
             "attachPrSummary": "풀 또는 머지 리퀘스트를 만들 때 Linear 이슈에 연결하세요.",
             "attachPrPrompt": "{{value0}}을 사용해 이 풀 또는 머지 리퀘스트를 연결된 Linear 이슈에 첨부하세요.",
-            "triageFollowupsSummary": "Set assignee, priority, or estimate, and file parented follow-up tickets.",
-            "triageFollowupsPrompt": "Use {{value0}} to triage the linked Linear issue — set priority and estimate — and create a parented follow-up ticket for the deferred cleanup."
+            "triageFollowupsSummary": "담당자, 우선순위 또는 예상 작업량을 설정하고 상위 이슈에 연결된 후속 티켓을 생성하세요.",
+            "triageFollowupsPrompt": "{{value0}}을 사용하여 연결된 Linear 이슈의 우선순위와 예상 작업량을 설정하고, 미뤄 둔 정리 작업에 대한 후속 티켓을 하위 이슈로 생성하세요."
           }
         },
         "issue": {
@@ -1334,13 +1334,13 @@
         "image": {
           "attachments": {
             "fallbackName": "Image attachment",
-            "unsupportedType": "{{fileName}} is not a supported image type.",
+            "unsupportedType": "{{fileName}}은(는) 지원되는 이미지 유형이 아닙니다.",
             "empty": "{{fileName}} is empty.",
-            "tooLarge": "{{fileName}} is larger than {{maxSize}}.",
-            "tooMany": "You can attach up to {{maxCount}} images.",
-            "dimensionsTooLarge": "{{fileName}} has dimensions that are too large to preview safely.",
-            "invalidImage": "{{fileName}} is not a valid supported image.",
-            "additionalErrors": "{{count}} additional images could not be attached.",
+            "tooLarge": "{{fileName}}은(는) {{maxSize}}보다 큽니다.",
+            "tooMany": "최대 {{maxCount}}개의 이미지를 첨부할 수 있습니다.",
+            "dimensionsTooLarge": "{{fileName}}의 크기가 너무 커서 안전하게 미리 볼 수 없습니다.",
+            "invalidImage": "{{fileName}}은(는) 유효한 지원 이미지가 아닙니다.",
+            "additionalErrors": "이미지 {{count}}개를 추가로 첨부하지 못했습니다.",
             "totalTooLarge": "{{fileName}}을(를) 포함하면 첨부 파일 합계가 {{maxSize}}를 초과합니다.",
             "compressed": "{{fileName}}을(를) 첨부 파일 한도에 맞추기 위해 {{originalSize}}에서 {{size}}(으)로 압축했습니다."
           }
@@ -1477,6 +1477,10 @@
           "wslRegistrationUnavailable": "WSL CLI 등록을 사용할 수 없습니다.",
           "wslWindowsOnly": "WSL CLI 등록은 Windows에서만 사용할 수 있습니다."
         }
+      },
+      "workspacePortBrowserOpen": {
+        "systemBrowserHint": "{{shortcut}}+클릭하여 시스템 브라우저에서 열기",
+        "tooltip": "{{label}}. {{hint}}"
       }
     },
     "hooks": {
@@ -1501,7 +1505,7 @@
         "nativeDropTooManyPaths": "드롭에 파일이 너무 많습니다.",
         "nativeDropPathsTooLargeDescription": "파일 수를 줄이거나 더 짧은 경로 목록을 사용하세요.",
         "nativeDropPathsTooLarge": "드롭 경로 목록이 너무 큽니다.",
-        "ownerChanged": "Couldn't verify which host owns this workspace. Try again after it reconnects.",
+        "ownerChanged": "이 워크스페이스를 소유한 호스트를 확인할 수 없습니다. 다시 연결한 후 다시 시도하세요.",
         "nativeDropUnresolvedPathsDescription": "먼저 디스크에 저장한 다음 저장된 파일을 삭제하세요.",
         "nativeDropUnresolvedPaths": "Orca가 삭제된 파일의 경로를 읽을 수 없습니다.",
         "nativeDropTempCopyFailed_one": "Orca가 드롭한 파일 {{count}}개를 복사하지 못했습니다.",
@@ -1516,10 +1520,10 @@
         "a8d2bf8e9e": "닫을 활성 브라우저 탭이 없습니다.",
         "f000b2ff76": "활성 작업 트리 없음",
         "7a64b31991": "원격 런타임이 활성화된 동안에는 로컬 terminal 생성을 사용할 수 없습니다.",
-        "ef223fbb6b": "A device tried to connect but is not paired",
-        "11992d0337": "If this was your phone or another Orca client, re-pair it from Settings → Mobile.",
+        "ef223fbb6b": "장치가 연결을 시도했지만 페어링되지 않았습니다.",
+        "11992d0337": "귀하의 휴대폰이거나 다른 Orca 클라이언트인 경우 설정 → 모바일에서 다시 페어링하세요.",
         "6573cfe955": "Open Mobile Settings",
-        "unresolvedTerminalWorktreeOwner": "Terminal creation is unavailable because the worktree owner could not be resolved"
+        "unresolvedTerminalWorktreeOwner": "작업 트리 소유자를 확인할 수 없어 터미널 생성을 사용할 수 없습니다."
       },
       "useSettingsNavigationMetadata": {
         "4a728cd56b": "아직 구체화되고 있는 새로운 기능입니다. 한번 시도해 보세요.",
@@ -2118,14 +2122,14 @@
         "perWorkspaceEnvHint": "레시피에서 온디맨드 환경 프로비저닝",
         "branchName": "브랜치 이름",
         "branchNamePlaceholder": "feature/my-branch",
-        "connectTimedOut": "Connection timed out. It may still be connecting in the background.",
+        "connectTimedOut": "연결 시간이 초과되었습니다. 백그라운드에서 여전히 연결 중일 수 있습니다.",
         "connectingHost": "Connecting…",
         "connectHost": "Connect",
         "addHost": "Add host",
         "addSshHost": "Add SSH host",
-        "addSshHostHint": "Use an existing machine over SSH",
-        "addRemoteOrcaServer": "Add Remote Orca Server",
-        "addRemoteOrcaServerHint": "Pair another Orca runtime",
+        "addSshHostHint": "SSH로 기존 컴퓨터 사용",
+        "addRemoteOrcaServer": "원격 Orca 서버 추가",
+        "addRemoteOrcaServerHint": "다른 Orca 런타임 페어링",
         "hostConnectionFailed": "Connection failed",
         "defaultBranchUpdateFailed": "프로젝트 기본 브랜치를 업데이트할 수 없습니다. 다시 시도해 보세요.",
         "setLocation": "프로젝트 위치 설정",
@@ -2136,16 +2140,16 @@
         "setupConfigDefaultTabs": "기본 탭 명령",
         "setupConfigSetupAndDefaultTabs": "설정 및 기본 탭 명령",
         "setupConfigSetupScript": "설정 스크립트",
-        "runDefaultTabCommands": "Run default tab commands",
-        "runSetupAndDefaultTabCommands": "Run setup and default tab commands",
-        "runSetupCommand": "Run setup command",
+        "runDefaultTabCommands": "기본 탭 명령 실행",
+        "runSetupAndDefaultTabCommands": "설정 및 기본 탭 명령 실행",
+        "runSetupCommand": "설정 명령 실행",
         "askRunDefaultTabCommands": "지금 기본 탭 명령을 실행할까요?",
         "askRunSetupAndDefaultTabCommands": "지금 설정 및 기본 탭 명령을 실행할까요?",
         "askRunSetup": "지금 설정을 실행할까요?",
-        "runSetupNow": "Run setup now",
-        "runCommandsNow": "Run commands now",
-        "skipForNow": "Skip for now",
-        "skipCommands": "Skip commands",
+        "runSetupNow": "지금 설정 실행",
+        "runCommandsNow": "지금 명령 실행",
+        "skipForNow": "지금은 건너뛰기",
+        "skipCommands": "명령 건너뛰기",
         "connectProject": "{{name}} 연결"
       },
       "NewWorkspaceComposerModal": {
@@ -2612,10 +2616,10 @@
         "jiraSortDescending": "내림차순",
         "jiraSortBy": "정렬 기준",
         "jiraToggleSortDirection": "{{value0}}으로 정렬",
-        "75a38d7df8": "GitHub data is temporarily unavailable. Its API may be down, rate-limited, or unreachable. Please try again shortly.",
-        "noGithubSourceDetected": "No GitHub source detected for",
-        "noGithubSourceDetectedHint": "it may have no GitHub remote, or the source could not be resolved.",
-        "jiraLinkSourceUnavailable": "Couldn’t link this Jira issue. Reconnect Jira or pick the matching site, then try again.",
+        "75a38d7df8": "GitHub 데이터를 일시적으로 사용할 수 없습니다. 해당 API가 다운되었거나, 속도가 제한되었거나, 연결할 수 없을 수 있습니다. 잠시 후 다시 시도해 주세요.",
+        "noGithubSourceDetected": "다음 대상의 GitHub 소스를 찾지 못했습니다:",
+        "noGithubSourceDetectedHint": "GitHub 원격이 없거나 소스를 확인할 수 없습니다.",
+        "jiraLinkSourceUnavailable": "이 Jira 이슈를 연결할 수 없습니다. Jira를 다시 연결하거나 해당 사이트를 선택한 후 다시 시도하세요.",
         "loadPageUnreachable": "{{value0}} 페이지는 GitHub 검색이 반환할 수 있는 범위를 벗어났습니다.",
         "loadPageFailed": "GitHub에서 {{value0}} 페이지를 불러오지 못했습니다.",
         "loadPageNoMoreResults": "{{value0}} 페이지에 더 이상 결과가 없습니다.",
@@ -3590,7 +3594,7 @@
                     "pane": {
                       "id": {
                         "copy": {
-                          "failed": "Unable to copy pane ID"
+                          "failed": "창 ID를 복사할 수 없습니다."
                         }
                       }
                     }
@@ -4252,10 +4256,10 @@
             "c06c1d215d": "네트워크 요청 실패로 Claude 사용량을 새로 고칠 수 없습니다.",
             "cabdc2a9e0": "Claude 로그인 자격 증명을 읽을 수 없습니다.",
             "a7517cccb6": "현재 Claude 사용량을 사용할 수 없습니다.",
-            "e2c6a4f917": "Run Grok to refresh",
-            "d1b7f509ac": "Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.",
-            "f90b3d7a16": "Run Kimi to refresh",
-            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.",
+            "e2c6a4f917": "Grok을 실행하여 새로 고침",
+            "d1b7f509ac": "Orca를 실행하는 컴퓨터의 터미널에서 grok을 실행하고 시작될 때까지 기다리세요. 메시지가 표시되면 로그인을 완료한 후 사용량 조회를 다시 시도하세요. 채팅 메시지를 보낼 필요는 없습니다.",
+            "f90b3d7a16": "새로고침하려면 Kimi를 실행하세요.",
+            "a37e8c15d4": "Orca를 실행하는 컴퓨터의 터미널에서 kimi를 실행하고 시작될 때까지 기다린 후 사용량 조회를 다시 시도하세요.",
             "minimax": {
               "expired": {
                 "label": "로그인이 만료되었습니다",
@@ -4374,9 +4378,9 @@
           "SkillUpdateStatusSegment": {
             "runningLabel": "Updating skills",
             "runningOne": "Updating {{value0}}…",
-            "runningAria": "Skills updating. Click to open details.",
+            "runningAria": "스킬 업데이트 중입니다. 세부정보를 열려면 클릭하세요.",
             "successLabel": "Skills updated",
-            "successAria": "Skills updated. Click to open details.",
+            "successAria": "스킬이 업데이트되었습니다. 세부정보를 열려면 클릭하세요.",
             "attentionAria": "일부 스킬 업데이트를 건너뛰었습니다. 클릭하여 세부 정보를 여세요.",
             "attentionLabel": "스킬 확인 필요",
             "attentionTooltip": "일부 스킬 업데이트를 건너뛰었습니다 — 클릭하여 세부 정보 보기",
@@ -4394,13 +4398,13 @@
             "last_connected": "마지막 연결 {{value0}}",
             "reconnect_attempt": "{{value0}} 시도",
             "access_revoked": "Access revoked",
-            "access_revoked_summary": "This server revoked access for this computer",
-            "access_revoked_explanation": "Re-pair with a new pairing link from the server to reconnect.",
+            "access_revoked_summary": "이 서버가 이 컴퓨터에 대한 액세스를 취소했습니다.",
+            "access_revoked_explanation": "다시 연결하려면 서버에서 새로운 페어링 링크로 다시 페어링하세요.",
             "managed_access_revoked_explanation": "Orca가 SSH로 다시 페어링하지 못했습니다. 연결하여 다시 시도하세요.",
             "connect_access_revoked_explanation": "연결하여 다시 시도하세요.",
             "update_required": "Update required",
-            "update_required_summary": "Orca versions are not compatible",
-            "update_required_explanation": "Update Orca on this computer or on the server, then connect again.",
+            "update_required_summary": "Orca 버전이 호환되지 않습니다",
+            "update_required_explanation": "이 컴퓨터나 서버의 Orca를 업데이트한 후 다시 연결하세요.",
             "repair": "Re-pair…",
             "open_settings": "설정 열기…",
             "server_replaced": "다른 서버",
@@ -4946,7 +4950,7 @@
           "checkNow": "지금 확인",
           "close": "닫기",
           "progressAria": "Updating skills",
-          "errorTitle": "The update didn't finish",
+          "errorTitle": "업데이트가 완료되지 않았습니다",
           "updating": "Updating…",
           "done": "Done",
           "finishedWithProblems": "일부 스킬에 확인이 필요합니다",
@@ -5537,7 +5541,7 @@
         },
         "SleepTwinWorkspaceDialog": {
           "title": "Sleep Workspace",
-          "alsoSleeps": "Also sleeps the copy on {{hosts}}",
+          "alsoSleeps": "{{hosts}}의 복사본도 절전 모드로 전환합니다",
           "cancel": "Cancel",
           "confirm": "Sleep"
         },
@@ -5607,9 +5611,9 @@
           "a2fd890d9e": "제출하기 전에 피드백을 입력해 주세요.",
           "f2e42e1307": "보내기",
           "69969ba364": "전송 중…",
-          "imageReadFailed": "Could not read the attached images. Try attaching them again.",
-          "attachWhileSending": "Wait for the current feedback to finish sending before attaching more images.",
-          "imagesNotDelivered": "Feedback sent, but image delivery could not be confirmed.",
+          "imageReadFailed": "첨부된 이미지를 읽을 수 없습니다. 다시 첨부해 보세요.",
+          "attachWhileSending": "더 많은 이미지를 첨부하기 전에 현재 피드백 전송이 완료될 때까지 기다리세요.",
+          "imagesNotDelivered": "피드백이 전송되었으나 이미지 전송을 확인할 수 없습니다.",
           "imagesNotIncluded": "피드백을 보냈습니다. 스크린샷을 업로드하지 못해 포함되지 않았습니다.",
           "imagesRejected": "피드백을 보냈습니다. 스크린샷이 너무 커서 업로드하지 못해 포함되지 않았습니다."
         },
@@ -5972,18 +5976,18 @@
           "pathInvalid": "경로가 유효한 로컬 경로가 아닙니다.",
           "localOnly": "Local only",
           "remoteSsh": "Remote SSH",
-          "remoteRuntimeUnsupported": "Opening this path in a local app is not available.",
-          "remoteRuntimeUnsupportedDetail": "Switch to a local or SSH workspace, then try again.",
-          "sshTargetNotFound": "SSH host is no longer available.",
-          "sshTargetNotFoundDetail": "Refresh workspaces or reconnect the host, then try again.",
-          "sshTargetInvalid": "SSH host configuration is incomplete.",
-          "sshTargetInvalidDetail": "Edit or reconnect the SSH host, then try again.",
+          "remoteRuntimeUnsupported": "로컬 앱에서는 이 경로를 열 수 없습니다.",
+          "remoteRuntimeUnsupportedDetail": "로컬 또는 SSH 워크스페이스로 전환한 후 다시 시도하세요.",
+          "sshTargetNotFound": "SSH 호스트를 더 이상 사용할 수 없습니다.",
+          "sshTargetNotFoundDetail": "워크스페이스의 새로고침을 실행하거나 호스트를 다시 연결한 후 다시 시도하세요.",
+          "sshTargetInvalid": "SSH 호스트 구성이 불완전합니다.",
+          "sshTargetInvalidDetail": "SSH 호스트를 편집하거나 다시 연결한 후 다시 시도하세요.",
           "sshAliasRequired": "이 편집기에는 이 호스트에 대한 SSH 구성 별칭이 필요합니다.",
-          "sshAliasRequiredDetail": "Add a Host alias for {{host}}:{{port}} to your local SSH config, reconnect the workspace, then try again.",
-          "remoteEditorUnsupported": "This app cannot open SSH workspaces.",
+          "sshAliasRequiredDetail": "로컬 SSH 설정에 {{host}}:{{port}}의 Host 별칭을 추가하고 워크스페이스를 다시 연결한 후 다시 시도하세요.",
+          "remoteEditorUnsupported": "이 앱은 SSH 워크스페이스를 열 수 없습니다.",
           "remoteEditorUnsupportedDetail": "VS Code, Cursor 또는 Zed를 선택하거나 앱을 로컬에서 사용하세요.",
-          "remotePathInvalid": "Path is not valid for the SSH host.",
-          "remotePathInvalidDetail": "Refresh the workspace before trying again.",
+          "remotePathInvalid": "SSH 호스트에 대한 경로가 유효하지 않습니다.",
+          "remotePathInvalidDetail": "워크스페이스의 새로고침을 실행한 후 다시 시도하세요.",
           "pathLaunchFailed": "편집기에서 경로를 열 수 없습니다.",
           "pathLaunchFailedDetail": "이 컴퓨터에 구성된 편집기 명령을 확인하세요.",
           "wsl": "WSL",
@@ -6144,15 +6148,15 @@
               "c460fecc4a": "일부 워크스페이스를 절전 모드로 전환하지 못했습니다.",
               "8bc3fc0671": "워크스페이스를 절전 모드로 전환하지 못했습니다.",
               "legacy": {
-                "unverified": "The older host runtime could not confirm terminal shutdown. The workspace was kept open; update the host and try again."
+                "unverified": "이전 호스트 런타임이 터미널 종료를 확인하지 못해 워크스페이스를 열어 두었습니다. 호스트를 업데이트한 후 다시 시도하세요."
               },
               "twin": {
-                "unattributed": "Orca couldn't tell which host runs this workspace's terminals, so the workspace was kept open. Reconnect its hosts and try again."
+                "unattributed": "Orca가 이 워크스페이스의 터미널을 실행하는 호스트를 확인하지 못해 워크스페이스를 열어 두었습니다. 호스트를 다시 연결한 후 다시 시도하세요."
               },
               "host": {
-                "unverified": "The host could not confirm terminal shutdown. The workspace was kept open; check the connection and try again."
+                "unverified": "호스트가 터미널 종료를 확인하지 못해 워크스페이스를 열어 두었습니다. 연결을 확인한 후 다시 시도하세요."
               },
-              "retry": "The workspace was kept open. Try again; if the problem continues, check the host connection.",
+              "retry": "워크스페이스를 열어 두었습니다. 다시 시도해 보세요. 문제가 계속되면 호스트 연결을 확인하세요.",
               "chat": {
                 "partial": "호스트는 채팅이 중지되었는지 확인할 수 없습니다. 다른 패널이 닫혔을 수도 있습니다. 연결을 확인하고 다시 시도해 보세요."
               },
@@ -8163,7 +8167,7 @@
           "serverRuntimeUnavailable": "Orca를 사용할 수 없습니다.",
           "serverRuntimeUnavailableDescription": "SSH 전송이 연결되었지만 Orca 런타임이 응답하지 않았습니다. 호스트가 아직 실행 중일 수 있습니다.",
           "serverReconnecting": "다시 연결하는 중",
-          "accessRevoked": "{{value0}} no longer accepts this computer. Re-pair it with a new access link.",
+          "accessRevoked": "{{value0}}에서는 더 이상 이 컴퓨터를 사용할 수 없습니다. 새로운 액세스 링크로 다시 페어링하세요.",
           "managedAccessRevoked": "{{value0}}이(가) 더 이상 이 컴퓨터를 허용하지 않으며, Orca가 SSH로 다시 페어링하지 못했습니다. 연결하여 다시 시도하세요.",
           "connectAccessRevoked": "{{value0}}이(가) 더 이상 이 컴퓨터를 허용하지 않습니다. 연결하여 다시 시도하세요.",
           "repair": "Re-pair…",
@@ -11663,8 +11667,8 @@
           "cancel": "취소",
           "saveFailed": "호스트를 저장할 수 없습니다.",
           "saveFailedHelp": "호스트가 확인되었지만 Orca가 호스트를 저장할 수 없습니다. 이름과 로컬 설정 저장소를 확인한 후 다시 시도하세요.",
-          "differentServer": "This link is for a different server",
-          "differentServerHelp": "This pairing link is for a different server. Create the link on the server you are re-pairing.",
+          "differentServer": "이 링크는 다른 서버용입니다.",
+          "differentServerHelp": "이 페어링 링크는 다른 서버용입니다. 다시 페어링할 서버에 링크를 생성하세요.",
           "loopbackRecoveryTunnel": "다른 컴퓨터에서 '이 컴퓨터 공유'를 열고 Tailscale 또는 LAN 주소로 '다른 기기'용 링크를 만드세요. SSH 터널로 연결한다면 아래 옵션을 켜세요.",
           "sshTunnelReach": "SSH 터널을 통해 이 주소에 연결합니다",
           "addServerWithTunnel": "터널로 서버 추가",
@@ -14034,7 +14038,7 @@
             "worktreeUnavailable": "워크트리는 더 이상 사용할 수 없습니다.",
             "openSupportedWorkspace": "세션을 재개하기 전에 워크스페이스를 여세요.",
             "sessionHostMismatchUnsupported": "이 세션은 다른 호스트에 속합니다. 재개하려면 같은 호스트의 워크스페이스를 여세요.",
-            "prepareSessionResumeFailed": "Could not prepare this session for resume.",
+            "prepareSessionResumeFailed": "재개를 위해 이 세션을 준비할 수 없습니다.",
             "sessionDeleted": "세션이 삭제되었습니다",
             "sessionDeleteFailed": "세션을 삭제하지 못했습니다",
             "sessionDeleteCheckingHost": "{{value0}} 확인 중…",
@@ -14225,15 +14229,15 @@
               "error": {
                 "copy": {
                   "580025e7b7": "GitHub is unavailable",
-                  "01c85b5770": "GitHub's API is temporarily unavailable. This panel reloads automatically once it recovers.",
+                  "01c85b5770": "GitHub의 API를 일시적으로 사용할 수 없습니다. 이 패널은 복구되면 자동으로 다시 로드됩니다.",
                   "d1a9f2b165": "Can't reach GitHub",
-                  "7d01d42a3a": "GitHub is unreachable right now. Check your connection, then try again shortly.",
-                  "e9d681894a": "GitHub rate limit reached",
-                  "8c77434d6f": "GitHub is rate-limiting requests. This panel refreshes once the limit resets.",
-                  "79aa06bb2c": "Couldn't refresh. GitHub's API is temporarily unavailable. Showing the last known status.",
-                  "6ec12cee0c": "Couldn't refresh. GitHub is unreachable right now. Showing the last known status.",
-                  "de088015e8": "Couldn't refresh. GitHub is rate-limiting requests. Showing the last known status.",
-                  "d9dd7c6687": "Couldn't refresh from GitHub. Showing the last known status.",
+                  "7d01d42a3a": "지금은 GitHub에 연결할 수 없습니다. 연결을 확인한 후 잠시 후 다시 시도해 보세요.",
+                  "e9d681894a": "GitHub 속도 제한에 도달했습니다.",
+                  "8c77434d6f": "GitHub에서 요청 수를 제한하고 있습니다. 제한이 초기화되면 이 패널이 새로고침됩니다.",
+                  "79aa06bb2c": "새로고침할 수 없습니다. GitHub의 API를 일시적으로 사용할 수 없습니다. 마지막으로 알려진 상태를 표시합니다.",
+                  "6ec12cee0c": "새로고침할 수 없습니다. 지금은 GitHub에 연결할 수 없습니다. 마지막으로 알려진 상태를 표시합니다.",
+                  "de088015e8": "새로고침할 수 없습니다. GitHub에서 요청 수를 제한하고 있습니다. 마지막으로 확인된 상태를 표시합니다.",
+                  "d9dd7c6687": "GitHub에서 새로고침할 수 없습니다. 마지막으로 알려진 상태를 표시합니다.",
                   "manual_provider": "{{provider}}에서 새로고침할 수 없습니다. 다시 시도하세요."
                 }
               }
@@ -14621,7 +14625,7 @@
             "retryJira": "다시 시도",
             "searchJira": "Jira 이슈 검색 또는 이슈 URL 붙여넣기",
             "jiraMode": "Jira",
-            "jiraSelectBindFailed": "Couldn’t link this Jira issue. Pick the matching site or reconnect Jira, then try again.",
+            "jiraSelectBindFailed": "이 Jira 이슈를 연결할 수 없습니다. 해당 사이트를 선택하거나 Jira를 다시 연결한 후 다시 시도하세요.",
             "emoji": "Emoji",
             "loadingLinearIssue": "Linear 문제 로드 중…",
             "linearLoginUnreadableTitle": "Linear 다시 연결",
@@ -16097,11 +16101,11 @@
           "stepsFailedOfTotal_other": "{{count}}개 단계 중 {{failed}}개 실패"
         },
         "ExternalFileChangeBanner": {
-          "7c41e90d12": "This file changed on disk while you have unsaved edits. Overwrite replaces the newer disk content.",
+          "7c41e90d12": "저장하지 않은 편집 내용이 있는 동안 디스크의 파일이 변경되었습니다. 덮어쓰면 디스크의 최신 내용이 대체됩니다.",
           "3fa2b8d417": "디스크에서 다시 로드",
           "a95d02c644": "편집 내용 유지",
-          "overwrite": "Overwrite",
-          "keepHint": "Keeps your version. Your next save replaces the version on disk.",
+          "overwrite": "덮어쓰기",
+          "keepHint": "편집 중인 버전을 유지합니다. 다음에 저장하면 디스크의 버전이 대체됩니다.",
           "5c02de9b31": "디스크에서 다시 로드됨",
           "d1e830fa22": "실행 취소",
           "90b2ce7d43": "비교"
@@ -16140,14 +16144,14 @@
           "save": {
             "failure": {
               "notice": {
-                "8c59ce5075": "Failed to save the file. Please try again."
+                "8c59ce5075": "파일을 저장하지 못했습니다. 다시 시도해 주세요."
               }
             },
             "stale": {
-              "notice": "This file changed on disk since your edits. Use the banner to compare, reload, or overwrite."
+              "notice": "편집한 이후 디스크의 파일이 변경되었습니다. 배너에서 비교하거나 다시 로드하거나 덮어쓰세요."
             },
             "sectionStale": {
-              "notice": "This file changed on disk since this section loaded."
+              "notice": "이 섹션을 불러온 이후 디스크의 파일이 변경되었습니다."
             },
             "notUtf8": {
               "notice": "{{name}}은(는) UTF-8 텍스트가 아니어서 자동 저장이 일시 중지되었습니다. 직접 저장하면 UTF-8로 다시 쓰이며 유효한 UTF-8이 아닌 문자는 대체됩니다.",
@@ -17800,7 +17804,7 @@
         "teamRequired": "이 워크트리의 상태, 담당자, 레이블을 로드하려면 팀을 선택하세요.",
         "filters": "필터",
         "allWorkspacesTitle": "워크트리 선택",
-        "allWorkspacesBody": "상태, 담당자, 레이블 필터는 단일 Linear �크트리의 ID를 사용합니다. 필터링할 워크트리를 선택하세요.",
+        "allWorkspacesBody": "상태, 담당자, 레이블 필터는 단일 Linear 워크스페이스의 ID를 사용합니다. 필터링할 워크트리를 선택하세요.",
         "clearAll": "모든 필터 지우기",
         "partialCoverage": "부분 연결",
         "partialCoverageTitle": "일부 팀은 이 필터에서 제외될 수 있습니다. 자세한 내용을 보려면 필터를 여세요."
@@ -17879,7 +17883,7 @@
       },
       "terminalPane": {
         "useManualTerminalWorktreeParking": {
-          "cannotPark": "These terminals cannot be parked safely."
+          "cannotPark": "이 터미널은 안전하게 보관할 수 없습니다."
         }
       },
       "pr-check-counts": {
@@ -18251,15 +18255,15 @@
       },
       "TaskPageJiraSavedFilters": {
         "6c381858a1": "Saved filters",
-        "d14121662d": "No saved filters yet.",
+        "d14121662d": "아직 저장된 필터가 없습니다.",
         "af0dd8c528": "Edit {{value0}}",
-        "bae9bd87bf": "You can save up to {{value0}} filters.",
+        "bae9bd87bf": "최대 {{value0}}개의 필터를 저장할 수 있습니다.",
         "85506127a5": "Save current filter",
         "7aef259c28": "Edit Jira filter",
         "4f0e55d2e5": "Save Jira filter",
-        "466c1b12ce": "Give this JQL query a name for quick access.",
+        "466c1b12ce": "빠른 액세스를 위해 이 JQL 쿼리에 이름을 지정합니다.",
         "e4c2f52972": "Name",
-        "0ab71bb840": "A saved filter with this name already exists.",
+        "0ab71bb840": "이 이름을 가진 저장된 필터가 이미 존재합니다.",
         "42ce360813": "JQL",
         "7b21c59a26": "Delete filter",
         "a62f9db53d": "Cancel",
@@ -18411,18 +18415,18 @@
     },
     "runtime": {
       "remoteServerUpdateErrors": {
-        "manualRequired": "This server must be updated manually through its service manager.",
-        "notAvailable": "The server no longer reports an available update. Check again.",
-        "notDownloaded": "The server update has not finished downloading.",
-        "legacyServer": "Update this server manually once to enable remote updates.",
-        "updaterTimeout": "Timed out waiting for the server updater.",
-        "requestedVersionUnavailable": "The server updater did not offer the requested Orca version.",
-        "updateUnavailable": "The server did not report an available update.",
-        "downloadIncomplete": "The server update did not finish downloading.",
-        "reconnectTimeout": "The server did not reconnect on the updated version."
+        "manualRequired": "이 서버는 서비스 관리자를 통해 수동으로 업데이트해야 합니다.",
+        "notAvailable": "서버가 더 이상 사용 가능한 업데이트를 보고하지 않습니다. 다시 확인하세요.",
+        "notDownloaded": "서버 업데이트 다운로드가 완료되지 않았습니다.",
+        "legacyServer": "원격 업데이트를 활성화하려면 이 서버를 수동으로 한 번 업데이트하세요.",
+        "updaterTimeout": "서버 업데이터를 기다리는 동안 시간이 초과되었습니다.",
+        "requestedVersionUnavailable": "서버 업데이터가 요청한 Orca 버전을 제공하지 않았습니다.",
+        "updateUnavailable": "서버가 사용 가능한 업데이트를 보고하지 않았습니다.",
+        "downloadIncomplete": "서버 업데이트 다운로드가 완료되지 않았습니다.",
+        "reconnectTimeout": "서버가 업데이트된 버전으로 다시 연결되지 않았습니다."
       },
       "webRuntimeSession": {
-        "remoteHostDisconnected": "The workspace is not connected to a remote Orca host.",
+        "remoteHostDisconnected": "워크스페이스가 원격 Orca 호스트에 연결되어 있지 않습니다.",
         "splitSourceUnpublished": "창을 분할하지 못했습니다: 호스트에서 터미널이 아직 시작되지 않았습니다.",
         "terminalCreateUnconfirmed": "Orca가 호스트에서 새 터미널이 열렸는지 확인할 수 없습니다."
       },
@@ -18728,7 +18732,7 @@
         "capacity": "이 채팅을 실행하는 컴퓨터의 Orca가 요청 한도에 도달했습니다. 해당 컴퓨터에서 Orca를 업데이트한 다음 다시 시도하세요.",
         "outcomeUnknown": "Orca가 무슨 일이 있었는지 확인하지 못했습니다. 채팅을 확인하세요.",
         "sendOutcomeLost": "Orca가 메시지가 에이전트에 전달되었는지 확인하지 못했습니다. 채팅을 확인하고 필요하면 다시 보내세요.",
-        "continuationSuperseded": "This chat has moved on. Check the latest messages before continuing.",
+        "continuationSuperseded": "이 채팅은 계속 진행되었습니다. 계속하기 전에 최신 메시지를 확인하세요.",
         "questionChanged": "이 질문은 이미 답변되었거나 변경되었습니다.",
         "cancelNotSaved": "이 질문 또는 승인을 취소하지 못했습니다.",
         "historyUnreadable": "Orca가 이 채팅의 저장된 기록을 읽지 못했습니다.",
@@ -20661,17 +20665,17 @@
   },
   "runtimeRpc": {
     "startupFailure": {
-      "unknownCause": "No additional error details were available.",
-      "continueButton": "Continue without CLI",
-      "title": "Orca CLI unavailable",
-      "message": "Orca couldn't start its local command transport.",
-      "detail": "Orca will continue to work, but commands such as orca status, orca terminal, and orchestration are unavailable for this session.\n\n{{guidance}}\n\nCause: {{cause}}",
+      "unknownCause": "추가 오류 세부정보가 없습니다.",
+      "continueButton": "CLI 없이 계속",
+      "title": "Orca CLI를 사용할 수 없습니다",
+      "message": "Orca가 로컬 명령 전송 기능을 시작하지 못했습니다.",
+      "detail": "Orca는 계속 작동하지만 이번 세션에서는 orca status, orca terminal 등의 명령과 오케스트레이션 기능을 사용할 수 없습니다.\n\n{{guidance}}\n\n원인: {{cause}}",
       "guidance": {
-        "permissionDenied": "Orca couldn't write its runtime file. Check permissions on Orca's data folder, then restart.",
-        "storageUnavailable": "Your disk may be full or read-only. Free up space, then restart Orca.",
-        "invalidPath": "Orca's data folder may be missing, moved, or at a path that is too long. Restore it or use a shorter path, then restart Orca.",
-        "addressInUse": "Another process may be holding the port. Restart Orca to try again.",
-        "unknown": "Restart Orca to try again."
+        "permissionDenied": "Orca가 런타임 파일을 쓸 수 없습니다. Orca 데이터 폴더의 권한을 확인한 후 다시 시작하세요.",
+        "storageUnavailable": "디스크가 가득 찼거나 읽기 전용일 수 있습니다. 공간을 확보한 후 Orca를 다시 시작하세요.",
+        "invalidPath": "Orca 데이터 폴더가 없거나 이동되었거나 경로가 너무 길 수 있습니다. 폴더를 복원하거나 더 짧은 경로를 사용한 후 Orca를 다시 시작하세요.",
+        "addressInUse": "다른 프로세스가 포트를 사용 중일 수 있습니다. Orca를 다시 시작한 후 다시 시도하세요.",
+        "unknown": "Orca를 다시 시작한 후 다시 시도하세요."
       }
     }
   },
@@ -21472,11 +21476,11 @@
     "noPathMatches": "No folders found.",
     "repositoryRoot": "Repository root",
     "loadingPaths": "Reading folders…",
-    "pathsUnavailable": "Could not read this folder. Type the path instead.",
+    "pathsUnavailable": "이 폴더를 읽을 수 없습니다. 대신 경로를 입력하세요.",
     "pathAdded": "Added",
     "openFolder": "Open {{name}}",
-    "findOrTypePath": "Find a folder, or type any path…",
-    "noDirectories": "No folders added yet.",
+    "findOrTypePath": "폴더를 찾거나 경로를 입력하세요...",
+    "noDirectories": "아직 추가된 폴더가 없습니다.",
     "removePath": "Remove {{name}}",
     "addTypedPathCode": "<path/> 추가"
   },

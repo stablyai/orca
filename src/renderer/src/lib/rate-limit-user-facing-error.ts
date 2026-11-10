@@ -6,6 +6,10 @@ export function formatRateLimitUserFacingError(raw: string | null | undefined): 
     return ''
   }
   const message = raw.trim()
+  const invalidWorkspace = message.match(/^Invalid workspace ID format:(.*)$/i)
+  if (invalidWorkspace) {
+    return `${translate('auto.lib.rateLimits.errors.opencodeInvalidWorkspaceId', 'Invalid workspace ID format')}:${invalidWorkspace[1]}`
+  }
   for (const known of KNOWN_RATE_LIMIT_ERRORS) {
     if (typeof known.test === 'string') {
       if (message === known.test) {

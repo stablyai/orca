@@ -1943,6 +1943,10 @@
           "wslRegistrationUnavailable": "WSL CLI kaydı kullanılamıyor.",
           "wslWindowsOnly": "WSL CLI kaydı yalnızca Windows’ta kullanılabilir."
         }
+      },
+      "workspacePortBrowserOpen": {
+        "systemBrowserHint": "Sistem tarayıcısında açmak için {{shortcut}}+tıklayın",
+        "tooltip": "{{label}}. {{hint}}"
       }
     },
     "hooks": {
@@ -13409,7 +13413,7 @@
         "PluginPageHero": {
           "screenshots": "Ekran görüntüleri",
           "openScreenshot": "Ekran görüntüsünü aç: {{value0}}",
-          "position": "{{value1}} / {{value0}}",
+          "position": "{{value0}} / {{value1}}",
           "previous": "Önceki ekran görüntüsü",
           "next": "Sonraki ekran görüntüsü"
         },

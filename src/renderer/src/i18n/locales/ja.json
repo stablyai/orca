@@ -720,7 +720,7 @@
         "remotePairingUnreachable": "{{endpoint}} の Orca に接続できません。",
         "remotePairingInvalidDetails": "このアクセスリンクには無効な接続情報が含まれています。",
         "remotePairingSaveFailed": "Orca はホストを確認しましたが、ホストを保存できませんでした。ブラウザのストレージを確認して、もう一度試してください。",
-        "remotePairingRepairUnavailable": "Re-pairing is not available in the browser. Pair this browser with the server again."
+        "remotePairingRepairUnavailable": "ブラウザでは再ペアリングできません。このブラウザをサーバーと再度ペアリングします。"
       },
       "web": {
         "preload": {
@@ -1477,6 +1477,10 @@
           "wslRegistrationUnavailable": "WSL CLI の登録を利用できません。",
           "wslWindowsOnly": "WSL CLI の登録は Windows でのみ利用できます。"
         }
+      },
+      "workspacePortBrowserOpen": {
+        "systemBrowserHint": "{{shortcut}}を押しながらクリックするとシステムブラウザーで開きます",
+        "tooltip": "{{label}}。{{hint}}"
       }
     },
     "hooks": {
@@ -2136,16 +2140,16 @@
         "setupConfigDefaultTabs": "デフォルトタブのコマンド",
         "setupConfigSetupAndDefaultTabs": "セットアップとデフォルトタブのコマンド",
         "setupConfigSetupScript": "セットアップスクリプト",
-        "runDefaultTabCommands": "Run default tab commands",
-        "runSetupAndDefaultTabCommands": "Run setup and default tab commands",
-        "runSetupCommand": "Run setup command",
+        "runDefaultTabCommands": "デフォルトタブのコマンドを実行",
+        "runSetupAndDefaultTabCommands": "セットアップとデフォルトタブのコマンドを実行",
+        "runSetupCommand": "セットアップコマンドを実行",
         "askRunDefaultTabCommands": "デフォルトタブのコマンドを今すぐ実行しますか？",
         "askRunSetupAndDefaultTabCommands": "セットアップとデフォルトタブのコマンドを今すぐ実行しますか？",
         "askRunSetup": "今すぐセットアップを実行しますか？",
-        "runSetupNow": "Run setup now",
-        "runCommandsNow": "Run commands now",
-        "skipForNow": "Skip for now",
-        "skipCommands": "Skip commands",
+        "runSetupNow": "今すぐセットアップを実行",
+        "runCommandsNow": "今すぐコマンドを実行",
+        "skipForNow": "今はスキップ",
+        "skipCommands": "コマンドをスキップ",
         "connectProject": "{{name}} に接続"
       },
       "NewWorkspaceComposerModal": {
@@ -3699,6 +3703,9 @@
           "RemoteViewportHeldChip": {
             "sizedElsewhere": "別のウィンドウに合わせたサイズ",
             "fitHere": "ここに合わせる"
+          },
+          "legacyRelayBridge": {
+            "unreachable": "このターミナルは、古いバージョンのOrcaを使うホストで引き続き実行されています。再接続しています…"
           }
         }
       },
@@ -4394,13 +4401,13 @@
             "last_connected": "最後に接続したのは {{value0}}",
             "reconnect_attempt": "{{value0}} を試みます",
             "access_revoked": "Access revoked",
-            "access_revoked_summary": "This server revoked access for this computer",
-            "access_revoked_explanation": "Re-pair with a new pairing link from the server to reconnect.",
+            "access_revoked_summary": "このサーバーはこのコンピュータへのアクセスを取り消しました",
+            "access_revoked_explanation": "サーバーで発行した新規ペアリングリンクで再度ペアリングし、接続し直してください。",
             "managed_access_revoked_explanation": "Orca は SSH 経由で再ペアリングできませんでした。接続してもう一度お試しください。",
             "connect_access_revoked_explanation": "接続してもう一度お試しください。",
             "update_required": "Update required",
-            "update_required_summary": "Orca versions are not compatible",
-            "update_required_explanation": "Update Orca on this computer or on the server, then connect again.",
+            "update_required_summary": "Orca のバージョンに互換性がありません",
+            "update_required_explanation": "このコンピュータまたはサーバーの Orca を更新してから、再度接続してください。",
             "repair": "Re-pair…",
             "open_settings": "設定を開く…",
             "server_replaced": "別のサーバー",
@@ -5537,7 +5544,7 @@
         },
         "SleepTwinWorkspaceDialog": {
           "title": "Sleep Workspace",
-          "alsoSleeps": "Also sleeps the copy on {{hosts}}",
+          "alsoSleeps": "{{hosts}} 上のコピーもスリープします",
           "cancel": "Cancel",
           "confirm": "Sleep"
         },
@@ -6147,7 +6154,7 @@
                 "unverified": "古いホストランタイムでは、ターミナルの終了を確認できませんでした。ワークスペースは開いたままです。ホストを更新してから、もう一度お試しください。"
               },
               "twin": {
-                "unattributed": "Orca couldn't tell which host runs this workspace's terminals, so the workspace was kept open. Reconnect its hosts and try again."
+                "unattributed": "Orca は、どのホストがこのワークスペースのターミナルを実行しているかを認識できなかったため、ワークスペースは開いたままになりました。ホストを再接続して、再試行してください。"
               },
               "host": {
                 "unverified": "ホストがターミナルの終了を確認できませんでした。ワークスペースは開いたままです。接続を確認してから、もう一度お試しください。"
@@ -8200,7 +8207,7 @@
           "serverRuntimeUnavailable": "Orca は利用できません",
           "serverRuntimeUnavailableDescription": "SSH トランスポートは接続されていますが、Orca ランタイムが応答しませんでした。ホストがまだ実行中の可能性があります。",
           "serverReconnecting": "再接続中",
-          "accessRevoked": "{{value0}} no longer accepts this computer. Re-pair it with a new access link.",
+          "accessRevoked": "{{value0}} はこのコンピュータからの接続を受け付けなくなりました。新規アクセスリンクで再度ペアリングしてください。",
           "managedAccessRevoked": "{{value0}} はこのコンピューターを受け付けなくなり、Orca は SSH 経由で再ペアリングできませんでした。接続してもう一度お試しください。",
           "connectAccessRevoked": "{{value0}} はこのコンピューターを受け付けなくなりました。接続してもう一度お試しください。",
           "repair": "Re-pair…",
@@ -10633,7 +10640,7 @@
               "7640ed9848": "声",
               "56defcd6c3": "ディクテーションに使用するローカルまたはクラウドの音声テキスト変換モデルを選択します。",
               "931b1a9e53": "押して話をする",
-              "064a9bd94a": "所有",
+              "064a9bd94a": "長押し",
               "6fa48bcd41": "トグル",
               "d86f5600da": "モード",
               "089d31a45b": "口述筆記",
@@ -11663,8 +11670,8 @@
           "cancel": "キャンセル",
           "saveFailed": "ホストを保存できませんでした",
           "saveFailedHelp": "ホストは確認されましたが、Orca はホストを保存できませんでした。名前とローカル設定ストレージを確認して、再試行してください。",
-          "differentServer": "This link is for a different server",
-          "differentServerHelp": "This pairing link is for a different server. Create the link on the server you are re-pairing.",
+          "differentServer": "このリンクは別のサーバー用です",
+          "differentServerHelp": "このペアリングリンクは別のサーバー用です。再度ペアリングするサーバーでリンクを作成してください。",
           "loopbackRecoveryTunnel": "もう一方のコンピューターで「このコンピューターを共有」を開き、Tailscale または LAN アドレスで「別のデバイス」用のリンクを作成してください。SSH トンネル経由で接続する場合は、下のオプションをオンにしてください。",
           "sshTunnelReach": "このアドレスには SSH トンネル経由で接続する",
           "addServerWithTunnel": "トンネル経由でサーバーを追加",
@@ -16097,11 +16104,11 @@
           "stepsFailedOfTotal_other": "{{count}} ステップ中 {{failed}} 件失敗"
         },
         "ExternalFileChangeBanner": {
-          "7c41e90d12": "This file changed on disk while you have unsaved edits. Overwrite replaces the newer disk content.",
+          "7c41e90d12": "未保存の編集がある間に、ディスク上のファイルが変更されました。上書きすると、ディスク上の新しい内容が置き換えられます。",
           "3fa2b8d417": "ディスクから再読み込み",
           "a95d02c644": "編集内容を保持",
-          "overwrite": "Overwrite",
-          "keepHint": "Keeps your version. Your next save replaces the version on disk.",
+          "overwrite": "上書き",
+          "keepHint": "編集中の内容を保持します。次回の保存時にディスク上の内容が置き換えられます。",
           "5c02de9b31": "ディスクから再読み込みしました",
           "d1e830fa22": "元に戻す",
           "90b2ce7d43": "比較"
@@ -16144,10 +16151,10 @@
               }
             },
             "stale": {
-              "notice": "This file changed on disk since your edits. Use the banner to compare, reload, or overwrite."
+              "notice": "編集後にディスク上のファイルが変更されました。バナーから比較、再読み込み、または上書きを行ってください。"
             },
             "sectionStale": {
-              "notice": "This file changed on disk since this section loaded."
+              "notice": "このセクションの読み込み後に、ディスク上のファイルが変更されました。"
             },
             "notUtf8": {
               "notice": "{{name}} は UTF-8 テキストではないため、自動保存は一時停止しています。自分で保存すると UTF-8 で書き直され、UTF-8 として無効な文字は置き換えられます。",
@@ -18251,15 +18258,15 @@
       },
       "TaskPageJiraSavedFilters": {
         "6c381858a1": "Saved filters",
-        "d14121662d": "No saved filters yet.",
+        "d14121662d": "フィルターはまだ保存されていません。",
         "af0dd8c528": "Edit {{value0}}",
-        "bae9bd87bf": "You can save up to {{value0}} filters.",
+        "bae9bd87bf": "最大 {{value0}} 件のフィルターを保存できます。",
         "85506127a5": "Save current filter",
         "7aef259c28": "Edit Jira filter",
         "4f0e55d2e5": "Save Jira filter",
-        "466c1b12ce": "Give this JQL query a name for quick access.",
+        "466c1b12ce": "すぐにアクセスできるよう、この JQL クエリに名前を付けてください。",
         "e4c2f52972": "Name",
-        "0ab71bb840": "A saved filter with this name already exists.",
+        "0ab71bb840": "この名前で保存されたフィルターはすでに存在します。",
         "42ce360813": "JQL",
         "7b21c59a26": "Delete filter",
         "a62f9db53d": "Cancel",
@@ -18728,7 +18735,7 @@
         "capacity": "このチャットを実行しているコンピューターの Orca がリクエストの上限に達しました。そのコンピューターで Orca を更新してから、もう一度お試しください。",
         "outcomeUnknown": "Orca は何が起きたかを確認できませんでした。チャットを確認してください。",
         "sendOutcomeLost": "Orca はメッセージが Agent に届いたことを確認できませんでした。チャットを確認し、必要であればもう一度送信してください。",
-        "continuationSuperseded": "This chat has moved on. Check the latest messages before continuing.",
+        "continuationSuperseded": "このチャットは次へ進みました。続行する前に、最新のメッセージを確認してください。",
         "questionChanged": "この質問はすでに回答済みか、変更されています。",
         "cancelNotSaved": "この質問または承認をキャンセルできませんでした。",
         "historyUnreadable": "Orca はこのチャットの保存済み履歴を読み取れませんでした。",
@@ -20327,6 +20334,11 @@
     },
     "dictation": {
       "stoppedAfterSilenceSeconds": "{{seconds}} 秒間無音だったため停止しました"
+    },
+    "toastFallbacks": {
+      "filesDropFailed": "ファイルをドロップできませんでした。",
+      "filesUploadFailed": "ファイルをアップロードできませんでした。",
+      "filesResolveDroppedFailed": "ドロップしたファイルを解決できませんでした。"
     }
   },
   "dashboardPopout": {
@@ -21472,11 +21484,11 @@
     "noPathMatches": "No folders found.",
     "repositoryRoot": "Repository root",
     "loadingPaths": "Reading folders…",
-    "pathsUnavailable": "Could not read this folder. Type the path instead.",
+    "pathsUnavailable": "このフォルダーを読み取れませんでした。パスを直接入力してください。",
     "pathAdded": "Added",
     "openFolder": "Open {{name}}",
-    "findOrTypePath": "Find a folder, or type any path…",
-    "noDirectories": "No folders added yet.",
+    "findOrTypePath": "フォルダーを検索するか、パスを直接入力…",
+    "noDirectories": "まだフォルダーは追加されていません。",
     "removePath": "Remove {{name}}",
     "addTypedPathCode": "<path/> を追加"
   },

@@ -1,6 +1,6 @@
 // Japanese and Chinese run on after a full-width terminator; any other sentence takes a space.
 const RUNS_ON_AFTER = /[\u3002\uFF01\uFF1F]$/
-const CJK_TEXT = /[\u3040-\u30FF\u3400-\u9FFF\uF900-\uFAFF]/u
+const CJK_TEXT = /[\u3040-\u30FF\u3400-\u9FFF\uF900-\uFAFF]$/u
 const ENDS_IN_PUNCTUATION = /[\p{P}\p{S}]$/u
 
 // Why: a CJK sentence whose catalog value drops its final stop still ends there, so it gets 。, not a space.

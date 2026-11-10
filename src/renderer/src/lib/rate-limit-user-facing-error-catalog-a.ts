@@ -22,11 +22,6 @@ export const KNOWN_RATE_LIMIT_ERRORS_A: RateLimitKnownError[] = [
     fallback: 'No workspace ID found'
   },
   {
-    test: /^Invalid workspace ID format:/i,
-    key: 'auto.lib.rateLimits.errors.opencodeInvalidWorkspaceId',
-    fallback: 'Invalid workspace ID format'
-  },
-  {
     test: /^Workspaces fetch failed \((\d+)\)$/i,
     key: 'auto.lib.rateLimits.errors.workspacesFetchFailed',
     fallback: 'Workspaces fetch failed ({{status}})',

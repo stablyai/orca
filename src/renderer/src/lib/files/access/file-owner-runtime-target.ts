@@ -9,9 +9,6 @@ import { translate } from '@/i18n/i18n'
 
 const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 
-export const FILE_OWNER_UNRESOLVED_MESSAGE =
-  "Couldn't verify which host owns this file. Reopen the file and try again."
-
 export function fileOwnerUnresolvedMessage(): string {
   return translate(
     'auto.lib.fileOwnerRuntimeTarget.unresolved',

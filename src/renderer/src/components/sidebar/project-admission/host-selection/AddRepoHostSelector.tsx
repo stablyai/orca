@@ -90,7 +90,9 @@ export function AddRepoHostSelector({
             aria-expanded={open}
             className="h-7 min-w-0 max-w-[18rem] gap-1.5 rounded-md border border-border bg-muted/30 px-2 text-xs font-medium text-foreground hover:bg-accent hover:text-accent-foreground"
           >
-            <span className="min-w-0 truncate">{selectedHost.label}</span>
+            <span className="min-w-0 truncate">
+              {translateExecutionHostLabel(selectedHost.label)}
+            </span>
             {selectedHost.health !== 'local' ? (
               <span
                 title={getHostStatusDetail(selectedHost, t)}

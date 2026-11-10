@@ -2011,6 +2011,10 @@
           "wslRegistrationUnavailable": "Регистрация WSL CLI недоступна.",
           "wslWindowsOnly": "Регистрация WSL CLI доступна только в Windows."
         }
+      },
+      "workspacePortBrowserOpen": {
+        "systemBrowserHint": "{{shortcut}}+щелчок, чтобы открыть в системном браузере",
+        "tooltip": "{{label}}. {{hint}}"
       }
     },
     "hooks": {

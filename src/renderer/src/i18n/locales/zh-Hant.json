@@ -1915,6 +1915,17 @@
           "wslRegistrationUnavailable": "WSL CLI 註冊無法使用。",
           "wslWindowsOnly": "WSL CLI 註冊僅適用於 Windows。"
         }
+      },
+      "projectHostSetupOptions": {
+        "locationNotSet": "尚未設定專案位置"
+      },
+      "workspacePortScan": {
+        "serverSshUpdateRequired": "請更新伺服器以查看其 SSH 主機上的連接埠。",
+        "hostMismatch": "伺服器掃描的主機與此工作區執行所在的主機不同。"
+      },
+      "workspacePortBrowserOpen": {
+        "systemBrowserHint": "按住 {{shortcut}} 並點擊以在系統瀏覽器中開啟",
+        "tooltip": "{{label}}。{{hint}}"
       }
     },
     "hooks": {
@@ -20704,6 +20715,10 @@
     },
     "dictation": {
       "stoppedAfterSilenceSeconds": "靜音 {{seconds}} 秒後已停止"
+    },
+    "toastFallbacks": {
+      "worktreeCreateFailed": "無法建立工作樹。",
+      "missingBaseBranchHelp": "請建立初始提交（例如在 main 上），或在「建立來源」中選擇現有分支，然後重試。"
     }
   },
   "dashboardPopout": {

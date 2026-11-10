@@ -2468,6 +2468,10 @@
           "wslCodexHomeUnavailable": "WSL Codex home unavailable for {{distro}}",
           "wslKimiHomeUnavailable": "WSL Kimi home unavailable for {{distro}}"
         }
+      },
+      "workspacePortBrowserOpen": {
+        "systemBrowserHint": "{{shortcut}}+click to open in the system browser",
+        "tooltip": "{{label}}. {{hint}}"
       }
     },
     "hooks": {
@@ -20205,7 +20209,7 @@
         "chat": {
           "label": "Chat UI",
           "description": "Agents reply in a chat, with rendered messages and diffs.",
-          "terminalFallback": "Agents without chat support, and SSH or WSL projects, still open in a terminal.",
+          "terminalFallback": "Agents without chat support and folders opened through SSH or WSL on this computer still open in a terminal.",
           "noneDetected": "None of your detected agents work in Chat UI."
         },
         "terminal": {
@@ -22906,7 +22910,7 @@
       "description": "Search everything your agents have said and done, on this computer and on any paired Orca server.",
       "searchDescription": "Turn on session search for this computer and paired servers, or clear search data.",
       "indexComputers": "Search inside sessions",
-      "computersConsent": "Each computer keeps a searchable copy of its own agent conversations. Nothing leaves that computer.",
+      "computersConsent": "Each computer keeps its own searchable index of agent conversations. Authenticated paired clients can receive search results.",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "Search sessions on {{host}}",
       "serverOffline": "Offline",

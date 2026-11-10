@@ -923,7 +923,7 @@
       "openInSidebarCopy": "Digite o que você lembra, ou peça a um agente: “encontre a sessão em que corrigimos o timeout de login.”",
       "open": "Abrir",
       "enableOnAll": "Ativar em todos os computadores",
-      "computersConsent": "Cada computador mantém uma cópia pesquisável das próprias conversas de agente e saídas de ferramentas. Nada sai desse computador."
+      "computersConsent": "Cada computador mantém seu próprio índice pesquisável das conversas de agentes. Clientes pareados e autenticados podem receber resultados de busca."
     },
     "dialog": {
       "select": "Selecionar",
@@ -2137,6 +2137,12 @@
       },
       "runtimeGitWorkingTreeClient": {
         "resolveConflictNeedsNewerHost": "Para resolver conflitos, é necessária uma versão mais recente do Orca neste host. Atualize o Orca nesse host."
+      },
+      "remoteTerminal": {
+        "connectionClosed": "A conexão com o ambiente remoto foi fechada.",
+        "streamClosed": "O fluxo do terminal remoto foi fechado.",
+        "streamEnded": "O fluxo do terminal remoto terminou.",
+        "streamStopped": "O fluxo do terminal remoto parou de responder."
       }
     },
     "ssh": {
@@ -3080,6 +3086,23 @@
           "wslRegistrationUnavailable": "O registro da CLI do WSL não está disponível.",
           "wslWindowsOnly": "O registro da CLI do WSL está disponível apenas no Windows."
         }
+      },
+      "projectHostSetupOptions": {
+        "locationNotSet": "Local do projeto não definido"
+      },
+      "workspacePortScan": {
+        "serverSshUpdateRequired": "Atualize o servidor para ver as portas nos hosts SSH dele.",
+        "hostMismatch": "O servidor verificou um host diferente daquele em que este espaço de trabalho é executado."
+      },
+      "executionHostFacts": {
+        "sshPlatformWithheld": "O host SSH ainda não informou seu sistema operacional. Conecte-se a ele e tente novamente.",
+        "runtimePlatformWithheld": "O servidor Orca ainda não informou seu sistema operacional. Reconecte-se e tente novamente.",
+        "runtimePlatformUpdate": "Este servidor Orca não informa seu sistema operacional. Atualize o servidor para iniciar agentes nele.",
+        "hostUnresolvedWithheld": "O Orca ainda não consegue identificar o host deste espaço de trabalho."
+      },
+      "workspacePortBrowserOpen": {
+        "systemBrowserHint": "{{shortcut}}+clique para abrir no navegador do sistema",
+        "tooltip": "{{label}}. {{hint}}"
       }
     },
     "components": {
@@ -20623,7 +20646,7 @@
         "chat": {
           "label": "Interface de chat",
           "description": "Os agentes respondem em um chat, com mensagens e diffs formatados.",
-          "terminalFallback": "Agentes sem suporte de chat e projetos SSH ou WSL ainda abrem em um terminal.",
+          "terminalFallback": "Agentes sem suporte de chat e pastas abertas por SSH ou WSL neste computador ainda abrem em um terminal.",
           "noneDetected": "Nenhum dos agentes detectados funciona na interface de chat."
         },
         "terminal": {
@@ -22620,6 +22643,10 @@
     },
     "dictation": {
       "stoppedAfterSilenceSeconds": "Parado após {{seconds}} segundos de silêncio"
+    },
+    "toastFallbacks": {
+      "worktreeCreateFailed": "Não foi possível criar a árvore de trabalho.",
+      "missingBaseBranchHelp": "Crie um commit inicial (por exemplo, em main) ou selecione uma ramificação existente em Criar a partir de e tente novamente."
     }
   },
   "csv": {

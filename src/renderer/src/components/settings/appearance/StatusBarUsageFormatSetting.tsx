@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react'
 import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
 import type { StatusBarUsageFormat } from '../../../../../shared/status-bar-usage-format'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '../../../store'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
@@ -57,6 +57,7 @@ export function StatusBarUsageFormatSetting({
   onChange
 }: StatusBarUsageFormatSettingProps): React.JSX.Element {
   const t = useTranslate()
+  const locale = useIntlLocale()
   const placeholders: readonly [string, string][] = [
     [
       '{provider}',
@@ -117,9 +118,9 @@ export function StatusBarUsageFormatSetting({
     }
     return renderUsageFormatTemplate(
       template,
-      buildUsageFormatValues(sampleLimits(now), { display, now })
+      buildUsageFormatValues(sampleLimits(now), { display, now, locale })
     )
-  }, [display, hasTemplate, now, template])
+  }, [display, hasTemplate, now, template, locale])
 
   return (
     <div className="space-y-2">

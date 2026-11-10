@@ -981,7 +981,7 @@
         "remotePairingUnreachable": "Impossible de joindre Orca à l'adresse {{endpoint}}.",
         "remotePairingInvalidDetails": "Ce lien d'accès contient des détails de connexion invalides.",
         "remotePairingSaveFailed": "Orca a vérifié l'hôte mais n'a pas pu l'enregistrer. Vérifiez le stockage du navigateur et réessayez.",
-        "remotePairingRepairUnavailable": "Re-pairing is not available in the browser. Pair this browser with the server again."
+        "remotePairingRepairUnavailable": "Le ré-appairage n'est pas disponible dans le navigateur. Associez à nouveau ce navigateur au serveur."
       },
       "web": {
         "preload": {
@@ -1738,6 +1738,23 @@
           "wslRegistrationUnavailable": "L’enregistrement de la CLI WSL n’est pas disponible.",
           "wslWindowsOnly": "L’enregistrement de la CLI WSL est disponible uniquement sous Windows."
         }
+      },
+      "projectHostSetupOptions": {
+        "locationNotSet": "Emplacement du projet non défini"
+      },
+      "workspacePortScan": {
+        "serverSshUpdateRequired": "Mettez à jour le serveur pour voir les ports de ses hôtes SSH.",
+        "hostMismatch": "Le serveur a analysé un hôte différent de celui de cet espace de travail."
+      },
+      "executionHostFacts": {
+        "sshPlatformWithheld": "L’hôte SSH n’a pas encore indiqué son système d’exploitation. Connectez-vous à lui et réessayez.",
+        "runtimePlatformWithheld": "Le serveur Orca n’a pas encore indiqué son système d’exploitation. Reconnectez-vous et réessayez.",
+        "runtimePlatformUpdate": "Ce serveur Orca n’indique pas son système d’exploitation. Mettez-le à jour pour y lancer des agents.",
+        "hostUnresolvedWithheld": "Orca ne sait pas encore quel hôte possède cet espace de travail."
+      },
+      "workspacePortBrowserOpen": {
+        "systemBrowserHint": "{{shortcut}}+clic pour ouvrir dans le navigateur système",
+        "tooltip": "{{label}}. {{hint}}"
       }
     },
     "hooks": {
@@ -4751,13 +4768,13 @@
             "last_connected": "Dernière connexion {{value0}}",
             "reconnect_attempt": "Tentative {{value0}}",
             "access_revoked": "Access revoked",
-            "access_revoked_summary": "This server revoked access for this computer",
-            "access_revoked_explanation": "Re-pair with a new pairing link from the server to reconnect.",
+            "access_revoked_summary": "Ce serveur a révoqué l'accès à cet ordinateur",
+            "access_revoked_explanation": "Ré-appairez avec un nouveau lien d'appairage du serveur pour vous reconnecter.",
             "managed_access_revoked_explanation": "Orca n'a pas pu s'associer de nouveau à lui via SSH. Connectez-vous pour réessayer.",
             "connect_access_revoked_explanation": "Connectez-vous pour réessayer.",
             "update_required": "Update required",
-            "update_required_summary": "Orca versions are not compatible",
-            "update_required_explanation": "Update Orca on this computer or on the server, then connect again.",
+            "update_required_summary": "Les versions d'Orca ne sont pas compatibles",
+            "update_required_explanation": "Mettez à jour Orca sur cet ordinateur ou sur le serveur, puis reconnectez-vous.",
             "repair": "Re-pair…",
             "open_settings": "Ouvrir les paramètres…",
             "server_replaced": "Serveur différent",
@@ -6051,7 +6068,7 @@
         },
         "SleepTwinWorkspaceDialog": {
           "title": "Sleep Workspace",
-          "alsoSleeps": "Also sleeps the copy on {{hosts}}",
+          "alsoSleeps": "Met également en veille la copie sur {{hosts}}",
           "cancel": "Cancel",
           "confirm": "Sleep"
         },
@@ -6650,7 +6667,7 @@
                 "unverified": "L'ancien runtime d'hôte n'a pas pu confirmer l'arrêt des terminaux. L'espace de travail est resté ouvert ; mettez à jour l'hôte et réessayez."
               },
               "twin": {
-                "unattributed": "Orca couldn't tell which host runs this workspace's terminals, so the workspace was kept open. Reconnect its hosts and try again."
+                "unattributed": "Orca n'a pas pu déterminer quel hôte exécute les terminaux de cet espace de travail. L'espace de travail est donc resté ouvert. Reconnectez ses hôtes et réessayez."
               },
               "host": {
                 "unverified": "L'hôte n'a pas pu confirmer l'arrêt des terminaux. L'espace de travail est resté ouvert ; vérifiez la connexion et réessayez."
@@ -8755,7 +8772,7 @@
           "serverRuntimeUnavailable": "Orque indisponible",
           "serverRuntimeUnavailableDescription": "Le transport SSH est connecté, mais le runtime Orca n'a pas répondu. L'hôte est peut-être toujours en cours d'exécution.",
           "serverReconnecting": "Reconnexion",
-          "accessRevoked": "{{value0}} no longer accepts this computer. Re-pair it with a new access link.",
+          "accessRevoked": "{{value0}} n'accepte plus cet ordinateur. Réassociez-le avec un nouveau lien d'accès.",
           "managedAccessRevoked": "{{value0}} n'accepte plus cet ordinateur, et Orca n'a pas pu s'associer de nouveau à lui via SSH. Connectez-vous pour réessayer.",
           "connectAccessRevoked": "{{value0}} n'accepte plus cet ordinateur. Connectez-vous pour réessayer.",
           "repair": "Re-pair…",
@@ -12194,8 +12211,8 @@
           "cancel": "Annuler",
           "saveFailed": "Impossible d'enregistrer l'hôte",
           "saveFailedHelp": "L'hôte a été vérifié, mais Orca n'a pas pu l'enregistrer. Vérifiez le nom et le stockage local des paramètres, puis réessayez.",
-          "differentServer": "This link is for a different server",
-          "differentServerHelp": "This pairing link is for a different server. Create the link on the server you are re-pairing.",
+          "differentServer": "Ce lien est pour un autre serveur",
+          "differentServerHelp": "Ce lien d’appairage est destiné à un autre serveur. Créez le lien sur le serveur que vous souhaitez appairer à nouveau.",
           "loopbackRecoveryTunnel": "Sur l’autre ordinateur, ouvrez « Partager cet ordinateur » et créez un lien pour « Un autre appareil » avec son adresse Tailscale ou LAN. Si vous y accédez via un tunnel SSH, activez l’option ci-dessous.",
           "sshTunnelReach": "J’accède à cette adresse via un tunnel SSH",
           "addServerWithTunnel": "Ajouter le serveur via le tunnel",
@@ -16742,11 +16759,11 @@
           "cancelled": "Gros collage annulé car sa cible d'origine a changé."
         },
         "ExternalFileChangeBanner": {
-          "7c41e90d12": "This file changed on disk while you have unsaved edits. Overwrite replaces the newer disk content.",
+          "7c41e90d12": "Ce fichier a changé sur le disque alors que vous avez des modifications non enregistrées. L’écrasement remplace le contenu plus récent sur le disque.",
           "3fa2b8d417": "Recharger depuis le disque",
           "a95d02c644": "Garder mes modifications",
-          "overwrite": "Overwrite",
-          "keepHint": "Keeps your version. Your next save replaces the version on disk.",
+          "overwrite": "Écraser",
+          "keepHint": "Conservez votre version. Le prochain enregistrement remplacera la version sur le disque.",
           "5c02de9b31": "Rechargé depuis le disque",
           "d1e830fa22": "Annuler",
           "90b2ce7d43": "Comparer"
@@ -16798,10 +16815,10 @@
               }
             },
             "stale": {
-              "notice": "This file changed on disk since your edits. Use the banner to compare, reload, or overwrite."
+              "notice": "Ce fichier a changé sur le disque depuis vos modifications. Utilisez le bandeau pour comparer, recharger ou écraser."
             },
             "sectionStale": {
-              "notice": "This file changed on disk since this section loaded."
+              "notice": "Ce fichier a changé sur le disque depuis le chargement de cette section."
             }
           }
         },
@@ -19172,6 +19189,12 @@
       },
       "runtimeGitWorkingTreeClient": {
         "resolveConflictNeedsNewerHost": "Pour résoudre les conflits, une version plus récente d’Orca est nécessaire sur cet hôte. Mettez Orca à jour sur cet hôte."
+      },
+      "remoteTerminal": {
+        "connectionClosed": "La connexion à l’environnement distant est fermée.",
+        "streamClosed": "Le flux du terminal distant est fermé.",
+        "streamEnded": "Le flux du terminal distant est terminé.",
+        "streamStopped": "Le flux du terminal distant ne répond plus."
       }
     },
     "ssh": {
@@ -19398,7 +19421,7 @@
         "capacity": "Orca sur l'ordinateur qui exécute ce chat a atteint une limite de requêtes. Mettez à jour Orca sur cet ordinateur, puis réessayez.",
         "outcomeUnknown": "Orca n'a pas pu confirmer ce qui s'est passé. Vérifiez le chat.",
         "sendOutcomeLost": "Orca n'a pas pu confirmer que votre message est parvenu à l'agent. Vérifiez le chat, puis renvoyez-le si nécessaire.",
-        "continuationSuperseded": "This chat has moved on. Check the latest messages before continuing.",
+        "continuationSuperseded": "Cette discussion a évolué. Vérifiez les derniers messages avant de continuer.",
         "questionChanged": "Cette question a déjà reçu une réponse ou a changé.",
         "cancelNotSaved": "Impossible d'annuler cette question ou cette approbation.",
         "historyUnreadable": "Orca n'a pas pu lire l'historique enregistré de ce chat.",
@@ -21165,6 +21188,10 @@
     },
     "dictation": {
       "stoppedAfterSilenceSeconds": "Arrêté après {{seconds}} secondes de silence"
+    },
+    "toastFallbacks": {
+      "worktreeCreateFailed": "Impossible de créer l’arbre de travail.",
+      "missingBaseBranchHelp": "Créez un premier commit (par exemple sur main), ou sélectionnez une branche existante dans « Créer à partir de », puis réessayez."
     }
   },
   "dashboardPopout": {
@@ -22126,11 +22153,11 @@
     "noPathMatches": "No folders found.",
     "repositoryRoot": "Repository root",
     "loadingPaths": "Reading folders…",
-    "pathsUnavailable": "Could not read this folder. Type the path instead.",
+    "pathsUnavailable": "Impossible de lire ce dossier. Tapez plutôt le chemin.",
     "pathAdded": "Added",
     "openFolder": "Open {{name}}",
-    "findOrTypePath": "Find a folder, or type any path…",
-    "noDirectories": "No folders added yet.",
+    "findOrTypePath": "Recherchez un dossier ou saisissez n’importe quel chemin…",
+    "noDirectories": "Aucun dossier ajouté pour l'instant.",
     "removePath": "Remove {{name}}",
     "addTypedPathCode": "Ajouter <path/>"
   },

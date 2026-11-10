@@ -191,7 +191,7 @@ export function SessionHistorySettingsPane({
               )
             : t(
                 'sessionHistory.settings.computersConsent',
-                'Each computer keeps a searchable copy of its own agent conversations. Nothing leaves that computer.'
+                'Each computer keeps its own searchable index of agent conversations. Authenticated paired clients can receive search results.'
               )}
         </p>
       </div>

@@ -28,7 +28,7 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
   let unsubscribe: (() => void)[] = []
   let reattaching = false
   let reattachQueued = false
-  let showingUnreachable = false
+  let unreachableMessage: string | null = null
   let lastState: 'live' | 'unverifiable' | null = null
   /** Bumped by release, so an attach answered after the pane left hands its viewer back. */
   let epoch = 0
@@ -75,16 +75,17 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
   }
 
   const showUnreachable = (): void => {
-    if (!showingUnreachable) {
-      showingUnreachable = true
-      callbacks?.onError?.(legacyRelayBridgeUnreachableMessage())
+    if (unreachableMessage === null) {
+      unreachableMessage = legacyRelayBridgeUnreachableMessage()
+      callbacks?.onError?.(unreachableMessage)
     }
   }
 
   const clearUnreachable = (): void => {
-    if (showingUnreachable) {
-      showingUnreachable = false
-      callbacks?.onErrorCleared?.(legacyRelayBridgeUnreachableMessage())
+    if (unreachableMessage !== null) {
+      const message = unreachableMessage
+      unreachableMessage = null
+      callbacks?.onErrorCleared?.(message)
     }
   }
 

@@ -5,7 +5,7 @@ export function translateBrowserSessionProfileLabel(
   label: string | null | undefined,
   profileId?: string | null
 ): string {
-  if (profileId === 'default' || label === 'Default' || !label?.trim()) {
+  if (profileId === 'default' || !label?.trim() || (profileId == null && label === 'Default')) {
     return translate('auto.components.settings.BrowserPane.4399c77caa', 'Default')
   }
   return label

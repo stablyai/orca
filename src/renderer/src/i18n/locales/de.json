@@ -1967,6 +1967,17 @@
           "wslRegistrationUnavailable": "Die WSL-CLI-Registrierung ist nicht verfügbar.",
           "wslWindowsOnly": "Die WSL-CLI-Registrierung ist nur unter Windows verfügbar."
         }
+      },
+      "projectHostSetupOptions": {
+        "locationNotSet": "Projektverzeichnis nicht festgelegt"
+      },
+      "workspacePortScan": {
+        "serverSshUpdateRequired": "Aktualisieren Sie den Server, um Ports auf seinen SSH-Hosts anzuzeigen.",
+        "hostMismatch": "Der Server hat einen anderen Host als den dieses Arbeitsbereichs durchsucht."
+      },
+      "workspacePortBrowserOpen": {
+        "systemBrowserHint": "{{shortcut}}+Klick zum Öffnen im Systembrowser",
+        "tooltip": "{{label}}. {{hint}}"
       }
     },
     "hooks": {
@@ -13423,7 +13434,7 @@
           "autoUpdateHint": "Fragt nur bei neuen Zugriffen erneut"
         },
         "PluginPageHero": {
-          "screenshots": "Screenshots",
+          "screenshots": "Bildschirmfotos",
           "openScreenshot": "Screenshot öffnen: {{value0}}",
           "position": "{{value0}} von {{value1}}",
           "previous": "Vorheriger Screenshot",
@@ -21021,6 +21032,10 @@
     },
     "dictation": {
       "stoppedAfterSilenceSeconds": "Nach {{seconds}} Sekunden Stille gestoppt"
+    },
+    "toastFallbacks": {
+      "worktreeCreateFailed": "Worktree konnte nicht erstellt werden.",
+      "missingBaseBranchHelp": "Erstellen Sie einen ersten Commit (zum Beispiel auf main) oder wählen Sie unter „Erstellen von“ einen vorhandenen Branch aus und versuchen Sie es erneut."
     }
   },
   "dashboardPopout": {

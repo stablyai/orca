@@ -11,20 +11,18 @@ function isMacShortcutPlatform(): boolean {
 }
 
 export function getPortSystemBrowserHint(isMac: boolean = isMacShortcutPlatform()): string {
-  const systemBrowser = translate(
-    'auto.components.settings.browser.use.search.63a66da648',
-    'system browser'
+  return translate(
+    'auto.lib.workspacePortBrowserOpen.systemBrowserHint',
+    '{{shortcut}}+click to open in the system browser',
+    { shortcut: isMac ? '⇧⌘' : 'Shift+Ctrl' }
   )
-  if (systemBrowser === '系统浏览器') {
-    return isMac ? '⇧⌘+点击用系统浏览器打开' : 'Shift+Ctrl+点击用系统浏览器打开'
-  }
-  return isMac ? `⇧⌘+click for ${systemBrowser}` : `Shift+Ctrl+click for ${systemBrowser}`
 }
 
 export function getPortOpenBrowserTooltipLabel(openLabel: string, isMac?: boolean): string {
-  const hint = getPortSystemBrowserHint(isMac)
-  const separator = /[\u3400-\u9fff]/u.test(`${openLabel}${hint}`) ? '，' : '. '
-  return `${openLabel}${separator}${hint}`
+  return translate('auto.lib.workspacePortBrowserOpen.tooltip', '{{label}}. {{hint}}', {
+    label: openLabel,
+    hint: getPortSystemBrowserHint(isMac)
+  })
 }
 
 type PortOpenClickEvent = Pick<MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'>
