@@ -36,7 +36,7 @@ export function orcadPostReadyDeps(
   store: PostReadyStore
 ): OrcadPostReadyDeps {
   return {
-    warmTerminalList: () => runtime.listTerminals(),
+    warmTerminalList: async () => runtime.listTerminals(),
     startAgentStateRules: async () => {
       const { startAgentStateRulesLiveUpdates } =
         await import('../runtime/agent-state-rules/agent-state-rules-live-update')

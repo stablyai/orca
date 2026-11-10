@@ -12,12 +12,14 @@ import {
   consumeOrcadStartupQualification,
   discardOrcadStartupQualification,
   isQualifiableOrcadSlot,
-  ORCAD_STARTUP_QUALIFICATION_DIR_ENV,
   ORCAD_STARTUP_QUALIFIED_FILENAME,
   orcadStartupQualificationKey,
   recordOrcadStartupQualification
 } from './orcad-startup-qualification'
-import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../shared/orcad-managed-launch-env'
+import {
+  ORCAD_MANAGED_ACTIVATION_ROOT_ENV,
+  ORCAD_STARTUP_QUALIFICATION_DIR_ENV
+} from '../../shared/orcad-managed-launch-env'
 
 let slot: string
 
@@ -72,7 +74,9 @@ describe('orcad startup qualification', () => {
   })
 
   it('keeps the marker in the named directory, leaving the slot untouched', async () => {
-    const markers = mkdtempSync(join(tmpdir(), 'orcad-qualified-markers-'))
+    const markersRoot = mkdtempSync(join(tmpdir(), 'orcad-qualified-markers-'))
+    // The launcher may name a directory that does not exist yet.
+    const markers = join(markersRoot, 'slot')
     const env = { [ORCAD_STARTUP_QUALIFICATION_DIR_ENV]: markers }
     try {
       await recordOrcadStartupQualification(slot, 'key-1', env)
@@ -86,7 +90,7 @@ describe('orcad startup qualification', () => {
       await discardOrcadStartupQualification(slot, env)
       expect(await consumeOrcadStartupQualification(slot, 'key-2', env)).toBe(false)
     } finally {
-      rmSync(markers, { recursive: true, force: true })
+      rmSync(markersRoot, { recursive: true, force: true })
     }
   })
 })
