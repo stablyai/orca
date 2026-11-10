@@ -1,4 +1,5 @@
 import { fetchMobileWebBundle } from '../transport/web-bundle/mobile-web-bundle-fetch'
+import { mobileWebBundleStreamBytes } from '../transport/web-bundle/mobile-web-bundle-window-reader'
 import { mobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-operations'
 import type {
   MobileWebBundleManifestRead,
@@ -87,7 +88,7 @@ export async function readManifest(
     manifest: {
       ...compatOf(manifest),
       buildId: manifest.buildId,
-      totalBytes: manifest.totalBytes,
+      totalBytes: mobileWebBundleStreamBytes(opened),
       totalAssets: manifest.assets.length,
       routes: manifest.routes
     }
