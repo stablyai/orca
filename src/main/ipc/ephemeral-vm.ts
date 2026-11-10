@@ -35,11 +35,13 @@ import {
   listPickerRecipes,
   buildEphemeralEnvironmentName,
   resolveRecipeForRepo,
-  type EphemeralVmRecipeCatalogEntry
+  type EphemeralVmRecipeCatalogEntry,
+  type EphemeralVmProvisionArgs
 } from './ephemeral-vm-recipe-context'
 import { registerEphemeralVmRuntimeHandlers } from './ephemeral-vm-runtime-handlers'
 import type { PluginService } from '../plugins/plugin-service'
 import { installHostedSandbox, withProviderRecipes } from '../hosted-sandbox/hosted-sandbox-install'
+import { refuseOrcaCloudWithoutGithub } from '../hosted-sandbox/hosted-sandbox-recipe'
 import { resolveProvisionedRootSource } from '../ephemeral-vm/provisioned-root-source'
 import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/runtime-environment-registry-root'
 import {
@@ -119,19 +121,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
 
   ipcMain.handle(
     'ephemeralVm:provision',
-    async (
-      _event,
-      args: {
-        repoId: string
-        recipeId: string
-        workspaceName?: string
-        projectId?: string
-        workspaceId?: string
-        branch?: string
-        ref?: string
-        provisionId?: string
-      }
-    ): Promise<EphemeralVmProvisionIpcResult> => {
+    async (_event, args: EphemeralVmProvisionArgs): Promise<EphemeralVmProvisionIpcResult> => {
       const repo = getRecipeRepo(store, args.repoId)
       if (!repo.ok) {
         return provisionFailure(repo.failure)
@@ -143,6 +133,10 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
       )
       if (!recipe) {
         return provisionFailure(ephemeralVmFailure('recipeNotFound', { recipeId: args.recipeId }))
+      }
+      const refused = await refuseOrcaCloudWithoutGithub(recipe, repo.repo.path)
+      if (refused) {
+        return provisionFailure(refused)
       }
       const controller = args.provisionId ? new AbortController() : null
       if (args.provisionId && controller) {

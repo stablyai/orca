@@ -2,10 +2,16 @@
 # Golden build from source, run by the Worker inside the build sandbox: orcad + the orca CLI from one
 # commit of the Orca repo (cloud/integration carries host RPCs no upstream release has), then the same
 # provision-golden.sh every image uses. Inputs (env):
-#   ORCA_SRC_REPO (https://github.com/<owner>/<repo>), ORCA_SRC_SHA (40-hex), ORCA_SRC_AUTH (an
+#   ORCA_SRC_SHA (40-hex) and either ORCA_SRC_DIR (source already uploaded) or ORCA_SRC_REPO
+#   (https://github.com/<owner>/<repo>) + ORCA_SRC_AUTH (an
 #   `Authorization: Basic …` header value for a 1 h read-only installation token; never printed),
 #   ORCA_PROVISION_SCRIPT (base64 of provision-golden.sh) + everything provision-golden.sh reads.
 set -euo pipefail
+# Vercel can report a detached build command as still running after it exits, so the outcome is also
+# a file the caller polls: /tmp/source-build.exit (exit code), /tmp/source-build.report (the
+# provision report line).
+rm -f /tmp/source-build.exit /tmp/source-build.report
+trap 'echo $? >/tmp/source-build.exit' EXIT
 log() { printf '[source-build] %s\n' "$*" >&2; }
 start=$(date +%s)
 [[ "$ORCA_SRC_SHA" =~ ^[0-9a-f]{40}$ ]] || { log 'ORCA_SRC_SHA must be a full commit sha'; exit 2; }
@@ -19,15 +25,23 @@ else
 fi
 sudo corepack enable >/dev/null 2>&1 || true
 
-log "fetch $ORCA_SRC_SHA"
 src="$HOME/orca-src"
-rm -rf "$src" && mkdir -p "$src" && cd "$src"
-git init -q
-# The header lives only in this one command's config, not in .git/config.
-git -c "http.https://github.com/.extraheader=$ORCA_SRC_AUTH" fetch -q --depth 1 "$ORCA_SRC_REPO" "$ORCA_SRC_SHA"
-unset ORCA_SRC_AUTH
-git -c advice.detachedHead=false checkout -q FETCH_HEAD
-test "$(git rev-parse HEAD)" = "$ORCA_SRC_SHA"
+if [ -n "${ORCA_SRC_DIR:-}" ]; then
+  # Operator rotation (image/rotate-golden-from-source.ts) uploaded `git archive <sha>` here already.
+  log "uploaded source for $ORCA_SRC_SHA"
+  src="$ORCA_SRC_DIR"
+  cd "$src" && test -f package.json
+  git init -q && git add -A && git -c user.email=build@orca -c user.name=build commit -qm "$ORCA_SRC_SHA"
+else
+  log "fetch $ORCA_SRC_SHA"
+  rm -rf "$src" && mkdir -p "$src" && cd "$src"
+  git init -q
+  # The header lives only in this one command's config, not in .git/config.
+  git -c "http.https://github.com/.extraheader=$ORCA_SRC_AUTH" fetch -q --depth 1 "$ORCA_SRC_REPO" "$ORCA_SRC_SHA"
+  unset ORCA_SRC_AUTH
+  git -c advice.detachedHead=false checkout -q FETCH_HEAD
+  test "$(git rev-parse HEAD)" = "$ORCA_SRC_SHA"
+fi
 
 log 'build orcad + CLI'
 export CI=1 ELECTRON_SKIP_BINARY_DOWNLOAD=1 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
@@ -49,7 +63,7 @@ export ORCAD_BUNDLE_SHA256
 cd "$HOME"
 printf '%s' "$ORCA_PROVISION_SCRIPT" | base64 -d >/tmp/provision-golden.sh
 unset ORCA_PROVISION_SCRIPT
-bash /tmp/provision-golden.sh
+bash /tmp/provision-golden.sh | tee /tmp/source-build.report
 # Build leftovers stay out of the image.
 rm -rf "$src" "$HOME/.local/share/pnpm" "$HOME/.cache/pnpm" /tmp/orcad.tgz /tmp/provision-golden.sh /tmp/src-*.log
 log "done in $(( $(date +%s) - start ))s"

@@ -9,9 +9,26 @@ import { z } from 'zod'
  */
 export const ORCA_CLOUD_IDLE_SLEEP_MINUTES = 15
 
+/** Median and slow-tail durations of a recent operation, as the control plane measured them. */
+export const HostedSandboxTimingSchema = z.object({
+  p50Ms: z.number().nonnegative(),
+  p95Ms: z.number().nonnegative(),
+  samples: z.number().int().positive()
+})
+export type HostedSandboxTiming = z.infer<typeof HostedSandboxTimingSchema>
+
 /** GET /v1/config: product constants clients (desktop, mobile, CLI, marketing) must not hardcode. */
 export const HostedSandboxConfigResponseSchema = z.object({
-  idleSleepMinutes: z.number().int().positive()
+  idleSleepMinutes: z.number().int().positive(),
+  /** Recent sandbox starts (create until orcad is ready); absent until enough were measured. */
+  createTiming: HostedSandboxTimingSchema.optional()
+})
+export type HostedSandboxConfigResponse = z.infer<typeof HostedSandboxConfigResponseSchema>
+
+/** POST /v1/github/connect: where the browser binds a GitHub App installation to the account. */
+export const HostedGithubConnectResponseSchema = z.object({
+  installUrl: z.string().url(),
+  authorizeUrl: z.string().url()
 })
 
 // Billing sells exactly these; larger boxes need a Vercel Enterprise plan.

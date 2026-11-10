@@ -64,7 +64,7 @@ export async function listAudit(
   return results
 }
 
-export function auditView(row: AuditRow) {
+export function auditView(row: AuditRow, names: ReadonlyMap<string, string> = new Map()) {
   let detail: unknown = null
   try {
     detail = row.detail ? JSON.parse(row.detail) : null
@@ -73,7 +73,7 @@ export function auditView(row: AuditRow) {
   }
   return {
     id: row.id,
-    actor: { type: row.actor_type, id: row.actor_id, userId: row.user_id },
+    actor: { type: row.actor_type, id: row.actor_id, userId: row.user_id, userName: row.user_id ? (names.get(row.user_id) ?? null) : null },
     action: row.action,
     target: row.target_type ? { type: row.target_type, id: row.target_id } : null,
     detail,

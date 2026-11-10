@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { RuntimeStatusSlice } from './runtime-status-types'
+import { runtimeEnvironmentDisplayName } from '../../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 
 const activeRuntimeDisconnectedToasts = new Map<string, symbol>()
 const RUNTIME_DISCONNECTED_TOAST_DURATION_MS = 4_000
@@ -23,7 +24,7 @@ export function showRuntimeDisconnectedToast(
     ? translate(
         'auto.store.slices.runtime.status.runtimeHostUnreachableNamed',
         "Can't reach {{hostName}}",
-        { hostName: environment.name }
+        { hostName: runtimeEnvironmentDisplayName(environment) }
       )
     : translate(
         'auto.store.slices.runtime.status.runtimeHostUnreachable',

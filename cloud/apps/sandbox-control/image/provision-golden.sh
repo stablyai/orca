@@ -168,7 +168,15 @@ if [ -n "$cli" ]; then
 else
   log 'bundle has no orca CLI (orca-cli.cjs): agents will not have `orca` on PATH'
 fi
-printf 'export PATH=%s/tools/bin:%s/bin:$PATH\n' "$ORCA_HOME" "$ORCA_HOME" | sudo tee /etc/profile.d/orca.sh >/dev/null
+# The image's node/npm/npx live only on the build command's PATH; append them so agents (codex's
+# `env node` shebang) and stdio MCP servers launched with npx resolve them in Orca's login shells.
+system_node="$(command -v npx || command -v node || true)"
+if [ -z "$system_node" ]; then
+  echo 'no node/npx on the build PATH' >&2
+  exit 1
+fi
+printf 'export PATH=%s/tools/bin:%s/bin:$PATH:%s\n' "$ORCA_HOME" "$ORCA_HOME" "$(dirname "$system_node")" |
+  sudo tee /etc/profile.d/orca.sh >/dev/null
 # Every new shell (login or not: /etc/bashrc sources profile.d) re-reads the session env file.
 sudo install -m 0644 "$ORCA_HOME/bin/orca-session-env.sh" /etc/profile.d/zz-orca-session-env.sh
 if [ -f /etc/bash.bashrc ]; then

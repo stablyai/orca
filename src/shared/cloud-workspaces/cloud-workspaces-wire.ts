@@ -47,7 +47,10 @@ export const CloudWorkspaceSchema = z.object({
   lastActivityBy: Id.nullable(),
   cost: CloudWorkspaceCostSchema,
   access: z.enum(['owner', 'granted', 'can_open', 'none']),
-  presence: z.array(CloudWorkspacePresenceSchema)
+  presence: z.array(CloudWorkspacePresenceSchema),
+  // Display names (each member's token `name` claim) for the ids above. Labels only, and the org
+  // roster wins where it has an entry. Older control planes omit it.
+  memberNames: z.record(z.string(), z.string().max(80)).optional().catch(undefined)
 })
 
 export type CloudWorkspace = z.infer<typeof CloudWorkspaceSchema>

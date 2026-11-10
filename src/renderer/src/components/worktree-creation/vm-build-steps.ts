@@ -10,6 +10,8 @@ export type VmBuildStepId = 'provision' | 'checks' | 'create'
 export type VmBuildStep = {
   id: VmBuildStepId
   state: WorktreeSetupStepState
+  /** Done without running: an older VM server has no environment checks. */
+  skipped: boolean
   /** Time spent so far (running) or in total (done/failed); null when unknown. */
   elapsedMs: number | null
   /** Git's checkout percent while the workspace step checks out files. */
@@ -17,15 +19,6 @@ export type VmBuildStep = {
   /** When the step started, if it has. */
   startedAt: number | null
 }
-
-/** Typical Orca Cloud step durations in seconds, shown as "usually ~Ns" while a step runs. */
-export const ORCA_CLOUD_TYPICAL_STEP_SECONDS: Record<VmBuildStepId, number> = {
-  provision: 5,
-  checks: 3,
-  create: 2
-}
-
-type StepCore = Omit<VmBuildStep, 'startedAt'>
 
 type VmBuildEntry = Pick<
   PendingWorktreeCreation,
@@ -36,6 +29,7 @@ type VmBuildEntry = Pick<
   | 'startedAt'
   | 'checkoutProgress'
   | 'worktreeId'
+  | 'errorAt'
 >
 
 export function isOrcaCloudBuild(entry: Pick<PendingWorktreeCreation, 'request'>): boolean {
@@ -53,9 +47,27 @@ function span(start: number | undefined, end: number | undefined): number | null
   return start === undefined || end === undefined ? null : Math.max(0, end - start)
 }
 
+function step(
+  id: VmBuildStepId,
+  state: WorktreeSetupStepState,
+  elapsedMs: number | null,
+  startedAt: number | undefined,
+  extra: Partial<Pick<VmBuildStep, 'skipped' | 'percent'>> = {}
+): VmBuildStep {
+  return {
+    id,
+    state,
+    elapsedMs,
+    startedAt: startedAt ?? null,
+    skipped: extra.skipped ?? false,
+    percent: extra.percent ?? null
+  }
+}
+
 /**
  * Provision, then the VM's environment checks, then the workspace (fetch + checkout, folded into one
- * row). A failed step keeps the steps before it done; a worktree id means the workspace is opening.
+ * row). A failed step keeps the steps before it done and shows how long it ran; a worktree id means
+ * the workspace is opening.
  */
 export function deriveVmBuildSteps(entry: VmBuildEntry, now: number): VmBuildStep[] {
   const check = entry.environmentCheck
@@ -66,58 +78,35 @@ export function deriveVmBuildSteps(entry: VmBuildEntry, now: number): VmBuildSte
   const createAt = phaseStart(entry, ['fetching', 'creating'])
   const provisionDone = Boolean(check) || workspacePhase
 
-  const provision: StepCore = provisionDone
-    ? {
-        id: 'provision',
-        state: 'done',
-        elapsedMs: span(provisionAt, check?.startedAt ?? createAt),
-        percent: null
-      }
-    : {
-        id: 'provision',
-        state: failed ? 'failed' : 'running',
-        elapsedMs: failed ? null : span(provisionAt, now),
-        percent: null
-      }
+  const provision = provisionDone
+    ? step('provision', 'done', span(provisionAt, check?.startedAt ?? createAt), provisionAt)
+    : failed
+      ? step('provision', 'failed', span(provisionAt, entry.errorAt), provisionAt)
+      : step('provision', 'running', span(provisionAt, now), provisionAt)
 
-  const checksState: WorktreeSetupStepState = !check
-    ? 'pending'
+  const checks = !check
+    ? step('checks', 'pending', null, undefined)
     : check.status === 'running'
-      ? 'running'
-      : check.status === 'failed'
-        ? 'failed'
-        : // An older VM server ran nothing, so the step must not read as verified.
-          check.status === 'skipped'
-          ? 'pending'
-          : 'done'
-  const checks: StepCore = {
-    id: 'checks',
-    state: checksState,
-    elapsedMs:
-      checksState === 'running'
-        ? span(check?.startedAt, now)
-        : checksState === 'pending'
-          ? null
-          : span(check?.startedAt, check?.finishedAt),
-    percent: null
-  }
+      ? step('checks', 'running', span(check.startedAt, now), check.startedAt)
+      : check.status === 'skipped'
+        ? // An older VM server ran nothing, so the step says so instead of reading as verified.
+          step('checks', 'done', null, check.startedAt, { skipped: true })
+        : step(
+            'checks',
+            check.status === 'failed' ? 'failed' : 'done',
+            span(check.startedAt, check.finishedAt),
+            check.startedAt
+          )
 
-  const create: StepCore = !workspacePhase
-    ? { id: 'create', state: 'pending', elapsedMs: null, percent: null }
+  const create = !workspacePhase
+    ? step('create', 'pending', null, undefined)
     : ready
-      ? { id: 'create', state: 'done', elapsedMs: span(createAt, now), percent: null }
+      ? step('create', 'done', span(createAt, now), createAt)
       : failed
-        ? { id: 'create', state: 'failed', elapsedMs: null, percent: null }
-        : {
-            id: 'create',
-            state: 'running',
-            elapsedMs: span(createAt, now),
+        ? step('create', 'failed', span(createAt, entry.errorAt), createAt)
+        : step('create', 'running', span(createAt, now), createAt, {
             percent: getVisibleCheckoutProgress(entry)?.percent ?? null
-          }
+          })
 
-  return [
-    { ...provision, startedAt: provisionAt },
-    { ...checks, startedAt: check?.startedAt ?? null },
-    { ...create, startedAt: workspacePhase ? (createAt ?? null) : null }
-  ]
+  return [provision, checks, create]
 }

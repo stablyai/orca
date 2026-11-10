@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   WAKE_INPUT_CAP,
   WAKE_INPUT_MAX_HOLD_MS,
@@ -18,8 +18,17 @@ import {
   subscribeWakeInputDelivered
 } from './wake-input-buffer'
 
+const T = 1_800_000_000_000
+
+beforeEach(() => {
+  // The buffer stamps wake settlement with Date.now(); pin it so hold and grace math is exact.
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(T)
+})
+
 afterEach(() => {
   resetWakeInputForTests()
+  vi.useRealTimers()
 })
 
 function pane(ready = false) {
@@ -32,8 +41,6 @@ function pane(ready = false) {
     isReady: () => state.ready
   }
 }
-
-const T = 1_800_000_000_000
 
 describe('wake input buffer', () => {
   it('does nothing when the workspace is not waking', () => {
@@ -75,7 +82,7 @@ describe('wake input buffer', () => {
 
   it('waits for the wake to settle when the transport never dropped (it may be the old attachment)', () => {
     const p = pane(true)
-    beginWorkspaceWake('ws', Date.now())
+    beginWorkspaceWake('ws', T)
     captureWakeInput('ws', 'leaf-1', 'x', p.deliver, p.isReady)
     pumpWakeInputForTests()
     expect(p.delivered).toEqual([])
@@ -108,7 +115,7 @@ describe('wake input buffer', () => {
     beginWorkspaceWake('ws', T)
     captureWakeInput('ws', 'leaf-1', 'ls', p.deliver, p.isReady)
     endWorkspaceWake('ws', 'ready')
-    pumpWakeInputForTests(Date.now() + WAKE_INPUT_SETTLED_GRACE_MS + 1)
+    pumpWakeInputForTests(T + WAKE_INPUT_SETTLED_GRACE_MS + 1)
     p.state.ready = true
     pumpWakeInputForTests()
     expect(p.delivered).toEqual([])
@@ -184,7 +191,11 @@ describe('applyWakeInput', () => {
 
   it('Backspace edits the held text and Ctrl-C clears it', () => {
     expect(apply('lss\x7f -la').text).toBe('ls -la')
-    expect(apply('\x03', 'rm -rf /')).toEqual({ text: '', submitted: false, multiline: false })
+    expect(apply('\x03', 'rm -rf /')).toEqual({
+      text: '',
+      submitted: false,
+      multiline: false
+    })
   })
 
   it('drops escape sequences (arrows, OSC, alt keys) and other controls', () => {
@@ -223,7 +234,7 @@ describe('nothing joined, nothing lost silently', () => {
     beginWorkspaceWake('c', T)
     captureWakeInput('c', 'leaf-1', 'x', p.deliver, p.isReady)
     endWorkspaceWake('c', 'ready')
-    pumpWakeInputForTests(Date.now() + WAKE_INPUT_SETTLED_GRACE_MS + 1)
+    pumpWakeInputForTests(T + WAKE_INPUT_SETTLED_GRACE_MS + 1)
     expect(dropped.sort()).toEqual(['a', 'b', 'c'])
   })
 })

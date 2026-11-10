@@ -2,7 +2,7 @@
 // in-process through the HostedSandboxDriver, and answering like a recipe process would.
 import { z } from 'zod'
 import { EphemeralVmRecipeResultSchema } from '../../shared/ephemeral-vm-recipes'
-import { ephemeralVmFailure } from '../../shared/ephemeral-vm-failure-copy'
+import { ephemeralVmFailure, type EphemeralVmFailure } from '../../shared/ephemeral-vm-failure-copy'
 import { normalizeGitRemoteUrl } from '../../shared/git/remotes/git-remote-identity'
 import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
 import {
@@ -61,6 +61,21 @@ export async function hostedSandboxRepoUrl(repoPath: string): Promise<string | n
   return normalized?.startsWith('github.com/') ? `https://${normalized}.git` : null
 }
 
+/**
+ * The sandbox can only clone from GitHub, so a repo without a GitHub remote is refused before the
+ * control plane starts (and bills) a sandbox that could never open the workspace: the project has
+ * no identity a sandbox checkout can match.
+ */
+export async function refuseOrcaCloudWithoutGithub(
+  recipe: Pick<OrcaVmRecipe, 'provider'>,
+  repoPath: string
+): Promise<EphemeralVmFailure | null> {
+  if (recipe.provider !== 'orca-cloud' || (await hostedSandboxRepoUrl(repoPath))) {
+    return null
+  }
+  return ephemeralVmFailure('cloudNoGithubRemote')
+}
+
 function ok(stdout: string): RecipeStepProviderResult {
   return { stdout, stderr: '', exitCode: 0, signal: null }
 }
@@ -82,6 +97,13 @@ function failed(error: unknown): RecipeStepProviderResult {
       ...base,
       stderr: `Orca Cloud: ${error.reason ?? 'no plan'}\n`,
       failure: ephemeralVmFailure('cloudPlanRequired')
+    }
+  }
+  if (isEnvironmentProviderError(error, 'conflict') && error.reason === 'github_not_connected') {
+    return {
+      ...base,
+      stderr: `Orca Cloud: ${error.reason}\n`,
+      failure: ephemeralVmFailure('cloudGithubNotConnected')
     }
   }
   if (isEnvironmentProviderError(error, 'unauthorized')) {

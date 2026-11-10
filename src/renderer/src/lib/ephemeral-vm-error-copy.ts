@@ -127,7 +127,11 @@ const COPY: Record<EphemeralVmFailureCode, (params: Params | undefined) => strin
     translate('ephemeralVm.errors.cloudConcurrencyLimit', EN.cloudConcurrencyLimit),
   cloudSignInRequired: () =>
     translate('ephemeralVm.errors.cloudSignInRequired', EN.cloudSignInRequired),
-  cloudUnavailable: () => translate('ephemeralVm.errors.cloudUnavailable', EN.cloudUnavailable)
+  cloudUnavailable: () => translate('ephemeralVm.errors.cloudUnavailable', EN.cloudUnavailable),
+  cloudGithubNotConnected: () =>
+    translate('ephemeralVm.errors.cloudGithubNotConnected', EN.cloudGithubNotConnected),
+  cloudNoGithubRemote: () =>
+    translate('ephemeralVm.errors.cloudNoGithubRemote', EN.cloudNoGithubRemote)
 }
 
 function isEphemeralVmFailureCode(code: string): code is EphemeralVmFailureCode {

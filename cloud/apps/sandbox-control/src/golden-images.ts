@@ -295,7 +295,16 @@ async function stepBuild(deps: GoldenImageDeps, row: GoldenRow): Promise<GoldenT
   if (!row.session_id || !row.command_id) {
     return 'building'
   }
-  const { exitCode } = await deps.provider.getCommand(row.session_id, row.command_id)
+  let { exitCode } = await deps.provider.getCommand(row.session_id, row.command_id)
+  if (exitCode === null && row.source.startsWith('git:')) {
+    // Vercel can keep reporting a detached source build as running after it exited (seen live);
+    // source-build.sh also writes its exit code to a file.
+    const marker = await deps.provider
+      .runCommand(row.session_id, { command: 'bash', args: ['-c', 'cat /tmp/source-build.exit 2>/dev/null'], timeoutMs: 20_000 })
+      .catch(() => null)
+    const code = marker?.stdout.trim()
+    exitCode = code && /^\d+$/.test(code) ? Number(code) : null
+  }
   if (exitCode === null) {
     return 'building'
   }

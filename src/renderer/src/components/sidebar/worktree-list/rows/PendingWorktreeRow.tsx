@@ -8,10 +8,22 @@ import {
 } from '@/lib/workspace/creation/pending-worktree-creation'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { vmBuildFailureSummary } from '@/components/worktree-creation/vm-build-failure-toast'
+import type { Repo } from '../../../../../../shared/repo-types'
 
-function statusLabel(entry: PendingWorktreeCreation, t: Translate = translate): string {
+function statusLabel(
+  entry: PendingWorktreeCreation,
+  repos: readonly Repo[],
+  t: Translate = translate
+): string {
   if (entry.status === 'error') {
+    // An Orca Cloud refusal reads like its build-sheet card, never the raw provider text.
+    const cloud =
+      entry.request.ephemeralVmRecipe?.provider === 'orca-cloud' && entry.error
+        ? vmBuildFailureSummary(entry, entry.error, repos, t)
+        : null
     return (
+      cloud?.title ??
       entry.error ??
       t('auto.components.sidebar.PendingWorktreeRow.creationFailed', 'Creation failed')
     )
@@ -47,6 +59,7 @@ export function PendingWorktreeRow({
   const t = useTranslate()
   const entry = useAppStore((s) => s.pendingWorktreeCreations[creationId])
   const active = useAppStore((s) => s.activePendingCreationId === creationId)
+  const repos = useAppStore((s) => s.repos)
   if (!entry) {
     return <HostCreationRow repoName={repoName} />
   }
@@ -89,7 +102,7 @@ export function PendingWorktreeRow({
               isError ? 'text-destructive/90' : 'text-muted-foreground'
             )}
           >
-            {statusLabel(entry, t)}
+            {statusLabel(entry, repos, t)}
           </span>
         </span>
       </button>

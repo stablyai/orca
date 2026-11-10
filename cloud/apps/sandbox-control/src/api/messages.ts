@@ -3,6 +3,7 @@
 import { LifecycleError, resumeSandbox, type LifecycleDeps } from '../lifecycle'
 import { getSandbox } from '../store'
 import { withSenderEnvelope, parseSenderEnvelope } from '../../../../../src/shared/cloud-workspaces/sender-envelope'
+import { memberNamesFor } from '../member-names'
 import { randomId } from './keys'
 import { launchAgent, sendToSession, VmAgentError, type AgentId } from './vm-agent'
 import type { WorkspaceRow } from './workspaces'
@@ -31,11 +32,13 @@ const MAX_ATTEMPTS = 4
 /** A delivery claimed this long ago without finishing is presumed dead and retried. */
 const DELIVERY_STALE_MS = 3 * 60_000
 
-export function messageView(row: MessageRow) {
+export function messageView(row: MessageRow, names: ReadonlyMap<string, string> = new Map()) {
   return {
     id: row.id,
     workspaceId: row.sandbox_id,
     agent: row.agent,
+    sentBy: row.sent_by,
+    sentByName: names.get(row.sent_by) ?? null,
     status: row.status,
     // The session that received it: pass back as `session` to continue the same conversation.
     session: row.result_handle ?? row.session_handle,
@@ -129,7 +132,10 @@ export async function deliverMessage(life: LifecycleDeps, message: MessageRow): 
     const text =
       message.sent_by === row.user_id
         ? parseSenderEnvelope(message.body).body
-        : withSenderEnvelope(message.body, { userId: message.sent_by, name: message.sent_by })
+        : withSenderEnvelope(message.body, {
+            userId: message.sent_by,
+            name: (await memberNamesFor(life.db, message.account_id, [message.sent_by])).get(message.sent_by) ?? message.sent_by
+          })
     let handle: string
     if (message.session_handle) {
       await sendToSession(life.provider, sessionId, message.session_handle, text)

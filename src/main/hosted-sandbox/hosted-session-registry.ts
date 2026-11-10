@@ -58,6 +58,8 @@ export function createHostedSessionRegistry(deps: {
   driver: HostedEnvironmentProviderDriver
   windows: () => readonly BrowserWindow[]
   log?: (line: string) => void
+  /** Each time a running workspace's orcad is first reached in this app session (including after resume). */
+  onConnected?: (runtimeEnvironmentId: string) => void
 }): HostedSessionRegistry {
   const running = new Map<string, Running>()
   const log = deps.log ?? ((line: string) => console.error(line))
@@ -169,6 +171,7 @@ export function createHostedSessionRegistry(deps: {
       workspaceId: runtime.workspaceId ?? null
     })
     scheduler.start()
+    deps.onConnected?.(runtimeEnvironmentId)
     log(`[orca-cloud] lease scheduler started for ${runtime.workspaceName ?? runtime.id}`)
   }
 

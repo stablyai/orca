@@ -6,7 +6,7 @@ type Op = {
   summary: string
   description?: string
   scope?: string
-  params?: { name: string; in: 'path' | 'query'; description?: string; schema?: object; required?: boolean }[]
+  params?: { name: string; in: 'path' | 'query' | 'header'; description?: string; schema?: object; required?: boolean }[]
   body?: object
   responses: Record<string, string | { description: string; schema: object }>
   tags: string[]
@@ -31,6 +31,7 @@ const schemas: Record<string, object> = {
       prefix: { type: 'string', description: 'Non-secret start of the key, e.g. `orca_sk_Ab3x`' },
       scopes: { type: 'array', items: { type: 'string', enum: [...API_SCOPES] } },
       createdBy: { type: 'string' },
+      createdByName: { type: ['string', 'null'], description: 'Display name of the member, when known' },
       createdAt: { type: 'integer', description: 'Unix ms' },
       lastUsedAt: { type: ['integer', 'null'] },
       expiresAt: { type: ['integer', 'null'] }
@@ -310,6 +311,7 @@ export const OPERATIONS: Record<string, Record<string, Op>> = {
       tags: ['Workspaces'],
       scope: 'workspaces:write',
       summary: 'Create a workspace (starts a sandbox)',
+      params: [{ name: 'Idempotency-Key', in: 'header', description: 'Optional, 8-128 chars. A retry with the same key and body within 24 h returns the first response (header `idempotent-replayed: true`) instead of starting another sandbox; the same key with a different body answers 422.', schema: { type: 'string' } }],
       description: 'Returns once the sandbox is running (typically a few seconds). Pass `message` to queue a first prompt for an agent.',
       body: obj({
         name: { type: 'string' },

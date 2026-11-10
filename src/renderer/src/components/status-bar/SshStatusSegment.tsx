@@ -42,6 +42,7 @@ import {
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import { isConnectedRuntimeHostState } from '../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import { RuntimeRepairDialog } from '../runtime-access/RuntimeRepairDialog'
+import { runtimeEnvironmentDisplayName } from '../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 
 export function SshStatusSegment({
   compact,
@@ -110,7 +111,7 @@ export function SshStatusSegment({
       const repairRoute = runtimePairingRepairRoute(environment)
       return {
         id: environment.id,
-        label: registryHost?.label || environment.name || environment.id,
+        label: registryHost?.label || runtimeEnvironmentDisplayName(environment) || environment.id,
         blockedReason,
         blocked: blockedReason
           ? {

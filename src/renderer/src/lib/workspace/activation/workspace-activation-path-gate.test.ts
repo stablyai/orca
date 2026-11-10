@@ -17,7 +17,12 @@ vi.mock('sonner', () => ({ toast: { error: mocks.toastError, success: vi.fn() } 
 const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
 const store = createTestStore()
 
-vi.mock('@/store/index', () => ({ useAppStore: store }))
+// Read lazily: the fixture's own imports reach '@/store/index' before `store` exists.
+vi.mock('@/store/index', () => ({
+  get useAppStore() {
+    return store
+  }
+}))
 
 const { activateAndRevealWorkspace } = await import('./worktree-activation')
 

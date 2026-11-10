@@ -5,6 +5,12 @@ export type AuthCallbackForwardRequest = {
   port: number
 }
 
+/** An OAuth redirect to `localhost:<port>` that an agent on the host (not Orca's own sign-in) is waiting for. */
+export type LoopbackCallbackForwardRequest = {
+  environmentId: string
+  port: number
+}
+
 export type AuthCallbackForwardResult =
   | { ok: true }
   | { ok: false; code: 'port_busy' | 'listen_failed' | 'tunnel_failed'; message: string }

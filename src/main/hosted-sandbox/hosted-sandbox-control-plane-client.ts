@@ -12,6 +12,9 @@ export {
 } from './hosted-sandbox-request'
 import {
   HostedSandboxDesktopResponseSchema,
+  HostedSandboxConfigResponseSchema,
+  HostedGithubConnectResponseSchema,
+  type HostedSandboxConfigResponse,
   HostedArchiveResponseSchema,
   HostedWakeResponseSchema,
   HostedWorkspaceStatusResponseSchema,
@@ -29,6 +32,9 @@ import {
   type HostedSandboxReadyResponse,
   type HostedSandboxView
 } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
+import type { z } from 'zod'
+
+type HostedGithubConnectResponse = z.infer<typeof HostedGithubConnectResponseSchema>
 
 export type HostedSandboxControlPlaneClient = {
   create(
@@ -71,6 +77,10 @@ export type HostedSandboxControlPlaneClient = {
   ): Promise<HostedSandboxSshAccess>
   /** Starts the VM's remote desktop (idempotent); it listens on the VM's loopback only. */
   startDesktop(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxDesktop>
+  /** Product constants and measured timings (GET /v1/config). */
+  config(signal?: AbortSignal): Promise<HostedSandboxConfigResponse>
+  /** Starts binding a GitHub App installation to the account; the browser finishes it. */
+  connectGitHub(signal?: AbortSignal): Promise<HostedGithubConnectResponse>
 }
 
 export function createHostedSandboxControlPlaneClient(
@@ -192,6 +202,13 @@ export function createHostedSandboxControlPlaneClient(
           kind: 'control',
           signal
         })
-      ).desktop
+      ).desktop,
+    config: (signal) =>
+      call('GET', 'v1/config', HostedSandboxConfigResponseSchema, { kind: 'control', signal }),
+    connectGitHub: (signal) =>
+      call('POST', 'v1/github/connect', HostedGithubConnectResponseSchema, {
+        kind: 'control',
+        signal
+      })
   }
 }
