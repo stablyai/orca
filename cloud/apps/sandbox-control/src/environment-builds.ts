@@ -191,9 +191,15 @@ async function buildSecrets(deps: BuildDeps, accountId: string, names: string[])
   return env
 }
 
-export async function startBuild(deps: BuildDeps, caller: SandboxCaller, environment: EnvironmentRow): Promise<BuildRow> {
+export async function startBuild(
+  deps: BuildDeps,
+  caller: SandboxCaller,
+  environment: EnvironmentRow,
+  /** `config`: rebuild an earlier build's config (golden refresh) instead of the environment's current one. */
+  options: { config?: BuildConfig } = {}
+): Promise<BuildRow> {
   requireAdmin(caller)
-  const repos = parseRepos(environment)
+  const repos = options.config?.repos ?? parseRepos(environment)
   if (repos.length === 0) {
     throw new EnvironmentError('invalid_request', 400, 'no_repos')
   }
@@ -220,7 +226,7 @@ export async function startBuild(deps: BuildDeps, caller: SandboxCaller, environ
   }
   const now = deps.now()
   const id = randomId()
-  const config: BuildConfig = {
+  const config: BuildConfig = options.config ?? {
     revision: environment.revision,
     repos,
     installScript: environment.install_script,
