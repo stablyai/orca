@@ -569,9 +569,9 @@ function observeParkedMail(value: unknown): ParkedMailRegistry {
 
 it('worker-abandon settles and fences consumption, releases the existing binding and retains the child', async () => {
   await launch()
-  const observe = host.observeJournalPublications.bind(host)
+  const observe = host.observeConversationPublications.bind(host)
   const subscriptions = new Map<string, ReturnType<typeof vi.fn>>()
-  vi.spyOn(host, 'observeJournalPublications').mockImplementation((id, callback) => {
+  vi.spyOn(host, 'observeConversationPublications').mockImplementation((id, callback) => {
     const unsubscribe = vi.fn(observe(id, callback))
     subscriptions.set(id, unsubscribe)
     return unsubscribe
