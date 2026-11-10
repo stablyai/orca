@@ -22,6 +22,7 @@ export const VM_SCRIPTS = [
   'orca-sandbox-members',
   'orca-git-as',
   'orca-git-identity',
+  'orcad-boot',
   'git'
 ] as const
 

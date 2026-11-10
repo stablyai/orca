@@ -158,7 +158,7 @@ if [ -n "${NOVNC_VERSION:-}" ]; then
 fi
 
 log 'Orca entry points'
-for name in orca-sandbox-start orca-sandbox-drain orca-sandbox-env orca-session-env.sh orca-egress-probe orca-image-wipe orca-share-proxy orca-sshd orca-ssh-keys orca-desktop-start orca-desktop-proxy orca-desktop-page.js orca-sandbox-grant orca-sandbox-revoke orca-sandbox-members orca-git-as orca-git-identity git; do
+for name in orca-sandbox-start orca-sandbox-drain orca-sandbox-env orca-session-env.sh orca-egress-probe orca-image-wipe orca-share-proxy orca-sshd orca-ssh-keys orca-desktop-start orca-desktop-proxy orca-desktop-page.js orca-sandbox-grant orca-sandbox-revoke orca-sandbox-members orca-git-as orca-git-identity orcad-boot git; do
   var="ORCA_VM_SCRIPT_${name//[-.]/_}"
   printf '%s' "${!var}" | base64 -d >"$ORCA_HOME/bin/$name"
   chmod 0755 "$ORCA_HOME/bin/$name"
@@ -195,8 +195,10 @@ sudo install -d -o "$(id -u)" -g "$(id -g)" "$ORCA_HOME/compile-cache"
 # so every boot from the image skips orcad's disposable startup preflight (~0.6 s of wake).
 sudo install -d -o "$(id -u)" -g "$(id -g)" "$ORCA_HOME/startup-qualification"
 smoke_data="$(mktemp -d)"
+# orcad-boot also writes orcad's full code cache as the smoke run exits (~0.3 s more off every boot).
 NODE_COMPILE_CACHE="$ORCA_HOME/compile-cache" ORCA_ORCAD_STARTUP_QUALIFICATION_DIR="$ORCA_HOME/startup-qualification" \
-  ORCA_USER_DATA="$smoke_data" timeout 60 "$node" "$ORCA_HOME/runtime/orcad/orcad-server.js" \
+  ORCA_USER_DATA="$smoke_data" timeout 60 "$node" "$ORCA_HOME/bin/orcad-boot" \
+  --code-cache "$ORCA_HOME/compile-cache/orcad-server.v8" --write-code-cache "$ORCA_HOME/runtime/orcad/orcad-server.js" \
   --port 6799 --json >/tmp/orcad-smoke.out 2>/tmp/orcad-smoke.err &
 smoke_pid=$!
 ready=0
@@ -214,6 +216,13 @@ wait "$smoke_pid" 2>/dev/null || true
 rm -rf "$smoke_data" /tmp/orcad-smoke.out
 if [ "$ready" != 1 ]; then
   tail -n 40 /tmp/orcad-smoke.err >&2; exit 1
+fi
+# Best effort: without it every boot loads orcad as before.
+if [ -s "$ORCA_HOME/compile-cache/orcad-server.v8" ]; then
+  log "orcad code cache: $(stat -c %s "$ORCA_HOME/compile-cache/orcad-server.v8") bytes"
+else
+  log 'orcad code cache was not written; boots compile orcad without it'
+  grep 'orcad-boot' /tmp/orcad-smoke.err >&2 || true
 fi
 
 log 'versions'

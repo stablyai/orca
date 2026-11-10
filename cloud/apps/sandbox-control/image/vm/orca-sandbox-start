@@ -162,8 +162,8 @@ env -i HOME="$HOME" USER="$(id -un)" LANG=C.UTF-8 TERM=xterm-256color \
   ORCA_USER_DATA="$HOME/.orcad-data" ORCA_SANDBOX_ID="$ORCA_SANDBOX_ID" "${managed_env[@]}" \
   NODE_COMPILE_CACHE="$ORCA_HOME/compile-cache" ORCA_ORCAD_STARTUP_QUALIFICATION_DIR="$ORCA_HOME/startup-qualification" \
   ORCA_SESSION_ENV_NAMES="${secret_names[*]}" "${agent_env[@]}" \
-  setsid nohup "$node" "$ORCA_HOME/runtime/orcad/orcad-server.js" \
-  --port 6768 --bind 0.0.0.0 --pairing-address "$ORCA_PUBLIC_WSS" \
+  setsid nohup "$node" "$ORCA_HOME/bin/orcad-boot" --code-cache "$ORCA_HOME/compile-cache/orcad-server.v8" \
+  "$ORCA_HOME/runtime/orcad/orcad-server.js" --port 6768 --bind 0.0.0.0 --pairing-address "$ORCA_PUBLIC_WSS" \
   --recipe-json --project-root "$PROJECT" \
   >"$STATE/ready.json" 2>"$STATE/orcad.log" </dev/null 9>&- &
 echo $! >"$STATE/orcad.pid"

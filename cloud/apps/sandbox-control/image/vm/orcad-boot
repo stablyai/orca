@@ -1,0 +1,139 @@
+#!/usr/bin/env node
+// Starts orcad from a V8 code cache taken after a full startup, so a boot skips compiling the
+// functions startup runs. NODE_COMPILE_CACHE only stores what V8 compiles before the bundle runs
+// (about 5 of its 15 MB); every other function compiled lazily on every boot (~300 ms of wake).
+//   orcad-boot --code-cache <file> [--write-code-cache] <orcad-server.js> [orcad args...]
+// orcad sees the argv `node <orcad-server.js> [orcad args...]`, as if started directly.
+// --write-code-cache (the image's smoke run) writes the cache when orcad exits. The cache is used
+// only when its header matches this bundle's bytes and this Node; otherwise orcad loads exactly as
+// before (plain require, which NODE_COMPILE_CACHE still serves). Plain Node, no dependencies.
+// getBuiltinModule (Node >= 22.3) works whether node loads this extensionless file as CommonJS
+// (in the VM) or as an ES module (under this repo's type:module package, in tests).
+const fs = process.getBuiltinModule('node:fs')
+const path = process.getBuiltinModule('node:path')
+const vm = process.getBuiltinModule('node:vm')
+const zlib = process.getBuiltinModule('node:zlib')
+const { Module, createRequire } = process.getBuiltinModule('node:module')
+
+const MAGIC = 'orcad-code-cache-v1'
+
+const args = process.argv.slice(2)
+let cacheFile = null
+let writeCache = false
+while (args[0] === '--code-cache' || args[0] === '--write-code-cache') {
+  if (args[0] === '--code-cache') {
+    cacheFile = args[1]
+    args.splice(0, 2)
+  } else {
+    writeCache = true
+    args.shift()
+  }
+}
+const entry = args.shift()
+if (!entry || !cacheFile) {
+  console.error('usage: orcad-boot --code-cache <file> [--write-code-cache] <orcad-server.js> [args...]')
+  process.exit(2)
+}
+// As for `node <entry>`: argv[1] is the resolved path, __filename the real one.
+process.argv = [process.argv[0], path.resolve(entry), ...args]
+let file = process.argv[1]
+try {
+  file = fs.realpathSync(file)
+} catch {
+  // A missing bundle fails in require below, as it would under plain node.
+}
+
+// One line of identity: a cache from another bundle or Node must never run (V8 only checks length).
+function cacheHeader(bytes) {
+  return `${MAGIC} ${process.version} ${process.arch} ${bytes.length} ${zlib.crc32(bytes)}\n`
+}
+
+function readCache(header) {
+  let data
+  try {
+    data = fs.readFileSync(cacheFile)
+  } catch {
+    return null
+  }
+  const headerLength = Buffer.byteLength(header)
+  if (data.length <= headerLength || data.toString('latin1', 0, headerLength) !== header) {
+    console.error('orcad-boot: code cache is for another orcad build; loading without it')
+    return null
+  }
+  return data.subarray(headerLength)
+}
+
+function runCompiled(header, source, cachedData) {
+  // A vm.Script can serialize what startup compiled; the CommonJS loader cannot. Same wrapper,
+  // filename and require as the loader, and import() resolves from the bundle like it does there.
+  const options = {
+    filename: file,
+    cachedData: cachedData ?? undefined,
+    importModuleDynamically: vm.constants.USE_MAIN_CONTEXT_DEFAULT_LOADER
+  }
+  // Node flags the loader option experimental once, on the first import() through it. Spend that
+  // one-time warning here, unprinted, so orcad's stderr stays as it was.
+  const emitWarning = process.emitWarning
+  process.emitWarning = (warning, ...rest) => {
+    if (!String(warning?.message ?? warning).includes('USE_MAIN_CONTEXT_DEFAULT_LOADER')) {
+      emitWarning.call(process, warning, ...rest)
+    }
+  }
+  let script
+  try {
+    new vm.Script('import("node:path")', {
+      filename: file,
+      importModuleDynamically: options.importModuleDynamically
+    })
+      .runInThisContext()
+      .catch(() => {})
+    script = new vm.Script(Module.wrap(source), options)
+  } finally {
+    process.emitWarning = emitWarning
+  }
+  if (cachedData && script.cachedDataRejected) {
+    console.error('orcad-boot: V8 rejected the code cache (other V8 flags?); compiled without it')
+  }
+  if (writeCache) {
+    process.on('exit', () => {
+      try {
+        const data = script.createCachedData()
+        const temporary = `${cacheFile}.${process.pid}.tmp`
+        fs.writeFileSync(temporary, Buffer.concat([Buffer.from(header, 'latin1'), data]))
+        fs.renameSync(temporary, cacheFile)
+        console.error(`orcad-boot: wrote ${data.length} bytes of code cache`)
+      } catch (error) {
+        console.error(`orcad-boot: could not write the code cache: ${error.message}`)
+      }
+    })
+  }
+  const module = new Module(file, null)
+  module.filename = file
+  module.paths = Module._nodeModulePaths(path.dirname(file))
+  const compiled = script.runInThisContext()
+  compiled.call(module.exports, module.exports, createRequire(file), module, file, path.dirname(file))
+}
+
+// Locals, so neither the bundle bytes nor the cache outlive the compile.
+function boot() {
+  // Older Node (no crc32 or main-context import()) loads as before.
+  if (typeof zlib.crc32 === 'function' && vm.constants?.USE_MAIN_CONTEXT_DEFAULT_LOADER) {
+    let bytes = null
+    try {
+      bytes = fs.readFileSync(file)
+    } catch {
+      // Missing or unreadable: require reports it as plain node would.
+    }
+    if (bytes) {
+      const header = cacheHeader(bytes)
+      const cachedData = readCache(header)
+      if (cachedData || writeCache) {
+        runCompiled(header, bytes.toString('utf8'), cachedData)
+        return
+      }
+    }
+  }
+  createRequire(file)(file)
+}
+
+boot()
