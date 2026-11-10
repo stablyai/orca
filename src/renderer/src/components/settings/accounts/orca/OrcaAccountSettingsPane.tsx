@@ -13,6 +13,7 @@ import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../../OrcaSignInProgr
 import { PlanBillingSection } from '../../../billing/PlanBillingSection'
 import { TeamSettingsLink } from '../../../billing/team/TeamSettingsLink'
 import { CloudSecretsSection } from '../../cloud-secrets/CloudSecretsSection'
+import { CloudPredictiveWakeSetting } from '../../orca-cloud/CloudPredictiveWakeSetting'
 import { CloudEnvironmentSection } from '../../../cloud-environment/CloudEnvironmentSection'
 
 function accountStatusCopy(
@@ -141,6 +142,9 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
           />
         ) : null}
         {connected ? <CloudSecretsSection orgId={authStatus?.cloud?.activeOrgId ?? null} /> : null}
+        {connected && authStatus?.capabilities?.flags?.sandbox ? (
+          <CloudPredictiveWakeSetting />
+        ) : null}
         {connected ? (
           <CloudEnvironmentSection
             orgId={authStatus?.cloud?.activeOrgId ?? null}
