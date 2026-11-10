@@ -30,6 +30,7 @@ import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { PtySubprocessOptions } from './pty-subprocess'
 import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../../shared/remote-viewer-clipboard-env'
 import { ORCAD_SERVER_LAUNCH_ENV_KEYS } from '../../../shared/orcad-server-launch-env'
+import { WORKSPACE_PORT_ENV_KEYS } from '../../../shared/workspace-port-block'
 import { stripInheritedClaudeSessionEnv } from '../../../shared/agent-launch/startup/claude-parent-session-env'
 
 const PANE_IDENTITY_ENV_KEYS = [
@@ -40,6 +41,8 @@ const PANE_IDENTITY_ENV_KEYS = [
   // Not identity but equally per-spawn: an inherited copy names another launch's CLI.
   'ORCA_WSL_CLI_DIR',
   'JCODE_RUNTIME_DIR',
+  // The host's own port block (a VM launcher sets one) is not this pane's workspace block.
+  ...WORKSPACE_PORT_ENV_KEYS,
   // Per-viewer: an Orca started from a remote viewer's pane must not mark its own local panes.
   REMOTE_VIEWER_CLIPBOARD_ENV,
   // A server's own launch env; a user's `orcad` in this shell is not that server.

@@ -226,6 +226,25 @@ describe('run actions', () => {
     expect(getRunActionRun(WT_B, 'web')?.status).toBe('running')
   })
 
+  it('nonconcurrent leaves the project’s other actions running, here and elsewhere', async () => {
+    const worker: OrcaRunAction = { id: 'worker', name: 'Worker', command: 'pnpm worker' }
+    mocks.checkRuntimeHooks.mockResolvedValue({
+      status: 'ok',
+      hooks: { scripts: { run: [web, worker], runMode: 'nonconcurrent' } }
+    })
+    await startRunAction(WT_A, web, config([web, worker], 'nonconcurrent'))
+    await startRunAction(WT_B, worker, config([web, worker], 'nonconcurrent'))
+    const starting = startRunAction(WT_A, worker, config([web, worker], 'nonconcurrent'))
+    await vi.advanceTimersByTimeAsync(0)
+    // Only the same action in the other workspace is interrupted.
+    expect(mocks.sendRuntimePtyInput).toHaveBeenCalledTimes(1)
+    expect(getRunActionRun(WT_B, 'worker')?.status).toBe('stopping')
+    dispatchTerminalCommandFinishedEvent(WT_B, 130, getRunActionRun(WT_B, 'worker')!.tabId)
+    await starting
+    expect(getRunActionRun(WT_A, 'web')?.status).toBe('running')
+    expect(getRunActionRun(WT_A, 'worker')?.status).toBe('running')
+  })
+
   it('concurrent leaves other workspaces running', async () => {
     await startRunAction(WT_A, web, config([web]))
     await startRunAction(WT_B, web, config([web]))
