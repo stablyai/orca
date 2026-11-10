@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
+  cloudSetupNeedsGitHub,
   cloudSetupNeedsPlan,
   type CloudSetupStep,
   type CloudSetupStepId
@@ -159,6 +160,33 @@ function planDetail(step: CloudSetupStep, t: Translate): string | null {
   }
 }
 
+/**
+ * A setup session's rows name how a step is covered with a code ('subscription', 'trial',
+ * 'checkout', 'requested'); say it in words, or nothing. Undefined: not a session code.
+ */
+export function sessionDetailCopy(step: CloudSetupStep, t: Translate): string | null | undefined {
+  if (step.id === 'plan' && step.detail === 'subscription') {
+    // "Team plan · Done" already says it.
+    return null
+  }
+  if (step.id === 'plan' && step.detail === 'trial') {
+    return t('components.newWorkspace.cloudSetup.planCoveredByTrial', 'Your trial covers it.')
+  }
+  if (step.id === 'plan' && step.detail === 'checkout') {
+    return t(
+      'components.newWorkspace.cloudSetup.planCheckoutOpen',
+      'Finish checkout in your browser.'
+    )
+  }
+  if (step.id === 'github' && step.detail === 'requested') {
+    return t(
+      'components.newWorkspace.cloudSetup.githubRequestedSession',
+      'Waiting for an owner on GitHub to approve Orca Cloud.'
+    )
+  }
+  return undefined
+}
+
 function stateLabel(step: CloudSetupStep, t: Translate): string {
   switch (step.state) {
     case 'done':
@@ -246,15 +274,20 @@ export function OrcaCloudSetupPanel({
                     'components.newWorkspace.cloudSetup.subtitleOwnerFixes',
                     'An owner or admin needs to fix this. Your prompt stays here.'
                   )
-                : cloudSetupNeedsPlan(steps)
+                : cloudSetupNeedsPlan(steps) && cloudSetupNeedsGitHub(steps)
                   ? t(
-                      'components.newWorkspace.cloudSetup.subtitleChoosePlan',
-                      'One visit to your browser to choose a plan. Your prompt stays here and starts when you’re done.'
+                      'components.newWorkspace.cloudSetup.subtitleChoosePlanAndGitHub',
+                      'One visit to your browser to choose a plan and give Orca Cloud access on GitHub. Your prompt stays here and starts when you’re done.'
                     )
-                  : t(
-                      'components.newWorkspace.cloudSetup.subtitleNoCard',
-                      'One visit to your browser, no card. Your prompt stays here and starts when you’re done.'
-                    )))}
+                  : cloudSetupNeedsPlan(steps)
+                    ? t(
+                        'components.newWorkspace.cloudSetup.subtitleChoosePlan',
+                        'One visit to your browser to choose a plan. Your prompt stays here and starts when you’re done.'
+                      )
+                    : t(
+                        'components.newWorkspace.cloudSetup.subtitleNoCard',
+                        'One visit to your browser, no card. Your prompt stays here and starts when you’re done.'
+                      )))}
       </p>
       {/* One polite announcement per row change ("Team plan, done"). */}
       <ul aria-live="polite" className="mt-2 space-y-1.5">
@@ -263,6 +296,8 @@ export function OrcaCloudSetupPanel({
           const title = step.label ?? copy.title
           const state = step.status ?? copy.status ?? stateLabel(step, t)
           const note = step.note ?? copy.note
+          const sessionDetail = sessionDetailCopy(step, t)
+          const detail = sessionDetail === undefined ? (step.detail ?? copy.detail) : sessionDetail
           return (
             <li
               key={step.id}
@@ -277,10 +312,8 @@ export function OrcaCloudSetupPanel({
                 <span className="block text-xs text-foreground">{title}</span>
                 {step.state === 'loading' ? (
                   <Skeleton shape="small" className="mt-1 h-2.5 w-40" />
-                ) : (step.detail ?? copy.detail) ? (
-                  <span className="block text-[11px] text-muted-foreground">
-                    {step.detail ?? copy.detail}
-                  </span>
+                ) : detail ? (
+                  <span className="block text-[11px] text-muted-foreground">{detail}</span>
                 ) : null}
                 {note ? (
                   <span className="block text-[11px] text-muted-foreground">{note}</span>

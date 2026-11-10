@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  cloudSetupNeedsGitHub,
   deriveCloudSetupSteps,
   getCloudPrimaryAction,
   getOrcaCloudSegmentState,
@@ -271,5 +272,17 @@ describe('withReachableGitHub', () => {
   it('leaves the rows alone while the repository is still unreachable', () => {
     const steps = [...session]
     expect(withReachableGitHub(steps, false)).toBe(steps)
+  })
+})
+
+describe('cloudSetupNeedsGitHub', () => {
+  it('counts GitHub access the browser visit gives, not an approval, a missing remote or a check', () => {
+    expect(cloudSetupNeedsGitHub([{ id: 'github', state: 'needed', need: 'github' }])).toBe(true)
+    expect(cloudSetupNeedsGitHub([{ id: 'github', state: 'active' }])).toBe(true)
+    expect(cloudSetupNeedsGitHub([{ id: 'github', state: 'done' }])).toBe(false)
+    expect(cloudSetupNeedsGitHub([{ id: 'github', state: 'loading' }])).toBe(false)
+    expect(
+      cloudSetupNeedsGitHub([{ id: 'github', state: 'pending', need: 'github', blocksStart: true }])
+    ).toBe(false)
   })
 })

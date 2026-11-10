@@ -191,6 +191,16 @@ export function cloudSetupNeedsPlan(steps: readonly CloudSetupStep[]): boolean {
   )
 }
 
+/**
+ * The same browser trip also gives Orca Cloud access to the repository on GitHub. An owner's
+ * approval (D2) or a project not on GitHub (D3) isn't part of the trip; still checking isn't either.
+ */
+export function cloudSetupNeedsGitHub(steps: readonly CloudSetupStep[]): boolean {
+  return getOpenSetupSteps(steps).some(
+    (step) => step.id === 'github' && !step.blocksStart && step.state !== 'loading'
+  )
+}
+
 export type CloudPrimaryAction =
   | 'start'
   | 'setUpAndStart'
@@ -273,7 +283,7 @@ export function withReachableGitHub(
   if (!reachable || !steps.some((step) => step.id === 'github' && step.state !== 'done')) {
     return steps
   }
-  return steps.map(
-    (step): CloudSetupStep => (step.id === 'github' ? { id: 'github', state: 'done' } : step)
+  return steps.map((step): CloudSetupStep =>
+    step.id === 'github' ? { id: 'github', state: 'done' } : step
   )
 }
