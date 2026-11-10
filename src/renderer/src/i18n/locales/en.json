@@ -26187,6 +26187,13 @@
     }
   },
   "orcaCloudWorkspace": {
+    "menu": {
+      "sleep": "Sleep",
+      "sleepDescription": "Close this workspace's panels and put its sandbox to sleep. Opening the workspace wakes it.",
+      "wake": "Wake",
+      "retryWake": "Try waking again",
+      "waking": "Waking…"
+    },
     "archived": {
       "prOpen": "Open",
       "prDraft": "Draft",
