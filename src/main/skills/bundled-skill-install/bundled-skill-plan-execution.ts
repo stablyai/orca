@@ -8,7 +8,10 @@ import type {
   BundledSkillOutcome,
   BundledSkillPlanEntry
 } from '../../../shared/bundled-skill-plan'
-import { isBundledSkillAutoUpdateOp } from '../../../shared/bundled-skill-summary'
+import {
+  holdsCurrentBundledSkillCopy,
+  isBundledSkillAutoUpdateOp
+} from '../../../shared/bundled-skill-summary'
 import type { BundledSkillSource } from './bundled-skill-sources'
 import { classifyBundledSkillPath } from './bundled-skill-classification'
 import { filesystemErrorCode } from './bundled-skill-filesystem-error'
@@ -212,16 +215,26 @@ async function runSkill(run: SkillRun): Promise<BundledSkillOutcome> {
     statuses.set(op.path, outcome.strandedPath ? 'done' : outcome.status)
     ops.push(outcome)
   }
-  if (run.entry.ops.some((op) => op.content === 'files' && statuses.get(op.path) === 'done')) {
-    // Lets other Orca builds on this host recognise these bytes as Orca's, not a user edit.
-    await recordBundledSkillDigestWritten(
-      run.input.filesystem,
-      run.input.destination.homeDirectory,
-      run.entry.name,
-      run.entry.digest
-    )
+  if (
+    holdsCurrentBundledSkillCopy(run.entry) ||
+    run.entry.ops.some((op) => op.content === 'files' && statuses.get(op.path) === 'done')
+  ) {
+    await recordOrcaCopy(run.input, run.entry)
   }
   return { name: run.entry.name, status: 'ran', ops }
+}
+
+/**
+ * Lets other Orca builds on this host recognise these bytes as Orca's, not a user edit.
+ * Execution only: preview stays read-only.
+ */
+function recordOrcaCopy(input: BundledSkillExecuteInput, entry: BundledSkillPlanEntry) {
+  return recordBundledSkillDigestWritten(
+    input.filesystem,
+    input.destination.homeDirectory,
+    entry.name,
+    entry.digest
+  )
 }
 
 /** Re-plan under all target locks and require the previewed digest; stale previews must write nothing. */
@@ -273,6 +286,10 @@ export async function autoUpdateBundledSkills(
       if (ops.length > 0) {
         const source = findBundledSkillSource(input.sources, entry.name)
         skills.push(await runSkill({ input, entry: { ...entry, ops }, source }))
+      }
+      // An already-current copy (keep-only, so nothing ran) written before markers existed.
+      if (holdsCurrentBundledSkillCopy(entry)) {
+        await recordOrcaCopy(input, entry)
       }
     }
     return { scope: plan.scope, skills }

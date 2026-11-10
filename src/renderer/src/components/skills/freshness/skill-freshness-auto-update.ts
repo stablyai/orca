@@ -4,7 +4,10 @@ import type {
   BundledSkillPlan,
   BundledSkillPlanEntry
 } from '../../../../../shared/bundled-skill-plan'
-import { isBundledSkillAutoUpdateOp } from '../../../../../shared/bundled-skill-summary'
+import {
+  holdsCurrentBundledSkillCopy,
+  isBundledSkillAutoUpdateOp
+} from '../../../../../shared/bundled-skill-summary'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/skills/discovery/installed-agent-skill-discovery'
 import {
   bundledSkillTargetKey,
@@ -19,6 +22,8 @@ import { getSkillUpdateRun, runAutomaticSkillUpdate } from './skill-update-run-s
 type AttemptState = 'running' | 'settled'
 // Keyed by target; each scan prunes what it no longer observes, so the map stays plan-sized.
 const attemptsByTarget = new Map<string, Map<string, AttemptState>>()
+// Current copies asked to record their marker this session; one per target, skill and bytes.
+const markedCopies = new Set<string>()
 
 /** Drop settled attempts for states this scan no longer sees; running ones still own their skills. */
 function pruneAttempts(targetKey: string, liveKeys: ReadonlySet<string>): void {
@@ -142,6 +147,15 @@ export function autoUpdateUnmodifiedSkills(
   }
   const started: string[] = []
   const keys: string[] = []
+  // Why: a copy already at this build's digest plans keep-only, so no update ever runs to mark it.
+  const marking = canStart
+    ? entries.flatMap(({ entry, key }) => {
+        const mark = `${targetKey}:${entry.name}@${entry.digest}`
+        return !key && !markedCopies.has(mark) && holdsCurrentBundledSkillCopy(entry)
+          ? [{ name: entry.name, mark }]
+          : []
+      })
+    : []
   for (const { entry, key } of entries) {
     const attempt = key ? attempts.get(key) : undefined
     if (!key || attempt === 'settled' || (!attempt && !canStart)) {
@@ -154,15 +168,21 @@ export function autoUpdateUnmodifiedSkills(
       keys.push(key)
     }
   }
-  if (started.length > 0) {
+  for (const { mark } of marking) {
+    markedCopies.add(mark)
+  }
+  // Marking-only names are not owned: the host records them and changes nothing on disk.
+  const names = [...started, ...marking.map(({ name }) => name)]
+  if (names.length > 0) {
     // The host re-plans under its locks and re-checks each location right before writing.
-    void runAutomaticSkillUpdate(target, started, () =>
-      autoUpdateBundledSkillsOnTarget(target, started)
+    void runAutomaticSkillUpdate(target, names, () =>
+      autoUpdateBundledSkillsOnTarget(target, names)
     )
       .then(
         (ran) => reportPreservedEdits(ran?.value ?? null),
         // Settling the keys below means the same state is never retried; the nudge takes over.
-        () => reportUncertainOutcome(target, plan)
+        // A marking-only call writes no skill, so its failure has nothing to report.
+        () => (started.length > 0 ? reportUncertainOutcome(target, plan) : undefined)
       )
       .catch(() => undefined)
       .finally(() => {
@@ -171,7 +191,9 @@ export function autoUpdateUnmodifiedSkills(
         for (const key of keys) {
           settled.set(key, 'settled')
         }
-        notifyInstalledAgentSkillsChanged()
+        if (started.length > 0) {
+          notifyInstalledAgentSkillsChanged()
+        }
       })
   }
   return owned
@@ -180,6 +202,7 @@ export function autoUpdateUnmodifiedSkills(
 /** @internal - tests need a clean module between cases. */
 export function _resetSkillFreshnessAutoUpdate(): void {
   attemptsByTarget.clear()
+  markedCopies.clear()
 }
 
 /** @internal - lets tests prove the attempt map stays bounded. */

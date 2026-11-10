@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { appendFile, readFile } from 'node:fs/promises'
+import { appendFile, lstat, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
@@ -36,10 +36,25 @@ const NEWER_SOURCE: BundledSkillSource = {
   releasedDigests: [digest(OLD_TEXT), digest(NEW_TEXT), digest(NEWER_TEXT)]
 }
 
+const DEV_TEXT = `---\nname: ${NAME}\ndescription: Dev\n---\n\nDev branch body\n`
+/** A dev build whose bundle never shipped `NEW_TEXT`, so it cannot recognise that copy by hash. */
+const DEV_SOURCE: BundledSkillSource = {
+  name: NAME,
+  text: DEV_TEXT,
+  releasedDigests: [digest(OLD_TEXT), digest(DEV_TEXT)]
+}
+
 const asBuild = (home: SkillHome, source: BundledSkillSource) => ({
   ...serviceInput(home),
   sources: [source]
 })
+const autoUpdateAs = (home: SkillHome, source: BundledSkillSource) =>
+  autoUpdateInstalledBundledSkills({ ...asBuild(home, source), names: [NAME] })
+const hasMarker = (home: SkillHome, text: string) =>
+  lstat(join(home.home, '.agents', '.orca-skill-digests', NAME, digest(text))).then(
+    () => true,
+    () => false
+  )
 
 describe("another Orca build's copy on the same host", () => {
   it('is not reported out of date or downgraded by an older build, until the user edits it', async () => {
@@ -70,5 +85,47 @@ describe("another Orca build's copy on the same host", () => {
     const edited = await previewBundledSkillInstall(asBuild(home, NEW_SOURCE))
     expect(edited.skills[0].ops[0]).toMatchObject({ kind: 'leave', reason: 'edited' })
     expect(bundledSkillNudgeEntries(edited).map((entry) => entry.name)).toEqual([NAME])
+  })
+
+  it("marks a copy already at the build's own digest when its keep-only update runs", async () => {
+    const home = await makeSkillHome()
+    // Written before markers existed; the build that owns these bytes sees it as current.
+    await writeCopy(home.shared, NEW_TEXT)
+    expect(await hasMarker(home, NEW_TEXT)).toBe(false)
+
+    const result = await autoUpdateAs(home, NEW_SOURCE)
+    expect(result.skills).toEqual([])
+    expect(await hasMarker(home, NEW_TEXT)).toBe(true)
+
+    const plan = await previewBundledSkillInstall(asBuild(home, DEV_SOURCE))
+    expect(plan.skills[0].ops[0]).toMatchObject({ kind: 'leave', reason: 'other-build' })
+    expect(bundledSkillNudgeEntries(plan)).toEqual([])
+  })
+
+  it('writes no marker from a preview alone', async () => {
+    const home = await makeSkillHome()
+    await writeCopy(home.shared, NEW_TEXT)
+
+    await previewBundledSkillInstall(asBuild(home, NEW_SOURCE))
+    expect(await hasMarker(home, NEW_TEXT)).toBe(false)
+    const plan = await previewBundledSkillInstall(asBuild(home, DEV_SOURCE))
+    expect(plan.skills[0].ops[0]).toMatchObject({ kind: 'leave', reason: 'edited' })
+  })
+
+  it("records a paired server's marker on the server's own disk, never the client's", async () => {
+    const client = await makeSkillHome()
+    const server = await makeSkillHome()
+    await writeCopy(client.shared, NEW_TEXT)
+    await writeCopy(server.shared, NEW_TEXT)
+
+    // The server runs its own keep-only update against its own home.
+    await autoUpdateAs(server, NEW_SOURCE)
+    expect(await hasMarker(server, NEW_TEXT)).toBe(true)
+    expect(await hasMarker(client, NEW_TEXT)).toBe(false)
+
+    const serverPlan = await previewBundledSkillInstall(asBuild(server, DEV_SOURCE))
+    const clientPlan = await previewBundledSkillInstall(asBuild(client, DEV_SOURCE))
+    expect(serverPlan.skills[0].ops[0]).toMatchObject({ reason: 'other-build' })
+    expect(clientPlan.skills[0].ops[0]).toMatchObject({ reason: 'edited' })
   })
 })

@@ -167,6 +167,16 @@ export function isBundledSkillAutoUpdateOp(
   )
 }
 
+/** A location already holds exactly this build's bytes; executing records it as Orca's copy. */
+export function holdsCurrentBundledSkillCopy(entry: BundledSkillPlanEntry): boolean {
+  return entry.ops.some(
+    (op) =>
+      op.kind === 'keep' &&
+      op.observed.kind === 'folder' &&
+      op.observed.skillDigest === entry.digest
+  )
+}
+
 function opNeedsConsent(op: BundledSkillOp, autoUpdating: boolean): boolean {
   // An old copy holding edits Orca has not yet backed up waits on the user, never on deletion.
   if (op.cleanup.some((item) => item.action === 'backup')) {
