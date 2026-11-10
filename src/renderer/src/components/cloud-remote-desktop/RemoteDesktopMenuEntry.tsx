@@ -1,5 +1,6 @@
 import type React from 'react'
 import { Monitor } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -11,6 +12,9 @@ export function RemoteDesktopMenuEntry({ onSelect }: { onSelect: () => void }): 
       <DropdownMenuItem onSelect={onSelect}>
         <Monitor className="size-3.5" />
         {t('components.cloudRemoteDesktop.openMenuItem', 'Open remote desktop')}
+        <Badge variant="tag" className="ml-auto">
+          {t('components.cloudRemoteDesktop.beta', 'Beta')}
+        </Badge>
       </DropdownMenuItem>
       <DropdownMenuSeparator />
     </>

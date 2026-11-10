@@ -175,10 +175,7 @@ export function VmBuildSheet({
           <div className="flex items-center gap-2">
             <span className="grid size-4 shrink-0 place-items-center">
               {building ? (
-                <Loader2
-                  aria-hidden
-                  className="size-4 text-muted-foreground motion-safe:animate-spin"
-                />
+                <Loader2 aria-hidden className="size-4 text-muted-foreground animate-spin" />
               ) : state === 'ready' ? (
                 <CircleCheck aria-hidden className="size-4 text-foreground" />
               ) : gated ? (

@@ -238,6 +238,7 @@ import {
   TypeParams
 } from './emulator-params'
 import { EnvironmentDoctorParams } from './environment-doctor-params'
+import { FileArchiveCancel, FileArchiveRead, FileArchiveStart } from './files-archive-params'
 import {
   FileCommitUpload,
   FileCopy,
@@ -1066,6 +1067,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'emulator.type': TypeParams,
   'emulator.unregisterActive': EmulatorUnregisterActiveParams,
   'environment.doctor': EnvironmentDoctorParams,
+  'files.archiveCancel': FileArchiveCancel,
+  'files.archiveRead': FileArchiveRead,
+  'files.archiveStart': FileArchiveStart,
   'files.browseServerDir': ServerDirectoryBrowse,
   'files.commitUpload': FileCommitUpload,
   'files.copy': FileCopy,

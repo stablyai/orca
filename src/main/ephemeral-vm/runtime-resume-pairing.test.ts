@@ -124,6 +124,7 @@ describe('resuming a recipe VM server', () => {
     )
     expect(outcome).toMatchObject({ reusedPairing: true, endpointChanged: false })
     expect(listEnvironments(desktopDataPath)[0]).toEqual(before)
+    expect(invalidateTransport).toHaveBeenCalledTimes(1)
     expect(invalidateTransport).toHaveBeenCalledWith(environmentId)
   })
 
@@ -175,9 +176,102 @@ describe('resuming a recipe VM server', () => {
     expect(next.deviceToken).not.toBe(original.deviceToken)
     expect(next.publicKeyB64).toBe(savedKeySpelling)
     expect(listEnvironments(desktopDataPath)[0]!.pairingRevision).not.toBe(before.pairingRevision)
-    // Only once, after the probe: reconnecting earlier would dial with the rejected token.
-    expect(invalidateTransport).toHaveBeenCalledTimes(1)
+    // Dialed alongside the probe, then again once the re-pair replaced the rejected token.
+    expect(invalidateTransport).toHaveBeenCalledTimes(2)
     connect(serverDataPath, desktopDataPath, environmentId)
+  })
+
+  it('starts the reconnect before the saved-pairing probe answers', async () => {
+    const environmentId = provision()
+    const order: string[] = []
+    await applyResumedRuntimePairing({
+      userDataPath: desktopDataPath,
+      environmentId,
+      pairingCode: bootVm(serverDataPath, 'wss://vm-1.example/runtime'),
+      invalidateTransport: () => order.push('invalidate'),
+      probeSavedPairing: async () => {
+        order.push('probe')
+      }
+    })
+    expect(order).toEqual(['invalidate', 'probe'])
+  })
+
+  it('answers before the probe when confirming in the background, and re-pairs later if needed', async () => {
+    const environmentId = provision()
+    const before = listEnvironments(desktopDataPath)[0]!
+    rmSync(serverDataPath, { recursive: true, force: true })
+    serverDataPath = mkdtempSync(join(tmpdir(), 'orca-resume-server-'))
+    const invalidateTransport = vi.fn()
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    const auth = serverAuth(serverDataPath)
+    const repaired = new Promise<string>((resolve) => {
+      void applyResumedRuntimePairing({
+        userDataPath: desktopDataPath,
+        environmentId,
+        pairingCode: bootVm(serverDataPath, 'wss://vm-1.example/runtime', unpaddedHostKey),
+        invalidateTransport,
+        probeSavedPairing: async (connection) => {
+          await gate
+          return auth(connection)
+        },
+        confirmInBackground: true,
+        onRepairedInBackground: (environment) => resolve(String(environment.pairingRevision))
+      }).then((outcome) => {
+        // Answered while the probe is still held: the kept pairing, transport already redialing.
+        expect(outcome.reusedPairing).toBe(true)
+        expect(invalidateTransport).toHaveBeenCalledTimes(1)
+        release()
+      })
+    })
+    expect(await repaired).not.toBe(String(before.pairingRevision))
+    expect(invalidateTransport).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not let a stale background re-pair overwrite a newer resume', async () => {
+    const environmentId = provision()
+    rmSync(serverDataPath, { recursive: true, force: true })
+    serverDataPath = mkdtempSync(join(tmpdir(), 'orca-resume-server-'))
+    let releaseFirst!: () => void
+    const firstGate = new Promise<void>((resolve) => (releaseFirst = resolve))
+    const auth = serverAuth(serverDataPath)
+    const repairedA = vi.fn()
+    const firstProbeSettled = Promise.withResolvers<void>()
+    // Resume A: its probe is held, so its re-pair would land late.
+    await applyResumedRuntimePairing({
+      userDataPath: desktopDataPath,
+      environmentId,
+      pairingCode: bootVm(serverDataPath, 'wss://vm-a.example/runtime', unpaddedHostKey),
+      invalidateTransport: vi.fn(),
+      probeSavedPairing: async (connection) => {
+        await firstGate
+        try {
+          return await auth(connection)
+        } finally {
+          firstProbeSettled.resolve()
+        }
+      },
+      confirmInBackground: true,
+      onRepairedInBackground: repairedA
+    })
+    // Resume B lands first and re-pairs synchronously (probe answers at once).
+    const outcomeB = await applyResumedRuntimePairing({
+      userDataPath: desktopDataPath,
+      environmentId,
+      pairingCode: bootVm(serverDataPath, 'wss://vm-b.example/runtime', unpaddedHostKey),
+      invalidateTransport: vi.fn(),
+      probeSavedPairing: auth
+    })
+    const afterB = resolveEnvironmentPairingOffer(desktopDataPath, environmentId)
+    releaseFirst()
+    await firstProbeSettled.promise
+    // Let A's confirmation chain (catch → guarded repair → then) run to the end.
+    for (let tick = 0; tick < 10; tick++) {
+      await Promise.resolve()
+    }
+    expect(repairedA).not.toHaveBeenCalled()
+    expect(resolveEnvironmentPairingOffer(desktopDataPath, environmentId)).toEqual(afterB)
+    expect(outcomeB.environment.id).toBe(environmentId)
   })
 
   it('keeps the saved pairing when the server cannot be reached to check it', async () => {

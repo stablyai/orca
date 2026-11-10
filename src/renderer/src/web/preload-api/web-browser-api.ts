@@ -77,6 +77,8 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
     onGrabModeToggle: () => noopUnsubscribe,
     onGrabActionShortcut: () => noopUnsubscribe,
     onGuestEscape: () => noopUnsubscribe,
+    onRemoteDesktopState: () => noopUnsubscribe,
+    onRemoteDesktopRelease: () => noopUnsubscribe,
     sessionListProfiles: () => Promise.resolve([]),
     onSessionProfilesChanged: () => noopUnsubscribe,
     // Web clients render remote workspaces through the server; no local SSH routing exists.

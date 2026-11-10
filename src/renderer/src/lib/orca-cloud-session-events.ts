@@ -6,6 +6,7 @@ import {
 } from '@/lib/agent-session/resume/interrupted-turn-continue'
 import { createElement } from 'react'
 import { toast } from 'sonner'
+import { noteCloudRolloverState } from '@/lib/orca-cloud/orca-cloud-rollover-state'
 import { CloudStateDot } from '@/components/orca-cloud/CloudStateDot'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -59,6 +60,7 @@ export function installOrcaCloudSessionEvents(): () => void {
     api.onCloudSessionState?.(({ workspaceId, state }) => {
       if (workspaceId) {
         noteOrcaCloudRolloverState(workspaceId, displayName(workspaceId, null), state)
+        noteCloudRolloverState(workspaceId, state)
         // A rollover restarts the host under any working agent: carry its turn on afterwards.
         if (state === 'restarting') {
           armInterruptedTurnsForHostRestart(workspaceId)
@@ -90,7 +92,7 @@ export function installOrcaCloudSessionEvents(): () => void {
   }
 }
 
-/** "See plans" on the create failure when the account has no plan with cloud hours. */
+/** "See plans" on the create failure when the team has no plan with sandbox hours. */
 export function showOrcaCloudPlanUpsell(message: string): void {
   toast.error(message, {
     action: {
@@ -100,7 +102,7 @@ export function showOrcaCloudPlanUpsell(message: string): void {
   })
 }
 
-/** "<name> slept after {{n}} minutes idle · Wake" (n = ORCA_CLOUD_IDLE_SLEEP_MINUTES, via the event): the quiet receipt for an automatic sleep. */
+/** "<name> slept after N minutes idle · Wake" (N from the control plane, via the event): the quiet receipt for an automatic sleep. */
 export function showIdleSleepNotice(
   workspaceId: string,
   name: string,
@@ -114,7 +116,8 @@ export function showIdleSleepNotice(
           '{{name}} slept after {{count}} minutes idle',
           {
             name,
-            count: minutes
+            count: minutes,
+            defaultValue_one: '{{name}} slept after {{count}} minute idle'
           }
         )
       : translate('orcaCloudWorkspace.idleSleptNoTime', '{{name}} went to sleep while idle', {

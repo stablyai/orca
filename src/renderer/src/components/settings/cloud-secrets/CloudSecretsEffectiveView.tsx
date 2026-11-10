@@ -1,4 +1,4 @@
-import { KeyRound } from 'lucide-react'
+import { KeyRound, Layers } from 'lucide-react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type {
   CloudSecretScope,
@@ -7,6 +7,7 @@ import type {
 import { Badge } from '../../ui/badge'
 import { InlineError } from '../../ui/inline-error'
 import { Skeleton } from '../../ui/skeleton'
+import { CloudApiEmptyState } from '../cloud-api/cloud-api-parts'
 import {
   cloudSecretKindLabel,
   cloudSecretScopeLabel,
@@ -92,16 +93,15 @@ export function CloudSecretsEffectiveView({
     <div className="space-y-3">
       <CloudSecretsPrecedence precedence={precedence} />
       {secrets.length === 0 ? (
-        <div className="rounded-md border border-dashed border-border/60 px-4 py-5 text-center">
-          <p className="text-sm font-medium">
-            {t('cloudSecrets.effective.emptyTitle', 'Nothing is injected yet')}
-          </p>
-          <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">
-            {t(
+        <div className="rounded-md border border-border/60">
+          <CloudApiEmptyState
+            icon={Layers}
+            title={t('cloudSecrets.effective.emptyTitle', 'Nothing is injected yet')}
+            description={t(
               'cloudSecrets.effective.emptyDetail',
               'Secrets you add in any scope show up here with the scope that wins.'
             )}
-          </p>
+          />
         </div>
       ) : (
         <div className="overflow-hidden rounded-md border border-border/60">

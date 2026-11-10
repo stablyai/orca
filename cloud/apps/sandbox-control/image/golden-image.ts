@@ -15,6 +15,8 @@ export const VM_SCRIPTS = [
   'orca-sshd',
   'orca-ssh-keys',
   'orca-desktop-start',
+  'orca-desktop-proxy',
+  'orca-desktop-page.js',
   'orca-sandbox-grant',
   'orca-sandbox-revoke',
   'orca-sandbox-members',

@@ -77,7 +77,7 @@ export function VmBuildStepRow({
           </span>
         ) : null}
         {step.elapsedMs !== null && step.state !== 'pending' ? (
-          <span className="w-12 text-right text-xs tabular-nums text-muted-foreground">
+          <span className="min-w-12 shrink-0 whitespace-nowrap text-right text-xs tabular-nums text-muted-foreground">
             {formatElapsedTime(step.elapsedMs)}
           </span>
         ) : null}

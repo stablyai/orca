@@ -1476,7 +1476,9 @@
       "duplicates_other": "{{count}} duplicates ignored",
       "save": "Save {{count}} secrets",
       "save_one": "Save {{count}} secret",
-      "save_other": "Save {{count}} secrets"
+      "save_other": "Save {{count}} secrets",
+      "unreadable_one": "{{count}} unreadable line skipped",
+      "unreadable_other": "{{count}} unreadable lines skipped"
     },
     "value": {
       "lines": "Multi-line value · {{count}} lines",
@@ -2040,6 +2042,14 @@
       "workers_one": "{{count}} worker",
       "workers_other": "{{count}} workers"
     },
+    "runtimeDownload": {
+      "fileCount_one": "{{files}} file",
+      "fileCount_other": "{{files}} files",
+      "folderFilesProgress_one": "{{files}} file",
+      "folderFilesProgress_other": "{{files}} files",
+      "skipped_one": "{{count}} item couldn’t be read and was left out.",
+      "skipped_other": "{{count}} items couldn’t be read and were left out."
+    },
     "tab": {
       "bar": {
         "bulkClose": {
@@ -2144,11 +2154,11 @@
     "errors": {
       "cleanupInterrupted": "Cleanup was interrupted. Retry cleanup to continue.",
       "cleanupStopped": "Cleanup stopped by user.",
-      "cloudConcurrencyLimit": "You already have as many Orca Cloud workspaces running as your plan allows. Sleep or delete one, then try again.",
+      "cloudConcurrencyLimit": "You’re at your team’s limit of running sandboxes. Put one to sleep or delete it, then try again.",
       "cloudDeleteNotConfirmed": "Orca Cloud couldn’t confirm this sandbox was deleted, so it may still be running. Sign in with the Orca account that started it, then try again.",
       "cloudGithubNotConnected": "Connect GitHub to your Orca account so Orca Cloud can clone this repository.",
       "cloudNoGithubRemote": "Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub, then try again.",
-      "cloudPlanRequired": "Orca Cloud workspaces need a plan with cloud hours. Open Plan & billing to choose one.",
+      "cloudPlanRequired": "Orca Cloud needs a Team plan. Open Plan & billing to choose one.",
       "cloudSignInRequired": "Sign in to Orca to use Orca Cloud workspaces.",
       "cloudUnavailable": "Orca Cloud is unavailable right now. Try again in a moment.",
       "defaultStartRefUnresolved": "Could not resolve a default provisioned-root start ref.",
@@ -2193,7 +2203,25 @@
   "menu": {
     "quitApp": "Quit {{appName}}"
   },
+  "orcaCloudMove": {
+    "confirm": {
+      "changesCount_one": "{{count}} uncommitted change, plus untracked files",
+      "changesCount_other": "{{count}} uncommitted changes, plus untracked files",
+      "chatsCount_one": "{{count}} agent chat, so the agent can resume here",
+      "chatsCount_other": "{{count}} agent chats, so agents can resume here",
+      "stopsAgents_one": "Stops {{count}} running agent",
+      "stopsAgents_other": "Stops {{count}} running agents"
+    },
+    "done": {
+      "chats_one": "{{count}} agent chat",
+      "chats_other": "{{count}} agent chats",
+      "untracked_one": "{{count}} untracked file",
+      "untracked_other": "{{count}} untracked files"
+    }
+  },
   "orcaCloudWorkspace": {
+    "idleSleptMinutes_one": "{{name}} slept after {{count}} minute idle",
+    "idleSleptMinutes_other": "{{name}} slept after {{count}} minutes idle",
     "overlay": {
       "pendingKeys_one": "{{count}} key waiting · goes to the terminal when it’s up",
       "pendingKeys_other": "{{count}} keys waiting · go to the terminal when it’s up"

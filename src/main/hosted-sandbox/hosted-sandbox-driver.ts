@@ -34,6 +34,7 @@ export const HOSTED_SANDBOX_CAPABILITIES: HostedEnvironmentCapabilities = Object
   maxSessionMs: 24 * 60 * 60_000,
   fsPersistOnStop: true,
   egressInjection: true,
+  // Fallback only: the control plane's status (`idleSleepMinutes`) wins once read.
   idleStopMs: ORCA_CLOUD_IDLE_SLEEP_MINUTES * 60_000
 })
 

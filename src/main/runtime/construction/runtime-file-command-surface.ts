@@ -29,6 +29,7 @@ export type RuntimeFileCommandSurface = Pick<
     | 'readFileExplorerPreview'
     | 'readChatImagePreview'
     | 'readFileExplorerChunk'
+    | 'resolveFileExplorerArchivePath'
     | 'readDocPreviewFile'
     | 'readDocPreviewChunk'
   > &
@@ -91,6 +92,7 @@ export function installRuntimeFileCommandSurface(
     readFileExplorerPreview: fileReads.readFileExplorerPreview.bind(fileReads),
     readChatImagePreview: fileReads.readChatImagePreview.bind(fileReads),
     readFileExplorerChunk: fileReads.readFileExplorerChunk.bind(fileReads),
+    resolveFileExplorerArchivePath: fileReads.resolveFileExplorerArchivePath.bind(fileReads),
     readDocPreviewFile: fileReads.readDocPreviewFile.bind(fileReads),
     readDocPreviewChunk: fileReads.readDocPreviewChunk.bind(fileReads),
     writeFileExplorerFile: fileMutations.writeFileExplorerFile.bind(fileMutations),

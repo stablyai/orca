@@ -33,6 +33,8 @@ export function setupGuestShortcutForwarding(args: {
   resolveWorkspaceId?: (browserTabId: string) => string | null
   /** False for plugin frames (see GuestShortcutForwardContext). */
   browserPage?: boolean
+  /** True while the page owns every key (a focused remote desktop): Orca forwards nothing. */
+  isKeyboardCaptured?: () => boolean
 }): () => void {
   const {
     browserTabId,
@@ -43,7 +45,8 @@ export function setupGuestShortcutForwarding(args: {
     getKeybindings,
     resolveWorktreeId,
     resolveWorkspaceId,
-    browserPage
+    browserPage,
+    isKeyboardCaptured
   } = args
   let ctrlTabSwitching = false
   const doubleTapDetector = new ModifierDoubleTapDetector()
@@ -72,7 +75,7 @@ export function setupGuestShortcutForwarding(args: {
 
   const handler = (event: Electron.Event, input: Electron.Input): void => {
     // Agent-injected keys must not trigger Orca actions (#20595).
-    if (isAgentInjectingInput(guest)) {
+    if (isAgentInjectingInput(guest) || isKeyboardCaptured?.()) {
       return
     }
     const keybindings = getKeybindings?.()

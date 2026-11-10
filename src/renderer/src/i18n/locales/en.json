@@ -2190,13 +2190,6 @@
         "busyInUseHere": "localhost:{{value0}} in use on this computer",
         "listenFailedRetry": "Couldn't listen on this computer. Retry or pick another port"
       },
-      "orcaCloudTransfer": {
-        "waking": "Waking the workspace…",
-        "done": "Moved to this computer",
-        "leftovers": "Some changes did not apply cleanly; they were saved to {{dir}}.",
-        "summary": "Branch {{branch}} with your uncommitted changes and agent chats ({{count}}). The cloud workspace is unchanged.",
-        "failed": "Could not move the workspace"
-      },
       "orcaCloud": {
         "workspaceActions": {
           "unavailable": "Orca Cloud is unavailable."
@@ -4102,12 +4095,13 @@
             "outOfHoursBodyMember": "Your team has used this month’s sandbox hours. Ask an owner or admin to add hours. Nothing was created, and you weren’t charged.",
             "spendCapReachedTitle": "Spend cap reached",
             "spendCapReachedBody": "Your team has reached this month’s spend cap. Raise it to keep starting sandboxes. Nothing was created, and you weren’t charged.",
-            "spendCapReachedBodyMember": "Your team has reached this month’s spend cap. Ask an owner or admin to add hours. Nothing was created, and you weren’t charged.",
             "paymentFailedTitle": "Payment failed",
             "paymentFailedBody": "New sandboxes can’t start until the payment goes through. Nothing was created, and you weren’t charged.",
             "paymentFailedBodyMember": "New sandboxes can’t start until the payment goes through. Ask an owner or admin to update the payment method. Nothing was created, and you weren’t charged.",
             "teamLimitTitle": "You’re at your team’s limit of running sandboxes",
             "limitBody": "Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
+            "teamLimitBody": "Your team can run {{value0}} sandboxes at once ({{value1}} per seat). Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
+            "memberLimitBody2": "You can run {{value0}} sandboxes at once. Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
             "memberLimitTitle": "You’re at your limit of running sandboxes",
             "githubNotConnectedTitle": "GitHub isn’t connected for {{repo}}",
             "githubNotConnectedBody": "Orca Cloud clones your code from GitHub and needs access to this repository first. Connect GitHub, then try again. Nothing was created, and you weren’t charged.",
@@ -4118,7 +4112,8 @@
             "snapshotBody3": "The sandbox starts from a saved copy of your environment, and that copy couldn’t be found. Nothing was created, and you weren’t charged. Try again, or contact support if it keeps happening.",
             "connectGitHubFailed": "Couldn’t open GitHub. Try again in a moment.",
             "noGithubRemoteBody2": "Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub, then try again. Nothing was created, and you weren’t charged.",
-            "howToPushToGitHub": "How to push to GitHub"
+            "howToPushToGitHub": "How to push to GitHub",
+            "spendCapReachedBodyMember2": "Your team has reached this month’s spend cap. Ask an owner or admin to raise the spend cap. Nothing was created, and you weren’t charged."
           },
           "VmBuildLog": {
             "jumpToError": "Jump to first error",
@@ -4137,7 +4132,6 @@
             "connecting": "Connecting to the sandbox…",
             "resuming": "Waking the sandbox…",
             "suspending": "Putting the sandbox to sleep…",
-            "rollingOver": "Starting a fresh session…",
             "destroying": "Deleting the sandbox…",
             "denyNoPlan": "Your account has no active Team plan.",
             "denySpendCap": "This month’s spend cap is reached.",
@@ -4155,7 +4149,8 @@
             "denyConcurrency2": "You’re at your team’s limit of running sandboxes.",
             "denyMemberConcurrency2": "You’re at your limit of running sandboxes.",
             "denyMachineSize2": "This sandbox size isn’t part of your plan.",
-            "refusedProvider2": "Orca Cloud is unavailable right now."
+            "refusedProvider2": "Orca Cloud is unavailable right now.",
+            "rollingOver2": "Restarting the sandbox…"
           },
           "environmentCheckCopy": {
             "gitMissing": "git isn’t installed.",
@@ -14650,7 +14645,10 @@
             "clipboardStagingUnavailable": "Could not copy the file because Orca's temporary storage is unavailable",
             "revealInFinder": "Reveal in Finder",
             "openContainingFolder": "Open Containing Folder",
-            "revealInFileExplorer": "Reveal in File Explorer"
+            "revealInFileExplorer": "Reveal in File Explorer",
+            "downloadFolderZip": "Download as ZIP…",
+            "openLocally": "Open on This Computer",
+            "downloadFileEllipsis": "Download…"
           },
           "FileExplorerToolbar": {
             "d238264654": "Show Git Ignored Files",
@@ -20519,7 +20517,8 @@
           "vpRunningBody2": "Sandboxes keep working while you are away and report back when they finish.",
           "leftResets": "{{value0}} hours left · resets {{value1}}",
           "retry": "Try again",
-          "featureSleep2": "Sleeps after {{value0}} minutes idle",
+          "featureSleep3": "Sleeps after {{value0}} minutes idle, so quiet time is free",
+          "featureReady": "Ready in seconds, nothing to set up or host",
           "billedYearly": "Billed yearly",
           "waiting": "Waiting for checkout…",
           "fixPaymentAbove": "Update your payment method above to keep your plan active.",
@@ -20529,9 +20528,9 @@
           "savePercent": "Save {{value0}}%",
           "seatsPeriod": "{{value0}} · {{value1}}",
           "was": "Was",
-          "featureConcurrency2": "{{value0}} sandboxes running at once per seat",
           "featureHours4": "{{value0}} sandbox hours per seat each month, pooled across your team",
-          "featureLarge3": "Standard (4 vCPU · 8 GB) sandboxes; Large (8 vCPU · 16 GB) uses sandbox hours at {{value0}}× the rate",
+          "featureStandard": "Standard (4 vCPU · 8 GB)",
+          "featureLarge4": "Large (8 vCPU · 16 GB) uses sandbox hours at {{value0}}× the rate",
           "featureOverage3": "Optional overage at {{value0}}/hour ({{value1}}/hour on Large), capped at a monthly spend cap you set ({{value2}} by default)",
           "footTerms4": "Prices in USD, before tax. Overage is off until an owner or admin turns it on. Cancel anytime; your plan runs to the end of the billing period.",
           "lockedBody2": "Only an owner or admin of your team can choose a plan. Ask one of them to open Plan & billing in Orca.",
@@ -20675,6 +20674,8 @@
         "emptyTeamTitle": "No team workspaces yet",
         "environmentName": "{{value0}} (cloud)",
         "errorConcurrencyLimit": "You're at your team's limit of running sandboxes. Put one to sleep or delete it, then try again.",
+        "errorConcurrencyLimitCount2": "Your team can run {{value0}} sandboxes at once ({{value1}} per seat). Put one to sleep or delete it, then try again.",
+        "errorMemberConcurrencyLimit": "You're at your limit of running sandboxes. Put one to sleep or delete it, then try again.",
         "errorConflict": "This workspace is still starting or going to sleep. Nothing was changed. Try again in a moment.",
         "errorConflictInline": "This workspace is still starting or going to sleep. Nothing was changed.",
         "errorEntitlementDenied": "Your team's plan can't start this workspace right now. Your files are safe. Ask an owner or admin to check the plan.",
@@ -20905,6 +20906,13 @@
       "webPairingRefused": {
         "title": "Orca refused this browser",
         "retry": "Try again"
+      }
+    },
+    "app": {
+      "shell": {
+        "TitlebarMainStrip": {
+          "sidebarAfterBuild": "Available when the workspace is ready"
+        }
       }
     }
   },
@@ -22872,7 +22880,7 @@
       "retry": "Try again",
       "notCloudTitle": "Remote desktop is only available in cloud workspaces.",
       "notCloudDetail": "Create a cloud workspace to run apps with a screen.",
-      "asleepTitle": "This workspace is asleep.",
+      "asleepTitle": "This sandbox is asleep.",
       "asleepDetail": "Wake it, then open the remote desktop again. Your files are safe.",
       "notInstalledTitle": "This sandbox doesn’t have a remote desktop yet.",
       "notInstalledDetail": "It was created before remote desktop was available. New cloud workspaces include it. Your files are safe.",
@@ -22882,12 +22890,25 @@
       "forwardFailedDetail": "The desktop is running in the sandbox. Your files are safe.",
       "unavailableTitle": "Couldn’t start the remote desktop.",
       "unavailableDetail": "Orca Cloud didn’t respond in time. Your files are safe.",
-      "wake": "Wake workspace",
+      "wake": "Wake sandbox",
       "signIn": "Sign in",
       "createWorkspace": "Create workspace",
       "slowDetail": "The first start in a sandbox can take up to a minute.",
       "dismiss": "Dismiss",
-      "openMenuItem": "Open remote desktop"
+      "openMenuItem": "Open remote desktop",
+      "startingTitle": "The sandbox is still starting or waking.",
+      "archivedTitle": "This sandbox is archived.",
+      "archivedDetail": "Unarchive the workspace to use the remote desktop again. Your files are safe.",
+      "startingDetail": "Try again in a moment. Your files are safe.",
+      "keyboardCaptured": "Keys go to the remote desktop. Press <kbd>{{chord}}</kbd> to use Orca shortcuts.",
+      "keyboardReleased": "Orca shortcuts are back. Click the desktop to type in it.",
+      "pageAsleep": "This sandbox is asleep. Wake it in Orca, then reconnect.",
+      "pageArchived": "This sandbox is archived. Unarchive the workspace in Orca, then reconnect.",
+      "pageStarting": "The sandbox is starting or waking. Reconnect in a moment.",
+      "pageSignedOut": "You’re signed out of Orca Cloud. Sign in, then reconnect.",
+      "pageDisconnected": "The remote desktop disconnected. Your files are safe.",
+      "reconnect": "Reconnect",
+      "beta": "Beta"
     },
     "orcaCloud": {
       "offline": {
@@ -22911,7 +22932,7 @@
         "composerPlaceholder": "Message the agent",
         "composerLabel": "Message to queue",
         "sendAndWake": "Send and wake",
-        "region": "Sleeping workspace (read-only)",
+        "region": "Asleep workspace (read-only)",
         "wake": "Wake",
         "emptyBody": "Orca keeps a copy of chats, terminals and changes once you have used this workspace while it was awake.",
         "tabChat": "Chat",
@@ -22922,6 +22943,49 @@
         "terminalOutput": "Saved output of {{title}}",
         "noGit": "No source control state was saved."
       }
+    },
+    "runtimeDownload": {
+      "collectingFiles": "Collecting files…",
+      "starting": "Starting…",
+      "amountOfTotal": "{{done}} of {{total}}",
+      "amountAndRate": "{{amount}} · {{rate}}/s",
+      "openFailedTitle": "Couldn’t open {{name}}",
+      "failedTitle": "Couldn’t download {{name}}",
+      "tooLargeToOpen": "Files over 1 GB can’t be opened directly. Download it instead.",
+      "sandboxUpdateRequired": "This sandbox runs an older version of Orca. New cloud workspaces include downloads. Your files are safe.",
+      "hostUpdateRequired": "The remote host runs an older version of Orca. Update Orca there, then try again.",
+      "busy": "Too many downloads are running. Wait for one to finish, then try again.",
+      "changed": "It changed while Orca was reading it. Try again.",
+      "sandboxDisconnected": "The connection to the sandbox dropped. Nothing was saved on this computer.",
+      "hostDisconnected": "The connection to the remote host dropped. Nothing was saved on this computer.",
+      "transferFailed": "Something went wrong while copying it. Nothing was saved on this computer.",
+      "dismiss": "Dismiss",
+      "opening": "Opening {{name}}",
+      "downloading": "Downloading {{name}}",
+      "progressLabel": "Download progress",
+      "cancel": "Cancel",
+      "skipped_one": "{{count}} item couldn’t be read and was left out.",
+      "skipped_other": "{{count}} items couldn’t be read and were left out.",
+      "downloaded": "Downloaded {{name}}",
+      "open": "Open",
+      "retry": "Try again",
+      "downloadInstead": "Download",
+      "fileCount_one": "{{files}} file",
+      "fileCount_other": "{{files}} files",
+      "amountRateEta": "{{amount}} · {{rate}}/s · {{eta}} left",
+      "folderFilesProgress_one": "{{files}} file",
+      "folderFilesProgress_other": "{{files}} files",
+      "zipSize": "{{size}} zip",
+      "defaultDirsNotIncluded": "node_modules and .git weren’t included.",
+      "refresh": "Refresh",
+      "folderTooLarge": "This folder is over 2 GB, the most Orca can download at once. Download the folders inside it one at a time. Nothing was saved on this computer.",
+      "fileGrew": "The file grew while Orca was copying it. Nothing was saved on this computer.",
+      "folderTooManyItems": "This folder has more than 65,000 items, the most Orca can download at once. Download the folders inside it one at a time. Nothing was saved on this computer.",
+      "openRefused": "Orca doesn’t open files that can run programs, like scripts, installers and apps. Download it to check it first. Nothing was saved on this computer.",
+      "notFoundInSandboxNothingSaved": "It was moved or deleted in the sandbox. Nothing was saved on this computer.",
+      "notFoundOnHostNothingSaved": "It was moved or deleted on the remote host. Nothing was saved on this computer.",
+      "savedName": "Saved {{name}}",
+      "noAppForType": "No app on this computer opens this file type. Reveal it to choose one."
     }
   },
   "dashboardPopout": {
@@ -25672,7 +25736,7 @@
       "cleanupStopped": "Cleanup stopped by user.",
       "cleanupInterrupted": "Cleanup was interrupted. Retry cleanup to continue.",
       "sshTargetRemoveFailed": "Failed to remove the hidden SSH target.",
-      "cloudPlanRequired": "Orca Cloud workspaces need a plan with cloud hours. Open Plan & billing to choose one.",
+      "cloudPlanRequired": "Orca Cloud needs a Team plan. Open Plan & billing to choose one.",
       "cloudSignInRequired": "Sign in to Orca to use Orca Cloud workspaces.",
       "cloudDeleteNotConfirmed": "Orca Cloud couldn’t confirm this sandbox was deleted, so it may still be running. Sign in with the Orca account that started it, then try again.",
       "cloudUnavailable": "Orca Cloud is unavailable right now. Try again in a moment.",
@@ -25686,7 +25750,7 @@
       "resumeExitedWithoutCode": "Resume exited without an exit code.",
       "recipeTimedOut": "The recipe {{mode}} step did not finish within {{timeout}}, so Orca stopped it. Check the recipe output, or raise timeoutSeconds in orca.yaml if it needs longer.",
       "provisionInterrupted": "Orca stopped while this VM was being created. Destroy it to release any provider resources.",
-      "cloudConcurrencyLimit": "You already have as many Orca Cloud workspaces running as your plan allows. Sleep or delete one, then try again."
+      "cloudConcurrencyLimit": "You’re at your team’s limit of running sandboxes. Put one to sleep or delete it, then try again."
     }
   },
   "installDirAcl": {
@@ -26264,11 +26328,17 @@
       "hours": "{{value}} h"
     },
     "sandboxHoursValue": "{{value}} sandbox hours",
-    "idleSleptMinutes": "{{name}} slept after {{count}} minutes idle",
     "idleSleptNoTime": "{{name}} went to sleep while idle",
     "idleSleptDetail": "Files and chats are saved. It uses no sandbox hours until you open it.",
     "typedWhileWaking": "What you typed is on the prompt. Press Enter to run it.",
-    "typingNotSent": "Your typing wasn’t sent."
+    "typingNotSent": "Your typing wasn’t sent.",
+    "idleSleptMinutes_one": "{{name}} slept after {{count}} minute idle",
+    "idleSleptMinutes_other": "{{name}} slept after {{count}} minutes idle",
+    "moveToComputer": "Move to this computer",
+    "moveHere": "Move here",
+    "openLocal": "Open local workspace",
+    "copiedOn": "Moved to this computer · {{date}}",
+    "moveAgain": "Move again"
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",
@@ -26339,7 +26409,11 @@
     "change": "Change",
     "signInQueued": "Agent sign-in will open when the sandbox is ready",
     "subtitleBuild": "Give Claude Code or Codex access in Orca Cloud.",
-    "useKey": "Use a key"
+    "useKey": "Use a key",
+    "discardQuestion": "Discard the key you typed?",
+    "discard": "Discard",
+    "keepEditing": "Keep editing",
+    "signInHandedOff": "Continues in the Agent sign-in row below."
   },
   "cloudSecrets": {
     "editor": {
@@ -26406,7 +26480,8 @@
       "noReposDetail": "Repository secrets follow a GitHub repository. Add a project with a GitHub remote to set them.",
       "description": "Cloud workspaces of this repository get these, for whoever starts them.",
       "emptyTitle": "No secrets for this repository",
-      "emptyDetail": "Add the variables this project needs to run, such as DATABASE_URL, or paste its .env file."
+      "emptyDetail": "Add the variables this project needs to run, such as DATABASE_URL, or paste its .env file.",
+      "addProject": "Add project"
     },
     "readOnly": {
       "shared": "Ask an owner or admin to change shared secrets.",
@@ -26446,7 +26521,14 @@
       "duplicates_one": "{{count}} duplicate ignored",
       "duplicates_other": "{{count}} duplicates ignored",
       "save_one": "Save {{count}} secret",
-      "save_other": "Save {{count}} secrets"
+      "save_other": "Save {{count}} secrets",
+      "unreadable_one": "{{count}} unreadable line skipped",
+      "unreadable_other": "{{count}} unreadable lines skipped",
+      "pasteOnly": "Paste only: typing here does nothing. Edit names and values in the rows below.",
+      "lineName": "line {{line}}",
+      "skippedLine": "Line {{line}} · skipped",
+      "renamed": "Renamed from {{name}}",
+      "normalized": "Spaces and dashes become underscores"
     },
     "value": {
       "hide": "Hide value",
@@ -26534,5 +26616,89 @@
     "syncingShort": "Syncing…",
     "title": "MCP servers",
     "toggleServer": "Sync {{name}} ({{agent}}) to cloud workspaces"
+  },
+  "orcaCloudMove": {
+    "step": {
+      "waking": "Waking",
+      "packing": "Packing",
+      "downloading": "Downloading",
+      "creating": "Creating workspace",
+      "applying": "Applying changes"
+    },
+    "confirm": {
+      "intro": "This creates a local workspace from {{name}}:",
+      "branch": "The branch and its commits",
+      "changes": "Uncommitted changes and untracked files",
+      "chats": "Claude and Codex chats, so agents can resume here",
+      "branchTaken": "{{branch}} is already checked out on this computer",
+      "branchTakenDetail": "It will be {{newName}}. Chats already on this computer are kept.",
+      "action": "Move to this computer",
+      "branchNamed": "Branch {{branch}} and its commits",
+      "changesCount_one": "{{count}} uncommitted change, plus untracked files",
+      "changesCount_other": "{{count}} uncommitted changes, plus untracked files",
+      "chatsCount_one": "{{count}} agent chat, so the agent can resume here",
+      "chatsCount_other": "{{count}} agent chats, so agents can resume here",
+      "archiveAfter": "Archive the cloud workspace afterwards",
+      "stopsAgents_one": "Stops {{count}} running agent",
+      "stopsAgents_other": "Stops {{count}} running agents"
+    },
+    "cancel": "Cancel",
+    "steps": "Steps",
+    "bytesOf": "{{done}} of {{total}}",
+    "elapsed": "{{elapsed}} elapsed",
+    "failedDetail": "Your files are safe in the cloud workspace. Nothing changed on this computer.",
+    "retry": "Try again",
+    "close": "Close",
+    "done": {
+      "branch": "Branch {{branch}}",
+      "branchRenamed": "Branch {{branch}} (renamed from {{cloud}})",
+      "changes": "Uncommitted changes",
+      "untracked_one": "{{count}} untracked file",
+      "untracked_other": "{{count}} untracked files",
+      "chats_one": "{{count}} agent chat",
+      "chats_other": "{{count}} agent chats",
+      "archive": "Archive cloud workspace",
+      "changesPartial": "Uncommitted changes, partly",
+      "archived": "The cloud workspace is archived. Unarchive it any time.",
+      "stillRunning": "The cloud workspace is still running and using sandbox hours. Archive it to stop that; you can unarchive later.",
+      "open": "Open workspace"
+    },
+    "partialDetail": "Some changes didn’t apply cleanly. They were saved here, so nothing is lost:",
+    "title": {
+      "running": "Moving {{name}} to this computer",
+      "done": "Moved to this computer",
+      "failed": "Couldn’t move {{name}}",
+      "confirm": "Move to this computer"
+    },
+    "description": "Copy this cloud workspace to a local workspace.",
+    "hide": "Hide",
+    "failedLocalDetail": "The local workspace was created, but the changes didn’t apply. Your files are safe in the cloud workspace.",
+    "show": "Show",
+    "stepState": {
+      "active": "in progress",
+      "done": "done",
+      "pending": "not started"
+    },
+    "background": "You can keep working; this finishes in the background.",
+    "cause": {
+      "waking": "The sandbox didn’t wake up.",
+      "packing": "The workspace couldn’t be packed in the sandbox.",
+      "downloading": "The download from the sandbox didn’t finish.",
+      "creating": "The local workspace couldn’t be created.",
+      "applying": "The changes couldn’t be applied to the local workspace."
+    },
+    "notice": {
+      "done": "{{name}} is on this computer",
+      "lateDone": "{{name}} finished moving to this computer"
+    },
+    "showDetails": "Show details",
+    "timeout": {
+      "waking": "Waking the sandbox is taking too long, so Orca stopped waiting. Your files are safe; try again.",
+      "packing": "Packing the workspace is taking too long, so Orca stopped waiting. Your files are safe; try again.",
+      "downloading": "The download is taking too long, so Orca stopped waiting. Your files are safe; try again.",
+      "creating": "Creating the local workspace is taking too long, so Orca stopped waiting.",
+      "applying": "Applying the changes is taking too long, so Orca stopped waiting."
+    },
+    "openFolder": "Open folder"
   }
 }

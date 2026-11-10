@@ -101,9 +101,19 @@ describe('golden image build', () => {
   it('ships VM scripts that parse', () => {
     for (const script of ['provision-golden.sh', ...VM_SCRIPTS.map((name) => `vm/${name}`)]) {
       const path = fileURLToPath(new URL(`./${script}`, import.meta.url).href)
-      // Node entry points (shebang `env node`) parse with node, the rest with bash.
-      const isNode = readFileSync(path, 'utf8').startsWith('#!/usr/bin/env node')
-      expect(spawnSync(isNode ? process.execPath : 'bash', isNode ? ['--check', path] : ['-n', path]).status, script).toBe(0)
+      // Node entry points (shebang `env node`) and page modules (.js) parse with node, Python ones
+      // with python3 (when this machine has it), the rest with bash.
+      const source = readFileSync(path, 'utf8')
+      const isNode = source.startsWith('#!/usr/bin/env node')
+      if (script.endsWith('.js')) {
+        const check = spawnSync(process.execPath, ['--input-type=module', '--check'], { input: source })
+        expect(check.status, script).toBe(0)
+      } else if (source.startsWith('#!/usr/bin/env python3')) {
+        const check = spawnSync('python3', ['-c', 'import ast, sys; ast.parse(open(sys.argv[1]).read())', path])
+        expect(check.error ? 0 : check.status, script).toBe(0)
+      } else {
+        expect(spawnSync(isNode ? process.execPath : 'bash', isNode ? ['--check', path] : ['-n', path]).status, script).toBe(0)
+      }
     }
   })
 

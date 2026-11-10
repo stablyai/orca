@@ -12,6 +12,7 @@ import { Skeleton } from '../../ui/skeleton'
 import { Button } from '../../ui/button'
 import { cloudSecretKindLabel, cloudSecretsErrorCopy } from './cloud-secrets-copy'
 import { CloudSecretEditor, type CloudSecretEditorTarget } from './CloudSecretEditor'
+import { CloudApiEmptyState } from '../cloud-api/cloud-api-parts'
 import { CloudSecretsPasteEnv } from './CloudSecretsPasteEnv'
 import type { CloudSecretListModel } from './use-cloud-secrets'
 
@@ -316,12 +317,13 @@ export function CloudSecretList({
           : ''}
       </p>
       {secrets.length === 0 && mode.kind === 'idle' ? (
-        <div className="rounded-md border border-dashed border-border/60 px-4 py-5 text-center">
-          <p className="text-sm font-medium">{emptyTitle}</p>
-          <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">
-            {emptyDetail}
-          </p>
-          {emptyAction ? <div className="mt-3 flex justify-center">{emptyAction}</div> : null}
+        <div className="rounded-md border border-border/60">
+          <CloudApiEmptyState
+            icon={KeyRound}
+            title={emptyTitle}
+            description={emptyDetail}
+            action={emptyAction}
+          />
         </div>
       ) : secrets.length > 0 ? (
         <ul className="divide-y divide-border/60 rounded-md border border-border/60">

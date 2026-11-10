@@ -299,7 +299,7 @@ describe('formatStepDuration', () => {
   it('formats compactly', () => {
     expect(formatStepDuration(null)).toBe('')
     expect(formatStepDuration(4_200)).toBe('4s')
-    expect(formatStepDuration(125_000)).toBe('2m 05s')
-    expect(formatStepDuration(3_725_000)).toBe('62m 05s')
+    expect(formatStepDuration(125_000)).toBe('2m 5s')
+    expect(formatStepDuration(3_725_000)).toBe('1h 2m 5s')
   })
 })

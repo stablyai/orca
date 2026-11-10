@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Starts the on-demand remote desktop (idempotent) and prints one JSON line:
-# {"schemaVersion":1,"port":6080,"display":":1","path":"vnc.html","password":"<8 chars>"}
-# Xvnc (X server + VNC in one) listens on a unix socket only; websockify serves noVNC and bridges
-# WebSockets to that socket on 127.0.0.1 only. Nothing is reachable from outside the VM: the
-# desktop reaches it through Orca's port forward. The forward is a localhost port on the user's
-# computer, which any local process or web page can reach, so VNC auth with a per-boot random
-# password guards it (Xvnc blacklists repeated failures). Never started at boot.
+# Starts the on-demand remote desktop (idempotent) and mints one connection ticket. Prints one line:
+# {"schemaVersion":2,"port":6080,"display":":1","path":"vnc.html","ticket":"<43 chars>","expiresInMs":60000}
+# Xvnc (X server + VNC in one) listens on a 0600 unix socket only, with no VNC auth: only this uid
+# can open it. orca-desktop-proxy (websockify + a ticket gate) serves noVNC on 127.0.0.1 and
+# bridges WebSockets to that socket. Nothing is reachable from outside the VM: the desktop app
+# reaches it through Orca's port forward, a localhost port on the user's computer that any local
+# process or web page can reach, so each WebSocket needs a ticket from here: 32 random bytes,
+# single use, valid for 60 s, stored only as its sha256 (the file name; its content is the expiry).
+# The ticket goes to stdout only (the control plane hands it to the desktop app). Never started at boot.
 set -euo pipefail
 umask 077
 DESKTOP=/opt/orca/desktop
@@ -23,8 +25,13 @@ case "$PORT" in '' | *[!0-9]*) fail 'ORCA_DESKTOP_PORT must be a number' ;; esac
 case "$DISPLAY_NUM" in '' | *[!0-9]*) fail 'ORCA_DESKTOP_DISPLAY must be a number' ;; esac
 case "$GEOMETRY" in [0-9]*x[0-9]*) ;; *) fail 'ORCA_DESKTOP_GEOMETRY must look like 1280x800' ;; esac
 command -v Xvnc >/dev/null || fail 'not installed in this image (Xvnc missing)' 3
-command -v vncpasswd >/dev/null || fail 'not installed in this image (vncpasswd missing)' 3
 [ -s "$DESKTOP/novnc/vnc.html" ] || fail 'not installed in this image (noVNC missing)' 3
+PROXY="$(dirname "$(readlink -f "$0")")/orca-desktop-proxy"
+[ -x "$PROXY" ] || fail 'orca-desktop-proxy missing next to this script'
+TICKETS="$STATE/tickets"
+TICKET_TTL_S=60
+# Xvnc's mode: a previous version of this script ran it with VncAuth; restart it in this mode.
+MODE=ticket-v1
 
 mkdir -p "$STATE"
 exec 9>"$STATE/start.lock"
@@ -37,22 +44,47 @@ pid_of() { # never "0": kill 0 targets our own process group
   printf '%s' "$pid"
 }
 alive() { local pid; pid="$(pid_of "$1")" && kill -0 "$pid" 2>/dev/null; }
-ready_line() {
-  printf '{"schemaVersion":1,"port":%s,"display":":%s","path":"vnc.html","password":"%s"}\n' \
-    "$PORT" "$DISPLAY_NUM" "$(cat "$STATE/password")"
+mint_ticket() { # prints the ticket; stores only its sha256, with the expiry as content
+  local ticket now digest
+  mkdir -p "$TICKETS"
+  now="$(date +%s)"
+  # Expired or spent-but-unswept tickets; keep at most 16 live ones (oldest go first).
+  for file in "$TICKETS"/*; do
+    [ -f "$file" ] || continue
+    [ "$(cat "$file" 2>/dev/null || echo 0)" -ge "$now" ] 2>/dev/null || rm -f "$file"
+  done
+  # shellcheck disable=SC2012 # names are hex digests
+  ls -1t "$TICKETS" 2>/dev/null | tail -n +16 | while read -r old; do rm -f "$TICKETS/$old"; done
+  ticket="$(head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n')"
+  [ "${#ticket}" = 43 ] || fail 'could not generate a ticket'
+  digest="$(printf '%s' "$ticket" | sha256sum | cut -d' ' -f1)"
+  printf '%s' "$((now + TICKET_TTL_S))" >"$TICKETS/.$digest" && mv "$TICKETS/.$digest" "$TICKETS/$digest"
+  printf '%s' "$ticket"
 }
-listening() { # websockify answers HTTP on loopback
+ready_line() {
+  local ticket
+  ticket="$(mint_ticket)" || exit 1
+  printf '{"schemaVersion":2,"port":%s,"display":":%s","path":"vnc.html","ticket":"%s","expiresInMs":%s}\n' \
+    "$PORT" "$DISPLAY_NUM" "$ticket" "$((TICKET_TTL_S * 1000))"
+}
+listening() { # the proxy answers HTTP on loopback
   curl -fsS -o /dev/null --max-time 1 "http://127.0.0.1:$PORT/vnc.html" 2>/dev/null
 }
 
 # Pids from a previous boot (resume = reboot from disk) name dead or unrelated processes.
 boot_id="$(cat /proc/sys/kernel/random/boot_id)"
 if [ "$(cat "$STATE/boot-id" 2>/dev/null || true)" != "$boot_id" ]; then
-  rm -f "$STATE"/*.pid "$SOCKET" "$STATE/password" "$STATE/passwd"
+  rm -rf "$STATE"/*.pid "$SOCKET" "$STATE/password" "$STATE/passwd" "$STATE/mode" "$TICKETS"
   printf '%s' "$boot_id" >"$STATE/boot-id"
 fi
 
-if alive xvnc && alive websockify && listening && [ -s "$STATE/password" ]; then
+# Same boot, older script: its websockify had no ticket gate and its Xvnc wanted a VNC password.
+rm -f "$STATE/password" "$STATE/passwd"
+if alive websockify; then kill "$(pid_of websockify)" 2>/dev/null || true; fi
+rm -f "$STATE/websockify.pid"
+current_mode() { cat "$STATE/mode" 2>/dev/null || true; }
+
+if alive xvnc && alive proxy && listening && [ "$(current_mode)" = "$MODE" ]; then
   ready_line
   exit 0
 fi
@@ -64,19 +96,23 @@ start() { # name cmd... — detached, logs in $STATE/<name>.log
   echo $! >"$STATE/$name.pid"
 }
 
-if ! alive xvnc || [ ! -s "$STATE/password" ]; then
+if ! alive xvnc || [ "$(current_mode)" != "$MODE" ]; then
   if alive xvnc; then kill "$(pid_of xvnc)" 2>/dev/null || true; sleep 0.2; fi
   rm -f "$SOCKET"
-  # VNC auth uses 8 password bytes; 8 random alphanumerics (~48 bits) plus Xvnc's blacklist.
-  password="$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c 8 || true)"
-  [ "${#password}" = 8 ] || fail 'could not generate a password'
-  printf '%s' "$password" | vncpasswd -f >"$STATE/passwd"
-  printf '%s' "$password" >"$STATE/password"
-  # -rfbport -1: no TCP VNC port at all, only a 0600 unix socket for websockify.
-  start xvnc Xvnc ":$DISPLAY_NUM" -geometry "$GEOMETRY" -depth 24 -nolisten tcp \
+  # -rfbport -1: no TCP VNC port at all, only a 0600 unix socket (in the 0700 state dir) for the
+  # proxy. SecurityTypes None is safe only because of that: the ticket gate is in the proxy.
+  # SendPrimary=0: only explicit copies (xterm copies its selection, below) leave the sandbox.
+  # The X display itself takes a cookie from ~/.Xauthority (Xlib's default for this user), so only
+  # this uid's processes (agents, apps they start on DISPLAY=:1) can open it.
+  auth=()
+  if command -v xauth >/dev/null && command -v mcookie >/dev/null; then
+    xauth -q -f "$HOME/.Xauthority" add ":$DISPLAY_NUM" . "$(mcookie)" 9>&- && auth=(-auth "$HOME/.Xauthority")
+  fi
+  start xvnc Xvnc ":$DISPLAY_NUM" "${auth[@]}" -geometry "$GEOMETRY" -depth 24 -nolisten tcp \
     -rfbport -1 -rfbunixpath "$SOCKET" -rfbunixmode 0600 \
-    -SecurityTypes VncAuth -PasswordFile "$STATE/passwd" \
+    -SecurityTypes None -SendPrimary=0 \
     -AlwaysShared -AcceptSetDesktopSize -desktop 'Remote desktop'
+  printf '%s' "$MODE" >"$STATE/mode"
   for _ in $(seq 1 100); do
     [ -S "$SOCKET" ] && break
     alive xvnc || { tail -n 20 "$STATE/xvnc.log" >&2; fail 'Xvnc exited'; }
@@ -91,23 +127,28 @@ if ! alive xvnc || [ ! -s "$STATE/password" ]; then
       '<applications><application class="XTerm"><maximized>yes</maximized></application></applications>' \
       '</openbox_config>' >"$STATE/openbox.xml"
     start wm openbox --config-file "$STATE/openbox.xml"
+    # Let it manage the screen before the terminal maps, so its maximize rule applies.
+    sleep 0.2
   elif command -v twm >/dev/null; then
     start wm twm
   fi
   if command -v xterm >/dev/null; then
-    start xterm xterm -bg '#1e1f22' -fg '#d4d4d4' -fa 'Liberation Mono,Monospace' -fs 11
+    # selectToClipboard: a selection is a copy (to CLIPBOARD, which reaches this computer).
+    start xterm xterm -maximized -bg '#1e1f22' -fg '#d4d4d4' -fa 'Liberation Mono,Monospace' -fs 11 \
+      -xrm 'XTerm*selectToClipboard: true'
   fi
 fi
 
-if ! alive websockify || ! listening; then
-  if alive websockify; then kill "$(pid_of websockify)" 2>/dev/null || true; fi
-  PYTHONPATH="$DESKTOP/websockify" start websockify python3 -P -W ignore::UserWarning -m websockify \
-    --web "$DESKTOP/novnc" --unix-target "$SOCKET" "127.0.0.1:$PORT"
+if ! alive proxy || ! listening; then
+  if alive proxy; then kill "$(pid_of proxy)" 2>/dev/null || true; sleep 0.1; fi
+  mkdir -p "$TICKETS"
+  PYTHONPATH="$DESKTOP/websockify" start proxy python3 -P -W ignore::UserWarning "$PROXY" \
+    --listen "$PORT" --web "$DESKTOP/novnc" --unix-target "$SOCKET" --tickets "$TICKETS"
   for _ in $(seq 1 100); do
     listening && break
-    alive websockify || { tail -n 20 "$STATE/websockify.log" >&2; fail 'websockify exited'; }
+    alive proxy || { tail -n 20 "$STATE/proxy.log" >&2; fail 'orca-desktop-proxy exited'; }
     sleep 0.05
   done
-  listening || fail "websockify is not answering on 127.0.0.1:$PORT"
+  listening || fail "orca-desktop-proxy is not answering on 127.0.0.1:$PORT"
 fi
 ready_line

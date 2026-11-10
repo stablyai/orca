@@ -24,6 +24,7 @@ import type { RemoteRuntimeTransportSubscription } from '../../../shared/remote-
 import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
 import { decodeRuntimeEnvironmentSubscriptionEvents } from './runtime-environment-subscription-events'
 import { enqueueRuntimeCall } from './runtime-environment-call-queue'
+import type { RuntimeRpcCallLane } from '../../../shared/runtime-rpc-call-queue'
 import { holdForInFlightRecipeVmWake } from './runtime-environment-recipe-vm-wake'
 import {
   sendRemoteRuntimeConnectionRequestAbortable,
@@ -54,6 +55,8 @@ export async function callRuntimeEnvironment(
     signal?: AbortSignal
     expectedEnvironmentRuntimeId?: string
     preparation?: ManagedRuntimeCallPreparation
+    /** Queue lane override; see RuntimeRpcCallLane. */
+    lane?: RuntimeRpcCallLane
   }
 ): Promise<Rpc.RuntimeRpcResponse<unknown>> {
   if (method === 'status.get') {
@@ -168,7 +171,8 @@ export async function callRuntimeEnvironment(
         markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
         return response
       },
-      options?.signal
+      options?.signal,
+      options?.lane
     )
   } catch (error) {
     if (error instanceof Error && error.name !== 'AbortError') {

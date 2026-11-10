@@ -1,11 +1,12 @@
 import { useId, useState } from 'react'
-import { Info } from 'lucide-react'
+import { FolderPlus, Info } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import type { CloudSecretScope } from '../../../../../shared/cloud-secrets/cloud-secrets-wire'
 import { Button } from '../../ui/button'
 import { Label } from '../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs'
+import { CloudApiEmptyState } from '../cloud-api/cloud-api-parts'
 import { SettingsGroupHeader } from '../section-layout/SettingsGroup'
 import { cloudSecretScopeLabel } from './cloud-secrets-copy'
 import { CloudSecretList, type CloudSecretPeople } from './CloudSecretList'
@@ -136,12 +137,15 @@ export function CloudSecretsPane({
   repos,
   people,
   onSetUpAgent,
+  onAddProject,
   initialTab = 'personal'
 }: {
   api: CloudSecretsApi
   repos: readonly CloudSecretRepoChoice[]
   people: Omit<CloudSecretPeople, 'viewerUserId'>
   onSetUpAgent?: () => void
+  /** Opens the app's Add project flow, the way to get a GitHub repository here. */
+  onAddProject?: () => void
   initialTab?: Tab
 }): React.JSX.Element {
   const t = useTranslate()
@@ -260,16 +264,22 @@ export function CloudSecretsPane({
         <TabsContent value="repo">
           <div className="space-y-3 pt-2">
             {repos.length === 0 ? (
-              <div className="rounded-md border border-dashed border-border/60 px-4 py-5 text-center">
-                <p className="text-sm font-medium">
-                  {t('cloudSecrets.repo.noReposTitle', 'No GitHub repositories yet')}
-                </p>
-                <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">
-                  {t(
+              <div className="rounded-md border border-border/60">
+                <CloudApiEmptyState
+                  icon={FolderPlus}
+                  title={t('cloudSecrets.repo.noReposTitle', 'No GitHub repositories yet')}
+                  description={t(
                     'cloudSecrets.repo.noReposDetail',
                     'Repository secrets follow a GitHub repository. Add a project with a GitHub remote to set them.'
                   )}
-                </p>
+                  action={
+                    onAddProject ? (
+                      <Button variant="outline" size="sm" onClick={onAddProject}>
+                        {t('cloudSecrets.repo.addProject', 'Add project')}
+                      </Button>
+                    ) : null
+                  }
+                />
               </div>
             ) : (
               <>

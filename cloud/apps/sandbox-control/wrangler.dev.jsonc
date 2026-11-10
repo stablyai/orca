@@ -22,6 +22,9 @@
   // Same-account Workers cannot call each other over workers.dev (error 1042); BILLING_URL names the origin.
   "services": [{ "binding": "BILLING", "service": "orca-billing-dev" }],
   // Every minute for routines (src/routines); the rest of the cron work runs on minute % 5 == 0.
+  // Environment builds advance on Durable Object alarms (EnvironmentBuildRunner), not on readers.
+  "durable_objects": { "bindings": [{ "name": "ENV_BUILD_RUNNER", "class_name": "EnvironmentBuildRunner" }] },
+  "migrations": [{ "tag": "env-build-runner-v1", "new_sqlite_classes": ["EnvironmentBuildRunner"] }],
   "triggers": { "crons": ["* * * * *"] },
   "vars": {
     "SANDBOX_ENV": "dev",

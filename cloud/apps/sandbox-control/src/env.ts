@@ -42,6 +42,8 @@ export type Env = {
   BILLING_URL?: string
   /** Service binding to the billing Worker; Workers on one account cannot reach each other over workers.dev. */
   BILLING?: Fetcher
+  /** Durable Object that advances environment builds on alarms (EnvironmentBuildRunner in index.ts). */
+  ENV_BUILD_RUNNER?: DurableObjectNamespace
   CONTROL_PLANE_TOKEN?: string
   /** `stub` allows every start and records nothing: local dev only, refused when SANDBOX_ENV=prod. */
   ENTITLEMENTS_MODE?: string
@@ -129,6 +131,8 @@ export type Env = {
   GITHUB_WEBHOOK_SECRET?: string
   /** Archived workspaces are destroyed this many days after archive (default 30). */
   ARCHIVE_TTL_DAYS?: string
+  /** Idle minutes before a sandbox sleeps (default 15; keep equal to billing's plan idleSleepMinutes). */
+  IDLE_SLEEP_MINUTES?: string
   /** Status-panel cost estimate, cents per running hour by machine size: {"standard":75,"large":150}. */
   COST_CENTS_PER_HOUR?: string
 }

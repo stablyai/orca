@@ -155,7 +155,8 @@ export function VmBuildAgentSignInRowView({
     <li className="flex flex-col gap-2 py-1.5" data-vm-build-agent-sign-in={model.kind}>
       <div className="flex items-center gap-2.5">
         {icon}
-        <div className="flex min-w-0 flex-1 flex-col">
+        {/* Sign-in progresses on its own (waiting, code shown, done); screen readers hear each step. */}
+        <div className="flex min-w-0 flex-1 flex-col" aria-live="polite" aria-atomic="true">
           <span className="truncate">
             {t('vmBuildAgentSignIn.title', 'Agent sign-in')}
             {tag ? <span className="text-xs text-muted-foreground"> · {tag}</span> : null}

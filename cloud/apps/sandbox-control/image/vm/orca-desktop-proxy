@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+# Remote desktop gateway, started by orca-desktop-start: serves noVNC on 127.0.0.1 and bridges one
+# WebSocket per single-use ticket to Xvnc's 0600 unix socket (Xvnc itself has no VNC auth: only this
+# uid can open the socket). The port is reached only through Orca's localhost forward on the user's
+# computer, where any local process or web page could knock, so every WebSocket must carry an
+# unused, unexpired ticket minted by orca-desktop-start (see consume_ticket), from a page on the same
+# localhost origin. Tickets never reach a log: paths are scrubbed before websockify logs them.
+#   orca-desktop-proxy --listen PORT --web DIR --unix-target SOCKET --tickets DIR
+# stdlib + websockify (pinned tarball in /opt/orca/desktop/websockify, on PYTHONPATH) only.
+import argparse
+import hashlib
+import hmac
+import logging
+import os
+import re
+import sys
+import time
+from urllib.parse import parse_qs, urlsplit
+
+from websockify import websocketproxy
+
+TICKET_RE = re.compile(r'^[A-Za-z0-9_-]{43}$')  # 32 random bytes, base64url without padding
+SCRUB_RE = re.compile(r'([?&]ticket=)[^&\s\'"]*')
+LOOPBACK_HOST_RE = re.compile(r'^(localhost|127\.0\.0\.1|\[::1\])(:[0-9]{1,5})?$')
+WS_PATH = '/websockify'
+PAGE_SCRIPT = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'orca-desktop-page.js')
+# The page may only talk to its own origin (its WebSocket included): even a URL that tries to point
+# noVNC elsewhere cannot carry a ticket or the user's keys off this forward.
+PAGE_CSP = "connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'"
+PAGE_TAG = b'<script type="module" src="orca-desktop-page.js"></script>\n</head>'
+
+
+def scrub(text):
+    return SCRUB_RE.sub(r'\1<redacted>', str(text))
+
+
+def ticket_digest(ticket):
+    return hashlib.sha256(ticket.encode('ascii')).hexdigest()
+
+
+def consume_ticket(directory, ticket, now=None):
+    """True once per minted ticket, within its lifetime. The ticket file (named by the ticket's
+    sha256, holding its expiry) is unlinked on first use, so a replay or a racing second
+    connection finds nothing; each request runs in its own forked process, so state is on disk."""
+    if not isinstance(ticket, str) or not TICKET_RE.match(ticket):
+        return False
+    digest = ticket_digest(ticket)
+    match = None
+    try:
+        names = os.listdir(directory)
+    except OSError:
+        return False
+    for name in names:
+        # Compare every entry in constant time; never short-circuit on a prefix.
+        if hmac.compare_digest(name.encode('ascii', 'replace'), digest.encode('ascii')):
+            match = name
+    if match is None:
+        return False
+    path = os.path.join(directory, match)
+    try:
+        with open(path, 'r', encoding='ascii') as handle:
+            expires_at = int(handle.read().strip() or '0')
+    except (OSError, ValueError):
+        expires_at = 0
+    try:
+        os.unlink(path)  # the consume: only one caller can win this
+    except FileNotFoundError:
+        return False
+    return (now if now is not None else time.time()) <= expires_at
+
+
+def same_loopback_origin(headers):
+    """The page and the WebSocket share one localhost origin (blocks other local sites and DNS
+    rebinding). The port is the user's local forward, which may differ from ours, so compare the
+    Origin with the Host the browser dialed rather than with a fixed port."""
+    host = (headers.get('Host') or '').strip().lower()
+    origin = (headers.get('Origin') or '').strip().lower()
+    return loopback_host(host) and origin == 'http://' + host
+
+
+def loopback_host(host):
+    return bool(LOOPBACK_HOST_RE.match(host or ''))
+
+
+class TicketedProxyHandler(websocketproxy.ProxyRequestHandler):
+    """websockify's proxy handler plus the ticket + origin gate. Module level (not a closure) so
+    websockify's per-connection multiprocessing can pickle it under any start method."""
+
+    def log_message(self, format, *args):  # noqa: A002 (websockify's signature)
+        super().log_message('%s', scrub(format % args if args else format))
+
+    def reject(self, code, reason):
+        self.send_response(code)
+        self.send_header('Content-Length', '0')
+        self.send_header('Connection', 'close')
+        self.end_headers()
+        self.close_connection = True
+        raise self.server.EClose('desktop: websocket refused (%s)' % reason)
+
+    def validate_connection(self):
+        parts = urlsplit(self.path)
+        ticket = (parse_qs(parts.query).get('ticket') or [''])[0]
+        # Drop it before anything below (websockify's own logging included) can see self.path.
+        self.path = parts.path
+        if parts.path != WS_PATH:
+            self.reject(404, 'path')
+        if not same_loopback_origin(self.headers):
+            self.reject(403, 'origin')
+        if not consume_ticket(self.server.orca_tickets_dir, ticket):
+            self.reject(403, 'ticket')
+
+    def loopback_request(self):
+        if loopback_host((self.headers.get('Host') or '').strip().lower()):
+            return True
+        self.send_error(403)
+        return False
+
+    def do_GET(self):
+        if not self.loopback_request():
+            return None
+        path = urlsplit(self.path).path
+        if path == '/orca-desktop-page.js':
+            return self.send_bytes(read_file(PAGE_SCRIPT), 'text/javascript; charset=utf-8')
+        if path == '/vnc.html':
+            page = read_file(os.path.join(self.server.web, 'vnc.html'))
+            return self.send_bytes(page.replace(b'</head>', PAGE_TAG, 1), 'text/html; charset=utf-8', PAGE_CSP)
+        return super().do_GET()
+
+    def do_HEAD(self):
+        if not self.loopback_request():
+            return None
+        return super().do_HEAD()
+
+    def send_bytes(self, body, content_type, csp=None):
+        self.send_response(200)
+        self.send_header('Content-Type', content_type)
+        if csp:
+            self.send_header('Content-Security-Policy', csp)
+        self.send_header('Content-Length', str(len(body)))
+        self.send_header('Cache-Control', 'no-store')
+        self.send_header('Referrer-Policy', 'no-referrer')
+        self.end_headers()
+        self.wfile.write(body)
+        return None
+
+
+def read_file(path):
+    with open(path, 'rb') as handle:
+        return handle.read()
+
+
+def main(argv):
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--listen', type=int, required=True)
+    parser.add_argument('--web', required=True)
+    parser.add_argument('--unix-target', required=True)
+    parser.add_argument('--tickets', required=True)
+    args = parser.parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+    server = websocketproxy.WebSocketProxy(
+        RequestHandlerClass=TicketedProxyHandler,
+        listen_host='127.0.0.1',
+        listen_port=args.listen,
+        web=args.web,
+        file_only=True,
+        unix_target=args.unix_target,
+    )
+    server.orca_tickets_dir = os.path.abspath(args.tickets)
+    server.start_server()
+
+
+if __name__ == '__main__':
+    main(sys.argv[1:])
