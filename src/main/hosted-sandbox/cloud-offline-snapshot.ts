@@ -227,7 +227,8 @@ export async function buildOfflineSnapshot(
     capturedAt: times.length > 0 ? Math.max(...times) : null,
     git,
     terminals,
-    chats
+    chats,
+    source: 'device'
   }
 }
 

@@ -29,12 +29,8 @@ import {
 import { createOwedWorkBeat } from './cloud-offline-beat'
 import { setCloudOfflineReset } from './cloud-offline-reset'
 import { safeStorageCodec, setCloudOfflineObserver } from './cloud-offline-seam'
-import {
-  archiveCheckoutsFromCache,
-  buildOfflineSnapshot,
-  stringParam,
-  terminalHandlesOf
-} from './cloud-offline-snapshot'
+import { archiveCheckoutsFromCache, stringParam, terminalHandlesOf } from './cloud-offline-snapshot'
+import { createCloudReadMemo, type CloudSnapshotReader } from './cloud-offline-cloud-read'
 import { getHostedWorkspaceService, setArchiveCheckoutsProvider } from './hosted-workspace-service'
 
 type CloudRuntimeInfo = {
@@ -71,6 +67,11 @@ export function installCloudOfflineService(deps: {
   windows: () => readonly BrowserWindow[]
   /** The control plane says the workspace is archived (nothing wakes or sends to it). */
   isArchived: (workspaceId: string) => Promise<boolean>
+  /**
+   * The workspace's own sealed sleep snapshot, opened on this device (never wakes it). Null when
+   * there is none or it cannot be read; the view then shows this computer's copy alone.
+   */
+  readCloudSnapshot?: CloudSnapshotReader
   codec?: OfflineCacheCodec | null
   log?: (line: string) => void
 }): CloudOfflineService {
@@ -121,6 +122,8 @@ export function installCloudOfflineService(deps: {
   const invalidate = () => {
     memo = null
   }
+
+  const cloudReads = createCloudReadMemo(deps.readCloudSnapshot)
 
   const broadcast = (channel: string, payload: unknown): void => {
     for (const window of deps.windows()) {
@@ -252,6 +255,7 @@ export function installCloudOfflineService(deps: {
     }
   })
   setCloudOfflineReset(() => {
+    cloudReads.clear()
     void cache.clear()
     queue.clear()
   })
@@ -274,9 +278,7 @@ export function installCloudOfflineService(deps: {
     async (_event, args: { workspaceId: string }): Promise<CloudOfflineSnapshot | null> => {
       invalidate()
       const info = runtimes().byWorkspace.get(args.workspaceId)
-      return info
-        ? await buildOfflineSnapshot(cache, info.environmentId, args.workspaceId, info.asleep)
-        : null
+      return info ? await cloudReads.snapshot(cache, info, args.workspaceId) : null
     }
   )
   ipcMain.handle(

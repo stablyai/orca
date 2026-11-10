@@ -11,6 +11,8 @@ import {
   runUnarchiveCloudWorkspace
 } from '../orca-cloud/cloud-workspace-actions'
 import { describeError } from './cloud-workspace-errors'
+import type { Translate } from '@/i18n/use-translate'
+import { cloudWorkspaceTitle } from './open-cloud-workspace'
 
 export type HomeArchiveDeps = {
   localWorktreeId: (sandboxId: string) => Promise<string | null>
@@ -94,4 +96,28 @@ export async function unarchiveFromHome(
       'It’s asleep. Opening it wakes it.'
     )
   })
+}
+
+export function runHomeArchive(w: CloudWorkspace, t: Translate, refresh: () => void): void {
+  void archiveFromHome(w, cloudWorkspaceTitle(w, t)).finally(refresh)
+}
+
+/** Row actions for the team list. A teammate's running workspace asks first (their agents stop). */
+export function homeArchiveActions(options: {
+  selfId: string | null
+  t: Translate
+  refresh: () => void
+  confirmArchive: (pending: { kind: 'archive'; workspace: CloudWorkspace }) => void
+}): { archive: (w: CloudWorkspace) => void; unarchive: (w: CloudWorkspace) => void } {
+  const { selfId, t, refresh } = options
+  return {
+    archive: (w) => {
+      if (w.ownerUserId !== selfId && w.status === 'running') {
+        options.confirmArchive({ kind: 'archive', workspace: w })
+        return
+      }
+      runHomeArchive(w, t, refresh)
+    },
+    unarchive: (w) => void unarchiveFromHome(w, cloudWorkspaceTitle(w, t)).finally(refresh)
+  }
 }

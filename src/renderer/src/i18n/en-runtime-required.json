@@ -1580,6 +1580,12 @@
     }
   },
   "components": {
+    "confirmation": {
+      "itemList": {
+        "showMore_one": "Show {{count}} more",
+        "showMore_other": "Show {{count}} more"
+      }
+    },
     "native-chat": {
       "approval": {
         "allow": "Allow",
@@ -2066,6 +2072,12 @@
         }
       }
     },
+    "orcaCloud": {
+      "read": {
+        "showMore_one": "Show {{count}} earlier message",
+        "showMore_other": "Show {{count}} earlier messages"
+      }
+    },
     "orchestrationCrew": {
       "needsYou_one": "{{count}} needs you",
       "needsYou_other": "{{count}} need you",
@@ -2250,6 +2262,11 @@
     }
   },
   "orcaCloudWorkspace": {
+    "archived": {
+      "files": "{{count}} files",
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files"
+    },
     "idleSleptMinutes_one": "{{name}} slept after {{count}} minute idle",
     "idleSleptMinutes_other": "{{name}} slept after {{count}} minutes idle",
     "overlay": {

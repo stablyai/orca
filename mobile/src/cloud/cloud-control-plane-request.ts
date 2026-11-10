@@ -23,7 +23,7 @@ const ErrorBodySchema = z.object({ error: z.string(), reason: z.string().optiona
 
 export async function cloudRequest<T>(
   plane: CloudControlPlane,
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   path: string,
   schema: z.ZodType<T>,
   init: {

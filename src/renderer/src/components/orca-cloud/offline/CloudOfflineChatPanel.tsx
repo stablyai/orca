@@ -69,17 +69,19 @@ function QueuedPromptRow({
           {prompt.text}
         </div>
       )}
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <div className="flex items-center text-xs text-muted-foreground">
         {prompt.state === 'sending' ? (
-          <Loader2 className="size-3 motion-safe:animate-spin" />
+          <Loader2 className="mr-1.5 size-3 motion-safe:animate-spin" />
         ) : null}
         <span className={prompt.state === 'failed' ? 'text-destructive' : undefined}>
           {label}
           {prompt.error ? ` · ${prompt.error}` : ''}
         </span>
         {prompt.state === 'queued' && !editing ? (
-          // Quiet until the bubble is hovered or a control has focus.
-          <span className="flex items-center opacity-0 transition-opacity group-hover/queued:opacity-100 group-focus-within/queued:opacity-100 pointer-coarse:opacity-100">
+          // Quiet until the bubble is hovered or a control has focus. Collapsed to no width while
+          // hidden so the caption sits flush right; still focusable (never display:none), and
+          // focusing a control expands it.
+          <span className="flex max-w-0 items-center overflow-hidden opacity-0 transition-opacity motion-reduce:transition-none group-hover/queued:ml-1.5 group-hover/queued:max-w-16 group-hover/queued:opacity-100 group-focus-within/queued:ml-1.5 group-focus-within/queued:max-w-16 group-focus-within/queued:opacity-100 pointer-coarse:ml-1.5 pointer-coarse:max-w-16 pointer-coarse:opacity-100">
             <Button
               size="icon-xs"
               variant="ghost"
@@ -200,7 +202,8 @@ export function ChatPanel({
               aria-pressed={candidate.sessionId === chat.sessionId}
               onClick={() => setSelected(candidate.sessionId)}
             >
-              {candidate.messages.find((m) => m.role === 'user')?.text.slice(0, 40) ??
+              {candidate.title?.slice(0, 40) ??
+                candidate.messages.find((m) => m.role === 'user')?.text.slice(0, 40) ??
                 t('components.orcaCloud.offline.chatN', 'Chat {{n}}', { n: index + 1 })}
             </Button>
           ))}

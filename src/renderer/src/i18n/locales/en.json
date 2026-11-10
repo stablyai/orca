@@ -20873,6 +20873,8 @@
         "you": "You",
         "youAreTyping": "You are typing",
         "youAreViewing": "You are viewing",
+        "view": "View",
+        "viewAsleep": "View read-only copy",
         "routines": "Routines",
         "archiveConfirmTitle": "Archive {{name}}?",
         "archiveConfirmBody": "{{owner}}'s agents in this workspace will stop. Files are kept and it can be unarchived.",
@@ -21897,7 +21899,21 @@
         "chatRewoundConflicts": "The chat was rewound, but files weren't restored because this workspace has unresolved merge conflicts. Nothing on disk changed.",
         "chatRewoundBlocked": "The chat was rewound, but files weren't restored because a folder now sits where a restored file goes. Nothing on disk changed.",
         "chatRewoundMissing": "The chat was rewound, but files weren't restored because Orca no longer has the files saved for this message. Nothing on disk changed.",
-        "chatRewoundFailed": "The chat was rewound, but some files couldn't be restored. Check Source Control before you continue."
+        "chatRewoundFailed": "The chat was rewound, but some files couldn't be restored. Check Source Control before you continue.",
+        "filesOnlyUnavailable": "Orca doesn't have the files saved for this message, so there is nothing to restore.",
+        "filesOnlyTitle": "Restore files to here?",
+        "filesOnlyDescription": "The chat stays as it is.",
+        "filesOnlyConfirm": "Restore files",
+        "changedFilesList": "Changed files",
+        "filesOnlyBusy": "Files weren't restored because the agent is still working. Nothing on disk changed.",
+        "filesOnlyConflicts": "Files weren't restored because this workspace has unresolved merge conflicts. Nothing on disk changed.",
+        "filesOnlyBlocked": "Files weren't restored because a folder now sits where a restored file goes. Nothing on disk changed.",
+        "filesOnlyMissing": "Files weren't restored because Orca no longer has the files saved for this message. Nothing on disk changed.",
+        "chatRewoundPartial": "The chat was rewound, but some files couldn't be restored. Undo puts back the files Orca changed.",
+        "filesOnlyPartial": "Some files couldn't be restored. Undo puts back the files Orca changed.",
+        "filesOnlyFailed": "Some files couldn't be restored. Check Source Control before you continue.",
+        "undoneFilesOnly": "Files are back to how they were before the restore.",
+        "restoreFilesAction": "Restore files to here"
       },
       "drop": {
         "messageTitle": "Drop to attach to this message",
@@ -23184,7 +23200,6 @@
         "composerLabel": "Message to queue",
         "sendAndWake": "Send and wake",
         "region": "Asleep workspace (read-only)",
-        "wake": "Wake",
         "emptyBody": "Orca keeps a copy of chats, terminals and changes once you have used this workspace while it was awake.",
         "tabChat": "Chat",
         "tabTerminals": "Terminals",
@@ -23193,6 +23208,48 @@
         "readOnly": "Read-only",
         "terminalOutput": "Saved output of {{title}}",
         "noGit": "No source control state was saved."
+      },
+      "read": {
+        "wakeToContinue": "Wake to continue",
+        "unreadable": "Couldn't open the saved copy on this computer. Your files are safe.",
+        "asOf": "Asleep · As of {{when}}",
+        "note": "Read-only copy saved when it went to sleep.",
+        "prTitle": "#{{number}} {{title}}",
+        "untitledChat": "Untitled chat",
+        "noMessages": "No messages were saved for this chat.",
+        "roleUser": "Person:",
+        "roleAgent": "Agent:",
+        "showLess": "Show less",
+        "showMore_one": "Show {{count}} earlier message",
+        "showMore_other": "Show {{count}} earlier messages",
+        "truncated": "Older messages are in the workspace. Wake it to read them.",
+        "noSessions": "No agent chats were open.",
+        "loading": "Loading the saved copy",
+        "agents": "Agents",
+        "changes": "Changes",
+        "region": "Asleep workspace (read-only)",
+        "asleep": "Asleep",
+        "empty": "Nothing saved yet. Orca saves a read-only copy each time this workspace goes to sleep.",
+        "notSealedForKey": "This device was added after the workspace went to sleep. Wake it once to read it here.",
+        "tryAgain": "Try again",
+        "checksPassed": "Checks passed",
+        "checksFailed": "Checks failed",
+        "checksPending": "Checks running",
+        "checksNone": "No checks",
+        "agentWorking": "Was working",
+        "agentAttention": "Needs input",
+        "agentDone": "Done",
+        "agentIdle": "Idle",
+        "agentUnknown": "Status unknown",
+        "prOpen": "Open",
+        "prDraft": "Draft",
+        "prMerged": "Merged",
+        "prClosed": "Closed",
+        "stateAsOf": "{{state}} · As of {{when}}",
+        "wakingElapsed": "Waking… {{elapsed}}",
+        "staleCopy": "Orca Cloud sent an older copy than the one you last saw, so it isn’t shown. Wake the workspace to see it as it is now.",
+        "keychainUnavailable": "Orca can’t open the saved copy because this computer’s keychain isn’t available. Wake the workspace to see it.",
+        "keychainLinux": "Or set up a keyring (like GNOME Keyring) and reopen Orca."
       }
     },
     "runtimeDownload": {
@@ -23237,6 +23294,13 @@
       "notFoundOnHostNothingSaved": "It was moved or deleted on the remote host. Nothing was saved on this computer.",
       "savedName": "Saved {{name}}",
       "noAppForType": "No app on this computer opens this file type. Reveal it to choose one."
+    },
+    "confirmation": {
+      "itemList": {
+        "showFewer": "Show fewer",
+        "showMore_one": "Show {{count}} more",
+        "showMore_other": "Show {{count}} more"
+      }
     }
   },
   "dashboardPopout": {
@@ -26490,7 +26554,9 @@
       "files": "{{count}} files",
       "uncommitted": "Uncommitted changes",
       "moreChanges": "{{count}} more",
-      "noCommits": "No commits on this branch yet."
+      "noCommits": "No commits on this branch yet.",
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files"
     },
     "state": {
       "archived": "Archived",
@@ -26592,7 +26658,6 @@
     "unarchiveFailed": "Couldn’t unarchive the workspace",
     "asleep": {
       "noCopy": "Asleep · nothing cached yet",
-      "copyFrom": "Asleep · copy from {{when}}",
       "readOnly": "Read-only copy kept on this computer."
     },
     "bytes": {

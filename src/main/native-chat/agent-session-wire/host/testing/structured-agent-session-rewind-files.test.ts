@@ -180,7 +180,12 @@ describe('rewind with file restore', () => {
     expect(await git('stash', 'list')).toBe('')
 
     const preview = await hostAgentSessionCheckpoints(host).preview(HOST_TEST_SESSION, second)
-    expect(preview).toMatchObject({ available: true, changedFiles: 3, headMoved: false })
+    expect(preview).toMatchObject({
+      available: true,
+      changedFiles: 3,
+      paths: ['app.ts', 'feature.ts', 'refactor/util.ts'],
+      headMoved: false
+    })
     const restored = await hostAgentSessionCheckpoints(host).restore(HOST_TEST_SESSION, second)
     expect(restored.changedFiles).toBe(3)
     expect(await read('app.ts')).toBe('v1\n')

@@ -20,6 +20,7 @@ import {
   restoreNativeChatRewindFiles,
   type NativeChatCheckpointClient
 } from './native-chat-rewind-files'
+import { restoreNativeChatFilesOnly } from './native-chat-restore-files-only'
 
 export type RewindInput = Omit<
   AgentSessionRewindInput,
@@ -99,9 +100,17 @@ export function useNativeChatRewind(input: RewindInput) {
     [checkpoints, sharedRequest]
   )
   const shared = rewind.surface
+  const restoreFiles = useMemo(
+    () =>
+      checkpoints
+        ? (itemId: string, confirm: ConfirmationDialogContextValue) =>
+            restoreNativeChatFilesOnly(checkpoints, itemId, confirm)
+        : undefined,
+    [checkpoints]
+  )
   const surface = useMemo<NativeChatRewindSurface | undefined>(
-    () => shared && { ...shared, request },
-    [shared, request]
+    () => shared && { ...shared, request, ...(restoreFiles ? { restoreFiles } : {}) },
+    [shared, request, restoreFiles]
   )
   return { ...rewind, request, surface }
 }

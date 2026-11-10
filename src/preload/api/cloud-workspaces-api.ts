@@ -5,6 +5,7 @@ import type {
   CloudWorkspacePatch,
   OrgPrompts
 } from '../../shared/cloud-workspaces/cloud-workspaces-wire'
+import type { CloudReadSnapshotState } from '../../shared/cloud-workspaces/read-snapshot-state'
 
 export type CloudWorkspacesResult<T> =
   | { ok: true; value: T }
@@ -33,6 +34,8 @@ export type CloudWorkspacesApi = {
   openGrant: (
     id: string
   ) => Promise<CloudWorkspacesResult<{ grantId: string; pairingCode: string }>>
+  /** A sleeping workspace's sealed read snapshot, opened in main with this device's reader key. Never wakes it. */
+  readSnapshot: (id: string) => Promise<CloudWorkspacesResult<CloudReadSnapshotState>>
   listGrants: (id: string) => Promise<CloudWorkspacesResult<CloudWorkspaceGrant[]>>
   revokeGrant: (id: string, grantId: string) => Promise<CloudWorkspacesResult<void>>
   localWorkspaces: () => Promise<LocalCloudWorkspace[]>
