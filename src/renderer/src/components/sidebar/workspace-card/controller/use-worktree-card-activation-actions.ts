@@ -143,7 +143,7 @@ export function useWorktreeCardActivationActions({
       ) {
         return
       }
-      noteWorktreeRowPress(worktree.id)
+      noteWorktreeRowPress(worktree.id, event.clientX, event.clientY)
     },
     [isActive, isDeleting, isSshDisconnected, worktree.id]
   )
