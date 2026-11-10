@@ -1,4 +1,4 @@
-import { observeCloudOfflineAnswer } from '../../hosted-sandbox/cloud-offline-service'
+import { observeCloudOfflineAnswer } from '../../hosted-sandbox/cloud-offline-seam'
 import {
   manuallyDisconnectedResponse,
   runtimeEnvironmentCallFailure
