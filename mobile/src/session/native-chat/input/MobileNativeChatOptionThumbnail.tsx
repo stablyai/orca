@@ -87,7 +87,11 @@ const styles = themedStyleSheet(() => ({
   text: {
     position: 'absolute',
     ...(Platform.OS === 'web'
-      ? { whiteSpace: 'pre' as const, width: 'max-content' as TextStyle['width'] }
+      ? {
+          whiteSpace: 'pre' as const,
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: RN Web accepts intrinsic CSS widths; this branch never reaches native.
+          width: 'max-content' as TextStyle['width']
+        }
       : {}),
     top: 0,
     left: 0,
