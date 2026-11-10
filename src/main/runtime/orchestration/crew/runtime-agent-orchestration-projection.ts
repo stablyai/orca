@@ -69,7 +69,7 @@ export class RuntimeAgentOrchestrationProjection {
     }
     const scope = createOrchestrationProjectionScope(db, this.deps)
     const contexts: Record<string, AgentStatusOrchestrationContext> = {}
-    const terminals = new Map<string, readonly string[]>()
+    const terminals = new Map<string, Iterable<string>>()
     const terminalCandidates = this.deps.captureTerminalCandidates?.()
     for (const candidate of source?.rows() ?? []) {
       const handle =

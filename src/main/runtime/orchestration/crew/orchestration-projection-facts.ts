@@ -258,9 +258,12 @@ export class OrchestrationProjectionFacts {
   }
 
   private reset(): void {
-    for (const key of this.facts.keys()) {
-      this.forget(key)
+    if (!this.transient) {
+      // Rollback can restore SQL memberships after a failed refresh cleared the JS owners.
+      this.db.db.prepare('DELETE FROM temp.orchestration_projection_tracked').run()
     }
+    this.facts.clear()
+    this.dependencies.clear()
     this.candidates.clear()
     this.owned.clear()
     this.cold = true

@@ -7,7 +7,7 @@ import type { PtyPaneOf } from '../../terminal/surface/pty-pane-query'
 
 export type OrchestrationTerminalCandidates = (pane: string) => readonly {
   paneKey: string
-  handles: readonly string[]
+  handles: Iterable<string>
 }[]
 
 /** One read scope, retaining source order without choosing a terminal from dispatch insertion order. */
@@ -56,47 +56,58 @@ export function captureOrchestrationTerminalCandidates(source: {
   }
   const paneOf = (pty: RuntimePtyWorktreeRecord) =>
     (source.paneOf ?? captured?.read ?? source.capturePaneOf())(pty).paneKey
-  const groups = new Map<string, { paneKey: string; handles: readonly string[] }>()
-  const group = (paneKey: string) => {
-    let result = groups.get(paneKey)
-    if (!result) {
-      const handles = new Set<string>()
-      const parsed = parsePaneKey(paneKey)
-      const leaf = parsed
-        ? source.leaves.get(source.leafKey(parsed.tabId, parsed.leafId))
-        : undefined
-      if (leaf?.ptyId) {
-        handles.add(source.issueLeaf(leaf))
-      }
-      for (const id of ptysFor(paneKey)) {
-        const pty = source.ptys.get(id)
-        if (pty && paneOf(pty) === paneKey) {
-          handles.add(source.issuePty(pty))
-        }
-      }
-      result = { paneKey, handles: [...handles] }
-      groups.set(paneKey, result)
-    }
-    return result
-  }
+  const requests = new Map<string, ReturnType<OrchestrationTerminalCandidates>>()
   return (pane) => {
-    const panes = new Set<string>()
     const parsed = parsePaneKey(pane)
+    const key = parsed ? `leaf:${parsed.leafId}` : `pane:${pane}`
+    const cached = requests.get(key)
+    if (cached) {
+      return cached
+    }
+    const panes = new Map<string, RuntimePtyWorktreeRecord[]>()
     if (parsed) {
       for (const id of source.leavesForId(parsed.leafId)) {
         const leaf = source.leaves.get(id)
         if (leaf?.ptyId) {
-          panes.add(source.makePaneKey(leaf))
+          panes.set(source.makePaneKey(leaf), [])
         }
       }
     }
     for (const id of ptysFor(pane)) {
       const pty = source.ptys.get(id)
-      const key = pty && paneOf(pty)
-      if (key) {
-        panes.add(key)
+      const address = pty && paneOf(pty)
+      if (pty && address) {
+        const records = panes.get(address) ?? []
+        records.push(pty)
+        panes.set(address, records)
       }
     }
-    return [...panes].map(group)
+    const groups = [...panes].map(([paneKey, ptys]) => ({
+      paneKey,
+      handles: {
+        *[Symbol.iterator]() {
+          const seen = new Set<string>()
+          const parsed = parsePaneKey(paneKey)
+          const leaf = parsed
+            ? source.leaves.get(source.leafKey(parsed.tabId, parsed.leafId))
+            : undefined
+          if (leaf?.ptyId) {
+            const handle = source.issueLeaf(leaf)
+            seen.add(handle)
+            yield handle
+          }
+          // Mint fallback identities only if the preceding candidate had no context.
+          for (const pty of ptys) {
+            const handle = source.issuePty(pty)
+            if (!seen.has(handle)) {
+              seen.add(handle)
+              yield handle
+            }
+          }
+        }
+      }
+    }))
+    requests.set(key, groups)
+    return groups
   }
 }
