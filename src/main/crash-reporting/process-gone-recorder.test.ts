@@ -64,7 +64,7 @@ afterEach(() => {
 })
 
 describe('recordProcessGoneCrash', () => {
-  it('reports no crash when the speech process dies, since dictation already shows the error', async () => {
+  it('reports no application crash for managed utilities with their own failure presentation', async () => {
     const record = vi.fn().mockResolvedValue({ id: 'report-1' })
     const utility = (name: string, reason: string, exitCode: number) =>
       event({
@@ -75,17 +75,19 @@ describe('recordProcessGoneCrash', () => {
         details: { name, serviceName: 'node.mojom.NodeService', type: 'Utility' }
       })
 
-    for (const [reason, exitCode] of [
-      ['killed', 9],
-      ['crashed', 11],
-      ['oom', 1]
-    ] as const) {
-      recordProcessGoneCrash(
-        { record, attachDetails } as never,
-        utility('Orca Speech', reason, exitCode),
-        new ProcessGoneDedupe(),
-        noMinidump
-      )
+    for (const name of ['Orca Speech', 'Orca backend']) {
+      for (const [reason, exitCode] of [
+        ['killed', 9],
+        ['crashed', 11],
+        ['oom', 1]
+      ] as const) {
+        recordProcessGoneCrash(
+          { record, attachDetails } as never,
+          utility(name, reason, exitCode),
+          new ProcessGoneDedupe(),
+          noMinidump
+        )
+      }
     }
     recordProcessGoneCrash(
       { record, attachDetails } as never,
@@ -96,6 +98,14 @@ describe('recordProcessGoneCrash', () => {
 
     await vi.waitFor(() => expect(record).toHaveBeenCalledOnce())
     expect(record.mock.calls[0][0].details).toMatchObject({ name: 'Some Other Service' })
+    expect(getCrashBreadcrumbSnapshot()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'process_gone_suppressed',
+          data: expect.objectContaining({ name: 'Orca backend', reason: 'killed', exitCode: 9 })
+        })
+      ])
+    )
   })
 
   it('still persists the report when the forced trace flush fails', async () => {

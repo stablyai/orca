@@ -14,6 +14,7 @@ import {
   BACKEND_CONNECTION_CHANGED,
   BACKEND_PORT_DELIVERY,
   BACKEND_PORT_REQUEST,
+  BACKEND_UTILITY_PROCESS_NAME,
   type AutomationUsageClient
 } from '../../shared/backend-service-contract'
 import { agentTokenUsageSchema } from '../../shared/telemetry-agent-token-usage-schema'
@@ -189,7 +190,7 @@ export class BackendSupervisor {
       'backend-entry.js'
     )
     const child = utilityProcess.fork(entry, [], {
-      serviceName: 'Orca backend',
+      serviceName: BACKEND_UTILITY_PROCESS_NAME,
       stdio: ['ignore', 'ignore', 'pipe']
     })
     this.child = child
