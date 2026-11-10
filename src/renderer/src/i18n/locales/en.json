@@ -20956,7 +20956,7 @@
           "forkNotStarted": "The worktree was created, but the chat could not be forked into it.",
           "created": "Created {{name}}",
           "nameLabel": "Name",
-          "where": "Folder {{folder}}, branch {{name}} (with your branch prefix)"
+          "whereName": "The worktree’s folder and branch are named {{name}} (the branch with your prefix). The exact folder and branch show once it’s created."
         },
         "subagent": {
           "title": "Fork as a background subagent",
@@ -20976,7 +20976,8 @@
         "fromMessageTab": "Edit in a new tab",
         "fromMessageWorktree": "Edit in a new worktree…",
         "terminalFailed": "Couldn’t fork this chat",
-        "terminalHostTooOld": "Update Orca on the host that runs this chat, then fork again."
+        "terminalHostTooOld": "Update Orca on the host that runs this chat, then fork again.",
+        "terminalNoWorktree": "The new worktree isn’t available yet. Try again."
       },
       "usage": {
         "description": "Show usage for this chat’s Codex account",

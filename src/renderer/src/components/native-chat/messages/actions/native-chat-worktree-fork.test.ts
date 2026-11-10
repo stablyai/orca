@@ -116,8 +116,7 @@ describe('runNativeChatWorktreeFork', () => {
   it('names a second fork Fork 2 and nests every fork under its source', async () => {
     expect(nativeChatWorktreeForkPlan('repo::/work/feature')).toEqual({
       name: 'login-fork-2',
-      displayName: 'Fork 2 of Login',
-      folder: '/work'
+      displayName: 'Fork 2 of Login'
     })
     await runNativeChatWorktreeFork({
       sourceWorktreeId: 'repo::/work/feature',

@@ -127,9 +127,9 @@ function WorktreeForkDialog({
           {plan && slug ? (
             <p className="text-xs text-muted-foreground">
               {t(
-                'components.native-chat.fork.worktree.where',
-                'Folder {{folder}}, branch {{name}} (with your branch prefix)',
-                { folder: `${plan.folder}/${slug}`, name: slug }
+                'components.native-chat.fork.worktree.whereName',
+                'The worktree’s folder and branch are named {{name}} (the branch with your prefix). The exact folder and branch show once it’s created.',
+                { name: slug }
               )}
             </p>
           ) : null}

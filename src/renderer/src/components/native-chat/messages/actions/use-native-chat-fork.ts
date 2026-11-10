@@ -215,11 +215,17 @@ export function useNativeChatFork(input: {
     (): string | undefined => nativeChatForkPoint(latest.current),
     []
   )
-  const forkPointBefore = useCallback(
-    (messageItemId: string): string | undefined =>
-      nativeChatForkPoint(latest.current, messageItemId),
-    []
-  )
+  const forkPointBefore = useCallback((messageItemId: string): string | undefined => {
+    const point = nativeChatForkPoint(latest.current, messageItemId)
+    const { support } = latest.current
+    // A tip-only agent forks only its newest reply, as response rows already offer it.
+    return support.kind === 'known' &&
+      support.fork === 'tip' &&
+      support.inheritedOriginal !== true &&
+      point !== nativeChatForkPoint(latest.current)
+      ? undefined
+      : point
+  }, [])
   const forkLatest = useCallback((): NativeChatForkLatestOutcome => {
     if (inFlight.current) {
       return 'pending'

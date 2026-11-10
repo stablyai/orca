@@ -60,6 +60,18 @@ export async function launchNativeChatTerminalFork(input: {
   const state = useAppStore.getState()
   const worktreeId = input.destinationWorktreeId ?? input.source.worktreeId
   const worktree = state.getKnownWorktreeById(worktreeId)
+  // Without the destination's folder the copy would land where Claude in that worktree can't find it.
+  if (input.destinationWorktreeId && !worktree) {
+    failure(
+      new Error(
+        translate(
+          'components.native-chat.fork.terminalNoWorktree',
+          'The new worktree isn’t available yet. Try again.'
+        )
+      )
+    )
+    return {}
+  }
   const executionHostId =
     getExecutionHostIdForWorktree(state, input.source.worktreeId) ?? LOCAL_EXECUTION_HOST_ID
   try {

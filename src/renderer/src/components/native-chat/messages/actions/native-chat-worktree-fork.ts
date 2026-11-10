@@ -38,24 +38,23 @@ export function useNativeChatWorktreeForkOffered(worktreeId: string): boolean {
     target,
     AGENT_SESSION_CREATE_FORK_WORKTREE_RUNTIME_CAPABILITY
   )
-  return host === 'supported' && nativeChatWorktreeForkSourceBranch(worktreeId) !== null
+  // Selected from the store, so a branch Git refresh adds later shows the menu.
+  const branch = useAppStore((state) => {
+    const worktree = state.getKnownWorktreeById(worktreeId)
+    const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : undefined
+    return forkableWorktreeBranch(worktree, repo, worktreeId)
+  })
+  return host === 'supported' && branch !== null
 }
 
 /** The name a fork gets and where it should land, as the dialog shows it before confirming. */
 export type NativeChatWorktreeForkPlan = {
   name: string
   displayName: string
-  /** The folder Orca creates it in when the project keeps worktrees side by side. */
-  folder: string
 }
 
 function shortBranch(ref: string): string {
   return ref.replace(/^refs\/heads\//, '')
-}
-
-function parentFolder(path: string): string {
-  const cut = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
-  return cut > 0 ? path.slice(0, cut) : path
 }
 
 /** The next free `<source>-fork`, `-fork-2`… among the project's worktrees, titled `Fork N of <source>`. */
@@ -82,8 +81,7 @@ export function nativeChatWorktreeForkPlan(
   }
   return {
     name: index === 1 ? base : `${base}-${index}`,
-    displayName: index === 1 ? `Fork of ${sourceTitle}` : `Fork ${index} of ${sourceTitle}`,
-    folder: parentFolder(source.path)
+    displayName: index === 1 ? `Fork of ${sourceTitle}` : `Fork ${index} of ${sourceTitle}`
   }
 }
 

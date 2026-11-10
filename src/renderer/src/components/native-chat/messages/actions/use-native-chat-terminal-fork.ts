@@ -1,3 +1,7 @@
+import {
+  terminalForkPointBefore,
+  terminalForkTurnEnd
+} from '../../../../../../shared/native-chat/terminal-fork-point'
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { isRootAgentJournalItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
@@ -56,7 +60,9 @@ export function useNativeChatTerminalFork(input: {
       try {
         return await launchNativeChatTerminalFork({
           source,
-          throughItemId,
+          // The reply's whole turn, tool work after its last text included.
+          throughItemId:
+            terminalForkTurnEnd(latest.current.messages, throughItemId) ?? throughItemId,
           ...(destination ? { destinationWorktreeId: destination.worktreeId } : {}),
           ...(draft ? { draft } : {})
         })
@@ -67,11 +73,11 @@ export function useNativeChatTerminalFork(input: {
     },
     []
   )
-  const forkPointBefore = useCallback((messageItemId: string): string | undefined => {
-    const { messages } = latest.current
-    const index = messages.findIndex((message) => message.id === messageItemId)
-    return index === -1 ? undefined : messages.slice(0, index).findLast(terminalForkPoint)?.id
-  }, [])
+  const forkPointBefore = useCallback(
+    (messageItemId: string): string | undefined =>
+      terminalForkPointBefore(latest.current.messages, messageItemId),
+    []
+  )
   const latestForkItemId = useCallback(
     () => latest.current.messages.findLast(terminalForkPoint)?.id,
     []

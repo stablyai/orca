@@ -1,3 +1,4 @@
+import { terminalForkTurnEnd } from '../../../../src/shared/native-chat/terminal-fork-point'
 import { AI_VAULT_TERMINAL_FORK_CUT_CAPABILITY } from '../../../../src/shared/ai-vault/resume/ai-vault-resume-preparation'
 import { useRegisteredAgent } from './use-mobile-registered-fork-agent'
 import type { MobileWorktreeForkMode } from '../mobile-structured-chat-worktree-fork'
@@ -198,13 +199,17 @@ export function useMobileNativeChatFork(input: {
       }
       inFlight.current = true
       setPending(true)
-      void create(agent, { sessionId, throughItemId: message.id }).finally(() => {
+      // A terminal fork copies the reply's whole turn, tool work after its last text included.
+      const throughItemId = terminal
+        ? (terminalForkTurnEnd(messages, message.id) ?? message.id)
+        : message.id
+      void create(agent, { sessionId, throughItemId }).finally(() => {
         inFlight.current = false
         setPending(false)
       })
       return true
     },
-    [agent, offerFor, sessionId]
+    [agent, messages, offerFor, sessionId, terminal]
   )
   const fork = useCallback(
     (message: NativeChatMessage) => void start(message, createFork),
