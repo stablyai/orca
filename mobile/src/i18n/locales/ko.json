@@ -2450,8 +2450,7 @@
     "tabStrip": {
       "checkingCapabilities": "데스크톱에서 지원하는 기능을 확인 중입니다. 잠시 후 다시 시도하세요.",
       "newTab": "새 탭",
-      "quickCommandsUpdateRequired": "빠른 명령을 사용하려면 데스크톱 업데이트가 필요합니다.",
-      "tabStatus": "{{title}}, {{status}}"
+      "quickCommandsUpdateRequired": "빠른 명령을 사용하려면 데스크톱 업데이트가 필요합니다."
     },
     "terminalActionSheetActions": {
       "clearTerminal": "터미널 지우기",

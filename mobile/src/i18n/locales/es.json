@@ -2524,8 +2524,7 @@
     "tabStrip": {
       "checkingCapabilities": "Comprobando las funciones del escritorio. Inténtalo de nuevo en un momento.",
       "newTab": "Nueva pestaña",
-      "quickCommandsUpdateRequired": "Actualiza el escritorio para usar los comandos rápidos.",
-      "tabStatus": "{{title}}, {{status}}"
+      "quickCommandsUpdateRequired": "Actualiza el escritorio para usar los comandos rápidos."
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Limpiar terminal",
