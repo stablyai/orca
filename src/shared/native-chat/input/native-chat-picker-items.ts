@@ -1,5 +1,5 @@
 import type { DiscoveredSkill, SkillSourceKind } from '../../skills'
-import { locatedPickerSkill, getSafeSkillName, isTokenSafe } from '../native-chat-reported-skill'
+import * as reportedSkills from '../native-chat-reported-skill'
 import type { NativeChatSessionSkill, SlashCommandSuggestion } from './native-chat-slash-commands'
 import { stripUnsafeDisplayCharacters } from '../../display-text-safety'
 import { compareBaseSensitivityLocaleText } from '../../locale-text-collators'
@@ -25,6 +25,8 @@ export type NativeChatPickerItem =
       name: string
       token: string
       description: string | null
+      /** How the session says the skill is invoked, e.g. `<target>`. */
+      argumentHint?: string
       sources: { sourceKind: SkillSourceKind; skillFilePath: string }[]
       /** The file the agent selects this skill by, when the agent reported it; a pick sends it. */
       path?: string
@@ -153,7 +155,7 @@ function mergeNativeChatSkills(
   }
   const byName = new Map<string, DiscoveredSkill[]>()
   for (const skill of exactPaths.values()) {
-    const safeName = getSafeSkillName(skill)
+    const safeName = reportedSkills.getSafeSkillName(skill)
     if (!safeName) {
       continue
     }
@@ -178,9 +180,9 @@ function mergeNativeChatSkills(
     }
   }
   const located = (sessionSkills ?? []).flatMap((skill) =>
-    skill.path && isTokenSafe(skill.name)
+    skill.path && reportedSkills.isTokenSafe(skill.name)
       ? [
-          locatedPickerSkill(
+          reportedSkills.locatedPickerSkill(
             skill,
             skill.path,
             exactPaths.get(skill.path),
@@ -196,19 +198,18 @@ function mergeNativeChatSkills(
           ...sessionSkills
             .filter((skill) => !skill.path)
             .map((skill) => skill.name)
-            .filter(isTokenSafe),
+            .filter(reportedSkills.isTokenSafe),
           ...[...discovered.keys()].filter((name) => unclassifiedNames.has(name))
         ]
       : [...discovered.keys()]
   return [
     ...located,
-    ...[...new Set(names)].map((name) => {
-      const skill = discovered.get(name) ?? pickerSkill(name, [], skillSigil)
-      const reported = firstReportedByName.get(name)?.description
-      return skill.description === null && reported
-        ? { ...skill, description: sanitizePickerText(reported, 240) }
-        : skill
-    })
+    ...[...new Set(names)].map((name) =>
+      reportedSkills.withReportedSkillCopy(
+        discovered.get(name) ?? pickerSkill(name, [], skillSigil),
+        firstReportedByName.get(name)
+      )
+    )
   ].sort(comparePickerSkills)
 }
 

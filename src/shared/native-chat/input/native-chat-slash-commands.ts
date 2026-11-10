@@ -155,7 +155,10 @@ export function sessionSlashCommandSuggestions(
     })
 }
 
-export type NativeChatSessionSkill = Pick<AgentSessionSlashCommand, 'name' | 'description' | 'path'>
+export type NativeChatSessionSkill = Pick<
+  AgentSessionSlashCommand,
+  'name' | 'description' | 'path' | 'argumentHint'
+>
 
 function isSessionSkill(entry: AgentSessionSlashCommand, agent?: AgentType): boolean {
   return (
@@ -174,7 +177,8 @@ export function sessionReportedSkills(
           {
             name: entry.name,
             ...(entry.description ? { description: entry.description } : {}),
-            ...(entry.path ? { path: entry.path } : {})
+            ...(entry.path ? { path: entry.path } : {}),
+            ...(entry.argumentHint ? { argumentHint: entry.argumentHint } : {})
           }
         ]
       : []

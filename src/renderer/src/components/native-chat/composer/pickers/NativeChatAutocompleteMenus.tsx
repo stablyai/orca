@@ -203,7 +203,7 @@ function PickerOption({
           <span className="min-w-0 truncate font-mono text-chat-code font-medium">
             {item.token}
           </span>
-          {item.kind === 'command' && item.argumentHint ? (
+          {item.argumentHint ? (
             <span className="min-w-0 truncate font-mono text-2xs text-muted-foreground">
               {item.argumentHint}
             </span>
