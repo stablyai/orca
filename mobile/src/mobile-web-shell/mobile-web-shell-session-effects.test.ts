@@ -7,6 +7,7 @@ const doubles = vi.hoisted(() => ({
 }))
 
 vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths: { cache: '' } }))
+vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 // The runner's deadlines live in the runtime module, whose foreground timer reads React Native's AppState.
 vi.mock('./foreground-timer', () => ({ setForegroundTimer: () => () => {} }))
 vi.mock('../transport/rpc/rpc-operation', () => ({

@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 
-// Mock the import-time native module to test only the URI converter.
+// Mock the import-time native modules to test only the URI converter.
 vi.mock('expo-file-system', () => ({
   Directory: class {},
   File: class {},
   Paths: { cache: '' }
 }))
+vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 
 import { generationDirectoryPath } from './generation-store-file-system'
 

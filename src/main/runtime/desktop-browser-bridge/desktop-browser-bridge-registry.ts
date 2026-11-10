@@ -19,6 +19,7 @@ type Attachment = {
   pairedDeviceId: string
   acceptsCancel?: boolean
   enforcesExpectUrl?: boolean
+  readsTabAnnotations?: boolean
   emit: (event: DesktopBrowserBridgeEvent) => void
 }
 
@@ -55,6 +56,10 @@ export class DesktopBrowserBridgeRegistry {
   /** Commands go to the newest attachment only, so an older one behind it can't help. */
   newestAttachmentEnforcesExpectUrl(): boolean {
     return this.attachments.at(-1)?.enforcesExpectUrl === true
+  }
+
+  newestAttachmentReadsTabAnnotations(): boolean {
+    return this.attachments.at(-1)?.readsTabAnnotations === true
   }
 
   forward(

@@ -207,6 +207,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  tab create                Create a new browser tab (navigates to --url)',
   '  tab list                  List open browser tabs',
   '  tab show                  Show one browser tab by page id',
+  "  tab annotations           Show a tab's unsent notes from the user",
   '  tab current               Show the current browser tab',
   '  tab profile list          List browser session profiles',
   '  tab profile create        Create a browser session profile',
