@@ -39,9 +39,15 @@ export type WorkerShowResult = {
     releaseState?: string | null
     terminalHandle?: string | null
   } | null
-  observation?: { agentWait?: { source: string; reason?: string } | null }
+  observation?: { agentWait?: { source: string; reason?: string } | null; reason?: string }
+  /** Present only when the worker's paired server could not be reached and this Orca's record answered. */
+  server?: RemoteWorkerServer & { reachable: false }
+  lastReport?: string | null
   autoReleaseAt?: string | null
 }
+
+/** A worker a paired server runs, as this Orca names that server and last heard from it. */
+type RemoteWorkerServer = { name: string; lastSeenAt: string }
 
 type WorkerShowFields = {
   dispatchId: string
@@ -56,6 +62,10 @@ type WorkerShowFields = {
   terminal?: string
   terminalState?: string
   workspace?: string
+  server?: string
+  lastSeen?: string
+  lastReport?: string
+  note?: string
   attention?: string[]
   waitingOnHuman?: string
   lastError?: string
@@ -84,6 +94,10 @@ export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerSh
         value.terminalResource?.releaseState ??
         undefined,
       workspace: value.projection?.workspace?.id ?? value.worker.worktreeId ?? undefined,
+      server: value.server?.name,
+      lastSeen: value.server?.lastSeenAt,
+      lastReport: value.lastReport ?? undefined,
+      note: value.server ? value.observation?.reason : undefined,
       attention: actionableAttention(value.projection),
       // Silence means checked and clear; an older host or unreadable pane never evaluated it.
       waitingOnHuman:
@@ -111,6 +125,8 @@ export type WorkerListResult = {
     coordinatedFrom?: string | null
     resource?: { worktreeId?: string | null; autoReleaseAt?: string | null } | null
     projection?: WorkerProjection
+    /** Only on a worker a paired server runs, listed from this Orca's record of it. */
+    server?: RemoteWorkerServer
   }[]
   counts: Record<string, number>
   page?: { hasMore: boolean; nextCursor: string | null; total: number }
@@ -135,6 +151,7 @@ type WorkerListRow = {
   workspace?: string
   host?: string
   coordinatedFrom?: string
+  lastSeen?: string
   attention?: string[]
   autoReleaseAt?: string
   next?: string
@@ -169,8 +186,9 @@ export const WORKER_LIST_VIEW: OrchestrationAgentView<ScopedWorkerList, WorkerLi
         terminalState: worker.terminalState ?? undefined,
         // Older runtimes send no projection; the terminal resource row still names both.
         workspace: projection?.workspace?.id ?? worker.resource?.worktreeId ?? undefined,
-        host: projection?.host.id,
+        host: projection?.host.id ?? worker.server?.name,
         coordinatedFrom: worker.coordinatedFrom ?? undefined,
+        lastSeen: worker.server?.lastSeenAt,
         attention: actionableAttention(projection),
         autoReleaseAt: projection?.autoReleaseAt ?? worker.resource?.autoReleaseAt ?? undefined,
         next: projection
