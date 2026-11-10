@@ -26,7 +26,7 @@ import {
   structuredAgentSessionFocusOwner,
   structuredAgentSessionTargetForHost
 } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
-import { holdFrameDrawnProvisionalChatTab } from '../../frame-drawn-chat-tab-placement'
+import { holdFrameDrawnProvisionalChatTab } from '../../../store/workspace-layout/frames/frame-drawn-chat-tab-placement'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import {
   openAgentSessionTabThroughLayoutOwner,

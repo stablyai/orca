@@ -9,7 +9,7 @@ import { isWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layou
 import { hasHostSessionMirrorHydrated } from '@/runtime/web-session-tabs-sync/hydration/host-session-mirror-hydration'
 import { hasHostMirrorHandleWaitExpired } from '../../host-mirror-handle-gap-wait'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '../../workspace/ownership/resolve-owner'
-import { warnAmbiguousOwnerOnce } from '../../ambiguous-owner-warning'
+import { warnAmbiguousOwnerOnce } from '../../workspace/ownership/ambiguous-owner-warning'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
