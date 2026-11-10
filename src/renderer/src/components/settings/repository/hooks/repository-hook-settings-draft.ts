@@ -26,7 +26,7 @@ export function getLocalHookFields(
   return [
     {
       name: 'setup',
-      label: t('auto.components.settings.RepositoryHooksSection.52b31baf02', 'Setup Script'),
+      label: t('auto.components.settings.RepositoryHooksSection.1ecf0b115a', 'Setup script'),
       description: isFolder
         ? t(
             'components.settings.RepositoryHooksSection.folderSetupFieldDescription',
@@ -43,7 +43,7 @@ export function getLocalHookFields(
     },
     {
       name: 'archive',
-      label: t('auto.components.settings.RepositoryHooksSection.9a100323ff', 'Archive Script'),
+      label: t('auto.components.settings.RepositoryHooksSection.bfdb1266ce', 'Archive script'),
       description: isFolder
         ? t(
             'components.settings.RepositoryHooksSection.folderArchiveFieldDescription',

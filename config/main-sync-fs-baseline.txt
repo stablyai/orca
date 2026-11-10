@@ -282,6 +282,7 @@
 1 src/main/ipc/filesystem/watcher-process/parcel-watcher-supervisor-subscribe.ts
 1 src/main/ipc/filesystem/watcher-process/rebinding-file-watch.ts
 1 src/main/ipc/filesystem/watcher-process/watcher-event-root-path-rewrite.ts
+1 src/main/ipc/floating-workspace-directory.ts
 1 src/main/ipc/macos-keyboard-layout-snapshot.ts
 1 src/main/ipc/notification-authorization-status.ts
 1 src/main/ipc/pty/spawn-pane-env.ts

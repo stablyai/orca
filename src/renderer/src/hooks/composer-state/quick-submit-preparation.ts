@@ -2,10 +2,8 @@ import type { QuickSubmitPreparationInput } from './quick-submit-input-contract'
 
 import { useCallback } from 'react'
 import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
-import {
-  getLinkedWorkItemProvider,
-  canUseIssueCommandForLinkedItemProvider
-} from '@/lib/new-workspace'
+import { getWorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
+import { canUseIssueCommandForLinkedItemProvider } from '@/lib/new-workspace'
 import { getSetupConfig } from '../../../../shared/orca-hook-setup-config'
 import {
   deriveWorkspaceSetupState,
@@ -130,7 +128,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
       // Hosts that predate folder setup ignore the decision for folders.
       const effectiveSetupDecision: SetupDecision = submitResolvedSetupDecision ?? 'inherit'
       const submitLinkedWorkItemProvider = submitLinkedWorkItem
-        ? getLinkedWorkItemProvider(submitLinkedWorkItem)
+        ? getWorkspaceSourceProvider(submitLinkedWorkItem)
         : null
       // Setup trust applies to folder projects too; the issue command needs a Git repo.
       const hookPreparation: WorktreeCreationRequest['hookPreparation'] = {

@@ -109,8 +109,8 @@ export function RepositoryHooksSection({
       <SettingsGroup
         title={
           isFolder
-            ? t('components.settings.RepositoryHooksSection.folderTitle', 'Workspace Hooks')
-            : t('auto.components.settings.RepositoryHooksSection.ff082fe7c6', 'Worktree Hooks')
+            ? t('components.settings.RepositoryHooksSection.folderTitle', 'Workspace hooks')
+            : t('auto.components.settings.RepositoryHooksSection.01bdba296f', 'Worktree hooks')
         }
         description={
           isFolder
@@ -125,7 +125,7 @@ export function RepositoryHooksSection({
         }
       >
         <SearchableSetting
-          title={t('auto.components.settings.RepositoryHooksSection.52b31baf02', 'Setup Script')}
+          title={t('auto.components.settings.RepositoryHooksSection.1ecf0b115a', 'Setup script')}
           description={
             isFolder
               ? t(
@@ -163,8 +163,8 @@ export function RepositoryHooksSection({
         </SearchableSetting>
         <SearchableSetting
           title={t(
-            'auto.components.settings.RepositoryHooksSection.fb6bebcf7e',
-            'When to Run Setup'
+            'auto.components.settings.RepositoryHooksSection.1c17e751c4',
+            'When to run setup'
           )}
           description={t(
             'auto.components.settings.RepositoryHooksSection.63e1783173',
@@ -187,7 +187,7 @@ export function RepositoryHooksSection({
           />
         </SearchableSetting>
         <SearchableSetting
-          title={t('auto.components.settings.RepositoryHooksSection.9a100323ff', 'Archive Script')}
+          title={t('auto.components.settings.RepositoryHooksSection.bfdb1266ce', 'Archive script')}
           description={
             isFolder
               ? t(
@@ -295,8 +295,8 @@ function RepositoryIssueCommandRow({
   return (
     <SearchableSetting
       title={t(
-        'auto.components.settings.RepositoryHooksSection.13394103bd',
-        'Custom GitHub Issue Command'
+        'auto.components.settings.RepositoryHooksSection.da00f141c2',
+        'Custom GitHub issue command'
       )}
       description={t(
         'auto.components.settings.RepositoryHooksSection.2cc27dc12b',
