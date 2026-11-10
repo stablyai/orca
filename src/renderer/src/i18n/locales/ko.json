@@ -19464,8 +19464,7 @@
         "continueNow": "지금 계속",
         "switchAccount": "계정 전환",
         "addAccount": "계정 추가…",
-        "accountUnavailable": "이 채팅을 다른 계정으로 옮길 수 없습니다. 다른 에이전트에게 인계하세요.",
-        "handOff": "넘기기…"
+        "accountUnavailable": "이 채팅을 다른 계정으로 옮길 수 없습니다. 다른 에이전트에게 인계하세요."
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "자동 계속을 취소하지 못했습니다. 다시 시도하세요.",

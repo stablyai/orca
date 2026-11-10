@@ -20211,8 +20211,7 @@
         "continueNow": "Continuer maintenant",
         "switchAccount": "Changer de compte",
         "addAccount": "Ajouter un compte…",
-        "accountUnavailable": "Cette conversation ne peut pas passer à un autre compte. Transférez-la à un autre agent.",
-        "handOff": "Transférer…"
+        "accountUnavailable": "Cette conversation ne peut pas passer à un autre compte. Transférez-la à un autre agent."
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "Impossible d’annuler la reprise automatique. Réessayez.",

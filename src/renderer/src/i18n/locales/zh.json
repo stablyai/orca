@@ -19404,8 +19404,7 @@
         "continueNow": "立即继续",
         "switchAccount": "切换账号",
         "addAccount": "添加账号…",
-        "accountUnavailable": "此聊天无法切换到其他账户。请将其移交给其他智能体。",
-        "handOff": "移交…"
+        "accountUnavailable": "此聊天无法切换到其他账户。请将其移交给其他智能体。"
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "无法取消自动继续。请重试。",

@@ -20806,8 +20806,7 @@
         "continueNow": "Continue Now",
         "switchAccount": "Switch Account",
         "addAccount": "Add Account…",
-        "accountUnavailable": "This chat cannot move to another account. Hand it off to another agent instead.",
-        "handOff": "Hand Off…"
+        "accountUnavailable": "This chat cannot move to another account. Hand it off to another agent instead."
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "Couldn't cancel automatic continuation. Try again.",

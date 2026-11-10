@@ -19972,8 +19972,7 @@
         "continueNow": "Continuar ahora",
         "switchAccount": "Cambiar de cuenta",
         "addAccount": "Añadir cuenta…",
-        "accountUnavailable": "Este chat no se puede mover a otra cuenta. Transfiérelo a otro agente.",
-        "handOff": "Transferir…"
+        "accountUnavailable": "Este chat no se puede mover a otra cuenta. Transfiérelo a otro agente."
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "No se pudo cancelar la continuación automática. Inténtalo de nuevo.",

@@ -19464,8 +19464,7 @@
         "continueNow": "今すぐ続ける",
         "switchAccount": "アカウントを切り替え",
         "addAccount": "アカウントを追加…",
-        "accountUnavailable": "このチャットは別のアカウントに移せません。別の Agent に引き継いでください。",
-        "handOff": "引き継ぐ…"
+        "accountUnavailable": "このチャットは別のアカウントに移せません。別の Agent に引き継いでください。"
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "自動続行をキャンセルできませんでした。もう一度お試しください。",

@@ -8,7 +8,9 @@ import {
   useState,
   type ReactNode
 } from 'react'
+import { MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { structuredChatTabById } from '@/lib/structured-chat-tab-index'
@@ -252,19 +254,31 @@ export function NativeChatUsageLimitActions(): React.JSX.Element | null {
   if (!actions || (!actions.account && !actions.handOff)) {
     return null
   }
+  const handOffLabel = t(
+    'components.agentSessionContinuation.handOffToAnotherAgent',
+    'Hand Off to Another Agent'
+  )
   return (
     <div className="ml-6 flex flex-wrap items-center gap-2">
       {actions.account}
       {actions.handOff ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="xs"
-          disabled={actions.disabled}
-          onClick={actions.handOff}
-        >
-          {t('components.native-chat.usageLimitActions.handOff', 'Hand Off…')}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-xs"
+              aria-label={handOffLabel}
+              disabled={actions.disabled}
+              onClick={actions.handOff}
+            >
+              <MessageSquarePlus />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            {handOffLabel}
+          </TooltipContent>
+        </Tooltip>
       ) : null}
     </div>
   )
