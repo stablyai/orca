@@ -66,7 +66,14 @@ export async function listPendingCloudTransfers(root: string): Promise<CloudTran
     const dir = join(root, entry.name)
     const transfer = await loadPersistedTransfer(dir)
     const worktreePath = await persistedWorktreePath(dir)
-    if (!transfer || !worktreePath) {
+    // The local worktree is gone (deleted since): nothing to apply into, so nothing to offer.
+    const worktreeExists = worktreePath
+      ? await stat(worktreePath).then(
+          (s) => s.isDirectory(),
+          () => false
+        )
+      : false
+    if (!transfer || !worktreePath || !worktreeExists) {
       continue
     }
     pending.push({
@@ -77,4 +84,16 @@ export async function listPendingCloudTransfers(root: string): Promise<CloudTran
     })
   }
   return pending
+}
+
+/** "Discard" on the after-restart offer: the saved changes are deleted. */
+export async function discardPendingCloudTransfer(
+  root: string,
+  transferId: string
+): Promise<boolean> {
+  if (!/^[0-9a-f-]{36}$/i.test(transferId)) {
+    return false
+  }
+  await rm(join(root, transferId), { recursive: true, force: true })
+  return true
 }

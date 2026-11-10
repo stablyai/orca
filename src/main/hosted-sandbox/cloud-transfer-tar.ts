@@ -3,7 +3,19 @@
 // or climbs out of the destination are skipped; total bytes and entry counts are capped, and gzip is
 // inflated with a byte cap (no gzip bombs).
 import { createReadStream, createWriteStream } from 'node:fs'
-import { link, lstat, mkdir, open, readFile, realpath, rename, rm, unlink } from 'node:fs/promises'
+import { constants as fsConstants } from 'node:fs'
+import {
+  copyFile,
+  link,
+  lstat,
+  mkdir,
+  open,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  unlink
+} from 'node:fs/promises'
 import { randomBytes } from 'node:crypto'
 import { dirname, isAbsolute, join, normalize, sep } from 'node:path'
 import { pipeline } from 'node:stream/promises'
@@ -236,10 +248,21 @@ export async function safeExtractTar(
         // link() fails if something appeared at the path meanwhile: atomic no-clobber.
         try {
           await link(temp, target)
-        } catch {
-          result.existing.push(relative)
-          await unlink(temp)
-          continue
+        } catch (error) {
+          const code = error instanceof Error && 'code' in error ? error.code : null
+          // No hard links on this filesystem: an exclusive-create copy is just as no-clobber.
+          const copied =
+            code === 'EPERM' || code === 'ENOTSUP' || code === 'EXDEV'
+              ? await copyFile(temp, target, fsConstants.COPYFILE_EXCL).then(
+                  () => true,
+                  () => false
+                )
+              : false
+          if (!copied) {
+            result.existing.push(relative)
+            await unlink(temp)
+            continue
+          }
         }
         await unlink(temp)
       } else {

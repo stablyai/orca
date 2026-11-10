@@ -139,6 +139,7 @@ export async function applyTransferToWorktree(
     leftovers
   )
   let skippedUntracked: string[] = []
+  await sweepTransferTemps(worktreePath)
   if ((await fileSize(join(entry.dir, 'untracked.tgz'))) > 0) {
     // Inflate with a cap (no gzip bombs), then extract without clobbering anything already there.
     const untrackedTar = join(entry.dir, 'untracked.tar')
@@ -151,12 +152,15 @@ export async function applyTransferToWorktree(
     // Files that differ from what is here were not written: keep the archive and name them, so
     // nothing is lost and the folder (and "Apply changes again") stays.
     skippedUntracked = [...extracted.existing, ...extracted.skipped].slice(0, 200)
-    if (extracted.existing.length > 0) {
+    // Anything not written (a different file here, or refused for safety: a symlink or directory at
+    // the path, a symlinked parent) keeps the archive and its list, so nothing is lost and archiving
+    // the cloud copy stays blocked.
+    if (skippedUntracked.length > 0) {
       await mkdir(leftovers, { recursive: true })
       await cp(join(entry.dir, 'untracked.tgz'), join(leftovers, 'untracked.tgz'))
       await writeFile(
         join(leftovers, 'untracked-not-written.txt'),
-        `${extracted.existing.join('\n')}\n`
+        `${skippedUntracked.join('\n')}\n`
       )
     } else {
       await rm(join(leftovers, 'untracked.tgz'), { force: true })
@@ -189,5 +193,25 @@ export async function applyTransferToWorktree(
     leftoverPatchDir: kept ? leftovers : null,
     conflicts: [...staged.conflicts, ...unstaged.conflicts],
     skippedUntracked
+  }
+}
+
+/** Temp files an interrupted earlier extraction may have left (the name is ours alone). */
+async function sweepTransferTemps(worktreePath: string): Promise<void> {
+  let listed = ''
+  try {
+    const out = await gitExecFileAsync(['ls-files', '-o', '-z'], {
+      cwd: worktreePath,
+      maxBuffer: 64 * 1024 * 1024,
+      timeout: 120_000
+    })
+    listed = out.stdout
+  } catch {
+    return
+  }
+  for (const file of listed.split('\0')) {
+    if (/\.orca-transfer-[0-9a-f]{12}$/.test(file)) {
+      await rm(join(worktreePath, file), { force: true })
+    }
   }
 }

@@ -82,6 +82,8 @@ export type OrcaCloudTransferApi = {
   }) => Promise<CloudTransferResult<CloudTransferFinished>>
   /** Moves with changes still to apply, kept across app restarts. */
   listPendingTransfers: () => Promise<CloudTransferPending[]>
+  /** Deletes a kept move's saved changes (the after-restart offer's "Discard"). */
+  discardPendingTransfer: (args: { transferId: string }) => Promise<boolean>
   onTransferProgress: (callback: (event: CloudTransferProgressEvent) => void) => () => void
 }
 
@@ -90,5 +92,6 @@ export const ORCA_CLOUD_TRANSFER_CHANNELS = {
   finish: 'orcaCloudWorkspace:finishTransferToLocal',
   reapply: 'orcaCloudWorkspace:reapplyTransferToLocal',
   listPending: 'orcaCloudWorkspace:listPendingTransfers',
+  discardPending: 'orcaCloudWorkspace:discardPendingTransfer',
   progress: 'orcaCloudWorkspace:transferProgress'
 } as const

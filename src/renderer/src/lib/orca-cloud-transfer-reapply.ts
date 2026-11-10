@@ -95,6 +95,10 @@ export async function offerPendingCloudTransfers(): Promise<number> {
           'They are saved on this computer. Nothing you changed here is overwritten.'
         ),
         duration: Infinity,
+        cancel: {
+          label: translate('orcaCloudMove.pending.discard', 'Discard'),
+          onClick: () => void api.discardPendingTransfer({ transferId: transfer.transferId })
+        },
         action: {
           label: translate('orcaCloudMove.reapply', 'Apply changes again'),
           onClick: () =>

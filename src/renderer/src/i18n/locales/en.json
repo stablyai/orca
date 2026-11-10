@@ -26714,7 +26714,8 @@
       "title": "Some changes from a move weren’t applied",
       "detail": "They are saved on this computer. Nothing you changed here is overwritten.",
       "stillLeft": "Some changes still conflict with edits made here. They stay saved.",
-      "done": "All changes applied"
+      "done": "All changes applied",
+      "discard": "Discard"
     }
   },
   "orcaCloud": {

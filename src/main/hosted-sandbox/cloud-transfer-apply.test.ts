@@ -12,6 +12,7 @@ import {
   persistTransfer
 } from './cloud-transfer-apply'
 import { listPendingCloudTransfers, sweepCloudTransfers } from './cloud-transfer'
+import { discardPendingCloudTransfer } from './cloud-transfer-pending'
 
 const git = (cwd: string, ...args: string[]) =>
   execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...args], {
@@ -190,5 +191,43 @@ describe('Apply changes again', () => {
         leftoverDir: join(dir, 'unapplied')
       }
     ])
+  })
+
+  it('keeps the archive when a file was refused for safety (a directory at the path)', async () => {
+    const { root, repo, dir, entry, homes } = setup()
+    const src = join(root, 'untracked-src2')
+    mkdirSync(src, { recursive: true })
+    writeFileSync(join(src, 'clash'), 'cloud file\n')
+    execFileSync('tar', ['-czf', join(dir, 'untracked.tgz'), '-C', src, 'clash'], {
+      env: { ...process.env, COPYFILE_DISABLE: '1' }
+    })
+    mkdirSync(join(repo, 'clash'))
+    const result = await applyTransferToWorktree(entry, repo, homes)
+    expect(result.skippedUntracked).toEqual(['clash'])
+    expect(result.leftoverPatchDir).toBe(join(dir, 'unapplied'))
+    expect(existsSync(join(dir, 'unapplied', 'untracked.tgz'))).toBe(true)
+  })
+
+  it('sweeps temp files an interrupted extraction left, on the next apply', async () => {
+    const { repo, entry, homes } = setup()
+    writeFileSync(join(repo, 'a.txt.orca-transfer-0123456789ab'), 'partial')
+    await applyTransferToWorktree(entry, repo, homes)
+    expect(existsSync(join(repo, 'a.txt.orca-transfer-0123456789ab'))).toBe(false)
+  })
+
+  it('does not offer a kept transfer whose worktree is gone, and Discard deletes it', async () => {
+    const { root, repo, entry } = setup()
+    const transfers = join(root, 'transfers2')
+    const gone = '22222222-2222-3333-4444-555555555555'
+    const kept = '33333333-2222-3333-4444-555555555555'
+    for (const id of [gone, kept]) {
+      mkdirSync(join(transfers, id), { recursive: true })
+    }
+    await persistTransfer({ ...entry, dir: join(transfers, gone) }, join(root, 'deleted-worktree'))
+    await persistTransfer({ ...entry, dir: join(transfers, kept) }, repo)
+    expect((await listPendingCloudTransfers(transfers)).map((t) => t.transferId)).toEqual([kept])
+    expect(await discardPendingCloudTransfer(transfers, kept)).toBe(true)
+    expect(existsSync(join(transfers, kept))).toBe(false)
+    expect(await discardPendingCloudTransfer(transfers, '../x')).toBe(false)
   })
 })

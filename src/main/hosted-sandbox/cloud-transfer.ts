@@ -19,6 +19,7 @@ import {
   persistTransfer
 } from './cloud-transfer-apply'
 import {
+  discardPendingCloudTransfer,
   listPendingCloudTransfers,
   persistedWorktreePath,
   sweepCloudTransfers
@@ -91,6 +92,7 @@ export function installCloudTransferHandlers(deps: {
   ipcMain.removeHandler(CH.finish)
   ipcMain.removeHandler(CH.reapply)
   ipcMain.removeHandler(CH.listPending)
+  ipcMain.removeHandler(CH.discardPending)
   ipcMain.handle(
     CH.prepare,
     async (
@@ -276,10 +278,18 @@ export function installCloudTransferHandlers(deps: {
   ipcMain.handle(CH.listPending, async (): Promise<CloudTransferPending[]> =>
     listPendingCloudTransfers(join(deps.userDataPath, 'cloud-transfers'))
   )
+  ipcMain.handle(
+    CH.discardPending,
+    async (_event, args: { transferId: string }): Promise<boolean> =>
+      applying.has(args.transferId)
+        ? false
+        : discardPendingCloudTransfer(join(deps.userDataPath, 'cloud-transfers'), args.transferId)
+  )
   return () => {
     ipcMain.removeHandler(CH.prepare)
     ipcMain.removeHandler(CH.finish)
     ipcMain.removeHandler(CH.reapply)
     ipcMain.removeHandler(CH.listPending)
+    ipcMain.removeHandler(CH.discardPending)
   }
 }

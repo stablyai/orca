@@ -216,6 +216,28 @@ describe('interrupted turn continue', () => {
     expect(offer).toHaveBeenCalledTimes(1)
   })
 
+  it('a sleep (disarm) after the restart settled cancels a loop that is already waiting', async () => {
+    state.agentStatusByPaneKey = { 'tab-a:1': working('tab-a:1', 'claude') }
+    armInterruptedTurnsForHostRestart('ws', NOW)
+    let clock = NOW
+    const send = vi.fn(async () => true)
+    const result = await continueInterruptedTurns('ws', {
+      now: () => clock,
+      sleep: async (ms: number) => {
+        clock += ms
+        if (clock === NOW + 10_000) {
+          disarmInterruptedTurns('ws')
+        }
+      },
+      ptyIdFor: () => (clock >= NOW + 60_000 ? 'pty' : null),
+      send,
+      submit: vi.fn(async () => true),
+      agentInForeground: async () => true
+    })
+    expect(result).toBe(0)
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('a re-arm stops the older wait loop, so continue is never sent twice', async () => {
     state.agentStatusByPaneKey = { 'tab-a:1': working('tab-a:1', 'claude') }
     armInterruptedTurnsForHostRestart('ws', NOW)
