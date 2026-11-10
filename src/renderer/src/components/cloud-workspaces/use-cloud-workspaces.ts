@@ -69,11 +69,24 @@ export function useCloudWorkspacesAvailable(): boolean | null {
   )
 }
 
-export function useCloudWorkspaces(query: CloudWorkspaceListQuery, enabled: boolean) {
+/**
+ * `account` is the signed-in `${userId}:${activeOrgId}`: it is part of the read's key, so a team
+ * switch re-reads at once and a list read for the previous team is never shown or kept.
+ */
+function accountOf(key: string): string {
+  const parsed: { account: string } = JSON.parse(key)
+  return parsed.account
+}
+
+export function useCloudWorkspaces(
+  query: CloudWorkspaceListQuery,
+  enabled: boolean,
+  account: string
+) {
   const [state, setState] = useState<CloudWorkspacesState>({ status: 'loading' })
   const [reading, setReading] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
-  const key = JSON.stringify(query)
+  const key = JSON.stringify({ account, query })
   const keyRef = useRef(key)
   keyRef.current = key
   const refresh = useCallback(() => setReloadKey((k) => k + 1), [])
@@ -97,7 +110,8 @@ export function useCloudWorkspaces(query: CloudWorkspaceListQuery, enabled: bool
         return
       }
       setReading(true)
-      const listQuery: CloudWorkspaceListQuery = JSON.parse(key)
+      const parsed: { query: CloudWorkspaceListQuery } = JSON.parse(key)
+      const listQuery = parsed.query
       let result: Awaited<ReturnType<typeof window.api.cloudWorkspaces.list>>
       try {
         result = await window.api.cloudWorkspaces.list(listQuery)
@@ -148,6 +162,10 @@ export function useCloudWorkspaces(query: CloudWorkspaceListQuery, enabled: bool
   }, [])
 
   // A list or error read for an earlier filter is shown dimmed and busy until this one lands.
-  const stale = (state.status === 'ready' || state.status === 'error') && state.key !== key
-  return { state, stale, reading: reading && enabled, refresh, replace }
+  // One read for another team is not shown at all: those are not this team's workspaces.
+  const settled = state.status === 'ready' || state.status === 'error'
+  const otherAccount = settled && accountOf(state.key) !== account
+  const shown: CloudWorkspacesState = otherAccount ? { status: 'loading' } : state
+  const stale = settled && !otherAccount && state.key !== key
+  return { state: shown, stale, reading: reading && enabled, refresh, replace }
 }

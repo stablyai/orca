@@ -13,8 +13,14 @@ import { CloudApiSignedOutNotice } from './CloudApiSignedOutNotice'
 import { cloudApiErrorCopy } from './cloud-api-copy'
 import { useOrcaCloudApiAvailability } from '@/hooks/useOrcaCloudApiAvailability'
 import { useRequestGeneration } from './use-request-generation'
+import { useOrcaAccountKey } from '@/hooks/use-orca-account-key'
 
+/** Keys, settings and grants belong to one team: a team switch remounts and re-reads them. */
 export function CloudApiKeysPane(): React.JSX.Element | null {
+  return <CloudApiKeysPaneBody key={useOrcaAccountKey()} />
+}
+
+function CloudApiKeysPaneBody(): React.JSX.Element | null {
   const t = useTranslate()
   const availability = useOrcaCloudApiAvailability()
   const api = window.api.cloudApi
