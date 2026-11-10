@@ -21,5 +21,4 @@ describe('single-pane width cap', () => {
       /\[data-tab-area-unsplit\][^{]*\.pane-single-cap[^{]*{[^}]*max-width:\s*var\(--pane-single-max-width, 1100px\);[^}]*margin-inline:\s*auto;/s
     )
   })
-
 })
