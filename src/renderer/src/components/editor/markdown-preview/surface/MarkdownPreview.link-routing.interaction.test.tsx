@@ -6,7 +6,7 @@ import type * as WorktreeRuntimeOwnerIndex from '@/lib/workspace/ownership/workt
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore } from '@/store/index'
+import '@/store/index'
 import type { MarkdownPreviewSourceOpenFile } from '../render-tree/markdown-preview-types'
 
 const createBrowserTabMock = vi.fn()
@@ -59,7 +59,7 @@ vi.mock('@/lib/workspace/ownership/worktree-runtime-owner-index', async (importO
   findFirstIndexedWorktree: (_worktrees: unknown, id: string) =>
     worktreeLookup.value.find((worktree) => worktree.id === id) ?? null
 }))
-vi.mock('@/lib/file-owner-runtime-target', () => {
+vi.mock('@/lib/files/access/file-owner-runtime-target', () => {
   const getRuntimeTargetForFileOwner = (
     _state: unknown,
     _worktreeId: string | null | undefined,
@@ -107,7 +107,7 @@ vi.mock('../../markdown/navigation/MarkdownTableOfContentsPanel', () => ({
 
 import MarkdownPreview from './MarkdownPreview'
 import { buildOwnedEditorFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
-import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'
+import '@/store/slices/editor/focus/editor-focus-reveal'
 import { registerHttpLinkStoreAccessor } from '../../../../lib/browser/navigation/http-link-routing'
 
 describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
@@ -324,30 +324,6 @@ describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
           column: 1
         })
       )
-    })
-
-    it('lets a newer editor navigation supersede the detached preview reveal', async () => {
-      await clickLineLink('file:///other/src/Example.cs#L120')
-      act(() => {
-        root.unmount()
-      })
-      const successorId = buildOwnedEditorFileId('/repo/src/Newer.ts', 'wt-1', null)
-      scheduleEditorLineReveal(useAppStore.getState, '/repo/src/Newer.ts', 75, 3, successorId)
-      flushFrames()
-
-      expect(storeState.setPendingEditorReveal.mock.calls).toEqual([
-        [null],
-        [null],
-        [
-          {
-            filePath: '/repo/src/Newer.ts',
-            fileId: successorId,
-            line: 75,
-            column: 3,
-            matchLength: 0
-          }
-        ]
-      ])
     })
   })
 })

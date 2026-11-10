@@ -9,7 +9,7 @@ import type { FeatureWallOpenSourceTelemetry } from '../../../../shared/telemetr
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { WorkbenchStep, WorkbenchStepId } from '../../../../shared/workbench-steps'
 import type { InstalledAgentSkillState } from '@/hooks/skills/discovery/useInstalledAgentSkills'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { FeatureWallCompletionState } from './use-feature-wall-completion'
 import { FeatureWallBody } from './FeatureWallBody'
 import { FeatureWallRail } from './FeatureWallRail'

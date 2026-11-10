@@ -7,7 +7,8 @@ import type {
 } from '@/components/terminal-pane/agent-completion/agent-completion-coordinator-types'
 import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import { dispatchTerminalNotification } from '../components/terminal-pane/notifications/dispatch-terminal-notification'
-import { collectLeafIdsInOrder } from '../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import '../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/terminal-pane-tree'
 import { getPtyIdForPaneKey } from './pane-key-pty-id'
 import { dispatchAgentHookTerminalLifecycle } from '@/components/terminal-pane/agent-completion/agent-hook-terminal-lifecycle'
 import { isAgentTaskCompleteTrackingEnabledFromState as isAgentHookCompletionTrackingEnabled } from '../components/terminal-pane/notifications/agent-task-complete-policy'
@@ -22,18 +23,13 @@ import {
 } from './agent-hook-completion-revision-hold'
 import { getFirstTerminalTab } from '@/store/terminals/terminal-tab-owner-index'
 import * as finishDrops from '@/attention/agent-finish-drop-breadcrumb'
-
-type CoordinatorEntry = {
-  worktreeId: string
-  coordinator: AgentCompletionCoordinator
-}
-
-type StoreSnapshot = ReturnType<typeof useAppStore.getState>
-const emptyTerminalTabs: StoreSnapshot['tabsByWorktree'] = {}
-type PaneCoordinatorLivenessSnapshot = Pick<
+import type {
+  CoordinatorEntry,
   StoreSnapshot,
-  'tabsByWorktree' | 'ptyIdsByTabId' | 'terminalLayoutsByTabId' | 'suppressedPtyExitIds'
->
+  PaneCoordinatorLivenessSnapshot
+} from './agent-hook-completion-notification-types'
+
+const emptyTerminalTabs: StoreSnapshot['tabsByWorktree'] = {}
 
 const coordinatorsByPaneKey = new Map<string, CoordinatorEntry>()
 const paneKeysRequiringFreshWorking = new Set<string>()
@@ -141,7 +137,7 @@ function paneKeyHasUnsuppressedPtyHint(state: StoreSnapshot, paneKey: string): b
     return false
   }
   const layout = state.terminalLayoutsByTabId?.[parsed.tabId]
-  if (layout?.root && !collectLeafIdsInOrder(layout.root).includes(parsed.leafId)) {
+  if (layout?.root && !collectLayoutLeafIdsInOrder(layout.root).includes(parsed.leafId)) {
     return false
   }
   const leafPtyId = layout?.ptyIdsByLeafId?.[parsed.leafId]

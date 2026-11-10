@@ -1,4 +1,4 @@
-import { holdBrowserAttachmentFiles } from '@/lib/browser-attachment-files'
+import { holdBrowserAttachmentFiles } from '@/lib/files/drop/browser-attachment-files'
 import { decodeBase64Bytes } from '@/lib/base64-bytes'
 import {
   agentSessionPastedImageName,

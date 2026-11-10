@@ -11,7 +11,7 @@ import {
   getFileExplorerOperationOwnerFromState
 } from './right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
 const mocks = vi.hoisted(() => ({ stat: vi.fn(), open: vi.fn(() => 'owner-file') }))
-vi.mock('@/lib/user-opened-local-path', () => ({ statUserOpenedPath: mocks.stat }))
+vi.mock('@/lib/files/access/user-opened-local-path', () => ({ statUserOpenedPath: mocks.stat }))
 vi.mock('@/store/slices/editor/focus/editor-focus-reveal', () => ({
   scheduleEditorLineReveal: vi.fn()
 }))

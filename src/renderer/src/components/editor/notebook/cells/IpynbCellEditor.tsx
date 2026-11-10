@@ -8,7 +8,7 @@ import {
   monacoTypographyOptions
 } from '@/lib/editor/appearance/editor-typography'
 import { useEditorTypography } from '@/hooks/use-editor-typography'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { installMonacoEditorFindShortcut } from '../../editor-shortcuts'
 import { syncContentUpdate } from '../../monaco-content-sync'
 import {
