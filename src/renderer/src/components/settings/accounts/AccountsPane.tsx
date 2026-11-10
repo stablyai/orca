@@ -47,6 +47,7 @@ import { ZcodePlanAccountsSection } from './usage/ZcodePlanAccountsSection'
 import type {
   AccountsPaneProps,
   AccountsPaneSectionModel,
+  ClaudeAccountAction,
   ProviderAccountAction,
   RemoveAccountTarget
 } from './accounts-pane-types'
@@ -65,6 +66,7 @@ import { renderOpenCodeAccountsSection } from './providers/accounts-pane-opencod
 import { MiniMaxAccountsSection } from './usage/MiniMaxAccountsSection'
 import { useUsageHostSettings } from './usage/use-usage-host-settings'
 import { ManagedDataAccountsSection } from './providers/ManagedDataAccountsSection'
+import { ClaudeAccountRenameDialog } from '../accounts-pane-claude-rename-dialog'
 import { renderAccountsRemovalDialogs } from './accounts-pane-removal-dialogs'
 
 export function AccountsPane({
@@ -145,10 +147,11 @@ export function AccountsPane({
   const [codexAction, setCodexAction] = useState<ProviderAccountAction>('idle')
   const [claudeAccounts, setClaudeAccounts] =
     useState<ClaudeRateLimitAccountsState>(emptyClaudeAccountsState)
-  const [claudeAction, setClaudeAction] = useState<ProviderAccountAction>('idle')
+  const [claudeAction, setClaudeAction] = useState<ClaudeAccountAction>('idle')
   // Capture runtime slots at dialog opening; roster updates could remove the slot needed for restart diffs.
   const [removeCodexTarget, setRemoveCodexTarget] = useState<RemoveAccountTarget | null>(null)
   const [removeClaudeTarget, setRemoveClaudeTarget] = useState<RemoveAccountTarget | null>(null)
+  const [renameClaudeTarget, setRenameClaudeTarget] = useState<RemoveAccountTarget | null>(null)
   const accountVisibilityOptions = {
     remoteOwner: isRemoteAccountScope,
     ownerPlatform: accountOwnerPlatform
@@ -301,6 +304,7 @@ export function AccountsPane({
     visibleClaudeAccounts,
     systemClaudeActive,
     setRemoveClaudeTarget,
+    setRenameClaudeTarget,
     runClaudeAccountAction,
     codexAccounts,
     codexAction,
@@ -380,6 +384,7 @@ export function AccountsPane({
   return (
     <div className="space-y-8">
       {renderAccountsRemovalDialogs(model, removeCodexTarget, removeClaudeTarget, t)}
+      <ClaudeAccountRenameDialog model={model} renameClaudeTarget={renameClaudeTarget} />
       <SettingsSectionStack sections={visibleSections} />
     </div>
   )

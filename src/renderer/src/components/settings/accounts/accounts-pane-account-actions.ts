@@ -18,6 +18,7 @@ import {
 } from '../../provider-accounts/provider-account-visibility'
 import type {
   ProviderAccountAction,
+  ClaudeAccountAction,
   ClaudeAccountActionRunner,
   CodexAccountActionRunner
 } from './accounts-pane-types'
@@ -146,7 +147,7 @@ type ClaudeActionContext = {
   isRemoteAccountScope: boolean
   claudeAccounts: ClaudeRateLimitAccountsState
   setClaudeAccounts: Dispatch<SetStateAction<ClaudeRateLimitAccountsState>>
-  setClaudeAction: Dispatch<SetStateAction<ProviderAccountAction>>
+  setClaudeAction: Dispatch<SetStateAction<ClaudeAccountAction>>
   fetchSettings: () => Promise<void>
   recordFeatureInteraction: (featureId: FeatureInteractionId) => void
   /** False once the pane shows a different account owner than this action targeted. */

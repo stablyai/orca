@@ -1,8 +1,15 @@
 import type { AntigravityAccountState } from '../../shared/antigravity-account-types'
+import { getClaudeManagedAccountLabel } from '../../shared/claude-managed-account-label'
 import type { ManagedDataAccountsState } from '../../shared/managed-account-types'
 
 type AccountsBlock = {
-  accounts: readonly { id: string; email: string; needsSignIn?: true }[]
+  accounts: readonly {
+    id: string
+    email: string
+    needsSignIn?: true
+    displayName?: string | null
+    organizationName?: string | null
+  }[]
   activeAccountId: string | null
   activeAccountIdsByRuntime?: {
     host: string | null
@@ -37,7 +44,7 @@ export function formatAccountsBlock(label: string, block: AccountsBlock): string
   // Why the id: `orca account select --account` needs it when one email signs into several orgs.
   const lines = block.accounts.map(
     (account) =>
-      `  ${account.id}  ${account.email}${activeAccountIds.has(account.id) ? ' (active)' : ''}${
+      `  ${account.id}  ${getClaudeManagedAccountLabel(account)}${activeAccountIds.has(account.id) ? ' (active)' : ''}${
         account.needsSignIn ? ' (sign in again in Orca Settings > AI Provider Accounts)' : ''
       }`
   )
