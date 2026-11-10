@@ -1,8 +1,7 @@
 import React from 'react'
-import { ArrowRight, LoaderCircle, Plug, RotateCw, TriangleAlert, Unplug } from 'lucide-react'
+import { ArrowRight, LoaderCircle, Plug, RotateCw, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import type { RuntimePortForward } from '../../../../shared/runtime-port-forwards'
 
@@ -167,40 +166,5 @@ export function RuntimePortForwardStatus({
         {action.label}
       </Button>
     </span>
-  )
-}
-
-/** Stop forwarding as a row hover action, beside Open and Copy. */
-export function RuntimePortForwardStopButton({
-  remotePort,
-  onStop
-}: {
-  remotePort: number
-  onStop: () => void
-}): React.JSX.Element {
-  const t = useTranslate()
-  const label = t(
-    'auto.components.right.sidebar.RuntimeForwardedPorts.stopLabel',
-    'Stop forwarding port {{value0}}',
-    { value0: remotePort }
-  )
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          className="text-muted-foreground hover:text-foreground"
-          onClick={onStop}
-          aria-label={label}
-        >
-          <Unplug size={13} />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="top" sideOffset={4}>
-        {t('auto.components.right.sidebar.RuntimePortForward.stopForwarding', 'Stop forwarding')}
-      </TooltipContent>
-    </Tooltip>
   )
 }
