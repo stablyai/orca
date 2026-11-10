@@ -7391,10 +7391,6 @@
             "modeAriaLabel": "Agent ダッシュボードの開き方",
             "modeInWindow": "ウィンドウ内",
             "modePopout": "ポップアウト"
-          },
-          "browserExtensions": {
-            "copy": "ローカルブラウザプロファイル向けに 設定 › ブラウザ › 拡張機能 を追加します。",
-            "toggleLabel": "ブラウザ拡張機能を切り替え"
           }
         },
         "FloatingWorkspacePane": {
@@ -9550,13 +9546,6 @@
               "inWindow": "窓内",
               "worktrees": "ワークツリー",
               "eaf17a7214": "Agent ダッシュボード"
-            },
-            "browserExtensions": {
-              "title": "ブラウザ拡張機能",
-              "description": "パスワードマネージャーなどの Chrome 拡張機能を Orca のブラウザタブで実行します。",
-              "extension": "拡張機能",
-              "chrome": "クローム",
-              "password": "パスワードマネージャー"
             }
           }
         },

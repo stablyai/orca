@@ -7887,10 +7887,6 @@
             "modeAriaLabel": "代理程式儀表板開啟模式",
             "modeInWindow": "視窗內",
             "modePopout": "彈出視窗"
-          },
-          "browserExtensions": {
-            "copy": "為本機瀏覽器設定檔新增「設定 › 瀏覽器 › 擴充功能」。",
-            "toggleLabel": "切換瀏覽器擴充功能"
           }
         },
         "FloatingWorkspacePane": {
@@ -10056,13 +10052,6 @@
               "inWindow": "視窗內",
               "worktrees": "工作樹",
               "eaf17a7214": "代理程式儀表板"
-            },
-            "browserExtensions": {
-              "title": "瀏覽器擴充功能",
-              "description": "在 Orca 瀏覽器分頁中執行 Chrome 擴充功能，例如密碼管理工具。",
-              "extension": "擴充功能",
-              "chrome": "chrome",
-              "password": "密碼管理工具"
             }
           }
         },

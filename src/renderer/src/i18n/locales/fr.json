@@ -7949,10 +7949,6 @@
             "modeAriaLabel": "Mode d'ouverture du tableau de bord des agents",
             "modeInWindow": "Dans la fenêtre",
             "modePopout": "Fenêtre indépendante"
-          },
-          "browserExtensions": {
-            "copy": "Ajoute Paramètres › Navigateur › Extensions pour les profils de navigateur locaux.",
-            "toggleLabel": "Activer ou désactiver les extensions de navigateur"
           }
         },
         "FloatingWorkspacePane": {
@@ -10119,13 +10115,6 @@
               "inWindow": "dans la fenêtre",
               "worktrees": "arbres de travail",
               "eaf17a7214": "Tableau de bord des agents"
-            },
-            "browserExtensions": {
-              "title": "Extensions de navigateur",
-              "description": "Exécutez des extensions Chrome, comme des gestionnaires de mots de passe, dans les onglets du navigateur Orca.",
-              "extension": "extension",
-              "chrome": "chrome",
-              "password": "gestionnaire de mots de passe"
             }
           }
         },
