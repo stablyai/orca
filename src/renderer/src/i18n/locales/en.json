@@ -27095,6 +27095,24 @@
     "signInAgain": {
       "message": "Sign in to Orca again to continue.",
       "action": "Sign in"
+    },
+    "setup": {
+      "github": {
+        "label": "GitHub access",
+        "repositoryLabel": "GitHub repository",
+        "notGithub": "Orca Cloud starts from a GitHub repository.",
+        "notGithubNote": "Push this project to GitHub, or pick a repository Orca Cloud can reach from Project.",
+        "howToPush": "How to push",
+        "requested": "Waiting for an owner of {{owner}} on GitHub to approve Orca Cloud.",
+        "requestedStatus": "Requested",
+        "requestedNote": "GitHub sent them the request. This workspace starts once they approve, if Orca is open.",
+        "missing": "Orca Cloud can’t reach {{repo}} yet.",
+        "neededStatus": "Needed",
+        "missingNote": "It clones your code from GitHub. Give access to this repository once.",
+        "giveAccessAndStart": "Give access and start",
+        "public": "{{repo}} is public. Nothing to do.",
+        "doneStatus": "Done"
+      }
     }
   },
   "runActions": {
