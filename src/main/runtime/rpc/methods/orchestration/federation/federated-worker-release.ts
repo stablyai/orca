@@ -9,10 +9,8 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { FederatedDispatchRow } from '../../../../orchestration/db/orchestration-records'
 import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
-import {
-  releaseUnknownRecovery,
-  type WorkerReleaseReceipt
-} from '../worker/worker-release-completion'
+import type { WorkerReleaseReceipt } from '../worker/worker-release-completion'
+import { releaseUnknownRecovery } from '../worker/worker-release-unknown-recovery'
 import type { resolvePinnedFederatedServer } from '../worker/worker-observation'
 
 type RemoteReleaseReceipt = Omit<WorkerReleaseReceipt, 'archive'> & {

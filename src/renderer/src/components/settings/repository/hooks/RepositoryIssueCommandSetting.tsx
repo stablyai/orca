@@ -27,8 +27,8 @@ export function RepositoryIssueCommandSetting({
       <div className="space-y-1">
         <h5 className="text-sm font-semibold">
           {t(
-            'auto.components.settings.RepositoryHooksSection.13394103bd',
-            'Custom GitHub Issue Command'
+            'auto.components.settings.RepositoryHooksSection.da00f141c2',
+            'Custom GitHub issue command'
           )}
         </h5>
         <p className="text-xs text-muted-foreground">
@@ -47,8 +47,8 @@ export function RepositoryIssueCommandSetting({
       <textarea
         value={issueCommandDraft}
         aria-label={t(
-          'auto.components.settings.RepositoryHooksSection.13394103bd',
-          'Custom GitHub Issue Command'
+          'auto.components.settings.RepositoryHooksSection.da00f141c2',
+          'Custom GitHub issue command'
         )}
         readOnly={issueCommandReadOnly}
         onChange={(event) => setIssueCommandDraft(event.target.value)}

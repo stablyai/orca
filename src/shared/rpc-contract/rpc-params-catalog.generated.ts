@@ -510,6 +510,11 @@ import {
   TaskCreateParams,
   TaskListParams
 } from './orchestration-params'
+import {
+  PeerMailAckParams,
+  PeerMailDeliverParams,
+  PeerMailPullParams
+} from './orchestration-peer-mail-params'
 import { RequestShowParams } from './orchestration-runs-mutation-request-show-params'
 import {
   RunCreateParams,
@@ -579,6 +584,7 @@ import {
   ProjectGroupScanNested,
   ProjectGroupSelector,
   ProjectGroupUpdate,
+  ProjectGroupUpdateMany,
   RepoClone,
   RepoCreate,
   RepoHooksCheck,
@@ -620,7 +626,8 @@ import {
   DictationSetup,
   DictationStart,
   OpenAiSpeechKeySet,
-  SpeechModelAction
+  SpeechModelAction,
+  SpeechSetupRead
 } from './speech-params'
 import {
   RepoAddRemote,
@@ -1317,6 +1324,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'mobileRelay.hosts.list': null,
   'mobileRelay.hosts.worktrees': MobileRelayHostWorktreesParamsSchema,
   'mobileRelay.projectSections': null,
+  'mobileWeb.bundle.brotliRange': MobileWebBundleChunkParamsSchema,
   'mobileWeb.bundle.chunk': MobileWebBundleChunkParamsSchema,
   'mobileWeb.bundle.manifest': null,
   'mobileWeb.bundle.range': MobileWebBundleChunkParamsSchema,
@@ -1364,6 +1372,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.inbox': InboxParams,
   'orchestration.partyLocation': PartyLocationParams,
   'orchestration.partyOpen': PartyLocationParams,
+  'orchestration.peerMailAck': PeerMailAckParams,
+  'orchestration.peerMailDeliver': PeerMailDeliverParams,
+  'orchestration.peerMailPull': PeerMailPullParams,
   'orchestration.reply': ReplyParams,
   'orchestration.requestShow': RequestShowParams,
   'orchestration.reset': ResetParams,
@@ -1437,6 +1448,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'projectGroup.moveProject': ProjectGroupMoveProject,
   'projectGroup.scanNested': ProjectGroupScanNested,
   'projectGroup.update': ProjectGroupUpdate,
+  'projectGroup.updateMany': ProjectGroupUpdateMany,
   'projectHostSetup.clone': ProjectHostSetupClone,
   'projectHostSetup.create': ProjectHostSetupCreate,
   'projectHostSetup.delete': ProjectHostSetupDelete,
@@ -1531,7 +1543,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'speech.dictation.start': DictationStart,
   'speech.models.delete': SpeechModelAction,
   'speech.models.download': SpeechModelAction,
-  'speech.models.list': null,
+  'speech.models.list': SpeechSetupRead,
   'speech.openAiKey.clear': null,
   'speech.openAiKey.set': OpenAiSpeechKeySet,
   'speech.openAiKey.status': null,

@@ -23,12 +23,9 @@ import {
   ensureSimulatorTab,
   getSimulatorTabForWorktree
 } from '@/lib/simulator/tabs/ensure-simulator-tab'
+import { Button } from '@/components/ui/button'
 import { SplitPaneLandingAgentRow } from './SplitPaneLandingAgentRow'
-import {
-  LANDING_ROW_CLASS,
-  LandingRowShortcut,
-  moveLandingRowFocus
-} from './split-pane-landing-row'
+import { LandingRowLabel, LandingRowShortcut, moveLandingRowFocus } from './split-pane-landing-row'
 
 /** Fills an empty split pane so the user picks what opens there; each action creates into this group. */
 export function SplitPaneLanding({
@@ -142,12 +139,12 @@ export function SplitPaneLanding({
   return (
     <div className="absolute inset-0 overflow-auto scrollbar-sleek bg-background">
       <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center px-4 py-10">
-        <div className="mb-3 px-2.5 text-sm text-muted-foreground">
+        <div className="mb-3 text-sm text-muted-foreground">
           {t('components.tabGroup.splitPaneLanding.heading', 'Open in this pane')}
         </div>
         <div
           ref={listRef}
-          className="flex flex-col gap-1"
+          className="flex flex-col gap-2"
           onKeyDown={(event) => moveLandingRowFocus(event, listRef.current)}
         >
           <SplitPaneLandingAgentRow
@@ -160,7 +157,7 @@ export function SplitPaneLanding({
           ))}
           {canReopen ? (
             <>
-              <div className="mx-2.5 my-1.5 h-px bg-border" />
+              <div className="my-1 h-px bg-border" />
               <LandingRowButton
                 row={{
                   id: 'reopen',
@@ -177,13 +174,17 @@ export function SplitPaneLanding({
           ) : null}
         </div>
         {onClosePane ? (
-          <button
+          <Button
             type="button"
-            className="mt-5 self-center rounded-md px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            variant="ghost"
+            size="sm"
+            className="mt-4 self-center"
             onClick={onClosePane}
           >
-            {t('components.tabGroup.splitPaneLanding.closePane', 'Close pane')}
-          </button>
+            <span className="text-muted-foreground">
+              {t('components.tabGroup.splitPaneLanding.closePane', 'Close pane')}
+            </span>
+          </Button>
         ) : null}
       </div>
     </div>
@@ -201,10 +202,17 @@ type LandingRow = {
 function LandingRowButton({ row }: { row: LandingRow }): React.JSX.Element {
   const Icon = row.icon
   return (
-    <button type="button" data-landing-row className={LANDING_ROW_CLASS} onClick={row.onSelect}>
-      <Icon className="size-4 text-muted-foreground" />
-      <span className="min-w-0 flex-1 truncate text-left">{row.label}</span>
+    <Button
+      type="button"
+      variant="outline"
+      size="lg"
+      data-landing-row
+      className="w-full justify-start"
+      onClick={row.onSelect}
+    >
+      <Icon className="text-muted-foreground" />
+      <LandingRowLabel label={row.label} />
       <LandingRowShortcut shortcut={row.shortcut} />
-    </button>
+    </Button>
   )
 }

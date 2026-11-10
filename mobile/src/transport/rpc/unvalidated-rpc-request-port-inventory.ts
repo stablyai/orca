@@ -1,4 +1,4 @@
-// Fence raw sendRequest access/selectors, sendSingleFlightRequest calls and raw-port imports per file.
+// Fence raw sendRequest access/selectors and raw-port imports per file.
 // Counts are ceilings that only shrink; the boundary test rejects new, missing or increased entries.
 // Owners implement or route the port; migrate pending callers only after recording their existing behavior.
 export type UnvalidatedRpcRequestPortEntry = {
@@ -23,13 +23,12 @@ export const UNVALIDATED_RPC_REQUEST_PORT_OWNERS: readonly UnvalidatedRpcRequest
   // Supplies the port for one relay session.
   { file: 'src/transport/mobile-relay-rpc-session.ts', references: 1 },
   // A second raw sender: string method in, unread envelope out. Its callers are fenced too.
-  { file: 'src/transport/rpc/request-single-flight.ts', references: 3 },
   // Owns connect-wait, timeout and replay bookkeeping for every raw request.
   { file: 'src/transport/rpc/rpc-client-request-tracker.ts', references: 1 },
   // Composes the port into RpcClient, which is why every holder of a client still carries it.
   { file: 'src/transport/rpc/rpc-client-contract.ts', references: 2 },
   // The typed boundary itself — the one module that turns a reply into a declared type.
-  { file: 'src/transport/rpc/rpc-operation.ts', references: 5 },
+  { file: 'src/transport/rpc/rpc-operation.ts', references: 3 },
   // Forwards the port with the workspace's execution host stamped on; picks no method.
   { file: 'src/transport/execution-host-scoped-rpc-client.ts', references: 2 },
   // Forwards the port across a physical-client cutover.

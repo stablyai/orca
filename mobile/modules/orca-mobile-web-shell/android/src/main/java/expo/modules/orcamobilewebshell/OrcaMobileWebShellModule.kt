@@ -13,6 +13,7 @@ import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import java.io.File
 
 class OrcaMobileWebShellModule : Module() {
   private val main = Handler(Looper.getMainLooper())
@@ -55,6 +56,16 @@ class OrcaMobileWebShellModule : Module() {
 
     OnActivityDestroys {
       discardSpare()
+    }
+
+    // Page builds live in filesDir: "Clear cache", cleaner apps and low storage empty cacheDir, which cost a full
+    // download on the next open. allowBackup false and the device-transfer rules keep them on this phone.
+    Function("generationStoreDirectory") { name: String ->
+      val filesDir = appContext.reactContext?.filesDir ?: throw Exceptions.ReactContextLost()
+      val directory = File(filesDir, name)
+      // A full disk can refuse the folder; the caller then keeps the old root.
+      if (!directory.mkdirs() && !directory.isDirectory) throw UnableToCreateGenerationStoreException()
+      Uri.fromFile(directory).toString()
     }
 
     AsyncFunction("prepareSpareDocument") { directory: String, sessionId: String ->
@@ -124,3 +135,6 @@ class OrcaMobileWebShellModule : Module() {
     }
   }
 }
+
+private class UnableToCreateGenerationStoreException :
+  CodedException("The page build folder could not be created")

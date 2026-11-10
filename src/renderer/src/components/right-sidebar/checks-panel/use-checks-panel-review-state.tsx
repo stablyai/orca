@@ -21,14 +21,13 @@ import {
   markPullRequestGenerationRequiresPushBeforeCreate
 } from '@/store/slices/hosted-review/generation/pull-request-generation'
 import type { PullRequestGenerationContext } from '@/store/slices/hosted-review/generation/pull-request-generation-state'
-import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../../shared/source-control/ai/generation/commit-message-host-key'
 import { DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import {
   resolveSourceControlAiEnabled,
   resolveSourceControlAiPrCreationDefaults
 } from '../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import { resolveSourceControlAiForOperation } from '../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
-import { getRuntimeGitScope } from '@/runtime/source-control/git/runtime-git-client-context'
+import { getRuntimeGitRepoDiscoveryHostKey } from '@/runtime/source-control/git/runtime-git-client-context'
 import type { ChecksPanelReviewStateInput } from './review-state-dependencies'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -278,8 +277,10 @@ export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
     if (!settings) {
       return DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
     }
-    const hostKey = getCommitMessageModelDiscoveryHostKeyForScope(
-      getRuntimeGitScope(ownerTarget ?? { kind: 'local' }, repo?.connectionId)
+    const hostKey = getRuntimeGitRepoDiscoveryHostKey(
+      ownerTarget ?? { kind: 'local' },
+      repo,
+      repo?.connectionId
     )
     const resolved = resolveSourceControlAiForOperation({
       settings,

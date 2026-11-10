@@ -79,9 +79,7 @@ export function SettingsSection({
           >
             {title}
             {badge ? (
-              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.05em] text-muted-foreground">
-                {badge}
-              </span>
+              <span className="text-2xs font-normal text-muted-foreground">{badge}</span>
             ) : null}
             {badgeAccessory}
           </h2>

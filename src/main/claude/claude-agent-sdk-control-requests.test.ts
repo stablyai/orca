@@ -6,6 +6,21 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+it('bounds the optional persisted title request and ignores its late response', async () => {
+  vi.useFakeTimers()
+  const pending = Promise.withResolvers<string>()
+  const generateSessionTitle = vi.fn(() => pending.promise)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the feature-detected method is called.
+  const controls = createClaudeControlSurface({ generateSessionTitle } as unknown as Query)
+  const result = controls.generateSessionTitle!('Repair login')
+  const expired = expect(result).rejects.toThrow('claude generate_session_title request timed out')
+  await vi.advanceTimersByTimeAsync(30_000)
+  await expired
+  pending.resolve('Late title')
+  await expect(result).rejects.toThrow('timed out')
+  expect(generateSessionTitle).toHaveBeenCalledWith('Repair login', { persist: true })
+})
+
 describe('createClaudeControlSurface stopTask', () => {
   it('bounds a lost reply and permits a later stop request', async () => {
     vi.useFakeTimers()

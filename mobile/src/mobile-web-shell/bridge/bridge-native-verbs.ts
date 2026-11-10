@@ -42,6 +42,7 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.image.act',
   BRIDGE_SPEECH_VERB,
   BRIDGE_STORE_VERB,
+  'native.a11y.announce',
   'native.browser.local',
   'native.browser.view'
 ] as const
@@ -101,6 +102,11 @@ export type BridgePdfOpenParams = Omit<
   Extract<z.infer<typeof pdfViewParamsSchema>, { action: 'open' }>,
   'action'
 >
+
+// The page has no announce call of its own (RNW's is a no-op); the shell speaks for it. Long text is a page bug, so it is refused.
+export const a11yAnnounceParamsSchema = z.strictObject({ message: z.string().min(1).max(500) })
+// announced:false when the shell leaves it to the page's live region (Android, where TalkBack reads it).
+export const a11yAnnounceResultSchema = z.strictObject({ announced: z.boolean() })
 
 // The shell draws a browser tab in its own web view, with traffic through the host; relayed servers stay streamed.
 const browserViewModeSchema = z.enum(['web', 'mobile'])
@@ -234,6 +240,10 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   [BRIDGE_STORE_VERB]: {
     params: storeParamsSchema,
     result: storeResultSchema
+  },
+  'native.a11y.announce': {
+    params: a11yAnnounceParamsSchema,
+    result: a11yAnnounceResultSchema
   },
   'native.browser.local': {
     params: browserLocalParamsSchema,

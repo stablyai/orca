@@ -1,11 +1,12 @@
 import { useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
-import { normalizeGitHubLinkQuery, parseGitHubIssueOrPRLink } from '@/lib/github-links'
+import { normalizeGitHubLinkQuery } from '../../../../shared/new-workspace/github-links'
+import { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
 import {
   lookupGitHubWorkItemByOwnerRepoForSource,
   lookupGitHubWorkItemForSource
 } from '@/lib/work-items/github/github-work-item-source-lookup'
-import { lookupSmartGitHubSubmitItem } from '@/lib/smart-github-submit'
+import { lookupSmartGitHubSubmitItem } from '@/lib/work-items/github/smart-github-submit'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { RESULT_LIMIT } from './smart-workspace-name-field-model'
 import { resolveSmartWorkspaceGithubDirectLink } from './smart-workspace-github-direct-link'

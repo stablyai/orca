@@ -28,7 +28,7 @@ export const getTerminalAdvancedSearchEntries = createLocalizedCatalog(() => [
     keywords: getTerminalLimitSearchKeywords()
   },
   {
-    title: translate('auto.components.settings.terminal.search.7674e758e1', 'Scrollback Rows'),
+    title: translate('auto.components.settings.terminal.search.edd38f8bb8', 'Scrollback rows'),
     description: translate(
       'auto.components.settings.terminal.search.f7d56b6281',
       'Retained desktop terminal rows.'
@@ -45,7 +45,7 @@ export const getTerminalAdvancedSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
-    title: translate('auto.components.settings.terminal.search.957a0203fc', 'Word Separators'),
+    title: translate('auto.components.settings.terminal.search.10344a316c', 'Word separators'),
     description: translate(
       'auto.components.settings.terminal.search.3ab64c47d8',
       'Characters treated as word boundaries for double-click selection.'

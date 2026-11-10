@@ -196,7 +196,10 @@ export function journalClaudeMessage(
       tool.name === 'Monitor' &&
       ctx.toolOrigins.has(result.toolUseId)
     ) {
-      ctx.backgroundTasks.observeMonitorToolResult(claudeRecord(message.tool_use_result)?.taskId)
+      ctx.backgroundTasks.observeMonitorToolResult(
+        claudeRecord(message.tool_use_result)?.taskId,
+        result.toolUseId
+      )
     }
     ctx.tools.delete(result.toolUseId)
     changed = true

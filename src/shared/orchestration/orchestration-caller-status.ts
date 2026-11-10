@@ -15,7 +15,11 @@ export type OrchestrationCallerRefusal = {
 export type CliStatusCaller = OrchestrationCallerSession | OrchestrationCallerRefusal
 
 /** `null`: the caller is not an Orca session. */
-export type OrchestrationCallerShowResult = { caller: OrchestrationCallerSession | null }
+export type OrchestrationCallerShowResult = {
+  caller: OrchestrationCallerSession | null
+  /** True when this Orca verified the calling terminal agent's launch. Absent from older Orcas. */
+  terminal?: boolean
+}
 
 /** `orchestration.sessionAddress`: a session's Orca session ID, its `/clear` root's. */
 export type OrchestrationSessionAddressResult = { orcaSessionId: string }
