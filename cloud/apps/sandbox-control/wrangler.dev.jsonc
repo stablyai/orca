@@ -24,9 +24,17 @@
   // Same-account Workers cannot call each other over workers.dev (error 1042); BILLING_URL names the origin.
   "services": [{ "binding": "BILLING", "service": "orca-billing-dev" }],
   // Every minute for routines (src/routines); the rest of the cron work runs on minute % 5 == 0.
-  // Environment builds advance on Durable Object alarms (EnvironmentBuildRunner), not on readers.
-  "durable_objects": { "bindings": [{ "name": "ENV_BUILD_RUNNER", "class_name": "EnvironmentBuildRunner" }] },
-  "migrations": [{ "tag": "env-build-runner-v1", "new_sqlite_classes": ["EnvironmentBuildRunner"] }],
+  // Environment builds advance on Durable Object alarms (EnvironmentBuildRunner), not on readers. The
+  // runner is its own Worker (wrangler.build-runner.dev.jsonc, deployed first): a Worker implementing a
+  // Durable Object gets no preview URLs. v2 deletes the class this Worker hosted until then; its only
+  // state was each build's alarm, and the cron below re-arms every unfinished build within a minute.
+  "durable_objects": {
+    "bindings": [{ "name": "ENV_BUILD_RUNNER", "class_name": "EnvironmentBuildRunner", "script_name": "orca-sandbox-build-runner-dev" }]
+  },
+  "migrations": [
+    { "tag": "env-build-runner-v1", "new_sqlite_classes": ["EnvironmentBuildRunner"] },
+    { "tag": "env-build-runner-v2", "deleted_classes": ["EnvironmentBuildRunner"] }
+  ],
   "triggers": { "crons": ["* * * * *"] },
   "vars": {
     "SANDBOX_ENV": "dev",
