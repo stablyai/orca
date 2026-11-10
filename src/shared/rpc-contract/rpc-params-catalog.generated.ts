@@ -3,6 +3,7 @@
 import type { z } from 'zod'
 import { HostAccountLaunchEnvParams } from '../agent-launch/startup/host-account-launch-env'
 import { AgentSkillShareRequestSchema } from '../agent-skill-sharing-contract'
+import { AgentUpdateRequestSchema } from '../agent-updates/agent-update-types'
 import {
   AiVaultSearchRequestSchema,
   AiVaultSearchStatusRequestSchema,
@@ -880,6 +881,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSessionAttachment.uploadStart': AttachmentUploadStartParams,
   'agentTeams.prepareLaunch': AgentTeamsPrepareLaunch,
   'agentTeams.tmuxCompat': AgentTeamsTmuxCompat,
+  'agentUpdates.getState': null,
+  'agentUpdates.refresh': null,
+  'agentUpdates.update': AgentUpdateRequestSchema,
   'aiVault.deleteSession': AiVaultDeleteSessionParams,
   'aiVault.listSessions': AiVaultListSessionsParams,
   'aiVault.prepareSessionResume': AiVaultPrepareSessionResumeParams,

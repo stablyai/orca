@@ -5,14 +5,18 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import type { AgentUpdatesState } from '../../../../shared/agent-updates/agent-update-types'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
 import { AgentUpdateRow } from './AgentUpdateRow'
 import {
   refreshAgentUpdates,
   requestAgentUpdates,
   startAgentUpdatesSync,
-  useAgentUpdates
+  useAgentUpdates,
+  useRemoteAgentUpdatesPolling
 } from './agent-update-store'
+import { useAgentUpdatesOwner } from './agent-update-owner'
 
 type SegmentTone = 'running' | 'failed' | 'available' | 'done'
 
@@ -39,21 +43,30 @@ export function AgentUpdateStatusSegment({
   iconOnly: boolean
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const { rows } = useAgentUpdates()
-  const [open, setOpen] = useState(false)
+  // Why: agents belong to the focused workspace's machine, which may be a server.
+  const owner = useAgentUpdatesOwner()
+  const { rows } = useAgentUpdates(owner)
+  // Why per owner: focusing another machine's workspace closes the list instead of reopening it there.
+  const [openFor, setOpenFor] = useState<RuntimeClientTarget | null>(null)
+  const open = owner !== null && openFor === owner
 
-  useEffect(() => startAgentUpdatesSync(), [])
+  useEffect(() => (owner ? startAgentUpdatesSync(owner) : undefined), [owner])
+  useRemoteAgentUpdatesPolling(owner, open)
 
-  const handleOpenChange = useCallback((nextOpen: boolean) => {
-    setOpen(nextOpen)
-    if (nextOpen) {
-      refreshAgentUpdates()
-    }
-  }, [])
+  const handleOpenChange = useCallback(
+    (nextOpen: boolean) => {
+      setOpenFor(nextOpen ? owner : null)
+      if (nextOpen && owner) {
+        refreshAgentUpdates(owner)
+      }
+    },
+    [owner]
+  )
 
-  if (rows.length === 0) {
+  if (!owner || rows.length === 0) {
     return null
   }
+  const update = (agents: TuiAgent[]): void => requestAgentUpdates(owner, agents)
 
   const count = rows.filter((row) => row.updateAvailable || row.run?.state === 'failed').length
   const runnable = rows.filter((row) => row.action.kind === 'run' && row.updateAvailable)
@@ -126,14 +139,19 @@ export function AgentUpdateStatusSegment({
             variant="outline"
             size="xs"
             disabled={anyRunning || runnable.length === 0}
-            onClick={() => requestAgentUpdates(runnable.map((row) => row.agent))}
+            onClick={() => update(runnable.map((row) => row.agent))}
           >
             {t('auto.components.status.bar.AgentUpdateStatusSegment.updateAll', 'Update all')}
           </Button>
         </div>
         <ul className="max-h-[28rem] overflow-y-auto scrollbar-sleek py-1">
           {rows.map((row) => (
-            <AgentUpdateRow key={row.agent} row={row} updatesLocked={anyRunning} />
+            <AgentUpdateRow
+              key={row.agent}
+              row={row}
+              updatesLocked={anyRunning}
+              onUpdate={() => update([row.agent])}
+            />
           ))}
         </ul>
         {anyDone && (

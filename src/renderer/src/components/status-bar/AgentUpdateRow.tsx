@@ -5,15 +5,16 @@ import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { useTranslate } from '@/i18n/use-translate'
 import type { AgentUpdateRow as AgentUpdateRowState } from '../../../../shared/agent-updates/agent-update-types'
 import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
-import { requestAgentUpdates } from './agent-update-store'
 
 export function AgentUpdateRow({
   row,
-  updatesLocked
+  updatesLocked,
+  onUpdate
 }: {
   row: AgentUpdateRowState
   /** True while any agent update is running; every update button waits for it. */
   updatesLocked: boolean
+  onUpdate: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const failure = row.run?.state === 'failed' ? row.run.message : null
@@ -73,12 +74,7 @@ export function AgentUpdateRow({
       )
     }
     return (
-      <Button
-        variant="outline"
-        size="xs"
-        disabled={updatesLocked}
-        onClick={() => requestAgentUpdates([row.agent])}
-      >
+      <Button variant="outline" size="xs" disabled={updatesLocked} onClick={onUpdate}>
         {failure === null
           ? t('auto.components.status.bar.AgentUpdateStatusSegment.update', 'Update')
           : t('auto.components.status.bar.AgentUpdateStatusSegment.retry', 'Retry')}
