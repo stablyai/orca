@@ -37,6 +37,7 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
     scope?.route.executionHostId ?? undefined
   )
   const workspaces = useGitGraphWorkspaces(scope)
+  const agentWorkspaces = useGitGraphWorkspaces(scope, true)
   const rows = useMemo(
     () =>
       result
@@ -226,6 +227,7 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
                             support={commitActionSupport}
                             onCheckout={(ref) => controller.actions.requestBranch(item, ref)}
                             workspaces={workspaces}
+                            agentWorkspaces={agentWorkspaces}
                             references={item.references ?? []}
                             onSwitch={controller.switchToWorkspace}
                             currentRefId={result?.currentRef?.id}

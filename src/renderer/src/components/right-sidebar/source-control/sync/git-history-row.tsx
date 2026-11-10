@@ -10,27 +10,36 @@ import type { GitHistoryItemViewModel } from '../../../../../../shared/git/histo
 import { GitHistoryGraphSvg, graphColor } from './git-history-graph-svg'
 import { dedupeRemoteTrackingRefs } from '../../../../../../shared/git/history/git-history-ref-display'
 import { useTranslate } from '@/i18n/use-translate'
+import { GitGraphRefWorkspaceAgents } from '@/components/editor/git-graph/git-graph-ref-workspace-agents'
+import type { Worktree } from '../../../../../../shared/worktree/types'
 
-function GitHistoryRefBadge({ itemRef }: { itemRef: GitHistoryItemRef }): React.JSX.Element {
+function GitHistoryRefBadge({
+  itemRef,
+  workspace
+}: {
+  itemRef: GitHistoryItemRef
+  workspace?: Worktree
+}): React.JSX.Element {
   const refLabel = itemRef.category ? `${itemRef.name} (${itemRef.category})` : itemRef.name
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span
-          className="max-w-[8rem] truncate rounded-full border bg-sidebar px-1.5 py-0.5 text-[10px] leading-none"
-          style={{
-            borderColor: itemRef.color ? graphColor(itemRef.color) : 'var(--border)',
-            color: itemRef.color ? graphColor(itemRef.color) : 'var(--muted-foreground)'
-          }}
-        >
-          {itemRef.name}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
-        {refLabel}
-      </TooltipContent>
-    </Tooltip>
+    <span
+      className="inline-flex max-w-[8rem] items-center gap-1 rounded-full border bg-sidebar px-1.5 py-0.5 text-[10px] leading-none"
+      style={{
+        borderColor: itemRef.color ? graphColor(itemRef.color) : 'var(--border)',
+        color: itemRef.color ? graphColor(itemRef.color) : 'var(--muted-foreground)'
+      }}
+    >
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="min-w-0 truncate">{itemRef.name}</span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
+          {refLabel}
+        </TooltipContent>
+      </Tooltip>
+      {workspace && <GitGraphRefWorkspaceAgents worktree={workspace} />}
+    </span>
   )
 }
 
@@ -38,6 +47,8 @@ type GitHistoryRowProps = React.HTMLAttributes<HTMLElement> & {
   viewModel: GitHistoryItemViewModel
   expanded?: boolean
   preserveRefIds?: readonly string[]
+  /** Ref id → workspace that has it checked out; its agent sessions show on the ref badge. */
+  agentWorkspaces?: ReadonlyMap<string, Worktree>
   onOpenCommit?: (item: GitHistoryItem) => void
   onToggleExpand?: (item: GitHistoryItem) => void
 }
@@ -48,6 +59,7 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
       viewModel,
       expanded = false,
       preserveRefIds,
+      agentWorkspaces,
       onOpenCommit,
       onToggleExpand,
       className,
@@ -104,7 +116,11 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
         {refs.length > 0 && (
           <div className="flex shrink-0 items-center gap-1 overflow-hidden">
             {visibleRefs.map((ref) => (
-              <GitHistoryRefBadge key={ref.id} itemRef={ref} />
+              <GitHistoryRefBadge
+                key={ref.id}
+                itemRef={ref}
+                workspace={agentWorkspaces?.get(ref.id)}
+              />
             ))}
             {hiddenRefs.length > 0 && (
               <Tooltip>

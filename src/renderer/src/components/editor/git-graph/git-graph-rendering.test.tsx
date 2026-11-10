@@ -99,6 +99,53 @@ it('keeps the branch checkout strip open after selecting a badge context-menu ac
   expect(container.querySelector('form')?.textContent).toContain('Check out branch topic?')
 })
 
+it('shows agent sessions on the branch of the workspace showing the graph', async () => {
+  const tabId = 'tab-1'
+  const paneKey = `${tabId}:11111111-1111-4111-8111-111111111111`
+  useAppStore.setState({
+    tabsByWorktree: {
+      [workspaceId]: [
+        {
+          id: tabId,
+          ptyId: null,
+          worktreeId: workspaceId,
+          title: 'claude',
+          customTitle: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 0
+        }
+      ]
+    },
+    agentStatusByPaneKey: {
+      [paneKey]: {
+        paneKey,
+        worktreeId: workspaceId,
+        tabId,
+        agentType: 'claude',
+        state: 'working',
+        prompt: 'Ship it',
+        updatedAt: 0,
+        stateStartedAt: 0,
+        stateHistory: []
+      }
+    }
+  })
+  getHistory.mockReset().mockResolvedValue({
+    ...result,
+    currentRef: { id: local.branch, name: 'main' },
+    items: [{ ...result.items[0], references: [{ id: local.branch, name: 'main' }] }]
+  })
+  await act(async () =>
+    root.render(
+      <TooltipProvider>
+        <GitGraphTab worktreeId={workspaceId} />
+      </TooltipProvider>
+    )
+  )
+  expect(container.querySelector('[aria-label^="Agents in this workspace"]')).not.toBeNull()
+})
+
 it('recovers silently after each later token expiry and ignores refreshes for other worktrees', async () => {
   let history: ReturnType<typeof useGitGraphHistory>
   function History() {

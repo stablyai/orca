@@ -21,18 +21,25 @@ import type { GitHistoryItemRef } from '../../../../../shared/git/history/git-hi
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { cn } from '@/lib/utils'
 
-export function useGitGraphWorkspaces(scope: ReturnType<typeof gitGraphScope>) {
+export function useGitGraphWorkspaces(
+  scope: ReturnType<typeof gitGraphScope>,
+  // Agent sessions also run in the workspace showing the graph, which is not a switch target.
+  withCurrent = false
+) {
   const worktrees = useAppStore(selectWorktreesByRepo)
   const repos = useAppStore((state) => state.repos)
   return useMemo(
     () =>
       new Map(
-        gitGraphWorkspaceCatalog(scope, { repos, worktreesByRepo: worktrees }).map((row) => [
+        [
+          ...gitGraphWorkspaceCatalog(scope, { repos, worktreesByRepo: worktrees }),
+          ...(withCurrent && scope ? [scope.worktree] : [])
+        ].map((row) => [
           row.branch.startsWith('refs/heads/') ? row.branch : `refs/heads/${row.branch}`,
           row
         ])
       ),
-    [scope, worktrees, repos]
+    [scope, worktrees, repos, withCurrent]
   )
 }
 
@@ -40,6 +47,7 @@ export function GitGraphRefs({
   references,
   currentRefId,
   workspaces,
+  agentWorkspaces,
   onSwitch,
   onCheckout,
   controller,
@@ -48,6 +56,7 @@ export function GitGraphRefs({
   references: GitHistoryItemRef[]
   currentRefId?: string
   workspaces: Map<string, Worktree>
+  agentWorkspaces: Map<string, Worktree>
   onSwitch: (refId: string) => Promise<void>
   onCheckout: (ref: GitHistoryItemRef) => void
   controller: GitGraphCommitActionsController
@@ -77,6 +86,7 @@ export function GitGraphRefs({
   }
   const badge = (ref: GitHistoryItemRef) => {
     const workspace = workspaces.get(ref.id)
+    const agentWorkspace = agentWorkspaces.get(ref.id)
     return (
       <ContextMenuTrigger asChild key={ref.id}>
         <span
@@ -92,7 +102,7 @@ export function GitGraphRefs({
           <span className="min-w-0 truncate" title={ref.name}>
             {ref.name}
           </span>
-          {workspace && <GitGraphRefWorkspaceAgents worktree={workspace} />}
+          {agentWorkspace && <GitGraphRefWorkspaceAgents worktree={agentWorkspace} />}
           {workspace && (
             <Tooltip>
               <TooltipTrigger asChild>

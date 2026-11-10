@@ -45,7 +45,9 @@ export function GitGraphRefWorkspaceAgents({ worktree }: { worktree: Worktree })
           aria-label={`${label}: ${rows.length}, ${agentStateLabel(state)}`}
         >
           <AgentStateDot state={state} title={null} />
-          {rows.length > 1 && <span className="text-2xs tabular-nums">{rows.length}</span>}
+          {rows.length > 1 && (
+            <span className="text-2xs leading-none tabular-nums">{rows.length}</span>
+          )}
         </span>
       </HoverCardTrigger>
       <HoverCardContent

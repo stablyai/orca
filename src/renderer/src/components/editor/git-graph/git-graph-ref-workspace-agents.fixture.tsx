@@ -1,6 +1,8 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { GitGraphRefs } from './git-graph-ref-menu'
 import { gitGraphHistoryForTab } from './git-graph-tab-controllers'
+import { GitHistoryRow } from '@/components/right-sidebar/source-control/sync/git-history-row'
+import { buildGitHistoryViewModels } from '../../../../../shared/git/history/git-history-graph'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
@@ -29,8 +31,18 @@ const workspace: Worktree = {
   sortOrder: 0,
   lastActivityAt: 0
 }
+// The workspace showing the graph: its branch has no switch target but still has sessions.
+const current: Worktree = {
+  ...workspace,
+  id: 'fixture-repo::/repo',
+  path: '/repo',
+  branch: 'refs/heads/main',
+  isMainWorktree: true,
+  displayName: 'main'
+}
 
 function session(
+  worktreeId: string,
   index: number,
   agentType: AgentStatusEntry['agentType'],
   state: AgentStatusEntry['state'],
@@ -38,7 +50,7 @@ function session(
   startedAgo: number
 ): { tab: TerminalTab; entry: AgentStatusEntry } {
   const tab: TerminalTab = {
-    id: `fixture-login-tab-${index}`,
+    id: `fixture-tab-${worktreeId === current.id ? 'main' : 'login'}-${index}`,
     ptyId: null,
     worktreeId,
     title: prompt,
@@ -64,13 +76,25 @@ function session(
 }
 
 const sessions = [
-  session(0, 'claude', 'working', 'Wire the OAuth callback', 12 * MINUTE),
-  session(1, 'codex', 'waiting', 'Review the login plan', 3 * MINUTE)
+  session(worktreeId, 0, 'claude', 'working', 'Wire the OAuth callback', 12 * MINUTE),
+  session(worktreeId, 1, 'codex', 'waiting', 'Review the login plan', 3 * MINUTE),
+  session(current.id, 0, 'claude', 'working', 'Draft the release notes', 2 * MINUTE)
 ]
 const store = {
-  tabsByWorktree: { [worktreeId]: sessions.map(({ tab }) => tab) },
+  tabsByWorktree: {
+    [worktreeId]: sessions.slice(0, 2).map(({ tab }) => tab),
+    [current.id]: sessions.slice(2).map(({ tab }) => tab)
+  },
   agentStatusByPaneKey: Object.fromEntries(sessions.map(({ entry }) => [entry.paneKey, entry]))
 }
+const agentWorkspaces = new Map([
+  [workspace.branch, workspace],
+  [current.branch, current]
+])
+const references = [
+  { id: 'refs/heads/main', name: 'main' },
+  { id: workspace.branch, name: 'feat/login' }
+]
 
 function render() {
   return (
@@ -81,10 +105,8 @@ function render() {
         onCheckout={() => {}}
         onSwitch={async () => {}}
         workspaces={new Map([[workspace.branch, workspace]])}
-        references={[
-          { id: 'refs/heads/main', name: 'main' },
-          { id: workspace.branch, name: 'feat/login' }
-        ]}
+        agentWorkspaces={agentWorkspaces}
+        references={references}
         currentRefId="refs/heads/main"
       />
     </div>
@@ -106,4 +128,22 @@ export const sessionsOpen = defineFixture({
       ?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' }))
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
+})
+
+// The Source Control commits list shows the same sessions on its ref badges.
+export const historyRow = defineFixture({
+  width: 420,
+  store,
+  render: () => (
+    <div className="w-full bg-sidebar text-foreground">
+      <GitHistoryRow
+        viewModel={
+          buildGitHistoryViewModels([
+            { id: 'a', parentIds: [], subject: 'Add login form', message: '', references }
+          ])[0]!
+        }
+        agentWorkspaces={agentWorkspaces}
+      />
+    </div>
+  )
 })
