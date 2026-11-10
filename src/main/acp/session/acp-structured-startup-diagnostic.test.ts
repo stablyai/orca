@@ -27,9 +27,9 @@ it.each(['initialize', 'session/new', 'authenticate'])(
           agent.on('session/new', (frame) => agent.fail(frame, -32000, 'Sign in'))
         }
         agent.on(method, (frame) => {
-          rig.child().stderr = 'harness: Permission denied token=stderr-private'
+          rig.child().stderr = 'harness: Permission denied {"token":"stderr-private"}'
           agent.fail(frame, -32603, 'Internal error', {
-            details: 'Cannot execute localharness authorization=Bearer rpc-private'
+            details: '{"error":"Cannot execute localharness","authorization":"Bearer rpc-private"}'
           })
         })
       }
@@ -40,13 +40,15 @@ it.each(['initialize', 'session/new', 'authenticate'])(
       cause: {
         name: 'AcpAgentError',
         code: -32603,
-        data: { details: 'Cannot execute localharness authorization=Bearer rpc-private' }
+        data: {
+          details: '{"error":"Cannot execute localharness","authorization":"Bearer rpc-private"}'
+        }
       },
       fact: {
         kind: 'startFailed',
         detail: {
           audience: 'log',
-          text: 'Cannot execute localharness [redacted:labeled-kv]\nharness: Permission denied [redacted:labeled-kv]'
+          text: '{"error":"Cannot execute localharness",[redacted:labeled-kv]}\nharness: Permission denied {[redacted:labeled-kv]}'
         }
       }
     })
@@ -111,11 +113,15 @@ it.each(['load', 'resume'] as const)(
       deps: { logger: createStructuredAgentSessionLogger() },
       script: (agent) =>
         agent.on(`session/${method}`, (frame) => {
-          rig.child().stderr = 'saved database unavailable token=stderr-private'
-          agent.fail(frame, -32603, 'Internal error', {
-            reason: 'database open failed',
-            token: 'rpc-private'
-          })
+          rig.child().stderr = 'saved database unavailable "authorization":"Bearer stderr-private"'
+          agent.fail(
+            frame,
+            -32603,
+            'Internal error',
+            method === 'load'
+              ? { reason: 'database open failed', token: 'rpc-private' }
+              : { details: '{"error":"database open failed","token":"rpc-private"}' }
+          )
         })
     })
     await rig.acquire()
