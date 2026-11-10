@@ -89,10 +89,16 @@ export const buildSaved = sheet(
   { kind: 'saved', saved: { agents: ['claude'], scope: 'org' } }
 )
 
-export const buildReadyDesktopKey = sheet({
-  readiness: { claude: 'desktop-key', codex: null },
-  canShare: false
-})
+const DESKTOP_KEYS = [
+  { id: 'k1', agent: 'claude', envName: 'ANTHROPIC_API_KEY', hint: 'x4Qa' },
+  { id: 'k2', agent: 'gemini', envName: 'GEMINI_API_KEY', hint: '9fZk' }
+] as const
+
+/** This computer has Agent API Keys: the key form offers each one as a Cloud secret. */
+export const buildKeysWithDesktopKeys = sheet(
+  { readiness: NONE, canShare: false, desktopKeys: [...DESKTOP_KEYS] },
+  { kind: 'keys' }
+)
 
 export const buildReadyTeam = sheet({
   readiness: { claude: 'team', codex: 'team' },
@@ -150,6 +156,8 @@ function dialog(
     canShare?: boolean
     failure?: CloudAgentSetupFailure
     pendingSave?: boolean
+    desktopKeys?: boolean
+    desktopKeyFailure?: boolean
     interact?: (frame: HTMLElement) => Promise<void>
   } = {}
 ) {
@@ -161,6 +169,8 @@ function dialog(
           readiness={options.readiness ?? NONE}
           canShare={options.canShare ?? false}
           steadyHeight
+          desktopKeys={options.desktopKeys ? [...DESKTOP_KEYS] : []}
+          onSaveDesktopKey={async () => (options.desktopKeyFailure ? 'unavailable' : null)}
           onSave={options.pendingSave ? () => new Promise(() => {}) : async () => null}
           onSaved={noop}
           onCancel={noop}
@@ -176,6 +186,19 @@ function dialog(
 export const dialogSubscription = dialog('sign-in', { readiness: { claude: 'team', codex: null } })
 
 export const dialogApiKeyAdmin = dialog('api-key', { canShare: true })
+
+export const dialogDesktopKeys = dialog('api-key', { desktopKeys: true })
+
+/** One key saved, the next one failed: each row keeps its own outcome. */
+export const dialogDesktopKeysSavedAndFailed = dialog('api-key', {
+  desktopKeys: true,
+  desktopKeyFailure: true,
+  interact: async (frame) => {
+    const buttons = frame.querySelectorAll<HTMLButtonElement>('[aria-label^="Save "]')
+    buttons[1]?.click()
+    await settle()
+  }
+})
 
 export const dialogApiKeySaving = dialog('api-key', {
   pendingSave: true,

@@ -29,6 +29,11 @@ export type CloudSecretsApi = {
   effective: (request: { repo?: string }) => Promise<CloudSecretsResult<CloudSecretsEffective>>
   /** Best-effort nudge so a running workspace picks up new values now; the server also does it on write. */
   refreshEnv: (request: { runtimeEnvironmentId: string }) => Promise<CloudSecretsResult<boolean>>
+  /** Saves one of this computer's Agent API Keys as a personal Cloud secret (the value never leaves main). */
+  saveDesktopKey: (request: {
+    agent: string
+    envName: string
+  }) => Promise<CloudSecretsResult<CloudSecretView>>
 }
 
 export const cloudSecretsApi: CloudSecretsApi = {
@@ -38,5 +43,6 @@ export const cloudSecretsApi: CloudSecretsApi = {
   remove: (request) => ipcRenderer.invoke('cloudSecrets:remove', request),
   batch: (request) => ipcRenderer.invoke('cloudSecrets:batch', request),
   effective: (request) => ipcRenderer.invoke('cloudSecrets:effective', request),
-  refreshEnv: (request) => ipcRenderer.invoke('cloudSecrets:refreshEnv', request)
+  refreshEnv: (request) => ipcRenderer.invoke('cloudSecrets:refreshEnv', request),
+  saveDesktopKey: (request) => ipcRenderer.invoke('cloudSecrets:saveDesktopKey', request)
 }
