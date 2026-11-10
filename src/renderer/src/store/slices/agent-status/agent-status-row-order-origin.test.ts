@@ -5,7 +5,7 @@ import { createTestStore } from '../../testing/app-store-test-fixture'
 import { buildWorktreeAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-agent-rows'
 import { AGENT_STATE_HISTORY_MAX } from '../../../../../shared/agent-status/lifecycle/agent-state-history'
 import { makePaneKey, parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import type { AgentStatusTiming } from './agent-status-contract'
+import type { AgentStatusTiming, AgentStatusBatchUpdate } from './agent-status-contract'
 import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
 import {
   ENV,
@@ -402,4 +402,72 @@ it('keeps Command Code prompt boundaries case-sensitive after live removal', () 
     )
   expect(store.getState().agentConversationsByPaneKey[pane].providerSession).toBeUndefined()
   expect(store.getState().agentStatusByPaneKey[pane].firstStateStartedAt).toBe(2000)
+})
+
+it.each([100, 1000])('keeps conversation updates atomic with %s unplaced conversations', (size) => {
+  const store = createTestStore()
+  const update = (
+    index: number,
+    state: 'working' | 'done',
+    at: number
+  ): AgentStatusBatchUpdate => ({
+    paneKey: `conversation-tab:${index}`,
+    payload: { state, prompt: 'task', agentType: 'codex' },
+    timing: { updatedAt: at, stateStartedAt: at, turnStartedAt: 1000 },
+    routing: { worktreeId: 'wt-order' },
+    metadata: { providerSession: { key: 'session_id', id: `session-${index}` } }
+  })
+  store
+    .getState()
+    .setAgentStatuses(Array.from({ length: size }, (_, index) => update(index, 'working', 1000)))
+  expect(Object.keys(store.getState().agentConversationsByPaneKey)).toHaveLength(
+    size === 100 ? 100 : 500
+  )
+  const target = size - 1
+  const targetKey = `conversation-tab:${target}`
+  let changes = 0
+  const unsubscribe = store.subscribe((next, previous) => {
+    if (next.agentConversationsByPaneKey !== previous.agentConversationsByPaneKey) {
+      changes += 1
+    }
+  })
+  const initial = store.getState().agentConversationsByPaneKey
+  store.getState().setAgentStatuses([update(target, 'working', 2000)])
+  const replay = update(target, 'working', 3000)
+  replay.timing = { updatedAt: 3000, stateStartedAt: 1000, turnStartedAt: 1000, isReplay: true }
+  store.getState().setAgentStatuses([replay])
+  store
+    .getState()
+    .recordAgentProviderSession(targetKey, 'codex', { key: 'session_id', id: `session-${target}` })
+  expect(store.getState().agentConversationsByPaneKey).toBe(initial)
+  expect(changes).toBe(0)
+  store.getState().setAgentStatuses([update(target, 'done', 4000)])
+  const completed = store.getState().agentConversationsByPaneKey
+  expect(changes).toBe(1)
+  expect(Object.keys(completed)).toHaveLength(size === 100 ? 100 : 500)
+  expect(completed[targetKey].continuity?.state).toBe('done')
+  for (const key of Object.keys(initial)) {
+    if (key !== targetKey) {
+      expect(completed[key]).toBe(initial[key])
+    }
+  }
+  store.getState().setAgentStatuses([update(target, 'working', 5000)])
+  const beforeBatch = store.getState().agentConversationsByPaneKey
+  changes = 0
+  store
+    .getState()
+    .setAgentStatuses([target, target - 1, target - 2].map((index) => update(index, 'done', 6000)))
+  const afterBatch = store.getState().agentConversationsByPaneKey
+  expect(changes).toBe(1)
+  for (const key of Object.keys(beforeBatch)) {
+    if (![target, target - 1, target - 2].some((index) => key === `conversation-tab:${index}`)) {
+      expect(afterBatch[key]).toBe(beforeBatch[key])
+    }
+  }
+  expect(
+    [target, target - 1, target - 2].map(
+      (index) => afterBatch[`conversation-tab:${index}`].continuity?.state
+    )
+  ).toEqual(['done', 'done', 'done'])
+  unsubscribe()
 })
