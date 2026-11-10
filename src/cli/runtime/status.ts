@@ -2,6 +2,7 @@ import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
 import { runtimeHostConnectionState } from '../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import { findTransport, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { tryReadMetadata } from './metadata'
+import { runtimeBuildFields } from './runtime-build-fields'
 import { sendRequest } from './transport'
 import {
   projectRemoteAppStatus,
@@ -115,7 +116,7 @@ function projectConnectedStatus(
         status: response.result
       }),
       runtimeId: response.result.runtimeId,
-      ...(response.result.appVersion ? { appVersion: response.result.appVersion } : {}),
+      ...runtimeBuildFields(response.result),
       ...(response.result.remoteUpdateSupport
         ? { remoteUpdateSupport: response.result.remoteUpdateSupport }
         : {}),

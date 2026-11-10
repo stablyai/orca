@@ -26697,7 +26697,15 @@
     "thisWorkspace": "This workspace",
     "sleepFailedNamed": "Couldn’t put {{name}} to sleep",
     "sleepFailedCount": "Couldn’t put {{count}} workspaces to sleep",
-    "sleepFailedDetail": "Its sandbox is still running and using sandbox hours. Your files are safe."
+    "sleepFailedDetail": "Its sandbox is still running and using sandbox hours. Your files are safe.",
+    "versionSkew": {
+      "newerTitle": "This cloud workspace uses a newer version of Orca",
+      "olderTitle": "This cloud workspace uses an older version of Orca",
+      "newerDetail": "Update Orca on this computer to connect to it. Your files are safe.",
+      "olderDetail": "This version of Orca can’t connect to it, and restarting won’t update it. Your files are safe. New cloud workspaces use the current version.",
+      "checkForUpdates": "Check for updates",
+      "createWorkspace": "Create workspace"
+    }
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",
@@ -27088,6 +27096,24 @@
     "signInAgain": {
       "message": "Sign in to Orca again to continue.",
       "action": "Sign in"
+    },
+    "setup": {
+      "github": {
+        "label": "GitHub access",
+        "repositoryLabel": "GitHub repository",
+        "notGithub": "Orca Cloud starts from a GitHub repository.",
+        "notGithubNote": "Push this project to GitHub, or pick a repository Orca Cloud can reach from Project.",
+        "howToPush": "How to push",
+        "requested": "Waiting for an owner of {{owner}} on GitHub to approve Orca Cloud.",
+        "requestedStatus": "Requested",
+        "requestedNote": "GitHub sent them the request. This workspace starts once they approve, if Orca is open.",
+        "missing": "Orca Cloud can’t reach {{repo}} yet.",
+        "neededStatus": "Needed",
+        "missingNote": "It clones your code from GitHub. Give access to this repository once.",
+        "giveAccessAndStart": "Give access and start",
+        "public": "{{repo}} is public. Nothing to do.",
+        "doneStatus": "Done"
+      }
     }
   },
   "runActions": {

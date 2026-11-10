@@ -1489,7 +1489,6 @@
       "updateDesktop": "Orca auf {{desktop}} aktualisieren, um Automatisierungen zu nutzen."
     },
     "emptyState": {
-      "connectedDescription": "Der Desktop erscheint hier. Alles ist Ende-zu-Ende-verschlüsselt.",
       "connectedTitle": "Verbunden",
       "description": "Mit Orca auf dem Computer koppeln, um Agenten im Blick zu behalten, beliebige Terminals zu öffnen und die Arbeit vom Smartphone aus zu steuern.",
       "openDesktopDescription": "Einstellungen → Mobil öffnen und einen QR-Code zum Koppeln erstellen.",
