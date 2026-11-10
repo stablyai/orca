@@ -12,6 +12,7 @@ import {
 } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import {
   createNamedFile,
+  getNamedFileRelativeDirectory,
   isSshOwnedFileContext,
   NamedFileExistsError,
   NamedFileOutsideWorkspaceError,
@@ -54,7 +55,13 @@ export default function NewFileModal(): React.JSX.Element | null {
   // Why: pinned at open so a worktree switch behind the dialog cannot redirect the write.
   const [opened] = useState((): OpenResult | null => {
     if (!worktreeId || !worktreePath) {
-      return null
+      return {
+        session: null,
+        blockedMessage: t(
+          'auto.components.editor.NewFileDialog.createFailed',
+          "Couldn't create the file."
+        )
+      }
     }
     const state = useAppStore.getState()
     try {
@@ -206,10 +213,18 @@ export default function NewFileModal(): React.JSX.Element | null {
     return null
   }
 
+  // Why: a file opened from outside the workspace would otherwise default to a folder the dialog rejects.
+  const activeFileFolder = activeFilePath ? parentFolderOfFile(activeFilePath) : null
+  const defaultFolder =
+    activeFileFolder !== null &&
+    getNamedFileRelativeDirectory(activeFileFolder, session.worktreePath) !== null
+      ? activeFileFolder
+      : session.worktreePath
+
   return (
     <NewFileDialog
       worktreePath={session.worktreePath}
-      defaultFolder={activeFilePath ? parentFolderOfFile(activeFilePath) : session.worktreePath}
+      defaultFolder={defaultFolder}
       disableBrowse={session.disableBrowse}
       suggestName={suggestName}
       onCreate={handleCreate}
