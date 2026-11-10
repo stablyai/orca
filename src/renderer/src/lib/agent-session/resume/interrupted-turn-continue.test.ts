@@ -261,6 +261,48 @@ describe('interrupted turn continue', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
+  it('an older loop exiting after a re-arm keeps the newer loop reachable by disarm', async () => {
+    state.agentStatusByPaneKey = { 'tab-a:1': working('tab-a:1', 'claude') }
+    armInterruptedTurnsForHostRestart('ws', NOW)
+    let clock = NOW
+    const send = vi.fn(async () => true)
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let released = false
+    let second: Promise<number> | null = null
+    const first = continueInterruptedTurns('ws', {
+      now: () => clock,
+      sleep: async (ms: number) => {
+        clock += ms
+        if (clock === NOW + 5_000) {
+          armInterruptedTurnsForHostRestart('ws', clock)
+          second = continueInterruptedTurns('ws', {
+            now: () => clock,
+            sleep: () => gate,
+            ptyIdFor: () => (released ? 'pty' : null),
+            send,
+            submit: vi.fn(async () => true),
+            agentInForeground: async () => true
+          })
+        }
+      },
+      ptyIdFor: () => null,
+      send,
+      submit: vi.fn(async () => true),
+      agentInForeground: async () => true
+    })
+    expect(await first).toBe(0)
+    // The newer loop is still waiting; a sleep now must cancel it.
+    disarmInterruptedTurns('ws')
+    released = true
+    release()
+    expect(second).not.toBeNull()
+    expect(await second).toBe(0)
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('gives up on a pane that is never reopened while the turn is fresh', async () => {
     state.agentStatusByPaneKey = { 'tab-a:1': working('tab-a:1', 'claude') }
     armInterruptedTurnsForHostRestart('ws', NOW)

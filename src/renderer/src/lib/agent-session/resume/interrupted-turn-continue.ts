@@ -57,7 +57,8 @@ const SETTLE_AFTER_REPORT_MS = 2_000
 
 const armedByWorkspace = new Map<string, ArmedTurn[]>()
 /** Panes whose continue loop is running, per workspace: a disarm (e.g. a sleep) must reach them. */
-const runningByWorkspace = new Map<string, Set<string>>()
+// paneKey -> generation of the loop that owns it, so a stale loop exiting never un-tracks a newer one.
+const runningByWorkspace = new Map<string, Map<string, number | undefined>>()
 /** Bumped by every arm/disarm of a pane: an older wait loop for that pane stops at its next step. */
 const paneGeneration = new Map<string, number>()
 const bumpPane = (paneKey: string): number => {
@@ -151,7 +152,7 @@ export function disarmInterruptedTurns(workspaceId: string): void {
   for (const turn of armedByWorkspace.get(workspaceId) ?? []) {
     bumpPane(turn.paneKey)
   }
-  for (const paneKey of runningByWorkspace.get(workspaceId) ?? []) {
+  for (const paneKey of runningByWorkspace.get(workspaceId)?.keys() ?? []) {
     bumpPane(paneKey)
   }
   armedByWorkspace.delete(workspaceId)
@@ -319,16 +320,18 @@ export async function continueInterruptedTurns(
   for (const turn of armed) {
     turn.settledAt = settledAt
   }
-  const running = runningByWorkspace.get(workspaceId) ?? new Set<string>()
+  const running = runningByWorkspace.get(workspaceId) ?? new Map<string, number | undefined>()
   runningByWorkspace.set(workspaceId, running)
   for (const turn of armed) {
-    running.add(turn.paneKey)
+    running.set(turn.paneKey, turn.generation)
   }
   const results = await Promise.all(
     armed.map((turn) =>
       continueOne(turn, deps)
         .finally(() => {
-          running.delete(turn.paneKey)
+          if (running.get(turn.paneKey) === turn.generation) {
+            running.delete(turn.paneKey)
+          }
           if (running.size === 0 && runningByWorkspace.get(workspaceId) === running) {
             runningByWorkspace.delete(workspaceId)
           }
