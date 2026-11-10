@@ -16,6 +16,15 @@ export function upsertHostSetupProject(
     return [...projects, project]
   }
   const merged = mergeProjectCompatibilityProject(existing, project)
-  const next = remoteHost ? { ...merged, displayName: existing.displayName } : merged
-  return projects.map((entry) => (entry.id === project.id ? next : entry))
+  if (remoteHost) {
+    // Name, color and the local Windows runtime choice belong to this computer's project.
+    merged.displayName = existing.displayName
+    merged.badgeColor = existing.badgeColor
+    if (existing.localWindowsRuntimePreference === undefined) {
+      delete merged.localWindowsRuntimePreference
+    } else {
+      merged.localWindowsRuntimePreference = existing.localWindowsRuntimePreference
+    }
+  }
+  return projects.map((entry) => (entry.id === project.id ? merged : entry))
 }

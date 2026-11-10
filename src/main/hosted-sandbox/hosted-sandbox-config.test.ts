@@ -98,6 +98,14 @@ describe('getHostedSandboxConfig sandbox tokens', () => {
     expect(isEnvironmentProviderError(error, 'unauthorized')).toBe(true)
   })
 
+  it('concurrent callers for one identity share a single mint', async () => {
+    const config = devConfig()
+    const profileId = ensureActiveOrcaProfile(state.dir).profile.id
+    linkOrcaProfileToCloud(profileId, cloud('user-a'), state.dir)
+    const [a, b] = await Promise.all([config.getAccessToken(), config.getAccessToken()])
+    expect(a).toBe(b)
+  })
+
   it('every config instance sees an identity change, not just the one that observed it', async () => {
     const a = devConfig()
     const b = devConfig()

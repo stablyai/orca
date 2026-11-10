@@ -73,8 +73,8 @@ async function prepareEphemeralVmRecipeRequest(
       setupExistingFolder: async (args) => {
         // The VM's checkout folder is named "project"; register it under the real project's name.
         const displayName =
-          store.projects.find((project) => project.id === args.projectId)?.displayName ??
-          sourceRepo?.displayName
+          useAppStore.getState().projects.find((project) => project.id === args.projectId)
+            ?.displayName ?? sourceRepo?.displayName
         const setup = await store.setupProjectExistingFolder(
           displayName ? { ...args, displayName } : args
         )

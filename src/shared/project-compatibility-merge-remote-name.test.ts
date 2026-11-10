@@ -3,12 +3,16 @@ import type { Project } from './project-types'
 import type { Repo } from './repo-types'
 import { mergePreviousProjectMetadata } from './project-compatibility-merge'
 
-const localRepo = { id: 'local-repo', path: '/Users/me/orca-sandbox-push-test' } as Repo
-const vmRepo = {
+function repo(fields: Pick<Repo, 'id' | 'path'> & Partial<Repo>): Repo {
+  return { displayName: 'x', badgeColor: '#888888', addedAt: 1, ...fields }
+}
+
+const localRepo = repo({ id: 'local-repo', path: '/Users/me/orca-sandbox-push-test' })
+const vmRepo = repo({
   id: 'vm-repo',
   path: '/vercel/sandbox/project',
   executionHostId: 'runtime:env-1'
-} as Repo
+})
 
 function project(displayName: string, sourceRepoIds: string[]): Project {
   return {

@@ -107,8 +107,7 @@ export function createHostedSandboxDriver(
       if (view.status !== 'destroyed') {
         throw new EnvironmentProviderError(
           'unavailable',
-          `Orca Cloud answered ${view.status} instead of destroyed.`,
-          HOSTED_SANDBOX_DELETE_NOT_CONFIRMED
+          `Orca Cloud answered ${view.status} instead of destroyed.`
         )
       }
     },

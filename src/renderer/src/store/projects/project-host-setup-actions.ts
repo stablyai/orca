@@ -126,9 +126,7 @@ export function createProjectHostSetupActions(
         })
         const project = normalizeProjectRow(result.project)
         set((s) => ({
-          projects: s.projects.some((entry) => entry.id === project.id)
-            ? s.projects.map((entry) => (entry.id === project.id ? project : entry))
-            : [...s.projects, project],
+          projects: upsertHostSetupProject(s.projects, project, target.kind !== 'local'),
           projectHostSetups: upsertProjectHostSetup(s.projectHostSetups, setup)
         }))
         return { project, setup }
@@ -177,9 +175,7 @@ export function createProjectHostSetupActions(
                 )
               : [...s.repos, repo]
             : s.repos,
-          projects: s.projects.some((entry) => entry.id === project.id)
-            ? s.projects.map((entry) => (entry.id === project.id ? project : entry))
-            : [...s.projects, project],
+          projects: upsertHostSetupProject(s.projects, project, target.kind !== 'local'),
           projectHostSetups: upsertProjectHostSetup(s.projectHostSetups, setup)
         }))
         return { ...result, project, repo, setup }

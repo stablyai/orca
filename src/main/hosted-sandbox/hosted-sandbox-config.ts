@@ -60,6 +60,10 @@ export function getHostedSandboxConfig(
     ? env.ORCA_CLOUD_SANDBOX_DEV_KEY_FILE?.trim()
     : undefined
   let cached: CachedSandboxToken | null = null
+  let inflight: {
+    identity: string
+    promise: Promise<{ token: string; expiresAt: number }>
+  } | null = null
   const fresh = (entry: CachedSandboxToken | null): entry is CachedSandboxToken =>
     entry !== null && entry.expiresAt - Date.now() > 60_000
   const mint = (active: ActiveOrcaProfileState) =>
@@ -82,13 +86,32 @@ export function getHostedSandboxConfig(
           cached = { ...cached, generation }
           return cached.token
         }
-        const minted = await mint(active)
+        // Concurrent callers for the same identity share one mint.
+        let shared = inflight?.identity === identity ? inflight : null
+        if (!shared) {
+          const entry = { identity, promise: mint(active) }
+          shared = entry
+          inflight = entry
+          void entry.promise
+            .catch(() => undefined)
+            .finally(() => {
+              if (inflight === entry) {
+                inflight = null
+              }
+            })
+        }
+        const minted = await shared.promise
         // An identity change while minting must not hand the old identity's token to the caller.
         if (
-          attempt === 0 &&
           generation !== getOrcaProfileIndexGeneration() &&
           sandboxIdentity(ensureActiveOrcaProfile(userDataPath)) !== identity
         ) {
+          if (attempt >= 2) {
+            throw new EnvironmentProviderError(
+              'unavailable',
+              'Your Orca account changed while signing in to Orca Cloud. Try again.'
+            )
+          }
           continue
         }
         cached = { ...minted, identity, generation }
