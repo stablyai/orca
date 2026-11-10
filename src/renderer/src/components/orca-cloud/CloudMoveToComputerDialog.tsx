@@ -159,7 +159,7 @@ export function CloudMoveToComputerDialogHost({
               archiveAfter:
                 state.stage === 'confirm'
                   ? effectiveArchiveAfter(state.archiveAfter, runningAgents)
-                  : state.stage === 'running'
+                  : state.stage === 'running' || state.stage === 'failed'
                     ? state.archiveAfter
                     : false,
               onArchive: archive

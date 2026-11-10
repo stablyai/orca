@@ -2,6 +2,8 @@
 // orcad, create the local workspace through the ordinary create path (reusing the transferred
 // branch), apply the uncommitted work and chats, then open it. The cloud workspace is left as is.
 // Progress, success and failure render in CloudMoveToComputerDialog (orca-cloud-move-store).
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import {
@@ -23,7 +25,9 @@ const STEP_OF_PHASE: Partial<Record<CloudTransferProgressEvent['phase'], CloudMo
 /** A move that hasn't settled by now is reported as failed (the pack or download stalled). */
 export const MOVE_TIMEOUT_MS = 15 * 60_000
 
-let inFlight = false
+/** The run that holds the one-move-at-a-time guard; a timed-out run releases it. */
+let inFlightRun: number | null = null
+let runCounter = 0
 
 export async function runOrcaCloudTransferToLocal(
   workspaceId: string,
@@ -32,10 +36,11 @@ export async function runOrcaCloudTransferToLocal(
 ): Promise<void> {
   const api = window.api?.orcaCloudWorkspace
   // One move at a time: a second click (or a retry racing the first) must not start another pack.
-  if (!api?.prepareTransferToLocal || inFlight) {
+  if (!api?.prepareTransferToLocal || inFlightRun !== null) {
     return
   }
-  inFlight = true
+  const run = ++runCounter
+  inFlightRun = run
   const archiveAfter = options.archiveAfter ?? false
   const startedAt = Date.now()
   let step: CloudMoveStep = 'packing'
@@ -67,7 +72,12 @@ export async function runOrcaCloudTransferToLocal(
     })
   }
   const timeout = setTimeout(() => {
+    // Stop waiting: release the guard so Try again works; this run's late results are ignored
+    // except a late success, which still lands as a notice (the workspace really is here).
     timedOut = true
+    if (inFlightRun === run) {
+      inFlightRun = null
+    }
     setCloudMoveState({
       stage: 'failed',
       workspaceId,
@@ -75,6 +85,7 @@ export async function runOrcaCloudTransferToLocal(
       step,
       timedOut: true,
       localWorktreeId,
+      archiveAfter,
       hidden: isHidden()
     })
   }, MOVE_TIMEOUT_MS)
@@ -145,6 +156,19 @@ export async function runOrcaCloudTransferToLocal(
       throw new Error(finished.message)
     }
     if (timedOut) {
+      noteCloudWorkspaceMoved(workspaceId, Date.now(), worktree.id)
+      toast.success(
+        translate('orcaCloudMove.notice.lateDone', '{{name}} finished moving to this computer', {
+          name
+        }),
+        {
+          duration: 12_000,
+          action: {
+            label: translate('orcaCloudMove.done.open', 'Open workspace'),
+            onClick: () => activateAndRevealWorktree(worktree.id)
+          }
+        }
+      )
       return
     }
     noteCloudWorkspaceMoved(workspaceId, Date.now(), worktree.id)
@@ -178,12 +202,15 @@ export async function runOrcaCloudTransferToLocal(
         step,
         timedOut: false,
         localWorktreeId,
+        archiveAfter,
         hidden: isHidden()
       })
     }
   } finally {
     clearTimeout(timeout)
-    inFlight = false
+    if (inFlightRun === run) {
+      inFlightRun = null
+    }
     dispose()
   }
 }

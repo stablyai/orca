@@ -62,6 +62,8 @@ export type CloudMoveState =
       timedOut: boolean
       /** The local worktree that was created before the failure, if any. */
       localWorktreeId: string | null
+      /** The user's archive-afterwards choice, so Try again keeps it. */
+      archiveAfter: boolean
       /** Settled while hidden: stays a notice until Show (never steals focus). */
       hidden: boolean
     }
@@ -169,15 +171,18 @@ export function cloudWorkspaceMoved(workspaceId: string): CloudWorkspaceMoved | 
       return null
     }
     // Older entries are a bare timestamp.
-    const parsed: unknown = raw.startsWith('{')
-      ? JSON.parse(raw)
-      : { at: Number(raw), localWorktreeId: null }
-    const value = parsed as Partial<CloudWorkspaceMoved>
-    return typeof value.at === 'number' && Number.isFinite(value.at)
-      ? {
-          at: value.at,
-          localWorktreeId: typeof value.localWorktreeId === 'string' ? value.localWorktreeId : null
-        }
+    if (!raw.startsWith('{')) {
+      const at = Number(raw)
+      return Number.isFinite(at) ? { at, localWorktreeId: null } : null
+    }
+    const parsed: unknown = JSON.parse(raw)
+    if (typeof parsed !== 'object' || parsed === null || !('at' in parsed)) {
+      return null
+    }
+    const at = parsed.at
+    const local = 'localWorktreeId' in parsed ? parsed.localWorktreeId : null
+    return typeof at === 'number' && Number.isFinite(at)
+      ? { at, localWorktreeId: typeof local === 'string' ? local : null }
       : null
   } catch {
     return null

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   closeMoveToThisComputer,
   cloudWorkspaceMoved,
@@ -10,6 +10,7 @@ import {
 
 describe('move to this computer store', () => {
   beforeEach(() => setCloudMoveState({ stage: 'closed' }))
+  afterEach(() => vi.unstubAllGlobals())
 
   it('opens on confirm and closes', () => {
     openMoveToThisComputer('ws', 'fix-auth')
@@ -17,7 +18,7 @@ describe('move to this computer store', () => {
       stage: 'confirm',
       workspaceId: 'ws',
       name: 'fix-auth',
-      archiveAfter: true
+      archiveAfter: null
     })
     closeMoveToThisComputer()
     expect(getCloudMoveState().stage).toBe('closed')
@@ -43,12 +44,12 @@ describe('move to this computer store', () => {
 
   it('remembers when a workspace was moved', () => {
     const items = new Map<string, string>()
-    ;(globalThis as { window?: unknown }).window = {
+    vi.stubGlobal('window', {
       localStorage: {
         getItem: (key: string) => items.get(key) ?? null,
         setItem: (key: string, value: string) => void items.set(key, value)
       }
-    }
+    })
     expect(cloudWorkspaceMoved('never-moved')).toBeNull()
     noteCloudWorkspaceMoved('ws', 1_800_000_000_000, 'local-1')
     expect(cloudWorkspaceMoved('ws')).toEqual({ at: 1_800_000_000_000, localWorktreeId: 'local-1' })

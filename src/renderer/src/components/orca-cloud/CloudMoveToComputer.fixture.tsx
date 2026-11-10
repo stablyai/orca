@@ -176,6 +176,7 @@ export const moveFailed = defineFixture({
         ...base,
         step: 'downloading',
         timedOut: false,
+        archiveAfter: true,
         localWorktreeId: null,
         hidden: false
       }}
@@ -192,6 +193,7 @@ export const moveFailedAfterLocal = defineFixture({
         ...base,
         step: 'applying',
         timedOut: false,
+        archiveAfter: true,
         localWorktreeId: 'l1',
         hidden: false
       }}

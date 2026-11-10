@@ -1,6 +1,6 @@
 // "Move to this computer" body: confirm what moves, the steps with elapsed time, then the result.
 // A plain view (fixtures render it inline); CloudMoveToComputerDialog wraps it in the app's Dialog.
-import React, { useEffect, useRef } from 'react'
+import React, { useRef } from 'react'
 import { AlertTriangle, Check, Circle, FolderOpen, Laptop, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -14,6 +14,7 @@ import {
   type CloudMoveState
 } from '@/lib/orca-cloud/orca-cloud-move-store'
 import { cloudMoveFailureCause, cloudMoveStepLabel, formatMoveSize } from './cloud-move-copy'
+import { BulletList, useFocusOnStage } from './cloud-move-parts'
 
 export { cloudMoveStepLabel, cloudMoveTitle } from './cloud-move-copy'
 
@@ -23,27 +24,6 @@ export type CloudMoveConflicts = {
 }
 
 type OpenState = Exclude<CloudMoveState, { stage: 'closed' }>
-
-/** Neutral bullets for what will move (not checkmarks: nothing has happened yet). */
-function BulletList({ items }: { items: React.ReactNode[] }): React.JSX.Element {
-  return (
-    <ul className="flex list-disc flex-col gap-1 pl-5 text-sm marker:text-muted-foreground">
-      {items.map((item, index) => (
-        <li key={index}>{item}</li>
-      ))}
-    </ul>
-  )
-}
-
-/** Moves focus to the stage's main control whenever the stage changes. */
-function useFocusOnStage(
-  stage: OpenState['stage'],
-  ref: React.RefObject<HTMLElement | null>
-): void {
-  useEffect(() => {
-    ref.current?.focus()
-  }, [stage, ref])
-}
 
 /** The dialog's body for one state. Pure: actions come in as callbacks. */
 export function CloudMoveToComputerView({
@@ -90,34 +70,44 @@ export function CloudMoveToComputerView({
         </p>
         <BulletList
           items={[
-            known?.branch
-              ? t('orcaCloudMove.confirm.branchNamed', 'Branch {{branch}} and its commits', {
-                  branch: known.branch
-                })
-              : t('orcaCloudMove.confirm.branch', 'The branch and its commits'),
-            known
-              ? t(
-                  'orcaCloudMove.confirm.changesCount',
-                  '{{count}} uncommitted changes, plus untracked files',
-                  {
-                    count: known.uncommittedChanges,
-                    defaultValue_one: '{{count}} uncommitted change, plus untracked files'
-                  }
-                )
-              : t('orcaCloudMove.confirm.changes', 'Uncommitted changes and untracked files'),
-            known && known.chats > 0
-              ? t(
-                  'orcaCloudMove.confirm.chatsCount',
-                  '{{count}} agent chats, so agents can resume here',
-                  {
-                    count: known.chats,
-                    defaultValue_one: '{{count}} agent chat, so the agent can resume here'
-                  }
-                )
-              : t(
-                  'orcaCloudMove.confirm.chats',
-                  'Claude and Codex chats, so agents can resume here'
-                )
+            {
+              key: 'branch',
+              node: known?.branch
+                ? t('orcaCloudMove.confirm.branchNamed', 'Branch {{branch}} and its commits', {
+                    branch: known.branch
+                  })
+                : t('orcaCloudMove.confirm.branch', 'The branch and its commits')
+            },
+            {
+              key: 'changes',
+              node: known
+                ? t(
+                    'orcaCloudMove.confirm.changesCount',
+                    '{{count}} uncommitted changes, plus untracked files',
+                    {
+                      count: known.uncommittedChanges,
+                      defaultValue_one: '{{count}} uncommitted change, plus untracked files'
+                    }
+                  )
+                : t('orcaCloudMove.confirm.changes', 'Uncommitted changes and untracked files')
+            },
+            {
+              key: 'chats',
+              node:
+                known && known.chats > 0
+                  ? t(
+                      'orcaCloudMove.confirm.chatsCount',
+                      '{{count}} agent chats, so agents can resume here',
+                      {
+                        count: known.chats,
+                        defaultValue_one: '{{count}} agent chat, so the agent can resume here'
+                      }
+                    )
+                  : t(
+                      'orcaCloudMove.confirm.chats',
+                      'Claude and Codex chats, so agents can resume here'
+                    )
+            }
           ]}
         />
         {taken ? (
@@ -222,14 +212,9 @@ export function CloudMoveToComputerView({
             )
           })}
         </ol>
-        {/* One announcement per step change; the ticking time is visual only. */}
+        {/* Announces step changes only; byte progress and time are visual (no chatter per chunk). */}
         <p className="sr-only" role="status">
-          {progress
-            ? t('orcaCloudMove.announce.withProgress', '{{step}}, {{progress}}', {
-                step: cloudMoveStepLabel(state.step, t),
-                progress
-              })
-            : cloudMoveStepLabel(state.step, t)}
+          {cloudMoveStepLabel(state.step, t)}
         </p>
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 flex-col">
@@ -300,8 +285,9 @@ export function CloudMoveToComputerView({
   const { finished, prepared } = state
   const chats = finished.claudeSessions + finished.codexSessions
   const partial = finished.leftoverPatchDir
-  const rows: { text: React.ReactNode; warn?: boolean }[] = [
+  const rows: { key: string; text: React.ReactNode; warn?: boolean }[] = [
     {
+      key: 'branch',
       text:
         prepared.branch === prepared.cloudBranch || !prepared.cloudBranch
           ? t('orcaCloudMove.done.branch', 'Branch {{branch}}', { branch: prepared.branch })
@@ -313,6 +299,7 @@ export function CloudMoveToComputerView({
   ]
   if (partial || finished.appliedStaged || finished.appliedUnstaged) {
     rows.push({
+      key: 'changes',
       text: partial
         ? t('orcaCloudMove.done.changesPartial', 'Uncommitted changes, partly')
         : t('orcaCloudMove.done.changes', 'Uncommitted changes'),
@@ -321,6 +308,7 @@ export function CloudMoveToComputerView({
   }
   if (finished.untrackedFiles > 0) {
     rows.push({
+      key: 'untracked',
       text: t('orcaCloudMove.done.untracked', '{{count}} untracked files', {
         count: finished.untrackedFiles,
         defaultValue_one: '{{count}} untracked file'
@@ -329,6 +317,7 @@ export function CloudMoveToComputerView({
   }
   if (chats > 0) {
     rows.push({
+      key: 'chats',
       text: t('orcaCloudMove.done.chats', '{{count}} agent chats', {
         count: chats,
         defaultValue_one: '{{count}} agent chat'
@@ -338,8 +327,8 @@ export function CloudMoveToComputerView({
   return (
     <div className="flex flex-col gap-4">
       <ul className="flex flex-col gap-1 text-sm">
-        {rows.map((row, index) => (
-          <li key={index} className="flex items-start gap-2">
+        {rows.map((row) => (
+          <li key={row.key} className="flex items-start gap-2">
             {row.warn ? (
               <AlertTriangle
                 className="mt-0.5 size-3.5 shrink-0 text-status-warning-text"

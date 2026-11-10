@@ -37,7 +37,8 @@ export function cloudMoveTitle(state: CloudMoveState, t: Translate): string {
       return t('orcaCloudMove.title.done', 'Moved to this computer')
     case 'failed':
       return t('orcaCloudMove.title.failed', 'Couldn’t move {{name}}', { name: state.name })
-    default:
+    case 'closed':
+    case 'confirm':
       return t('orcaCloudMove.title.confirm', 'Move to this computer')
   }
 }
@@ -53,27 +54,27 @@ export function cloudMoveFailureCause(
       case 'waking':
         return t(
           'orcaCloudMove.timeout.waking',
-          'Waking the sandbox took too long, so Orca stopped.'
+          'Waking the sandbox is taking too long, so Orca stopped waiting. Your files are safe; try again.'
         )
       case 'packing':
         return t(
           'orcaCloudMove.timeout.packing',
-          'Packing the workspace took too long, so Orca stopped.'
+          'Packing the workspace is taking too long, so Orca stopped waiting. Your files are safe; try again.'
         )
       case 'downloading':
         return t(
           'orcaCloudMove.timeout.downloading',
-          'The download took too long, so Orca stopped.'
+          'The download is taking too long, so Orca stopped waiting. Your files are safe; try again.'
         )
       case 'creating':
         return t(
           'orcaCloudMove.timeout.creating',
-          'Creating the local workspace took too long, so Orca stopped.'
+          'Creating the local workspace is taking too long, so Orca stopped waiting.'
         )
       case 'applying':
         return t(
           'orcaCloudMove.timeout.applying',
-          'Applying the changes took too long, so Orca stopped.'
+          'Applying the changes is taking too long, so Orca stopped waiting.'
         )
     }
   }

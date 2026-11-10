@@ -26265,7 +26265,8 @@
     "moveToComputer": "Move to this computer",
     "moveHere": "Move here",
     "openLocal": "Open local workspace",
-    "copiedOn": "Moved to this computer · {{date}}"
+    "copiedOn": "Moved to this computer · {{date}}",
+    "moveAgain": "Move again"
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",
@@ -26576,8 +26577,7 @@
       "changesPartial": "Uncommitted changes, partly",
       "archived": "The cloud workspace is archived. Unarchive it any time.",
       "stillRunning": "The cloud workspace is still running and using sandbox hours. Archive it to stop that; you can unarchive later.",
-      "open": "Open workspace",
-      "openLocal": "Open local workspace"
+      "open": "Open workspace"
     },
     "partialDetail": "Some changes didn’t apply cleanly. They were saved here, so nothing is lost:",
     "title": {
@@ -26595,13 +26595,8 @@
       "done": "done",
       "pending": "not started"
     },
-    "announce": {
-      "withProgress": "{{step}}, {{progress}}"
-    },
     "background": "You can keep working; this finishes in the background.",
     "cause": {
-      "timedOut": "It took too long while {{step}}, so Orca stopped it.",
-      "step": "Something went wrong while {{step}}.",
       "waking": "The sandbox didn’t wake up.",
       "packing": "The workspace couldn’t be packed in the sandbox.",
       "downloading": "The download from the sandbox didn’t finish.",
@@ -26609,15 +26604,17 @@
       "applying": "The changes couldn’t be applied to the local workspace."
     },
     "notice": {
-      "done": "{{name}} is on this computer"
+      "done": "{{name}} is on this computer",
+      "lateDone": "{{name}} finished moving to this computer"
     },
     "showDetails": "Show details",
     "timeout": {
-      "waking": "Waking the sandbox took too long, so Orca stopped.",
-      "packing": "Packing the workspace took too long, so Orca stopped.",
-      "downloading": "The download took too long, so Orca stopped.",
-      "creating": "Creating the local workspace took too long, so Orca stopped.",
-      "applying": "Applying the changes took too long, so Orca stopped."
-    }
+      "waking": "Waking the sandbox is taking too long, so Orca stopped waiting. Your files are safe; try again.",
+      "packing": "Packing the workspace is taking too long, so Orca stopped waiting. Your files are safe; try again.",
+      "downloading": "The download is taking too long, so Orca stopped waiting. Your files are safe; try again.",
+      "creating": "Creating the local workspace is taking too long, so Orca stopped waiting.",
+      "applying": "Applying the changes is taking too long, so Orca stopped waiting."
+    },
+    "openFolder": "Open folder"
   }
 }
