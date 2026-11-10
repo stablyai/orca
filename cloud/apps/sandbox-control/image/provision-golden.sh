@@ -14,6 +14,9 @@ sudo chown -R "$(id -u):$(id -g)" "$ORCA_HOME"
 
 log 'system packages'
 if command -v apt-get >/dev/null; then
+  # Transient mirror errors and dpkg lock contention made apt exit 100 (2 of ~10 golden builds):
+  # retry downloads and wait for the lock instead of failing the build.
+  printf 'Acquire::Retries "5";\nDPkg::Lock::Timeout "180";\n' | sudo tee /etc/apt/apt.conf.d/80-orca-retries >/dev/null
   # Sandbox egress is TLS-only: plain-http apt mirrors time out at runtime (W2, wake on SSH).
   sudo sed -i 's#http://#https://#g' /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null || true
   sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq

@@ -18,6 +18,9 @@ start=$(date +%s)
 
 log 'build tools'
 if command -v apt-get >/dev/null; then
+  # Transient mirror errors and dpkg lock contention made apt exit 100 (2 of ~10 golden builds):
+  # retry downloads and wait for the lock instead of failing the build.
+  printf 'Acquire::Retries "5";\nDPkg::Lock::Timeout "180";\n' | sudo tee /etc/apt/apt.conf.d/80-orca-retries >/dev/null
   sudo apt-get update -qq
   sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends build-essential python3 git ca-certificates >/dev/null
 else
