@@ -14,6 +14,7 @@ import type {
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentSessionThreadGoalChange } from '../../../../../../shared/agent-session/agent-session-thread-goal-wire'
 import { translate } from '@/i18n/i18n'
+import { useNativeChatShellHost } from '../../shell/use-native-chat-shell-host'
 import type { Translate } from '@/i18n/use-translate'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 
@@ -98,6 +99,12 @@ export function useNativeChatStructuredComposerTransport(args: {
     controller.acceptsImages
   )
   const { fork, sideChat } = forks
+  const shell = useNativeChatShellHost({
+    target: props.target,
+    sessionId: props.sessionId,
+    isWorking: controller.isWorking,
+    lastMessageId: controller.messages.at(-1)?.id
+  })
   return useMemo((): NativeChatStructuredComposerTransport => {
     const threadGoal = controller.threadGoal
     // A held host takes no turn; pausing or clearing a goal starts none.
@@ -160,6 +167,7 @@ export function useNativeChatStructuredComposerTransport(args: {
           },
           onSent
         ).then(localizeStructuredComposerOutcome),
+      ...shell,
       ...(changeThreadGoal
         ? {
             threadGoal: {
@@ -212,6 +220,7 @@ export function useNativeChatStructuredComposerTransport(args: {
     sendBlockedReason,
     sendThroughLaunch,
     setOptionPickerRequest,
+    shell,
     starting,
     transportEnabled
   ])

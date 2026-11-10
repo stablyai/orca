@@ -95,6 +95,7 @@ export type NativeChatComposerFieldProps = {
   agent?: string
   launchPrompt?: { placeholder: string }
   workspaceFooter?: React.ReactNode
+  shellMode?: boolean
 }
 
 /** After a clear suppressed by IME, preserve only the composed segment; compare both ends because the caret need not be at the end. */
@@ -168,7 +169,8 @@ export function NativeChatComposerField({
   goalMode,
   agent,
   launchPrompt,
-  workspaceFooter
+  workspaceFooter,
+  shellMode
 }: NativeChatComposerFieldProps): React.JSX.Element {
   const t = useTranslate()
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
@@ -304,15 +306,17 @@ export function NativeChatComposerField({
                 : notice
             )}
             className="mb-1.5"
+            shellMode={shellMode}
           />
           <div
             className={cn(
               // Use a constant container border so focus changes cannot flash it.
-              'group/composer rounded-xl border p-1.5 shadow-xs',
+              'native-chat-composer-frame group/composer rounded-xl border p-1.5 shadow-xs',
               !launch && 'native-chat-composer-card',
               launch
                 ? 'border-foreground/10 bg-background dark:bg-foreground/[0.04]'
                 : 'border-chat-composer-border bg-chat-composer-surface',
+              shellMode && 'native-chat-composer-shell',
               // Contain caret-blink repaint to the composer; keep 4px slack around overhanging attachment buttons, while menus use portals.
               '[contain:paint]'
             )}

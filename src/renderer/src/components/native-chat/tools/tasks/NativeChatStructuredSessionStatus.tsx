@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
+import { NativeChatShellRunList } from '../../shell/NativeChatShellRunList'
 import type { NativeChatMessageListHandle } from '../../messages/actions/use-native-chat-reveal-latest'
 import type { AgentSessionCancelResult } from '../../../../../../shared/agent-session/agent-session-wire'
 import {
@@ -101,6 +102,7 @@ export function NativeChatStructuredSessionStatus(props: {
 
   return (
     <>
+      <NativeChatShellRunList sessionId={props.sessionId} />
       {props.tasks.backgroundTasks.show ? (
         <NativeChatBackgroundTasksStatus
           isVisible={props.isVisible}

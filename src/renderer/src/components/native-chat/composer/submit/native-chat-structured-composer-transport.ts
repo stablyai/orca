@@ -34,6 +34,8 @@ export type NativeChatStructuredComposerTransport = {
     text: string,
     onSent?: () => void
   ) => Promise<StructuredAgentSessionCommandOutcome>
+  runShellCommand?: (command: string) => void
+  hasAddedShellResults?: boolean
   optionsSurface: SessionOptionsSurface
   optionSnapshot: SessionOptionDescriptor[]
   optionPickerRequest?: NativeChatOptionPickerRequest | null

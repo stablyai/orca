@@ -674,6 +674,7 @@ import {
 } from './structured-agent-session-queued-edit-params'
 import { RenameParams } from './structured-agent-session-rename-params'
 import { SendRecordedParams } from './structured-agent-session-send-recorded-params'
+import { ShellCommandParams } from './structured-agent-session-shell-command-params'
 import { SubscribeParams } from './structured-agent-session-subscribe-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal-daemon-params'
 import { TerminalLimitUpdateParams } from './terminal-limit-params'
@@ -862,6 +863,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.restartResume': RestartResumeParams,
   'agentSession.reveal': RevealParams,
   'agentSession.rewind': RewindParams,
+  'agentSession.runShellCommand': ShellCommandParams,
   'agentSession.send': SendParams,
   'agentSession.sendRecorded': SendRecordedParams,
   'agentSession.setOption': SetOptionParams,

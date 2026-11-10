@@ -38,6 +38,7 @@ function harness(options: {
   lane?: 'pty'
   submitEmpty?: () => void
   capturePresentation?: NativeChatStructuredComposerTransport['capturePresentation']
+  runShellCommand?: (command: string) => void
 }) {
   const onError = vi.fn()
   const onSubmitted = vi.fn()
@@ -48,7 +49,8 @@ function harness(options: {
     onSubmitted,
     send: vi.fn(() => options.nativeAdmission ?? true),
     dispatchCommand: vi.fn(async () => ({ handled: false, accepted: false, error: null })),
-    ...(options.threadGoal ? { threadGoal: options.threadGoal } : {})
+    ...(options.threadGoal ? { threadGoal: options.threadGoal } : {}),
+    ...(options.runShellCommand ? { runShellCommand: options.runShellCommand } : {})
   } as unknown as NativeChatStructuredComposerTransport
   const calls = {
     sendPty: vi.fn(),
@@ -127,5 +129,25 @@ describe('composer goal mode', () => {
     expect(readNativeChatDraftCache(SCOPE)).toBe('')
     expect(calls.setCaret).not.toHaveBeenCalled()
     expect(onError).not.toHaveBeenCalled()
+  })
+})
+
+describe('composer ! shell commands', () => {
+  it('runs a ! draft in the shell instead of sending it', async () => {
+    const runShellCommand = vi.fn()
+    const { hook, calls } = harness({ draft: '! git status', runShellCommand })
+    await act(async () => hook.result.current.send())
+    expect(runShellCommand).toHaveBeenCalledWith('git status')
+    expect(calls.setDraft).toHaveBeenCalledWith('')
+    expect(calls.sendStructured).not.toHaveBeenCalled()
+  })
+
+  it('keeps a bare "!" in the composer instead of sending it', async () => {
+    const runShellCommand = vi.fn()
+    const { hook, calls } = harness({ draft: '!', runShellCommand })
+    await act(async () => hook.result.current.send())
+    expect(runShellCommand).not.toHaveBeenCalled()
+    expect(calls.sendStructured).not.toHaveBeenCalled()
+    expect(calls.setDraft).not.toHaveBeenCalled()
   })
 })

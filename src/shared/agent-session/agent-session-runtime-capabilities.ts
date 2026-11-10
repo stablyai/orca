@@ -87,6 +87,8 @@ export const AGENT_SESSION_SEND_RECORDED_RUNTIME_CAPABILITY =
   'agent-session.send-recorded.v1' as const
 // The RPC is registered unconditionally; per-session rewind support is a separate check.
 export const AGENT_SESSION_REWIND_RUNTIME_CAPABILITY = 'agent-session.rewind.v1' as const
+export const AGENT_SESSION_SHELL_COMMAND_RUNTIME_CAPABILITY =
+  'agent-session.shell-command.v1' as const
 // Why: the rewind UI relies on the next send settling an in-doubt rewind, even with the agent up.
 export const AGENT_SESSION_REWIND_RECOVERY_CAPABILITY = 'agent-session.rewind-recovery.v1' as const
 // Why: hosts before this advertise rewind.v1 but refuse agentSession.rewind from a phone.
@@ -165,6 +167,7 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     ...AGENT_SESSION_ATTENTION_RUNTIME_CAPABILITIES,
     AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY,
     AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
+    AGENT_SESSION_SHELL_COMMAND_RUNTIME_CAPABILITY,
     AGENT_SESSION_REWIND_RECOVERY_CAPABILITY,
     AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY,
     AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
