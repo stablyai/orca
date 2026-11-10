@@ -3,7 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaBillingEntitlement } from '../../shared/orca-billing'
-import { decideUsageAlert, usageAlertLevel } from '../../shared/orca-billing-usage-alerts'
+import {
+  decideUsageAlert,
+  usageAlertLevel,
+  usageAlertSentence
+} from '../../shared/orca-billing-usage-alerts'
 import {
   notifyUsageAlertIfDue,
   readUsageAlertLedger,
@@ -104,6 +108,9 @@ describe('decideUsageAlert', () => {
   })
 })
 
+const interpolate = (_key: string, fallback: string, options?: Record<string, string>): string =>
+  fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => options?.[name] ?? '')
+
 describe('notifyUsageAlertIfDue', () => {
   let dir: string
   let show: ReturnType<typeof vi.fn<UsageAlertDeps['show']>>
@@ -111,7 +118,7 @@ describe('notifyUsageAlertIfDue', () => {
   const deps = (): UsageAlertDeps => ({
     userDataPath: dir,
     notificationsEnabled: () => enabled,
-    body: (percent) => `Your team has used ${percent}% of this month’s sandbox hours.`,
+    body: (entitlement) => usageAlertSentence(entitlement, interpolate, 'en'),
     show
   })
 
@@ -152,6 +159,20 @@ describe('notifyUsageAlertIfDue', () => {
     ])
     expect([a, b].filter((level) => level !== null)).toEqual([75])
     expect(show).toHaveBeenCalledTimes(1)
+  })
+
+  it('says what happens next at 100%, by overage', async () => {
+    expect(await notifyUsageAlertIfDue('u:o', at(100, 120), deps())).toBe(100)
+    expect(show).toHaveBeenLastCalledWith({
+      title: USAGE_ALERT_TITLE,
+      body: 'Your team has used all of this month’s sandbox hours. Running sandboxes go to sleep and new ones can’t start. Turn on overage to keep going.'
+    })
+    const on = { overage: { ...team().overage, optedIn: true, spendCapCents: 5000 } }
+    expect(await notifyUsageAlertIfDue('u:b', at(100, 125, on), deps())).toBe(100)
+    expect(show).toHaveBeenLastCalledWith({
+      title: USAGE_ALERT_TITLE,
+      body: 'Your team has used all of this month’s sandbox hours. Overage is on, up to your $50 spend cap.'
+    })
   })
 
   it('counts a level as handled while notifications are off', async () => {

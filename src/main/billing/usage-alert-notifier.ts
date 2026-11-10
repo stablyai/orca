@@ -22,7 +22,8 @@ export type UsageAlertDeps = {
   userDataPath: string
   /** The user's global desktop-notification switch. */
   notificationsEnabled: () => boolean
-  body: (percent: number) => string
+  /** The alert sentence for this entitlement (the same one the in-app notice shows). */
+  body: (entitlement: OrcaBillingEntitlement) => string | null
   show: (input: { title: string; body: string }) => void
 }
 
@@ -93,6 +94,10 @@ async function decideAndNotify(
   if (!deps.notificationsEnabled()) {
     return null
   }
-  deps.show({ title: USAGE_ALERT_TITLE, body: deps.body(decision.notify.percent) })
+  const body = deps.body(entitlement)
+  if (!body) {
+    return null
+  }
+  deps.show({ title: USAGE_ALERT_TITLE, body })
   return decision.notify.level
 }

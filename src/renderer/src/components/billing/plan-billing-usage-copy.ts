@@ -5,7 +5,7 @@ import type {
   OrcaBillingEntitlement,
   OrcaBillingStatusResult
 } from '../../../../shared/orca-billing'
-import { usageWarningUsedPercent } from '../../../../shared/orca-billing-usage-alerts'
+import { usageAlertSentence } from '../../../../shared/orca-billing-usage-alerts'
 import { includedUsagePercent } from './plan-billing-format'
 import { isActivePlan } from './team/team-seat-math'
 
@@ -56,36 +56,29 @@ export function sandboxHoursOverLine(
   )
 }
 
-/** The share used for the warning sentence; shared with the desktop notification in main. */
-export const usedPercentForWarning = usageWarningUsedPercent
-
 /**
- * Shown to owners and admins once billing reports a warning level (75%, 90%) until the hours run
- * out; the sentence states the actual share used, not the level. At 100% the bar, the hours-left
- * line and the out-of-hours states say it instead. Members aren't alerted, so they don't see it.
+ * The usage alert for owners and admins (75%, 90%: the share used; 100%: what happens next). The
+ * same sentence goes out as the desktop notification. Members aren't alerted, so they don't see it.
  */
-export function usageWarningLine(entitlement: OrcaBillingEntitlement, t: Translate): string | null {
-  const level = entitlement.usageWarningPercent
-  if (!entitlement.canManageBilling || level === null || level >= 100) {
-    return null
-  }
-  return t(
-    'auto.components.billing.teamUsedPercent',
-    'Your team has used {{percent}}% of this month’s sandbox hours.',
-    { percent: String(usedPercentForWarning(entitlement)) }
-  )
+export function usageWarningLine(
+  entitlement: OrcaBillingEntitlement,
+  t: Translate,
+  locale: string
+): string | null {
+  return usageAlertSentence(entitlement, t, locale)
 }
 
 /** The account menu's plan lines: hours left, and the early warning once the team reaches it. */
 export function accountMenuUsageLines(
   result: OrcaBillingStatusResult | null,
-  t: Translate
+  t: Translate,
+  locale: string
 ): { hoursLeft: string; warning: string | null } | null {
   if (result?.status !== 'ok' || !isActivePlan(result.entitlement)) {
     return null
   }
   return {
     hoursLeft: sandboxHoursLeftLine(result.entitlement, t),
-    warning: usageWarningLine(result.entitlement, t)
+    warning: usageWarningLine(result.entitlement, t, locale)
   }
 }

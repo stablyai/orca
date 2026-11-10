@@ -144,6 +144,20 @@ export const signedInMenuUsageWarning90 = footer({
   interact: openAccountMenu
 })
 
+/** Out of hours with overage off (owner or admin): the 100% alert in the header. */
+export const signedInMenuUsageAlert100 = footer({
+  height: 400,
+  authStatus: signedInWithBilling,
+  setup: withBilling(true, {
+    usedSeconds: 120 * 3600,
+    remainingIncludedSeconds: 0,
+    usageWarningPercent: 100,
+    canStartSandbox: false,
+    reason: 'included_hours_exhausted'
+  }),
+  interact: openAccountMenu
+})
+
 /** A member at the same 90% level: hours left only, no admin usage notice. */
 export const signedInMenuUsageWarningMember = footer({
   height: 360,

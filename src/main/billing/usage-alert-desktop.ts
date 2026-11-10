@@ -5,16 +5,16 @@ import { retainNotificationUntilRelease } from '../ipc/native-notification-lifec
 import { getTrustedUIRendererWindow } from '../ipc/ui'
 import { safelyRevealWindow } from '../window/focus-existing-window'
 import { isBackgroundLaunch } from '../window/foreground-activation-policy'
-import { translateMain } from '../i18n/main-i18n'
-import { ORCA_PLAN_BILLING_SETTINGS_TARGET } from '../../shared/orca-billing'
+import { mainI18n, translateMain } from '../i18n/main-i18n'
+import { usageAlertSentence } from '../../shared/orca-billing-usage-alerts'
+import {
+  ORCA_PLAN_BILLING_SETTINGS_TARGET,
+  type OrcaBillingEntitlement
+} from '../../shared/orca-billing'
 
-export function usageAlertBody(percent: number): string {
-  // Same key and copy as the in-app notice, so both read (and translate) alike.
-  return translateMain(
-    'auto.components.billing.teamUsedPercent',
-    'Your team has used {{percent}}% of this month’s sandbox hours.',
-    { percent: String(percent) }
-  )
+export function usageAlertBody(entitlement: OrcaBillingEntitlement): string | null {
+  // Same sentence and keys as the in-app notice, so both read (and translate) alike.
+  return usageAlertSentence(entitlement, translateMain, mainI18n.language || 'en')
 }
 
 export function showUsageAlertNotification({ title, body }: { title: string; body: string }): void {

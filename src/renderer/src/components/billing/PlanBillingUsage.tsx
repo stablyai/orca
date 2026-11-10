@@ -63,7 +63,7 @@ export function UsageSummary({
   const date = (ms: number): string =>
     new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(ms)
   const overLine = sandboxHoursOverLine(entitlement, t)
-  const warning = usageWarningLine(entitlement, t)
+  const warning = usageWarningLine(entitlement, t, locale)
   return (
     <div className="space-y-2">
       <div className="flex items-baseline justify-between gap-3 text-xs">

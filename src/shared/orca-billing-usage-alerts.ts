@@ -83,3 +83,56 @@ export function decideUsageAlert(
     ledger: { ...ledger, [accountKey]: { periodStart, levels: [...levels] } }
   }
 }
+
+/** "$50", "$25", "$0.75" in the given locale (shared by the plans page and the usage alert). */
+export function formatCents(cents: number, locale: string): string {
+  const whole = cents % 100 === 0
+  return new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: whole ? 0 : 2,
+    maximumFractionDigits: whole ? 0 : 2
+  }).format(cents / 100)
+}
+
+type UsageAlertTranslate = (
+  key: string,
+  fallback: string,
+  options?: Record<string, string>
+) => string
+
+/**
+ * The alert sentence for the in-app notice and the desktop notification alike, or null when there
+ * is nothing to say (no level reached, or a member: members aren't alerted). At 75% and 90% it
+ * states the share used; at 100% it says what happens next, which depends on overage.
+ */
+export function usageAlertSentence(
+  entitlement: OrcaBillingEntitlement,
+  t: UsageAlertTranslate,
+  locale: string
+): string | null {
+  if (!entitlement.canManageBilling) {
+    return null
+  }
+  const level = usageAlertLevel(entitlement)
+  if (level === null) {
+    return null
+  }
+  if (level < 100) {
+    return t(
+      'auto.components.billing.teamUsedPercent',
+      'Your team has used {{percent}}% of this month’s sandbox hours.',
+      { percent: String(usageWarningUsedPercent(entitlement)) }
+    )
+  }
+  return entitlement.overage.optedIn
+    ? t(
+        'auto.components.billing.teamUsedAllOverageOn',
+        'Your team has used all of this month’s sandbox hours. Overage is on, up to your {{cap}} spend cap.',
+        { cap: formatCents(entitlement.overage.spendCapCents, locale) }
+      )
+    : t(
+        'auto.components.billing.teamUsedAllOverageOff',
+        'Your team has used all of this month’s sandbox hours. Running sandboxes go to sleep and new ones can’t start. Turn on overage to keep going.'
+      )
+}
