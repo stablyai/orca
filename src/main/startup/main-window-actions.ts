@@ -220,9 +220,9 @@ export function getSystemTrayOptions(): SystemTrayOptions | null {
     devInstanceLabel: state.devInstanceIdentity?.devLabel ?? null,
     onOpen: showMainWindowFromTray,
     onOpenSettings: openSettingsFromSystemMenu,
-    onCheckForUpdates: () => {
+    onCheckForUpdates: (options) => {
       showMainWindowFromTray()
-      runUserInitiatedUpdateCheck()
+      runUserInitiatedUpdateCheck(options)
     },
     onQuit: quitFromSystemTray,
     ...(state.isServeMode

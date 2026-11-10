@@ -111,7 +111,6 @@ export function GeneralUpdateSettingsSection({
               'Check for updates'
             )}
           </Button>
-
           {updateStatus.state === 'available' && !updateStatus.externallyManaged ? (
             <Button
               variant="default"
@@ -162,6 +161,9 @@ export function GeneralUpdateSettingsSection({
             </Button>
           ) : null}
         </div>
+        {/* Why: native title tooltips need hover dwell and vanish while disabled;
+            keep RC/perf modifiers as always-visible muted copy (#10590). */}
+        <p className="text-xs text-muted-foreground">{updateCheckHint}</p>
 
         <p className="text-xs text-muted-foreground">
           {updateStatus.state === 'idle' &&
