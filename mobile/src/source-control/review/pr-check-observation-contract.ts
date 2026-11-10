@@ -1,7 +1,9 @@
 import * as z from 'zod'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import type { SendRequestOptions } from '../../transport/rpc/unvalidated-rpc-request-port'
-import type { RpcOperationSender } from '../../transport/rpc/rpc-operation-sender'
+import type {
+  SendRequestOptions,
+  UnvalidatedRpcRequestPort
+} from '../../transport/rpc/unvalidated-rpc-request-port'
 import { captureGitHubInvocation, supportsExactGitHubOperations } from './github-target-invocation'
 import {
   readRuntimeStatusProbe,
@@ -97,7 +99,7 @@ function statusFor(client: RpcClient, refresh: boolean): Promise<Status | null |
 }
 
 export async function captureMobilePRCheckContract(
-  sender: RpcOperationSender,
+  sender: UnvalidatedRpcRequestPort,
   params: { repo: string },
   refresh = false
 ) {
@@ -184,6 +186,6 @@ export async function captureMobilePRCheckContract(
     } satisfies SendRequestOptions
   }
 }
-function isRpcClient(sender: RpcOperationSender): sender is RpcClient {
+function isRpcClient(sender: UnvalidatedRpcRequestPort): sender is RpcClient {
   return 'getState' in sender
 }

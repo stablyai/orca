@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { JiraIssue, JiraSite } from '../../../src/shared/jira/jira-types'
-import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 import { lookupJiraIssueByUrl } from './jira-mobile-url-lookup'
 
 const acme: JiraSite = {
@@ -29,7 +29,7 @@ function issue(overrides: Partial<JiraIssue> = {}): JiraIssue {
   }
 }
 
-function clientReturning(result: unknown, sendRequest = vi.fn()): RpcOperationSender {
+function clientReturning(result: unknown, sendRequest = vi.fn()): UnvalidatedRpcRequestPort {
   sendRequest.mockResolvedValue({ ok: true, result })
   return { sendRequest }
 }

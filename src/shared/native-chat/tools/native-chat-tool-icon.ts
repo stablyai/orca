@@ -73,6 +73,8 @@ const CATEGORY_BY_ROW_WORD = new Map<string, NativeChatToolCategory>([
   ['task', 'subAgentActivity'],
   // Claude's transcript alias of Task.
   ['agent', 'subAgentActivity'],
+  // OpenCode 2.x's name for its task tool.
+  ['subagent', 'subAgentActivity'],
   ['webfetch', 'webSearch'],
   ['todowrite', 'todoList'],
   ['update_plan', 'todoList'],

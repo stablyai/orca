@@ -1,5 +1,5 @@
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
-import { getDiffCommentLineLabel } from '../../../diff-comment-compat'
+import { getDiffCommentLineLabel } from '../../../source-control/review/comments/diff-comment-compat'
 
 const MAX_EXCERPT_LINES = 8
 const MAX_CARD_QUOTE_LENGTH = 60

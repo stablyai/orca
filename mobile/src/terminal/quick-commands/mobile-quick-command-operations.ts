@@ -2,13 +2,6 @@ import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rp
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
 import '../terminal-reply-schema'
 import { terminalQuickCommandsSchema } from './mobile-quick-command-reply-schema'
-import '../../session/agent-launch/mobile-agent-detection-reply-schema'
-import '../../files/session-documents/mobile-markdown-tab-reply-schema'
-import '../../transport/rpc/rpc-uninterpreted-reply-schemas'
-import '../session/mobile-session-terminal-reply-schema'
-import '../../worktree/session-worktree-record-reply-schema'
-import '../../session/native-chat/composer/mobile-native-chat-skill-reply-schema'
-import '../../files/workspace-file-paths-reply-schema'
 
 export const quickCommandsReader = rpcResultVariant(
   'terminal-quick-commands',
@@ -25,8 +18,6 @@ export const quickCommandsRead = bindDeferredRpcOperation(
     read: quickCommandsReader
   })
 )
-
-import '../../session/tabs/mobile-session-tab-write-reply-schema'
 
 export const quickCommandsWrite = bindDeferredRpcOperation(
   defineRpcOperation({

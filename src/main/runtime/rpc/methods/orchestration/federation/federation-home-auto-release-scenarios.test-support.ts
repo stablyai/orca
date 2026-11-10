@@ -2,10 +2,8 @@ import { expect, it, vi } from 'vitest'
 import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
 
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
-import {
-  GRACE_MS,
-  type AutoReleaseScenarioHarness
-} from './federation-auto-release-scenarios.test-support'
+import type { AutoReleaseScenarioHarness } from './federation-auto-release-scenarios.test-support'
+import { GRACE_MS } from './federation-auto-release-grace.test-support'
 
 export function registerHomeAutoReleaseScenarios(args: {
   harness: AutoReleaseScenarioHarness

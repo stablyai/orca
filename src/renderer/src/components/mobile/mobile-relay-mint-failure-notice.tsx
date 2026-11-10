@@ -3,8 +3,8 @@ import { CircleAlert, Loader2 } from 'lucide-react'
 import { Button } from '../ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import type { MobileRelayMintFailure } from '../../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
-import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store/index'
+import { cn } from '@/lib/class-names'
 import { relayClockSkewMessage } from './relay-clock-skew-message'
 
 export function MobileRelayMintFailureNotice({

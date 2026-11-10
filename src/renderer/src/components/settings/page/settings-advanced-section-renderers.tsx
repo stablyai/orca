@@ -45,7 +45,7 @@ export function renderDevSettingsSection(
     <SettingsSection
       id="dev"
       grouped
-      title={t('auto.components.settings.Settings.dev', 'Dev Tools')}
+      title={t('auto.components.settings.Settings.3eac6fb97f', 'Dev tools')}
       description={t(
         'auto.components.settings.Settings.devDescription',
         'Dev-only tools for exercising UI states.'

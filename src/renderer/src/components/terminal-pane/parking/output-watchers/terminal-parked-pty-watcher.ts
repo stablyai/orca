@@ -2,6 +2,7 @@ import { isTerminalLeafId } from '../../../../../../shared/workspace-layout/stab
 import { isProvenProcessExit } from '../../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useAppStore } from '@/store/index'
+import { getTerminalTabOwnerWorktreeId } from '@/store/terminals/terminal-tab-owner-index'
 import { terminalProviderSessionIsGone } from '../../../terminal/terminal-provider-gone-sessions'
 import { closeTerminalTab } from '../../../terminal/terminal-tab-actions'
 import { startParkedTerminalByteWatcher } from './parked-terminal-byte-watcher'
@@ -25,6 +26,7 @@ import {
 } from '../../layout/close/terminal-pane-close-identity'
 import {
   capturedPanesByTabId,
+  retainParkedWatcherPty,
   parkedWatchersByTabId,
   type ParkedTabWatcherEntry,
   type ParkedTerminalPaneCapture
@@ -140,7 +142,9 @@ export function startParkedPtyWatcher(args: {
     ? () => {}
     : subscribeToPtyExit(ptyId, handlePtyExit)
   entry.paneIdByPtyId.set(ptyId, pane.paneId)
+  const releaseOwnership = retainParkedWatcherPty(tab.id, ptyId)
   entry.disposersByPtyId.set(ptyId, () => {
+    releaseOwnership()
     unsubscribeExit()
     disposeWatcher()
   })
@@ -174,9 +178,10 @@ export function collapseParkedTerminalLeaf(tabId: string, leafId: string, ptyId?
   if (!detached) {
     return
   }
-  const terminalTab = Object.values(state.tabsByWorktree)
-    .flat()
-    .find((candidate) => candidate.id === tabId)
+  const worktreeId = getTerminalTabOwnerWorktreeId(state.tabsByWorktree, tabId)
+  const terminalTab = worktreeId
+    ? state.tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
+    : undefined
   if (shouldClearLaunchAgentForClosedPane(terminalTab, ptyId ?? layout?.ptyIdsByLeafId?.[leafId])) {
     state.clearTabLaunchAgent(tabId)
   }

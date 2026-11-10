@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 /** Esc closes the Tasks page unless a modal, menu, or focused field should own it. */
 export function useTaskPageEscapeToClose(blocked: boolean, closeTaskPage: () => void): void {

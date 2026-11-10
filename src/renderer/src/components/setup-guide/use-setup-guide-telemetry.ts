@@ -13,7 +13,7 @@ import {
   trackSetupGuideClosed,
   trackSetupGuideOpened,
   trackSetupGuideStepCompleted
-} from '@/lib/feature-education-telemetry'
+} from '@/diagnostics/telemetry/feature-education-telemetry'
 
 type SetupGuideTelemetrySession = {
   source: SetupGuideSource

@@ -4,13 +4,13 @@ import type {
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import type { DirectWorkItemSetupRequest } from '@/lib/workspace/creation/work-item/direct-work-item-setup'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
 import type { WorkspaceStatus } from '../../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
-import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
+import type { WorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
 import type { PluginTaskLaunch } from './use-plugin-task-launch'
 
 export type ComposerModalData = {

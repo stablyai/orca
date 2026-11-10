@@ -30,8 +30,6 @@
 3 test-no-in-test-import-actual:src/renderer/src/components/terminal-pane/snapshots/remote-snapshot-alt-screen-host-chain.test.ts
 1 test-no-in-test-import-actual:src/renderer/src/hooks/useIpcEvents-agent-status-pane-teardown.test.ts
 1 test-no-in-test-import-actual:src/renderer/src/hooks/useIpcEvents-agent-status-snapshot-hydration.test.ts
-1 test-no-in-test-import-actual:src/renderer/src/hooks/useIpcEvents-rate-limit-hydration.test.ts
-1 test-no-in-test-import-actual:src/renderer/src/lib/agent-session/launch/new-tab/agent-launch-caller-routing.test.ts
 1 test-no-polling-loop:src/main/browser/cookies/browser-cookie-import-concurrency.test.ts
 1 test-no-polling-loop:src/main/claude/claude-stop-ack-race.test.ts
 1 test-no-polling-loop:src/main/claude/claude-stream-json-connection.test.ts
@@ -147,7 +145,6 @@
 2 test-no-real-time-wait:src/main/agent-hooks/server/testing/http/server-transport-interference.test.ts
 1 test-no-real-time-wait:src/main/agent-hooks/server/testing/main-agent/server-turn-ended-at.test.ts
 1 test-no-real-time-wait:src/main/agent-hooks/server/testing/main-agent/server-turn-started-at.test.ts
-5 test-no-real-time-wait:src/main/agent-hooks/wsl-relay/wsl-hook-relay-manager.test.ts
 1 test-no-real-time-wait:src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-process.test.ts
 2 test-no-real-time-wait:src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-scan-scope.test.ts
 1 test-no-real-time-wait:src/main/antigravity/windows-hook-json-post.test.ts
@@ -258,14 +255,12 @@
 1 test-no-real-time-wait:src/main/windows/windows-process-tree-command-line-patch.test.ts
 2 test-no-real-time-wait:src/main/windows/windows-pty-job.win32.test.ts
 1 test-no-real-time-wait:src/main/worker-thread-child-process/worker-thread-child-process.test.ts
-1 test-no-real-time-wait:src/main/workspaces/creation/preparation/worktree-create-preparation-cancellation.test.ts
 1 test-no-real-time-wait:src/main/workspaces/removal/local-worktree-removal-recovery-live.test.ts
 2 test-no-real-time-wait:src/main/wsl/execution/wsl-command-loop.test.ts
 2 test-no-real-time-wait:src/main/wsl/orcad/wsl-orcad-real-distro-lane.test.ts
 4 test-no-real-time-wait:src/renderer/src/components/activity/activity-auto-mark-read-loop.react185.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/editor/DiagramViewerModal.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/editor/combined-diff/load-sections/combined-diff-stale-analysis-work-budget.test.tsx
-1 test-no-real-time-wait:src/renderer/src/components/native-chat/drafts/native-chat-composer-draft-lifecycle.test.tsx
 4 test-no-real-time-wait:src/renderer/src/components/native-chat/drafts/native-chat-composer-draft-store.test.ts
 1 test-no-real-time-wait:src/renderer/src/components/terminal-pane/layout/split/resolve-split-cwd.test.ts
 2 test-no-real-time-wait:src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts
@@ -275,7 +270,6 @@
 1 test-no-real-time-wait:src/renderer/src/components/terminal-pane/viewport/terminal-fit-restore.test.ts
 1 test-no-real-time-wait:src/renderer/src/hooks/runtime-project-refresh-scheduler.test.ts
 1 test-no-real-time-wait:src/renderer/src/lib/agent-session/resume/cli-fork/native-chat-cli-fork-preparation.test.ts
-1 test-no-real-time-wait:src/renderer/src/lib/orca-yaml-trust-prompt-slot-eviction.test.ts
 2 test-no-real-time-wait:src/renderer/src/store/slices/workspace-cleanup/workspace-cleanup-removal-preflight.test.ts
 2 test-no-real-time-wait:src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts
 1 test-no-real-time-wait:src/shared/darwin-process-table-capture.test.ts
@@ -635,13 +629,12 @@
 2 test-no-wall-clock:src/renderer/src/components/dashboard/useLiveDashboardSnapshot.test.ts
 1 test-no-wall-clock:src/renderer/src/components/native-chat/conversation/slots/NativeChatMessageList.opening-send.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/native-chat/conversation/slots/NativeChatMessageList.queued-turn-order.test.tsx
-3 test-no-wall-clock:src/renderer/src/components/native-chat/conversation/turns/NativeChatMessageList.turn-indicator.test.tsx
+2 test-no-wall-clock:src/renderer/src/components/native-chat/conversation/turns/NativeChatMessageList.turn-indicator.test.tsx
 3 test-no-wall-clock:src/renderer/src/components/native-chat/conversation/turns/NativeChatResolvedView.turn-status.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/native-chat/session/structured/delivery/NativeChatMessageList.unsent-message.test.tsx
 3 test-no-wall-clock:src/renderer/src/components/native-chat/surfaces/integration/NativeChatMessageList.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/native-chat/tools/tasks/NativeChatStructuredSessionStatus.test.tsx
-1 test-no-wall-clock:src/renderer/src/components/settings/accounts/providers/GrokAccountsSection.test.tsx
-3 test-no-wall-clock:src/renderer/src/components/sidebar/workspace-card/review/use-workspace-reference-details.test.tsx
+1 test-no-wall-clock:src/renderer/src/components/sidebar/workspace-card/review/use-workspace-reference-details.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/sidebar/worktree-list/listing/WorktreeList.lineage-agent-expansion-coupling.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/task-page/jira/task-page-jira-cache-selectors.test.ts
 2 test-no-wall-clock:src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts
@@ -651,13 +644,11 @@
 1 test-no-wall-clock:src/renderer/src/components/worktree-jump/WorktreeJumpPalette.recent-tabs.behavior.test.tsx
 4 test-no-wall-clock:src/renderer/src/components/worktree-jump/WorktreeJumpPalette.recent-tabs.test.tsx
 2 test-no-wall-clock:src/renderer/src/hooks/ipc-events/agent-status-terminal-title-tab-write.test.ts
-1 test-no-wall-clock:src/renderer/src/hooks/useIpcEvents-agent-status-hook-titles.test.ts
 1 test-no-wall-clock:src/renderer/src/lib/paired-runtime-closed-tab-resume.test.ts
 2 test-no-wall-clock:src/renderer/src/lib/use-tab-agent-observed-signal-dispatch.test.tsx
 2 test-no-wall-clock:src/renderer/src/lib/wake-sleeping-agents-live-unmounted-pane.test.ts
 1 test-no-wall-clock:src/renderer/src/lib/workspace/ownership/workspace-terminal-host-authority.test.ts
 1 test-no-wall-clock:src/renderer/src/lib/workspace/activation/worktree-activation-emptied-workspace-reseed.test.ts
-2 test-no-wall-clock:src/renderer/src/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement.test.ts
 2 test-no-wall-clock:src/renderer/src/store/github/pull-requests/github-pr-branch-linked-pr-divergence.test.ts
 6 test-no-wall-clock:src/renderer/src/store/slices/jira/jira.test.ts
 5 test-no-wall-clock:src/renderer/src/store/slices/worktrees/metadata/worktree-meta-hosted-review.test.ts
@@ -681,7 +672,6 @@
 2 test-no-wall-clock:tests/e2e/cross-version-wire/release-source-retention.unit.test.ts
 1 test-no-wall-clock:tests/e2e/host-cold-park-remote-subscriber.unit.test.ts
 2 test-no-wall-clock:tests/e2e/omp-child-session-recovery.unit.test.ts
-1 test-no-wall-clock:tests/e2e/structured-session-tab-close-regressions.unit.test.ts
 2 test-timeout-needs-reason:mobile/src/terminal/document/native-document-bundle.test.ts
 1 test-timeout-needs-reason:mobile/src/test-support/rpc-recording/family-recordings.test.ts
 1 test-timeout-needs-reason:mobile/src/test-support/rpc-recording/mutants/family-mutants.test.ts
@@ -691,7 +681,6 @@
 2 test-timeout-needs-reason:src/main/acp/journal/acp-structured-broken-stream.test.ts
 4 test-timeout-needs-reason:src/main/agent-hooks/server/testing/http/server-transport-interference.test.ts
 1 test-timeout-needs-reason:src/main/agent-hooks/wsl-relay/testing/wsl-hook-relay-live.integration.test.ts
-1 test-timeout-needs-reason:src/main/agent-hooks/wsl-relay/wsl-hook-relay-manager.test.ts
 1 test-timeout-needs-reason:src/main/ai-vault/parse-cache/session-parse-cache-large-scan.test.ts
 1 test-timeout-needs-reason:src/main/antigravity/native-macos-credentials.real.test.ts
 1 test-timeout-needs-reason:src/main/antigravity/posix-hook-invocation.test.ts
@@ -706,7 +695,7 @@
 1 test-timeout-needs-reason:src/main/browser/cookies/browser-cookie-import-validated-partition.electron.test.ts
 1 test-timeout-needs-reason:src/main/browser/guest-lifecycle/find/browser-find-frame-traversal.electron.test.ts
 1 test-timeout-needs-reason:src/main/browser/identity/wire-probes/browser-session-ua-wire-identity-cross-context.electron.test.ts
-2 test-timeout-needs-reason:src/main/browser/identity/wire-probes/browser-session-ua-wire-identity.electron.test.ts
+1 test-timeout-needs-reason:src/main/browser/identity/wire-probes/browser-session-ua-wire-identity.electron.test.ts
 3 test-timeout-needs-reason:src/main/claude-usage/scanner-incremental-reader.test.ts
 1 test-timeout-needs-reason:src/main/claude/claude-agent-sdk-exit-proof.test.ts
 1 test-timeout-needs-reason:src/main/claude/claude-background-run-isolation-real-cli.test.ts

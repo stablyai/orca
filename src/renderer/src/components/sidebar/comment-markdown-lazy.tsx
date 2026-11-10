@@ -1,6 +1,6 @@
 import React from 'react'
-import { cn } from '@/lib/utils'
-import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { cn } from '@/lib/class-names'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 
 // Share one lazy identity/chunk so Markdown dependencies stay off the boot graph for both sidebar surfaces.
 const LazyCommentMarkdown = lazyWithRetry(() => import('./CommentMarkdown'), {

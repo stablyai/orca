@@ -31,7 +31,7 @@ export function TerminalCursorAppearanceSection({
 
       <div className="ml-4 divide-y divide-border/40">
         <SearchableSetting
-          title={t('auto.components.settings.TerminalAppearanceSection.db270cc9a9', 'Cursor Shape')}
+          title={t('auto.components.settings.TerminalAppearanceSection.4adb9364f4', 'Cursor shape')}
           description={t(
             'auto.components.settings.TerminalAppearanceSection.d455f2ef4f',
             'Default cursor appearance for Orca terminal panes.'
@@ -40,14 +40,14 @@ export function TerminalCursorAppearanceSection({
         >
           <SettingsRow
             label={t(
-              'auto.components.settings.TerminalAppearanceSection.db270cc9a9',
-              'Cursor Shape'
+              'auto.components.settings.TerminalAppearanceSection.4adb9364f4',
+              'Cursor shape'
             )}
             control={
               <SettingsSegmentedControl
                 ariaLabel={t(
-                  'auto.components.settings.TerminalAppearanceSection.db270cc9a9',
-                  'Cursor Shape'
+                  'auto.components.settings.TerminalAppearanceSection.4adb9364f4',
+                  'Cursor shape'
                 )}
                 value={settings.terminalCursorStyle}
                 onChange={(option) => updateSettings({ terminalCursorStyle: option })}
@@ -99,8 +99,8 @@ export function TerminalCursorAppearanceSection({
 
         <SearchableSetting
           title={t(
-            'auto.components.settings.TerminalAppearanceSection.b9f1804422',
-            'Cursor Opacity'
+            'auto.components.settings.TerminalAppearanceSection.55c3f22e7c',
+            'Cursor opacity'
           )}
           description={t(
             'auto.components.settings.TerminalAppearanceSection.04cdf85dec',
@@ -110,8 +110,8 @@ export function TerminalCursorAppearanceSection({
         >
           <NumberField
             label={t(
-              'auto.components.settings.TerminalAppearanceSection.b9f1804422',
-              'Cursor Opacity'
+              'auto.components.settings.TerminalAppearanceSection.55c3f22e7c',
+              'Cursor opacity'
             )}
             description=""
             value={settings.terminalCursorOpacity ?? 1}

@@ -6,13 +6,13 @@ import { ensureWorktreeHasInitialTerminal } from '@/lib/workspace/activation/ini
 import {
   cleanupEphemeralVmRuntimeForFailedCreate,
   prepareRequestForCreate
-} from '@/lib/ephemeral-vm-worktree-creation'
-import { getProvisionedRootCreateOptions } from '@/lib/provisioned-root-create-options'
-import { releaseVmCreateCheckout } from '@/lib/vm-create-hidden-checkouts'
+} from '@/lib/workspace/creation/ephemeral-vm-worktree-creation'
+import { getProvisionedRootCreateOptions } from '@/lib/workspace/creation/provisioned-root-create-options'
+import { releaseVmCreateCheckout } from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
 import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
-} from '@/lib/workspace-create-error-format'
+} from '@/lib/workspace/creation/workspace-create-error-format'
 import type { CreatedWorktreeResult } from '@/store/slices/worktrees/create/worktree-create-payload'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import { resolveBackendDraftStartup } from '@/lib/workspace/creation/worktree-draft-startup-view-mode'
@@ -29,7 +29,7 @@ import {
 import { completeWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-completion'
 import { showWorktreeCreationReadyToast } from '@/lib/workspace/creation/worktree-creation-ready-toast'
 import { mountCreatedWorktreeStartupTabsInBackground } from '@/lib/workspace/creation/worktree-creation-background-mount'
-import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
+import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/runtime/hosted-terminals/restoration/web-runtime-worktree-terminal-after-wake'
 import { attachCreatedWorkspaceState } from '@/lib/worktree-creation-created-attachments'
 import {
   isCreatedWorkspaceInView,

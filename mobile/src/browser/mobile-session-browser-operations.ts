@@ -4,7 +4,6 @@ import '../files/mobile-file-preview-operations'
 import { browserTabCreatedSchema } from './mobile-session-browser-reply-schema'
 import '../agent-history/mobile-ai-vault-resume-reply-schema'
 import '../files/session-documents/mobile-file-tap-reply-schema'
-import '../transport/rpc/rpc-uninterpreted-reply-schemas'
 
 export const sessionBrowserTabCreate = bindDeferredRpcOperation(
   defineRpcOperation({

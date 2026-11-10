@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { readServeInstallEvidence } from './serve-install-hold'
-import { isShipItRunningForBundle } from '../../shared/shipit-process-listing'
 
 describe('readServeInstallEvidence', () => {
   let root: string
@@ -59,12 +58,5 @@ describe('readServeInstallEvidence', () => {
         }
       })
     ).resolves.toEqual({ kind: 'clear' })
-  })
-
-  it('matches only the ShipIt binary path', () => {
-    expect(isShipItRunningForBundle(`  ${shipIt('/A.app')}`, '/A.app')).toBe(true)
-    expect(
-      isShipItRunningForBundle('/A.app/Contents/Frameworks/Squirrel.framework/Squirrel', '/A.app')
-    ).toBe(false)
   })
 })

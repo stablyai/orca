@@ -2,7 +2,7 @@ import { useId, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { IntegrationStatusPill } from '@/components/integration-status-pill'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { getShowInTasksActionLabel, getShowInTasksLabel } from './TaskSourceShowInTasksStep'
 import {
   TASK_PROVIDER_SETUP_STATUS_TONE,
@@ -51,7 +51,7 @@ function getSetupStatusLabel(status: TaskProviderSetupStatus, t: Translate = tra
         'Status unavailable'
       )
     case 'hidden':
-      return t('auto.components.settings.TaskSourceProviderCard.statusHidden', 'Hidden from Tasks')
+      return t('auto.components.settings.TaskSourceProviderCard.d2d9e9707b', 'Hidden from tasks')
     case 'incomplete':
       return t('auto.components.settings.TaskSourceProviderCard.statusIncomplete', 'Needs setup')
   }
