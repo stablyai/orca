@@ -1,16 +1,16 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { installAttentionScreen } from '../../workspace-attention/workspace-unread-characterization-fixture'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   markWorktreeSleepIntent,
   onWorktreeSleepIntentCleared,
   forgetWorktreeSleepIntent
-} from '@/lib/worktree-sleep-intent'
+} from '@/lib/workspace/sleep/worktree-sleep-intent'
 import { createTestStore } from '../../../testing/app-store-test-fixture'
 import { makeTab } from '../../../terminals/terminal-tab.test-fixture'
 import { makeWorktree } from '../worktree.test-fixture'
 import { makeFolderWorkspace } from '../../../folder-workspaces/folder-workspace.test-fixture'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
 const FOLDER_ID = 'folder-activation'
 const FOLDER_KEY = folderWorkspaceKey(FOLDER_ID)
