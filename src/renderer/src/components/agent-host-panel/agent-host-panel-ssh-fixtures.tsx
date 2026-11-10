@@ -88,3 +88,13 @@ export const sshClassicDisconnected = defineFixture({
   width: 1000,
   render: () => ssh({}, ROWS, 'disconnected')
 })
+
+/** An API key signs Codex in while its ChatGPT login on the host goes unused (hasLogin). */
+export const sshClassicKeyOverrides = defineFixture({
+  width: 1000,
+  render: () =>
+    ssh({}, [
+      { agent: 'claude', state: 'signedIn', canSignOut: true },
+      { agent: 'codex', state: 'apiKeyOverrides', canSignOut: false }
+    ])
+})

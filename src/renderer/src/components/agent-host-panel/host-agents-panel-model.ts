@@ -8,7 +8,14 @@ import {
 import type { AgentApiKeySummary } from '../../../../shared/agent-api-keys/agent-api-key-catalog'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
-export type HostAgentPanelState = 'signedIn' | 'apiKey' | 'signedOut' | 'notInstalled' | 'unknown'
+export type HostAgentPanelState =
+  | 'signedIn'
+  | 'apiKey'
+  /** An API key signs the agent in, and a CLI login underneath goes unused (classic SSH reports it). */
+  | 'apiKeyOverrides'
+  | 'signedOut'
+  | 'notInstalled'
+  | 'unknown'
 
 export type HostAgentPanelRow = {
   agent: HostAgentSignInAgent
@@ -25,7 +32,11 @@ export function hostAgentPanelRows(report: HostAgentSignInReport | null): HostAg
     }
     if (entry.state === 'signedIn') {
       return entry.method === 'apiKey'
-        ? { agent, state: 'apiKey', canSignOut: false }
+        ? {
+            agent,
+            state: 'hasLogin' in entry && entry.hasLogin === true ? 'apiKeyOverrides' : 'apiKey',
+            canSignOut: false
+          }
         : { agent, state: 'signedIn', canSignOut: true }
     }
     return { agent, state: entry.state, canSignOut: false }

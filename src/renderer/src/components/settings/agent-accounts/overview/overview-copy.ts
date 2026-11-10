@@ -29,6 +29,11 @@ export function overviewCellText(
       }
     case 'apiKey':
       return { text: t('agentAccountsOverview.cell.apiKey', 'API key'), tone: 'plain' }
+    case 'apiKeyOverrides':
+      return {
+        text: t('agentAccountsOverview.cell.apiKeyOverrides', 'API key overrides sign-in'),
+        tone: 'warning'
+      }
     case 'notInstalled':
       return { text: t('agentAccountsOverview.cell.notInstalled', 'Not installed'), tone: 'muted' }
     case 'notConnected':

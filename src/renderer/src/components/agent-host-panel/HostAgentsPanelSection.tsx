@@ -26,6 +26,8 @@ export type HostAgentsPanelSectionProps = {
   actionsDisabledReason: string | null
   onSignOut: (agent: HostAgentSignInAgent) => void
   onCheckAgain: () => void
+  /** WSL: the account selected for this distro in Accounts, per agent (annotation 7). */
+  accounts?: Partial<Record<HostAgentSignInAgent, string | null>>
   /** Classic SSH: code sign-in over remote exec, inline under the agent's row. */
   codeSignIn?: {
     flows: Partial<Record<HostAgentSignInAgent, SshAgentSignInFlow>>
@@ -48,6 +50,8 @@ function stateLabel(state: HostAgentPanelState, t: Translate): string {
       return t('agentHostPanel.host.signedIn', 'Signed in')
     case 'apiKey':
       return t('agentHostPanel.host.apiKey', 'Signed in with an API key')
+    case 'apiKeyOverrides':
+      return t('agentHostPanel.host.apiKeyOverrides', 'API key overrides sign-in')
     case 'signedOut':
       return t('agentHostPanel.host.signedOut', 'Signed out')
     case 'notInstalled':
@@ -186,6 +190,15 @@ export function HostAgentsPanelSection(props: HostAgentsPanelSectionProps): Reac
                     <span className="text-sm text-foreground">
                       {[stateLabel(row.state, t), muted].filter(Boolean).join(' · ')}
                     </span>
+                    {props.accounts?.[row.agent] ? (
+                      <span className="break-words text-xs text-muted-foreground">
+                        {t(
+                          'agentHostPanel.host.selectedAccount',
+                          'Account: {{name}} (selected in Accounts)',
+                          { name: props.accounts[row.agent] }
+                        )}
+                      </span>
+                    ) : null}
                     {row.state === 'signedOut' && !props.codeSignIn ? (
                       <span className="text-xs text-muted-foreground">
                         {t(

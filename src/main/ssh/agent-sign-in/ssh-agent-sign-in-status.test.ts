@@ -8,7 +8,7 @@ vi.mock('../remote-exec/remote-exec-command', () => ({
     typeof error === 'object' && error !== null && 'exitCode' in error
 }))
 
-const { SshAgentSignInStatus, SSH_AGENT_STATUS_COMMAND } =
+const { SshAgentSignInStatus, SSH_AGENT_STATUS_COMMAND, SSH_AGENT_LOGIN_PRESENCE_COMMAND } =
   await import('./ssh-agent-sign-in-status')
 
 function transport(connected = true, generation = 1) {
@@ -107,5 +107,58 @@ describe('SshAgentSignInStatus', () => {
     generation = 2
     await status.read('devbox')
     expect(exec).toHaveBeenCalledTimes(4)
+  })
+
+  it('hasLogin: presence only, asked only under an API key, never a value', async () => {
+    exec.mockReset()
+    const SECRET = 'sk-ant-oat01-SECRETVALUE'
+    exec.mockImplementation(async (_conn: unknown, command: string) => {
+      if (command === SSH_AGENT_STATUS_COMMAND.claude) {
+        return '{"loggedIn":true,"authMethod":"api_key","apiKeySource":"ANTHROPIC_API_KEY"}'
+      }
+      if (command === SSH_AGENT_LOGIN_PRESENCE_COMMAND.claude) {
+        return 'yes\n'
+      }
+      if (command === SSH_AGENT_STATUS_COMMAND.codex) {
+        return 'Logged in using an API key'
+      }
+      // A host that answers with anything but yes/no gives no verdict, and nothing it said leaks.
+      return `${SECRET}\n`
+    })
+    const result = await new SshAgentSignInStatus(() => transport()).read('devbox')
+    expect(result).toMatchObject({
+      ok: true,
+      report: {
+        agents: [
+          { agent: 'claude', state: 'signedIn', method: 'apiKey', hasLogin: true },
+          { agent: 'codex', state: 'signedIn', method: 'apiKey' }
+        ]
+      }
+    })
+    expect(JSON.stringify(result)).not.toContain(SECRET)
+    expect(result.ok && 'hasLogin' in (result.report.agents[1] ?? {})).toBe(false)
+  })
+
+  it('the presence commands never read a credential into output', () => {
+    for (const command of Object.values(SSH_AGENT_LOGIN_PRESENCE_COMMAND)) {
+      expect(command).not.toMatch(/\s-[wg]\b|\bcat\b|\bhead\b|\bjq\b/)
+      // Every path prints only yes or no.
+      expect(command.match(/echo (\w+)/g)?.every((echo) => /echo (yes|no)/.test(echo))).toBe(true)
+    }
+    expect(SSH_AGENT_LOGIN_PRESENCE_COMMAND.codex).toContain('grep -q')
+    expect(SSH_AGENT_LOGIN_PRESENCE_COMMAND.claude).toContain('>/dev/null')
+  })
+
+  it('signed-in CLI logins and signed-out agents are never probed for presence', async () => {
+    exec.mockReset()
+    exec.mockImplementation(async (_conn: unknown, command: string) =>
+      command === SSH_AGENT_STATUS_COMMAND.claude
+        ? '{"loggedIn":true,"authMethod":"claude.ai"}'
+        : ''
+    )
+    await new SshAgentSignInStatus(() => transport()).read('devbox')
+    const commands = exec.mock.calls.map((call: unknown[]) => String(call[1]))
+    expect(commands).not.toContain(SSH_AGENT_LOGIN_PRESENCE_COMMAND.claude)
+    expect(commands).not.toContain(SSH_AGENT_LOGIN_PRESENCE_COMMAND.codex)
   })
 })
