@@ -21,7 +21,7 @@ describe('unread agent-session membership', () => {
     const moved = replaceTabBuckets(initial, [['first', null]])
     expect(hasUnreadAgentSessionTab(moved, 'same-bucket')).toBe(true)
 
-    const replaced = replaceTabBuckets(moved, [
+    const replaced = replaceTabBuckets<{ id: string; contentType?: string }>(moved, [
       ['second', [{ id: 'same-bucket', contentType: 'terminal' }]]
     ])
     expect(hasUnreadAgentSessionTab(replaced, 'same-bucket')).toBe(false)
