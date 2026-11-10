@@ -80,7 +80,7 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
   if (request.method === 'orchestration.ask') {
     return 'ask'
   }
-  if (request.method === 'orchestration.check') {
+  if (request.method === 'orchestration.check' || request.method === 'orchestration.lockAcquire') {
     const params = request.params as { wait?: unknown } | undefined
     return params?.wait === true ? 'wait' : null
   }
