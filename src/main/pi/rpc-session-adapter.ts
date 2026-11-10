@@ -96,7 +96,8 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
       }
       const process = await spawned.read(session.connection.pid)
       if (session.connection.closed || attempt.signal.aborted) {
-        throw new Error('Pi exited while starting')
+        const ending = attempt.signal.aborted ? undefined : this.endings.get(id, session.generation)
+        throw ending ?? new Error('Pi exited while starting')
       }
       return {
         process,
