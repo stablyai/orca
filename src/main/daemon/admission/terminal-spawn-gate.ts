@@ -25,6 +25,7 @@ import type { LegacyRestoreDetails, LegacyRestoreRecords } from './legacy-restor
 import { admitRecordingLegacyRestore } from './legacy-restore-admission'
 import { TerminalSpawnWaiters } from './terminal-spawn-waiters'
 import { hostTerminalCapRefusal, TerminalSpawnHostShare } from './terminal-spawn-host-share'
+import { refreshPressureBounded } from './terminal-spawn-pressure-refresh'
 
 import type { TerminalSpawnAdmissionMode } from './terminal-spawn-admission-mode'
 
@@ -134,7 +135,7 @@ export class TerminalSpawnGate {
     let attempt: ReturnType<TerminalSpawnGate['attempt']> = first
     while (attempt.kind === 'wait') {
       await this.waiters.waitForChange(attempt.untilMs, cancel?.signal)
-      await this.options.refreshPressure?.()
+      await refreshPressureBounded(this.options.refreshPressure, cancel?.signal)
       const maximum = this.options.resolveMaximum?.() ?? this.host.maxTerminals
       attempt = this.attempt(facts, cancel, true, maximum)
     }

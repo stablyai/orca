@@ -83,6 +83,29 @@ describe('TerminalSpawnGate', () => {
 
       await expect(admitted).resolves.toHaveProperty('commit')
     })
+
+    it('does not hold a waiter past its deadline when the pressure re-read never settles', async () => {
+      vi.useFakeTimers()
+      gate = new TerminalSpawnGate({
+        log,
+        mode: 'enforce',
+        now: () => Date.now(),
+        pressure: () => 'critical',
+        refreshPressure: () => new Promise<void>(() => {})
+      })
+
+      const admitted = gate.admit({
+        clientId: 'old-client',
+        declaredIntent: null,
+        hasAgentSessionClaim: true,
+        hasHistorySeed: true,
+        deadlineAt: Date.now() + 1_000
+      })
+      const outcome = expect(admitted).rejects.toThrow('terminal_spawn_refused')
+      await vi.advanceTimersByTimeAsync(1_300)
+
+      await outcome
+    })
   })
 
   describe('host terminal cap', () => {
