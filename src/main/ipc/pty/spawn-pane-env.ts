@@ -8,7 +8,6 @@ import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/
 import { isValidTerminalTabId } from '../../../shared/workspace-layout/terminal-tab-id'
 import {
   buildWorkspacePortEnv,
-  hostPinnedPortBlock,
   WORKSPACE_PORT_ENV_KEYS
 } from '../../../shared/workspace-port-block'
 import { getWorkspacePortBlockForWorktreeId } from '../../workspace-ports/workspace-port-block-registry'
@@ -96,8 +95,9 @@ export async function stampWorkspacePortEnv(
     return
   }
   try {
-    const block =
-      hostPinnedPortBlock(process.env) ?? (await getWorkspacePortBlockForWorktreeId(worktreeId))
+    // Always the workspace's own block: a host env's ORCA_PORT (a VM launcher sets one) would make
+    // every workspace on that host share it.
+    const block = await getWorkspacePortBlockForWorktreeId(worktreeId)
     if (block) {
       Object.assign(env, buildWorkspacePortEnv(block))
     }
