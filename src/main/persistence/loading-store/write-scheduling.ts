@@ -21,6 +21,7 @@ type WriteSchedulingOperationsRuntime = Pick<
   StoreRuntimeState,
   | 'activeViewPreference'
   | 'automationListProjectionCache'
+  | 'pendingAutomationRunsAfter'
   | 'dirtyProfileStateDomains'
   | 'firstPendingSaveAt'
   | 'pendingWrite'
@@ -91,18 +92,38 @@ export class WriteSchedulingOperations {
   }
 }
 
+/** Saves the rows of the domains a mutation changed. */
 export function scheduleSave(
   owner: WriteSchedulingOperations,
   domains: ProfileSaveDomains,
   writtenHostId?: ExecutionHostId
 ): void {
+  scheduleDomainSave(owner, domains, writtenHostId)
+}
+
+/** Startup load, migration and maintenance resume only: their changes span the profile. */
+export function scheduleFullProfileSave(owner: WriteSchedulingOperations): void {
+  scheduleDomainSave(owner, undefined)
+}
+
+function scheduleDomainSave(
+  owner: WriteSchedulingOperations,
+  dirtyDomains: readonly string[] | undefined,
+  writtenHostId?: ExecutionHostId
+): void {
   const { runtime, writes } = owner[writeSchedulingOperationsContext]
-  const dirtyDomains = domains === 'whole' ? undefined : domains
   notifyWorkspaceSessionWritten(runtime, dirtyDomains, writtenHostId)
   for (const listener of runtime.stateWriteListeners) {
     listener(dirtyDomains)
   }
   runtime.automationListProjectionCache = null
+  // A named automationRuns save must not write an older pending run list.
+  if (
+    dirtyDomains?.includes('automationRuns') &&
+    runtime.pendingAutomationRunsAfter !== undefined
+  ) {
+    runtime.pendingAutomationRunsAfter = runtime.state.automationRuns
+  }
   const trackedDomains = runtime.dirtyProfileStateDomains
   if (dirtyDomains === undefined) {
     runtime.dirtyProfileStateDomains = null

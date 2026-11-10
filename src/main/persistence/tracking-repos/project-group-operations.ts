@@ -1,4 +1,5 @@
 import type { ProfileSaveDomains } from '../profile-save-domains'
+import { WORKSPACE_SESSION_DOMAINS } from '../workspace-session-domains'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
   ProjectGroup,
@@ -151,7 +152,15 @@ export class ProjectGroupPersistenceOperations {
       (workspace) => !deletedGroupIds.has(workspace.projectGroupId)
     )
     this.pruneMobileClientTabSelections((worktreeId) => removedFolderWorkspaceKeys.has(worktreeId))
-    this.scheduleSave('whole')
+    this.scheduleSave([
+      'projectGroups',
+      'repos',
+      'folderWorkspaces',
+      'workspaceLineageByChildKey',
+      'crossStoreLineageByChildKey',
+      ...WORKSPACE_SESSION_DOMAINS,
+      'mobileClientTabSelectionsByDeviceId'
+    ])
     return true
   }
 }

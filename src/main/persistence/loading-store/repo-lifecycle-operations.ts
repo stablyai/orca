@@ -1,4 +1,5 @@
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { REMOVE_PROJECT_DOMAINS, REPO_CATALOG_DOMAINS } from '../profile-save-domains'
 import type { ProjectHostSetup, ProjectHostSetupUpdateArgs } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { RepoHostTarget } from '../../../shared/repo-host-identity'
@@ -138,7 +139,7 @@ export class RepoLifecycleOperations {
         }
       }
     }
-    scheduleSave(this[repoLifecycleOperationsContext].scheduling, 'whole')
+    scheduleSave(this[repoLifecycleOperationsContext].scheduling, REMOVE_PROJECT_DOMAINS)
   }
 
   /** Sweep unregistered local repos at load; unpaired remote absence cannot prove deletion. */
@@ -218,9 +219,6 @@ function dropRepoRestoreHints(owner: RepoLifecycleOperations, repoId: string): v
     (worktreeId) => getRepoIdFromWorktreeId(worktreeId) === repoId
   )
 }
-
-/** Repo writes also re-derive the project catalog compatibility rows. */
-const REPO_CATALOG_DOMAINS = ['repos', 'projects', 'projectHostSetups']
 
 export function getRepoOrderOperations(
   owner: RepoLifecycleOperations

@@ -1,5 +1,7 @@
-/** A save names the profile domains it changed; 'whole' only where a mutation cannot know them. */
-export type ProfileSaveDomains = readonly string[] | 'whole'
+import { WORKSPACE_SESSION_DOMAINS } from './workspace-session-domains'
+
+/** The profile domains a mutation changed; its save writes only their rows. */
+export type ProfileSaveDomains = readonly string[]
 
 export const WORKTREE_METADATA_DOMAINS = [
   'worktreeMeta',
@@ -46,3 +48,45 @@ export function savedWorkspaceCatalog(dirtyDomains: readonly string[] | undefine
     dirtyDomains.some((domain) => WORKSPACE_CATALOG_SAVE_DOMAINS.includes(domain))
   )
 }
+
+/** Repo writes also re-derive the project catalog compatibility rows. */
+export const REPO_CATALOG_DOMAINS: readonly string[] = ['repos', 'projects', 'projectHostSetups']
+
+/** Removing a project prunes its workspaces' metadata, lineage, sessions and phone selections. */
+export const REMOVE_PROJECT_DOMAINS: readonly string[] = [
+  ...REPO_CATALOG_DOMAINS,
+  'sparsePresetsByRepo',
+  'retiredWorktreeNamesByRepo',
+  ...WORKTREE_METADATA_DOMAINS,
+  ...WORKSPACE_LINEAGE_DOMAINS,
+  ...WORKSPACE_SESSION_DOMAINS,
+  'mobileClientTabSelectionsByDeviceId'
+]
+
+/** Removing a folder workspace drops its sessions, lineage and phone selections. */
+export const FOLDER_WORKSPACE_REMOVAL_DOMAINS: readonly string[] = [
+  'folderWorkspaces',
+  'workspaceLineageByChildKey',
+  'crossStoreLineageByChildKey',
+  ...WORKSPACE_SESSION_DOMAINS,
+  'mobileClientTabSelectionsByDeviceId'
+]
+
+/** Pruning missing worktrees drops their metadata and lineage. */
+export const WORKTREE_METADATA_PRUNE_DOMAINS: readonly string[] = [
+  ...WORKTREE_METADATA_DOMAINS,
+  ...WORKSPACE_LINEAGE_DOMAINS
+]
+
+/** Removing worktree metadata also drops its lineage and saved session tabs. */
+export const WORKTREE_METADATA_REMOVAL_DOMAINS: readonly string[] = [
+  ...WORKTREE_METADATA_PRUNE_DOMAINS,
+  ...WORKSPACE_SESSION_DOMAINS
+]
+
+/** A worktree locator move rewrites its metadata, lineage, sessions, phone selections and UI keys. */
+export const WORKTREE_IDENTITY_MIGRATION_DOMAINS: readonly string[] = [
+  ...WORKTREE_METADATA_REMOVAL_DOMAINS,
+  'mobileClientTabSelectionsByDeviceId',
+  'ui'
+]

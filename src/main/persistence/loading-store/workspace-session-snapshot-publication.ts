@@ -121,7 +121,11 @@ export function setLocalWorkspaceSession(
     remappedManualUnread.changed
   ) {
     // UI remaps include protected fields, so keep the complete serializer boundary.
-    scheduleSave(context.scheduling, 'whole', LOCAL_EXECUTION_HOST_ID)
+    scheduleSave(
+      context.scheduling,
+      ['workspaceSession', 'ui', 'sshRemotePtyLeases'],
+      LOCAL_EXECUTION_HOST_ID
+    )
   } else {
     scheduleSave(
       context.scheduling,

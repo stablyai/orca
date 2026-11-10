@@ -23,7 +23,7 @@ import {
   bindPersistedTabTerminalPanes,
   sweepPersistedUnattachedTerminalRows
 } from '../restoring-sessions/tab-terminal-pane-binding-repair'
-import { scheduleSave } from './write-scheduling'
+import { scheduleFullProfileSave, scheduleSave } from './write-scheduling'
 import {
   migrateLegacyOpenCodeGoApiKey,
   type OpenCodeGoApiKeyTarget
@@ -177,7 +177,7 @@ export class Store {
         adaptedProjectGroups ||
         sweptRepoIds.length > 0
       ) {
-        scheduleSave(this.domains.scheduling, 'whole')
+        scheduleFullProfileSave(this.domains.scheduling)
       }
     }
   }

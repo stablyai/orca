@@ -1,4 +1,5 @@
 import { MAX_ORCAD_MIGRATION_STAGED_CATALOGS } from '../../../shared/orcad-migration/orcad-migration-staged-catalog-validation'
+import { ORCAD_CATALOG_COMMIT_DOMAINS } from './orcad-catalog-commit-domains'
 import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
 import type {
   OrcadMigrationCatalogAbortResult,
@@ -72,6 +73,7 @@ type OrcadCatalogImportContext = {
 }
 
 // Manifests arrive parsed; the RPC boundary verified the digest over the bytes as sent.
+
 export class OrcadCatalogImportPersistence {
   readonly [orcadCatalogImportContext]: OrcadCatalogImportContext
 
@@ -182,7 +184,7 @@ export class OrcadCatalogImportPersistence {
     commitOrcadMigrationBlobs(manifest, blobRoot)
     const receipt = commitPreparedCatalog(context, manifest, prepared, options.now)
     const generationBefore = context.runtime.writeGeneration
-    scheduleSave(context.scheduling, 'whole')
+    scheduleSave(context.scheduling, ORCAD_CATALOG_COMMIT_DOMAINS)
     recordOrcadMigrationCommitWriteGeneration(context.runtime, manifest, generationBefore)
     return committedCatalogState(receipt)
   }

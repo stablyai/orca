@@ -1,4 +1,4 @@
-import type { ProfileSaveDomains } from '../profile-save-domains'
+import { FOLDER_WORKSPACE_REMOVAL_DOMAINS, type ProfileSaveDomains } from '../profile-save-domains'
 import { randomUUID } from 'node:crypto'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -282,7 +282,7 @@ export class FolderWorkspacePersistenceOperations {
     removeWorkspaceSessionOwnerEverywhere(this.state, folderWorkspaceKey(id))
     this.removeWorkspaceLineageForRemovedFolder(id)
     this.pruneMobileClientTabSelections((worktreeId) => worktreeId === folderWorkspaceKey(id))
-    this.scheduleSave('whole')
+    this.scheduleSave(FOLDER_WORKSPACE_REMOVAL_DOMAINS)
     return true
   }
 

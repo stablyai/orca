@@ -101,6 +101,28 @@ describe('Store', () => {
     ])
   })
 
+  it('removing a project saves the repo, metadata and session removal with only those domains dirty', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1', path: '/repo' }))
+    store.setWorktreeMeta(at('r1::/repo/wt', 'local'), { displayName: 'wt' })
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      lastVisitedAtByWorktreeId: { 'r1::/repo/wt': 111 }
+    })
+    // Drain earlier saves so the removal's own save is the one under test.
+    store.flush()
+
+    store.removeProjectForHost({ id: 'r1', executionHostId: 'local' })
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getRepos()).toEqual([])
+    expect(reloaded.getWorktreeMeta('r1::/repo/wt')).toBeUndefined()
+    expect(
+      reloaded.getWorkspaceSession().lastVisitedAtByWorktreeId?.['r1::/repo/wt']
+    ).toBeUndefined()
+  })
+
   it('removeProjectForHost on the local host keeps a surviving SSH host session', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'shared', path: '/repo' }))
