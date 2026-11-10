@@ -72,7 +72,6 @@
 1 src/renderer/src/app-shell/use-app-session-persistence.ts
 1 src/renderer/src/components/browser-pane/browser-client-page-position-driver.ts
 1 src/renderer/src/components/contextual-tours/use-contextual-tour.ts
-1 src/renderer/src/components/editor/setup-contextual-copy.ts
 1 src/renderer/src/components/right-sidebar/plugin-panels/health/plugin-panel-watchdog.ts
 1 src/renderer/src/components/sidebar/SeveredTerminalDaemonBanner.tsx
 1 src/renderer/src/components/sidebar/StalledTerminalDaemonBanner.tsx
