@@ -8,16 +8,14 @@ import type {
   CloudSecretView,
   CloudSecretsErrorCode
 } from '../../../../../shared/cloud-secrets/cloud-secrets-wire'
-import { Badge } from '../../ui/badge'
 import { InlineError } from '../../ui/inline-error'
 import { Skeleton } from '../../ui/skeleton'
 import { Button } from '../../ui/button'
-import { cloudSecretKindLabel, cloudSecretsErrorCopy } from './cloud-secrets-copy'
+import { cloudSecretsErrorCopy } from './cloud-secrets-copy'
 import { CloudSecretEditor, type CloudSecretEditorTarget } from './CloudSecretEditor'
 import { CloudApiEmptyState } from '../cloud-api/cloud-api-parts'
 import { CloudSecretsPasteEnv } from './CloudSecretsPasteEnv'
-import { cloudSecretStoredOnVm } from '../../../../../shared/cloud-secrets/cloud-secret-rules'
-import { CloudSecretVmBadge } from './CloudSecretVmBadge'
+import { CloudSecretChips } from './CloudSecretVmBadge'
 import type { CloudSecretListModel } from './use-cloud-secrets'
 
 export type CloudSecretPeople = {
@@ -79,17 +77,12 @@ function SecretRow({
       }}
     >
       <div className="flex min-h-7 items-center gap-3">
-        <span className="flex min-w-0 flex-1 items-center gap-2">
-          <code title={secret.name} className="min-w-0 truncate font-mono text-xs">
+        {/* The name never truncates: chips sit on their own line under it. */}
+        <span className="flex min-w-0 flex-1 flex-col items-start gap-1 py-0.5">
+          <code title={secret.name} className="min-w-0 font-mono text-xs break-all">
             {secret.name}
           </code>
-          {secret.kind === 'agent_key' && !cloudSecretStoredOnVm(secret.name) ? (
-            <Badge variant="referenceLabel">
-              <KeyRound />
-              {cloudSecretKindLabel(secret.name, t)}
-            </Badge>
-          ) : null}
-          <CloudSecretVmBadge name={secret.name} />
+          <CloudSecretChips name={secret.name} kind={secret.kind} />
         </span>
         <span className="w-[9ch] shrink-0 font-mono text-xs whitespace-nowrap text-muted-foreground">
           <span aria-hidden>{maskedHint(secret.hint)}</span>
