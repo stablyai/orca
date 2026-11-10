@@ -1,9 +1,10 @@
 // What the composer card renders for "Start in Orca Cloud", shared by the hook and the card.
 import type { CloudSetupStep } from './cloud-start-model'
 import type { CloudOnlyRepo } from './use-cloud-only-repo'
+import type { CloudSetupViewExtras } from '../cloud-setup/use-cloud-setup-tracker'
 
 /** What the card renders: Run on's Orca Cloud segment, the setup panel and the fallback button. */
-export type CloudStartView = {
+export type CloudStartView = CloudSetupViewExtras & {
   steps: CloudSetupStep[]
   panelVisible: boolean
   allSet: boolean

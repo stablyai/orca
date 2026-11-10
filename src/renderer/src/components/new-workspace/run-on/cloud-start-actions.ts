@@ -1,5 +1,6 @@
 // What the "Start in Orca Cloud" primary button says, and the fix one click runs before a session
 // exists (sign in first, else the plan/billing action).
+import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { OrcaCloudAvailability } from '../../../../../shared/orca-yaml-hook-types'
 import { getOrcaCloudPick, type OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
@@ -50,4 +51,18 @@ export function setupActionFor(
       : access
   const pick = getOrcaCloudPick(effective)
   return pick.kind === 'act' ? pick.run : null
+}
+
+/** D2: an owner approved on GitHub while this composer waits; offer the start (never auto). */
+export function showGitHubGrantedToast(repoName: string, onStart: () => void): void {
+  toast.message(
+    translate(
+      'components.newWorkspace.cloudStart.githubGranted',
+      'GitHub access granted for {{repo}}',
+      {
+        repo: repoName
+      }
+    ),
+    { action: { label: getCloudPrimaryLabel('start'), onClick: onStart } }
+  )
 }
