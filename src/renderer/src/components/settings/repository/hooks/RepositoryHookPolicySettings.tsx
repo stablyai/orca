@@ -9,7 +9,7 @@ import { Trans } from 'react-i18next'
 import { i18n, translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { matchesSettingsSearch } from '../../search/settings-search'
-import { SettingsSwitch } from '../../form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 import { RepositoryHooksYamlStatus } from './RepositoryHooksYamlStatus'
 
 type PolicyOption<Policy> = { policy: Policy; label: string; description: string }
@@ -101,11 +101,13 @@ function getCommandSourcePolicyOptions(
 }
 
 export function RepositorySetupPolicySetting({
+  isFolder = false,
   setupRunPolicy,
   setupAgentStartupPolicy,
   onRunPolicyChange,
   onStartupPolicyChange
 }: {
+  isFolder?: boolean
   setupRunPolicy: SetupRunPolicy
   setupAgentStartupPolicy: SetupAgentStartupPolicy
   onRunPolicyChange: (policy: SetupRunPolicy) => void
@@ -121,10 +123,15 @@ export function RepositorySetupPolicySetting({
             {t('auto.components.settings.RepositoryHooksSection.793dcee97d', 'When to run')}
           </h5>
           <p className="text-xs text-muted-foreground">
-            {t(
-              'auto.components.settings.RepositoryHooksSection.21fb607a87',
-              'Default behavior when a new worktree is created.'
-            )}
+            {isFolder
+              ? t(
+                  'components.settings.RepositoryHooksSection.folderRunPolicyDescription',
+                  'Default behavior when a new workspace is created.'
+                )
+              : t(
+                  'auto.components.settings.RepositoryHooksSection.21fb607a87',
+                  'Default behavior when a new worktree is created.'
+                )}
           </p>
         </div>
         <SegmentedPolicyToggle
@@ -142,14 +149,14 @@ export function RepositorySetupPolicySetting({
             )}
           </h5>
         </div>
-        <SettingsSwitch
+        <Switch
           checked={setupAgentStartupPolicy === 'wait-for-setup'}
-          onChange={() =>
+          onCheckedChange={() =>
             onStartupPolicyChange(
               setupAgentStartupPolicy === 'wait-for-setup' ? 'start-immediately' : 'wait-for-setup'
             )
           }
-          ariaLabel={t(
+          aria-label={t(
             'auto.components.settings.RepositoryHooksSection.waitForSetupBeforeAgent',
             'Wait for setup to complete before starting agent'
           )}
@@ -250,7 +257,7 @@ export function RepositoryHookCommandSourceSetting({
         <div className="space-y-3">
           <div className="space-y-1">
             <p className="text-sm font-medium">
-              {t('auto.components.settings.RepositoryHooksSection.32fec28f5b', 'Command Source')}
+              {t('auto.components.settings.RepositoryHooksSection.88c6d1e54a', 'Command source')}
             </p>
             <p className="text-[11px] text-muted-foreground">
               <Trans

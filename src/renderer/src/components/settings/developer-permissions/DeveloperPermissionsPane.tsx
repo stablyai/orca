@@ -79,8 +79,8 @@ const PERMISSIONS: PermissionDefinition[] = [
     id: 'screen',
     get label() {
       return translate(
-        'auto.components.settings.DeveloperPermissionsPane.f24f31a884',
-        'Screen Recording'
+        'auto.components.settings.DeveloperPermissionsPane.515baa0f5c',
+        'Screen recording'
       )
     },
     get description() {
@@ -91,8 +91,8 @@ const PERMISSIONS: PermissionDefinition[] = [
     },
     get actionLabel() {
       return translate(
-        'auto.components.settings.DeveloperPermissionsPane.actionOpenSettings',
-        'Open Settings'
+        'auto.components.settings.DeveloperPermissionsPane.b8cd05701d',
+        'Open settings'
       )
     },
     icon: <MonitorUp className="size-4" />
@@ -132,8 +132,8 @@ const PERMISSIONS: PermissionDefinition[] = [
     },
     get actionLabel() {
       return translate(
-        'auto.components.settings.DeveloperPermissionsPane.actionOpenSettings',
-        'Open Settings'
+        'auto.components.settings.DeveloperPermissionsPane.b8cd05701d',
+        'Open settings'
       )
     },
     icon: <HardDrive className="size-4" />
@@ -151,8 +151,8 @@ const PERMISSIONS: PermissionDefinition[] = [
     },
     get actionLabel() {
       return translate(
-        'auto.components.settings.DeveloperPermissionsPane.actionTriggerPrompt',
-        'Trigger Prompt'
+        'auto.components.settings.DeveloperPermissionsPane.28350e590b',
+        'Trigger prompt'
       )
     },
     icon: <Workflow className="size-4" />
@@ -161,8 +161,8 @@ const PERMISSIONS: PermissionDefinition[] = [
     id: 'local-network',
     get label() {
       return translate(
-        'auto.components.settings.DeveloperPermissionsPane.e7bb06007c',
-        'Local Network'
+        'auto.components.settings.DeveloperPermissionsPane.78b1e0b9d4',
+        'Local network'
       )
     },
     get description() {
@@ -173,8 +173,8 @@ const PERMISSIONS: PermissionDefinition[] = [
     },
     get actionLabel() {
       return translate(
-        'auto.components.settings.DeveloperPermissionsPane.actionRequestAccess',
-        'Request Access'
+        'auto.components.settings.DeveloperPermissionsPane.e2596159f6',
+        'Request access'
       )
     },
     icon: <Network className="size-4" />
@@ -183,8 +183,8 @@ const PERMISSIONS: PermissionDefinition[] = [
     id: 'usb',
     get label() {
       return translate(
-        'auto.components.settings.DeveloperPermissionsPane.bf51e4a542',
-        'USB Devices'
+        'auto.components.settings.DeveloperPermissionsPane.91f887e323',
+        'USB devices'
       )
     },
     get description() {
@@ -195,8 +195,8 @@ const PERMISSIONS: PermissionDefinition[] = [
     },
     get actionLabel() {
       return translate(
-        'auto.components.settings.DeveloperPermissionsPane.actionOpenSettings',
-        'Open Settings'
+        'auto.components.settings.DeveloperPermissionsPane.b8cd05701d',
+        'Open settings'
       )
     },
     icon: <Usb className="size-4" />
@@ -214,8 +214,8 @@ const PERMISSIONS: PermissionDefinition[] = [
     },
     get actionLabel() {
       return translate(
-        'auto.components.settings.DeveloperPermissionsPane.actionOpenSettings',
-        'Open Settings'
+        'auto.components.settings.DeveloperPermissionsPane.b8cd05701d',
+        'Open settings'
       )
     },
     icon: <Bluetooth className="size-4" />

@@ -1,9 +1,9 @@
 import { editorSaveResourceKey } from '@/store/slices/editor/buffers/editor-buffer-identity'
 import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { acquireEditorFileOperation } from '@/lib/editor-file-operation-owner'
-import { captureEditorFileOperationForOwner } from '@/lib/editor-file-child-owner'
-import { editorTabFileAccess } from '@/lib/local-file-access'
+import { acquireEditorFileOperation } from '@/lib/editor/file-operations/editor-file-operation-owner'
+import { captureEditorFileOperationForOwner } from '@/lib/editor/file-operations/editor-file-child-owner'
+import { editorTabFileAccess } from '@/lib/files/access/local-file-access'
 import type { AppStoreApi } from './editor-save-queue-contract'
 import type { EditorSaveAcquisition, EditorSaveRequest } from './editor-save-slots'
 import {

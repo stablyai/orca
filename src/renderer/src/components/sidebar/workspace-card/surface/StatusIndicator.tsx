@@ -1,6 +1,6 @@
 import React from 'react'
 import { Activity } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'

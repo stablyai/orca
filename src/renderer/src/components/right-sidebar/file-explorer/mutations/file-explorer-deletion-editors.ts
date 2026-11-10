@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
+import { getEditorFileOperationContext } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import type { FileExplorerOperationRoute } from '../navigation/file-explorer-operation-owner'
 import { isPathEqualOrDescendant } from '../navigation/file-explorer-paths'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'

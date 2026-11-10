@@ -38,6 +38,7 @@ export function registerRepoHandlers(
   ipcMain.removeHandler('projectGroups:list')
   ipcMain.removeHandler('projectGroups:create')
   ipcMain.removeHandler('projectGroups:update')
+  ipcMain.removeHandler('projectGroups:updateMany')
   ipcMain.removeHandler('projectGroups:delete')
   ipcMain.removeHandler('projectGroups:moveProject')
   ipcMain.removeHandler('projectGroups:scanNested')

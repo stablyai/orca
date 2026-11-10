@@ -3,7 +3,7 @@ import {
   captureWorkspaceSelection,
   restoreWorkspaceSelection,
   type WorkspaceSelection
-} from '@/lib/active-workspace-host'
+} from '@/lib/workspace/ownership/active-workspace-host'
 import {
   clearWorktreeSleepIntent,
   markWorktreeSleepIntent,

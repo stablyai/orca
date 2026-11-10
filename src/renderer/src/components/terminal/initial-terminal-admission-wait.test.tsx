@@ -37,7 +37,7 @@ vi.mock('@/lib/workspace/activation/worktree-agent-activation-gate', () => ({
 vi.mock('@/lib/agent-session/resume/resume-sleeping-agent-session', () => ({
   resumeSleepingAgentSessionsForWorktree: vi.fn()
 }))
-vi.mock('@/lib/workspace-terminal-host-authority', () => ({
+vi.mock('@/lib/workspace/ownership/workspace-terminal-host-authority', () => ({
   createWorkspaceTerminalHostAuthoritySelector: () => () => 'none'
 }))
 vi.mock('../terminal-pane/parking/output-watchers/terminal-parked-tab-watchers', () => ({
@@ -203,6 +203,7 @@ function Watcher(): null {
     terminalStartupRestorationReady: true,
     hydrationSucceeded: false,
     workspaceSurfaceIds: [],
+    workspaceSurfaceIdSet: new Set(),
     tabsByWorktree: {},
     createTab: mocks.createTab,
     reconcileWorktreeTabModel: () => ({ renderableTabCount: 0, activeRenderableTabId: null }),

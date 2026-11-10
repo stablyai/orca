@@ -3,11 +3,17 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
-import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
+import {
+  chatProviderAgents,
+  useHostStructuredAgentsVersion
+} from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { recomputeOn } from '@/lib/recompute-on'
 import type { ProspectiveWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { readChatProgram, resolveChatProgramContext } from '@/lib/host-chat-program'
-import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
+import {
+  readChatProgram,
+  resolveChatProgramContext
+} from '@/lib/agent-session/launch/inventory/host-chat-program'
+import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { relearnHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { useAppStore } from '@/store'
 import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'

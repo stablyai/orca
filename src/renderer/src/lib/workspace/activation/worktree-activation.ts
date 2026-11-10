@@ -1,5 +1,5 @@
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../ownership/worktree-runtime-owner'
-import { noteUserWorkspaceOpen } from '../../workspace-switch-user-act'
+import { noteUserWorkspaceOpen } from './workspace-switch-user-act'
 import { useAppStore } from '@/store/index'
 import { activateWebRuntimeSessionWorktree } from '@/runtime/web-session-tabs-sync/actions/web-runtime-worktree-activation'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
@@ -11,19 +11,19 @@ import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../../shared/wor
 import {
   folderWorkspaceActivationBlocked,
   notifyBlockedFolderWorkspacePath
-} from '../../folder-workspace-path-status'
+} from '../paths/folder-workspace-path-status'
 import {
   findFolderWorkspaceOwner,
   getRuntimeEnvironmentIdForFolderWorkspace
-} from '../../folder-workspace-runtime-owner'
+} from '../ownership/folder-workspace-runtime-owner'
 import '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../../shared/folder-workspaces/folder-workspace-host-id'
 import {
   ensureFolderWorkspaceInitialTerminal,
   ensureWorktreeHasInitialTerminal
 } from '@/lib/workspace/activation/initial-surface/worktree-initial-terminal-seeding'
-import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
-import { applyWorktreeNavViewEntry } from '@/lib/worktree-nav-view-history-replay'
+import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/runtime/hosted-terminals/restoration/web-runtime-worktree-terminal-after-wake'
+import { applyWorktreeNavViewEntry } from '@/lib/workspace/activation/worktree-nav-view-history-replay'
 import {
   activationProvidesInitialSurface,
   activationSeedsUserDefaultSurface,
@@ -32,7 +32,7 @@ import {
 import { gateAndReseedEmptyWorkspace } from './worktree-activation-gated-empty-reseed'
 import { liftSidebarFiltersHidingWorktree } from './worktree-activation-sidebar-filters'
 import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
-import { revealFloatingWorkspacePanel } from '../../floating-workspace-panel-reveal'
+import { revealFloatingWorkspacePanel } from '../../../components/floating-terminal/floating-workspace-panel-reveal'
 import { findPendingWorktreeCreationId } from '../creation/pending-worktree-creation'
 import {
   buildActivationStateTransition,
@@ -47,8 +47,7 @@ import {
   type WorkspaceActivationOutcome,
   type FolderWorkspaceActivationOptions,
   type WorkspaceRevealOptions
-} from '@/lib/worktree-activation-outcome'
-export type { ActivateAndRevealResult } from '@/lib/worktree-activation-outcome'
+} from '@/lib/workspace/activation/worktree-activation-outcome'
 
 const canInspectAgentActivationInventory = (): boolean =>
   typeof window !== 'undefined' &&

@@ -9,12 +9,13 @@ import { computeOrcadMigrationManifestSha256 } from '../../../orcad/orcad-migrat
 
 const sendRequest = vi.hoisted(() => vi.fn())
 const status = vi.hoisted((): { capabilities: string[] } => ({ capabilities: [] }))
-vi.mock('../../../../shared/remote-runtime/remote-runtime-client', () => ({
-  sendRemoteRuntimeRequestWithStatusPreflight: async (
+vi.mock('../../../../shared/remote-runtime/requests/remote-runtime-request-socket', () => ({
+  sendRemoteRuntimeRequestOnSocket: async (
     pairing: unknown,
     method: string,
     params: unknown,
     _timeoutMs: number,
+    _envelope: unknown,
     validate: (response: unknown) => void
   ) => {
     validate({

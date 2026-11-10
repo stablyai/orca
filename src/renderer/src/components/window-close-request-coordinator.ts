@@ -1,6 +1,6 @@
 /** App owns the close subscription even without Terminal mounted (#5144); run unsaved-work guards, then rich confirmation or the landing-page fallback. */
 
-import { showShutdownCheckpointFailureToast } from '@/lib/shutdown-checkpoint-failure-toast'
+import { showShutdownCheckpointFailureToast } from '@/app-shell/shutdown/shutdown-checkpoint-failure-toast'
 
 export type WindowCloseRequestHandler = (data: { isQuitting: boolean }) => void
 

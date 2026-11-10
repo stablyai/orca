@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 
 import { createTestStore, seedStore } from '../testing/app-store-test-fixture'
 import { makeTab } from './terminal-tab.test-fixture'
@@ -21,7 +21,7 @@ vi.mock('@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-sus
   unregisterPtyDataHandlers: mockUnregisterPtyDataHandlers
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return {
     ...actual,

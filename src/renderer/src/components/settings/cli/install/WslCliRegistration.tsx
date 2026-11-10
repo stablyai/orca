@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../../../shared/cli-install-types'
-import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
+import { useWindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../../../ui/button'
 import {
@@ -175,7 +175,7 @@ export function WslCliRegistration({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <TooltipProvider delayDuration={250}>
+            <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button

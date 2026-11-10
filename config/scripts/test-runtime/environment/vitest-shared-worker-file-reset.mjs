@@ -7,7 +7,7 @@ import { afterAll, vi } from 'vitest'
 const VITEST_INTERNAL = /\/vitest\/dist\/|\/@vitest\/|vitest-virtual-/
 // Registries their owners create on first use and look up again on every access.
 const LAZY_GLOBAL_REGISTRY = /^(?:Symbol\(orca\.|__zod_global)/
-const PROCESS_KEYS = ['platform', 'arch', 'execPath', 'argv', 'exitCode']
+const PROCESS_KEYS = ['platform', 'arch', 'execPath', 'argv', 'exitCode', 'env']
 
 function resetNode(node) {
   node.evaluated = false
@@ -180,7 +180,9 @@ function restoreProcessState() {
   return leaks
 }
 
-afterAll(() => {
+afterAll(async () => {
+  // Finish background imports while their file's environment and module promises still exist.
+  await vi.dynamicImportSettled()
   // Runs Vitest's end-of-file spy restore now: a spy restored by hand would otherwise be re-applied after this hook.
   vi.restoreAllMocks()
   vi.useRealTimers()

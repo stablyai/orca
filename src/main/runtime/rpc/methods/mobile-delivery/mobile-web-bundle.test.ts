@@ -214,6 +214,47 @@ describe('an install that carries a mobile web bundle', () => {
   })
 })
 
+describe('the language catalogs a build serves on request', () => {
+  let bundle: SyntheticMobileWebBundle
+
+  beforeEach(() => {
+    bundle = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 1, [], {
+      de: { greeting: 'Hallo' }
+    })
+  })
+
+  it('serves the listed catalog, then nothing to a phone that already holds it', async () => {
+    const [german] = bundle.catalogs
+
+    const first = await call('mobileWeb.bundle.localeCatalog', { locale: 'de' })
+    const again = await call('mobileWeb.bundle.localeCatalog', {
+      locale: 'de',
+      knownSha256: german.sha256
+    })
+
+    expect(first.ok && first.result).toEqual({
+      locale: 'de',
+      sha256: german.sha256,
+      catalog: { greeting: 'Hallo' }
+    })
+    expect(again.ok && again.result).toEqual({
+      locale: 'de',
+      sha256: german.sha256,
+      catalog: null
+    })
+  })
+
+  it('refuses a locale the build has no catalog for, and a catalog file that changed', async () => {
+    writeFileSync(join(bundle.root, bundle.catalogs[0].path), '{"greeting":"Servus"}')
+
+    const french = await call('mobileWeb.bundle.localeCatalog', { locale: 'fr' })
+    const changed = await call('mobileWeb.bundle.localeCatalog', { locale: 'de' })
+
+    expect(errorMessage(french)).toBe('mobile_web_bundle_asset_unknown')
+    expect(errorMessage(changed)).toBe('mobile_web_bundle_asset_changed')
+  })
+})
+
 describe('where the resolver probes', () => {
   it('finds the bundle beside an out/main app path', async () => {
     const bundle = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 3)
