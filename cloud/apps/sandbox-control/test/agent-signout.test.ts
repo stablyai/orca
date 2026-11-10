@@ -1,5 +1,4 @@
-// A9: agents are signed out on a sandbox before Orca deletes it, and environment-build images are
-// scrubbed of agent sign-ins before anyone else boots them.
+// A9: agents are signed out on a running sandbox before Orca deletes it, without ever blocking the delete.
 import { execFileSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -19,16 +18,16 @@ describe('sign agents out before delete', () => {
     const h = await createHarness()
     const { body } = await h.call('POST', '/v1/sandboxes', { body: create })
     const name = `orca-test-${body.sandbox.id}`
-    const seen: { scrubOnly: boolean; boxAlive: boolean }[] = []
+    const seen: { boxAlive: boolean }[] = []
     h.vercel.commandHandler = (params) => {
       if (isSignout(params)) {
-        seen.push({ scrubOnly: params.args!.includes('--scrub-only'), boxAlive: h.vercel.boxes.has(name) })
+        seen.push({ boxAlive: h.vercel.boxes.has(name) })
       }
       return undefined
     }
     const destroyed = await h.call('DELETE', `/v1/sandboxes/${body.sandbox.id}`)
     expect(destroyed.body.sandbox.status).toBe('destroyed')
-    expect(seen).toEqual([{ scrubOnly: false, boxAlive: true }])
+    expect(seen).toEqual([{ boxAlive: true }])
     expect(h.vercel.boxes.has(name)).toBe(false)
   })
 
@@ -76,59 +75,6 @@ describe('sign agents out before delete', () => {
   })
 })
 
-describe('scrub agent sign-ins on clone (environment builds)', () => {
-  const RESULT = JSON.stringify({ durationSec: 1, repos: [], diskUsedBytes: 1, diskTotalBytes: 2 })
-
-  async function setup() {
-    const h = await createHarness()
-    h.vercel.buildResult = RESULT
-    const admin = await h.token('alice', 'acme', 'sandbox', { orgRole: 'admin' })
-    const call = (method: string, path: string, body?: unknown) => h.call(method, path, { bearer: admin, body })
-    const created = await call('POST', '/v1/environments', {
-      name: 'Default',
-      repos: [{ url: 'acme/web', defaultBranch: 'main' }],
-      installScript: 'claude auth login',
-      envVarNames: []
-    })
-    const envId: string = created.body.environment.id
-    async function build() {
-      const started = await call('POST', `/v1/environments/${envId}/builds`)
-      const command = [...h.vercel.buildCommands.values()].at(-1)!
-      command.exitCode = 0
-      h.advance(1000)
-      return (await call('GET', `/v1/environments/${envId}/builds/${started.body.build.id}`)).body.build
-    }
-    return { h, build }
-  }
-
-  it('scrubs agent auth (files only) before the build is snapshotted', async () => {
-    const { h, build } = await setup()
-    const order: string[] = []
-    const createSnapshot = h.vercel.createSnapshot.bind(h.vercel)
-    h.vercel.createSnapshot = async (sessionId, expirationMs) => {
-      order.push('snapshot')
-      return createSnapshot(sessionId, expirationMs)
-    }
-    h.vercel.commandHandler = (params) => {
-      if (isSignout(params)) {
-        order.push(params.args!.includes('--scrub-only') ? 'scrub' : 'signout')
-      }
-      return undefined
-    }
-    expect(await build()).toMatchObject({ status: 'succeeded', active: true })
-    expect(order.slice(0, 2)).toEqual(['scrub', 'snapshot'])
-  })
-
-  it('fails the build, with no image, when the scrub cannot confirm the sign-ins are gone', async () => {
-    const { h, build } = await setup()
-    const images = () => [...h.vercel.snapshots.values()].filter((s) => s.creationMethod === 'manual').length
-    h.vercel.commandHandler = (params) =>
-      isSignout(params) ? { exitCode: 0, stdout: '{"loggedOut":0,"left":1}\n', stderr: '' } : undefined
-    expect(await build()).toMatchObject({ status: 'failed', failedStep: 'record', active: false })
-    expect(images()).toBe(0)
-  })
-})
-
 describe('orca-agent-signout (VM script)', () => {
   let home = ''
   afterEach(() => {
@@ -150,28 +96,10 @@ describe('orca-agent-signout (VM script)', () => {
     )
   }
 
-  function run(args: string[]): { loggedOut: number; left: number } {
+  function run(): { loggedOut: number; left: number } {
     const env = { HOME: home, PATH: process.env.PATH ?? '/usr/bin:/bin' }
-    return JSON.parse(execFileSync('bash', [SCRIPT, ...args], { env, encoding: 'utf8' }).trim())
+    return JSON.parse(execFileSync('bash', [SCRIPT], { env, encoding: 'utf8' }).trim())
   }
-
-  it('--scrub-only removes credential files and sign-in fields, keeping settings and running no CLI', () => {
-    seed()
-    const bin = join(home, '.local/bin')
-    mkdirSync(bin, { recursive: true })
-    for (const cli of ['claude', 'codex']) {
-      writeFileSync(join(bin, cli), `#!/bin/sh\ntouch "${home}/ran-${cli}"\n`)
-      chmodSync(join(bin, cli), 0o755)
-    }
-    expect(run(['--scrub-only'])).toEqual({ loggedOut: 0, left: 0 })
-    expect(existsSync(join(home, '.claude/.credentials.json'))).toBe(false)
-    expect(existsSync(join(home, '.codex/auth.json'))).toBe(false)
-    expect(existsSync(join(home, '.orcad-data/codex-accounts/a/auth.json'))).toBe(false)
-    expect(existsSync(join(home, '.codex/config.toml'))).toBe(true)
-    expect(JSON.parse(readFileSync(join(home, '.claude.json'), 'utf8'))).toEqual({ hasCompletedOnboarding: true })
-    expect(existsSync(join(home, 'ran-claude'))).toBe(false)
-    expect(existsSync(join(home, 'ran-codex'))).toBe(false)
-  })
 
   it('runs each agent logout, then removes the files even when a logout fails', () => {
     seed()
@@ -184,9 +112,13 @@ describe('orca-agent-signout (VM script)', () => {
     for (const file of ['timeout', 'claude', 'codex']) {
       chmodSync(join(bin, file), 0o755)
     }
-    expect(run([])).toEqual({ loggedOut: 1, left: 0 })
+    expect(run()).toEqual({ loggedOut: 1, left: 0 })
     expect(readFileSync(join(home, 'claude-args'), 'utf8').trim()).toBe('auth logout')
     expect(existsSync(join(home, '.codex/auth.json'))).toBe(false)
     expect(existsSync(join(home, '.claude/.credentials.json'))).toBe(false)
+    expect(existsSync(join(home, '.orcad-data/codex-accounts/a/auth.json'))).toBe(false)
+    // Settings Orca wrote stay; only the sign-in fields go.
+    expect(existsSync(join(home, '.codex/config.toml'))).toBe(true)
+    expect(JSON.parse(readFileSync(join(home, '.claude.json'), 'utf8'))).toEqual({ hasCompletedOnboarding: true })
   })
 })

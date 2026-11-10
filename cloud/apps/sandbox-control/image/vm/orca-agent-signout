@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
-# Signs every agent out on this sandbox (A9). Two callers, both from the control plane:
-# - before Orca deletes a workspace sandbox: each agent's own logout, then the credential files go;
-# - `--scrub-only` before an environment build is snapshotted into an image other people boot: the
-#   files only (no CLI runs, so nothing else in the image changes).
-# Never fails: whatever happens, the sandbox is deleted or snapshotted next. Values are never printed.
+# Signs every agent out on this sandbox before Orca deletes it (A9): each agent's own logout, then
+# its credential files. Covers logins made inside the sandbox (the kill-switch fallback path).
+# Never fails: the sandbox is deleted next whatever happens. Values are never printed.
 set -u
 HOME="${HOME:-$(getent passwd "$(id -u)" | cut -d: -f6)}"
 export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:/usr/local/bin:/usr/bin:/bin:/opt/orca/bin:${PATH:-}"
@@ -12,14 +10,12 @@ claude_json="${CLAUDE_CONFIG_DIR:-$HOME}/.claude.json"
 codex_dir="${CODEX_HOME:-$HOME/.codex}"
 
 logged_out=0
-if [ "${1:-}" != --scrub-only ]; then
-  # Each logout gets a few seconds; a hung CLI must not hold up the delete.
-  if command -v claude >/dev/null 2>&1 && timeout 8 claude auth logout </dev/null >/dev/null 2>&1; then
-    logged_out=$((logged_out + 1))
-  fi
-  if command -v codex >/dev/null 2>&1 && timeout 8 codex logout </dev/null >/dev/null 2>&1; then
-    logged_out=$((logged_out + 1))
-  fi
+# Each logout gets a few seconds; a hung CLI must not hold up the delete.
+if command -v claude >/dev/null 2>&1 && timeout 8 claude auth logout </dev/null >/dev/null 2>&1; then
+  logged_out=$((logged_out + 1))
+fi
+if command -v codex >/dev/null 2>&1 && timeout 8 codex logout </dev/null >/dev/null 2>&1; then
+  logged_out=$((logged_out + 1))
 fi
 
 # The files go whether or not a logout ran: an older CLI, a missing binary or no network leaves them.

@@ -26,7 +26,6 @@ import { ProviderError, type SandboxProviderApi } from './sandbox-provider'
 import { ORCAD_PORT, startOrcad } from './sandbox-vm-commands'
 import type { Keyring } from './secrets-crypto'
 import { SANDBOX_VCPUS } from './machine-size'
-import { scrubAgentAuthForImage } from './agent-signout'
 
 export const BUILD_DEADLINE_MS = 45 * 60_000
 const STARTING_STUCK_MS = 5 * 60_000
@@ -445,12 +444,6 @@ async function finalize(deps: BuildDeps, row: BuildRow, exitCode: number): Promi
     const recorded = await transition(deps.db, row, { result }, deps.now())
     if (!recorded) {
       return (await getBuild(deps.db, row.environment_id, row.id)) ?? row
-    }
-    // The image is shared with everyone who uses the environment: no agent sign-in may ride along
-    // (A9 clone scrub). Last before the snapshot, so nothing the build ran can leave one after it.
-    if (!(await scrubAgentAuthForImage(deps.provider, sessionId))) {
-      log('environment_build_agent_scrub_failed', { buildId: row.id })
-      return (await failBuild(deps, recorded, 'record', 'record_failed')) ?? recorded
     }
     const snapshotId = await deps.provider.createSnapshot(sessionId, 0)
     return completeBuild(deps, recorded, snapshotId)
