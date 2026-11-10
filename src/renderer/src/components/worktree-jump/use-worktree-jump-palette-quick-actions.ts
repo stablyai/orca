@@ -62,6 +62,7 @@ type WorktreeJumpPaletteQuickActionsInput = WorktreeJumpPaletteStoreState &
   Pick<WorktreeJumpPaletteOpenTabs, never>
 
 export function useWorktreeJumpPaletteQuickActions({
+  visible,
   openModal,
   openSettingsPage,
   openSettingsTarget,
@@ -87,8 +88,10 @@ export function useWorktreeJumpPaletteQuickActions({
   // "Open remote desktop" shows only for Orca Cloud workspaces: read the list fresh on open.
   const cloudEnvironmentIds = useCloudEnvironmentIds()
   useEffect(() => {
-    void refreshCloudEnvironmentIds()
-  }, [])
+    if (visible) {
+      void refreshCloudEnvironmentIds()
+    }
+  }, [visible])
   const graphScope = useGitGraphScope(activeWorktreeId ?? '')
   const graphOwner = JSON.stringify([activeWorktreeId, graphScope?.route])
   const [graphProbe, setGraphProbe] = useState<{ owner: string; support: boolean | null }>()

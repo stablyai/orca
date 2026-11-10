@@ -18,7 +18,7 @@ export type CloudRemoteDesktopToastFailure = CloudRemoteDesktopFailureCode | 'wa
 export type CloudRemoteDesktopToastState =
   | { kind: 'starting'; slow: boolean }
   /** Wake (or Unarchive) from this toast: the desktop opens by itself once the sandbox is awake. */
-  | { kind: 'waking' }
+  | { kind: 'waking'; via: 'wake' | 'unarchive' }
   | { kind: 'failed'; code: CloudRemoteDesktopToastFailure }
 
 type FailureCopy = {
@@ -50,7 +50,7 @@ function failureCopy(t: Translate, code: CloudRemoteDesktopToastFailure): Failur
         title: t('components.cloudRemoteDesktop.asleepTitle', 'This sandbox is asleep.'),
         detail: t(
           'components.cloudRemoteDesktop.asleepDetail',
-          'Wake it and the remote desktop opens. Your files are safe.'
+          'Wake it to open the remote desktop. Your files are safe.'
         ),
         action: 'wake',
         tone: 'neutral'
@@ -67,7 +67,7 @@ function failureCopy(t: Translate, code: CloudRemoteDesktopToastFailure): Failur
         title: t('components.cloudRemoteDesktop.archivedTitle', 'This workspace is archived.'),
         detail: t(
           'components.cloudRemoteDesktop.archivedDetail',
-          'Unarchive it and the remote desktop opens. Your files are safe.'
+          'Unarchive it to open the remote desktop. Your files are safe.'
         ),
         action: 'unarchive',
         tone: 'neutral'
@@ -162,21 +162,32 @@ export function CloudRemoteDesktopToast({
   onDismiss: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const dismissButton = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-xs"
+      aria-label={t('components.cloudRemoteDesktop.dismiss', 'Dismiss')}
+      className="absolute top-1.5 right-1.5"
+      onClick={onDismiss}
+    >
+      <X aria-hidden />
+    </Button>
+  )
   if (state.kind === 'starting' || state.kind === 'waking') {
     const slow = state.kind === 'starting' && state.slow
     return (
-      <div
-        role="status"
-        className="flex w-[356px] items-center gap-3 rounded-lg border border-border bg-popover px-3 py-2.5 text-sm text-popover-foreground shadow-lg"
-      >
+      <div className="relative flex w-[356px] items-center gap-3 rounded-lg border border-border bg-popover py-2.5 pr-9 pl-3 text-sm text-popover-foreground shadow-lg">
         <Loader2
           className="size-4 shrink-0 text-muted-foreground motion-safe:animate-spin"
           aria-hidden
         />
-        <div className="min-w-0 space-y-0.5">
+        <div role="status" className="min-w-0 space-y-0.5">
           <p className="font-medium">
             {state.kind === 'waking'
-              ? t('components.cloudRemoteDesktop.waking', 'Waking sandbox…')
+              ? state.via === 'unarchive'
+                ? t('components.cloudRemoteDesktop.unarchiving', 'Unarchiving workspace…')
+                : t('components.cloudRemoteDesktop.waking', 'Waking sandbox…')
               : slow
                 ? t('components.cloudRemoteDesktop.stillStarting', 'Still starting…')
                 : t('components.cloudRemoteDesktop.starting', 'Starting remote desktop…')}
@@ -197,6 +208,8 @@ export function CloudRemoteDesktopToast({
             </p>
           ) : null}
         </div>
+        {/* Hides the notice only: the desktop still opens when it's ready. */}
+        {dismissButton}
       </div>
     )
   }
@@ -222,16 +235,7 @@ export function CloudRemoteDesktopToast({
           ) : undefined
         }
       />
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        aria-label={t('components.cloudRemoteDesktop.dismiss', 'Dismiss')}
-        className="absolute top-1.5 right-1.5"
-        onClick={onDismiss}
-      >
-        <X aria-hidden />
-      </Button>
+      {dismissButton}
     </div>
   )
 }

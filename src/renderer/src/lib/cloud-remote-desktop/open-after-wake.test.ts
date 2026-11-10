@@ -18,7 +18,7 @@ function harness(answers: CloudRemoteDesktopResult[], overrides: Partial<OpenAft
   const open = vi.fn(async () => answers.shift() ?? opened)
   const onAwake = vi.fn()
   const deps: OpenAfterWakeDeps = {
-    wake: vi.fn(async () => true),
+    wake: vi.fn(async () => 'awake' as const),
     wakeFailedSince: () => false,
     environmentId: () => 'env-1',
     open,
@@ -63,7 +63,7 @@ describe('openDesktopAfterWake', () => {
   })
 
   it('stays quiet when Unarchive already showed why it failed', async () => {
-    const { deps, open } = harness([], { wake: async () => false })
+    const { deps, open } = harness([], { wake: async () => 'reported' as const })
     await expect(openDesktopAfterWake(deps)).resolves.toEqual({ kind: 'cancelled' })
     expect(open).not.toHaveBeenCalled()
   })
@@ -107,6 +107,39 @@ describe('openDesktopAfterWake', () => {
     expect(open.mock.calls.length).toBeLessThanOrEqual(
       AFTER_WAKE_DEADLINE_MS / AFTER_WAKE_RETRY_MS + 1
     )
+  })
+
+  it('notices a wake that fails after its call returned', async () => {
+    let failed = false
+    const { deps, open } = harness([{ ok: false, code: 'starting' }], {
+      wakeFailedSince: () => failed,
+      sleep: async () => {
+        failed = true
+      }
+    })
+    await expect(openDesktopAfterWake(deps)).resolves.toEqual({
+      kind: 'failed',
+      code: 'wake_failed'
+    })
+    expect(open).toHaveBeenCalledOnce()
+  })
+
+  it('reports a wake the wake call said failed', async () => {
+    const { deps, open } = harness([], { wake: async () => 'failed' as const })
+    await expect(openDesktopAfterWake(deps)).resolves.toEqual({
+      kind: 'failed',
+      code: 'wake_failed'
+    })
+    expect(open).not.toHaveBeenCalled()
+  })
+
+  it('reports a wake that throws as a failed wake', async () => {
+    const { deps, open } = harness([], { wake: () => Promise.reject(new Error('ipc')) })
+    await expect(openDesktopAfterWake(deps)).resolves.toEqual({
+      kind: 'failed',
+      code: 'wake_failed'
+    })
+    expect(open).not.toHaveBeenCalled()
   })
 
   it('stops when the workspace went away during the wake', async () => {

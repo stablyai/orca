@@ -3,11 +3,12 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { selectWorkspaceRuntimeEnvironmentId } from '@/lib/workspace/ownership/workspace-runtime-environment'
-import { getCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspace-store'
 import {
-  runUnarchiveCloudWorkspace,
-  wakeCloudWorkspace
-} from '@/components/orca-cloud/cloud-workspace-actions'
+  getCloudWorkspaceSnapshot,
+  isCloudWorkspaceArchived
+} from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import { runUnarchiveCloudWorkspace } from '@/components/orca-cloud/cloud-workspace-actions'
+import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
 import {
   CloudRemoteDesktopToast,
   type CloudRemoteDesktopNextAction,
@@ -15,6 +16,7 @@ import {
 } from '@/components/cloud-remote-desktop/CloudRemoteDesktopToast'
 import type { CloudRemoteDesktopResult } from '../../../../shared/hosted-sandbox/cloud-remote-desktop'
 import { openDesktopAfterWake } from './open-after-wake'
+import { createDesktopToastGate } from './desktop-toast-gate'
 
 const SLOW_START_MS = 5_000
 /** Worktree ids with an open (or a wake, then open) in flight. */
@@ -61,25 +63,28 @@ type DesktopToast = {
 
 function desktopToast(worktreeId: string): DesktopToast {
   const id = `cloud-remote-desktop:${worktreeId}`
-  const dismiss = (): void => {
-    toast.dismiss(id)
-  }
-  const show = (state: CloudRemoteDesktopToastState): void => {
-    toast.custom(
-      () => (
-        <CloudRemoteDesktopToast
-          state={state}
-          onDismiss={dismiss}
-          onAction={(action) => {
-            dismiss()
-            runNextAction(action, worktreeId)
-          }}
-        />
-      ),
-      // Errors stay until dismissed or acted on: each names the one next step.
-      { id, duration: Number.POSITIVE_INFINITY }
-    )
-  }
+  const gate = createDesktopToastGate<CloudRemoteDesktopToastState>({
+    render: (state) => {
+      toast.custom(
+        () => (
+          <CloudRemoteDesktopToast
+            state={state}
+            onDismiss={gate.closeByUser}
+            onAction={(action) => {
+              gate.dismiss()
+              runNextAction(action, worktreeId)
+            }}
+          />
+        ),
+        // Errors stay until dismissed or acted on: each names the one next step.
+        { id, duration: Number.POSITIVE_INFINITY }
+      )
+    },
+    hide: () => {
+      toast.dismiss(id)
+    }
+  })
+  const { show, dismiss } = gate
   return {
     show,
     dismiss,
@@ -157,14 +162,22 @@ export function openCloudRemoteDesktop(worktreeId: string, environmentId: string
 function wakeThenOpen(worktreeId: string, via: 'wake' | 'unarchive'): Promise<void> {
   return exclusive(worktreeId, async () => {
     const view = desktopToast(worktreeId)
-    view.show({ kind: 'waking' })
+    view.show({ kind: 'waking', via })
     let stopSlow = (): void => {}
     const outcome = await openDesktopAfterWake({
       wake:
         via === 'unarchive'
-          ? () => runUnarchiveCloudWorkspace(worktreeId)
-          : () => wakeCloudWorkspace(worktreeId).then(() => true),
+          ? () => runUnarchiveCloudWorkspace(worktreeId).then((ok) => (ok ? 'awake' : 'reported'))
+          : () =>
+              // This toast reports a failed wake: the generic wake-failed toast stays quiet.
+              activateWorktreeFromSidebar(worktreeId, undefined, {
+                reportWakeFailure: false
+              }).then((result) => (result.ok ? 'awake' : 'failed')),
       wakeFailedSince: (startedAt) => {
+        // Archived meanwhile: the desktop answer says "archived" (with Unarchive), not a failed wake.
+        if (isCloudWorkspaceArchived(worktreeId)) {
+          return false
+        }
         const wake = getCloudWorkspaceSnapshot().wake[worktreeId]
         return wake?.phase === 'failed' && wake.at >= startedAt
       },

@@ -15,8 +15,11 @@ export type OpenAfterWakeOutcome =
   | { kind: 'cancelled' }
 
 export type OpenAfterWakeDeps = {
-  /** Wakes the sandbox (or unarchives, then wakes); false when that flow already said why not. */
-  wake: () => Promise<boolean>
+  /**
+   * Wakes the sandbox (or unarchives, then wakes): 'reported' when that flow already showed why
+   * it could not (Unarchive's own toast), 'failed' when the wake failed and this flow says so.
+   */
+  wake: () => Promise<'awake' | 'failed' | 'reported'>
   /** Whether a wake that began at or after `startedAt` reported failure. */
   wakeFailedSince: (startedAt: number) => boolean
   /** Re-read after the wake: the workspace may have been deleted meanwhile. */
@@ -37,16 +40,27 @@ export async function openDesktopAfterWake(deps: OpenAfterWakeDeps): Promise<Ope
   const now = deps.now ?? Date.now
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)))
   const startedAt = now()
-  if (!(await deps.wake())) {
+  let woke: 'awake' | 'failed' | 'reported'
+  try {
+    woke = await deps.wake()
+  } catch {
+    // A wake that throws is still a failed wake: never leave "Waking…" up.
+    woke = 'failed'
+  }
+  if (woke === 'reported') {
     return { kind: 'cancelled' }
   }
-  if (deps.wakeFailedSince(startedAt)) {
+  if (woke === 'failed' || deps.wakeFailedSince(startedAt)) {
     return { kind: 'failed', code: 'wake_failed' }
   }
   deps.onAwake()
   const deadline = now() + AFTER_WAKE_DEADLINE_MS
   let asleepAnswers = 0
   for (;;) {
+    // The wake can also fail after its call returned (main reports it late): stop asking then.
+    if (deps.wakeFailedSince(startedAt)) {
+      return { kind: 'failed', code: 'wake_failed' }
+    }
     const environmentId = deps.environmentId()
     if (!environmentId) {
       return { kind: 'cancelled' }

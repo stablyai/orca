@@ -145,6 +145,6 @@ export async function runUnarchiveCloudWorkspace(workspaceId: string): Promise<b
   return result.ok
 }
 
-export function wakeCloudWorkspace(workspaceId: string): Promise<void> {
-  return activateWorktreeFromSidebar(workspaceId)
+export async function wakeCloudWorkspace(workspaceId: string): Promise<void> {
+  await activateWorktreeFromSidebar(workspaceId)
 }

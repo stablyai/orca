@@ -38,14 +38,14 @@ const style = document.createElement('style');
 style.textContent = `
 #noVNC_connect_dlg, #noVNC_control_bar_anchor { display: none !important; }
 #orca_pause { --orca-scrim: rgb(10 10 10 / 0.88); --orca-card: #171717; --orca-text: #f0f0f0;
-  --orca-border: rgb(255 255 255 / 0.1); --orca-control: rgb(255 255 255 / 0.15);
+  --orca-border: rgb(255 255 255 / 0.1); --orca-control: rgb(255 255 255 / 0.25);
   --orca-control-hover: rgb(255 255 255 / 0.08); --orca-focus: color-mix(in oklab, #f0f0f0 65%, #0a0a0a);
   color-scheme: dark; position: fixed; inset: 0; display: none; align-items: center;
   justify-content: center; padding: 16px; background: var(--orca-scrim); z-index: 1000;
   font: 13px/1.5 system-ui, sans-serif; }
 @media (prefers-color-scheme: light) {
   #orca_pause { --orca-scrim: rgb(255 255 255 / 0.88); --orca-card: #fff; --orca-text: #0a0a0a;
-    --orca-border: #e5e5e5; --orca-control: #d4d4d4; --orca-control-hover: #f5f5f5;
+    --orca-border: #e5e5e5; --orca-control: #a3a3a3; --orca-control-hover: #f5f5f5;
     --orca-focus: color-mix(in oklab, #0a0a0a 55%, #fff); color-scheme: light; }
 }
 #orca_pause.open { display: flex; }
