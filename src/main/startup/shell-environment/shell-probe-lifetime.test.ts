@@ -41,6 +41,21 @@ describe('shell probe lifetime', () => {
     lifetime.release()
   })
 
+  it('force-kills a probe that outlives the grace even after its caller settles', async () => {
+    setPlatform('linux')
+    vi.useFakeTimers()
+    const child = fakeChild()
+    const lifetime = bindShellProbeLifetime(child)
+
+    lifetime.terminate()
+    // The caller settles and releases on the timeout; the probe ignores SIGTERM and stays alive.
+    await vi.advanceTimersByTimeAsync(1)
+    lifetime.release()
+    expect(signalProcessTree).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(SHELL_PROBE_TERMINATE_GRACE_MS)
+    expect(signalProcessTree).toHaveBeenLastCalledWith(child, 'SIGKILL')
+  })
+
   it('force-kills at once when the owner exits', () => {
     setPlatform('linux')
     const child = fakeChild()
