@@ -17,6 +17,7 @@ import {
   WorktreeJumpPaletteSimulatorRow
 } from './worktree-jump-palette-browser-simulator-rows'
 import { useTranslate } from '@/i18n/use-translate'
+import { WorktreeJumpPaletteExtraRow } from './worktree-jump-palette-extra-row'
 
 export function WorktreeJumpPaletteEntry({
   entry,
@@ -106,6 +107,11 @@ export function WorktreeJumpPaletteEntry({
         renderKey={renderKey}
         controller={controller}
       />
+    )
+  }
+  if (entry.type === 'extra') {
+    return (
+      <WorktreeJumpPaletteExtraRow entry={entry} renderKey={renderKey} controller={controller} />
     )
   }
   if (entry.type === 'simulator-tab') {
