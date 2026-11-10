@@ -316,7 +316,15 @@ it('pauses conversion while a registered client start waits for its provider to 
   expect(await live.host.create({ callerKey: 'client' }, hostTestAttachParams(null))).toMatchObject(
     { ok: true }
   )
-  live.host.deps.adapter.dispatch = async () => ({ state: 'accepted' })
+  live.host.deps.adapter.dispatch = async () => ({
+    state: 'accepted',
+    providerIdentity: {
+      provider: 'codex',
+      threadId: HOST_TEST_THREAD,
+      turnId: 'provider-turn',
+      ordinal: 51
+    }
+  })
   const sent = await live.host.send({ callerKey: 'client' }, hostTestSendParams('hello'))
   if (!sent.ok) {
     throw new Error('the send was refused')
@@ -344,7 +352,15 @@ it('keeps provider work active when its obsolete registered start finishes', asy
   expect(await live.host.create({ callerKey: 'client' }, hostTestAttachParams(null))).toMatchObject(
     { ok: true }
   )
-  live.host.deps.adapter.dispatch = async () => ({ state: 'accepted' })
+  live.host.deps.adapter.dispatch = async () => ({
+    state: 'accepted',
+    providerIdentity: {
+      provider: 'codex',
+      threadId: HOST_TEST_THREAD,
+      turnId: 'provider-turn',
+      ordinal: 51
+    }
+  })
   const sent = await live.host.send({ callerKey: 'client' }, hostTestSendParams('hello'))
   if (!sent.ok) {
     throw new Error('the send was refused')
