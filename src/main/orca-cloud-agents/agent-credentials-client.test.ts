@@ -142,4 +142,23 @@ describe('createAgentCredentialsClient', () => {
       body: JSON.stringify({ agent: 'claude', source: 'sign-in' })
     })
   })
+
+  it('reads and writes one workspace’s Source by its sandbox id', async () => {
+    const { client, seen } = fakeControlPlane(() =>
+      Response.json({
+        defaults: {},
+        effective: { codex: { source: 'key' } },
+        coveredByKey: { claude: false, codex: true },
+        sharedWorkspace: false
+      })
+    )
+    const read = await client.sources(undefined, 'sbx_41d9')
+    expect(read.effective?.codex?.source).toBe('key')
+    await client.setWorkspaceSource('codex', 'key', 'sbx_41d9')
+    expect(seen[0]?.url).toContain('/v1/agent-sources?workspaceId=sbx_41d9')
+    expect(seen[1]).toMatchObject({
+      method: 'PUT',
+      body: JSON.stringify({ agent: 'codex', source: 'key', workspaceId: 'sbx_41d9' })
+    })
+  })
 })

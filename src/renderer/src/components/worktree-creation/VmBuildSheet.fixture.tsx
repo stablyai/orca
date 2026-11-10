@@ -378,3 +378,6 @@ export const secretsRefused = secretsFrame(
   })
 )
 export const secretsSkipped = secretsFrame(secretsRow(secretsData('admin'), { phase: 'skipped' }))
+
+// The Agents row (spec §5b), as VmBuildSheet:agents*.
+export * from './vm-build-sheet-agents-fixtures'
