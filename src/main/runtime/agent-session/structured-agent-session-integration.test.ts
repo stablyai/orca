@@ -326,11 +326,12 @@ describe('a structured codex session over agentSession.*', () => {
     ).sessions.get(SESSION)!.journal
     const appendEntered = Promise.withResolvers<void>()
     const appendGate = Promise.withResolvers<void>()
-    const originalAppend = journal.appendItem.bind(journal)
-    vi.spyOn(journal, 'appendItem').mockImplementationOnce(async (...args) => {
+    const originalAppend = journal.appendSteps.bind(journal)
+    vi.spyOn(journal, 'appendSteps').mockImplementationOnce(async (...args) => {
+      const committed = await originalAppend(...args)
       appendEntered.resolve()
       await appendGate.promise
-      return originalAppend(...args)
+      return committed
     })
 
     let stopped = false
