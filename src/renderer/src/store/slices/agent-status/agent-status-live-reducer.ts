@@ -89,7 +89,7 @@ export function reduceAgentStatusLiveUpdate(
   const evictedPaneKeys = capLiveAgentStatusesInPlace(
     nextLive,
     paneKey,
-    () => classifyPaneKeyLiveness(state),
+    () => classifyPaneKeyLiveness(state.terminalLayoutsByTabId),
     updatedAt,
     undefined,
     nextLiveCount

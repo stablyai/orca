@@ -94,7 +94,7 @@ export function createAgentConversationCapacityIndex() {
       }
     }
     if (affected.size > 0) {
-      const classify = classifyPaneKeyLiveness({ terminalLayoutsByTabId: nextLayouts })
+      const classify = classifyPaneKeyLiveness(nextLayouts)
       for (const key of affected) {
         if (classify(key) === 'live') {
           eligible.delete(key)

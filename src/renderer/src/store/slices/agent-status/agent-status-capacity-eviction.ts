@@ -40,17 +40,17 @@ function rootHasLeaf(root: TerminalPaneLayoutNode, leafId: string): boolean {
 
 // Only exact rooted leaves prove placement; legacy colon-containing owners still match full keys.
 export function classifyPaneKeyLiveness(
-  state: Pick<AppState, 'terminalLayoutsByTabId'>
+  layouts: AppState['terminalLayoutsByTabId']
 ): (paneKey: string) => PaneLiveness {
   return (paneKey) => {
     for (const tabId of paneKeyCandidateTabIds(paneKey)) {
-      const root = state.terminalLayoutsByTabId[tabId]?.root
+      const root = layouts[tabId]?.root
       if (root && rootHasLeaf(root, paneKey.slice(tabId.length + 1))) {
         return 'live'
       }
     }
     const tabId = getTabIdFromPaneKey(paneKey)
-    return tabId !== null && state.terminalLayoutsByTabId[tabId]?.root ? 'dead' : 'unprovable'
+    return tabId !== null && layouts[tabId]?.root ? 'dead' : 'unprovable'
   }
 }
 
