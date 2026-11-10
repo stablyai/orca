@@ -2,19 +2,19 @@ import { tuiAgentToAgentKind } from '../../shared/agent-kind'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import type { EventProps } from '../../shared/telemetry-events'
 import type { JournalWriterCommit } from '../native-chat/agent-session-journal/journal-writer-changes'
+import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { recordStructuredChatPromptAccepted } from './structured-chat-dispatch'
 
-type PromptJournal = object
 type PromptSource = EventProps<'native_chat_prompt_submitted'>
 const pendingPrompts = new WeakMap<
-  PromptJournal,
+  AgentSessionJournal,
   Map<string, { source: PromptSource; ownerKey?: string }>
 >()
 const MAX_PENDING_PROMPTS_PER_JOURNAL = 256
 
 /** Fresh user sends retain device provenance through queued-message conversion, without persisting telemetry state. */
 export function rememberNativeChatPrompt(
-  journal: PromptJournal,
+  journal: AgentSessionJournal,
   clientMessageId: string,
   agent: string,
   userClient: 'desktop' | 'mobile' | undefined,
@@ -48,13 +48,16 @@ export function rememberNativeChatPrompt(
   })
 }
 
-export function forgetNativeChatPrompt(journal: PromptJournal, clientMessageId: string): void {
+export function forgetNativeChatPrompt(
+  journal: AgentSessionJournal,
+  clientMessageId: string
+): void {
   pendingPrompts.get(journal)?.delete(clientMessageId)
 }
 
 /** Observe only committed transitions, never history snapshots, local reservations or handover preambles. */
 export function observeNativeChatPromptSubmissions(
-  journal: PromptJournal,
+  journal: AgentSessionJournal,
   commit: JournalWriterCommit | undefined
 ): void {
   const pending = pendingPrompts.get(journal)

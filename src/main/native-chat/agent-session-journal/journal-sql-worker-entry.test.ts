@@ -70,8 +70,8 @@ it('commits fork installation with FULL durability and restores NORMAL before ac
     vi.restoreAllMocks()
     vi.doUnmock('node:worker_threads')
     vi.doUnmock('./database/journal-checkpoint-owner')
-    if (db.open) {
+    try {
       db.close()
-    }
+    } catch {}
   }
 })

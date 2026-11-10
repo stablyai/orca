@@ -68,61 +68,65 @@ export function registerJournalUnsentSendHoldQueueTests(
   })
 
   describe('old saved queues', () => {
-    it.each(['stopped', 'reserved-command', 'moved-command'] as const)(
-      'preserves the %s ordering boundary',
-      async (shape) => {
-        const command = { ...fixture.message('/compact'), command: { name: 'compact' as const } }
-        const journal = await fixture.openHistorical(
-          shape === 'stopped'
-            ? [
-                fixture.historicalQueue(2, 'W'),
-                {
-                  ...fixture.historicalBase(3),
-                  kind: 'tombstone',
-                  itemId: 'orca:stop',
-                  revision: 1,
-                  stopEvent: { reason: 'user-stop', at: 1_003 }
-                },
-                fixture.historicalSend(4, 'S')
-              ]
-            : [
-                fixture.historicalQueue(2, 'C1', command),
-                fixture.historicalSend(3, 'S'),
-                fixture.historicalQueue(4, 'C2'),
-                {
-                  ...fixture.historicalBase(5),
-                  kind: 'queue',
-                  messageId: 'C2',
-                  change: { op: 'moved', position: 1 }
-                },
-                ...(shape === 'reserved-command'
-                  ? [
-                      fixture.historicalSend(6, 'command-attempt', {
-                        body: command,
-                        queuedMessageId: 'C1'
-                      }),
-                      {
-                        ...fixture.historicalBase(7),
-                        kind: 'dispatch' as const,
-                        clientMessageId: 'command-attempt',
-                        state: 'pending' as const,
-                        providerItemId: null,
-                        reason: null,
-                        turnScope: { kind: 'thread' as const }
-                      }
-                    ]
-                  : [])
-              ]
-        )
-        expect(await fixture.cardOrder(journal)).toEqual(
-          shape === 'stopped'
-            ? ['S', 'W']
-            : shape === 'reserved-command'
-              ? ['C2', 'S']
-              : ['C2', 'C1', 'S']
-        )
-      }
-    )
+    it('preserves the stopped ordering boundary', async () => {
+      const journal = await fixture.openHistorical([
+        fixture.historicalQueue(2, 'W'),
+        {
+          ...fixture.historicalBase(3),
+          kind: 'tombstone',
+          itemId: 'orca:stop',
+          revision: 1,
+          stopEvent: { reason: 'user-stop', at: 1_003 }
+        },
+        fixture.historicalSend(4, 'S')
+      ])
+      expect(await fixture.cardOrder(journal)).toEqual(['S', 'W'])
+    })
+
+    it('preserves the reserved-command handover boundary', async () => {
+      const command = { ...fixture.message('/compact'), command: { name: 'compact' as const } }
+      const journal = await fixture.openHistorical([
+        fixture.historicalQueue(2, 'C1', command),
+        fixture.historicalSend(3, 'S'),
+        fixture.historicalQueue(4, 'C2'),
+        {
+          ...fixture.historicalBase(5),
+          kind: 'queue',
+          messageId: 'C2',
+          change: { op: 'moved', position: 1 }
+        },
+        fixture.historicalSend(6, 'command-attempt', {
+          body: command,
+          queuedMessageId: 'C1'
+        }),
+        {
+          ...fixture.historicalBase(7),
+          kind: 'dispatch',
+          clientMessageId: 'command-attempt',
+          state: 'pending',
+          providerItemId: null,
+          reason: null,
+          turnScope: { kind: 'thread' }
+        }
+      ])
+      expect(await fixture.cardOrder(journal)).toEqual(['C2', 'S'])
+    })
+
+    it('preserves a moved command ahead of the kept send', async () => {
+      const command = { ...fixture.message('/compact'), command: { name: 'compact' as const } }
+      const journal = await fixture.openHistorical([
+        fixture.historicalQueue(2, 'C1', command),
+        fixture.historicalSend(3, 'S'),
+        fixture.historicalQueue(4, 'C2'),
+        {
+          ...fixture.historicalBase(5),
+          kind: 'queue',
+          messageId: 'C2',
+          change: { op: 'moved', position: 1 }
+        }
+      ])
+      expect(await fixture.cardOrder(journal)).toEqual(['C2', 'C1', 'S'])
+    })
     it('keeps unsent mail in custody as waiting across restart', async () => {
       const journal = await fixture.afterRestart(async (earlier) => {
         await fixture.accept(earlier, 'mail', {

@@ -176,11 +176,9 @@ it('rolls back both the changed turn and its Stop revision when the derived writ
 
 it('keeps full semantic source when an unprojected Stop has a shortened wire head and restores it on removal', () => {
   const { db, item, write, turn, display } = fixture()
-  const large = {
-    kind: 'status' as const,
-    text: 'x'.repeat(2_097_152),
-    failure: { kind: 'cancelUnconfirmed' as const }
-  }
+  const large: AgentJournalItemBody = JSON.parse(`{
+    "kind":"status","text":"${'x'.repeat(2_097_152)}","failure":{"kind":"cancelUnconfirmed"}
+  }`)
   turn('running')
   write('stop:turn-1', large, turnId)
   const context = () => new JournalSqlStatusContext(new JournalSqlScope(db, 'chat', 'epoch'))
@@ -188,7 +186,9 @@ it('keeps full semantic source when an unprojected Stop has a shortened wire hea
   expect(display()).toMatchObject({ item: { body: large } })
   expect(turn('running').items.map((value) => value.itemId)).toEqual([turnId])
   turn('interrupted')
-  const revised = { ...large, text: 'New source failure.' }
+  const revised: AgentJournalItemBody = JSON.parse(`{
+    "kind":"status","text":"New source failure.","failure":{"kind":"cancelUnconfirmed"}
+  }`)
   expect(write('stop:turn-1', revised, turnId).items[0]).toMatchObject({
     revision: 2,
     body: { kind: 'status', text: 'Cancellation requested.' }

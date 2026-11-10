@@ -152,7 +152,7 @@ export function createFixture() {
       clientMessageId,
       body,
       payloadFingerprint: fingerprint(body),
-      providerHandle: claudeProviderHandle('native-1', null),
+      providerHandle: { kind: 'claude', sessionId: 'native-1', leafUuid: null },
       origin: 'client',
       source: { kind: 'user' },
       handoverRecorded: true,
@@ -165,7 +165,7 @@ export function createFixture() {
         ...historicalBase(1),
         kind: 'epoch',
         reason: 'session_created',
-        providerHandle: claudeProviderHandle('native-1', null)
+        providerHandle: { kind: 'claude', sessionId: 'native-1', leafUuid: null }
       },
       ...rows
     ])

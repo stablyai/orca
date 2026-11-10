@@ -95,8 +95,9 @@ function diffItemUuid(sessionId: string, index: number): string {
   ].join('-')
 }
 
-function turnScopeOf(item: object): TurnScope | null {
-  const scope = 'turnScope' in item ? item.turnScope : null
+function turnScopeOf(item: unknown): TurnScope | null {
+  const scope =
+    typeof item === 'object' && item !== null && 'turnScope' in item ? item.turnScope : null
   return typeof scope === 'object' &&
     scope !== null &&
     'kind' in scope &&
