@@ -8,7 +8,11 @@ import {
   uploadExternalPaths,
   uploadExternalPathsToAgentSessionAttachments
 } from './agent-session-attachment-upload'
-import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../shared/clipboard-image'
+import {
+  CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
+  RUNTIME_TEMP_UPLOAD_MAX_TOTAL_BYTES,
+  runtimeTempUploadTotalReason
+} from '../../shared/clipboard-image'
 import { saveClipboardImageBufferInRuntime } from '../window/clipboard-runtime-image-upload'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 
@@ -58,7 +62,11 @@ export function registerAgentSessionAttachmentUploadHandlers(): void {
           {
             maxBytes: CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
             label: 'chat attachment limit',
-            signal: lifetime.signal
+            signal: lifetime.signal,
+            total: {
+              maxBytes: RUNTIME_TEMP_UPLOAD_MAX_TOTAL_BYTES,
+              reason: runtimeTempUploadTotalReason
+            }
           },
           async (file, writeBody) => {
             const parts: Buffer[] = []

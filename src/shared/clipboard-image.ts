@@ -115,6 +115,14 @@ export function clipboardFormatsIncludeImage(formats: readonly string[]): boolea
   return formats.some((format) => format.startsWith('image/'))
 }
 
+/** The most one drop or pick may send to a paired server's temp folder, across all its files. */
+export const RUNTIME_TEMP_UPLOAD_MAX_TOTAL_BYTES = 100 * 1024 * 1024
+
+/** Why a file is left out: it would take its drop past the total for one drop. */
+export function runtimeTempUploadTotalReason(name: string): string {
+  return `'${name}' would take this drop over the ${RUNTIME_TEMP_UPLOAD_MAX_TOTAL_BYTES / 1024 / 1024} MB limit for one drop`
+}
+
 const NAMED_TEMP_UPLOAD_FOLDER =
   /^orca-paste-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 

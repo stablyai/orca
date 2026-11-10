@@ -155,10 +155,17 @@ export type ExternalFileStore = (
 /** Upload files in input order; folders are unsupported. */
 export async function uploadExternalPaths(
   paths: readonly string[],
-  limit: { maxBytes: number; label: string; signal?: AbortSignal },
+  limit: {
+    maxBytes: number
+    label: string
+    signal?: AbortSignal
+    /** Files past this total for the whole call are refused; absent, only each file is limited. */
+    total?: { maxBytes: number; reason: (name: string) => string }
+  },
   store: ExternalFileStore
 ): Promise<AgentSessionAttachmentPathUploadResult> {
   const result: AgentSessionAttachmentPathUploadResult = { uploaded: [], skipped: [], failed: [] }
+  let sentBytes = 0
   for (const sourcePath of paths) {
     limit.signal?.throwIfAborted()
     // Reject folders before staging walks and opens their contents.
@@ -191,6 +198,11 @@ export async function uploadExternalPaths(
       })
       continue
     }
+    if (limit.total && sentBytes + entry.byteLength > limit.total.maxBytes) {
+      result.failed.push({ sourcePath, reason: limit.total.reason(basename(sourcePath)) })
+      continue
+    }
+    sentBytes += entry.byteLength
     try {
       const path = await store(
         { name: staged.name, byteLength: entry.byteLength },

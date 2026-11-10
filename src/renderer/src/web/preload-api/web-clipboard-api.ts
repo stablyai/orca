@@ -14,6 +14,8 @@ import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import {
   CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
   CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
+  RUNTIME_TEMP_UPLOAD_MAX_TOTAL_BYTES,
+  runtimeTempUploadTotalReason,
   CLIPBOARD_IMAGE_TOO_LARGE_ERROR,
   assertClipboardImageByteLengthWithinLimit,
   assertNamedTempUploadKeptName,
@@ -268,6 +270,7 @@ export async function uploadBrowserFilesToWebRuntimeTempFiles(args: {
   paths: readonly string[]
 }): Promise<AgentSessionAttachmentPathUploadResult> {
   const result: AgentSessionAttachmentPathUploadResult = { uploaded: [], skipped: [], failed: [] }
+  let sentBytes = 0
   for (const sourcePath of args.paths) {
     const file = readBrowserAttachmentFile(sourcePath)
     if (!file) {
@@ -281,6 +284,11 @@ export async function uploadBrowserFilesToWebRuntimeTempFiles(args: {
       })
       continue
     }
+    if (sentBytes + file.size > RUNTIME_TEMP_UPLOAD_MAX_TOTAL_BYTES) {
+      result.failed.push({ sourcePath, reason: runtimeTempUploadTotalReason(file.name) })
+      continue
+    }
+    sentBytes += file.size
     try {
       const path = await saveClipboardImageAsTempFileInRuntime(
         encodeBase64Bytes(new Uint8Array(await file.arrayBuffer())),
