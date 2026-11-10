@@ -192,13 +192,25 @@ describe('Resource Manager folder ownership', () => {
 
 describe('Resource Manager paired-server totals', () => {
   it('adds each sampled server to the summary and terminal count', () => {
-    const snapshot = {
+    const usage = { cpu: 0, memory: 0 }
+    const snapshot: MemorySnapshot = {
+      app: { ...usage, main: usage, renderer: usage, other: usage, history: [] },
       worktrees: [],
-      host: { totalMemory: 16384 },
+      host: {
+        totalMemory: 16384,
+        freeMemory: 8192,
+        availableMemory: 8192,
+        availableMemorySource: 'free-memory',
+        usedMemory: 8192,
+        memoryUsagePercent: 50,
+        cpuCoreCount: 8,
+        loadAverage1m: 1
+      },
       totalMemory: 2048,
       totalCpu: 2,
-      processMemoryMetric: 'rss'
-    } as unknown as MemorySnapshot
+      processMemoryMetric: 'rss',
+      collectedAt: 0
+    }
     const serverRow = (id: string, memory: number, sessions: number): WorktreeMemory => ({
       worktreeId: id,
       worktreeName: id,
