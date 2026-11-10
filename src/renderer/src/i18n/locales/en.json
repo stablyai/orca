@@ -23085,7 +23085,6 @@
         "starting": "Starting your cloud workspace…",
         "agentSetUpAfterSignIn": "{{agent}}: set up once in Settings → Agent accounts after you sign in",
         "agentSetUpOnce": "{{agent}}: set up once in Settings → Agent accounts",
-        "comparePlans": "Compare plans",
         "accountNeededTeam": "Sign in or create one. We’ll make a team for you.",
         "trial": "Trial",
         "trialNoCard": "No card needed. Nothing is charged until you choose a plan.",
@@ -23099,7 +23098,8 @@
         "askChoosePlan": "Ask an owner or admin to choose a plan.",
         "trialUsedUpChoose": "Choose a plan to keep using Orca Cloud.",
         "trialOffer_one": "{{hours}} sandbox hour to try Orca Cloud",
-        "trialOffer_other": "{{hours}} sandbox hours to try Orca Cloud"
+        "trialOffer_other": "{{hours}} sandbox hours to try Orca Cloud",
+        "subtitleChoosePlan": "One visit to your browser to choose a plan. Your prompt stays here and starts when you’re done."
       },
       "runOn": {
         "thisComputer": "This computer",
@@ -23120,7 +23120,9 @@
         "trialToast_one": "Using sandbox hours · {{hours}} sandbox hour left in your trial",
         "trialToast_other": "Using sandbox hours · {{hours}} sandbox hours left in your trial",
         "planToast_one": "Using sandbox hours · {{hours}} sandbox hour left",
-        "planToast_other": "Using sandbox hours · {{hours}} sandbox hours left"
+        "planToast_other": "Using sandbox hours · {{hours}} sandbox hours left",
+        "trialOffered_one": "Trial · {{hours}} sandbox hour left · No card needed",
+        "trialOffered_other": "Trial · {{hours}} sandbox hours left · No card needed"
       },
       "trialUsedUp": {
         "running": "Running sandboxes go to sleep and new ones can’t start. Nothing is deleted, and your files are safe.",

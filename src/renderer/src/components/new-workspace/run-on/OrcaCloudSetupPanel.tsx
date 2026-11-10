@@ -7,7 +7,11 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import type { CloudSetupStep, CloudSetupStepId } from './cloud-start-model'
+import {
+  cloudSetupNeedsPlan,
+  type CloudSetupStep,
+  type CloudSetupStepId
+} from './cloud-start-model'
 
 type RowCopy = { title: string; detail: string | null; note?: string; status?: string }
 
@@ -161,8 +165,9 @@ function stateLabel(step: CloudSetupStep, t: Translate): string {
 }
 
 function StateIcon({ step }: { step: CloudSetupStep }): React.JSX.Element {
-  if (step.state === 'done') {
-    return <Check className="size-3.5 text-status-success" aria-hidden />
+  // Neutral checks: done and an included trial are facts, not alerts.
+  if (step.state === 'done' || step.need === 'trial') {
+    return <Check className="size-3.5 text-muted-foreground" aria-hidden />
   }
   if (step.state === 'active') {
     // The browser is working on this step; static under reduced motion, the label carries the state.
@@ -215,10 +220,15 @@ export function OrcaCloudSetupPanel({
         {allSet
           ? t('components.newWorkspace.cloudSetup.starting', 'Starting your cloud workspace…')
           : (subtitle ??
-            t(
-              'components.newWorkspace.cloudSetup.subtitleNoCard',
-              'One visit to your browser, no card. Your prompt stays here and starts when you’re done.'
-            ))}
+            (cloudSetupNeedsPlan(steps)
+              ? t(
+                  'components.newWorkspace.cloudSetup.subtitleChoosePlan',
+                  'One visit to your browser to choose a plan. Your prompt stays here and starts when you’re done.'
+                )
+              : t(
+                  'components.newWorkspace.cloudSetup.subtitleNoCard',
+                  'One visit to your browser, no card. Your prompt stays here and starts when you’re done.'
+                )))}
       </p>
       {/* One polite announcement per row change ("Team plan, done"). */}
       <ul aria-live="polite" className="mt-2 space-y-1.5">

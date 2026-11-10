@@ -128,6 +128,8 @@ describe('setup rows and the primary label', () => {
     // Members aren't blocked from the trial: the agent row stays.
     expect(steps.some((s) => s.id === 'agent')).toBe(true)
     expect(getCloudPrimaryAction(steps)).toBe('startTrial')
+    // An included trial isn't a task: no panel, the hint line carries it.
+    expect(isCloudSetupPanelVisible(steps)).toBe(false)
   })
 
   it('trial used up: owner "Choose plan and start"; member runs on this computer (T2, C1)', () => {

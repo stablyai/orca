@@ -180,7 +180,15 @@ export function getOpenSetupSteps(steps: readonly CloudSetupStep[]): CloudSetupS
 
 /** The panel shows while anything required is open (or still loading). */
 export function isCloudSetupPanelVisible(steps: readonly CloudSetupStep[]): boolean {
-  return getOpenSetupSteps(steps).length > 0
+  // An included trial isn't a task: with nothing else open, the hint line carries it (B1).
+  return getOpenSetupSteps(steps).some((step) => step.need !== 'trial')
+}
+
+/** The browser trip is for choosing a plan (T2, lapsed, no plan), not a free trial. */
+export function cloudSetupNeedsPlan(steps: readonly CloudSetupStep[]): boolean {
+  return getOpenSetupSteps(steps).some(
+    (step) => step.need === 'plan' || step.need === 'renew-plan' || step.need === 'trial-used-up'
+  )
 }
 
 export type CloudPrimaryAction =
@@ -203,9 +211,7 @@ export function getCloudPrimaryAction(steps: readonly CloudSetupStep[]): CloudPr
   if (open.length === 0) {
     return 'start'
   }
-  if (
-    open.some((step) => (step.state === 'needed' && step.canFix === false) || step.blocksStart)
-  ) {
+  if (open.some((step) => (step.state === 'needed' && step.canFix === false) || step.blocksStart)) {
     return 'useThisComputer'
   }
   if (open.every((step) => step.state === 'loading')) {

@@ -11,7 +11,6 @@ import {
   readCloudSetupSession,
   subscribeCloudSetupSessionRevision
 } from '@/lib/orca-cloud/cloud-setup-session-seam'
-import { openPlansPage } from '@/components/billing/plans/plans-page-store'
 import type { OrcaCloudAvailability } from '../../../../../shared/orca-yaml-hook-types'
 import type { OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
 import { deriveCloudSetupSteps, type CloudSetupStep } from './cloud-start-model'
@@ -39,27 +38,13 @@ function agentStep(step: CloudSetupStep, agent: string | null, signedOut: boolea
   }
 }
 
-function planStep(step: CloudSetupStep): CloudSetupStep {
-  // T2: an owner can compare plans (with Enterprise) before choosing one.
-  if (step.id !== 'plan' || step.need !== 'trial-used-up' || step.canFix === false) {
-    return step
-  }
-  return {
-    ...step,
-    action: {
-      label: translate('components.newWorkspace.cloudSetup.comparePlans', 'Compare plans'),
-      onClick: () => openPlansPage('sandbox')
-    }
-  }
-}
-
-/** Composer-only wording on derived rows: the agent's name, and Compare plans on T2. */
+/** Composer-only wording on derived rows: the agent's name. */
 export function decorateCloudSetupStep(
   step: CloudSetupStep,
   agent: string | null,
   signedOut: boolean
 ): CloudSetupStep {
-  return planStep(agentStep(step, agent, signedOut))
+  return agentStep(step, agent, signedOut)
 }
 
 export function useCloudStartSteps({

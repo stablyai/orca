@@ -69,6 +69,10 @@ function useBlockCopy(access: OrcaCloudRunTargetAccess): BlockCopy | null {
   const t = useTranslate()
   switch (access.state) {
     case 'no-plan':
+      if (access.trialOfferSeconds) {
+        // B1: the trial is included; Start claims it, so nothing blocks.
+        return null
+      }
       if (access.trialUsedUp) {
         // T2: neutral, nothing failed.
         return {
