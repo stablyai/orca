@@ -175,6 +175,11 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
     if ((command.bulk || command.skipEmptyCheck) && tab.isPinned) {
       return true
     }
+    const unsentNotes = tab.contentType === 'browser' && hasUnsentBrowserNotes(state, tab.entityId)
+    // Bulk closes keep a tab holding unsent notes open, as they keep pinned tabs.
+    if (command.bulk && unsentNotes) {
+      return true
+    }
     // Why before the pin guard: its prompt takes focus, and the floating panel's reaction reads focus.
     const whenEmptied =
       command.bulk || command.skipEmptyCheck
@@ -191,7 +196,7 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
         isPinned: tab.isPinned === true,
         tabLabel: resolvePinnedTabLabel(state, target.worktreeId, tab.id),
         onClose: close,
-        unsentNotes: tab.contentType === 'browser' && hasUnsentBrowserNotes(state, tab.entityId)
+        unsentNotes
       })
     }
     return true
