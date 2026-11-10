@@ -21655,7 +21655,6 @@
       "roleImplementer": "implementer",
       "turnLimitReached": "Turn limit reached ({{count}})",
       "workTogether": "Work together…",
-      "description": "Connect two existing local chats. You control the story, permissions and continuation.",
       "retry": "Retry the unconfirmed action",
       "pause": "Pause",
       "stop": "Stop link turns",
