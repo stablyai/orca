@@ -25,7 +25,6 @@
   "auditCaps": {
     "agent.real-task": "Proven only with moonshotai/kimi-k2 through the Claude Code CLI. Per the user decision (2026-11-10), there will be no AI Gateway real-model runs; this cap is lifted by the user's own e2e session with their own credentials (local subscription or API key transferred to the VM). It is on the coordinator's e2e checklist. Cursor/OpenCode are still not on the image.",
     "agent.signin": "Auth folders persist across sleep/wake and rollover, but subscription OAuth on a VM was never exercised. This cap is lifted by the user's own e2e session with their own credentials (after their review of #40228). It is on the coordinator's e2e checklist.",
-    "sub.size": "Standard is 4 vCPU / 8 GB; Conductor gives 8 / 16 to everyone. Large (8/16) exists but uses included hours at 2x. Not parity on default hardware.",
-    "local.checkpoints": "Owner-reported pass (gap-checkpoints #191, live runs with real agents on both Macs). W9 has not re-run it independently: it needs real agent turns, and gateway credit is off-limits. It is on the user e2e checklist (agent turn, then Rewind with Also restore files, then Undo)."
+    "sub.size": "Standard is 4 vCPU / 8 GB; Conductor gives 8 / 16 to everyone. Large (8/16) exists but uses included hours at 2x. Not parity on default hardware."
   }
 }
