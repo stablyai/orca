@@ -14,9 +14,8 @@ import {
   promptSkillRefs
 } from '../editor/native-chat-prompt-document'
 import type { StructuredAgentSessionAttachmentPreparation } from '../../session/structured/delivery/structured-agent-session-send-slot'
-import type { StructuredAgentSessionSendOutcome } from '../../session/structured/delivery/structured-agent-session-send-runtime'
 import { useCallback } from 'react'
-import { agentJournalSubmissionKey } from '../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { createNativeChatStructuredSubmissionTelemetry } from '../../telemetry/native-chat-structured-submission-delivery'
 import { completeNativeChatStructuredUserAction } from './native-chat-structured-user-action'
 import {
   isStructuredAgentSessionHostCommand,
@@ -87,7 +86,8 @@ export function useNativeChatStructuredComposerSend({
 }: UseNativeChatStructuredComposerSendArgs): NativeChatStructuredComposerSend {
   const submissionSource = explicitSubmissionSource ?? structuredTransport?.submissionSource
   const submissionKey = submissionSource?.key ?? draftScopeKey
-  const { submissionHistory, readPriorSubmission } = useNativeChatSubmissionHistory(submissionKey)
+  const { submissionHistory, readPriorSubmission, readSubmissionDelivery } =
+    useNativeChatSubmissionHistory(submissionKey)
   return useCallback<NativeChatStructuredComposerSend>(
     async (text, attachments = imageAttachments, intent): Promise<boolean> => {
       // Picked commands must also wait for pending attachments to acquire paths.
@@ -218,8 +218,11 @@ export function useNativeChatStructuredComposerSend({
         !hostCommand && priorMessages && !priorMessages.some(isConfirmedNativeChatUserSubmission)
           ? () => readPriorSubmission(submissionSource)
           : undefined
-      const delivery = Promise.withResolvers<boolean>()
-      let messageId: string | undefined
+      const delivery = createNativeChatStructuredSubmissionTelemetry(
+        priorMessages ? { priorMessages, priorSubmission, submissionHistory } : undefined,
+        (id, signal) => readSubmissionDelivery(submissionSource, id, signal),
+        stagedInput ? () => stagedInput.release() : undefined
+      )
       return dispatchNativeChatStructuredComposerText(
         structuredTransport,
         text,
@@ -228,21 +231,7 @@ export function useNativeChatStructuredComposerSend({
         {
           ...intent,
           ...(prepareAttachments ? { prepareAttachments } : {}),
-          ...(priorMessages
-            ? {
-                onCreated: (id: string) => {
-                  messageId = agentJournalSubmissionKey(id)
-                }
-              }
-            : {}),
-          ...(priorMessages || prepareAttachments
-            ? {
-                onSettled: (outcome: StructuredAgentSessionSendOutcome) => {
-                  stagedInput?.release()
-                  delivery.resolve(outcome === 'recorded')
-                }
-              }
-            : {})
+          ...delivery.intent
         },
         consume
       )
@@ -259,15 +248,7 @@ export function useNativeChatStructuredComposerSend({
             agent,
             structuredTransport,
             revealsTranscript && (!hostCommand || isCurrent()) ? revealAdmitted : undefined,
-            handled || !priorMessages
-              ? undefined
-              : {
-                  priorMessages,
-                  priorSubmission,
-                  submission: delivery.promise,
-                  messageId,
-                  submissionHistory
-                }
+            handled ? undefined : delivery.followUp
           )
           consume()
           return true
@@ -295,6 +276,7 @@ export function useNativeChatStructuredComposerSend({
         })
         .finally(() => {
           if (!transferred) {
+            delivery.cancel()
             stagedInput?.release()
           }
           finishNativeChatComposerSubmission(draftScopeKey, submission)
@@ -312,7 +294,8 @@ export function useNativeChatStructuredComposerSend({
       recallSource,
       submissionSource,
       submissionHistory,
-      readPriorSubmission
+      readPriorSubmission,
+      readSubmissionDelivery
     ]
   )
 }

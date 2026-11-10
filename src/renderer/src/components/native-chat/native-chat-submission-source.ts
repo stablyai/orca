@@ -8,10 +8,13 @@ import type { AgentType } from '../../../../shared/agent-status/contracts/agent-
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { UseNativeChatLiveSessionArgs } from './session/terminal/read/native-chat-live-session-contract'
 import type { StructuredAgentSessionState } from '../../../../shared/agent-session/structured-agent-session-reducer'
+import { getStructuredAgentSessionReadOwner } from './session/structured/read/structured-agent-session-read-owner'
+import { readNativeChatStructuredSubmissionDelivery } from './telemetry/native-chat-structured-submission-delivery'
 
 export type NativeChatSubmissionSource = {
   key: string
   readPriorSubmission: (signal?: AbortSignal) => Promise<boolean>
+  readDelivery?: (clientMessageId: string, signal: AbortSignal) => Promise<boolean>
 }
 
 export function structuredChatSubmissionSource(
@@ -21,6 +24,12 @@ export function structuredChatSubmissionSource(
 ): NativeChatSubmissionSource {
   return {
     key: JSON.stringify([args.target, args.sessionId, state.epoch]),
+    readDelivery: (clientMessageId, signal) =>
+      readNativeChatStructuredSubmissionDelivery(
+        getStructuredAgentSessionReadOwner(args.sessionId, args.target),
+        clientMessageId,
+        signal
+      ),
     readPriorSubmission: (signal) =>
       readStructuredChatPriorSubmission({
         ...args,
@@ -86,6 +95,18 @@ function createSubmissionHistory(key: string) {
         priorSubmission = source.readPriorSubmission(controller.signal).catch(() => false)
       }
       return priorSubmission
+    },
+    readDelivery: (
+      source: NativeChatSubmissionSource | undefined,
+      clientMessageId: string,
+      signal: AbortSignal
+    ) => {
+      if (!source?.readDelivery || controller.signal.aborted) {
+        return Promise.resolve(false)
+      }
+      return source
+        .readDelivery(clientMessageId, AbortSignal.any([signal, controller.signal]))
+        .catch(() => false)
     }
   }
 }
@@ -93,6 +114,11 @@ function createSubmissionHistory(key: string) {
 export function useNativeChatSubmissionHistory(key: string): {
   submissionHistory: Map<string, Promise<boolean>>
   readPriorSubmission: (source: NativeChatSubmissionSource | undefined) => Promise<boolean>
+  readSubmissionDelivery: (
+    source: NativeChatSubmissionSource | undefined,
+    clientMessageId: string,
+    signal: AbortSignal
+  ) => Promise<boolean>
 } {
   const state = useMemo(() => createSubmissionHistory(key), [key])
   useEffect(() => state.start(), [state])
@@ -100,7 +126,15 @@ export function useNativeChatSubmissionHistory(key: string): {
     (source: NativeChatSubmissionSource | undefined) => state.read(source),
     [state]
   )
-  return { submissionHistory: state.submissionHistory, readPriorSubmission }
+  const readSubmissionDelivery = useCallback(
+    (
+      source: NativeChatSubmissionSource | undefined,
+      clientMessageId: string,
+      signal: AbortSignal
+    ) => state.readDelivery(source, clientMessageId, signal),
+    [state]
+  )
+  return { submissionHistory: state.submissionHistory, readPriorSubmission, readSubmissionDelivery }
 }
 
 function submissionHistorySignal(signal?: AbortSignal): AbortSignal {

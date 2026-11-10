@@ -21,6 +21,10 @@ import type { NativeChatStructuredComposerTransport } from './native-chat-struct
 import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
 import { track } from '@/lib/telemetry'
 import type { NativeChatRecallSource } from '../../drafts/native-chat-sent-prompt-history'
+import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../../../../shared/agent-session/structured-agent-session-reducer'
+import type { AgentJournalSubmission } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSessionReadSnapshot } from '../../session/structured/read/structured-agent-session-read-owner-contract'
+import { readNativeChatStructuredSubmissionDelivery } from '../../telemetry/native-chat-structured-submission-delivery'
 
 vi.mock('@/lib/telemetry', () => ({ track: vi.fn(), tuiAgentToAgentKind: () => 'codex' }))
 
@@ -151,35 +155,140 @@ describe('complete handback acceptance', () => {
     }
   }
 
-  it('counts a structured follow-up only after delivery is recorded, excluding failures and commands', async () => {
-    const fixture = acceptanceFixture({
-      messages: [{ id: 'prior-user', role: 'user', blocks: [], timestamp: 1, source: 'transcript' }]
-    })
+  it('counts only accepted deliveries as follow-ups and predecessor evidence', async () => {
+    const fixture = acceptanceFixture({ messages: [] })
+    let snapshot: StructuredAgentSessionReadSnapshot = {
+      state: { ...EMPTY_STRUCTURED_AGENT_SESSION, epoch: 'conversation' },
+      loadingOlder: false,
+      olderHistoryGeneration: 0,
+      initialHistoryAutoLoad: true,
+      current: true
+    }
+    const listeners = new Set<() => void>()
+    const owner = {
+      getSnapshot: () => snapshot,
+      subscribe: (listener: () => void) => {
+        listeners.add(listener)
+        return () => {
+          listeners.delete(listener)
+        }
+      }
+    }
+    fixture.transport.submissionSource = {
+      key: 'conversation',
+      readPriorSubmission: async () => false,
+      readDelivery: (id, signal) => readNativeChatStructuredSubmissionDelivery(owner, id, signal)
+    }
     let settle: NonNullable<
       Parameters<NativeChatStructuredComposerTransport['send']>[2]
     >['onSettled']
-    fixture.transport.send = (_text, _attachments, request) => {
+    fixture.transport.send = (text, _attachments, request) => {
+      request?.onCreated?.(text)
       settle = request?.onSettled
       return true
     }
+    const publish = (
+      submissions: AgentJournalSubmission[],
+      queuedMessages: NonNullable<
+        StructuredAgentSessionReadSnapshot['state']['queuedMessages']
+      > = []
+    ) => {
+      snapshot = { ...snapshot, state: { ...snapshot.state, submissions, queuedMessages } }
+      listeners.forEach((listener) => listener())
+    }
+    const submission = (
+      id: string,
+      dispatchState: AgentJournalSubmission['dispatchState'],
+      extra: Partial<AgentJournalSubmission> = {}
+    ): AgentJournalSubmission => ({
+      clientMessageId: id,
+      fence: 1,
+      payloadFingerprint: id,
+      dispatchState,
+      providerItemId: null,
+      reason: null,
+      submittedAt: 1,
+      resolvedAt: null,
+      handoverRecorded: true,
+      ...extra
+    })
     const hook = fixture.mount()
     vi.mocked(track).mockClear()
     const followUps = () =>
       vi.mocked(track).mock.calls.filter(([name]) => name === 'native_chat_follow_up_sent')
+    await act(async () => hook.result.current.send('deleted', []))
     await act(async () => {
-      expect(await hook.result.current.send('/src/app.ts needs a fix', [])).toBe(true)
+      publish(
+        [],
+        [
+          {
+            messageId: 'deleted',
+            position: 1,
+            body: { kind: 'message', role: 'user', blocks: [] },
+            state: 'waiting'
+          }
+        ]
+      )
+      settle?.('recorded')
     })
     expect(followUps()).toEqual([])
-    await act(async () => settle?.('returned'))
+    await act(async () => publish([]))
+    await act(async () => hook.result.current.send('rejected', []))
+    await act(async () => {
+      publish([submission('rejected', 'pending')])
+      settle?.('recorded')
+    })
     expect(followUps()).toEqual([])
-    await act(async () => hook.result.current.send('try again', []))
-    await act(async () => settle?.('unconfirmed'))
+    await act(async () => publish([submission('rejected', 'rejected')]))
+    await act(async () => hook.result.current.send('withdrawn', []))
+    await act(async () => {
+      publish([submission('withdrawn', 'pending', { handedOverAt: 2 })])
+      settle?.('recorded')
+    })
     expect(followUps()).toEqual([])
-    await act(async () => hook.result.current.send('deliver this follow-up', []))
-    await act(async () => settle?.('recorded'))
+    await act(async () =>
+      publish([submission('withdrawn', 'rejected', { reason: 'provider_cancelled_before_start' })])
+    )
+    await act(async () => hook.result.current.send('first-delivered', []))
+    await act(async () => publish([submission('first-delivered', 'accepted')]))
+    expect(followUps()).toEqual([])
+    await act(async () => hook.result.current.send('queued-follow-up', []))
+    await act(async () => {
+      publish(
+        [],
+        [
+          {
+            messageId: 'queued-follow-up',
+            position: 1,
+            body: { kind: 'message', role: 'user', blocks: [] },
+            state: 'waiting'
+          }
+        ]
+      )
+      settle?.('recorded')
+    })
+    expect(followUps()).toEqual([])
+    await act(async () =>
+      publish([
+        submission('queue-handoff', 'pending', {
+          queuedMessageId: 'queued-follow-up',
+          handedOverAt: 3
+        })
+      ])
+    )
+    expect(followUps()).toEqual([])
+    await act(async () =>
+      publish([submission('queue-handoff', 'accepted', { queuedMessageId: 'queued-follow-up' })])
+    )
     expect(followUps()).toEqual([
       ['native_chat_follow_up_sent', { agent_kind: 'codex', runtime: 'local', client: 'desktop' }]
     ])
+    await act(async () => hook.result.current.send('rejected-follow-up', []))
+    await act(async () => {
+      publish([submission('rejected-follow-up', 'pending')])
+      settle?.('recorded')
+    })
+    await act(async () => publish([submission('rejected-follow-up', 'rejected')]))
     fixture.goal.resolve(true)
     await act(async () => {
       expect(await hook.result.current.send('/goal fix the app', [])).toBe(true)
