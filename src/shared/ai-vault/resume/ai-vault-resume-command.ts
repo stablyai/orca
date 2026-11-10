@@ -31,9 +31,10 @@ export function buildAiVaultResumeCommand(args: {
   const { agent, sessionId, cwd, platform, commandOverride, codexHome, resumeFilePath, shell } =
     args
   const baseCommand = commandOverride?.trim() || defaultAiVaultResumeCommandBase(agent)
-  // OMP/Prime --resume accepts absolute transcript paths across custom roots/WSL; default-store ID lookup would miss them. Fall back to ID without a path.
+  // OMP/Prime/Pi accept absolute transcript paths across custom roots/WSL; default-store ID lookup
+  // would miss them. Fall back to the ID without a path.
   const resumeTarget =
-    (agent === 'omp' || agent === 'prime-agent') && resumeFilePath?.trim()
+    (agent === 'omp' || agent === 'prime-agent' || agent === 'pi') && resumeFilePath?.trim()
       ? resumeFilePath.trim()
       : sessionId
   const sessionArg =

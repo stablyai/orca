@@ -93,3 +93,26 @@ describe('OMP profile session resume', () => {
     ])
   })
 })
+
+describe('buildAiVaultResumeCommand transcript targets', () => {
+  const base = { sessionId: 'sid', cwd: '/repo', platform: 'darwin' as const }
+
+  // A session indexed from an external root is not in Pi's default store, so an ID lookup misses it.
+  it('resumes Pi from the transcript path when one is known', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        ...base,
+        agent: 'pi',
+        resumeFilePath: '/mnt/transcripts/--repo--/2026-01-01T00-00-00-000Z_sid.jsonl'
+      })
+    ).toBe(
+      "cd '/repo' && pi --session '/mnt/transcripts/--repo--/2026-01-01T00-00-00-000Z_sid.jsonl'"
+    )
+  })
+
+  it('falls back to the Pi session id when no transcript path is known', () => {
+    expect(buildAiVaultResumeCommand({ ...base, agent: 'pi' })).toBe(
+      "cd '/repo' && pi --session 'sid'"
+    )
+  })
+})
