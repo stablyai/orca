@@ -145,7 +145,9 @@ describe('orca cloud via main()', () => {
     )
     await main(['cloud', 'workspace', 'destroy', 'sbx_d1', '--json'], home)
     expect(process.exitCode).toBeUndefined()
-    expect(fetchMock.mock.calls.map(([url, init]) => `${init?.method} ${url}`)).toEqual([
+    expect(
+      fetchMock.mock.calls.map(([url, init]) => `${String(init?.method)} ${String(url)}`)
+    ).toEqual([
       'DELETE https://cloud.test/v1/workspaces/sbx_d1',
       'DELETE https://cloud.test/v1/workspaces/sbx_d1'
     ])
