@@ -55,6 +55,7 @@ function sheet(
           onCancel={noop}
           onRetry={noop}
           onDismiss={noop}
+          onReturnToComposer={noop}
           onEditRecipe={noop}
           cloudAgentStep={
             <VmBuildCloudAgentStepView model={model} actions={actions} initialMode={initialMode} />

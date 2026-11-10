@@ -28,6 +28,8 @@ import {
 import { deriveVmBuildSteps, isOrcaCloudBuild, type VmBuildStep } from './vm-build-steps'
 import { useMinimumRunningSteps } from './use-minimum-running-steps'
 import { useRetryAfterCloudSignIn } from './use-retry-after-cloud-sign-in'
+import { typedComposerPrompt } from './vm-build-composer-return'
+import { requestOrcaCloudAfterCheckout } from '@/lib/orca-cloud-after-checkout'
 import {
   connectOrcaCloudGitHub,
   orcaCloudRepoName,
@@ -84,6 +86,7 @@ export function VmBuildSheet({
   onCancel,
   onRetry,
   onDismiss,
+  onReturnToComposer,
   onEditRecipe,
   agentSignInRow,
   cloudAgentStep,
@@ -98,6 +101,8 @@ export function VmBuildSheet({
   onRetry: () => void
   /** Leaves the build; when a VM is still up the caller confirms before it is deleted. */
   onDismiss: () => void
+  /** Leaves a refused build for the composer with its prompt; `local` runs it on this computer. */
+  onReturnToComposer: (options: { local: boolean }) => void
   onEditRecipe: () => void
   /** Fixtures only: a fixed sign-in row in place of the live one. */
   agentSignInRow?: React.ReactNode
@@ -269,8 +274,17 @@ export function VmBuildSheet({
                   : onRetry,
               onEditRecipe,
               onOpenAnyway: () => resolveVmEnvironmentCheckDecision(creationId, 'open-anyway'),
-              onDismiss,
-              onSeePlans: () => openPlansPage('sandbox'),
+              // Nothing was created, so leaving a billing refusal hands the typed prompt back.
+              onDismiss:
+                isBillingFailure(failure) && typedComposerPrompt(entry).trim()
+                  ? () => onReturnToComposer({ local: false })
+                  : onDismiss,
+              onSeePlans: () => {
+                // Once paid, the plans dialog closes and retries this create.
+                requestOrcaCloudAfterCheckout({ kind: 'retry', creationId })
+                openPlansPage('sandbox')
+              },
+              onCreateLocally: () => onReturnToComposer({ local: true }),
               onOpenBilling: () => {
                 const store = useAppStore.getState()
                 store.openSettingsTarget({ pane: 'orca-account', repoId: null })

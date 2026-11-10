@@ -4217,7 +4217,8 @@
             "connectGitHubFailed": "Couldn’t open GitHub. Try again in a moment.",
             "noGithubRemoteBody2": "Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub, then try again. Nothing was created, and you weren’t charged.",
             "howToPushToGitHub": "How to push to GitHub",
-            "spendCapReachedBodyMember2": "Your team has reached this month’s spend cap. Ask an owner or admin to raise the spend cap. Nothing was created, and you weren’t charged."
+            "spendCapReachedBodyMember2": "Your team has reached this month’s spend cap. Ask an owner or admin to raise the spend cap. Nothing was created, and you weren’t charged.",
+            "createOnThisComputer": "Create on this computer instead"
           },
           "VmBuildLog": {
             "jumpToError": "Jump to first error",
@@ -16616,7 +16617,9 @@
             "orcaCloudAskPayment": "Ask an owner or admin to update the payment method.",
             "orcaCloudIdleSleep_one": "Sleeps after {{count}} minute idle",
             "orcaCloudIdleSleep_other": "Sleeps after {{count}} minutes idle",
-            "orcaCloudAskAddHoursOnly": "Ask an owner or admin to add hours."
+            "orcaCloudAskAddHoursOnly": "Ask an owner or admin to add hours.",
+            "orcaCloudAskChoosePlan": "Ask an owner or admin to choose one.",
+            "orcaCloudAskRaiseSpendCap": "Ask an owner or admin to raise the spend cap."
           },
           "projectCombobox": {
             "recentHeading": "Recent",

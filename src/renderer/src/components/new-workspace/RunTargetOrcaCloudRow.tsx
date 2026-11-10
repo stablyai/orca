@@ -148,6 +148,19 @@ function OrcaCloudDetail({ access }: { access: OrcaCloudRunTargetAccess }): Reac
   }
 }
 
+/** Members can't fix billing; say who can rather than offer a pick that does nothing. */
+function AskOwnerOrAdmin(): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <span className="ml-2 shrink-0 self-center text-xs text-muted-foreground">
+      {t(
+        'auto.components.new.workspace.RunTargetCombobox.orcaCloudAskOwnerOrAdmin',
+        'Ask an owner or admin'
+      )}
+    </span>
+  )
+}
+
 function OrcaCloudMeta({
   access,
   onAction
@@ -187,6 +200,9 @@ function OrcaCloudMeta({
         />
       )
     case 'no-plan':
+      if (!access.canManageBilling) {
+        return <AskOwnerOrAdmin />
+      }
       return (
         <RowAction
           label={
@@ -200,15 +216,7 @@ function OrcaCloudMeta({
     case 'out-of-hours':
     case 'payment-issue':
       if (!access.canManageBilling) {
-        // Members can't fix it; say who can rather than offer a pick that does nothing.
-        return (
-          <span className="ml-2 shrink-0 self-center text-xs text-muted-foreground">
-            {t(
-              'auto.components.new.workspace.RunTargetCombobox.orcaCloudAskOwnerOrAdmin',
-              'Ask an owner or admin'
-            )}
-          </span>
-        )
+        return <AskOwnerOrAdmin />
       }
       return (
         <RowAction
@@ -276,7 +284,9 @@ export function RunTargetOrcaCloudRow({
       armed={armed}
       current={current}
       disabled={
-        (access.state === 'out-of-hours' || access.state === 'payment-issue') &&
+        (access.state === 'no-plan' ||
+          access.state === 'out-of-hours' ||
+          access.state === 'payment-issue') &&
         !access.canManageBilling
       }
       optionId={optionId}

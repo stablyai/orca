@@ -15,6 +15,7 @@ const actions = (): VmBuildFailureActions => ({
   onDismiss: vi.fn(),
   onSeePlans: vi.fn(),
   onOpenBilling: vi.fn(),
+  onCreateLocally: vi.fn(),
   onSignIn: vi.fn(),
   onShowWorkspaces: vi.fn(),
   onContactSupport: vi.fn(),
@@ -25,10 +26,12 @@ const actions = (): VmBuildFailureActions => ({
 function Sheet({
   failure,
   connectingGitHub = false,
+  canManageBilling = true,
   handlers
 }: {
   failure: VmBuildFailure | null
   connectingGitHub?: boolean
+  canManageBilling?: boolean
   handlers: VmBuildFailureActions
 }) {
   return (
@@ -42,7 +45,7 @@ function Sheet({
         vmKept={false}
         firstErrorLine={null}
         canFixWithAgent={false}
-        canManageBilling
+        canManageBilling={canManageBilling}
         signingIn={false}
         connectingGitHub={connectingGitHub}
         repoName="acme/web"
@@ -79,4 +82,33 @@ it('keeps a pending Connect GitHub focusable and ignores repeat clicks', () => {
   fireEvent.click(button)
   expect(handlers.onConnectGitHub).not.toHaveBeenCalled()
   expect(document.activeElement).toBe(button)
+})
+
+it('offers an owner See plans then Try again on no plan', () => {
+  const handlers = actions()
+  render(<Sheet failure={{ kind: 'plan' }} handlers={handlers} />)
+  const buttons = screen.getAllByRole('button').map((button) => button.textContent?.trim())
+  expect(buttons.slice(0, 2)).toEqual(['See plans', 'Try again'])
+  fireEvent.click(screen.getByRole('button', { name: /Try again/ }))
+  expect(handlers.onRetry).toHaveBeenCalledOnce()
+})
+
+it.each(['plan', 'hoursUsed', 'spendCap', 'payment'] as const)(
+  'gives a member running into %s a way to create on this computer, not a billing fix',
+  (kind) => {
+    const handlers = actions()
+    render(<Sheet failure={{ kind }} canManageBilling={false} handlers={handlers} />)
+    expect(
+      screen.queryByRole('button', { name: /See plans|Raise spend cap|Turn on overage/ })
+    ).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Create on this computer instead/ }))
+    expect(handlers.onCreateLocally).toHaveBeenCalledOnce()
+  }
+)
+
+it("keeps Create on this computer instead beside an owner's billing fix", () => {
+  const handlers = actions()
+  render(<Sheet failure={{ kind: 'spendCap' }} handlers={handlers} />)
+  const buttons = screen.getAllByRole('button').map((button) => button.textContent?.trim())
+  expect(buttons.slice(0, 2)).toEqual(['Raise spend cap', 'Create on this computer instead'])
 })
