@@ -226,8 +226,7 @@ export function WorktreeCardSshHostControl({
           className={cn(
             PILL_BASE,
             failed ? PILL_FAILED : PILL_QUIET,
-            // The host slot is a fixed 12px column so titles line up across host kinds.
-            iconOnly && 'w-3 justify-center !px-0 has-[>svg]:!px-0'
+            iconOnly && 'w-4 justify-center !px-0 has-[>svg]:!px-0'
           )}
           aria-label={accessibleName}
           data-ssh-target-label={targetLabel}

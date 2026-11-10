@@ -61,7 +61,8 @@ export function WorktreeCardHostMark({
   onPointerDown?: React.PointerEventHandler<HTMLButtonElement>
 }): React.JSX.Element | null {
   if (sshControl) {
-    return <>{sshControl}</>
+    // A fixed 12px column (the 16px control overhangs it evenly) so titles line up across hosts.
+    return <span className="inline-flex w-3 shrink-0 justify-center">{sshControl}</span>
   }
   return (
     <CloudWorkspaceMarkSlot
