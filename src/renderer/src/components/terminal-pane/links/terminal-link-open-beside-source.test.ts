@@ -33,7 +33,7 @@ vi.mock('@/store/index', () => ({
 
 vi.mock('sonner', () => ({ toast: { error: toastErrorMock } }))
 
-vi.mock('@/lib/language-detect', () => ({
+vi.mock('../../../../../shared/editor-language/editor-language-detect', () => ({
   detectLanguage: () => 'plaintext'
 }))
 

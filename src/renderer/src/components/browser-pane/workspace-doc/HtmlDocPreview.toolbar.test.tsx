@@ -36,7 +36,7 @@ const grants = vi.hoisted(() => {
   return { mintedLocation, requestLocation: mintedLocation, shareControlCalls }
 })
 
-vi.mock('@/lib/doc-preview-grants', () => ({
+vi.mock('@/lib/browser/documents/doc-preview-grants', () => ({
   buildDocPreviewGrantRequest: () => grants.requestLocation,
   // The real cache keeps the first mint's handle for the tab, whatever a later request says.
   ensureDocPreviewGrant: () =>

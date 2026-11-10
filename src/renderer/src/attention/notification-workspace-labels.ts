@@ -15,8 +15,8 @@ import {
   findIndexedRepoOwnerForHost,
   resolveIndexedRepoOwner
 } from '../lib/workspace/ownership/repo-owner-index'
-import { getCatalogOwnerHostId } from '../lib/workspace/ownership/workspace-catalog-owner-index'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import '../lib/workspace/ownership/workspace-catalog-owner-index'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
@@ -83,7 +83,7 @@ export function getNotificationWorkspaceLabels(
       findIndexedProjectGroupOwner(
         state.projectGroups,
         folder.projectGroupId,
-        getCatalogOwnerHostId(folder)
+        getRepoExecutionHostId(folder)
       )
     return { repoLabel: group?.name, worktreeLabel: folder?.name || fallback }
   }

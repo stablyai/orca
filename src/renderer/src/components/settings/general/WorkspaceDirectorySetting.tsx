@@ -8,6 +8,8 @@ import {
   clearHostSettingOverride
 } from '../../../../../shared/host-setting-overrides'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { normalizeWorkspaceDirInput } from '../../../../../shared/worktree/workspace-dir-input'
+import { isWindowsUserAgent } from '@/lib/user-agent-platform'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
@@ -90,7 +92,9 @@ export function WorkspaceDirectorySetting({
   }
 
   const commitDraftValue = (): void => {
-    const next = draftValueRef.current
+    // Show the value main will save, so a padded re-save of the saved path writes nothing.
+    const next = normalizeWorkspaceDirInput(draftValueRef.current, isWindowsUserAgent())
+    setDraft(next)
     if (next === value) {
       return
     }

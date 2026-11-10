@@ -3,7 +3,7 @@ import { Cloud, Copy, FolderGit2, GitBranch, Laptop, LocateFixed, Server } from 
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
-import { AgentTypeIcon } from '@/lib/agent-type-icon'
+import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { getWorktreeGitIdentityDisplay } from '../../../../shared/worktree/git-identity-display'
 import { jumpToWorktreeFromSidebar } from '@/lib/workspace/activation/worktree-jump-navigation'

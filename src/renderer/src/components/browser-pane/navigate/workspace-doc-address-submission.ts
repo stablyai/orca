@@ -1,5 +1,6 @@
 import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
-import { convertBrowserPageToWorkspaceDoc } from '@/lib/file-preview'
+import '@/lib/browser/documents/file-preview'
+import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
 import { resolveWorkspaceDocAddressTarget } from '@/lib/workspace-doc-address-input'
 import { useAppStore } from '@/store'
 

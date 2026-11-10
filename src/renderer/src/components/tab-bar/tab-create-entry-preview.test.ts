@@ -3,7 +3,7 @@ import { openTabBarEntry } from './tab-create-entry-action'
 
 const preview = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/open-html-file-preview', () => ({ openHtmlFilePreview: preview }))
-vi.mock('@/lib/editor-file-operation-owner', () => ({
+vi.mock('@/lib/editor/file-operations/editor-file-operation-owner', () => ({
   getEditorFileOperationContext: () => {
     throw new Error('A preview must not require file mutation authorization')
   }

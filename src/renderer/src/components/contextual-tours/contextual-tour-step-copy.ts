@@ -94,16 +94,6 @@ const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
       'Each worktree gets its own branch, so parallel work stays separate.'
     )
   }),
-  'browser-grab': () => ({
-    title: translate(
-      'auto.components.contextual.tours.contextual.tour.step.copy.browser.grab.title',
-      'Grab page context for agents'
-    ),
-    body: translate(
-      'auto.components.contextual.tours.contextual.tour.step.copy.browser.grab.body',
-      "Use the grab tool to copy a page element's context for agents."
-    )
-  }),
   'browser-annotate': () => ({
     title: translate(
       'auto.components.contextual.tours.contextual.tour.step.copy.browser.annotate.title',

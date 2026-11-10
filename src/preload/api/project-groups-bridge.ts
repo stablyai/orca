@@ -6,6 +6,7 @@ export const projectGroupsApi = {
   list: () => ipcRenderer.invoke('projectGroups:list'),
   create: (args) => ipcRenderer.invoke('projectGroups:create', args),
   update: (args) => ipcRenderer.invoke('projectGroups:update', args),
+  updateMany: (args) => ipcRenderer.invoke('projectGroups:updateMany', args),
   delete: (args) => ipcRenderer.invoke('projectGroups:delete', args),
   moveProject: (args) => ipcRenderer.invoke('projectGroups:moveProject', args),
   scanNested: (args) => ipcRenderer.invoke('projectGroups:scanNested', args),

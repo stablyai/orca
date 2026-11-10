@@ -1,6 +1,6 @@
 import type { EditorFileDropDestination } from './editor-file-drop-destination'
 import { toast } from 'sonner'
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../shared/editor-language/editor-language-detect'
 import {
   isPathInsideWorktree,
   toWorktreeRelativePath

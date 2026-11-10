@@ -68,6 +68,9 @@ import '../../../src/shared/execution-host'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 
 import { NewWorktreeModal } from './NewWorktreeModal'
+import { publishPageDeviceStore } from '../mobile-web-shell/bridge/page-device-store'
+import { resetDurableDraftFieldsForTests } from '../drafts/durable-draft-fields'
+import { publishInMemoryDeviceStore } from '../drafts/in-memory-device-store.test-support'
 
 import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
 
@@ -345,5 +348,75 @@ describe('NewWorktreeModal project targets', () => {
     })
 
     expect(sourceInputs(renderer).map((input) => input.props.value)).toEqual(['', ''])
+  })
+})
+
+describe('NewWorktreeModal note draft', () => {
+  // The shell's draft table outlives the page; nothing else does.
+  const table = new Map<string, string>()
+  let renderer: ReactTestRenderer | null = null
+
+  async function open(): Promise<ReactTestRenderer> {
+    const client = requestsOnly(
+      vi.fn((method: string) =>
+        method === 'repo.list' ? replied({ repos }) : new Promise<never>(() => {})
+      )
+    )
+    await act(async () => {
+      renderer = create(
+        createElement(NewWorktreeModal, {
+          visible: true,
+          client,
+          hostId: 'host-1',
+          onCreated: () => {},
+          onClose: () => {},
+          openExternalUrl: () => {}
+        })
+      )
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    return renderer!
+  }
+
+  const noteInput = (opened: ReactTestRenderer) =>
+    findAllByHostType(opened.root, 'TextInput').find(
+      (node) => node.props.placeholder === 'Write a note'
+    )!
+  const optionsExpanded = (opened: ReactTestRenderer) =>
+    opened.root.find((node) => node.props.title === 'Options' && 'expanded' in node.props).props
+      .expanded
+
+  // A kill: the page and its memory go, the store stays.
+  function kill(): void {
+    act(() => renderer?.unmount())
+    renderer = null
+    resetDurableDraftFieldsForTests()
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    setCachedRepos('host-1', repos)
+    resetDurableDraftFieldsForTests()
+    publishInMemoryDeviceStore(table)
+  })
+
+  afterEach(() => {
+    kill()
+    table.clear()
+    publishPageDeviceStore(null)
+    vi.useRealTimers()
+  })
+
+  it('brings the note back after a kill, with Options open so it is not sent unseen', async () => {
+    const typed = await open()
+    act(() => noteInput(typed).props.onChangeText('pairing with Ama on the flaky test'))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000)
+    })
+    kill()
+
+    const reopened = await open()
+    expect(noteInput(reopened).props.value).toBe('pairing with Ama on the flaky test')
+    expect(optionsExpanded(reopened)).toBe(true)
   })
 })

@@ -2,6 +2,7 @@ import { webContents } from 'electron'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+// oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import {
@@ -10,6 +11,11 @@ import {
   getBrowserExtensionSessionForProfile
 } from '../profile-sessions/browser-extension-session-loader'
 import { getBrowserExtensionMainWindow } from './browser-extension-window-model'
+import {
+  forgetBrowserPageGuestsGone,
+  noteBrowserPageGuestGone,
+  unloadedPageIds
+} from './browser-extension-unloaded-pages'
 
 /**
  * Orca mounts a browser page's <webview> only when the page is first shown, so a restored page
@@ -38,11 +44,6 @@ let source: SavedBrowserTabsSource | null = null
 let stopWatchingWrites: (() => void) | null = null
 let nextTabId = FIRST_DISCARDED_BROWSER_TAB_ID
 const assignedByPageId = new Map<string, { tabId: number; session: Electron.Session }>()
-/**
- * Pages whose guest went away. A closed page stays in the saved session until the renderer's next
- * write, so it is listed again only once a write still saves it (an evicted guest's page).
- */
-const unloadedPageIds = new Set<string>()
 
 /** The extension session a tab's guest would load in, as the renderer picks its partition. */
 function extensionSessionFor(tab: BrowserWorkspace): Electron.Session | null {
@@ -166,11 +167,4 @@ export function takeDiscardedBrowserTabId(
   return assigned
 }
 
-export function noteBrowserPageGuestGone(browserPageId: string): void {
-  unloadedPageIds.add(browserPageId)
-}
-
-/** A restored renderer remounts from the saved session, so no guest loss there is a close. */
-export function forgetBrowserPageGuestsGone(): void {
-  unloadedPageIds.clear()
-}
+export { forgetBrowserPageGuestsGone, noteBrowserPageGuestGone }

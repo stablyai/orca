@@ -66,7 +66,9 @@ export const ReplyParams = z.object({
   id: requiredString('Missing --id'),
   body: requiredString('Missing --body'),
   from: OptionalString,
-  run: OptionalString
+  run: OptionalString,
+  // Optional check: mail from a paired server always answers there.
+  on: OptionalString
 })
 
 export const InboxParams = z.object({

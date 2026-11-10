@@ -89,7 +89,11 @@ function optionDescriptor(args: {
   const showDefault = !tracked && (cliStatesDefault || (mode === 'draft' && !modelIsCliDefault))
   const valueSource = tracked?.source ?? (showDefault ? 'default' : 'unknown')
   if (option.kind.type === 'select') {
-    const choices = choiceWithCurrent(option.kind.choices, tracked)
+    // Speed offers only the tiers the model lists, as Codex does; a config-only tier still runs.
+    const choices =
+      option.id === 'serviceTier'
+        ? [...option.kind.choices]
+        : choiceWithCurrent(option.kind.choices, tracked)
     if (choices.length <= 1) {
       return null
     }

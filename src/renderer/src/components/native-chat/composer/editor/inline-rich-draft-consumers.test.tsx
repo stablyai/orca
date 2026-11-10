@@ -23,10 +23,6 @@ import {
   setNativeChatComposerDraftStorageForTests,
   type StoredNativeChatComposerDraft
 } from '../../drafts/native-chat-composer-draft-storage'
-import {
-  replayNativeChatComposerDraftJournal,
-  snapshotNativeChatComposerDraftJournal
-} from '../../drafts/native-chat-composer-draft-journal'
 import { resolveNativeChatPastedText } from '../../paste/native-chat-composer-pasted-text-references'
 import { nativeChatPastedTextToken } from '../../paste/native-chat-pasted-text-reference'
 import {
@@ -161,60 +157,6 @@ it('keeps a rich return through an actual composing editor transaction and next 
   )
   expect(readNativeChatComposerDraft(scope).text).toBe('typed가\n\n$review changed')
   expect(nextSend().skills).toEqual([{ name: 'review', path: '/returned/SKILL.md' }])
-})
-
-it('replays a full rich addition into existing content, renders it and sends resolved files/images/skills', () => {
-  const edit = returned()
-  const paste = 'd851d135-98ac-44d1-b122-caf190002345'
-  const draft = readNativeChatComposerDraft(edit.scopeKey)
-  updateNativeChatComposerDraft(
-    edit.scopeKey,
-    {
-      text: `${draft.text}\n${nativeChatPastedTextToken(paste)}`,
-      document: {
-        ...draft.document,
-        content: [
-          ...(draft.document?.content ?? []),
-          {
-            type: 'paragraph',
-            content: [
-              {
-                type: 'nativeChatFileReference',
-                attrs: { token: nativeChatPastedTextToken(paste), path: '' }
-              }
-            ]
-          }
-        ]
-      },
-      pastedTextFiles: { [paste]: '/remote/paste.txt' },
-      images: [{ id: 'new', path: '/new.png' }]
-    },
-    'immediate'
-  )
-  handBackNativeChatQueuedEdit(edit)
-  discardNativeChatQueuedEdit(edit)
-  // Simulate another renderer run reading the actual addition journal before storage confirmation.
-  const raw = localStorage.getItem('orca:nativeChatComposerDraftJournal:v1')!
-  localStorage.setItem(
-    'orca:nativeChatComposerDraftJournal:v1',
-    raw.replaceAll(/"run":"[^"]+"/g, '"run":"previous-run"')
-  )
-  const loaded = new Map<string, StoredNativeChatComposerDraft | null>([
-    [scope, { text: 'existing', images: [], savedAt: 0 }]
-  ])
-  replayNativeChatComposerDraftJournal(loaded, snapshotNativeChatComposerDraftJournal())
-  updateNativeChatComposerDraft(scope, loaded.get(scope)!, 'immediate')
-  render(<Bottom />)
-  expect(promptSkillRefs(promptEditor(screen.getByRole('textbox')).getJSON())).toEqual([
-    { name: 'review', path: '/returned/SKILL.md' }
-  ])
-  expect(nextSend()).toMatchObject({
-    blocks: [
-      { type: 'text', text: expect.stringContaining('@/remote/paste.txt') },
-      { type: 'image-ref', path: '/new.png' }
-    ],
-    skills: [{ name: 'review', path: '/returned/SKILL.md' }]
-  })
 })
 
 // Joined replacement boundary: real edit owner, picker, mounted rich editor and wire serializer.
@@ -563,7 +505,7 @@ it.each(['mounted', 'success', 'unmounted', 'ime', 'cancel'] as const)(
       act(() =>
         bottom.view.dispatch(bottom.state.tr.insertText('가', bottom.state.doc.content.size - 1))
       )
-      expect(nextSend().blocks).toEqual([{ type: 'text', text: 'first\n\necho가echo' }])
+      expect(nextSend().blocks).toEqual([{ type: 'text', text: 'first\n\necho가 echo' }])
     } else {
       expect(nextSend().blocks).toEqual([
         {

@@ -1,4 +1,7 @@
-import { agentLaunchRecoveryMessage, notifyAgentLaunchFailure } from '@/lib/agent-launch-failure'
+import {
+  agentLaunchRecoveryMessage,
+  notifyAgentLaunchFailure
+} from '@/lib/agent-session/launch/failure/agent-launch-failure'
 import type { DirectWorkItemLaunchResult } from '@/lib/workspace/creation/work-item/direct-work-item-setup'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'

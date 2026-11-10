@@ -1,4 +1,4 @@
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import {
   isPathInsideWorktree,

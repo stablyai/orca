@@ -6,7 +6,7 @@ import { useMemo } from 'react'
 import {
   isMarkdownReviewNotesEnabled,
   withoutMarkdownReviewNotes
-} from '@/lib/markdown-review-notes-setting'
+} from '@/lib/editor/markdown/review-notes/markdown-review-notes-setting'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 
 const NO_COMMENTS: DiffComment[] = []

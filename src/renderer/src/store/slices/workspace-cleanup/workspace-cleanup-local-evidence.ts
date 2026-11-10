@@ -1,5 +1,5 @@
 import type { AppState } from '../../types'
-import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
+import { detectAgentStatusFromTitle } from '../../../../../shared/agent-status/title/agent-title-status'
 import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
 import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import { getWorktreeVisitTimestamp } from '@/lib/workspace/activation/worktree-visit-recency'
@@ -163,7 +163,7 @@ function hasIdleAgentTitleForPty(
 }
 
 function isIdleAgentTitle(title: string): boolean {
-  return classifyTitleActivity(title) === 'idle'
+  return detectAgentStatusFromTitle(title) === 'idle'
 }
 
 function normalizeProcessName(value: string | null): string | null {

@@ -230,7 +230,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     transport
   })
 
-  const { signIn, notices } = useNativeChatStructuredPaneNotices({
+  const { setup, notices } = useNativeChatStructuredPaneNotices({
     props,
     ownerWorktreeId,
     provisionalLaunch,
@@ -306,7 +306,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                   directory={fileLinkContext}
                   controller={controller}
                   continuation={continuation.view}
-                  signIn={signIn}
+                  setup={setup}
                   forks={forks}
                   messageListRef={submits.messageListRef}
                   session={session}

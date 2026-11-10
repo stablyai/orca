@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { publishPageDeviceStore } from '../mobile-web-shell/bridge/page-device-store'
+import { publishInMemoryDeviceStore } from './in-memory-device-store.test-support'
 import { dropDocumentEditDraft, resetDocumentEditDraftsForTests } from './document-edit-draft-rows'
 import { useDocumentEditDraft } from './use-document-edit-draft'
 
@@ -42,23 +43,7 @@ function kill(): void {
 
 beforeEach(() => {
   vi.useFakeTimers()
-  publishPageDeviceStore({
-    available: () => true,
-    read: async (_table, keys) => ({
-      status: 'ok',
-      values: keys.map((key) => table.get(key) ?? null)
-    }),
-    write: async (_table, ops) => {
-      for (const op of ops) {
-        if (op.value === null) {
-          table.delete(op.key)
-        } else {
-          table.set(op.key, op.value)
-        }
-      }
-      return { written: true }
-    }
-  })
+  publishInMemoryDeviceStore(table)
 })
 
 afterEach(() => {

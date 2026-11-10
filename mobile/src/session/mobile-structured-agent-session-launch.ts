@@ -7,7 +7,8 @@ import type {
 } from '../../../src/shared/agent-session/agent-session-wire'
 import {
   isDefinitiveAgentSessionCreateRefusal,
-  isAgentSessionForkSourceAdmissionRefusal
+  isAgentSessionForkSourceAdmissionRefusal,
+  isAgentSessionCreateAdmissionRefusal
 } from '../../../src/shared/agent-session/failures/agent-session-definitive-refusal'
 import {
   createStructuredAgentSessionId,
@@ -187,7 +188,8 @@ export async function createMobileStructuredAgentSession(
       forkFrom &&
       !priorCreateOutcomeUnknown &&
       result.refusal.createAttemptRefusedBeforeCommit === true &&
-      isAgentSessionForkSourceAdmissionRefusal(result.refusal)
+      (isAgentSessionForkSourceAdmissionRefusal(result.refusal) ||
+        isAgentSessionCreateAdmissionRefusal(result.refusal))
     ) {
       return {
         kind: 'failed',

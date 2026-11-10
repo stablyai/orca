@@ -5,8 +5,10 @@ import { NativeChatUsageLimitActionsProvider } from './usage/NativeChatUsageLimi
 import type { ComponentProps, ReactNode, Ref } from 'react'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { NativeChatRowActionsProvider } from './messages/actions/NativeChatRowActionsProvider'
-import { NativeChatSignInContext } from './host-access/native-chat-sign-in'
-import type { useNativeChatSignIn } from './host-access/native-chat-sign-in'
+import {
+  NativeChatHostSetupContext,
+  type NativeChatHostSetup
+} from './host-access/native-chat-host-setup'
 import type { useNativeChatInterruptedContinuation } from './usage/NativeChatInterruptedContinue'
 import type { useStructuredAgentSession } from './session/structured/use-structured-agent-session'
 import type { NativeChatMessageListHandle } from './messages/actions/use-native-chat-reveal-latest'
@@ -16,7 +18,7 @@ export function NativeChatStructuredTranscript({
   directory,
   controller,
   continuation,
-  signIn,
+  setup,
   forks,
   messageListRef,
   ...props
@@ -40,7 +42,7 @@ export function NativeChatStructuredTranscript({
   controller: ReturnType<typeof useStructuredAgentSession>
   continuation: ReturnType<typeof useNativeChatInterruptedContinuation>['view']
   forks: ComponentProps<typeof NativeChatRowActionsProvider>['forks']
-  signIn: ReturnType<typeof useNativeChatSignIn>
+  setup: NativeChatHostSetup
   messageListRef: Ref<NativeChatMessageListHandle>
 }): React.JSX.Element {
   return (
@@ -52,7 +54,7 @@ export function NativeChatStructuredTranscript({
         messages={controller.messages}
         view={continuation}
       >
-        <NativeChatSignInContext.Provider value={signIn}>
+        <NativeChatHostSetupContext.Provider value={setup}>
           <NativeChatMessageList
             {...props}
             structuredAttachments
@@ -70,7 +72,7 @@ export function NativeChatStructuredTranscript({
             settledTurns={controller.settledTurns}
             turnActivity={controller.turnActivity}
           />
-        </NativeChatSignInContext.Provider>
+        </NativeChatHostSetupContext.Provider>
       </NativeChatUsageLimitActionsProvider>
     </NativeChatRowActionsProvider>
   )

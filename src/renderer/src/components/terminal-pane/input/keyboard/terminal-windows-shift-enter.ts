@@ -3,7 +3,7 @@ import {
   isTuiAgent,
   TUI_AGENT_CONFIG
 } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
-import { resolveCommittedTitleAgentType } from '../../../../lib/pane-agent-evidence'
+import { resolveExplicitTerminalTitleAgentType } from '../../../../../../shared/agent-status/title/terminal-title-agent-type'
 import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
 
 export type WindowsShiftEnterEncoding = 'alt-enter' | 'csi-u'
@@ -58,7 +58,7 @@ export function resolveWindowsShiftEnterEncodingForPane(
     return encoding
   }
   // Why: strict pane-local titles recover Pi/Droid through process-scan gaps without overriding process or shell proof.
-  const titleAgent = resolveCommittedTitleAgentType(terminalTitle)
+  const titleAgent = resolveExplicitTerminalTitleAgentType(terminalTitle)
   // Why: pending confirmation retains the foreground identity; a stale title cannot switch agents.
   if (
     foreground?.routingConfirmationPending === true &&

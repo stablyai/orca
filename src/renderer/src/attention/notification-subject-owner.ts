@@ -1,4 +1,8 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import type { NotificationWorkspaceOwner } from '../../../shared/notification-source'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
@@ -18,7 +22,7 @@ import {
   findIndexedProjectGroupOwner
 } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { findIndexedRepoOwner } from '@/lib/workspace/ownership/repo-owner-index'
-import { getCatalogOwnerHostId } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
+import '@/lib/workspace/ownership/workspace-catalog-owner-index'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 
 type SubjectOwnerState = WorktreeRuntimeOwnerState &
@@ -50,7 +54,7 @@ export function resolveNotificationTabOwner(
     }
     const group = findIndexedProjectGroupOwner(state.projectGroups, folder.projectGroupId, hostId)
     return routeForOwner({
-      hostId: getCatalogOwnerHostId({
+      hostId: getRepoExecutionHostId({
         executionHostId: folder.executionHostId ?? group?.executionHostId,
         connectionId: folder.connectionId ?? group?.connectionId
       })
@@ -66,7 +70,7 @@ export function resolveNotificationTabOwner(
   const repo = !owner.hostId ? findIndexedRepoOwner(state.repos, owner.repoId) : null
   const resolution = resolveExactWorktreeRoute(state, {
     ...owner,
-    hostId: owner.hostId ?? (repo ? getCatalogOwnerHostId(repo) : hostId)
+    hostId: owner.hostId ?? (repo ? getRepoExecutionHostId(repo) : hostId)
   })
   return resolution.kind === 'resolved' ? resolution.route : null
 }
