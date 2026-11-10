@@ -56,7 +56,7 @@ export function prepareRetiredHistory(
       FROM ${table} WHERE session_id=? AND epoch=?`)
       .get(target, epoch)!
     if (Number(result.n) !== limit) {
-      throw new Error(`retired fixture copied ${result.n} rows, expected ${limit}`)
+      throw new Error(`retired fixture copied ${String(result.n)} rows, expected ${limit}`)
     }
     db.exec('COMMIT')
     return { rows: Number(result.n), payloadBytes: Number(result.bytes) }
