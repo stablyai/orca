@@ -85,6 +85,7 @@ function heldOut(row: SessionSearchFileRow, mtimeMs: number): boolean {
   )
 }
 
+/** A committed row still covers this file when its stat has not moved since the read. */
 function statMatches(row: SessionSearchFileRow, file: SessionFileCandidate['file']): boolean {
   return (
     row.mtimeMs === file.mtimeMs &&

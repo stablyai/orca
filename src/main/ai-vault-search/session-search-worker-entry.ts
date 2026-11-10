@@ -38,6 +38,7 @@ const writes = new Map<
   { write: SessionSearchFileWrite; identity: TranscriptSessionIdentity | null }
 >()
 
+/** Read file rows plus their session columns; the worker answers cursor questions from here. */
 function rows(path?: string): SessionSearchSnapshotRow[] {
   if (!store) {
     return []

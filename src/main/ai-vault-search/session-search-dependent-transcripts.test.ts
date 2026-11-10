@@ -160,6 +160,7 @@ async function runIndexPass(candidates: SessionFileCandidate[]): Promise<void> {
   expect(errors).toEqual([])
 }
 
+/** Ante discovery hands the parser the transcript as a sidecar of `meta.json`. */
 async function anteCandidate(
   metadataPath: string,
   transcriptPath: string
@@ -174,6 +175,7 @@ async function anteCandidate(
   return candidate
 }
 
+/** One `events.jsonl` record in Ante's externally tagged `{ Variant: payload }` shape. */
 function anteEventLine(role: 'user' | 'assistant', text: string, index: number): string {
   return `${JSON.stringify({
     timestamp: recordTimestamp(index),

@@ -201,6 +201,7 @@ export class SessionSearchStore {
     this.onError(error)
   }
 
+  /** Snapshot every indexed file with its stat, for diffing against a fresh discovery pass. */
   files(): SessionSearchFileRow[] {
     return (
       this.db

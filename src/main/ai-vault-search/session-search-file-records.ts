@@ -79,6 +79,7 @@ export class SessionSearchFileRecords {
       .run(...values, rowId)
   }
 
+  /** Record the stat this committed read observed, including the sidecar that supplied messages. */
   upsertFile(
     candidate: SessionFileCandidate,
     byteOffset: number,
