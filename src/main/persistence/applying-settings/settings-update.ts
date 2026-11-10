@@ -1,3 +1,4 @@
+import { PinnedGroupsSchema, PinnedGroupMembershipSchema } from '../../../shared/pinned-groups'
 import { publishSettingsUpdate } from './settings-update-effects'
 import { legacyChatPermissionWrite } from './legacy-chat-permission-write'
 import { stampDefaultOnMigrationGuards } from './default-on-migration-guards'
@@ -60,6 +61,14 @@ export function updateSettings(
   options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
 ): GlobalSettings {
   const sanitizedUpdates = normalizeWorkspaceDirSetting(stripRetiredGlobalSettings(updates))
+  if ('pinnedGroups' in updates) {
+    sanitizedUpdates.pinnedGroups = PinnedGroupsSchema.parse(updates.pinnedGroups)
+  }
+  if ('pinnedGroupByWorktreeIdentity' in updates) {
+    sanitizedUpdates.pinnedGroupByWorktreeIdentity = PinnedGroupMembershipSchema.parse(
+      updates.pinnedGroupByWorktreeIdentity
+    )
+  }
   const linkBehavior = updates.terminalLinkClickBehavior
   if (linkBehavior === 'actions' || linkBehavior === 'open' || linkBehavior === 'none') {
     // Loaded defaults are ambiguous; synchronize the legacy switch only on an explicit write.

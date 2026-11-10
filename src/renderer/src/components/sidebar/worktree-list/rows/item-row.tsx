@@ -71,7 +71,7 @@ function getWorktreeItemRowGeometry(
     return { surfaceInset: LINEAGE_NESTED_ROW_SURFACE_INSET, cardContentIndent: 0 }
   }
 
-  const isGrouped = ctx.groupBy !== 'none'
+  const isGrouped = ctx.groupBy !== 'none' || itemRow.groupDepth > 0
   const paddingLeft = getWorktreeCardContentIndent({
     isGrouped,
     groupDepth: itemRow.groupDepth,

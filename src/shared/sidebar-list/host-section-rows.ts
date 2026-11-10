@@ -110,7 +110,7 @@ function getPendingRowKey(row: Extract<Row, { type: 'header' }>): string {
 
 /** A project group's header (it names no host itself): its nesting depth, else null. */
 function getProjectGroupHeaderDepth(row: Row): number | null {
-  return row.type === 'header' && row.projectGroup && !row.repo
+  return row.type === 'header' && !row.repo && (row.projectGroup || row.icon.kind === 'pinned')
     ? (row.projectGroupDepth ?? 0)
     : null
 }

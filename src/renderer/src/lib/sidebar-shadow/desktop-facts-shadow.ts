@@ -24,7 +24,8 @@ type WindowFactsState = Pick<
   | 'sshTargetLabels'
   | 'sshConnectionStates'
   | 'wslHostStatuses'
->
+> &
+  Partial<Pick<AppState, 'settings'>>
 
 /** The same facts from the window's own store, in main's shape, for the rows the local runtime owns. */
 export function readWindowDesktopSidebarFacts(state: WindowFactsState): DesktopSidebarFacts {
@@ -42,6 +43,8 @@ export function readWindowDesktopSidebarFacts(state: WindowFactsState): DesktopS
       worktreeId: state.activeWorktreeId ?? null
     },
     pinnedWorkspaceIds: [...new Set(pinned)].sort(),
+    pinnedGroups: state.settings?.pinnedGroups ?? [],
+    pinnedGroupByWorktreeIdentity: state.settings?.pinnedGroupByWorktreeIdentity ?? {},
     repoOrder: state.repos
       .map((repo) => ({ hostId: getRepoExecutionHostId(repo), repoId: repo.id }))
       .filter((entry) => parseExecutionHostId(entry.hostId)?.kind !== 'runtime'),

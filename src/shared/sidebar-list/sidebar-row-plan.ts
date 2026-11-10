@@ -1,3 +1,4 @@
+import type { PinnedGroupSettings } from '../pinned-groups'
 import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../project-group-types'
 import type { Repo } from '../repo-types'
@@ -59,7 +60,7 @@ import type { WorkspaceSortBy } from '../workspace-view/workspace-row-sort'
 type SidebarOccurrenceSection = WorktreeOccurrenceSection<Worktree> & { group: WorktreeGroupEntry }
 
 /** Everything the row builder reads. Pure data: no store, clock or client-specific state. */
-export type SidebarRowPlanInputs = {
+export type SidebarRowPlanInputs = PinnedGroupSettings & {
   groupBy: WorktreeGroupBy
   sortBy: WorkspaceSortBy
   /** Visible worktrees in the frozen sort order. */
@@ -240,7 +241,8 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       collapsedGroups,
       result,
       occurrencePlan,
-      mixedWorktreeHostContextLabels
+      mixedWorktreeHostContextLabels,
+      inputs
     )
     const withImportedLines = (rows: Row[]): Row[] =>
       appendImportedWorktreeLines(rows, { importedWorktreesByRepo, defaultHostId, hostLabelById })

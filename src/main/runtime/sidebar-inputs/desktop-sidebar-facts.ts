@@ -39,7 +39,11 @@ export type DesktopSidebarFactSources = {
     getUI?: () => Pick<PersistedUIState, 'manualRepoOrder' | 'workspaceHostOrder'>
     getSettings?: () => Pick<
       GlobalSettings,
-      'activeRuntimeEnvironmentId' | 'hostSettingOverrides' | 'showPinnedWorktreesInGroups'
+      | 'activeRuntimeEnvironmentId'
+      | 'hostSettingOverrides'
+      | 'showPinnedWorktreesInGroups'
+      | 'pinnedGroups'
+      | 'pinnedGroupByWorktreeIdentity'
     >
   }
   /** The registry's list, which leaves out targets a paired server owns; the window lists the same. */
@@ -101,6 +105,8 @@ export function readDesktopSidebarFacts(sources: DesktopSidebarFactSources): Des
     focusedHostId: getSettingsFocusedExecutionHostId(settings),
     hostLabels: Object.fromEntries(getHostDisplayLabelOverrides(settings)),
     showPinnedInGroups: settings?.showPinnedWorktreesInGroups === true,
-    ...(sources.installationId ? { installationId: sources.installationId } : {})
+    ...(sources.installationId ? { installationId: sources.installationId } : {}),
+    pinnedGroups: settings?.pinnedGroups ?? [],
+    pinnedGroupByWorktreeIdentity: settings?.pinnedGroupByWorktreeIdentity ?? {}
   }
 }

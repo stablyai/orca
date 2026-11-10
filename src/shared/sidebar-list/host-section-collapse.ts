@@ -32,6 +32,9 @@ export function scopeHostSectionCollapse(args: {
       sectionCollapsed = false
     }
     if (row.type === 'header') {
+      if (row.key.startsWith('pinned-group:') && sectionCollapsed) {
+        return []
+      }
       sectionCollapsed = false
       if (!isHostLaneSectionKey(row.key)) {
         return [row]

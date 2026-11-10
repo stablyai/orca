@@ -76,6 +76,8 @@ export function buildSidebarRowPlan(
     hostLabelById,
     defaultHostId,
     pinnedDisplayPolicy,
+    pinnedGroups: settings?.pinnedGroups,
+    pinnedGroupByWorktreeIdentity: settings?.pinnedGroupByWorktreeIdentity,
     filterRepoIds
   })
 }

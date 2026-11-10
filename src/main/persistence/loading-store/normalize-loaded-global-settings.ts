@@ -1,3 +1,4 @@
+import { PinnedGroupsSchema, PinnedGroupMembershipSchema } from '../../../shared/pinned-groups'
 import { normalizeAgentDefaultSurface } from '../../../shared/native-chat/native-chat-providers'
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat/native-chat-appearance-settings'
 import { getDefaultVoiceSettings } from '../../../shared/constants'
@@ -92,6 +93,10 @@ export function normalizeLoadedGlobalSettings(
       stripRetiredGlobalSettings(parsed.settings),
       defaults.settings
     ),
+    pinnedGroups: PinnedGroupsSchema.safeParse(parsed.settings?.pinnedGroups).data ?? [],
+    pinnedGroupByWorktreeIdentity:
+      PinnedGroupMembershipSchema.safeParse(parsed.settings?.pinnedGroupByWorktreeIdentity).data ??
+      {},
     agentDefaultSurface: normalizeAgentDefaultSurface(parsed.settings?.agentDefaultSurface),
     nativeChatAppearance: normalizeNativeChatAppearanceSettings(
       parsed.settings?.nativeChatAppearance

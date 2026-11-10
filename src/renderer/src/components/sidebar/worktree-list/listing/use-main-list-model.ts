@@ -220,6 +220,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
   )
 
   const effectiveCollapsedGroups = useEffectiveCollapsedGroups({
+    settings: args.settings,
     occurrencePlan: planned.plan.occurrencePlan,
     hostScopedGroups: planned.hostScoped,
     collapsedGroups: args.collapsedGroups,

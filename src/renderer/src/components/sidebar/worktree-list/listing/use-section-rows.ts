@@ -16,7 +16,6 @@ import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-r
 import { createHostScopedRepoOf } from '../../../../../../shared/sidebar-list/sidebar-feed-index'
 import { createSidebarPRGroupReader } from '../grouping/pr-group-key'
 import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
-import type { Row } from '../../../../../../shared/sidebar-list/row-types'
 import type { SectionRowsArgs } from './sidebar-list-model'
 import { getLogicalRepoOrderRankById } from '../../../../../../shared/project-section-order'
 import { readHiddenVmCheckouts, subscribeHiddenVmCheckouts } from '@/lib/vm-create-hidden-checkouts'
@@ -31,13 +30,13 @@ import {
   mergeDraggedHostSectionOrder,
   orderHostSectionOptions
 } from '../../../../../../shared/sidebar-list/host-section-order'
-import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host/execution-host-registry-entry'
 import {
   type SidebarHostOption,
   buildSidebarHostOptions,
   sidebarHostSemantics,
   createSidebarHostLabelsSelector
 } from '../controls/sidebar-host-options'
+import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host/execution-host-registry-entry'
 import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { selectEphemeralVmHostLifecycles } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'
@@ -181,6 +180,8 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         hostLabelById,
         defaultHostId,
         pinnedDisplayPolicy: args.pinnedDisplayPolicy,
+        pinnedGroups: args.settings?.pinnedGroups,
+        pinnedGroupByWorktreeIdentity: args.settings?.pinnedGroupByWorktreeIdentity,
         filterRepoIds: args.filterRepoIds
       }),
     [
@@ -206,10 +207,13 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       pendingCreations,
       hostLabelById,
       args.pinnedDisplayPolicy,
+      args.settings?.pinnedGroups,
+      args.settings?.pinnedGroupByWorktreeIdentity,
       args.filterRepoIds
     ]
   )
   const effectiveCollapsedGroups = useEffectiveCollapsedGroups({
+    settings: args.settings,
     occurrencePlan: rowPlan.occurrencePlan,
     hostScopedGroups,
     collapsedGroups: args.effectiveCollapsedGroups,
@@ -236,10 +240,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         : effectiveCollapsedGroups,
     [effectiveCollapsedGroups, hostScopedGroups]
   )
-  const rows: Row[] = useMemo(
-    () => rowPlan.render(rowCollapsedGroups),
-    [rowPlan, rowCollapsedGroups]
-  )
+  const rows = useMemo(() => rowPlan.render(rowCollapsedGroups), [rowPlan, rowCollapsedGroups])
   const orderedHostOptions = useMemo(
     () => orderHostSectionOptions(hostOptions, workspaceHostOrder),
     [hostOptions, workspaceHostOrder]

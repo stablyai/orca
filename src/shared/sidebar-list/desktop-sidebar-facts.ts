@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { PinnedGroupsSchema, PinnedGroupMembershipSchema } from '../pinned-groups'
 
 /** Host-owned sidebar facts use ExecutionHostId spellings and each row’s own workspace ID. */
 export const DesktopSidebarFactsSchema = z.object({
@@ -25,7 +26,9 @@ export const DesktopSidebarFactsSchema = z.object({
   /** "Also show pinned workspaces in their groups"; absent reads as off. */
   showPinnedInGroups: z.boolean().optional(),
   /** This host's store identity, which other stores' cross-store records name; older hosts omit it. */
-  installationId: z.string().optional().catch(undefined)
+  installationId: z.string().optional().catch(undefined),
+  pinnedGroups: PinnedGroupsSchema.optional(),
+  pinnedGroupByWorktreeIdentity: PinnedGroupMembershipSchema.optional()
 })
 
 export type DesktopSidebarFacts = z.infer<typeof DesktopSidebarFactsSchema>

@@ -1,3 +1,4 @@
+import { PinnedWorktreeGroupMenuItems } from './PinnedWorktreeGroupMenuItems'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -107,9 +108,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
         setMenuPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
         setMenuOpenState(true)
       }}
-      onClickCapture={(event) => {
-        suppressOpeningPointerEvent(event)
-      }}
+      onClickCapture={suppressOpeningPointerEvent}
     >
       {children}
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpenState} modal={false}>
@@ -185,6 +184,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                   ? t('auto.components.sidebar.WorktreeContextMenu.697d0f6e1b', 'Unpin')
                   : t('auto.components.sidebar.WorktreeContextMenu.3baa7d6507', 'Pin')}
               </DropdownMenuItem>
+              <PinnedWorktreeGroupMenuItems model={model} />
             </>
           )}
           <WorktreeStatusMenuItems

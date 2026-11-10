@@ -1,5 +1,6 @@
 import type { AntigravityChatAuthSettings } from './antigravity-chat-auth-config'
 import type { EmulatorOpeningSettings } from './emulator-opening-preferences'
+import type { PinnedGroupSettings } from './pinned-groups'
 import type { BrowserExtensionGlobalSettings } from './browser/extensions/browser-extension-settings'
 import type { ClaudeAgentViewSettings } from './claude-agent-view'
 import type { BrowserLinkOpeningSettings } from './browser-link-opening-settings'
@@ -29,6 +30,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   EmulatorOpeningSettings &
   SshRemoteControlSettings &
   ClaudeAgentViewSettings &
+  PinnedGroupSettings &
   NativeChatGlobalSettings &
   NativeChatIdleStopSettings &
   WorktreeDeletionPreferences &

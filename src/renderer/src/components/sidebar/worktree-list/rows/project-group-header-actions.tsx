@@ -12,7 +12,10 @@ import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
 import { getFolderWorkspacePathStatusDescription } from '@/lib/workspace/paths/folder-workspace-path-status'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
+import {
+  type FolderWorkspacePathStatus,
+  isConfirmedStaleFolderPathStatus
+} from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getFolderProjectGroupRefreshHandler } from './project-group-folder-refresh'
 import { REPO_HEADER_ACTION_BUTTON_CLASS } from './repo-header-action-button-class'
@@ -29,8 +32,12 @@ export function ProjectGroupHeaderMenu({
   projectGroup,
   onRefreshProjectGroup,
   onRename,
-  onDelete
+  onDelete,
+  children,
+  removeLabel
 }: {
+  children?: React.ReactNode
+  removeLabel?: string
   groupId: string
   /** Owner host of the group row, so rename/delete route to the host that holds it. */
   hostId?: ExecutionHostId
@@ -84,11 +91,23 @@ export function ProjectGroupHeaderMenu({
         <DropdownMenuItem onSelect={() => onRename(groupId, label, hostId)}>
           {t('auto.components.sidebar.WorktreeList.4d7b73658c', 'Rename group')}
         </DropdownMenuItem>
-        <DropdownMenuItem variant="destructive" onSelect={() => onDelete(groupId, label, hostId)}>
-          {t('auto.components.sidebar.WorktreeList.902115cdbe', 'Delete group')}
+        {children}
+        <DropdownMenuItem
+          variant={removeLabel ? undefined : 'destructive'}
+          onSelect={() => onDelete(groupId, label, hostId)}
+        >
+          {removeLabel ?? t('auto.components.sidebar.WorktreeList.902115cdbe', 'Delete group')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+// The folder-scan project group whose parent path is gone can't create new workspaces.
+export function isFolderWorkspaceCreateDisabled(status: FolderWorkspacePathStatus | null): boolean {
+  return (
+    status?.exists === false &&
+    (isConfirmedStaleFolderPathStatus(status) || status.reason === 'ambiguous-connection')
   )
 }
 

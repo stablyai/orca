@@ -9,7 +9,9 @@ import type { RuntimeStore } from '../construction/runtime-store-contract'
 const WORKSPACE_VIEW_SETTINGS: readonly (keyof GlobalSettings)[] = [
   'compactWorktreeCards',
   'experimentalNewWorktreeCardStyle',
-  'showPinnedWorktreesInGroups'
+  'showPinnedWorktreesInGroups',
+  'pinnedGroups',
+  'pinnedGroupByWorktreeIdentity'
 ]
 
 function workspaceViewUiValues(ui: PersistedUIState): unknown[] {

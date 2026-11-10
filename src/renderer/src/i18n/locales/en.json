@@ -7728,7 +7728,19 @@
           "running": "Running",
           "idle": "Idle"
         },
-        "projectOrderSaveFailed": "Could not save the complete project order"
+        "projectOrderSaveFailed": "Could not save the complete project order",
+        "PinnedGroups": {
+          "addToGroup": "Add to group",
+          "newGroupAction": "New group…",
+          "removeFromGroup": "Remove from group",
+          "newGroup": "New pin group",
+          "nameDescription": "Name this group in Pinned.",
+          "removeGroup": "Remove group",
+          "moveUp": "Move up",
+          "moveDown": "Move down",
+          "renameGroup": "Rename pin group",
+          "saveFailed": "Failed to save pin groups"
+        }
       },
       "shared": {
         "useDaemonActions": {
