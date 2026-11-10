@@ -3,6 +3,7 @@ import { access, mkdtemp, mkdir, readFile, rename, rm, writeFile } from 'node:fs
 import { dirname, join } from 'node:path'
 import { lock } from 'proper-lockfile'
 import { scavengeReleaseCheckoutStaging } from './release-checkout-tree.ts'
+import { releaseModuleLocation } from './release-module-locations.ts'
 
 export const CHECKOUT_FORMAT = 9
 
@@ -82,8 +83,13 @@ async function checkoutMatches(root: string, commit: string): Promise<boolean> {
 }
 
 async function assertCheckoutWireSurface(root: string, ref: string): Promise<void> {
+  // Releases before v1.4.249 define the protocol at its pre-refactor location.
+  const protocol = releaseModuleLocation(
+    root,
+    'src/shared/terminal/stream/terminal-stream-protocol.ts'
+  )
   try {
-    await access(join(root, 'src', 'shared', 'terminal-stream-protocol.ts'), constants.F_OK)
+    await access(join(root, protocol), constants.F_OK)
   } catch {
     throw new Error(
       `Cross-version checkout for ${ref} is missing the terminal stream protocol; ` +

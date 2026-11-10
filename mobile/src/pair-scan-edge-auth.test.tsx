@@ -40,10 +40,10 @@ vi.mock('lucide-react-native', () => ({
   Clipboard: 'Clipboard',
   QrCode: 'QrCode'
 }))
-vi.mock('./transport/pre-profile-pairing-coordinator', () => ({
+vi.mock('./pairing/pre-profile-pairing-coordinator', () => ({
   startPreProfilePairing: mocks.start
 }))
-vi.mock('./transport/host-client-hooks', () => ({ useRefreshHostClient: () => vi.fn() }))
+vi.mock('./transport/connection/host-client-hooks', () => ({ useRefreshHostClient: () => vi.fn() }))
 vi.mock('./components/TextInputModal', () => ({ TextInputModal: 'TextInputModal' }))
 vi.mock('./components/ConnectionLog', () => ({ ConnectionLog: () => null }))
 vi.mock('./onboarding/mobile-onboarding-plan', () => ({

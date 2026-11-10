@@ -1,8 +1,9 @@
 import { readFileSync, realpathSync, statSync } from 'node:fs'
+import { resolveRealPathSync } from '../../shared/real-path-sync'
 import { dirname, isAbsolute, join, relative } from 'node:path'
 import { normalizeRuntimePathSeparators } from '../../shared/cross-platform-path'
-import { resolveGitMetadataPath } from '../../shared/git-metadata-path'
-import { parseGitdirMarkerPayload } from '../../shared/gitdir-marker-payload'
+import { resolveGitMetadataPath } from '../../shared/git/metadata/git-metadata-path'
+import { parseGitdirMarkerPayload } from '../../shared/git/metadata/gitdir-marker-payload'
 
 export type GitMarkerScanResult =
   | { status: 'valid'; rootPath: string }
@@ -25,18 +26,6 @@ export function scanGitMarkerSync(path: string): GitMarkerScanResult {
     return realPathScan
   }
   return scanGitMarkerAncestorsSync(path)
-}
-
-export function resolveRealPathSync(path: string): string | null {
-  try {
-    return realpathSync.native(path)
-  } catch {
-    try {
-      return realpathSync(path)
-    } catch {
-      return null
-    }
-  }
 }
 
 function scanGitMarkerAncestorsSync(path: string): GitMarkerScanResult {

@@ -1,149 +1,91 @@
-/**
- * Manifest `commands` (Chromium commands.json): each command's shortcut for this platform, in
- * Chrome's string form, and matching against a key event.
- */
+import { realpath, stat } from 'node:fs/promises'
+import { isAbsolute } from 'node:path'
+import type {
+  BrowserExtensionListParams,
+  BrowserExtensionReloadParams,
+  BrowserExtensionReloadResult,
+  BrowserExtensionSummaryListResult,
+  InstalledBrowserExtension
+} from '../../../shared/browser/extensions/browser-extension-types'
+import { BrowserError } from '../browser-error'
+import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
+import { getBrowserExtensionInstallStore } from './installation/browser-extension-install-store'
+import {
+  listBrowserExtensionsForProfile,
+  reloadUnpackedBrowserExtension
+} from './browser-extension-management'
 
-export type BrowserExtensionCommand = {
-  name: string
-  description: string
-  /** Chrome's form, e.g. "Ctrl+Shift+Y"; on macOS "⇧⌘Y". Empty when none is assigned. */
-  shortcut: string
-  binding: ParsedShortcut | null
-}
-
-export type ParsedShortcut = {
-  key: string
-  control: boolean
-  meta: boolean
-  alt: boolean
-  shift: boolean
-}
-
-type KeyInput = Pick<Electron.Input, 'key' | 'code' | 'control' | 'meta' | 'alt' | 'shift'>
-
-export const EXECUTE_ACTION_COMMANDS = new Set([
-  '_execute_action',
-  '_execute_browser_action',
-  '_execute_page_action'
-])
-
-const PLATFORM_KEYS: Partial<Record<NodeJS.Platform, string>> = {
-  darwin: 'mac',
-  win32: 'windows',
-  linux: 'linux'
-}
-
-// Chrome assigns suggested keys to at most four commands.
-const MAX_SUGGESTED_SHORTCUTS = 4
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? Object.fromEntries(Object.entries(value))
-    : null
-}
-
-/** "Ctrl+Shift+Y" → modifiers + key. On macOS Chrome reads Ctrl as Command and MacCtrl as Control. */
-export function parseExtensionShortcut(
-  shortcut: string,
-  platform: NodeJS.Platform
-): ParsedShortcut | null {
-  const parts = shortcut.split('+').map((part) => part.trim())
-  const key = parts.pop()
-  if (!key || parts.length === 0) {
-    return null
+/** Finds the one installed unpacked extension whose canonical source folder is `path`. */
+async function extensionIdForSourceFolder(
+  path: string,
+  installed: InstalledBrowserExtension[]
+): Promise<string> {
+  if (!isAbsolute(path)) {
+    throw new BrowserError('invalid_argument', 'Extension source folder must be an absolute path')
   }
-  const parsed: ParsedShortcut = { key, control: false, meta: false, alt: false, shift: false }
-  for (const modifier of parts) {
-    if (modifier === 'Ctrl') {
-      parsed[platform === 'darwin' ? 'meta' : 'control'] = true
-    } else if (modifier === 'Command') {
-      parsed.meta = true
-    } else if (modifier === 'MacCtrl') {
-      parsed.control = true
-    } else if (modifier === 'Alt') {
-      parsed.alt = true
-    } else if (modifier === 'Shift') {
-      parsed.shift = true
-    } else {
-      return null
+  const directory = await realpath(path).catch(() => null)
+  if (!directory || !(await stat(directory).catch(() => null))?.isDirectory()) {
+    throw new BrowserError('invalid_argument', 'Extension source folder was not found')
+  }
+  const matches = await Promise.all(
+    installed
+      .filter((extension) => extension.source === 'unpacked')
+      .map(async (extension) =>
+        (await realpath(extension.path).catch(() => null)) === directory ? extension.id : null
+      )
+  )
+  const ids = matches.filter((id) => id !== null)
+  if (ids.length !== 1) {
+    throw new BrowserError(
+      'invalid_argument',
+      ids.length === 0
+        ? 'No installed unpacked extension matches this source folder'
+        : 'Multiple installed unpacked extensions match this source folder; use an extension ID'
+    )
+  }
+  return ids[0]
+}
+
+/** Selection shape and ID format are checked by the RPC params schema. */
+export const desktopBrowserExtensions = {
+  async list({
+    profileId = 'default'
+  }: BrowserExtensionListParams): Promise<BrowserExtensionSummaryListResult> {
+    if (!browserSessionRegistry.getProfile(profileId)) {
+      throw new BrowserError('invalid_argument', `Browser profile ${profileId} was not found`)
     }
-  }
-  // Chrome requires Ctrl/Command/Alt (MacCtrl on mac); Shift alone is not a command.
-  return parsed.control || parsed.meta || parsed.alt ? parsed : null
-}
-
-const MAC_SYMBOLS: [keyof ParsedShortcut, string][] = [
-  ['control', '⌃'],
-  ['alt', '⌥'],
-  ['shift', '⇧'],
-  ['meta', '⌘']
-]
-
-function formatShortcut(parsed: ParsedShortcut, platform: NodeJS.Platform): string {
-  if (platform === 'darwin') {
-    return `${MAC_SYMBOLS.filter(([flag]) => parsed[flag])
-      .map(([, symbol]) => symbol)
-      .join('')}${parsed.key}`
-  }
-  return [
-    parsed.control ? 'Ctrl' : '',
-    parsed.alt ? 'Alt' : '',
-    parsed.shift ? 'Shift' : '',
-    parsed.key
-  ]
-    .filter(Boolean)
-    .join('+')
-}
-
-export function readBrowserExtensionCommands(
-  manifest: Record<string, unknown> | undefined,
-  platform: NodeJS.Platform
-): BrowserExtensionCommand[] {
-  const commands = asRecord(manifest?.commands) ?? {}
-  let assigned = 0
-  return Object.entries(commands).map(([name, raw]) => {
-    const command = asRecord(raw) ?? {}
-    const suggested = asRecord(command.suggested_key)
-    const wanted = suggested?.[PLATFORM_KEYS[platform] ?? ''] ?? suggested?.default
-    const binding =
-      typeof wanted === 'string' && assigned < MAX_SUGGESTED_SHORTCUTS
-        ? parseExtensionShortcut(wanted, platform)
-        : null
-    if (binding) {
-      assigned++
-    }
+    const { active, extensions } = await listBrowserExtensionsForProfile(profileId)
     return {
-      name,
-      description: typeof command.description === 'string' ? command.description : '',
-      shortcut: binding ? formatShortcut(binding, platform) : '',
-      binding
+      active,
+      extensions: extensions.map(({ id, name, version, source, path, enabled, loadError }) => ({
+        id,
+        name,
+        version,
+        source,
+        path,
+        enabled,
+        loadError
+      }))
     }
-  })
-}
-
-const KEY_ALIASES: Record<string, string> = {
-  Comma: ',',
-  Period: '.',
-  Space: ' ',
-  Up: 'ArrowUp',
-  Down: 'ArrowDown',
-  Left: 'ArrowLeft',
-  Right: 'ArrowRight'
-}
-
-export function shortcutMatchesInput(binding: ParsedShortcut, input: KeyInput): boolean {
-  if (
-    binding.control !== input.control ||
-    binding.meta !== input.meta ||
-    binding.alt !== input.alt ||
-    binding.shift !== input.shift
-  ) {
-    return false
+  },
+  /** Reloads every profile where the extension is enabled, like the Settings reload button. */
+  async reload(params: BrowserExtensionReloadParams): Promise<BrowserExtensionReloadResult> {
+    const installed = getBrowserExtensionInstallStore().list()
+    const extensionId =
+      params.path !== undefined
+        ? await extensionIdForSourceFolder(params.path, installed)
+        : params.extensionId
+    const extension = installed.find((record) => record.id === extensionId)
+    if (!extension) {
+      throw new BrowserError('invalid_argument', 'Extension is not installed')
+    }
+    if (extension.source !== 'unpacked') {
+      throw new BrowserError('invalid_argument', 'Only unpacked extensions can be reloaded')
+    }
+    const result = await reloadUnpackedBrowserExtension(extension.id)
+    if (!result.ok) {
+      throw new BrowserError('runtime_error', result.error)
+    }
+    return { extensionId: extension.id }
   }
-  const wanted = KEY_ALIASES[binding.key] ?? binding.key
-  if (/^[A-Z0-9]$/.test(wanted)) {
-    // Why code: Alt/Option and Shift change `key` (e.g. "Ÿ"), the physical key does not.
-    return input.code === (/\d/.test(wanted) ? `Digit${wanted}` : `Key${wanted}`)
-  }
-  return input.key === wanted
 }

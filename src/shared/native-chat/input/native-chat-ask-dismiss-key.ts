@@ -19,7 +19,8 @@ export function nativeChatAskDismissKey(prompt: AskPrompt | null): string | null
     ...question,
     question: askDismissKeyText(question.question),
     header: askDismissKeyText(question.header),
-    options: question.options.map((option) => ({
+    // Status and transcript copies shorten previews differently; labels already identify the option.
+    options: question.options.map(({ preview: _preview, ...option }) => ({
       ...option,
       description: askDismissKeyText(option.description)
     }))

@@ -23,9 +23,9 @@ vi.mock('react-native', () => ({ Platform: platformMock }))
 import {
   markHostCredentialWrite,
   resetHostCredentialWriteRevisionsForTests
-} from './host-credential-write-revision'
+} from '../host-credentials/host-credential-write-revision'
 import { cacheEndpointAuthSnapshot, peekEndpointAuthHeaders } from './endpoint-auth-headers'
-import { resetPairingKeychainForTests } from './pairing-keychain'
+import { resetPairingKeychainForTests } from '../host-credentials/pairing-keychain'
 import {
   deleteEndpointAuthHeaders,
   primeEndpointAuthHeaders,

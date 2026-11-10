@@ -7,7 +7,7 @@ const HERE = import.meta.dirname
 const POWERSHELL = 'powershell.exe'
 const PS_ARGS = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass']
 
-// Always use case-insensitive win32 path semantics so offline selftests handle backslashes on any OS.
+// Compare module paths with case-insensitive Windows semantics.
 function normalizeForCompare(p) {
   return win32
     .normalize(p)

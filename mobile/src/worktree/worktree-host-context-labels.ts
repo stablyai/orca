@@ -13,8 +13,8 @@ export {
   buildHostLabelById,
   getHostContextLabel
 } from '../../../src/shared/worktree/host-context-labels'
-import type { ExecutionHostHealth } from '../../../src/shared/execution-host-health'
-import type { Worktree } from './workspace-list-types'
+import type { ExecutionHostHealth } from '../../../src/shared/execution-host/execution-host-health'
+import type { Worktree, WorktreeHostContextView } from './workspace-list-types'
 import { getHostHealthBadgeLabel } from './worktree-host-health'
 
 export type HostLabelSources = {
@@ -70,19 +70,24 @@ export function getWorktreeHostContextLabels(
   })
 }
 
-export function applyWorktreeHostContextLabels(
-  worktrees: Worktree[],
+/** Each row's host context, looked up beside the row rather than written onto it. */
+export type WorktreeHostContextOf = (row: Worktree) => WorktreeHostContextView | undefined
+
+export const NO_WORKTREE_HOST_CONTEXT: WorktreeHostContextOf = () => undefined
+
+export function buildWorktreeHostContextOf(
+  worktrees: readonly Worktree[],
   sources: HostLabelSources
-): Worktree[] {
+): WorktreeHostContextOf {
   const labels = getWorktreeHostContextLabels(worktrees, sources)
   // Why: the desktop card shows SSH status on any host count, so an unhealthy host is named even alone.
   const anyUnhealthy =
     [...sources.hostHealthById.values()].some(getHostHealthBadgeLabel) ||
     (sources.hostHealthLabelById?.size ?? 0) > 0
   if (!labels && !anyUnhealthy) {
-    return worktrees
+    return NO_WORKTREE_HOST_CONTEXT
   }
-  return worktrees.map((worktree) => {
+  return (worktree) => {
     const hostContextHostId = resolveWorktreeHostId(worktree, sources.repoHostIdByRepoId)
     const hostContextHealthLabel =
       sources.hostHealthLabelById?.get(hostContextHostId) ??
@@ -91,13 +96,12 @@ export function applyWorktreeHostContextLabels(
       ? labels.get(getResolvedWorktreeRowIdentity(worktree, sources.repoHostIdByRepoId))
       : hostContextHealthLabel && getHostContextLabel(hostContextHostId, sources)
     if (!hostContextLabel) {
-      return worktree
+      return undefined
     }
     return {
-      ...worktree,
       hostContextLabel,
       hostContextHostId,
       ...(hostContextHealthLabel ? { hostContextHealthLabel } : {})
     }
-  })
+  }
 }

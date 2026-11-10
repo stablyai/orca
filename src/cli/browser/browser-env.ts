@@ -1,7 +1,7 @@
 import type {
   BrowserGeolocationResult,
   BrowserViewportResult
-} from '../../shared/runtime-browser-contracts'
+} from '../../shared/browser/runtime/runtime-browser-contracts'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
 import {
@@ -12,7 +12,7 @@ import {
   getRequiredStringFlagAllowingEmpty
 } from '../flags'
 import { RuntimeClientError } from '../runtime/types'
-import { getBrowserCommandTarget } from '../selectors'
+import { getBrowserCommandTarget } from './browser-command-target'
 
 export const BROWSER_ENV_HANDLERS: Record<string, CommandHandler> = {
   viewport: async ({ flags, client, cwd, json }) => {

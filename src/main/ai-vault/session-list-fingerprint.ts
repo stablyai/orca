@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { AiVaultListResult } from '../../shared/ai-vault-types'
+import type { AiVaultListResult } from '../../shared/ai-vault/contracts/ai-vault-types'
 
 export function conditionalAiVaultListResult(
   result: AiVaultListResult,

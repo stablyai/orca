@@ -20,6 +20,8 @@ import { HostSidebarRevealContext } from '../../src/layout/host-sidebar-reveal'
 import { HostAreaServingContext } from '../../src/mobile-web-shell/host-area-serving'
 import { usePageOwnsHostArea } from '../../src/mobile-web-shell/page-owns-host-area'
 import { isOverlayPageRoute } from '../../src/new-workspace/overlay-page-route'
+import { MobileDictationHostProvider } from '../../src/dictation/mobile-dictation-host'
+import { MobileDictationPillLayer } from '../../src/dictation/MobileDictationPill'
 
 // Keep at least this much room for the detail pane when resizing the sidebar.
 const MIN_DETAIL_WIDTH = 320
@@ -121,33 +123,37 @@ export default function HostGroupLayout() {
   // Keep detail Stack at a stable tree position so fold/rotation cannot remount navigation.
   return (
     <HostProtocolGate hostId={hostId} transparentWhilePending={overlayRoute}>
-      <View style={[styles.row, overlayRoute && styles.transparent]}>
-        {showSidebar && (sidebarOpen || foldSidebarWidth !== null) ? (
-          <View style={[styles.sidebar, { width: foldSidebarWidth ?? sidebarWidth }]}>
-            <HostScreen
-              embedded
-              hostId={hostId}
-              onHideSidebar={canCollapseSidebar ? hideSidebar : undefined}
-            />
-            {/* Edge drag handle captures Android gestures above the list. */}
-            {foldSidebarWidth === null ? (
-              <View style={styles.resizeHandle} {...resizer.panHandlers} />
-            ) : null}
+      {/* One dictation per host document, outliving the session screen that started it. */}
+      <MobileDictationHostProvider>
+        <View style={[styles.row, overlayRoute && styles.transparent]}>
+          {showSidebar && (sidebarOpen || foldSidebarWidth !== null) ? (
+            <View style={[styles.sidebar, { width: foldSidebarWidth ?? sidebarWidth }]}>
+              <HostScreen
+                embedded
+                hostId={hostId}
+                onHideSidebar={canCollapseSidebar ? hideSidebar : undefined}
+              />
+              {/* Edge drag handle captures Android gestures above the list. */}
+              {foldSidebarWidth === null ? (
+                <View style={styles.resizeHandle} {...resizer.panHandlers} />
+              ) : null}
+            </View>
+          ) : null}
+          {foldGap > 0 ? <View style={{ width: foldGap }} /> : null}
+          <View style={styles.detail}>
+            <HostAreaServingContext.Provider value={setHostAreaServing}>
+              <HostSidebarRevealContext.Provider
+                value={
+                  showSidebar && !sidebarOpen && foldSidebarWidth === null ? revealSidebar : null
+                }
+              >
+                <HostStack animation={showSidebar ? 'none' : 'default'} />
+              </HostSidebarRevealContext.Provider>
+            </HostAreaServingContext.Provider>
           </View>
-        ) : null}
-        {foldGap > 0 ? <View style={{ width: foldGap }} /> : null}
-        <View style={styles.detail}>
-          <HostAreaServingContext.Provider value={setHostAreaServing}>
-            <HostSidebarRevealContext.Provider
-              value={
-                showSidebar && !sidebarOpen && foldSidebarWidth === null ? revealSidebar : null
-              }
-            >
-              <HostStack animation={showSidebar ? 'none' : 'default'} />
-            </HostSidebarRevealContext.Provider>
-          </HostAreaServingContext.Provider>
         </View>
-      </View>
+        <MobileDictationPillLayer />
+      </MobileDictationHostProvider>
     </HostProtocolGate>
   )
 }

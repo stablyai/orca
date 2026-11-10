@@ -3,18 +3,13 @@ import type {
   WebRuntimeConnectionLifecycle,
   WebRuntimeConnectionAuth
 } from './web-runtime-connection-auth'
-import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
-import {
-  createPairedE2EEClientHandshake,
-  type PairedE2EEClientHandshake
-} from '../../../shared/paired-e2ee-client-handshake'
+import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import type { PairedE2EEClientHandshake } from '../../../shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
 import type { WebRuntimeAuthPlan } from './web-runtime-credential-source'
 import type { WebRuntimeConnectionTimers } from './web-runtime-connection-timers'
-import { WEB_PAIRED_E2EE_PRIMITIVES } from './web-paired-e2ee-primitives'
 
 export function installWebRuntimeSocket({
   socket,
-  connection,
   plan,
   auth,
   timers,
@@ -27,7 +22,6 @@ export function installWebRuntimeSocket({
   assertCurrent
 }: {
   socket: WebSocket
-  connection: PairedRuntimeConnection
   plan: WebRuntimeAuthPlan
   auth: WebRuntimeConnectionAuth
   timers: WebRuntimeConnectionTimers
@@ -64,12 +58,7 @@ export function installWebRuntimeSocket({
       assertCurrent?.()
       timers.clear('connect')
       owner.setState('handshaking')
-      const handshake = createPairedE2EEClientHandshake({
-        primitives: WEB_PAIRED_E2EE_PRIMITIVES,
-        hostPublicKeyB64: connection.hostPublicKeyB64,
-        framing: auth.framingFor(plan),
-        transport: 'direct'
-      })
+      const handshake = auth.createHandshake(plan)
       owner.handshake = handshake
       socket.send(handshake.helloText())
       timers.arm('handshake', 10_000, () => {
@@ -106,7 +95,7 @@ export function installWebRuntimeSocket({
       })
     }
   }
-  socket.onclose = () => owner.handleSocketClosed(socket)
+  socket.onclose = (event?: CloseEvent) => owner.handleSocketClosed(socket, event?.code)
   socket.onerror = () => {
     if (owner.ws === socket && owner.state === 'connecting') {
       rejectUnavailable()

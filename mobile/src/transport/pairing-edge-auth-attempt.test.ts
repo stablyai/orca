@@ -1,15 +1,15 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { PairingOffer } from './types'
-import { startPreProfilePairing } from './pre-profile-pairing-coordinator'
+import type { PairingOffer } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import { startPreProfilePairing } from '../pairing/pre-profile-pairing-coordinator'
 import { writeEndpointAuthHeaders } from './endpoint-auth-headers-store'
 import {
   markHostCredentialWrite,
   resetHostCredentialWriteRevisionsForTests
-} from './host-credential-write-revision'
+} from '../host-credentials/host-credential-write-revision'
 import { startPairingWithEdgeAuth } from './pairing-edge-auth-attempt'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
-vi.mock('./pre-profile-pairing-coordinator', () => ({ startPreProfilePairing: vi.fn() }))
+vi.mock('../pairing/pre-profile-pairing-coordinator', () => ({ startPreProfilePairing: vi.fn() }))
 vi.mock('./endpoint-auth-headers-store', () => ({ writeEndpointAuthHeaders: vi.fn() }))
 const offer: PairingOffer = {
   v: 2,

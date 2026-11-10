@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
@@ -12,10 +12,10 @@ import { colors, spacing } from '../src/theme/mobile-theme'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import type { Translate } from '../src/i18n/mobile-i18n'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
-import { loadHosts, peekHosts } from '../src/transport/host-store'
-import type { HostProfile } from '../src/transport/types'
-import { useFocusedSettingsHostClients } from '../src/transport/settings-host-client-connections'
-import type { RpcClient } from '../src/transport/rpc-client'
+import { loadHosts, peekHosts } from '../src/host-catalog/host-store'
+import type { HostProfile } from '../src/host-catalog/host-profile'
+import { useFocusedSettingsHostClients } from '../src/settings/settings-host-client-connections'
+import type { RpcClient } from '../src/transport/rpc/rpc-client-contract'
 import { LIST_LEADING_INSET, ListRow } from '../src/components/list/ListGroup'
 import { PickerModal, type PickerOption } from '../src/components/PickerModal'
 import { TerminalShortcutSettings } from '../src/components/TerminalShortcutSettings'
@@ -26,11 +26,6 @@ import {
 } from '../src/terminal/terminal-auto-restore-fit-state'
 import { setTerminalSettingsScrollEnabled } from '../src/terminal/terminal-settings-scroll-lock'
 import { useTerminalTextScaleSetting } from '../src/terminal/use-terminal-text-scale-setting'
-import {
-  loadTerminalAutocompleteEnabled,
-  saveTerminalAutocompleteEnabled
-} from '../src/storage/preferences'
-import { MobileSwitch } from '../src/components/MobileSwitch'
 import {
   SettingsEmptyRow,
   SettingsNavBar,
@@ -191,26 +186,6 @@ export default function TerminalSettingsScreen() {
     [selectTextScale, t]
   )
 
-  const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
-  // Fast toggle must win over delayed initial load.
-  const userToggledAutocompleteRef = useRef(false)
-  useEffect(() => {
-    let stale = false
-    void loadTerminalAutocompleteEnabled().then((enabled) => {
-      if (!stale && !userToggledAutocompleteRef.current) {
-        setAutocompleteEnabled(enabled)
-      }
-    })
-    return () => {
-      stale = true
-    }
-  }, [])
-  const toggleAutocomplete = useCallback((next: boolean) => {
-    userToggledAutocompleteRef.current = true
-    setAutocompleteEnabled(next)
-    void saveTerminalAutocompleteEnabled(next)
-  }, [])
-
   useEffect(() => {
     let cancelled = false
     for (const host of hosts) {
@@ -339,34 +314,6 @@ export default function TerminalSettingsScreen() {
               leading={<Type size={18} color={colors.textSecondary} />}
               navigates
               onPress={() => setTextSizePickerOpen(true)}
-            />
-          </SettingsSection>
-
-          <SettingsSection
-            title={t('app.terminalSettings.keyboardInputHeading', 'KEYBOARD INPUT')}
-            footer={t(
-              'app.terminalSettings.keyboardInputDescription',
-              'Autocomplete, autocorrect, and spelling suggestions apply only to buffered command input. Use the double-chevron button above the keyboard to switch from live input, then edit your command before tapping Send. Off by default to avoid rewriting commands, flags, or paths.'
-            )}
-          >
-            <ListRow
-              key="autocomplete"
-              title={t('app.terminalSettings.autocomplete', 'Autocomplete & autocorrect')}
-              subtitle={
-                autocompleteEnabled
-                  ? t('app.terminalSettings.autocompleteOn', 'On')
-                  : t('app.terminalSettings.autocompleteOff', 'Off')
-              }
-              accessory={
-                <MobileSwitch
-                  accessibilityLabel={t(
-                    'app.terminalSettings.autocomplete',
-                    'Autocomplete & autocorrect'
-                  )}
-                  value={autocompleteEnabled}
-                  onValueChange={toggleAutocomplete}
-                />
-              }
             />
           </SettingsSection>
 

@@ -1,4 +1,4 @@
-import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
+import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -6,7 +6,7 @@ import type { GitLabPipelineJob, GitLabWorkItem } from '../../../../shared/gitla
 import { showGitLabMutationError } from '../gitlab-item-dialog-parts'
 import type { GitLabDialogRepoSelector } from './gitlab-item-dialog-types'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 export function useGitLabPipelineActions(
   item: GitLabWorkItem | null,

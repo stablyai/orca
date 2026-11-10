@@ -14,13 +14,13 @@ import { ChevronLeft } from 'lucide-react-native'
 import {
   resolvePairConfirmRouteState,
   type PairConfirmRouteState
-} from '../src/transport/pair-confirm-state'
+} from '../src/pairing/pair-confirm-state'
 import {
   startPairingWithEdgeAuth,
   type PairingEdgeAuthAttempt
 } from '../src/transport/pairing-edge-auth-attempt'
-import type { ConnectionLogEntry } from '../src/transport/types'
-import { useRefreshHostClient } from '../src/transport/host-client-hooks'
+import type { ConnectionLogEntry } from '../src/diagnostics/connection/connection-log-types'
+import { useRefreshHostClient } from '../src/transport/connection/host-client-hooks'
 import { colors, spacing, pressedStyle } from '../src/theme/mobile-theme'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
@@ -41,6 +41,7 @@ import {
   mobileOnboardingDestination
 } from '../src/onboarding/mobile-onboarding-plan'
 import { pairConfirmStyles as styles } from '../src/pair-confirm-styles'
+import { getPairingFailureMessage } from '../src/pairing/pairing-failure-message'
 
 const PAIRING_OVERALL_TIMEOUT_MS = 25_000
 
@@ -177,20 +178,21 @@ function PairConfirmAttemptScreen({ routeState }: { routeState: PairConfirmRoute
       activeAttempt.current?.dispose()
       activeAttempt.current = null
       router.replace(mobileOnboardingDestination(steps, verified.hostId))
-    } catch {
+    } catch (error) {
       if (isCurrent()) {
         setStatus('error')
         setErrorMessage(
-          activeAttempt.current?.timedOut
-            ? t(
-                'app.pairConfirm.connectTimedOut',
-                "Couldn't connect within {{seconds}}s — see log below for where it stalled",
-                { seconds: PAIRING_OVERALL_TIMEOUT_MS / 1000 }
-              )
-            : t(
-                'app.pairConfirm.edgePairingFailed',
-                'Could not finish pairing or save credentials. Check the connection and protected storage, then retry.'
-              )
+          getPairingFailureMessage({
+            screen: 'confirm',
+            error,
+            timedOut: activeAttempt.current?.timedOut ?? false,
+            timeoutMs: PAIRING_OVERALL_TIMEOUT_MS,
+            t,
+            fallbackMessage: t(
+              'app.pairConfirm.edgePairingFailed',
+              'Could not finish pairing or save credentials. Check the connection and protected storage, then retry.'
+            )
+          })
         )
       }
     } finally {

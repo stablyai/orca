@@ -1,11 +1,15 @@
+import type * as WslPaths from '../../shared/wsl-paths'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { WslResult, WslSpec } from '../wsl/wsl-runner'
+import type { WslResult, WslSpec } from '../wsl/execution/wsl-runner'
 
 const runWslProcess = vi.hoisted(() => vi.fn<(spec: WslSpec) => Promise<WslResult>>())
-vi.mock('../wsl/wsl-runner', () => ({ runWslProcess }))
-vi.mock('../wsl', () => ({
-  toWindowsWslPath: (linuxPath: string, distro: string) =>
-    `\\\\wsl.localhost\\${distro}${linuxPath}`
+vi.mock('../wsl/execution/wsl-runner', () => ({ runWslProcess }))
+vi.mock('../../shared/wsl-paths', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslPaths>()),
+  ...(await (() => ({
+    toWindowsWslPath: (linuxPath: string, distro: string) =>
+      `\\\\wsl.localhost\\${distro}${linuxPath}`
+  }))())
 }))
 
 import { CodexManagedHomePath } from './codex-managed-home-path'

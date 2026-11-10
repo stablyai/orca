@@ -4,13 +4,16 @@
  * Status), foreground work from the same process probe the close-tab warning uses, and running
  * automation runs and live orchestration dispatches from their own stores. This only reads.
  */
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status-ipc-payload'
-import { getAgentResumeArgv } from '../../../shared/agent-resume-argv'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import { getAgentResumeArgv } from '../../../shared/agent-launch/startup/agent-resume-argv'
 import { isResumableTuiAgent } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import { isFinalAutomationRunStatus, type AutomationRun } from '../../../shared/automations-types'
-import { probePtyRunningWorkWithInspection } from '../../../shared/pty-running-work-probe'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
-import type { TerminalProcessInspection } from '../../../shared/terminal-process-inspection'
+import {
+  isFinalAutomationRunStatus,
+  type AutomationRun
+} from '../../../shared/automations/history/automation-run'
+import { probePtyRunningWorkWithInspection } from '../../../shared/terminal/pty/lifecycle/pty-running-work-probe'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { WslMoveTerminalScope } from './wsl-move-driver-ports'
 import type { WslGuestPaneForeground } from './wsl-move-guest-foreground'
 import { WSL_MOVE_LIVE_WORKER_STATES } from './wsl-move-orchestration-history-rewrite'

@@ -1,30 +1,44 @@
+import { claudeScriptedChild } from '../../claude/claude-scripted-child.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
+import type * as TimersPromises from 'node:timers/promises'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   hostTestAttachParams,
   hostTestMessage,
   HOST_TEST_SESSION as SESSION
-} from '../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+} from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { piScriptedChild } from '../../pi/pi-scripted-child.test-fixture'
-import { codexScriptedChild } from '../../codex/codex-scripted-child.test-fixture'
-import { acpScriptedChild } from '../../acp/acp-scripted-child.test-fixture'
-import type { ScriptedAgentChild } from '../structured-agent-scripted-child.test-fixture'
+import { codexScriptedChild } from '../../codex/structured/session-lifecycle/codex-scripted-child.test-fixture'
+import type { ScriptedAgentChild } from './installation/structured-agent-scripted-child.test-fixture'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+
+// The start retry backoff's promise delay must use the fake clock this suite jumps.
+vi.mock('node:timers/promises', async (importOriginal) => ({
+  ...(await importOriginal<typeof TimersPromises>()),
+  // ast-grep-ignore: test-no-real-time-wait -- Backed by the fake setTimeout installed per test.
+  setTimeout: (ms?: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+}))
 
 let directory: string | undefined
 let operations = 0
 const operationId = () => `${Date.now()}-${(++operations).toString(16).padStart(32, '0')}`
 const caller = { callerKey: 'adapter-start-failure-test' }
 
+beforeEach(() => {
+  // Real time still passes, so file and database work settles; waits jump the clock.
+  vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout'] })
+})
+
 afterEach(async () => {
+  vi.useRealTimers()
   await stopStructuredAgentSessionRuntime()
   if (directory) {
     await rm(directory, { recursive: true, force: true })
@@ -32,7 +46,11 @@ afterEach(async () => {
   }
 })
 
-async function failedStart(agent: 'pi' | 'codex' | 'grok', script: ScriptedAgentChild) {
+async function failedStart(
+  agent: 'pi' | 'codex' | 'grok' | 'claude',
+  script: ScriptedAgentChild,
+  unanswered = false
+) {
   directory = await mkdtemp(join(tmpdir(), 'orca-adapter-start-failure-'))
   const root = directory
   const host = await ensureStructuredAgentSessionHost({
@@ -55,9 +73,11 @@ async function failedStart(agent: 'pi' | 'codex' | 'grok', script: ScriptedAgent
           agent,
           providerHandle: undefined,
           accountHome:
-            agent === 'pi'
-              ? { variable: 'PI_CODING_AGENT_DIR', path: root }
-              : { variable: 'GROK_HOME', path: root },
+            agent === 'claude'
+              ? { variable: 'CLAUDE_CONFIG_DIR', path: root }
+              : agent === 'pi'
+                ? { variable: 'PI_CODING_AGENT_DIR', path: root }
+                : { variable: 'GROK_HOME', path: root },
           location: {
             executionHostId: 'local',
             wslDistro: null,
@@ -88,10 +108,21 @@ async function failedStart(agent: 'pi' | 'codex' | 'grok', script: ScriptedAgent
   if (!sent.ok) {
     throw new Error(JSON.stringify(sent.refusal))
   }
-  for (let attempt = 1; attempt <= 5; attempt++) {
-    // Retries back off 100·2^n ms (800 ms before the fifth spawn); the 1 s default leaves no room under load.
-    await vi.waitFor(() => expect(script.spawns()).toBe(attempt), { timeout: 5_000 })
-    script.failHandshake('provider config is invalid: bad key')
+  const expectedAttempts = unanswered || agent === 'grok' || agent === 'claude' ? 5 : 1
+  for (let attempt = 1; attempt <= expectedAttempts; attempt++) {
+    // Retries back off 100·2^n ms (800 ms before the fifth spawn); each poll jumps 100 ms.
+    await vi.waitFor(
+      () => {
+        vi.advanceTimersByTime(100)
+        expect(script.spawns()).toBe(attempt)
+      },
+      { timeout: 5_000, interval: 10 }
+    )
+    const fail = unanswered ? script.exitHandshake : script.failHandshake
+    if (!fail) {
+      throw new Error('fixture has no unanswered exit')
+    }
+    fail('provider config is invalid: bad key')
   }
   const submission = async () => {
     await host.flushStreamedEvents(SESSION)
@@ -104,7 +135,7 @@ async function failedStart(agent: 'pi' | 'codex' | 'grok', script: ScriptedAgent
   })
   const settled = await submission()
   const snapshot = await host.journalSnapshot(SESSION)
-  const failureKind = agent === 'codex' ? 'startFailed' : 'providerStartFailed'
+  const failureKind = agent === 'codex' && !unanswered ? 'startFailed' : 'providerStartFailed'
   expect(readWholeAgentSessionFailureFact(settled?.rejection)).toMatchObject({
     kind: failureKind,
     detail: { text: 'provider config is invalid: bad key' }
@@ -117,15 +148,15 @@ async function failedStart(agent: 'pi' | 'codex' | 'grok', script: ScriptedAgent
     )
   ).toHaveLength(1)
   expect(script.prompts()).toEqual([])
-  expect(script.spawns()).toBe(5)
+  expect(script.spawns()).toBe(expectedAttempts)
 }
 
-it('Pi records one failure without dispatch after a failed start', async () => {
-  await failedStart('pi', piScriptedChild())
+it('Claude keeps unanswered early exits within five attempts', async () => {
+  await failedStart('claude', claudeScriptedChild())
 })
-it('Codex records one failure without dispatch after a failed start', async () => {
-  await failedStart('codex', codexScriptedChild())
+it('Codex keeps unanswered early exits within five attempts', async () => {
+  await failedStart('codex', codexScriptedChild(), true)
 })
-it('ACP records one failure without dispatch after a failed start', async () => {
-  await failedStart('grok', acpScriptedChild('grok')())
+it('Pi keeps unanswered early exits within five attempts', async () => {
+  await failedStart('pi', piScriptedChild(), true)
 })

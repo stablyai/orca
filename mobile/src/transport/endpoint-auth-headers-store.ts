@@ -11,12 +11,12 @@ import {
 import {
   getHostCredentialWriteRevision,
   markHostCredentialWrite
-} from './host-credential-write-revision'
+} from '../host-credentials/host-credential-write-revision'
 import {
   deletePairingKeychainItem,
   readPairingKeychainItem,
   writePairingKeychainItem
-} from './pairing-keychain'
+} from '../host-credentials/pairing-keychain'
 
 // Why: SecureStore keys must match [A-Za-z0-9._-] (colons rejected), so use dots as the separator.
 const HEADERS_KEY_PREFIX = 'orca.mobile-endpoint-auth.'

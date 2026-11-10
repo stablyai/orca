@@ -1,7 +1,10 @@
 import { fork, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { pickAllowedEnv, RUNTIME_ENV_ALLOWLIST } from '../ai-vault/session-scanner-service-env'
+import {
+  pickAllowedEnv,
+  RUNTIME_ENV_ALLOWLIST
+} from '../ai-vault/scan-service/session-scanner-service-env'
 
 const PROCESS_ENTRY_FILENAME = 'wsl-transcript-fs-process-entry.js'
 

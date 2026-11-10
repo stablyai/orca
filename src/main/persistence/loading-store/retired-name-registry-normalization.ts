@@ -1,4 +1,4 @@
-import { normalizeRetirableGeneratedName } from '../../worktree-name-retirement'
+import { normalizeRetirableGeneratedName } from '../../workspaces/removal/retirement/retirable-generated-name'
 import {
   clampExhaustedTiers,
   compactRetiredNames,

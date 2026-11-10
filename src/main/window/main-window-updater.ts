@@ -5,8 +5,8 @@ import { RELEASE_CHANNELS, type ReleaseChannel } from '../../shared/release-chan
 import { getTrustedUIRendererWindow, isTrustedUIRenderer } from '../ipc/ui'
 import type { Store } from '../persistence/loading-store/store'
 import { logStartupMilestone } from '../startup/startup-diagnostics'
-import { applyProxyToElectronUpdaterSession } from '../updater/electron-updater-proxy-session'
-import { updaterErrorMessage } from '../updater/updater-coded-error'
+import { applyProxyToElectronUpdaterSession } from '../updater/lifecycle/electron-updater-proxy-session'
+import { updaterErrorMessage } from '../updater/lifecycle/updater-coded-error'
 import { updaterCodedMessage } from '../../shared/updater-failure-copy'
 import { normalizeUpdateDelayDays } from '../../shared/update-delay'
 import {
@@ -19,11 +19,13 @@ import {
   listAvailableReleaseBuilds,
   quitAndInstall,
   setupAutoUpdater,
-  showLinuxPackage,
-  type PreQuitCleanupFailureMode,
-  type UpdateInstallMode,
-  type UpdaterSetupOptions
-} from '../updater'
+  showLinuxPackage
+} from '../updater/updater-service'
+import type {
+  PreQuitCleanupFailureMode,
+  UpdateInstallMode
+} from '../updater/lifecycle/updater-state'
+import type { UpdaterSetupOptions } from '../updater/lifecycle/updater-setup'
 
 const UPDATER_SETUP_FALLBACK_MS = 15_000
 

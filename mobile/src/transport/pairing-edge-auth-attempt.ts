@@ -1,5 +1,5 @@
 import { Platform } from 'react-native'
-import { startPreProfilePairing } from './pre-profile-pairing-coordinator'
+import { startPreProfilePairing } from '../pairing/pre-profile-pairing-coordinator'
 import {
   endpointAuthOrigin,
   endpointAuthMutationEpoch,
@@ -7,9 +7,9 @@ import {
   type EndpointAuthHeaders
 } from './endpoint-auth-headers'
 import { writeEndpointAuthHeaders } from './endpoint-auth-headers-store'
-import { getHostCredentialWriteRevision } from './host-credential-write-revision'
-import type { ConnectOptions } from './rpc-client'
-import type { PairingOffer } from './types'
+import { getHostCredentialWriteRevision } from '../host-credentials/host-credential-write-revision'
+import type { ConnectOptions } from './rpc/direct-rpc-connect'
+import type { PairingOffer } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 
 export type PairingEdgeAuthAttempt = {
   readonly result: Promise<{ hostId: string; credentialsSaved: boolean }>

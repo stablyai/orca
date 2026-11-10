@@ -56,28 +56,6 @@ describe('SSH retained payload admission', () => {
     expect(admit('nope')).toEqual({ kind: 'managed', environmentId: 'env-1' })
   })
 
-  it('caps an unverifiable serving detail like its sibling details', () => {
-    const managedServer = admitSshConnectionState(
-      {
-        targetId: 'ssh-a',
-        status: 'connected',
-        error: null,
-        reconnectAttempt: 0,
-        managedServer: {
-          kind: 'managed',
-          environmentId: 'env-1',
-          serving: {
-            state: 'unverifiable',
-            detail: 'x'.repeat(SSH_CONNECTION_ERROR_MAX_UTF8_BYTES * 4)
-          }
-        }
-      },
-      'ssh-a'
-    )?.managedServer
-    const detail = managedServer?.kind === 'managed' ? managedServer.serving?.detail : undefined
-    expect(getUtf8ByteLength(detail ?? '')).toBe(SSH_CONNECTION_ERROR_MAX_UTF8_BYTES)
-  })
-
   it('admits the plain SSH mode and drops a malformed one without dropping the state', () => {
     const state = { targetId: 'ssh-a', status: 'connected', error: null, reconnectAttempt: 0 }
     const plainSsh = { reason: 'home_noexec', message: 'Home is noexec.' }

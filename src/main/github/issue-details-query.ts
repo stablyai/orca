@@ -14,6 +14,7 @@ export const ISSUE_DETAILS_QUERY = `query($owner: String!, $repo: String!, $numb
         pageInfo { hasNextPage }
       }
       body
+      bodyHTML
       assignees(first: 50) {
         nodes { login avatarUrl(size: 48) ... on User { name } }
         pageInfo { hasNextPage }
@@ -26,8 +27,10 @@ export const ISSUE_DETAILS_QUERY = `query($owner: String!, $repo: String!, $numb
         nodes {
           databaseId
           body
+          bodyHTML
           createdAt
           url
+          viewerDidAuthor
           author {
             login
             avatarUrl(size: 48)
@@ -61,24 +64,27 @@ export type GraphQLIssueDetailsResponse = {
     repository?: {
       issue?: {
         body?: string | null
+        bodyHTML?: unknown
         assignees?: { nodes?: (Partial<GitHubAssignableUser> | null)[] | null }
         participants?: { nodes?: GitHubAssignableUser[] }
         comments?: {
           pageInfo?: { hasNextPage: boolean }
-          nodes?: {
+          nodes?: ({
             databaseId?: number | null
             body?: string | null
+            bodyHTML?: unknown
             createdAt?: string | null
             url?: string | null
+            viewerDidAuthor?: boolean | null
             author?: {
               login?: string | null
               avatarUrl?: string | null
               __typename?: string
             } | null
-          }[]
+          } | null)[]
         }
       } | null
     } | null
   }
-  errors?: { message?: string }[]
+  errors?: { message?: string; path?: unknown }[]
 }

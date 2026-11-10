@@ -1,10 +1,10 @@
 import { agentJournalSubmissionKey } from '../../../../src/shared/agent-session/journal/agent-session-journal-item-key'
-import { mobileAgentSessionWriteNoticeText } from '../agent-session-write-notice-copy'
+import { mobileAgentSessionWriteNoticeText } from './agent-session/agent-session-write-notice-copy'
 import { agentSessionVisibleFailureFacts } from '../../../../src/shared/agent-session/failures/agent-session-visible-failures'
 import type { NativeChatTurnJournal } from '../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
 import { dispatchWasWithdrawn } from '../../../../src/shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { structuredAgentSessionRecordedRejectionParts } from '../../../../src/shared/agent-session/failures/structured-agent-session-rejection-words'
-import { tuiAgentDisplayName } from '../../../../src/shared/tui-agent-display-names'
+import { tuiAgentDisplayName } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 
 const NO_NOTICES: ReadonlyMap<string, string> = new Map()
 

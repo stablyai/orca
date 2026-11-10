@@ -42,11 +42,13 @@ vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0 })
 }))
 vi.mock('lucide-react-native', () => ({ ChevronLeft: 'ChevronLeft' }))
-vi.mock('./transport/pre-profile-pairing-coordinator', () => ({
+vi.mock('./pairing/pre-profile-pairing-coordinator', () => ({
   startPreProfilePairing: mocks.start
 }))
 vi.mock('./transport/pairing-edge-auth-attempt', () => ({ startPairingWithEdgeAuth: mocks.start }))
-vi.mock('./transport/host-client-hooks', () => ({ useRefreshHostClient: () => mocks.refresh }))
+vi.mock('./transport/connection/host-client-hooks', () => ({
+  useRefreshHostClient: () => mocks.refresh
+}))
 vi.mock('./transport/endpoint-auth-headers-store', () => ({
   readEndpointAuthHeaders: async () => null,
   writeEndpointAuthHeaders: async () => {},

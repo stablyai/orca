@@ -90,6 +90,26 @@ async function unresponsiveWebSocketPeer(port: number): Promise<Socket> {
   return raw
 }
 
+// Resolves once the listener refuses new connections, i.e. the relay has begun shutting down.
+async function waitUntilListenerClosed(port: number): Promise<void> {
+  const deadline = Date.now() + 4_000
+  while (Date.now() < deadline) {
+    const accepted = await new Promise<boolean>((resolveProbe) => {
+      const probe = connect(port, '127.0.0.1')
+      probe.once('connect', () => {
+        probe.destroy()
+        resolveProbe(true)
+      })
+      probe.once('error', () => resolveProbe(false))
+    })
+    if (!accepted) {
+      return
+    }
+    await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 50))
+  }
+  throw new Error('relay kept accepting connections after SIGTERM')
+}
+
 // Peers that are not idle to server.close(); unbounded, a silent one held exit until SIGKILL.
 it.each([
   ['silent TCP peer', (port: number) => silentTcpPeer(port)],
@@ -107,6 +127,9 @@ it.each([
     relay.once('exit', (code) => resolveExit(code))
   )
   relay.kill('SIGTERM')
+  // A second signal must not restart or extend shutdown. Send it only once the first has been
+  // handled, so the two cannot coalesce into one delivery.
+  await waitUntilListenerClosed(port)
   relay.kill('SIGTERM')
 
   expect(await exited).toBe(0)

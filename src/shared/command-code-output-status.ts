@@ -3,7 +3,7 @@ import {
   cleanCommandCodePromptCandidate,
   isCommandCodeIdlePromptCandidate
 } from './command-code-prompt-text'
-import { stripTerminalControl } from './terminal-control-stripping'
+import { stripTerminalControl } from './terminal/protocol/escape/terminal-control-stripping'
 import { escapeRegex } from './string-utils'
 import { ownRetainedString } from './own-retained-string'
 

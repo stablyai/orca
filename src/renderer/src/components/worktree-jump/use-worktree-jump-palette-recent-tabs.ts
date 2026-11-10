@@ -7,7 +7,7 @@ import {
   orderRecentWorkspaceTabs,
   type RecentWorkspaceTabRow
 } from '@/lib/recent-workspace-tab-rows'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
   EMPTY_RECENT_TAB_ORDER,
   type OpenTabRecentRow,
@@ -21,7 +21,7 @@ import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-w
 import {
   getPaletteWorktreeExecutionHostId,
   getPaletteWorktreeIdentity
-} from '@/lib/palette-repo-resolution'
+} from '@/lib/workspace/search/palette-repo-resolution'
 import { encodePaletteIdentity } from '../../../../shared/palette-match/palette-ranking'
 
 type WorktreeJumpPaletteRecentTabsInput = WorktreeJumpPaletteStoreState &

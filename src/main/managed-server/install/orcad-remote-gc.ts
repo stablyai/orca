@@ -1,5 +1,5 @@
 // GC only orcad-owned slots; pin active, rollback, live-daemon and journal versions, skipping collection when recovery state is unreadable.
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from './orcad-host-transport'
 import {
   execCommand,
   isUnconfirmedSshCommandTermination
@@ -16,15 +16,15 @@ import {
   orcadLivenessProbeCommand
 } from './orcad-remote-launch'
 import { gcRemoteNodeRuntimeStore } from './remote-node-runtime-store-gc'
-import { readOrcadGcTransactionPins } from '../../ssh/orcad-gc-transaction-pins'
+import { readOrcadGcTransactionPins } from '../activation/orcad-gc-transaction-pins'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
-import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
+} from '../../ssh/remote-host/ssh-remote-platform'
+import { RELAY_REMOTE_DIR } from './remote-install-root'
 import { orcadWindowsHomeOpCommand } from './orcad-remote-windows-node'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { ORCAD_INSTALL_COMPLETE_FILENAME } from '../../../shared/orcad-artifacts'
 import { ORCAD_WINDOWS_LIVENESS_MANY_MARKER } from '../host-state/orcad-windows-host-script'
 

@@ -27,14 +27,14 @@ import {
   mobileNativeChatRowBoxProps,
   type MobileNativeChatReadingUnit,
   type MobileNativeChatScrollNode
-} from '../../mobile-native-chat-reading-place'
+} from './mobile-native-chat-reading-place'
 import type { MobileNativeChatListHandle } from './use-mobile-native-chat-tail-follow'
 import type { MobileNativeChatScrollRoots } from './mobile-native-chat-scroll-roots'
-import { scrollWritesStopMomentum } from '../../mobile-native-chat-scroll-motion'
+import { scrollWritesStopMomentum } from './mobile-native-chat-scroll-motion'
 import {
   createMobileNativeChatGrowthHold,
   MobileNativeChatGrowthHoldContext
-} from '../../mobile-native-chat-growth-hold'
+} from './mobile-native-chat-growth-hold'
 
 const FIRST_ROWS = 24
 const DRAW_BATCH = 12
@@ -237,7 +237,16 @@ export function MobileNativeChatPageList({
       }
     }
   })
-  useEffect(() => () => clearTimeout(settleTimer.current), [])
+  // A hidden chat keeps its hold but loses the timer and touch listeners; settle it again when the chat shows.
+  useEffect(() => {
+    if (heldRef.current) {
+      settle.current()
+    }
+    return () => {
+      clearTimeout(settleTimer.current)
+      touching.current = false
+    }
+  }, [])
 
   const drawAndFetch = useCallback(
     (s: Scroller) => {
@@ -355,8 +364,9 @@ export function MobileNativeChatPageList({
         return
       }
       const byReader = own.current === null || Math.abs(s.scrollTop - own.current) >= 1
-      own.current = null
+      // RN Web repeats the last scroll event 100 ms after scrolling stops; keep our write so that repeat is ours too.
       if (byReader) {
+        own.current = null
         readerScrolledAt.current = Date.now()
       }
       onEndDistance(Math.max(0, -s.scrollTop), byReader)

@@ -8,12 +8,12 @@ import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   areTaskSourceContextsEqual,
   normalizeStoredTaskSourceContext
-} from '../../../shared/task-source-context'
+} from '../../../shared/work-items/task-source-context'
 import {
   areWorkspaceLinkedItemsEqual,
   normalizeWorkspaceLinkedItem
-} from '../../../shared/workspace-linked-item'
-import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
+} from '../../../shared/workspace-attachments/workspace-linked-item'
+import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-attachments/workspace-linked-item-source-context'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   pruneUnreferencedWorktreeIdentityMeta,
@@ -21,7 +21,7 @@ import {
 } from '../loading-store/worktree-identity-metadata'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { fillDefaultWorktreeMetaFields } from '../../../shared/worktree/meta-persisted-defaults'
-import { getWorkspaceAttachments } from '../../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/workspace-attachments'
 import { rehomeLocalOnlyWorktreeMetadata } from '../loading-store/local-only-worktree-meta-rehoming'
 
 // Reclaim externally deleted local checkouts after idle grace; local stat cannot judge remote/WSL paths.
@@ -78,6 +78,7 @@ export function gcStaleWorktreeMeta(state: PersistedState): number {
     delete state.worktreeMeta[key]
     delete state.worktreeLineageById[key]
     delete state.workspaceLineageByChildKey[worktreeWorkspaceKey(key)]
+    delete state.crossStoreLineageByChildKey?.[worktreeWorkspaceKey(key)]
     // Remove identity aliases too or future worktrees at the same path could inherit dead metadata.
     removeWorktreeMetadataForHost(state, key, LOCAL_EXECUTION_HOST_ID)
     removed++

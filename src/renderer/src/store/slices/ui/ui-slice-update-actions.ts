@@ -4,7 +4,7 @@ import {
   normalizeBrowserPageZoomLevel
 } from '../../../../../shared/browser-page-zoom'
 import { normalizeKagiSessionLink } from '../../../../../shared/browser-url'
-import { DEFAULT_BROWSER_DEVTOOLS_DOCK_LAYOUT } from '../../../../../shared/browser-devtools-dock'
+import { DEFAULT_BROWSER_DEVTOOLS_DOCK_LAYOUT } from '../../../../../shared/browser/devtools/browser-devtools-dock'
 export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
     updateStatus: { state: 'idle' },
@@ -100,6 +100,13 @@ export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial
     markUpdateReassuranceSeen: () => {
       void window.api.ui.set({ updateReassuranceSeen: true }).catch(console.error)
       set({ updateReassuranceSeen: true })
+    },
+    seenMacosUpdateRequirement: null,
+    markMacosUpdateRequirementSeen: (minimumMacosVersion) => {
+      void window.api.ui
+        .set({ seenMacosUpdateRequirement: minimumMacosVersion })
+        .catch(console.error)
+      set({ seenMacosUpdateRequirement: minimumMacosVersion })
     },
     osc52ClipboardDefaultOnNoticePending: false,
     clearOsc52ClipboardDefaultOnNotice: () => {

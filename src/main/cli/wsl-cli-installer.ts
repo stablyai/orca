@@ -1,7 +1,7 @@
 import type { CliInstallStatus } from '../../shared/cli-install-types'
-import { getDefaultWslDistro } from '../wsl'
-import { runWslProcess } from '../wsl/wsl-runner'
-import { describeWslProcessFailure } from '../wsl/wsl-process-failure'
+import { getDefaultWslDistro } from '../wsl/discovery/distro-catalog'
+import { runWslProcess } from '../wsl/execution/wsl-runner'
+import { describeWslProcessFailure } from '../wsl/execution/wsl-process-failure'
 import { CliInstaller } from './cli-installer'
 import {
   buildManagedLegacyRemoveCommand,
@@ -14,7 +14,7 @@ import {
   getWslLauncherMarker,
   parseManagedLauncherTarget
 } from './wsl-cli-scripts'
-import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell/launch/shell-argument-quoting'
 import { buildWslCliInstallCommand } from './wsl-cli-registration-command'
 import {
   buildWslCliStatus,

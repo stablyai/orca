@@ -1,3 +1,4 @@
+import { projectPRCheckOwner } from '../../../../../shared/github/complete-pr-check-owner'
 import { useAppStore } from '@/store'
 import { useGitHubItemTargetContext } from './github-work-item-target-context'
 import {
@@ -7,7 +8,7 @@ import {
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
 import { useGitHubTaskRefresh } from './use-github-task-refresh'
-import { addressedGitHubIssueItem } from '@/lib/github-task-target'
+import { addressedGitHubIssueItem } from '@/lib/work-items/github/github-task-target'
 import {
   normalizeItemDialogTab,
   type ItemDialogTab
@@ -102,7 +103,14 @@ export function useGitHubWorkItemDetails({
   // The opened row and the loaded item both show the current record's facts; main's item lacks the row's repo.
   const taskItems = useMemo(
     () =>
-      workItem ? [workItem, ...(rawDetails ? [{ ...workItem, ...rawDetails.item }] : [])] : [],
+      workItem
+        ? [
+            workItem,
+            ...(rawDetails
+              ? [projectPRCheckOwner(rawDetails.item, { ...workItem, ...rawDetails.item })]
+              : [])
+          ]
+        : [],
     [workItem, rawDetails]
   )
   const projectedItems = useGitHubTaskItems(taskItems)
@@ -194,7 +202,7 @@ export function useGitHubWorkItemDetails({
     if (!workItem || !details?.item) {
       return projectedWorkItem
     }
-    return {
+    return projectPRCheckOwner(details.item, {
       ...projectedWorkItem,
       ...details.item,
       repoId: workItem.repoId,
@@ -202,7 +210,7 @@ export function useGitHubWorkItemDetails({
       number: workItem.number,
       url: workItem.url,
       ...(resource?.type === 'pr' ? { prRepo: resource.repository } : {})
-    }
+    })
   }, [details?.item, workItem, projectedWorkItem, resource])
 
   useEffect(() => {

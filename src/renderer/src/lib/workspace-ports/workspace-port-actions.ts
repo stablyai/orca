@@ -1,10 +1,11 @@
 import { translate } from '@/i18n/i18n'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import type { useAppStore } from '@/store/index'
-import { assertRuntimeEnvironmentCapability, callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { assertRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import type {
   WorkspacePort,
   WorkspacePortKillResult,
@@ -14,7 +15,7 @@ import type { LocalhostWorktreeLabelRoute } from '../../../../shared/localhost-w
 import { runWorkspacePortScanForTarget } from './workspace-port-scan-client'
 import { browserUrlForPort } from './workspace-port-urls'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
-import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../shared/browser-runtime-capabilities'
+import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { RUNTIME_BROWSER_UNAVAILABLE_MESSAGE } from '../client-creation-action-policy'
 
 const WORKSPACE_PORT_STOP_SETTLE_MS = 500

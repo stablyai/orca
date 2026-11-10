@@ -21,9 +21,9 @@ vi.mock('expo-secure-store', () => ({
 vi.mock('react-native', () => ({ Platform: platformMock }))
 
 import { cacheEndpointAuthSnapshot, peekEndpointAuthHeaders } from './endpoint-auth-headers'
-import { resetHostCredentialWriteRevisionsForTests } from './host-credential-write-revision'
-import { resetPairingKeychainForTests } from './pairing-keychain'
-import { createUnpairedHostCredentialDeletion } from './unpaired-host-credential-deletion'
+import { resetHostCredentialWriteRevisionsForTests } from '../host-credentials/host-credential-write-revision'
+import { resetPairingKeychainForTests } from '../host-credentials/pairing-keychain'
+import { createUnpairedHostCredentialDeletion } from '../pairing/unpaired-host-credential-deletion'
 
 const AUTH_KEY = 'orca.mobile-endpoint-auth.host-1'
 

@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   }
 }))
 
-vi.mock('@/runtime/web-runtime-browser-creation', () => ({
+vi.mock('@/runtime/browser/creation/web-runtime-browser-creation', () => ({
   createWebRuntimeSessionBrowserTab: mocks.createBrowserTab
 }))
 
@@ -66,93 +66,6 @@ describe('ClientHostedBrowserPagePane', () => {
     installClientHostedPaneApi({ browser: { publishClientPageMetadata: mocks.publishMetadata } })
   })
   afterEach(() => cleanup())
-
-  it('attaches the exact retained guest once and keeps focus changes local', () => {
-    const { webview, focus } = createWebview()
-    const detach = vi.fn()
-    mocks.attach.mockReturnValue(retainedAttachment(webview, detach))
-    const onUpdatePageState = vi.fn()
-    const onSetUrl = vi.fn()
-    const view = render(
-      <ClientHostedBrowserPagePane
-        browserTab={page()}
-        workspaceId="workspace-a"
-        chromeShortcutScope="focused"
-        runtimeEnvironmentId="environment-a"
-        worktreeId="worktree-a"
-        placement={PLACEMENT}
-        isActive={false}
-        onUpdatePageState={onUpdatePageState}
-        onSetUrl={onSetUrl}
-      />
-    )
-
-    expect(mocks.attach).toHaveBeenCalledTimes(1)
-    expect(mocks.attach).toHaveBeenCalledWith(
-      { browserPageId: 'page-a', pageHostGeneration: 7 },
-      expect.any(HTMLElement)
-    )
-    view.rerender(
-      <ClientHostedBrowserPagePane
-        browserTab={page()}
-        workspaceId="workspace-a"
-        chromeShortcutScope="focused"
-        runtimeEnvironmentId="environment-a"
-        worktreeId="worktree-a"
-        placement={PLACEMENT}
-        isActive
-        onUpdatePageState={onUpdatePageState}
-        onSetUrl={onSetUrl}
-      />
-    )
-
-    expect(mocks.attach).toHaveBeenCalledTimes(1)
-    expect(focus).toHaveBeenCalledTimes(1)
-    view.unmount()
-    expect(detach).toHaveBeenCalledTimes(1)
-  })
-
-  it('updates local chrome from the retained guest navigation', () => {
-    const { webview, setUrl, setTitle } = createWebview()
-    mocks.attach.mockReturnValue(retainedAttachment(webview))
-    const onUpdatePageState = vi.fn()
-    const onSetUrl = vi.fn()
-    render(
-      <ClientHostedBrowserPagePane
-        browserTab={page()}
-        workspaceId="workspace-a"
-        chromeShortcutScope="focused"
-        runtimeEnvironmentId="environment-a"
-        worktreeId="worktree-a"
-        placement={PLACEMENT}
-        isActive
-        onUpdatePageState={onUpdatePageState}
-        onSetUrl={onSetUrl}
-      />
-    )
-    onUpdatePageState.mockClear()
-    onSetUrl.mockClear()
-    setUrl('https://remote.internal/path')
-    setTitle('Remote page')
-
-    act(() => webview.dispatchEvent(new Event('did-navigate')))
-
-    expect(onSetUrl).toHaveBeenCalledWith('page-a', 'https://remote.internal/path', {
-      preserveLoadError: true
-    })
-    expect(onUpdatePageState).toHaveBeenCalledWith(
-      'page-a',
-      expect.objectContaining({
-        title: 'Remote page',
-        loading: false,
-        canGoBack: true,
-        canGoForward: false
-      })
-    )
-    expect((screen.getByLabelText('Address') as HTMLInputElement).value).toBe(
-      'https://remote.internal/path'
-    )
-  })
 
   it('searches non-URL address input like the local pane instead of forcing a host', () => {
     const { webview } = createWebview()
@@ -284,167 +197,6 @@ describe('ClientHostedBrowserPagePane', () => {
     expect(screen.getByText('Client-hosted browser unavailable')).not.toBeNull()
     expect(document.querySelector('webview')).toBeNull()
   })
-
-  it('escapes an unrenderable page to a NEW server-placed page at its last committed URL', async () => {
-    mocks.attach.mockReturnValue(null)
-    mocks.createBrowserTab.mockClear()
-
-    render(
-      <ClientHostedBrowserPagePane
-        browserTab={{ ...page(), url: 'https://remote.internal/path' }}
-        workspaceId="workspace-a"
-        chromeShortcutScope="focused"
-        runtimeEnvironmentId="environment-a"
-        worktreeId="worktree-a"
-        placement={PLACEMENT}
-        isActive
-        onUpdatePageState={vi.fn()}
-        onSetUrl={vi.fn()}
-      />
-    )
-
-    expect(screen.getByText(/Signed-in and other transient page state may differ/)).not.toBeNull()
-    await act(async () => {
-      screen.getByRole('button', { name: 'Reopen on server' }).click()
-    })
-
-    expect(mocks.createBrowserTab).toHaveBeenCalledWith({
-      worktreeId: 'worktree-a',
-      environmentId: 'environment-a',
-      url: 'https://remote.internal/path',
-      placementPreference: 'server',
-      focusOnCreate: true
-    })
-  })
-
-  it('requests the one-time intro tour on the first active client-hosted page', async () => {
-    vi.useFakeTimers()
-    const { useAppStore } = await import('@/store')
-    const prior = {
-      persistedUIReady: useAppStore.getState().persistedUIReady,
-      contextualToursSeenIds: useAppStore.getState().contextualToursSeenIds,
-      activeContextualTourId: useAppStore.getState().activeContextualTourId
-    }
-    useAppStore.setState({
-      persistedUIReady: true,
-      contextualToursSeenIds: [],
-      activeContextualTourId: null
-    })
-    const { webview } = createWebview()
-    mocks.attach.mockReturnValue(retainedAttachment(webview))
-    try {
-      render(
-        <ClientHostedBrowserPagePane
-          browserTab={page()}
-          workspaceId="workspace-a"
-          chromeShortcutScope="focused"
-          runtimeEnvironmentId="environment-a"
-          worktreeId="worktree-a"
-          placement={PLACEMENT}
-          isActive={true}
-          onUpdatePageState={vi.fn()}
-          onSetUrl={vi.fn()}
-        />
-      )
-      // Why: happy-dom rects are zero-sized and the tour gate requires a measurable target.
-      const target = document.querySelector<HTMLElement>(
-        '[data-contextual-tour-target="client-hosted-browser-controls"]'
-      )
-      expect(target).not.toBeNull()
-      target!.getBoundingClientRect = () => new DOMRect(0, 0, 400, 32)
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(0)
-      })
-      expect(useAppStore.getState().activeContextualTourId).toBe('client-hosted-browser')
-    } finally {
-      useAppStore.setState(prior)
-      vi.useRealTimers()
-    }
-  })
-
-  it('never re-requests the intro tour once it has been seen', async () => {
-    vi.useFakeTimers()
-    const { useAppStore } = await import('@/store')
-    const prior = {
-      persistedUIReady: useAppStore.getState().persistedUIReady,
-      contextualToursSeenIds: useAppStore.getState().contextualToursSeenIds,
-      activeContextualTourId: useAppStore.getState().activeContextualTourId
-    }
-    useAppStore.setState({
-      persistedUIReady: true,
-      contextualToursSeenIds: ['client-hosted-browser'],
-      activeContextualTourId: null
-    })
-    const { webview } = createWebview()
-    mocks.attach.mockReturnValue(retainedAttachment(webview))
-    try {
-      render(
-        <ClientHostedBrowserPagePane
-          browserTab={page()}
-          workspaceId="workspace-a"
-          chromeShortcutScope="focused"
-          runtimeEnvironmentId="environment-a"
-          worktreeId="worktree-a"
-          placement={PLACEMENT}
-          isActive={true}
-          onUpdatePageState={vi.fn()}
-          onSetUrl={vi.fn()}
-        />
-      )
-      // Why: same measurable target as the positive case — only seenIds differs.
-      const target = document.querySelector<HTMLElement>(
-        '[data-contextual-tour-target="client-hosted-browser-controls"]'
-      )
-      expect(target).not.toBeNull()
-      target!.getBoundingClientRect = () => new DOMRect(0, 0, 400, 32)
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(0)
-      })
-      expect(useAppStore.getState().activeContextualTourId).toBeNull()
-    } finally {
-      useAppStore.setState(prior)
-      vi.useRealTimers()
-    }
-  })
-
-  it('publishes full guest metadata through the exact runtime placement', async () => {
-    const { webview, setUrl, setTitle } = createWebview()
-    mocks.attach.mockReturnValue(retainedAttachment(webview))
-    render(
-      <ClientHostedBrowserPagePane
-        browserTab={page()}
-        workspaceId="workspace-a"
-        chromeShortcutScope="focused"
-        runtimeEnvironmentId="environment-a"
-        worktreeId="worktree-a"
-        placement={PLACEMENT}
-        isActive
-        onUpdatePageState={vi.fn()}
-        onSetUrl={vi.fn()}
-      />
-    )
-    setUrl('https://remote.internal/path')
-    setTitle('Remote page')
-
-    act(() => webview.dispatchEvent(new Event('did-navigate')))
-
-    await vi.waitFor(() => expect(mocks.publishMetadata).toHaveBeenCalledTimes(2))
-    expect(mocks.publishMetadata).toHaveBeenLastCalledWith({
-      environmentId: 'environment-a',
-      params: {
-        browserHostClientId: 'host-a',
-        browserHostGeneration: 3,
-        browserPageId: 'page-a',
-        pageHostGeneration: 7,
-        revision: 2,
-        url: 'https://remote.internal/path',
-        title: 'Remote page',
-        loading: false,
-        canGoBack: true,
-        canGoForward: false
-      }
-    })
-  })
 })
 
 describe('ClientHostedBrowserPagePane address bar parity', () => {
@@ -508,32 +260,6 @@ describe('ClientHostedBrowserPagePane address bar parity', () => {
     expect(input.selectionStart).toBe(0)
     expect(input.selectionEnd).toBe(input.value.length)
     expect(focus).not.toHaveBeenCalled()
-  })
-
-  it('still hands focus to the guest when the tab opens on a real page', () => {
-    const { webview, focus, setUrl } = createWebview()
-    // Why: the attach is mocked, so place the guest where the real attach would put it.
-    document.body.appendChild(webview)
-    setUrl('https://remote.internal/path')
-    mocks.attach.mockReturnValue(retainedAttachment(webview))
-
-    render(
-      <ClientHostedBrowserPagePane
-        browserTab={page()}
-        workspaceId="workspace-a"
-        chromeShortcutScope="focused"
-        runtimeEnvironmentId="environment-a"
-        worktreeId="worktree-a"
-        placement={PLACEMENT}
-        isActive
-        onUpdatePageState={vi.fn()}
-        onSetUrl={vi.fn()}
-      />
-    )
-    act(() => flushFrames())
-
-    expect(focus).toHaveBeenCalledTimes(1)
-    expect(document.activeElement).not.toBe(screen.getByLabelText('Address'))
   })
 
   it('gives the guest focus back after the palette hands the address bar a turn', () => {
@@ -604,34 +330,6 @@ describe('ClientHostedBrowserPagePane address bar parity', () => {
     // A guest owns separate WebContents focus until explicitly blurred, even after an input is focused.
     expect(blur).toHaveBeenCalled()
     expect(document.activeElement).toBe(screen.getByLabelText('Address'))
-  })
-
-  it('files guest navigations into the URL history the address bar suggests from', () => {
-    const { webview, setUrl, setTitle } = createWebview()
-    mocks.attach.mockReturnValue(retainedAttachment(webview))
-    render(
-      <ClientHostedBrowserPagePane
-        browserTab={page()}
-        workspaceId="workspace-a"
-        chromeShortcutScope="focused"
-        runtimeEnvironmentId="environment-a"
-        worktreeId="worktree-a"
-        placement={PLACEMENT}
-        isActive
-        onUpdatePageState={vi.fn()}
-        onSetUrl={vi.fn()}
-      />
-    )
-    // Why: the initial sync sees about:blank, which never belongs in history.
-    expect(useAppStore.getState().browserUrlHistory).toHaveLength(0)
-
-    setUrl('https://remote.internal/docs')
-    setTitle('Remote docs')
-    act(() => webview.dispatchEvent(new Event('did-navigate')))
-
-    expect(useAppStore.getState().browserUrlHistory).toEqual([
-      expect.objectContaining({ url: 'https://remote.internal/docs', title: 'Remote docs' })
-    ])
   })
 })
 

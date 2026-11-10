@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { loadHostCatalog } from '../transport/host-store'
-import type { RpcClient } from '../transport/rpc-client'
-import { startRuntimeCapabilityProbe } from '../transport/runtime-capability-probe'
-import { useAllHostClients } from '../transport/use-all-host-clients'
+import { loadHostCatalog } from '../host-catalog/host-store'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { startRuntimeCapabilityProbe } from '../transport/connection/runtime-capability-probe'
+import { useAllHostClients } from '../transport/connection/use-all-host-clients'
 import { NOTIFICATIONS_REMOTE_PUSH_CAPABILITY } from './push-registration'
 
 export type RemotePushHostSupport = {
@@ -37,12 +37,14 @@ export function useRemotePushCapableHosts(): RemotePushHostSupport {
   const clients = useAllHostClients(hostIds)
 
   // Remove votes from unpaired hosts because their pushes cannot reach this phone.
-  useEffect(() => {
+  const [prunedForHostIds, setPrunedForHostIds] = useState(hostIds)
+  if (prunedForHostIds !== hostIds) {
+    setPrunedForHostIds(hostIds)
     setSupportedByHostId((previous) => {
       const kept = Object.entries(previous).filter(([hostId]) => hostIds.includes(hostId))
       return kept.length === Object.keys(previous).length ? previous : Object.fromEntries(kept)
     })
-  }, [hostIds])
+  }
 
   // Diff client identities: useAllHostClients rebuilds its array on every tick, which must not restart unchanged probes.
   useEffect(() => {

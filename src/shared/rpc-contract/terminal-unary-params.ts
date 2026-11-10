@@ -1,7 +1,7 @@
-import { z } from 'zod'
-import { TERMINAL_KITTY_FILE_MAX_BYTES } from '../terminal-kitty-file'
+import * as z from 'zod'
+import { TERMINAL_KITTY_FILE_MAX_BYTES } from '../terminal/images/terminal-kitty-file'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
-import { isTuiAgent } from '../tui-agent-config'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import { SpawnIntentParam } from './agent-session-params'
 import {
   canonicalizeWindowsShellOverride,
@@ -98,6 +98,8 @@ export const TerminalListParams = z.object({
   includeVisualLayouts: z.boolean().optional(),
   // Readers that never show the output tail drop it; absent includes it, as older hosts always do.
   includePreview: z.boolean().optional(),
+  // Agent sleep asks who else is viewing or typing; older hosts ignore it and report nothing.
+  includeAttention: z.boolean().optional(),
   // Layout-owner hosts show the workspace's unshown live terminals before listing (a window's
   // activation sweep); other hosts drop it, as they did before it existed.
   placeUnshownLiveTerminals: z.boolean().optional()
@@ -162,6 +164,12 @@ export const TerminalSetPaneTitle = TerminalHandle.extend({
 })
 
 export const TerminalSend = TerminalHandle.extend({
+  inputSequence: z
+    .object({
+      sessionId: z.string().min(1).max(128),
+      seq: z.number().int().positive().max(Number.MAX_SAFE_INTEGER)
+    })
+    .optional(),
   text: OptionalString,
   enter: z.unknown().optional(),
   interrupt: z.unknown().optional(),
@@ -194,6 +202,10 @@ export const TerminalSend = TerminalHandle.extend({
     })
     .optional(),
   claimViewport: z.literal(true).optional()
+})
+
+export const TerminalOpenInputSession = TerminalHandle.extend({
+  client: z.object({ id: requiredString('Missing client ID'), type: z.literal('mobile') })
 })
 
 export const TerminalViewport = z.object({
@@ -250,6 +262,7 @@ export const TerminalCreateParams = z.object({
   // Older hosts drop it and resume as before.
   resumeOrigin: z.literal('saved').optional(),
   launchToken: OptionalString,
+  trustWorktreeId: z.string().min(1).max(32_768).optional(),
   launchAgent: z.string().refine(isTuiAgent).optional(),
   terminalKittyKeyboardProtocol: z.boolean().optional(),
   terminalColorQueryReplies: TerminalColorQueryReplyColorsParam.optional(),

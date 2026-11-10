@@ -1,7 +1,7 @@
 // Check load/save idempotence: a second load must change nothing. Known first-load kinds are broad; return per-kind counts for logging so new normalizations remain visible.
 
 import type { ExecutionHostId } from '../execution-host'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import { loadWorkspaceLayout } from './workspace-layout-load'
 import { nameBasedLoadContext } from './workspace-layout-minted-ids'
 import { stableJson } from './workspace-layout-load-report'

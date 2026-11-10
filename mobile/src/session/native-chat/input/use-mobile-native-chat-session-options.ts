@@ -19,13 +19,12 @@ import type {
   SessionOptionDescriptor,
   SessionOptionValue
 } from '../../../../../src/shared/native-chat/input/native-chat-session-options'
-import type { MobileNativeChatSendOutcome } from '../mobile-native-chat-send'
+import type { MobileNativeChatSendOutcome } from '../composer/mobile-native-chat-send'
 import {
   createNativeChatPtySessionOptions,
   type NativeChatPtySessionOptionsSurface
 } from '../../../../../src/shared/native-chat/input/native-chat-pty-session-options'
 import {
-  clearNativeChatSessionOptionCacheForTests,
   readNativeChatSessionOptionCache,
   writeNativeChatSessionOptionCache
 } from '../../../../../src/shared/native-chat/input/native-chat-session-option-cache'
@@ -39,9 +38,14 @@ import { sayMobileNativeChatSessionOption } from './native-chat-session-option-c
 export type MobileNativeChatSessionOptionsController = {
   optionSurface?: SessionOptionsSurface
   conversationCommands?: readonly AgentSessionConversationCommand[]
+  compactInstructions?: boolean
   optionPickerRequest?: { id: string; sequence: number } | null
   snapshot: SessionOptionDescriptor[]
   pendingId: string | null
+  /** Structured picks are taken before the chat attaches and applied when it does. */
+  appliesOnAttach?: boolean
+  /** A pick waits for the chat to attach. */
+  heldPick?: boolean
   setOption: (id: string, value: SessionOptionValue) => Promise<boolean>
   invokeAction: (id: string) => Promise<boolean>
   recordCommand: (command: string) => void
@@ -78,11 +82,6 @@ const getEmptySnapshot = (): SessionOptionDescriptor[] => EMPTY_SNAPSHOT
 
 // Kept across remounts: a repeated hook model is not fresh evidence, and reapplying it would revert a newer pick.
 const appliedReportByScope = new Map<string, string>()
-
-export function clearMobileSessionOptionRecordsForTests(): void {
-  clearNativeChatSessionOptionCacheForTests()
-  appliedReportByScope.clear()
-}
 
 /** A tab that runs another agent starts over: a new session there carries none of the old one's picks. */
 function startScopeOverForAgent(scopeKey: string, agent: string): void {

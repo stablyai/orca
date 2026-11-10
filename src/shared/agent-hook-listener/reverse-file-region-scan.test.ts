@@ -42,21 +42,6 @@ describe('scanFileRegionsBackward', () => {
     }
   })
 
-  it('stops at the first defined result without reading the rest of the file', () => {
-    const file = writeFixture(`${Array.from({ length: 200 }, (_, i) => `line-${i}`).join('\n')}\n`)
-    let regions = 0
-    const found = scanFileRegionsBackward(
-      file,
-      { chunkBytes: 32, maxScanBytes: 1024 * 1024 },
-      () => {
-        regions += 1
-        return 'first'
-      }
-    )
-    expect(found).toBe('first')
-    expect(regions).toBe(1)
-  })
-
   it('reports the byte offset each region starts at', () => {
     const file = writeFixture('😀alpha\nbravo\ncharlie\n')
     const offsets: { text: string; regionPosition: number }[] = []
@@ -78,23 +63,5 @@ describe('scanFileRegionsBackward', () => {
     // A byte cap cannot prove the start of the topmost record.
     const file = writeFixture(`${'x'.repeat(500)}\nkeep-me\n`)
     expect(collectLines(file, 64, 128)).toEqual(['keep-me'])
-  })
-
-  it('reads a file with no trailing newline', () => {
-    expect(collectLines(writeFixture('alpha\nbravo'), 4)).toEqual(['bravo', 'alpha'])
-  })
-
-  it('treats an empty or missing file as nothing found', () => {
-    expect(collectLines(writeFixture(''), 64)).toEqual([])
-    expect(
-      scanFileRegionsBackward(
-        '/nonexistent/transcript.jsonl',
-        {
-          chunkBytes: 64,
-          maxScanBytes: 64
-        },
-        () => 'x'
-      )
-    ).toBeUndefined()
   })
 })

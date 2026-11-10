@@ -1,18 +1,18 @@
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
-import type { SidebarHostOption } from '@/components/sidebar/sidebar-host-options'
+import type { SidebarHostOption } from '@/components/sidebar/worktree-list/controls/sidebar-host-options'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-ports/workspace-port-groups'
-import { buildWorktreePaletteDocuments } from '@/lib/worktree-palette-document'
+import { buildWorktreePaletteDocuments } from '@/lib/workspace/search/worktrees/worktree-palette-document'
 import {
   getPaletteWorktreeIdentity,
   getPaletteWorktreeExecutionHostId,
   resolvePaletteRepoForWorktree
-} from '@/lib/palette-repo-resolution'
+} from '@/lib/workspace/search/palette-repo-resolution'
 import type { PaletteDocument } from '../../../../shared/palette-match/palette-document'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 
 export function buildWorktreeJumpPaletteDocumentIndex({

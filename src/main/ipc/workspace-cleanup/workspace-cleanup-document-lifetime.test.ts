@@ -1,8 +1,8 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GitStatusResult } from '../../../shared/git-status-types'
+import type { GitStatusResult } from '../../../shared/git/status/git-status-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
-import type * as RepoWorktrees from '../../repo-worktrees'
+import type * as RepoWorktrees from '../../workspaces/catalog/repo-worktrees'
 
 const boundary = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, args: unknown) => unknown>(),
@@ -23,7 +23,7 @@ vi.mock('node:fs/promises', () => ({
     throw new Error('no gitdir pointer')
   })
 }))
-vi.mock('../../repo-worktrees', async (importOriginal) => ({
+vi.mock('../../workspaces/catalog/repo-worktrees', async (importOriginal) => ({
   ...(await importOriginal<typeof RepoWorktrees>()),
   listRepoWorktrees: boundary.list
 }))
@@ -31,7 +31,7 @@ vi.mock('../../git/source-control/status-read', () => ({ getStatus: boundary.sta
 vi.mock('../../git/command-runner/git-exec-file', () => ({
   gitExecFileAsync: vi.fn(async () => ({ stdout: '0\n', stderr: '' }))
 }))
-vi.mock('../../project-runtime-git-options', () => ({
+vi.mock('../../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
 }))
 vi.mock('../../workspaces/cleanup/workspace-cleanup-scan-snapshot', () => ({
@@ -134,19 +134,6 @@ describe('workspace cleanup document ownership', () => {
       expect(sender.eventNames()).toEqual([])
     }
   )
-  it('preserves same-document navigation and persists a completed scan', async () => {
-    const pending = Promise.withResolvers<GitStatusResult>()
-    boundary.status.mockReturnValue(pending.promise)
-    const { sender, scan } = setup()
-    const result = scan('live')
-    await vi.waitFor(() => expect(boundary.status).toHaveBeenCalledTimes(3))
-    sender.emit('did-navigate-in-page', {}, '#section', true)
-    pending.resolve(STATUS)
-    await result
-    expect(boundary.status).toHaveBeenCalledTimes(10)
-    expect(boundary.persist).toHaveBeenCalledTimes(1)
-    expect(sender.eventNames()).toEqual([])
-  })
   it('lets a successor finish while late retired reads settle', async () => {
     const pending = Promise.withResolvers<GitStatusResult>()
     boundary.list

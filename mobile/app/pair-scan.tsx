@@ -1,3 +1,4 @@
+import * as reticle from '../src/pairing/pairing-scan-reticle-dimensions'
 import { useState, useRef, useCallback, useEffect } from 'react'
 import {
   AppState,
@@ -13,14 +14,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, Clipboard as ClipboardIcon, QrCode } from 'lucide-react-native'
-import { decodePairingUrl, parsePairingCode } from '../src/transport/pairing'
-import { getPairingScanErrorMessage } from '../src/transport/pairing-scan-error-message'
+import { decodePairingUrl, parsePairingCode } from '../src/pairing/pairing'
+import { getPairingScanErrorMessage } from '../src/pairing/pairing-scan-error-message'
 import {
   startPreProfilePairing,
   type PreProfilePairingAttempt
-} from '../src/transport/pre-profile-pairing-coordinator'
-import type { ConnectionLogEntry, PairingOffer } from '../src/transport/types'
-import { useRefreshHostClient } from '../src/transport/host-client-hooks'
+} from '../src/pairing/pre-profile-pairing-coordinator'
+import type { ConnectionLogEntry } from '../src/diagnostics/connection/connection-log-types'
+import type { PairingOffer } from '../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import { useRefreshHostClient } from '../src/transport/connection/host-client-hooks'
 import { colors, spacing, pressedStyle } from '../src/theme/mobile-theme'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
@@ -41,11 +43,10 @@ import {
 } from '../src/pairing/pairing-visuals'
 import { PairScanRecovery } from '../src/pairing/pair-scan-recovery'
 import { triggerSuccess } from '../src/platform/haptics'
+import { getPairingFailureMessage } from '../src/pairing/pairing-failure-message'
 
 // Bound initial pairing at ~25s (one connect timeout plus retry) so broken routes show an actionable error/log; live RPC retries indefinitely.
 const PAIRING_OVERALL_TIMEOUT_MS = 25_000
-const SCAN_RETICLE_SCALE = 0.62
-const SCAN_RETICLE_MAX_SIZE = 360
 
 export default function PairScanScreen() {
   useMobileColorScheme()
@@ -194,7 +195,7 @@ export default function PairScanScreen() {
         return
       }
       router.replace(mobileOnboardingDestination(onboardingSteps, hostId))
-    } catch {
+    } catch (err) {
       const timedOut = attempt.timedOut
       const attemptIsCurrent = activePairingAttemptRef.current === attempt
       attempt.dispose()
@@ -204,23 +205,21 @@ export default function PairScanScreen() {
       if (!mountedRef.current || !attemptIsCurrent) {
         return
       }
-      setFailedSecureCode(
-        Platform.OS !== 'web' && offer.endpoint.toLowerCase().startsWith('wss://')
-          ? originalCode
-          : null
-      )
+      const secure = Platform.OS !== 'web' && offer.endpoint.toLowerCase().startsWith('wss://')
+      setFailedSecureCode(secure ? originalCode : null)
       setStatus('error')
       setErrorMessage(
-        timedOut
-          ? t(
-              'app.pairScan.connectTimedOut',
-              "Couldn't connect within {{seconds}}s — see log below for where it stalled",
-              { seconds: PAIRING_OVERALL_TIMEOUT_MS / 1000 }
-            )
-          : t(
-              'app.pairScan.secureFailure',
-              'Pairing failed. Check that Orca is reachable and the pairing link is current.'
-            )
+        getPairingFailureMessage({
+          screen: 'scan',
+          error: err,
+          timedOut,
+          timeoutMs: PAIRING_OVERALL_TIMEOUT_MS,
+          t,
+          fallbackMessage: t(
+            'app.pairScan.secureFailure',
+            'Pairing failed. Check that Orca is reachable and the pairing link is current.'
+          )
+        })
       )
       processingRef.current = false
     }
@@ -243,8 +242,8 @@ export default function PairScanScreen() {
   }
   // Keep QR guide square even on rectangular iPad previews.
   const reticleSize = Math.min(
-    Math.round(Math.min(cameraBounds.width, cameraBounds.height) * SCAN_RETICLE_SCALE),
-    SCAN_RETICLE_MAX_SIZE
+    Math.round(Math.min(cameraBounds.width, cameraBounds.height) * reticle.SCALE),
+    reticle.MAX_SIZE
   )
 
   if (!permission) {

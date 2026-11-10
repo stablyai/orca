@@ -1,4 +1,4 @@
-import type { ConnectionLogEntry } from '../transport/types'
+import type { ConnectionLogEntry } from '../diagnostics/connection/connection-log-types'
 import { ConnectionLog } from '../components/ConnectionLog'
 import { View, Text, Pressable } from 'react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'

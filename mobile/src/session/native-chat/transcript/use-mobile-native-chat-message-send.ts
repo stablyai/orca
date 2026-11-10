@@ -1,28 +1,34 @@
 import { useCallback, type MutableRefObject } from 'react'
-import type { RpcClient } from '../../../transport/rpc-client'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import {
   clearMobileNativeChatInput,
   openMobileNativeChatSendBudget,
+  readMobileNativeChatInputClear,
   sendMobileNativeChatMessageWithOutcome,
   typeMobileNativeChatCommandWithOutcome,
+  type MobileNativeChatSendIntent,
   type MobileNativeChatSendOutcome
-} from '../mobile-native-chat-send'
+} from '../composer/mobile-native-chat-send'
 import type { CatalogCommandDelivery } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-types'
 import { isSlashCommandDraft } from '../../../../../src/shared/native-chat/input/native-chat-slash-commands'
-import { healMobileNativeChatStaleInput } from '../mobile-native-chat-stale-input'
-import { classifyMobileNativeChatSend } from '../mobile-native-chat-send-classification'
+import { healMobileNativeChatStaleInput } from '../composer/mobile-native-chat-stale-input'
+import { classifyMobileNativeChatSend } from '../composer/mobile-native-chat-send-classification'
 import { readMobileNativeChatSkillOrigin } from '../composer/mobile-native-chat-draft-store'
+import { nativeChatSendTextOwner } from './mobile-native-chat-send-text-owner'
+import {
+  beginMobileNativeChatInFlightSend,
+  settleMobileNativeChatInFlightSend
+} from '../composer/mobile-native-chat-in-flight-sends'
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
-} from '../mobile-native-chat-terminal-write-lock'
-import type { MobileNativeChatSendOrigin } from '../mobile-native-chat-pending-echo'
-import { UNCONFIRMED_SEND_MESSAGE } from '../use-mobile-native-chat-unconfirmed-sends'
-import type { MobileNativeChatLaunchDraftSeed } from '../composer/use-mobile-native-chat-launch-draft-seed'
+} from '../composer/mobile-native-chat-terminal-write-lock'
+import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
 import {
-  AGENT_TUI_CLEAR_INPUT_LINE,
-  buildAgentTuiClearInputForText
-} from '../../../../../src/shared/agent-tui-input-clear'
+  UNCONFIRMED_SEND_MESSAGE,
+  UNCONFIRMED_SEND_RESTORED_MESSAGE
+} from '../composer/use-mobile-native-chat-unconfirmed-sends'
+import type { MobileNativeChatLaunchDraftSeed } from '../composer/use-mobile-native-chat-launch-draft-seed'
 import { buildNativeChatPasteBytes } from '../../../../../src/shared/native-chat/input/native-chat-paste-bytes'
 
 export type MobileNativeChatMessageSend = {
@@ -34,7 +40,8 @@ export type MobileNativeChatMessageSend = {
     deadline?: number,
     // Only a structured send carries them; a terminal chat's images were pasted before this.
     _attachments?: readonly unknown[],
-    sentAt?: number
+    sentAt?: number,
+    intent?: MobileNativeChatSendIntent
   ) => Promise<MobileNativeChatSendOutcome>
   dispatchCommand: (
     text: string,
@@ -53,12 +60,17 @@ export function useMobileNativeChatMessageSend(args: {
   captureSendOrigin: (text: string, sentAt?: number) => MobileNativeChatSendOrigin | null
   readSeededLaunchDraftSeed: () => MobileNativeChatLaunchDraftSeed | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
-  restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
+  restoreRejectedDraft: (
+    origin: MobileNativeChatSendOrigin,
+    text: string,
+    options?: { preserveConversationCommands?: boolean }
+  ) => void
   acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => void
   holdUnconfirmedSend: (
     origin: MobileNativeChatSendOrigin,
     text: string,
-    onUnconfirmed: () => void
+    onUnconfirmed: () => void,
+    inFlightId?: string | null
   ) => void
   onSendError: (message: string) => void
 }): MobileNativeChatMessageSend {
@@ -85,7 +97,8 @@ export function useMobileNativeChatMessageSend(args: {
       syncComposer: boolean,
       recordControlSend: boolean,
       sharedDeadline?: number,
-      sentAt?: number
+      sentAt?: number,
+      intent?: MobileNativeChatSendIntent
     ): Promise<MobileNativeChatSendOutcome> => {
       // Trim only outgoing bytes to prevent rapid-send concatenation; restore the exact typed draft on rejection.
       const text = draftText.trimEnd()
@@ -111,25 +124,37 @@ export function useMobileNativeChatMessageSend(args: {
         return 'rejected'
       }
       // A picked skill leading the draft is chat, as on desktop; read it before the clear forgets it.
-      const skillOrigin = readMobileNativeChatSkillOrigin(origin.draftKey)
+      const owner = nativeChatSendTextOwner(intent, syncComposer ? restoreRejectedDraft : null)
+      const skillOrigin = owner.skillOrigin ?? readMobileNativeChatSkillOrigin(origin.draftKey)
       // Clear optimistically before slow/lost acknowledgements; only definite rejection restores the draft.
       if (syncComposer) {
         clearDraftForSend(origin, draftText)
       }
       const seededLaunchDraft = readSeededLaunchDraftSeed()
       const classification = classifyMobileNativeChatSend(agent, text, skillOrigin)
+      // Saved in the same write as the clear, so a kill before the outcome cannot lose the text.
+      const inFlightId = owner.owned
+        ? beginMobileNativeChatInFlightSend(origin, 'terminal', draftText, {
+            command: classification !== 'chat',
+            intent
+          })
+        : null
       const typesCodexCommand =
         agent === 'codex' &&
         classification !== 'chat' &&
         isSlashCommandDraft(text) &&
         !images?.length
-      if (!images?.length && (seededLaunchDraft || !typesCodexCommand)) {
+      if (!images?.length) {
+        const clearInput = await readMobileNativeChatInputClear({
+          client,
+          terminal: handle,
+          deadline,
+          ...(seededLaunchDraft ? { seededText: seededLaunchDraft.text } : {})
+        })
         const cleared = await clearMobileNativeChatInput({
           client,
           terminal: handle,
-          clearInput: seededLaunchDraft
-            ? buildAgentTuiClearInputForText(seededLaunchDraft.text)
-            : AGENT_TUI_CLEAR_INPUT_LINE,
+          clearInput,
           deadline,
           ...(deviceTokenRef.current
             ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
@@ -139,6 +164,7 @@ export function useMobileNativeChatMessageSend(args: {
           if (syncComposer) {
             restoreRejectedDraft(origin, draftText)
           }
+          settleMobileNativeChatInFlightSend(inFlightId)
           onSendError('Message not sent')
           return 'rejected'
         }
@@ -167,14 +193,31 @@ export function useMobileNativeChatMessageSend(args: {
             deadline,
             ...(mobileClient ? { mobileClient } : {})
           })
-      // TUI commands cannot reconcile user echoes, so neither optimistic bubbles nor unconfirmed transcript holds apply.
       if (outcome === 'unknown') {
         if (classification === 'chat') {
-          // Lost acknowledgement proves no failure; verify delivery by transcript rather than reporting not sent.
-          holdUnconfirmedSend(origin, text, () => onSendError(UNCONFIRMED_SEND_MESSAGE))
+          // Lost acknowledgement proves no failure; wait for the transcript, then hand back text it never showed.
+          holdUnconfirmedSend(
+            origin,
+            text,
+            () => {
+              // A TUI holds a mid-turn send with no transcript row until the turn ends, so its absence proves nothing.
+              if (!owner.owned || origin.queuedDuringWorkingEpoch !== undefined) {
+                onSendError(UNCONFIRMED_SEND_MESSAGE)
+                return
+              }
+              owner.giveBack(origin, draftText)
+              onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
+            },
+            inFlightId
+          )
+        } else {
+          owner.giveBack(origin, draftText, { preserveConversationCommands: true })
+          settleMobileNativeChatInFlightSend(inFlightId, 'sent')
+          onSendError(UNCONFIRMED_SEND_MESSAGE)
         }
         return 'unknown'
       }
+      settleMobileNativeChatInFlightSend(inFlightId, outcome === 'rejected' ? 'kept' : 'sent')
       if (outcome === 'rejected') {
         if (syncComposer) {
           restoreRejectedDraft(origin, draftText)
@@ -214,8 +257,9 @@ export function useMobileNativeChatMessageSend(args: {
       images?: string[],
       deadline?: number,
       _attachments?: readonly unknown[],
-      sentAt?: number
-    ) => sendMessage(text, images, true, true, deadline, sentAt),
+      sentAt?: number,
+      intent?: MobileNativeChatSendIntent
+    ) => sendMessage(text, images, !intent?.queued, true, deadline, sentAt, intent),
     [sendMessage]
   )
 

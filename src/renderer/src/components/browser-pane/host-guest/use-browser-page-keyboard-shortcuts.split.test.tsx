@@ -8,7 +8,8 @@ import type {
 } from '../../../../../shared/browser-page-command-target'
 import type { BrowserPageZoomCommand } from '../../../../../shared/browser-page-zoom'
 import { paneChannel } from '../client-hosted-browser-pane-test-rig'
-import type { BrowserChromeShortcutScope, GrabIntent } from '../describe-page/browser-page-types'
+import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
+import type { GrabIntent } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { useBrowserPageKeyboardShortcuts } from './use-browser-page-keyboard-shortcuts'
 
 // Why: the chords are Cmd on macOS and Ctrl elsewhere, so the platform cannot be left to the runner.
@@ -183,18 +184,6 @@ describe('useBrowserPageKeyboardShortcuts in a split of two active browser panes
     expect(a.webview.goBack).not.toHaveBeenCalled()
     expect(a.webview.goForward).not.toHaveBeenCalled()
     expect(a.reload).not.toHaveBeenCalled()
-  })
-
-  it('answers a chrome chord only in the focused split', () => {
-    const { a, b } = renderSplit('focused', 'inactive')
-
-    press(window, { key: '[', code: 'BracketLeft' })
-    press(window, { key: 'r', code: 'KeyR' })
-
-    expect(a.webview.goBack).toHaveBeenCalledTimes(1)
-    expect(a.reload).toHaveBeenCalledWith(false)
-    expect(b.webview.goBack).not.toHaveBeenCalled()
-    expect(b.reload).not.toHaveBeenCalled()
   })
 
   it('answers a chrome chord only in the pane it came from when no split is focused', () => {

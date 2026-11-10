@@ -1,0 +1,140 @@
+import type { FolderWorkspace } from './folder-workspace-types'
+import type { ProjectGroup } from '../project-group-types'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
+import { normalizeStoredTaskSourceContext } from '../work-items/task-source-context'
+import { normalizeWorkspaceLinkedItem } from '../workspace-attachments/workspace-linked-item'
+import { isWorkspaceLinkedItemSourceContextMatch } from '../workspace-attachments/workspace-linked-item-source-context'
+import { normalizeWorkspaceCreatorProvenance } from '../workspace-creator-provenance'
+import { getWorkspaceAttachments } from '../workspace-attachments/workspace-attachments'
+import { isSmartTier } from '../sidebar-list/sort-stamps'
+import { normalizeOrcadRetainedMarker } from '../orcad-retained-marker'
+
+export function normalizeFolderWorkspaceName(
+  name: string | null | undefined,
+  fallback = 'Untitled workspace'
+): string {
+  const trimmed = typeof name === 'string' ? name.trim() : ''
+  return trimmed.length > 0 ? trimmed : fallback
+}
+
+export function normalizeFolderWorkspaces(
+  value: unknown,
+  projectGroups: readonly ProjectGroup[]
+): FolderWorkspace[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const groupsById = new Map(projectGroups.map((group) => [group.id, group]))
+
+  const workspaces: FolderWorkspace[] = []
+  const seen = new Set<string>()
+  for (const candidate of value) {
+    if (!candidate || typeof candidate !== 'object') {
+      continue
+    }
+    const raw = candidate as Partial<FolderWorkspace>
+    if (
+      typeof raw.id !== 'string' ||
+      raw.id.trim().length === 0 ||
+      seen.has(raw.id) ||
+      typeof raw.projectGroupId !== 'string'
+    ) {
+      continue
+    }
+    const group = groupsById.get(raw.projectGroupId)
+    if (!group) {
+      continue
+    }
+    const folderPath =
+      typeof raw.folderPath === 'string' && raw.folderPath.trim().length > 0
+        ? raw.folderPath
+        : group.parentPath
+    if (!folderPath) {
+      continue
+    }
+    const now = Date.now()
+    const linkedTask = normalizeWorkspaceLinkedItem(raw.linkedTask)
+    const linkedTaskSourceContext = normalizeStoredTaskSourceContext(raw.linkedTaskSourceContext)
+    const creatorProvenance = normalizeWorkspaceCreatorProvenance(raw.creatorProvenance)
+    const orcadRetained = normalizeOrcadRetainedMarker(raw.orcadRetained)
+    seen.add(raw.id)
+    // Do not persist fetch-time executionHostId: it may name an unowned runtime authority and lacks a generation fence.
+    // connectionId is the durable pin main projects from.
+    workspaces.push({
+      id: raw.id,
+      projectGroupId: raw.projectGroupId,
+      name: normalizeFolderWorkspaceName(raw.name),
+      folderPath,
+      connectionId:
+        typeof raw.connectionId === 'string'
+          ? raw.connectionId
+          : raw.connectionId === null
+            ? null
+            : (group.connectionId ?? null),
+      ...(creatorProvenance ? { creatorProvenance } : {}),
+      linkedTask,
+      ...(raw.linkedItems !== undefined
+        ? {
+            linkedItems: getWorkspaceAttachments({
+              linkedItems: raw.linkedItems,
+              linkedWorkItem: linkedTask,
+              linkedTaskSourceContext
+            })
+          }
+        : {}),
+      linkedTaskSourceContext: isWorkspaceLinkedItemSourceContextMatch(
+        linkedTask,
+        linkedTaskSourceContext
+      )
+        ? linkedTaskSourceContext
+        : null,
+      comment: typeof raw.comment === 'string' ? raw.comment : '',
+      isArchived: raw.isArchived === true,
+      isUnread: raw.isUnread === true,
+      isPinned: raw.isPinned === true,
+      sortOrder:
+        typeof raw.sortOrder === 'number' && Number.isFinite(raw.sortOrder) ? raw.sortOrder : now,
+      ...(typeof raw.manualOrder === 'number' && Number.isFinite(raw.manualOrder)
+        ? { manualOrder: raw.manualOrder }
+        : {}),
+      ...(typeof raw.workspaceStatus === 'string' && raw.workspaceStatus.trim().length > 0
+        ? { workspaceStatus: raw.workspaceStatus }
+        : {}),
+      ...(isTuiAgent(raw.createdWithAgent) ? { createdWithAgent: raw.createdWithAgent } : {}),
+      ...(raw.pendingFirstAgentMessageRename === true
+        ? { pendingFirstAgentMessageRename: true }
+        : {}),
+      ...(typeof raw.firstAgentMessageRenameError === 'string'
+        ? { firstAgentMessageRenameError: raw.firstAgentMessageRenameError }
+        : raw.firstAgentMessageRenameError === null
+          ? { firstAgentMessageRenameError: null }
+          : {}),
+      lastActivityAt:
+        typeof raw.lastActivityAt === 'number' && Number.isFinite(raw.lastActivityAt)
+          ? raw.lastActivityAt
+          : 0,
+      ...(isSmartTier(raw.smartTier) &&
+      typeof raw.smartAt === 'number' &&
+      Number.isFinite(raw.smartAt)
+        ? { smartTier: raw.smartTier, smartAt: raw.smartAt }
+        : {}),
+      ...(typeof raw.lastTerminalUseAt === 'number' && Number.isFinite(raw.lastTerminalUseAt)
+        ? { lastTerminalUseAt: raw.lastTerminalUseAt }
+        : {}),
+      createdAt:
+        typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? raw.createdAt : now,
+      updatedAt:
+        typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : now,
+      // Legacy #14112 builds stored notes inline; canonical storage is PersistedState.folderWorkspaceDiffComments.
+      ...(Array.isArray(raw.diffComments) ? { diffComments: raw.diffComments } : {}),
+      // Entries are validated where they are read (external-conversation-links.ts).
+      ...(Array.isArray(raw.externalConversations)
+        ? { externalConversations: raw.externalConversations }
+        : {}),
+      ...(orcadRetained ? { orcadRetained } : {})
+    })
+  }
+  return workspaces.sort(
+    (left, right) => right.sortOrder - left.sortOrder || left.name.localeCompare(right.name)
+  )
+}

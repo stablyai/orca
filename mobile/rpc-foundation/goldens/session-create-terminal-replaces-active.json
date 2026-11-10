@@ -70,11 +70,6 @@
       "sessionTabs": ["tab-1"],
       "terminals": ["terminal-1"]
     },
-    "59de30d666ef": {
-      "name": "fetch-session-tabs",
-      "ordinal": 7,
-      "value": {}
-    },
     "6275ace50da2": {
       "activeHandle": "terminal-0",
       "activeSessionTabId": "tab-0",
@@ -87,12 +82,10 @@
       "sessionTabs": [],
       "terminals": []
     },
-    "8b5144e3301d": {
-      "name": "schedule-delayed-action",
+    "7a53e88025f0": {
+      "name": "fetch-session-tabs",
       "ordinal": 6,
-      "value": {
-        "delayMs": 500
-      }
+      "value": {}
     },
     "9270aeb7d9c6": {
       "status": "pending",
@@ -129,9 +122,9 @@
         "startedAt": 0
       }
     },
-    "c13357779299": {
+    "c9f8d8917777": {
       "name": "subscribe-terminal",
-      "ordinal": 5,
+      "ordinal": 4,
       "value": {
         "handle": "terminal-1"
       }
@@ -141,19 +134,19 @@
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:wt-1\",\"afterTabId\":\"tab-0\",\"clientMutationId\":\"mobile-create:mjuohs00-8ig2hens\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
     },
+    "e458e239d53c": {
+      "name": "schedule-delayed-action",
+      "ordinal": 5,
+      "value": {
+        "delayMs": 500
+      }
+    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": {
         "$rpc": "undefined"
-      }
-    },
-    "fb6329365e0b": {
-      "name": "default-live-input",
-      "ordinal": 4,
-      "value": {
-        "handles": ["terminal-1"]
       }
     }
   },
@@ -183,7 +176,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "4e377b1c4bf7",
-          "effects": ["4d318de3b635", "fb6329365e0b", "c13357779299", "8b5144e3301d"]
+          "effects": ["4d318de3b635", "c9f8d8917777", "e458e239d53c"]
         }
       },
       {
@@ -196,13 +189,7 @@
             "create": "eb79a9b3682a"
           },
           "state": "4e377b1c4bf7",
-          "effects": [
-            "4d318de3b635",
-            "fb6329365e0b",
-            "c13357779299",
-            "8b5144e3301d",
-            "59de30d666ef"
-          ]
+          "effects": ["4d318de3b635", "c9f8d8917777", "e458e239d53c", "7a53e88025f0"]
         }
       }
     ]

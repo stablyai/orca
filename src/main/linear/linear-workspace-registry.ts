@@ -13,8 +13,8 @@ import {
   type LinearWorkspaceFile
 } from './linear-workspace-record'
 import type { LinearWorkspace } from '../../shared/linear/workspace-types'
-import { createIntegrationStateFileCache } from '../integration-state-file-cache'
-import { createIntegrationTokenFileCache } from '../integration-token-file-cache'
+import { createIntegrationStateFileCache } from '../credentials/integration-state-file-cache'
+import { createIntegrationTokenFileCache } from '../credentials/integration-token-file-cache'
 
 export const workspaceTokenFileCache = createIntegrationTokenFileCache({
   service: 'Linear',

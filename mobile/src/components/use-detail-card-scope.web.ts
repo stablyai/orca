@@ -47,7 +47,7 @@ export function useDetailCardScope({
       record.restore = false
       dismiss()
     }
-    const click = (event: MouseEvent) => {
+    const press = (event: MouseEvent) => {
       if (!inside(event.target) && !headerBack(event.target)) {
         outside()
       }
@@ -120,13 +120,15 @@ export function useDetailCardScope({
       }
     }
     const capture = { capture: true, signal: listeners.signal }
-    document.addEventListener('click', click, capture)
+    // Why: the terminal claims its touches, so iOS sends no click for a tap there.
+    document.addEventListener('pointerdown', press, capture)
+    document.addEventListener('click', press, capture)
     document.addEventListener('keydown', key, capture)
     document.addEventListener('keyup', key, capture)
     document.addEventListener('keydown', isolate, { signal: listeners.signal })
     document.addEventListener('keyup', isolate, { signal: listeners.signal })
     document.addEventListener('focusin', focusin, capture)
-    // Why: tab and title taps keep a focused text field; taking focus here would close the soft keyboard.
+    // Why: title taps keep a focused text field; taking focus here would close the soft keyboard.
     if (!isTextField(document.activeElement)) {
       content.focus()
     }

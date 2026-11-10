@@ -8,16 +8,16 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { openExternalLink } from '../../platform/external-link'
 import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
-import { isBrokenCheck } from '../../../../src/shared/pr-checks-fix-prompt'
-import { sortChecksBySeverity } from '../../../../src/shared/pr-check-severity-order'
-import { buildPrFixChecksPrompt } from '../../session/pr-ai-triage-prompt'
+import { isBrokenCheck } from '../../../../src/shared/source-control/checks/pr-checks-fix-prompt'
+import { sortChecksBySeverity } from '../../../../src/shared/source-control/checks/pr-check-severity-order'
+import { buildPrFixChecksPrompt } from '../../source-control/review/pr-ai-triage-prompt'
 import { DisclosureChevron } from '../DisclosureChevron'
 import { ListGroup, ListRow, SectionHeader, LIST_LEADING_INSET } from '../list/ListGroup'
 import { AgentLaunchNotice } from '../AgentLaunchNotice'
 import { checkOutcome, prCheckKey } from './pr-checks-presentation'
 import { NotReady, ScreenFrame, type ScreenProps } from './pr-tab-screen-frame'
 import { useHostProtocolGates } from '../host-protocol-gates-context'
-import { useMobileLaunchAgentLabel } from '../../session/use-mobile-launch-agent-label'
+import { useMobileLaunchAgentLabel } from '../../session/agent-launch/use-mobile-launch-agent-label'
 import { readyPrData } from './use-mobile-pr-tab'
 import { PrCheckFailureRow } from './PrCheckFailureRow'
 
@@ -34,13 +34,14 @@ export function PrChecksScreen({ tab, onBack, bottomInset = 0 }: ScreenProps) {
     () => checks.filter((check) => checkOutcome(check) === 'failure'),
     [checks]
   )
+  const cancelled = checks.filter((check) => checkOutcome(check) === 'cancelled')
   const { hostCapabilities } = useHostProtocolGates()
   const fixAgent = useMobileLaunchAgentLabel({
     client: tab.client,
     worktreeId: tab.worktreeId,
     hostCapabilities,
     actionId: 'fixChecks',
-    enabled: failing.length > 0
+    enabled: failing.length + cancelled.length > 0
   })
   const fixLabel = fixAgent
     ? t('pullRequest.screens.fixWith', 'Fix with {{agent}}', { agent: fixAgent })
@@ -50,10 +51,20 @@ export function PrChecksScreen({ tab, onBack, bottomInset = 0 }: ScreenProps) {
   const other = checks.filter((check) => checkOutcome(check) === 'neutral')
   const [showPassed, setShowPassed] = useState(false)
 
-  // Open and prefetch only the first few failures; a wide matrix would otherwise fan out one host read per job.
+  // One bounded identity set owns both initial expansion and its detail reads across sections.
+  const initialDetails = useMemo(
+    () =>
+      new Map(
+        checks
+          .filter((check) => ['failure', 'cancelled'].includes(checkOutcome(check)))
+          .slice(0, PREFETCHED_FAILURES)
+          .map((check) => [prCheckKey(check), check])
+      ),
+    [checks]
+  )
   useEffect(() => {
-    failing.slice(0, PREFETCHED_FAILURES).forEach(ensure)
-  }, [ensure, failing])
+    initialDetails.forEach(ensure)
+  }, [ensure, initialDetails])
 
   const fixChecks = (target: PRCheckDetail[]) => {
     if (data) {
@@ -77,6 +88,7 @@ export function PrChecksScreen({ tab, onBack, bottomInset = 0 }: ScreenProps) {
         <ScrollView contentContainerStyle={{ paddingBottom: bottomInset + spacing.lg }}>
           <ChecksSummary
             failing={failing.length}
+            cancelled={cancelled.length}
             running={running.length}
             passed={passed.length}
             live={tab.polling}
@@ -86,38 +98,45 @@ export function PrChecksScreen({ tab, onBack, bottomInset = 0 }: ScreenProps) {
           {data.checks.length === 0 && !data.checksError ? (
             <Text style={styles.muted}>{t('pullRequest.checksSection.noChecks', 'No checks')}</Text>
           ) : null}
-          {failing.length > 0 ? (
-            <View>
-              <SectionHeader title={t('pullRequest.screens.failing', 'Failing')} />
-              <ListGroup style={styles.plain} separatorInset={LIST_LEADING_INSET}>
-                {failing.map((check, index) => (
-                  <PrCheckFailureRow
-                    key={prCheckKey(check)}
-                    initiallyOpen={index < PREFETCHED_FAILURES}
-                    onOpen={() => ensure(check)}
-                    check={check}
-                    entry={cache[prCheckKey(check)]}
-                    actionable={isBrokenCheck(check)}
-                    fixLabel={fixLabel}
-                    onFix={() => fixChecks([check])}
-                    fixBusy={tab.triage.isBusy('fix-checks')}
-                    fixAvailable={tab.triage.availability === 'available'}
-                    onRerun={tab.actions.rerunFailingChecks}
-                    rerunBusy={tab.actions.isBusy({ kind: 'rerun' })}
-                  />
-                ))}
-              </ListGroup>
-              <View style={styles.notes}>
-                <AgentLaunchNotice
-                  availability={tab.triage.availability}
-                  success={notice.success}
-                  error={notice.error}
-                  warning={notice.warning}
-                  undeliveredPrompt={notice.undeliveredPrompt}
-                  errorStyle={styles.error}
-                />
-                {tab.actions.error ? <Text style={styles.error}>{tab.actions.error}</Text> : null}
+          {[
+            { label: t('pullRequest.screens.failing', 'Failing'), checks: failing },
+            { label: t('pullRequest.checkStatus.cancelled', 'Cancelled'), checks: cancelled }
+          ]
+            .filter((section) => section.checks.length > 0)
+            .map((section) => (
+              <View key={section.label}>
+                <SectionHeader title={section.label} />
+                <ListGroup style={styles.plain} separatorInset={LIST_LEADING_INSET}>
+                  {section.checks.map((check) => (
+                    <PrCheckFailureRow
+                      key={prCheckKey(check)}
+                      initiallyOpen={initialDetails.has(prCheckKey(check))}
+                      onOpen={() => ensure(check)}
+                      check={check}
+                      entry={cache[prCheckKey(check)]}
+                      actionable={isBrokenCheck(check)}
+                      fixLabel={fixLabel}
+                      onFix={() => fixChecks([check])}
+                      fixBusy={tab.triage.isBusy('fix-checks')}
+                      fixAvailable={tab.triage.availability === 'available'}
+                      onRerun={tab.actions.rerunFailingChecks}
+                      rerunBusy={tab.actions.isBusy({ kind: 'rerun' })}
+                    />
+                  ))}
+                </ListGroup>
               </View>
+            ))}
+          {failing.length + cancelled.length > 0 ? (
+            <View style={styles.notes}>
+              <AgentLaunchNotice
+                availability={tab.triage.availability}
+                success={notice.success}
+                error={notice.error}
+                warning={notice.warning}
+                undeliveredPrompt={notice.undeliveredPrompt}
+                errorStyle={styles.error}
+              />
+              {tab.actions.error ? <Text style={styles.error}>{tab.actions.error}</Text> : null}
             </View>
           ) : null}
           {running.length > 0 ? (
@@ -195,12 +214,14 @@ function foldedNames(checks: PRCheckDetail[], t: Translate): string {
 // A bar split by outcome, then the counts in words, so the state reads before any row.
 function ChecksSummary({
   failing,
+  cancelled,
   running,
   passed,
   live,
   t
 }: {
   failing: number
+  cancelled: number
   running: number
   passed: number
   // The screen polls while it is open, so it says so instead of offering a refresh button.
@@ -208,10 +229,11 @@ function ChecksSummary({
   t: Translate
 }) {
   useMobileColorScheme()
-  if (failing + running + passed === 0) {
+  if (failing + cancelled + running + passed === 0) {
     return null
   }
   const rest = [
+    cancelled > 0 ? `${cancelled} ${t('pullRequest.checkStatus.cancelled', 'Cancelled')}` : null,
     running > 0 ? t('pullRequest.screens.running', '{{count}} running', { count: running }) : null,
     passed > 0 ? t('pullRequest.checksSection.passed', '{{count}} passed', { count: passed }) : null
   ].filter(Boolean)
@@ -220,6 +242,9 @@ function ChecksSummary({
       <View style={styles.bar}>
         {failing > 0 ? (
           <View style={[styles.segment, styles.segmentFailing, { flex: failing }]} />
+        ) : null}
+        {cancelled > 0 ? (
+          <View style={[styles.segment, styles.segmentCancelled, { flex: cancelled }]} />
         ) : null}
         {running > 0 ? (
           <View style={[styles.segment, styles.segmentRunning, { flex: running }]} />
@@ -294,6 +319,7 @@ const styles = themedStyleSheet(() => ({
   segment: { borderRadius: radii.pill },
   segmentFailing: { backgroundColor: colors.statusRed },
   segmentRunning: { backgroundColor: colors.statusAmber },
+  segmentCancelled: { backgroundColor: colors.textMuted },
   segmentPassed: { backgroundColor: colors.statusGreen },
   counts: { flexShrink: 1, color: colors.textSecondary, fontSize: typography.metaSize },
   countsFailing: { color: colors.statusRed, fontWeight: '600' },

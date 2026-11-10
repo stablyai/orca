@@ -1,4 +1,4 @@
-import type { MRListState } from '../../shared/gitlab-types'
+import type { GitLabMRInvolvement, MRListState } from '../../shared/gitlab-types'
 
 export type GitLabIssueListState = 'opened' | 'closed' | 'all'
 
@@ -15,6 +15,10 @@ export function normalizeGitLabPositiveInteger(
 
 export function normalizeGitLabMRListState(value: unknown): MRListState {
   return value === 'merged' || value === 'closed' || value === 'all' ? value : 'opened'
+}
+
+export function normalizeGitLabMRInvolvement(value: unknown): GitLabMRInvolvement | undefined {
+  return value === 'authored' || value === 'reviewing' ? value : undefined
 }
 
 export function normalizeGitLabIssueListState(value: unknown): GitLabIssueListState {

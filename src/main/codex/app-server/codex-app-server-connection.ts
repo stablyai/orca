@@ -5,6 +5,7 @@ import { createClaudeChildTreeReaper } from '../../claude/claude-agent-sdk-exit-
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
 import { buildCodexAppServerExitError } from './codex-app-server-exit-error'
 import { withProviderSpawnAbsence } from '../../provider-process/provider-executable-missing'
+import { afterProviderOutputDrains } from '../../provider-process/provider-exit-output-drain'
 import { initializeCodexAppServerConnection } from './codex-app-server-handshake'
 import { CodexAppServerHandshakeExitUnprovenError } from './codex-app-server-handshake-exit-proof'
 import {
@@ -37,6 +38,7 @@ async function connectCodexAppServer(
   })
   const { child } = managed
   const tree = createClaudeChildTreeReaper(child, {
+    site: 'codex-app-server-child-close',
     exited: () => managed.rootVerdict === 'exited',
     supervised: managed.supervised
   })
@@ -48,8 +50,8 @@ async function connectCodexAppServer(
   // Several listeners can report one failure; preserve its first, specific cause.
   let terminalError: Error | null = null
 
-  function buildExitError(cause?: Error): Error {
-    const error = buildCodexAppServerExitError(managed.stderrTail(), cause)
+  function buildExitError(cause?: Error, protocolFailure = false): Error {
+    const error = buildCodexAppServerExitError(managed.stderrTail(), cause, protocolFailure)
     return withProviderSpawnAbsence(error, managed.spawnAbsence)
   }
 
@@ -57,16 +59,22 @@ async function connectCodexAppServer(
     handlers,
     writeResponse,
     onProtocolFailure: (error) => {
-      handleUnexpectedEnd(error)
+      handleUnexpectedEnd(error, true)
       void managed.close()
     }
   })
 
-  // Fail pending calls immediately, but notify the owner only once root exit is proven.
-  function handleUnexpectedEnd(cause?: Error): void {
+  // Pending calls fail once output drained, so an answer written just before exit still settles
+  // its call; the owner is notified only once root exit is proven.
+  function handleUnexpectedEnd(cause?: Error, protocolFailure = false): void {
     if (!terminalError) {
-      terminalError = buildExitError(cause)
-      dispatcher.failPending(terminalError)
+      const error = buildExitError(cause, protocolFailure)
+      terminalError = error
+      if (protocolFailure) {
+        dispatcher.failPending(error)
+      } else {
+        afterProviderOutputDrains(child.stdout, () => dispatcher.failPending(error), child)
+      }
     }
     if (managed.rootVerdict === 'exited' && closesInFlight === 0 && !exitReported) {
       exitReported = true
@@ -105,7 +113,7 @@ async function connectCodexAppServer(
       }
     },
     onFatal: (error) => {
-      handleUnexpectedEnd(error)
+      handleUnexpectedEnd(error, true)
       void managed.close()
     }
   })

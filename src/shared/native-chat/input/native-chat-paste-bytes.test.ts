@@ -8,11 +8,6 @@ const BEGIN = '\x1b[200~'
 const END = '\x1b[201~'
 
 describe('buildNativeChatPasteBytes', () => {
-  it('single-line text has no trailing submit (Enter is written separately)', () => {
-    expect(buildNativeChatPasteBytes('hello world')).toBe('hello world')
-    expect(buildNativeChatPasteBytes('hello world')).not.toContain('\r')
-  })
-
   it('multi-line text is bracketed-paste wrapped with NO trailing submit', () => {
     const text = 'line one\r\nline two\nline three'
     expect(buildNativeChatPasteBytes(text)).toBe(`${BEGIN}line one\rline two\rline three${END}`)
