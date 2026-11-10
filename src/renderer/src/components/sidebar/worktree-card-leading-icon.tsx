@@ -166,7 +166,12 @@ export function WorktreeCardLeadingIcon({
       {mark ? (
         mark
       ) : aiIcon ? (
-        <img className="worktree-card-leading-image" src={aiIcon} alt="" draggable={false} />
+        // A mask, not an <img>: the glyph takes the sidebar's text color, so color stays for status.
+        <span
+          className="worktree-card-leading-image"
+          style={{ maskImage: `url("${aiIcon}")` }}
+          aria-hidden
+        />
       ) : (
         <TabStack worktreeId={worktreeId} />
       )}

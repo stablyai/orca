@@ -19,7 +19,7 @@ export function registerWorktreeIconGenerationHandlers(
   const host = {
     getSettings: () => store.getSettings(),
     getAgentEnvironment: () => commitMessageAgentEnv,
-    cacheFile: path.join(app.getPath('userData'), 'worktree-icons.json')
+    cacheFile: path.join(app.getPath('userData'), 'worktree-icons-v2.json')
   }
   const requests = new WeakMap<WebContents, Map<string, AbortController>>()
   ipcMain.handle('worktreeIcons:generate', async (event, args: unknown) => {

@@ -24,16 +24,16 @@ export function formatWorktreeIconBatchList(names: readonly string[]): string {
 }
 
 export function buildWorktreeIconBatchPrompt(names: readonly string[]): string {
-  return `Design tiny app-icon style SVGs for the coding workspaces listed below, one per workspace.
+  return `Design tiny monochrome glyph SVGs for the coding workspaces listed below, one per workspace.
 Workspaces:
 ${formatWorktreeIconBatchList(names)}
 Rules:
 - Output ONLY the raw <svg> elements in list order, nothing else, no markdown fences.
 - Start each with <svg id="icon-N" where N is the workspace number.
 - viewBox="0 0 18 15", no width/height attributes.
-- Each renders at 18x15 CSS px inside a rounded tile, so use a full-bleed background <rect width="18" height="15" rx="4"/> with a rich gradient, plus ONE bold simple white glyph (strokes >= 1.3) that represents the name.
-- Give every gradient an id that is unique across all icons.
-- At most 6 shapes per icon. No text, no <image>, no scripts, no external refs, no filters.
+- Each renders at 18x15 CSS px as a single-color mask, so draw ONE bold simple glyph that represents the name, in pure white (#fff) only, with strokes >= 1.4, filling most of the box.
+- Transparent background: no background <rect>, no tile, no gradients, no other colors, no opacity.
+- At most 5 shapes per icon. No text, no <image>, no scripts, no external refs, no filters.
 This is an icon-only task. Do not edit files, run commands, or use tools.`
 }
 

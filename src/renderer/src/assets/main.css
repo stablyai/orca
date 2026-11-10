@@ -1953,20 +1953,21 @@ html.native-shell .app-layout {
   opacity: 0.5;
 }
 
-/* AI icon style: one generated mark for the workspace name in the tile's footprint. */
+/* AI icon style: one generated glyph for the workspace name in the tile's footprint, drawn in
+   the sidebar's own text color. Luminance, so a stray dark background drops out of the mask. */
 .worktree-card-leading-image {
   position: absolute;
   inset: 0;
   width: 18px;
   height: 15px;
-  border-radius: 4px;
-  box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--worktree-sidebar-foreground) 24%, transparent),
-    0 1px 2px rgb(0 0 0 / 0.3);
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 72%, transparent);
+  mask-mode: luminance;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
 }
 
 .worktree-card-leading-icon-offline .worktree-card-leading-image {
-  filter: grayscale(1);
   opacity: 0.5;
 }
 

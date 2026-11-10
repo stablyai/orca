@@ -226,7 +226,8 @@ export const SlotAgentLineRow = React.memo(function SlotAgentLineRow({
       onKeyDown={handleKeyDown}
       onMouseDown={stopPropagation}
       onPointerDown={stopPropagation}
-      title={sendTarget?.disabledReason ?? `${agentLabel} · ${text}`}
+      // The model lives in the tooltip: the icon already names the agent, and a column of ids is noise.
+      title={sendTarget?.disabledReason ?? [agentLabel, model, text].filter(Boolean).join(' · ')}
       data-worktree-card-slot-line={displaySignal.kind}
       data-focused-agent-pane={highlighted ? 'true' : undefined}
       data-agent-send-target={sendTarget?.status}
@@ -270,14 +271,6 @@ export const SlotAgentLineRow = React.memo(function SlotAgentLineRow({
           text
         )}
       </span>
-      {model ? (
-        <span
-          className="max-w-20 shrink-0 truncate font-mono text-3xs text-muted-foreground/70"
-          title={model}
-        >
-          {model}
-        </span>
-      ) : null}
       {cacheTimer ? <CacheTimer startedAt={cacheTimer.startedAt} ttlMs={cacheTimer.ttlMs} /> : null}
       {hasChildren ? (
         <button
