@@ -1,6 +1,6 @@
 import { queryOptions, skipToken } from '@tanstack/react-query'
-import { AccountsSnapshotSchema, decodeAccountsSnapshot } from '../components/accounts-snapshot'
-import type { AccountsSnapshot } from '../components/AccountUsage'
+import { AccountsSnapshotSchema, decodeAccountsSnapshot } from './accounts-snapshot'
+import type { AccountsSnapshot } from './accounts-snapshot'
 import { hostQueryKey, type HostQueryKey } from '../query/host-query-key'
 import type { PersistedHostFamily } from '../query/host-query-persistence'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'

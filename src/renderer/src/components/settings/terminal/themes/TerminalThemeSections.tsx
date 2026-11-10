@@ -1,5 +1,5 @@
 import { usePluginTerminalThemes } from '@/store/plugins/appearance/plugin-themes'
-import { withTerminalPluginPalettes } from '@/lib/terminal-plugin-palettes'
+import { withTerminalPluginPalettes } from '@/lib/terminal/themes/terminal-plugin-palettes'
 import { useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'

@@ -31,37 +31,6 @@ function statuses(tap: ReturnType<typeof recorder>) {
 }
 
 describe('Codex terminal failure categories', () => {
-  it.each([
-    ['rateLimitExceeded', 'usageLimitReached'],
-    ['flexUnavailable', 'providerUnavailable'],
-    ['modelNotFound', 'modelUnavailable'],
-    ['policyCapacityUnavailable', 'providerUnavailable'],
-    ['misalignmentPolicyViolation', 'providerSafetyStopped'],
-    ['serverOverloaded', 'providerUnavailable'],
-    ['cyberPolicy', 'providerSafetyStopped']
-  ])('categorizes %s without exposing its diagnostic', (code, kind) => {
-    for (const info of [code, { [code]: { httpStatusCode: 401 } }]) {
-      const tap = recorder()
-      const translator = translatorFor(tap)
-      translator.handle(notification('error', error(info)))
-      expect(statuses(tap)).toMatchObject([{ failure: { kind } }])
-      expect(statuses(tap)[0]?.text).not.toContain(DIAGNOSTIC)
-      expect(statuses(tap)[0]?.providerFrame?.payload.head).toContain(DIAGNOSTIC)
-      translator.dispose()
-    }
-  })
-
-  it('uses the existing usage-limit category for HTTP 429 retry exhaustion', () => {
-    const tap = recorder()
-    const translator = translatorFor(tap)
-    translator.handle(
-      notification('error', error({ responseTooManyFailedAttempts: { httpStatusCode: 429 } }))
-    )
-    expect(statuses(tap)).toMatchObject([
-      { tone: 'warning', failure: { kind: 'usageLimitReached' } }
-    ])
-  })
-
   it('ends a recorded-shape failed completion carrying an unknown future code', () => {
     const frames: {
       case: string

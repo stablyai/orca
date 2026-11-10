@@ -6,7 +6,7 @@ import type {
 import type { SortBy } from '../../../../../../shared/sidebar-list/smart-sort'
 import '../../workspace-status/presentation/workspace-status'
 import { getWorkspaceStatus } from '../../../../../../shared/workspace-statuses'
-import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
+import { compareWorktreeDisplayName } from '@/lib/workspace/display/worktree-display-name-order'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 
 function sortBoardWorktrees(a: Worktree, b: Worktree): number {

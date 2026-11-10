@@ -233,7 +233,7 @@
 1 src/renderer/src/lib/skills/runtime/skill-runtime-command.ts
 1 src/renderer/src/lib/workspace/ownership/terminal-close-route.ts
 4 src/renderer/src/lib/workspace/ownership/terminal-worktree-route.ts # resolveTerminalPtyOwner: teardown, close and PTY identity read spawn's attribution (round 3 F8), which retired the deprecated resolver's readers
-3 src/renderer/src/lib/unread-badge-count-selector.ts
+3 src/renderer/src/attention/unread/unread-badge-count-selector.ts
 1 src/renderer/src/runtime/hosted-terminals/restoration/web-runtime-worktree-terminal-after-wake.ts
 1 src/renderer/src/lib/work-items/linear/linear-issue-url-lookup.ts
 1 src/renderer/src/lib/work-items/linear/linear-issue-write.ts

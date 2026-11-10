@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { hasActiveWorkspaceActivity } from '@/lib/worktree-activity-state'
+import { hasActiveWorkspaceActivity } from '@/lib/workspace/activity/worktree-activity-state'
 import { recomputeOn } from '@/lib/recompute-on'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'

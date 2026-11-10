@@ -1,4 +1,4 @@
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   getClaudeSubagentNavigationTitle,
   getClaudeSubagentNavigationDescription
@@ -19,7 +19,7 @@ import {
   getAgentStatusHooksTitle
 } from './behavior/agent-status-hooks-copy'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { AgentLaunchSettingsSection } from './launch/AgentLaunchSettingsSection'
 import {
   AgentPermissionsSetting,

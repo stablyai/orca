@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { BrowserPage } from '../../../../../../shared/browser-workspace-types'
@@ -70,5 +70,30 @@ describe('NativeChatBrowserRunPageButton', () => {
 
     act(() => setBrowserAgentPageActive('p2', true, 'wt-1'))
     expect(screen.getByRole('button').getAttribute('title')).toBe('First')
+  })
+
+  it("ignores other agents driving a different page before this run's command lands", () => {
+    state.browserPagesByWorkspace = { 'ws-1': [page('p1', 'Mine'), page('p2', 'Theirs')] }
+    // An earlier run in this chat, so it is known to claim its activity.
+    setBrowserAgentPageActive('p1', true, 'wt-1', undefined, 'session-1')
+    const { container } = render(
+      <NativeChatBrowserRunPageButton
+        calls={[
+          {
+            type: 'tool-call',
+            name: 'Bash',
+            input: { command: 'orca browser click @e1' },
+            callId: 'run-b'
+          }
+        ]}
+      />,
+      { wrapper }
+    )
+
+    act(() => setBrowserAgentPageActive('p2', true, 'wt-1'))
+    act(() => setBrowserAgentPageActive('p2', true, 'wt-1', undefined, 'session-2'))
+    act(() => setBrowserAgentPageActive('p1', true, 'wt-1', undefined, 'session-1'))
+    act(() => setBrowserAgentPageActive('p2', true, 'wt-1'))
+    expect(within(container).getByRole('button').getAttribute('title')).toBe('Mine')
   })
 })

@@ -11,7 +11,7 @@ import { omitSleepingAgentSessionsForWorktrees } from './sleeping-agent-session-
 import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
 import { omitRecordKeys } from './record-key-omission'
 import { removeWorktreeVisitEntriesForTargets } from '@/lib/workspace/activation/worktree-visit-recency'
-import { forgetAmbiguousOwnerWarnings } from '@/lib/ambiguous-owner-warning'
+import { forgetAmbiguousOwnerWarnings } from '@/lib/workspace/ownership/ambiguous-owner-warning'
 import { forgetWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
 import {

@@ -187,7 +187,8 @@ export class HostRelay extends HostRelayPhones {
         // Same order as the cells' heartbeat: expired auth past its grace, then the 6 h lease.
         if (now > a.claims.exp + CONTROL_CONTINUITY_LIMITS.expiredAuthExistingSpliceGraceMs) {
           const sinceRefreshS = a.lastRefreshAt === undefined ? -1 : Math.round((now - a.lastRefreshAt) / 1000)
-          metric(this.env, 'auth_expired_close', sinceRefreshS, a.lastRefreshAt === undefined ? 'never' : 'refreshed', [], '', a.place)
+          const seenAgoS = Math.round((now - seen) / 1000)
+          metric(this.env, 'auth_expired_close', sinceRefreshS, a.lastRefreshAt === undefined ? 'never' : 'refreshed', [seenAgoS], this.keepalive(a) ? 'keepalive' : 'legacy', a.place)
           this.close(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'relay authorization expired')
           await this.onSocketGone(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, '')
           continue
