@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useSyncExternalStore } from 'react'
-import { X } from 'lucide-react'
+import { KeyRound, X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
@@ -56,35 +56,35 @@ export function CloudSecretsMissingNotice({
     return null
   }
   return (
-    <InlineError
-      tone="neutral"
-      density="compact"
-      title={t('cloudSecretsAsk.missing', '{{count}} secrets missing', {
-        count: notice.names.length,
-        defaultValue_one: '{{count}} secret missing'
-      })}
-      action={
-        <>
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            onClick={() => openCloudSecretsAsk(workspaceId)}
-          >
-            {t('cloudSecretsAsk.add', 'Add')}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label={t('cloudSecretsAsk.dismissNotice', 'Dismiss secrets missing notice')}
-            onClick={() => clearCloudSecretsMissing(workspaceId)}
-          >
-            <X aria-hidden />
-          </Button>
-        </>
-      }
-    />
+    <div
+      role="status"
+      className="flex items-center gap-2 rounded-md border border-border bg-muted/40 py-1 ps-2.5 pe-1 text-xs"
+    >
+      <KeyRound aria-hidden className="size-3.5 shrink-0 text-status-warning" />
+      <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+        {t('cloudSecretsAsk.missing', '{{count}} secrets missing', {
+          count: notice.names.length,
+          defaultValue_one: '{{count}} secret missing'
+        })}
+      </span>
+      <Button
+        type="button"
+        variant="outline"
+        size="xs"
+        onClick={() => openCloudSecretsAsk(workspaceId)}
+      >
+        {t('cloudSecretsAsk.add', 'Add')}
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        aria-label={t('cloudSecretsAsk.dismissNotice', 'Dismiss secrets missing notice')}
+        onClick={() => clearCloudSecretsMissing(workspaceId)}
+      >
+        <X aria-hidden />
+      </Button>
+    </div>
   )
 }
 

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SecretRequestedEvent } from '../../../../shared/secret-request-contract'
 import {
   applySecretRequested,
@@ -6,6 +6,7 @@ import {
   dismissSecretRequest,
   readSecretRequests,
   resetSecretRequestStoreForTests,
+  markSecretRequestsReplaying,
   setSecretRequestExpiry,
   setSecretRequestLocal
 } from './secret-request-store'
@@ -13,6 +14,7 @@ import { isSecretRequestedEvent, isSecretRequestSettledEvent } from './secret-re
 import {
   routeSecretRequests,
   secretRequestAgentName,
+  unseenSecretRequests,
   type SecretRequestPaneSlot
 } from './secret-request-routing'
 
@@ -78,6 +80,28 @@ describe('secret request store', () => {
     expect(readSecretRequests()[0].event.expiresAt).toBe(99_000_000)
   })
 
+  it('drops what orcad no longer replays after the stream reconnects', () => {
+    vi.useFakeTimers()
+    applySecretRequested('env', requested())
+    applySecretRequested('env', requested({ requestId: 'sr_bbbbbbbb', name: 'B' }))
+    setSecretRequestLocal('env', 'sr_bbbbbbbb', 'saved')
+    markSecretRequestsReplaying('env')
+    vi.advanceTimersByTime(6_000)
+    // The settled one is gone; the one this window finished stays until dismissed.
+    expect(readSecretRequests().map((entry) => entry.event.name)).toEqual(['B'])
+    vi.useRealTimers()
+  })
+
+  it('keeps a request orcad replays after a reconnect', () => {
+    vi.useFakeTimers()
+    applySecretRequested('env', requested())
+    markSecretRequestsReplaying('env')
+    applySecretRequested('env', requested())
+    vi.advanceTimersByTime(6_000)
+    expect(readSecretRequests()).toHaveLength(1)
+    vi.useRealTimers()
+  })
+
   it('keeps requests from different hosts apart', () => {
     applySecretRequested('a', requested())
     applySecretRequested('b', requested())
@@ -102,39 +126,54 @@ describe('event guards', () => {
 })
 
 describe('routeSecretRequests', () => {
+  afterEach(() => resetSecretRequestStoreForTests())
   const slot = (patch: Partial<SecretRequestPaneSlot>): SecretRequestPaneSlot => ({
     paneKey: 'tab:1',
     environmentId: 'env',
     handle: null,
+    visible: true,
     primary: false,
     ...patch
   })
 
-  it('pins a request to the pane running the asking terminal', () => {
+  it('pins a request to the showing pane running the asking terminal', () => {
     applySecretRequested('env', requested({ terminalHandle: 'h2' }))
     const routed = routeSecretRequests(readSecretRequests(), [
       slot({ paneKey: 'tab:1', handle: 'h1', primary: true }),
       slot({ paneKey: 'tab:2', handle: 'h2' })
     ])
     expect([...routed.keys()]).toEqual(['tab:2'])
-    resetSecretRequestStoreForTests()
+    expect(routed.get('tab:2')?.[0].onAskingPane).toBe(true)
+  })
+
+  it('shows a request from a hidden tab on the showing pane, without Restart rights there', () => {
+    applySecretRequested('env', requested({ terminalHandle: 'h2' }))
+    const routed = routeSecretRequests(readSecretRequests(), [
+      slot({ paneKey: 'tab:1', handle: 'h1', primary: true }),
+      slot({ paneKey: 'tab:2', handle: 'h2', visible: false })
+    ])
+    expect([...routed.keys()]).toEqual(['tab:1'])
+    expect(routed.get('tab:1')?.[0].onAskingPane).toBe(false)
   })
 
   it('falls back to the active pane on the same host, and stacks the rest there', () => {
     applySecretRequested('env', requested({ terminalHandle: undefined }))
     applySecretRequested('env', requested({ requestId: 'sr_cccccccc', terminalHandle: 'gone' }))
     applySecretRequested('other', requested({ requestId: 'sr_dddddddd' }))
-    const routed = routeSecretRequests(readSecretRequests(), [
+    const slots = [
       slot({ paneKey: 'tab:1', handle: 'h1' }),
       slot({ paneKey: 'tab:9', handle: 'h9', primary: true })
-    ])
-    expect(routed.get('tab:9')?.map((entry) => entry.event.requestId)).toEqual([
+    ]
+    const routed = routeSecretRequests(readSecretRequests(), slots)
+    expect(routed.get('tab:9')?.map((item) => item.entry.event.requestId)).toEqual([
       'sr_aaaaaaaa',
       'sr_cccccccc'
     ])
-    // Nothing on the other host is mounted here, so its request waits.
+    // Nothing on the other host is mounted, so its request is unseen (the notifier says so).
     expect(routed.size).toBe(1)
-    resetSecretRequestStoreForTests()
+    expect(unseenSecretRequests(readSecretRequests(), slots).map((e) => e.environmentId)).toEqual([
+      'other'
+    ])
   })
 })
 

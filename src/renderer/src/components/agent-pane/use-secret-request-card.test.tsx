@@ -45,7 +45,13 @@ function Harness(): React.JSX.Element | null {
 }
 
 function Card({ entry }: { entry: ReturnType<typeof readSecretRequests>[number] }) {
-  const { model, actions } = useSecretRequestCard({ entry, more: 0, worktreeId: null, ptyId: 'p' })
+  const { model, actions } = useSecretRequestCard({
+    entry,
+    more: 0,
+    worktreeId: null,
+    ptyId: 'p',
+    onAskingPane: true
+  })
   return <SecretRequestCard model={model} actions={actions} />
 }
 
@@ -155,6 +161,38 @@ describe('S4-b secret request card', () => {
     })
     expect(screen.getByText('This request expired.')).toBeTruthy()
     expect(screen.queryByLabelText('Value for NPM_TOKEN')).toBeNull()
+  })
+
+  it('never declines while a save is in flight', async () => {
+    let finish: (value: unknown) => void = () => {}
+    put.mockReturnValue(new Promise((resolve) => (finish = resolve)))
+    render(<Harness />)
+    fireEvent.change(valueInput(), { target: { value: 'v' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add secret' }))
+    })
+    await act(async () => {
+      fireEvent.keyDown(valueInput(), { key: 'Escape' })
+      fireEvent.click(screen.getByRole('button', { name: 'Not now' }))
+    })
+    expect(rpc.mock.calls.some(([, , params]) => params?.outcome === 'declined')).toBe(false)
+    await act(async () => finish({ ok: true, value: {} }))
+    expect(screen.getByText('NPM_TOKEN added to your personal secrets.')).toBeTruthy()
+  })
+
+  it('says the agent wasn’t told when orcad doesn’t answer the resolve', async () => {
+    rpc.mockImplementation(async (_target, method: string) => {
+      if (method === 'secrets.resolveRequest') {
+        throw new Error('timeout')
+      }
+      return { expiresAt: NOW }
+    })
+    render(<Harness />)
+    fireEvent.change(valueInput(), { target: { value: 'v' } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add secret' }))
+    })
+    expect(screen.getByText(/stopped waiting, so tell it the secret is ready/)).toBeTruthy()
   })
 
   it('declines on Escape', async () => {

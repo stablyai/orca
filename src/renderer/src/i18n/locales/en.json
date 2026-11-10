@@ -27140,7 +27140,8 @@
       "guestOwner": "Personal values come from {{owner}}, who owns this workspace.",
       "guest": "Personal values come from the person who owns this workspace.",
       "empty": "No variables from Cloud secrets yet.",
-      "overrides": "overrides {{scopes}}"
+      "overrides": "overrides {{scopes}}",
+      "askOwner": "Ask {{owner}} or an admin to add it."
     },
     "keys": {
       "askAdmin": "Ask an owner or admin to add one.",
@@ -27151,7 +27152,9 @@
       "shadowedLabel": "Keys not used for {{name}}",
       "editLabel": "Edit {{name}}",
       "edit": "Edit",
-      "empty": "No agent keys in Cloud secrets."
+      "empty": "No agent keys in Cloud secrets.",
+      "emptyMember": "Add your own, or ask an owner or admin for a team key.",
+      "manage": "Open Cloud secrets"
     },
     "section": {
       "keysCloud": "API keys from Cloud secrets",
@@ -27163,7 +27166,9 @@
     },
     "retry": "Try again",
     "asleepFooter": "Changes reach the sandbox when it wakes.",
-    "loadingSecrets": "Loading Cloud secrets…"
+    "loadingSecrets": "Loading Cloud secrets…",
+    "unreachable": "Couldn’t reach Orca Cloud.",
+    "details": "Details"
   },
   "cloudSecretsAsk": {
     "scopeLabel": "Scope for {{name}}",
@@ -27193,7 +27198,9 @@
     "loading": "Loading secrets…",
     "nothingMissing": "Nothing is missing.",
     "dialogTitle": "Add missing secrets",
-    "dialogDetail": "Values go to your Cloud secrets. New terminals and agents in this workspace get them within a few seconds."
+    "dialogDetail": "Values go to your Cloud secrets. New terminals and agents in this workspace get them within a few seconds.",
+    "buildTeamOnly_one": "The environment build only uses team values. Ask an owner or admin to add {{name}} as a team secret.",
+    "buildTeamOnly_other": "The environment build only uses team values. Ask an owner or admin to add {{name}} as team secrets."
   },
   "cloudAgents": {
     "source": {
@@ -27234,6 +27241,9 @@
     "retry": "Try again",
     "notNow": "Not now",
     "add": "Add secret",
-    "announce": "{{title}}. Press F6 to answer."
+    "announce": "{{title}}. Press F6 to answer.",
+    "expand": "Show request",
+    "collapse": "Hide request",
+    "unseen": "Open that workspace to answer. The request waits up to 15 minutes."
   }
 }

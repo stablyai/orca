@@ -3,9 +3,11 @@ import { z } from 'zod'
 import {
   SECRET_REQUEST_REASON_MAX,
   SECRETS_REQUEST_SETTLED_EVENT,
+  SECRETS_REQUEST_UPDATED_EVENT,
   SECRETS_REQUESTED_EVENT,
   type SecretRequestedEvent,
-  type SecretRequestSettledEvent
+  type SecretRequestSettledEvent,
+  type SecretRequestUpdatedEvent
 } from '../../../../shared/secret-request-contract'
 
 const RequestId = z.string().regex(/^sr_[A-Za-z0-9_-]{8,64}$/)
@@ -32,6 +34,16 @@ const SettledSchema = z.object({
   requestId: RequestId,
   status: z.enum(['provided', 'declined', 'expired'])
 })
+
+const UpdatedSchema = z.object({
+  type: z.literal(SECRETS_REQUEST_UPDATED_EVENT),
+  requestId: RequestId,
+  expiresAt: Millis
+})
+
+export function isSecretRequestUpdatedEvent(value: unknown): value is SecretRequestUpdatedEvent {
+  return UpdatedSchema.safeParse(value).success
+}
 
 export function isSecretRequestedEvent(value: unknown): value is SecretRequestedEvent {
   return RequestedSchema.safeParse(value).success

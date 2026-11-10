@@ -1,6 +1,6 @@
 // Drives one S4-b card: the typed value lives only here, is sent once to Orca Cloud (PUT
 // /v1/secrets/:scope/:NAME through main), then orcad is told the outcome. The value never goes to orcad.
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -8,10 +8,13 @@ import { cloudSecretsErrorCopy } from '@/components/settings/cloud-secrets/cloud
 import { cloudSecretRepoKey } from '@/components/settings/cloud-secrets/cloud-secret-repos'
 import {
   dismissSecretRequest,
+  readSecretRequestTouchedAt,
   setSecretRequestExpiry,
   setSecretRequestLocal,
+  setSecretRequestTouched,
   type SecretRequestEntry
 } from '@/lib/secret-requests/secret-request-store'
+import { useAgentHostPanelOpener } from '@/lib/agent-host-panel/agent-host-panel-opener'
 import {
   restartableSecretRequestAgent,
   secretRequestAgentName
@@ -105,8 +108,10 @@ export function useSecretRequestCard(args: {
   worktreeId: string | null
   /** The pane's PTY, for Restart {{agent}}. */
   ptyId: string | null
+  /** The card sits on the asking agent's own pane; only then can Restart target it. */
+  onAskingPane: boolean
 }): { model: SecretRequestCardModel; actions: SecretRequestCardActions } {
-  const { entry, more, worktreeId, ptyId } = args
+  const { entry, more, worktreeId, ptyId, onAskingPane } = args
   const { environmentId, event } = entry
   const { requestId } = event
   const t = useTranslate()
@@ -116,8 +121,9 @@ export function useSecretRequestCard(args: {
   const [fieldError, setFieldError] = useState<string | null>(null)
   const [focused, setFocused] = useState(false)
   const [repoWritable, setRepoWritable] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
   const repoKey = useWorkspaceRepoKey(event.worktreeId ?? worktreeId)
-  const lastTouch = useRef(0)
+  const openPanel = useAgentHostPanelOpener()
   const local = entry.local
 
   useEffect(() => {
@@ -165,7 +171,7 @@ export function useSecretRequestCard(args: {
       return
     }
     const touch = (): void => {
-      lastTouch.current = Date.now()
+      setSecretRequestTouched(environmentId, requestId, Date.now())
       void callRuntimeRpc<SecretsTouchRequestResult>(
         { kind: 'environment', environmentId },
         SECRETS_TOUCH_REQUEST_METHOD,
@@ -176,8 +182,13 @@ export function useSecretRequestCard(args: {
         () => {}
       )
     }
-    // Never more than once a minute, across focus changes too.
-    const delay = Math.max(0, lastTouch.current + SECRET_REQUEST_TOUCH_INTERVAL_MS - Date.now())
+    // Never more than once a minute, across focus changes and card remounts too.
+    const delay = Math.max(
+      0,
+      readSecretRequestTouchedAt(environmentId, requestId) +
+        SECRET_REQUEST_TOUCH_INTERVAL_MS -
+        Date.now()
+    )
     let interval: number | undefined
     const first = window.setTimeout(() => {
       touch()
@@ -225,10 +236,11 @@ export function useSecretRequestCard(args: {
     setValue('')
     void api.refreshEnv({ runtimeEnvironmentId: environmentId }).catch(() => {})
     const outcome = await resolveRequest(environmentId, requestId, 'provided')
+    // Only a confirmed 'provided' means the agent was told; otherwise say so and let the person tell it.
     setSecretRequestLocal(
       environmentId,
       requestId,
-      outcome === 'expired' ? 'savedAfterExpiry' : 'saved'
+      outcome === 'provided' ? 'saved' : 'savedAfterExpiry'
     )
   }, [value, local, environmentId, requestId, effectiveScope, repoKey, event.name, t])
 
@@ -256,7 +268,8 @@ export function useSecretRequestCard(args: {
       phase,
       fieldError,
       more,
-      canRestart: restartAgent !== null && ptyId !== null
+      canRestart: restartAgent !== null && ptyId !== null && onAskingPane,
+      collapsed
     },
     actions: {
       onValueChange: (next) => {
@@ -267,6 +280,10 @@ export function useSecretRequestCard(args: {
       onAdd: () => void add(),
       onRetry: () => void add(),
       onNotNow: () => {
+        // Mid-save the value may already be stored: never tell the agent "declined" then.
+        if (local !== null) {
+          return
+        }
         setValue('')
         dismissSecretRequest(environmentId, requestId)
         void resolveRequest(environmentId, requestId, 'declined')
@@ -278,6 +295,10 @@ export function useSecretRequestCard(args: {
         dismissSecretRequest(environmentId, requestId)
       },
       onDismiss: () => dismissSecretRequest(environmentId, requestId),
+      onToggleCollapsed: () => setCollapsed((current) => !current),
+      onDetails: openPanel
+        ? () => openPanel({ hostId: environmentId, focus: { secret: event.name } })
+        : undefined,
       onFocusChange: setFocused
     }
   }

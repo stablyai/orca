@@ -14,7 +14,9 @@ const ACTIONS: SecretRequestCardActions = {
   onNotNow: noop,
   onRetry: noop,
   onRestart: noop,
-  onDismiss: noop
+  onDismiss: noop,
+  onToggleCollapsed: noop,
+  onDetails: noop
 }
 
 const BASE: SecretRequestCardModel = {
@@ -28,7 +30,8 @@ const BASE: SecretRequestCardModel = {
   phase: 'open',
   fieldError: null,
   more: 0,
-  canRestart: true
+  canRestart: true,
+  collapsed: false
 }
 
 /** A terminal pane behind the card, as it sits over a Claude session. */
@@ -69,3 +72,5 @@ export const saved = frame({ phase: 'saved' })
 export const savedRepo = frame({ phase: 'saved', scope: 'repo' })
 export const savedAfterExpiry = frame({ phase: 'savedAfterExpiry' })
 export const expired = frame({ phase: 'expired' })
+export const collapsed = frame({ collapsed: true, more: 1 })
+export const notOnAskingPane = frame({ phase: 'saved', canRestart: false })

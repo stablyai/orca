@@ -89,8 +89,12 @@ export function CloudMissingSecretRow({
           {t('agentHostPanel.env.missing', 'Missing')}
         </Badge>
         {expanded ? null : !canAdd ? (
-          <span className="ms-auto text-xs text-muted-foreground">
-            {t('agentHostPanel.keys.askAdmin', 'Ask an owner or admin to add one.')}
+          <span className="ms-auto text-end text-xs text-muted-foreground">
+            {data.sharing?.ownerName
+              ? t('agentHostPanel.env.askOwner', 'Ask {{owner}} or an admin to add it.', {
+                  owner: data.sharing.ownerName
+                })
+              : t('agentHostPanel.keys.askAdmin', 'Ask an owner or admin to add one.')}
           </span>
         ) : (
           <Button
@@ -145,7 +149,7 @@ export function CloudMissingSecretRow({
               >
                 <SelectTrigger
                   size="sm"
-                  className="w-32 shrink-0"
+                  className="w-32 shrink-0 text-xs"
                   aria-label={t('cloudSecretsAsk.scopeLabel', 'Scope for {{name}}', { name })}
                 >
                   <SelectValue />

@@ -11,15 +11,19 @@ import { subscribeRuntimeEnvironment } from '../environment-revisions/runtime-en
 import { answerBrowserClientHostRequest } from '../../browser/client-hosting/browser-client-host-request-answer'
 import {
   SECRETS_REQUEST_SETTLED_EVENT,
+  SECRETS_REQUEST_UPDATED_EVENT,
   SECRETS_REQUESTED_EVENT
 } from '../../../../../shared/secret-request-contract'
 import {
   applySecretRequested,
-  applySecretRequestSettled
+  applySecretRequestSettled,
+  applySecretRequestUpdated,
+  markSecretRequestsReplaying
 } from '@/lib/secret-requests/secret-request-store'
 import {
   isSecretRequestedEvent,
-  isSecretRequestSettledEvent
+  isSecretRequestSettledEvent,
+  isSecretRequestUpdatedEvent
 } from '@/lib/secret-requests/secret-request-event-guards'
 
 export type RuntimeClientEventSubscription = {
@@ -76,6 +80,8 @@ function handleRuntimeClientEventResponse(
   }
   const message = response.result as RuntimeClientEventStreamMessage
   if (message.type === 'ready') {
+    // orcad replays pending secret requests right after this; ones it doesn't replay are gone.
+    markSecretRequestsReplaying(environmentId)
     for (const sshState of message.snapshot?.sshStates ?? []) {
       const state = admitSshConnectionState(sshState.state, sshState.targetId)
       if (state) {
@@ -97,6 +103,12 @@ function handleRuntimeClientEventResponse(
   if (message.type === SECRETS_REQUESTED_EVENT) {
     if (isSecretRequestedEvent(message)) {
       applySecretRequested(environmentId, message)
+    }
+    return
+  }
+  if (message.type === SECRETS_REQUEST_UPDATED_EVENT) {
+    if (isSecretRequestUpdatedEvent(message)) {
+      applySecretRequestUpdated(environmentId, message)
     }
     return
   }

@@ -203,8 +203,13 @@ export function CloudSecretsAskForm({
         <p className="ps-7 text-xs leading-5 text-muted-foreground">
           {t(
             'cloudSecretsAsk.buildTeamOnly',
-            'The environment build only uses team values. Ask an owner or admin to add {{name}} as a team secret.',
-            { name: listNames(data.missing) }
+            'The environment build only uses team values. Ask an owner or admin to add {{name}} as team secrets.',
+            {
+              name: listNames(data.missing),
+              count: data.missing.length,
+              defaultValue_one:
+                'The environment build only uses team values. Ask an owner or admin to add {{name}} as a team secret.'
+            }
           )}
         </p>
       ) : null}
@@ -283,7 +288,7 @@ export function CloudSecretsAskForm({
                 >
                   <SelectTrigger
                     size="sm"
-                    className="w-32"
+                    className="w-32 text-xs"
                     aria-label={t('cloudSecretsAsk.scopeLabel', 'Scope for {{name}}', { name })}
                   >
                     <SelectValue />

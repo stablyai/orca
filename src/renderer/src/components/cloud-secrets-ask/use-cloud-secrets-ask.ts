@@ -49,8 +49,12 @@ export function useCloudSecretsAskLoad(repoKey: string | null): {
       if (cancelled) {
         return
       }
-      // No environment (or no access to the list) means nothing is declared: stay out of the way.
-      const environment = list?.ok ? environmentForRepo(list.data.environments, repoKey) : null
+      // A list that failed isn't "no environment": the caller must not take it as nothing missing.
+      if (!list || !list.ok) {
+        setLoad({ status: 'failed', error: 'unavailable' })
+        return
+      }
+      const environment = environmentForRepo(list.data.environments, repoKey)
       if (!environment) {
         setLoad({ status: 'none' })
         return

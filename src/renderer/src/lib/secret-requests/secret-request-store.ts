@@ -24,6 +24,10 @@ export type SecretRequestEntry = {
   local: SecretRequestLocalPhase | null
   /** This window's clock when the event first arrived (ties in requestedAt keep arrival order). */
   receivedAt: number
+  /** When this window last sent touchRequest (D3: at most once a minute, across card remounts). */
+  touchedAt: number
+  /** The stream reconnected and orcad hasn't replayed this request yet; dropped if it never does. */
+  stale: boolean
 }
 
 type State = { entries: ReadonlyMap<string, SecretRequestEntry> }
@@ -66,8 +70,72 @@ export function applySecretRequested(
     event,
     settled: existing?.settled ?? null,
     local: existing?.local ?? null,
-    receivedAt: existing?.receivedAt ?? now
+    receivedAt: existing?.receivedAt ?? now,
+    touchedAt: existing?.touchedAt ?? 0,
+    stale: false
   })
+  commit(next)
+}
+
+/** Any client's touchRequest moved the expiry (secrets.requestUpdated). */
+export function applySecretRequestUpdated(
+  environmentId: string,
+  event: { requestId: string; expiresAt: number }
+): void {
+  setSecretRequestExpiry(environmentId, event.requestId, event.expiresAt)
+}
+
+/** A request this window can no longer act on stays only while it shows what the person did. */
+const REPLAY_GRACE_MS = 5_000
+const staleTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+/**
+ * The stream (re)attached: orcad replays every request still pending right after. Requests it
+ * settled while this window was away aren't replayed, so whatever isn't replayed soon is dropped.
+ */
+export function markSecretRequestsReplaying(environmentId: string): void {
+  let changed = false
+  const next = new Map(state.entries)
+  for (const [key, entry] of next) {
+    if (entry.environmentId === environmentId && entry.local === null && entry.settled === null) {
+      next.set(key, { ...entry, stale: true })
+      changed = true
+    }
+  }
+  if (!changed) {
+    return
+  }
+  commit(next)
+  clearTimeout(staleTimers.get(environmentId))
+  staleTimers.set(
+    environmentId,
+    setTimeout(() => {
+      staleTimers.delete(environmentId)
+      const pruned = new Map(
+        [...state.entries].filter(
+          ([, entry]) =>
+            !(entry.environmentId === environmentId && entry.stale && entry.local === null)
+        )
+      )
+      if (pruned.size !== state.entries.size) {
+        commit(pruned)
+      }
+    }, REPLAY_GRACE_MS)
+  )
+}
+
+export function setSecretRequestTouched(
+  environmentId: string,
+  requestId: string,
+  touchedAt: number
+): void {
+  const key = keyOf(environmentId, requestId)
+  const existing = state.entries.get(key)
+  if (!existing) {
+    return
+  }
+  const next = new Map(state.entries)
+  next.set(key, { ...existing, touchedAt })
   commit(next)
 }
 
@@ -141,16 +209,6 @@ export function dismissSecretRequest(environmentId: string, requestId: string): 
   commit(next)
 }
 
-/** The environment's stream ended for good (host removed): its requests can't be answered here. */
-export function clearSecretRequestsForEnvironment(environmentId: string): void {
-  const next = new Map(
-    [...state.entries].filter(([, entry]) => entry.environmentId !== environmentId)
-  )
-  if (next.size !== state.entries.size) {
-    commit(next)
-  }
-}
-
 const EMPTY: readonly SecretRequestEntry[] = []
 let cachedFor: State | null = null
 let cachedList: readonly SecretRequestEntry[] = EMPTY
@@ -178,7 +236,16 @@ export function readSecretRequests(): readonly SecretRequestEntry[] {
 }
 
 export function resetSecretRequestStoreForTests(): void {
+  for (const timer of staleTimers.values()) {
+    clearTimeout(timer)
+  }
+  staleTimers.clear()
   state = { entries: new Map() }
   cachedFor = null
   cachedList = EMPTY
+}
+
+/** When this window last touched the request, read at the time a hold starts. */
+export function readSecretRequestTouchedAt(environmentId: string, requestId: string): number {
+  return state.entries.get(keyOf(environmentId, requestId))?.touchedAt ?? 0
 }

@@ -1,20 +1,20 @@
 import React from 'react'
-import { CircleCheck, KeyRound, Loader2, RotateCw } from 'lucide-react'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { ChevronDown, ChevronUp, KeyRound, Loader2 } from 'lucide-react'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
 import { SecretValueInput } from '@/components/settings/cloud-secrets/SecretValueInput'
-import { cloudSecretScopeLabel } from '@/components/settings/cloud-secrets/cloud-secrets-copy'
 import { cn } from '@/lib/utils'
 import type { SecretRequestScope } from '../../../../shared/secret-request-contract'
+import {
+  SecretRequestDone,
+  SecretRequestScopeControl,
+  SecretRequestTitle,
+  UntrustedReason
+} from './SecretRequestCardParts'
+
+export { secretRequestTitle } from './SecretRequestCardParts'
 
 export type SecretRequestCardPhase =
   | 'open'
@@ -22,6 +22,7 @@ export type SecretRequestCardPhase =
   /** The save didn't reach Orca Cloud; nothing changed. */
   | 'failed'
   | 'saved'
+  /** Saved, but the agent wasn't told: the request expired first, or orcad didn't answer (D3). */
   | 'savedAfterExpiry'
   | 'expired'
 
@@ -42,8 +43,10 @@ export type SecretRequestCardModel = {
   fieldError: string | null
   /** Other requests waiting on this pane. */
   more: number
-  /** Restart is offered where Orca can restart that agent in the pane. */
+  /** Restart is offered only on the asking agent's own pane. */
   canRestart: boolean
+  /** Folded to one line so the output under it can be read, without declining. */
+  collapsed: boolean
 }
 
 export type SecretRequestCardActions = {
@@ -54,85 +57,27 @@ export type SecretRequestCardActions = {
   onRetry: () => void
   onRestart: () => void
   onDismiss: () => void
+  onToggleCollapsed: () => void
+  /** Opens the Agent accounts & secrets panel on this name; absent until the panel exists. */
+  onDetails?: () => void
   /** Focus entered or left the card (the desktop keeps the request alive while it has focus). */
   onFocusChange?: (focused: boolean) => void
-}
-
-const NAME_SLOT = '\u0000'
-
-/** The translated title with the variable name set in monospace. */
-function titleFor(agent: string | null, name: string, t: Translate): React.ReactNode {
-  const text = agent
-    ? t('secretRequest.title', '{{agent}} asked for {{name}}', { agent, name: NAME_SLOT })
-    : t('secretRequest.titleUnknown', 'An agent asked for {{name}}', { name: NAME_SLOT })
-  return text.split(NAME_SLOT).map((part, index) => (
-    <React.Fragment key={index}>
-      {index > 0 ? <code className="font-mono text-[0.95em]">{name}</code> : null}
-      {part}
-    </React.Fragment>
-  ))
-}
-
-/** Title text for aria-label and announcements. */
-export function secretRequestTitle(agent: string | null, name: string, t: Translate): string {
-  return agent
-    ? t('secretRequest.title', '{{agent}} asked for {{name}}', { agent, name })
-    : t('secretRequest.titleUnknown', 'An agent asked for {{name}}', { name })
-}
-
-/** Plain text clamped to two lines, with Show more when it overflows. Never linkified. */
-function UntrustedReason({ reason, from }: { reason: string; from: string }): React.JSX.Element {
-  const t = useTranslate()
-  const ref = React.useRef<HTMLSpanElement>(null)
-  const [expanded, setExpanded] = React.useState(false)
-  const [overflows, setOverflows] = React.useState(false)
-  React.useLayoutEffect(() => {
-    const element = ref.current
-    if (element && !expanded) {
-      setOverflows(element.scrollHeight > element.clientHeight + 1)
-    }
-  }, [reason, expanded])
-  return (
-    <figure className="flex min-w-0 flex-col gap-0.5 border-l-2 border-border pl-2.5 text-xs leading-5 text-muted-foreground">
-      <blockquote className="min-w-0">
-        <span ref={ref} className={cn('break-words', !expanded && 'line-clamp-2')}>
-          {`“${reason}”`}
-        </span>
-      </blockquote>
-      <figcaption className="flex items-center gap-2">
-        <span>{from}</span>
-        {overflows || expanded ? (
-          <button
-            type="button"
-            className="rounded-sm text-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-            aria-expanded={expanded}
-            onClick={() => setExpanded(!expanded)}
-          >
-            {expanded
-              ? t('secretRequest.showLess', 'Show less')
-              : t('secretRequest.showMore', 'Show more')}
-          </button>
-        ) : null}
-      </figcaption>
-    </figure>
-  )
 }
 
 /**
  * S4-b: an agent in an Orca Cloud workspace asked for a secret. The value goes from this card to
  * Orca Cloud only; the agent is told it's ready and never gets it from Orca. Non-modal: it never takes
- * focus from the terminal.
+ * focus from the terminal (F6 moves focus in and back out).
  */
 export function SecretRequestCard({
   model,
   actions,
-  inputRef,
+  rootRef,
   className
 }: {
   model: SecretRequestCardModel
   actions: SecretRequestCardActions
-  /** Lets F6 move focus into the card. */
-  inputRef?: React.Ref<HTMLDivElement>
+  rootRef?: React.Ref<HTMLDivElement>
   className?: string
 }): React.JSX.Element {
   const t = useTranslate()
@@ -144,107 +89,125 @@ export function SecretRequestCard({
   const done = model.phase === 'saved' || model.phase === 'savedAfterExpiry'
   const saving = model.phase === 'saving'
   const canSave = model.value.length > 0 && !saving
+  const ownRef = React.useRef<HTMLDivElement>(null)
+  const focusedWithin = React.useRef(false)
 
-  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
-    if (event.key === 'Escape' && !done && model.phase !== 'expired') {
-      event.stopPropagation()
-      actions.onNotNow()
+  // When the form gives way to the result, focus that was in it lands on the result's first action
+  // instead of falling to the page.
+  React.useLayoutEffect(() => {
+    const root = ownRef.current
+    if (done && focusedWithin.current && root && !root.contains(document.activeElement)) {
+      root.querySelector<HTMLElement>('button')?.focus()
+    }
+  }, [done])
+
+  const setRefs = (node: HTMLDivElement | null): void => {
+    ownRef.current = node
+    if (typeof rootRef === 'function') {
+      rootRef(node)
+    } else if (rootRef) {
+      rootRef.current = node
     }
   }
 
+  const header = (
+    <div className="flex items-start gap-2.5">
+      <KeyRound aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+      <div className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+        <h3 id={titleId} className="min-w-0 font-medium break-words text-foreground">
+          <SecretRequestTitle agent={model.agent} name={model.name} />
+        </h3>
+        {model.more > 0 ? (
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {t('secretRequest.more', '{{count}} more requests', {
+              count: model.more,
+              defaultValue_one: '{{count}} more request'
+            })}
+          </span>
+        ) : null}
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        className="-my-0.5 shrink-0"
+        aria-expanded={!model.collapsed}
+        aria-label={
+          model.collapsed
+            ? t('secretRequest.expand', 'Show request')
+            : t('secretRequest.collapse', 'Hide request')
+        }
+        onClick={actions.onToggleCollapsed}
+      >
+        {model.collapsed ? <ChevronDown aria-hidden /> : <ChevronUp aria-hidden />}
+      </Button>
+    </div>
+  )
+
   return (
     <div
+      ref={setRefs}
       role="dialog"
       aria-modal="false"
       aria-labelledby={titleId}
       data-secret-request-card=""
-      onKeyDown={onKeyDown}
-      onFocus={() => actions.onFocusChange?.(true)}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) {
-          actions.onFocusChange?.(false)
+      onKeyDown={(event) => {
+        if (event.key === 'Escape' && !done && !saving && model.phase !== 'expired') {
+          event.stopPropagation()
+          actions.onNotNow()
         }
       }}
+      onFocus={() => {
+        focusedWithin.current = true
+        actions.onFocusChange?.(true)
+      }}
+      onBlur={(event) => {
+        const root = event.currentTarget
+        if (root.contains(event.relatedTarget)) {
+          return
+        }
+        // A control that unmounts (Add → result) blurs with nowhere to go; that isn't leaving.
+        window.setTimeout(() => {
+          if (!root.isConnected || root.contains(document.activeElement)) {
+            return
+          }
+          if (document.activeElement === document.body) {
+            return
+          }
+          focusedWithin.current = false
+          actions.onFocusChange?.(false)
+        }, 0)
+      }}
       className={cn(
-        'flex w-full flex-col gap-3 rounded-lg border border-border bg-popover p-4 font-sans text-sm text-popover-foreground shadow-lg motion-safe:animate-in motion-safe:fade-in-0',
+        'flex w-full flex-col gap-3 rounded-lg border border-border bg-popover font-sans text-sm text-popover-foreground shadow-lg motion-safe:animate-in motion-safe:fade-in-0',
+        model.collapsed ? 'px-3 py-2' : 'p-4',
         className
       )}
     >
       {done ? (
-        <div className="flex items-start gap-3">
-          <CircleCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-          <div role="status" className="min-w-0 flex-1 space-y-1">
-            <p id={titleId} className="font-medium text-foreground">
-              {model.phase === 'savedAfterExpiry'
-                ? t(
-                    'secretRequest.savedAfterExpiry',
-                    'Saved. {{agent}} stopped waiting, so tell it the secret is ready.',
-                    { agent: model.agent ?? t('secretRequest.theAgent', 'The agent') }
-                  )
-                : model.scope === 'repo'
-                  ? t('secretRequest.doneRepo', '{{name}} added to this repository’s secrets.', {
-                      name: model.name
-                    })
-                  : t('secretRequest.done', '{{name}} added to your personal secrets.', {
-                      name: model.name
-                    })}
-            </p>
-            <p className="text-xs leading-5 text-muted-foreground">
-              {model.phase === 'saved'
-                ? t(
-                    'secretRequest.doneDetail',
-                    'New shells get it now. {{agent}} was told it’s ready, and it never gets the value from Orca.',
-                    { agent: model.agent ?? t('secretRequest.theAgent', 'The agent') }
-                  )
-                : t('secretRequest.doneDetailExpired', 'New shells get it now.')}{' '}
-              {model.canRestart
-                ? t(
-                    'secretRequest.restartDetail',
-                    'Restart {{agent}} to give its own shell the new value.',
-                    { agent: agentName }
-                  )
-                : null}
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-col items-end gap-1">
-            {model.canRestart ? (
-              <Button type="button" variant="outline" size="xs" onClick={actions.onRestart}>
-                <RotateCw aria-hidden />
-                {t('secretRequest.restart', 'Restart {{agent}}', { agent: agentName })}
-              </Button>
-            ) : null}
-            <Button type="button" variant="ghost" size="xs" onClick={actions.onDismiss}>
-              {t('secretRequest.dismiss', 'Dismiss')}
-            </Button>
-          </div>
-        </div>
+        <SecretRequestDone
+          agent={model.agent}
+          name={model.name}
+          scope={model.scope}
+          toldAgent={model.phase === 'saved'}
+          canRestart={model.canRestart}
+          titleId={titleId}
+          onRestart={actions.onRestart}
+          onDismiss={actions.onDismiss}
+        />
+      ) : model.collapsed ? (
+        header
       ) : (
         <>
-          <div className="flex items-start gap-2.5">
-            <KeyRound aria-hidden className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-            <div className="flex min-w-0 flex-1 flex-col gap-2">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-                <h3 id={titleId} className="min-w-0 font-medium break-words text-foreground">
-                  {titleFor(model.agent, model.name, t)}
-                </h3>
-                {model.more > 0 ? (
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {t('secretRequest.more', '{{count}} more requests', {
-                      count: model.more,
-                      defaultValue_one: '{{count}} more request'
-                    })}
-                  </span>
-                ) : null}
-              </div>
-              {model.reason ? (
-                <UntrustedReason
-                  reason={model.reason}
-                  from={t('secretRequest.from', 'from {{agent}}', { agent: agentName })}
-                />
-              ) : null}
+          {header}
+          {model.reason ? (
+            <div className="ps-6.5">
+              <UntrustedReason
+                reason={model.reason}
+                from={t('secretRequest.from', 'from {{agent}}', { agent: agentName })}
+              />
             </div>
-          </div>
-
+          ) : null}
           {model.phase === 'expired' ? (
             <InlineError
               tone="neutral"
@@ -260,7 +223,7 @@ export function SecretRequestCard({
             />
           ) : (
             <>
-              <div ref={inputRef} tabIndex={-1} className="flex flex-col gap-1.5 outline-none">
+              <div data-secret-request-field="" className="flex flex-col gap-1.5">
                 <Label htmlFor={`${id}-value`} className="sr-only">
                   {t('secretRequest.valueLabel', 'Value for {{name}}', { name: model.name })}
                 </Label>
@@ -284,36 +247,13 @@ export function SecretRequestCard({
                       describedBy={model.fieldError ? `${errorId} ${helpId}` : helpId}
                     />
                   </div>
-                  {model.scopes.length > 1 ? (
-                    <Select
-                      value={model.scope}
-                      onValueChange={(next) =>
-                        actions.onScopeChange(next === 'repo' ? 'repo' : 'personal')
-                      }
-                      disabled={saving}
-                    >
-                      <SelectTrigger
-                        size="sm"
-                        className="w-32 shrink-0"
-                        aria-label={t('secretRequest.scopeLabel', 'Scope for {{name}}', {
-                          name: model.name
-                        })}
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {model.scopes.map((scope) => (
-                          <SelectItem key={scope} value={scope}>
-                            {cloudSecretScopeLabel(scope, t)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <span className="inline-flex h-8 shrink-0 items-center rounded-full border border-border px-2.5 text-xs text-muted-foreground">
-                      {cloudSecretScopeLabel('personal', t)}
-                    </span>
-                  )}
+                  <SecretRequestScopeControl
+                    name={model.name}
+                    scopes={model.scopes}
+                    scope={model.scope}
+                    disabled={saving}
+                    onChange={actions.onScopeChange}
+                  />
                 </div>
                 {model.fieldError ? (
                   <p id={errorId} role="alert" className="text-xs text-destructive">
@@ -344,8 +284,20 @@ export function SecretRequestCard({
                   density="compact"
                 />
               ) : null}
-              <div className="flex items-center justify-end gap-2">
-                <Button type="button" variant="ghost" size="xs" onClick={actions.onNotNow}>
+              <div className="flex items-center gap-2">
+                {actions.onDetails ? (
+                  <Button type="button" variant="ghost" size="xs" onClick={actions.onDetails}>
+                    {t('agentHostPanel.details', 'Details')}
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="ms-auto aria-disabled:opacity-50"
+                  aria-disabled={saving || undefined}
+                  onClick={saving ? undefined : actions.onNotNow}
+                >
                   {t('secretRequest.notNow', 'Not now')}
                 </Button>
                 <Button

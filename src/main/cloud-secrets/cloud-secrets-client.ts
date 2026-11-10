@@ -107,10 +107,12 @@ export function createCloudSecretsClient(
         { kind: 'control' }
       )
       const owner = sources.owner ?? null
+      const shared = sources.sharedWorkspace === true
       return {
-        shared: sources.sharedWorkspace === true,
+        shared,
         ownerName: owner && !owner.isCaller ? owner.displayName : null,
-        isOwner: owner === null || owner.isCaller
+        // Unknown owner: only an unshared workspace is safely the caller's own.
+        isOwner: owner ? owner.isCaller : !shared
       }
     }
   }

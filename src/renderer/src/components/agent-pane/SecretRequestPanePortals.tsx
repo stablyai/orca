@@ -1,120 +1,50 @@
-import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
-import { useSecretRequests } from '@/lib/secret-requests/secret-request-store'
+import {
+  useSecretRequests,
+  type SecretRequestEntry
+} from '@/lib/secret-requests/secret-request-store'
 import {
   routeSecretRequests,
-  secretRequestAgentName,
-  type SecretRequestPaneSlot
+  secretRequestAgentName
 } from '@/lib/secret-requests/secret-request-routing'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { TerminalPaneController } from '../terminal-pane/controller/use-terminal-pane-controller'
 import { SecretRequestCard, secretRequestTitle } from './SecretRequestCard'
+import {
+  registerSecretRequestCard,
+  setSecretRequestSlot,
+  useSecretRequestSlots
+} from './secret-request-focus'
 import { useSecretRequestCard } from './use-secret-request-card'
-
-// Every mounted pane on a remote host, across tabs, so a request lands on exactly one of them.
-const slots = new Map<string, SecretRequestPaneSlot>()
-const slotListeners = new Set<() => void>()
-let slotSnapshot: readonly SecretRequestPaneSlot[] = []
-
-function publishSlots(): void {
-  slotSnapshot = [...slots.values()]
-  for (const listener of slotListeners) {
-    listener()
-  }
-}
-
-function setSlot(slot: SecretRequestPaneSlot | null, paneKey: string): void {
-  const current = slots.get(paneKey)
-  if (slot === null) {
-    if (current) {
-      slots.delete(paneKey)
-      publishSlots()
-    }
-    return
-  }
-  if (
-    current?.environmentId === slot.environmentId &&
-    current.handle === slot.handle &&
-    current.primary === slot.primary
-  ) {
-    return
-  }
-  slots.set(paneKey, slot)
-  publishSlots()
-}
-
-function useSlots(): readonly SecretRequestPaneSlot[] {
-  return useSyncExternalStore(
-    (listener) => {
-      slotListeners.add(listener)
-      return () => slotListeners.delete(listener)
-    },
-    () => slotSnapshot,
-    () => slotSnapshot
-  )
-}
-
-function SecretRequestPaneCard({
-  pane,
-  paneKey,
-  ptyId,
-  worktreeId,
-  primary
-}: {
-  pane: ManagedPane
-  paneKey: string
-  ptyId: string
-  worktreeId: string
-  primary: boolean
-}): React.JSX.Element | null {
-  const t = useTranslate()
-  const requests = useSecretRequests()
-  const allSlots = useSlots()
-  const routed = useMemo(() => routeSecretRequests(requests, allSlots), [requests, allSlots])
-  const mine = routed.get(paneKey) ?? []
-  const entry = mine[0]
-  if (!entry) {
-    return null
-  }
-  return createPortal(
-    <SecretRequestPaneCardBody
-      // A new request starts from an empty field and Personal.
-      key={`${entry.environmentId}:${entry.event.requestId}`}
-      entry={entry}
-      more={mine.length - 1}
-      ptyId={ptyId}
-      worktreeId={worktreeId}
-      primary={primary}
-      announcement={t('secretRequest.announce', '{{title}}. Press F6 to answer.', {
-        title: secretRequestTitle(secretRequestAgentName(entry.event.agent), entry.event.name, t)
-      })}
-    />,
-    pane.container,
-    `secret-request-${pane.id}`
-  )
-}
 
 function SecretRequestPaneCardBody({
   entry,
   more,
+  pane,
+  paneKey,
   ptyId,
   worktreeId,
+  onAskingPane,
   primary,
   announcement
 }: {
-  entry: Parameters<typeof useSecretRequestCard>[0]['entry']
+  entry: SecretRequestEntry
   more: number
+  pane: ManagedPane
+  paneKey: string
   ptyId: string
   worktreeId: string
+  onAskingPane: boolean
   primary: boolean
   announcement: string
 }): React.JSX.Element {
-  const { model, actions } = useSecretRequestCard({ entry, more, worktreeId, ptyId })
-  const fieldRef = useRef<HTMLDivElement>(null)
+  const { model, actions } = useSecretRequestCard({ entry, more, worktreeId, ptyId, onAskingPane })
+  const cardRef = useRef<HTMLDivElement>(null)
   // Filled after mount so screen readers hear it once; a live region's initial text isn't read.
   const [spoken, setSpoken] = useState('')
   const open = model.phase === 'open'
@@ -126,26 +56,20 @@ function SecretRequestPaneCardBody({
     const timer = window.setTimeout(() => setSpoken(announcement), 150)
     return () => window.clearTimeout(timer)
   }, [open, announcement])
-  // F6 reaches the card from the terminal; the card itself never takes focus when it appears.
-  useEffect(() => {
-    if (!primary) {
-      return
-    }
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'F6' || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
-        return
-      }
-      const field = fieldRef.current?.querySelector<HTMLElement>('input, textarea')
-      const target = field ?? fieldRef.current
-      if (target) {
-        event.preventDefault()
-        event.stopPropagation()
-        target.focus()
-      }
-    }
-    window.addEventListener('keydown', onKeyDown, true)
-    return () => window.removeEventListener('keydown', onKeyDown, true)
-  }, [primary])
+
+  // F6 reaches this card from its pane (or from anywhere when it's on the active pane), and the card
+  // hands focus back to where it came from when it goes away.
+  useLayoutEffect(
+    () =>
+      registerSecretRequestCard({
+        paneKey,
+        container: pane.container,
+        card: () => cardRef.current,
+        primary
+      }),
+    [paneKey, pane.container, primary]
+  )
+
   return (
     <div
       data-secret-request-overlay=""
@@ -157,24 +81,27 @@ function SecretRequestPaneCardBody({
       <SecretRequestCard
         model={model}
         actions={actions}
-        inputRef={fieldRef}
+        rootRef={cardRef}
         className="pointer-events-auto max-w-md"
       />
     </div>
   )
 }
 
-function SecretRequestPaneSlotTracker({
+function SecretRequestPaneSlot({
   pane,
   tabId,
+  visible,
   primary,
   worktreeId
 }: {
   pane: ManagedPane
   tabId: string
+  visible: boolean
   primary: boolean
   worktreeId: string
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const paneKey = makePaneKey(tabId, pane.leafId)
   const ptyId = useAppStore(
     (state) => state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[pane.leafId] ?? null
@@ -184,23 +111,41 @@ function SecretRequestPaneSlotTracker({
   const handle = remote?.handle ?? null
   useEffect(() => {
     if (!environmentId) {
-      setSlot(null, paneKey)
       return
     }
-    setSlot({ paneKey, environmentId, handle, primary }, paneKey)
-    return () => setSlot(null, paneKey)
-  }, [paneKey, environmentId, handle, primary])
-  if (!environmentId || !ptyId) {
+    setSecretRequestSlot(paneKey, { paneKey, environmentId, handle, visible, primary })
+    return () => setSecretRequestSlot(paneKey, null)
+  }, [paneKey, environmentId, handle, visible, primary])
+
+  const requests = useSecretRequests()
+  const slots = useSecretRequestSlots()
+  const mine = useMemo(
+    () => (environmentId ? (routeSecretRequests(requests, slots).get(paneKey) ?? []) : []),
+    [environmentId, requests, slots, paneKey]
+  )
+  const first = mine[0]
+  if (!first || !ptyId) {
     return null
   }
-  return (
-    <SecretRequestPaneCard
+  const { entry } = first
+  return createPortal(
+    <SecretRequestPaneCardBody
+      // A new request starts from an empty field and Personal.
+      key={`${entry.environmentId}:${entry.event.requestId}`}
+      entry={entry}
+      more={mine.length - 1}
       pane={pane}
       paneKey={paneKey}
       ptyId={ptyId}
       worktreeId={worktreeId}
+      onAskingPane={first.onAskingPane}
       primary={primary}
-    />
+      announcement={t('secretRequest.announce', '{{title}}. Press F6 to answer.', {
+        title: secretRequestTitle(secretRequestAgentName(entry.event.agent), entry.event.name, t)
+      })}
+    />,
+    pane.container,
+    `secret-request-${pane.id}`
   )
 }
 
@@ -214,11 +159,12 @@ export function SecretRequestPanePortals({
   return (
     <>
       {managedPanes.map((pane) => (
-        <SecretRequestPaneSlotTracker
+        <SecretRequestPaneSlot
           key={pane.id}
           pane={pane}
           tabId={tabId}
           worktreeId={worktreeId}
+          visible={isActive}
           primary={isActive && activePane?.id === pane.id}
         />
       ))}

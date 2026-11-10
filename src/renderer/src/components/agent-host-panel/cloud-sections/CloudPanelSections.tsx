@@ -9,7 +9,10 @@ import {
   cloudSecretsErrorCopy
 } from '@/components/settings/cloud-secrets/cloud-secrets-copy'
 import { cn } from '@/lib/utils'
-import type { CloudSecretScope } from '../../../../../shared/cloud-secrets/cloud-secrets-wire'
+import type {
+  CloudSecretScope,
+  CloudSecretsErrorCode
+} from '../../../../../shared/cloud-secrets/cloud-secrets-wire'
 import { CloudMissingSecretRow } from './CloudMissingSecretRow'
 import { LoadingRows, PanelSection } from './PanelSection'
 import {
@@ -44,6 +47,13 @@ function ownerLabel(owner: CloudKeyOwner, t: Translate): string {
     default:
       return OWNER_LABEL[owner]
   }
+}
+
+/** A read that failed: transport problems say where, without the save-oriented "Nothing was changed". */
+export function cloudPanelLoadErrorTitle(code: CloudSecretsErrorCode, t: Translate): string {
+  return code === 'unavailable' || code === 'timeout' || code === 'unknown'
+    ? t('agentHostPanel.unreachable', 'Couldn’t reach Orca Cloud.')
+    : cloudSecretsErrorCopy(code, t)
 }
 
 function shadowedReason(shadowedBy: CloudSecretScope, t: Translate): string {
@@ -137,12 +147,15 @@ export function CloudAgentKeysSection({
   load,
   number,
   onEdit,
+  onManage,
   onRetry,
   extraRows
 }: {
   load: CloudPanelSectionsLoad
   number?: React.ReactNode
   onEdit?: (row: CloudKeyRow) => void
+  /** Opens Cloud secrets (Settings), where keys are added. */
+  onManage?: () => void
   onRetry: () => void
   extraRows?: React.ReactNode
 }): React.JSX.Element {
@@ -169,17 +182,27 @@ export function CloudAgentKeysSection({
       ) : load.status === 'failed' ? (
         <InlineError
           density="compact"
-          title={cloudSecretsErrorCopy(load.error, t)}
+          title={cloudPanelLoadErrorTitle(load.error, t)}
           retryLabel={t('agentHostPanel.retry', 'Try again')}
           onRetry={onRetry}
         />
       ) : rows.length === 0 && !extraRows ? (
-        <p className="text-xs text-muted-foreground">
-          {t('agentHostPanel.keys.empty', 'No agent keys in Cloud secrets.')}{' '}
-          {load.data.effective.caller.canWrite.org
-            ? null
-            : t('agentHostPanel.keys.askAdmin', 'Ask an owner or admin to add one.')}
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">
+            {t('agentHostPanel.keys.empty', 'No agent keys in Cloud secrets.')}{' '}
+            {load.data.effective.caller.canWrite.org
+              ? null
+              : t(
+                  'agentHostPanel.keys.emptyMember',
+                  'Add your own, or ask an owner or admin for a team key.'
+                )}
+          </p>
+          {onManage ? (
+            <Button type="button" variant="outline" size="xs" onClick={onManage}>
+              {t('agentHostPanel.keys.manage', 'Open Cloud secrets')}
+            </Button>
+          ) : null}
+        </div>
       ) : (
         <ul className="flex flex-col divide-y divide-border/60">
           {rows.map((row) => (
@@ -229,12 +252,12 @@ export function CloudEnvironmentPanelSection({
               data.sharing?.ownerName
                 ? t(
                     'agentHostPanel.env.guestOwner',
-                    'Personal values come from {{owner}}, who owns this workspace.',
+                    'In a shared workspace, Personal values come from its owner, {{owner}}, not from you.',
                     { owner: data.sharing.ownerName }
                   )
                 : t(
                     'agentHostPanel.env.guest',
-                    'Personal values come from the person who owns this workspace.'
+                    'In a shared workspace, Personal values come from its owner, not from you.'
                   )
             }`
           : t(
@@ -255,7 +278,7 @@ export function CloudEnvironmentPanelSection({
       ) : load.status === 'failed' ? (
         <InlineError
           density="compact"
-          title={cloudSecretsErrorCopy(load.error, t)}
+          title={cloudPanelLoadErrorTitle(load.error, t)}
           retryLabel={t('agentHostPanel.retry', 'Try again')}
           onRetry={onRetry}
         />
@@ -317,6 +340,7 @@ export function CloudPanelSections({
   onRetry,
   onAdd,
   onEdit,
+  onManage,
   focusSecret,
   keysExtraRows,
   initialExpanded,
@@ -326,17 +350,33 @@ export function CloudPanelSections({
   onRetry: () => void
   onAdd: CloudPanelAddSecret
   onEdit?: (row: CloudKeyRow) => void
+  onManage?: () => void
   focusSecret?: string
   keysExtraRows?: React.ReactNode
   initialExpanded?: string | null
   className?: string
 }): React.JSX.Element {
+  const t = useTranslate()
+  if (load.status === 'failed') {
+    // One read feeds both sections, so one error (and one announcement) covers them.
+    return (
+      <div className={cn('px-5 py-4', className)}>
+        <InlineError
+          density="compact"
+          title={cloudPanelLoadErrorTitle(load.error, t)}
+          retryLabel={t('agentHostPanel.retry', 'Try again')}
+          onRetry={onRetry}
+        />
+      </div>
+    )
+  }
   return (
     <div className={cn('flex flex-col divide-y divide-border', className)}>
       <CloudAgentKeysSection
         number={2}
         load={load}
         onEdit={onEdit}
+        onManage={onManage}
         onRetry={onRetry}
         extraRows={keysExtraRows}
       />

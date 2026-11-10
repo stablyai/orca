@@ -1,5 +1,4 @@
-// Which pane shows which secret request: the pane running the asking terminal, else the active pane of
-// a visible tab on the same host. One card per pane; the rest count as "N more requests".
+// Which pane shows which secret request. One card per pane; the rest count as "N more requests".
 import type { SecretRequestEntry } from './secret-request-store'
 
 export type SecretRequestPaneSlot = {
@@ -7,45 +6,82 @@ export type SecretRequestPaneSlot = {
   environmentId: string
   /** The remote terminal handle this pane runs, when known. */
   handle: string | null
-  /** The active pane of a visible tab: where requests without a matching pane land. */
+  /** The pane's tab is the one showing. */
+  visible: boolean
+  /** The active pane of a showing tab: where requests without a showing asking pane land. */
   primary: boolean
 }
 
+export type RoutedSecretRequest = {
+  entry: SecretRequestEntry
+  /** Shown on the pane running the asking terminal, so "Restart {{agent}}" restarts the right one. */
+  onAskingPane: boolean
+}
+
+function handleKey(environmentId: string, handle: string): string {
+  return JSON.stringify([environmentId, handle])
+}
+
+/**
+ * The asking terminal's pane when its tab is showing; else the active pane of a showing tab on the
+ * same host; else the asking pane even though hidden (it shows when that tab is opened).
+ */
 export function routeSecretRequests(
   entries: readonly SecretRequestEntry[],
   slots: readonly SecretRequestPaneSlot[]
-): Map<string, SecretRequestEntry[]> {
-  const routed = new Map<string, SecretRequestEntry[]>()
-  const byHandle = new Map<string, string>()
+): Map<string, RoutedSecretRequest[]> {
+  const routed = new Map<string, RoutedSecretRequest[]>()
+  const byHandle = new Map<string, SecretRequestPaneSlot>()
   for (const slot of slots) {
     if (slot.handle) {
-      byHandle.set(`${slot.environmentId}\u0000${slot.handle}`, slot.paneKey)
+      byHandle.set(handleKey(slot.environmentId, slot.handle), slot)
     }
   }
-  // Deterministic fallback when several visible tabs share a host: the lowest pane key.
+  // Deterministic when several showing tabs share a host: the lowest pane key.
   const primaryByEnvironment = new Map<string, string>()
   for (const slot of slots) {
     const current = primaryByEnvironment.get(slot.environmentId)
-    if (slot.primary && (current === undefined || slot.paneKey < current)) {
+    if (slot.primary && slot.visible && (current === undefined || slot.paneKey < current)) {
       primaryByEnvironment.set(slot.environmentId, slot.paneKey)
     }
   }
   for (const entry of entries) {
     const handle = entry.event.terminalHandle
-    const paneKey =
-      (handle ? byHandle.get(`${entry.environmentId}\u0000${handle}`) : undefined) ??
-      primaryByEnvironment.get(entry.environmentId)
+    const asking = handle ? byHandle.get(handleKey(entry.environmentId, handle)) : undefined
+    const primary = primaryByEnvironment.get(entry.environmentId)
+    const paneKey = asking?.visible ? asking.paneKey : (primary ?? asking?.paneKey)
     if (!paneKey) {
       continue
     }
+    const item = { entry, onAskingPane: asking?.paneKey === paneKey }
     const list = routed.get(paneKey)
     if (list) {
-      list.push(entry)
+      list.push(item)
     } else {
-      routed.set(paneKey, [entry])
+      routed.set(paneKey, [item])
     }
   }
   return routed
+}
+
+/** Pending requests no showing pane displays (the person is looking at another workspace). */
+export function unseenSecretRequests(
+  entries: readonly SecretRequestEntry[],
+  slots: readonly SecretRequestPaneSlot[]
+): SecretRequestEntry[] {
+  const routed = routeSecretRequests(entries, slots)
+  const visibleKeys = new Set(slots.filter((slot) => slot.visible).map((slot) => slot.paneKey))
+  const seen = new Set<SecretRequestEntry>()
+  for (const [paneKey, items] of routed) {
+    if (visibleKeys.has(paneKey)) {
+      for (const item of items) {
+        seen.add(item.entry)
+      }
+    }
+  }
+  return entries.filter(
+    (entry) => !seen.has(entry) && entry.local === null && entry.settled === null
+  )
 }
 
 const AGENT_DISPLAY_NAME: Record<string, string> = {

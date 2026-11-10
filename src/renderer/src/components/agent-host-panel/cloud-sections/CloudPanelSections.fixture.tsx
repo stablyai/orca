@@ -117,6 +117,7 @@ function Frame({
           onRetry={noop}
           onAdd={saved}
           onEdit={noop}
+          onManage={noop}
           initialExpanded={initialExpanded}
         />
       </div>
