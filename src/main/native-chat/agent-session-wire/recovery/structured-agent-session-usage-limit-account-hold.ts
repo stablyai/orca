@@ -2,6 +2,7 @@ import { rateLimitSpentUntil } from '../../../../shared/rate-limit-spent-windows
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import {
   isNativeChatUsageLimitCutSchedulable,
+  NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS,
   type NativeChatUsageLimitCut
 } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
@@ -68,15 +69,15 @@ const READING_WAIT_MS = 120_000
 export class UsageLimitAccountHolds {
   private readonly holds = new Map<string, Hold>()
   private readonly scopes = new Map<string, UsageLimitAccountScope | undefined>()
-  /** The account scope token each chat was attributed under. */
-  private readonly tokens = new Map<string, string | undefined>()
-  /** Shared by every chat of a pass and keyed by scope token: work scales with accounts and their
-   *  changes, not chats. */
+  /** The source witness each chat's attribution was computed under. */
+  private readonly witnesses = new Map<string, string | undefined>()
+  /** Shared by every chat of a pass and keyed by source witness: work scales with accounts and
+   *  their changes, not chats. */
   private launchHomes = new Map<string, Promise<AgentSessionAccountHome | null>>()
   private readings = new Map<string, Promise<UsageLimitAccountScope | undefined>>()
 
   get size(): number {
-    return this.holds.size + this.scopes.size + this.tokens.size
+    return this.holds.size + this.scopes.size + this.witnesses.size
   }
 
   /** Launch homes and readings resolve again, once each, from here on. */
@@ -89,13 +90,13 @@ export class UsageLimitAccountHolds {
   async attribute(id: string, host: AttributionHost): Promise<void> {
     const record = host.store.getRecord(id)
     const read = host.usageLimitAutoContinue?.accountUsage
-    const token = record ? liveToken(host, record.provider) : undefined
+    const witness = record ? liveWitness(host, record.provider) : undefined
     let scope: UsageLimitAccountScope | undefined
     try {
       // WSL readings never reach this host, so a WSL launch keeps the cut's own reset.
       if (record && read && record.location.wslDistro === null) {
         // Off WSL a launch home follows only the provider's selection, never the chat.
-        const target = JSON.stringify([token, record.provider])
+        const target = JSON.stringify([witness, record.provider])
         let launch = this.launchHomes.get(target)
         if (!launch) {
           launch = (async () => (await host.launchAccountHome?.(record)) ?? null)()
@@ -104,7 +105,7 @@ export class UsageLimitAccountHolds {
         const home = (await launch) ?? record.accountHome
         const path = agentSessionAccountHomePath(home)
         if (home && path) {
-          const key = JSON.stringify([token, record.provider, path])
+          const key = JSON.stringify([witness, record.provider, path])
           let reading = this.readings.get(key)
           if (!reading) {
             reading = read(record.provider, home)
@@ -116,23 +117,34 @@ export class UsageLimitAccountHolds {
     } catch {
       // No attributable account this pass: the cut's own reset and any hold already seen decide.
     }
+    if (record && liveWitness(host, record.provider) !== witness) {
+      // Sources moved while this resolved: the result mixes them, so nothing stands for the chat.
+      this.scopes.delete(id)
+      this.witnesses.delete(id)
+      return
+    }
     this.scopes.set(id, scope)
-    this.tokens.set(id, token)
+    this.witnesses.set(id, witness)
   }
 
-  /** The chat's account scope token now; it moves with the selection and the reading. */
-  liveToken(id: string, host: AttributionHost): string | undefined {
+  /** The witness the chat's attribution was computed under; a send binds to this one. */
+  attributionWitness(id: string): string | undefined {
+    return this.witnesses.get(id)
+  }
+
+  /** Whether the sources `witness` names still hold for the chat's provider. */
+  witnessHolds(id: string, host: AttributionHost, witness: string | undefined): boolean {
     const record = host.store.getRecord(id)
-    return record ? liveToken(host, record.provider) : undefined
+    return record !== null && liveWitness(host, record.provider) === witness
   }
 
-  /** Whether the chat's attribution was made under the token that holds now. */
-  attributedUnderLiveToken(id: string, host: AttributionHost): boolean {
-    return this.tokens.has(id) && this.tokens.get(id) === this.liveToken(id, host)
+  /** Whether the chat has an attribution whose sources still hold. */
+  attributionCurrent(id: string, host: AttributionHost): boolean {
+    return this.witnesses.has(id) && this.witnessHolds(id, host, this.witnesses.get(id))
   }
 
   retain(shown: ReadonlySet<string>): void {
-    for (const cache of [this.holds, this.scopes, this.tokens]) {
+    for (const cache of [this.holds, this.scopes, this.witnesses]) {
       for (const id of cache.keys()) {
         if (!shown.has(id)) {
           cache.delete(id)
@@ -144,7 +156,7 @@ export class UsageLimitAccountHolds {
   clear(): void {
     this.holds.clear()
     this.scopes.clear()
-    this.tokens.clear()
+    this.witnesses.clear()
     this.beginPass()
   }
 
@@ -175,9 +187,26 @@ export class UsageLimitAccountHolds {
       reading?.status === 'ok' &&
       reading.usageMetadata?.source !== 'live-session' &&
       reading.updatedAt >= since
-    if (account && reading && fresh(cut.resetsAt)) {
-      // A window that began after the cut's reset is later spending, not what stopped this cut.
-      const spentUntil = rateLimitSpentUntil(reading, cut.resetsAt)
+    // Eligibility first: the cut's own reset, this hold, or a spent window that covered that reset.
+    // Later spending never revives a cut that is overdue from all of them.
+    const covering =
+      account && reading && fresh(cut.resetsAt) && rateLimitSpentUntil(reading, cut.resetsAt)
+    const anchor = Math.max(
+      cut.resetsAt,
+      hold.heldUntil ?? cut.resetsAt,
+      typeof covering === 'number' ? covering : cut.resetsAt
+    )
+    if (
+      account &&
+      reading &&
+      fresh(cut.resetsAt) &&
+      now - anchor <= NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS
+    ) {
+      if (typeof covering === 'number') {
+        hold.heldUntil = Math.max(hold.heldUntil ?? covering, covering)
+      }
+      // Eligible: every window spent now holds the send, whenever it began.
+      const spentUntil = rateLimitSpentUntil(reading)
       if (spentUntil === null) {
         hold.unknownReset = true
       } else if (spentUntil !== undefined) {
@@ -244,10 +273,10 @@ export class UsageLimitAccountHolds {
   }
 }
 
-/** Changes whenever the provider's selected account or its reading's home and provenance change. */
-function liveToken(
+/** Changes whenever a source the provider's attribution reads changes. */
+function liveWitness(
   host: AttributionHost,
   provider: AgentSessionRecord['provider']
 ): string | undefined {
-  return host.usageLimitAutoContinue?.accountScopeToken?.(provider)
+  return host.usageLimitAutoContinue?.accountWitness?.(provider)
 }

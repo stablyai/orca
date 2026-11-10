@@ -237,12 +237,17 @@ export class StructuredAgentSessionUsageLimitContinue {
   }
 
   private async send(id: string, cut: Cut): Promise<void> {
-    // Earlier sends take time; a moved account resolves again, once per new token for every chat.
-    if (!this.holds.attributedUnderLiveToken(id, this.deps.host)) {
+    // Earlier sends take time; moved sources resolve again, once per new witness for every chat.
+    if (!this.holds.attributionCurrent(id, this.deps.host)) {
       await this.holds.attribute(id, this.deps.host)
     }
     const record = this.deps.host.store.getRecord(id)
     if (!record) {
+      return
+    }
+    // Still moving: yield without spending an attempt; a later pass resolves on settled sources.
+    if (!this.holds.attributionCurrent(id, this.deps.host)) {
+      this.deferUnchangedCut(id, cut, this.deps.now())
       return
     }
     // The reading is live: one that arrived during earlier sends holds this one.
@@ -250,7 +255,7 @@ export class StructuredAgentSessionUsageLimitContinue {
       this.deps.publish(id)
       return
     }
-    const attributed = this.holds.liveToken(id, this.deps.host)
+    const witness = this.holds.attributionWitness(id)
     const at = this.deps.now()
     const attempt: Attempt = {
       identity: identity(cut),
@@ -282,7 +287,7 @@ export class StructuredAgentSessionUsageLimitContinue {
             !current ||
             identity(current) !== identity(cut) ||
             !this.eligible(id, current) ||
-            this.holds.liveToken(id, this.deps.host) !== attributed ||
+            !this.holds.witnessHolds(id, this.deps.host, witness) ||
             !this.holds.ready(id, current, this.deps.now())
           ) {
             throw new RestartContinuationSupersededError()

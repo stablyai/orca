@@ -6,36 +6,16 @@ import {
 import { appendRewindUsageLimitedTurn } from './structured-agent-session-rewind-usage-limit.test-fixture'
 import {
   HOST_TEST_SESSION as SESSION,
-  HOST_TEST_NOW,
-  hostTestRestingOptionsRecord
+  HOST_TEST_NOW
 } from './structured-agent-session-host-test-data'
-import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
-import { RestartContinuationSupersededError } from '../../recovery/structured-agent-session-restart-continuation'
-import { StructuredAgentSessionUsageLimitContinue } from '../../recovery/structured-agent-session-usage-limit-continue'
+import { HOUR, weekly } from './structured-agent-session-usage-limit-fleet.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
 import type { UsageLimitAccountScope } from '../../recovery/structured-agent-session-usage-limit-account-hold'
 
-const HOUR = 60 * 60 * 1000
 const DAY = 24 * HOUR
 let rig: QueuedMessageTestRig | undefined
 afterEach(async () => rig?.dispose())
-
-function weekly(usedPercent: number, resetsAt: number | null, updatedAt: number) {
-  return {
-    provider: 'codex',
-    session: {
-      usedPercent: 3,
-      windowMinutes: 300,
-      resetsAt: updatedAt + HOUR,
-      resetDescription: null
-    },
-    weekly: { usedPercent, windowMinutes: 10_080, resetsAt, resetDescription: null },
-    updatedAt,
-    error: null,
-    status: 'ok'
-  } satisfies ProviderRateLimits
-}
 
 /** Production sweep through dispatch, on an account whose polled reading the test sets per pass. */
 async function heldChat(identityKnown: boolean) {
@@ -184,75 +164,30 @@ it('asks for a first reading when a late first pass finds none, and waits for it
   ).toHaveLength(1)
 })
 
-/** N loaded chats on one account, all due; the first dispatch brings a reading that spends the week. */
-async function queuedBehindSpentReading(count: number) {
-  const now = HOST_TEST_NOW
-  const weeklyReset = now + 3 * HOUR
-  const ids = Array.from({ length: count }, (_, index) => `chat-${index}`)
-  let reading = weekly(0, null, now)
-  const calls = { launchHome: 0, reader: 0 }
-  const dispatched: string[] = []
-  const sweep = new StructuredAgentSessionUsageLimitContinue({
-    host: {
-      logger: recordingStructuredAgentSessionLogger().logger,
-      launchAccountHome: async () => {
-        calls.launchHome++
-        return { variable: 'CODEX_HOME', path: '/homes/a' }
-      },
-      usageLimitAutoContinue: {
-        isEnabled: () => true,
-        isWorkspaceAsleep: () => false,
-        subscribe: () => () => {},
-        accountScopeToken: () => 'account-a',
-        accountUsage: async () => {
-          calls.reader++
-          return {
-            scope: 'home-a',
-            account: {
-              key: 'account-a',
-              identityKnown: true,
-              read: () => reading,
-              refresh: () => {}
-            }
-          }
-        }
-      },
-      store: {
-        hostId: 'local',
-        listVisibleSessionIds: () => ids,
-        isSessionTabVisible: () => true,
-        cancelUsageLimitContinue: async (id) => hostTestRestingOptionsRecord(id),
-        getRecord: (id) => hostTestRestingOptionsRecord(id)
-      }
-    },
-    sessions: new Map(ids.map((id) => [id, {}])),
-    readSavedCut: () => null,
-    readLoadedCut: (id) => ({
-      turnItemId: `${id}-turn`,
-      resetsAt: now - 60_000,
-      turnEndedAt: now - 120_000,
-      chain: 0
-    }),
-    serialize: (_id, run) => run(),
-    // Answered as superseded, which spends no budget; only what reached dispatch matters here.
-    send: async (params) => {
-      params.beforeRun?.()
-      dispatched.push(params.envelope.sessionId)
-      reading = weekly(100, weeklyReset, now)
-      throw new RestartContinuationSupersededError()
-    },
-    publish: () => {},
-    now: () => now
-  })
-  await sweep.tick()
-  return { calls, dispatched, last: sweep.readState(ids[count - 1]!) }
-}
+it('holds a still-eligible cut for a spent window that began after its reset', async () => {
+  const chat = await heldChat(true)
+  const reset = chat.cut.resetsAt
+  const sessionSpentUntil = { usedPercent: 100, resetsAt: reset + 10 * HOUR }
+  expect(
+    await chat.pass(reset + 6 * HOUR, (now) => weekly(0, null, now, sessionSpentUntil))
+  ).toEqual([])
+  expect(chat.state()).toMatchObject({ state: 'scheduled', continueAt: reset + 10 * HOUR })
+  expect(await chat.pass(reset + 10 * HOUR + 15_000, (now) => weekly(0, null, now))).toHaveLength(1)
+})
 
-it('shares attribution for queued continuations blocked by a newer reading at N and 10N', async () => {
-  for (const count of [300, 3000]) {
-    const fleet = await queuedBehindSpentReading(count)
-    expect(fleet.dispatched).toEqual(['chat-0'])
-    expect(fleet.last).toMatchObject({ state: 'scheduled', continueAt: HOST_TEST_NOW + 3 * HOUR })
-    expect(fleet.calls).toEqual({ launchHome: 1, reader: 1 })
-  }
+it('extends a weekly hold for a session window still spent at the weekly reset', async () => {
+  const chat = await heldChat(true)
+  const friday = chat.cut.resetsAt + 96 * HOUR
+  expect(await chat.pass(chat.cut.resetsAt + 15_000, (now) => weekly(100, friday, now))).toEqual([])
+  const sessionSpentUntil = { usedPercent: 100, resetsAt: friday + 2 * HOUR }
+  expect(
+    await chat.pass(friday + 15_000, (now) => weekly(0, friday + 7 * DAY, now, sessionSpentUntil))
+  ).toEqual([])
+  expect(chat.state()).toMatchObject({ state: 'scheduled', continueAt: friday + 2 * HOUR })
+  const sent = await chat.pass(friday + 2 * HOUR + 15_000, (now) => weekly(0, null, now))
+  expect(sent).toHaveLength(1)
+  const id = sent[0]!.clientMessageId
+  await eventually(async () => expect((await rig!.submission(id))?.handedOverAt).toBeDefined())
+  await rig!.settleAccepted(id, 'continued')
+  expect((await rig!.submission(id))?.dispatchState).toBe('accepted')
 })

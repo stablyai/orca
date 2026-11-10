@@ -1,5 +1,8 @@
 import { agentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
-import { resolveLoginShellEnvironment } from '../../../startup/login-shell-environment'
+import {
+  loginShellEnvironmentRevision,
+  resolveLoginShellEnvironment
+} from '../../../startup/login-shell-environment'
 import { refreshAtRestCommandContext } from '../../../native-chat/agent-session-wire/options/at-rest-command-context'
 import {
   cachedPersistedWindowsPathSegments,
@@ -112,6 +115,9 @@ export async function hostShellEnvironment(cachedOnly = false): Promise<NodeJS.P
   }
   return withSavedPath
 }
+
+/** Moves whenever the capture `hostShellEnvironment` serves is replaced; synchronous, starts nothing. */
+export const hostShellEnvironmentRevision = loginShellEnvironmentRevision
 
 /** After a missing-program lookup, await a capture (Windows: saved PATH read) started no earlier than askedAt; the shell timeout bounds it. */
 export async function refreshHostAgentBaseEnvironmentAfterMiss(askedAt: number): Promise<void> {

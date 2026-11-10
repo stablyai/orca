@@ -20,9 +20,9 @@ import type { StructuredAgentSessionHostDeps } from '../../../native-chat/agent-
 import { OrcaRuntimeWithStartTuiIdleVisibleReadProbe } from '../../terminal/wait/terminal-wait-visible-probe'
 import {
   hostShellEnvironment,
-  structuredAgentBaseEnvironment
+  hostShellEnvironmentRevision
 } from '../environment/structured-agent-shell-environment'
-import { usageLimitAccountScopeToken, usageLimitAccountUsage } from './usage-limit-account-usage'
+import { usageLimitAccountSources } from './usage-limit-account-usage'
 
 export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTuiIdleVisibleReadProbe {
   /** Apply the host-owning desktop's account overlay to configured agent environment. */
@@ -78,24 +78,13 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
         this.requireStore().getSettings().nativeChatAutoContinueAfterUsageLimit === true,
       subscribe: (changed) => this.requireStore().onSettingsChanged?.(changed) ?? (() => {}),
       isWorkspaceAsleep: (workspaceId) => this.isWorktreeTerminalSleepHeld(workspaceId),
-      accountScopeToken: usageLimitAccountScopeToken({
-        rateLimits: () => this.accounts.usageRateLimits(),
-        settings: () => this.requireStore().getSettings()
-      }),
-      accountUsage: usageLimitAccountUsage({
+      ...usageLimitAccountSources({
         rateLimits: () => this.accounts.usageRateLimits(),
         settings: () => this.requireStore().getSettings(),
-        claudeLaunchEnvironment: async () => {
-          const settings = this.requireStore().getSettings()
-          // The last capture: this runs every sweep pass and must not start a login shell.
-          return {
-            ...structuredAgentBaseEnvironment({
-              shellEnv: await hostShellEnvironment(true),
-              policy: nativeChatShellEnvironmentPolicy(settings)
-            }),
-            ...this.structuredAgentLaunchEnv('claude', settings)
-          }
-        }
+        // The last capture: this runs every sweep pass and must not start a login shell.
+        shellEnvironment: () => hostShellEnvironment(true),
+        shellEnvironmentRevision: hostShellEnvironmentRevision,
+        claudeLaunchEnv: (settings) => this.structuredAgentLaunchEnv('claude', settings)
       })
     }
   }

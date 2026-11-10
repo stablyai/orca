@@ -185,8 +185,14 @@ export abstract class RateLimitServiceState {
     home: string | null | undefined,
     provenance: string | null
   ): void {
+    const previous = this.usageReadingAccounts[provider]
+    // The same object while unchanged: its identity is how readers see the reading's source move.
     this.usageReadingAccounts[provider] =
-      target.runtime === 'host' && home && provenance !== null ? { home, provenance } : undefined
+      target.runtime !== 'host' || !home || provenance === null
+        ? undefined
+        : previous?.home === home && previous.provenance === provenance
+          ? previous
+          : { home, provenance }
   }
 
   protected updateState(next: InternalRateLimitState): void {

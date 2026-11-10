@@ -195,8 +195,8 @@ export type StructuredAgentSessionHostDeps = {
       provider: AgentSessionRecord['provider'],
       home: AgentSessionAccountHome
     ) => Promise<UsageLimitAccountScope | undefined>
-    /** Synchronous; changes whenever the account or reading `accountUsage` would see changes. */
-    accountScopeToken?: (provider: AgentSessionRecord['provider']) => string
+    /** Synchronous witness of every source `accountUsage` reads; an attribution holds while it does. */
+    accountWitness?: (provider: AgentSessionRecord['provider']) => string
   }
   startupLimits?: Partial<StructuredAgentSessionStartupLimits>
   /** Absent means no dispatch ownership. */

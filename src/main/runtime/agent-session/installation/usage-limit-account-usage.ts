@@ -4,6 +4,8 @@ import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/native-chat-shell-environment'
+import { createStructuredAgentEnvironmentResolvers } from '../environment/structured-agent-shell-environment'
 import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/environment'
 import type { RateLimitService } from '../../../rate-limits/service/rate-limit-service'
 import type { StructuredAgentSessionHostDeps } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
@@ -50,87 +52,109 @@ async function canonicalHome(raw: string): Promise<string> {
   return normalizeRuntimePathForComparison((await realpath(absolute).catch(() => null)) ?? absolute)
 }
 
-type SelectionSettings = Partial<
+type AccountSettings = Partial<
   Pick<
     GlobalSettings,
-    | 'activeClaudeManagedAccountId'
-    | 'activeClaudeManagedAccountIdsByRuntime'
-    | 'activeCodexManagedAccountId'
-    | 'activeCodexManagedAccountIdsByRuntime'
+    | 'claudeManagedAccounts'
+    | 'codexManagedAccounts'
+    | 'nativeChatInheritShellEnvironment'
+    | 'nativeChatShellEnvironmentVariables'
     | 'agentDefaultEnv'
   >
 >
 
-/** Cheap and synchronous: moves whenever the provider's selected account, its launch env, or the
- *  home and provenance of its reading move, so an unchanged token needs no new attribution. */
-export function usageLimitAccountScopeToken(deps: {
-  rateLimits: () => RateLimitService | null
-  settings: () => SelectionSettings
-}): (provider: string) => string {
-  return (provider) => {
-    const settings = deps.settings()
-    const selection =
-      provider === 'claude'
-        ? [settings.activeClaudeManagedAccountId, settings.activeClaudeManagedAccountIdsByRuntime]
-        : provider === 'codex'
-          ? [settings.activeCodexManagedAccountId, settings.activeCodexManagedAccountIdsByRuntime]
-          : []
-    const reading =
-      provider === 'claude' || provider === 'codex'
-        ? deps.rateLimits()?.usageReadingAccount(provider)
-        : null
-    const env = settings.agentDefaultEnv?.[provider as keyof typeof settings.agentDefaultEnv]
-    return JSON.stringify([
-      selection,
-      env ?? null,
-      reading?.home ?? null,
-      reading?.provenance ?? null
-    ])
-  }
+/** A source replaced, never mutated, when it changes; its identity is its version. */
+type WitnessedSource =
+  | AccountSettings
+  | NonNullable<ReturnType<RateLimitService['usageReadingAccount']>>
+
+export type UsageLimitAccountSourceDeps = {
+  rateLimits: () => Pick<
+    RateLimitService,
+    'usageReadingAccount' | 'usageReading' | 'requestUsageReading'
+  > | null
+  /** Replaced, never mutated, on every write, so its identity names the settings it holds. */
+  settings: () => AccountSettings
+  /** The cached login-shell capture launches start from; never starts a shell. */
+  shellEnvironment: () => Promise<NodeJS.ProcessEnv>
+  /** Moves whenever that capture is replaced. */
+  shellEnvironmentRevision: () => number
+  /** The user's and the host account's Claude overlay, as a launch lays it over the base. */
+  claudeLaunchEnv: (settings: AccountSettings) => Record<string, string>
+  processEnvironment?: NodeJS.ProcessEnv
 }
 
-/** Attributes a chat's launch home to the selected account's polled reading only when that reading
- *  was taken in the same home; anything else is no evidence. */
-export function usageLimitAccountUsage(deps: {
-  rateLimits: () => RateLimitService | null
-  settings: () => Partial<Pick<GlobalSettings, 'claudeManagedAccounts' | 'codexManagedAccounts'>>
-  claudeLaunchEnvironment: () => Promise<Record<string, string | undefined>>
-}): AccountUsageReader {
-  return async (provider, accountHome) => {
-    const path = agentSessionAccountHomePath(accountHome)
-    const service = deps.rateLimits()
-    if ((provider !== 'claude' && provider !== 'codex') || !path || !service) {
-      return undefined
+/** The account a chat would launch on and its polled usage, with a synchronous witness of every
+ *  source that decides it: the settings snapshot, the cached shell capture, and the reading's
+ *  source. An attribution counts only while the witness it was computed under still holds. */
+export function usageLimitAccountSources(deps: UsageLimitAccountSourceDeps): {
+  accountWitness: (provider: string) => string
+  accountUsage: AccountUsageReader
+} {
+  const ids = new WeakMap<WitnessedSource, number>()
+  let nextId = 0
+  const idOf = (source: WitnessedSource | null | undefined): number => {
+    if (!source) {
+      return 0
     }
-    const home = await canonicalHome(path)
-    if (provider === 'claude') {
-      const env = await deps.claudeLaunchEnvironment()
-      if (CLAUDE_NON_SUBSCRIPTION_ENV.some((name) => env[name]?.trim())) {
-        return { scope: JSON.stringify([home, 'non-subscription']) }
+    let id = ids.get(source)
+    if (id === undefined) {
+      id = ++nextId
+      ids.set(source, id)
+    }
+    return id
+  }
+  const readingSource = (provider: string) =>
+    provider === 'claude' || provider === 'codex'
+      ? deps.rateLimits()?.usageReadingAccount(provider)
+      : null
+  return {
+    accountWitness: (provider) =>
+      `${idOf(deps.settings())}:${deps.shellEnvironmentRevision()}:${idOf(readingSource(provider))}`,
+    accountUsage: async (provider, accountHome) => {
+      const path = agentSessionAccountHomePath(accountHome)
+      const service = deps.rateLimits()
+      if ((provider !== 'claude' && provider !== 'codex') || !path || !service) {
+        return undefined
       }
-    }
-    const scope = JSON.stringify([home, 'subscription'])
-    const reading = service.usageReadingAccount(provider)
-    if (!reading) {
-      // No reading has said where it was taken yet (a headless start polls nothing on its own).
-      return { scope, bootstrap: () => service.requestUsageReading(provider) }
-    }
-    if ((await canonicalHome(reading.home)) !== home) {
-      return { scope }
-    }
-    const identity = readingIdentity(provider, reading, deps.settings())
-    return {
-      scope,
-      account: {
-        key: JSON.stringify([home, identity]),
-        identityKnown: identity !== null,
-        read: () => {
-          const current = service.usageReadingAccount(provider)
-          return current?.home === reading.home && current.provenance === reading.provenance
-            ? service.usageReading(provider)
-            : null
-        },
-        refresh: () => service.requestUsageReading(provider)
+      const settings = deps.settings()
+      const reading = service.usageReadingAccount(provider)
+      const home = await canonicalHome(path)
+      if (provider === 'claude') {
+        // Billing follows the env a launch computes now, through the launch's own composition.
+        const environment = createStructuredAgentEnvironmentResolvers({
+          prewarm: false,
+          resolveEnvironment: deps.shellEnvironment,
+          resolveShellEnvironmentPolicy: () => nativeChatShellEnvironmentPolicy(settings),
+          resolveAgentLaunchEnv: () => deps.claudeLaunchEnv(settings),
+          ...(deps.processEnvironment ? { processEnvironment: deps.processEnvironment } : {})
+        })
+        const env = await environment.resolveAgentEnvironment('claude')
+        if (CLAUDE_NON_SUBSCRIPTION_ENV.some((name) => env[name]?.trim())) {
+          return { scope: JSON.stringify([home, 'non-subscription']) }
+        }
+      }
+      const scope = JSON.stringify([home, 'subscription'])
+      if (!reading) {
+        // No reading has said where it was taken yet (a headless start polls nothing on its own).
+        return { scope, bootstrap: () => service.requestUsageReading(provider) }
+      }
+      if ((await canonicalHome(reading.home)) !== home) {
+        return { scope }
+      }
+      const identity = readingIdentity(provider, reading, settings)
+      return {
+        scope,
+        account: {
+          key: JSON.stringify([home, identity]),
+          identityKnown: identity !== null,
+          // Only while the reading still comes from the source this attribution saw.
+          read: () =>
+            service.usageReadingAccount(provider) === reading
+              ? service.usageReading(provider)
+              : null,
+          refresh: () => service.requestUsageReading(provider)
+        }
       }
     }
   }
