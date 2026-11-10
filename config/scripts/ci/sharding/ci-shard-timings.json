@@ -5527,7 +5527,6 @@
       "src/renderer/src/components/settings/developer-permissions/TerminalTccAttributionNotice.test.tsx": 401,
       "src/renderer/src/components/settings/voice/VoiceMicrophoneSetting.test.tsx": 957,
       "src/renderer/src/components/settings/voice/VoicePane.test.tsx": 1042,
-      "src/renderer/src/components/settings/voice/VoiceSpeechModelSection.test.tsx": 503,
       "src/renderer/src/components/settings/accounts/sign-in/account-add-cancel-target.test.ts": 217,
       "src/renderer/src/components/settings/accounts/usage/accounts-pane-opencode-credentials.test.ts": 519,
       "src/renderer/src/lib/agent-session/launch/agent-settings-update-queue.test.ts": 249,
