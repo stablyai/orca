@@ -1,11 +1,22 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { isActiveWakePaneAttached } from '@/components/terminal-pane/input/wake-pane-attach'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import type { CloudWakeProgressEvent } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 
 /** How often the hold checks the pane in front while it waits. */
 export const WAKE_ATTACH_POLL_MS = 100
 /** A pane that never re-attaches (closed, broken) stops holding the pill after this. */
 export const WAKE_ATTACH_HOLD_MAX_MS = 8_000
+
+type Track = {
+  /** The last in-flight report of the current wake: what the pill showed before ready. */
+  last: CloudWakeProgressEvent | undefined
+  /** The wake shown as still connecting while the pane in front re-attaches. */
+  held: CloudWakeProgressEvent | undefined
+}
+
+const isInFlight = (wake: CloudWakeProgressEvent | undefined): wake is CloudWakeProgressEvent =>
+  wake?.phase === 'waking' || wake?.phase === 'connecting'
 
 /**
  * A wake reports ready once the server answers; the pane in front re-attaches to its terminal a
@@ -18,48 +29,46 @@ export function useWakeAttachHold(
   wake: CloudWakeProgressEvent | undefined,
   isAttached: (workspaceId: string) => boolean | null = isActiveWakePaneAttached
 ): CloudWakeProgressEvent | undefined {
-  const [held, setHeld] = useState<CloudWakeProgressEvent | undefined>(undefined)
-  // The last in-flight phase of the current wake: what the pill showed before ready.
-  const inFlight = useRef<CloudWakeProgressEvent | undefined>(undefined)
+  const [track, setTrack] = useState<Track>({ last: undefined, held: undefined })
 
+  // Adjusted during render (not in an effect), so the pill never shows a stale frame.
+  if (isInFlight(wake)) {
+    const last = track.last
+    if (!last || last.startedAt !== wake.startedAt || last.phase !== wake.phase || track.held) {
+      setTrack({ last: wake, held: undefined })
+    }
+  } else if (wake?.phase === 'failed') {
+    if (track.last || track.held) {
+      setTrack({ last: undefined, held: undefined })
+    }
+  } else if (track.last && (!wake || wake.startedAt === track.last.startedAt)) {
+    // Ready, or the settled entry already dropped: hold only a wake that was in flight here.
+    const held =
+      isAttached(workspaceId) === false
+        ? { ...track.last, phase: 'connecting' as const }
+        : undefined
+    setTrack({ last: undefined, held })
+  }
+
+  // Release once the pane is attached, or after the cap. The store dropping the settled wake
+  // doesn't cancel this: it is keyed on the held wake only.
+  const heldStart = track.held?.startedAt
   useEffect(() => {
-    if (wake && (wake.phase === 'waking' || wake.phase === 'connecting')) {
-      inFlight.current = wake
-      setHeld(undefined)
+    if (heldStart === undefined) {
       return
     }
-    if (wake?.phase === 'failed') {
-      inFlight.current = undefined
-      setHeld(undefined)
-      return
-    }
-    // Ready, or the entry already dropped: hold only a wake that was in flight here.
-    const last = inFlight.current
-    inFlight.current = undefined
-    if (!last || (wake && wake.startedAt !== last.startedAt)) {
-      return
-    }
-    if (isAttached(workspaceId) !== false) {
-      return
-    }
-    setHeld({ ...last, phase: 'connecting', at: Date.now() })
-    // Keyed on the wake's identity and phase, not the object (the store re-creates it).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspaceId, wake?.startedAt, wake?.phase, wake === undefined])
+    const since = Date.now()
+    return installWindowVisibilityInterval({
+      run: () => {
+        if (isAttached(workspaceId) !== false || Date.now() - since >= WAKE_ATTACH_HOLD_MAX_MS) {
+          setTrack((current) =>
+            current.held?.startedAt === heldStart ? { ...current, held: undefined } : current
+          )
+        }
+      },
+      intervalMs: WAKE_ATTACH_POLL_MS
+    })
+  }, [heldStart, workspaceId, isAttached])
 
-  // Its own effect: the store dropping the settled wake must not cancel the wait.
-  const heldAt = held?.at
-  useEffect(() => {
-    if (heldAt === undefined) {
-      return
-    }
-    const timer = setInterval(() => {
-      if (isAttached(workspaceId) !== false || Date.now() - heldAt >= WAKE_ATTACH_HOLD_MAX_MS) {
-        setHeld(undefined)
-      }
-    }, WAKE_ATTACH_POLL_MS)
-    return () => clearInterval(timer)
-  }, [heldAt, workspaceId, isAttached])
-
-  return held
+  return track.held
 }

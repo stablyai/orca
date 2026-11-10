@@ -22,6 +22,7 @@ const waking: CloudWakeProgressEvent = {
   startedAt: T0 - 5_000,
   at: T0
 }
+const start: { wake: CloudWakeProgressEvent | undefined } = { wake: waking }
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -60,7 +61,7 @@ describe('useWakeAttachHold', () => {
     const { result, rerender } = renderHook(
       ({ wake }: { wake: CloudWakeProgressEvent | undefined }) =>
         useWakeAttachHold('ws', wake, () => attached),
-      { initialProps: { wake: waking as CloudWakeProgressEvent | undefined } }
+      { initialProps: start }
     )
     expect(result.current).toBeUndefined()
     rerender({ wake: { ...waking, phase: 'ready', at: T0 + 1_000 } })
@@ -79,7 +80,7 @@ describe('useWakeAttachHold', () => {
     const { result, rerender } = renderHook(
       ({ wake }: { wake: CloudWakeProgressEvent | undefined }) =>
         useWakeAttachHold('ws', wake, () => attached),
-      { initialProps: { wake: waking as CloudWakeProgressEvent | undefined } }
+      { initialProps: start }
     )
     rerender({ wake: { ...waking, phase: 'ready' } })
     expect(result.current).toBeUndefined()
@@ -97,7 +98,7 @@ describe('useWakeAttachHold', () => {
     const { result, rerender } = renderHook(
       ({ wake }: { wake: CloudWakeProgressEvent | undefined }) =>
         useWakeAttachHold('ws', wake, () => false),
-      { initialProps: { wake: waking as CloudWakeProgressEvent | undefined } }
+      { initialProps: start }
     )
     rerender({ wake: { ...waking, phase: 'ready' } })
     expect(result.current?.phase).toBe('connecting')
