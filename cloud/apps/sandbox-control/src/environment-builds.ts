@@ -107,6 +107,11 @@ export type BuildDeps = {
   githubFetch?: typeof fetch
   /** Keeps finalization running after a watcher disconnects (Worker ctx.waitUntil). */
   waitUntil?: (promise: Promise<unknown>) => void
+  /**
+   * Hands a started build to its server-side runner (a Durable Object alarm in the Worker), so it
+   * advances whether or not anyone is watching. Absent in tests that tick builds by hand.
+   */
+  schedule?: (build: { id: string; environmentId: string }) => Promise<void>
   config: { environment: string; goldenSnapshotId: string; region: string; guardrails?: GuardrailConfig }
 }
 
@@ -250,7 +255,12 @@ export async function startBuild(deps: BuildDeps, caller: SandboxCaller, environ
   const row = (await getBuild(deps.db, environment.id, id))!
   log('environment_build_started', { buildId: id, environmentId: environment.id, number: row.number, repos: repos.length })
   try {
-    return await bootBuild(deps, row, config)
+    const booted = await bootBuild(deps, row, config)
+    // Progress is server-side from here: a client that never opens the log stream still gets a build.
+    await deps.schedule?.({ id: booted.id, environmentId: booted.environment_id }).catch((error: unknown) =>
+      log('environment_build_schedule_failed', { buildId: booted.id, error: String(error).slice(0, 120) })
+    )
+    return booted
   } catch (error) {
     const current = (await getBuild(deps.db, environment.id, id)) ?? row
     const code =
@@ -738,6 +748,43 @@ export async function reportBuildUsage(deps: Pick<BuildDeps, 'db' | 'entitlement
   }
   await deps.db.prepare('UPDATE environment_builds SET usage_reported_at = ? WHERE id = ?').bind(deps.now(), row.id).run()
   return true
+}
+
+/** Runner cadence: how soon to look again at a build in this state; null once it is final. */
+export function nextBuildTickMs(row: Pick<BuildRow, 'status'>): number | null {
+  switch (row.status) {
+    case 'starting':
+    case 'running':
+      return 3_000
+    case 'snapshotting':
+      return 10_000
+    default:
+      return null
+  }
+}
+
+/**
+ * One server-side step for a build (the runner's alarm): advance it and say when to look again.
+ * Independent of readers: the log stream and GET also advance, all through the same CAS steps.
+ */
+export async function tickBuild(deps: BuildDeps, environmentId: string, buildId: string): Promise<number | null> {
+  const row = await getBuild(deps.db, environmentId, buildId)
+  if (!row) {
+    return null
+  }
+  const next = await advanceBuild(deps, row)
+  if (TERMINAL.has(next.status) && next.usage_reported_at === null) {
+    await reportBuildUsage(deps, (await getBuild(deps.db, environmentId, buildId)) ?? next)
+  }
+  return nextBuildTickMs(next)
+}
+
+/** Unfinished builds (the cron re-arms their runners in case one was lost). */
+export async function unfinishedBuilds(db: D1Database): Promise<{ id: string; environment_id: string }[]> {
+  const { results } = await db
+    .prepare(`SELECT id, environment_id FROM environment_builds WHERE status IN ('starting', 'running', 'snapshotting') LIMIT 50`)
+    .all<{ id: string; environment_id: string }>()
+  return results
 }
 
 /** Cron: advance every unfinished build (finalize the ones nobody is watching). */
