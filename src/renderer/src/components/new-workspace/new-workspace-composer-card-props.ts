@@ -48,6 +48,8 @@ export type NewWorkspaceComposerCardProps = {
   nameInputRef?: React.RefObject<HTMLInputElement | null>
   quickAgent: TuiAgent | null
   agentSurfaceRows?: AgentComboboxSurfaceRows
+  /** One muted line under the agent picker (Orca Cloud: why another agent is selected). */
+  agentNotice?: string
   agentPickerDraft?: AgentPickerDraft
   agentSetupDisabled?: boolean
   onQuickAgentChange: (

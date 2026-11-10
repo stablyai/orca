@@ -12,6 +12,7 @@ type NewWorkspaceComposerAgentSectionProps = Pick<
   NewWorkspaceComposerCardProps,
   | 'quickAgent'
   | 'agentSurfaceRows'
+  | 'agentNotice'
   | 'agentPickerDraft'
   | 'agentSetupDisabled'
   | 'selectedRepoIsGit'
@@ -36,6 +37,7 @@ type NewWorkspaceComposerAgentSectionProps = Pick<
 export function NewWorkspaceComposerAgentSection({
   quickAgent,
   agentSurfaceRows,
+  agentNotice,
   agentPickerDraft,
   agentSetupDisabled,
   selectedRepoIsGit,
@@ -100,6 +102,7 @@ export function NewWorkspaceComposerAgentSection({
           onSelectBlankTerminal={() => onQuickAgentChange(null)}
           onPick={(agent, draft, entry) => onQuickAgentChange(agent, draft?.surface, draft, entry)}
         />
+        {agentNotice ? <p className="text-xs text-muted-foreground">{agentNotice}</p> : null}
       </div>
 
       <div className="!mb-2">

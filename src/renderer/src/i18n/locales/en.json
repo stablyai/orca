@@ -22944,7 +22944,8 @@
         "yamlSource": "orca.yaml",
         "bothSources": "orca.yaml + local",
         "localSource": "local settings"
-      }
+      },
+      "orcaCloudAgentFallback": "{{agent}} isn’t available on Orca Cloud yet, so {{fallback}} is selected."
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Another issue change is in progress."

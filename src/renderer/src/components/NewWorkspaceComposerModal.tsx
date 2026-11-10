@@ -158,12 +158,8 @@ function QuickTabBody({
   const [quickAgentOverride, setQuickAgentOverride] = useState<TuiAgent | null | undefined>(
     modalData.recovery?.agent
   )
-  const { orcaCloud, orcaCloudModel, quickAgent, chipAgentIds } = useComposerQuickAgent(
-    cardProps,
-    settings,
-    quickAgentOverride,
-    setQuickAgentOverride
-  )
+  const { orcaCloud, orcaCloudModel, quickAgent, chipAgentIds, agentNotice } =
+    useComposerQuickAgent(cardProps, settings, quickAgentOverride, setQuickAgentOverride)
   // Why keyed by agent: a pick repaired to another agent must not carry the old one's surface.
   const [quickAgentPick, setQuickAgentPick] = useState<
     Omit<NonNullable<ComposerModalData['recovery']>, 'note'>
@@ -361,6 +357,7 @@ function QuickTabBody({
         // Chips list offered agents, keeping a pick whose chat is still being learned.
         detectedAgentIds={chipAgentIds}
         createDisabled={createDisabled}
+        agentNotice={agentNotice}
         agentSurfaceRows={
           agentMenuModel
             ? {
