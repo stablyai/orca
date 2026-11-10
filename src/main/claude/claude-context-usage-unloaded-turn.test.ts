@@ -1,3 +1,4 @@
+import { followTestSinkSnapshots } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-direct-sink.test-fixture'
 import { readTestJournalItems } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import {
@@ -62,9 +63,10 @@ async function openJournal(): Promise<AgentSessionJournal> {
   })
 }
 
-function translate(journal: AgentSessionJournal) {
+async function translate(journal: AgentSessionJournal) {
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   const translator = createClaudeJournalTranslator({ sink: deferred.sink, coalesceMs: 0 })
+  await followTestSinkSnapshots(deferred, journal)
   deferred.bind({ journal, fence: 1, publish: () => {} })
   const settle = async (): Promise<void> => {
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
@@ -73,7 +75,7 @@ function translate(journal: AgentSessionJournal) {
 }
 
 function runTurn(
-  translator: ReturnType<typeof translate>['translator'],
+  translator: Awaited<ReturnType<typeof translate>>['translator'],
   turnId: string,
   at: number,
   sizes: number[]
@@ -178,7 +180,7 @@ async function catchUp(
 describe('context usage for a turn row outside the loaded page', () => {
   it('marks a live context write on a turn row the window cannot take, and the host answer carries it', async () => {
     const journal = await openJournal()
-    const { translator, settle } = translate(journal)
+    const { translator, settle } = await translate(journal)
     runTurn(translator, 'turn-a', 1_000, [120_000, 130_000, 140_000, 150_000])
     translator.handle(resultFrame(2_000, { 'claude-fable-5-1[1m]': { contextWindow: 1_000_000 } }))
     runTurn(translator, 'turn-b', 3_000, [200_000, 210_000, 220_000, 230_000])
@@ -201,7 +203,7 @@ describe('context usage for a turn row outside the loaded page', () => {
 
   it('keeps the ring on the newest facts while a live turn outgrows the retained window', async () => {
     const journal = await openJournal()
-    const { translator, settle } = translate(journal)
+    const { translator, settle } = await translate(journal)
     runTurn(translator, 'turn-a', 1_000, [120_000])
     translator.handle(resultFrame(2_000, { 'claude-fable-5-1[1m]': { contextWindow: 1_000_000 } }))
     runTurn(translator, 'turn-b', 3_000, [])

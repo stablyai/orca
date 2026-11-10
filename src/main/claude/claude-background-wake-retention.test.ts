@@ -1,3 +1,4 @@
+import { followTestSinkSnapshots } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-direct-sink.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -80,6 +81,7 @@ async function wiredSession() {
   const deferred = createDeferredStructuredAgentSessionEventSink(
     testEventSinkLogging(parent.sessionId)
   )
+  await followTestSinkSnapshots(deferred, journal)
   deferred.bind({ journal, fence: 7, publish: () => void publish() })
   const run = await producer(host, deferred.sink)
   const describe = (views: ReturnType<typeof host.getStructuredChildWorkViews>) =>
