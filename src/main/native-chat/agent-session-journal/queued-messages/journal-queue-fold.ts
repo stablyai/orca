@@ -1,6 +1,6 @@
 import type { JournalKeyedMap, JournalKeyedSet } from '../journal-keyed-storage'
-import type { JournalIndexStorageFactory } from '../journal-index-storage'
-import { memoryJournalIndexStorage } from '../journal-memory-index-storage'
+import type { JournalInputIndexStorage } from '../journal-index-storage'
+import { memoryJournalInputIndexStorage } from '../journal-memory-input-index-storage'
 import { journalInputOrder } from '../input-order/journal-input-order'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -34,7 +34,7 @@ export type JournalQueueState = {
 }
 
 export function createJournalQueueState(
-  storage: JournalIndexStorageFactory = memoryJournalIndexStorage
+  storage: JournalInputIndexStorage = memoryJournalInputIndexStorage
 ): JournalQueueState {
   return {
     cards: storage.map('queue.cards'),

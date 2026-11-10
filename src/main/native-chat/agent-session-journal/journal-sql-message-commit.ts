@@ -8,7 +8,7 @@ import type { AgentJournalMessageItem } from '../../../shared/agent-session/jour
 import type { JournalStepOutcome } from './writing/journal-writer-step'
 import { journalSqlFailure, type JournalSqlFailure } from './journal-sql-failure'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import { journalContextEpoch } from './context-epochs/journal-context-cursor'
+import { journalContextEpoch } from './context-epochs/journal-context-epoch'
 
 export type JournalSqlMessage = JournalDomainItemWrite & { body: AgentJournalMessageItem }
 

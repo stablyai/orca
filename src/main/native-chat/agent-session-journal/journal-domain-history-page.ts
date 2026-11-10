@@ -34,7 +34,7 @@ import {
   readJournalDomainSourceBody,
   isJournalDomainSourceHeader
 } from './journal-domain-source-items'
-import { journalContextEpoch } from './context-epochs/journal-context-cursor'
+import { journalContextEpoch } from './context-epochs/journal-context-epoch'
 import {
   latestTurnItem,
   readJournalDomainForwardHistory,

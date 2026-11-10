@@ -4,7 +4,7 @@ import { isAgentSessionRewindTarget } from '../../../shared/agent-session/lifecy
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import { journalContextEpoch } from './context-epochs/journal-context-cursor'
+import { journalContextEpoch } from './context-epochs/journal-context-epoch'
 import type { JournalSqlScope } from './journal-sql-scope'
 
 export type JournalRewindTarget = {

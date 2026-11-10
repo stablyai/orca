@@ -10,11 +10,11 @@ import type {
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReducerState } from '../projection/journal-reducer'
-import type { JournalInputPlaceStorage, JournalIndexStorageFactory } from '../journal-index-storage'
+import type { JournalInputPlaceStorage, JournalInputIndexStorage } from '../journal-index-storage'
 import { JournalInputObservations } from './journal-input-observations'
 import { journalSubmissionIsPersonal } from '../submissions/journal-submission-fold'
 import { JournalSubmissionLinks } from './journal-submission-links'
-import { memoryJournalIndexStorage } from '../journal-memory-index-storage'
+import { memoryJournalInputIndexStorage } from '../journal-memory-input-index-storage'
 
 /** Reconstructible query evidence on the input owner; canonical records remain authoritative. */
 export class JournalInputEvidence extends JournalInputObservations {
@@ -27,7 +27,7 @@ export class JournalInputEvidence extends JournalInputObservations {
 
   constructor(
     state: JournalReducerState,
-    indexes: JournalIndexStorageFactory = memoryJournalIndexStorage
+    indexes: JournalInputIndexStorage = memoryJournalInputIndexStorage
   ) {
     super(state, indexes)
     this.evidenceFacts = indexes.evidenceFacts()

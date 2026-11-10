@@ -4,7 +4,7 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { runningStructuredAgentSessionTurnItemBySequence } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
-import { journalContextEpoch } from './context-epochs/journal-context-cursor'
+import { journalContextEpoch } from './context-epochs/journal-context-epoch'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalStatusItem, JournalStatusItemSelection } from './journal-status-items'
 import { sqlJournalStatusItems } from './journal-sql-status-items'

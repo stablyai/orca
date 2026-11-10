@@ -3,7 +3,8 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { createJournalReducerState, renderJournalItems } from './projection/journal-reducer'
+import { createJournalReducerState } from './projection/journal-reducer'
+import { renderJournalItems } from './projection/journal-public-read'
 import { journalInputOrder } from './input-order/journal-input-order'
 import { journalDispatchRowBuilder } from './writing/journal-row-builders'
 import { readJournalUsageLimitCut, readJournalOrcaStopCut } from './journal-status-cuts'

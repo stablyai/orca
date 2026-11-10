@@ -5,8 +5,9 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { JournalInputOrder } from '../input-order/journal-input-order'
-import { renderJournalItems, renderJournalState, type JournalReducerState } from './journal-reducer'
-import { journalContextCursor } from '../context-epochs/journal-context-cursor'
+import type { JournalReducerState } from './journal-reducer'
+import { compareAgentJournalItems } from '../../../../shared/agent-session/journal/agent-session-journal-position'
+import { journalContextCursor } from '../context-epochs/journal-context-epoch'
 import { journalInputPresentationMember } from '../input-order/journal-input-obligations'
 import { projectJournalStopNote } from '../context-epochs/journal-stop-note-projection'
 
@@ -163,4 +164,23 @@ export function renderJournalStatusItem(
   return item?.itemId === itemId && journalInputPresentationMember(state, itemId)
     ? projectJournalStopNote(item, state.items)
     : null
+}
+
+export function renderJournalItems(state: JournalReducerState): AgentJournalSnapshot['items'] {
+  // Map insertion order changes on recreation; journal position alone orders the timeline.
+  return [...memoryJournalMap(state.items).values()]
+    .filter((item) => journalInputPresentationMember(state, item.itemId))
+    .map((item) => projectJournalStopNote(item, state.items))
+    .sort(compareAgentJournalItems)
+}
+
+export function renderJournalState(state: JournalReducerState): AgentJournalSnapshot {
+  return {
+    sessionId: state.sessionId,
+    cursor: journalContextCursor(state),
+    items: renderJournalItems(state),
+    submissions: [...memoryJournalMap(state.submissions).values()].sort(
+      (a, b) => a.submittedAt - b.submittedAt
+    )
+  }
 }

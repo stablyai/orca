@@ -41,8 +41,7 @@ export type JournalNewestTurnStorage = {
   boundary: number
 }
 
-export type JournalIndexStorageFactory = {
-  stateQueries: () => JournalStateQueries
+export type JournalInputIndexStorage = {
   map: <K, V>(name: string, key?: string | number) => JournalKeyedMap<K, V>
   set: <T>(name: string, key?: string | number) => JournalKeyedSet<T>
   orderFacts: () => JournalInputOrderFacts
@@ -54,4 +53,8 @@ export type JournalIndexStorageFactory = {
   queuedRows: (name: string) => JournalQueuedRowStorage
   submissions: (name: string) => JournalSubmissionStorage
   newestTurn: () => JournalNewestTurnStorage
+}
+
+export type JournalIndexStorageFactory = JournalInputIndexStorage & {
+  stateQueries: () => JournalStateQueries
 }

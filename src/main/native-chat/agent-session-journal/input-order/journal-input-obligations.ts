@@ -1,7 +1,7 @@
 import { journalInputAttemptEndedFromFacts } from './journal-input-attempt-ended'
 import { memoryJournalMap } from '../journal-memory-collections'
-import type { JournalIndexStorageFactory } from '../journal-index-storage'
-import { memoryJournalIndexStorage } from '../journal-memory-index-storage'
+import type { JournalInputIndexStorage } from '../journal-index-storage'
+import { memoryJournalInputIndexStorage } from '../journal-memory-input-index-storage'
 import { journalInputOrder } from './journal-input-order'
 import {
   agentJournalSubmissionKey,
@@ -44,7 +44,7 @@ export type JournalInputEnd =
   | { kind: 'stop'; event: NonNullable<JournalTombstoneRow['stopEvent']> }
 
 export function createJournalInputObligations(
-  storage: JournalIndexStorageFactory = memoryJournalIndexStorage
+  storage: JournalInputIndexStorage = memoryJournalInputIndexStorage
 ) {
   return {
     sources: storage.map<string, JournalInputSource>('inputs.sources'),

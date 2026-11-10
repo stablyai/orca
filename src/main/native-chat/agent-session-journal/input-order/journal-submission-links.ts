@@ -1,6 +1,6 @@
 import type { JournalSubmissionLinkFacts } from '../journal-input-facts-storage'
-import type { JournalIndexStorageFactory } from '../journal-index-storage'
-import { memoryJournalIndexStorage } from '../journal-memory-index-storage'
+import type { JournalInputIndexStorage } from '../journal-index-storage'
+import { memoryJournalInputIndexStorage } from '../journal-memory-input-index-storage'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { journalInputSourceFamily, journalInputSourceSequence } from './journal-input-source'
 import type { JournalReducerState } from '../projection/journal-reducer'
@@ -9,7 +9,7 @@ import type { AgentJournalSubmission } from '../../../../shared/agent-session/jo
 /** Reverse links derive from submission rows and share the reducer lifetime. */
 export class JournalSubmissionLinks {
   private readonly facts: JournalSubmissionLinkFacts
-  constructor(private readonly indexes: JournalIndexStorageFactory = memoryJournalIndexStorage) {
+  constructor(private readonly indexes: JournalInputIndexStorage = memoryJournalInputIndexStorage) {
     this.facts = indexes.linkFacts()
   }
 

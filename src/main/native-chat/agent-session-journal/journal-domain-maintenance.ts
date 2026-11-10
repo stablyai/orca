@@ -1,4 +1,4 @@
-import { journalForkStageEpochs } from './journal-fork-stages'
+import { journalForkStageEpochs } from './journal-fork-stage-state'
 import type Database from '../../sqlite/sync-database'
 
 export type JournalDomainMaintenance =

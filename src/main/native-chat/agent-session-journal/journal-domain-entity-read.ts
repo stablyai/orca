@@ -5,7 +5,7 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalSqlPointRead, JournalSqlPointReadResult } from './journal-sql-point-read'
 import type { JournalSqlScope } from './journal-sql-scope'
-import { journalContextEpoch } from './context-epochs/journal-context-cursor'
+import { journalContextEpoch } from './context-epochs/journal-context-epoch'
 import { readJournalDomainSubmissionBody } from './journal-domain-submission-records'
 import type { JournalHistoryOrigin } from './context-epochs/journal-history-origin'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'

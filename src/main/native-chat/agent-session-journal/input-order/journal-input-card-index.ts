@@ -9,8 +9,8 @@ import {
 } from '../queued-messages/queued-message-pause'
 import { journalManualStop } from '../queued-messages/queued-message-pause-marks'
 import type { JournalInputCardFacts } from '../journal-input-facts-storage'
-import type { JournalIndexStorageFactory, JournalQueuedRowStorage } from '../journal-index-storage'
-import { memoryJournalIndexStorage } from '../journal-memory-index-storage'
+import type { JournalInputIndexStorage, JournalQueuedRowStorage } from '../journal-index-storage'
+import { memoryJournalInputIndexStorage } from '../journal-memory-input-index-storage'
 import type { JournalInputOrderResolver } from './journal-input-order-registry'
 
 export { compareQueuedRows } from './journal-queued-row-index'
@@ -31,7 +31,7 @@ export class JournalInputCardIndex {
 
   constructor(
     private readonly journalInputOrder: JournalInputOrderResolver,
-    indexes: JournalIndexStorageFactory = memoryJournalIndexStorage
+    indexes: JournalInputIndexStorage = memoryJournalInputIndexStorage
   ) {
     this.facts = indexes.cardFacts()
     this.current = indexes.queuedRows('cards')

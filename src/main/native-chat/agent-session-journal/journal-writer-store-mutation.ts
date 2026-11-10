@@ -1,4 +1,4 @@
-import { journalForkStageHeld } from './journal-fork-stages'
+import { journalForkStageHeld } from './journal-fork-stage-state'
 import { pruneJournalWriterOperations } from './journal-writer-operation-expiry'
 import { copyAgentSessionStoreCache } from '../../runtime/agent-session/records/agent-session-store-cache'
 import { journalDomainPublicCursor } from './journal-domain-context-replacement'

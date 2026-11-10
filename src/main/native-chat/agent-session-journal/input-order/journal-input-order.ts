@@ -1,11 +1,11 @@
-import { journalInputOrder } from './journal-input-order-registry'
+import { getJournalInputOrder, setJournalInputOrder } from './journal-input-order-registry'
 import { memoryJournalMap } from '../journal-memory-collections'
 import type { JournalInputOrderFacts } from '../journal-input-facts-storage'
-import type { JournalSubmissionStorage, JournalIndexStorageFactory } from '../journal-index-storage'
+import type { JournalSubmissionStorage, JournalInputIndexStorage } from '../journal-index-storage'
 import { journalInputOrderChanged } from './journal-input-order-state'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { memoryJournalIndexStorage } from '../journal-memory-index-storage'
+import { memoryJournalInputIndexStorage } from '../journal-memory-input-index-storage'
 import { JournalNewestTurn } from './journal-newest-turn'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from '../projection/journal-reducer'
@@ -15,11 +15,7 @@ import { JournalInputEvidence } from './journal-input-evidence'
 import { LegacyQueueOrderReader } from './legacy-queue-order-reader'
 import { JournalInputCardIndex } from './journal-input-card-index'
 
-export {
-  initializeJournalInputOrder,
-  journalInputOrder,
-  setJournalInputOrder
-} from './journal-input-order-registry'
+export { setJournalInputOrder } from './journal-input-order-registry'
 
 /** Delivery evidence and the current hand-off; every other waiting input has a queue row. */
 export class JournalInputOrder extends JournalInputEvidence {
@@ -35,7 +31,7 @@ export class JournalInputOrder extends JournalInputEvidence {
   constructor(
     state: JournalReducerState,
     newestTurn: JournalNewestTurn | undefined = undefined,
-    indexes: JournalIndexStorageFactory = memoryJournalIndexStorage
+    indexes: JournalInputIndexStorage = memoryJournalInputIndexStorage
   ) {
     super(state, indexes)
     this.orderFacts = indexes.orderFacts()
@@ -219,4 +215,17 @@ export class JournalInputOrder extends JournalInputEvidence {
       }
     }
   }
+}
+
+export function initializeJournalInputOrder(
+  state: JournalReducerState,
+  storage: JournalInputIndexStorage = memoryJournalInputIndexStorage
+): JournalInputOrder {
+  const owner = new JournalInputOrder(state, undefined, storage)
+  setJournalInputOrder(state, owner)
+  return owner
+}
+
+export function journalInputOrder(state: JournalReducerState): JournalInputOrder {
+  return getJournalInputOrder(state) ?? initializeJournalInputOrder(state)
 }

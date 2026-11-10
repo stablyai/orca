@@ -6,7 +6,7 @@ import {
   journalDomainNewestTurn,
   journalDomainUnsettledInputs
 } from './journal-domain-input-populations'
-import { journalContextEpoch } from './context-epochs/journal-context-cursor'
+import { journalContextEpoch } from './context-epochs/journal-context-epoch'
 import type Database from '../../sqlite/sync-database'
 import {
   agentJournalItemKey,

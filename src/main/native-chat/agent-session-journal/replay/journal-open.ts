@@ -9,7 +9,6 @@ import { readJournalLegacyCards } from '../queued-messages/journal-queue-import'
 import { journalInputOrder } from '../input-order/journal-input-order'
 import { journalOutcomeSource } from '../outcomes/journal-outcome-format'
 import { readJournalOutcomes } from '../outcomes/journal-outcome-table'
-import '../outcomes/journal-outcome-codec'
 import {
   JournalOutcomeDecodeError,
   AgentSessionJournalError
@@ -248,5 +247,4 @@ export function startJournalRowFold(
   return { add: input.untilDamage ? (entry) => add(entry) && damage === null : add, finish }
 }
 
-import './journal-read-row'
 import { memoryJournalMap } from '../journal-memory-collections'

@@ -5,7 +5,7 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalContinuationContext } from './journal-reads'
-import { journalContextEpoch } from './context-epochs/journal-context-cursor'
+import { journalContextEpoch } from './context-epochs/journal-context-epoch'
 import type { SqliteBindings, SqliteRow } from '../../sqlite/sqlite-statement'
 
 const PAGE = 256

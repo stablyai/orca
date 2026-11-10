@@ -17,7 +17,7 @@ import {
 } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalEpochRow, AgentJournalEpochReason } from './durable-rows/journal-row-schema'
-import { journalContextEpoch } from './context-epochs/journal-context-cursor'
+import { journalContextEpoch } from './context-epochs/journal-context-epoch'
 import type { JournalReplacementItem } from './context-epochs/journal-epoch-replacement'
 import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
 import {

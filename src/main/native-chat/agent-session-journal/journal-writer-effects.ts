@@ -1,4 +1,4 @@
-import { journalForkAttachmentHeld } from './journal-fork-stages'
+import { journalForkAttachmentHeld } from './journal-fork-stage-state'
 import { agentSessionAttachmentStoreRoot } from '../agent-session-attachments/agent-session-attachment-references'
 import type Database from '../../sqlite/sync-database'
 import {

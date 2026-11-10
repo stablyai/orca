@@ -6,7 +6,7 @@ import { structuredAgentSessionStoppingForMark } from '../agent-session-wire/ter
 import type { JournalReducerState } from './projection/journal-reducer'
 import { renderJournalStatus, renderJournalStatusItem } from './projection/journal-public-read'
 import { journalInputOrder } from './input-order/journal-input-order'
-import { journalContextCursor } from './context-epochs/journal-context-cursor'
+import { journalContextCursor } from './context-epochs/journal-context-epoch'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 
 export type JournalStatusIndicatorRead = {

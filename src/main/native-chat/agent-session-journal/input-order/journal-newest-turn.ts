@@ -6,7 +6,7 @@ import type { JournalReducerState } from '../projection/journal-reducer'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
 import { compareTurnSources, type TurnSource } from './journal-newest-turn-tree'
 import type { JournalNewestTurnStorage } from '../journal-index-storage'
-import { memoryJournalIndexStorage } from '../journal-memory-index-storage'
+import { memoryJournalInputIndexStorage } from '../journal-memory-input-index-storage'
 import {
   isTurnOrClear,
   settledFailure,
@@ -19,7 +19,7 @@ export class JournalNewestTurn {
   /** Only on restore; streamed rows never rescan conversation history. */
   constructor(
     state: JournalReducerState,
-    private readonly storage: JournalNewestTurnStorage = memoryJournalIndexStorage.newestTurn()
+    private readonly storage: JournalNewestTurnStorage = memoryJournalInputIndexStorage.newestTurn()
   ) {
     if (!storage.initializeFromItems) {
       return

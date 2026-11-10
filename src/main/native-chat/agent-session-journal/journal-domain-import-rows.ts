@@ -1,4 +1,4 @@
-import { journalForkStageHeld } from './journal-fork-stages'
+import { journalForkStageHeld } from './journal-fork-stage-state'
 import { insertJournalDomainImportedSubmission } from './journal-domain-import-submissions'
 import {
   JOURNAL_DOMAIN_ITEM_COLUMNS,

@@ -3,8 +3,8 @@ import { agentJournalSubmissionKey } from '../../../../shared/agent-session/jour
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { readWholeAgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type { JournalReducerState } from '../projection/journal-reducer'
-import { memoryJournalIndexStorage } from '../journal-memory-index-storage'
-import type { JournalInputPlaceStorage, JournalIndexStorageFactory } from '../journal-index-storage'
+import { memoryJournalInputIndexStorage } from '../journal-memory-input-index-storage'
+import type { JournalInputPlaceStorage, JournalInputIndexStorage } from '../journal-index-storage'
 
 export type JournalInputKeys = {
   has: (key: string) => boolean
@@ -22,7 +22,7 @@ export abstract class JournalInputObservations {
 
   constructor(
     protected readonly state: JournalReducerState,
-    protected readonly indexes: JournalIndexStorageFactory = memoryJournalIndexStorage
+    protected readonly indexes: JournalInputIndexStorage = memoryJournalInputIndexStorage
   ) {
     this.observationFacts = indexes.observationFacts()
     this.receiptSequences = indexes.place('receipt-sequences')

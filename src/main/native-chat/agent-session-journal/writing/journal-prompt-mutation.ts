@@ -11,7 +11,7 @@ import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journ
 import type { JournalPromptMutationInput, JournalAppendResult } from '../journal-store-contracts'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import { readJournalInputItem } from '../input-order/journal-input-obligations'
-import { journalContextCursor } from '../context-epochs/journal-context-cursor'
+import { journalContextCursor } from '../context-epochs/journal-context-epoch'
 import { journalItemRowBuilder } from './journal-row-builders'
 import type { JournalRowWriter, JournalOperationReceipt } from './journal-row-writer'
 

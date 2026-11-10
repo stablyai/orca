@@ -6,7 +6,8 @@ import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../../shared/agent-sessi
 import { projectStructuredAgentSessionMessages } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 
 import { DISPATCH_DOUBT_HOST_RESTARTED } from './journal-dispatch-doubt-reasons'
-import { applyJournalRow, createJournalReducerState, renderJournalState } from './journal-reducer'
+import { applyJournalRow, createJournalReducerState } from './journal-reducer'
+import { renderJournalState } from './journal-public-read'
 import { buildJournalSubmissionRow, journalRowBase } from '../writing/journal-row-builders'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
 

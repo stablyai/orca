@@ -1,5 +1,5 @@
 import { JOURNAL_EPOCH_TABLES } from './journal-domain-maintenance'
-import { journalForkStageHeld } from './journal-fork-stages'
+import { journalForkStageHeld } from './journal-fork-stage-state'
 import type Database from '../../sqlite/sync-database'
 
 export type JournalDomainImportDiscard = { more: boolean; epoch: string | null }

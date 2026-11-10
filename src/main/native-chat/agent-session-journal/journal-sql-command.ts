@@ -1,5 +1,6 @@
 import { runJournalSqlCommand } from './journal-sql-command-dispatch'
-import { journalForkStageHeld, type JournalForkStages } from './journal-fork-stages'
+import type { JournalForkStages } from './journal-fork-stages'
+import { journalForkStageHeld } from './journal-fork-stage-state'
 import { beginJournalRequestEvents } from './journal-writer-request-events'
 import type Database from '../../sqlite/sync-database'
 

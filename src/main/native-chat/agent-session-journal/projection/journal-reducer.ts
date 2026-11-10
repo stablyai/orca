@@ -1,14 +1,11 @@
-import { memoryJournalMap } from '../journal-memory-collections'
 import type { JournalKeyedMap, JournalKeyedSet } from '../journal-keyed-storage'
 import type { JournalStateQueries } from '../journal-state-queries'
 import type { JournalIndexStorageFactory } from '../journal-index-storage'
 import { memoryJournalIndexStorage } from '../journal-memory-index-storage'
-import { journalContextCursor } from '../context-epochs/journal-context-epoch'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
 import {
   createJournalInputObligations,
-  foldJournalInputObligations,
-  journalInputPresentationMember
+  foldJournalInputObligations
 } from '../input-order/journal-input-obligations'
 import { resolveJournalItemId } from './journal-item-echo'
 import { journalInputOrder, initializeJournalInputOrder } from '../input-order/journal-input-order'
@@ -16,7 +13,6 @@ import type { JournalInputEntry, JournalInputCard } from '../input-order/journal
 import type {
   AgentJournalAcceptanceReceipt,
   AgentJournalRenderItem,
-  AgentJournalSnapshot,
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
@@ -24,7 +20,6 @@ import {
   type JournalHistoryOrigin
 } from '../context-epochs/journal-history-origin'
 import { journalBatchMutationProducer, journalRenderItem } from './journal-render-item'
-import { compareAgentJournalItems } from '../../../../shared/agent-session/journal/agent-session-journal-position'
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 
 import { JournalDerivedTurnScope } from './journal-derived-turn-scope'
@@ -38,7 +33,6 @@ import {
 } from '../submissions/journal-submission-fold'
 import { applyJournalDispatchRow } from './journal-dispatch-reducer'
 
-import { projectJournalStopNote } from '../context-epochs/journal-stop-note-projection'
 import { journalItemExecutionFence } from './journal-item-provenance'
 import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../shared/native-chat/native-chat-pull-request-event'
 import { retireRewoundJournalSubmission } from '../context-epochs/journal-rewind-submission-retirement'
@@ -294,25 +288,6 @@ export function rememberAppliedSettlementId(
       return
     }
     state.appliedSettlementIds.delete(oldest)
-  }
-}
-
-export function renderJournalItems(state: JournalReducerState): AgentJournalSnapshot['items'] {
-  // Map insertion order changes on recreation; journal position alone orders the timeline.
-  return [...memoryJournalMap(state.items).values()]
-    .filter((item) => journalInputPresentationMember(state, item.itemId))
-    .map((item) => projectJournalStopNote(item, state.items))
-    .sort(compareAgentJournalItems)
-}
-
-export function renderJournalState(state: JournalReducerState): AgentJournalSnapshot {
-  return {
-    sessionId: state.sessionId,
-    cursor: journalContextCursor(state),
-    items: renderJournalItems(state),
-    submissions: [...memoryJournalMap(state.submissions).values()].sort(
-      (a, b) => a.submittedAt - b.submittedAt
-    )
   }
 }
 

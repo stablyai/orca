@@ -3,7 +3,7 @@ import type {
   AgentJournalSnapshot
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionForkedFrom } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import { journalContextEpoch } from './context-epochs/journal-context-cursor'
+import { journalContextEpoch } from './context-epochs/journal-context-epoch'
 import type { JournalSqlScope } from './journal-sql-scope'
 import { journalDomainFullDisplaySql } from './journal-domain-stop-notes'
 

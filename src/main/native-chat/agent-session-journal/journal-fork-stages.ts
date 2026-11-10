@@ -1,5 +1,5 @@
 import { applyJournalForkStagePage } from './journal-fork-stage-page'
-import type { Stage } from './journal-fork-stage-state'
+import { registerJournalForkStages, type Stage } from './journal-fork-stage-state'
 import { randomUUID } from 'node:crypto'
 import type Database from '../../sqlite/sync-database'
 import type { JournalWriterTarget, JournalWriterCommand } from './journal-writer-command'
@@ -36,21 +36,6 @@ export type JournalForkStageResult =
   | { accepted: number; auxiliary: boolean }
   | null
 
-const owners = new WeakMap<Database.Database, JournalForkStages>()
-export function journalForkStageHeld(
-  db: Database.Database,
-  sessionId: string,
-  epoch?: string
-): boolean {
-  return owners.get(db)?.holds(sessionId, epoch) ?? false
-}
-export function journalForkAttachmentHeld(db: Database.Database, sessionId: string): boolean {
-  return owners.get(db)?.holdsAttachments(sessionId) ?? false
-}
-export function journalForkStageEpochs(db: Database.Database, sessionId: string): string[] {
-  return owners.get(db)?.epochs(sessionId) ?? []
-}
-
 /** Disposable stages stay private; mutable progress is adopted only after the outer COMMIT. */
 export class JournalForkStages {
   private live = new Map<string, Stage>()
@@ -60,7 +45,7 @@ export class JournalForkStages {
     private readonly db: Database.Database,
     private readonly stateDirectory: string
   ) {
-    owners.set(db, this)
+    registerJournalForkStages(db, this)
   }
   epochs(sessionId: string): string[] {
     return [...this.live.values()]
