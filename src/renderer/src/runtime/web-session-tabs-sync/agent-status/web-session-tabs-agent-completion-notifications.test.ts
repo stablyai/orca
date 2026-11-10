@@ -147,6 +147,11 @@ function applySnapshot(
   )
 }
 
+const actual = await vi.importActual<{
+  observeAgentHookCompletionForNotification: typeof observeAgentHookCompletionForNotification
+  resetAgentHookCompletionNotificationCoordinators: typeof resetAgentHookCompletionNotificationCoordinators
+}>('@/hooks/agent-hook-completion-notifications')
+
 describe('paired session-tab agent completion notifications', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -177,10 +182,6 @@ describe('paired session-tab agent completion notifications', () => {
   ] as const)(
     'delivers only unseen canonical history through the real paired observer (%s)',
     async (mode) => {
-      const actual = await vi.importActual<{
-        observeAgentHookCompletionForNotification: typeof observeAgentHookCompletionForNotification
-        resetAgentHookCompletionNotificationCoordinators: typeof resetAgentHookCompletionNotificationCoordinators
-      }>('@/hooks/agent-hook-completion-notifications')
       const { setPresenceGated } = await import('@/hooks/agent-auto-ack-presence')
       const { TEST_REPO } = await import('@/store/repos/repo.test-fixture')
       const { makeWorktree } = await import('@/store/slices/worktrees/worktree.test-fixture')

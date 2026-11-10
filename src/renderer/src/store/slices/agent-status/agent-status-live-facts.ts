@@ -126,13 +126,13 @@ export function agentSleepSuccessorEvidence(
 ) {
   const pane = parsePaneKey(entry.paneKey)
   const ptyId = pane
-    ? state.terminalLayoutsByTabId[pane.tabId]?.ptyIdsByLeafId?.[pane.leafId]
+    ? state.terminalLayoutsByTabId?.[pane.tabId]?.ptyIdsByLeafId?.[pane.leafId]
     : undefined
   return {
     updatedAt: entry.updatedAt,
     evidenceObservedAt: timing?.evidenceObservedAt,
     isReplay: timing?.isReplay,
     restoredUnconfirmed: entry.restoredUnconfirmed,
-    stopping: ptyId ? (state.pendingPtyShutdownIds[ptyId] ?? 0) > 0 : false
+    stopping: ptyId ? (state.pendingPtyShutdownIds?.[ptyId] ?? 0) > 0 : false
   }
 }

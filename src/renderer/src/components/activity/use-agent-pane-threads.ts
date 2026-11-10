@@ -1,3 +1,8 @@
+import {
+  selectWorktreesByRepo,
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { useDeferredValue, useMemo, useRef } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
@@ -73,6 +78,8 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
       ) {
         eventBuildCacheRef.current.panes.clear()
         eventBuildCacheRef.current.tabs = undefined
+        eventBuildCacheRef.current.sleep = undefined
+        eventBuildCacheRef.current.owners = undefined
         return EMPTY_ACTIVITY_BUILD
       }
       // Global history caps affect live-thread unread and search state.
@@ -90,9 +97,9 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
           repos: storeData.repos,
           resolveWorktree: storeData.getKnownWorktreeById,
           ownerCatalog: [
-            storeData.worktreesByRepo,
-            storeData.detectedWorktreesByRepo,
-            storeData.folderWorkspaces,
+            selectWorktreesByRepo(storeData),
+            selectDetectedWorktreesByRepo(storeData),
+            selectFolderWorkspaces(storeData),
             storeData.projectGroups,
             storeData.floatingWorkspacePath
           ],

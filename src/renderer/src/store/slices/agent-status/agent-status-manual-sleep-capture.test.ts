@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createStoreCascadesMockApi } from '../../testing/app-store-cascade-api.test-fixture'
+import { applySleepRuntimeRpcDefault } from '../../terminals/terminal-sleep-rpc.test-fixture'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
@@ -6,14 +8,24 @@ import type { AppState } from '../../types'
 import { createTestStore } from '../../testing/app-store-test-fixture'
 import { makeTab } from '../../terminals/terminal-tab.test-fixture'
 
+const LEAF = '11111111-1111-4111-8111-111111111111'
+const OTHER = '22222222-2222-4222-8222-222222222222'
+const API = createStoreCascadesMockApi()
+beforeEach(() => {
+  vi.clearAllMocks()
+  applySleepRuntimeRpcDefault(API)
+  vi.stubGlobal('window', { api: API })
+})
+
 const NOW = 1_800_000_000_000
 
 afterEach(() => {
   vi.useRealTimers()
+  vi.unstubAllGlobals()
 })
 
 function makeAgentEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
-  const paneKey = overrides.paneKey ?? 'tab-1:leaf-1'
+  const paneKey = overrides.paneKey ?? 'tab-1:11111111-1111-4111-8111-111111111111'
   return {
     state: 'working',
     prompt: 'finish the task',
@@ -33,6 +45,21 @@ function seedTabs(store: ReturnType<typeof createTestStore>): void {
   store.setState({
     tabsByWorktree: {
       'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+    },
+    ptyIdsByTabId: { 'tab-1': ['pty-1', 'pty-2'] },
+    terminalLayoutsByTabId: {
+      'tab-1': {
+        root: {
+          type: 'split',
+          direction: 'horizontal',
+          ratio: 0.5,
+          first: { type: 'leaf', leafId: LEAF },
+          second: { type: 'leaf', leafId: OTHER }
+        },
+        activeLeafId: LEAF,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [LEAF]: 'pty-1', [OTHER]: 'pty-2' }
+      }
     }
   } as Partial<AppState>)
 }
@@ -40,7 +67,7 @@ function seedTabs(store: ReturnType<typeof createTestStore>): void {
 function makeSleepingRecord(
   overrides: Partial<SleepingAgentSessionRecord> = {}
 ): SleepingAgentSessionRecord {
-  const paneKey = overrides.paneKey ?? 'tab-1:leaf-1'
+  const paneKey = overrides.paneKey ?? 'tab-1:11111111-1111-4111-8111-111111111111'
   return {
     paneKey,
     tabId: paneKey.split(':')[0],
@@ -70,11 +97,14 @@ describe('manual sleep agent session capture', () => {
         ]
       },
       agentStatusByPaneKey: {
-        'tab-1:leaf-1': makeAgentEntry({ paneKey: 'tab-1:leaf-1', state: 'done' })
+        'tab-1:11111111-1111-4111-8111-111111111111': makeAgentEntry({
+          paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
+          state: 'done'
+        })
       },
       sleepingAgentSessionsByPaneKey: {
-        'tab-2:leaf-1': makeSleepingRecord({
-          paneKey: 'tab-2:leaf-1',
+        'tab-2:11111111-1111-4111-8111-111111111111': makeSleepingRecord({
+          paneKey: 'tab-2:11111111-1111-4111-8111-111111111111',
           agent: 'claude',
           state: 'done',
           providerSession: { key: 'session_id', id: 'claude-never-woken' },
@@ -83,15 +113,21 @@ describe('manual sleep agent session capture', () => {
       }
     } as Partial<AppState>)
 
+    const currentTabs = store.getState().tabsByWorktree
+    seedTabs(store)
+    store.setState({ tabsByWorktree: currentTabs })
     await store.getState().shutdownWorktreeTerminals('wt-1', { keepIdentifiers: true })
 
     const records = store.getState().sleepingAgentSessionsByPaneKey
-    expect(records['tab-2:leaf-1']).toMatchObject({
+    expect(records['tab-2:11111111-1111-4111-8111-111111111111']).toMatchObject({
       origin: 'worktree-sleep',
       state: 'done',
       providerSession: { key: 'session_id', id: 'claude-never-woken' }
     })
-    expect(records['tab-1:leaf-1']).toMatchObject({ origin: 'worktree-sleep', state: 'done' })
+    expect(records['tab-1:11111111-1111-4111-8111-111111111111']).toMatchObject({
+      origin: 'worktree-sleep',
+      state: 'done'
+    })
   })
 
   // Why: an unresumable `live` checkpoint is provisional, so the wipe must still clear it.
@@ -102,7 +138,7 @@ describe('manual sleep agent session capture', () => {
     seedTabs(store)
     store.setState({
       sleepingAgentSessionsByPaneKey: {
-        'tab-1:leaf-1': makeSleepingRecord({
+        'tab-1:11111111-1111-4111-8111-111111111111': makeSleepingRecord({
           agent: 'pi',
           providerSession: { key: 'session_id', id: 'pi-session-1' }
         })
@@ -111,7 +147,9 @@ describe('manual sleep agent session capture', () => {
 
     store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
 
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBeUndefined()
+    expect(
+      store.getState().sleepingAgentSessionsByPaneKey['tab-1:11111111-1111-4111-8111-111111111111']
+    ).toBeUndefined()
   })
 
   // Sleep deactivates workspace before killing terminals; capture must still find its live rows.
@@ -123,9 +161,12 @@ describe('manual sleep agent session capture', () => {
     store.setState({
       activeWorktreeId: 'wt-1',
       agentStatusByPaneKey: {
-        'tab-1:done': makeAgentEntry({ paneKey: 'tab-1:done', state: 'done' }),
-        'tab-1:interrupted': makeAgentEntry({
-          paneKey: 'tab-1:interrupted',
+        'tab-1:11111111-1111-4111-8111-111111111111': makeAgentEntry({
+          paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
+          state: 'done'
+        }),
+        'tab-1:22222222-2222-4222-8222-222222222222': makeAgentEntry({
+          paneKey: 'tab-1:22222222-2222-4222-8222-222222222222',
           state: 'done',
           interrupted: true
         })
@@ -136,8 +177,11 @@ describe('manual sleep agent session capture', () => {
     await store.getState().shutdownWorktreeTerminals('wt-1', { keepIdentifiers: true })
 
     const records = store.getState().sleepingAgentSessionsByPaneKey
-    expect(Object.keys(records).sort()).toEqual(['tab-1:done', 'tab-1:interrupted'])
-    expect(records['tab-1:interrupted']).toMatchObject({
+    expect(Object.keys(records).sort()).toEqual([
+      'tab-1:11111111-1111-4111-8111-111111111111',
+      'tab-1:22222222-2222-4222-8222-222222222222'
+    ])
+    expect(records['tab-1:22222222-2222-4222-8222-222222222222']).toMatchObject({
       origin: 'worktree-sleep',
       state: 'done'
     })
@@ -149,24 +193,30 @@ describe('manual sleep agent session capture', () => {
     const store = createTestStore()
     seedTabs(store)
     store.setState({
-      ptyIdsByTabId: { 'tab-1': [] },
       agentStatusByPaneKey: {
-        'tab-1:stale': makeAgentEntry({
-          paneKey: 'tab-1:stale',
+        'tab-1:11111111-1111-4111-8111-111111111111': makeAgentEntry({
+          paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
           updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1
         })
       },
       sleepingAgentSessionsByPaneKey: {
-        'tab-1:stale': makeSleepingRecord({ paneKey: 'tab-1:stale' })
+        'tab-1:11111111-1111-4111-8111-111111111111': makeSleepingRecord({
+          paneKey: 'tab-1:11111111-1111-4111-8111-111111111111'
+        })
       }
     } as Partial<AppState>)
 
     await store.getState().shutdownWorktreeTerminals('wt-1', { keepIdentifiers: true })
 
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:stale']).toMatchObject({
+    expect(
+      store.getState().sleepingAgentSessionsByPaneKey['tab-1:11111111-1111-4111-8111-111111111111']
+    ).toMatchObject({
       origin: 'worktree-sleep',
       updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1,
-      providerSession: { key: 'session_id', id: 'session-tab-1:stale' }
+      providerSession: {
+        key: 'session_id',
+        id: 'session-tab-1:11111111-1111-4111-8111-111111111111'
+      }
     })
   })
 })
