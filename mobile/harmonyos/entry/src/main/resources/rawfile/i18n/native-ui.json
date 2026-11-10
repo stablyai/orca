@@ -3665,6 +3665,19 @@
     "es": "{{minutes}} min",
     "zh-Hant": "{{minutes}} 分鐘"
   },
+  "home.listFooter.hostPickerTitle": {
+    "zh": "选择打开任务的主机",
+    "en": "Open Tasks On",
+    "tr": "Görevlerin Açılacağı Sunucu",
+    "ja": "タスクを開くホスト",
+    "de": "Aufgaben auf Host öffnen",
+    "ru": "Открыть задачи на сервере",
+    "pt": "Abrir tarefas em",
+    "fr": "Ouvrir les tâches sur",
+    "ko": "작업을 열 호스트",
+    "es": "Abrir tareas en",
+    "zh-Hant": "選擇開啟任務的主機"
+  },
   "home.usage.updatedJustNow": {
     "zh": "刚刚更新",
     "en": "Updated just now",

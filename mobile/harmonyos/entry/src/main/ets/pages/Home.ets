@@ -440,6 +440,10 @@ struct Home {
     this.online = next;
     this.hostPhases = phases;
     this.connecting = anyConnecting;
+    if (this.tabHostPickerOpen && this.tabHostPicker === 'tasks'
+      && this.offeredActionHosts.some((hostId: string): boolean => next[hostId] !== true)) {
+      this.tabHostPickerOpen = false;
+    }
     this.rebuildRows();
   }
 
@@ -1438,7 +1442,7 @@ struct Home {
   private tabPickerTitle(): string {
     if (this.tabHostPicker === 'usage') { return '选择要显示使用情况的桌面'; }
     if (this.tabHostPicker === 'automations') { return '选择要显示自动化的桌面'; }
-    return this.tabHostPicker === 'workspace' ? '选择创建工作区的桌面' : '选择桌面';
+    return this.tabHostPicker === 'workspace' ? '选择创建工作区的桌面' : 'home.listFooter.hostPickerTitle';
   }
 
   private pickerHosts(): HostMeta[] {
