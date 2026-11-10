@@ -17,7 +17,8 @@ import { SettingsNavBar, SettingsNote, SettingsSection } from '../settings/setti
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { CloudAgentPicker, CLOUD_DEFAULT_AGENT } from './CloudAgentPicker'
+import { ORCA_CLOUD_DEFAULT_AGENT } from '../../../src/shared/hosted-sandbox/orca-cloud-image-agents'
+import { CloudAgentPicker } from './CloudAgentPicker'
 import { CloudPhaseSteps } from './CloudPhaseSteps'
 import { createCloudWorkspace, renameCloudWorkspace } from './cloud-control-plane-client'
 import { enqueueCloudPrompt } from './cloud-prompt-queue'
@@ -51,7 +52,7 @@ export function NewCloudWorkspaceScreen() {
   const existing = useCloudWorkspaces(useCloudEnrollment()).data
   const [repo, setRepo] = useState('')
   const [branch, setBranch] = useState('')
-  const [agent, setAgent] = useState(CLOUD_DEFAULT_AGENT)
+  const [agent, setAgent] = useState(ORCA_CLOUD_DEFAULT_AGENT)
   const [prompt, setPrompt] = useState('')
   const [startedAt, setStartedAt] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
