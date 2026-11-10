@@ -60,7 +60,7 @@ export function createContextualCopyHintRefresh(
     stopLabelSubscriptions?.()
   }
 
-  // Monaco 0.55.1 exposes this event at runtime but omits it from its public declaration.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Monaco 0.55.1 exposes this event at runtime but omits it from its public declaration.
   const viewZoneEditor = editorInstance as editor.IStandaloneCodeEditor & {
     readonly onDidChangeViewZones: IEvent<void>
   }
