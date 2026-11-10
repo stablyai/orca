@@ -685,13 +685,14 @@ function redirectHosts(raw: string | null): string[] {
   }
 }
 
-export function grantView(row: GrantRow) {
+export function grantView(row: GrantRow, names: ReadonlyMap<string, string> = new Map()) {
   return {
     id: row.family_id,
     clientId: row.client_id,
     clientName: row.client_name,
     redirectHosts: redirectHosts(row.redirect_uris),
     userId: row.created_by,
+    userName: names.get(row.created_by) ?? null,
     scopes: row.scopes.split(' ').filter(Boolean),
     approvedWith: row.via_key ? { apiKeyPrefix: row.via_key } : { approvalCode: true },
     grantedAt: row.granted_at,
