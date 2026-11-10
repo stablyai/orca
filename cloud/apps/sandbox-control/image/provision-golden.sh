@@ -4,7 +4,7 @@
 # Inputs (env, from image/golden-image.manifest.json via build-golden-image.ts):
 #   ORCAD_BUNDLE_URL ORCAD_BUNDLE_SHA256 [GH_VERSION GH_SHA256] [CHROME_VERSION CHROME_SHA256]
 #   AGENT_NPM_PACKAGES (space-separated
-#   name@version), [NOVNC_VERSION NOVNC_SHA256 WEBSOCKIFY_VERSION WEBSOCKIFY_SHA256] and ORCA_VM_SCRIPT_<name> (base64) for each /opt/orca/bin entry point.
+#   name@version), [CURSOR_AGENT_VERSION CURSOR_AGENT_SHA256], [NOVNC_VERSION NOVNC_SHA256 WEBSOCKIFY_VERSION WEBSOCKIFY_SHA256] and ORCA_VM_SCRIPT_<name> (base64) for each /opt/orca/bin entry point.
 set -euo pipefail
 ORCA_HOME=/opt/orca
 log() { printf '[golden] %s\n' "$*" >&2; }
@@ -87,6 +87,38 @@ log 'agent CLIs'
 # The image's system npm installs them; agents later run on whatever node orcad puts on PATH.
 # shellcheck disable=SC2086 # word splitting is the package list
 npm install --global --no-fund --no-audit --prefix "$ORCA_HOME/tools" $AGENT_NPM_PACKAGES
+# opencode-ai installs every linux-x64 build variant (~205 MB each) and hardlinks the one its
+# postinstall picked into bin/opencode.exe, a standalone binary: drop the variants it did not pick.
+opencode_pkg="$ORCA_HOME/tools/lib/node_modules/opencode-ai"
+if [ -x "$opencode_pkg/bin/opencode.exe" ]; then
+  picked="$(stat -c %i "$opencode_pkg/bin/opencode.exe")"
+  for variant in "$opencode_pkg"/node_modules/opencode-*; do
+    [ -d "$variant" ] || continue
+    [ "$(stat -c %i "$variant/bin/opencode" 2>/dev/null)" = "$picked" ] || rm -rf "$variant"
+  done
+  "$opencode_pkg/bin/opencode.exe" --version >/dev/null
+fi
+
+# The agents' first run on a VM must not be where a broken pin shows up.
+for bin in gemini copilot; do
+  if [ -e "$ORCA_HOME/tools/bin/$bin" ]; then "$ORCA_HOME/tools/bin/$bin" --version >/dev/null; fi
+done
+
+if [ -n "${CURSOR_AGENT_VERSION:-}" ]; then
+  # Cursor's agent CLI is a pinned tarball (its own node + bundle), not an npm package. The image
+  # copy lives under /opt/orca (root-owned) and its release channel is set to "static" at boot
+  # (orca-sandbox-env), so it never replaces itself mid-session.
+  log "cursor-agent $CURSOR_AGENT_VERSION"
+  tgz="$(mktemp -d)/cursor-agent.tgz"
+  fetch_verified "https://downloads.cursor.com/lab/${CURSOR_AGENT_VERSION}/linux/x64/agent-cli-package.tar.gz" \
+    "$CURSOR_AGENT_SHA256" "$tgz"
+  rm -rf "$ORCA_HOME/tools/cursor-agent"
+  mkdir -p "$ORCA_HOME/tools/cursor-agent" "$ORCA_HOME/tools/bin"
+  tar --strip-components=1 -xzf "$tgz" -C "$ORCA_HOME/tools/cursor-agent"
+  rm -rf "$(dirname "$tgz")"
+  ln -sfn ../cursor-agent/cursor-agent "$ORCA_HOME/tools/bin/cursor-agent"
+  "$ORCA_HOME/tools/bin/cursor-agent" --version >/dev/null
+fi
 
 log 'openssh server (binaries only)'
 # For `orca ssh`: an unprivileged sshd on loopback (see vm/orca-sshd). Only the server binaries,
@@ -227,7 +259,7 @@ fi
 
 log 'versions'
 versions="{}"
-for bin in claude codex opencode gemini gh; do
+for bin in claude codex opencode gemini cursor-agent copilot gh; do
   if [ -x "$ORCA_HOME/tools/bin/$bin" ]; then
     v="$("$ORCA_HOME/tools/bin/$bin" --version 2>/dev/null | head -n 1 || echo unknown)"
     versions="$(jq -c --arg k "$bin" --arg v "$v" '. + {($k): $v}' <<<"$versions")"

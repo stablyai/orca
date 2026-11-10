@@ -46,7 +46,12 @@ export const AGENT_KEY_NAMES: ReadonlySet<string> = new Set([
   'ANTHROPIC_MODEL',
   'ANTHROPIC_SMALL_FAST_MODEL',
   'OPENAI_BASE_URL',
-  'OPENAI_MODEL'
+  'OPENAI_MODEL',
+  'GOOGLE_GENERATIVE_AI_API_KEY',
+  'COPILOT_PROVIDER_BASE_URL',
+  'COPILOT_PROVIDER_API_KEY',
+  'COPILOT_PROVIDER_BEARER_TOKEN',
+  'COPILOT_MODEL'
 ])
 
 /** Names that would break or hijack the VM's own processes, or that Orca manages itself. */

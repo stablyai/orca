@@ -38,6 +38,10 @@ export type ProxiedRoute = {
   credential: () => Promise<string | null>
   /** Narrows where this credential may be used (member tokens: the workspace repository only). */
   pathAllowed?: (method: string, path: string) => boolean
+  /** The reply must be a JSON object; only these top-level fields pass (no refresh token for the VM). */
+  keepResponseFields?: readonly string[]
+  /** Names the swapped credential in the proxy's log line (never its value). */
+  label?: string
 }
 
 export type EgressProxyDeps = {
@@ -148,6 +152,29 @@ export async function handleEgressProxy(request: Request, deps: EgressProxyDeps)
     body: hasBody ? await request.arrayBuffer() : undefined,
     redirect: 'manual'
   })
+  // Names only: which sandbox, host and credential were swapped, and what the provider answered.
+  console.log(
+    JSON.stringify({ event: 'egress_swap', sandboxId: row.id, host, credential: route.label ?? route.header, status: upstream.status })
+  )
+  if (route.keepResponseFields) {
+    return onlyFields(upstream, route.keepResponseFields)
+  }
   // Re-wrapping lets the runtime frame the body (content-length or chunked) for the VM's client.
   return new Response(upstream.body, { status: upstream.status, headers: upstream.headers })
+}
+
+/**
+ * The reply's JSON object cut down to `fields`, whatever its declared type. Anything else becomes an
+ * empty object with the same status: the client still sees success or failure, never the body.
+ */
+async function onlyFields(upstream: Response, fields: readonly string[]): Promise<Response> {
+  let body: unknown = null
+  try {
+    body = JSON.parse(await upstream.text())
+  } catch {
+    // Not JSON: nothing of it is passed on.
+  }
+  const object = body !== null && typeof body === 'object' && !Array.isArray(body) ? body : {}
+  const kept = Object.fromEntries(Object.entries(object).filter(([key]) => fields.includes(key)))
+  return new Response(JSON.stringify(kept), { status: upstream.status, headers: { 'content-type': 'application/json' } })
 }

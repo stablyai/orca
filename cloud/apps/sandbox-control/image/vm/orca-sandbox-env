@@ -29,7 +29,10 @@ tmp="$(mktemp "$dir/.session.env.XXXXXX")"
 count=0
 openai_base_url=''
 openai_model=''
+anthropic_model=''
 anthropic_key_tail=''
+gateway_key=''
+gemini_key=''
 while IFS= read -r line; do
   name="${line%%=*}" b64="${line#*=}"
   case "$name" in '' | *[!A-Z0-9_]* | [0-9]* | ORCA_* | PATH | HOME | LD_* | DYLD_*) continue ;; esac
@@ -39,6 +42,9 @@ while IFS= read -r line; do
   case "$name" in
     OPENAI_BASE_URL) openai_base_url="$(printf '%s' "$b64" | base64 -d)" ;;
     OPENAI_MODEL) openai_model="$(printf '%s' "$b64" | base64 -d)" ;;
+    ANTHROPIC_MODEL) anthropic_model="$(printf '%s' "$b64" | base64 -d)" ;;
+    AI_GATEWAY_API_KEY) gateway_key=1 ;;
+    GEMINI_API_KEY) gemini_key=1 ;;
     # Claude Code asks once per key whether to use ANTHROPIC_API_KEY; it remembers the last 20 chars.
     ANTHROPIC_API_KEY) anthropic_key_tail="$(printf '%s' "$b64" | base64 -d | tail -c 20)" ;;
   esac
@@ -97,12 +103,14 @@ if true; then
   mv -f "$next" "$codex_config"
   rm -f "$user_part"
 fi
-# ---- Claude Code: first-run screens answered once (theme picker, folder trust, bypass-mode warning,
-# the "use this API key?" question). A prompt delivered from the phone or the API has no one to click
+# ---- Claude Code, Gemini CLI, Cursor agent, Copilot CLI, OpenCode: first-run screens answered once
+# (Claude: theme picker, folder trust, bypass-mode warning, the "use this API key?" question; others:
+# folder trust, auth-method picker, self-update). A prompt delivered from the phone or the API has no one to click
 # through them, and the agent would sit there doing nothing. Merges; never touches credentials.
 node_bin="$(command -v node || find /opt/orca/runtime/runtimes -type f -name node 2>/dev/null | head -n 1)"
 if [ -n "$node_bin" ]; then
-  ORCA_PROJECT="$PROJECT" ORCA_KEY_TAIL="$anthropic_key_tail" "$node_bin" -e '
+  ORCA_PROJECT="$PROJECT" ORCA_KEY_TAIL="$anthropic_key_tail" ORCA_GEMINI_KEY="$gemini_key" \
+    ORCA_GATEWAY_MODEL="${gateway_key:+${anthropic_model:-$openai_model}}" "$node_bin" -e '
 const fs = require("fs"), path = require("path"), os = require("os")
 const home = os.homedir()
 const readJson = (file) => { try { const v = JSON.parse(fs.readFileSync(file, "utf8")); return v && typeof v === "object" && !Array.isArray(v) ? v : {} } catch { return {} } }
@@ -132,6 +140,90 @@ if (JSON.stringify(c) !== before) write(claudeFile, c)
 const settingsFile = path.join(home, ".claude", "settings.json")
 const s = readJson(settingsFile)
 if (s.skipDangerousModePermissionPrompt !== true) write(settingsFile, { ...s, skipDangerousModePermissionPrompt: true })
+
+// Each block below only fills in what is unset and leaves a file it cannot parse alone.
+const readStrict = (file) => { try { return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {} } catch { return null } }
+const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v)
+const section = (o, key) => (isObject(o[key]) ? o[key] : (o[key] = {}))
+
+// Gemini CLI: folder trust and the auth-method picker (only when a Gemini key is configured; a
+// Google sign-in picks its own method), no self-update, no usage stats (its host is not on the
+// egress allowlist, so every send would fail).
+const geminiTrustFile = path.join(home, ".gemini", "trustedFolders.json")
+const geminiTrust = readStrict(geminiTrustFile)
+if (isObject(geminiTrust) && !geminiTrust[p]) write(geminiTrustFile, { ...geminiTrust, [p]: "TRUST_FOLDER" })
+const geminiSettingsFile = path.join(home, ".gemini", "settings.json")
+const g = readStrict(geminiSettingsFile)
+if (isObject(g)) {
+  const gBefore = JSON.stringify(g)
+  const general = section(g, "general")
+  general.disableAutoUpdate ??= true
+  general.disableUpdateNag ??= true
+  section(g, "privacy").usageStatisticsEnabled ??= false
+  if (process.env.ORCA_GEMINI_KEY) section(section(g, "security"), "auth").selectedType ??= "gemini-api-key"
+  if (JSON.stringify(g) !== gBefore) write(geminiSettingsFile, g)
+}
+
+// Cursor agent: trust the workspace (cursor-agent keys trust by a slug of the path) and pin the
+// release channel to "static", which turns off its background self-update.
+const cursorTrust = path.join(home, ".cursor", "projects", p.replace(/^\/+/, "").replace(/[^A-Za-z0-9]+/g, "-"), ".workspace-trusted")
+if (!fs.existsSync(cursorTrust)) {
+  fs.mkdirSync(path.dirname(cursorTrust), { recursive: true, mode: 0o700 })
+  fs.writeFileSync(cursorTrust, JSON.stringify({ trustedAt: new Date().toISOString(), workspacePath: p }, null, 2) + "\n", { mode: 0o600 })
+}
+const cursorConfigFile = path.join(home, ".cursor", "cli-config.json")
+const cc = readStrict(cursorConfigFile)
+if (isObject(cc) && cc.channel === undefined) write(cursorConfigFile, { version: 1, ...cc, channel: "static" })
+
+// GitHub Copilot CLI: trusted folders live in ~/.copilot/config.json, which Copilot prefixes with
+// "//" comment lines; keep them.
+const copilotFile = path.join(home, ".copilot", "config.json")
+let copilotHead = ""
+let co = {}
+try {
+  const raw = fs.existsSync(copilotFile) ? fs.readFileSync(copilotFile, "utf8") : ""
+  const lines = raw.split("\n")
+  let i = 0
+  while (i < lines.length && /^\s*\/\//.test(lines[i])) i++
+  copilotHead = lines.slice(0, i).map((l) => l + "\n").join("")
+  const body = lines.slice(i).join("\n").trim()
+  co = body ? JSON.parse(body) : {}
+} catch { co = null }
+if (isObject(co)) {
+  const folders = Array.isArray(co.trustedFolders) ? co.trustedFolders : []
+  if (!folders.includes(p)) {
+    fs.mkdirSync(path.dirname(copilotFile), { recursive: true, mode: 0o700 })
+    const tmp = `${copilotFile}.orca-${process.pid}`
+    fs.writeFileSync(tmp, copilotHead + JSON.stringify({ ...co, trustedFolders: [...folders, p] }, null, 2) + "\n", { mode: 0o600 })
+    fs.renameSync(tmp, copilotFile)
+  }
+}
+
+// OpenCode: with the AI Gateway preset and a model secret (ANTHROPIC_MODEL, else OPENAI_MODEL), use
+// that model through the gateway unless the user picked one. A ledger remembers what Orca wrote, so a
+// changed model secret updates it and a model the user set is never touched.
+const ocDir = path.join(home, ".config", "opencode")
+const ocFile = path.join(ocDir, "opencode.json")
+const ocLedger = path.join(ocDir, ".orca-managed-model")
+const managedModel = process.env.ORCA_GATEWAY_MODEL ? `vercel/${process.env.ORCA_GATEWAY_MODEL}` : ""
+const oc = readStrict(ocFile)
+let jsoncHasModel = false
+try { jsoncHasModel = /"model"\s*:/.test(fs.readFileSync(path.join(ocDir, "opencode.jsonc"), "utf8")) } catch {}
+if (isObject(oc) && !jsoncHasModel) {
+  let ours = ""
+  try { ours = fs.readFileSync(ocLedger, "utf8").trim() } catch {}
+  const userModel = typeof oc.model === "string" && oc.model !== ours
+  if (!userModel && (oc.model ?? "") !== managedModel) {
+    const next = { $schema: "https://opencode.ai/config.json", ...oc }
+    if (managedModel) next.model = managedModel
+    else delete next.model
+    write(ocFile, next)
+  }
+  if (!userModel) {
+    if (managedModel) fs.writeFileSync(ocLedger, managedModel + "\n", { mode: 0o600 })
+    else fs.rmSync(ocLedger, { force: true })
+  }
+}
 ' || echo 'agent first-run state not seeded' >&2
 fi
 printf '{"names":%d}\n' "$count"

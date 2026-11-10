@@ -32,7 +32,7 @@ type ToolDef<T extends z.ZodObject> = {
 // Ids go into URL paths: restrict them so a tool argument can never address another route.
 const Id = (what: string) => z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, `a ${what} id`).describe(`The ${what} id.`)
 const WorkspaceId = z.object({ workspaceId: Id('workspace') }).strict()
-const Agent = z.enum(AGENTS).describe('Agent CLI to run: claude (Claude Code, default) or codex.')
+const Agent = z.enum(AGENTS).describe(`Agent CLI to run: ${AGENTS.join(', ')} (claude, Claude Code, is the default).`)
 const MAX_WAIT_SECONDS = 45
 
 function ok(body: unknown): ToolResult {
