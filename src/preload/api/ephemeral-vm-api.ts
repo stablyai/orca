@@ -102,6 +102,8 @@ export type EphemeralVmApi = {
   resumeWorkspace: (args: {
     workspaceId: string
     quiet?: boolean
+    /** Only mark the workspace opened (claims an intent wake); wakes nothing. */
+    claimOnly?: boolean
   }) => Promise<EphemeralVmWorkspaceLifecycleResult>
   /** Suspends the workspace's VM without closing panels; sleep closes them first. */
   suspendWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmWorkspaceLifecycleResult>

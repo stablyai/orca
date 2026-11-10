@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { claimQuietWake } from './quiet-wakes'
 import type { Store } from '../persistence/loading-store/store'
 import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-workspace-runtime'
 import { suspendEphemeralVmRuntime } from './runtime-service'
@@ -14,6 +15,8 @@ export async function suspendEphemeralVmWorkspace(
   workspaceId: string
 ): Promise<void> {
   const userDataPath = app.getPath('userData')
+  // Asleep again: an intent wake's short idle window no longer applies.
+  claimQuietWake(workspaceId)
   const runtime = findWorkspaceEphemeralVmRuntime(userDataPath, workspaceId)
   if (!runtime) {
     return

@@ -46,8 +46,13 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   // The window's wake shares the runtime's single VM wake path with its sleep's suspend.
   ipcMain.handle(
     'ephemeralVm:resumeWorkspace',
-    (_event, args: { workspaceId: string; quiet?: boolean }) => {
+    (_event, args: { workspaceId: string; quiet?: boolean; claimOnly?: boolean }) => {
       // An intent wake fails without a trace; an open (no `quiet`) claims any such wake in flight.
+      if (args.claimOnly === true) {
+        // The window opened (or is showing) this workspace: never sleep it as unopened. No wake.
+        claimQuietWake(args.workspaceId)
+        return Promise.resolve({ ok: true as const, runtime: null })
+      }
       if (args.quiet === true) {
         markQuietWake(args.workspaceId)
       } else {
