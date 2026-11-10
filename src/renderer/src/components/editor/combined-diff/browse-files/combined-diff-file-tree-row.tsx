@@ -6,8 +6,8 @@ import type { SourceControlTreeNode } from '../../../../../../shared/source-cont
 import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
-import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
-import { writeWorkspaceFileDragSourceForWorkspace } from '@/lib/workspace-file-drag-source'
+import { WORKSPACE_FILE_PATH_MIME } from '@/lib/files/drop/workspace-file-drag'
+import { writeWorkspaceFileDragSourceForWorkspace } from '@/lib/files/drop/workspace-file-drag-source'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type {
   GitFileStatus,

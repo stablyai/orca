@@ -37,7 +37,8 @@ const STORE_REWRITES: Record<
   (scope: WslMoveRendererRewriteScope) => Promise<void>
 > = {
   'quick-open-history': async (scope) => {
-    const { copyQuickOpenHistoryScopes } = await import('../../quick-open-file-history')
+    const { copyQuickOpenHistoryScopes } =
+      await import('../../files/search/quick-open-file-history')
     copyQuickOpenHistoryScopes((key) => hostQuickOpenHistoryScope(key, scope))
   },
   'file-view-preferences': async (scope) => {
