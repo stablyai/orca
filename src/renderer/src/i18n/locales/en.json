@@ -26936,7 +26936,8 @@
     },
     "vm": {
       "badge": "Real value in sandbox",
-      "warning": "Orca can’t swap AWS keys at the network edge, so cloud workspaces get the real value. Anything running in the sandbox can read it."
+      "warning": "Orca can’t swap AWS keys at the network edge, so cloud workspaces get the real value. Anything running in the sandbox can read it.",
+      "warningKey": "Orca can’t swap {{name}} at the network edge, so cloud workspaces get the real value. Anything running in the sandbox can read it."
     }
   },
   "cloudMcpSync": {

@@ -192,7 +192,7 @@ export function PasteRowEditor({
         {note ? `${status} · ${note}` : status}
       </p>
       {row.name && cloudSecretStoredOnVm(row.name) ? (
-        <p className="pl-5.5 text-2xs text-muted-foreground">{cloudSecretVmWarning(t)}</p>
+        <p className="pl-5.5 text-2xs text-muted-foreground">{cloudSecretVmWarning(t, row.name)}</p>
       ) : null}
     </li>
   )

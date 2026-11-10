@@ -13,7 +13,7 @@ export function CloudSecretVmBadge({ name }: { name: string }): React.JSX.Elemen
   if (!cloudSecretStoredOnVm(name)) {
     return null
   }
-  const why = cloudSecretVmWarning(t)
+  const why = cloudSecretVmWarning(t, name)
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -36,9 +36,15 @@ export function CloudSecretVmBadge({ name }: { name: string }): React.JSX.Elemen
   )
 }
 
-export function cloudSecretVmWarning(t: ReturnType<typeof useTranslate>): string {
-  return t(
-    'cloudSecrets.vm.warning',
-    'Orca can’t swap AWS keys at the network edge, so cloud workspaces get the real value. Anything running in the sandbox can read it.'
-  )
+export function cloudSecretVmWarning(t: ReturnType<typeof useTranslate>, name: string): string {
+  return name.startsWith('AWS_')
+    ? t(
+        'cloudSecrets.vm.warning',
+        'Orca can’t swap AWS keys at the network edge, so cloud workspaces get the real value. Anything running in the sandbox can read it.'
+      )
+    : t(
+        'cloudSecrets.vm.warningKey',
+        'Orca can’t swap {{name}} at the network edge, so cloud workspaces get the real value. Anything running in the sandbox can read it.',
+        { name }
+      )
 }

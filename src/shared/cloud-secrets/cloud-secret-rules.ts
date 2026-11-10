@@ -38,19 +38,80 @@ const AGENT_KEY_NAMES: ReadonlySet<string> = new Set([
 ])
 
 /**
- * Agent keys the egress proxy cannot swap, so the workspace VM holds the real value: AWS requests
- * are signed in the VM (SigV4) with the secret key, and Bedrock API keys are not routed yet. Every
- * other agent key reaches the VM only as a placeholder. Mirrors the control plane's swap list.
+ * Credentials agents and their model providers read. Any of these the egress proxy cannot swap
+ * reaches a cloud sandbox as its real value, so the UI marks it "Real value in sandbox": AWS keys
+ * (requests are signed in the VM with SigV4), Bedrock API keys (not routed yet) and every provider
+ * key below that has no swap route. A control-plane test keeps this in step with the proxy.
  */
-const STORED_ON_VM_NAMES: ReadonlySet<string> = new Set([
+export const AGENT_CREDENTIAL_NAMES: readonly string[] = [
   'AWS_ACCESS_KEY_ID',
   'AWS_SECRET_ACCESS_KEY',
   'AWS_SESSION_TOKEN',
-  'AWS_BEARER_TOKEN_BEDROCK'
-])
+  'AWS_BEARER_TOKEN_BEDROCK',
+  'OPENROUTER_API_KEY',
+  'GROQ_API_KEY',
+  'XAI_API_KEY',
+  'MISTRAL_API_KEY',
+  'DEEPSEEK_API_KEY',
+  'TOGETHER_API_KEY',
+  'TOGETHER_AI_API_KEY',
+  'FIREWORKS_API_KEY',
+  'PERPLEXITY_API_KEY',
+  'CEREBRAS_API_KEY',
+  'MOONSHOT_API_KEY',
+  'KIMI_API_KEY',
+  'DASHSCOPE_API_KEY',
+  'ZAI_API_KEY',
+  'ZHIPU_API_KEY',
+  'MINIMAX_API_KEY',
+  'NVIDIA_API_KEY',
+  'COHERE_API_KEY',
+  'AZURE_OPENAI_API_KEY',
+  'AZURE_API_KEY',
+  'HUGGINGFACE_API_KEY',
+  'HF_TOKEN',
+  'AMP_API_KEY',
+  'FACTORY_API_KEY',
+  'AUGMENT_API_KEY',
+  'CODEBUFF_API_KEY',
+  'CLINE_API_KEY',
+  'QWEN_API_KEY',
+  // Swapped (no badge): listed so the test sees every agent credential in one place.
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_AUTH_TOKEN',
+  'AI_GATEWAY_API_KEY',
+  'OPENAI_API_KEY',
+  'GEMINI_API_KEY',
+  'GOOGLE_API_KEY',
+  'GOOGLE_GENERATIVE_AI_API_KEY',
+  'CURSOR_API_KEY',
+  'COPILOT_GITHUB_TOKEN',
+  'COPILOT_PROVIDER_API_KEY',
+  'COPILOT_PROVIDER_BEARER_TOKEN'
+]
 
+/** Agent credentials the egress proxy swaps: a sandbox only ever holds a stand-in for these. */
+export const CLOUD_SWAPPED_CREDENTIALS: readonly string[] = [
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_AUTH_TOKEN',
+  'AI_GATEWAY_API_KEY',
+  'OPENAI_API_KEY',
+  'GEMINI_API_KEY',
+  'GOOGLE_GENERATIVE_AI_API_KEY',
+  'CURSOR_API_KEY',
+  'GOOGLE_API_KEY',
+  'COPILOT_GITHUB_TOKEN',
+  'COPILOT_PROVIDER_API_KEY',
+  'COPILOT_PROVIDER_BEARER_TOKEN'
+]
+
+export function cloudSecretSwapped(name: string): boolean {
+  return CLOUD_SWAPPED_CREDENTIALS.includes(name)
+}
+
+/** An agent credential a cloud sandbox gets in full (no egress stand-in for it). */
 export function cloudSecretStoredOnVm(name: string): boolean {
-  return STORED_ON_VM_NAMES.has(name)
+  return AGENT_CREDENTIAL_NAMES.includes(name) && !cloudSecretSwapped(name)
 }
 
 const RESERVED_NAMES: ReadonlySet<string> = new Set([
@@ -168,26 +229,4 @@ export function isPublicHttpsUrl(value: string): boolean {
     !/^\d+\.\d+\.\d+\.\d+$/.test(host) &&
     !host.startsWith('[')
   )
-}
-
-/**
- * Variables the Orca Cloud egress proxy swaps (cloud/apps/sandbox-control/src/provider-env.ts,
- * checked equal by a control-plane test): a workspace only ever holds a stand-in for these.
- */
-export const CLOUD_SWAPPED_CREDENTIALS: readonly string[] = [
-  'ANTHROPIC_API_KEY',
-  'ANTHROPIC_AUTH_TOKEN',
-  'AI_GATEWAY_API_KEY',
-  'OPENAI_API_KEY',
-  'GEMINI_API_KEY',
-  'GOOGLE_GENERATIVE_AI_API_KEY',
-  'CURSOR_API_KEY',
-  'GOOGLE_API_KEY',
-  'COPILOT_GITHUB_TOKEN',
-  'COPILOT_PROVIDER_API_KEY',
-  'COPILOT_PROVIDER_BEARER_TOKEN'
-]
-
-export function cloudSecretSwapped(name: string): boolean {
-  return CLOUD_SWAPPED_CREDENTIALS.includes(name)
 }

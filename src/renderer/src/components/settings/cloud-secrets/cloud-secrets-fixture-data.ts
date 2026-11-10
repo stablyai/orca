@@ -47,7 +47,8 @@ export const FIXTURE_SECRETS: Record<CloudSecretScope, CloudSecretView[]> = {
     view('personal', 'SENTRY_ENV', 'env', null, 400),
     // Not swappable at egress: shows "Real value in sandbox".
     view('personal', 'AWS_ACCESS_KEY_ID', 'agent_key', 'Q7MP', 6),
-    view('personal', 'AWS_SECRET_ACCESS_KEY', 'agent_key', 'k2Vd', 6)
+    view('personal', 'AWS_SECRET_ACCESS_KEY', 'agent_key', 'k2Vd', 6),
+    view('personal', 'OPENROUTER_API_KEY', 'env', 'r9Tw', 8)
   ],
   org: [
     view('org', 'AI_GATEWAY_API_KEY', 'agent_key', 'M3kz', 30, 'u_dana'),
