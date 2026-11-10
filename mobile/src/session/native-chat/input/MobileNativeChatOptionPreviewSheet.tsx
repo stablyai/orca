@@ -56,7 +56,11 @@ export function MobileNativeChatOptionPreviewSheet({
               })}
               onClose={onClose}
             />
-            <ReadablePreview key={`${index}:${option.label}`} preview={option.preview ?? ''} />
+            <ReadablePreview
+              // oxlint-disable-next-line react-doctor/no-array-index-as-key -- Option indices are immutable answer identities; changing pages resets both scroll axes.
+              key={index}
+              preview={option.preview ?? ''}
+            />
             {previews.length > 1 ? (
               <ScrollView
                 horizontal
