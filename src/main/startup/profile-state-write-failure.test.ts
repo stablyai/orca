@@ -39,16 +39,16 @@ class FakeWindow extends EventEmitter {
   isDestroyed() {
     return this.destroyed
   }
-  // Any of these would reveal or activate the app: the reporter must never call them.
+  // Any reveal/activation fails: persistence errors must remain in the background.
   show = this.reveal
   showInactive = this.reveal
   focus = this.reveal
   moveTop = this.reveal
 }
 
-const timeout = new ProfileStateWriterError(
-  'profile-state-writer-timeout',
-  'timed out',
+const workerExit = new ProfileStateWriterError(
+  'profile-state-writer-exit',
+  'exited',
   'indeterminate'
 )
 const conflict = new ProfileStateWriterError(
@@ -67,7 +67,7 @@ beforeEach(() => {
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 afterEach(async () => {
-  // Release any reporter still waiting so module state does not leak between tests.
+  // Release pending reporters so module state cannot leak across tests.
   fixture.state.isQuitting = true
   fixture.app.emit('browser-window-created', {}, new FakeWindow(false))
   await new Promise((resolve) => setImmediate(resolve))
@@ -79,7 +79,7 @@ afterEach(async () => {
 it('attaches the alert to the visible main window and explains an unconfirmed write', async () => {
   const window = new FakeWindow(true)
   fixture.state.mainWindow = window
-  reportProfileStateWriteFailure(timeout)
+  reportProfileStateWriteFailure(workerExit)
   await vi.waitFor(() => expect(fixture.show).toHaveBeenCalledOnce())
   expect(fixture.show).toHaveBeenCalledWith(window, {
     type: 'error',
@@ -89,27 +89,17 @@ it('attaches the alert to the visible main window and explains an unconfirmed wr
       'Orca could not confirm whether your most recent change was saved. New changes will not be saved until you restart Orca.',
     buttons: ['OK']
   })
-  expect(recordProfileStateWriteFailureReport).toHaveBeenCalledWith(timeout, 'dialog')
-})
-
-it('tells the user saved changes are safe when no write was left unresolved', async () => {
-  fixture.state.mainWindow = new FakeWindow(true)
-  reportProfileStateWriteFailure(conflict)
-  await vi.waitFor(() => expect(fixture.show).toHaveBeenCalledOnce())
-  expect(fixture.show.mock.calls[0][1]).toMatchObject({
-    detail:
-      'Changes saved before this point are safe. New changes will not be saved until you restart Orca.'
-  })
+  expect(recordProfileStateWriteFailureReport).toHaveBeenCalledWith(workerExit, 'dialog')
 })
 
 it('waits for a hidden window to be shown by the user instead of revealing it', async () => {
   const window = new FakeWindow(false)
   fixture.state.mainWindow = window
-  reportProfileStateWriteFailure(timeout)
+  reportProfileStateWriteFailure(workerExit)
   await new Promise((resolve) => setImmediate(resolve))
   expect(fixture.show).not.toHaveBeenCalled()
   expect(window.reveal).not.toHaveBeenCalled()
-  expect(recordProfileStateWriteFailureReport).toHaveBeenCalledWith(timeout, 'deferred')
+  expect(recordProfileStateWriteFailureReport).toHaveBeenCalledWith(workerExit, 'deferred')
   window.visible = true
   window.emit('show')
   await vi.waitFor(() =>
@@ -118,7 +108,7 @@ it('waits for a hidden window to be shown by the user instead of revealing it', 
 })
 
 it('never falls back to a parentless alert when no main window exists', async () => {
-  reportProfileStateWriteFailure(timeout)
+  reportProfileStateWriteFailure(workerExit)
   await new Promise((resolve) => setImmediate(resolve))
   expect(fixture.show).not.toHaveBeenCalled()
   const window = new FakeWindow(true)
@@ -136,7 +126,7 @@ it('waits for a replacement after the main window is destroyed', async () => {
   const destroyed = new FakeWindow(true)
   destroyed.destroyed = true
   fixture.state.mainWindow = destroyed
-  reportProfileStateWriteFailure(timeout)
+  reportProfileStateWriteFailure(workerExit)
   await new Promise((resolve) => setImmediate(resolve))
   expect(fixture.show).not.toHaveBeenCalled()
   const replacement = new FakeWindow(true)
@@ -151,7 +141,7 @@ it('shows one alert for concurrent failures', async () => {
   fixture.state.mainWindow = new FakeWindow(true)
   let close!: () => void
   fixture.show.mockReturnValue(new Promise((resolve) => (close = () => resolve({ response: 0 }))))
-  reportProfileStateWriteFailure(timeout)
+  reportProfileStateWriteFailure(workerExit)
   reportProfileStateWriteFailure(conflict)
   await vi.waitFor(() => expect(fixture.show).toHaveBeenCalledOnce())
   expect(recordProfileStateWriteFailureReport).toHaveBeenCalledWith(conflict, 'duplicate')
@@ -162,19 +152,19 @@ it.each(['background', 'serve'])('keeps %s runs free of native dialogs', async (
   fixture.background = mode === 'background'
   fixture.state.isServeMode = mode === 'serve'
   fixture.state.mainWindow = new FakeWindow(true)
-  reportProfileStateWriteFailure(timeout)
+  reportProfileStateWriteFailure(workerExit)
   await new Promise((resolve) => setImmediate(resolve))
   expect(fixture.show).not.toHaveBeenCalled()
   expect(console.error).toHaveBeenCalledWith(
     expect.stringContaining('stopped saving'),
     expect.any(Error)
   )
-  expect(recordProfileStateWriteFailureReport).toHaveBeenCalledWith(timeout, 'suppressed')
+  expect(recordProfileStateWriteFailureReport).toHaveBeenCalledWith(workerExit, 'suppressed')
 })
 
 it('handles a failed dialog without an unhandled rejection', async () => {
   fixture.state.mainWindow = new FakeWindow(true)
   fixture.show.mockRejectedValue(new Error('window system unavailable'))
-  reportProfileStateWriteFailure(timeout)
+  reportProfileStateWriteFailure(workerExit)
   await vi.waitFor(() => expect(console.warn).toHaveBeenCalled())
 })

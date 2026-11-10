@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { SettingsNavIcon, SettingsNavSection } from '@/lib/settings-navigation-types'
 import type { CmdJQuickAction } from './quick-actions'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
@@ -12,7 +13,7 @@ import {
 import {
   paletteResultQualityClassRank,
   type PaletteResultQualityClass
-} from '@/lib/palette-match/match-quality'
+} from '../../../../shared/palette-match/match-quality'
 
 export type CmdJSettingsResult = {
   id: string
@@ -94,19 +95,17 @@ export function isCmdJPaletteQueryTooLarge(
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
-// Why not a module constant: translate() must run at call time, and the localized word is
-// the same one the palette stamps on these rows — a zh user searching `设置` types the badge.
-function settingsWord(): string {
-  return translate('auto.components.WorktreeJumpPalette.settingsBadge', 'Settings').toLowerCase()
+// Translate at call time; localized users can search the same Settings word displayed on row badges.
+function settingsWord(t: Translate = translate): string {
+  return t('auto.components.WorktreeJumpPalette.settingsBadge', 'Settings').toLowerCase()
 }
 
-function keywordParts(section: SettingsNavSection): string[] {
+function keywordParts(section: SettingsNavSection, t?: Translate): string[] {
   const baseId = section.id.startsWith('repo-') ? 'repo' : section.id
   const idWords = baseId.replace(/-/g, ' ')
   const paneLevelEntries = section.searchEntries.filter((entry) => !entry.targetSectionId)
-  const localized = settingsWord()
-  // Why keep the English forms alongside the localized ones: section titles stay English in
-  // some catalogs, and a user on a localized build still types `terminal settings` freely.
+  const localized = settingsWord(t)
+  // Keep English aliases too; catalog titles may remain English and users can still type English queries.
   const suffixed = [`${section.title} settings`, `${idWords} settings`]
   if (localized !== 'settings') {
     suffixed.push(`${section.title} ${localized}`, `${idWords} ${localized}`, localized)
@@ -122,8 +121,8 @@ function keywordParts(section: SettingsNavSection): string[] {
   ]
 }
 
-function targetEntryKeywordParts(entryTitle: string): string[] {
-  const localized = settingsWord()
+function targetEntryKeywordParts(entryTitle: string, t?: Translate): string[] {
+  const localized = settingsWord(t)
   const parts = [entryTitle, `${entryTitle} settings`]
   if (localized !== 'settings') {
     parts.push(`${entryTitle} ${localized}`)
@@ -132,7 +131,8 @@ function targetEntryKeywordParts(entryTitle: string): string[] {
 }
 
 export function buildCmdJSettingsResults(
-  sections: readonly SettingsNavSection[]
+  sections: readonly SettingsNavSection[],
+  t?: Translate
 ): CmdJSettingsResult[] {
   return sections.flatMap((section, order) => {
     const paneResult: CmdJSettingsResult = {
@@ -143,7 +143,7 @@ export function buildCmdJSettingsResults(
       icon: section.icon,
       sectionId: section.id,
       order,
-      configKeywords: uniqueNormalizedCmdJPaletteKeywords(keywordParts(section))
+      configKeywords: uniqueNormalizedCmdJPaletteKeywords(keywordParts(section, t))
     }
     const targetedResults = section.searchEntries
       .filter((entry) => entry.targetSectionId)
@@ -157,7 +157,7 @@ export function buildCmdJSettingsResults(
         targetSectionId: entry.targetSectionId,
         order: order + (entryIndex + 1) / 100,
         configKeywords: uniqueNormalizedCmdJPaletteKeywords([
-          ...targetEntryKeywordParts(entry.title),
+          ...targetEntryKeywordParts(entry.title, t),
           ...(entry.cmdJKeywords ?? entry.keywords ?? [])
         ])
       }))
@@ -167,9 +167,7 @@ export function buildCmdJSettingsResults(
 }
 
 export function buildCmdJActionResults(actions: readonly CmdJQuickAction[]): CmdJActionResult[] {
-  // Why fold here, like the settings path above: the query is folded before ranking, so
-  // a raw `Format Document` keyword can never satisfy the exact-intent rules and the
-  // command sinks below any workspace that merely prefix-matches.
+  // Fold keywords like queries or raw-cased commands miss exact intent and sink below workspace prefixes.
   return actions.map((action, order) => ({
     ...action,
     order,
@@ -192,8 +190,7 @@ function rankingForCandidate(
     return null
   }
 
-  // Why: the shortcut rules below only inspect the head and tail of the query, so coverage has
-  // to gate all of them — otherwise "new terminal <junk> browser settings" still wins on rule 3.
+  // Gate head/tail shortcut rules on full coverage so unmatched middle words cannot produce exact intent.
   const values =
     candidate.kind === 'settings'
       ? [candidate.title, ...candidate.configKeywords]

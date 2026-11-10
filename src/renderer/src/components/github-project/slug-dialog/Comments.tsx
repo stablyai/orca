@@ -1,68 +1,39 @@
-import React, { useMemo, useState } from 'react'
-import { useShallow } from 'zustand/react/shallow'
+import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import React, { useState } from 'react'
 import { Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import { useAppStore } from '@/store'
+import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-owner-api'
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
-} from '@/lib/comment-body-submit-state'
-import { useRepoSlugIndex } from '@/lib/repo-slug-index'
-import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+} from '@/lib/source-control/review/comments/comment-body-submit-state'
 import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type {
-  GitHubProjectCommentMutationResult,
-  GitHubProjectMutationResult
-} from '../../../../../shared/github/project-result-types'
-import { translate } from '@/i18n/i18n'
-
-function getRuntimeTarget(settings: Parameters<typeof getActiveRuntimeTarget>[0]) {
-  const target = getActiveRuntimeTarget(settings)
-  return target.kind === 'environment' ? target : null
-}
-
-function useRuntimeSettingsForSlug(owner: string, repo: string, host?: string) {
-  const { lookupSlug } = useRepoSlugIndex()
-  const matchedRepo = useMemo(
-    () => lookupSlug(`${owner}/${repo}`, host)[0] ?? null,
-    [lookupSlug, owner, repo, host]
-  )
-  return useAppStore(
-    useShallow((s) =>
-      matchedRepo ? getSettingsForRepoRuntimeOwner(s, matchedRepo.id) : s.settings
-    )
-  )
-}
+import { useTranslate } from '@/i18n/use-translate'
+import { projectViewErrorMessage } from '../project-view-error-copy'
 
 export function CommentsList({
   owner,
   repo,
   host,
   comments,
-  sourceSettings,
+  sourceTarget,
   onChange
 }: {
   owner: string
   repo: string
   host?: string
   comments: PRComment[]
-  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  sourceTarget: RuntimeClientTarget
   onChange: (next: PRComment[]) => void
 }): React.JSX.Element {
-  const fallbackRuntimeSettings = useRuntimeSettingsForSlug(owner, repo, host)
-  const runtimeSettings = sourceSettings ?? fallbackRuntimeSettings
+  const t = useTranslate()
   return (
     <div className="flex flex-col gap-3">
       {comments.length === 0 ? (
         <div className="text-xs italic text-muted-foreground">
-          {translate(
-            'auto.components.github.project.slug.dialog.Comments.5f104bf855',
-            'No comments yet.'
-          )}
+          {t('auto.components.github.project.slug.dialog.Comments.5f104bf855', 'No comments yet.')}
         </div>
       ) : (
         comments.map((c) => (
@@ -72,46 +43,30 @@ export function CommentsList({
             repo={repo}
             comment={c}
             onDelete={async () => {
-              const target = getRuntimeTarget(runtimeSettings)
-              const args = {
+              const res = await gitHubSlugApiForTarget(sourceTarget).deleteIssueCommentBySlug({
                 owner,
                 repo,
                 ...(host ? { host } : {}),
-                commentId: c.id
-              }
-              const res = target
-                ? await callRuntimeRpc<GitHubProjectMutationResult>(
-                    target,
-                    'github.project.deleteIssueCommentBySlug',
-                    args,
-                    { timeoutMs: 30_000 }
-                  )
-                : await window.api.gh.deleteIssueCommentBySlug(args)
+                commentId: c.id,
+                wakeWslDistro: true
+              })
               if (!res.ok) {
-                toast.error(res.error.message)
+                toast.error(projectViewErrorMessage(res.error))
                 return
               }
               onChange(comments.filter((x) => x.id !== c.id))
             }}
             onEdit={async (next) => {
-              const target = getRuntimeTarget(runtimeSettings)
-              const args = {
+              const res = await gitHubSlugApiForTarget(sourceTarget).updateIssueCommentBySlug({
                 owner,
                 repo,
                 ...(host ? { host } : {}),
                 commentId: c.id,
-                body: next
-              }
-              const res = target
-                ? await callRuntimeRpc<GitHubProjectMutationResult>(
-                    target,
-                    'github.project.updateIssueCommentBySlug',
-                    args,
-                    { timeoutMs: 30_000 }
-                  )
-                : await window.api.gh.updateIssueCommentBySlug(args)
+                body: next,
+                wakeWslDistro: true
+              })
               if (!res.ok) {
-                toast.error(res.error.message)
+                toast.error(projectViewErrorMessage(res.error))
                 return
               }
               onChange(comments.map((x) => (x.id === c.id ? { ...x, body: next } : x)))
@@ -134,6 +89,7 @@ function CommentRow({
   onDelete: () => void | Promise<void>
   onEdit: (next: string) => void | Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(comment.body)
   return (
@@ -149,10 +105,10 @@ function CommentRow({
               setEditing(true)
             }}
           >
-            {translate('auto.components.github.project.slug.dialog.Comments.8564f58542', 'Edit')}
+            {t('auto.components.github.project.slug.dialog.Comments.8564f58542', 'Edit')}
           </button>
           <button type="button" className="hover:underline" onClick={() => void onDelete()}>
-            {translate('auto.components.github.project.slug.dialog.Comments.463d030ae4', 'Delete')}
+            {t('auto.components.github.project.slug.dialog.Comments.463d030ae4', 'Delete')}
           </button>
         </div>
       </div>
@@ -172,13 +128,10 @@ function CommentRow({
                 void onEdit(draft)
               }}
             >
-              {translate('auto.components.github.project.slug.dialog.Comments.c3e829b4d9', 'Save')}
+              {t('auto.components.github.project.slug.dialog.Comments.c3e829b4d9', 'Save')}
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
-              {translate(
-                'auto.components.github.project.slug.dialog.Comments.c0e576e96b',
-                'Cancel'
-              )}
+              {t('auto.components.github.project.slug.dialog.Comments.c0e576e96b', 'Cancel')}
             </Button>
           </div>
         </div>
@@ -194,27 +147,26 @@ export function NewCommentForm({
   repo,
   host,
   number,
-  sourceSettings,
+  sourceTarget,
   onAdded
 }: {
   owner: string
   repo: string
   host?: string
   number: number
-  sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  sourceTarget: RuntimeClientTarget
   onAdded: (c: PRComment) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [draft, setDraft] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const fallbackRuntimeSettings = useRuntimeSettingsForSlug(owner, repo, host)
-  const runtimeSettings = sourceSettings ?? fallbackRuntimeSettings
   const canSubmitComment = hasBoundedCommentBodyText(draft)
   return (
     <div className="flex flex-col gap-2">
       <textarea
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
-        placeholder={translate(
+        placeholder={t(
           'auto.components.github.project.slug.dialog.Comments.1c95937c8b',
           'Write a comment…'
         )}
@@ -231,7 +183,7 @@ export function NewCommentForm({
             }
             if (bodyState.status === 'too-large-leading-whitespace') {
               toast.error(
-                translate(
+                t(
                   'auto.components.github.project.slug.dialog.Comments.commentTooLarge',
                   'Comment is too large to submit safely.'
                 )
@@ -240,24 +192,16 @@ export function NewCommentForm({
             }
             setSubmitting(true)
             try {
-              const target = getRuntimeTarget(runtimeSettings)
-              const args = {
+              const res = await gitHubSlugApiForTarget(sourceTarget).addIssueCommentBySlug({
                 owner,
                 repo,
                 ...(host ? { host } : {}),
                 number,
-                body: bodyState.body
-              }
-              const res = target
-                ? await callRuntimeRpc<GitHubProjectCommentMutationResult>(
-                    target,
-                    'github.project.addIssueCommentBySlug',
-                    args,
-                    { timeoutMs: 30_000 }
-                  )
-                : await window.api.gh.addIssueCommentBySlug(args)
+                body: bodyState.body,
+                wakeWslDistro: true
+              })
               if (!res.ok) {
-                toast.error(res.error.message)
+                toast.error(projectViewErrorMessage(res.error))
                 return
               }
               onAdded(res.comment)
@@ -268,7 +212,7 @@ export function NewCommentForm({
           }}
         >
           <Send className="mr-1 size-3.5" />{' '}
-          {translate('auto.components.github.project.slug.dialog.Comments.fd5cccd138', 'Comment')}
+          {t('auto.components.github.project.slug.dialog.Comments.fd5cccd138', 'Comment')}
         </Button>
       </div>
     </div>

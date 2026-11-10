@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { PanelsTopLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -5,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { FloatingTerminalIconContextMenu } from './FloatingTerminalIconContextMenu'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
-import { selectFloatingWorkspaceHasUnread } from '@/store/selectors'
+import { selectFloatingWorkspaceHasUnread } from '@/store/workspaces/floating/floating-workspace-unread-selector'
 import {
   anchorFloatingTerminalTriggerPosition,
   clampFloatingTerminalTriggerPosition,
@@ -20,7 +21,7 @@ import {
   type FloatingTerminalTriggerPosition,
   type FloatingTerminalTriggerPositionSource
 } from './floating-terminal-trigger-position'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const FLOATING_TERMINAL_TRIGGER_DRAG_THRESHOLD = 4
 
@@ -63,11 +64,11 @@ export function FloatingTerminalToggleButton({
   open: boolean
   onToggle: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  // Memoized: subscribe so a language change still repaints its labels.
+  useTranslation()
   const shortcutLabel = useShortcutLabel('floatingTerminal.toggle')
-  // Why: show an attention dot while minimized (closed) when any floating-
-  // workspace tab still has an unacknowledged bell or agent completion. Derived
-  // from the shared unread maps, so it clears when the user engages with — or
-  // closes — the offending tab (see selectFloatingWorkspaceHasUnread).
+  // Read shared unread state so engaging with or closing a tab clears its minimized-panel attention dot.
   const hasFloatingUnread = useAppStore(selectFloatingWorkspaceHasUnread)
   const showAttentionDot = !open && hasFloatingUnread
   const initialPositionState = useRef<FloatingTerminalTriggerPositionState | null>(null)
@@ -114,8 +115,7 @@ export function FloatingTerminalToggleButton({
   const reconcilePosition = useCallback((): void => {
     setPosition((current) => {
       if (!shouldReconcileFloatingTerminalTriggerPosition(positionSourceRef.current)) {
-        // Why: a startup-size viewport must not overwrite an intentional saved
-        // drag position with the safety clamp before the renderer finishes sizing.
+        // Wait for final viewport sizing before clamping away the user’s saved drag position.
         return current
       }
       const next = resolveFloatingTerminalTriggerPosition(
@@ -127,8 +127,7 @@ export function FloatingTerminalToggleButton({
   }, [])
 
   useLayoutEffect(() => {
-    // Why: Electron can mount before the renderer has final viewport dimensions;
-    // default positions should re-anchor to bottom-right before first paint.
+    // Re-anchor defaults before paint because Electron’s initial viewport can precede final window sizing.
     reconcilePosition()
   }, [reconcilePosition])
 
@@ -195,8 +194,7 @@ export function FloatingTerminalToggleButton({
   return (
     <FloatingTerminalIconContextMenu
       currentLocation="floating-button"
-      // Why: keep the toggle/minimize control above the z-[45] panel so it stays
-      // clickable where the two overlap.
+      // Keep the toggle above the panel so overlapping areas remain clickable.
       className="fixed z-[46]"
       style={{ left: position.left, top: position.top }}
     >
@@ -206,26 +204,21 @@ export function FloatingTerminalToggleButton({
             type="button"
             variant="outline"
             size="icon"
-            // Why: a parked launcher needs contrast against the page. On light
-            // pages a soft drop shadow lifts it; on near-black dark surfaces a
-            // drop shadow vanishes, so use a distinctly lighter fill plus a
-            // bright hairline ring to define the edge.
+            // Use shadow in light mode and a lighter fill/ring in dark mode so the parked launcher keeps contrast.
             className="relative cursor-grab rounded-lg border-transparent text-foreground bg-card shadow-[0_4px_12px_rgb(0_0_0_/_0.22),0_0_0_1px_color-mix(in_srgb,var(--foreground)_12%,transparent)] hover:-translate-y-0.5 hover:bg-accent active:translate-y-0 active:cursor-grabbing dark:bg-accent dark:shadow-[0_6px_16px_rgb(0_0_0_/_0.55),0_0_0_1px_rgb(255_255_255_/_0.22)] dark:hover:bg-[color-mix(in_srgb,var(--accent)_82%,white)]"
             data-floating-terminal-toggle
             aria-label={
               open
-                ? translate(
+                ? t(
                     'auto.components.floating.terminal.FloatingTerminalToggleButton.5785dd9148',
                     'Minimize floating workspace'
                   )
                 : showAttentionDot
-                  ? // Why: announce pending activity to assistive tech; the dot
-                    // itself is aria-hidden decoration.
-                    translate(
+                  ? t(
                       'auto.components.floating.terminal.FloatingTerminalToggleButton.4cb418b991',
                       'Show floating workspace, new activity'
                     )
-                  : translate(
+                  : t(
                       'auto.components.floating.terminal.FloatingTerminalToggleButton.3b04b065b5',
                       'Show floating workspace'
                     )
@@ -239,9 +232,7 @@ export function FloatingTerminalToggleButton({
           >
             <PanelsTopLeft className="size-4" />
             {showAttentionDot ? (
-              // Why: amber matches Orca's "needs attention / unread" convention
-              // (the tab-unread bell); the ring matches the button fill so the
-              // dot reads on both light (bg-card) and dark (dark:bg-accent).
+              // Match unread attention color; match the ring to the button fill so the dot stays legible in both themes.
               <span
                 aria-hidden
                 data-floating-terminal-attention
@@ -251,7 +242,7 @@ export function FloatingTerminalToggleButton({
           </Button>
         </TooltipTrigger>
         <TooltipContent side="left" sideOffset={6}>
-          {translate(
+          {t(
             'auto.components.floating.terminal.FloatingTerminalToggleButton.bfe7809a70',
             '{{value0}} floating workspace ({{value1}})',
             { value0: open ? 'Minimize' : 'Show', value1: shortcutLabel }

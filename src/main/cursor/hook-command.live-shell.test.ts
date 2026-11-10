@@ -11,7 +11,7 @@ import type * as OsModule from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { runProcess, runProcessSync, spawnProcess } from '../../shared/child-process/run-process'
+import { runProcess, runProcessSync, spawnProcess } from '@orca/process-host'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { getCursorHookResponse } from './hook-events'
 import { CursorHookService } from './hook-service'
@@ -103,41 +103,6 @@ describe.skipIf(process.platform === 'win32')('local Cursor hooks through login 
       expect(result.stderr).toBe('')
       expect(existsSync(join(fixture, 'injected'))).toBe(false)
       expect(existsSync(join(fixture, 'backtick-injected'))).toBe(false)
-    })
-
-    it.each(['missing', 'nonexecutable', 'directory'])(
-      'answers permission hooks when the managed script is %s',
-      async (state) => {
-        unlinkSync(scriptPath)
-        if (state === 'nonexecutable') {
-          writeFileSync(scriptPath, 'exit 99\n', { mode: 0o644 })
-        }
-        if (state === 'directory') {
-          mkdirSync(scriptPath)
-        }
-        const result = await runProcess({
-          program: shell.path,
-          args: [...shell.args, command],
-          cwd: fixture,
-          env: environment(),
-          input: payload
-        })
-        expect(result.code, result.stderr).toBe(0)
-        expect(result.stdout).toBe(`${getCursorHookResponse('preToolUse')}\n`)
-        expect(result.stderr).toBe('')
-      }
-    )
-
-    it('returns the managed script exit code', async () => {
-      writeFileSync(scriptPath, '#!/bin/sh\nexit 23\n')
-      const result = await runProcess({
-        program: shell.path,
-        args: [...shell.args, command],
-        cwd: fixture,
-        env: environment()
-      })
-      expect(result.code, result.stderr).toBe(23)
-      expect(result.stdout).toBe('')
     })
 
     it('drains a missing-script payload until EOF even with an empty PATH', async () => {

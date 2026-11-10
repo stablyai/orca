@@ -2,24 +2,25 @@ import { useCallback, useLayoutEffect, useMemo } from 'react'
 import type React from 'react'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import type { HostSectionRow } from '../../host-section-rows'
-import type { PinnedWorktreeDisplayPolicy } from '../grouping/row-types'
-import { getRenderedWorktreesInSidebarOrder } from '../../worktree-sidebar-row-preference'
-import { setVisibleWorktreeIds, setVisibleWorktreeShortcutTargets } from '../../visible-worktrees'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
+import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
+import { getRenderedWorktreesInSidebarOrder } from './worktree-sidebar-row-preference'
+import {
+  setVisibleWorktreeIds,
+  setVisibleWorktreeShortcutTargets
+} from '../listing/visible-worktrees'
 import { useListMultiSelection } from '@/hooks/use-list-multi-selection'
 import { useReusedArrayIdentity } from '../listing/use-reused-array-identity'
 
 const getSidebarContainer = (): Element | null =>
   document.querySelector('[data-worktree-sidebar-container]')
 
-// Multi-select over the rows the sidebar actually rendered, so gestures, context menus, and
-// the Cmd+1–9 shortcut cache all agree on one order.
 export function useSidebarWorktreeSelection(args: {
   sectionRows: HostSectionRow[]
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
 }) {
   const { sectionRows, pinnedDisplayPolicy } = args
-  // Why: derive order from the built rows, not the flat worktrees array, so Cmd+1–9 match visual positions when grouping reorders cards.
+  // Built rows include grouping/pinning reorder; use their order for selection and Cmd+1–9 parity.
   const renderedWorktrees = useMemo(
     () => getRenderedWorktreesInSidebarOrder(sectionRows, pinnedDisplayPolicy),
     [pinnedDisplayPolicy, sectionRows]

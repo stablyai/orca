@@ -1,21 +1,6 @@
-/**
- * Guarantees __REACT_DEVTOOLS_GLOBAL_HOOK__ exists, and nothing else.
- *
- * Split out from the observer because the two halves have different deadlines:
- * react-dom reads this global ONCE, at its own module evaluation, so a fresh
- * shim must beat that import — but wrapping `onCommitFiberRoot` can happen at
- * any time, since react-dom re-reads the property at every commit. This module
- * therefore installs itself on import and has NO imports of its own, so a bare
- * side-effect import cannot be outrun by a transitive graph that reaches
- * react-dom, and cannot drag the breadcrumb recorder in ahead of any vi.mock.
- */
+/** Install the hook before react-dom’s one-time global lookup. Keep this import-free so transitive dependencies cannot outrun it or import breadcrumbs ahead of test mocks; observer wrapping can happen later because React rereads callbacks each commit. */
 
-/**
- * Only what react-dom and react-refresh require. onCommitFiberUnmount,
- * onPostCommitFiberRoot and setStrictMode are deliberately absent: react-dom
- * guards each with a typeof check, and calls onCommitFiberUnmount once per
- * DELETED FIBER, which is genuinely hot when terminal panes unmount.
- */
+/** Expose only required callbacks; React typeof-guards omitted optional ones, including onCommitFiberUnmount called on every deleted fiber. */
 export type ReactDevtoolsCommitHook = {
   isDisabled?: boolean
   supportsFiber?: boolean
@@ -29,8 +14,7 @@ export type ReactDevtoolsCommitHook = {
   ) => void
 }
 
-// Indexed, not a global augmentation: bippy (a react-grab dependency) already
-// declares this global with a narrower callback signature.
+// Use indexed typing: bippy already augments this global with a narrower callback signature.
 type GlobalWithReactDevtoolsHook = Record<string, ReactDevtoolsCommitHook | undefined>
 
 function createCommitHookShim(): ReactDevtoolsCommitHook {
@@ -44,8 +28,7 @@ function createCommitHookShim(): ReactDevtoolsCommitHook {
       renderers.set(rendererId, renderer)
       return rendererId
     },
-    // Why a noop and not undefined: react-refresh captures this property and
-    // calls oldOnCommitFiberRoot.apply(this, arguments) with no typeof guard.
+    // react-refresh calls captured onCommitFiberRoot.apply without checking for undefined.
     onCommitFiberRoot: () => {}
   }
 }

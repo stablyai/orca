@@ -14,9 +14,7 @@ export type BrowserHistoryOmniboxRow = {
   id: string
 }
 
-// A row the user can act on in the new-tab open entry: an open tab to switch
-// to, a create-menu action, a matched agent to launch, a page from browser
-// history, or a file/URL entry.
+// Unify actionable switch, create, agent, history and file/URL rows for selection.
 export type ActiveOption =
   | {
       kind: 'agent'
@@ -45,7 +43,7 @@ export function isActiveEntryOption(option: TabEntryOption): option is ActiveEnt
 
 export function getActiveOptionId(option: ActiveOption): string {
   if (option.kind === 'agent') {
-    return `agent:${option.option.agent}`
+    return option.option.id ?? `agent:${option.option.agent}`
   }
   if (option.kind === 'menu') {
     return `menu:${option.option.id}`

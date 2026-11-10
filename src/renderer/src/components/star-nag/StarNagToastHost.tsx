@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Check, ExternalLink, Loader2, Star, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const ORCA_REPO_URL = 'https://github.com/stablyai/orca'
 type StarNagMode = 'gh' | 'web'
@@ -21,6 +21,7 @@ function StarNagToast({
   markResolved,
   setDismissSuppressed
 }: StarNagToastProps): React.JSX.Element {
+  const t = useTranslate()
   const [mode, setMode] = useState(initialMode)
   const [status, setStatus] = useState<StarNagToastStatus>('idle')
   const busy = status === 'busy'
@@ -77,16 +78,16 @@ function StarNagToast({
 
   const actionLabel =
     status === 'starred'
-      ? translate('auto.components.star.nag.StarNagToastHost.starredThanks', 'Starred — thank you!')
+      ? t('auto.components.star.nag.StarNagToastHost.starredThanks', 'Starred — thank you!')
       : status === 'opened'
-        ? translate('auto.components.star.nag.StarNagToastHost.githubOpened', 'GitHub opened')
+        ? t('auto.components.star.nag.StarNagToastHost.githubOpened', 'GitHub opened')
         : busy
           ? mode === 'web'
-            ? translate('auto.components.star.nag.StarNagToastHost.opening', 'Opening…')
-            : translate('auto.components.star.nag.StarNagToastHost.starring', 'Starring…')
+            ? t('auto.components.star.nag.StarNagToastHost.opening', 'Opening…')
+            : t('auto.components.star.nag.StarNagToastHost.starring', 'Starring…')
           : mode === 'web'
-            ? translate('auto.components.star.nag.StarNagToastHost.openGithub', 'Open GitHub')
-            : translate('auto.components.star.nag.StarNagToastHost.starOnGithub', 'Star on GitHub')
+            ? t('auto.components.star.nag.StarNagToastHost.openGithub', 'Open GitHub')
+            : t('auto.components.star.nag.StarNagToastHost.starOnGithub', 'Star on GitHub')
 
   const completedStar = status === 'starred'
   const primaryActionClass = completedStar
@@ -113,14 +114,14 @@ function StarNagToast({
               )}
             </span>
             <div className="text-sm font-semibold">
-              {translate(
+              {t(
                 'auto.components.star.nag.StarNagToastHost.onboardingCompleted',
                 'Onboarding completed!'
               )}
             </div>
           </div>
           <p className="text-sm leading-5 text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.star.nag.StarNagToastHost.body',
               'If you’re enjoying Orca so far, a GitHub star helps other developers discover it.'
             )}
@@ -130,9 +131,10 @@ function StarNagToast({
           variant="ghost"
           size="icon"
           className="size-7 shrink-0"
+          data-close-button
           onClick={close}
           disabled={busy}
-          aria-label={translate('auto.components.star.nag.StarNagToastHost.dismiss', 'Dismiss')}
+          aria-label={t('auto.components.star.nag.StarNagToastHost.dismiss', 'Dismiss')}
         >
           <X className="size-3.5" />
         </Button>
@@ -161,7 +163,7 @@ function StarNagToast({
           onClick={later}
           disabled={busy || status === 'starred' || status === 'opened'}
         >
-          {translate('auto.components.star.nag.StarNagToastHost.later', 'Later')}
+          {t('auto.components.star.nag.StarNagToastHost.later', 'Later')}
         </Button>
       </div>
     </div>
@@ -231,8 +233,7 @@ export function StarNagToastHost(): null {
     return () => {
       unsubscribeShow()
       unsubscribeHide()
-      // The toast has an infinite lifetime; dismiss it when this host unmounts
-      // so its React tree and captured callbacks cannot outlive the surface.
+      // Dismiss infinite-lived toasts on unmount so their React tree and callbacks cannot outlive this host.
       dismissActiveToast()
       activeToastIdRef.current = null
       activeToastResolvedRef.current = null

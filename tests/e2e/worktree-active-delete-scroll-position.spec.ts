@@ -1,14 +1,17 @@
-import type { Page } from '@stablyai/playwright-test'
+import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
+import { evaluatePolled } from './helpers/page-evaluate-polled'
+import { addRepoWithWorkspaces, writeWorkspaceMeta } from './helpers/repo-with-workspaces'
 import { waitForSessionReady } from './helpers/store'
 
 const TARGET_INDEX = 24
 const SYNTHETIC_COUNT = 40
 const VISUAL_PROOF_PAUSE_MS = 1_200
 const POST_REMOVAL_SAMPLE_FRAMES = 20
-const MAX_REMOVAL_WAIT_FRAMES = 300
+// A real delete runs git, so wait by time: a frame count shrinks on high-refresh displays.
+const MAX_REMOVAL_WAIT_MS = 20_000
 
-test.use({ minimumSeededWorktreeCount: 1 })
+test.use({ seedTestRepo: false })
 
 type RowRemovalFrame = {
   animationCount: number
@@ -31,109 +34,60 @@ async function pauseForVisualProof(page: Page): Promise<void> {
   }
 }
 
-async function seedActiveDeletionRows(page: Page): Promise<{
+async function seedActiveDeletionRows(
+  page: Page,
+  testInfo: TestInfo
+): Promise<{
   belowId: string
   successorId: string
   targetId: string
 }> {
-  return page.evaluate(
-    ({ count, targetIndex }) => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('window.__store is not available')
+  const repo = await addRepoWithWorkspaces(page, testInfo, SYNTHETIC_COUNT)
+  await writeWorkspaceMeta(
+    page,
+    repo.ids.map((worktreeId, index) => ({
+      worktreeId,
+      updates: {
+        displayName: `Active delete row ${String(index).padStart(2, '0')}`,
+        sortOrder: SYNTHETIC_COUNT - index,
+        manualOrder: SYNTHETIC_COUNT - index
       }
+    }))
+  )
+  const targetId = repo.ids[TARGET_INDEX]!
+  const belowId = repo.ids[TARGET_INDEX + 1]!
+  const successorId = repo.ids[0]!
+  await evaluatePolled(
+    page,
+    async ({ repoId, targetId, successorId }) => {
+      const store = window.__store!
       const state = store.getState()
-      const repo = state.repos[0]
-      const source = repo
-        ? state.worktreesByRepo[repo.id]?.find((worktree) => worktree.isMainWorktree)
-        : null
-      if (!repo || !source || !state.settings) {
-        throw new Error('Expected a seeded e2e worktree and hydrated settings')
-      }
-
-      const now = Date.now()
-      const worktrees = Array.from({ length: count }, (_, index) => {
-        const suffix = String(index).padStart(2, '0')
-        return {
-          ...source,
-          id: `${repo.id}::active-delete-${suffix}`,
-          instanceId: `active-delete-${suffix}`,
-          path: source.path,
-          displayName: `Active delete row ${suffix}`,
-          branch: `active-delete-${suffix}`,
-          isMainWorktree: false,
-          isPinned: false,
-          isUnread: false,
-          sortOrder: count - index,
-          manualOrder: count - index,
-          lastActivityAt: now - index,
-          parentWorktreeId: null,
-          childWorktreeIds: [],
-          lineage: null
-        }
+      await state.updateSettings({ skipDeleteWorktreeConfirm: true })
+      // A setup script keeps the setup guide from opening over the sidebar.
+      await state.updateRepo(repoId, {
+        hookSettings: { mode: 'auto', scripts: { setup: 'true', archive: '' } }
       })
-      const target = worktrees[targetIndex]
-      const below = worktrees[targetIndex + 1]
-      const successor = worktrees[0]
-      if (!target || !below || !successor) {
-        throw new Error('Synthetic worktree fixture is too small')
-      }
-      const targetId = target.id
-      const belowId = below.id
-      const successorId = successor.id
-
       store.setState({
-        activeRepoId: repo.id,
+        activeRepoId: repoId,
         activeView: 'terminal',
         activeWorktreeId: targetId,
         activeWorkspaceKey: `worktree:${targetId}`,
         filterRepoIds: [],
         groupBy: 'none',
         hideDefaultBranchWorkspace: false,
-        lastVisitedAtByWorktreeId: { [successorId]: now + 1_000 },
+        lastVisitedAtByWorktreeId: { [successorId]: Date.now() + 1_000 },
         pendingRevealSidebarRow: null,
         pendingRevealWorktree: null,
-        repos: state.repos.map((candidate) =>
-          candidate.id === repo.id
-            ? {
-                ...candidate,
-                hookSettings: {
-                  mode: candidate.hookSettings?.mode ?? 'auto',
-                  ...candidate.hookSettings,
-                  scripts: {
-                    archive: candidate.hookSettings?.scripts.archive ?? '',
-                    setup: 'true'
-                  }
-                }
-              }
-            : candidate
-        ),
-        settings: { ...state.settings, skipDeleteWorktreeConfirm: true },
-        setupScriptPromptDismissedRepoIds: [`generation-v1:local\0${repo.id}`],
+        setupScriptPromptDismissedRepoIds: [`generation-v1:local\0${repoId}`],
         showActiveOnly: false,
         showSleepingWorkspaces: true,
         sidebarOpen: true,
-        sortBy: 'manual',
-        worktreesByRepo: { ...state.worktreesByRepo, [repo.id]: worktrees },
-        removeWorktree: async (target) => {
-          const id = typeof target === 'string' ? target : target.id
-          store.setState((current) => ({
-            activeWorktreeId: current.activeWorktreeId === id ? null : current.activeWorktreeId,
-            activeWorkspaceKey: current.activeWorktreeId === id ? null : current.activeWorkspaceKey,
-            worktreesByRepo: {
-              ...current.worktreesByRepo,
-              [repo.id]: (current.worktreesByRepo[repo.id] ?? []).filter(
-                (worktree) => worktree.id !== id
-              )
-            }
-          }))
-          return { ok: true }
-        }
+        sortBy: 'manual'
       })
-      return { belowId, successorId, targetId }
     },
-    { count: SYNTHETIC_COUNT, targetIndex: TARGET_INDEX }
+    { repoId: repo.repoId, targetId, successorId }
   )
+  return { belowId, successorId, targetId }
 }
 
 async function prepareScrolledActiveRow(page: Page, targetId: string): Promise<void> {
@@ -176,7 +130,7 @@ async function startRowRemovalSampling(
   belowId: string
 ): Promise<void> {
   await page.evaluate(
-    ({ belowId, maxRemovalWaitFrames, postRemovalSampleFrames, targetId }) => {
+    ({ belowId, maxRemovalWaitMs, postRemovalSampleFrames, targetId }) => {
       const sample = async (): Promise<RowRemovalFrame[]> => {
         const readFrame = (): RowRemovalFrame => {
           const scroller = document.querySelector<HTMLElement>('[data-worktree-sidebar]')
@@ -199,7 +153,8 @@ async function startRowRemovalSampling(
         }
         const frames: RowRemovalFrame[] = [readFrame()]
         let framesAfterRemoval = 0
-        for (let index = 0; index < maxRemovalWaitFrames + postRemovalSampleFrames; index += 1) {
+        const deadline = performance.now() + maxRemovalWaitMs
+        while (performance.now() < deadline) {
           await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
           const frame = readFrame()
           frames.push(frame)
@@ -214,7 +169,7 @@ async function startRowRemovalSampling(
     },
     {
       belowId,
-      maxRemovalWaitFrames: MAX_REMOVAL_WAIT_FRAMES,
+      maxRemovalWaitMs: MAX_REMOVAL_WAIT_MS,
       postRemovalSampleFrames: POST_REMOVAL_SAMPLE_FRAMES,
       targetId
     }
@@ -233,10 +188,10 @@ async function finishRowRemovalSampling(page: Page): Promise<RowRemovalFrame[]> 
 
 test('deleting the active scrolled worktree preserves position and closes the row gap', async ({
   orcaPage
-}) => {
+}, testInfo) => {
   await waitForSessionReady(orcaPage)
   await orcaPage.setViewportSize({ width: 1_200, height: 800 })
-  const { belowId, successorId, targetId } = await seedActiveDeletionRows(orcaPage)
+  const { belowId, successorId, targetId } = await seedActiveDeletionRows(orcaPage, testInfo)
   await prepareScrolledActiveRow(orcaPage, targetId)
   const target = orcaPage.locator(
     `[data-worktree-sidebar] [data-worktree-id=${JSON.stringify(targetId)}]`
@@ -286,47 +241,27 @@ test('deleting the active scrolled worktree preserves position and closes the ro
 
 test('reduced motion removes the active row without animating its neighbor', async ({
   orcaPage
-}) => {
+}, testInfo) => {
   await orcaPage.emulateMedia({ reducedMotion: 'reduce' })
   await waitForSessionReady(orcaPage)
-  const { belowId, targetId } = await seedActiveDeletionRows(orcaPage)
+  const { belowId, targetId } = await seedActiveDeletionRows(orcaPage, testInfo)
   await prepareScrolledActiveRow(orcaPage, targetId)
 
-  const animationCount = await orcaPage.evaluate(
-    async ({ belowId, targetId }) => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('window.__store is not available')
+  await startRowRemovalSampling(orcaPage, targetId, belowId)
+  await evaluatePolled(
+    orcaPage,
+    async (targetId) => {
+      const removed = await window
+        .__store!.getState()
+        .removeWorktree({ id: targetId, executionHostId: 'local' })
+      if (!removed.ok) {
+        throw new Error(removed.error)
       }
-      const state = store.getState()
-      const repo = state.repos[0]
-      if (!repo) {
-        throw new Error('Expected a seeded e2e repo')
-      }
-      const repoId = repo.id
-      const worktrees = state.worktreesByRepo[repoId]
-      if (!worktrees) {
-        throw new Error('Expected seeded e2e worktrees')
-      }
-      store.setState({
-        activeWorktreeId: null,
-        activeWorkspaceKey: null,
-        worktreesByRepo: {
-          ...state.worktreesByRepo,
-          [repoId]: worktrees.filter((worktree) => worktree.id !== targetId)
-        }
-      })
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-      const below = document.querySelector<HTMLElement>(
-        `[data-worktree-sidebar] [data-worktree-id=${JSON.stringify(belowId)}]`
-      )
-      return (
-        below?.closest('[data-worktree-virtual-row]')?.firstElementChild?.getAnimations().length ??
-        0
-      )
     },
-    { belowId, targetId }
+    targetId
   )
+  const frames = await finishRowRemovalSampling(orcaPage)
 
-  expect(animationCount).toBe(0)
+  expect(frames.some((frame) => !frame.targetExists)).toBe(true)
+  expect(Math.max(...frames.map((frame) => frame.animationCount))).toBe(0)
 })

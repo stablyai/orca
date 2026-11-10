@@ -1,19 +1,21 @@
 import React, { useCallback, useRef, useState } from 'react'
 import { Copy, Check } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type CodeBlockCopyButtonProps = React.HTMLAttributes<HTMLPreElement> & {
   children?: React.ReactNode
+  wrapInPre?: boolean
 }
 
 export default function CodeBlockCopyButton({
   children,
+  wrapInPre = true,
   ...props
 }: CodeBlockCopyButtonProps): React.JSX.Element {
+  const t = useTranslate()
   const [copied, setCopied] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
-  // Why: clipboard IPC can resolve after this button unmounts; avoid starting
-  // a reset timer that will outlive the component.
+  // Clipboard IPC may settle after unmount; do not start an orphan reset timer.
   const isMountedRef = useRef(false)
 
   const clearCopiedResetTimer = useCallback((): void => {
@@ -34,9 +36,7 @@ export default function CodeBlockCopyButton({
   )
 
   const handleCopy = useCallback(() => {
-    // Extract the text content from the nested <code> element rendered by
-    // react-markdown inside <pre>. We walk the React children tree to grab the
-    // raw string so clipboard receives plain text, not markup.
+    // Extract raw text from react-markdown’s nested code children so the clipboard receives no markup.
     let text = ''
     React.Children.forEach(children, (child) => {
       if (React.isValidElement(child) && child.props) {
@@ -61,26 +61,28 @@ export default function CodeBlockCopyButton({
         }, 1500)
       })
       .catch(() => {
-        // Silently swallow clipboard write failures (e.g. permission denied).
+        // Clipboard permission failures must not disrupt the preview.
       })
   }, [children, clearCopiedResetTimer])
 
   return (
-    <div className="code-block-wrapper">
-      <pre {...props}>{children}</pre>
+    <div
+      className={wrapInPre ? 'code-block-wrapper' : 'code-block-wrapper code-block-wrapper-diagram'}
+    >
+      {wrapInPre ? <pre {...props}>{children}</pre> : children}
       <button
         ref={setCopyButtonRef}
         type="button"
         className="code-block-copy-btn"
         onClick={handleCopy}
-        aria-label={translate('auto.components.editor.CodeBlockCopyButton.1f9f4def45', 'Copy code')}
-        title={translate('auto.components.editor.CodeBlockCopyButton.1f9f4def45', 'Copy code')}
+        aria-label={t('auto.components.editor.CodeBlockCopyButton.1f9f4def45', 'Copy code')}
+        title={t('auto.components.editor.CodeBlockCopyButton.1f9f4def45', 'Copy code')}
       >
         {copied ? (
           <>
             <Check size={14} />
             <span className="code-block-copy-label">
-              {translate('auto.components.editor.CodeBlockCopyButton.28921f5bf9', 'Copied')}
+              {t('auto.components.editor.CodeBlockCopyButton.28921f5bf9', 'Copied')}
             </span>
           </>
         ) : (
@@ -91,7 +93,6 @@ export default function CodeBlockCopyButton({
   )
 }
 
-/** Recursively extract text from React children. */
 function extractText(node: React.ReactNode): string {
   if (typeof node === 'string' || typeof node === 'number') {
     return String(node)

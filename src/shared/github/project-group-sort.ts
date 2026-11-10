@@ -1,6 +1,4 @@
-// Why: grouping and sorting of Project rows is deterministic shared logic
-// driven by `selectedView` — it must not depend on fetch ordering. Keeping it
-// in a pure shared module lets desktop and mobile render Project views the same.
+// Pure selected-view grouping/sorting keeps desktop/mobile order independent of fetch order.
 import type {
   GitHubProjectField,
   GitHubProjectRow,
@@ -8,10 +6,14 @@ import type {
   GitHubProjectTable
 } from './project-types'
 
+import {
+  projectContentField,
+  projectContentFieldLabel,
+  projectContentFieldSortValue
+} from './project-content-field'
+
 export type ProjectGroup = {
-  /** Stable key used for React reconciliation. */
   key: string
-  /** Human-readable label used in the group header. */
   label: string
   /** Iteration metadata for headers that render a date range + Current pill. */
   iteration: {
@@ -47,9 +49,7 @@ function hasNonEmptyFieldValue(value: ProjectFieldValue | undefined): boolean {
   }
 }
 
-// Why: use a finite sentinel instead of Infinity so subtractions in the sort
-// comparator stay finite. `Infinity - Infinity` is NaN, which makes
-// Array.sort's behavior implementation-defined and skips later tie-breaks.
+// Finite sentinels avoid Infinity - Infinity yielding NaN and skipping sort tie-breaks.
 const UNKNOWN_INDEX_SENTINEL = Number.MAX_SAFE_INTEGER
 
 function createFieldOrderIndex(field: GitHubProjectField): ReadonlyMap<string, number> {
@@ -75,8 +75,19 @@ function getFieldValueForGrouping(
   field: GitHubProjectField,
   orderIndex: ReadonlyMap<string, number>
 ): { key: string; label: string; orderHint: number; iteration: ProjectGroup['iteration'] } {
-  const value = row.fieldValuesByFieldId[field.id]
-  if (!hasNonEmptyFieldValue(value)) {
+  const contentValue = projectContentField(row.content, field.dataType)
+  if (contentValue && contentValue.kind !== 'linked') {
+    const label = projectContentFieldLabel(contentValue)
+    const order = projectContentFieldSortValue(contentValue)
+    return {
+      key: contentValue.kind === 'parent' ? contentValue.parent.url : `raw:${label}`,
+      label,
+      orderHint: typeof order === 'number' ? order : UNKNOWN_INDEX_SENTINEL - 1,
+      iteration: null
+    }
+  }
+  const value = contentValue === null ? undefined : row.fieldValuesByFieldId[field.id]
+  if (!value || !hasNonEmptyFieldValue(value)) {
     return {
       key: EMPTY_PROJECT_GROUP_KEY,
       label: labelForEmpty(field),
@@ -107,7 +118,13 @@ function getFieldValueForGrouping(
     }
   }
   const label = deriveStringValue(value)
-  return { key: `raw:${label}`, label, orderHint: 0, iteration: null }
+  return {
+    key: `raw:${label}`,
+    label,
+    // Why: number labels sort as text (10 before 2, -10 between -1 and -2).
+    orderHint: value.kind === 'number' ? value.number : UNKNOWN_INDEX_SENTINEL - 1,
+    iteration: null
+  }
 }
 
 function labelForEmpty(field: GitHubProjectField): string {
@@ -144,8 +161,7 @@ export function groupRows(
   return groupRowsByField(groupField, rowsInOrder)
 }
 
-/** Buckets rows by an explicit field — the table view's groupBy and the board
- *  view's column field share this so both order and label groups identically. */
+/** Share field grouping between table/board so labels and ordering agree. */
 export function groupRowsByField(
   groupField: GitHubProjectField,
   rowsInOrder: GitHubProjectRow[]
@@ -174,7 +190,6 @@ export function groupRowsByField(
     bucket.rows.push(row)
   }
   const entries = Array.from(buckets.entries())
-  // Ordering rules per design doc §Grouping.
   entries.sort((a, b) => {
     if (a[0] === EMPTY_PROJECT_GROUP_KEY) {
       return 1
@@ -184,6 +199,13 @@ export function groupRowsByField(
     }
     if (groupField.kind === 'iteration' || groupField.kind === 'single-select') {
       return a[1].orderHint - b[1].orderHint
+    }
+    if (
+      groupField.dataType === 'NUMBER' ||
+      groupField.dataType === 'PARENT_ISSUE' ||
+      groupField.dataType === 'SUB_ISSUES_PROGRESS'
+    ) {
+      return a[1].orderHint - b[1].orderHint || a[1].label.localeCompare(b[1].label)
     }
     return a[1].label.localeCompare(b[1].label)
   })
@@ -202,6 +224,20 @@ function compareSort(
   orderIndex: ReadonlyMap<string, number>
 ): number {
   const field = sort.field
+  const aContent = projectContentField(a.content, field.dataType)
+  if (aContent !== undefined) {
+    const bContent = projectContentField(b.content, field.dataType)
+    const aOrder = projectContentFieldSortValue(aContent)
+    const bOrder = projectContentFieldSortValue(bContent ?? null)
+    if (aOrder === null || bOrder === null) {
+      return aOrder === bOrder ? 0 : aOrder === null ? 1 : -1
+    }
+    const cmp =
+      typeof aOrder === 'number' && typeof bOrder === 'number'
+        ? aOrder - bOrder
+        : String(aOrder).localeCompare(String(bOrder))
+    return sort.direction === 'DESC' ? -cmp : cmp
+  }
   const aValue = a.fieldValuesByFieldId[field.id]
   const bValue = b.fieldValuesByFieldId[field.id]
   // Why: return before the trailing DESC flip so empty sorts last in both directions.
@@ -241,8 +277,7 @@ function compareSort(
   } else if (aValue.kind === 'labels' && bValue.kind === 'labels') {
     cmp = (aValue.labels[0]?.name ?? '').localeCompare(bValue.labels[0]?.name ?? '')
   } else {
-    // Why: unknown sort-field kind — ignore this sort field and fall through
-    // to tie-breaks (and eventually row.position).
+    // Ignore unknown sort kinds and continue tie-breaks, ending at row.position.
     return 0
   }
   return sort.direction === 'DESC' ? -cmp : cmp

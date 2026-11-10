@@ -1,0 +1,78 @@
+diff --git a/src/rules/no-object-parameters.ts b/src/rules/no-object-parameters.ts
+index 6589ebf5f587ecdad1989b9f89886370f0ed5350..10eb7cf06d09802ce53dab6342d48f456bd55731 100644
+--- a/src/rules/no-object-parameters.ts
++++ b/src/rules/no-object-parameters.ts
+@@ -63,6 +63,11 @@ export const noObjectParametersRule = defineRule({
+ 
+ 		return {
+ 			Program(node) {
++				if (!context.sourceCode.text.includes("object") && !context.sourceCode.text.includes("\\u")) {
++					environment = null;
++					return;
++				}
++
+ 				environment = createTypeAliasEnvironment(
+ 					node,
+ 					context.sourceCode.visitorKeys,
+diff --git a/src/rules/no-unknown-type-aliases.ts b/src/rules/no-unknown-type-aliases.ts
+index af5f08a5002fb26f94414be13f1ad848ae73d522..eb95ebc44fcb4b4760b2afe097a114cbabad4e7f 100644
+--- a/src/rules/no-unknown-type-aliases.ts
++++ b/src/rules/no-unknown-type-aliases.ts
+@@ -36,6 +36,11 @@ export const noUnknownTypeAliasesRule = defineRule({
+ 
+ 		return {
+ 			Program(node) {
++				if (!context.sourceCode.text.includes("unknown") && !context.sourceCode.text.includes("\\u")) {
++					environment = null;
++					return;
++				}
++
+ 				environment = createTypeAliasEnvironment(
+ 					node,
+ 					context.sourceCode.visitorKeys,
+diff --git a/src/rules/no-widen-then-assert.ts b/src/rules/no-widen-then-assert.ts
+--- a/src/rules/no-widen-then-assert.ts
++++ b/src/rules/no-widen-then-assert.ts
+@@ -325,11 +325,12 @@
+     },
+   },
+   createOnce(context) {
+-    let scopes: Parameters<typeof resolvedVariableForIdentifier>[0] = [];
++    let scopes: Parameters<typeof resolvedVariableForIdentifier>[0] | null = null;
+
+     const checkAssertion = (node: ESTree.TSAsExpression | ESTree.TSTypeAssertion) => {
+       const expression = assertedExpression(node);
+       if (expression.type !== "Identifier") return;
++      scopes ??= context.sourceCode.scopeManager.scopes;
+
+       const variable = resolvedVariableForIdentifier(scopes, expression);
+       if (variable === null) return;
+@@ -357,7 +358,7 @@
+
+     return {
+       Program() {
+-        scopes = context.sourceCode.scopeManager.scopes;
++        scopes = null;
+       },
+       TSAsExpression: checkAssertion,
+       TSTypeAssertion: checkAssertion,
+diff --git a/src/rules/no-module-mocking.ts b/src/rules/no-module-mocking.ts
+--- a/src/rules/no-module-mocking.ts
++++ b/src/rules/no-module-mocking.ts
+@@ -39,7 +39,6 @@
+
+ function moduleMockCall(sourceCode: SourceCode, callee: ESTree.Expression): boolean {
+   if (!("property" in callee) || !("object" in callee) || !("computed" in callee)) return false;
+-  if (!isTestFrameworkObject(sourceCode, callee.object)) return false;
+   const property = callee.property;
+   const method = callee.computed
+     ? property.type === "Literal" &&
+@@ -51,7 +50,7 @@
+     : property.type === "Identifier"
+       ? property.name
+       : null;
+-  return method !== null && moduleMockMethods.has(method);
++  return method !== null && moduleMockMethods.has(method) && isTestFrameworkObject(sourceCode, callee.object);
+ }
+
+ /** Ban test framework module mocking in favor of real dependency seams. */

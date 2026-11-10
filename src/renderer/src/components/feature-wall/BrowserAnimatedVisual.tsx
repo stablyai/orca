@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { BrowserAgentVerificationPane } from './BrowserAgentVerificationPane'
 import { BrowserStoryboardWindow } from './BrowserStoryboardWindow'
 import {
@@ -21,8 +21,7 @@ export function BrowserAnimatedVisual(props: {
   const targets = useBrowserVisualTargetRefs()
   const newBrowserShortcutLabel = useShortcutLabel('tab.newBrowser')
 
-  // Why: branch on the state source, not the element type, so a reducedMotion
-  // toggle re-renders the storyboard in place instead of remounting it.
+  // Keep the component identity stable when reduced motion toggles so the storyboard does not remount.
   const animatedState = useBrowserAnimatedVisualStoryboard(
     targets,
     props.reducedMotion,
@@ -43,6 +42,7 @@ function BrowserVisualFrame(props: {
   targets: BrowserVisualTargetRefs
   newBrowserShortcutLabel: string
 }): JSX.Element {
+  const t = useTranslate()
   const isSplit = isBrowserSplitPhase(props.state.phase)
   return (
     <div className="flex flex-col gap-2">
@@ -63,7 +63,7 @@ function BrowserVisualFrame(props: {
         </div>
       </div>
       <style>
-        {translate(
+        {t(
           'auto.components.feature.wall.BrowserAnimatedVisual.1bec24acc1',
           '@keyframes browserFlash { 0% { opacity: 0; } 20% { opacity: 0.85; } 100% { opacity: 0; } } @keyframes browserTabIn { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } } @keyframes browserViewIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }'
         )}

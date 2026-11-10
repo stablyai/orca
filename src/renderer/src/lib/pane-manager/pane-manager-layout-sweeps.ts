@@ -1,10 +1,8 @@
 import type { ManagedPaneInternal } from './pane-manager-types'
-import type { PaneLayoutEditIntent } from '../../../../shared/rpc-contract/session-tabs-schemas-params'
 import { equalizePaneSplitSizes } from './pane-tree-ops'
 import { fitRevealedPane } from './pane-reveal-fit'
 
-// Why: a raw synchronous fit on reveal can apply a transient DOM<->WebGL
-// cell-metric grid and reflow-garble diff-painting inline TUIs; see fitRevealedPane.
+// Raw reveal fits can reflow transient DOM/WebGL metric differences and corrupt inline TUIs; use fitRevealedPane.
 export function fitRevealedPanes(panes: Map<number, ManagedPaneInternal>): void {
   for (const pane of panes.values()) {
     fitRevealedPane(pane)
@@ -18,7 +16,7 @@ export function refreshAllPaneTerminals(panes: Map<number, ManagedPaneInternal>)
         pane.terminal.refresh(0, pane.terminal.rows - 1)
       }
     } catch {
-      // Why: restore-all repaint is best-effort while panes are mounting or tearing down.
+      // Restore-all repaint is best-effort during mount/teardown.
     }
   }
 }
@@ -26,7 +24,7 @@ export function refreshAllPaneTerminals(panes: Map<number, ManagedPaneInternal>)
 export function equalizeManagedPaneSizes(
   panes: Map<number, ManagedPaneInternal>,
   root: HTMLElement,
-  onLayoutChanged?: (intent?: PaneLayoutEditIntent) => void
+  onLayoutChanged?: () => void
 ): void {
   if (panes.size < 2) {
     return
@@ -39,5 +37,5 @@ export function equalizeManagedPaneSizes(
     return
   }
 
-  onLayoutChanged?.('gesture')
+  onLayoutChanged?.()
 }

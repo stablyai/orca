@@ -1,9 +1,10 @@
-import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from '../orca-runtime-tests/runtime-durable-store-fixture'
 import { vi, type Mock } from 'vitest'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import type { RuntimeTerminalListResult } from '../../../shared/runtime-types'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import type { RuntimeTerminalListResult } from '../../../shared/runtime-terminal-contracts'
 import { OrcaRuntimeService } from '../orca-runtime'
+import { withMainLayout } from './main-layout-close-fixture'
 import {
   CANARY_INCARNATION_ID,
   CANARY_LEAF_ID,
@@ -25,27 +26,6 @@ import {
   makeSession
 } from './orca-runtime-terminal-close-continuity-state-fixture'
 import { createCloseContinuityGraphFixture } from './orca-runtime-terminal-close-continuity-graph-fixture'
-
-export {
-  CANARY_INCARNATION_ID,
-  CANARY_LEAF_ID,
-  CANARY_PTY_ID,
-  CANARY_TAB_ID,
-  INCARNATION_ID,
-  LEAF_ID,
-  OTHER_WORKTREE_ID,
-  PTY_ID,
-  REPO_ID,
-  RUNTIME_OWNED_PTY_ID,
-  SIBLING_INCARNATION_ID,
-  SIBLING_LEAF_ID,
-  SIBLING_PTY_ID,
-  STALE_TAB_ID,
-  TAB_ID,
-  WORKTREE_ID,
-  WORKTREE_PATH,
-  makeSession
-} from './orca-runtime-terminal-close-continuity-state-fixture'
 
 export type CloseContinuityHarness = {
   runtime: OrcaRuntimeService
@@ -114,6 +94,7 @@ function createHarness(
       }
     })
   })
+  withMainLayout(store, { get: () => session, set: (next) => (session = next) })
   const acknowledged = makeDeferred()
   let closeTerminalTabError: Error | null = null
   let closeTerminalTabAction: (() => void | Promise<void>) | null = null
@@ -298,9 +279,4 @@ async function createStaleTabCloseHarness(
   return { ...harness, terminal }
 }
 
-export {
-  makeDeferred,
-  createHarness,
-  createPtyBackedPublishedSurfaceHarness,
-  createStaleTabCloseHarness
-}
+export { createHarness, createPtyBackedPublishedSurfaceHarness, createStaleTabCloseHarness }

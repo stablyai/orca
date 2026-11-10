@@ -1,20 +1,16 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { describe, expect, it } from 'vitest'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   EMPTY_RETIRED_NAME_REGISTRY,
   type RetiredNameRegistry
 } from '../../../src/shared/worktree/retired-name-registry'
-import {
-  buildRetiredWorktreeNamesRefreshKey,
-  useRetiredWorktreeNames
-} from './use-retired-worktree-names'
+import { useRetiredWorktreeNames } from './use-retired-worktree-names'
 
 type Pending = { resolve: (response: unknown) => void; reject: (err: Error) => void }
 
-/** Renders the hook against a deferred RPC client so a test decides exactly when each
- *  `worktree.listRetiredNames` lands, and for which repo. */
+// Defer RPC replies to control both their repo and arrival order.
 function mountNames() {
   const pending: Pending[] = []
   const requests: { method: string; params: unknown }[] = []
@@ -55,8 +51,7 @@ function mountNames() {
       retiredNameTiersByRepo: Record<string, unknown> = {}
     ) {
       await act(async () => {
-        // `ok` is what the host always sends and what the read's acceptance policy routes on;
-        // a reply without it read as a refusal, which is not a shape any host produces.
+        // Include the real host’s ok field so acceptance exercises success rather than refusal.
         pending[index]!.resolve({
           ok: true,
           result: { retiredNamesByRepo, retiredNameTiersByRepo }
@@ -74,56 +69,7 @@ function mountNames() {
 }
 
 describe('useRetiredWorktreeNames', () => {
-  it('builds a stable refresh key without copied-array methods or input mutation', () => {
-    const paths = ['/repo/zebra', '/repo/antelope']
-    const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'toSorted')
-    Reflect.deleteProperty(Array.prototype, 'toSorted')
-
-    try {
-      expect(buildRetiredWorktreeNamesRefreshKey(paths)).toBe('/repo/antelope\0/repo/zebra')
-      expect(buildRetiredWorktreeNamesRefreshKey(undefined)).toBe('')
-      expect(paths).toEqual(['/repo/zebra', '/repo/antelope'])
-    } finally {
-      if (descriptor) {
-        Reflect.defineProperty(Array.prototype, 'toSorted', descriptor)
-      }
-    }
-  })
-
-  it('reads the selected repo out of the response envelope', async () => {
-    const probe = mountNames()
-    expect(probe.requests[0]).toEqual({
-      method: 'worktree.listRetiredNames',
-      params: { repo: 'id:repo-1' }
-    })
-    await probe.settle(0, { 'repo-1': ['nautilus'], 'repo-2': ['seahorse'] })
-    expect(probe.names).toEqual(['nautilus'])
-  })
-
-  it('answers empty for a host that omits the field', async () => {
-    const probe = mountNames()
-    await probe.settle(0, {})
-    expect(probe.registry).toEqual(EMPTY_RETIRED_NAME_REGISTRY)
-  })
-
-  it('carries the compaction watermark through, so spent tiers are not suggested back', async () => {
-    const probe = mountNames()
-    await probe.settle(0, { 'repo-1': ['nautilus-2'] }, { 'repo-1': 1 })
-    expect(probe.registry).toEqual({ exhaustedTiers: 1, names: ['nautilus-2'] })
-  })
-
-  it('holds the watermark too when a refresh fails', async () => {
-    const probe = mountNames()
-    await probe.settle(0, { 'repo-1': [] }, { 'repo-1': 3 })
-
-    probe.rerender({ repoId: 'repo-1', refreshKey: 'b' })
-    await probe.fail(1)
-
-    expect(probe.registry.exhaustedTiers).toBe(3)
-  })
-
-  // Regression: this hook used to reset to [] on any error, un-retiring every name for the rest of
-  // the sheet session. Desktop always held the previous answer; both now share that rule.
+  // Match desktop: refresh failure must not un-retire every name for the rest of the sheet session.
   it('keeps previously loaded names when a refresh fails', async () => {
     const probe = mountNames()
     await probe.settle(0, { 'repo-1': ['nautilus'] })
@@ -135,33 +81,15 @@ describe('useRetiredWorktreeNames', () => {
     expect(probe.names).toEqual(['nautilus'])
   })
 
-  // Regression: the effect used to depend on [client, repoId] only, so a workspace created while
-  // the sheet was open never made it into the pool.
-  it('refetches when the workspace list changes', async () => {
-    const probe = mountNames()
-    await probe.settle(0, { 'repo-1': ['nautilus'] })
-
-    probe.rerender({ repoId: 'repo-1', refreshKey: 'b' })
-    expect(probe.requests).toHaveLength(2)
-    // The previous answer stays visible while the refetch is in flight.
-    expect(probe.names).toEqual(['nautilus'])
-
-    await probe.settle(1, { 'repo-1': ['nautilus', 'seahorse'] })
-    expect(probe.names).toEqual(['nautilus', 'seahorse'])
-  })
-
   it('drops names when the repo changes rather than showing another repo pool', async () => {
     const probe = mountNames()
     await probe.settle(0, { 'repo-1': ['nautilus'] })
 
+    probe.rerender({ repoId: 'repo-1', refreshKey: 'b' })
     probe.rerender({ repoId: 'repo-2', refreshKey: 'a' })
     expect(probe.names).toEqual([])
-  })
-
-  it('reports nothing without a selected repo, and asks the host nothing', () => {
-    const probe = mountNames()
-    probe.rerender({ repoId: null, refreshKey: 'a' })
-    expect(probe.names).toEqual([])
-    expect(probe.requests).toHaveLength(1)
+    await probe.settle(2, { 'repo-2': ['seahorse'] })
+    await probe.settle(1, { 'repo-1': ['nautilus', 'marlin'] })
+    expect(probe.names).toEqual(['seahorse'])
   })
 })

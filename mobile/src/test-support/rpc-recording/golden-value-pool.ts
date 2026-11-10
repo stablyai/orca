@@ -4,16 +4,8 @@ import type { RecordedValue } from './recording-values'
 
 type FieldShape = 'list' | 'map' | 'whole'
 
-/**
- * How each observation field is interned. `sender`, `payloads` and `effects` are append-only
- * histories and `settlements` is keyed by action id, so every checkpoint after the first re-states
- * its predecessor's entries: pooling the whole field stored that shared prefix once per checkpoint,
- * and once per reply partition in a matrix golden. Interning per entry stores it once per file.
- *
- * Declared rather than sniffed from the value, so an empty list cannot be encoded as a map and a
- * projection that changes a field's container fails loudly instead of silently switching encodings.
- * `Record<keyof Observation, …>` makes a new observation field declare how it interns.
- */
+// Intern entries rather than whole histories to share repeated checkpoint prefixes.
+// Declare field shapes so empty lists/maps cannot switch encodings and new fields require a choice.
 const FIELD_SHAPES = {
   sender: 'list',
   payloads: 'list',
@@ -61,7 +53,11 @@ export function canonicalJson(value: RecordedValue): string {
 }
 
 export function valueHash(value: RecordedValue): string {
-  return createHash('sha256').update(canonicalJson(value)).digest('hex').slice(0, 12)
+  return canonicalJsonHash(canonicalJson(value))
+}
+
+function canonicalJsonHash(json: string): string {
+  return createHash('sha256').update(json).digest('hex').slice(0, 12)
 }
 
 function listEntries(at: string, value: RecordedValue): RecordedValue[] {
@@ -85,9 +81,12 @@ export function internRecording(recording: Recording): {
 } {
   const pool: ValuePool = {}
   const canonical = new Map<string, string>()
+  // Checkpoints repeat their append-only histories; hash each distinct entry once.
+  const hashes = new Map<string, string>()
   const intern = (entry: RecordedValue, at: string): string => {
-    const hash = valueHash(entry)
     const json = canonicalJson(entry)
+    const hash = hashes.get(json) ?? canonicalJsonHash(json)
+    hashes.set(json, hash)
     const seen = canonical.get(hash)
     if (seen !== undefined && seen !== json) {
       throw new Error(`Golden value hash collision at ${hash} (${at})`)
@@ -125,8 +124,7 @@ export function internRecording(recording: Recording): {
 }
 
 export function resolveRecording(values: ValuePool, recording: InternedRecording): Recording {
-  // Content addressing is what keeps an entry shared between checkpoints honest: editing a pooled
-  // value without moving every reference to it is caught here rather than resolving silently.
+  // Validate content addresses so editing a pooled value cannot silently change every checkpoint referencing it.
   for (const [hash, value] of Object.entries(values)) {
     if (valueHash(value) !== hash) {
       throw new Error(`Golden value ${hash} does not hash to its pool key`)

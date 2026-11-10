@@ -6,6 +6,7 @@ import {
   normalizeRuntimePathForComparison,
   normalizeRuntimePathSeparators
 } from '../../shared/cross-platform-path'
+import { resolveCreatePathAlias } from '../workspaces/creation/worktree-create-in-flight'
 
 export type ClaimedCloneTarget = {
   canCleanup: boolean
@@ -14,22 +15,46 @@ export type ClaimedCloneTarget = {
 
 type CloneDirectoryIdentity = Pick<Stats, 'dev' | 'ino' | 'birthtimeMs'>
 
-export function deriveCloneRepoNameFromUrl(url: string): string {
-  // Why: direct callers can supply URLs whose default git clone folder would
-  // be "." or ".."; rejecting them prevents parent/destination deletion.
+/** Path part of a clone source: scp-style host prefixes removed, URL schemes kept. */
+function cloneSourcePath(url: string): { path: string; windows: boolean } {
   const source = url.replace(/\.git\/?$/, '')
-  const isWindowsLocalSource = /^[A-Za-z]:[\\/]/.test(source) || source.startsWith('\\\\')
-  const repoName = isWindowsLocalSource ? win32.basename(source) : posix.basename(source)
-  if (!repoName || repoName === '.' || repoName === '..') {
-    throw new Error('Invalid repository name derived from URL')
+  if (/^[A-Za-z]:[\\/]/.test(source) || source.startsWith('\\\\')) {
+    return { path: source, windows: true }
   }
-  if (repoName.includes('/') || repoName.includes('\\')) {
-    throw new Error('Invalid repository name derived from URL')
-  }
-  return repoName
+  const scpPath = !source.includes('://')
+    ? source.match(/^(?:[^@/:]+@)?(?:\[[^\]]+\]|[^:/\s]+):(.+)$/)?.[1]
+    : undefined
+  return { path: scpPath ?? source, windows: false }
 }
 
-export function deriveValidatedClonePath(args: { url: string; destination: string }): string {
+function assertCloneFolderName(name: string, message: string): string {
+  if (!name || name === '.' || name === '..' || name.includes('/') || name.includes('\\')) {
+    throw new Error(message)
+  }
+  return name
+}
+
+export function deriveCloneRepoNameFromUrl(url: string): string {
+  // Reject dot destinations before cleanup could remove a parent or unrelated folder.
+  const { path, windows } = cloneSourcePath(url)
+  const repoName = windows ? win32.basename(path) : posix.basename(path)
+  return assertCloneFolderName(repoName, 'Invalid repository name derived from URL')
+}
+
+/** The segment above the repository (GitHub owner, GitLab group), or null when there is none. */
+export function deriveCloneOwnerFromUrl(url: string): string | null {
+  const { path, windows } = cloneSourcePath(url)
+  const pathOps = windows ? win32 : posix
+  const repoPath = windows ? path : path.replace(/^[a-z][\w+.-]*:\/\/[^/]*/i, '')
+  const owner = pathOps.basename(pathOps.dirname(repoPath))
+  return owner && owner !== '.' && owner !== '..' && !owner.includes(':') ? owner : null
+}
+
+export function deriveValidatedClonePath(args: {
+  url: string
+  destination: string
+  folderName?: string
+}): string {
   if (
     !args.destination ||
     !isAbsolute(args.destination) ||
@@ -38,7 +63,10 @@ export function deriveValidatedClonePath(args: { url: string; destination: strin
     throw new Error('Clone destination must be an absolute path')
   }
 
-  const repoName = deriveCloneRepoNameFromUrl(args.url)
+  const requestedFolderName = args.folderName?.trim()
+  const repoName = requestedFolderName
+    ? assertCloneFolderName(requestedFolderName, 'Invalid clone folder name')
+    : deriveCloneRepoNameFromUrl(args.url)
 
   const clonePath = join(args.destination, repoName)
   const resolvedDestination = resolve(args.destination)
@@ -56,13 +84,20 @@ export function deriveValidatedClonePath(args: { url: string; destination: strin
   return clonePath
 }
 
+/** Git-registered projects save Git's resolved checkout path, so a folder reached through a
+ *  symlink matches by its resolved spelling as well as the typed one. */
+export async function getSavedProjectPathKeys(path: string): Promise<string[]> {
+  // A clone target may not exist yet (or was deleted); its existing ancestors still resolve.
+  const resolved = await resolveCreatePathAlias(path)
+  return [...new Set([getClonePathComparisonKey(path), getClonePathComparisonKey(resolved)])]
+}
+
 export function getClonePathComparisonKey(clonePath: string): string {
   const resolvedClonePath = isWindowsAbsolutePathLike(clonePath) ? clonePath : resolve(clonePath)
   const normalized = normalizeRuntimePathSeparators(resolvedClonePath)
   const wslUncMatch = normalized.match(/^\/\/(?:wsl\.localhost|wsl\$)\/([^/]+)(\/.*)?$/i)
   if (wslUncMatch) {
-    // Why: WSL UNC paths cross into a case-sensitive Linux filesystem, so only
-    // the Windows UNC server alias and distro segment should be case-folded.
+    // WSL paths stay case-sensitive after the UNC server/distro prefix.
     const linuxPath = (wslUncMatch[2] ?? '').replace(/\/+$/, '')
     return `//wsl/${wslUncMatch[1].toLowerCase()}${linuxPath}`
   }
@@ -109,14 +144,11 @@ export async function cleanupClaimedCloneTarget(
     return
   }
 
-  await rm(clonePath, { recursive: true, force: true }).catch(() => {
-    // Best-effort cleanup - do not mask the original clone failure.
-  })
+  await rm(clonePath, { recursive: true, force: true }).catch(() => {})
 }
 
 function cloneDirectoryIdentity(stats: Stats): CloneDirectoryIdentity {
-  // Why: fast remove/recreate cycles can reuse an inode; birthtime keeps us
-  // from treating a replacement directory as the clone target we created.
+  // Birthtime distinguishes replacements when rapid remove/create cycles reuse an inode.
   return { dev: stats.dev, ino: stats.ino, birthtimeMs: stats.birthtimeMs }
 }
 

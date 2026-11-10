@@ -3,8 +3,7 @@ import {
   recordCoalescedDurableCrashBreadcrumb,
   recordDurableCrashBreadcrumb
 } from '../../crash-reporting/durable-crash-breadcrumb'
-import { getSystemPowerState } from '../../system-power-lifecycle'
-import type { ProfileStateWriterDeadlineExpiry } from './profile-state-writer-deadline'
+import { getSystemPowerState } from '../../power/system-power-lifecycle'
 import { profileStateWriterFailureOutcome } from './profile-state-writer-errors'
 
 export type ProfileStateWriterDiagnosticRequest = {
@@ -13,7 +12,7 @@ export type ProfileStateWriterDiagnosticRequest = {
   acknowledgedRevision: number
 }
 
-// Only codes, counters, and timings: never payloads, paths, or profile ids.
+// Exclude payloads, paths and profile IDs from diagnostic fields.
 function errorFields(error: unknown): CrashReportBreadcrumbData {
   const code =
     error instanceof Error && 'code' in error && typeof error.code === 'string'
@@ -22,36 +21,21 @@ function errorFields(error: unknown): CrashReportBreadcrumbData {
   return { errorCode: code, outcome: profileStateWriterFailureOutcome(error) }
 }
 
-function expiryFields(expiry: ProfileStateWriterDeadlineExpiry): CrashReportBreadcrumbData {
-  return {
-    timeoutMs: expiry.timeoutMs,
-    elapsedMs: Math.round(expiry.elapsedMs),
-    overdueMs: Math.round(expiry.overdueMs),
-    graces: expiry.graces,
-    powerState: expiry.powerState
+export type ProfileStateWriterSlowPhase = 'awaiting-reply' | 'awaiting-exit'
+
+/** Monotonic wait duration, including stalled loops, rather than CPU time. */
+export function recordProfileStateWriterSlow(
+  request: ProfileStateWriterDiagnosticRequest & {
+    phase: ProfileStateWriterSlowPhase
+    elapsedMs: number
   }
-}
-
-export function recordProfileStateWriterGrace(
-  request: ProfileStateWriterDiagnosticRequest,
-  expiry: ProfileStateWriterDeadlineExpiry
 ): void {
-  // Coalesced: a long stall can grant grace to consecutive requests in one burst.
+  // Coalesce consecutive slow requests from one stall.
   recordCoalescedDurableCrashBreadcrumb({
-    name: 'profile_state_writer_deadline_grace',
-    data: { ...request, ...expiryFields(expiry) },
-    coalesceKey: 'profile_state_writer_deadline_grace',
+    name: 'profile_state_writer_slow',
+    data: request,
+    coalesceKey: 'profile_state_writer_slow',
     minIntervalMs: 60_000
-  })
-}
-
-export function recordProfileStateWriterTimeout(
-  request: ProfileStateWriterDiagnosticRequest,
-  expiry: ProfileStateWriterDeadlineExpiry
-): void {
-  recordDurableCrashBreadcrumb('profile_state_writer_timeout', {
-    ...request,
-    ...expiryFields(expiry)
   })
 }
 
@@ -61,13 +45,8 @@ export function recordProfileStateWriterFault(
   acknowledgedRevision: number,
   exitCode?: number
 ): void {
-  const fields = errorFields(error)
-  // Timeouts already carry their deadline timings in profile_state_writer_timeout.
-  if (fields.errorCode === 'profile-state-writer-timeout') {
-    return
-  }
   recordDurableCrashBreadcrumb('profile_state_writer_failed', {
-    ...fields,
+    ...errorFields(error),
     ...(active && { command: active.command, requestId: active.id }),
     acknowledgedRevision,
     ...(exitCode === undefined ? {} : { exitCode }),

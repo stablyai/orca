@@ -1,4 +1,8 @@
-export function createPdfFindFixture({ title = 'PDF search fixture' } = {}): Buffer {
+export function createPdfFindFixture({
+  title = 'PDF search fixture',
+  /** Grows the file with a stream no page references, for size-dependent paths. */
+  paddingBytes = 0
+} = {}): Buffer {
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [4 0 R 6 0 R 8 0 R] /Count 3 >>',
@@ -17,6 +21,9 @@ export function createPdfFindFixture({ title = 'PDF search fixture' } = {}): Buf
     ]
     const stream = `BT /F1 20 Tf 60 700 Td 40 TL ${lines.map((line) => `(${line}) Tj T*`).join(' ')} ET\n`
     objects.push(`<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}endstream`)
+  }
+  if (paddingBytes > 0) {
+    objects.push(`<< /Length ${paddingBytes} >>\nstream\n${'x'.repeat(paddingBytes)}\nendstream`)
   }
   let pdf = '%PDF-1.4\n'
   const offsets = [0]

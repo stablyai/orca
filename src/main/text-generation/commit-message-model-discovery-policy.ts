@@ -1,6 +1,9 @@
-import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
-import type { CommitMessagePlan } from '../../shared/commit-message-plan'
-import { planAgentBinary } from '../../shared/commit-message-plan'
+import { buildClaudeModelListArgs } from '../../shared/claude-model-list-probe'
+import type { CommitMessageModel } from '../../shared/source-control/ai/generation/commit-message-agent-spec'
+import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
+import type { CommandTemplateBackslash } from '../../shared/source-control/ai/generation/commit-message-prompt'
+import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
+import { planAgentBinary } from '../../shared/agent-launch/startup/agent-command-plan'
 import type { AgentModelProbeSpec } from '../../shared/agent-model-probe-spec'
 import { formatAgentCliFailureMessage } from './source-control-agent-failure'
 import type { DiscoverCommitMessageModelsResult } from './source-control-text-generation-types'
@@ -44,10 +47,21 @@ export function finalizeModelDiscoveryOutput(
       error: formatAgentCliFailureMessage(spec.label, stdout, stderr, code)
     }
   }
-  let models = spec.modelDiscovery?.parse(stdout) ?? []
+  const parse =
+    spec.modelDiscovery && 'parse' in spec.modelDiscovery ? spec.modelDiscovery.parse : null
+  let models = parse?.(stdout) ?? []
   if (models.length === 0 && stderr.trim()) {
-    models = spec.modelDiscovery?.parse(stderr) ?? []
+    models = parse?.(stderr) ?? []
   }
+  return discoveredModelsResult(spec, models)
+}
+
+/** Wraps a probe's models, falling back to the spec's list when it found none. */
+export function discoveredModelsResult(
+  spec: AgentModelProbeSpec,
+  discovered: CommitMessageModel[]
+): DiscoverCommitMessageModelsResult {
+  let models = discovered
   if (models.length === 0) {
     if (spec.models.length > 0) {
       console.warn('[commit-message] Model discovery returned no models; using static fallback:', {
@@ -63,8 +77,7 @@ export function finalizeModelDiscoveryOutput(
       models = [configuredDefault, ...models]
     }
   }
-  // A sentinel model in the static spec (for example `default`) means the CLI
-  // should keep its configured provider even when discovery lists concrete models.
+  // Static default sentinels preserve the CLI's configured provider despite concrete discovered models.
   const defaultModelId =
     spec.defaultModelId === 'default' || models.some((model) => model.id === spec.defaultModelId)
       ? spec.defaultModelId
@@ -75,7 +88,8 @@ export function finalizeModelDiscoveryOutput(
 export function planModelDiscovery(
   spec: AgentModelProbeSpec,
   agentCommandOverride?: string,
-  backslash: CommandTemplateBackslash = 'escape'
+  backslash: CommandTemplateBackslash = 'escape',
+  strictMcp = true
 ): { ok: true; plan: CommitMessagePlan } | { ok: false; error: string } {
   const modelDiscovery = spec.modelDiscovery
   if (!modelDiscovery) {
@@ -85,12 +99,18 @@ export function planModelDiscovery(
   if (!command.ok) {
     return command
   }
+  const args =
+    'listing' in modelDiscovery
+      ? CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS
+      : spec.id === 'claude'
+        ? buildClaudeModelListArgs(strictMcp, command.prefixArgs)
+        : modelDiscovery.args
   return {
     ok: true,
     plan: {
       binary: command.binary,
-      args: [...command.prefixArgs, ...modelDiscovery.args],
-      stdinPayload: modelDiscovery.stdinPayload ?? null,
+      args: [...command.prefixArgs, ...args],
+      stdinPayload: 'stdinPayload' in modelDiscovery ? (modelDiscovery.stdinPayload ?? null) : null,
       label: spec.label,
       ...(command.env ? { env: command.env } : {})
     }

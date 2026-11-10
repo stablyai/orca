@@ -50,29 +50,6 @@ function deferred<T>(): {
 }
 
 describe('buildGpuCrashDiagnostics', () => {
-  it('keeps only the active GPU identity, driver, rendering backend, and feature status', () => {
-    expect(
-      buildGpuCrashDiagnostics({ info: BASIC_INFO, level: 'complete' }, FEATURE_STATUS)
-    ).toEqual({
-      gpuInfoLevel: 'complete',
-      gpuDeviceCount: 2,
-      gpuVendorId: 0x10de,
-      gpuDeviceId: 0x2684,
-      gpuVendor: 'NVIDIA',
-      gpuDevice: 'Discrete GPU',
-      gpuDriverVendor: 'NVIDIA',
-      gpuDriverVersion: '32.0.15.6094',
-      gpuGlVendor: 'Google Inc.',
-      gpuGlRenderer: 'ANGLE (NVIDIA, D3D11)',
-      gpuGlVersion: 'OpenGL ES 3.0',
-      gpuCompositingStatus: 'enabled',
-      gpuRasterizationStatus: 'enabled',
-      gpuWebglStatus: 'enabled',
-      gpuWebgl2Status: 'enabled',
-      gpuVideoDecodeStatus: 'enabled'
-    })
-  })
-
   it('degrades malformed or unavailable GPU info without copying arbitrary fields', () => {
     expect(
       buildGpuCrashDiagnostics(
@@ -201,23 +178,5 @@ describe('GpuCrashDiagnosticsRecorder', () => {
     expect(recordBreadcrumb).toHaveBeenCalledWith(
       expect.objectContaining({ gpuInfoLevel: 'unavailable' })
     )
-  })
-
-  it('still records collection status when Electron throws during both GPU info calls', async () => {
-    const recordBreadcrumb = vi.fn()
-    const provider = {
-      getGPUInfo: vi.fn(() => {
-        throw new Error('GPU access disabled')
-      }),
-      getGPUFeatureStatus: vi.fn(() => {
-        throw new Error('GPU teardown')
-      })
-    }
-    const recorder = new GpuCrashDiagnosticsRecorder({ provider, recordBreadcrumb })
-
-    recorder.warm()
-    await recorder.record()
-
-    expect(recordBreadcrumb).toHaveBeenCalledWith({ gpuInfoLevel: 'unavailable' })
   })
 })

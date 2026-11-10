@@ -1,14 +1,16 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
-import { translate } from '@/i18n/i18n'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   LinearProjectTable,
   LinearCollectionNotice
 } from '@/components/linear-project-view-surfaces'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function TaskPageLinearProjectList({
   model
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     selectedLinearWorkspaceId,
     linearProjectsResult,
@@ -20,13 +22,13 @@ export function TaskPageLinearProjectList({
   return (
     <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
       <div className="grid h-8 flex-none items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground grid-cols-[minmax(180px,1.5fr)_110px_100px_90px_120px_110px_80px_70px]">
-        <span>{translate('auto.components.TaskPage.00022ec0ba', 'Project')}</span>
-        <span>{translate('auto.components.TaskPage.154b0fa623', 'Status')}</span>
-        <span>{translate('auto.components.TaskPage.8a07f21e76', 'Health')}</span>
-        <span>{translate('auto.components.TaskPage.c8d5bec5f7', 'Priority')}</span>
-        <span>{translate('auto.components.TaskPage.34da8ac06c', 'Lead')}</span>
-        <span>{translate('auto.components.TaskPage.7da41c9225', 'Target')}</span>
-        <span>{translate('auto.components.TaskPage.dfc0c79bd8', 'Issues')}</span>
+        <span>{t('auto.components.TaskPage.00022ec0ba', 'Project')}</span>
+        <span>{t('auto.components.TaskPage.154b0fa623', 'Status')}</span>
+        <span>{t('auto.components.TaskPage.8a07f21e76', 'Health')}</span>
+        <span>{t('auto.components.TaskPage.c8d5bec5f7', 'Priority')}</span>
+        <span>{t('auto.components.TaskPage.34da8ac06c', 'Lead')}</span>
+        <span>{t('auto.components.TaskPage.7da41c9225', 'Target')}</span>
+        <span>{t('auto.components.TaskPage.dfc0c79bd8', 'Issues')}</span>
         <span />
       </div>
       <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto scrollbar-sleek">
@@ -43,7 +45,7 @@ export function TaskPageLinearProjectList({
           onSelectProject={openLinearProjectContext}
           onOpenProject={(project) => {
             if (project.url) {
-              void window.api.shell.openUrl(project.url)
+              openAppHttpLink(project.url)
             }
           }}
           onUseProjectIssues={(project) => {
@@ -56,7 +58,7 @@ export function TaskPageLinearProjectList({
         errors={linearProjectsResult.errors}
         hasMore={linearProjectsResult.hasMore}
         count={linearProjectsResult.items.length}
-        label={translate('auto.components.TaskPage.b39fe6511d', 'projects')}
+        kind="projects"
       />
     </div>
   )

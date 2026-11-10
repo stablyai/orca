@@ -1,19 +1,12 @@
 import React from 'react'
 import type { VirtualItem } from '@tanstack/react-virtual'
-import type { Row } from '../grouping/row-types'
+import type { Row } from '../../../../../../shared/sidebar-list/row-types'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
-import { PendingWorktreeRow } from '../../PendingWorktreeRow'
-import ImportedWorktreesVisibilityLine from '../../ImportedWorktreesVisibilityLine'
-import NewExternalWorktreesInboxLine from '../../NewExternalWorktreesInboxLine'
-import type { ImportedWorktreeCardActionState } from '../../imported-worktrees-card-actions'
-import type { NewExternalWorktreesInboxActionState } from '../../new-external-worktrees-inbox-actions'
-
-export function canKeepImportedWorktreesHidden(
-  row: Extract<Row, { type: 'imported-worktrees-card' }>,
-  actionState: ImportedWorktreeCardActionState | undefined
-): boolean {
-  return row.placement === 'repo-group' && actionState?.forceVisible !== true
-}
+import { PendingWorktreeRow } from './PendingWorktreeRow'
+import ImportedWorktreesVisibilityLine from '../listing/ImportedWorktreesVisibilityLine'
+import NewExternalWorktreesInboxLine from '../listing/NewExternalWorktreesInboxLine'
+import type { ImportedWorktreeCardActionState } from '../listing/imported-worktrees-card-actions'
+import type { NewExternalWorktreesInboxActionState } from '../listing/new-external-worktrees-inbox-actions'
 
 type NoticeRowFrameProps = {
   vItem: VirtualItem
@@ -22,7 +15,7 @@ type NoticeRowFrameProps = {
   children: React.ReactNode
 }
 
-// Every non-card sidebar row shares the same absolutely-positioned virtual frame.
+// Share the absolute virtual frame across non-card rows.
 function NoticeRowFrame({
   vItem,
   measureVirtualRowElement,
@@ -49,33 +42,47 @@ export function renderImportedWorktreesVirtualRow(args: {
   row: Extract<Row, { type: 'imported-worktrees-card' }>
   vItem: VirtualItem
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
-  actionState: ImportedWorktreeCardActionState | undefined
+  actionStateByProjectId: ReadonlyMap<string, ImportedWorktreeCardActionState>
   onShow: (projectId: string) => void
   onKeepHidden: (projectId: string) => void
 }): React.JSX.Element {
-  const { row, actionState } = args
-  return (
+  const { row, actionStateByProjectId } = args
+  const frame = (line: React.JSX.Element): React.JSX.Element => (
     <NoticeRowFrame
       key={args.vItem.key}
       vItem={args.vItem}
       measureVirtualRowElement={args.measureVirtualRowElement}
     >
+      {line}
+    </NoticeRowFrame>
+  )
+  if (row.placement === 'all-projects') {
+    const states = row.projects.map((project) => actionStateByProjectId.get(project.repo.id))
+    return frame(
       <ImportedWorktreesVisibilityLine
-        repoDisplayName={row.repo.displayName}
         hostContextLabel={row.hostContextLabel}
         hostContextHostId={row.hostContextHostId}
-        hiddenWorktrees={row.hiddenWorktrees}
-        placement={row.placement}
-        pending={actionState?.pending ?? false}
-        error={actionState?.error ?? null}
-        onShow={() => args.onShow(row.repo.id)}
-        onKeepHidden={
-          canKeepImportedWorktreesHidden(row, actionState)
-            ? () => args.onKeepHidden(row.repo.id)
-            : undefined
-        }
+        hiddenWorktrees={row.projects.flatMap((project) => project.hiddenWorktrees)}
+        pending={states.some((state) => state?.pending)}
+        error={states.find((state) => state?.error)?.error ?? null}
+        onShow={() => row.projects.forEach((project) => args.onShow(project.repo.id))}
       />
-    </NoticeRowFrame>
+    )
+  }
+  const actionState = actionStateByProjectId.get(row.repo.id)
+  return frame(
+    <ImportedWorktreesVisibilityLine
+      repoDisplayName={row.repo.displayName}
+      hostContextLabel={row.hostContextLabel}
+      hostContextHostId={row.hostContextHostId}
+      hiddenWorktrees={row.hiddenWorktrees}
+      pending={actionState?.pending ?? false}
+      error={actionState?.error ?? null}
+      onShow={() => args.onShow(row.repo.id)}
+      onKeepHidden={
+        actionState?.forceVisible !== true ? () => args.onKeepHidden(row.repo.id) : undefined
+      }
+    />
   )
 }
 
@@ -120,7 +127,10 @@ export function renderPendingCreationVirtualRow(args: {
       measureVirtualRowElement={args.measureVirtualRowElement}
       className="absolute left-0 right-0 top-0 px-2 pb-1.5"
     >
-      <PendingWorktreeRow creationId={args.row.creationId} />
+      <PendingWorktreeRow
+        creationId={args.row.creationId}
+        repoName={args.row.repo?.displayName ?? null}
+      />
     </NoticeRowFrame>
   )
 }

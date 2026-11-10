@@ -149,15 +149,16 @@ export function createUiSurfaceActions(set: UISliceSet, _get: UISliceGet): Parti
 
     pendingRevealWorktree: null,
     pendingRevealSidebarRow: null,
-    // Why skipped rather than queued: the worktree list is unmounted in the activity view, and a
-    // reveal that switched bodies would kick the user out on every incidental activation.
+    // Activity view unmounts workspaces; incidental activation must not switch bodies or queue a surprise reveal.
     revealWorktreeInSidebar: (worktreeId, options) =>
       set((state) =>
         state.sidebarBody === 'agents'
           ? state
           : {
+              pendingRevealSidebarRow: null,
               pendingRevealWorktree: {
                 worktreeId,
+                ...(options?.rowKey ? { rowKey: options.rowKey } : {}),
                 ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {}),
                 behavior: options?.behavior ?? 'smooth',
                 ...(options?.highlight ? { highlight: true } : {}),
@@ -170,6 +171,7 @@ export function createUiSurfaceActions(set: UISliceSet, _get: UISliceGet): Parti
         state.sidebarBody === 'agents'
           ? state
           : {
+              pendingRevealWorktree: null,
               pendingRevealSidebarRow: {
                 rowKey,
                 behavior: options?.behavior ?? 'smooth',
@@ -177,8 +179,18 @@ export function createUiSurfaceActions(set: UISliceSet, _get: UISliceGet): Parti
               }
             }
       ),
-    clearPendingRevealWorktreeId: () => set({ pendingRevealWorktree: null }),
-    clearPendingRevealSidebarRow: () => set({ pendingRevealSidebarRow: null }),
+    clearPendingRevealWorktreeId: (expected) =>
+      set((state) =>
+        expected !== undefined && state.pendingRevealWorktree !== expected
+          ? state
+          : { pendingRevealWorktree: null }
+      ),
+    clearPendingRevealSidebarRow: (expected) =>
+      set((state) =>
+        expected !== undefined && state.pendingRevealSidebarRow !== expected
+          ? state
+          : { pendingRevealSidebarRow: null }
+      ),
     scrollToDiffCommentId: null,
     setScrollToDiffCommentId: (id) => set({ scrollToDiffCommentId: id }),
     floatingWorkspacePath: null,
@@ -188,8 +200,7 @@ export function createUiSurfaceActions(set: UISliceSet, _get: UISliceGet): Parti
           ? state
           : { floatingWorkspacePath: path || null }
       ),
-    // Why restored: leaving the panel closed forces the user to reopen and re-maximize it,
-    // and that size jump reflows a live TUI's buffer (see floating-terminal-panel-view-state).
+    // Restore floating panel size/open state to avoid reopen/remaximize reflow of live TUI buffers (floating-terminal-panel-view-state).
     floatingWorkspacePanelOpen: readPersistedFloatingTerminalPanelViewState()?.open === true,
     setFloatingWorkspacePanelOpen: (open) =>
       set((state) =>

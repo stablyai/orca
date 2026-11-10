@@ -1,9 +1,4 @@
-/**
- * E2E regression for issue #11090: in a narrow browser pane every toolbar
- * button stays shrink-0, so the address bar absorbed the whole squeeze and
- * became an unusable globe icon with a zero-width input. Focusing it must now
- * overlay the toolbar with a typable field that navigates on Enter.
- */
+// Narrow-pane regression #11090: focus must expand a collapsed address field into a usable navigation overlay.
 
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
@@ -19,11 +14,7 @@ import {
 } from './helpers/store'
 import { BROWSER_ADDRESS_BAR_MIN_INLINE_WIDTH } from '../../src/renderer/src/components/browser-pane/assemble-chrome/browser-address-bar-expansion'
 
-// Why: the toolbar must land in a band — squeezed enough that the inline field
-// collapses, roomy enough that the overlay itself has somewhere to go. Target
-// the middle of that band rather than a fixed window width, because how much
-// chrome flanks the pane (left sidebar, and a right sidebar that other startup
-// paths may re-open) varies between runs.
+// Target the middle of the toolbar’s collapse band because sidebar chrome varies between runs.
 const TARGET_TOOLBAR_WIDTH = 260
 const MIN_USABLE_TOOLBAR_WIDTH = BROWSER_ADDRESS_BAR_MIN_INLINE_WIDTH + 20
 const NARROW_WINDOW_HEIGHT = 800
@@ -90,19 +81,8 @@ async function addressBarInputWidth(page: Page): Promise<number> {
   return addressBarInput(page).evaluate((node) => node.getBoundingClientRect().width)
 }
 
-/**
- * Drive the app to the resting state this spec is about: a squeezed-but-usable
- * toolbar whose address bar is collapsed and unfocused.
- *
- * Why one loop rather than three: both preconditions are actively fought by the
- * app. Startup paths re-open the right sidebar (which alone leaves the pane
- * ~70px, too narrow for the overlay to have anywhere to go), and BrowserPane
- * re-focuses a blank tab's address bar across several animation frames plus the
- * blank-url did-finish-load handler. Settling them separately just lets whichever
- * settled first drift back while the next one runs, so re-assert all of them
- * together until they hold at the same time. The interval must clear the 200ms
- * blur-close timer in BrowserAddressBar for the collapse to register.
- */
+// Settle width, sidebar and focus together because startup paths fight each precondition.
+// Let the 200ms blur timer finish before accepting collapse.
 async function settleToSqueezedRestingState(
   page: Page,
   electronApp: ElectronApplication
@@ -117,7 +97,6 @@ async function settleToSqueezedRestingState(
           page.evaluate(() => window.innerWidth),
           toolbarWidth(page)
         ])
-        // Chrome flanking the pane is everything the toolbar didn't get.
         await setWindowWidth(electronApp, innerWidth - toolbar + TARGET_TOOLBAR_WIDTH)
         await addressBarInput(page).evaluate((node) => node.blur())
         const measuredToolbar = await toolbarWidth(page)
@@ -151,7 +130,6 @@ test.describe('Browser address bar in a narrow toolbar', () => {
       await settleToSqueezedRestingState(orcaPage, electronApp)
 
       const overlay = addressBarOverlay(orcaPage)
-      // The bug: the inline field is squeezed away entirely.
       await expect.poll(() => addressBarInputWidth(orcaPage), { timeout: 10_000 }).toBeLessThan(40)
 
       await orcaPage.locator('form:has(> [data-orca-browser-address-bar="true"])').click()

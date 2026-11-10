@@ -66,8 +66,7 @@ function disposeInputQuietListeners(): void {
 }
 
 if (import.meta !== undefined && import.meta.hot) {
-  // Vite can replace this module without a full renderer reload. Remove the
-  // global input hooks so dev sessions do not retain stale scheduler closures.
+  // Remove global hooks on Vite replacement so HMR cannot retain stale scheduler closures.
   import.meta.hot.dispose(disposeInputQuietListeners)
 }
 
@@ -152,9 +151,7 @@ export function scheduleAfterInputQuiet(
     idleId = scheduleIdleCallback(targetWindow, run, idleTimeoutMs)
   }
 
-  // Why: terminal wake remounts xterm panes. Wait for both the initial delay
-  // and a quiet input window so a follow-up click/keystroke cannot collide
-  // with the heavy remount.
+  // Wait for both startup delay and quiet input before heavy terminal-wake remounts so follow-up gestures do not collide.
   delayTimer = targetWindow.setTimeout(() => {
     delayTimer = null
     checkQuietWindow()

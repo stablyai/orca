@@ -16,7 +16,7 @@ function executableArgument(argv) {
 }
 
 export function checkoutRunProcessPath() {
-  return path.resolve(import.meta.dirname, '../../../out/shared/child-process/run-process.js')
+  return createRequire(import.meta.url).resolve('@orca/process-host')
 }
 
 export function packagedProbeInvocation(executable, environment = process.env) {

@@ -2,8 +2,7 @@ import { appendFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-// Diagnostic probes for emulator bring-up. They are opt-in because command
-// params can include typed text, package names, and local paths.
+// Opt in because probe data can include typed text and local paths.
 export const EMULATOR_PROBE_LOG = join(tmpdir(), 'orca-android-emu-probe.log')
 const EMULATOR_PROBE_ENABLED = process.env.ORCA_EMULATOR_PROBE === '1'
 

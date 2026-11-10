@@ -28,7 +28,6 @@ export {
 export type FeatureInteractionRecord = {
   /** Unix timestamp in milliseconds for the first local interaction. */
   firstInteractedAt: number
-  /** Number of local interactions recorded for this feature. */
   interactionCount: number
 }
 

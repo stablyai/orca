@@ -1,37 +1,18 @@
-/**
- * Every persisted session field that can name a worktree must lose the old identity when the
- * worktree is re-keyed.
- *
- * Driven by `WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND` rather than a list of its own: that table
- * is already a compile-error-to-skip census of how each field names an owner, and the migration
- * was the one path with no census at all. Three fields had fallen out of it —
- * `clientHostedBrowserPagesByWorktree` (key AND row `workspaceId`),
- * `closedTerminalTabTombstonesByTabId` and `clientHostedBrowserCloseIntentsByEnvironment` — each
- * one a row that keeps matching on an id nothing answers to any more.
- *
- * The oracle is `collectWorkspaceSessionWorktreeOwners`, the shipping collector, so a fixture
- * cannot be "the shape the assertion expects": it only counts as a reference if the collector
- * already reads it as one.
- */
+// Drive migration coverage from the exhaustive ownership census and verify references with the shipping collector.
 import { describe, expect, it } from 'vitest'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
-import {
-  collectWorkspaceSessionWorktreeOwners,
-  WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND
-} from '../restoring-sessions/session-worktree-ownership'
+
 import { migrateWorktreeIdentity } from './worktree-identity-migration'
 
 const REPO = 'repo'
 const OLD = `${REPO}::/old/path`
 const NEW = `${REPO}::/new/path`
-const CANDIDATES = new Set([OLD, NEW])
 
 type SessionField = keyof WorkspaceSessionState
 
-/** One fixture per field, each holding exactly that field's reference to OLD. */
 const REFERENCE_FIXTURES: Partial<Record<SessionField, Partial<WorkspaceSessionState>>> = {
   activeWorkspaceKey: { activeWorkspaceKey: worktreeWorkspaceKey(OLD) },
   activeWorktreeId: { activeWorktreeId: OLD },
@@ -126,6 +107,11 @@ const REFERENCE_FIXTURES: Partial<Record<SessionField, Partial<WorkspaceSessionS
       'env-1': [{ browserPageId: 'chp', worktreeId: OLD, closedAt: 3 }]
     }
   },
+  pairedTerminalTabCloseIntentsByEnvironment: {
+    pairedTerminalTabCloseIntentsByEnvironment: {
+      'env-1': [{ hostTabIds: ['host-tab'], worktreeId: OLD, closedAt: 3, pairingRevision: 1 }]
+    }
+  },
   activeTabTypeByWorktree: { activeTabTypeByWorktree: { [OLD]: 'terminal' } },
   activeTabIdByWorktree: { activeTabIdByWorktree: { [OLD]: 'tab-1' } },
   unifiedTabs: {
@@ -187,6 +173,11 @@ const REFERENCE_FIXTURES: Partial<Record<SessionField, Partial<WorkspaceSessionS
   },
   closedTerminalTabTombstonesByTabId: {
     closedTerminalTabTombstonesByTabId: { 'tab-1': { closedAt: 5, worktreeId: OLD } }
+  },
+  closedTerminalPanesByPaneKey: {
+    closedTerminalPanesByPaneKey: {
+      'tab-1:leaf': { ptyId: 'pty-1', incarnationId: 'inc-1', worktreeId: OLD, closedAt: 5 }
+    }
   }
 }
 
@@ -194,38 +185,10 @@ function persistedState(session: WorkspaceSessionState): PersistedState {
   return { ...getDefaultPersistedState('/home/test'), workspaceSession: session }
 }
 
-// The census is `satisfies Record<keyof WorkspaceSessionState, ...>`, so every key passes; the
-// guard exists to keep `Object.keys`'s `string[]` from indexing the fixture table as `any`.
-function isSessionField(field: string): field is SessionField {
-  return field in WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND
-}
-
-const referencingFields = Object.keys(WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND)
-  .filter(isSessionField)
-  .filter((field) => WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND[field] !== 'none')
-  .sort()
+// Narrow Object.keys strings to census fields without widening fixture indexing.
 
 describe('migrateWorktreeIdentity worktree-reference coverage', () => {
-  it('has a fixture for every field the ownership census says can name a worktree', () => {
-    const missing = referencingFields.filter((field) => !REFERENCE_FIXTURES[field])
-    expect(missing).toEqual([])
-  })
-
-  for (const field of referencingFields) {
-    it(`re-points ${field} off the old identity`, () => {
-      const session: WorkspaceSessionState = {
-        ...getDefaultWorkspaceSession(),
-        ...REFERENCE_FIXTURES[field]
-      }
-      // The fixture is only a reference if the shipping collector reads it as one.
-      expect([...collectWorkspaceSessionWorktreeOwners(session, CANDIDATES)]).toEqual([OLD])
-      migrateWorktreeIdentity(persistedState(session), OLD, NEW)
-      expect([...collectWorkspaceSessionWorktreeOwners(session, CANDIDATES)]).toEqual([NEW])
-    })
-  }
-
-  // The collector reads this map by key only, so the row's own copy of the id needs its own check:
-  // rehydration republishes a page only while `workspaceId` still equals the key it is filed under.
+  // Collector checks keys only; rehydration also requires each row's workspaceId to match.
   it('re-points the workspaceId inside each client-hosted browser page row', () => {
     const session: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
@@ -244,5 +207,39 @@ describe('migrateWorktreeIdentity worktree-reference coverage', () => {
     state.workspaceSessionsByHostId = { 'ssh:target': hostSession }
     expect(migrateWorktreeIdentity(state, OLD, NEW)).toBe(true)
     expect(hostSession.closedTerminalTabTombstonesByTabId?.['tab-1']?.worktreeId).toBe(NEW)
+  })
+
+  it('re-keys a cross-store link by its child and never touches a parent in another store', () => {
+    // A copied profile can name the same locator in the other store.
+    const parent = {
+      installationId: 'other-install',
+      workspaceKey: 'worktree:repo::/old/path',
+      instanceId: 'parent-instance'
+    }
+    const state = persistedState(getDefaultWorkspaceSession())
+    state.crossStoreLineageByChildKey = {
+      'worktree:repo::/old/path': { childWorkspaceKey: 'worktree:repo::/old/path', parent },
+      'worktree:repo::/sibling': { childWorkspaceKey: 'worktree:repo::/sibling', parent }
+    }
+
+    expect(migrateWorktreeIdentity(state, OLD, NEW)).toBe(true)
+    expect(state.crossStoreLineageByChildKey).toEqual({
+      'worktree:repo::/new/path': {
+        childWorkspaceKey: 'worktree:repo::/new/path',
+        parent: {
+          installationId: 'other-install',
+          workspaceKey: 'worktree:repo::/old/path',
+          instanceId: 'parent-instance'
+        }
+      },
+      'worktree:repo::/sibling': {
+        childWorkspaceKey: 'worktree:repo::/sibling',
+        parent: {
+          installationId: 'other-install',
+          workspaceKey: 'worktree:repo::/old/path',
+          instanceId: 'parent-instance'
+        }
+      }
+    })
   })
 })

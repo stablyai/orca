@@ -9,7 +9,7 @@ import {
   _resetSecretStoreForTests
 } from '../../../shared/secret-store'
 import { Store } from '../loading-store/store'
-import * as storeDomains from '../loading-store/store-domain-composition'
+
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 
 let keyState: 'available' | 'unavailable' | 'decrypt-fails' = 'available'
@@ -30,7 +30,7 @@ vi.mock('../../telemetry/client', () => ({ track: () => {} }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
-vi.mock('../../ssh/ssh-config-parser', () => ({
+vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
@@ -80,38 +80,6 @@ const secrets = {
 }
 const sealed = (value: string) => Buffer.from(`encrypted:${value}`, 'utf8').toString('base64')
 
-it.each([false, true])(
-  'rejects reused input before Store context installation (secret=%s)',
-  (hasSecret) => {
-    const directory = mkdtempSync(join(tmpdir(), 'orca-consumed-startup-'))
-    directories.push(directory)
-    const authority = new ProfileStateSqliteAuthority(join(directory, 'profile-state.db'), 'once')
-    if (hasSecret) {
-      authority.writeSerializedState(
-        Buffer.from(
-          JSON.stringify({
-            settings: { opencodeSessionCookie: sealed(secrets.cookie) }
-          })
-        )
-      )
-    }
-    const options = {
-      dataFile: join(directory, 'orca-data.json'),
-      profileStateAuthority: authority,
-      initialAuthorityState: authority.readInitialState()
-    }
-    const store = new Store(options)
-    stores.push(store)
-    if (hasSecret) {
-      expect(store.getSettings().opencodeSessionCookie).toBe(secrets.cookie)
-    }
-    const install = vi.spyOn(storeDomains, 'installStoreDomainContexts')
-
-    expect(() => new Store(options)).toThrow('already been consumed')
-    expect(install).not.toHaveBeenCalled()
-  }
-)
-
 describe.each(['serialized', 'parsed'] as const)(
   '%s startup secret retention',
   (representation) => {
@@ -135,20 +103,31 @@ describe.each(['serialized', 'parsed'] as const)(
           return { store, authority }
         }
 
+        // Emulate a relay-era record loaded from disk.
+        const legacy = new ProfileStateSqliteAuthority(databaseFile, 'startup-secrets')
+        legacy.writeSerializedState(
+          Buffer.from(
+            JSON.stringify({
+              sshPtyConsumerRecoveries: [
+                {
+                  targetId: 'ssh-1',
+                  clientInstanceId: 'client-1',
+                  serverBuildId: 'server-1',
+                  clientGeneration: 1,
+                  ownerGeneration: 1,
+                  ownerLease: sealed(secrets.lease)
+                }
+              ]
+            })
+          )
+        )
+        legacy.close()
         const seeded = open()
         seeded.store.updateSettings({
           httpProxyUrl: secrets.proxy,
           opencodeSessionCookie: secrets.cookie
         })
         seeded.store.updateUI({ browserKagiSessionLink: secrets.kagi })
-        await seeded.store.upsertSshPtyConsumerRecovery({
-          targetId: 'ssh-1',
-          clientInstanceId: 'client-1',
-          serverBuildId: 'server-1',
-          clientGeneration: 1,
-          ownerGeneration: 1,
-          ownerLease: secrets.lease
-        })
         await seeded.store.flushAsync()
         seeded.store.freezeWrites()
 
@@ -173,11 +152,15 @@ describe.each(['serialized', 'parsed'] as const)(
         reopened.store.freezeWrites()
 
         keyState = 'available'
-        const restored = open().store
+        const { store: restored, authority: restoredAuthority } = open()
         expect(restored.getSettings().httpProxyUrl).toBe(secrets.proxy)
         expect(restored.getSettings().opencodeSessionCookie).toBe(secrets.cookie)
         expect(restored.getUI().browserKagiSessionLink).toBe(secrets.kagi)
-        expect(restored.getSshPtyConsumerRecovery('ssh-1')?.ownerLease).toBe(secrets.lease)
+        restored.updateSettings({ terminalFontSize: 20 })
+        await restored.flushAsync()
+        expect(
+          JSON.parse(restoredAuthority.readSerializedState() ?? 'null').sshPtyConsumerRecoveries
+        ).toMatchObject([{ ownerLease: sealed(secrets.lease) }])
       }
     )
   }

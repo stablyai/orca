@@ -1,40 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  OrcaRuntimeService,
-  listWorktrees,
-  resolveWorktreeScanCacheTtlMs
-} from '../orca-runtime-test-mocks.spec'
-import { store } from '../orca-runtime-test-fixtures.spec'
-import { bumpLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { resolveWorktreeScanCacheTtlMs } from '../workspaces/catalog/runtime-worktree-scan-cache'
+import { store } from './orca-runtime-test-fixtures.spec'
+import { bumpLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-worktree-scan-generation'
 
 describe('resolveWorktreeScanCacheTtlMs', () => {
   const BASE_TTL_MS = 30_000
   const SCRATCH_TTL_MS = 5 * 60_000
 
-  it('keeps the base TTL for ordinary local repos', () => {
-    expect(
-      resolveWorktreeScanCacheTtlMs({ path: '/Users/dev/projects/app', connectionId: '' })
-    ).toBe(BASE_TTL_MS)
-  })
-
-  it('extends the TTL for agent-scratch repo roots', () => {
-    expect(
-      resolveWorktreeScanCacheTtlMs({
-        path: '/Users/dev/.codex-tmp/foragent-capsule-b1-repo-zP9Az6',
-        connectionId: ''
-      })
-    ).toBe(SCRATCH_TTL_MS)
-    expect(
-      resolveWorktreeScanCacheTtlMs({
-        path: '/Users/dev/.claude/skills/obsidian-second-brain',
-        connectionId: ''
-      })
-    ).toBe(SCRATCH_TTL_MS)
-  })
-
   it('never extends the TTL for SSH repos', () => {
-    // Why: scratch classification reads local path conventions; a remote path
-    // that merely looks similar must keep normal freshness.
+    // Remote paths that resemble local scratch paths must retain normal freshness.
     expect(
       resolveWorktreeScanCacheTtlMs({
         path: '/home/dev/.codex-tmp/capsule',
@@ -44,11 +21,14 @@ describe('resolveWorktreeScanCacheTtlMs', () => {
   })
 
   it('keeps a scratch repo scan cached past the base TTL while normal repos rescan', async () => {
-    // Why: the whole fix lives in the cache-stamp call site; pin the wiring so
-    // a revert to the flat TTL fails CI, not just the pure-function tests.
-    vi.useFakeTimers()
-    // Why: the shared listWorktrees stub keeps call history across this file's
-    // tests; absolute counts need a clean baseline.
+    // Fake only Date: real admin-fingerprint probes must settle before refresh can invalidate the cache.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    let runtimeProbes: { size: number } = { size: 0 }
+    const settleFingerprintProbes = async (): Promise<void> => {
+      for (let attempt = 0; attempt < 400 && runtimeProbes.size > 0; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 5))
+      }
+    }
     vi.mocked(listWorktrees).mockClear()
     try {
       const scratchPath = '/tmp/.codex-tmp/capsule-a'
@@ -66,10 +46,12 @@ describe('resolveWorktreeScanCacheTtlMs', () => {
         ]
       } as never)
       const internals = runtime as unknown as { listResolvedWorktrees: () => Promise<unknown> }
+      runtimeProbes = runtime['worktreeAdminFingerprintProbes']
       const scanCallsFor = (path: string): number =>
         vi.mocked(listWorktrees).mock.calls.filter((call) => call[0] === path).length
 
       await internals.listResolvedWorktrees()
+      await settleFingerprintProbes()
       expect(scanCallsFor('/tmp/repo')).toBe(1)
       expect(scanCallsFor(scratchPath)).toBe(1)
 
@@ -87,9 +69,7 @@ describe('resolveWorktreeScanCacheTtlMs', () => {
   })
 
   it('scans a repo registered after the last snapshot instead of answering from it', async () => {
-    // Why: the fleet snapshot only covers the repos that existed when it ran, so for a full TTL it
-    // reported a just-connected SSH host as having no worktrees at all — and callers that resolve a
-    // workspace through it turned that gap into `skill-install-workspace-not-found`.
+    // A newly registered SSH repo must invalidate the fleet snapshot or workspace lookup falsely reports absence.
     vi.mocked(listWorktrees).mockClear()
     const addedPath = '/tmp/repo-registered-later'
     const repos = [

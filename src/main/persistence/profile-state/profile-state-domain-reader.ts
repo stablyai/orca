@@ -6,9 +6,10 @@ import {
 import { readProfileStateAutomationRunsDocument } from './profile-state-automation-runs'
 import { openProfileStateDatabaseReadOnly } from './profile-state-database'
 import {
-  validateProfileStateDocumentRow,
-  type ProfileStateParsedDocument
-} from './profile-state-document-validation'
+  PROFILE_STATE_DOCUMENT_ROW_COLUMNS,
+  readProfileStateDocumentRow
+} from './profile-state-document-parts-reader'
+import type { ProfileStateParsedDocument } from './profile-state-document-validation'
 
 export type ProfileStateDomainReadResult =
   | { kind: 'value'; value: unknown }
@@ -19,11 +20,7 @@ export type ProfileStateDomainsReadResult =
   | { kind: 'values'; revision: number; values: ReadonlyMap<string, unknown> }
   | { kind: 'unreadable'; error: unknown }
 
-/**
- * Read one domain from an existing profile database without opening a write
- * handle, applying migrations, or creating the database. Any malformed selected
- * row makes the whole read unusable so callers that prune state can fail closed.
- */
+/** Read without creating/migrating storage; invalid rows fail closed so pruning cannot discard state. */
 export function readProfileStateDomain(
   databasePath: string,
   profileId: string,
@@ -39,7 +36,7 @@ export function readProfileStateDomain(
   return { kind: 'value', value: result.values.get(domain) }
 }
 
-/** Read several domains and the fencing revision under one SQLite snapshot. */
+/** Read selected domains and their fence under one snapshot. */
 export function readProfileStateDomains(
   databasePath: string,
   profileId: string,
@@ -56,7 +53,7 @@ export function readProfileStateDomains(
   }
 }
 
-/** Read several domains from an already-open database, keeping the caller's handle alive. */
+/** Preserve caller ownership of the database handle. */
 export function readProfileStateDomainsWithRevisionFromDatabase(
   db: Parameters<typeof readProfileStateRevision>[0],
   domains: readonly string[]
@@ -100,16 +97,14 @@ function readSelectedDocuments(
   const placeholders = domains.map(() => '?').join(',')
   const rows = db
     .prepare(
-      `SELECT domain, payload, domain_version, revision, updated_at, content_hash
+      `SELECT ${PROFILE_STATE_DOCUMENT_ROW_COLUMNS}
        FROM profile_state_documents
        WHERE domain IN (${placeholders})
        ORDER BY rowid`
     )
     .iterate(...domains)
   return Array.from(rows, (row) => {
-    const { payload: _payload, ...document } = validateProfileStateDocumentRow(row, {
-      retainParsedValue: true
-    })
+    const { payload: _payload, ...document } = readProfileStateDocumentRow(db, row, true)
     return { ...document, value: document.value }
   })
 }

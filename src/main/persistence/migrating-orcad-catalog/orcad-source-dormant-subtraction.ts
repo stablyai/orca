@@ -1,16 +1,16 @@
-import type { OrcadMigrationManifest } from '../../../shared/orcad-migration-manifest'
+import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { subtractOrcadSourceWorktreeMetadata } from './orcad-source-worktree-metadata'
 import { subtractOrcadMigrationSourceAutomationState } from './orcad-source-automation-subtraction'
 import { subtractOrcadMigrationSourceWorkspaceSession } from './orcad-source-workspace-session-subtraction'
 import { subtractOrcadMigrationClientState } from './orcad-source-client-subtraction'
 
-/** On a copy of the profile only: what an earlier migration moved, gone from the delta view. */
+/** Mutate a delta-view copy only. */
 export function subtractOrcadMigrationSourceDormantState(
   state: PersistedState,
   manifest: OrcadMigrationManifest
 ): void {
-  // By scope, even with no dormant state: a downgraded build may have added some since.
+  // Include state a downgraded build added even when the manifest had none.
   subtractOrcadSourceWorktreeMetadata(state, manifest)
   subtractOrcadMigrationSourceAutomationState(state, manifest)
   const dormant = manifest.payload.dormantState

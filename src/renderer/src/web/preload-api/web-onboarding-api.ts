@@ -53,7 +53,9 @@ export function createWebOnboardingApi(): Partial<PreloadApi> {
         }
         writeJson(ONBOARDING_STORAGE_KEY, next)
         return next
-      }
+      },
+      // Why: the browser client has no profile from before Chat UI left Experimental.
+      getChatUiLaunchTipVariant: () => Promise.resolve('none')
     }
   }
 }

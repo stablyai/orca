@@ -23,7 +23,6 @@ describe('terminal WebView external mouse drag', () => {
       expect(motion.charCodeAt(3)).toBe(64)
     }
     expect(reports.at(-1)?.charCodeAt(3)).toBe(35)
-    // Motion reports are deduped per cell, so a horizontal drag advances columns.
     const motionCols = reports.slice(1, -1).map((report) => report.charCodeAt(4))
     expect(new Set(motionCols).size).toBe(motionCols.length)
   })
@@ -35,7 +34,6 @@ describe('terminal WebView external mouse drag', () => {
 
     mouse.mouseDrag(40, 60, 160, 60)
 
-    // x10 reports presses only; the press goes out at drag start, no motion or release follows.
     const bytes = mouse.terminalInputBytes()
     expect(bytes.slice(0, 4)).toBe(`${ESC}[M `)
     expect(bytes).toHaveLength(6)
@@ -43,7 +41,7 @@ describe('terminal WebView external mouse drag', () => {
 
   it('selects character-anchored text on a mouse drag outside tracking mode', () => {
     mouse.boot()
-    // Why: init itself emits a set-select-mode reset; only the drag matters here.
+    // Discard init’s selection reset so assertions observe only the drag.
     mouse.clearPostedMessages()
 
     mouse.mouseDrag(40, 60, 160, 90)
@@ -73,7 +71,6 @@ describe('terminal WebView external mouse drag', () => {
 
     mouse.dispatchPointer('pointerdown', { x: 40, y: 60, button: 0, buttons: 1 })
     mouse.dispatchPointer('pointermove', { x: 160, y: 60, button: 0, buttons: 1 })
-    // Pointer re-enters with the button already up — the pointerup never arrived.
     mouse.dispatchPointer('pointermove', { x: 200, y: 60, button: 0, buttons: 0 })
 
     const reports = mouse.terminalInputBytes().match(DEFAULT_MOUSE_REPORT_RE) ?? []
@@ -82,7 +79,6 @@ describe('terminal WebView external mouse drag', () => {
     mouse.clearPostedMessages()
     mouse.dispatchPointer('pointermove', { x: 240, y: 60, button: 0, buttons: 1 })
 
-    // The lost pointerup ended the gesture; a later unrelated move must not emit motion.
     expect(mouse.terminalInputBytes()).toBe('')
   })
 
@@ -96,7 +92,6 @@ describe('terminal WebView external mouse drag', () => {
     mouse.dispatchPointer('pointercancel', { x: 160, y: 60 })
 
     const reports = mouse.terminalInputBytes().match(DEFAULT_MOUSE_REPORT_RE) ?? []
-    // Press went to the TUI, so the cancel must not leave the button latched.
     expect(reports.at(-1)?.charCodeAt(3)).toBe(35)
   })
 })

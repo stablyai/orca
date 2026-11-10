@@ -1,8 +1,7 @@
 import type { SecretAtRestProtection } from './secret-at-rest-protection'
 export type BitbucketAuthMode = 'token' | 'basic'
 
-// Where the active credential comes from. Drives whether the UI offers
-// Disconnect, which is only meaningful for in-app `stored` credentials.
+// Offer Disconnect only for in-app stored credentials.
 export type BitbucketCredentialSource = 'environment' | 'stored' | 'none'
 
 export type BitbucketConnectArgs = {
@@ -13,15 +12,10 @@ export type BitbucketConnectArgs = {
   baseUrl?: string | null
 }
 
-// Deliberately excludes the secret: it never crosses the IPC boundary back to
-// the renderer.
+// Never return credential secrets over IPC to the renderer.
 export type BitbucketConnectionStatus = {
   configured: boolean
-  /**
-   * How a `stored` credential sits on disk. Null for `environment` and `none`: Orca
-   * wrote nothing, so it has no claim to make. Optional so an older remote host that
-   * omits it reads as unknown rather than as sealed.
-   */
+  /** Stored-at-rest status only; environment/none write nothing and use null. Older hosts omit this, meaning unknown rather than sealed. */
   credentialProtection?: SecretAtRestProtection | null
   source: BitbucketCredentialSource
   account: string | null
@@ -30,6 +24,25 @@ export type BitbucketConnectionStatus = {
   baseUrl: string | null
 }
 
+// One English table for Bitbucket connect failures: main builds the wire `error`, the renderer translates by code.
+export const BITBUCKET_CONNECT_FAILURE_COPY = {
+  invalidInput: 'Invalid Bitbucket credentials',
+  accessTokenRequired: 'Enter an access token.',
+  emailAndApiTokenRequired: 'Enter both an email and an API token.',
+  rejected: 'Bitbucket rejected these credentials. Check the email and token, then try again.',
+  unreachable:
+    'Could not reach Bitbucket. Check your connection or the API base URL, then try again.'
+} as const
+
+export type BitbucketConnectFailureCode = keyof typeof BITBUCKET_CONNECT_FAILURE_COPY
+
 export type BitbucketConnectResult =
   | { ok: true; account: string | null }
-  | { ok: false; error: string }
+  /** `error` stays English for older clients; `errorCode` is absent from older hosts. */
+  | { ok: false; error: string; errorCode?: string }
+
+export function bitbucketConnectFailure(
+  errorCode: BitbucketConnectFailureCode
+): Extract<BitbucketConnectResult, { ok: false }> {
+  return { ok: false, error: BITBUCKET_CONNECT_FAILURE_COPY[errorCode], errorCode }
+}

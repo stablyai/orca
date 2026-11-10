@@ -1,8 +1,9 @@
-import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
-import type { PtyModelRestoreReason } from '../../../../shared/pty-model-restore-marker'
+import { redactPtyIdForDiagnostics } from '../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
+import type { PtyModelRestoreReason } from '../../../../shared/terminal/replay/pty-model-restore-marker'
 import { mainDeliveryBreadcrumbs } from './debug'
 import { recordPtyRendererDeliveryPressure } from './accounting'
 import type { PtyDataPayload, PtyIpcSession } from '../session'
+import { escapeBoundaryFields, type PtyEscapeBoundary } from './pty-escape-boundary'
 
 export function makePtyDataPayload(
   id: string,
@@ -10,9 +11,10 @@ export function makePtyDataPayload(
   startSeq: number | undefined,
   containsBackgroundOutput: boolean | undefined,
   rawLength = data.length,
-  transformed = false
+  transformed = false,
+  startEscapeBoundary?: PtyEscapeBoundary
 ): PtyDataPayload {
-  const payload: PtyDataPayload = { id, data }
+  const payload: PtyDataPayload = { id, data, ...escapeBoundaryFields(startEscapeBoundary) }
   if (typeof startSeq === 'number') {
     payload.seq = startSeq + rawLength
   }
@@ -36,7 +38,8 @@ export function sendModelRestoreNeededMarker(
   session: PtyIpcSession,
   id: string,
   reason: PtyModelRestoreReason,
-  markerSeq: number | undefined
+  markerSeq: number | undefined,
+  hiddenDropEpisode?: number
 ): boolean {
   if (!session.mainWindow || session.mainWindow.isDestroyed()) {
     return false
@@ -45,10 +48,11 @@ export function sendModelRestoreNeededMarker(
     session.mainWindow.webContents.send('pty:modelRestoreNeeded', {
       id,
       reason,
-      ...(typeof markerSeq === 'number' ? { markerSeq } : {})
+      ...(typeof markerSeq === 'number' ? { markerSeq } : {}),
+      ...(typeof hiddenDropEpisode === 'number' ? { hiddenDropEpisode } : {})
     })
   } catch (error) {
-    // Why: a disposed render frame throws synchronously here, and this rides the data path.
+    // Disposed frames can throw synchronously on this data path.
     console.error('[pty] renderer model-restore marker send failed', error)
     return false
   }
@@ -58,14 +62,10 @@ export function sendModelRestoreNeededMarker(
 export function sendPtyDataToRenderer(
   session: PtyIpcSession,
   id: string,
-  payload: PtyDataPayload,
-  projectionAdmissionIds?: readonly string[]
-): { sent: boolean; projectionsTransferred: boolean } {
+  payload: PtyDataPayload
+): boolean {
   if (!session.mainWindow) {
-    if (projectionAdmissionIds) {
-      session.sshOutputIntake?.transferProjections(projectionAdmissionIds, 'renderer-destroyed')
-    }
-    return { sent: false, projectionsTransferred: projectionAdmissionIds !== undefined }
+    return false
   }
   const charCount = getPtyPayloadCharCount(payload)
   const accounting = session.rendererDeliveryAccountingByPty.get(id)
@@ -101,31 +101,12 @@ export function sendPtyDataToRenderer(
       }
     }
     session.rendererDeliveryRestoreNeededPtys.add(id)
-    if (projectionAdmissionIds) {
-      session.sshOutputIntake?.transferProjections(projectionAdmissionIds, 'renderer-send-failed')
-    }
     mainDeliveryBreadcrumbs.record('pty-data-send-failed', {
       id: redactPtyIdForDiagnostics(id),
       chars: charCount
     })
     console.error('[pty] renderer data send failed; payload will not be retried', error)
-    return { sent: false, projectionsTransferred: projectionAdmissionIds !== undefined }
-  }
-  let projectionsTransferred = false
-  if (projectionAdmissionIds) {
-    try {
-      session.sshOutputIntake?.publishProjectionPrefix(
-        projectionAdmissionIds,
-        payload.data.length,
-        charCount
-      )
-    } catch {
-      session.sshOutputIntake?.transferProjections(
-        projectionAdmissionIds,
-        'projection-publish-failed'
-      )
-      projectionsTransferred = true
-    }
+    return false
   }
   if (
     session.rendererDeliveryRestoreNeededPtys.has(id) &&
@@ -136,8 +117,8 @@ export function sendPtyDataToRenderer(
       session.runtime?.getPtyOutputSequence(id)
     )
   ) {
-    // Why cleared only on a successful send: an unsent marker leaves the restore pending.
+    // Failed sends must leave restore pending.
     session.rendererDeliveryRestoreNeededPtys.delete(id)
   }
-  return { sent: true, projectionsTransferred }
+  return true
 }

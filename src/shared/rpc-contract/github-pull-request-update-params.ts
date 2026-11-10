@@ -43,6 +43,11 @@ export const MarkPrReadyForReview = RepoSelector.extend({
   prRepo: SlugRepo.nullable().optional()
 })
 
+export const MarkPrDraft = RepoSelector.extend({
+  prNumber: z.number().int().positive(),
+  prRepo: SlugRepo.nullable().optional()
+})
+
 export const RequestPrReviewers = RepoSelector.extend({
   prNumber: z.number().int().positive(),
   prRepo: SlugRepo.nullable().optional(),

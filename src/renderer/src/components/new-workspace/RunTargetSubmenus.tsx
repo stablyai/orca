@@ -2,7 +2,7 @@ import React from 'react'
 import { ChevronDown, Cloud, Plus, Server } from 'lucide-react'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { RunTargetRow } from './RunTargetComboboxRow'
 import {
   getEphemeralVmLabel,
@@ -34,6 +34,7 @@ export function RecipesSubmenuRow({
   onArm: () => void
   onSelectRecipe: (recipeId: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [hoveredKey, setHoveredKey] = React.useState<string | null>(null)
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
@@ -41,8 +42,8 @@ export function RecipesSubmenuRow({
         <div>
           <RunTargetRow
             icon={<Cloud className="size-3.5 shrink-0 text-muted-foreground" />}
-            label={getEphemeralVmLabel()}
-            detail={translate(
+            label={getEphemeralVmLabel(t)}
+            detail={t(
               'auto.components.NewWorkspaceComposerCard.perWorkspaceEnvHint',
               'Provision an on-demand environment from a recipe'
             )}
@@ -62,11 +63,10 @@ export function RecipesSubmenuRow({
         className={SUBMENU_CONTENT}
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
-        {/* Why: submenu rows track their own hover — without it they were the
-            only rows in either picker that never highlighted under the pointer. */}
+        {/* Nested rows own hover so pointer movement updates their highlight too. */}
         <div
           role="listbox"
-          aria-label={getEphemeralVmLabel()}
+          aria-label={getEphemeralVmLabel(t)}
           onMouseLeave={() => setHoveredKey(null)}
         >
           {recipes.map((recipe) => (
@@ -74,7 +74,7 @@ export function RecipesSubmenuRow({
               key={recipe.id}
               icon={<Cloud className="size-3.5 shrink-0 text-muted-foreground" />}
               label={recipe.name}
-              detail={getRecipeDetail(recipe)}
+              detail={getRecipeDetail(recipe, t)}
               armed={hoveredKey === recipe.id}
               current={recipe.id === selectedRecipeId}
               optionId={undefined}
@@ -88,10 +88,7 @@ export function RecipesSubmenuRow({
   )
 }
 
-/**
- * "Add host", pinned to the popover edge so it stays reachable in every state —
- * scrolled, filtered to nothing, or with no hosts at all.
- */
+/** Pin Add host so scrolling, filtering and empty results cannot hide it. */
 export function AddHostSubmenuRow({
   open,
   onOpenChange,
@@ -109,8 +106,9 @@ export function AddHostSubmenuRow({
   onAddSshHost?: () => void
   onAddRemoteServer?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [hoveredKey, setHoveredKey] = React.useState<string | null>(null)
-  const addHostLabel = translate('auto.components.NewWorkspaceComposerCard.addHost', 'Add host')
+  const addHostLabel = t('auto.components.NewWorkspaceComposerCard.addHost', 'Add host')
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverAnchor asChild>
@@ -126,11 +124,13 @@ export function AddHostSubmenuRow({
           onMouseMove={onArm}
           onClick={() => onOpenChange(true)}
           className={cn(
-            'flex h-9 shrink-0 cursor-default items-center gap-2 border-t border-border px-2 text-sm',
+            'flex h-9 shrink-0 cursor-default items-center gap-2 border-t border-border px-3 text-sm',
             armed && 'bg-accent text-accent-foreground'
           )}
         >
-          <Plus className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className="flex w-4 shrink-0 items-center justify-center">
+            <Plus className="size-3.5 text-muted-foreground" />
+          </span>
           <span className="truncate">{addHostLabel}</span>
           <span className="ml-auto flex shrink-0 items-center">
             <ChevronDown className="size-3.5 -rotate-90 text-muted-foreground" />
@@ -148,11 +148,8 @@ export function AddHostSubmenuRow({
           {onAddSshHost ? (
             <RunTargetRow
               icon={<Server className="size-3.5 shrink-0 text-muted-foreground" />}
-              label={translate(
-                'auto.components.NewWorkspaceComposerCard.addSshHost',
-                'Add SSH host'
-              )}
-              detail={translate(
+              label={t('auto.components.NewWorkspaceComposerCard.addSshHost', 'Add SSH host')}
+              detail={t(
                 'auto.components.NewWorkspaceComposerCard.addSshHostHint',
                 'Use an existing machine over SSH'
               )}
@@ -167,11 +164,11 @@ export function AddHostSubmenuRow({
           {onAddRemoteServer ? (
             <RunTargetRow
               icon={<Cloud className="size-3.5 shrink-0 text-muted-foreground" />}
-              label={translate(
+              label={t(
                 'auto.components.NewWorkspaceComposerCard.addRemoteOrcaServer',
                 'Add Remote Orca Server'
               )}
-              detail={translate(
+              detail={t(
                 'auto.components.NewWorkspaceComposerCard.addRemoteOrcaServerHint',
                 'Pair another Orca runtime'
               )}

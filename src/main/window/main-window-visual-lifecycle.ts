@@ -3,13 +3,12 @@ import { isMacosTahoeOrNewer } from './macos-tahoe-release'
 
 const activeRepaintJiggles = new WeakSet<BrowserWindow>()
 export function forceRepaint(window: BrowserWindow): void {
-  // Why: webContents can be destroyed a beat before the BrowserWindow during close, and this runs from timers/focus events in that gap.
+  // Timers/focus callbacks can run after WebContents dies but before BrowserWindow closes; guard both.
   if (window.isDestroyed() || window.webContents.isDestroyed()) {
     return
   }
   window.webContents.invalidate()
-  // Why: macOS 26 scene-backed windows deadlock on frame mutation, and device emulation can
-  // strand the compositor after wake. The native shell no longer relies on dvh reflow.
+  // macOS 26 scene-backed frame writes deadlock; avoid device-emulation wake traps too. Native shell sizing no longer needs dvh reflow.
   if (isMacosTahoeOrNewer()) {
     return
   }
@@ -17,15 +16,14 @@ export function forceRepaint(window: BrowserWindow): void {
     return
   }
   activeRepaintJiggles.add(window)
-  // Why: show/restore fire from inside AppKit's window-state dispatch; mutating the frame there re-enters scene handling, so nudge on a fresh turn.
+  // AppKit show/restore dispatch cannot safely mutate its own scene; nudge in a fresh turn.
   setTimeout(() => {
     if (window.isDestroyed()) {
       activeRepaintJiggles.delete(window)
       return
     }
     const [width, height] = window.getSize()
-    // Why: if the nudge throws mid-flight the WeakSet entry must still clear, or this window
-    // never repaints again.
+    // Clear the WeakSet even on native failure or this window can never repaint again.
     try {
       window.setSize(width + 1, height)
     } catch {
@@ -36,7 +34,7 @@ export function forceRepaint(window: BrowserWindow): void {
       try {
         if (!window.isDestroyed()) {
           const [currentWidth, currentHeight] = window.getSize()
-          // Why: a real user resize during the jiggle owns the final bounds.
+          // Concurrent user resize owns the final bounds; never restore over it.
           if (currentWidth === width + 1 && currentHeight === height) {
             window.setSize(width, height)
           }
@@ -55,7 +53,7 @@ export function installMacosVisibilityRepaint(window: BrowserWindow): void {
     if (delayedRepaintTimer) {
       clearTimeout(delayedRepaintTimer)
     }
-    // Why: macOS may restore compositor layers after the show/restore event; a second paint catches late black-surface recovery.
+    // macOS compositor layers can restore late; repaint again after show/restore.
     delayedRepaintTimer = setTimeout(() => {
       delayedRepaintTimer = null
       forceRepaint(window)
@@ -68,8 +66,7 @@ export function installMacosVisibilityRepaint(window: BrowserWindow): void {
     }
   }
 
-  // Why: occlusion reveal can fire no restore/show, so preserve the renderer relay without
-  // trusting events from another window.
+  // Occlusion reveal may emit neither show nor restore; accept only this window's renderer relay.
   const onRendererRevealed = (event: Electron.IpcMainEvent): void => {
     if (window.isDestroyed() || window.webContents.isDestroyed()) {
       return
@@ -83,7 +80,7 @@ export function installMacosVisibilityRepaint(window: BrowserWindow): void {
 
   window.on('restore', repaintAfterVisibilityTransition)
   window.on('show', repaintAfterVisibilityTransition)
-  // Why: occlusion-uncover can fire only focus; invalidate without resizing terminals on Cmd+Tab.
+  // Occlusion uncover may emit only focus; invalidate without resizing terminals on Cmd+Tab.
   window.on('focus', () => {
     if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
       window.webContents.invalidate()
@@ -95,19 +92,7 @@ export function installMacosVisibilityRepaint(window: BrowserWindow): void {
   })
 }
 
-export function isMacAppPasteInput(input: Electron.Input): boolean {
-  return (
-    process.platform === 'darwin' &&
-    input.type === 'keyDown' &&
-    input.meta &&
-    !input.control &&
-    !input.alt &&
-    !input.shift &&
-    (input.code === 'KeyV' || input.key.toLowerCase() === 'v')
-  )
-}
-
-// Why: titlebar content center sits ~18 CSS px from top (×zoom); traffic lights are ~12px tall, so top edge = center − 6.
+// Center is 18 CSS px × zoom; 12px traffic lights start 6px above it.
 export const TITLEBAR_CSS_CENTER = 18
 export const TRAFFIC_LIGHT_RADIUS = 6
 export const TRAFFIC_LIGHT_X = 16

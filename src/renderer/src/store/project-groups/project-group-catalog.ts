@@ -1,9 +1,13 @@
 import type { ProjectGroup } from '../../../../shared/project-group-types'
-import { callRuntimeRpc, type RuntimeClientTarget } from '../../runtime/runtime-rpc-client'
-import { catalogOwnsHost, getProjectGroupHostId } from '../slices/project-group-owner-routing'
-import { getRuntimeTargetHostId } from '../runtime-target-host'
-import { projectGroupWithFetchedOwner } from './project-group-owner-stamping'
-import { mergeByIdentity, unchangedMergeSource } from '../catalog-identity'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { catalogOwnsHost, getProjectGroupHostId } from './project-group-owner-routing'
+import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
+import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
+import {
+  mergeByIdentity,
+  unchangedMergeSource
+} from '../../lib/catalog-reconciliation/catalog-identity'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export type FetchedProjectGroupCatalog = {
@@ -48,7 +52,9 @@ export async function fetchProjectGroupCatalogForTarget(
           })
         ).groups
   return {
-    projectGroups: fetchedGroups.map((group) => projectGroupWithFetchedOwner(group, target)),
+    projectGroups: fetchedGroups.map((group) =>
+      adoptFromEndpoint(target, { kind: 'projectGroup', row: group })
+    ),
     hostId: getRuntimeTargetHostId(target)
   }
 }

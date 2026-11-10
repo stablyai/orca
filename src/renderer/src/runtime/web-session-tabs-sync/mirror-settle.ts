@@ -1,10 +1,11 @@
-import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
-import { probeHostLiveTerminals } from '../host-live-terminal-probe'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
+import { probeHostLiveTerminals } from '../hosted-terminals/inventory/host-live-terminal-probe'
 import {
   markHostSessionMirrorHydrated,
   markHostSessionMirrorWorktreeHydrated
-} from '../host-session-mirror-hydration'
-import { getRuntimeEnvironmentRevision } from '../runtime-environment-revision'
+} from './hydration/host-session-mirror-hydration'
+import { getRuntimeEnvironmentRevision } from '../rpc/environment-revisions/runtime-environment-revision'
 import { getWebSessionTabsTrackingGeneration } from './tracking-lifecycle'
 import type { WebSessionTabsSnapshotDecision } from './tracking-decisions'
 
@@ -12,6 +13,7 @@ import type { WebSessionTabsSnapshotDecision } from './tracking-decisions'
 export type HostSessionMirrorSettle = () => void
 
 export type HostSessionMirrorPatchFrame = {
+  source?: RuntimeMobileSessionTabsResult
   environmentId: string
   worktreeId: string
   decision: WebSessionTabsSnapshotDecision

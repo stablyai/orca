@@ -1,8 +1,8 @@
-import type { TerminalPanePlacement } from '../../../shared/terminal-pane-placement'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { TerminalPanePlacement } from '../../../shared/workspace-layout/terminal-pane-placement'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { layoutContainsLeafId } from '../restoring-sessions/terminal-layout-normalization'
 
-/** Low-cardinality: it lands on the `persistence.pty-binding` span. */
+/** Low-cardinality span attribute; absent tracks new leaves relying on legacy mint/graft placement. */
 export type TerminalPanePlacementAgreement =
   | 'absent'
   | 'leaf_present'
@@ -13,10 +13,7 @@ export type TerminalPanePlacementAgreement =
   | 'root_occupied'
   | 'check_threw'
 
-/**
- * Whether placement names the tab today's binding write picks, read before that write. Report-only
- * until the mint and graft are deleted; the write never branches on it.
- */
+/** Compare placement before binding; reporting never changes the write. */
 export function terminalPanePlacementAgreement(
   placement: TerminalPanePlacement | undefined,
   session: WorkspaceSessionState,
@@ -24,13 +21,13 @@ export function terminalPanePlacementAgreement(
   tabId: string,
   leafId: string
 ): TerminalPanePlacementAgreement {
-  if (!placement) {
-    return 'absent'
-  }
   const tabExists = session.tabsByWorktree?.[worktreeId]?.some((tab) => tab.id === tabId) === true
   const root = session.terminalLayoutsByTabId?.[tabId]?.root ?? null
   if (tabExists && layoutContainsLeafId(root, leafId)) {
     return 'leaf_present'
+  }
+  if (!placement) {
+    return 'absent'
   }
   switch (placement.kind) {
     case 'new-tab':

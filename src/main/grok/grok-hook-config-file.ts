@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
 import { copyFile, lstat, open, readFile, realpath, rename, rm, stat } from 'node:fs/promises'
-import { parseHooksJsonText } from '../agent-hooks/hooks-json-read'
-import type { HooksConfig } from '../agent-hooks/installer-utils'
+import { parseHooksJsonText } from '../agent-hooks/installation/configuration/hooks-json-read'
+import type { HooksConfig } from '../agent-hooks/installation/configuration/hook-config-schema'
 
 export type AsyncGrokHookConfigSnapshot = {
   raw: string | null
@@ -25,10 +25,7 @@ export async function writeGrokHookConfigIfUnchanged(
   return await mutateGrokHookConfigIfUnchanged(targetPath, expectedContents, contents, options)
 }
 
-/**
- * Removes the managed config. Returns false when the caller must write through instead: a config
- * the user has symlinked belongs to them, so we strip our entries rather than unlink their link.
- */
+/** Remove managed configs only; symlinked user configs require stripping entries and writing through. */
 export async function removeGrokHookConfigIfUnchanged(
   targetPath: string,
   expectedContents: string,
@@ -37,7 +34,6 @@ export async function removeGrokHookConfigIfUnchanged(
   return await mutateGrokHookConfigIfUnchanged(targetPath, expectedContents, null, options)
 }
 
-/** True when the config is a symlink, so it must be written through and never unlinked. */
 export async function isGrokHookConfigSymlink(targetPath: string): Promise<boolean> {
   try {
     return (await lstat(targetPath)).isSymbolicLink()
@@ -59,7 +55,7 @@ async function mutateGrokHookConfigIfUnchanged(
   if (options?.beforeHold && !(await options.beforeHold())) {
     return false
   }
-  // Why resolve first: moving the link path would detach a config kept in the user's dotfiles.
+  // Resolve symlinks before moving so dotfile-managed configs stay connected.
   const writePath = await resolveWriteTarget(targetPath)
   const heldPath = `${writePath}.${process.pid}.${randomUUID()}.held`
   try {
@@ -125,8 +121,7 @@ async function mutateGrokHookConfigIfUnchanged(
 
 async function restoreHeldFile(heldPath: string, targetPath: string): Promise<void> {
   try {
-    // Why exclusive copy: it never overwrites a concurrent writer and works on Windows/network
-    // filesystems that do not support hard links. Keep heldPath until the complete copy succeeds.
+    // Exclusive copy preserves concurrent writers and supports filesystems without hard links; retain heldPath until complete.
     await copyFile(heldPath, targetPath, constants.COPYFILE_EXCL)
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {

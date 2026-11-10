@@ -3,9 +3,8 @@ export type ComposerCreateGateInput = {
   workspaceSeedName: string
   creating: boolean
   sourceIntentBlocksCreate?: boolean
-  requiresExplicitSetupChoice: boolean
-  hasSetupDecision: boolean
   selectedRepoRequiresConnection: boolean
+  selectedTargetNeedsVisibleHost: boolean
   sparseError: string | null
 }
 
@@ -15,14 +14,12 @@ function hasBlockingCreateState(input: ComposerCreateGateInput): boolean {
     input.sourceIntentBlocksCreate === true ||
     input.creating ||
     input.selectedRepoRequiresConnection ||
-    (input.requiresExplicitSetupChoice && !input.hasSetupDecision) ||
+    input.selectedTargetNeedsVisibleHost ||
     input.sparseError !== null
   )
 }
 
 export function getQuickComposerCreateDisabled(input: ComposerCreateGateInput): boolean {
-  // Why: quick create resolves setup hooks and optional issue automation inside submit. Keeping those
-  // background probes out of the disabled gate makes the primary action usable
-  // as soon as the form has enough local state to submit.
+  // Setup/automation probes run during submit; keep them out of disabled gates so valid local form state remains actionable.
   return hasBlockingCreateState(input)
 }

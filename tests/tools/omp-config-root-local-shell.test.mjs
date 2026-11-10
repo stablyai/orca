@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { runProcess } from '../../src/shared/child-process/run-process'
+import { runProcess } from '@orca/process-host'
 import { inheritOmpLaunchEnvironment } from '../../src/main/ipc/pty/host-env/omp-launch-environment'
 import { resetLoginShellEnvironmentCacheForTests } from '../../src/main/startup/login-shell-environment'
 import { PiTitlebarExtensionService } from '../../src/main/pi/titlebar-extension-service'

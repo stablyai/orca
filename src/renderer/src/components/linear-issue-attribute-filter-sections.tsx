@@ -7,12 +7,13 @@ import {
 } from '@/components/github/PRFilterPickers'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_LABEL_IDS,
   LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS,
   type LinearIssueAttributeFilter
 } from '../../../shared/linear/issue-attribute-filter'
-import { getLinearPriorityLabel } from './task-page-localized-options'
+import { getLinearPriorityLabel } from './task-page/task-page-localized-options'
 import { LinearFacetCoverageNotice } from './linear-issue-attribute-filter-coverage-notice'
 import {
   expandLinearMetadataGroupKeys,
@@ -38,14 +39,15 @@ type LinearIssueFilterSectionSummary = { text: string; partial: boolean }
 function facetSummary(
   options: readonly LinearIssueFilterGroupedOption[],
   selectedIds: readonly string[],
-  truncated: boolean
+  truncated: boolean,
+  t: Translate = translate
 ): LinearIssueFilterSectionSummary {
   const count = selectedLinearMetadataGroupKeys(options, selectedIds).length
   if (count === 0) {
     return { text: '', partial: false }
   }
   return {
-    text: translate(
+    text: t(
       'auto.components.linear-issue-attribute-filter-sections.countSelected',
       '{{count}} selected',
       { count }
@@ -73,6 +75,7 @@ export function LinearIssueFilterSectionMenu({
   labelsTruncated: boolean
   onOpenSection: (section: LinearIssueFilterSectionKey) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const sections: {
     key: LinearIssueFilterSectionKey
     label: string
@@ -80,18 +83,15 @@ export function LinearIssueFilterSectionMenu({
   }[] = [
     {
       key: 'status',
-      label: translate('auto.components.linear-issue-attribute-filter-sections.status', 'Status'),
-      summary: facetSummary(statusOptions, value.stateIds, statusTruncated)
+      label: t('auto.components.linear-issue-attribute-filter-sections.status', 'Status'),
+      summary: facetSummary(statusOptions, value.stateIds, statusTruncated, t)
     },
     {
       key: 'priority',
-      label: translate(
-        'auto.components.linear-issue-attribute-filter-sections.priority',
-        'Priority'
-      ),
+      label: t('auto.components.linear-issue-attribute-filter-sections.priority', 'Priority'),
       summary: plainSummary(
         value.priorities.length > 0
-          ? translate(
+          ? t(
               'auto.components.linear-issue-attribute-filter-sections.countSelected',
               '{{count}} selected',
               { count: value.priorities.length }
@@ -101,28 +101,19 @@ export function LinearIssueFilterSectionMenu({
     },
     {
       key: 'assignee',
-      label: translate(
-        'auto.components.linear-issue-attribute-filter-sections.assignee',
-        'Assignee'
-      ),
+      label: t('auto.components.linear-issue-attribute-filter-sections.assignee', 'Assignee'),
       summary: plainSummary(
         value.assignee
           ? value.assignee.kind === 'unassigned'
-            ? translate(
-                'auto.components.linear-issue-attribute-filter-sections.unassigned',
-                'Unassigned'
-              )
-            : translate(
-                'auto.components.linear-issue-attribute-filter-sections.selected',
-                'selected'
-              )
+            ? t('auto.components.linear-issue-attribute-filter-sections.unassigned', 'Unassigned')
+            : t('auto.components.linear-issue-attribute-filter-sections.selected', 'selected')
           : ''
       )
     },
     {
       key: 'labels',
-      label: translate('auto.components.linear-issue-attribute-filter-sections.labels', 'Labels'),
-      summary: facetSummary(labelOptions, value.labelIds, labelsTruncated)
+      label: t('auto.components.linear-issue-attribute-filter-sections.labels', 'Labels'),
+      summary: facetSummary(labelOptions, value.labelIds, labelsTruncated, t)
     }
   ]
 
@@ -143,7 +134,7 @@ export function LinearIssueFilterSectionMenu({
             {/* Why: the marker sits outside the truncating span so a long count never clips it. */}
             {section.summary.partial ? (
               <span className="shrink-0">
-                {translate(
+                {t(
                   'auto.components.linear-issue-attribute-filter-sections.partialCoverageMarker',
                   '· partial'
                 )}
@@ -192,6 +183,7 @@ export function LinearIssueFilterSectionDetail({
   teamRequiredMessage: string | null
   onBack: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   if (section === 'priority') {
     return (
       <div>
@@ -201,7 +193,7 @@ export function LinearIssueFilterSectionDetail({
           selected={value.priorities.map(String)}
           loading={false}
           error={null}
-          searchPlaceholder={translate(
+          searchPlaceholder={t(
             'auto.components.linear-issue-attribute-filter-sections.searchPriority',
             'Filter priority…'
           )}
@@ -240,10 +232,7 @@ export function LinearIssueFilterSectionDetail({
                 })
               }
             >
-              {translate(
-                'auto.components.linear-issue-attribute-filter-sections.unassigned',
-                'Unassigned'
-              )}
+              {t('auto.components.linear-issue-attribute-filter-sections.unassigned', 'Unassigned')}
             </button>
           </div>
         ) : null}
@@ -252,7 +241,6 @@ export function LinearIssueFilterSectionDetail({
     )
   }
 
-  // Status and labels are the same grouped, cap-bounded picker over a different facet.
   if (section === 'status' || section === 'labels') {
     const isStatus = section === 'status'
     const options = isStatus ? statusOptions : labelOptions
@@ -267,11 +255,11 @@ export function LinearIssueFilterSectionDetail({
           error={isStatus ? statusError : labelError}
           searchPlaceholder={
             isStatus
-              ? translate(
+              ? t(
                   'auto.components.linear-issue-attribute-filter-sections.searchStatus',
                   'Filter status…'
                 )
-              : translate(
+              : t(
                   'auto.components.linear-issue-attribute-filter-sections.searchLabels',
                   'Filter labels…'
                 )
@@ -310,7 +298,7 @@ export function LinearIssueFilterSectionDetail({
         options={[
           {
             key: '__unassigned__',
-            primary: translate(
+            primary: t(
               'auto.components.linear-issue-attribute-filter-sections.unassigned',
               'Unassigned'
             )
@@ -320,7 +308,7 @@ export function LinearIssueFilterSectionDetail({
         activeValue={activeAssignee}
         loading={assigneeLoading}
         error={assigneeError}
-        searchPlaceholder={translate(
+        searchPlaceholder={t(
           'auto.components.linear-issue-attribute-filter-sections.searchAssignee',
           'Filter assignee…'
         )}
@@ -341,13 +329,14 @@ export function LinearIssueFilterSectionDetail({
 }
 
 function SectionBack({ onBack }: { onBack: () => void }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <button
       type="button"
       onClick={onBack}
       className="flex w-full items-center gap-1 border-b border-border/50 px-3 py-1.5 text-left text-xs text-muted-foreground transition hover:bg-muted/40 hover:text-foreground"
     >
-      {translate('auto.components.linear-issue-attribute-filter-sections.back', 'Back')}
+      {t('auto.components.linear-issue-attribute-filter-sections.back', 'Back')}
     </button>
   )
 }

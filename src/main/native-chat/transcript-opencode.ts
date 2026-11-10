@@ -1,30 +1,36 @@
+import { createImportedForkTip } from './agent-session-journal/history-import/imported-fork-tip'
+import type {
+  OpenCodeForkTipEvent,
+  OpenCodeTranscriptItem,
+  OpenCodeTranscriptPage,
+  OpenCodeTranscriptSignal
+} from './transcript-opencode-sqlite-query'
 import {
   OPENCODE_CAPTURE_RECORD_LIMIT,
   OPENCODE_CAPTURE_TEXT_LIMIT
-} from '../ai-vault/opencode-transcript-capture-limits'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+} from '../ai-vault/scanners/opencode/sqlite/opencode-transcript-capture-limits'
+import type { NativeChatMessage } from '../../shared/native-chat/native-chat-types'
 import { errorMessage } from '../ai-vault/session-scanner-values'
 import type { ReadTranscriptResult } from './transcript-reader'
 import {
   readOpenCodeTranscriptPageViaWorker,
   readOpenCodeTranscriptSignalViaWorker
-} from '../ai-vault/session-scanner-opencode-sqlite-worker-spawn'
+} from '../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import { discoverOpenCodeTranscriptDatabase } from './transcript-opencode-database'
-import type {
-  OpenCodeTranscriptPage,
-  OpenCodeTranscriptSignal
-} from './transcript-opencode-sqlite-query'
 import { DESKTOP_READ_WINDOW } from './transcript-watch-contract'
 import { openCodeTranscriptPageLimit } from '../../shared/opencode-transcript-page-limit'
 
-// OpenCode SQLite reads use the same bounded worker as AI Vault.
-
 export type OpenCodeTranscriptDeps = {
-  resolveDbPath?: (sessionId?: string, signal?: AbortSignal) => Promise<string | null>
+  resolveDbPath?: (
+    sessionId?: string,
+    signal?: AbortSignal,
+    agent?: 'zcode'
+  ) => Promise<string | null>
   readSignal?: (
     dbPath: string,
     sessionId: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    agent?: 'zcode'
   ) => Promise<OpenCodeTranscriptSignal | null>
   readPage?: (
     args: {
@@ -32,6 +38,7 @@ export type OpenCodeTranscriptDeps = {
       sessionId: string
       limit: number
       beforeMessageRowId?: number
+      agent?: 'zcode'
     },
     signal?: AbortSignal
   ) => Promise<OpenCodeTranscriptPage | null>
@@ -43,8 +50,8 @@ export function resolveOpenCodeTranscriptDbPath(sessionId?: string): Promise<str
 
 export const openCodeTranscriptDefaultDeps: Required<OpenCodeTranscriptDeps> = {
   resolveDbPath: discoverOpenCodeTranscriptDatabase,
-  readSignal: (dbPath, sessionId, signal) =>
-    readOpenCodeTranscriptSignalViaWorker({ dbPath, sessionId }, signal),
+  readSignal: (dbPath, sessionId, signal, agent) =>
+    readOpenCodeTranscriptSignalViaWorker({ dbPath, sessionId, agent }, signal),
   readPage: (args, signal) => readOpenCodeTranscriptPageViaWorker(args, signal)
 }
 
@@ -53,7 +60,7 @@ export type OpenCodeTailResult =
   | { error: string; notFound?: true }
 
 export async function readOpenCodeNativeChatTranscriptTail(
-  args: { sessionId: string; limit: number; beforeOffset?: number },
+  args: { sessionId: string; limit: number; beforeOffset?: number; agent?: 'zcode' },
   deps: OpenCodeTranscriptDeps = {},
   signal?: AbortSignal
 ): Promise<OpenCodeTailResult> {
@@ -61,7 +68,8 @@ export async function readOpenCodeNativeChatTranscriptTail(
   try {
     const dbPath = await (deps.resolveDbPath ?? openCodeTranscriptDefaultDeps.resolveDbPath)(
       args.sessionId,
-      signal
+      signal,
+      args.agent
     )
     if (!dbPath) {
       return { error: 'Transcript unavailable', notFound: true }
@@ -71,7 +79,8 @@ export async function readOpenCodeNativeChatTranscriptTail(
         dbPath,
         sessionId: args.sessionId,
         limit,
-        ...(args.beforeOffset !== undefined ? { beforeMessageRowId: args.beforeOffset } : {})
+        ...(args.beforeOffset !== undefined ? { beforeMessageRowId: args.beforeOffset } : {}),
+        ...(args.agent ? { agent: args.agent } : {})
       },
       signal
     )
@@ -91,17 +100,21 @@ export async function readOpenCodeNativeChatTranscriptTail(
 export async function readOpenCodeNativeChatTranscriptFull(
   sessionId: string,
   deps: OpenCodeTranscriptDeps = {},
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  agent?: 'zcode'
 ): Promise<ReadTranscriptResult> {
-  // Pages arrive newest-window first; reverse windows, preserving message order.
-  const pages: NativeChatMessage[][] = []
+  // Reverse newest-first windows while preserving order inside each page.
+  const pages: OpenCodeTranscriptItem[][] = []
+  const forkPages: OpenCodeForkTipEvent[][] = []
   let records = 0
   let bytes = 0
   let cursor: number | undefined
+  let sourceEmpty = false
   try {
     const dbPath = await (deps.resolveDbPath ?? openCodeTranscriptDefaultDeps.resolveDbPath)(
       sessionId,
-      signal
+      signal,
+      agent
     )
     if (!dbPath) {
       return { error: 'Transcript unavailable', notFound: true }
@@ -113,7 +126,8 @@ export async function readOpenCodeNativeChatTranscriptFull(
           dbPath,
           sessionId,
           limit: 500,
-          ...(cursor !== undefined ? { beforeMessageRowId: cursor } : {})
+          ...(cursor !== undefined ? { beforeMessageRowId: cursor } : {}),
+          ...(agent ? { agent } : {})
         },
         signal
       )
@@ -123,7 +137,18 @@ export async function readOpenCodeNativeChatTranscriptFull(
         }
         break
       }
-      pages.push(page.items.map((item) => item.message))
+      if (pages.length === 0) {
+        sourceEmpty = page.beforeMessageRowId === null && !page.hasMore
+      }
+      pages.push(page.items)
+      forkPages.push(
+        page.forkTip ??
+          page.items.map((item) => ({
+            id: item.message.id,
+            role: item.message.role,
+            terminal: false
+          }))
+      )
       records += page.items.length
       bytes += Buffer.byteLength(JSON.stringify(page.items))
       if (records > OPENCODE_CAPTURE_RECORD_LIMIT || bytes > OPENCODE_CAPTURE_TEXT_LIMIT) {
@@ -137,5 +162,14 @@ export async function readOpenCodeNativeChatTranscriptFull(
   } catch (err) {
     return { error: errorMessage(err) }
   }
-  return { messages: pages.toReversed().flat() }
+  const items = pages.toReversed().flat()
+  const forkTip = createImportedForkTip()
+  for (const event of forkPages.toReversed().flat()) {
+    forkTip.observe(event.id, event.role, event.terminal)
+  }
+  return {
+    messages: items.map((item) => item.message),
+    sourceEmpty,
+    forkTipItemIds: forkTip.settledItems()
+  }
 }

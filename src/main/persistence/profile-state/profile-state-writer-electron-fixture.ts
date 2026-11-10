@@ -4,13 +4,14 @@ import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { applyBackgroundActivationPolicy } from '../../window/foreground-activation-policy'
 import { openProfileStateDatabase } from './profile-state-database'
+import { readProfileStateSnapshot } from './profile-state-documents'
 import { readProfileStateRevision } from './profile-state-revision'
 import { ProfileStateWriteWorkerClient } from './profile-state-writer-worker-client'
 
 const root = process.argv[2]
-const timeoutMs = Number(process.argv[3])
-if (!root || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-  throw new Error('Expected an isolated fixture directory and a positive timeout')
+const slowWarningMs = Number(process.argv[3])
+if (!root || !Number.isFinite(slowWarningMs) || slowWarningMs <= 0) {
+  throw new Error('Expected an isolated fixture directory and a positive warning threshold')
 }
 app.setPath('userData', root)
 app.disableHardwareAcceleration()
@@ -38,19 +39,29 @@ async function run(): Promise<void> {
   const counters = new SharedArrayBuffer(8)
   const counts = new Int32Array(counters)
   const failures: string[] = []
+  let phase = 'initialize'
   const initialization = { databasePath, profileId, revision: 0, counters }
   const client = new ProfileStateWriteWorkerClient(initialization, {
     workerPath: join(root, 'observed-worker.cjs'),
-    timeoutMs,
-    onFailure: (error) => failures.push(error.message)
+    slowWarningMs,
+    onFailure: (error) => {
+      failures.push(error.message)
+      console.error('[writer-fixture] failure', {
+        phase,
+        queuedReplies: Atomics.load(counts, 0),
+        workerStarts: Atomics.load(counts, 1)
+      })
+    }
   })
   const write = (marker: string) =>
     client.writeSerializedDomains([{ domain: 'ui', payload: JSON.stringify({ marker }) }])
   const revisions: number[] = []
   try {
     await client.ready
+    phase = 'before'
     assert.equal(await write('before'), 1)
     for (let cycle = 0; cycle < 4; cycle += 1) {
+      phase = `stall-${cycle}`
       let pending: Promise<number> | undefined
       await new Promise<void>((resolve, reject) => {
         // Dispatch from check so the overdue timer runs before the next poll.
@@ -63,7 +74,7 @@ async function run(): Promise<void> {
               new Int32Array(new SharedArrayBuffer(4)),
               0,
               0,
-              Math.max(0, timeoutMs + 100 - (performance.now() - started))
+              Math.max(0, slowWarningMs + 100 - (performance.now() - started))
             )
             resolve()
           } catch (error) {
@@ -76,15 +87,18 @@ async function run(): Promise<void> {
       }
       revisions.push(await pending)
     }
+    phase = 'after'
     assert.equal(await write('after'), 6)
   } finally {
     await client.close()
   }
   const opened = openProfileStateDatabase(databasePath, profileId)
   const durableRevision = readProfileStateRevision(opened.db)
+  const durableState: unknown = JSON.parse(readProfileStateSnapshot(opened.db).json)
   opened.db.close()
   assert.deepEqual(revisions, [2, 3, 4, 5])
   assert.equal(durableRevision, 6)
+  assert.deepEqual(durableState, { ui: { marker: 'after' } })
   assert.equal(Atomics.load(counts, 1), 1)
   assert.deepEqual(failures, [])
   writeFileSync(
@@ -92,9 +106,10 @@ async function run(): Promise<void> {
     JSON.stringify({
       electron: process.versions.electron,
       node: process.versions.node,
-      timeoutMs,
+      slowWarningMs,
       revisions,
       durableRevision,
+      durableState,
       workerStarts: Atomics.load(counts, 1),
       failures
     })

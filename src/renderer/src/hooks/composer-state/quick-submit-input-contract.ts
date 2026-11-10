@@ -3,6 +3,7 @@ import type { ComposerModel } from './composer-model'
 export type QuickSubmitPreparationInput = Pick<
   ComposerModel,
   | 'branchAutoNameRef'
+  | 'branchIntent'
   | 'branchNameOverridePreservesNameEdits'
   | 'checkedHooksContextKey'
   | 'commitHookCheckIfCurrent'
@@ -18,7 +19,7 @@ export type QuickSubmitPreparationInput = Pick<
   | 'selectedRepoExecutionHostId'
   | 'selectedRepoHookContextKey'
   | 'selectedRepoIsGit'
-  | 'setAdvancedOpen'
+  | 'revealSetupChoice'
   | 'settings'
   | 'setupConfig'
   | 'setupDecision'

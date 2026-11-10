@@ -6,6 +6,21 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+it('bounds the optional persisted title request and ignores its late response', async () => {
+  vi.useFakeTimers()
+  const pending = Promise.withResolvers<string>()
+  const generateSessionTitle = vi.fn(() => pending.promise)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the feature-detected method is called.
+  const controls = createClaudeControlSurface({ generateSessionTitle } as unknown as Query)
+  const result = controls.generateSessionTitle!('Repair login')
+  const expired = expect(result).rejects.toThrow('claude generate_session_title request timed out')
+  await vi.advanceTimersByTimeAsync(30_000)
+  await expired
+  pending.resolve('Late title')
+  await expect(result).rejects.toThrow('timed out')
+  expect(generateSessionTitle).toHaveBeenCalledWith('Repair login', { persist: true })
+})
+
 describe('createClaudeControlSurface stopTask', () => {
   it('bounds a lost reply and permits a later stop request', async () => {
     vi.useFakeTimers()
@@ -25,7 +40,6 @@ describe('createClaudeControlSurface stopTask', () => {
   })
 })
 
-/** A query exposing only the cancel method, as the surface reads nothing else for it. */
 function queryWithCancel(cancelAsyncMessage?: (uuid: string) => Promise<unknown>): Query {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: cancelAsyncMessage reads only this member.
   return (cancelAsyncMessage ? { cancelAsyncMessage } : {}) as unknown as Query
@@ -33,7 +47,6 @@ function queryWithCancel(cancelAsyncMessage?: (uuid: string) => Promise<unknown>
 
 describe('createClaudeControlSurface cancelAsyncMessage', () => {
   it('reports a withdrawal only when the CLI answers cancelled: true', async () => {
-    // An older CLI answers with an empty success, which carries no `cancelled`.
     const cancelAsyncMessage = vi
       .fn<(uuid: string) => Promise<unknown>>()
       .mockResolvedValueOnce(true)

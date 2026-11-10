@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { isSilentSetupScriptPromptState } from '@/lib/setup-script-prompt'
 import {
   getRenderedSetupScriptPromptState,
   type LastVisibleSetupScriptPrompt,
@@ -34,7 +35,7 @@ export function useRenderedSetupScriptPromptState(input: {
     }
     if (
       promptTargetHidden ||
-      renderedPromptState?.status === 'forbidden' ||
+      (renderedPromptState && isSilentSetupScriptPromptState(renderedPromptState)) ||
       (renderedPromptState?.status === 'ok' && renderedPromptState.hasEffectiveSetup)
     ) {
       lastVisiblePromptRef.current = null

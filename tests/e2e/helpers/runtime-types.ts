@@ -1,6 +1,7 @@
 import type { AppState } from '../../../src/renderer/src/store/types'
 import type { PaneManager } from '../../../src/renderer/src/lib/pane-manager/pane-manager'
-import type { OpenFile, RightSidebarTab } from '../../../src/renderer/src/store/slices/editor'
+import type { OpenFile } from '../../../src/renderer/src/store/slices/editor/types/open-file'
+import type { RightSidebarTab } from '../../../src/shared/ui-chrome-types'
 import type {
   ManagedPane,
   ManagedPaneInternal,
@@ -10,24 +11,22 @@ import type { GlobalSettings } from '../../../src/shared/global-settings-types'
 import type { BrowserWorkspace } from '../../../src/shared/browser-workspace-types'
 import type { Repo } from '../../../src/shared/repo-types'
 import type { WorkspaceVisibleTabType } from '../../../src/shared/tab-types'
-import type { TerminalTab } from '../../../src/shared/terminal-tab-types'
+import type { TerminalTab } from '../../../src/shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../src/shared/worktree/types'
-import type { DictationMeterState } from '../../../src/renderer/src/components/dictation/dictation-audio-meter'
+import type { DictationMeterState } from '../../../src/shared/dictation-audio-meter'
 import type { ReactCommitHook } from './tab-render-recorder'
 
-// Why: window.__store is the Zustand bound store itself, so specs get the whole StoreApi.
+// window.__store is the bound Zustand store, including its StoreApi.
 export type AppStore = {
   getState(): AppState
   setState(partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)): void
   subscribe(listener: (state: AppState, previousState: AppState) => void): () => void
 }
 
-// Why: PaneManager hands out one object carrying both halves, and the rendering specs read
-// the internal renderer state off it.
+// PaneManager exposes both public and internal renderer state on the same handle.
 export type ManagedPaneHandle = ManagedPane & ManagedPaneInternal
 
-// Why not optional: window.__paneManagers only ever holds real PaneManager instances, and
-// marking the methods optional made every call site a possibly-undefined invocation.
+// Every registered PaneManager implements these methods; optional methods would weaken spec calls.
 export type PaneManagerLike = {
   getActivePane(): ManagedPaneHandle | null
   getPanes(limit?: number): ManagedPaneHandle[]
@@ -43,6 +42,8 @@ export type PaneManagerLike = {
   hasWebglRenderer(paneId: number): boolean
   getNumericIdForLeaf(leafId: string): number | null
   getLeafId(paneId: number): string | null
+  scheduleRevealRepaint(): void
+  scheduleRevealPresent(): void
 }
 
 export type ExplorerFileSummary = Pick<OpenFile, 'id' | 'filePath' | 'relativePath'>

@@ -1,4 +1,4 @@
-import type { IPtyProvider } from '../../../providers/types'
+import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { ptyIncarnationById } from './ownership-state'
 
 export async function shutdownProviderAndDetectExit(

@@ -1,3 +1,5 @@
+import type * as MobileRelayCredentialRotationModule from '../../../transport/relay/mobile-relay-credential-rotation'
+import type * as MobileRelayDirectUpgradeModule from '../../../transport/relay/mobile-relay-direct-upgrade'
 import type { MountAdapter, MountContext } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 import {
@@ -9,20 +11,15 @@ import {
   directHost
 } from '../relay-pairing-fixtures'
 
-/**
- * The two credential installers that run over an already-paired client: the seven-day rotation and
- * the direct-to-relay upgrade. Both are mutations whose lost reply is unknown rather than failed,
- * so what the recordings have to show is the request order and which authoritative install status
- * each step demanded before it wrote anything down.
- */
+// Record request ordering and authoritative install statuses before persistence; lost credential-mutation replies remain unknown.
 export function relayCredentialMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
   return {
     'relay.credential-rotation': ({ client, effect }: MountContext) => {
-      const rotate = modules.load<
-        typeof import('../../../transport/mobile-relay-credential-rotation')
-      >('mobile/src/transport/mobile-relay-credential-rotation.ts').rotateMobileRelayCredential
+      const rotate = modules.load<typeof MobileRelayCredentialRotationModule>(
+        'mobile/src/transport/relay/mobile-relay-credential-rotation.ts'
+      ).rotateMobileRelayCredential
       const hash = credentialHash(modules)
       let bundle = credentialBundle(hash)
       let outcome: unknown = 'unrotated'
@@ -72,8 +69,8 @@ export function relayCredentialMountAdapters(
       }
     },
     'relay.direct-upgrade': ({ client, effect }: MountContext) => {
-      const upgrade = modules.load<typeof import('../../../transport/mobile-relay-direct-upgrade')>(
-        'mobile/src/transport/mobile-relay-direct-upgrade.ts'
+      const upgrade = modules.load<typeof MobileRelayDirectUpgradeModule>(
+        'mobile/src/transport/relay/mobile-relay-direct-upgrade.ts'
       ).upgradeDirectMobileRelay
       const hash = credentialHash(modules)
       let journal: unknown = null

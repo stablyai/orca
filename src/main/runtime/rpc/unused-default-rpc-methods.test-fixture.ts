@@ -11,7 +11,9 @@ const unusedDefaultRpcMethods = vi.hoisted(() => {
   return { methods, consumption }
 })
 
-vi.mock('./methods', () => ({ ALL_RPC_METHODS: unusedDefaultRpcMethods.methods }))
+vi.mock('./methods/rpc-method-registry', () => ({
+  ALL_RPC_METHODS: unusedDefaultRpcMethods.methods
+}))
 
 afterEach(() => {
   try {

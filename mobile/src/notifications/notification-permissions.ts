@@ -1,9 +1,7 @@
 import * as Notifications from 'expo-notifications'
 import { Platform } from 'react-native'
 
-// Why: OS notification-permission state, separate from the delivery pipeline in
-// mobile-notifications.ts. Nothing here touches sockets, watermarks, or the
-// scheduled-push registry — it only reflects what the OS currently allows.
+// Keep OS permission separate from socket delivery and push reconciliation.
 
 export type NotificationPermissionState = {
   granted: boolean
@@ -18,13 +16,13 @@ export async function getNotificationPermissionState(): Promise<NotificationPerm
     granted: status === 'granted',
     status,
     canAskAgain,
-    // Why: Android <33 has no runtime notification permission, so "granted" is capability, not user consent.
+    // Android before 33 grants capability without runtime user consent.
     authorizationReflectsUserChoice:
       status === 'granted' && (Platform.OS !== 'android' || Number(Platform.Version) >= 33)
   }
 }
 
-// Why: re-read OS state every call — users can change it in Settings while Orca is backgrounded.
+// Reread every call because Settings can change permission while the app is backgrounded.
 export async function ensureNotificationPermissions(): Promise<boolean> {
   const existing = await getNotificationPermissionState()
   if (existing.granted) {

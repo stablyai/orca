@@ -21,12 +21,16 @@ export function resolveResourceWorkspaceHost(
   ctx: MergeContext,
   worktreeId: string,
   repoId: string
-): { isRemote: boolean; isRuntimeScoped: boolean } {
+): { isRemote: boolean; runtimeHostId: string | null } {
   const folder = resolveResourceFolderWorkspace(ctx, worktreeId)
   const host = folder ? parseExecutionHostId(folder.hostId ?? 'local') : null
   return {
     // Folder siblings may execute on different hosts within the same project group.
     isRemote: host ? host.kind === 'ssh' : ctx.repoConnectionIdById.get(repoId) != null,
-    isRuntimeScoped: host ? host.kind === 'runtime' : ctx.repoRuntimeScopedById.get(repoId) === true
+    runtimeHostId: host
+      ? host.kind === 'runtime'
+        ? host.id
+        : null
+      : (ctx.repoRuntimeHostIdById.get(repoId) ?? null)
   }
 }

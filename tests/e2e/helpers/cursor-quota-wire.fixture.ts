@@ -1,17 +1,19 @@
-import { app, net, session } from 'electron'
+import { app, session } from 'electron'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
 import { writeFileSync } from 'node:fs'
 import {
   LOCAL_HTTPS_TEST_CERTIFICATE,
   LOCAL_HTTPS_TEST_PRIVATE_KEY
-} from '../../../src/main/browser/browser-local-https-test-certificate'
-import { fetchCursorRateLimits } from '../../../src/main/rate-limits/cursor-fetcher'
+} from '../../../src/main/browser/electron-fixtures/browser-local-https-test-certificate'
+import { fetchCursorRateLimits } from '../../../src/main/rate-limits/providers/cursor/cursor-fetcher'
 import {
   cursorSessionCookie,
   parseCursorSessionToken
-} from '../../../src/main/rate-limits/cursor-session-token'
-import type { CursorAuthReadResult } from '../../../src/main/rate-limits/cursor-auth'
+} from '../../../src/main/rate-limits/providers/cursor/cursor-session-token'
+import type { CursorAuthReadResult } from '../../../src/main/rate-limits/providers/cursor/cursor-auth'
+import { setMainHttpClient } from '../../../src/main/network/http-client'
+import { electronHttpClient } from '../../../src/main/host/electron-http-client'
 
 function requiredEnv(name: string): string {
   const value = process.env[name]
@@ -150,18 +152,20 @@ async function run(): Promise<void> {
     )
   })
   let origin = httpOrigin
-  const nativeFetch = net.fetch.bind(net)
-  // Route only the provider URL and CSRF origin to loopback; Cookie and credential mode reach native fetch unchanged.
-  net.fetch = (url, options) => {
-    const parsed = new URL(String(url))
-    if (parsed.origin !== 'https://cursor.com') {
-      throw new Error('Fixture refuses non-Cursor requests')
+  // Route only the provider URL and CSRF origin to loopback; Cookie and credential mode reach the desktop client unchanged.
+  setMainHttpClient({
+    ...electronHttpClient,
+    fetch: (url, options) => {
+      const parsed = new URL(String(url))
+      if (parsed.origin !== 'https://cursor.com') {
+        throw new Error('Fixture refuses non-Cursor requests')
+      }
+      return electronHttpClient.fetch(origin + parsed.pathname + parsed.search, {
+        ...options,
+        headers: { ...options?.headers, Origin: origin, Referer: `${origin}/dashboard` }
+      })
     }
-    return nativeFetch(origin + parsed.pathname + parsed.search, {
-      ...options,
-      headers: { ...options?.headers, Origin: origin, Referer: `${origin}/dashboard` }
-    })
-  }
+  })
   const jarUnchanged: boolean[] = []
   const fetch = async (
     name: string,
@@ -241,7 +245,7 @@ async function run(): Promise<void> {
       })
     )
   } finally {
-    net.fetch = nativeFetch
+    setMainHttpClient(null)
     http.close()
     https.close()
     target.close()

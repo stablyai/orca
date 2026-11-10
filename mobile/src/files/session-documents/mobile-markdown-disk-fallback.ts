@@ -1,0 +1,29 @@
+import { isRendererUnavailableReply } from '../../transport/rpc/renderer-unavailable-reply'
+import type { RpcFailure } from '../../transport/rpc/rpc-wire-types'
+import type { MarkdownDocState } from './session-document-state'
+
+export function shouldReadMarkdownFromDiskAfterReadTabFailure(response: RpcFailure): boolean {
+  return isRendererUnavailableReply(response)
+}
+
+export function buildMarkdownDiskFallbackDoc(args: {
+  content: string
+  truncated?: boolean
+  byteLength?: number
+  tabIsDirty: boolean
+}): Extract<MarkdownDocState, { status: 'ready' }> {
+  const readOnlyReason = args.tabIsDirty
+    ? 'Desktop has unsaved changes. Showing disk content.'
+    : 'Editing needs Orca desktop running.'
+  return {
+    status: 'ready',
+    content: args.content,
+    localContent: args.content,
+    baseVersion: '',
+    isDirty: false,
+    editable: false,
+    stale: args.tabIsDirty,
+    readOnlyReason,
+    ...(args.truncated ? { truncated: true, byteLength: args.byteLength } : {})
+  }
+}

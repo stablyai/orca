@@ -4,23 +4,14 @@ export type HostTerminalDataMeta = {
   cwd?: string
 }
 
-/**
- * The authoritative side of the journey: one terminal handle backed by a fake PTY.
- * It records what the host was actually asked to do (input written, snapshots
- * serialized) so the oracle can prove the journey reached the process, not just
- * that frames moved.
- */
+// Record process input and snapshot serialization so frame traffic alone cannot satisfy the journey oracle.
 export type HostTerminalRuntimeStub = {
   runtime: unknown
   ptyId: string
   terminalHandle: string
-  /** Every text the host wrote to the PTY, in order. */
   writtenInput: string[]
-  /** Scrollback the client would see in a snapshot. */
   buffer: string
-  /** How many times the host serialized a buffer for a snapshot. */
   serializeCount: number
-  /** Push PTY output to every host-side data listener. */
   emitOutput: (data: string, meta?: HostTerminalDataMeta) => void
   /** Names of runtime methods the host called that the stub does not implement. */
   missingRuntimeMethods: string[]
@@ -36,6 +27,8 @@ export function createHostTerminalRuntimeStub(
     rows?: number
     initialBuffer?: string
     overflowInitialSnapshots?: boolean
+    /** Replaces the default always-accepting PTY write, to script refusals and lost settlements. */
+    writeInput?: (text: string) => Promise<unknown>
   } = {}
 ): HostTerminalRuntimeStub {
   const terminalHandle = options.terminalHandle ?? 'terminal-journey'
@@ -115,9 +108,13 @@ export function createHostTerminalRuntimeStub(
 
   const runtime: Record<string, unknown> = {
     getRuntimeId: () => 'cross-version-host',
+    getPtyExecutionHostMetadata: () => ({ incarnationId: 'test-incarnation' }),
+    getTerminalLaunchResult: () => undefined,
     resolveLiveLeafForHandle: (handle: string) => (handle === terminalHandle ? { ptyId } : null),
     resolveLeafForHandle: (handle: string) => (handle === terminalHandle ? { ptyId } : null),
     registerRemoteTerminalViewSubscriber: () => () => {},
+    isSoleRemoteTerminalQueryOwner: () => false,
+    answerYieldedTerminalQueries: () => {},
     requestRendererTerminalTabMount: () => true,
     updateRemoteDesktopViewer: async () => true,
     unregisterRemoteDesktopViewer: async () => true,
@@ -154,8 +151,10 @@ export function createHostTerminalRuntimeStub(
       entry?.run()
     },
     waitForTerminal: () => new Promise(() => {}),
-    // The input oracle: the host reached the process with exactly this text.
     sendTerminal: async (_handle: string, action: { text?: string }) => {
+      if (options.writeInput) {
+        return options.writeInput(action?.text ?? '')
+      }
       if (typeof action?.text === 'string') {
         stub.writtenInput.push(action.text)
       }
@@ -187,9 +186,7 @@ export function createHostTerminalRuntimeStub(
     isMobileSubscriberActive: () => false
   }
 
-  // Why: the two builds may ask the host for different methods. Record the gap by
-  // name and return undefined, so the oracle fails naming the method that needs
-  // adding here — instead of an unhandled TypeError that reads like a wire break.
+  // Report missing runtime methods by name so harness gaps do not masquerade as wire failures.
   stub.runtime = new Proxy(runtime, {
     get(target, property, receiver) {
       if (typeof property === 'string' && !(property in target)) {

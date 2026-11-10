@@ -1,7 +1,13 @@
 import { expect, it, vi } from 'vitest'
-const state = vi.hoisted(() => ({ task: null as null | ((input: unknown) => Promise<void>) }))
+const state = vi.hoisted(
+  (): { taskName: string; task: null | ((input: unknown) => Promise<void>) } => ({
+    taskName: '',
+    task: null
+  })
+)
 vi.mock('expo-task-manager', () => ({
-  defineTask: (_name: string, task: typeof state.task) => {
+  defineTask: (name: string, task: typeof state.task) => {
+    state.taskName = name
     state.task = task
   },
   isAvailableAsync: async () => true
@@ -24,6 +30,8 @@ import { registerPushDismissalTask } from './push-background-dismissal'
 
 it('handles native background JSON and scopes dismissal to the originating host', async () => {
   await registerPushDismissalTask()
+  expect(state.taskName).toBe('orca-push-dismissal')
+  expect(Notifications.registerTaskAsync).toHaveBeenCalledExactlyOnceWith('orca-push-dismissal')
   await state.task!({
     data: {
       data: {

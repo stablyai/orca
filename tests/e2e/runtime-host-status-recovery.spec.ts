@@ -1,6 +1,10 @@
 import { createConnection, createServer, type Socket, type AddressInfo } from 'node:net'
 import type { Page } from '@stablyai/playwright-test'
-import { decodePairingOffer, encodePairingOffer } from '../../src/shared/pairing'
+import {
+  decodePairingOffer,
+  encodePairingOffer
+} from '../../src/shared/remote-runtime/pairing/pairing'
+import type { PairingCreateOfferResult } from '../../src/shared/remote-runtime/pairing/pairing-create-offer-contract'
 import { expect, test } from './helpers/orca-app'
 import {
   createRuntimeDesktopPairingOffer,
@@ -37,16 +41,23 @@ async function interruptibleHost(offer: RuntimeDesktopPairingOffer) {
   })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address() as AddressInfo
-  const pairingUrl = encodePairingOffer({ ...pairing, endpoint: `ws://127.0.0.1:${address.port}` })
-  let webClientUrl: string | undefined
-  if (offer.webClientUrl) {
-    const url = new URL(offer.webClientUrl)
-    url.search = ''
-    url.hash = new URLSearchParams({ pairing: pairingUrl }).toString()
-    webClientUrl = url.href
+  function proxyPairingOffer(candidate: RuntimeDesktopPairingOffer) {
+    const pairingUrl = encodePairingOffer({
+      ...decodePairingOffer(candidate.pairingUrl),
+      endpoint: `ws://127.0.0.1:${address.port}`
+    })
+    let webClientUrl: string | undefined
+    if (candidate.webClientUrl) {
+      const url = new URL(candidate.webClientUrl)
+      url.search = ''
+      url.hash = new URLSearchParams({ pairing: pairingUrl }).toString()
+      webClientUrl = url.href
+    }
+    return { pairingUrl, webClientUrl }
   }
   return {
-    offer: { pairingUrl, webClientUrl },
+    offer: proxyPairingOffer(offer),
+    proxyPairingOffer,
     setOnline(value: boolean) {
       online = value
       if (!online) {
@@ -93,9 +104,15 @@ async function expectWorkspaceHostAppearance(
   ).toHaveCount(0)
   await expect(icon).toHaveClass(disconnected ? /text-destructive/ : /text-muted-foreground/)
   await icon.hover()
-  await expect(
-    page.getByRole('tooltip', { name: disconnected ? /disconnected/i : /Project on/ })
-  ).toBeVisible()
+  // Name the host: the previous card's tooltip can still be closing in the DOM.
+  const tooltipName = hostLabel
+    ? disconnected
+      ? `${hostLabel} disconnected`
+      : `Project on ${hostLabel}`
+    : disconnected
+      ? /disconnected/i
+      : /Project on/
+  await expect(page.getByRole('tooltip', { name: tooltipName, exact: true })).toBeVisible()
   await page.mouse.move(900, 600)
 }
 
@@ -111,19 +128,14 @@ for (const topology of ['desktop', 'headless'] as const) {
     let client: Awaited<ReturnType<typeof launchPairedElectronClient>> | undefined
     let browser: Awaited<ReturnType<typeof launchPairedWebClient>> | undefined
     try {
-      headless =
-        topology === 'headless'
-          ? await launchHeadlessPairedRuntimeHost({ pinnedServePort: true })
-          : null
-      const offer = headless?.offer ?? (await createRuntimeDesktopPairingOffer(page))
-      await (headless
-        ? headless.client.call('repo.add', { path: testRepoPath })
-        : page.evaluate(async (path) => {
-            await window.api.repos.add({ path })
-            await window.__store?.getState().fetchRepos()
-          }, testRepoPath))
-      proxy = await interruptibleHost(offer)
-      client = await launchPairedElectronClient(offer, testInfo, 'Direct host')
+      // Why two servers: a client saves one entry per server, so the steady host must be another one.
+      headless = await launchHeadlessPairedRuntimeHost({ pinnedServePort: true })
+      await headless.client.call('repo.add', { path: testRepoPath })
+      const desktopOffer = await createRuntimeDesktopPairingOffer(page)
+      const [recoveringOffer, directOffer] =
+        topology === 'headless' ? [headless.offer, desktopOffer] : [desktopOffer, headless.offer]
+      proxy = await interruptibleHost(recoveringOffer)
+      client = await launchPairedElectronClient(directOffer, testInfo, 'Direct host')
       proxy.setOnline(false)
       const offlineId = await client.page.evaluate(async (pairingCode) => {
         const { environment } = await window.api.runtimeEnvironments.addFromPairingCode({
@@ -149,7 +161,28 @@ for (const topology of ['desktop', 'headless'] as const) {
       await expectWorkspaceHostAppearance(client.page, false, 'Recovering host')
       await expect(client.page.getByText('Recovering host', { exact: true }).first()).toBeVisible()
       await client.page.screenshot({ path: testInfo.outputPath(`${topology}-recovered.png`) })
-      browser = await launchPairedWebClient(electronApp, proxy.offer)
+      // Each viewer needs its own ticket; browser key migration retires its pairing ticket.
+      let browserOffer: RuntimeDesktopPairingOffer
+      if (topology === 'desktop') {
+        browserOffer = await createRuntimeDesktopPairingOffer(page)
+      } else {
+        const { result } = await headless.client.call<PairingCreateOfferResult>(
+          'pairing.createOffer',
+          {
+            scope: 'runtime',
+            address: '127.0.0.1',
+            rotate: true
+          }
+        )
+        if (!result.available) {
+          throw new Error(result.guidance)
+        }
+        browserOffer = {
+          pairingUrl: result.pairingUrl,
+          ...(result.webClientUrl ? { webClientUrl: result.webClientUrl } : {})
+        }
+      }
+      browser = await launchPairedWebClient(electronApp, proxy.proxyPairingOffer(browserOffer))
       await expect
         .poll(() => statusEvidence(browser!.page), { timeout: 30_000 })
         .toMatchObject({ verification: 'verified', transport: 'ready' })

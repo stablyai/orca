@@ -15,9 +15,6 @@ export function shouldAllowComposerEnterSubmitTarget(
   if (composer?.contains(target)) {
     return true
   }
-  // Why: selecting a PR/issue/Linear row tears down the focused input and
-  // Radix's focus restore can land on body/documentElement, the DialogContent
-  // root, or any other ancestor wrapping the composer. Allow any ancestor so
-  // the modal's Cmd/Ctrl+Enter shortcut keeps firing post-selection.
+  // Selection teardown can restore focus to any composer ancestor; accept those targets so Cmd/Ctrl+Enter still submits.
   return composer ? target.contains(composer) : false
 }

@@ -1,15 +1,16 @@
 import React from 'react'
-import { Minus, Plus, Trash, Undo2 } from 'lucide-react'
+import { Minus, Plus, Undo2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import { useTranslate } from '@/i18n/use-translate'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
+import type { ConflictResolution } from '../../../../../../shared/source-control/listing/source-control-entry-actions'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
 import {
   getDiscardAllPaths,
   getUnstageAllPaths,
   isStageableStatusEntry,
   type DiscardAllArea
-} from '../commit/discard-all-sequence'
+} from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 import { ActionButton } from './action-button'
 import { SectionHeader } from './section-header'
 import { SourceControlSectionFileList } from './section-file-list'
@@ -17,16 +18,16 @@ import {
   getSourceControlSectionViewAction,
   type SourceControlDisplaySection,
   type SourceControlDisplaySectionId,
-  type SourceControlSectionArea,
+  type SourceControlDisplaySectionArea,
   type SourceControlSectionViewAction
-} from './section-order'
+} from '../../../../../../shared/source-control/listing/source-control-section-order'
 import type {
   RenderableSourceControlNode,
   RenderableSubmoduleListItem
 } from './submodule-expansion'
 import type { SourceControlRowOpenEvent } from './split-open'
 
-const SECTION_LABELS: Record<SourceControlSectionArea, { key: string; fallback: string }> = {
+const SECTION_LABELS: Record<SourceControlDisplaySectionArea, { key: string; fallback: string }> = {
   staged: {
     key: 'auto.components.right.sidebar.SourceControl.48a003c1b1',
     fallback: 'Staged Changes'
@@ -34,10 +35,6 @@ const SECTION_LABELS: Record<SourceControlSectionArea, { key: string; fallback: 
   unstaged: {
     key: 'auto.components.right.sidebar.SourceControl.d4ef4bafc5',
     fallback: 'Changes'
-  },
-  untracked: {
-    key: 'auto.components.right.sidebar.SourceControl.522f44dce5',
-    fallback: 'Untracked Files'
   }
 }
 const CONFLICTS_SECTION_LABEL = {
@@ -58,6 +55,11 @@ export function SourceControlUncommittedSections(props: {
   isExecutingBulk: boolean
   requestDiscardAllInArea: (area: DiscardAllArea, paths?: readonly string[]) => void
   handleStageAllPaths: (paths: readonly string[]) => Promise<void>
+  /** Stages a section header's set; a capped listing defers "all" to the host. */
+  handleStageSectionPaths: (
+    sectionId: SourceControlDisplaySectionId,
+    paths: readonly string[]
+  ) => Promise<void>
   handleUnstagePaths: (paths: readonly string[]) => Promise<void>
   sourceControlViewMode: SourceControlViewMode
   visibleTreeRowsBySection: Partial<
@@ -82,17 +84,18 @@ export function SourceControlUncommittedSections(props: {
   activeConnectionId: string | null
   handleOpenDiff: (entry: GitStatusEntry, event?: SourceControlRowOpenEvent) => void
   handleStage: (path: string) => Promise<void>
+  handleResolveConflict: (entry: GitStatusEntry, resolution: ConflictResolution) => Promise<void>
   handleUnstage: (path: string, oldPath?: string) => Promise<void>
   requestDiscardEntry: (entry: GitStatusEntry) => void
   diffCommentCountByPath: Map<string, number>
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       {props.displaySections.map((section) => {
         const { area, id, items } = section
         const isCollapsed = props.collapsedSections.has(id)
-        // Why: bulk stage/unstage act on the *unfiltered* group; the +/- hides while filtering to avoid acting on more than what's shown.
-        // Why: visibility and execution resolve paths via the same eligibility rules, so the button never shows for a set the handler would filter to empty.
+        // Bulk actions use unfiltered groups; hide them while filtering and share execution eligibility to avoid empty actions.
         const actionSection = props.unfilteredDisplaySectionsById.get(id) ?? section
         const actionItems = actionSection.items
         const stageAllPaths = actionItems.filter(isStageableStatusEntry).map((entry) => entry.path)
@@ -106,7 +109,7 @@ export function SourceControlUncommittedSections(props: {
         return (
           <div key={id}>
             <SectionHeader
-              label={translate(sectionLabel.key, sectionLabel.fallback)}
+              label={t(sectionLabel.key, sectionLabel.fallback)}
               count={items.length}
               conflictCount={items.filter((entry) => entry.conflictStatus === 'unresolved').length}
               isCollapsed={isCollapsed}
@@ -115,18 +118,11 @@ export function SourceControlUncommittedSections(props: {
                 <div className="flex items-center">
                   {canRevertAll && (
                     <ActionButton
-                      icon={area === 'untracked' ? Trash : Undo2}
-                      title={
-                        area === 'untracked'
-                          ? translate(
-                              'auto.components.right.sidebar.SourceControl.2f609a2e7c',
-                              'Delete all untracked'
-                            )
-                          : translate(
-                              'auto.components.right.sidebar.SourceControl.ce41708855',
-                              'Discard all'
-                            )
-                      }
+                      icon={Undo2}
+                      title={t(
+                        'auto.components.right.sidebar.SourceControl.ce41708855',
+                        'Discard all'
+                      )}
                       onClick={(event) => {
                         event.stopPropagation()
                         props.requestDiscardAllInArea(area, discardAllPaths)
@@ -137,13 +133,13 @@ export function SourceControlUncommittedSections(props: {
                   {canStageAll && (
                     <ActionButton
                       icon={Plus}
-                      title={translate(
+                      title={t(
                         'auto.components.right.sidebar.SourceControl.24d2598eff',
                         'Stage all'
                       )}
                       onClick={(event) => {
                         event.stopPropagation()
-                        void props.handleStageAllPaths(stageAllPaths)
+                        void props.handleStageSectionPaths(id, stageAllPaths)
                       }}
                       disabled={props.isExecutingBulk}
                     />
@@ -151,7 +147,7 @@ export function SourceControlUncommittedSections(props: {
                   {canUnstageAll && (
                     <ActionButton
                       icon={Minus}
-                      title={translate(
+                      title={t(
                         'auto.components.right.sidebar.SourceControl.9339382454',
                         'Unstage all'
                       )}
@@ -173,10 +169,7 @@ export function SourceControlUncommittedSections(props: {
                         props.onViewSection(sectionViewAction)
                       }}
                     >
-                      {translate(
-                        'auto.components.right.sidebar.SourceControl.48db37cca9',
-                        'View all'
-                      )}
+                      {t('auto.components.right.sidebar.SourceControl.48db37cca9', 'View all')}
                     </Button>
                   ) : null}
                 </div>
@@ -207,6 +200,7 @@ export function SourceControlUncommittedSections(props: {
                 activeConnectionId={props.activeConnectionId}
                 handleOpenDiff={props.handleOpenDiff}
                 handleStage={props.handleStage}
+                handleResolveConflict={props.handleResolveConflict}
                 handleUnstage={props.handleUnstage}
                 requestDiscardEntry={props.requestDiscardEntry}
                 diffCommentCountByPath={props.diffCommentCountByPath}

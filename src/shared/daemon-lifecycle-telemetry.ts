@@ -1,15 +1,13 @@
-// Enums + bucketing for the `daemon_lifecycle` telemetry event (STA-2376).
-// The daemon's own retirement cause (pam-rejections/probe-timeouts) lives in the
-// subprocess and never crosses into the app, so every reason here is one the app
-// itself decides: a startup replace, or an observed death→respawn.
+// App-observed replacements/death-respawns only (STA-2376); subprocess retirement causes such as PAM rejection/probe timeout never cross into the app.
 
-// Startup launcher replaced a still-connectable daemon (each maps 1:1 to a `daemon-init.ts` decision).
+// Startup launcher replaced a still-connectable daemon (each maps 1:1 to a `daemon-replacement-preflight.ts` decision).
 export const DAEMON_REPLACE_REASONS = [
   'unhealthy_resolver',
   'stale_bundle',
   'different_app_path',
   'failed_health_check',
-  'severed_tcc_attribution'
+  'severed_tcc_attribution',
+  'severed_host_image'
 ] as const
 export type DaemonReplaceReason = (typeof DAEMON_REPLACE_REASONS)[number]
 
@@ -19,8 +17,7 @@ export type DaemonRetireReason = (typeof DAEMON_RETIRE_REASONS)[number]
 
 export const DAEMON_LIFECYCLE_TRANSITIONS = ['replaced', 'retired'] as const
 
-// Bucketed, never raw: exact live-session counts could fingerprint heavy users. `unknown` when
-// the count couldn't be verified (null) — e.g. a wedged daemon or an already-dead respawn target.
+// Bucket counts to avoid fingerprinting heavy users; unknown covers unverifiable wedged/dead targets.
 export const DAEMON_LIFECYCLE_SESSION_BUCKETS = ['0', '1', '2-5', '6+', 'unknown'] as const
 export type DaemonLifecycleSessionBucket = (typeof DAEMON_LIFECYCLE_SESSION_BUCKETS)[number]
 

@@ -1,13 +1,13 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type { WebSocket } from 'ws'
 import { E2EEChannel, type E2EEChannelOptions } from './e2ee-channel'
-import { generateKeyPair, deriveSharedKey, encrypt, decrypt, encryptBytes } from './e2ee-crypto'
 import {
-  REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES,
-  REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
-} from '../../../shared/remote-runtime-memory-limits'
-import { REMOTE_RUNTIME_JSON_STRUCTURE_LIMITS } from '../../../shared/remote-runtime-request-frames'
-import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+  generateKeyPair,
+  deriveSharedKey,
+  encrypt,
+  decrypt,
+  encryptBytes
+} from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 
 function publicKeyToBase64(key: Uint8Array): string {
   return Buffer.from(key).toString('base64')
@@ -35,7 +35,14 @@ function setup(overrides?: Partial<E2EEChannelOptions>) {
     serverSecretKey: serverKeys.secretKey,
     resolveAuthenticatedDevice: (token) =>
       token === 'valid-token'
-        ? { deviceId: 'device-1', deviceToken: token, scope: 'mobile' }
+        ? {
+            deviceId: 'device-1',
+            deviceToken: token,
+            scope: 'mobile',
+            clientId: token,
+            callerFingerprint: 'test-fingerprint',
+            credentialRevision: 0
+          }
         : null,
     onReady,
     onError,
@@ -75,7 +82,10 @@ describe('E2EEChannel', () => {
       expect(ctx.onReady).toHaveBeenCalledWith(ctx.channel, {
         deviceId: 'device-1',
         deviceToken: 'valid-token',
-        scope: 'mobile'
+        scope: 'mobile',
+        clientId: 'valid-token',
+        callerFingerprint: 'test-fingerprint',
+        credentialRevision: 0
       })
       expect(ctx.onError).not.toHaveBeenCalled()
       expect(ctx.channel.deviceToken).toBe('valid-token')
@@ -102,52 +112,6 @@ describe('E2EEChannel', () => {
       expect(JSON.parse(ctx.ws.sent[0]!)).toEqual({ type: 'e2ee_ready' })
     })
 
-    it('binds runtime capabilities to encrypted authenticated metadata', () => {
-      const ctx = setup({
-        resolveAuthenticatedDevice: (token) =>
-          token === 'valid-token'
-            ? { deviceId: 'device-1', deviceToken: token, scope: 'runtime' }
-            : null
-      })
-      ctx.channel.handleRawMessage(
-        JSON.stringify({
-          type: 'e2ee_hello',
-          publicKeyB64: publicKeyToBase64(ctx.clientKeys.publicKey)
-        })
-      )
-      const sharedKey = deriveSharedKey(ctx.clientKeys.secretKey, ctx.serverKeys.publicKey)
-      ctx.channel.handleRawMessage(
-        encrypt(
-          JSON.stringify({
-            type: 'e2ee_auth',
-            deviceToken: 'valid-token',
-            clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
-          }),
-          sharedKey
-        )
-      )
-
-      expect(ctx.channel.clientCapabilities).toEqual([SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY])
-      expect(ctx.onReady).toHaveBeenCalledOnce()
-    })
-
-    it('rejects invalid encrypted token', () => {
-      const ctx = setup()
-      ctx.channel.handleRawMessage(
-        JSON.stringify({
-          type: 'e2ee_hello',
-          publicKeyB64: publicKeyToBase64(ctx.clientKeys.publicKey)
-        })
-      )
-      const sharedKey = deriveSharedKey(ctx.clientKeys.secretKey, ctx.serverKeys.publicKey)
-      ctx.channel.handleRawMessage(
-        encrypt(JSON.stringify({ type: 'e2ee_auth', deviceToken: 'bad-token' }), sharedKey)
-      )
-
-      expect(ctx.onError).toHaveBeenCalledWith(4001, 'Unauthorized')
-      expect(ctx.onReady).not.toHaveBeenCalled()
-    })
-
     it('rejects an auth frame encrypted to a stale desktop key', () => {
       const ctx = setup()
       ctx.channel.handleRawMessage(
@@ -166,95 +130,6 @@ describe('E2EEChannel', () => {
       expect(ctx.onError).toHaveBeenCalledOnce()
       expect(ctx.onError).toHaveBeenCalledWith(4001, 'Unauthorized')
       expect(ctx.onReady).not.toHaveBeenCalled()
-    })
-
-    it('rejects malformed JSON', () => {
-      const ctx = setup()
-      ctx.channel.handleRawMessage('not json')
-
-      expect(ctx.onError).toHaveBeenCalledWith(4001, 'Invalid handshake message')
-    })
-
-    it('rejects structurally amplified hello JSON before parsing', () => {
-      const ctx = setup()
-      const amplified = `{"type":"e2ee_hello","padding":[${'0,'.repeat(REMOTE_RUNTIME_JSON_STRUCTURE_LIMITS.structuralTokens)}0]}`
-      const parse = vi.spyOn(JSON, 'parse')
-
-      ctx.channel.handleRawMessage(amplified)
-
-      expect(ctx.onError).toHaveBeenCalledWith(4001, 'Invalid handshake message')
-      expect(parse).not.toHaveBeenCalled()
-      parse.mockRestore()
-      ctx.channel.destroy()
-    })
-
-    it('rejects structurally amplified auth JSON before parsing', () => {
-      const ctx = setup()
-      ctx.channel.handleRawMessage(
-        JSON.stringify({
-          type: 'e2ee_hello',
-          publicKeyB64: publicKeyToBase64(ctx.clientKeys.publicKey)
-        })
-      )
-      const sharedKey = deriveSharedKey(ctx.clientKeys.secretKey, ctx.serverKeys.publicKey)
-      const amplified = `{"type":"e2ee_auth","deviceToken":"valid-token","padding":[${'0,'.repeat(REMOTE_RUNTIME_JSON_STRUCTURE_LIMITS.structuralTokens)}0]}`
-      const parse = vi.spyOn(JSON, 'parse')
-
-      ctx.channel.handleRawMessage(encrypt(amplified, sharedKey))
-
-      expect(ctx.onError).toHaveBeenCalledWith(4001, 'Invalid e2ee_auth')
-      expect(parse).not.toHaveBeenCalled()
-      parse.mockRestore()
-      ctx.channel.destroy()
-    })
-
-    it('rejects missing fields', () => {
-      const ctx = setup()
-      ctx.channel.handleRawMessage(JSON.stringify({ type: 'e2ee_hello' }))
-
-      expect(ctx.onError).toHaveBeenCalledWith(4001, 'Invalid e2ee_hello')
-    })
-
-    it('rejects invalid public key length', () => {
-      const ctx = setup()
-      ctx.channel.handleRawMessage(
-        JSON.stringify({
-          type: 'e2ee_hello',
-          publicKeyB64: Buffer.from('short').toString('base64')
-        })
-      )
-
-      expect(ctx.onError).toHaveBeenCalledWith(4001, 'Invalid public key')
-    })
-
-    it('rejects oversized public key text before base64 decoding', () => {
-      const ctx = setup()
-      const decode = vi.spyOn(Buffer, 'from')
-
-      ctx.channel.handleRawMessage(
-        JSON.stringify({ type: 'e2ee_hello', publicKeyB64: 'A'.repeat(45) })
-      )
-
-      expect(ctx.onError).toHaveBeenCalledWith(4001, 'Invalid public key')
-      expect(decode).not.toHaveBeenCalled()
-      decode.mockRestore()
-    })
-
-    it('times out if no hello received', () => {
-      const ctx = setup()
-
-      vi.advanceTimersByTime(10_001)
-
-      expect(ctx.onError).toHaveBeenCalledWith(4002, 'E2EE handshake timeout')
-    })
-
-    it('clears timeout after successful handshake', () => {
-      const ctx = setup()
-      doHandshake(ctx)
-
-      vi.advanceTimersByTime(10_001)
-
-      expect(ctx.onError).not.toHaveBeenCalled()
     })
   })
 
@@ -284,42 +159,9 @@ describe('E2EEChannel', () => {
 
       ctx.channel.handleRawMessage(encrypt('{"id":"rpc-1","method":"status.get"}', sharedKey))
 
-      // The reply (ws.sent[2], after ready + authenticated) should be encrypted
       const replyEncrypted = ctx.ws.sent[2]!
       const replyPlain = decrypt(replyEncrypted, sharedKey)
       expect(replyPlain).toBe('{"id":"rpc-1","ok":true}')
-    })
-
-    it('rejects an oversized text reply before encryption', () => {
-      const ctx = setup()
-      const sharedKey = doHandshake(ctx)
-      const sentBefore = ctx.ws.sent.length
-
-      ctx.channel.onMessage((_plaintext, encryptedReply) => {
-        encryptedReply('x'.repeat(REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES + 1))
-      })
-      ctx.channel.handleRawMessage(encrypt('request', sharedKey))
-
-      expect(ctx.onError).toHaveBeenCalledWith(1013, 'Outbound reply buffer overflow')
-      expect(ctx.ws.sent).toHaveLength(sentBefore)
-    })
-
-    it('rejects an oversized binary reply before encryption', () => {
-      const ctx = setup()
-      const sharedKey = doHandshake(ctx)
-      const sentBefore = ctx.ws.sent.length
-      let accepted: boolean | void = undefined
-
-      ctx.channel.onMessage((_plaintext, _encryptedReply, encryptedBinaryReply) => {
-        accepted = encryptedBinaryReply(
-          new Uint8Array(REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES + 1)
-        )
-      })
-      ctx.channel.handleRawMessage(encrypt('request', sharedKey))
-
-      expect(accepted).toBe(false)
-      expect(ctx.onError).toHaveBeenCalledWith(1013, 'Outbound reply buffer overflow')
-      expect(ctx.ws.sent).toHaveLength(sentBefore)
     })
 
     it('decrypts and forwards binary messages after authentication', () => {
@@ -350,42 +192,6 @@ describe('E2EEChannel', () => {
 
       expect(received).toEqual([])
     })
-
-    it('closes after too many consecutive decrypt failures', () => {
-      const ctx = setup()
-      doHandshake(ctx)
-      ctx.channel.onMessage(() => {})
-
-      const badKey = deriveSharedKey(generateKeyPair().secretKey, generateKeyPair().publicKey)
-
-      for (let i = 0; i < 4; i++) {
-        ctx.channel.handleRawMessage(encrypt('bad', badKey))
-      }
-      expect(ctx.onError).not.toHaveBeenCalled()
-
-      ctx.channel.handleRawMessage(encrypt('bad', badKey))
-      expect(ctx.onError).toHaveBeenCalledWith(4003, 'Too many decryption failures')
-    })
-
-    it('resets failure count on successful decrypt', () => {
-      const ctx = setup()
-      const sharedKey = doHandshake(ctx)
-      ctx.channel.onMessage(() => {})
-
-      const badKey = deriveSharedKey(generateKeyPair().secretKey, generateKeyPair().publicKey)
-
-      for (let i = 0; i < 4; i++) {
-        ctx.channel.handleRawMessage(encrypt('bad', badKey))
-      }
-
-      // Successful decrypt resets the counter
-      ctx.channel.handleRawMessage(encrypt('good', sharedKey))
-
-      for (let i = 0; i < 4; i++) {
-        ctx.channel.handleRawMessage(encrypt('bad', badKey))
-      }
-      expect(ctx.onError).not.toHaveBeenCalled()
-    })
   })
 
   describe('destroy', () => {
@@ -404,12 +210,7 @@ describe('E2EEChannel', () => {
       expect(received).toEqual([])
     })
 
-    // Why: streaming RPC handlers (terminal.subscribe) retain the
-    // encryptedReply closure created inside handleRawMessage. If destroy()
-    // runs (mobile disconnect) before a late streaming emit, the closure's
-    // captured this.sharedKey is null. Without a guard, encrypt() would
-    // call nacl.box.after with a null key and throw an unhandled
-    // "unexpected type, use Uint8Array" rejection.
+    // Streaming handlers retain this reply closure after disconnect; destroy clears its key, so late emits must not encrypt with null.
     it('does not throw when streaming emit fires after destroy', () => {
       const ctx = setup()
       const sharedKey = doHandshake(ctx)

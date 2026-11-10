@@ -16,7 +16,9 @@ import { ShareUsageButton } from './ShareUsageButton'
 import { StatCard } from './StatCard'
 import { UsageFilterRadioGroup, UsageTrackingPaneShell } from './UsageTrackingPaneShell'
 import { formatCost, formatTokens, formatUpdatedAt } from './usage-formatters'
+import { unpricedCostLabel } from './unpriced-cost-label'
 import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 const RANGE_OPTIONS: ClaudeUsageRange[] = ['7d', '30d', '90d', 'all']
 const SCOPE_OPTIONS: { value: ClaudeUsageScope; label: string }[] = [
@@ -49,6 +51,8 @@ const RANGE_LABELS: Record<ClaudeUsageRange, string> = {
 }
 
 export function ClaudeUsagePane(): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const scanState = useAppStore((state) => state.claudeUsageScanState)
   const summary = useAppStore((state) => state.claudeUsageSummary)
   const daily = useAppStore((state) => state.claudeUsageDaily)
@@ -73,11 +77,8 @@ export function ClaudeUsagePane(): React.JSX.Element {
     void setClaudeUsageEnabled(enabled)
   }
 
-  const title = translate(
-    'auto.components.stats.ClaudeUsagePane.6afacbee37',
-    'Claude Usage Tracking'
-  )
-  const enableLabel = translate(
+  const title = t('auto.components.stats.ClaudeUsagePane.6afacbee37', 'Claude Usage Tracking')
+  const enableLabel = t(
     'auto.components.stats.ClaudeUsagePane.424cd50412',
     'Enable Claude usage analytics'
   )
@@ -87,7 +88,7 @@ export function ClaudeUsagePane(): React.JSX.Element {
       <UsageTrackingPaneShell
         enabled={false}
         title={title}
-        disabledDescription={translate(
+        disabledDescription={t(
           'auto.components.stats.ClaudeUsagePane.0cb1a36d7d',
           'Reads local Claude usage logs to show token, model, and session stats.'
         )}
@@ -109,9 +110,9 @@ export function ClaudeUsagePane(): React.JSX.Element {
       title={title}
       status={
         <>
-          {formatUpdatedAt(scanState.lastScanCompletedAt)}
+          {formatUpdatedAt(scanState.lastScanCompletedAt, t, intlLocale)}
           {scanState.lastScanError
-            ? translate(
+            ? t(
                 'auto.components.stats.ClaudeUsagePane.2d41fd45c6',
                 ' • Last scan error: {{value0}}',
                 { value0: scanState.lastScanError }
@@ -122,27 +123,24 @@ export function ClaudeUsagePane(): React.JSX.Element {
       isRefreshing={scanState.isScanning}
       hasData={hasAnyData}
       enableLabel={enableLabel}
-      optionsLabel={translate(
-        'auto.components.stats.ClaudeUsagePane.e9bf9fce0e',
-        'Claude usage options'
-      )}
-      filtersLabel={translate('auto.components.stats.ClaudeUsagePane.dd29209b21', 'Filters')}
-      refreshAriaLabel={translate(
+      optionsLabel={t('auto.components.stats.ClaudeUsagePane.e9bf9fce0e', 'Claude usage options')}
+      filtersLabel={t('auto.components.stats.ClaudeUsagePane.dd29209b21', 'Filters')}
+      refreshAriaLabel={t(
         'auto.components.stats.ClaudeUsagePane.c5b9b344d0',
         'Refresh Claude usage'
       )}
-      refreshLabel={translate('auto.components.stats.ClaudeUsagePane.8d18bbb771', 'Refresh')}
+      refreshLabel={t('auto.components.stats.ClaudeUsagePane.8d18bbb771', 'Refresh')}
       filterSections={[
         <UsageFilterRadioGroup
           key="scope"
-          label={translate('auto.components.stats.ClaudeUsagePane.f61cffb9c8', 'Scope')}
+          label={t('auto.components.stats.ClaudeUsagePane.f61cffb9c8', 'Scope')}
           value={scope}
           options={SCOPE_OPTIONS}
           onValueChange={(value) => void setClaudeUsageScope(value)}
         />,
         <UsageFilterRadioGroup
           key="range"
-          label={translate('auto.components.stats.ClaudeUsagePane.505be9aac4', 'Range')}
+          label={t('auto.components.stats.ClaudeUsagePane.505be9aac4', 'Range')}
           value={range}
           options={RANGE_OPTIONS.map((value) => ({ value, label: RANGE_LABELS[value] }))}
           onValueChange={(value) => void setClaudeUsageRange(value)}
@@ -153,7 +151,7 @@ export function ClaudeUsagePane(): React.JSX.Element {
           {SCOPE_OPTIONS.find((option) => option.value === scope)?.label} • {RANGE_LABELS[range]}
         </>
       }
-      emptyMessage={translate(
+      emptyMessage={t(
         'auto.components.stats.ClaudeUsagePane.7dde9331fd',
         'No local Claude usage found yet for this scope.'
       )}
@@ -168,30 +166,27 @@ export function ClaudeUsagePane(): React.JSX.Element {
       <>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            label={translate('auto.components.stats.ClaudeUsagePane.ea71fae8fc', 'Input tokens')}
-            value={formatTokens(summary?.inputTokens ?? 0)}
+            label={t('auto.components.stats.ClaudeUsagePane.ea71fae8fc', 'Input tokens')}
+            value={formatTokens(summary?.inputTokens ?? 0, intlLocale)}
             icon={<Sparkles className="size-4" />}
           />
           <StatCard
-            label={translate('auto.components.stats.ClaudeUsagePane.2b8a2f14aa', 'Output tokens')}
-            value={formatTokens(summary?.outputTokens ?? 0)}
+            label={t('auto.components.stats.ClaudeUsagePane.2b8a2f14aa', 'Output tokens')}
+            value={formatTokens(summary?.outputTokens ?? 0, intlLocale)}
             icon={<Activity className="size-4" />}
           />
           <StatCard
-            label={translate('auto.components.stats.ClaudeUsagePane.268cf0af51', 'Cache read')}
-            value={formatTokens(summary?.cacheReadTokens ?? 0)}
+            label={t('auto.components.stats.ClaudeUsagePane.268cf0af51', 'Cache read')}
+            value={formatTokens(summary?.cacheReadTokens ?? 0, intlLocale)}
             icon={<DatabaseZap className="size-4" />}
           />
           <StatCard
-            label={translate('auto.components.stats.ClaudeUsagePane.b786fb4a70', 'Cache write')}
-            value={formatTokens(summary?.cacheWriteTokens ?? 0)}
+            label={t('auto.components.stats.ClaudeUsagePane.b786fb4a70', 'Cache write')}
+            value={formatTokens(summary?.cacheWriteTokens ?? 0, intlLocale)}
             icon={<Waypoints className="size-4" />}
           />
           <StatCard
-            label={translate(
-              'auto.components.stats.ClaudeUsagePane.1634c4f404',
-              'Cache reuse rate'
-            )}
+            label={t('auto.components.stats.ClaudeUsagePane.1634c4f404', 'Cache reuse rate')}
             value={
               summary?.cacheReuseRate !== null && summary?.cacheReuseRate !== undefined
                 ? `${Math.round(summary.cacheReuseRate * 100)}%`
@@ -200,10 +195,7 @@ export function ClaudeUsagePane(): React.JSX.Element {
             icon={<Gauge className="size-4" />}
           />
           <StatCard
-            label={translate(
-              'auto.components.stats.ClaudeUsagePane.8cc23be4a3',
-              'Zero-cache-read turns'
-            )}
+            label={t('auto.components.stats.ClaudeUsagePane.8cc23be4a3', 'Zero-cache-read turns')}
             value={
               summary && summary.turns > 0
                 ? `${Math.round((summary.zeroCacheReadTurns / summary.turns) * 100)}%`
@@ -212,24 +204,22 @@ export function ClaudeUsagePane(): React.JSX.Element {
             icon={<DatabaseZap className="size-4" />}
           />
           <StatCard
-            label={translate(
-              'auto.components.stats.ClaudeUsagePane.0f3e696ca9',
-              'Sessions / Turns'
-            )}
-            value={`${(summary?.sessions ?? 0).toLocaleString()} / ${(summary?.turns ?? 0).toLocaleString()}`}
+            label={t('auto.components.stats.ClaudeUsagePane.0f3e696ca9', 'Sessions / Turns')}
+            value={`${(summary?.sessions ?? 0).toLocaleString(intlLocale)} / ${(summary?.turns ?? 0).toLocaleString(intlLocale)}`}
             icon={<FolderKanban className="size-4" />}
           />
           <StatCard
-            label={translate(
-              'auto.components.stats.ClaudeUsagePane.b26d4ddb58',
-              'Est. API-equivalent cost'
+            label={unpricedCostLabel(
+              t('auto.components.stats.ClaudeUsagePane.b26d4ddb58', 'Est. API-equivalent cost'),
+              summary,
+              t
             )}
             value={formatCost(summary?.estimatedCostUsd ?? null)}
             icon={<Coins className="size-4" />}
           />
         </div>
         <p className="px-1 text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.stats.ClaudeUsagePane.51ae85fa00',
             'Cache reuse rate is calculated as cache read tokens / (input tokens + cache read tokens).'
           )}

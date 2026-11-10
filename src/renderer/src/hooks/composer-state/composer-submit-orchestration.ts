@@ -21,7 +21,6 @@ export function useComposerSubmitOrchestration(
     disabledTuiAgents: target.workspaceIdentityState.disabledTuiAgents,
     folderCreateDisabled: source.composerNavigationActions.folderCreateDisabled,
     folderSourceRepos: target.runtimeTargetSelection.folderSourceRepos,
-    folderTargetConnectionId: target.runtimeTargetSelection.folderTargetConnectionId,
     folderTargetIsRemote: target.runtimeTargetSelection.folderTargetIsRemote,
     folderTargetRuntimeEnvironmentId:
       target.runtimeTargetSelection.folderTargetRuntimeEnvironmentId,
@@ -67,6 +66,7 @@ export function useComposerSubmitOrchestration(
     pushTarget: target.workspaceIdentityState.pushTarget
   })
   const quickSubmitPreparation = useQuickSubmitPreparation({
+    branchIntent: target.workspaceIdentityState.branchIntent,
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
     branchNameOverridePreservesNameEdits:
       target.workspaceIdentityState.branchNameOverridePreservesNameEdits,
@@ -84,7 +84,7 @@ export function useComposerSubmitOrchestration(
     selectedRepoExecutionHostId: target.runtimeTargetSelection.selectedRepoExecutionHostId,
     selectedRepoHookContextKey: target.runtimeTargetSelection.selectedRepoHookContextKey,
     selectedRepoIsGit: target.runtimeTargetSelection.selectedRepoIsGit,
-    setAdvancedOpen: target.asyncComposerState.setAdvancedOpen,
+    revealSetupChoice: target.asyncComposerState.revealSetupChoice,
     settings: target.composerTargetStore.settings,
     setupConfig: target.derivedComposerState.setupConfig,
     setupDecision: target.asyncComposerState.setupDecision,
@@ -109,11 +109,11 @@ export function useComposerSubmitOrchestration(
     resetForNextCreate: multipleCreateReset.resetForNextCreate,
     resolvedInitialWorkspaceStatus: target.initialTargetState.resolvedInitialWorkspaceStatus,
     selectedEphemeralVmRecipeId: target.runtimeTargetSelection.selectedEphemeralVmRecipeId,
-    selectedRepoAgentLaunchPlatform: target.runtimeTargetSelection.selectedRepoAgentLaunchPlatform,
+    selectedRepoAgentLaunchFact: target.runtimeTargetSelection.selectedRepoAgentLaunchFact,
     selectedRepoExecutionHostId: target.runtimeTargetSelection.selectedRepoExecutionHostId,
     selectedRepoIsGit: target.runtimeTargetSelection.selectedRepoIsGit,
     selectedRepoIsRemote: target.runtimeTargetSelection.selectedRepoIsRemote,
-    selectedRepoSettings: target.runtimeTargetSelection.selectedRepoSettings,
+    selectedRepoTarget: target.runtimeTargetSelection.selectedRepoTarget,
     selectedRepoStartupShell: target.runtimeTargetSelection.selectedRepoStartupShell,
     selectedWorkspaceTarget: target.runtimeTargetSelection.selectedWorkspaceTarget,
     settings: target.composerTargetStore.settings,
@@ -128,6 +128,7 @@ export function useComposerSubmitOrchestration(
     isProjectGroupTarget: target.runtimeTargetSelection.isProjectGroupTarget,
     isSubmissionCancelled: target.composerTargetStore.isSubmissionCancelled,
     linkedPR: target.workspaceIdentityState.linkedPR,
+    linkedWorkItem: target.sourceContextState.linkedWorkItem,
     name: target.sourceContextState.name,
     onCreated: target.composerTargetStore.onCreated,
     parsedLinkedIssueNumber: target.derivedComposerState.parsedLinkedIssueNumber,
@@ -137,14 +138,18 @@ export function useComposerSubmitOrchestration(
       external.githubSubmitResolution.resolvePendingSmartGitHubSubmit,
     selectedRepo: target.runtimeTargetSelection.selectedRepo,
     selectedRepoRequiresConnection: target.runtimeTargetSelection.selectedRepoRequiresConnection,
+    selectedTargetNeedsVisibleHost: target.runtimeTargetSelection.selectedTargetNeedsVisibleHost,
     selectedWorkspaceTarget: target.runtimeTargetSelection.selectedWorkspaceTarget,
+    revealSetupChoice: target.asyncComposerState.revealSetupChoice,
     setCreateError: target.asyncComposerState.setCreateError,
     setCreating: target.asyncComposerState.setCreating,
     setupDecision: target.asyncComposerState.setupDecision,
     showProjectRequiredError: source.branchStartPointActions.showProjectRequiredError,
     sourceIntentBlocksCreate: target.workspaceIdentityState.sourceIntentBlocksCreate,
     sparseError: target.derivedComposerState.sparseError,
-    submitFolderTarget: folderSubmitOrchestration.submitFolderTarget
+    submitFolderTarget: folderSubmitOrchestration.submitFolderTarget,
+    taskSourceContext: target.sourceContextState.taskSourceContext,
+    telemetrySource: target.composerTargetStore.telemetrySource
   })
   return {
     folderSubmitOrchestration,
