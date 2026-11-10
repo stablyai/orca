@@ -32,6 +32,7 @@ import { publishDictationMeter } from './dictation-meter-store'
 import { useDictationSilenceStop } from './use-dictation-silence-stop'
 import { stopAfterSilenceSeconds } from '../../../../shared/dictation-silence-stop'
 import { useDictationSpeechEvents } from './use-dictation-speech-events'
+import { useDictationSpeechModelSetup } from './use-dictation-speech-model-setup'
 import { NO_DICTATION_LIVE_TEXT } from '@/store/slices/dictation/dictation'
 import {
   canStartDictation,
@@ -74,6 +75,9 @@ export function DictationController() {
   const [failure, setFailure] = useState<DictationFailureKind | null>(null)
   // A new recording gets a fresh pill (timer and all); a retry keeps the one it failed in.
   const [recordingKey, setRecordingKey] = useState(0)
+  const isIdle = useCallback(() => sessionRef.current.phase === 'idle', [])
+  const { setupTarget, closeSetup, invalidatePendingStart, readyToRecord } =
+    useDictationSpeechModelSetup(isIdle, setPillAnchor)
   const queuedSend = useDictationQueuedSend(sessionRef, keptRef)
   const { clear: clearQueuedSend, release: releaseQueuedSend } = queuedSend
 
@@ -158,6 +162,7 @@ export function DictationController() {
 
   // Words that already landed stay; the engine drops the rest instead of transcribing it.
   const cancelDictation = useCallback(() => {
+    invalidatePendingStart()
     if (sessionRef.current.phase === 'error') {
       dispatch({ type: 'ended' })
       return
@@ -169,9 +174,10 @@ export function DictationController() {
     stopCapture()
     void window.api.speech.cancelDictation(previous.sessionId).catch(() => undefined)
     drainStoppedSession(previous.sessionId)
-  }, [dispatch, stopCapture, drainStoppedSession])
+  }, [dispatch, stopCapture, drainStoppedSession, invalidatePendingStart])
 
   const stopDictation = useCallback(async () => {
+    invalidatePendingStart()
     const previous = sessionRef.current
     const next = dispatch({ type: 'stop' })
     if (next === previous) {
@@ -183,7 +189,7 @@ export function DictationController() {
       return
     }
     await finishDictationSession(next)
-  }, [dispatch, finishCapture, finishDictationSession])
+  }, [dispatch, finishCapture, finishDictationSession, invalidatePendingStart])
 
   const startDictation = useCallback(async () => {
     if (!canStartDictation(sessionRef.current.phase)) {
@@ -198,6 +204,10 @@ export function DictationController() {
 
     if (!settings?.voice?.enabled) {
       showDictationDisabledToast()
+      return
+    }
+
+    if (!(await readyToRecord(settings.voice)) || !canStartDictation(sessionRef.current.phase)) {
       return
     }
 
@@ -315,7 +325,8 @@ export function DictationController() {
     finishDictationSession,
     drainStoppedSession,
     recordFeatureInteraction,
-    showFailure
+    showFailure,
+    readyToRecord
   ])
 
   // Sends the failed session's recording through the speech host again, into the same place.
@@ -414,6 +425,8 @@ export function DictationController() {
       anchor={pillAnchor}
       failure={failure}
       queued={queuedSend.queuedKind}
+      setup={setupTarget}
+      onSetupClose={closeSetup}
     />
   )
 }
