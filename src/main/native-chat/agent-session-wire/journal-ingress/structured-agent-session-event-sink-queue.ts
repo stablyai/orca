@@ -28,7 +28,8 @@ export class StructuredAgentSessionSinkQueue {
   private readonly buffered: Admitted[] = []
   private readonly dispatch = new StructuredAgentSessionDispatch(
     () => this.seal(),
-    () => !this.closed && this.failure === null
+    () => !this.closed && this.failure === null,
+    () => this.deps.onWorkChanged?.()
   )
   private readonly waiters: drain.StructuredAgentSessionDrainWaiter[] = []
   private readonly settledTurnListeners = new Set<(turnItemIds: readonly string[]) => void>()
@@ -71,6 +72,7 @@ export class StructuredAgentSessionSinkQueue {
   state = (): events.StructuredAgentSessionSinkState => ({
     queuedBytes: this.queuedBytes,
     queuedOperations: this.queuedOperations,
+    queuedWorkOperations: this.dispatch.queuedWorkOperations,
     backpressured: this.backpressured,
     failed: this.failure !== null
   })
@@ -213,10 +215,9 @@ export class StructuredAgentSessionSinkQueue {
     if (replaceAt >= 0) {
       this.buffered.splice(replaceAt, 1)
     }
-    this.dispatch.coalesce(accepted)
+    this.dispatch.coalesce(accepted, replaced)
     this.queuedBytes = queuedBytes
     this.queuedOperations = queuedOperations
-    this.deps.onWorkChanged?.()
     if (this.target) {
       this.stage(accepted, this.target)
     } else {
@@ -263,10 +264,9 @@ export class StructuredAgentSessionSinkQueue {
   }
 
   private release(operation: Admitted): void {
-    this.dispatch.forget(operation)
+    this.dispatch.release(operation)
     this.queuedBytes = Math.max(0, this.queuedBytes - operation.bytes)
     this.queuedOperations = Math.max(0, this.queuedOperations - (operation.operations ?? 1))
-    this.deps.onWorkChanged?.()
   }
 
   /** Buffered drops settle only after earlier handed-over writes so barriers cannot overtake them. */

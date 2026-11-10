@@ -1,7 +1,6 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { setImmediate } from 'node:timers/promises'
 import { afterEach, expect, it, vi } from 'vitest'
 import { openJournalDatabase } from '../../../native-chat/agent-session-journal/database/journal-database'
 import { journalDatabasePath } from '../../../native-chat/agent-session-journal/database/journal-host-database'
@@ -29,10 +28,32 @@ import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION,
   HOST_TEST_THREAD,
-  hostTestAttachParams
+  hostTestAttachParams,
+  hostTestSendParams
 } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { JournalSqlActivity } from '../../../native-chat/agent-session-journal/journal-sql-activity'
+
+const observeIdleWait = vi.hoisted(() => vi.fn<(idle: Promise<void>) => void>())
+vi.mock(
+  '../../../native-chat/agent-session-journal/journal-sql-activity',
+  async (importOriginal) => {
+    const original = await importOriginal<{ JournalSqlActivity: new () => JournalSqlActivity }>()
+    return {
+      JournalSqlActivity: vi.fn(function () {
+        const activity = new original.JournalSqlActivity()
+        const wait = activity.waitForIdle
+        activity.waitForIdle = (signal) => {
+          const idle = wait(signal)
+          observeIdleWait(idle)
+          return idle
+        }
+        return activity
+      })
+    }
+  }
+)
 
 let root: string | undefined
 let host: StructuredAgentSessionHost | undefined
@@ -45,6 +66,7 @@ afterEach(async () => {
   })
   host = undefined
   vi.restoreAllMocks()
+  observeIdleWait.mockReset()
   if (root) {
     await rm(root, { recursive: true, force: true })
   }
@@ -75,6 +97,13 @@ async function profile() {
   const discovery = barrier()
   const entered = Promise.withResolvers<void>()
   const converted = Promise.withResolvers<void>()
+  const atIdleGate = Promise.withResolvers<void>()
+  const order: string[] = []
+  observeIdleWait.mockImplementationOnce((idle) => {
+    order.push('waiting')
+    void idle.then(() => order.push('idle'))
+    atIdleGate.resolve()
+  })
   const read = JournalSqlReaderPool.prototype.database
   let held = false
   vi.spyOn(JournalSqlReaderPool.prototype, 'database').mockImplementation(async function (
@@ -86,8 +115,12 @@ async function profile() {
       entered.resolve()
       await discovery.promise
     }
-    if (operation.kind === 'sessions' && operation.after !== null) {
-      converted.resolve()
+    if (operation.kind === 'sessions') {
+      if (operation.after === null) {
+        order.push('sessions')
+      } else {
+        converted.resolve()
+      }
     }
     return read.call(this, operation)
   })
@@ -102,13 +135,7 @@ async function profile() {
   await entered.promise
   const history = () =>
     opened.journalDatabase.readers.domainHistory({ sessionId: 'unopened', direction: 'tail' })
-  // Both the maintenance continuation and its idle boundary get their scheduled turn.
-  const stillUnconverted = async () => {
-    await setImmediate()
-    await setImmediate()
-    await expect(history()).rejects.toThrow('without domain state')
-  }
-  return { ...opened, discovery, converted, history, stillUnconverted }
+  return { ...opened, discovery, converted, history, atIdleGate, order }
 }
 
 it('opens the startup/watch record slot without awaiting discovery, then converts an unopened chat without a host', async () => {
@@ -143,43 +170,67 @@ it('returns a fork capture refusal after releasing custody without waiting for h
   expect(await profileState.history()).toMatchObject({ ok: true })
 })
 
-it.each([false, true])(
-  'pauses conversion for pre-host record effects and releases activity after settlement (reject=%s)',
-  async (reject) => {
-    const profileState = await profile()
-    const effects = JournalSqlOwner.prototype.effects
-    const admitted = Promise.withResolvers<void>()
-    const finish = barrier()
-    vi.spyOn(JournalSqlOwner.prototype, 'effects').mockImplementationOnce(async function (
-      this: JournalSqlOwner,
-      input
-    ) {
-      admitted.resolve()
-      await finish.promise
-      if (reject) {
-        throw new Error('record write refused')
-      }
-      return effects.call(this, input)
-    })
-    const write = profileState.store.setConversationName('record-only', 'updated')
-    const result = write.catch((error: unknown) => error)
-    await admitted.promise
-    profileState.discovery.resolve()
-    await profileState.stillUnconverted()
-    finish.resolve()
-    if (reject) {
-      expect(await result).toEqual(new Error('record write refused'))
-    } else {
-      await result
-      expect(profileState.store.getRecord('record-only')?.conversationName).toBe('updated')
-    }
-    await profileState.converted.promise
-    expect(await profileState.history()).toMatchObject({ ok: true })
-  }
-)
-
-it('pauses for direct attach, registered starts and provider turns, then converts while the same Never child stays resident', async () => {
+it('pauses conversion for pre-host record effects until the write settles', async () => {
   const profileState = await profile()
+  const effects = JournalSqlOwner.prototype.effects
+  const admitted = Promise.withResolvers<void>()
+  const finish = barrier()
+  vi.spyOn(JournalSqlOwner.prototype, 'effects').mockImplementationOnce(async function (
+    this: JournalSqlOwner,
+    input
+  ) {
+    admitted.resolve()
+    await finish.promise
+    return effects.call(this, input)
+  })
+  const write = profileState.store.setConversationName('record-only', 'updated')
+  await admitted.promise
+  profileState.discovery.resolve()
+  await profileState.atIdleGate.promise
+  profileState.order.push('owner ended')
+  finish.resolve()
+  await write
+  expect(profileState.store.getRecord('record-only')?.conversationName).toBe('updated')
+  await profileState.converted.promise
+  expect(profileState.order).toEqual(['waiting', 'owner ended', 'idle', 'sessions'])
+  expect(await profileState.history()).toMatchObject({ ok: true })
+})
+
+it('releases pre-host record activity when the write rejects', async () => {
+  const profileState = await profile()
+  const admitted = Promise.withResolvers<void>()
+  const finish = barrier()
+  vi.spyOn(JournalSqlOwner.prototype, 'effects').mockImplementationOnce(async () => {
+    admitted.resolve()
+    await finish.promise
+    throw new Error('record write refused')
+  })
+  const write = profileState.store.setConversationName('record-only', 'updated')
+  const result = write.catch((error: unknown) => error)
+  await admitted.promise
+  profileState.discovery.resolve()
+  await profileState.atIdleGate.promise
+  profileState.order.push('owner ended')
+  finish.resolve()
+  expect(await result).toEqual(new Error('record write refused'))
+  await profileState.converted.promise
+  expect(profileState.order).toEqual(['waiting', 'owner ended', 'idle', 'sessions'])
+  expect(await profileState.history()).toMatchObject({ ok: true })
+})
+
+async function liveProfile() {
+  const profileState = await profile()
+  let activityReadSettled = Promise.resolve()
+  const hold = profileState.journalDatabase.holdActivity.bind(profileState.journalDatabase)
+  vi.spyOn(profileState.journalDatabase, 'holdActivity').mockImplementation(() => {
+    const release = hold()
+    const settled = Promise.withResolvers<void>()
+    activityReadSettled = settled.promise
+    return () => {
+      release()
+      settled.resolve()
+    }
+  })
   const acquired = Promise.withResolvers<void>()
   const acquire = barrier()
   const opening = Promise.withResolvers<void>()
@@ -233,42 +284,83 @@ it('pauses for direct attach, registered starts and provider turns, then convert
     probeOwner: async () => ({ outcome: 'pid-absent' }),
     idleSweep: { intervalMs: 3_600_000, idleMs: () => null }
   })
-  const attached = host.attach({ callerKey: 'client' }, hostTestAttachParams(null))
-  await Promise.race([
-    acquired.promise,
-    attached.then((answer) => {
-      throw new Error(`attach ended before acquiring: ${JSON.stringify(answer)}`)
-    })
-  ])
-  profileState.discovery.resolve()
-  await profileState.stillUnconverted()
-  acquire.resolve()
+  return {
+    profileState,
+    acquired,
+    acquire,
+    opening,
+    ready,
+    events: () => events!,
+    host,
+    activityReadsSettled: () => activityReadSettled
+  }
+}
+
+it('pauses conversion while a direct attach has not indexed its child', async () => {
+  const live = await liveProfile()
+  const attached = live.host.attach({ callerKey: 'client' }, hostTestAttachParams(null))
+  await live.acquired.promise
+  live.profileState.discovery.resolve()
+  await live.profileState.atIdleGate.promise
+  live.profileState.order.push('owner ended')
+  live.acquire.resolve()
+  live.ready.resolve()
   expect(await attached).toMatchObject({ ok: true })
-  await opening.promise
-  const { sessions, runtimeState, lifetime } = host.collaboratorsForTests()
-  const child = sessions.get(HOST_TEST_SESSION)!.child!
-  runtimeState.startFlights.register(HOST_TEST_SESSION, {
-    attemptId: 'old',
-    abort: () => {},
-    outcome: Promise.resolve({ ok: true })
-  })
-  runtimeState.startFlights.register(HOST_TEST_SESSION, {
-    attemptId: 'current',
-    abort: () => {},
-    outcome: Promise.resolve({ ok: true })
-  })
-  ready.resolve()
-  await vi.waitFor(() => expect(child.phase).toBe('ready'))
-  runtimeState.startFlights.end(HOST_TEST_SESSION, 'old')
-  await profileState.stillUnconverted()
-  events!.appendItem(
-    { provider: 'codex', threadId: HOST_TEST_THREAD, turnId: 'provider-turn', ordinal: 50 },
-    { kind: 'turn', turnId: 'provider-turn', state: 'running' },
-    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  await live.profileState.converted.promise
+  expect(live.profileState.order).toEqual(['waiting', 'owner ended', 'idle', 'sessions'])
+  expect(await live.profileState.history()).toMatchObject({ ok: true })
+})
+
+it('keeps a real client start and provider turn active across stale exits, then converts with the same ready Never child', async () => {
+  const live = await liveProfile()
+  const { profileState } = live
+  const identity = {
+    provider: 'codex' as const,
+    threadId: HOST_TEST_THREAD,
+    turnId: 'provider-turn',
+    ordinal: 50
+  }
+  live.host.deps.adapter.liveTurnId = () => 'provider-turn'
+  const dispatched = Promise.withResolvers<void>()
+  const finishDispatch = barrier()
+  live.host.deps.adapter.dispatch = async () => {
+    live
+      .events()
+      .appendItem(
+        identity,
+        { kind: 'turn', turnId: 'provider-turn', state: 'running' },
+        { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+    dispatched.resolve()
+    await finishDispatch.promise
+    return { state: 'accepted', providerIdentity: { ...identity, ordinal: 51 } }
+  }
+  expect(await live.host.create({ callerKey: 'client' }, hostTestAttachParams(null))).toMatchObject(
+    { ok: true }
   )
-  await host.flushStreamedEvents(HOST_TEST_SESSION)
-  runtimeState.startFlights.end(HOST_TEST_SESSION, 'current')
-  await host.handleAdapterEvent({
+  const sent = await live.host.send({ callerKey: 'client' }, hostTestSendParams('hello'))
+  expect(sent).toMatchObject({ ok: true })
+  await live.acquired.promise
+  live.acquire.resolve()
+  await live.opening.promise
+  const { sessions, runtimeState, lifetime, conversationDelivery } =
+    live.host.collaboratorsForTests()
+  const child = sessions.get(HOST_TEST_SESSION)!.child!
+  const readiness = runtimeState.startupAttempts.readiness(HOST_TEST_SESSION, child)!
+  live.ready.resolve()
+  expect(await readiness.wait()).toBe('ready')
+  await dispatched.promise
+  await live.host.flushStreamedEvents(HOST_TEST_SESSION)
+  finishDispatch.resolve()
+  if (!sent.ok) {
+    throw new Error('the send was refused')
+  }
+  await live.host.waitForSendSettlement(HOST_TEST_SESSION, sent.value.clientMessageId)
+  await conversationDelivery.loop.wake(HOST_TEST_SESSION)
+  await live.activityReadsSettled()
+  profileState.discovery.resolve()
+  await profileState.atIdleGate.promise
+  await live.host.handleAdapterEvent({
     type: 'ended',
     sessionId: HOST_TEST_SESSION,
     fence: child.fence,
@@ -276,14 +368,17 @@ it('pauses for direct attach, registered starts and provider turns, then convert
     cause: 'unexpected-exit',
     reason: 'old child exited'
   })
-  await profileState.stillUnconverted()
-  events!.appendItem(
-    { provider: 'codex', threadId: HOST_TEST_THREAD, turnId: 'provider-turn', ordinal: 50 },
-    { kind: 'turn', turnId: 'provider-turn', state: 'completed', completedAt: 1_800_000_000_100 },
-    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-  )
-  await host.flushStreamedEvents(HOST_TEST_SESSION)
+  profileState.order.push('owner ended')
+  live
+    .events()
+    .appendItem(
+      identity,
+      { kind: 'turn', turnId: 'provider-turn', state: 'completed', completedAt: 1_800_000_000_100 },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+  await live.host.flushStreamedEvents(HOST_TEST_SESSION)
   await profileState.converted.promise
+  expect(profileState.order).toEqual(['waiting', 'owner ended', 'idle', 'sessions'])
   await lifetime.idleSweep.tick()
   expect(sessions.get(HOST_TEST_SESSION)?.child).toBe(child)
   expect(await profileState.history()).toMatchObject({ ok: true })

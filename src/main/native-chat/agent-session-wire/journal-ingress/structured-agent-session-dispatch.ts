@@ -9,6 +9,7 @@ export type StructuredAgentSessionSinkOperation = {
   sequence: number
   bytes: number
   operations?: number
+  workOperations?: number
   /** Only publications coalesce by key; replacing journal writes would reorder them behind later work. */
   publicationKey?: string
   /** Handover synchronously joins the journal queue in submission order. */
@@ -21,14 +22,17 @@ export type Admitted = StructuredAgentSessionSinkOperation & { superseded?: bool
 
 /** Capture a complete synchronous source unit; ready-batch caps never divide its dependencies. */
 export class StructuredAgentSessionDispatch {
+  queuedWorkOperations = 0
   private pending: Admitted[] = []
   private readonly waitingPublications = new Map<string, Admitted>()
   constructor(
     private readonly flush: () => void,
-    private readonly canPublish: () => boolean
+    private readonly canPublish: () => boolean,
+    private readonly workChanged?: () => void
   ) {}
 
-  coalesce(operation: Admitted): void {
+  coalesce(operation: Admitted, replaced?: Admitted): void {
+    this.changeWork(sinkWorkOperations(operation) - (replaced ? sinkWorkOperations(replaced) : 0))
     const key = operation.publicationKey
     if (key !== undefined) {
       const prior = this.waitingPublications.get(key)
@@ -36,6 +40,18 @@ export class StructuredAgentSessionDispatch {
         prior.superseded = true
       }
       this.waitingPublications.set(key, operation)
+    }
+  }
+
+  release(operation: Admitted): void {
+    this.forget(operation)
+    this.changeWork(-sinkWorkOperations(operation))
+  }
+
+  private changeWork(change: number): void {
+    if (change !== 0) {
+      this.queuedWorkOperations += change
+      this.workChanged?.()
     }
   }
 
@@ -101,6 +117,10 @@ export class StructuredAgentSessionDispatch {
       sequence: dispatch.at(-1)!.sequence,
       bytes: dispatch.reduce((total, operation) => total + operation.bytes, 0),
       operations: dispatch.reduce((total, operation) => total + (operation.operations ?? 1), 0),
+      workOperations: dispatch.reduce(
+        (total, operation) => total + sinkWorkOperations(operation),
+        0
+      ),
       run: () =>
         run().finally(() => {
           for (const operation of dispatch) {
@@ -120,4 +140,11 @@ export function runStructuredAgentSessionSinkOperation(
   } catch (error) {
     return Promise.reject(error)
   }
+}
+
+function sinkWorkOperations(operation: StructuredAgentSessionSinkOperation): number {
+  return (
+    operation.workOperations ??
+    (operation.publicationKey === undefined ? (operation.operations ?? 1) : 0)
+  )
 }

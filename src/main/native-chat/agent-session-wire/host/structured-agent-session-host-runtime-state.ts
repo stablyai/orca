@@ -121,27 +121,45 @@ export class StructuredAgentSessionHostRuntimeState {
       database.setSessionActive(sessionId, false)
       return
     }
+    if (session.activityRead) {
+      return
+    }
     const release = database.holdActivity()
     database.setSessionActive(sessionId, false)
-    const cursor = session.journal.cursor()
-    const physical = session.journal.physicalCursor()
-    const revision = session.operationalRevision
-    const current = () =>
-      this.sessions.get(sessionId) === session &&
-      session.child === child &&
-      sameJournalCursor(cursor, session.journal.cursor()) &&
-      sameJournalCursor(physical, session.journal.physicalCursor()) &&
-      revision === session.operationalRevision
-    void readHostStructuredAgentSessionWork(
-      { store: this.deps.store, sessions: this.sessions },
-      sessionId,
-      { kind: 'child-work' }
-    )
-      .then(
-        (work) => {
+    session.activityRead = Promise.resolve()
+      .then(() => this.readActivity(sessionId, session))
+      .finally(release)
+  }
+
+  private async readActivity(
+    sessionId: string,
+    session: StructuredAgentSessionHostSession
+  ): Promise<void> {
+    const database = this.deps.journalDatabase
+    try {
+      while (this.sessions.get(sessionId) === session) {
+        const child = session.child
+        if (this.executing(sessionId) || !child || database.isClosed) {
+          database.setSessionActive(sessionId, this.executing(sessionId))
+          return
+        }
+        const cursor = session.journal.cursor()
+        const physical = session.journal.physicalCursor()
+        const revision = session.operationalRevision
+        const current = () =>
+          this.sessions.get(sessionId) === session &&
+          session.child === child &&
+          sameJournalCursor(cursor, session.journal.cursor()) &&
+          sameJournalCursor(physical, session.journal.physicalCursor()) &&
+          revision === session.operationalRevision
+        try {
+          const work = await readHostStructuredAgentSessionWork(
+            { store: this.deps.store, sessions: this.sessions },
+            sessionId,
+            { kind: 'child-work' }
+          )
           if (!current()) {
-            this.refreshActivity(sessionId)
-            return
+            continue
           }
           database.setSessionActive(
             sessionId,
@@ -150,24 +168,25 @@ export class StructuredAgentSessionHostRuntimeState {
               work.actionablePrompt ||
               this.childWorkOpen?.(sessionId) === true
           )
-        },
-        (error: unknown) => {
+        } catch (error) {
           if (!current()) {
-            this.refreshActivity(sessionId)
-            return
+            continue
           }
           database.setSessionActive(sessionId, this.executing(sessionId))
-          if (database.isClosed || session.journal.isClosed) {
-            return
+          if (!database.isClosed && !session.journal.isClosed) {
+            this.deps.logger.warn('reading live chat activity failed', {
+              scope: 'journal-database-activity',
+              sessionId,
+              error
+            })
           }
-          this.deps.logger.warn('reading live chat activity failed', {
-            scope: 'journal-database-activity',
-            sessionId,
-            error
-          })
         }
-      )
-      .finally(release)
+        return
+      }
+      this.refreshActivity(sessionId)
+    } finally {
+      session.activityRead = undefined
+    }
   }
 
   startLeaseRenewal(): void {
@@ -175,7 +194,7 @@ export class StructuredAgentSessionHostRuntimeState {
   }
 
   hasPendingIngress(sessionId: string): boolean {
-    return (this.eventSinks.get(sessionId)?.state().queuedOperations ?? 0) > 0
+    return (this.eventSinks.get(sessionId)?.state().queuedWorkOperations ?? 0) > 0
   }
 
   stopLeaseRenewal(): Promise<void> {

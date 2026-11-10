@@ -34,6 +34,7 @@ export type StructuredAgentSessionSinkAdmission =
 export type StructuredAgentSessionSinkState = {
   queuedBytes: number
   queuedOperations: number
+  queuedWorkOperations: number
   backpressured: boolean
   failed: boolean
 }

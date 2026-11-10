@@ -108,6 +108,7 @@ export function recordProviderChildEnd(
     ...(child.startedFor === undefined ? {} : { startedFor: child.startedFor }),
     endedAt: ended.endedAt ?? session.journal.cursor()
   }
+  session.workChanged?.()
   return true
 }
 
