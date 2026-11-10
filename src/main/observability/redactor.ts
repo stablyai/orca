@@ -1,10 +1,10 @@
+import { redactCredentialAssignments } from './credential-assignment-redaction'
+
 // Apply idempotent redaction at sink write, bundle collection and server ingest.
 // Server mode also strips product-telemetry identity keys.
 // Envelope bounds limit size; truncating attributes would lose diagnostic stack tails.
 
-// Word boundaries preserve FOO_SECRET matches; consume full Bearer/Token values.
-const LABELED_KV =
-  /["']?\b(?:api[-_]?key|token|secret|password|bearer|authorization)\b["']?\s*[:=]\s*(?:"(?:\\.|[^"\\\r\n])*"|'(?:\\.|[^'\\\r\n])*'|Bearer\s+\S+|Token\s+\S+|\S+)/gi
+const STANDALONE_BEARER = /\bBearer\s+[A-Za-z0-9._~+/=-]+/gi
 
 // Match specific providers first so sk-ant- retains its Anthropic tag.
 const PROVIDER_PATTERNS: { tag: string; re: RegExp }[] = [
@@ -95,7 +95,7 @@ export function redactString(input: string): string {
   }
   let out = input
 
-  out = out.replace(LABELED_KV, '[redacted:labeled-kv]')
+  out = redactCredentialAssignments(out).replace(STANDALONE_BEARER, '[redacted:labeled-kv]')
 
   // Redaction tags are stable identifiers used by external NDJSON tools.
   for (const { tag, re } of PROVIDER_PATTERNS) {

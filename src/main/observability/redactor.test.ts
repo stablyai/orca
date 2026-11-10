@@ -26,6 +26,42 @@ describe('redactor — labeled key-value', () => {
     expect(out).toContain('after')
     expect(out).not.toContain('xyz')
   })
+
+  it.each([
+    {
+      name: 'compound OAuth names and ordinary quoted escapes',
+      text: String.raw`{"refresh_token":"synthetic-refresh","accessToken":"synthetic-access","client_secret":"synthetic-client","token":"synthetic-token\"private-suffix","max_tokens":42,"token_count":3,"tokenCount":4,"cause":"harness unavailable"}`,
+      secrets: ['synthetic-refresh', 'synthetic-access', 'synthetic-client', 'private-suffix'],
+      keep: ['"max_tokens":42', '"token_count":3', '"tokenCount":4', 'harness unavailable']
+    },
+    {
+      name: 'one serialization layer of quoted labels and values',
+      text: String.raw`body: {\"token\":\"synthetic-token\\\"private-suffix\",\"refresh_token\":\"synthetic-escaped\"} harness unavailable`,
+      secrets: ['synthetic-token', 'private-suffix', 'synthetic-escaped'],
+      keep: ['body:', 'harness unavailable']
+    },
+    {
+      name: 'unterminated quoted values',
+      text: 'refresh_token="synthetic with private spaces\nharness unavailable tokenCount=4',
+      secrets: ['synthetic', 'private spaces'],
+      keep: ['harness unavailable tokenCount=4']
+    },
+    {
+      name: 'complete authorization schemes and standalone Bearer',
+      text: 'denied Authorization: Basic c3ludGhldGlj next Authorization=Token synthetic-token next Bearer opaque~+/=; harness unavailable; token expired',
+      secrets: ['c3ludGhldGlj', 'synthetic-token', 'opaque~+/='],
+      keep: ['denied', 'harness unavailable', 'token expired']
+    }
+  ])('redacts $name without losing evidence', ({ text, secrets, keep }) => {
+    const out = redactString(text)
+    for (const secret of secrets) {
+      expect(out).not.toContain(secret)
+    }
+    for (const evidence of keep) {
+      expect(out).toContain(evidence)
+    }
+    expect(redactString(out)).toBe(out)
+  })
 })
 
 describe('redactor — URL userinfo strip', () => {

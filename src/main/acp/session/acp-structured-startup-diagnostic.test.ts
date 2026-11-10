@@ -113,7 +113,8 @@ it.each(['load', 'resume'] as const)(
       deps: { logger: createStructuredAgentSessionLogger() },
       script: (agent) =>
         agent.on(`session/${method}`, (frame) => {
-          rig.child().stderr = 'saved database unavailable "authorization":"Bearer stderr-private"'
+          rig.child().stderr =
+            'saved database unavailable "authorization":"Bearer stderr-private" refresh_token="opaque-oauth-proof" harness evidence'
           agent.fail(
             frame,
             -32603,
@@ -143,5 +144,7 @@ it.each(['load', 'resume'] as const)(
     expect(bundle.payload).toContain('saved database unavailable [redacted:labeled-kv]')
     expect(bundle.payload).not.toContain('rpc-private')
     expect(bundle.payload).not.toContain('stderr-private')
+    expect(bundle.payload).toContain('harness evidence')
+    expect(bundle.payload).not.toContain('opaque-oauth-proof')
   }
 )
