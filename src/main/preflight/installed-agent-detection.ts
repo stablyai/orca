@@ -15,7 +15,7 @@ import {
 } from '../ipc/preflight/preflight-runtime-target'
 import { detectAgentCommandsOnHost } from './agent-command-detection'
 import { normalizeDisabledTuiAgents } from '../../shared/agent-launch/catalog/tui-agent-selection'
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { TuiAgentDetectionRuntime } from '../../shared/agent-launch/catalog/tui-agent-config-types'
 import { extractExecutableToken } from '../../shared/agent-launch/installation/managed-agent-command-token'

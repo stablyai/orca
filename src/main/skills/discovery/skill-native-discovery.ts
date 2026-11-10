@@ -256,6 +256,8 @@ export async function discoverSkills(args: {
     !mayReadStopped(pluginCwd) &&
     wslDistroForPath(pluginCwd) !== null &&
     (await isOnStoppedWslDistro(pluginCwd))
+  // Owner ids are plain agent-id strings; a string set sidesteps the AgentType/TuiAgent union mismatch.
+  const disabledOwners = args.disabledTuiAgents ? new Set<string>(args.disabledTuiAgents) : null
   const candidateRoots = [
     ...buildSkillDiscoverySources({ ...args, homeDir }),
     ...(pluginCwd && !pluginCwdStopped
@@ -266,7 +268,7 @@ export async function discoverSkills(args: {
           args.signal
         )
       : [])
-  ].filter((root) => !(root.owner && args.disabledTuiAgents?.includes(root.owner as TuiAgent)))
+  ].filter((root) => !(root.owner && disabledOwners?.has(root.owner)))
   // Host-only root sets never await the WSL gate.
   const { readable, unavailable } =
     gateStopped && candidateRoots.some((root) => wslDistroForPath(root.path))
