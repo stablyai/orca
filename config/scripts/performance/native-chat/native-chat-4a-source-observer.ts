@@ -1,6 +1,81 @@
 // Read-only source sizes and persisted outline keys, queried outside either product arm.
 import { openReadOnly, hasTable } from './native-chat-4a-sqlite-observer'
 
+function openItemSource(file: string, sessionId: string) {
+  const db = openReadOnly(file)
+  try {
+    const domain = hasTable(db, 'journal_chat_state')
+    if (!domain && !hasTable(db, 'journal_outcomes')) {
+      throw new Error('unsupported current-item storage; observation unexercised')
+    }
+    const head = domain
+      ? `SELECT session_id,epoch,epoch AS source,
+          (SELECT COALESCE(max(ordinal),0) FROM journal_items
+          WHERE session_id=head.session_id AND epoch=head.epoch) AS position
+          FROM journal_chat_state head WHERE session_id=?`
+      : `SELECT head.session_id,head.epoch,head.generation AS source,head.through_seq AS position
+          FROM journal_outcome_epochs head JOIN journal_sessions live
+          ON live.session_id=head.session_id AND live.epoch=head.epoch
+          WHERE head.session_id=? AND head.prefix_seq=0 AND head.format BETWEEN 1 AND 3`
+    const baseline = db.prepare(head).get(sessionId)
+    if (
+      !baseline ||
+      typeof baseline.epoch !== 'string' ||
+      typeof baseline.position !== 'number' ||
+      (typeof baseline.source !== 'string' && typeof baseline.source !== 'number')
+    ) {
+      throw new Error('no supported current item source; observation unexercised')
+    }
+    const tail = domain
+      ? `SELECT head.epoch,head.source,item.ordinal AS position,item.item_id AS id,
+          'items' AS field,0 AS deleted,item.rowid AS stored_row
+          FROM journal_items item JOIN head ON item.session_id=head.session_id AND item.epoch=head.epoch
+          WHERE item.ordinal>? ORDER BY item.ordinal DESC LIMIT ?`
+      : `SELECT head.epoch,head.source,item.seq AS position,json_extract(item.entry_key,'$') AS id,
+          item.field,item.deleted,item.rowid AS stored_row
+          FROM journal_outcomes item JOIN head ON item.generation=head.source
+          WHERE item.seq>? AND item.seq<=head.position ORDER BY item.seq DESC LIMIT ?`
+    return {
+      db,
+      epoch: baseline.epoch,
+      source: baseline.source,
+      position: baseline.position,
+      // Sort only bounded metadata; fetch bodies after obsolete revisions/deletions are excluded.
+      items: `WITH head AS (${head}),recent AS (${tail}),latest AS (
+        SELECT *,ROW_NUMBER() OVER (PARTITION BY field,id ORDER BY position DESC) AS rank FROM recent)
+        SELECT latest.*,stored.${domain ? 'payload_json' : 'value_json'} AS json FROM latest
+        JOIN ${domain ? 'journal_items' : 'journal_outcomes'} stored ON stored.rowid=latest.stored_row
+        WHERE latest.rank=1 AND latest.field='items' AND typeof(latest.id)='text'
+        AND latest.deleted=0 AND latest.epoch=? AND latest.source=?`,
+      close: () => db.close()
+    }
+  } catch (error) {
+    db.close()
+    throw error
+  }
+}
+
+/** Current burst identities only; each read releases its snapshot before the caller dispatches. */
+export function runningToolsObserver(file: string, sessionId: string) {
+  const source = openItemSource(file, sessionId)
+  try {
+    const query = source.db.prepare(`${source.items}
+      AND json_extract(json,'$.body.kind')='tool-call' AND json_extract(json,'$.body.state')='running'`)
+    return {
+      epoch: source.epoch,
+      position: source.position,
+      read: () =>
+        query
+          .all(sessionId, source.position, 40, source.epoch, source.source)
+          .map((item) => String(item.id)),
+      close: source.close
+    }
+  } catch (error) {
+    source.close()
+    throw error
+  }
+}
+
 export type OutlineCacheState = {
   epoch: string
   sequence: number
@@ -15,7 +90,7 @@ export type OutlineCacheState = {
 export function outlineCacheState(file: string, sessionId: string): OutlineCacheState | null {
   const db = openReadOnly(file)
   try {
-    if (!hasTable(db, 'journal_outline_cache')) {
+    if (!hasTable(db, 'journal_chat_state') || !hasTable(db, 'journal_outline_cache')) {
       return null
     }
     const row = db
@@ -49,6 +124,9 @@ export function outlineCacheState(file: string, sessionId: string): OutlineCache
 export function outlineCacheContains(file: string, sessionId: string, value: unknown): boolean {
   const db = openReadOnly(file)
   try {
+    if (!hasTable(db, 'journal_chat_state') || !hasTable(db, 'journal_outline_cache')) {
+      return false
+    }
     return Boolean(
       db
         .prepare(`SELECT 1 FROM journal_outline_cache cache JOIN journal_chat_state head
@@ -62,23 +140,23 @@ export function outlineCacheContains(file: string, sessionId: string, value: unk
   }
 }
 
-/** Read only the latest eight stored rows; SQLite returns the current ASCII stream's byte count, never its growing body. */
+/** At most 40 source records, newest revision per key; SQLite returns bytes, never the growing ASCII body. */
 export function streamTextObserver(file: string, sessionId: string, marker: string) {
-  const db = openReadOnly(file)
-  const source = hasTable(db, 'journal_chat_state')
-    ? `SELECT payload_json AS json FROM journal_items WHERE session_id=? AND epoch=
-        (SELECT epoch FROM journal_chat_state WHERE session_id=?) ORDER BY ordinal DESC LIMIT 8`
-    : `SELECT row_json AS json FROM journal_rows WHERE session_id=? AND epoch=
-        (SELECT epoch FROM journal_sessions WHERE session_id=?) ORDER BY seq DESC LIMIT 8`
-  const query =
-    db.prepare(`SELECT octet_length(json_extract(json,'$.body.blocks[0].text')) AS bytes,
-      json_extract(json,'$.body.state') AS state FROM (${source})
-      WHERE substr(json_extract(json,'$.body.blocks[0].text'),1,length(?))=? LIMIT 1`)
-  return {
-    read: () => {
-      const row = query.get(sessionId, sessionId, marker, marker)
-      return { bytes: Number(row?.bytes ?? 0), completed: row?.state === 'completed' }
-    },
-    close: () => db.close()
+  const source = openItemSource(file, sessionId)
+  try {
+    const query = source.db
+      .prepare(`SELECT octet_length(json_extract(json,'$.body.blocks[0].text')) AS bytes,
+      json_extract(json,'$.body.state') AS state FROM (${source.items})
+      WHERE substr(json_extract(json,'$.body.blocks[0].text'),1,length(?))=? ORDER BY position DESC LIMIT 1`)
+    return {
+      read: () => {
+        const row = query.get(sessionId, -1, 40, source.epoch, source.source, marker, marker)
+        return { bytes: Number(row?.bytes ?? 0), completed: row?.state === 'completed' }
+      },
+      close: source.close
+    }
+  } catch (error) {
+    source.close()
+    throw error
   }
 }
