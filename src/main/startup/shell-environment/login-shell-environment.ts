@@ -150,7 +150,7 @@ function spawnShellAndReadEnvironment(
       resolve(value)
     }
     const timer = setTimeout(() => {
-      lifetime.kill()
+      lifetime.terminate()
       finish(null)
     }, timeoutMs)
     child.stdin.on('error', () => {})

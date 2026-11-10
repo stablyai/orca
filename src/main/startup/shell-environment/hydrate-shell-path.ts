@@ -192,7 +192,7 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
 
     timer = setTimeout(() => {
       // Bound slow rc setup so agent discovery can fall back rather than wait forever.
-      lifetime.kill()
+      lifetime.terminate()
       finish({ segments: [], ok: false, failureReason: 'timeout' })
     }, SPAWN_TIMEOUT_MS)
 
