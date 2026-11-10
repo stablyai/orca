@@ -4960,8 +4960,10 @@
       "otherPhones": "Other phones",
       "noOthers": "No other phones have access.",
       "lastUsed": "Last used {{date}}",
-      "removeLabel": "Remove {{device}}",
-      "disconnectThis": "Disconnect this phone"
+      "disconnectThis": "Disconnect this phone",
+      "deviceLabel": "{{device}}, last used {{date}}",
+      "removeHint": "Removes this phone’s access",
+      "deviceLabelConnected": "{{device}}, connected {{date}}"
     },
     "agent": {
       "label": "Agent"
