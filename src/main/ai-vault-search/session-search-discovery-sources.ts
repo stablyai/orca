@@ -151,6 +151,28 @@ export class SessionSearchDiscoverySources {
       }
     }
     return change
+      ? {
+          ...change,
+          changed:
+            change.changed ||
+            change.file.mtimeMs !== candidate.file.mtimeMs ||
+            change.file.sizeBytes !== candidate.file.sizeBytes ||
+            change.file.dev !== candidate.file.dev ||
+            change.file.ino !== candidate.file.ino
+        }
+      : undefined
+  }
+  async acknowledgeRead(
+    candidate: SessionFileCandidate,
+    logicalRoot: string,
+    roots: SessionSearchScanRoots,
+    receipt: { path: string; revision: number } | undefined
+  ): Promise<void> {
+    if (!receipt) {
+      return
+    }
+    const root = await this.fileOwner(candidate, logicalRoot, roots)
+    await root?.inventory.acknowledge([receipt])
   }
 
   async end(): Promise<void> {

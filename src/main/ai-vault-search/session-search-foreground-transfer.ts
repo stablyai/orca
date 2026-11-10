@@ -43,7 +43,7 @@ export function sessionSearchForegroundTransfer(
         }
         return response
       })
-      .catch(() => {
+      .catch((): SearchWorkerResponse => {
         cancelled = true
         return { id: 0, accepted: false }
       })

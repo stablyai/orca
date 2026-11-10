@@ -85,11 +85,18 @@ export async function openSessionSearchIndexerHarness(
     inventory: (path) => {
       scratch ??= new SyncDatabase('')
       catalog ??= new SessionSearchCatalog(scratch)
-      return new SessionFileInventory(
+      const inventory = new SessionFileInventory(
         path,
         async (command) => catalog!.response(command),
         `fixture:${path}`
       )
+      const drain = inventory.drain.bind(inventory)
+      inventory.drain = async (...args) => {
+        const result = await drain(...args)
+        await inventory.acknowledge(result.receipts)
+        return result
+      }
+      return inventory
     },
     cleanup: async () => {
       scratch?.close()

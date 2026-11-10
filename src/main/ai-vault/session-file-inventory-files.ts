@@ -23,6 +23,12 @@ export class SessionInventoryFiles {
     file: Omit<FileWithMtime, 'modifiedAt'>
     dependency?: string
   }>
+  readonly delivery: SessionSearchCatalogClient<{
+    file?: Omit<FileWithMtime, 'modifiedAt'>
+    force: boolean
+    removed?: boolean
+    revision: number
+  }>
   readonly failures: SessionSearchCatalogRetries
   get count(): number {
     return this.files.size
@@ -35,6 +41,7 @@ export class SessionInventoryFiles {
     request: SessionSearchCatalogRequest,
     private readonly scheduleParent: (path: string) => Promise<void>
   ) {
+    this.delivery = new SessionSearchCatalogClient(`${scope}:delivery`, request)
     this.files = new SessionSearchCatalogClient(`${scope}:files`, request)
     this.failures = new SessionSearchCatalogRetries(
       new SessionSearchCatalogClient(`${scope}:file-refusals`, request)
@@ -161,6 +168,12 @@ export class SessionInventoryFiles {
     }
   }
 
+  async acknowledge(receipts: { path: string; revision: number }[]): Promise<void> {
+    if (!receipts.length) {
+      return
+    }
+    await this.files.transition({ kind: 'observe-ack', scope: this.scope, receipts })
+  }
   async *owners(dependency: string): AsyncGenerator<string> {
     let after: string | undefined
     do {

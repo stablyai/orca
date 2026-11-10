@@ -27,9 +27,11 @@ export class SessionSearchCatalogTransport {
             ? input.inputs
             : 'outcomes' in input
               ? input.outcomes
-              : 'paths' in input
-                ? input.paths
-                : undefined
+              : 'receipts' in input
+                ? input.receipts
+                : 'paths' in input
+                  ? input.paths
+                  : undefined
     if (rows && (rows.length > 256 || (rows.length > 1 && size > 256 * 1024))) {
       throw new Error('Session catalog request exceeds page budget')
     }

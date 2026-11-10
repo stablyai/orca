@@ -168,6 +168,8 @@ it('preserves delivered equal-stat rewrites while Claude and Codex roots drain t
   const path = join(harness.claudeProjectDir, 'old.jsonl')
   const fixture = codexFixture()
   const codexPath = join(harness.roots.codexSessionsDir!, fixture.fileName)
+  const indexPath = join(dirname(harness.roots.codexSessionsDir!), 'session_index.jsonl')
+  let restore: () => void = () => undefined
   const subject = new SessionSearchIndexer({
     databasePath: harness.databasePath,
     roots: harness.roots,
@@ -180,12 +182,49 @@ it('preserves delivered equal-stat rewrites while Claude and Codex roots drain t
     await writeClaudeTranscript(join(harness.claudeProjectDir, 'new.jsonl'), ['otherneedle'], 'new')
     await mkdir(dirname(codexPath), { recursive: true })
     await writeFile(codexPath, `${fixture.seedLines.join('\n')}\n`)
+    await writeFile(
+      indexPath,
+      `${JSON.stringify({ id: CODEX_FIXTURE_SESSION_ID, thread_name: 'Before title' })}\n`
+    )
     const preservedTime = new Date('2024-01-01T00:00:00Z')
     await utimes(path, preservedTime, preservedTime)
     await utimes(codexPath, preservedTime, preservedTime)
     const codexOld = await stat(codexPath)
     const old = await stat(path)
     await subject.start()
+    const acceptingA = Promise.withResolvers<void>()
+    const observedB = Promise.withResolvers<void>()
+    const request = SessionSearchWorkerClient.prototype.request
+    const intercept = vi
+      .spyOn(SessionSearchWorkerClient.prototype, 'request')
+      .mockImplementation(async function (this: SessionSearchWorkerClient, command) {
+        if (
+          command.op === 'catalog' &&
+          command.command.scope.includes(harness.roots.claudeProjectsDir!) &&
+          command.command.kind === 'page' &&
+          command.command.scope.endsWith(':refusals')
+        ) {
+          await acceptingA.promise
+        }
+        if (
+          command.op === 'candidates' &&
+          command.command.kind === 'contested' &&
+          command.command.rows.some((row) => row.path === codexPath)
+        ) {
+          acceptingA.resolve()
+          await observedB.promise
+        }
+        const result = await request.call(this, command)
+        if (
+          command.op === 'catalog' &&
+          command.command.kind === 'observe-apply' &&
+          command.command.outcomes.some((row) => row.path === path)
+        ) {
+          observedB.resolve()
+        }
+        return result
+      })
+    restore = () => intercept.mockRestore()
     await writeFile(
       path,
       (await readFile(path, 'utf8')).replaceAll('initialneedle', 'changedneedle')
@@ -196,6 +235,11 @@ it('preserves delivered equal-stat rewrites while Claude and Codex roots drain t
       (await readFile(codexPath, 'utf8')).replace('codex seed question', 'codex newx question')
     )
     await utimes(codexPath, codexOld.atime, codexOld.mtime)
+    await writeFile(
+      indexPath,
+      `${JSON.stringify({ id: CODEX_FIXTURE_SESSION_ID, thread_name: 'After title' })}\n`
+    )
+    notifySessionSearchFileChange(indexPath)
     notifySessionSearchFileChange(codexPath)
     notifySessionSearchFileChange(path)
     clock.advance(20_000)
@@ -223,7 +267,11 @@ it('preserves delivered equal-stat rewrites while Claude and Codex roots drain t
         db.prepare("SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'newx'").get()
       )
     ).toEqual({ n: 1 })
+    expect(
+      harness.read((db) => db.prepare("SELECT title FROM sessions WHERE agent='codex'").get())
+    ).toEqual({ title: 'After title' })
   } finally {
+    restore()
     await subject.close()
     await harness.cleanup()
   }

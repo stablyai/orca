@@ -60,6 +60,7 @@ it.each([40, 400])(
       while (inventory.pending) {
         const delta = await inventory.drain(args, () => false, 0)
         paths.push(...delta.changes.map(({ file }) => file.path))
+        await inventory.acknowledge(delta.receipts)
       }
       return paths
     }
@@ -180,6 +181,51 @@ it('searches the newest known transcript before an older candidate page', async 
     ).toEqual({ n: 0 })
   } finally {
     await subject.close()
+    await harness.cleanup()
+  }
+})
+
+it('redelivers an unaccepted observation and retains a newer rewrite after an older acknowledgement', async () => {
+  const harness = await openSessionSearchIndexerHarness('ss-observation-ack')
+  const db = new SyncDatabase('')
+  const catalog = new SessionSearchCatalog(db)
+  const root = join(harness.root, 'inputs')
+  const path = join(root, 'conversation.jsonl')
+  const inventory = new SessionFileInventory(
+    root,
+    async (command) => catalog.response(command),
+    'physical:receipt-control'
+  )
+  const args: DiscoverSessionFilesArgs = {
+    rootDir: root,
+    agent: 'claude',
+    limit: 0,
+    issues: [],
+    extensions: ['.jsonl']
+  }
+  const time = new Date('2025-01-01')
+  try {
+    await mkdir(root)
+    await writeFile(path, 'before\n')
+    await utimes(path, time, time)
+    const initial = await inventory.drain(args, () => false, 0)
+    expect(initial.changes.map(({ file }) => file.path)).toEqual([path])
+    // The first downstream consumer fails before accepting its page.
+    expect(
+      (await inventory.drain(args, () => false, 0)).changes.map(({ file }) => file.path)
+    ).toEqual([path])
+    await writeFile(path, 'after!\n')
+    await utimes(path, time, time)
+    await inventory.invalidate(path)
+    const newer = await inventory.drain(args, () => false, 0)
+    await inventory.acknowledge(initial.receipts)
+    expect((await inventory.drain(args, () => false, 0)).changes).toMatchObject([
+      { file: { path }, force: true }
+    ])
+    await inventory.acknowledge(newer.receipts)
+    expect((await inventory.drain(args, () => false, 0)).changes).toEqual([])
+  } finally {
+    db.close()
     await harness.cleanup()
   }
 })

@@ -32,7 +32,7 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
     return paths
   }
   async retirePage(paths: string[]): Promise<void> {
-    await this.request({ kind: 'forget-files', scope: this.scope, paths })
+    await this.request({ kind: 'forget-files', scope: this.scope, paths, notify: false })
   }
   async *paths(): AsyncGenerator<string> {
     let after: string | undefined
@@ -46,6 +46,7 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
   }
   get pending(): boolean {
     return (
+      this.observations.delivery.size > 0 ||
       this.walking ||
       this.dirty.size > 0 ||
       this.failures.pending ||
@@ -102,7 +103,15 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
     const file = await this.observations.observe(path, args, false, limit, true)
     const change = this.observations.changes.get(path)
     this.observations.changes.delete(path)
-    return file ? { file, force: change?.force ?? false, changed: change !== undefined } : undefined
+    const delivery = await this.observations.delivery.get(path)
+    return file
+      ? {
+          file,
+          force: change?.force || delivery?.force || false,
+          changed: change !== undefined || !!delivery,
+          receipt: delivery ? { path, revision: delivery.revision } : undefined
+        }
+      : undefined
   }
   async drain(
     args: DiscoverSessionFilesArgs,
@@ -112,6 +121,7 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
     changes: SessionFileChange[]
     removed: string[]
     removedDirectories: string[]
+    receipts: { path: string; revision: number }[]
   }> {
     if (!this.initialized) {
       await this.begin(false, args)
@@ -145,15 +155,29 @@ export class SessionFileInventory extends SessionInventoryDirectoryWalks {
         await this.reconcile()
       }
     }
+    const page = await this.observations.delivery.page()
     const result = {
-      changes: [...this.observations.changes.values()],
-      removed: [...this.observations.removed],
+      changes: page.rows.flatMap(({ value }) =>
+        value.file
+          ? [
+              {
+                file: { ...value.file, modifiedAt: new Date(value.file.mtimeMs).toISOString() },
+                force: value.force
+              }
+            ]
+          : []
+      ),
+      removed: page.rows.filter(({ value }) => value.removed).map(({ key }) => key),
+      receipts: page.rows.map(({ key, value }) => ({ path: key, revision: value.revision })),
       removedDirectories: [...this.removedDirectories]
     }
     this.observations.changes.clear()
     this.observations.removed.clear()
     this.removedDirectories.clear()
     return result
+  }
+  acknowledge(receipts: { path: string; revision: number }[]): Promise<void> {
+    return this.observations.acknowledge(receipts)
   }
   private async drainDirty(args: DiscoverSessionFilesArgs, limit: number): Promise<void> {
     const first = await this.dirty.firstEntry()

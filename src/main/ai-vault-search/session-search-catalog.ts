@@ -40,9 +40,11 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
             ? command.inputs
             : 'outcomes' in command
               ? command.outcomes
-              : 'paths' in command
-                ? command.paths
-                : undefined
+              : 'receipts' in command
+                ? command.receipts
+                : 'paths' in command
+                  ? command.paths
+                  : undefined
     if (
       records &&
       (records.length > SESSION_SEARCH_CATALOG_PAGE_ROWS ||
@@ -67,6 +69,8 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
     switch (command.kind) {
       case 'container-apply':
       case 'container-drain':
+      case 'container-ack':
+      case 'container-retirement-ack':
       case 'container-retire':
         return transitionSessionSearchContainer(this, command)
       case 'dependency-step':
@@ -110,13 +114,16 @@ export class SessionSearchCatalog extends SessionSearchCatalogStorage {
       }
       case 'observe-prepare':
       case 'observe-apply':
+      case 'observe-ack':
       case 'forget-files': {
         const records =
           command.kind === 'observe-prepare'
             ? command.inputs
             : command.kind === 'observe-apply'
               ? command.outcomes
-              : command.paths
+              : command.kind === 'observe-ack'
+                ? command.receipts
+                : command.paths
         if (
           records.length > 256 ||
           (records.length > 1 && JSON.stringify(command).length * 2 > 256 * 1024)

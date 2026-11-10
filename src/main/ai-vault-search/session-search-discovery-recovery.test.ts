@@ -527,8 +527,14 @@ it.each([40, 400])(
     const listings = vi.spyOn(filesystem, 'wslGatedReaddir')
     try {
       await inventory.drain(args, () => true, 12)
-      let quanta = 0
-      await inventory.drain(args, () => ++quanta >= Math.ceil(population / 16), 12)
+      const beforeRemoval = await inventory.drain(
+        args,
+        () => listings.mock.calls.some(([path]) => path === removed),
+        12
+      )
+      expect(beforeRemoval.changes.map(({ file }) => file.path)).not.toContain(
+        join(kept, 'kept.jsonl')
+      )
       await rm(removed, { recursive: true })
       await inventory.invalidate(removed)
       listings.mockClear()
@@ -768,7 +774,13 @@ it('keeps an accepted alias while its deferred replacement is owed by a held-out
     await subject.reconcile({ full: true })
     expect(matching('canonicalnewneedle')).toEqual({ n: 1 })
     await subject.settled()
-    await subject.reconcile()
+    for (
+      let cycle = 0;
+      cycle < 10000 && Number(matching('predecessorowedneedle')?.n) !== 0;
+      cycle++
+    ) {
+      await subject.reconcile()
+    }
     expect(matching('canonicalnewneedle')).toEqual({ n: 1 })
     expect(matching('predecessorowedneedle')).toEqual({ n: 0 })
     expect(subject.status().phase).not.toBe('indexing')

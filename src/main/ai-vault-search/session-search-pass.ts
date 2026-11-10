@@ -173,6 +173,7 @@ export async function runSessionSearchPass(
       await state.retire.set(path, path)
     }
     await accept([], false, update)
+    await state.discovery.containers.acknowledgeRetirements()
     if (!state.discovery.pending) {
       state.recovering = false
     }
@@ -209,17 +210,10 @@ export async function runSessionSearchPass(
           new Map(),
           true
         )
-        for (const suppressed of refreshed.suppressed) {
-          await state.queue.remove(suppressed)
-        }
-        for (const selected of refreshed.candidates) {
-          const force = observation.force || refreshed.forced.has(selected.file.path)
-          if (force) {
-            await state.candidates.requirePublication(selected.file.path)
-          }
-          await state.queue.enqueue(selected, store, force, !args.full)
-        }
-        await state.candidates.acknowledgeChanges(refreshed.receipts)
+        state.queue.update(
+          await state.candidates.admitChanges(refreshed.receipts, !args.full, state.recovering)
+        )
+        await state.discovery.acknowledgeRead(candidate, rootDir, args.roots, observation.receipt)
         return state.queue.get(path)
       }
     })

@@ -90,7 +90,7 @@ it('publishes a cold foreground read and preserves accepted messages across cold
     const request = SessionSearchWorkerClient.prototype.request
     const transferred = vi
       .spyOn(SessionSearchWorkerClient.prototype, 'request')
-      .mockImplementation(async function (command) {
+      .mockImplementation(async function (this: SessionSearchWorkerClient, command) {
         if (command.op === 'begin' && command.unprepared) {
           await admission.promise
         }

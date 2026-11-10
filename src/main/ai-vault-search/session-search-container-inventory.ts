@@ -33,6 +33,7 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
       family.sourceOrder = new Map(paths.map((path, rank) => [path, rank]))
     }
     const changes: FileWithMtime[] = []
+    const deliveries: { scope: string; receipts: { key: string; revision: number }[] }[] = []
     for (const path of paths) {
       let physical = family.physical.get(path)
       if (!physical) {
@@ -40,6 +41,7 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
           file: FileWithMtime
           epoch: number
           changed: boolean
+          revision: number
         }>(`container:${key}:${path}`, this.request!)
         physical = {
           files,
@@ -127,6 +129,13 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
         scope: physical.files.scope,
         limit: 256 - changes.length
       })
+      deliveries.push({
+        scope: physical.files.scope,
+        receipts: (pending.rows ?? []).map((row) => ({
+          key: row.key,
+          revision: physical.files.decode(row).revision
+        }))
+      })
       for (const row of pending.rows ?? []) {
         changes.push(physical.files.decode(row).file)
       }
@@ -141,7 +150,9 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
     }
     family.discovery ??= await read([], this.recentLimit)
     await this.drainRetirements()
-    return { ...family.discovery, files: changes, sourceOrder: family.sourceOrder }
+    const discovery = { ...family.discovery, files: changes, sourceOrder: family.sourceOrder }
+    this.deliveries.set(discovery, deliveries)
+    return discovery
   }
   async end(): Promise<void> {
     await this.drainRetirements()
@@ -173,6 +184,7 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
       return
     }
     const changes: FileWithMtime[] = []
+    const deliveries: { scope: string; receipts: { key: string; revision: number }[] }[] = []
     for (const physical of family.physical.values()) {
       if (!physical.pending || changes.length >= 256) {
         continue
@@ -182,11 +194,20 @@ export class SessionSearchContainerInventory extends SessionSearchContainerSourc
         scope: physical.files.scope,
         limit: 256 - changes.length
       })
+      deliveries.push({
+        scope: physical.files.scope,
+        receipts: (page.rows ?? []).map((row) => ({
+          key: row.key,
+          revision: physical.files.decode(row).revision
+        }))
+      })
       for (const row of page.rows ?? []) {
         changes.push(physical.files.decode(row).file)
       }
     }
-    return { ...family.discovery, files: changes, sourceOrder: family.sourceOrder }
+    const discovery = { ...family.discovery, files: changes, sourceOrder: family.sourceOrder }
+    this.deliveries.set(discovery, deliveries)
+    return discovery
   }
   clear(): void {
     this.pathLists.clear()

@@ -1,5 +1,6 @@
 import {
   SessionSearchCatalogClient,
+  recordSessionSearchCatalogCounts,
   type SessionSearchCatalogRequest
 } from './session-search-catalog-client'
 import { recordSessionScanIssue } from '../ai-vault/session-scan-issues'
@@ -11,7 +12,12 @@ import { isMissingTranscriptPathError } from '../ai-vault/session-scanner-discov
 import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 
 type Physical = {
-  files: SessionSearchCatalogClient<{ file: FileWithMtime; epoch: number; changed: boolean }>
+  files: SessionSearchCatalogClient<{
+    file: FileWithMtime
+    epoch: number
+    changed: boolean
+    revision: number
+  }>
   epoch: number
   pending: number
   proof?: number
@@ -40,14 +46,40 @@ export class SessionSearchContainerSources {
   protected readonly retries = new SessionObservationRetries()
   readonly removed = new Map<string, Set<string>>()
   protected request: SessionSearchCatalogRequest | undefined
-  protected retirement: SessionSearchCatalogClient<string> | undefined
+  protected retirement: SessionSearchCatalogClient<{ path: string; revision: number }> | undefined
+  private retirementReceipts: { key: string; revision: number }[] = []
+  async acknowledgeRetirements(): Promise<void> {
+    if (!this.retirementReceipts.length) {
+      return
+    }
+    await this.request!({
+      kind: 'container-retirement-ack',
+      scope: this.retirement!.scope,
+      receipts: this.retirementReceipts
+    })
+    this.retirementReceipts = []
+  }
   protected get retirementCount(): number {
     return this.retirement?.size ?? 0
   }
+  protected readonly deliveries = new WeakMap<
+    SessionFileDiscovery,
+    { scope: string; receipts: { key: string; revision: number }[] }[]
+  >()
+  async acknowledge(discovery: SessionFileDiscovery): Promise<void> {
+    for (const page of this.deliveries.get(discovery) ?? []) {
+      await this.request!({ kind: 'container-ack', scope: page.scope, receipts: page.receipts })
+    }
+    this.deliveries.delete(discovery)
+  }
   protected readonly acceptedProofs = new Map<string, Physical>()
   attach(request: SessionSearchCatalogRequest): void {
-    this.request ??= request
-    this.retirement ??= new SessionSearchCatalogClient('container-retirements', request)
+    this.request ??= async (command) => {
+      const result = await request(command)
+      recordSessionSearchCatalogCounts(this.request!, result)
+      return result
+    }
+    this.retirement ??= new SessionSearchCatalogClient('container-retirements', this.request)
   }
   readonly proofs = async (
     container: string,
@@ -69,6 +101,7 @@ export class SessionSearchContainerSources {
     this.retries.begin(full)
     this.recentLimit = recentLimit
     this.removed.clear()
+    this.retirementReceipts = []
     if (full) {
       for (const family of this.families.values()) {
         for (const physical of family.physical.values()) {
@@ -132,21 +165,19 @@ export class SessionSearchContainerSources {
     }
     return result
   }
-  protected async remove(path: string, agent: string): Promise<void> {
-    const key = `${agent}:${path}`
-    if (!(await this.retirement!.get(key))) {
-      await this.retirement!.put(key, path, { parent: agent })
-    }
-  }
   protected async drainRetirements(): Promise<void> {
+    if (this.retirementReceipts.length) {
+      return
+    }
     const page = await this.retirement!.page({ limit: Math.max(1, 256 - this.removed.size) })
-    for (const { key, value: path } of page.rows) {
+    for (const { key, value } of page.rows) {
+      const path = value.path
       const agent = key.slice(0, key.indexOf(':'))
       const agents = this.removed.get(path) ?? new Set<string>()
       agents.add(agent)
       this.removed.set(path, agents)
     }
-    await this.retirement!.deletePage(page.rows.map(({ key }) => key))
+    this.retirementReceipts = page.rows.map(({ key, value }) => ({ key, revision: value.revision }))
   }
   protected async release(
     key: string,

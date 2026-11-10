@@ -178,5 +178,6 @@ export class SessionSearchDependencyInventory {
       }
     }
     yield* keys
+    await inventory.acknowledge(delta.receipts)
   }
 }

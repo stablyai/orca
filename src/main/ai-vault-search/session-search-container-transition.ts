@@ -1,7 +1,7 @@
 import type { FileWithMtime } from '../ai-vault/session-scanner-types'
 import type { SessionSearchCatalog, SessionSearchCatalogRow } from './session-search-catalog'
 
-type Fact = { file: FileWithMtime; epoch: number; changed: boolean }
+type Fact = { file: FileWithMtime; epoch: number; changed: boolean; revision: number }
 export type SessionSearchContainerCommand =
   | {
       kind: 'container-apply'
@@ -12,6 +12,11 @@ export type SessionSearchContainerCommand =
       proof?: number
     }
   | { kind: 'container-drain'; scope: string; limit: number }
+  | {
+      kind: 'container-ack' | 'container-retirement-ack'
+      scope: string
+      receipts: { key: string; revision: number }[]
+    }
   | { kind: 'container-retire'; scope: string; epoch?: number; agent: string; after?: string }
 
 function fact(row: SessionSearchCatalogRow): Fact {
@@ -22,17 +27,34 @@ export function transitionSessionSearchContainer(
   catalog: SessionSearchCatalog,
   command: SessionSearchContainerCommand
 ): { rows?: SessionSearchCatalogRow[]; after?: string; invalidProof?: boolean } {
+  if (command.kind === 'container-ack' || command.kind === 'container-retirement-ack') {
+    for (const receipt of command.receipts) {
+      const row = catalog.execute({ kind: 'get', scope: command.scope, key: receipt.key }).rows?.[0]
+      if (row && fact(row).revision === receipt.revision) {
+        if (command.kind === 'container-retirement-ack') {
+          catalog.execute({ kind: 'delete', scope: command.scope, key: receipt.key })
+          continue
+        }
+        catalog.execute({
+          kind: 'put',
+          scope: command.scope,
+          rows: [{ ...row, value: JSON.stringify({ ...fact(row), changed: false }), ready: 0 }]
+        })
+      }
+    }
+    return {}
+  }
   if (command.kind === 'container-apply') {
     let invalidProof = false
     for (const { file, id } of command.rows) {
       const row = catalog.execute({ kind: 'get', scope: command.scope, key: file.path }).rows?.[0]
       const previous = row ? fact(row) : undefined
       invalidProof ||= !!id && command.proof !== undefined && previous?.epoch !== command.proof
-      const changed =
-        previous?.changed === true ||
+      const different =
         !previous ||
         previous.file.mtimeMs !== file.mtimeMs ||
         previous.file.sizeBytes !== file.sizeBytes
+      const changed = different || previous?.changed === true
       catalog.execute({
         kind: 'put',
         scope: command.scope,
@@ -42,7 +64,8 @@ export function transitionSessionSearchContainer(
             value: JSON.stringify({
               file,
               epoch: command.full ? command.epoch : (previous?.epoch ?? 0),
-              changed
+              changed,
+              revision: different ? catalog.nextRevision() : previous?.revision
             }),
             parent: '',
             group: id,
@@ -62,13 +85,6 @@ export function transitionSessionSearchContainer(
     limit: command.kind === 'container-drain' ? command.limit : 256
   })
   if (command.kind === 'container-drain') {
-    for (const row of page.rows ?? []) {
-      catalog.execute({
-        kind: 'put',
-        scope: command.scope,
-        rows: [{ ...row, value: JSON.stringify({ ...fact(row), changed: false }), ready: 0 }]
-      })
-    }
     return { rows: page.rows }
   }
   for (const row of page.rows ?? []) {
@@ -79,7 +95,7 @@ export function transitionSessionSearchContainer(
         rows: [
           {
             key: `${command.agent}:${row.key}`,
-            value: JSON.stringify(row.key),
+            value: JSON.stringify({ path: row.key, revision: catalog.nextRevision() }),
             parent: command.agent,
             group: '',
             rank: 0,

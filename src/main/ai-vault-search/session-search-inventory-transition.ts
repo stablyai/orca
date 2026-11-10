@@ -40,7 +40,8 @@ export type SessionSearchInventoryCommand =
       generation: number
       outcomes: SessionSearchObservationOutcome[]
     }
-  | { kind: 'forget-files'; scope: string; paths: string[] }
+  | { kind: 'forget-files'; scope: string; paths: string[]; notify?: boolean }
+  | { kind: 'observe-ack'; scope: string; receipts: { path: string; revision: number }[] }
 export type SessionSearchInventoryResult = {
   prepared?: SessionSearchPreparedObservation[]
   observations?: {
@@ -87,6 +88,16 @@ export function transitionSessionSearchInventory(
   }
   const remove = (scope: string, key: string) => catalog.execute({ kind: 'delete', scope, key })
   const observing = `${command.scope}:observing`
+  const delivery = `${command.scope}:delivery`
+  if (command.kind === 'observe-ack') {
+    for (const receipt of command.receipts) {
+      const row = get(delivery, receipt.path)
+      if (row && JSON.parse(row.value).revision === receipt.revision) {
+        remove(delivery, receipt.path)
+      }
+    }
+    return {}
+  }
   const token = (path: string) => [
     get(files, path)?.value ?? '',
     get(failures, path)?.value ?? '',
@@ -141,7 +152,11 @@ export function transitionSessionSearchInventory(
   }
   if (command.kind === 'forget-files') {
     for (const path of command.paths) {
-      filesDelta -= Number(!!get(files, path))
+      const known = !!get(files, path)
+      filesDelta -= Number(known)
+      if (known && command.notify !== false) {
+        put(delivery, path, { removed: true, force: false, revision: catalog.nextRevision() })
+      }
       remove(files, path)
       remove(observing, path)
       debtChange(path, decode<SessionSearchObservationDebt>(get(failures, path)), undefined)
@@ -213,6 +228,14 @@ export function transitionSessionSearchInventory(
       old.sizeBytes === facts.sizeBytes &&
       old.dev === facts.dev &&
       old.ino === facts.ino
+    if (force || !same || dependencyChanged) {
+      const owed = decode<{ force?: boolean }>(get(delivery, outcome.path))
+      put(delivery, outcome.path, {
+        file: facts,
+        force: !!owed?.force || dependencyChanged || (force && same),
+        revision: catalog.nextRevision()
+      })
+    }
     observations.push({
       path: outcome.path,
       file: { ...facts, modifiedAt: new Date(facts.mtimeMs).toISOString() },

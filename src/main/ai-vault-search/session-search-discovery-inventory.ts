@@ -156,12 +156,14 @@ export class SessionSearchDiscoveryInventory
         )
         await this.metadataDebt!.deletePage(paths)
       } else if (!this.accept) {
+        await root.inventory.acknowledge(delta.receipts)
         return {
           agent: args.agent,
           rootDir: args.rootDir,
           files: delta.changes.map((change) => change.file)
         }
       }
+      await root.inventory.acknowledge(delta.receipts)
       if ((!delta.changes.length && !delta.removed.length) || this.overdue()) {
         break
       }
@@ -194,15 +196,18 @@ export class SessionSearchDiscoveryInventory
       enumerationComplete
     )
     if (!this.accept) {
+      await this.containers.acknowledge(discovery)
       return discovery
     }
     await this.accept(discovery)
+    await this.containers.acknowledge(discovery)
     while (this.containers.hasChanges(key) && !this.overdue()) {
       const next = await this.containers.drain(key)
       if (!next?.files.length) {
         break
       }
       await this.accept(next)
+      await this.containers.acknowledge(next)
     }
     return { ...discovery, files: [] }
   }
