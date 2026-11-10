@@ -5,7 +5,7 @@ import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { MCODE_DIALECT } from '../acp/acp-dialects/mcode-dialect'
 import { readMcodeModelCatalog } from '../acp/acp-dialects/mcode-model-catalog'
 import type { StructuredAgentSessionHistory } from '../native-chat/structured-agent-cli-conversations'
-import { agentSessionSignInFor } from '../../shared/agent-session/lifecycle/agent-session-sign-in'
+import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/agent-session-setup-commands'
 import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
 import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 
@@ -43,7 +43,7 @@ export const MCODE_LAUNCH_SPEC = {
   args: () => ['acp'],
   env: {},
   dialect: MCODE_DIALECT,
-  loginCommand: agentSessionSignInFor('mcode')?.loginCommand ?? [],
+  loginCommand: agentSessionSetupFor('mcode')?.loginCommand ?? [],
   account: MCODE_ACCOUNT,
   installDirectories: () => [],
   modelDiscovery: {
