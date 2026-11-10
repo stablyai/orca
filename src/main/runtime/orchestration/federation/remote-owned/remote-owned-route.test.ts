@@ -206,19 +206,31 @@ describe('commands about a worker a paired server owns', () => {
     expect(db.db.prepare('SELECT COUNT(*) AS n FROM remote_placements').get()).toEqual({ n: 0 })
   })
 
-  it('frees the Task when the server refuses the start, and keeps it fenced when the answer is lost', async () => {
+  it('fails the Task when the server refuses the start, and keeps it fenced when the answer is lost', async () => {
     answers['orchestration.workerStart'] = [
       { error: 'invalid_argument', data: { effectsApplied: false } }
     ]
+    let dependent: string | undefined
+    whileSending = async () => {
+      // Another caller lists the reserved Task and depends on it while its start waits.
+      const reserved = db.getTask(String(sent[0].params.adoptTaskId))!
+      dependent = db.createTask({
+        spec: 'after it',
+        deps: [reserved.id],
+        runId: reserved.run_id
+      }).id
+    }
     await call(
       'orchestration.workerStart',
       { from: 'term_coord', on: 'devB', spec: 'refused', worktree: 'current' },
       { requestId: REQUEST }
     )
+    whileSending = async () => undefined
     const refusedTask = String(sent[0].params.adoptTaskId)
     expect(getRemotePlacement(db, refusedTask)).toBeUndefined()
-    // As a refused local start creates no Task, a refused start there leaves none here.
-    expect(db.getTask(refusedTask)).toBeUndefined()
+    // As a local start that fails after creating its Task leaves it failed, so its dependent keeps it.
+    expect(db.getTask(refusedTask)?.status).toBe('failed')
+    expect(db.getTask(dependent!)?.deps).toContain(refusedTask)
 
     const lost = await call(
       'orchestration.workerStart',
