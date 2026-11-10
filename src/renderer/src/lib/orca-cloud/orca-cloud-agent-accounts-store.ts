@@ -169,6 +169,24 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
+/** The current read, for code outside React (the cloud launch hold). */
+export function readOrcaCloudAgentAccounts(): OrcaCloudAgentAccountsState {
+  return state
+}
+
+/** Listens for changes outside React; also starts the setup subscription once. */
+export function subscribeOrcaCloudAgentAccounts(listener: () => void): () => void {
+  return subscribe(listener)
+}
+
+/** Reads again when the last read is stale or missing, for a launch about to decide. */
+export async function ensureFreshOrcaCloudAgentAccounts(): Promise<OrcaCloudAgentAccountsState> {
+  if (state.load.kind !== 'ready' || Date.now() - loadedAt > FRESH_MS) {
+    await reloadOrcaCloudAgentAccounts()
+  }
+  return state
+}
+
 /** S0 and the Agent row; reads once on mount when the last read is stale. */
 export function useOrcaCloudAgentAccounts(enabled = true): OrcaCloudAgentAccountsState {
   const snapshot = useSyncExternalStore(
