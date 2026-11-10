@@ -209,7 +209,8 @@ export class StateSerializationSecretHandlingOperations {
           ownerLease: encrypt(sshPtyOwnerLeaseSecretSlot(record.targetId), record.ownerLease)
         }))
       default:
-        return (state as unknown as Record<string, unknown>)[domain]
+        // Own properties only, including domains this build doesn't know.
+        return Object.getOwnPropertyDescriptor(state, domain)?.value
     }
   }
 
