@@ -64,7 +64,7 @@ export class CodexUsageLimits {
     const text = [message, additional && additional !== message ? additional : null]
       .filter((part): part is string => part !== null)
       .join('\n')
-    const limit = this.limit(error === 'usageLimitExceeded')
+    const limit = this.limit(info.error === 'usageLimitExceeded')
     return agentSessionFailureFact('usageLimitReached', {
       ...(limit ? { usageLimit: limit } : {}),
       detail: providerDiagnostic(text, 'person')
