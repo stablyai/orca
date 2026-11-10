@@ -127,7 +127,7 @@ describe('CodexAccountService config sync', () => {
         expect(
           getCodexAccountAuthWarning({
             limits: null,
-            target: { runtime: 'host' },
+            target: { runtime: 'host', wslDistro: null },
             runtime: { runtime: 'host' },
             activeAccountId: null,
             accountId: null,
