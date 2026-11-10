@@ -198,6 +198,22 @@ export async function createSetupSession(
   return { ok: true, id, url: setupPageUrl(env, '/start', { session: id, ticket }), expiresAt }
 }
 
+/** "Copy setup link": a fresh one-time ticket for another browser (the old one is replaced). */
+export async function reissueSetupTicket(
+  env: Env,
+  caller: BillingCaller,
+  id: string,
+  now: number
+): Promise<{ url: string } | null> {
+  const row = await loadSetupSession(env, id, now)
+  if (!row || row.user_id !== caller.userId || row.finished_at !== null) {
+    return null
+  }
+  const ticket = randomToken(32)
+  await touch(env, id, { ticket_hash: await sha256Hex(ticket), ticket_expires_at: now + TICKET_TTL_MS }, now)
+  return { url: setupPageUrl(env, '/start', { session: id, ticket }) }
+}
+
 export async function loadSetupSession(env: Env, id: string, now: number): Promise<SetupSessionRow | null> {
   if (!SETUP_SESSION_ID.test(id)) {
     return null

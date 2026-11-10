@@ -64,7 +64,7 @@ describe('cloud setup sessions', () => {
   })
 
   it('chains a new user through team (trial granted), then GitHub, then finishes', async () => {
-    const { h, trials, create, poll, pages } = await setup()
+    const { h, trials, create, poll, pages, personal } = await setup()
     const created = await create()
     expect(created.status).toBe(201)
     expect(created.body.id).toMatch(/^cs_[A-Za-z0-9_-]{22}$/)
@@ -84,6 +84,9 @@ describe('cloud setup sessions', () => {
     expect((await pages.redeem(session, 'x'.repeat(43))).status).toBe(404)
     expect((await pages.redeem(session, ticket)).body).toEqual({ userId: 'u1' })
     expect((await pages.redeem(session, ticket)).status).toBe(404)
+    // "Copy setup link" mints a fresh one-time link for another browser.
+    const link = await h.call('POST', `/v1/cloud-setup/sessions/${session}/link`, { headers: personal })
+    expect((await pages.redeem(session, ticketOf(link.body.url).ticket)).body).toEqual({ userId: 'u1' })
 
     // Pages read it as the session's user only.
     expect((await pages.read(session, 'u2')).status).toBe(404)

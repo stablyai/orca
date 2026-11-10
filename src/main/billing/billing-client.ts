@@ -68,7 +68,7 @@ export async function mintBillingToken(
   return body.data.billingToken
 }
 
-async function billingRequest(
+export async function billingRequest(
   endpoints: BillingEndpoints,
   token: string,
   method: 'GET' | 'POST',
@@ -221,7 +221,12 @@ export async function createCheckoutUrl(
     token,
     'POST',
     'v1/billing/checkout',
-    { plan: args.plan, interval: args.interval, seats: args.seats },
+    {
+      plan: args.plan,
+      interval: args.interval,
+      seats: args.seats,
+      ...(args.setupSessionId ? { setupSessionId: args.setupSessionId } : {})
+    },
     fetchImpl
   )
   return assertStripeHostedUrl(UrlBody.safeParse(body).data?.url)

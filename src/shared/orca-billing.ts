@@ -128,6 +128,8 @@ export type OrcaBillingCheckoutArgs = {
   plan: OrcaBillingPlanId
   interval: OrcaBillingInterval
   seats: number
+  /** The plans dialog joins an open cloud setup session: Checkout then returns to its next step. */
+  setupSessionId?: string
 }
 
 export type OrcaBillingOverageArgs = {
@@ -143,6 +145,8 @@ export type OrcaBillingOpenResult =
   | { status: 'forbidden' }
   | { status: 'already-subscribed' }
   | { status: 'no-billing-account' }
+  /** Personal account: every plan lands on a team, so the caller starts cloud setup instead. */
+  | { status: 'team-required' }
   | { status: 'failed'; error: string }
 
 export type OrcaBillingOverageResult =

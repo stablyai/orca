@@ -106,6 +106,22 @@ function prepare(userDataPath: string): Ready {
   }
 }
 
+/**
+ * Runs one billing-service call with a fresh billing token for the active profile (cloud setup
+ * uses it for its session calls). 'signed-out' when there is no usable Orca session.
+ */
+export async function withBillingToken<T>(
+  userDataPath: string,
+  call: (token: string, endpoints: BillingEndpoints) => Promise<T>
+): Promise<{ status: 'ok'; value: T } | { status: 'unconfigured' | 'signed-out' }> {
+  const ready = prepare(userDataPath)
+  if (!ready.ok) {
+    return { status: ready.status }
+  }
+  const value = await ready.run(call)
+  return value === 'signed-out' ? { status: 'signed-out' } : { status: 'ok', value }
+}
+
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
 export async function getOrcaBillingStatus(userDataPath: string): Promise<OrcaBillingStatusResult> {
@@ -152,6 +168,9 @@ function openResultForError(error: unknown): OrcaBillingOpenResult {
     if (error.errorCode === 'no_billing_account') {
       return { status: 'no-billing-account' }
     }
+    if (error.errorCode === 'team_required') {
+      return { status: 'team-required' }
+    }
   }
   return { status: 'failed', error: message(error) }
 }
@@ -183,11 +202,25 @@ async function openHosted(
   }
 }
 
-export function openOrcaBillingCheckout(
+export async function openOrcaBillingCheckout(
   userDataPath: string,
   args: OrcaBillingCheckoutArgs
 ): Promise<OrcaBillingOpenResult> {
-  return openHosted(userDataPath, (token, endpoints) => createCheckoutUrl(endpoints, token, args))
+  const result = await openHosted(userDataPath, (token, endpoints) =>
+    createCheckoutUrl(endpoints, token, args)
+  )
+  // A setup session for another team or user (or an expired one) must not block buying.
+  if (
+    args.setupSessionId &&
+    result.status === 'failed' &&
+    /setup_session_mismatch/.test(result.error)
+  ) {
+    const { setupSessionId: _dropped, ...plain } = args
+    return openHosted(userDataPath, (token, endpoints) =>
+      createCheckoutUrl(endpoints, token, plain)
+    )
+  }
+  return result
 }
 
 export function openOrcaBillingPortal(userDataPath: string): Promise<OrcaBillingOpenResult> {

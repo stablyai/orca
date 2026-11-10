@@ -24,6 +24,7 @@
 // Cloud setup (desktop billing JWT):
 //   POST /v1/cloud-setup/sessions {repo?, needs[], device?, useActiveTeam?} -> {id, url, expiresAt}
 //   GET  /v1/cloud-setup/sessions/:id      steps, team, trial, finished, error
+//   POST /v1/cloud-setup/sessions/:id/link -> {url}   fresh one-time link ("Copy setup link")
 //   GET  /v1/cloud-setup/offers            public: trial hours and Team prices for the setup pages
 // Control plane (CONTROL_PLANE_TOKEN):
 //   POST /v1/internal/cloud-setup/github {sessionId?, accountId, repo, state}
@@ -67,6 +68,7 @@ import {
   recordGithubEvent,
   recordSetupError,
   redeemSetupTicket,
+  reissueSetupTicket,
   setupGithubInstall,
   setupSessionView
 } from './cloud-setup'
@@ -106,7 +108,7 @@ export type Deps = {
   fetch?: typeof fetch
 }
 
-const SETUP_SESSION_PATH = /^\/v1\/cloud-setup\/sessions\/(cs_[A-Za-z0-9_-]{22})$/
+const SETUP_SESSION_PATH = /^\/v1\/cloud-setup\/sessions\/(cs_[A-Za-z0-9_-]{22})(\/link)?$/
 const INTERNAL_SETUP_PATH = /^\/v1\/internal\/cloud-setup\/sessions\/(cs_[A-Za-z0-9_-]{22})(?:\/(team|team-plans|checkout|github|error))?$/
 
 async function handleCloudSetup(
@@ -137,7 +139,15 @@ async function handleCloudSetup(
       : json({ error: created.error }, created.status)
   }
   const desktopMatch = SETUP_SESSION_PATH.exec(url.pathname)
-  if (desktopMatch && request.method === 'GET') {
+  if (desktopMatch?.[2] && request.method === 'POST') {
+    const caller = await authenticateDesktop(env, request)
+    if (!caller) {
+      return json({ error: 'unauthorized' }, 401)
+    }
+    const link = await reissueSetupTicket(env, caller, desktopMatch[1]!, now)
+    return link ? json(link) : json({ error: 'not_found' }, 404)
+  }
+  if (desktopMatch && !desktopMatch[2] && request.method === 'GET') {
     const caller = await authenticateDesktop(env, request)
     if (!caller) {
       return json({ error: 'unauthorized' }, 401)
