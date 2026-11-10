@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { isMac } from '@/app-shell/app-window-chrome'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { openUrlInTabBesideBrowserPage } from '@/lib/browser/palette/browser-page-tab-opening'
+import { openLinkInNewBrowserTab } from '@/lib/browser/palette/open-client-hosted-link-beside-page'
 import {
   buildSearchUrl,
   DEFAULT_SEARCH_ENGINE,
@@ -79,7 +79,7 @@ function buildMenuSections(
     }
   })
   const openInNewTab = (url: string, activate: boolean): void => {
-    openUrlInTabBesideBrowserPage({ sourcePageId: browserPageId, worktreeId, url, activate })
+    openLinkInNewBrowserTab({ sourcePageId: browserPageId, worktreeId, url, activate })
   }
   const openExternally = (url: string): void => {
     const targetUrl = normalizeExternalBrowserUrl(url)
