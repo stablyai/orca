@@ -28,9 +28,11 @@
   // runner is its own Worker (wrangler.build-runner.dev.jsonc, deployed first): a Worker implementing a
   // Durable Object gets no preview URLs. v2 deletes the class this Worker hosted until then; its only
   // state was each build's alarm, and the cron below re-arms every unfinished build within a minute.
-  // Step 1 of 2: Cloudflare refuses the delete-class migration while any binding names the class (error
-  // 10061), even one pointing at another script. This deploy applies v2 with no binding (builds advance on
-  // the every-minute cron meanwhile); step 2 re-adds the binding to orca-sandbox-build-runner-dev.
+  // v2 below was applied in a deploy with no binding (Cloudflare error 10061 refuses a delete-class migration
+  // while any binding names the class, even one with script_name); the binding now points at the runner Worker.
+  "durable_objects": {
+    "bindings": [{ "name": "ENV_BUILD_RUNNER", "class_name": "EnvironmentBuildRunner", "script_name": "orca-sandbox-build-runner-dev" }]
+  },
   "migrations": [
     { "tag": "env-build-runner-v1", "new_sqlite_classes": ["EnvironmentBuildRunner"] },
     { "tag": "env-build-runner-v2", "deleted_classes": ["EnvironmentBuildRunner"] }
