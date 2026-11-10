@@ -98,7 +98,11 @@ export type EphemeralVmApi = {
     runtimeId: string
     workspaceId: string
   }) => Promise<EphemeralVmRuntimeRecord>
-  resumeWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmWorkspaceLifecycleResult>
+  /** `quiet`: a wake started on intent; a refusal leaves the VM record as it was. */
+  resumeWorkspace: (args: {
+    workspaceId: string
+    quiet?: boolean
+  }) => Promise<EphemeralVmWorkspaceLifecycleResult>
   /** Suspends the workspace's VM without closing panels; sleep closes them first. */
   suspendWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmWorkspaceLifecycleResult>
   /** Fires after any runtime record write; re-list to read the new lifecycle status. */

@@ -21,6 +21,8 @@ import { CLOUD_WORKSPACE_ARCHIVED_ERROR } from '../../shared/hosted-sandbox/clou
 import { connectRuntimeOwnedSshTarget, refreshRuntimeOwnedSshTarget } from './runtime-ssh'
 import { noteRecipeVmWakePairing } from './recipe-vm-wake-pairings'
 import { applyResumedRuntimePairing, probeSavedPairing } from './runtime-resume-pairing'
+import { isQuietWake } from './quiet-wakes'
+import { getRecipeVmWaker } from '../runtime/workspaces/sleep/recipe-vm-waker-registry'
 import {
   preconnectWokenServer,
   proveSavedPairingViaControl,
@@ -114,11 +116,19 @@ export async function resumeEphemeralVmWorkspace(
     runtime.recipe?.provider === 'orca-cloud' &&
     runtime.connectionMode === 'orca-server' &&
     runtime.runtimeEnvironmentId &&
+    // A lost-contact recovery may still reach the old boot; only a clean wake pre-connects.
+    !lostContact &&
     !isRuntimeEnvironmentManuallyDisconnected(runtime.runtimeEnvironmentId)
       ? runtime.runtimeEnvironmentId
       : null
   const stopPreconnect = preconnectEnvironmentId
-    ? preconnectWokenServer(userDataPath, preconnectEnvironmentId)
+    ? preconnectWokenServer(userDataPath, preconnectEnvironmentId, () => {
+        // Only while this wake is still on: a sleep or a failed wake leaves the record asleep.
+        const current = findWorkspaceEphemeralVmRuntime(userDataPath, workspaceId)
+        return (
+          current?.status === 'running' || getRecipeVmWaker()?.state(workspaceId, true) === 'waking'
+        )
+      })
     : () => {}
   let result: Awaited<ReturnType<typeof resumeEphemeralVmRuntime>>
   try {
@@ -135,6 +145,13 @@ export async function resumeEphemeralVmWorkspace(
   if (!result.ok) {
     stopPreconnect()
     restoreAfterFailedRecovery()
+    if (isQuietWake(workspaceId)) {
+      // A wake on intent that nobody opened: no failed resume is saved for the row to show.
+      updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
+        status: runtime.status,
+        lifecycleLastError: null
+      })
+    }
     if (archivedCheck && (await archivedCheck)) {
       // Not a failed resume: the workspace is archived. Leave the record as it was.
       updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {

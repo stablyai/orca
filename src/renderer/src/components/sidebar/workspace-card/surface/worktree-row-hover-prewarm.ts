@@ -55,6 +55,8 @@ function installWheelListener(): void {
     () => {
       if (dwellWorktreeId !== null) {
         armDwell(dwellWorktreeId)
+        // Scrolling under a resting pointer is not intent either: restart the wake dwell too.
+        notePredictiveWakeHoverStart(dwellWorktreeId)
       }
     },
     { capture: true, passive: true }

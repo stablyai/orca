@@ -1,4 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron'
+import { claimQuietWake, markQuietWake } from '../ephemeral-vm/quiet-wakes'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   RuntimeRendererSyncWindowGraph,
@@ -38,8 +39,23 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   ipcMain.removeHandler('ephemeralVm:suspendWorkspace')
 
   // The window's wake shares the runtime's single VM wake path with its sleep's suspend.
-  ipcMain.handle('ephemeralVm:resumeWorkspace', (_event, args: { workspaceId: string }) =>
-    toWorkspaceLifecycleResult(() => runtime.wakeWorkspaceVm(args.workspaceId))
+  ipcMain.handle(
+    'ephemeralVm:resumeWorkspace',
+    (_event, args: { workspaceId: string; quiet?: boolean }) => {
+      // An intent wake fails without a trace; an open (no `quiet`) claims any such wake in flight.
+      if (args.quiet === true) {
+        markQuietWake(args.workspaceId)
+      } else {
+        claimQuietWake(args.workspaceId)
+      }
+      return toWorkspaceLifecycleResult(() => runtime.wakeWorkspaceVm(args.workspaceId)).finally(
+        () => {
+          if (args.quiet === true) {
+            claimQuietWake(args.workspaceId)
+          }
+        }
+      )
+    }
   )
   // Suspend VM with nothing open; a workspace with open panels sleeps, which suspends it after.
   ipcMain.handle('ephemeralVm:suspendWorkspace', (_event, args: { workspaceId: string }) =>

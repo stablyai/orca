@@ -22,7 +22,11 @@ export function controlReadyAt(environmentId: string): number | null {
 }
 
 /** Keeps the control socket dialing from the saved pairing while the VM boots (see startWakePreconnect). */
-export function preconnectWokenServer(userDataPath: string, environmentId: string): () => void {
+export function preconnectWokenServer(
+  userDataPath: string,
+  environmentId: string,
+  isWaking: () => boolean
+): () => void {
   return startWakePreconnect({
     ensure: () =>
       ensureRemoteRuntimeSharedControlConnection(
@@ -36,8 +40,8 @@ export function preconnectWokenServer(userDataPath: string, environmentId: strin
         getDiagnostics: () => getRemoteRuntimeSharedControlDiagnostics(environmentId),
         reconnectNow: () => reconnectRemoteRuntimeSharedControlConnection(environmentId)
       }),
-    // Bounded by readiness, the 60s cap, or the caller stopping it on a failed resume.
-    isWaking: () => !isRuntimeEnvironmentManuallyDisconnected(environmentId)
+    // Bounded by readiness, the 60s cap, the wake ending (sleep, failure) or the caller stopping it.
+    isWaking: () => isWaking() && !isRuntimeEnvironmentManuallyDisconnected(environmentId)
   })
 }
 

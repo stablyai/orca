@@ -1,6 +1,7 @@
 // Wires predictive wake to the app: the setting, the cloud status cache, the window's focus, and
 // the ordinary wake IPC (main's wake is single-flight per workspace, so a later open joins it).
 import { useAppStore } from '@/store'
+import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow'
 import {
   createPredictiveWakeController,
   notePredictiveWakeWindowBlur,
@@ -31,8 +32,19 @@ export function installCloudPredictiveWake(): () => void {
         )
       },
       wake: async (workspaceId) => {
-        await window.api.ephemeralVm.resumeWorkspace({ workspaceId }).catch(() => null)
+        // Quiet: a refusal leaves no failed-resume record behind (main), and no card (store).
+        const result = await window.api.ephemeralVm
+          .resumeWorkspace({ workspaceId, quiet: true })
+          .catch(() => null)
         await refreshCloudWorkspaceStatus(workspaceId)
+        return result?.ok === true
+      },
+      sleep: async (workspaceId) => {
+        // Never put away the workspace the user is looking at.
+        if (useAppStore.getState().activeWorktreeId === workspaceId) {
+          return
+        }
+        await runSleepWorktree(workspaceId)
       },
       setTimer: (run, ms) => {
         const timer = setTimeout(run, ms)
