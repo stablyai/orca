@@ -1,9 +1,7 @@
-import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
-import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { runtimeTargetForOwnerEnvironment } from '../../../../runtime/rpc/targets/runtime-client-target'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import { forgetWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
@@ -45,6 +43,7 @@ import {
 } from './worktree-state-before-removal'
 import { resolveWorktreeRemovalPreference } from './worktree-removal-preference'
 import { completePreservedBranchCleanup } from './complete-preserved-branch-cleanup'
+import { shouldSkipArchiveHooks } from './cloud-sandbox-delete-guard'
 
 export function createRemoveWorktree(
   set: WorktreeSliceSet,
@@ -88,16 +87,11 @@ export function createRemoveWorktree(
     }))
 
     try {
-      // forget-local touches no remote/archive hooks; read current trust so concurrent same-repo deletes share one approval.
-      const skipArchive = policy.forgetLocalOnly
-        ? true
-        : (await ensureHooksConfirmed(
-            get,
-            getRepoIdFromWorktreeId(worktreeId),
-            'archive',
-            hostId,
-            removalRoute?.runtimeEnvironmentId
-          )) === 'skip'
+      const skipArchive = await shouldSkipArchiveHooks(get, policy.forgetLocalOnly, {
+        worktreeId,
+        hostId,
+        runtimeEnvironmentId: removalRoute?.runtimeEnvironmentId
+      })
 
       const worktreeBeforeRemoval = findWorktreeOnConfirmedHost(
         get,

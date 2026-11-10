@@ -89,7 +89,9 @@ describe('Orca Cloud workspace delete', () => {
     const result = await store.getState().removeWorktree({ id: wt.id, executionHostId: null }, true)
 
     expect(result).toEqual({ ok: true })
-    expect(calledMethods()).not.toContain('worktree.rm')
+    // Nothing goes to the asleep sandbox's server, not even the archive-hook check (W9: a 31 s
+    // delete was waiting out request timeouts against it).
+    expect(calledMethods()).toEqual([])
     expect(mockApi.worktrees.forgetLocal).toHaveBeenCalled()
     expect(mockApi.ephemeralVm.cleanup).toHaveBeenCalledWith({ runtimeId: 'runtime-cloud' })
   })
