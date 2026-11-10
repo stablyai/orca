@@ -6,6 +6,12 @@ import {
 import { applyScrubSafeAgentEnvAliases } from '../../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { isValidTerminalTabId } from '../../../shared/workspace-layout/terminal-tab-id'
+import {
+  buildWorkspacePortEnv,
+  WORKSPACE_PORT_ENV_KEYS,
+  type WorkspacePortBlock
+} from '../../../shared/workspace-port-block'
+import { getWorkspacePortBlockForWorktreeId } from '../../workspace-ports/workspace-port-block-registry'
 
 export type PtySpawnPane = {
   paneKey: string
@@ -50,6 +56,7 @@ export function stampPtySpawnPaneEnv(
     delete env.ORCA_TAB_ID
     delete env.ORCA_WORKTREE_ID
     delete env.ORCA_AGENT_LAUNCH_TOKEN
+    stampWorkspacePortEnv(env, undefined)
     applyScrubSafeAgentEnvAliases(env)
     return
   }
@@ -64,12 +71,30 @@ export function stampPtySpawnPaneEnv(
   } else {
     delete env.ORCA_WORKTREE_ID
   }
+  stampWorkspacePortEnv(env, pane.worktreeId)
   // A failed managed-dir preparation must leave a working caller directory intact.
   if (args.jcodeRuntimeDir !== undefined) {
     env[JCODE_RUNTIME_DIR_ENV_KEY] = args.jcodeRuntimeDir
   }
   // Why: SSH relay spawns skip the local/daemon env builders that otherwise mirror these.
   applyScrubSafeAgentEnvAliases(env)
+}
+
+/** Every shell in a workspace sees that workspace's port block; an inherited block never leaks in. */
+function stampWorkspacePortEnv(env: Record<string, string>, worktreeId: string | undefined): void {
+  let block: WorkspacePortBlock | null = null
+  try {
+    block = worktreeId ? getWorkspacePortBlockForWorktreeId(worktreeId) : null
+  } catch {
+    // Port allocation is a convenience; it must never stop a shell from opening.
+  }
+  if (block) {
+    Object.assign(env, buildWorkspacePortEnv(block))
+    return
+  }
+  for (const key of WORKSPACE_PORT_ENV_KEYS) {
+    delete env[key]
+  }
 }
 
 /** Window local providers validate asynchronously; daemon spawns retain their synchronous preparation. */

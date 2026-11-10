@@ -9,6 +9,7 @@ import { selectVmBuildSurfaceShown } from '@/lib/workspace/creation/worktree-cre
 import { selectActiveTerminalChromeState } from './active-terminal-chrome-selector'
 import { hasCustomTitleBar } from './app-window-chrome'
 import type { AppChromeLayout } from './use-app-chrome-layout'
+import { RunActionButton } from '../components/run-actions/RunActionButton'
 
 export function RightSidebarToggle(): React.JSX.Element {
   const t = useTranslate()
@@ -44,6 +45,7 @@ export function RightSidebarToggle(): React.JSX.Element {
 
 export function TitlebarMainStrip({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
   const t = useTranslate()
+  const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const handleToggleExpand = (): void => {
     const { effectiveActiveTabId } = selectActiveTerminalChromeState(useAppStore.getState())
     if (!effectiveActiveTabId) {
@@ -66,6 +68,9 @@ export function TitlebarMainStrip({ layout }: { layout: AppChromeLayout }): Reac
           className={`flex flex-1 min-w-0 self-stretch${!layout.workspaceChromeActive ? ' invisible pointer-events-none' : ''}`}
         />
       )}
+      {layout.workspaceChromeActive && !layout.creationLayoutActive && activeWorktreeId ? (
+        <RunActionButton worktreeId={activeWorktreeId} />
+      ) : null}
       {layout.showTitlebarExpandButton && (
         <Tooltip>
           <TooltipTrigger asChild>

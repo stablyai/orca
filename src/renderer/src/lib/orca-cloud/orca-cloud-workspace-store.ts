@@ -2,6 +2,7 @@
 // status from the control plane, in-flight wakes and OOM notices. The one source of cloud ids and
 // wake state for every cloud surface. A tiny external store (not an app-store slice) so the
 // hundreds of sidebar rows that are not cloud workspaces subscribe to nothing.
+import { relaunchInterruptedRunActions } from '@/lib/run-actions/run-action-controller'
 import {
   armInterruptedTurnsForHostRestart,
   continueInterruptedTurns,
@@ -294,6 +295,8 @@ export function noteCloudWakeProgress(event: CloudWakeProgressEvent): void {
     }
   }
   if (event.phase === 'ready') {
+    // The VM came back with fresh shells: start again the run actions (dev servers) that were up.
+    void relaunchInterruptedRunActions(event.workspaceId)
     // Settled: drop the entry once the status says what the VM is, so nothing keeps ticking.
     void refreshCloudWorkspaceStatus(event.workspaceId).finally(() =>
       dropWake(event.workspaceId, next)
