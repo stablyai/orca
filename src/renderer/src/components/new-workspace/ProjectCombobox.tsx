@@ -142,7 +142,11 @@ export default function ProjectCombobox({
         onMoreCloudAccess?.()
         return
       }
-      if (key.startsWith(CLOUD_REPO_KEY_PREFIX)) {
+      // Only a listed cloud-only row; a project id never reaches this branch.
+      if (
+        key.startsWith(CLOUD_REPO_KEY_PREFIX) &&
+        cloudRepos?.some((repo) => cloudRepoKey(repo.fullName) === key)
+      ) {
         onCloudRepoSelected?.(key.slice(CLOUD_REPO_KEY_PREFIX.length))
         return
       }
@@ -152,6 +156,7 @@ export default function ProjectCombobox({
     [
       close,
       onAddProject,
+      cloudRepos,
       onCloudRepoSelected,
       onMoreCloudAccess,
       onShowMoreCloudRepos,

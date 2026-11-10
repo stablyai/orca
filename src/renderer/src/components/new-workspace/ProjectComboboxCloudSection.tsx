@@ -7,9 +7,11 @@ import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
 import type { OrcaCloudGitHubRepository } from '@/lib/orca-cloud/use-orca-cloud-github-repositories'
 
-export const CLOUD_REPO_KEY_PREFIX = 'github:'
-export const CLOUD_REPO_MORE_KEY = 'github-more-access'
-export const CLOUD_REPO_SHOW_MORE_KEY = 'github-show-more'
+// Row keys share one namespace with project option ids, and GitHub projects are keyed
+// `github:<owner>/<repo>`; this prefix must never collide with a project id.
+export const CLOUD_REPO_KEY_PREFIX = 'cloud-only-repo:'
+export const CLOUD_REPO_MORE_KEY = 'cloud-only-repo-more-access'
+export const CLOUD_REPO_SHOW_MORE_KEY = 'cloud-only-repo-show-more'
 
 export function cloudRepoKey(fullName: string): string {
   return `${CLOUD_REPO_KEY_PREFIX}${fullName}`
