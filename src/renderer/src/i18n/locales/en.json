@@ -16412,6 +16412,9 @@
             "648352c51f": "Open {{value0}} in floating workspace",
             "109870e023": "Maximize",
             "b5686fee1e": "Restore"
+          },
+          "FloatingWorkspaceHostMenu": {
+            "heading": "Open on another host"
           }
         }
       },

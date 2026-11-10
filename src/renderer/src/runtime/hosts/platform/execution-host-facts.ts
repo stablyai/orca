@@ -196,6 +196,20 @@ export function resolveRepoExecutionHostPlatform(
   })
 }
 
+/** The OS of a host a launch names outright, for the floating workspace no row places. */
+export function resolveNamedExecutionHostPlatform(
+  state: HostFactsState,
+  executionHostId: ExecutionHostId
+): ExecutionHostPlatformFact {
+  return resolveHostPlatform(state, {
+    host: parseExecutionHostId(executionHostId),
+    nestedSshTargetId: null,
+    sshOwnerEnvironmentId: null,
+    workspacePath: undefined,
+    projectRuntime: () => undefined
+  })
+}
+
 export function resolveRepoExecutionHostTarget(repo: {
   connectionId?: string | null
   executionHostId?: string | null

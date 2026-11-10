@@ -10,6 +10,7 @@ import { renderFloatingTerminalOrchestrationCard } from './FloatingTerminalOrche
 import { FloatingTerminalOrchestrationDialog } from './FloatingTerminalOrchestrationDialog'
 import { FloatingTerminalResizeHandles } from './FloatingTerminalResizeHandles'
 import { FloatingTerminalWindowControls } from './FloatingTerminalWindowControls'
+import { FloatingWorkspaceHostMenu } from './FloatingWorkspaceHostMenu'
 import type { useFloatingTerminalPanelController } from './use-floating-terminal-panel-controller'
 import type { Translate } from '@/i18n/use-translate'
 
@@ -45,6 +46,7 @@ export function renderFloatingTerminalPanelSurface(
     closeToRight,
     closeToLeft,
     createFloatingTerminalTab,
+    launchFloatingAgentOnHost,
     createFloatingBrowserTab,
     createFloatingMarkdownTab,
     openFloatingMarkdownTab,
@@ -146,6 +148,12 @@ export function renderFloatingTerminalPanelSurface(
                   onNewFileTab={createFloatingMarkdownTab}
                   onOpenFileTab={openFloatingMarkdownTab}
                   newTabMenuOrder="markdown-first"
+                  newTabMenuFooter={
+                    <FloatingWorkspaceHostMenu
+                      onNewTerminal={(hostId) => createFloatingTerminalTab(undefined, hostId)}
+                      onLaunchAgent={launchFloatingAgentOnHost}
+                    />
+                  }
                   onSetCustomTitle={setTabCustomTitle}
                   onSetTabColor={setTabColor}
                   onTogglePaneExpand={(tabId) =>

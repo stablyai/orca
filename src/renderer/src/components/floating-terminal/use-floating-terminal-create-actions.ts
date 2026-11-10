@@ -15,6 +15,10 @@ import type { FloatingWorkspaceChromeModel } from './use-floating-workspace-chro
 import type { FloatingTerminalPanelLocalState } from './use-floating-terminal-panel-local-state'
 import type { FloatingTerminalPanelStoreState } from './use-floating-terminal-panel-store-state'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+import { floatingWorkspaceHostExecutionFacts } from './floating-workspace-host-terminal'
 
 const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 
@@ -66,12 +70,35 @@ export function useFloatingTerminalCreateActions({
   )
 
   const createFloatingTerminalTab = useCallback(
-    (shellOverride?: string) => {
+    (shellOverride?: string, hostId?: ExecutionHostId) => {
       const tabId = createBrowserUuid()
-      createTab(FLOATING_TERMINAL_WORKTREE_ID, activeGroup?.id, shellOverride, { id: tabId })
+      const executionFacts = floatingWorkspaceHostExecutionFacts(useAppStore.getState(), hostId)
+      createTab(FLOATING_TERMINAL_WORKTREE_ID, activeGroup?.id, shellOverride, {
+        id: tabId,
+        ...(executionFacts ? { executionFacts } : {})
+      })
       focusTerminalTabSurface(tabId)
     },
     [activeGroup, createTab]
+  )
+
+  const launchFloatingAgentOnHost = useCallback(
+    (agent: TuiAgent, hostId: ExecutionHostId) => {
+      const result = launchAgentInNewTabWithOutcome({
+        requestId: createBrowserUuid(),
+        agent,
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        workspaceExecutionHostId: hostId,
+        // Why: a paired server refuses chats in its floating workspace, so only a terminal starts.
+        requestedSurface: 'terminal',
+        ...(activeGroup ? { groupId: activeGroup.id } : {}),
+        launchSource: 'tab_bar_quick_launch'
+      })
+      if (result && !('refused' in result) && result.surface.kind === 'local-terminal') {
+        focusTerminalTabSurface(result.surface.tabId)
+      }
+    },
+    [activeGroup]
   )
 
   const createFloatingBrowserTab = useCallback(() => {
@@ -151,6 +178,7 @@ export function useFloatingTerminalCreateActions({
   return {
     activateFloatingItem,
     createFloatingTerminalTab,
+    launchFloatingAgentOnHost,
     createFloatingBrowserTab,
     createFloatingMarkdownTab,
     openFloatingMarkdownTab
