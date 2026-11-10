@@ -16,7 +16,7 @@ import { useWorkflowEditorStore } from './workflow-editor-store'
 import { addWorkflowNode, workflowNodeKindLabel } from './workflow-editor-mutations'
 import { workflowEditorActions } from './workflow-editor-actions'
 import { WORKFLOW_NODE_ICONS } from './WorkflowNodeCard'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type WorkflowContextTarget =
   | { kind: 'pane'; position: { x: number; y: number } }
@@ -30,6 +30,7 @@ export function WorkflowCanvasContextMenu({
   target: WorkflowContextTarget
   children: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const execution = useWorkflowEditorStore((state) => state.mode === 'execution')
   const select = useWorkflowEditorStore((state) => state.select)
   const commit = useWorkflowEditorStore((state) => state.commit)
@@ -57,10 +58,7 @@ export function WorkflowCanvasContextMenu({
               <ContextMenuSub>
                 <ContextMenuSubTrigger>
                   <Plus className="size-4" />
-                  {translate(
-                    'auto.components.workflows.WorkflowCanvasContextMenu.36ae635e26',
-                    'Add node'
-                  )}
+                  {t('auto.components.workflows.WorkflowCanvasContextMenu.36ae635e26', 'Add node')}
                 </ContextMenuSubTrigger>
                 <ContextMenuSubContent>
                   {WORKFLOW_NODE_KINDS.map((kind) => {
@@ -89,17 +87,11 @@ export function WorkflowCanvasContextMenu({
               disabled={execution}
             >
               <LayoutGrid className="size-4" />
-              {translate(
-                'auto.components.workflows.WorkflowCanvasContextMenu.1e31e9e7e7',
-                'Auto-layout'
-              )}
+              {t('auto.components.workflows.WorkflowCanvasContextMenu.1e31e9e7e7', 'Auto-layout')}
             </ContextMenuItem>
             <ContextMenuItem onSelect={() => void flow.fitView({ padding: 0.2, duration: 200 })}>
               <Maximize className="size-4" />
-              {translate(
-                'auto.components.workflows.WorkflowCanvasContextMenu.962fc43e78',
-                'Fit to view'
-              )}
+              {t('auto.components.workflows.WorkflowCanvasContextMenu.962fc43e78', 'Fit to view')}
             </ContextMenuItem>
           </>
         ) : null}
@@ -107,10 +99,7 @@ export function WorkflowCanvasContextMenu({
           <>
             <ContextMenuItem onSelect={() => workflowEditorActions.duplicateSelection()}>
               <Copy className="size-4" />
-              {translate(
-                'auto.components.workflows.WorkflowCanvasContextMenu.d6e87ff6e5',
-                'Duplicate'
-              )}
+              {t('auto.components.workflows.WorkflowCanvasContextMenu.d6e87ff6e5', 'Duplicate')}
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem
@@ -118,10 +107,7 @@ export function WorkflowCanvasContextMenu({
               onSelect={() => workflowEditorActions.deleteSelection()}
             >
               <Trash2 className="size-4" />
-              {translate(
-                'auto.components.workflows.WorkflowCanvasContextMenu.8e04f7649d',
-                'Delete'
-              )}
+              {t('auto.components.workflows.WorkflowCanvasContextMenu.8e04f7649d', 'Delete')}
             </ContextMenuItem>
           </>
         ) : null}
@@ -130,7 +116,7 @@ export function WorkflowCanvasContextMenu({
             {target.kind === 'communication' ? (
               <ContextMenuItem onSelect={() => workflowEditorActions.toggleRoute(target.id)}>
                 <Power className="size-4" />
-                {translate(
+                {t(
                   'auto.components.workflows.WorkflowCanvasContextMenu.e939cf228c',
                   'Enable or disable route'
                 )}
@@ -141,7 +127,7 @@ export function WorkflowCanvasContextMenu({
               onSelect={() => workflowEditorActions.deleteSelection()}
             >
               <Trash2 className="size-4" />
-              {translate(
+              {t(
                 'auto.components.workflows.WorkflowCanvasContextMenu.962f570125',
                 'Delete connection'
               )}
@@ -150,7 +136,7 @@ export function WorkflowCanvasContextMenu({
         ) : null}
         {target.kind !== 'pane' && execution ? (
           <ContextMenuItem disabled>
-            {translate(
+            {t(
               'auto.components.workflows.WorkflowCanvasContextMenu.41a6c82e9c',
               'Switch to Design to edit'
             )}

@@ -36,8 +36,8 @@ export const WORKFLOW_METHODS = [
     name: 'workflow.presetList',
     permission: 'workspace',
     params: null,
-    handler: (_params, { runtime }) => {
-      const controller = getWorkflowController(runtime)
+    handler: async (_params, { runtime }) => {
+      const controller = await getWorkflowController(runtime)
       return {
         presets: controller.store.listPresets().map((preset) => ({
           ...preset,
@@ -51,7 +51,7 @@ export const WORKFLOW_METHODS = [
     permission: 'workspace',
     params: WorkflowPresetSaveParams,
     handler: async (params, { runtime }) => ({
-      preset: await getWorkflowController(runtime).savePreset(params.preset)
+      preset: await (await getWorkflowController(runtime)).savePreset(params.preset)
     })
   }),
   defineMethod({
@@ -59,7 +59,7 @@ export const WORKFLOW_METHODS = [
     permission: 'workspace',
     params: WorkflowPresetIdParams,
     handler: async (params, { runtime }) => ({
-      deleted: await getWorkflowController(runtime).store.deletePreset(params.id)
+      deleted: await (await getWorkflowController(runtime)).store.deletePreset(params.id)
     })
   }),
   defineMethod({
@@ -67,7 +67,7 @@ export const WORKFLOW_METHODS = [
     permission: 'workspace',
     params: WorkflowValidateParams,
     handler: async (params, { runtime }) => {
-      const { issues } = await getWorkflowController(runtime).validate(params.definition)
+      const { issues } = await (await getWorkflowController(runtime)).validate(params.definition)
       return { issues }
     }
   }),
@@ -78,7 +78,7 @@ export const WORKFLOW_METHODS = [
     handler: async (params, { runtime }) => {
       try {
         return {
-          run: runSummary(await getWorkflowController(runtime).startRun(params)),
+          run: runSummary(await (await getWorkflowController(runtime)).startRun(params)),
           issues: []
         }
       } catch (error) {
@@ -94,9 +94,9 @@ export const WORKFLOW_METHODS = [
     name: 'workflow.runList',
     permission: 'workspace',
     params: WorkflowRunListParams,
-    handler: (params, { runtime }) => ({
-      runs: getWorkflowController(runtime)
-        .store.listRuns()
+    handler: async (params, { runtime }) => ({
+      runs: (await getWorkflowController(runtime)).store
+        .listRuns()
         .filter((run) => !params.presetId || run.presetId === params.presetId)
         .map(runSummary)
     })
@@ -105,8 +105,8 @@ export const WORKFLOW_METHODS = [
     name: 'workflow.runGet',
     permission: 'workspace',
     params: WorkflowRunGetParams,
-    handler: (params, { runtime }) => {
-      const run = getWorkflowController(runtime).store.getRun(params.id)
+    handler: async (params, { runtime }) => {
+      const run = (await getWorkflowController(runtime)).store.getRun(params.id)
       if (!run) {
         throw new Error(`Workflow run ${params.id} was not found.`)
       }
@@ -122,7 +122,7 @@ export const WORKFLOW_METHODS = [
     permission: 'workspace',
     params: WorkflowRunIdParams,
     handler: async (params, { runtime }) => {
-      await getWorkflowController(runtime).pause(params.id)
+      await (await getWorkflowController(runtime)).pause(params.id)
       return { ok: true }
     }
   }),
@@ -131,7 +131,7 @@ export const WORKFLOW_METHODS = [
     permission: 'workspace',
     params: WorkflowRunIdParams,
     handler: async (params, { runtime }) => {
-      await getWorkflowController(runtime).resume(params.id)
+      await (await getWorkflowController(runtime)).resume(params.id)
       return { ok: true }
     }
   }),
@@ -140,7 +140,7 @@ export const WORKFLOW_METHODS = [
     permission: 'workspace',
     params: WorkflowRunIdParams,
     handler: async (params, { runtime }) => {
-      await getWorkflowController(runtime).cancel(params.id)
+      await (await getWorkflowController(runtime)).cancel(params.id)
       return { ok: true }
     }
   }),
@@ -148,8 +148,8 @@ export const WORKFLOW_METHODS = [
     name: 'workflow.runDelete',
     permission: 'workspace',
     params: WorkflowRunIdParams,
-    handler: (params, { runtime }) => ({
-      deleted: getWorkflowController(runtime).deleteRun(params.id)
+    handler: async (params, { runtime }) => ({
+      deleted: await (await getWorkflowController(runtime)).deleteRun(params.id)
     })
   }),
   defineMethod({
@@ -157,7 +157,7 @@ export const WORKFLOW_METHODS = [
     permission: 'workspace',
     params: WorkflowTaskRetryParams,
     handler: async (params, { runtime }) => {
-      await getWorkflowController(runtime).retryTask(params.runId, params.taskKey)
+      await (await getWorkflowController(runtime)).retryTask(params.runId, params.taskKey)
       return { ok: true }
     }
   }),
@@ -166,11 +166,9 @@ export const WORKFLOW_METHODS = [
     permission: 'workspace',
     params: WorkflowApprovalResolveParams,
     handler: async (params, { runtime }) => {
-      await getWorkflowController(runtime).resolveApproval(
-        params.runId,
-        params.taskKey,
-        params.resolution
-      )
+      await (
+        await getWorkflowController(runtime)
+      ).resolveApproval(params.runId, params.taskKey, params.resolution)
       return { ok: true }
     }
   }),
@@ -179,11 +177,9 @@ export const WORKFLOW_METHODS = [
     permission: 'workspace',
     params: WorkflowMessageReleaseParams,
     handler: async (params, { runtime }) => {
-      await getWorkflowController(runtime).releaseMessage(
-        params.runId,
-        params.messageId,
-        params.decision
-      )
+      await (
+        await getWorkflowController(runtime)
+      ).releaseMessage(params.runId, params.messageId, params.decision)
       return { ok: true }
     }
   }),
@@ -192,11 +188,9 @@ export const WORKFLOW_METHODS = [
     permission: 'workspace',
     params: WorkflowQuestionReplyParams,
     handler: async (params, { runtime }) => {
-      await getWorkflowController(runtime).replyToQuestion(
-        params.runId,
-        params.messageId,
-        params.body
-      )
+      await (
+        await getWorkflowController(runtime)
+      ).replyToQuestion(params.runId, params.messageId, params.body)
       return { ok: true }
     }
   })

@@ -47,6 +47,7 @@ export function WorkflowCanvas(): React.JSX.Element | null {
   const selection = useWorkflowEditorStore((state) => state.selection)
   const layer = useWorkflowEditorStore((state) => state.layer)
   const execution = useWorkflowEditorStore((state) => state.mode === 'execution')
+  const unsaved = useWorkflowEditorStore((state) => state.savedJson === null)
   const commit = useWorkflowEditorStore((state) => state.commit)
   const checkpoint = useWorkflowEditorStore((state) => state.checkpoint)
   const select = useWorkflowEditorStore((state) => state.select)
@@ -237,7 +238,7 @@ export function WorkflowCanvas(): React.JSX.Element | null {
           onMoveEnd={onMoveEnd}
           defaultViewport={preset.layout.viewport}
           // Saved presets reopen where the user left them; templates and new drafts open fitted.
-          fitView={preset.template || useWorkflowEditorStore.getState().savedJson === null}
+          fitView={preset.template || unsaved}
           fitViewOptions={{ padding: 0.12, maxZoom: 1, minZoom: 0.6 }}
           nodesDraggable={!execution}
           nodesConnectable={!execution}

@@ -21,7 +21,7 @@ import {
   TextField
 } from './workflow-inspector-fields'
 import { useUpdateAgentProfile } from './use-workflow-node'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const SOURCE_LABEL: Record<WorkflowAssembledPrompt['sections'][number]['source'], string> = {
   'user-role': 'Your role instructions',
@@ -38,6 +38,7 @@ export function WorkflowPromptSections({
 }: {
   prompt: WorkflowAssembledPrompt
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="space-y-3">
       {prompt.sections.map((section) => (
@@ -52,7 +53,7 @@ export function WorkflowPromptSections({
         </section>
       ))}
       <InspectorNote>
-        {translate(
+        {t(
           'auto.components.workflows.inspector.AgentPromptSection.b836ba3bae',
           'Orca adds its orchestration preamble (Task and Dispatch ids, how to report) when it dispatches the task. The agent CLI and its provider add their own system instructions, which Orca does not see or replace.'
         )}
@@ -70,6 +71,7 @@ function PromptPreviewDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const t = useTranslate()
   const preset = useWorkflowEditorStore((state) => state.preset)
   const prompt = useMemo(() => {
     if (!preset) {
@@ -111,19 +113,19 @@ function PromptPreviewDialog({
       <DialogContent scrollable className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
-            {translate(
+            {t(
               'auto.components.workflows.inspector.AgentPromptSection.99179f2c95',
               'Effective prompt ·'
             )}{' '}
             {node.label}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.workflows.inspector.AgentPromptSection.949b18a793',
               'What the workflow sends as this task’s specification. Payloads and peer addresses are placeholders until a run fills them.'
             )}{' '}
             {prompt
-              ? translate(
+              ? t(
                   'auto.components.workflows.inspector.AgentPromptSection.22b5b076b2',
                   '{{value0}} bytes.',
                   { value0: prompt.bytes }
@@ -138,27 +140,22 @@ function PromptPreviewDialog({
 }
 
 export function AgentPromptSection({ node }: { node: WorkflowAgentNode }): React.JSX.Element {
+  const t = useTranslate()
   const update = useUpdateAgentProfile(node.id)
   const [previewOpen, setPreviewOpen] = useState(false)
   const prompt = node.agent.prompt
   return (
     <InspectorSection
-      title={translate(
-        'auto.components.workflows.inspector.AgentPromptSection.0bcb8f14f8',
-        'Instructions'
-      )}
+      title={t('auto.components.workflows.inspector.AgentPromptSection.0bcb8f14f8', 'Instructions')}
       aside={
         <Button variant="ghost" size="xs" onClick={() => setPreviewOpen(true)}>
           <Eye />
-          {translate(
-            'auto.components.workflows.inspector.AgentPromptSection.6482bdf54d',
-            'Preview'
-          )}
+          {t('auto.components.workflows.inspector.AgentPromptSection.6482bdf54d', 'Preview')}
         </Button>
       }
     >
       <TextAreaField
-        label={translate(
+        label={t(
           'auto.components.workflows.inspector.AgentPromptSection.f85aebe252',
           'Role instructions'
         )}
@@ -171,43 +168,37 @@ export function AgentPromptSection({ node }: { node: WorkflowAgentNode }): React
         }
       />
       <TextAreaField
-        label={translate(
+        label={t(
           'auto.components.workflows.inspector.AgentPromptSection.5fb5a0d3b4',
           'Task template'
         )}
         rows={3}
         description={
           <>
-            {translate(
-              'auto.components.workflows.inspector.AgentPromptSection.cc7e2e4b37',
-              'Variables:'
-            )}
+            {t('auto.components.workflows.inspector.AgentPromptSection.cc7e2e4b37', 'Variables:')}
             <code className="font-mono">
-              {translate(
+              {t(
                 'auto.components.workflows.inspector.AgentPromptSection.8d1907e440',
                 '{{objective}}'
               )}
             </code>
             ,{' '}
             <code className="font-mono">
-              {translate(
+              {t(
                 'auto.components.workflows.inspector.AgentPromptSection.69c67b0b76',
                 '{{node.label}}'
               )}
             </code>
             ,{' '}
             <code className="font-mono">
-              {translate(
+              {t(
                 'auto.components.workflows.inspector.AgentPromptSection.61869a7426',
                 '{{iteration}}'
               )}
             </code>
             ,{' '}
             <code className="font-mono">
-              {translate(
-                'auto.components.workflows.inspector.AgentPromptSection.8b9d7e9293',
-                '{{run.id}}'
-              )}
+              {t('auto.components.workflows.inspector.AgentPromptSection.8b9d7e9293', '{{run.id}}')}
             </code>
             .
           </>
@@ -220,7 +211,7 @@ export function AgentPromptSection({ node }: { node: WorkflowAgentNode }): React
         }
       />
       <SwitchField
-        label={translate(
+        label={t(
           'auto.components.workflows.inspector.AgentPromptSection.fb5945c57a',
           'Include shared instructions'
         )}
@@ -232,12 +223,12 @@ export function AgentPromptSection({ node }: { node: WorkflowAgentNode }): React
         }
       />
       <TextAreaField
-        label={translate(
+        label={t(
           'auto.components.workflows.inspector.AgentPromptSection.1c4204a63a',
           'Read-only context'
         )}
         rows={3}
-        description={translate(
+        description={t(
           'auto.components.workflows.inspector.AgentPromptSection.8034fd7d0f',
           'Reference material sent verbatim under its own Read-only context heading.'
         )}
@@ -249,7 +240,7 @@ export function AgentPromptSection({ node }: { node: WorkflowAgentNode }): React
         }
       />
       <TextAreaField
-        label={translate(
+        label={t(
           'auto.components.workflows.inspector.AgentPromptSection.02c9587d3d',
           'Output requirements'
         )}
@@ -262,26 +253,26 @@ export function AgentPromptSection({ node }: { node: WorkflowAgentNode }): React
         }
       />
       <SelectField
-        label={translate(
+        label={t(
           'auto.components.workflows.inspector.AgentPromptSection.395984f7c0',
           'Result format'
         )}
         value={prompt.outputFormat}
-        description={translate(
+        description={t(
           'auto.components.workflows.inspector.AgentPromptSection.8061aee65d',
           'JSON asks the agent for a WORKFLOW_RESULT object that decisions and routes can read.'
         )}
         options={[
           {
             value: 'text',
-            label: translate(
+            label: t(
               'auto.components.workflows.inspector.AgentPromptSection.a05dd00a0a',
               'Text summary'
             )
           },
           {
             value: 'json',
-            label: translate(
+            label: t(
               'auto.components.workflows.inspector.AgentPromptSection.4f7c45f74e',
               'Text summary plus JSON result'
             )
@@ -295,12 +286,12 @@ export function AgentPromptSection({ node }: { node: WorkflowAgentNode }): React
       />
       {prompt.outputFormat === 'json' ? (
         <TextField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.AgentPromptSection.c4610dbac4',
             'Required result fields'
           )}
           mono
-          placeholder={translate(
+          placeholder={t(
             'auto.components.workflows.inspector.AgentPromptSection.8168e402b7',
             'verdict, findings'
           )}

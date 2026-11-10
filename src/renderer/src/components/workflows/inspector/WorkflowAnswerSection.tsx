@@ -1,6 +1,6 @@
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { WorkflowWorkerAnswer } from '../../../../../shared/workflow/workflow-run-types'
 import { InspectorNote, InspectorSection } from './workflow-inspector-fields'
@@ -13,7 +13,8 @@ export function WorkflowAnswerSection({
 }: {
   answer: WorkflowWorkerAnswer
 }): React.JSX.Element {
-  const title = translate(
+  const t = useTranslate()
+  const title = t(
     'auto.components.workflows.inspector.NodeExecutionInspector.answerTitle',
     'Answer'
   )
@@ -22,16 +23,10 @@ export function WorkflowAnswerSection({
       <Tabs defaultValue="text" activationMode="manual">
         <TabsList size="sm" aria-label={title}>
           <TabsTrigger value="text">
-            {translate(
-              'auto.components.workflows.inspector.WorkflowAnswerSection.text',
-              'Plain text'
-            )}
+            {t('auto.components.workflows.inspector.WorkflowAnswerSection.text', 'Plain text')}
           </TabsTrigger>
           <TabsTrigger value="markdown">
-            {translate(
-              'auto.components.workflows.inspector.WorkflowAnswerSection.markdown',
-              'Markdown'
-            )}
+            {t('auto.components.workflows.inspector.WorkflowAnswerSection.markdown', 'Markdown')}
           </TabsTrigger>
         </TabsList>
         <TabsContent value="text" asChild>
@@ -57,7 +52,7 @@ export function WorkflowAnswerSection({
       </Tabs>
       {answer.source === 'terminal' ? (
         <InspectorNote>
-          {translate(
+          {t(
             'auto.components.workflows.inspector.NodeExecutionInspector.answerFromTerminal',
             'Captured from the terminal screen because the agent’s session log could not be read.'
           )}
@@ -65,7 +60,7 @@ export function WorkflowAnswerSection({
       ) : null}
       {answer.truncated ? (
         <InspectorNote>
-          {translate(
+          {t(
             'auto.components.workflows.inspector.NodeExecutionInspector.answerTruncated',
             'Earlier output was left out; open the terminal for the full history.'
           )}

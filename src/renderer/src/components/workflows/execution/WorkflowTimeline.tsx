@@ -7,7 +7,8 @@ import type {
   WorkflowRun
 } from '../../../../../shared/workflow/workflow-run-types'
 import { useWorkflowEditorStore } from '../workflow-editor-store'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { getIntlLocale } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const TONE: Partial<Record<WorkflowEventKind, string>> = {
   'run-completed': 'bg-status-success',
@@ -41,6 +42,7 @@ export function WorkflowTimeline({
   run: WorkflowRun
   onlyErrors?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const [query, setQuery] = useState('')
   const select = useWorkflowEditorStore((state) => state.select)
   const labels = useMemo(
@@ -77,7 +79,7 @@ export function WorkflowTimeline({
         <Input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.workflows.execution.WorkflowTimeline.afb7b6ff5f',
             'Filter events'
           )}
@@ -86,7 +88,7 @@ export function WorkflowTimeline({
         />
         <span className="text-2xs text-muted-foreground">
           {events.length}{' '}
-          {translate('auto.components.workflows.execution.WorkflowTimeline.1284214df1', 'of')}{' '}
+          {t('auto.components.workflows.execution.WorkflowTimeline.1284214df1', 'of')}{' '}
           {run.events.length}
         </span>
       </div>
@@ -94,11 +96,11 @@ export function WorkflowTimeline({
         {events.length === 0 ? (
           <li className="px-3 py-6 text-center text-xs text-muted-foreground">
             {onlyErrors
-              ? translate(
+              ? t(
                   'auto.components.workflows.execution.WorkflowTimeline.19fac95c3c',
                   'No errors or warnings recorded.'
                 )
-              : translate(
+              : t(
                   'auto.components.workflows.execution.WorkflowTimeline.3b7a1d1bed',
                   'No events yet.'
                 )}

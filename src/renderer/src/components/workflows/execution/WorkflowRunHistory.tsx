@@ -10,9 +10,12 @@ import { useWorkflowEditorStore } from '../workflow-editor-store'
 import { useWorkflowRunViewStore } from '../workflow-run-view-store'
 import { WORKFLOW_RUN_STATUS_LABEL, formatWorkflowDuration } from '../workflow-status-style'
 import { useWorkflowClock } from '../use-workflow-clock'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 export function WorkflowRunHistory({ target }: { target: RuntimeClientTarget }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const presetId = useWorkflowEditorStore((state) => state.preset?.id)
   const setMode = useWorkflowEditorStore((state) => state.setMode)
   const watch = useWorkflowRunViewStore((state) => state.watch)
@@ -43,7 +46,7 @@ export function WorkflowRunHistory({ target }: { target: RuntimeClientTarget }):
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
         <span className="text-2xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.workflows.execution.WorkflowRunHistory.60a5c32c41',
             'Runs of this preset on this host, newest first. Each run keeps a frozen copy of the workflow it ran.'
           )}
@@ -51,7 +54,7 @@ export function WorkflowRunHistory({ target }: { target: RuntimeClientTarget }):
         <Button
           variant="ghost"
           size="icon-xs"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.workflows.execution.WorkflowRunHistory.f2a4dac740',
             'Refresh history'
           )}
@@ -63,10 +66,7 @@ export function WorkflowRunHistory({ target }: { target: RuntimeClientTarget }):
       <ul className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
         {runs?.length === 0 ? (
           <li className="px-3 py-6 text-center text-xs text-muted-foreground">
-            {translate(
-              'auto.components.workflows.execution.WorkflowRunHistory.3491ba357d',
-              'No runs yet.'
-            )}
+            {t('auto.components.workflows.execution.WorkflowRunHistory.3491ba357d', 'No runs yet.')}
           </li>
         ) : null}
         {runs?.map((run) => (
@@ -87,7 +87,7 @@ export function WorkflowRunHistory({ target }: { target: RuntimeClientTarget }):
               }}
             >
               <span className="w-36 shrink-0 font-mono text-2xs tabular-nums text-muted-foreground">
-                {new Date(run.createdAt).toLocaleString(getIntlLocale())}
+                {new Date(run.createdAt).toLocaleString(intlLocale)}
               </span>
               <span className="w-28 shrink-0 font-medium">
                 {WORKFLOW_RUN_STATUS_LABEL[run.status]}
@@ -108,7 +108,7 @@ export function WorkflowRunHistory({ target }: { target: RuntimeClientTarget }):
               <Button
                 variant="ghost"
                 size="icon-xs"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.workflows.execution.WorkflowRunHistory.cc689d7e44',
                   'Delete run history'
                 )}
@@ -119,7 +119,7 @@ export function WorkflowRunHistory({ target }: { target: RuntimeClientTarget }):
                     .then(load)
                     .catch((error: unknown) =>
                       toast.error(
-                        translate(
+                        t(
                           'auto.components.workflows.execution.WorkflowRunHistory.b1896cfc1c',
                           'Delete failed'
                         ),

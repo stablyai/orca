@@ -6,6 +6,7 @@ import { addWorkflowNode, workflowNodeKindLabel } from './workflow-editor-mutati
 import { WORKFLOW_NODE_ICONS } from './WorkflowNodeCard'
 import { WORKFLOW_NODE_DRAG_TYPE } from './WorkflowCanvas'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const GROUPS: { title: string; kinds: { kind: WorkflowNodeKind; hint: string }[] }[] = [
   {
@@ -30,6 +31,7 @@ const GROUPS: { title: string; kinds: { kind: WorkflowNodeKind; hint: string }[]
 ]
 
 export function WorkflowNodePalette(): React.JSX.Element {
+  const t = useTranslate()
   const commit = useWorkflowEditorStore((state) => state.commit)
   const select = useWorkflowEditorStore((state) => state.select)
   const execution = useWorkflowEditorStore((state) => state.mode === 'execution')
@@ -53,10 +55,7 @@ export function WorkflowNodePalette(): React.JSX.Element {
 
   return (
     <nav
-      aria-label={translate(
-        'auto.components.workflows.WorkflowNodePalette.11caf869bd',
-        'Node library'
-      )}
+      aria-label={t('auto.components.workflows.WorkflowNodePalette.11caf869bd', 'Node library')}
       className="flex w-52 shrink-0 flex-col gap-4 overflow-y-auto border-r border-border p-3 scrollbar-sleek"
     >
       {GROUPS.map((group) => (
@@ -96,21 +95,15 @@ export function WorkflowNodePalette(): React.JSX.Element {
       <div className="mt-auto space-y-1.5 rounded-md border border-border p-2.5 text-2xs leading-4 text-muted-foreground">
         <p>
           <span className="font-medium text-foreground">
-            {translate(
-              'auto.components.workflows.WorkflowNodePalette.a3fc94cba4',
-              'Top and bottom ports'
-            )}
+            {t('auto.components.workflows.WorkflowNodePalette.a3fc94cba4', 'Top and bottom ports')}
           </span>{' '}
-          {translate(
-            'auto.components.workflows.WorkflowNodePalette.96a3eadd08',
-            'set execution order.'
-          )}
+          {t('auto.components.workflows.WorkflowNodePalette.96a3eadd08', 'set execution order.')}
         </p>
         <p>
           <span className="font-medium text-foreground">
-            {translate('auto.components.workflows.WorkflowNodePalette.9c3ee56742', 'Side ports')}
+            {t('auto.components.workflows.WorkflowNodePalette.9c3ee56742', 'Side ports')}
           </span>{' '}
-          {translate(
+          {t(
             'auto.components.workflows.WorkflowNodePalette.c36f2d2b89',
             'grant a communication route between agents.'
           )}

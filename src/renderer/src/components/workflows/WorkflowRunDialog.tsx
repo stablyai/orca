@@ -29,13 +29,15 @@ import type { WorkflowPreset } from '../../../../shared/workflow/workflow-defini
 import { isWorkflowAgentNode } from '../../../../shared/workflow/workflow-definition-schema'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { workflowRpc } from './workflow-rpc'
+import { runWhilePending } from './workflow-pending-action'
 import { useWorkflowEditorStore } from './workflow-editor-store'
 import { useWorkflowRunViewStore } from './workflow-run-view-store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type WorkspaceOption = { id: string; label: string; folder: boolean }
 
 function useWorkspaceOptions(): WorkspaceOption[] {
+  const t = useTranslate()
   const worktreesByRepo = useAppStore(selectWorktreesByRepo)
   const folders = useAppStore(selectFolderWorkspaces)
   const repos = useAppStore((state) => state.repos)
@@ -53,15 +55,13 @@ function useWorkspaceOptions(): WorkspaceOption[] {
     )
     const folderOptions = (folders ?? []).map((folder) => ({
       id: folder.id,
-      label: translate(
-        'auto.components.workflows.WorkflowRunDialog.a28bc6ce92',
-        '{{value0}} (folder)',
-        { value0: folder.name }
-      ),
+      label: t('auto.components.workflows.WorkflowRunDialog.a28bc6ce92', '{{value0}} (folder)', {
+        value0: folder.name
+      }),
       folder: true
     }))
     return [...worktrees, ...folderOptions]
-  }, [worktreesByRepo, folders, repos])
+  }, [worktreesByRepo, folders, repos, t])
 }
 
 export function WorkflowRunDialog({
@@ -73,6 +73,7 @@ export function WorkflowRunDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const options = useWorkspaceOptions()
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const [objective, setObjective] = useState(preset.defaultRunSettings.objective)
@@ -99,50 +100,46 @@ export function WorkflowRunDialog({
     const target = tryRuntimeTargetForWorktreeOwner(useAppStore.getState(), chosenOption.id)
     if (!target) {
       toast.error(
-        translate(
+        t(
           'auto.components.workflows.WorkflowRunDialog.8735ec6aca',
           'Orca could not tell which host owns that workspace.'
         )
       )
       return
     }
-    setStarting(true)
-    try {
-      const result = await workflowRpc.startRun(target, {
-        preset,
-        objective,
-        worktreeSelector: `id:${chosenOption.id}`,
-        worktreeLabel: chosenOption.label
-      })
-      if (!result.run) {
-        setIssues(result.issues)
+    await runWhilePending(setStarting, async () => {
+      try {
+        const result = await workflowRpc.startRun(target, {
+          preset,
+          objective,
+          worktreeSelector: `id:${chosenOption.id}`,
+          worktreeLabel: chosenOption.label
+        })
+        if (!result.run) {
+          setIssues(result.issues)
+          toast.error(
+            t(
+              'auto.components.workflows.WorkflowRunDialog.05e98d142b',
+              'The workflow has validation errors'
+            ),
+            {
+              description: result.issues[0]?.message
+            }
+          )
+          return
+        }
+        watch(target, result.run.id)
+        setMode('execution')
+        onOpenChange(false)
+      } catch (error) {
         toast.error(
-          translate(
-            'auto.components.workflows.WorkflowRunDialog.05e98d142b',
-            'The workflow has validation errors'
-          ),
+          t('auto.components.workflows.WorkflowRunDialog.e40b033de5', 'Could not start the run'),
           {
-            description: result.issues[0]?.message
+            description: error instanceof Error ? error.message : String(error)
           }
         )
-        return
       }
-      watch(target, result.run.id)
-      setMode('execution')
-      onOpenChange(false)
-    } catch (error) {
-      toast.error(
-        translate(
-          'auto.components.workflows.WorkflowRunDialog.e40b033de5',
-          'Could not start the run'
-        ),
-        {
-          description: error instanceof Error ? error.message : String(error)
-        }
-      )
-    } finally {
-      setStarting(false)
-    }
+    })
   }
 
   return (
@@ -150,11 +147,11 @@ export function WorkflowRunDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {translate('auto.components.workflows.WorkflowRunDialog.c311106a6e', 'Run')}
+            {t('auto.components.workflows.WorkflowRunDialog.c311106a6e', 'Run')}
             {preset.name}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.workflows.WorkflowRunDialog.f953f13727',
               'Orca opens a coordinator terminal in the workspace, creates a Run, and starts each agent as a real worker when its turn comes. The run uses a frozen copy of this workflow.'
             )}
@@ -163,7 +160,7 @@ export function WorkflowRunDialog({
         <div className="space-y-4">
           <div className="space-y-1.5">
             <Label htmlFor="workflow-run-objective" variant="field">
-              {translate('auto.components.workflows.WorkflowRunDialog.37f0cece8d', 'Objective')}
+              {t('auto.components.workflows.WorkflowRunDialog.37f0cece8d', 'Objective')}
             </Label>
             <Textarea
               id="workflow-run-objective"
@@ -175,12 +172,12 @@ export function WorkflowRunDialog({
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="workflow-run-workspace" variant="field">
-              {translate('auto.components.workflows.WorkflowRunDialog.494287c71a', 'Workspace')}
+              {t('auto.components.workflows.WorkflowRunDialog.494287c71a', 'Workspace')}
             </Label>
             <Select value={chosen ?? undefined} onValueChange={setWorkspaceId}>
               <SelectTrigger id="workflow-run-workspace" className="w-full">
                 <SelectValue
-                  placeholder={translate(
+                  placeholder={t(
                     'auto.components.workflows.WorkflowRunDialog.7ea393f34c',
                     'No workspaces'
                   )}
@@ -195,14 +192,14 @@ export function WorkflowRunDialog({
               </SelectContent>
             </Select>
             <p className="text-2xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.workflows.WorkflowRunDialog.81554cce16',
                 'Agents set to the shared workspace work here; isolated agents get their own worktrees beside it.'
               )}
             </p>
             {folderBlocksIsolation ? (
               <p role="alert" className="text-xs text-destructive">
-                {translate(
+                {t(
                   'auto.components.workflows.WorkflowRunDialog.3f1c9a7e52',
                   'Folder projects cannot create worktrees. Pick a workspace from a Git project, or set every agent to the shared workspace.'
                 )}
@@ -212,14 +209,14 @@ export function WorkflowRunDialog({
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            {translate('auto.components.workflows.WorkflowRunDialog.f4c667feb5', 'Cancel')}
+            {t('auto.components.workflows.WorkflowRunDialog.f4c667feb5', 'Cancel')}
           </Button>
           <Button
             onClick={() => void start()}
             disabled={starting || !chosenOption || !objective.trim() || folderBlocksIsolation}
           >
             {starting ? <Loader2 className="animate-spin" /> : <Play />}
-            {translate('auto.components.workflows.WorkflowRunDialog.ed282070ff', 'Start run')}
+            {t('auto.components.workflows.WorkflowRunDialog.ed282070ff', 'Start run')}
           </Button>
         </DialogFooter>
       </DialogContent>

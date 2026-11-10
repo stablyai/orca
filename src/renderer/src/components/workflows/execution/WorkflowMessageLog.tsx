@@ -18,7 +18,7 @@ import type {
 } from '../../../../../shared/workflow/workflow-run-types'
 import { saveWorkflowTextFile } from '../workflow-file-export'
 import { workflowRunActions } from '../workflow-run-actions'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 const ALL = '__all__'
 
@@ -41,6 +41,7 @@ function FilterSelect({
   options: { value: string; label: string }[]
   label: string
 }) {
+  const t = useTranslate()
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger size="sm" density="compact" className="h-7 w-36" aria-label={label}>
@@ -49,7 +50,7 @@ function FilterSelect({
       <SelectContent>
         <SelectItem value={ALL}>
           {label}
-          {translate('auto.components.workflows.execution.WorkflowMessageLog.48d779f471', ': all')}
+          {t('auto.components.workflows.execution.WorkflowMessageLog.48d779f471', ': all')}
         </SelectItem>
         {options.map((option) => (
           <SelectItem key={option.value} value={option.value}>
@@ -62,31 +63,26 @@ function FilterSelect({
 }
 
 function MessageDetail({ message }: { message: WorkflowMessage }) {
+  const t = useTranslate()
   const [reply, setReply] = useState('')
   return (
     <div className="space-y-2 border-t border-border bg-muted/30 px-3 py-2">
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-2xs text-muted-foreground">
         <span>
-          {translate(
-            'auto.components.workflows.execution.WorkflowMessageLog.ef63fddc80',
-            'Correlation'
-          )}
+          {t('auto.components.workflows.execution.WorkflowMessageLog.ef63fddc80', 'Correlation')}
           <span className="font-mono">{message.correlationId}</span>
         </span>
         {message.orcaMessageId ? (
           <span>
-            {translate(
-              'auto.components.workflows.execution.WorkflowMessageLog.f2d0eb7abd',
-              'Orca message'
-            )}
+            {t('auto.components.workflows.execution.WorkflowMessageLog.f2d0eb7abd', 'Orca message')}
             <span className="font-mono">{message.orcaMessageId}</span>
           </span>
         ) : null}
         <span>
           {message.bytes}{' '}
-          {translate('auto.components.workflows.execution.WorkflowMessageLog.a41a4a7b37', 'B · ~')}
+          {t('auto.components.workflows.execution.WorkflowMessageLog.a41a4a7b37', 'B · ~')}
           {message.estimatedTokens}{' '}
-          {translate(
+          {t(
             'auto.components.workflows.execution.WorkflowMessageLog.c3bf3b8c13',
             'tokens (estimated)'
           )}
@@ -99,7 +95,7 @@ function MessageDetail({ message }: { message: WorkflowMessage }) {
       ) : null}
       <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background p-2 font-mono text-2xs scrollbar-sleek">
         {message.payload ||
-          translate(
+          t(
             'auto.components.workflows.execution.WorkflowMessageLog.748840570a',
             'Payload not kept (metadata-only logging).'
           )}
@@ -110,17 +106,14 @@ function MessageDetail({ message }: { message: WorkflowMessage }) {
             size="xs"
             onClick={() => void workflowRunActions.releaseMessage(message.id, 'deliver')}
           >
-            {translate(
-              'auto.components.workflows.execution.WorkflowMessageLog.cea871b963',
-              'Deliver'
-            )}
+            {t('auto.components.workflows.execution.WorkflowMessageLog.cea871b963', 'Deliver')}
           </Button>
           <Button
             variant="ghost"
             size="xs"
             onClick={() => void workflowRunActions.releaseMessage(message.id, 'drop')}
           >
-            {translate('auto.components.workflows.execution.WorkflowMessageLog.8b89ca85b7', 'Drop')}
+            {t('auto.components.workflows.execution.WorkflowMessageLog.8b89ca85b7', 'Drop')}
           </Button>
         </div>
       ) : null}
@@ -130,7 +123,7 @@ function MessageDetail({ message }: { message: WorkflowMessage }) {
             value={reply}
             onChange={(event) => setReply(event.target.value)}
             rows={2}
-            placeholder={translate(
+            placeholder={t(
               'auto.components.workflows.execution.WorkflowMessageLog.4e109ceb51',
               'Answer the worker'
             )}
@@ -146,10 +139,7 @@ function MessageDetail({ message }: { message: WorkflowMessage }) {
             }
           >
             <Send />
-            {translate(
-              'auto.components.workflows.execution.WorkflowMessageLog.3fd27fdbc9',
-              'Reply'
-            )}
+            {t('auto.components.workflows.execution.WorkflowMessageLog.3fd27fdbc9', 'Reply')}
           </Button>
         </div>
       ) : null}
@@ -158,6 +148,8 @@ function MessageDetail({ message }: { message: WorkflowMessage }) {
 }
 
 export function WorkflowMessageLog({ run }: { run: WorkflowRun }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const [agent, setAgent] = useState(ALL)
   const [type, setType] = useState(ALL)
   const [state, setState] = useState(ALL)
@@ -184,10 +176,7 @@ export function WorkflowMessageLog({ run }: { run: WorkflowRun }): React.JSX.Ele
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-1.5">
         <FilterSelect
-          label={translate(
-            'auto.components.workflows.execution.WorkflowMessageLog.3bd1be43e3',
-            'Agent'
-          )}
+          label={t('auto.components.workflows.execution.WorkflowMessageLog.3bd1be43e3', 'Agent')}
           value={agent}
           onChange={setAgent}
           options={run.definition.nodes
@@ -195,19 +184,13 @@ export function WorkflowMessageLog({ run }: { run: WorkflowRun }): React.JSX.Ele
             .map((node) => ({ value: node.id, label: node.label }))}
         />
         <FilterSelect
-          label={translate(
-            'auto.components.workflows.execution.WorkflowMessageLog.56418b1b11',
-            'Type'
-          )}
+          label={t('auto.components.workflows.execution.WorkflowMessageLog.56418b1b11', 'Type')}
           value={type}
           onChange={setType}
           options={types.map((entry) => ({ value: entry, label: entry }))}
         />
         <FilterSelect
-          label={translate(
-            'auto.components.workflows.execution.WorkflowMessageLog.f534de5749',
-            'State'
-          )}
+          label={t('auto.components.workflows.execution.WorkflowMessageLog.f534de5749', 'State')}
           value={state}
           onChange={setState}
           options={['delivered', 'truncated', 'held', 'rejected', 'dropped-by-approval'].map(
@@ -217,7 +200,7 @@ export function WorkflowMessageLog({ run }: { run: WorkflowRun }): React.JSX.Ele
         <Input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.workflows.execution.WorkflowMessageLog.734faecdb3',
             'Search payloads'
           )}
@@ -237,7 +220,7 @@ export function WorkflowMessageLog({ run }: { run: WorkflowRun }): React.JSX.Ele
             }
           >
             <Download />
-            {translate('auto.components.workflows.execution.WorkflowMessageLog.b74a8b5176', 'CSV')}
+            {t('auto.components.workflows.execution.WorkflowMessageLog.b74a8b5176', 'CSV')}
           </Button>
           <Button
             variant="ghost"
@@ -251,14 +234,14 @@ export function WorkflowMessageLog({ run }: { run: WorkflowRun }): React.JSX.Ele
             }
           >
             <Download />
-            {translate('auto.components.workflows.execution.WorkflowMessageLog.b110bd4d55', 'JSON')}
+            {t('auto.components.workflows.execution.WorkflowMessageLog.b110bd4d55', 'JSON')}
           </Button>
         </div>
       </div>
       <ul className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
         {messages.length === 0 ? (
           <li className="px-3 py-6 text-center text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.workflows.execution.WorkflowMessageLog.2c52ce2bb7',
               'No messages match.'
             )}
@@ -273,12 +256,12 @@ export function WorkflowMessageLog({ run }: { run: WorkflowRun }): React.JSX.Ele
               aria-expanded={open === message.id}
             >
               <span className="w-20 shrink-0 whitespace-nowrap font-mono text-2xs tabular-nums text-muted-foreground">
-                {new Date(message.timestamp).toLocaleTimeString(getIntlLocale())}
+                {new Date(message.timestamp).toLocaleTimeString(intlLocale)}
               </span>
               <span className="min-w-0 flex-1 truncate">
                 <span className="font-medium">
                   {labels.get(message.sourceNodeId ?? '') ??
-                    translate(
+                    t(
                       'auto.components.workflows.execution.WorkflowMessageLog.854a494c7f',
                       'Coordinator'
                     )}
@@ -286,7 +269,7 @@ export function WorkflowMessageLog({ run }: { run: WorkflowRun }): React.JSX.Ele
                 <span className="text-muted-foreground"> → </span>
                 <span className="font-medium">
                   {labels.get(message.destinationNodeId ?? '') ??
-                    translate(
+                    t(
                       'auto.components.workflows.execution.WorkflowMessageLog.854a494c7f',
                       'Coordinator'
                     )}
@@ -297,11 +280,8 @@ export function WorkflowMessageLog({ run }: { run: WorkflowRun }): React.JSX.Ele
               </span>
               <span className="w-16 shrink-0 text-2xs text-muted-foreground">
                 {message.channel === 'controller'
-                  ? translate(
-                      'auto.components.workflows.execution.WorkflowMessageLog.eebd574c3d',
-                      'route'
-                    )
-                  : translate(
+                  ? t('auto.components.workflows.execution.WorkflowMessageLog.eebd574c3d', 'route')
+                  : t(
                       'auto.components.workflows.execution.WorkflowMessageLog.57ab662005',
                       'direct'
                     )}

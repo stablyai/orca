@@ -278,7 +278,7 @@ export class WorkflowController {
     })
   }
 
-  deleteRun(id: string): boolean {
+  deleteRun(id: string): Promise<boolean> {
     const run = this.requireRun(id)
     if (!isWorkflowRunTerminal(run.status)) {
       throw new WorkflowRequestError(

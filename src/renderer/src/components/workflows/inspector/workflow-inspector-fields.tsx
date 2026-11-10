@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/select'
 import { cn } from '@/lib/class-names'
 import { useWorkflowEditorStore } from '../workflow-editor-store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Typing edits the draft without history; focusing a field records one undo step for the whole edit. */
 function useFieldHistory(): { onFocus: () => void; readOnly: boolean } {
@@ -150,12 +150,13 @@ export function ListField(props: {
   description?: string
   placeholder?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <TextAreaField
       label={props.label}
       description={
         props.description ??
-        translate(
+        t(
           'auto.components.workflows.inspector.workflow.inspector.fields.0243e40fc4',
           'One per line.'
         )

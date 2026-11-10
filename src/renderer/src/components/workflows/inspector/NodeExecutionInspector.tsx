@@ -15,7 +15,7 @@ import { useWorkflowClock } from '../use-workflow-clock'
 import { InspectorNote, InspectorSection } from './workflow-inspector-fields'
 import { WorkflowPromptSections } from './AgentPromptSection'
 import { WorkflowAnswerSection } from './WorkflowAnswerSection'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { isWorkflowAgentNode } from '../../../../../shared/workflow/workflow-definition-schema'
 
 function Row({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
@@ -43,6 +43,7 @@ function revealWorker(dispatch: WorkflowDispatch, run: WorkflowRun): boolean {
 }
 
 function DispatchCard({ dispatch, run }: { dispatch: WorkflowDispatch; run: WorkflowRun }) {
+  const t = useTranslate()
   const now = useWorkflowClock()
   const modelChanged =
     dispatch.effective &&
@@ -52,16 +53,13 @@ function DispatchCard({ dispatch, run }: { dispatch: WorkflowDispatch; run: Work
     <div className="space-y-1.5 rounded-md border border-border px-2.5 py-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium">
-          {translate(
-            'auto.components.workflows.inspector.NodeExecutionInspector.ab375d258e',
-            'Attempt'
-          )}{' '}
+          {t('auto.components.workflows.inspector.NodeExecutionInspector.ab375d258e', 'Attempt')}{' '}
           {dispatch.attempt}
         </span>
         <span className="text-2xs text-muted-foreground">{dispatch.state}</span>
       </div>
       <Row
-        label={translate(
+        label={t(
           'auto.components.workflows.inspector.NodeExecutionInspector.1238d8e3b6',
           'Dispatch'
         )}
@@ -69,7 +67,7 @@ function DispatchCard({ dispatch, run }: { dispatch: WorkflowDispatch; run: Work
         mono
       />
       <Row
-        label={translate(
+        label={t(
           'auto.components.workflows.inspector.NodeExecutionInspector.c75f9c4e76',
           'Terminal'
         )}
@@ -77,7 +75,7 @@ function DispatchCard({ dispatch, run }: { dispatch: WorkflowDispatch; run: Work
         mono
       />
       <Row
-        label={translate(
+        label={t(
           'auto.components.workflows.inspector.NodeExecutionInspector.9262e9d824',
           'Requested'
         )}
@@ -88,7 +86,7 @@ function DispatchCard({ dispatch, run }: { dispatch: WorkflowDispatch; run: Work
         }
       />
       <Row
-        label={translate(
+        label={t(
           'auto.components.workflows.inspector.NodeExecutionInspector.3ff2e411f9',
           'Effective'
         )}
@@ -100,14 +98,14 @@ function DispatchCard({ dispatch, run }: { dispatch: WorkflowDispatch; run: Work
       />
       {modelChanged ? (
         <InspectorNote tone="warning">
-          {translate(
+          {t(
             'auto.components.workflows.inspector.NodeExecutionInspector.015d7b6046',
             'The launched model differs from the requested one (fallback allowed).'
           )}
         </InspectorNote>
       ) : null}
       <Row
-        label={translate(
+        label={t(
           'auto.components.workflows.inspector.NodeExecutionInspector.8e7c6ee87c',
           'Duration'
         )}
@@ -121,7 +119,7 @@ function DispatchCard({ dispatch, run }: { dispatch: WorkflowDispatch; run: Work
       {dispatch.orcaPaneKey ? (
         <Button variant="outline" size="xs" onClick={() => revealWorker(dispatch, run)}>
           <SquareTerminal />
-          {translate(
+          {t(
             'auto.components.workflows.inspector.NodeExecutionInspector.a7a1d42443',
             'Open terminal'
           )}
@@ -138,6 +136,7 @@ export function NodeExecutionInspector({
   run: WorkflowRun
   nodeId: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const node = run.definition.nodes.find((candidate) => candidate.id === nodeId)
   const tasks = Object.values(run.tasks)
     .filter((task) => task.nodeId === nodeId)
@@ -163,14 +162,14 @@ export function NodeExecutionInspector({
           <span className={cn('size-2 rounded-full', style?.dot)} aria-hidden />
           <span className={cn('font-medium', style?.text)}>
             {style?.label ??
-              translate(
+              t(
                 'auto.components.workflows.inspector.NodeExecutionInspector.90a17179ca',
                 'Not in this run'
               )}
           </span>
           {task && task.iteration > 0 ? (
             <span className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.workflows.inspector.NodeExecutionInspector.9e914c24a1',
                 'revision'
               )}{' '}
@@ -179,7 +178,7 @@ export function NodeExecutionInspector({
           ) : null}
         </div>
         <Row
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.NodeExecutionInspector.5398411bd5',
             'Orca task'
           )}
@@ -187,7 +186,7 @@ export function NodeExecutionInspector({
           mono
         />
         <Row
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.NodeExecutionInspector.7625474403',
             'Waited'
           )}
@@ -198,7 +197,7 @@ export function NodeExecutionInspector({
           )}
         />
         <Row
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.NodeExecutionInspector.3fdea816bf',
             'Messages'
           )}
@@ -213,7 +212,7 @@ export function NodeExecutionInspector({
               onClick={() => void workflowRunActions.retry(task.key)}
             >
               <RotateCcw />
-              {translate(
+              {t(
                 'auto.components.workflows.inspector.NodeExecutionInspector.86da9e5cfc',
                 'Retry task'
               )}
@@ -225,15 +224,15 @@ export function NodeExecutionInspector({
               size="sm"
               onClick={() =>
                 void confirm({
-                  title: translate(
+                  title: t(
                     'auto.components.workflows.inspector.NodeExecutionInspector.stopRetryTitle',
                     'Stop this worker and retry?'
                   ),
-                  description: translate(
+                  description: t(
                     'auto.components.workflows.inspector.NodeExecutionInspector.stopRetryBody',
                     'Orca stops the worker, then starts a new attempt only if the stop is proven.'
                   ),
-                  confirmLabel: translate(
+                  confirmLabel: t(
                     'auto.components.workflows.inspector.NodeExecutionInspector.stopRetryConfirm',
                     'Stop and retry'
                   ),
@@ -246,7 +245,7 @@ export function NodeExecutionInspector({
               }
             >
               <RotateCcw />
-              {translate(
+              {t(
                 'auto.components.workflows.inspector.NodeExecutionInspector.stopRetry',
                 'Stop and retry'
               )}
@@ -259,7 +258,7 @@ export function NodeExecutionInspector({
                 onClick={() => void workflowRunActions.resolveApproval(task.key, 'approved')}
               >
                 <Check />
-                {translate(
+                {t(
                   'auto.components.workflows.inspector.NodeExecutionInspector.652cf02a10',
                   'Approve'
                 )}
@@ -270,7 +269,7 @@ export function NodeExecutionInspector({
                 onClick={() => void workflowRunActions.resolveApproval(task.key, 'rejected')}
               >
                 <X />
-                {translate(
+                {t(
                   'auto.components.workflows.inspector.NodeExecutionInspector.1502e6f461',
                   'Reject'
                 )}
@@ -282,7 +281,7 @@ export function NodeExecutionInspector({
       {answer ? <WorkflowAnswerSection answer={answer} /> : null}
       {task?.report ? (
         <InspectorSection
-          title={translate(
+          title={t(
             'auto.components.workflows.inspector.NodeExecutionInspector.92c8585731',
             'Report'
           )}
@@ -290,7 +289,7 @@ export function NodeExecutionInspector({
           <p className="text-xs font-medium">{task.report.subject}</p>
           <p className="whitespace-pre-wrap text-xs leading-5 text-muted-foreground">
             {task.report.summary ||
-              translate(
+              t(
                 'auto.components.workflows.inspector.NodeExecutionInspector.ae14a00afa',
                 'No summary.'
               )}
@@ -305,7 +304,7 @@ export function NodeExecutionInspector({
           ) : null}
           {task.report.filesModified.length > 0 ? (
             <Row
-              label={translate(
+              label={t(
                 'auto.components.workflows.inspector.NodeExecutionInspector.b6f6ebdc16',
                 'Files'
               )}
@@ -317,7 +316,7 @@ export function NodeExecutionInspector({
       ) : null}
       {task && task.dispatches.length > 0 ? (
         <InspectorSection
-          title={translate(
+          title={t(
             'auto.components.workflows.inspector.NodeExecutionInspector.282d717069',
             'Attempts'
           )}
@@ -329,7 +328,7 @@ export function NodeExecutionInspector({
       ) : null}
       {task?.prompt ? (
         <InspectorSection
-          title={translate(
+          title={t(
             'auto.components.workflows.inspector.NodeExecutionInspector.793491f358',
             'Prompt sent'
           )}
@@ -340,7 +339,7 @@ export function NodeExecutionInspector({
       ) : null}
       {tasks.length > 1 ? (
         <InspectorSection
-          title={translate(
+          title={t(
             'auto.components.workflows.inspector.NodeExecutionInspector.eb4be7f9b7',
             'Earlier revisions'
           )}
@@ -349,7 +348,7 @@ export function NodeExecutionInspector({
           {tasks.slice(1).map((earlier) => (
             <Row
               key={earlier.key}
-              label={translate(
+              label={t(
                 'auto.components.workflows.inspector.NodeExecutionInspector.51e3b72c49',
                 'Revision {{value0}}',
                 { value0: earlier.iteration + 1 }

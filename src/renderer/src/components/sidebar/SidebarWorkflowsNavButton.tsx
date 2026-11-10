@@ -2,9 +2,10 @@ import React from 'react'
 import { Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/class-names'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function SidebarWorkflowsNavButton(): React.JSX.Element {
+  const t = useTranslate()
   const openWorkflowsPage = useAppStore((s) => s.openWorkflowsPage)
   const active = useAppStore((s) => s.activeView === 'workflows')
   return (
@@ -24,7 +25,7 @@ export function SidebarWorkflowsNavButton(): React.JSX.Element {
         strokeWidth={active ? 2.25 : 1.75}
       />
       <span className="flex-1">
-        {translate('auto.components.sidebar.SidebarWorkflowsNavButton.206c9ecaea', 'Workflows')}
+        {t('auto.components.sidebar.SidebarWorkflowsNavButton.206c9ecaea', 'Workflows')}
       </span>
     </button>
   )

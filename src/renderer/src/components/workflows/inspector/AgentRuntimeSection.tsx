@@ -20,6 +20,7 @@ import {
 } from './workflow-inspector-fields'
 import { useUpdateAgentProfile } from './use-workflow-node'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const DEFAULT_MODEL = '__agent_default__'
 
@@ -55,6 +56,7 @@ const WORKTREE_HELP: Record<WorkflowWorktreeMode, string> = {
 }
 
 export function AgentRuntimeSection({ node }: { node: WorkflowAgentNode }): React.JSX.Element {
+  const t = useTranslate()
   const update = useUpdateAgentProfile(node.id)
   const detected = useAppStore((state) => state.detectedAgentIds)
   const runtime = node.agent.runtime
@@ -80,16 +82,13 @@ export function AgentRuntimeSection({ node }: { node: WorkflowAgentNode }): Reac
 
   return (
     <InspectorSection
-      title={translate(
+      title={t(
         'auto.components.workflows.inspector.AgentRuntimeSection.566904a53d',
         'Runtime and model'
       )}
     >
       <SelectField
-        label={translate(
-          'auto.components.workflows.inspector.AgentRuntimeSection.46c97150c8',
-          'CLI agent'
-        )}
+        label={t('auto.components.workflows.inspector.AgentRuntimeSection.46c97150c8', 'CLI agent')}
         value={runtime.agent}
         options={agents.map((entry) => ({
           value: entry.id,
@@ -107,25 +106,22 @@ export function AgentRuntimeSection({ node }: { node: WorkflowAgentNode }): Reac
       {notDetected ? (
         <InspectorNote tone="warning">
           {runtime.agent}{' '}
-          {translate(
+          {t(
             'auto.components.workflows.inspector.AgentRuntimeSection.7c5149ea0c',
             'was not found on this computer. A run on another host checks that host before launching.'
           )}
         </InspectorNote>
       ) : null}
       <SelectField
-        label={translate(
-          'auto.components.workflows.inspector.AgentRuntimeSection.41abb8a4f4',
-          'Model'
-        )}
+        label={t('auto.components.workflows.inspector.AgentRuntimeSection.41abb8a4f4', 'Model')}
         value={runtime.model ?? DEFAULT_MODEL}
         description={
           modelSelectable
-            ? translate(
+            ? t(
                 'auto.components.workflows.inspector.AgentRuntimeSection.38e4e48131',
                 'Orca passes the model to the agent at launch. The agent’s own default runs when unset.'
               )
-            : translate(
+            : t(
                 'auto.components.workflows.inspector.AgentRuntimeSection.3da61b9fa5',
                 'This agent cannot take a model at launch; it runs the model from its own configuration.'
               )
@@ -133,7 +129,7 @@ export function AgentRuntimeSection({ node }: { node: WorkflowAgentNode }): Reac
         options={[
           {
             value: DEFAULT_MODEL,
-            label: translate(
+            label: t(
               'auto.components.workflows.inspector.AgentRuntimeSection.d4db0e3197',
               'Agent default'
             )
@@ -145,7 +141,7 @@ export function AgentRuntimeSection({ node }: { node: WorkflowAgentNode }): Reac
             ? [
                 {
                   value: runtime.model,
-                  label: translate(
+                  label: t(
                     'auto.components.workflows.inspector.AgentRuntimeSection.44921944e4',
                     '{{value0}} (not in catalog)',
                     { value0: runtime.model }
@@ -166,7 +162,7 @@ export function AgentRuntimeSection({ node }: { node: WorkflowAgentNode }): Reac
       />
       {effortChoices.length > 0 ? (
         <SelectField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.AgentRuntimeSection.533f7bf57a',
             'Reasoning effort'
           )}
@@ -174,7 +170,7 @@ export function AgentRuntimeSection({ node }: { node: WorkflowAgentNode }): Reac
           options={[
             {
               value: DEFAULT_MODEL,
-              label: translate(
+              label: t(
                 'auto.components.workflows.inspector.AgentRuntimeSection.324352cc8f',
                 'Model default'
               )
@@ -197,11 +193,11 @@ export function AgentRuntimeSection({ node }: { node: WorkflowAgentNode }): Reac
         </InspectorNote>
       ) : null}
       <SwitchField
-        label={translate(
+        label={t(
           'auto.components.workflows.inspector.AgentRuntimeSection.67c530f605',
           'Allow model fallback'
         )}
-        description={translate(
+        description={t(
           'auto.components.workflows.inspector.AgentRuntimeSection.46882d05bd',
           'If Orca refuses the chosen model, run the agent’s default instead of failing validation.'
         )}
@@ -213,7 +209,7 @@ export function AgentRuntimeSection({ node }: { node: WorkflowAgentNode }): Reac
         }
       />
       <SelectField
-        label={translate(
+        label={t(
           'auto.components.workflows.inspector.AgentRuntimeSection.540f21c455',
           'Workspace isolation'
         )}
@@ -227,11 +223,8 @@ export function AgentRuntimeSection({ node }: { node: WorkflowAgentNode }): Reac
         }
       />
       <NumberField
-        label={translate(
-          'auto.components.workflows.inspector.AgentRuntimeSection.e1a96c603e',
-          'Timeout'
-        )}
-        description={translate(
+        label={t('auto.components.workflows.inspector.AgentRuntimeSection.e1a96c603e', 'Timeout')}
+        description={t(
           'auto.components.workflows.inspector.AgentRuntimeSection.19ae415e8f',
           'Orca stops the worker and fails the attempt after this long. Empty means no limit.'
         )}
@@ -243,7 +236,7 @@ export function AgentRuntimeSection({ node }: { node: WorkflowAgentNode }): Reac
         min={1}
         max={1440}
         suffix="minutes"
-        placeholder={translate(
+        placeholder={t(
           'auto.components.workflows.inspector.AgentRuntimeSection.132ba3ef6b',
           'None'
         )}
@@ -257,11 +250,8 @@ export function AgentRuntimeSection({ node }: { node: WorkflowAgentNode }): Reac
         }
       />
       <NumberField
-        label={translate(
-          'auto.components.workflows.inspector.AgentRuntimeSection.8344f011cf',
-          'Attempts'
-        )}
-        description={translate(
+        label={t('auto.components.workflows.inspector.AgentRuntimeSection.8344f011cf', 'Attempts')}
+        description={t(
           'auto.components.workflows.inspector.AgentRuntimeSection.02095274c9',
           'Total tries, each a new Orca Dispatch. 1 means no automatic retry.'
         )}
@@ -278,7 +268,7 @@ export function AgentRuntimeSection({ node }: { node: WorkflowAgentNode }): Reac
         }
       />
       <InspectorNote>
-        {translate(
+        {t(
           'auto.components.workflows.inspector.AgentRuntimeSection.7e892eed5e',
           'Runs on the host that owns the workspace you pick at launch. Each node runs one task at a time; the workflow-wide agent limit is in workflow settings.'
         )}

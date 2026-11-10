@@ -7,6 +7,7 @@ import {
   type WorkflowRun
 } from '../../../../shared/workflow/workflow-run-types'
 import { workflowRpc } from './workflow-rpc'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 
 const POLL_MS = 1_000
 /** How long a real delivery keeps its edge highlighted. */
@@ -65,6 +66,31 @@ export const useWorkflowRunViewStore = create<WorkflowRunViewState>((set, get) =
   fail: (error) => set({ error })
 }))
 
+/** Fetch one delta into the store; resolves true once the run has settled. */
+async function pollWorkflowRunOnce(
+  target: RuntimeClientTarget,
+  runId: string,
+  isCancelled: () => boolean
+): Promise<boolean> {
+  const state = useWorkflowRunViewStore.getState()
+  const afterSeq = state.run?.id === runId ? (state.run.events.at(-1)?.seq ?? -1) : undefined
+  try {
+    const result = await workflowRpc.getRun(target, runId, afterSeq)
+    if (isCancelled()) {
+      return false
+    }
+    useWorkflowRunViewStore.getState().apply(result.run, result.metrics)
+    return isWorkflowRunTerminal(result.run.status)
+  } catch (error) {
+    if (!isCancelled()) {
+      useWorkflowRunViewStore
+        .getState()
+        .fail(error instanceof Error ? error.message : String(error))
+    }
+    return false
+  }
+}
+
 /** Poll the authoritative run record; deltas only, and stop once the run has settled. */
 export function useWorkflowRunPolling(): void {
   const target = useWorkflowRunViewStore((state) => state.target)
@@ -75,36 +101,29 @@ export function useWorkflowRunPolling(): void {
     }
     let cancelled = false
     let inFlight = false
-    let settled = false
-    // One interval owned by this effect; a tick is skipped while the previous fetch is pending.
-    const tick = async (): Promise<void> => {
-      if (inFlight || settled) {
+    let stopPolling: (() => void) | null = null
+    const tick = (): void => {
+      if (inFlight || cancelled) {
         return
       }
       inFlight = true
-      const state = useWorkflowRunViewStore.getState()
-      const afterSeq = state.run?.id === runId ? (state.run.events.at(-1)?.seq ?? -1) : undefined
-      try {
-        const result = await workflowRpc.getRun(target, runId, afterSeq)
-        if (!cancelled) {
-          useWorkflowRunViewStore.getState().apply(result.run, result.metrics)
-          settled = isWorkflowRunTerminal(result.run.status)
-        }
-      } catch (error) {
-        if (!cancelled) {
-          useWorkflowRunViewStore
-            .getState()
-            .fail(error instanceof Error ? error.message : String(error))
-        }
-      } finally {
+      void pollWorkflowRunOnce(target, runId, () => cancelled).then((settled) => {
         inFlight = false
-      }
+        if (settled) {
+          stopPolling?.()
+          stopPolling = null
+        }
+      })
     }
-    void tick()
-    const interval = setInterval(() => void tick(), POLL_MS)
+    // Runs once now; hidden windows pause polling and a settled run stops it.
+    stopPolling = installWindowVisibilityInterval({
+      run: tick,
+      intervalMs: POLL_MS,
+      slowWhileUnfocused: true
+    })
     return () => {
       cancelled = true
-      clearInterval(interval)
+      stopPolling?.()
     }
   }, [target, runId])
 }

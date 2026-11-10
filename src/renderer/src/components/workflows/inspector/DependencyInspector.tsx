@@ -20,7 +20,7 @@ import {
   TextAreaField,
   TextField
 } from './workflow-inspector-fields'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const NO_NODES: readonly WorkflowNode[] = []
 
@@ -61,6 +61,7 @@ function ConditionEditor({
   condition: WorkflowCondition | null
   onChange: (next: WorkflowCondition | null) => void
 }) {
+  const t = useTranslate()
   const [advanced, setAdvanced] = useState(() => modeOf(condition) === 'advanced')
   const mode = advanced ? 'advanced' : modeOf(condition)
   const [json, setJson] = useState(() => JSON.stringify(condition ?? { kind: 'always' }, null, 2))
@@ -68,43 +69,40 @@ function ConditionEditor({
   return (
     <>
       <SelectField<ConditionMode>
-        label={translate(
-          'auto.components.workflows.inspector.DependencyInspector.ba8a8620ef',
-          'Runs when'
-        )}
+        label={t('auto.components.workflows.inspector.DependencyInspector.ba8a8620ef', 'Runs when')}
         value={mode}
         options={[
           {
             value: 'always',
-            label: translate(
+            label: t(
               'auto.components.workflows.inspector.DependencyInspector.b08f4927c2',
               'The source succeeds'
             )
           },
           {
             value: 'outcome',
-            label: translate(
+            label: t(
               'auto.components.workflows.inspector.DependencyInspector.1941c49dc7',
               'The source outcome is…'
             )
           },
           {
             value: 'approval',
-            label: translate(
+            label: t(
               'auto.components.workflows.inspector.DependencyInspector.0f8e219604',
               'The approval is…'
             )
           },
           {
             value: 'field',
-            label: translate(
+            label: t(
               'auto.components.workflows.inspector.DependencyInspector.e3c32abf7a',
               'A result field matches…'
             )
           },
           {
             value: 'advanced',
-            label: translate(
+            label: t(
               'auto.components.workflows.inspector.DependencyInspector.45d3c94f18',
               'Advanced condition (JSON)'
             )
@@ -127,22 +125,19 @@ function ConditionEditor({
       />
       {!advanced && condition?.kind === 'outcome' ? (
         <SelectField
-          label={translate(
-            'auto.components.workflows.inspector.DependencyInspector.d8616dbac0',
-            'Outcome'
-          )}
+          label={t('auto.components.workflows.inspector.DependencyInspector.d8616dbac0', 'Outcome')}
           value={condition.equals}
           options={[
             {
               value: 'succeeded',
-              label: translate(
+              label: t(
                 'auto.components.workflows.inspector.DependencyInspector.a36d74ccb2',
                 'Succeeded'
               )
             },
             {
               value: 'failed',
-              label: translate(
+              label: t(
                 'auto.components.workflows.inspector.DependencyInspector.5282c6d0c7',
                 'Failed'
               )
@@ -153,7 +148,7 @@ function ConditionEditor({
       ) : null}
       {!advanced && condition?.kind === 'approval' ? (
         <SelectField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.DependencyInspector.ba4a299201',
             'Decision'
           )}
@@ -161,14 +156,14 @@ function ConditionEditor({
           options={[
             {
               value: 'approved',
-              label: translate(
+              label: t(
                 'auto.components.workflows.inspector.DependencyInspector.d0d793ff96',
                 'Approved'
               )
             },
             {
               value: 'rejected',
-              label: translate(
+              label: t(
                 'auto.components.workflows.inspector.DependencyInspector.d60e419511',
                 'Rejected'
               )
@@ -180,20 +175,17 @@ function ConditionEditor({
       {!advanced && condition?.kind === 'field' ? (
         <>
           <TextField
-            label={translate(
-              'auto.components.workflows.inspector.DependencyInspector.240b17dc96',
-              'Field'
-            )}
+            label={t('auto.components.workflows.inspector.DependencyInspector.240b17dc96', 'Field')}
             mono
             value={condition.path}
-            description={translate(
+            description={t(
               'auto.components.workflows.inspector.DependencyInspector.bff1f16795',
               'A dot path into the source’s WORKFLOW_RESULT, such as verdict.'
             )}
             onChange={(path) => onChange({ ...condition, path })}
           />
           <SelectField
-            label={translate(
+            label={t(
               'auto.components.workflows.inspector.DependencyInspector.673e3ec992',
               'Comparison'
             )}
@@ -206,7 +198,7 @@ function ConditionEditor({
           />
           {condition.op !== 'exists' && condition.op !== 'not-exists' ? (
             <TextField
-              label={translate(
+              label={t(
                 'auto.components.workflows.inspector.DependencyInspector.2691b3b659',
                 'Value'
               )}
@@ -220,13 +212,13 @@ function ConditionEditor({
       {mode === 'advanced' ? (
         <>
           <TextAreaField
-            label={translate(
+            label={t(
               'auto.components.workflows.inspector.DependencyInspector.022dee4b6f',
               'Condition JSON'
             )}
             mono
             rows={6}
-            description={translate(
+            description={t(
               'auto.components.workflows.inspector.DependencyInspector.917ddd55f8',
               'all, any and not combine outcome, approval and field conditions. No code runs.'
             )}
@@ -258,6 +250,7 @@ export function DependencyInspector({
 }: {
   edge: WorkflowExecutionDependency
 }): React.JSX.Element {
+  const t = useTranslate()
   const commit = useWorkflowEditorStore((state) => state.commit)
   const nodes = useWorkflowEditorStore((state) => state.preset?.definition.nodes ?? NO_NODES)
   const update = (mutate: (draft: WorkflowExecutionDependency) => void): void =>
@@ -274,7 +267,7 @@ export function DependencyInspector({
   return (
     <>
       <InspectorSection
-        title={translate(
+        title={t(
           'auto.components.workflows.inspector.DependencyInspector.b94dfbe925',
           'Execution dependency'
         )}
@@ -283,7 +276,7 @@ export function DependencyInspector({
           <span className="font-medium">{label(edge.source)}</span>
           <span className="text-muted-foreground">
             {' '}
-            {translate(
+            {t(
               'auto.components.workflows.inspector.DependencyInspector.c4c8408157',
               'must settle before'
             )}
@@ -291,17 +284,11 @@ export function DependencyInspector({
           <span className="font-medium">{label(edge.target)}</span>
           <span className="text-muted-foreground">
             {' '}
-            {translate(
-              'auto.components.workflows.inspector.DependencyInspector.60051341f2',
-              'can start.'
-            )}
+            {t('auto.components.workflows.inspector.DependencyInspector.60051341f2', 'can start.')}
           </span>
         </p>
         <TextField
-          label={translate(
-            'auto.components.workflows.inspector.DependencyInspector.b5c6692c9f',
-            'Label'
-          )}
+          label={t('auto.components.workflows.inspector.DependencyInspector.b5c6692c9f', 'Label')}
           value={edge.label}
           placeholder={describeWorkflowCondition(edge.condition)}
           onChange={(value) =>
@@ -319,25 +306,25 @@ export function DependencyInspector({
           }
         />
         <InspectorNote>
-          {translate(
+          {t(
             'auto.components.workflows.inspector.DependencyInspector.c0305f511e',
             'Dependencies decide order only. What the target receives is set by communication routes.'
           )}
         </InspectorNote>
       </InspectorSection>
       <InspectorSection
-        title={translate(
+        title={t(
           'auto.components.workflows.inspector.DependencyInspector.49e0eec8db',
           'Bounded loop'
         )}
         defaultOpen={edge.loop !== null}
       >
         <SwitchField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.DependencyInspector.81f8d4a4ec',
             'Loop back'
           )}
-          description={translate(
+          description={t(
             'auto.components.workflows.inspector.DependencyInspector.6a0bd12079',
             'Re-run every node between the target and this edge’s source. Needs a condition.'
           )}
@@ -350,7 +337,7 @@ export function DependencyInspector({
         />
         {edge.loop ? (
           <NumberField
-            label={translate(
+            label={t(
               'auto.components.workflows.inspector.DependencyInspector.d328bc010d',
               'Maximum revisions'
             )}

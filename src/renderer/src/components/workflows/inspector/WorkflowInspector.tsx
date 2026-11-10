@@ -12,7 +12,7 @@ import { CommunicationInspector } from './CommunicationInspector'
 import { WorkflowSettingsInspector } from './WorkflowSettingsInspector'
 import { NodeExecutionInspector } from './NodeExecutionInspector'
 import { InspectorNote } from './workflow-inspector-fields'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 function NodeIssues({ id, kind }: { id: string; kind: 'node' | 'edge' }) {
   const allIssues = useWorkflowEditorStore((state) => state.issues)
@@ -40,6 +40,7 @@ function NodeIssues({ id, kind }: { id: string; kind: 'node' | 'edge' }) {
 
 /** Node, edge, or workflow settings by selection; execution mode swaps nodes for their run record. */
 export function WorkflowInspector(): React.JSX.Element | null {
+  const t = useTranslate()
   const selection = useWorkflowEditorStore((state) => state.selection)
   const definition = useWorkflowEditorStore((state) => state.preset?.definition)
   const execution = useWorkflowEditorStore((state) => state.mode === 'execution')
@@ -77,7 +78,7 @@ export function WorkflowInspector(): React.JSX.Element | null {
     return (
       <p className="p-4 text-xs text-muted-foreground">
         {selection.ids.length}{' '}
-        {translate(
+        {t(
           'auto.components.workflows.inspector.WorkflowInspector.befe7b1022',
           'nodes selected. Copy, duplicate, or delete them together.'
         )}

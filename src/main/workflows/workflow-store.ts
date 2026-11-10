@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, rmSync } from 'node:fs'
+import { readdir, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { AtomicSnapshotWriter } from '../persistence/atomic-snapshot-writer'
 import { parseWorkflowPreset } from '../../shared/workflow/workflow-preset-migration'
@@ -15,9 +15,9 @@ const PRESETS_FILE = 'presets.json'
 const FILE_MODE = 0o600
 const DIRECTORY_MODE = 0o700
 
-function readJson(path: string): unknown {
+async function readJson(path: string): Promise<unknown> {
   try {
-    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'))
+    const parsed: unknown = JSON.parse(await readFile(path, 'utf8'))
     return parsed
   } catch (error) {
     if (!(isWorkflowJsonRecord(error) && error.code === 'ENOENT')) {
@@ -52,20 +52,25 @@ export class WorkflowStore {
   private readonly presetWriter: AtomicSnapshotWriter
   private readonly templates = new Map(workflowTemplates().map((preset) => [preset.id, preset]))
 
-  constructor(private readonly rootDir: string) {
+  private constructor(private readonly rootDir: string) {
     this.presetWriter = new AtomicSnapshotWriter(() => join(rootDir, PRESETS_FILE), {
       fileMode: FILE_MODE,
       directoryMode: DIRECTORY_MODE
     })
-    this.load()
+  }
+
+  static async open(rootDir: string): Promise<WorkflowStore> {
+    const store = new WorkflowStore(rootDir)
+    await store.load()
+    return store
   }
 
   private runsDir(): string {
     return join(this.rootDir, 'runs')
   }
 
-  private load(): void {
-    const stored = readJson(join(this.rootDir, PRESETS_FILE))
+  private async load(): Promise<void> {
+    const stored = await readJson(join(this.rootDir, PRESETS_FILE))
     const list: unknown[] =
       isWorkflowJsonRecord(stored) && Array.isArray(stored.presets) ? stored.presets : []
     for (const raw of list) {
@@ -78,12 +83,15 @@ export class WorkflowStore {
     }
     let files: string[] = []
     try {
-      files = readdirSync(this.runsDir()).filter((file) => file.endsWith('.json'))
+      files = (await readdir(this.runsDir())).filter((file) => file.endsWith('.json'))
     } catch {
       files = []
     }
-    for (const file of files) {
-      const run = parseStoredRun(readJson(join(this.runsDir(), file)))
+    const runFiles = await Promise.all(
+      files.map(async (file) => ({ file, raw: await readJson(join(this.runsDir(), file)) }))
+    )
+    for (const { file, raw } of runFiles) {
+      const run = parseStoredRun(raw)
       if (run && `${run.id}.json` === file) {
         this.runs.set(run.id, run)
       }
@@ -151,13 +159,13 @@ export class WorkflowStore {
     return writer.write(() => JSON.stringify(run))
   }
 
-  deleteRun(id: string): boolean {
+  async deleteRun(id: string): Promise<boolean> {
     if (!RUN_ID_PATTERN.test(id) || !this.runs.delete(id)) {
       return false
     }
     this.runWriters.get(id)?.close()
     this.runWriters.delete(id)
-    rmSync(join(this.runsDir(), `${id}.json`), { force: true })
+    await rm(join(this.runsDir(), `${id}.json`), { force: true })
     return true
   }
 

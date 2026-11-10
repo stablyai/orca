@@ -9,9 +9,10 @@ import {
   TextAreaField,
   TextField
 } from './workflow-inspector-fields'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function WorkflowSettingsInspector(): React.JSX.Element | null {
+  const t = useTranslate()
   const preset = useWorkflowEditorStore((state) => state.preset)
   const commit = useWorkflowEditorStore((state) => state.commit)
   const issues = useWorkflowEditorStore((state) => state.issues)
@@ -30,13 +31,13 @@ export function WorkflowSettingsInspector(): React.JSX.Element | null {
   return (
     <>
       <InspectorSection
-        title={translate(
+        title={t(
           'auto.components.workflows.inspector.WorkflowSettingsInspector.457d07e767',
           'Workflow'
         )}
       >
         <TextField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.WorkflowSettingsInspector.9b240e7ba3',
             'Name'
           )}
@@ -52,7 +53,7 @@ export function WorkflowSettingsInspector(): React.JSX.Element | null {
           }
         />
         <TextAreaField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.WorkflowSettingsInspector.440c9e7cd0',
             'Description'
           )}
@@ -68,12 +69,12 @@ export function WorkflowSettingsInspector(): React.JSX.Element | null {
           }
         />
         <TextAreaField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.WorkflowSettingsInspector.02af629cac',
             'Default objective'
           )}
           rows={3}
-          description={translate(
+          description={t(
             'auto.components.workflows.inspector.WorkflowSettingsInspector.e5c7bb1bc8',
             'Prefilled when you run this workflow; available to prompts as {{objective}}.'
           )}
@@ -88,12 +89,12 @@ export function WorkflowSettingsInspector(): React.JSX.Element | null {
           }
         />
         <TextAreaField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.WorkflowSettingsInspector.26f7ab25c5',
             'Shared instructions'
           )}
           rows={4}
-          description={translate(
+          description={t(
             'auto.components.workflows.inspector.WorkflowSettingsInspector.fe670e90bd',
             'Added to every agent that includes shared instructions.'
           )}
@@ -110,13 +111,13 @@ export function WorkflowSettingsInspector(): React.JSX.Element | null {
         ))}
       </InspectorSection>
       <InspectorSection
-        title={translate(
+        title={t(
           'auto.components.workflows.inspector.WorkflowSettingsInspector.72fa09e7ed',
           'Execution policy'
         )}
       >
         <NumberField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.WorkflowSettingsInspector.63d88f5d39',
             'Agents at once'
           )}
@@ -128,26 +129,26 @@ export function WorkflowSettingsInspector(): React.JSX.Element | null {
           }
         />
         <SelectField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.WorkflowSettingsInspector.ed1e975c3d',
             'When a task fails'
           )}
           value={policies.failurePolicy}
-          description={translate(
+          description={t(
             'auto.components.workflows.inspector.WorkflowSettingsInspector.ed131f4cf5',
             'A failure that leaves by an explicit failed-outcome branch never ends the run.'
           )}
           options={[
             {
               value: 'fail-fast',
-              label: translate(
+              label: t(
                 'auto.components.workflows.inspector.WorkflowSettingsInspector.2b7ee58144',
                 'Stop the run'
               )
             },
             {
               value: 'continue',
-              label: translate(
+              label: t(
                 'auto.components.workflows.inspector.WorkflowSettingsInspector.b9bb56d96d',
                 'Let other branches finish, then fail'
               )
@@ -156,17 +157,17 @@ export function WorkflowSettingsInspector(): React.JSX.Element | null {
           onChange={(failurePolicy) => setPolicies({ failurePolicy })}
         />
         <NumberField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.WorkflowSettingsInspector.bf2bfd3ff9',
             'Maximum run duration'
           )}
           suffix="minutes"
           min={1}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.workflows.inspector.WorkflowSettingsInspector.c105709fa8',
             'None'
           )}
-          description={translate(
+          description={t(
             'auto.components.workflows.inspector.WorkflowSettingsInspector.6d2e81c4f7',
             'Recorded as a warning when exceeded. Use Hard stop to end the run.'
           )}
@@ -182,18 +183,18 @@ export function WorkflowSettingsInspector(): React.JSX.Element | null {
           }
         />
         <NumberField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.WorkflowSettingsInspector.a83f0d2b61',
             'Hard stop'
           )}
           suffix="minutes"
           min={1}
           max={10_080}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.workflows.inspector.WorkflowSettingsInspector.c105709fa8',
             'None'
           )}
-          description={translate(
+          description={t(
             'auto.components.workflows.inspector.WorkflowSettingsInspector.4c9b7e15d0',
             'After this long, Orca cancels the run and stops every agent still working.'
           )}
@@ -206,13 +207,13 @@ export function WorkflowSettingsInspector(): React.JSX.Element | null {
         />
       </InspectorSection>
       <InspectorSection
-        title={translate(
+        title={t(
           'auto.components.workflows.inspector.WorkflowSettingsInspector.8b0fea9fe9',
           'Communication budget'
         )}
       >
         <NumberField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.WorkflowSettingsInspector.949fe9f012',
             'Messages per run'
           )}
@@ -222,7 +223,7 @@ export function WorkflowSettingsInspector(): React.JSX.Element | null {
           onChange={(value) => setPolicies({ maxTotalMessages: value ?? 1 })}
         />
         <NumberField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.WorkflowSettingsInspector.46079242a1',
             'Payload bytes per run'
           )}
@@ -232,16 +233,16 @@ export function WorkflowSettingsInspector(): React.JSX.Element | null {
           onChange={(value) => setPolicies({ maxTotalPayloadBytes: value ?? 1_024 })}
         />
         <NumberField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.WorkflowSettingsInspector.7480d5e7af',
             'Estimated token budget'
           )}
           min={100}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.workflows.inspector.WorkflowSettingsInspector.c105709fa8',
             'None'
           )}
-          description={translate(
+          description={t(
             'auto.components.workflows.inspector.WorkflowSettingsInspector.c653136b10',
             'Estimated at 4 bytes per token across delivered payloads; not provider-measured usage.'
           )}

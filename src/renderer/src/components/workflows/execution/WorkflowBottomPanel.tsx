@@ -10,18 +10,19 @@ import { WorkflowTimeline } from './WorkflowTimeline'
 import { WorkflowMessageLog } from './WorkflowMessageLog'
 import { WorkflowMetricsView } from './WorkflowMetricsView'
 import { WorkflowRunHistory } from './WorkflowRunHistory'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const MIN_HEIGHT = 140
 const MAX_HEIGHT = 640
 
 function IssuesList(): React.JSX.Element {
+  const t = useTranslate()
   const issues = useWorkflowEditorStore((state) => state.issues)
   const select = useWorkflowEditorStore((state) => state.select)
   if (issues.length === 0) {
     return (
       <p className="px-3 py-6 text-center text-xs text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.workflows.execution.WorkflowBottomPanel.921ac18c46',
           'Validate to check the workflow. No issues recorded.'
         )}
@@ -69,9 +70,10 @@ function IssuesList(): React.JSX.Element {
 }
 
 function NoRun(): React.JSX.Element {
+  const t = useTranslate()
   return (
     <p className="px-3 py-6 text-center text-xs text-muted-foreground">
-      {translate(
+      {t(
         'auto.components.workflows.execution.WorkflowBottomPanel.8e4a64acd8',
         'Run the workflow, or open a past run from History.'
       )}
@@ -84,6 +86,7 @@ export function WorkflowBottomPanel({
 }: {
   historyTarget: RuntimeClientTarget
 }): React.JSX.Element {
+  const t = useTranslate()
   const run = useWorkflowRunViewStore((state) => state.run)
   const metrics = useWorkflowRunViewStore((state) => state.metrics)
   const error = useWorkflowRunViewStore((state) => state.error)
@@ -127,7 +130,7 @@ export function WorkflowBottomPanel({
         <div
           role="separator"
           aria-orientation="horizontal"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.workflows.execution.WorkflowBottomPanel.2072d3b099',
             'Resize panel'
           )}
@@ -160,53 +163,35 @@ export function WorkflowBottomPanel({
         <div className="flex h-8 shrink-0 items-center gap-2 px-2">
           <TabsList variant="line" size="sm">
             <TabsTrigger value="timeline">
-              {translate(
-                'auto.components.workflows.execution.WorkflowBottomPanel.7d6d2eacb7',
-                'Timeline'
-              )}
+              {t('auto.components.workflows.execution.WorkflowBottomPanel.7d6d2eacb7', 'Timeline')}
             </TabsTrigger>
             <TabsTrigger value="messages">
-              {translate(
-                'auto.components.workflows.execution.WorkflowBottomPanel.0b74c800f7',
-                'Messages'
-              )}
+              {t('auto.components.workflows.execution.WorkflowBottomPanel.0b74c800f7', 'Messages')}
               {run ? ` ${run.messages.length}` : ''}
             </TabsTrigger>
             <TabsTrigger value="metrics">
-              {translate(
-                'auto.components.workflows.execution.WorkflowBottomPanel.2feac58710',
-                'Metrics'
-              )}
+              {t('auto.components.workflows.execution.WorkflowBottomPanel.2feac58710', 'Metrics')}
             </TabsTrigger>
             <TabsTrigger value="output">
-              {translate(
-                'auto.components.workflows.execution.WorkflowBottomPanel.d0eb0230ba',
-                'Output'
-              )}
+              {t('auto.components.workflows.execution.WorkflowBottomPanel.d0eb0230ba', 'Output')}
             </TabsTrigger>
             <TabsTrigger value="errors">
-              {translate(
-                'auto.components.workflows.execution.WorkflowBottomPanel.949f2477eb',
-                'Errors'
-              )}
+              {t('auto.components.workflows.execution.WorkflowBottomPanel.949f2477eb', 'Errors')}
             </TabsTrigger>
             <TabsTrigger value="issues">
-              {translate(
+              {t(
                 'auto.components.workflows.execution.WorkflowBottomPanel.d8829d2dd4',
                 'Validation'
               )}
               {issueCount ? ` ${issueCount}` : ''}
             </TabsTrigger>
             <TabsTrigger value="history">
-              {translate(
-                'auto.components.workflows.execution.WorkflowBottomPanel.b23cf357fc',
-                'History'
-              )}
+              {t('auto.components.workflows.execution.WorkflowBottomPanel.b23cf357fc', 'History')}
             </TabsTrigger>
           </TabsList>
           {error ? (
             <span className="truncate text-2xs text-destructive">
-              {translate(
+              {t(
                 'auto.components.workflows.execution.WorkflowBottomPanel.59d739336b',
                 'Could not refresh the run:'
               )}{' '}
@@ -219,11 +204,11 @@ export function WorkflowBottomPanel({
             className="ml-auto"
             aria-label={
               open
-                ? translate(
+                ? t(
                     'auto.components.workflows.execution.WorkflowBottomPanel.5b08b6410a',
                     'Collapse panel'
                   )
-                : translate(
+                : t(
                     'auto.components.workflows.execution.WorkflowBottomPanel.d455ed4271',
                     'Expand panel'
                   )
@@ -250,12 +235,12 @@ export function WorkflowBottomPanel({
                   <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-5">
                     {run.finalOutput ??
                       (run.error
-                        ? translate(
+                        ? t(
                             'auto.components.workflows.execution.WorkflowBottomPanel.dc85bc7696',
                             'Run failed: {{value0}}',
                             { value0: run.error }
                           )
-                        : translate(
+                        : t(
                             'auto.components.workflows.execution.WorkflowBottomPanel.0a1901f98f',
                             'No output yet; the End node collects it.'
                           ))}

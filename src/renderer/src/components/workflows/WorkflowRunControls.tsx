@@ -3,7 +3,7 @@ import { Loader2, Pause, Play, RotateCw, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { isWorkflowRunTerminal } from '../../../../shared/workflow/workflow-run-types'
 import { useWorkflowEditorStore } from './workflow-editor-store'
@@ -12,6 +12,7 @@ import { workflowRunActions } from './workflow-run-actions'
 import { WORKFLOW_RUN_STATUS_LABEL } from './workflow-status-style'
 
 export function WorkflowRunControls({ onRun }: { onRun: () => void }) {
+  const t = useTranslate()
   const confirm = useConfirmationDialog()
   const run = useWorkflowRunViewStore((state) => state.run)
   const execution = useWorkflowEditorStore((state) => state.mode === 'execution')
@@ -26,7 +27,7 @@ export function WorkflowRunControls({ onRun }: { onRun: () => void }) {
     return (
       <Button size="sm" onClick={onRun}>
         <Play />
-        {translate('auto.components.workflows.WorkflowToolbar.7eab02df1e', 'Run')}
+        {t('auto.components.workflows.WorkflowToolbar.7eab02df1e', 'Run')}
       </Button>
     )
   }
@@ -50,7 +51,7 @@ export function WorkflowRunControls({ onRun }: { onRun: () => void }) {
             onClick={() => void act(workflowRunActions.resume)}
           >
             <Play />
-            {translate('auto.components.workflows.WorkflowToolbar.545ac28cd8', 'Resume')}
+            {t('auto.components.workflows.WorkflowToolbar.545ac28cd8', 'Resume')}
           </Button>
         ) : (
           <Tooltip>
@@ -62,11 +63,11 @@ export function WorkflowRunControls({ onRun }: { onRun: () => void }) {
                 onClick={() => void act(workflowRunActions.pause)}
               >
                 <Pause />
-                {translate('auto.components.workflows.WorkflowToolbar.ef4d9f9f57', 'Pause')}
+                {t('auto.components.workflows.WorkflowToolbar.ef4d9f9f57', 'Pause')}
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
-              {translate(
+              {t(
                 'auto.components.workflows.WorkflowToolbar.9653282742',
                 'Stop starting new tasks; running workers continue'
               )}
@@ -81,11 +82,8 @@ export function WorkflowRunControls({ onRun }: { onRun: () => void }) {
           disabled={busy || run.status === 'cancelling'}
           onClick={() =>
             void confirm({
-              title: translate(
-                'auto.components.workflows.WorkflowToolbar.6754c2f7c0',
-                'Cancel this run?'
-              ),
-              description: translate(
+              title: t('auto.components.workflows.WorkflowToolbar.6754c2f7c0', 'Cancel this run?'),
+              description: t(
                 'auto.components.workflows.WorkflowToolbar.086fe6e306',
                 'Orca stops each running worker. Any it cannot prove stopped stay marked unconfirmed.'
               ),
@@ -100,12 +98,12 @@ export function WorkflowRunControls({ onRun }: { onRun: () => void }) {
           }
         >
           {run.status === 'cancelling' ? <Loader2 className="animate-spin" /> : <Square />}
-          {translate('auto.components.workflows.WorkflowToolbar.c432a65899', 'Cancel')}
+          {t('auto.components.workflows.WorkflowToolbar.c432a65899', 'Cancel')}
         </Button>
       ) : (
         <Button size="sm" onClick={onRun}>
           <RotateCw />
-          {translate('auto.components.workflows.WorkflowToolbar.b05389e781', 'Run again')}
+          {t('auto.components.workflows.WorkflowToolbar.b05389e781', 'Run again')}
         </Button>
       )}
     </div>

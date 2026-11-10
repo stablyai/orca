@@ -29,7 +29,7 @@ import {
 } from './workflow-flow-mapping'
 import { workflowNodeKindLabel } from './workflow-editor-mutations'
 import { WORKFLOW_TASK_STATUS_STYLE, workflowNodeRunSummary } from './workflow-status-style'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 export const WORKFLOW_NODE_ICONS: Record<WorkflowNodeKind, LucideIcon> = {
@@ -74,6 +74,7 @@ function WorkflowNodeCardImpl({
   selected,
   data
 }: NodeProps<WorkflowFlowNode>): React.JSX.Element | null {
+  const t = useTranslate()
   useUiLanguageRevision()
   // The store shares unchanged node objects across commits, so edits elsewhere keep this reference.
   const node = useWorkflowEditorStore(
@@ -189,13 +190,13 @@ function WorkflowNodeCardImpl({
             <span className={cn('font-medium', status.text)}>{status.label}</span>
             {run.attempt > 1 ? (
               <span>
-                {translate('auto.components.workflows.WorkflowNodeCard.014f05dbbb', 'attempt')}
+                {t('auto.components.workflows.WorkflowNodeCard.014f05dbbb', 'attempt')}
                 {run.attempt}
               </span>
             ) : null}
             {run.iteration > 0 ? (
               <span>
-                {translate('auto.components.workflows.WorkflowNodeCard.e436bdb0c0', 'rev')}
+                {t('auto.components.workflows.WorkflowNodeCard.e436bdb0c0', 'rev')}
                 {run.iteration + 1}
               </span>
             ) : null}

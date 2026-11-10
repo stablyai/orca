@@ -11,7 +11,7 @@ import { cn } from '@/lib/class-names'
 import type { WorkflowFlowEdge } from './workflow-flow-mapping'
 import { useWorkflowEditorStore } from './workflow-editor-store'
 import { useWorkflowRunViewStore, WORKFLOW_EDGE_ACTIVITY_MS } from './workflow-run-view-store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 function EdgeChip({
@@ -69,6 +69,7 @@ function loopPath(
 }
 
 function DependencyEdgeImpl(props: EdgeProps<WorkflowFlowEdge>): React.JSX.Element {
+  const t = useTranslate()
   useUiLanguageRevision()
   // A number selector stays stable, so only real layout changes re-route loops.
   const leftmostNodeX = useStore((state) => {
@@ -114,7 +115,7 @@ function DependencyEdgeImpl(props: EdgeProps<WorkflowFlowEdge>): React.JSX.Eleme
         <EdgeChip x={labelX} y={labelY} selected={Boolean(props.selected)}>
           {props.data?.label}
           {loopLimit
-            ? translate(
+            ? t(
                 'auto.components.workflows.WorkflowEdges.3a4be452f9',
                 ' · up to {{value0}} revisions',
                 { value0: loopLimit }
@@ -145,6 +146,7 @@ function useRecentActivity(edgeId: string | undefined): boolean {
 }
 
 function CommunicationEdgeImpl(props: EdgeProps<WorkflowFlowEdge>): React.JSX.Element {
+  const t = useTranslate()
   useUiLanguageRevision()
   const [path, labelX, labelY] = getBezierPath({ ...props, curvature: 0.35 })
   const edgeId = props.data?.edgeId
@@ -188,11 +190,11 @@ function CommunicationEdgeImpl(props: EdgeProps<WorkflowFlowEdge>): React.JSX.El
       {showLabel || !enabled ? (
         <EdgeChip x={labelX} y={labelY} selected={Boolean(props.selected)}>
           {execution && counts
-            ? translate('auto.components.workflows.WorkflowEdges.f65b6ab7a5', '{{value0}} msg', {
+            ? t('auto.components.workflows.WorkflowEdges.f65b6ab7a5', '{{value0}} msg', {
                 value0: counts
               })
             : props.data?.label}
-          {!enabled ? translate('auto.components.workflows.WorkflowEdges.3178e51538', '· off') : ''}
+          {!enabled ? t('auto.components.workflows.WorkflowEdges.3178e51538', '· off') : ''}
         </EdgeChip>
       ) : null}
     </>

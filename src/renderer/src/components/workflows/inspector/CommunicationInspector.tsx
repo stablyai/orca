@@ -22,7 +22,7 @@ import {
   TextAreaField,
   TextField
 } from './workflow-inspector-fields'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const NO_NODES: readonly WorkflowNode[] = []
 
@@ -77,6 +77,7 @@ export function CommunicationInspector({
 }: {
   edge: WorkflowCommunicationEdge
 }): React.JSX.Element {
+  const t = useTranslate()
   const commit = useWorkflowEditorStore((state) => state.commit)
   const checkpoint = useWorkflowEditorStore((state) => state.checkpoint)
   const readOnly = useWorkflowEditorStore((state) => state.mode === 'execution')
@@ -101,16 +102,13 @@ export function CommunicationInspector({
   return (
     <>
       <InspectorSection
-        title={translate(
-          'auto.components.workflows.inspector.CommunicationInspector.0336b8b8fe',
-          'Route'
-        )}
+        title={t('auto.components.workflows.inspector.CommunicationInspector.0336b8b8fe', 'Route')}
       >
         <p className="text-[13px]">
           <span className="font-medium">{label(edge.source)}</span>
           <span className="text-muted-foreground">
             {' '}
-            {translate(
+            {t(
               'auto.components.workflows.inspector.CommunicationInspector.a2287bc7ae',
               'may send to'
             )}
@@ -118,10 +116,7 @@ export function CommunicationInspector({
           <span className="font-medium">{label(edge.target)}</span>
         </p>
         <TextField
-          label={translate(
-            'auto.components.workflows.inspector.CommunicationInspector.81209b1037',
-            'Name'
-          )}
+          label={t('auto.components.workflows.inspector.CommunicationInspector.81209b1037', 'Name')}
           value={edge.name}
           onChange={(name) =>
             update((draft) => {
@@ -130,11 +125,11 @@ export function CommunicationInspector({
           }
         />
         <SwitchField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.CommunicationInspector.08be3ad9b9',
             'Enabled'
           )}
-          description={translate(
+          description={t(
             'auto.components.workflows.inspector.CommunicationInspector.b3b102669a',
             'A disabled route grants nothing; Orca refuses messages on it.'
           )}
@@ -146,7 +141,7 @@ export function CommunicationInspector({
           }
         />
         <InspectorField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.CommunicationInspector.7c0c1c9942',
             'Allowed message types'
           )}
@@ -175,13 +170,13 @@ export function CommunicationInspector({
         </InspectorField>
       </InspectorSection>
       <InspectorSection
-        title={translate(
+        title={t(
           'auto.components.workflows.inspector.CommunicationInspector.2f07797937',
           'Payload'
         )}
       >
         <SelectField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.CommunicationInspector.cc9259a644',
             'What travels on this route'
           )}
@@ -195,12 +190,12 @@ export function CommunicationInspector({
         />
         {payload.kind === 'selected-fields' ? (
           <TextField
-            label={translate(
+            label={t(
               'auto.components.workflows.inspector.CommunicationInspector.98bd18ea55',
               'Fields'
             )}
             mono
-            placeholder={translate(
+            placeholder={t(
               'auto.components.workflows.inspector.CommunicationInspector.6a3e11ce6f',
               'verdict, findings'
             )}
@@ -220,7 +215,7 @@ export function CommunicationInspector({
         ) : null}
         {payload.kind === 'selected-context' ? (
           <TextAreaField
-            label={translate(
+            label={t(
               'auto.components.workflows.inspector.CommunicationInspector.093f380628',
               'Context to send'
             )}
@@ -231,11 +226,11 @@ export function CommunicationInspector({
         ) : null}
         {payload.kind === 'full-transcript' ? (
           <SwitchField
-            label={translate(
+            label={t(
               'auto.components.workflows.inspector.CommunicationInspector.1c9b9feab9',
               'I want the full report sent'
             )}
-            description={translate(
+            description={t(
               'auto.components.workflows.inspector.CommunicationInspector.abf738c4a7',
               'Required for this payload. Large reports may hit this route’s size limit.'
             )}
@@ -244,16 +239,16 @@ export function CommunicationInspector({
           />
         ) : null}
         <TextField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.CommunicationInspector.e7aa8674ad',
             'Required JSON fields'
           )}
           mono
-          placeholder={translate(
+          placeholder={t(
             'auto.components.workflows.inspector.CommunicationInspector.5777811a1d',
             'none'
           )}
-          description={translate(
+          description={t(
             'auto.components.workflows.inspector.CommunicationInspector.2837f3122c',
             'Structured payloads missing these are refused before delivery.'
           )}
@@ -268,20 +263,20 @@ export function CommunicationInspector({
           }
         />
         <InspectorNote>
-          {translate(
+          {t(
             'auto.components.workflows.inspector.CommunicationInspector.3abb747eb4',
             'The sender’s conversation is never forwarded. Only what this policy selects from its final report travels.'
           )}
         </InspectorNote>
       </InspectorSection>
       <InspectorSection
-        title={translate(
+        title={t(
           'auto.components.workflows.inspector.CommunicationInspector.3d51050374',
           'Limits and delivery'
         )}
       >
         <NumberField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.CommunicationInspector.16e306dff5',
             'Maximum message size'
           )}
@@ -292,7 +287,7 @@ export function CommunicationInspector({
           onChange={(value) => policy({ maxMessageBytes: value ?? 64_000 })}
         />
         <NumberField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.CommunicationInspector.1b11f3cd8d',
             'Messages per run'
           )}
@@ -302,14 +297,14 @@ export function CommunicationInspector({
           onChange={(value) => policy({ maxMessagesPerRun: value ?? 1 })}
         />
         <NumberField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.CommunicationInspector.64d7609d8b',
             'Rate limit'
           )}
           suffix="per minute"
           min={1}
           max={600}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.workflows.inspector.CommunicationInspector.fb300a6b8f',
             'None'
           )}
@@ -317,7 +312,7 @@ export function CommunicationInspector({
           onChange={(value) => policy({ rateLimitPerMinute: value })}
         />
         <SelectField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.CommunicationInspector.d13f236e0a',
             'When a limit is hit'
           )}
@@ -329,11 +324,11 @@ export function CommunicationInspector({
           onChange={(onBudgetExhausted) => policy({ onBudgetExhausted })}
         />
         <SwitchField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.CommunicationInspector.3569cd43a3',
             'Require approval'
           )}
-          description={translate(
+          description={t(
             'auto.components.workflows.inspector.CommunicationInspector.d18287f149',
             'Hold every message on this route until you release or drop it.'
           )}
@@ -341,7 +336,7 @@ export function CommunicationInspector({
           onChange={(requiresApproval) => policy({ requiresApproval })}
         />
         <SelectField
-          label={translate(
+          label={t(
             'auto.components.workflows.inspector.CommunicationInspector.2b98504f8f',
             'Logging'
           )}
@@ -349,14 +344,14 @@ export function CommunicationInspector({
           options={[
             {
               value: 'full',
-              label: translate(
+              label: t(
                 'auto.components.workflows.inspector.CommunicationInspector.f77c7e15d3',
                 'Keep payloads'
               )
             },
             {
               value: 'metadata',
-              label: translate(
+              label: t(
                 'auto.components.workflows.inspector.CommunicationInspector.c679cb44d4',
                 'Metadata only for refused messages'
               )
@@ -365,7 +360,7 @@ export function CommunicationInspector({
           onChange={(logging) => policy({ logging })}
         />
         <InspectorNote>
-          {translate(
+          {t(
             'auto.components.workflows.inspector.CommunicationInspector.58b1d597d7',
             'Orca checks every message a workflow agent sends through orchestration against these rules before writing it. A worker’s own send cannot be truncated or parked, so those limits refuse it with guidance instead. Agents with unrestricted shells can still reach the network or files outside Orca; that needs OS-level sandboxing.'
           )}

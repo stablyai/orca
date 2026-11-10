@@ -8,7 +8,8 @@ import type {
 import type { WorkflowRun } from '../../../../../shared/workflow/workflow-run-types'
 import { formatWorkflowDuration } from '../workflow-status-style'
 import { saveWorkflowTextFile } from '../workflow-file-export'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { getIntlLocale } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 const SOURCE_LABEL: Record<WorkflowMetric['source'], string> = {
   measured: 'measured',
@@ -80,11 +81,13 @@ export function WorkflowMetricsView({
   run: WorkflowRun
   metrics: WorkflowMetrics
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   return (
     <div className="h-full space-y-3 overflow-y-auto p-3 scrollbar-sleek">
       <div className="flex flex-wrap items-start gap-2">
         <Tile
-          label={translate(
+          label={t(
             'auto.components.workflows.execution.WorkflowMetricsView.4c332342be',
             'Duration'
           )}
@@ -92,36 +95,30 @@ export function WorkflowMetricsView({
           source={metrics.durationMs.source}
         />
         <Tile
-          label={translate(
-            'auto.components.workflows.execution.WorkflowMetricsView.9f7e61e40b',
-            'Tasks'
-          )}
+          label={t('auto.components.workflows.execution.WorkflowMetricsView.9f7e61e40b', 'Tasks')}
           value={`${metrics.tasksCompleted} done · ${metrics.tasksFailed} failed`}
         />
         <Tile
-          label={translate(
-            'auto.components.workflows.execution.WorkflowMetricsView.5a50332233',
-            'Retries'
-          )}
+          label={t('auto.components.workflows.execution.WorkflowMetricsView.5a50332233', 'Retries')}
           value={String(metrics.retries)}
         />
         <Tile
-          label={translate(
+          label={t(
             'auto.components.workflows.execution.WorkflowMetricsView.1679c7f8a4',
             'Messages'
           )}
           value={`${metrics.messagesDelivered} · ${metrics.messagesRejected} refused`}
         />
         <Tile
-          label={translate(
+          label={t(
             'auto.components.workflows.execution.WorkflowMetricsView.88698ba291',
             'Bytes sent'
           )}
-          value={metrics.bytesTransmitted.toLocaleString(getIntlLocale())}
+          value={metrics.bytesTransmitted.toLocaleString(intlLocale)}
           source="measured"
         />
         <Tile
-          label={translate(
+          label={t(
             'auto.components.workflows.execution.WorkflowMetricsView.8d0df4efca',
             'Tokens sent'
           )}
@@ -129,7 +126,7 @@ export function WorkflowMetricsView({
           source="estimated"
         />
         <Tile
-          label={translate(
+          label={t(
             'auto.components.workflows.execution.WorkflowMetricsView.74f51312cd',
             'Model usage'
           )}
@@ -145,7 +142,7 @@ export function WorkflowMetricsView({
             }
           >
             <Download />
-            {translate('auto.components.workflows.execution.WorkflowMetricsView.b4151f43ce', 'CSV')}
+            {t('auto.components.workflows.execution.WorkflowMetricsView.b4151f43ce', 'CSV')}
           </Button>
           <Button
             variant="ghost"
@@ -159,15 +156,12 @@ export function WorkflowMetricsView({
             }
           >
             <Download />
-            {translate(
-              'auto.components.workflows.execution.WorkflowMetricsView.69ad87949b',
-              'JSON'
-            )}
+            {t('auto.components.workflows.execution.WorkflowMetricsView.69ad87949b', 'JSON')}
           </Button>
         </div>
       </div>
       <p className="text-2xs text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.workflows.execution.WorkflowMetricsView.5038fff81d',
           'Token counts estimate 4 bytes per token across routed payloads. Orca does not receive per-worker provider usage for terminal agents, so model usage is unavailable here.'
         )}
@@ -176,52 +170,34 @@ export function WorkflowMetricsView({
         <thead className="text-2xs uppercase tracking-wider text-muted-foreground">
           <tr className="border-b border-border">
             <th className="py-1.5 pr-3 font-semibold">
-              {translate(
-                'auto.components.workflows.execution.WorkflowMetricsView.43c8eebb9c',
-                'Agent'
-              )}
+              {t('auto.components.workflows.execution.WorkflowMetricsView.43c8eebb9c', 'Agent')}
             </th>
             <th className="py-1.5 pr-3 font-semibold">
-              {translate(
-                'auto.components.workflows.execution.WorkflowMetricsView.561fab9a97',
-                'Model'
-              )}
+              {t('auto.components.workflows.execution.WorkflowMetricsView.561fab9a97', 'Model')}
             </th>
             <th className="py-1.5 pr-3 font-semibold">
-              {translate(
-                'auto.components.workflows.execution.WorkflowMetricsView.7377929744',
-                'Attempts'
-              )}
+              {t('auto.components.workflows.execution.WorkflowMetricsView.7377929744', 'Attempts')}
             </th>
             <th className="py-1.5 pr-3 font-semibold">
-              {translate(
-                'auto.components.workflows.execution.WorkflowMetricsView.5449ba0fcd',
-                'Ran'
-              )}
+              {t('auto.components.workflows.execution.WorkflowMetricsView.5449ba0fcd', 'Ran')}
             </th>
             <th className="py-1.5 pr-3 font-semibold">
-              {translate(
-                'auto.components.workflows.execution.WorkflowMetricsView.9ffae5f212',
-                'Waited'
-              )}
+              {t('auto.components.workflows.execution.WorkflowMetricsView.9ffae5f212', 'Waited')}
             </th>
             <th className="py-1.5 pr-3 font-semibold">
-              {translate(
+              {t(
                 'auto.components.workflows.execution.WorkflowMetricsView.13ca15196a',
                 'Held input'
               )}
             </th>
             <th className="py-1.5 pr-3 font-semibold">
-              {translate(
+              {t(
                 'auto.components.workflows.execution.WorkflowMetricsView.b9a4568c8e',
                 'Sent / received'
               )}
             </th>
             <th className="py-1.5 font-semibold">
-              {translate(
-                'auto.components.workflows.execution.WorkflowMetricsView.797d08e54c',
-                'Result'
-              )}
+              {t('auto.components.workflows.execution.WorkflowMetricsView.797d08e54c', 'Result')}
             </th>
           </tr>
         </thead>
@@ -233,7 +209,7 @@ export function WorkflowMetricsView({
                 {node.agent} ·{' '}
                 {node.effectiveModel ??
                   node.requestedModel ??
-                  translate(
+                  t(
                     'auto.components.workflows.execution.WorkflowMetricsView.744d0b18cb',
                     'default'
                   )}
@@ -254,37 +230,22 @@ export function WorkflowMetricsView({
         <thead className="text-2xs uppercase tracking-wider text-muted-foreground">
           <tr className="border-b border-border">
             <th className="py-1.5 pr-3 font-semibold">
-              {translate(
-                'auto.components.workflows.execution.WorkflowMetricsView.483d058989',
-                'Route'
-              )}
+              {t('auto.components.workflows.execution.WorkflowMetricsView.483d058989', 'Route')}
             </th>
             <th className="py-1.5 pr-3 font-semibold">
-              {translate(
-                'auto.components.workflows.execution.WorkflowMetricsView.33bdcf98e8',
-                'Delivered'
-              )}
+              {t('auto.components.workflows.execution.WorkflowMetricsView.33bdcf98e8', 'Delivered')}
             </th>
             <th className="py-1.5 pr-3 font-semibold">
-              {translate(
-                'auto.components.workflows.execution.WorkflowMetricsView.496a984f1a',
-                'Refused'
-              )}
+              {t('auto.components.workflows.execution.WorkflowMetricsView.496a984f1a', 'Refused')}
             </th>
             <th className="py-1.5 pr-3 font-semibold">
-              {translate(
-                'auto.components.workflows.execution.WorkflowMetricsView.53aacd960f',
-                'Held'
-              )}
+              {t('auto.components.workflows.execution.WorkflowMetricsView.53aacd960f', 'Held')}
             </th>
             <th className="py-1.5 pr-3 font-semibold">
-              {translate(
-                'auto.components.workflows.execution.WorkflowMetricsView.31b722fbec',
-                'Bytes'
-              )}
+              {t('auto.components.workflows.execution.WorkflowMetricsView.31b722fbec', 'Bytes')}
             </th>
             <th className="py-1.5 font-semibold">
-              {translate(
+              {t(
                 'auto.components.workflows.execution.WorkflowMetricsView.d39743e7b9',
                 'Tokens (est.)'
               )}
@@ -298,9 +259,7 @@ export function WorkflowMetricsView({
               <td className="py-1.5 pr-3 tabular-nums">{edge.delivered}</td>
               <td className="py-1.5 pr-3 tabular-nums">{edge.rejected}</td>
               <td className="py-1.5 pr-3 tabular-nums">{edge.held}</td>
-              <td className="py-1.5 pr-3 tabular-nums">
-                {edge.bytes.toLocaleString(getIntlLocale())}
-              </td>
+              <td className="py-1.5 pr-3 tabular-nums">{edge.bytes.toLocaleString(intlLocale)}</td>
               <td className="py-1.5 tabular-nums">~{num(edge.estimatedTokens)}</td>
             </tr>
           ))}

@@ -28,7 +28,7 @@ type Rig = {
   /** The worker terminal each node's attempt was assigned to. */
   workers: Map<string, { handle: string; taskId: string; dispatchId: string }>
   send: (method: string, params: Record<string, unknown>) => Promise<RpcResponse>
-  controller: (store?: WorkflowStore) => WorkflowController
+  controller: (store?: WorkflowStore) => Promise<WorkflowController>
 }
 
 function createRig(): Rig {
@@ -121,8 +121,10 @@ function createRig(): Rig {
     dir,
     workers,
     send,
-    controller: (store = new WorkflowStore(dir)) =>
-      new WorkflowController(store, adapterFor(), { reconcileIntervalMs: 100 })
+    controller: async (store?: WorkflowStore) =>
+      new WorkflowController(store ?? (await WorkflowStore.open(dir)), adapterFor(), {
+        reconcileIntervalMs: 100
+      })
   }
 }
 
@@ -146,9 +148,9 @@ describe('workflow controller on the Orca runtime', () => {
   let rig: Rig
   let controller: WorkflowController
 
-  beforeEach(() => {
+  beforeEach(async () => {
     rig = createRig()
-    controller = rig.controller()
+    controller = await rig.controller()
   })
 
   afterEach(() => {
@@ -288,7 +290,7 @@ describe('workflow controller on the Orca runtime', () => {
     )
 
     controller.dispose()
-    controller = rig.controller(new WorkflowStore(rig.dir))
+    controller = await rig.controller(await WorkflowStore.open(rig.dir))
     await controller.recoverAll()
     expect(
       controller.store.getRun(run.id)!.events.some((event) => event.kind === 'run-reconciled')

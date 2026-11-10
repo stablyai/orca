@@ -22,6 +22,8 @@ export type WorkflowSessionEffects = {
 }
 
 const MAX_STORED_EVENTS = 5_000
+/** A quiet run's backstop slows to this multiple of the base interval. */
+const MAX_RECONCILE_BACKOFF = 10
 
 /**
  * One run's serial executor. State changes happen inside exclusive() turns that never await an
@@ -29,7 +31,7 @@ const MAX_STORED_EVENTS = 5_000
  */
 export class WorkflowRunSession {
   private chain: Promise<unknown> = Promise.resolve()
-  private timer: ReturnType<typeof setInterval> | null = null
+  private timer: ReturnType<typeof setTimeout> | null = null
   private closed = false
   unregisterRouteGuard: (() => void) | null = null
 
@@ -99,17 +101,38 @@ export class WorkflowRunSession {
     if (this.timer || this.closed) {
       return
     }
-    this.timer = setInterval(() => {
-      this.deps.effects.reconcile(this).catch((error: unknown) => this.reportEffectError(error))
-    }, this.deps.reconcileIntervalMs)
-    this.timer.unref?.()
+    this.scheduleReconcile(this.deps.reconcileIntervalMs, this.lastEventSeq())
     this.deps.effects.pumpMail(this).catch((error: unknown) => this.reportEffectError(error))
+  }
+
+  /** Mail wakes carry the prompt path, so the backstop backs off while the run stays quiet. */
+  private scheduleReconcile(delayMs: number, seenSeq: number): void {
+    this.timer = setTimeout(() => {
+      this.timer = null
+      void this.deps.effects
+        .reconcile(this)
+        .catch((error: unknown) => this.reportEffectError(error))
+        .then(() => {
+          if (this.closed || this.terminal) {
+            return
+          }
+          const base = this.deps.reconcileIntervalMs
+          const seq = this.lastEventSeq()
+          const next = seq === seenSeq ? Math.min(delayMs * 2, base * MAX_RECONCILE_BACKOFF) : base
+          this.scheduleReconcile(next, seq)
+        })
+    }, delayMs)
+    this.timer.unref?.()
+  }
+
+  private lastEventSeq(): number {
+    return this.run.events.at(-1)?.seq ?? -1
   }
 
   close(): void {
     this.closed = true
     if (this.timer) {
-      clearInterval(this.timer)
+      clearTimeout(this.timer)
       this.timer = null
     }
     this.unregisterRouteGuard?.()

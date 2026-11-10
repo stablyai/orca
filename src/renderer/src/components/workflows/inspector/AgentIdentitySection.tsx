@@ -8,21 +8,22 @@ import {
   TextField
 } from './workflow-inspector-fields'
 import { useUpdateAgentProfile, useUpdateWorkflowNode } from './use-workflow-node'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function AgentIdentitySection({ node }: { node: WorkflowAgentNode }): React.JSX.Element {
+  const t = useTranslate()
   const updateNode = useUpdateWorkflowNode(node.id)
   const update = useUpdateAgentProfile(node.id)
   const profile = node.agent
   return (
     <InspectorSection
-      title={translate(
+      title={t(
         'auto.components.workflows.inspector.AgentIdentitySection.90dca236a2',
         'Identity and role'
       )}
     >
       <TextField
-        label={translate(
+        label={t(
           'auto.components.workflows.inspector.AgentIdentitySection.3844fdf45a',
           'Display name'
         )}
@@ -35,11 +36,8 @@ export function AgentIdentitySection({ node }: { node: WorkflowAgentNode }): Rea
         }
       />
       <InspectorField
-        label={translate(
-          'auto.components.workflows.inspector.AgentIdentitySection.0093283097',
-          'Node id'
-        )}
-        description={translate(
+        label={t('auto.components.workflows.inspector.AgentIdentitySection.0093283097', 'Node id')}
+        description={t(
           'auto.components.workflows.inspector.AgentIdentitySection.2f7217d255',
           'Stable across saves and exports; Orca task titles include it.'
         )}
@@ -49,12 +47,9 @@ export function AgentIdentitySection({ node }: { node: WorkflowAgentNode }): Rea
         </div>
       </InspectorField>
       <TextField
-        label={translate(
-          'auto.components.workflows.inspector.AgentIdentitySection.9aa0d4c465',
-          'Role'
-        )}
+        label={t('auto.components.workflows.inspector.AgentIdentitySection.9aa0d4c465', 'Role')}
         value={profile.role}
-        placeholder={translate(
+        placeholder={t(
           'auto.components.workflows.inspector.AgentIdentitySection.249c8f19a3',
           'Backend implementer'
         )}
@@ -65,7 +60,7 @@ export function AgentIdentitySection({ node }: { node: WorkflowAgentNode }): Rea
         }
       />
       <TextAreaField
-        label={translate(
+        label={t(
           'auto.components.workflows.inspector.AgentIdentitySection.797373a9ce',
           'Description'
         )}
@@ -78,7 +73,7 @@ export function AgentIdentitySection({ node }: { node: WorkflowAgentNode }): Rea
         }
       />
       <ListField
-        label={translate(
+        label={t(
           'auto.components.workflows.inspector.AgentIdentitySection.7d0cc2585d',
           'Responsibilities'
         )}
@@ -90,7 +85,7 @@ export function AgentIdentitySection({ node }: { node: WorkflowAgentNode }): Rea
         }
       />
       <ListField
-        label={translate(
+        label={t(
           'auto.components.workflows.inspector.AgentIdentitySection.22ce734aa0',
           'Allowed actions'
         )}
@@ -102,11 +97,11 @@ export function AgentIdentitySection({ node }: { node: WorkflowAgentNode }): Rea
         }
       />
       <ListField
-        label={translate(
+        label={t(
           'auto.components.workflows.inspector.AgentIdentitySection.ccdae613ac',
           'Forbidden actions'
         )}
-        description={translate(
+        description={t(
           'auto.components.workflows.inspector.AgentIdentitySection.f28f446f13',
           'One per line. These are instructions to the agent; Orca enforces only routing, placement and timeouts.'
         )}
@@ -118,7 +113,7 @@ export function AgentIdentitySection({ node }: { node: WorkflowAgentNode }): Rea
         }
       />
       <ListField
-        label={translate(
+        label={t(
           'auto.components.workflows.inspector.AgentIdentitySection.f559717f19',
           'Expected outputs'
         )}
@@ -130,7 +125,7 @@ export function AgentIdentitySection({ node }: { node: WorkflowAgentNode }): Rea
         }
       />
       <ListField
-        label={translate(
+        label={t(
           'auto.components.workflows.inspector.AgentIdentitySection.9dd8d3d72b',
           'Success criteria'
         )}

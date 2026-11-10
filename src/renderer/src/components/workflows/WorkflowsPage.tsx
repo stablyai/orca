@@ -12,9 +12,10 @@ import { WorkflowCanvas } from './WorkflowCanvas'
 import { WorkflowInspector } from './inspector/WorkflowInspector'
 import { WorkflowBottomPanel } from './execution/WorkflowBottomPanel'
 import { WorkflowRunDialog } from './WorkflowRunDialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 function WorkflowsWorkspace(): React.JSX.Element {
+  const t = useTranslate()
   const controls = useWorkflowPresets()
   const preset = useWorkflowEditorStore((state) => state.preset)
   const execution = useWorkflowEditorStore((state) => state.mode === 'execution')
@@ -30,10 +31,7 @@ function WorkflowsWorkspace(): React.JSX.Element {
         {controls.loading ? (
           <Loader2 className="size-4 animate-spin" />
         ) : (
-          translate(
-            'auto.components.workflows.WorkflowsPage.f8e09dbeac',
-            'No workflows are available.'
-          )
+          t('auto.components.workflows.WorkflowsPage.f8e09dbeac', 'No workflows are available.')
         )}
       </div>
     )
@@ -52,7 +50,7 @@ function WorkflowsWorkspace(): React.JSX.Element {
           <WorkflowCanvas />
         </div>
         <aside
-          aria-label={translate('auto.components.workflows.WorkflowsPage.7f4ebd548f', 'Inspector')}
+          aria-label={t('auto.components.workflows.WorkflowsPage.7f4ebd548f', 'Inspector')}
           className="w-[340px] shrink-0 overflow-y-auto border-l border-border bg-background scrollbar-sleek"
         >
           <WorkflowInspector />
