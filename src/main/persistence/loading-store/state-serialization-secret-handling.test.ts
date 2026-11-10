@@ -4,6 +4,7 @@ import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import type { StateSerializationSecretHandlingOperations } from './state-serialization-secret-handling'
 
 vi.mock('../../ssh/config/ssh-config-parser', () => ({
@@ -56,7 +57,9 @@ describe('profile save serialization', () => {
         }
       ]
     })
-    store.setWorktreeMeta({ id: 'repo-1::/work/wt-1', hostId: 'local' }, { comment: 'pinned' })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: 'repo-1::/work/wt-1', hostId: 'local' }), {
+      comment: 'pinned'
+    })
     const runtime = Reflect.get(store, 'runtime')
     runtime.state.sshPtyConsumerRecoveries = [
       {

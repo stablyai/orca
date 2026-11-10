@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import { AgentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
@@ -26,7 +27,21 @@ function createHeadlessRuntime(
 ) {
   const meta: Record<string, WorktreeMeta> = { [WT]: storeWorktreeMeta(stored) }
   // A folder workspace keeps its stamps and unread flag on its own record.
-  const folder: WorktreeMeta & { id: string } = { ...storeWorktreeMeta(stored), id: FOLDER_ID }
+  const folder: FolderWorkspace = {
+    id: FOLDER_ID,
+    projectGroupId: 'group-1',
+    name: 'Folder',
+    folderPath: '/tmp/folder-a',
+    linkedTask: null,
+    comment: '',
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    createdAt: 0,
+    updatedAt: 0,
+    ...stored
+  }
   const written = new Set<(domains: readonly string[] | undefined) => void>()
   const repo = storeRepo({ id: 'repo-1', path: '/tmp/repo-1', connectionId: null })
   const store = {
@@ -43,7 +58,7 @@ function createHeadlessRuntime(
     },
     getFolderWorkspace: (id: string) => (id === FOLDER_ID ? folder : undefined),
     getFolderWorkspaces: () => [folder],
-    updateFolderWorkspace: (id: string, updates: Partial<WorktreeMeta>) => {
+    updateFolderWorkspace: (_id: string, updates: Partial<FolderWorkspace>) => {
       Object.assign(folder, updates)
       written.forEach((listener) => listener(['folderWorkspaces']))
       return folder
@@ -147,7 +162,8 @@ describe('host sort stamps on a headless runtime', () => {
         const workspaceId = kind === 'folder' ? folderWorkspaceKey(FOLDER_ID) : WT
         const { runtime, meta, folder, setWorktreeMeta, updateFolderWorkspace } =
           createHeadlessRuntime(undefined, workspaceId)
-        const record = (): WorktreeMeta => (kind === 'folder' ? folder : meta[WT])
+        const record = (): Pick<WorktreeMeta, 'isUnread' | 'smartTier' | 'smartAt'> =>
+          kind === 'folder' ? folder : meta[WT]
         const server = new AgentHookServer()
         runtime.attachAgentStatusStore(server)
         const pane = (id: string, state: 'working' | 'done'): void =>
