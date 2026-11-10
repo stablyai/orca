@@ -1502,11 +1502,11 @@
       "updateRequired": "Actualiza Orca Mobile para abrir archivos PDF"
     },
     "unsavedEditsOffer": {
-      "changedSince": "Modificado en el escritorio desde tus cambios de las {{time}}",
+      "changedSince": "Modificado en el ordenador después de tus cambios de {{time}}",
       "copyMyEdits": "Copiar mis cambios",
       "discard": "Descartar",
       "restore": "Restaurar",
-      "unsavedFrom": "Cambios sin guardar de las {{time}}"
+      "unsavedFrom": "Cambios sin guardar ({{time}})"
     }
   },
   "home": {

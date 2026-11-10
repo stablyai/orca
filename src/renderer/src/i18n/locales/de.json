@@ -14165,6 +14165,10 @@
                     "title": "Repository archiviert",
                     "body": "Dieses Repository ist archiviert, daher aktualisiert Orca den Status des {{reviewLabel}}s nicht."
                   },
+                  "host_off": {
+                    "title": "WSL-Host ist ausgeschaltet",
+                    "body": "Orca aktualisiert den Status von {{reviewLabel}} über den WSL-Host dieses Projekts, der ausgeschaltet ist. Verbinde ihn erneut, um zu aktualisieren."
+                  },
                   "not_git": {
                     "title": "Kein Git-Repository",
                     "body": "Orca konnte diesen Ordner nicht als Git-Repository verwenden, um den Status des {{reviewLabel}}s zu prüfen."
@@ -18985,10 +18989,10 @@
         }
       },
       "agent-workspace-trust-decision": {
-        "prompt-title": "{{repo}} für Agenten vertrauen?",
+        "prompt-title": "Dem Repository {{repo}} für Agenten vertrauen?",
         "prompt-description": "Agenten wie Claude Code und Codex fragen „Do you trust this folder?“, bevor sie die eigenen Agenten-Einstellungen und Hooks des Projekts laden, die Befehle ausführen können. Orca kann diese Frage in jedem Worktree dieses Repositorys automatisch mit Ja beantworten.",
         "prompt-remembered": "Orca merkt sich die Antwort für dieses Repository. Sie lässt sich in den Einstellungen des Repositorys ändern.",
-        "trust-repository": "Repository vertrauen",
+        "trust-repository": "Dem Repository vertrauen",
         "let-agents-ask": "Agenten fragen lassen",
         "setting-title": "Ordnervertrauen für Agenten",
         "setting-description": "Legt fest, ob von Orca gestartete Agenten in den Worktrees dieses Repositorys die Abfrage „Do you trust this folder?“ überspringen und die Agenten-Einstellungen und Hooks des Projekts sofort laden.",
@@ -21439,7 +21443,7 @@
       "remote": "remote",
       "statusFailed": "Orca konnte die Änderungen in diesem Checkout nicht lesen. Aktualisiere die Quellcodeverwaltung, bevor du wechselst.",
       "statusUnknown": "Lies die Änderungen in diesem Checkout, bevor du wechselst.",
-      "conflict": "Schließe den {{operation}} ab oder brich ihn ab, bevor du den Branch wechselst.",
+      "conflict": "Schließe den Vorgang {{operation}} ab oder brich ihn ab, bevor du den Branch wechselst.",
       "dirty_one": "Committe oder verwirf {{count}} geänderte Datei, bevor du den Branch wechselst.",
       "dirty_other": "Committe oder verwirf {{count}} geänderte Dateien, bevor du den Branch wechselst.",
       "agentWorking": "Ein Agent arbeitet in diesem Arbeitsbereich. Wechsle den Branch, wenn er fertig ist, oder schließe seinen Tab, falls er angehalten hat.",
@@ -23587,7 +23591,7 @@
     "argumentsTerminalHint": "Gilt nur für Terminalstarts (CLI)",
     "searchAgentModels": "{{agent}}-Modelle suchen…",
     "legacyModelCount": "{{total}} Modelle",
-    "search": "Agenten und Konfigurationen suchen…",
+    "search": "Suchen, z. B. Opus 5.5…",
     "configure": "{{agent}} konfigurieren",
     "arguments": "Argumente",
     "argumentsHint": "Gilt nur für CLI-Starts.",
@@ -23619,7 +23623,7 @@
     "unsupportedDescription": "Apple unterstützt macOS {{macos}} auf diesem Mac nicht.",
     "unknownDescription": "Wir konnten nicht bestätigen, ob dieser Mac aktualisiert werden kann. Die Kompatibilitätsübersicht von Apple kann helfen.",
     "whyTitle": "Warum ändert sich das?",
-    "whyIntro": "Wir haben Electron, die Grundlage von Orca, aktualisiert. Das bringt:",
+    "whyIntro": "Wir haben Teile der Grundlage von Orca aktualisiert, darunter Electron und die lokale Spracherkennung. Das bringt:",
     "whySecurity": "Fortlaufende Sicherheitskorrekturen von Electron und Chromium.",
     "whyPerformance": "Schnelleren Start und effizientere Aufrufe nativer APIs.",
     "whySystemApis": "Unterstützung aktueller macOS-Benachrichtigungs-APIs und sicheren Schlüsselbundspeichers.",

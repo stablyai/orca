@@ -10139,6 +10139,10 @@
                     "title": "Repositório arquivado",
                     "body": "Este repositório está arquivado, então o Orca não está atualizando o status de {{reviewLabel}}."
                   },
+                  "host_off": {
+                    "title": "O host WSL está desligado",
+                    "body": "O Orca atualiza o status de {{reviewLabel}} pelo host WSL deste projeto, que está desligado. Reconecte-o para atualizar."
+                  },
                   "not_git": {
                     "title": "Não é um repositório Git",
                     "body": "O Orca não conseguiu tratar esta pasta como um repositório Git para o status de {{reviewLabel}}."
@@ -23395,7 +23399,7 @@
     "catalogInstall": "Instale {{agent}} neste host para carregar seus modelos e reabra o seletor de agentes.",
     "catalogUnresolved": "Os modelos de {{agent}} não foram carregados. Feche e reabra o seletor de agentes para tentar novamente.",
     "catalogEmpty": "{{agent}} não tem modelos disponíveis.",
-    "search": "Buscar agentes e configurações…",
+    "search": "Pesquisar, por exemplo, Opus 5.5…",
     "configure": "Configurar {{agent}}",
     "arguments": "Argumentos",
     "argumentsHint": "Aplica-se apenas às inicializações pela CLI.",
@@ -23981,7 +23985,7 @@
     "unsupportedDescription": "A Apple não oferece suporte ao macOS {{macos}} neste Mac.",
     "unknownDescription": "Não foi possível confirmar uma atualização para este Mac. O guia de compatibilidade da Apple pode ajudar.",
     "whyTitle": "Por que isso está mudando?",
-    "whyIntro": "Atualizamos o Electron, a base do Orca, para trazer:",
+    "whyIntro": "Atualizamos partes da base do Orca, como o Electron e o mecanismo de voz no dispositivo, para trazer:",
     "whySecurity": "Correções contínuas de segurança do Electron e do Chromium.",
     "whyPerformance": "Inicialização mais rápida e chamadas mais eficientes às APIs nativas.",
     "whySystemApis": "Suporte às APIs atuais de notificações do macOS e ao armazenamento seguro nas Chaves.",

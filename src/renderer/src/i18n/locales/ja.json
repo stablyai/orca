@@ -1,7 +1,7 @@
 {
   "agentLaunch": {
     "connectSsh": "このワークスペースのSSHホストに接続してから、もう一度お試しください。",
-    "sshUnavailable": "この SSH ホストではターミナルからの起動を利用できません。ワークスペースでターミナルを開き、そこで Agent を起動してください。",
+    "sshUnavailable": "この SSH ホストではターミナル起動を利用できません。ワークスペースでターミナルを開き、そこで Agent を起動してください。",
     "reconnectServer": "このワークスペースのOrcaサーバーに再接続してから、もう一度お試しください。",
     "updateServer": "このワークスペースのサーバーでOrcaを更新してから、もう一度お試しください。",
     "checkSettings": "Agent の起動設定を確認してから、もう一度お試しください。",
@@ -13503,6 +13503,10 @@
                     "title": "リポジトリがアーカイブされています",
                     "body": "このリポジトリはアーカイブされているため、Orca は {{reviewLabel}} ステータスを更新しません。"
                   },
+                  "host_off": {
+                    "title": "WSL ホストがオフです",
+                    "body": "Orca はこのプロジェクトの WSL ホストを通じて {{reviewLabel}} の状態を更新しますが、ホストはオフです。更新するには再接続してください。"
+                  },
                   "not_git": {
                     "title": "Git リポジトリではありません",
                     "body": "Orca はこのフォルダーを {{reviewLabel}} ステータス用の Git リポジトリとして扱えませんでした。"
@@ -21156,7 +21160,7 @@
       "dirty_other": "ブランチを切り替える前に、変更された {{count}} 個のファイルをコミットまたは破棄してください。",
       "agentWorking": "このワークスペースで Agent が作業中です。完了してからブランチを切り替えるか、停止している場合はそのタブを閉じてください。",
       "listFailed": "ローカルブランチを一覧表示できませんでした。ピッカーを開き直してください。",
-      "discoveryFailed": "リモートブランチが見つかりませんでした。ローカルブランチへの切り替えやブランチの作成は引き続き可能です。",
+      "discoveryFailed": "リモートブランチを検索できませんでした。ローカルブランチへの切り替えやブランチの作成は引き続き可能です。",
       "switchFailed": "ブランチを切り替えられませんでした。もう一度お試しください。",
       "switchFailedTitle": "ブランチを切り替えられませんでした",
       "switchFailedIn": "{{workspace}} でブランチを切り替えられませんでした",
@@ -22750,7 +22754,7 @@
     "catalogInstall": "このホストに{{agent}}をインストールしてモデルを読み込み、Agent 選択を開き直してください。",
     "catalogUnresolved": "{{agent}}のモデルは読み込まれていません。Agent 選択を閉じて開き直してください。",
     "catalogEmpty": "{{agent}}に利用可能なモデルはありません。",
-    "search": "Agent と設定を検索…",
+    "search": "検索、例: Opus 5.5…",
     "configure": "{{agent}} を設定",
     "arguments": "引数",
     "argumentsHint": "CLI での起動にのみ適用されます。",
@@ -23336,7 +23340,7 @@
     "unsupportedDescription": "Apple はこの Mac で macOS {{macos}} をサポートしていません。",
     "unknownDescription": "この Mac をアップグレードできるか確認できませんでした。Apple の互換性ガイドをご確認ください。",
     "whyTitle": "なぜ変更されるのですか？",
-    "whyIntro": "Orca の基盤である Electron を更新し、次の改善を提供します：",
+    "whyIntro": "Electron やデバイス上の音声エンジンなど、Orca の基盤の一部を更新し、次の改善を提供します：",
     "whySecurity": "Electron と Chromium による継続的なセキュリティ修正。",
     "whyPerformance": "起動の高速化とネイティブ API 呼び出しの効率化。",
     "whySystemApis": "最新の macOS 通知 API と安全なキーチェーンストレージのサポート。",
