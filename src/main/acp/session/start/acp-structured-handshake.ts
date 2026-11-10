@@ -72,10 +72,15 @@ export async function initializeAcpStructuredSession(
     env: launch.env,
     antigravityChatAuth: launch.antigravityChatAuth
   })
+  const sessionMeta = await spec.sessionMeta?.({
+    cwd: launch.cwd,
+    env: launch.env
+  })
   const setup = {
     authMethodId,
     authMethodUnavailableMessage: spec.authMethodUnavailableMessage,
-    resumePreference: spec.resumePreference
+    resumePreference: spec.resumePreference,
+    ...(sessionMeta ? { _meta: sessionMeta } : {})
   }
   const resume = launch.resume
   let started: Awaited<ReturnType<AcpStructuredConnection['start']>> | null = null

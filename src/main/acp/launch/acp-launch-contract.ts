@@ -72,6 +72,11 @@ export type AcpLaunchSpec = {
   /** Prefer session/resume even when loading is supported. */
   resumePreference?: 'resume'
   launchGate?: AcpLaunchGate
+  /** Metadata to include in session start requests (session/new, session/load, session/resume). */
+  sessionMeta?(input: {
+    cwd: string
+    env: Readonly<Record<string, string>>
+  }): Promise<Record<string, unknown> | undefined> | Record<string, unknown> | undefined
   /** Writes sessions it cannot delete into the user's own history, so it runs no naming tasks. */
   keepsEverySession?: true
   /** A program on the host preferred for new chats; chats whose account home it pins keep it. */

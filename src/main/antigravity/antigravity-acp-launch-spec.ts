@@ -20,6 +20,7 @@ import {
 } from './antigravity-chat-account'
 import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
 import { assertAntigravityChatAuthPublished } from './antigravity-chat-auth-publication'
+import { resolveAntigravityUserRulesMeta } from './antigravity-chat-user-rules'
 import { readAntigravitySignInLine } from './antigravity-sign-in-url'
 import {
   AGY_SKIP_PERMISSIONS_FLAG,
@@ -74,6 +75,7 @@ const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
   privateTempDirectory: true,
   // `session/load` replays the whole conversation, which the chat already holds.
   resumePreference: 'resume',
+  sessionMeta: ({ cwd, env }) => resolveAntigravityUserRulesMeta({ cwd, env }),
   launchGate: ANTIGRAVITY_LAUNCH_GATE
 } satisfies AcpLaunchSpec
 
