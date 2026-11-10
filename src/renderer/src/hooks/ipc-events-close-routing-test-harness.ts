@@ -118,10 +118,10 @@ export async function useIpcEventsForCloseRouting({
     }
   }
 
-  vi.doMock('../store', () => appStoreModule)
-  vi.doMock('@/store', () => appStoreModule)
+  vi.doMock('../store/index', () => appStoreModule)
+  vi.doMock('@/store/index', () => appStoreModule)
 
-  vi.doMock('@/lib/ui-zoom', () => ({
+  vi.doMock('@/app-shell/chrome/ui-zoom', () => ({
     applyUIZoom: vi.fn()
   }))
   vi.doMock('@/lib/workspace/activation/worktree-activation', () => ({
@@ -137,7 +137,7 @@ export async function useIpcEventsForCloseRouting({
     UI_ZOOM_MIN: -3,
     UI_ZOOM_MAX: 3
   }))
-  vi.doMock('@/lib/zoom-events', () => ({
+  vi.doMock('@/app-shell/chrome/zoom-events', () => ({
     dispatchZoomLevelChanged: vi.fn()
   }))
   vi.doMock('@/lib/workspace/persistence/workspace-session-host-persistence', () => ({

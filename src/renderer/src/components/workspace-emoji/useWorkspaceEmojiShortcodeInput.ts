@@ -5,9 +5,9 @@ import {
   getActiveWorkspaceEmojiShortcode,
   replaceCompletedWorkspaceEmojiShortcode,
   searchWorkspaceEmojiShortcodes,
-  type WorkspaceEmojiReplacement,
-  type WorkspaceEmojiSuggestion
-} from '@/lib/workspace-emoji-shortcodes'
+  type WorkspaceEmojiReplacement
+} from '@/lib/workspace/display/workspace-emoji-shortcodes'
+import type { StandardEmojiShortcodeEntry } from '../../../../shared/emoji-shortcode-catalog'
 
 type WorkspaceEmojiShortcodeInputOptions = {
   disabled?: boolean
@@ -92,7 +92,7 @@ export function useWorkspaceEmojiShortcodeInput({
   const close = useCallback(() => setCursor(null), [])
 
   const selectSuggestion = useCallback(
-    (suggestion: WorkspaceEmojiSuggestion) => {
+    (suggestion: StandardEmojiShortcodeEntry) => {
       if (!activeShortcode) {
         return
       }

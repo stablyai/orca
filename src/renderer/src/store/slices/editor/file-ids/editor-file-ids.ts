@@ -5,7 +5,7 @@ import type { DiffSource } from '../../../../../../shared/editor-tab-view-types'
 import { toSshExecutionHostId } from '../../../../../../shared/execution-host'
 import { areLocalWindowsWslPathAliases } from '../../../../../../shared/cross-platform-path'
 import { getConnectionIdForFileFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
-import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
+import { isLocalWindowsDesktopClient } from '@/app-shell/chrome/desktop-window-chrome'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 
