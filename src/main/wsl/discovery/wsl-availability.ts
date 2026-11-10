@@ -2,10 +2,12 @@ import { runProcess } from '@orca/process-host'
 import type { ProcessResult, ProcessSpec } from '@orca/process-host/process-spec'
 import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
 import { wslExeProcessSpec } from '../execution/wsl-exe-process'
+import { _resetWslInstallationForTests, readWslInstallation } from './wsl-installation'
 
 type WslAvailabilityCache =
   | { available: true }
   | { available: false; unsupported: true }
+  | { available: false; installationAbsent: true }
   | { available: false; cachedAt: number; retryable: boolean; failures: number }
 
 let wslAvailableCache: WslAvailabilityCache | null = null
@@ -21,7 +23,11 @@ const WSL_AVAILABILITY_MAX_RETRY_DELAY_MS = 30 * 60_000
 
 function isPermanentWslAvailabilityCache(cache: WslAvailabilityCache): boolean {
   // An off-Windows test seed must not suppress a Windows probe.
-  return cache.available || ('unsupported' in cache && process.platform !== 'win32')
+  // A confirmed missing install stays absent for this process: retrying wsl.exe opens the installer.
+  if (cache.available || 'installationAbsent' in cache) {
+    return true
+  }
+  return 'unsupported' in cache && process.platform !== 'win32'
 }
 
 function wslAvailabilityRetryDelayMs(cache: { retryable: boolean; failures: number }): number {
@@ -135,8 +141,16 @@ export function isWslAvailableAsync(): Promise<boolean> {
   }
 
   const startedAtGeneration = wslAvailabilityCacheGeneration
-  wslAvailabilityProbeInFlight = probeWslAvailability()
-    .then((failure) => cacheWslAvailabilityProbeResult(failure, startedAtGeneration))
+  wslAvailabilityProbeInFlight = readWslInstallation()
+    .then((installed) => {
+      if (installed === 'absent') {
+        writeWslAvailabilityCache({ available: false, installationAbsent: true })
+        return false
+      }
+      return probeWslAvailability().then((failure) =>
+        cacheWslAvailabilityProbeResult(failure, startedAtGeneration)
+      )
+    })
     .finally(() => {
       wslAvailabilityProbeInFlight = null
     })
@@ -155,7 +169,12 @@ export function getCachedWslAvailability(): boolean | null {
 // A discovered distro supersedes a stale availability failure; independent cache TTLs must not hide recovery.
 export function dropStaleWslAvailabilityFailure(): void {
   wslAvailabilityCacheGeneration += 1
-  if (wslAvailableCache && !wslAvailableCache.available && !('unsupported' in wslAvailableCache)) {
+  if (
+    wslAvailableCache &&
+    !wslAvailableCache.available &&
+    !('unsupported' in wslAvailableCache) &&
+    !('installationAbsent' in wslAvailableCache)
+  ) {
     wslAvailableCache = null
   }
 }
@@ -164,6 +183,7 @@ export function _resetWslAvailabilityCacheForTests(): void {
   wslAvailableCache = null
   wslAvailabilityProbeInFlight = null
   wslAvailabilityCacheGeneration = 0
+  _resetWslInstallationForTests()
 }
 
 export function _setWslAvailabilityCacheForTests(
