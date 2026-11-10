@@ -42,6 +42,7 @@ import type {
   ExchangePairingTicketParams,
   ExchangePairingTicketResult
 } from '../../../shared/remote-runtime/pairing/ticket-exchange-contract'
+import type { RemoteOwnedPeerRun } from '../../../shared/orchestration/remote-owned-wire'
 
 // Bind key rotation to the authenticated socket so callers can re-key only themselves.
 export type DeviceSelfRpcContext = {
@@ -91,6 +92,8 @@ export type RpcRequest = {
   params?: unknown
   orchestrationContractVersion?: number
   orchestrationRequestId?: string
+  /** A paired Orca acting as the coordinator of one of its Runs on this server. */
+  orchestrationPeerRun?: RemoteOwnedPeerRun
   compatibilityInvocationId?: string
   orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
   // Untrusted wire evidence; runtime-source-admission validates it.

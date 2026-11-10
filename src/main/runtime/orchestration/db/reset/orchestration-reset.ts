@@ -5,6 +5,7 @@ import {
   readRemovedWorkWatermark,
   summarizeRemovedWorkSince
 } from './removed-orchestration-work-read'
+import { OWE_REMOTE_RUN_CANCELS_SQL } from '../remote-owned/remote-run-links'
 
 /** Returns the removed-work watermark, read inside the transaction so the reply counts only this reset. */
 export function runResetTransaction(this: OrchestrationDb, statements: string): number {
@@ -28,6 +29,7 @@ export function runResetTransaction(this: OrchestrationDb, statements: string): 
 export function resetAll(this: OrchestrationDb): void {
   // Keep receipts so a lost reset reply cannot replay the mutation.
   this.runResetTransaction(`
+    ${OWE_REMOTE_RUN_CANCELS_SQL}
     DELETE FROM coordinator_runs;
     DELETE FROM decision_gates;
     DELETE FROM remote_questions;
@@ -60,6 +62,7 @@ export function resetAll(this: OrchestrationDb): void {
 export function resetTasks(this: OrchestrationDb): ResetRemovedWork | undefined {
   // Messages survive, and so do replies waiting for a paired Orca to pull them; close threads so orphaned questions cannot masquerade as generic replies.
   const watermark = this.runResetTransaction(`
+    ${OWE_REMOTE_RUN_CANCELS_SQL}
     DELETE FROM coordinator_runs;
     DELETE FROM decision_gates;
     DELETE FROM remote_questions;

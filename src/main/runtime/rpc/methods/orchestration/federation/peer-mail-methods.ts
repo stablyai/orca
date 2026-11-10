@@ -163,6 +163,7 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
           conversationId: item.dispatch_id,
           sequence: item.sequence,
           messageId: item.message_id,
+          kind: item.kind,
           payload: item.payload
         }))
       }
