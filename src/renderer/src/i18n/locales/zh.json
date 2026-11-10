@@ -366,7 +366,7 @@
       "customArgsTooltip": "使用自己的启动参数",
       "permissionsMixedNoMajority": "各代理使用不同的设置，选择一种模式将应用于全部",
       "permissionsMixed": "大多数代理使用的是{{mode}}，选择一种模式会重置已标记的例外，自定义参数除外",
-      "permissionsSearchDescription": "使用手动、自动或 Yolo 权限启动智能体",
+      "permissionsSearchDescription": "选择“替我批准”“完全访问”或各智能体自己的权限设置。",
       "editRowPermissions": "{{agent}} 权限：{{mode}}",
       "expandAgentSettings": "展开代理设置",
       "collapseAgentSettings": "折叠代理设置",
@@ -773,7 +773,7 @@
         "remotePairingUnreachable": "无法连接 {{endpoint}} 上的 Orca",
         "remotePairingInvalidDetails": "此访问链接包含无效的连接信息",
         "remotePairingSaveFailed": "Orca 已验证主机但无法保存，请检查浏览器存储后重试",
-        "remotePairingRepairUnavailable": "Re-pairing is not available in the browser. Pair this browser with the server again."
+        "remotePairingRepairUnavailable": "浏览器中无法重新配对。请再次将此浏览器与服务器配对。"
       },
       "web": {
         "preload": {
@@ -871,8 +871,8 @@
           "localBaseRefRefreshFailedForWorktree": "\"{{value1}}\"的本地 {{value0}} 未刷新",
           "903b51c2ed": "从 {{value0}} 创建工作区，但 Orca 无法快进本地 {{value1}}，{{value2}}",
           "localBaseRefRefreshFailedDescriptionNamed": "工作区\"{{value0}}\"从 {{value1}} 创建，但 Orca 无法快进本地 {{value2}}，{{value3}}",
-          "localBaseRefRefreshFailedDetailDirtyNamed": "{{value0}} 处的工作树(本地 {{value1}} 的检出位置)有未提交的更改，请提交、暂存或丢弃这些更改，然后手动更新本地 {{value1}}",
-          "localBaseRefRefreshFailedDetailDirty": "检出本地 {{value0}} 的工作树有未提交的更改，请提交、暂存或丢弃这些更改，然后手动更新本地 {{value0}}",
+          "localBaseRefRefreshFailedDetailDirtyNamed": "{{value0}} 处的工作树（本地 {{value1}} 的检出位置）有未提交的更改。请提交、存入 stash 或丢弃这些更改，然后手动更新本地 {{value1}}。",
+          "localBaseRefRefreshFailedDetailDirty": "检出本地 {{value0}} 的工作树有未提交的更改。请提交、存入 stash 或丢弃这些更改，然后手动更新本地 {{value0}}。",
           "localBaseRefRefreshFailedDetailNotFastForward": "本地 {{value0}} 不存在，或无法从远程基线干净快进，手动更新前请检查是否有仅存在于本地的提交",
           "localBaseRefRefreshFailedDetailError": "更新本地 {{value0}} 时 Git 返回错误，请检查仓库是否有锁定的引用或异常工作树状态，然后手动更新本地 {{value0}}",
           "localBaseRefShallowHistoryTitle": "本地 {{value0}} 未更新：浅克隆",
@@ -4602,13 +4602,13 @@
             "last_connected": "上次连接于 {{value0}}",
             "reconnect_attempt": "第 {{value0}} 次尝试",
             "access_revoked": "Access revoked",
-            "access_revoked_summary": "This server revoked access for this computer",
-            "access_revoked_explanation": "Re-pair with a new pairing link from the server to reconnect.",
+            "access_revoked_summary": "该服务器已撤销此计算机的访问权限",
+            "access_revoked_explanation": "使用服务器新生成的配对链接重新配对，以恢复连接。",
             "managed_access_revoked_explanation": "Orca 无法通过 SSH 重新与其配对，请连接以重试",
             "connect_access_revoked_explanation": "请连接以重试",
             "update_required": "Update required",
             "update_required_summary": "Orca versions are not compatible",
-            "update_required_explanation": "Update Orca on this computer or on the server, then connect again.",
+            "update_required_explanation": "更新此计算机或服务器上的 Orca，然后重新连接。",
             "repair": "Re-pair…",
             "open_settings": "打开设置…",
             "server_replaced": "不同的服务器",
@@ -6349,7 +6349,7 @@
                 "unverified": "旧版主机运行时无法确认终端已关闭，工作区已保持打开，请更新主机后重试"
               },
               "twin": {
-                "unattributed": "Orca couldn't tell which host runs this workspace's terminals, so the workspace was kept open. Reconnect its hosts and try again."
+                "unattributed": "Orca 无法判断此工作区的终端在哪台主机上运行，因此工作区保持打开状态。请重新连接其主机并重试。"
               },
               "host": {
                 "unverified": "主机无法确认终端已关闭，工作区已保持打开，请检查连接后重试"
@@ -8374,7 +8374,7 @@
           "serverRuntimeUnavailable": "Orca 不可用",
           "serverRuntimeUnavailableDescription": "SSH 传输已连接，但 Orca 运行时没有响应，主机可能仍在运行",
           "serverReconnecting": "正在重新连接",
-          "accessRevoked": "{{value0}} no longer accepts this computer. Re-pair it with a new access link.",
+          "accessRevoked": "{{value0}} 不再允许此计算机连接。请使用新的访问链接重新配对。",
           "managedAccessRevoked": "{{value0}} 不再接受这台电脑，且 Orca 无法通过 SSH 重新与其配对，请连接以重试",
           "connectAccessRevoked": "{{value0}} 不再接受这台电脑，请连接以重试",
           "repair": "Re-pair…",
@@ -9413,7 +9413,14 @@
             "c29089716e": "Kimi 使用情况",
             "96e32c1118": "MiniMax 使用情况",
             "aff6e6afdf": "IDE字体",
-            "ba1f9d39a6": "Antigravity 使用情况"
+            "ba1f9d39a6": "Antigravity 使用情况",
+            "statusBarUsageFormat": {
+              "title": "用量格式",
+              "description": "使用占位符自定义各提供商的用量在状态栏中的显示方式。",
+              "format": "格式",
+              "template": "模板",
+              "placeholder": "占位符"
+            }
           }
         },
         "auto": {
@@ -11880,7 +11887,7 @@
           "saveFailed": "无法保存主机",
           "saveFailedHelp": "主机已验证，但 Orca 无法保存，请检查名称和本地设置存储，然后重试",
           "differentServer": "This link is for a different server",
-          "differentServerHelp": "This pairing link is for a different server. Create the link on the server you are re-pairing.",
+          "differentServerHelp": "此配对链接属于另一台服务器。请在你要重新配对的服务器上创建链接。",
           "loopbackRecoveryTunnel": "在另一台电脑上打开“共享此电脑”，使用其 Tailscale 或局域网地址为“其他设备”创建链接，如果你通过 SSH 隧道访问，请打开下面的选项",
           "sshTunnelReach": "我通过 SSH 隧道访问此地址",
           "addServerWithTunnel": "通过隧道添加服务器",
@@ -13062,6 +13069,20 @@
           "codexSignInTimedOut": "Codex 登录等待超时，请重试",
           "codexSignInUnavailable": "Codex 登录暂时不可用，请一分钟后重试",
           "claudeSignInFailed": "Claude 登录失败，请重试"
+        },
+        "StatusBarUsageFormatSetting": {
+          "reset": "重置",
+          "previewLabel": "预览",
+          "previewBuiltin": "留空以使用 Orca 的内置格式。",
+          "placeholder": {
+            "provider": "提供商名称",
+            "plan": "套餐（Codex）",
+            "windows": "时间窗口的已用或剩余百分比",
+            "reset": "距重置的时间，例如 3h 15m",
+            "resetAt": "重置时刻，例如 20:50",
+            "buckets": "Gemini 模型分组",
+            "optional": "其中的占位符为空时省略该组"
+          }
         }
       },
       "right": {
@@ -13825,7 +13846,7 @@
                 },
                 "dirty": {
                   "title": "请先提交更改",
-                  "body": "请在创建 {{reviewLabel}} 之前提交或暂存更改"
+                  "body": "请在创建 {{reviewLabel}} 之前提交更改或将其存入 stash。"
                 },
                 "default_branch": {
                   "title": "在默认分支上",
@@ -16350,11 +16371,11 @@
           "stepsFailedOfTotal_other": "{{failed}} / {{count}} 个步骤失败"
         },
         "ExternalFileChangeBanner": {
-          "7c41e90d12": "This file changed on disk while you have unsaved edits. Overwrite replaces the newer disk content.",
+          "7c41e90d12": "你有未保存的修改时，磁盘上的文件发生了更改。覆盖会替换磁盘上较新的内容。",
           "3fa2b8d417": "从磁盘重新加载",
           "a95d02c644": "保留我的编辑",
           "overwrite": "Overwrite",
-          "keepHint": "Keeps your version. Your next save replaces the version on disk.",
+          "keepHint": "保留你的版本。下次保存时将替换磁盘上的版本。",
           "5c02de9b31": "已从磁盘重新加载",
           "d1e830fa22": "撤销",
           "90b2ce7d43": "比较"
@@ -16397,10 +16418,10 @@
               }
             },
             "stale": {
-              "notice": "This file changed on disk since your edits. Use the banner to compare, reload, or overwrite."
+              "notice": "自你编辑以来，磁盘上的文件发生了更改。请使用横幅进行比较、重新加载或覆盖。"
             },
             "sectionStale": {
-              "notice": "This file changed on disk since this section loaded."
+              "notice": "此部分加载后，磁盘上的文件发生了更改。"
             },
             "notUtf8": {
               "notice": "{{name}} 不是 UTF-8 文本，因此已暂停自动保存。手动保存会将其重写为 UTF-8，并替换无效的 UTF-8 字符",
@@ -18955,7 +18976,7 @@
         "capacity": "运行此聊天的计算机上的 Orca 已达到请求上限，请在那台计算机上更新 Orca，然后重试",
         "outcomeUnknown": "Orca 无法确认发生了什么，请查看聊天",
         "sendOutcomeLost": "Orca 无法确认你的消息已送达代理，请查看聊天，如有需要请重新发送",
-        "continuationSuperseded": "This chat has moved on. Check the latest messages before continuing.",
+        "continuationSuperseded": "此聊天已有后续进展。请查看最新消息后再继续。",
         "questionChanged": "此问题已被回答或已更改",
         "cancelNotSaved": "无法取消此问题或审批",
         "historyUnreadable": "Orca 无法读取此聊天的已保存历史记录",
@@ -23859,6 +23880,13 @@
         "remoteFileUnsupported": "仅本地文件可在 Orca 浏览器中打开",
         "twinFileUnsupported": "该项目存在于多个主机上，Orca 无法确定要打开哪个副本"
       }
+    }
+  },
+  "nestedImport": {
+    "error": {
+      "notInScan": "未在嵌套仓库扫描结果中找到该仓库",
+      "notGitRepository": "不是有效的 Git 仓库",
+      "importFailed": "无法导入仓库"
     }
   }
 }

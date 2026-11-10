@@ -844,7 +844,7 @@
         "scopeNotFound": "escopo de busca não encontrado nesse host",
         "agentNotSupported": "agente não compatível"
       },
-      "consent": "Ativar a busca em texto completo? O Orca cria um índice neste computador a partir das transcrições locais dos agentes, incluindo conversas completas e até 3.072 caracteres por saída de ferramenta. O conteúdo não é ocultado. Clientes pareados autenticados podem pesquisá-lo."
+      "consent": "Ativar a busca em texto completo? O Orca cria um índice neste computador a partir das transcrições locais dos agentes, incluindo conversas completas. O conteúdo não é ocultado. Clientes pareados autenticados podem pesquisá-lo."
     }
   },
   "menu": {
@@ -4649,7 +4649,14 @@
             "c29089716e": "Uso do Kimi",
             "96e32c1118": "Uso do MiniMax",
             "aff6e6afdf": "Fonte do IDE",
-            "ba1f9d39a6": "Uso do Antigravity"
+            "ba1f9d39a6": "Uso do Antigravity",
+            "statusBarUsageFormat": {
+              "title": "Formato de uso",
+              "description": "Personalize, com marcadores, como o uso de cada provedor aparece na barra de status.",
+              "format": "formato",
+              "template": "modelo",
+              "placeholder": "marcador"
+            }
           }
         },
         "repository": {
@@ -10016,6 +10023,20 @@
           "kitty_title": "Importar da Kitty",
           "kitty_description": "Revise as configurações que serão importadas do seu kitty.conf e os arquivos que ele inclui.",
           "kitty_not_found": "Nenhum kitty.conf encontrado neste computador. Escolha um arquivo de configuração para importar um de outro local."
+        },
+        "StatusBarUsageFormatSetting": {
+          "reset": "Redefinir",
+          "previewLabel": "Prévia",
+          "previewBuiltin": "Deixe em branco para usar o formato padrão do Orca.",
+          "placeholder": {
+            "provider": "nome do provedor",
+            "plan": "plano (Codex)",
+            "windows": "porcentagem usada ou restante no período",
+            "reset": "tempo até a redefinição, por exemplo, 3h 15m",
+            "resetAt": "horário da redefinição, por exemplo, 20:50",
+            "buckets": "grupos de modelos Gemini",
+            "optional": "omitido quando um marcador dentro do grupo está vazio"
+          }
         }
       },
       "right": {
@@ -21537,7 +21558,7 @@
         "settingsUnconfirmed": "O Codex não confirmou o modelo e o esforço selecionados. Esta alteração de objetivo não foi enviada. Confira o chat e tente novamente.",
         "pauseUnconfirmed": "O Codex parou de executar, mas a pausa do objetivo não foi confirmada. Confira o objetivo antes de continuar.",
         "stopUnconfirmed": "O Codex não conseguiu confirmar a parada. Confira o chat antes de continuar.",
-        "noGoal": "Codex não tem objetivo de alteração neste chat. Defina um com /goal seguido do objetivo."
+        "noGoal": "O Codex não tem nenhum objetivo para alterar neste chat. Defina um com /goal seguido do objetivo."
       },
       "slashCommandDescriptions": {
         "clearConversation": "Limpar a conversa",
@@ -22220,7 +22241,7 @@
         "linkPreviewsSearchUnfurl": "prévia de link",
         "linkPreviewsSearchHover": "cartão flutuante",
         "usageLimitContinueTitle": "Continuar chats automaticamente quando o limite de uso for redefinido",
-        "usageLimitContinueCopy": "O Orca envia “Continue de onde parou.” quando o limite for redefinido. Isso se aplica a todos os chats com um horário de redefinição conhecido.",
+        "usageLimitContinueCopy": "O Orca envia “Continue where you left off.” quando o limite de uso é redefinido. Isso se aplica a todos os chats com um horário de redefinição conhecido.",
         "usageLimitContinueSearchLimit": "limite de uso",
         "usageLimitContinueSearchReset": "reiniciar",
         "usageLimitContinueToggleLabel": "Alternar a continuação dos bate-papos quando um limite de uso for redefinido",
@@ -24807,5 +24828,12 @@
   },
   "checks": {
     "rerunUnsuccessful": "Executar novamente as verificações malsucedidas"
+  },
+  "nestedImport": {
+    "error": {
+      "notInScan": "O repositório não foi encontrado no resultado da busca por repositórios aninhados",
+      "notGitRepository": "Não é um repositório Git válido",
+      "importFailed": "Não foi possível importar o repositório"
+    }
   }
 }

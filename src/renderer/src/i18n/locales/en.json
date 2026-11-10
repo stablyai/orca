@@ -25181,5 +25181,12 @@
         "twinFileUnsupported": "This project is on more than one host, so Orca cannot tell which copy to open."
       }
     }
+  },
+  "nestedImport": {
+    "error": {
+      "notInScan": "Repository was not found in the nested repository scan result",
+      "notGitRepository": "Not a valid Git repository",
+      "importFailed": "Repository could not be imported"
+    }
   }
 }

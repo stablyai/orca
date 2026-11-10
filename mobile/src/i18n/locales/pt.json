@@ -1993,7 +1993,7 @@
       "replyToComment": "Responder ao comentário",
       "editComment": "Editar comentário",
       "deleteComment": "Excluir comentário",
-      "unresolveThread": "Tópico não resolvido",
+      "unresolveThread": "Reabrir discussão",
       "resolveThread": "Resolver thread",
       "replyPlaceholder": "Escreva uma resposta…"
     },
@@ -2301,7 +2301,7 @@
       "noThreads": "Nenhum tópico de revisão",
       "fromBots_one": "{{count}} de um bot",
       "fromBots_other": "{{count}} de bots",
-      "unresolvedThreads_one": "{{count}} tópicos não resolvidos",
+      "unresolvedThreads_one": "{{count}} tópico não resolvido",
       "unresolvedThreads_other": "{{count}} tópicos não resolvidos",
       "changesRequested": "Alterações solicitadas",
       "requestedChangesBy": "Alterações solicitadas por {{logins}}",
@@ -2645,7 +2645,7 @@
       "waitForStart": "Aguarde o agente terminar de iniciar.",
       "writeFailed": "O Orca não conseguiu repassar esta mensagem ao agente, por isso ela não foi enviada.",
       "pluginInputRequired": "{{agent}} parou porque o plugin \"{{plugin}}\" está aguardando uma entrada em um painel de terminal. Desative o plugin para sessões de chat ou execute a tarefa em um terminal {{agent}}.",
-      "unconfirmed": "Não foi reenviado"
+      "unconfirmed": "Não foi possível confirmar se isto foi enviado. Não foi reenviado."
     },
     "fileReader": {
       "copyReviewNotes": "Copiar notas de revisão",
@@ -3957,7 +3957,7 @@
       "mergeInProgress": "Merge em andamento",
       "rebaseInProgress": "Rebase em andamento",
       "cherryPickInProgress": "Cherry-pick em andamento",
-      "filesNeedDecision_one": "O arquivo {{count}} precisa de uma decisão antes de ser concluído.",
+      "filesNeedDecision_one": "{{count}} arquivo precisa de uma decisão antes de você concluir.",
       "filesNeedDecision_other": "{{count}} arquivos precisam de uma decisão antes de você terminar.",
       "conflictsResolved": "Todos os conflitos foram resolvidos. Conclua na barra abaixo.",
       "continueOnComputer": "Todo conflito é resolvido. Continue no seu computador para terminar.",
