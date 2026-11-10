@@ -1,7 +1,6 @@
 // Sender metadata for agents in shared (team-visible) Orca Cloud workspaces: several org members can
 // drive the same agent, so each message names who sent it (see shared/cloud-workspaces/sender-envelope).
 // This module tracks which runtime environments are shared cloud workspaces and who "I" am.
-import { useAppStore } from '@/store'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import {
   withSenderEnvelope,
@@ -29,13 +28,25 @@ export function noteCloudSend(environmentId: string, now: number = Date.now()): 
   void window.api.cloudWorkspaces?.noteSent(sandboxId).catch(() => undefined)
 }
 
+/** The signed-in cloud identity fields the sender line needs. */
+export type CloudSenderIdentity = {
+  userId?: string | null
+  activeOrgId?: string | null
+  displayName?: string | null
+  email?: string | null
+}
+
+// Injected at install (cloud-message-sender-install.ts) so this module never imports the store:
+// the store's own delivery path imports this module.
+let readCloudIdentity: () => CloudSenderIdentity | null | undefined = () => null
+
 /** Me, as teammates' agents should see me; null when not signed into an org. */
 function currentSender(): MessageSender | null {
-  const cloud = useAppStore.getState().orcaProfileAuthStatus?.cloud
+  const cloud = readCloudIdentity()
   if (!cloud?.userId || !cloud.activeOrgId) {
     return null
   }
-  return { userId: cloud.userId, name: cloud.displayName || cloud.email }
+  return { userId: cloud.userId, name: cloud.displayName || cloud.email || '' }
 }
 
 export function cloudSenderForEnvironment(environmentId: string): MessageSender | null {
@@ -101,7 +112,10 @@ export async function refreshCloudMessageSenders(): Promise<void> {
   cloudSandboxByEnvironment = byEnvironment
 }
 
-export function installCloudMessageSender(): () => void {
+export function installCloudMessageSender(
+  readIdentity: () => CloudSenderIdentity | null | undefined
+): () => void {
+  readCloudIdentity = readIdentity
   void refreshCloudMessageSenders().catch(() => undefined)
   // Re-reads while the window is visible (and on becoming visible); hidden windows send nothing.
   const stopInterval = installWindowVisibilityInterval({

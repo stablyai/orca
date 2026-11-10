@@ -1,6 +1,6 @@
 // Orca Cloud workspace surfaces for the window: status panel, Restart, archive/unarchive, wake
 // progress and OOM notices. Maps the renderer's workspace id to its Orca Cloud runtime record.
-import { failQueuedCloudPrompts } from './cloud-offline-service'
+import { failQueuedCloudPrompts } from './cloud-offline-seam'
 import { ipcMain, type BrowserWindow } from 'electron'
 import { HOSTED_ACCOUNT_CHANNELS, registerHostedAccountHandlers } from './hosted-account-ipc'
 import {

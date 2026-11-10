@@ -1,13 +1,27 @@
 import type { Translate } from '@/i18n/use-translate'
-import type { OrcaBillingStatusResult } from '../../../../shared/orca-billing'
+import type {
+  OrcaBillingEntitlement,
+  OrcaBillingOffers,
+  OrcaBillingStatusResult
+} from '../../../../shared/orca-billing'
 import type { VmBuildFailure } from './vm-build-failure'
 
 /** The running-sandbox caps billing enforces: per member, and per team (per seat × seats). */
 export type SandboxLimit = { perSeat: number; team: number }
 
+/** The billing fields the caps derive from (any OrcaBillingStatusResult fits). */
+export type SandboxLimitBillingStatus =
+  | {
+      status: 'ok'
+      entitlement: Pick<OrcaBillingEntitlement, 'seats'> & {
+        offers: { team: Pick<OrcaBillingOffers['team'], 'concurrentSandboxesPerSeat'> } | null
+      }
+    }
+  | { status: Exclude<OrcaBillingStatusResult['status'], 'ok'> }
+
 /** Mirrors billing's checkStart limits; null until the plan has loaded. */
 export function sandboxLimitFromBilling(
-  status: OrcaBillingStatusResult | null
+  status: SandboxLimitBillingStatus | null
 ): SandboxLimit | null {
   if (status?.status !== 'ok') {
     return null
