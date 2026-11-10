@@ -5,7 +5,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import { useAppStore } from '../../store'
-import { buildStatusMap } from '../../lib/git-path-decoration'
+import { buildStatusMap } from '../../lib/source-control/paths/git-path-decoration'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import '@/lib/workspace/ownership/connection-context'
@@ -19,7 +19,7 @@ import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities,
   type WindowsTerminalCapabilities
-} from '@/lib/windows-terminal-capabilities'
+} from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { shouldShowMobileEmulatorTabIntro } from '../emulator-pane/mobile-emulator-tab-intro-visibility'
 import {
   selectTabBarAgentProjections,

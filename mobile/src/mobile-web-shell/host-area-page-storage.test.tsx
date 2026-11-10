@@ -26,7 +26,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
       )
   }
 }))
-vi.mock('../transport/hosts/host-store', () => ({
+vi.mock('../host-catalog/host-store', () => ({
   loadHosts: async () => [{ id: 'host-a', name: 'Host', endpoint: 'ws://h', lastConnected: 1 }]
 }))
 

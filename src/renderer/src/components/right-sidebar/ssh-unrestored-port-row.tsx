@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { UnrestoredPortForward } from '../../../../shared/ssh-types'
 import { useTranslate } from '@/i18n/use-translate'

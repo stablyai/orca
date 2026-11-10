@@ -19,7 +19,10 @@ import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
 import type { Row } from '../../../../../../shared/sidebar-list/row-types'
 import type { SectionRowsArgs } from './sidebar-list-model'
 import { getLogicalRepoOrderRankById } from '../../../../../../shared/project-section-order'
-import { readHiddenVmCheckouts, subscribeHiddenVmCheckouts } from '@/lib/vm-create-hidden-checkouts'
+import {
+  readHiddenVmCheckouts,
+  subscribeHiddenVmCheckouts
+} from '@/runtime/ephemeral-vm/vm-create-hidden-checkouts'
 import { getEmptyProjectPlaceholderRepoIds } from '../../../../../../shared/sidebar-list/empty-project-placeholder-repos'
 import {
   deferHostSectionCollapse,

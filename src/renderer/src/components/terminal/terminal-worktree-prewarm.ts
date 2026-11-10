@@ -1,3 +1,4 @@
+import { invalidateTerminalParkingInputs } from '../terminal-pane/parking/terminal-parking-input-events'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 /** Each stage is its own task so a slow pointer sweep never stacks mount, style/layout and WebGL into one long frame. */
@@ -22,6 +23,9 @@ export function setTerminalPrewarmWorktrees(
     return
   }
   worktreeIdsByClient.set(client, [...worktreeIds])
+  for (const id of new Set([...current, ...worktreeIds])) {
+    invalidateTerminalParkingInputs(id)
+  }
   for (const listener of listeners) {
     listener()
   }
@@ -47,7 +51,18 @@ export function getTerminalPrewarmWorktrees(): ReadonlyMap<
 let heldWorktreeIds: ReadonlySet<string> = new Set()
 
 export function setHeldTerminalPrewarmWorktrees(worktreeIds: Iterable<string>): void {
+  const previous = heldWorktreeIds
   heldWorktreeIds = new Set(worktreeIds)
+  for (const id of previous) {
+    if (!heldWorktreeIds.has(id)) {
+      invalidateTerminalParkingInputs(id)
+    }
+  }
+  for (const id of heldWorktreeIds) {
+    if (!previous.has(id)) {
+      invalidateTerminalParkingInputs(id)
+    }
+  }
 }
 
 export function getHeldTerminalPrewarmWorktrees(): ReadonlySet<string> {

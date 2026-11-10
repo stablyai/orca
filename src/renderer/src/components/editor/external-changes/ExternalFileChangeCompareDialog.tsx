@@ -9,15 +9,15 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
-import { editorTabFileAccess } from '@/lib/local-file-access'
+import { editorTabFileAccess } from '@/lib/files/access/local-file-access'
 import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
 import {
   FILE_OWNER_UNRESOLVED_MESSAGE,
   getRuntimeTargetForFileOwner
-} from '@/lib/file-owner-runtime-target'
+} from '@/lib/files/access/file-owner-runtime-target'
 import { useAppStore } from '@/store/index'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { useTranslate } from '@/i18n/use-translate'

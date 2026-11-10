@@ -18,7 +18,7 @@ import { isTwinWorkspace } from '@/lib/workspace/ownership/resolve-owner'
 import {
   REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE,
   TWIN_FILE_BROWSER_UNSUPPORTED_MESSAGE
-} from '@/lib/workspace-file-browser-open-target'
+} from '@/lib/browser/documents/workspace-file-browser-open-target'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { findSiblingGroupId } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
@@ -29,7 +29,7 @@ import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
-import { findWorkspaceShowingDoc } from './file-preview-page-conversion'
+import { findWorkspaceShowingDoc } from './workspace-doc-tab-lookup'
 
 export type PreviewableLanguage = 'html'
 

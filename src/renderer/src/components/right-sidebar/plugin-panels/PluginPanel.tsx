@@ -24,7 +24,7 @@ import {
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 
 type PluginPanelProps = {
   tabKey: string

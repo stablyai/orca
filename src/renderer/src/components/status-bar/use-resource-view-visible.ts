@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
-import { getWindowParkVisible, subscribeWindowParkVisibility } from '@/lib/window-park-visibility'
+import {
+  getWindowParkVisible,
+  subscribeWindowParkVisibility
+} from '@/lib/window-activity/window-park-visibility'
 
 export function useResourceViewVisible(): boolean {
   const [nativeVisible, setNativeVisible] = useState(false)

@@ -9,7 +9,7 @@ import {
   pluginFontFamilyName
 } from '../../../../../shared/plugins/contributions/plugin-font-contribution'
 import { parsePluginImageUrl } from '../../../../../shared/plugins/images/plugin-image-url'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { isLivePlugin, usePluginListDerived } from '../catalog/plugin-contribution-catalog'
 
 type PluginFontFace = { url: string; weight: string; style: 'normal' | 'italic' }

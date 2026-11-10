@@ -24,10 +24,8 @@ import {
 } from '../restoring-sessions/workspace-pane-normalization'
 import { deleteRemovedTerminalScrollbackSnapshots } from './terminal-session-cleanup'
 import { preserveMissingWorkspaceSessionTerminalBindings } from './workspace-session-terminal-binding-replay'
-import {
-  getSessionSnapshotOperationsContext,
-  type SessionSnapshotOperations
-} from './session-snapshot-operations'
+import type { SessionSnapshotOperations } from './session-snapshot-operations'
+import { getSessionSnapshotOperationsContext } from './session-snapshot-operations-context'
 import { scheduleSave } from './write-scheduling'
 import { orderTerminalRowsByTabGroups } from '../../../shared/workspace-layout/terminal-row-order'
 

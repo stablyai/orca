@@ -11,10 +11,7 @@ export function getAntigravityStatusBarToggleSearchEntry(): {
 } {
   return {
     id: 'antigravity',
-    title: translate(
-      'auto.components.settings.appearance.search.antigravityUsageTitle',
-      'Antigravity Usage'
-    ),
+    title: translate('auto.components.settings.appearance.search.ba1f9d39a6', 'Antigravity usage'),
     description: translate(
       'auto.components.settings.appearance.search.antigravityUsageDescription',
       'Show Antigravity subscription usage in the status bar.'
