@@ -1125,7 +1125,6 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.pull': GitTargetedRemote,
   'git.push': GitPush,
   'git.rebaseFromBase': GitRebaseFromBase,
-  'git.rebaseOperation': WorktreeSelectorOfGitParams,
   'git.refs': GitRefs,
   'git.remoteCommitUrl': GitRemoteCommitUrl,
   'git.remoteFileUrl': GitRemoteFileUrl,

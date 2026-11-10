@@ -6,8 +6,7 @@ import {
 } from '../../session/agent-launch/mobile-existing-agent-launch'
 import {
   hostRefusesOtherRuntimeWorkspace,
-  loadMobileAgentLaunchContext,
-  type MobileAgentLaunchContext
+  loadMobileAgentLaunchContext
 } from '../../session/agent-launch/mobile-new-tab-agent-loader'
 import { resolveMobileSourceControlLaunchAgent } from './mobile-source-control-launch-agent'
 import { projectSourceControlActionLaunch } from '../../../../src/shared/source-control/ai/recipes/source-control-action-launch-preferences'
@@ -41,10 +40,6 @@ export async function launchAgentWithPrompt(args: {
   actionId: SourceControlLaunchActionId | null
   prompt: string
   launchSource: string
-  /** Runs after agent resolution so its owner-side check is fresh at launch; a refusal starts nothing. */
-  admitLaunch?: (
-    context: Pick<MobileAgentLaunchContext, 'repo'>
-  ) => Promise<{ ok: true } | { ok: false; message: string }>
 }): Promise<MobilePromptedAgentLaunch> {
   if (!supportsMobileExistingAgentLaunch(args.hostCapabilities)) {
     return {
@@ -56,14 +51,15 @@ export async function launchAgentWithPrompt(args: {
     }
   }
   let resolved
-  let context: MobileAgentLaunchContext
   try {
-    context = await loadMobileAgentLaunchContext({
-      client: args.client,
-      worktreeId: args.worktreeId,
-      hostRefusesOtherRuntime: hostRefusesOtherRuntimeWorkspace(args.hostCapabilities)
-    })
-    resolved = resolveMobileSourceControlLaunchAgent(context, args.actionId)
+    resolved = resolveMobileSourceControlLaunchAgent(
+      await loadMobileAgentLaunchContext({
+        client: args.client,
+        worktreeId: args.worktreeId,
+        hostRefusesOtherRuntime: hostRefusesOtherRuntimeWorkspace(args.hostCapabilities)
+      }),
+      args.actionId
+    )
   } catch (error) {
     const message = error instanceof Error ? error.message.trim() : ''
     return {
@@ -89,10 +85,6 @@ export async function launchAgentWithPrompt(args: {
         "This action's saved prompt is empty. Update Source Control AI settings on your computer."
       )
     }
-  }
-  const admission = args.admitLaunch ? await args.admitLaunch(context) : null
-  if (admission && !admission.ok) {
-    return { kind: 'not-started', message: admission.message }
   }
   const launched = await launchAgentInExistingWorkspace({
     client: args.client,

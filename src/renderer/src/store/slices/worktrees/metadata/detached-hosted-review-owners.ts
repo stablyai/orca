@@ -1,6 +1,6 @@
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
-  currentHostedReviewOwner,
+  branchHostedReviewOwner,
   type HostedReviewOwner
 } from '../../../../../../shared/worktree/hosted-review-branch-ownership'
 import {
@@ -24,8 +24,14 @@ export function observeDetachedHostedReviewOwner(
   nextBranch: string
 ): HostedReviewOwner | undefined {
   const key = reviewClearTombstoneKey(worktreeId, copyOwner)
-  const owner = currentHostedReviewOwner(worktree, detachedOwnersByCopy.get(key))
-  if (nextBranch === '' && owner && owner.kind !== 'unknown') {
+  const remembered = detachedOwnersByCopy.get(key)
+  const owner =
+    worktree.branch !== ''
+      ? branchHostedReviewOwner(worktree.branch, worktree)
+      : remembered?.instanceId === worktree.instanceId
+        ? remembered?.owner
+        : undefined
+  if (nextBranch === '' && owner) {
     detachedOwnersByCopy.set(key, { instanceId: worktree.instanceId, owner })
   } else {
     detachedOwnersByCopy.delete(key)

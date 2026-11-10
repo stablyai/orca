@@ -25,7 +25,6 @@ export const gitApi = {
     includeIgnored?: boolean
     bypassEffectiveUpstreamNegativeCache?: boolean
     reuseLineStats?: boolean
-    verifyRebaseOperation?: boolean
     branchLineTotalMergeBase?: string
     requestToken?: string
     wakeWslDistro?: boolean
@@ -67,8 +66,6 @@ export const gitApi = {
       wakeWslDistro?: boolean
     } & GitHistoryOptions
   ): Promise<GitHistoryResult> => ipcRenderer.invoke('git:history', args),
-  rebaseOperation: (args: { worktreePath: string; connectionId?: string }) =>
-    ipcRenderer.invoke('git:rebaseOperation', args),
   conflictOperation: (args: { worktreePath: string; connectionId?: string }) =>
     ipcRenderer.invoke('git:conflictOperation', args),
   mutationInFlight: (args: { worktreePath: string; connectionId?: string }) =>

@@ -243,7 +243,7 @@ describe('a new start beside an unconfirmed or retried chat', () => {
       onClose: vi.fn()
     })
 
-    expect(started).toBe('started')
+    expect(started).toBe(true)
     expect(onLaunched).toHaveBeenCalledOnce()
     expect(mocks.createIntent).toHaveBeenCalledTimes(2)
     expectSentTo(fresh.sessionId, 'Fix the failing check')

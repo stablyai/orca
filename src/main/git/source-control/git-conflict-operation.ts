@@ -1,20 +1,11 @@
-import { access, readFile, stat } from 'node:fs/promises'
+import { access } from 'node:fs/promises'
 import * as path from 'node:path'
-import type {
-  GitConflictOperation,
-  GitRebaseOperationResult,
-  GitRebaseOperationState
-} from '../../../shared/git/status/git-status-types'
-import {
-  isMissingGitAdminEntry,
-  readGitAdminFile
-} from '../../../shared/git/metadata/git-common-directory'
+import type { GitConflictOperation } from '../../../shared/git/status/git-status-types'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync } from '../runner'
-import { isFullGitObjectId } from '../commit-object-ref'
 import { runWithGitReadCacheInvalidation } from './git-read-cache-invalidation'
-import { resolveGitDir, resolveVerifiedGitDir } from './resolve-git-dir'
+import { resolveGitDir } from './resolve-git-dir'
 
 // HEAD detection races may yield unknown for one poll; rebase directories persist more reliably than REBASE_HEAD.
 export async function detectConflictOperation(
@@ -48,87 +39,6 @@ export async function detectConflictOperation(
     return 'revert'
   }
   return 'unknown'
-}
-
-export type RebaseOperationRead =
-  | { state: Extract<GitRebaseOperationState, 'active'>; branch?: string }
-  /** `headDetached` is read after the probes: rebase reattaches HEAD before removing its state. */
-  | { state: Extract<GitRebaseOperationState, 'none'>; headDetached: boolean }
-  | { state: Extract<GitRebaseOperationState, 'unverifiable'> }
-
-const UNVERIFIABLE: RebaseOperationRead = { state: 'unverifiable' }
-
-type PathProbe = 'present' | 'absent' | 'error'
-
-async function probePath(target: string): Promise<PathProbe> {
-  try {
-    await stat(target)
-    return 'present'
-  } catch (error) {
-    return isMissingGitAdminEntry(error) ? 'absent' : 'error'
-  }
-}
-
-async function activeRebase(stateDir: string): Promise<RebaseOperationRead> {
-  // A detached-HEAD rebase records 'detached HEAD'; unreadable names still leave the rebase active.
-  const headName = await readGitAdminFile(path.join(stateDir, 'head-name')).catch(() => null)
-  const ref = headName?.trim() ?? ''
-  return ref.startsWith('refs/heads/') && ref.length > 'refs/heads/'.length
-    ? { state: 'active', branch: ref }
-    : { state: 'active' }
-}
-
-/** Fail-closed rebase verdict for one checkout, read spawn-free on its owning host; git am is not a rebase. */
-export async function readRebaseOperation(
-  worktreePath: string,
-  options: Pick<GitRuntimeOptions, 'wslDistro'> = {}
-): Promise<RebaseOperationRead> {
-  const gitDir = await resolveVerifiedGitDir(worktreePath, options)
-  if (!gitDir) {
-    return UNVERIFIABLE
-  }
-  const rebaseMergeDir = path.join(gitDir, 'rebase-merge')
-  const rebaseApplyDir = path.join(gitDir, 'rebase-apply')
-  const [rebaseMerge, rebaseApply] = await Promise.all([
-    probePath(rebaseMergeDir),
-    probePath(rebaseApplyDir)
-  ])
-  if (rebaseMerge === 'present') {
-    return activeRebase(rebaseMergeDir)
-  }
-  if (rebaseApply === 'present') {
-    // Git's wt-status rule: rebase-apply without `applying` is a rebase, with it git am.
-    const applying = await probePath(path.join(rebaseApplyDir, 'applying'))
-    if (applying === 'error') {
-      return UNVERIFIABLE
-    }
-    if (applying === 'absent') {
-      return activeRebase(rebaseApplyDir)
-    }
-  }
-  if (rebaseMerge === 'error' || rebaseApply === 'error') {
-    return UNVERIFIABLE
-  }
-  let head: string
-  try {
-    head = (await readFile(path.join(gitDir, 'HEAD'), 'utf-8')).trim()
-  } catch {
-    return UNVERIFIABLE
-  }
-  // Only a symref or a full object id is a HEAD; empty or torn content proves nothing. Reftable's
-  // `ref: refs/heads/.invalid` stub reads as attached, which only withholds a detach proof.
-  if (/^ref:\s*refs\//.test(head)) {
-    return { state: 'none', headDetached: false }
-  }
-  return isFullGitObjectId(head) ? { state: 'none', headDetached: true } : UNVERIFIABLE
-}
-
-/** Fresh owner-side verdict, without enumerating status or sharing a prior read. */
-export async function getRebaseOperation(
-  worktreePath: string,
-  options: Pick<GitRuntimeOptions, 'wslDistro'> = {}
-): Promise<GitRebaseOperationResult> {
-  return { rebaseOperation: (await readRebaseOperation(worktreePath, options)).state }
 }
 
 /** Treat inaccessible paths as absent without throwing. */

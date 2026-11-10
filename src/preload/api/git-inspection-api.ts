@@ -6,7 +6,6 @@ import type {
 import type { GitMutationInFlight } from '../../shared/git/commands/git-mutation-in-flight'
 import type {
   GitConflictOperation,
-  GitRebaseOperationResult,
   GitStagingArea,
   GitStatusResult,
   GitUpstreamStatus
@@ -31,7 +30,6 @@ export type GitInspectionApi = {
     includeLineStats?: boolean
     bypassEffectiveUpstreamNegativeCache?: boolean
     reuseLineStats?: boolean
-    verifyRebaseOperation?: boolean
     /** Merge-base OID to measure the branch line total against; omit to skip the work. */
     branchLineTotalMergeBase?: string
     requestToken?: string
@@ -71,10 +69,6 @@ export type GitInspectionApi = {
       wakeWslDistro?: boolean
     } & GitHistoryOptions
   ) => Promise<GitHistoryResult>
-  rebaseOperation: (args: {
-    worktreePath: string
-    connectionId?: string
-  }) => Promise<GitRebaseOperationResult>
   conflictOperation: (args: {
     worktreePath: string
     connectionId?: string

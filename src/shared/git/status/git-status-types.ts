@@ -53,8 +53,6 @@ export type GitBranchLineTotal = {
   generated?: { added: number; removed: number }
 }
 
-export type GitRebaseOperationResult = { rebaseOperation: GitRebaseOperationState }
-
 export type GitStatusResult = {
   entries: GitStatusEntry[]
   conflictOperation: GitConflictOperation
@@ -75,12 +73,7 @@ export type GitStatusResult = {
   branchLineTotalUnavailable?: string
   // Git's error when status could not be read; empty entries then do not mean a clean tree.
   readError?: string
-  // Only on requests asking for it, read fresh on the owning host; absent (older host) is unverified.
-  rebaseOperation?: GitRebaseOperationState
 }
-
-/** `unverifiable` is never `none`: unreadable Git metadata cannot prove no rebase is running. */
-export type GitRebaseOperationState = 'active' | 'none' | 'unverifiable'
 
 // Without hasUpstream, ahead/behind 0/0 are placeholders, not proof of sync. Explicit upstream refreshes can fail independently of worktree status.
 export type GitUpstreamStatus = {

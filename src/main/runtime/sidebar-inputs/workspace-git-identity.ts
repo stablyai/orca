@@ -8,10 +8,7 @@ import {
 import type { HOSTED_REVIEW_LINK_KEYS } from '../../../shared/worktree/hosted-review-links'
 import {
   branchHostedReviewOwner,
-  decideHostedReviewClear,
-  detachedHostedReviewOwner,
   hostedReviewClearUpdates,
-  isUnobservedWorktreeIdentity,
   type HostedReviewClearUpdates,
   type HostedReviewOwner
 } from '../../../shared/worktree/hosted-review-branch-ownership'
@@ -31,7 +28,7 @@ type IdentityRow = Pick<
   | 'displayNameMode'
   | 'pushTarget'
 > &
-  Partial<Pick<Worktree, 'head' | 'detachedRebase' | 'linkedWorkItem'>> &
+  Partial<Pick<Worktree, 'linkedWorkItem'>> &
   Partial<Pick<Worktree, (typeof HOSTED_REVIEW_LINK_KEYS)[number]>>
 
 /** A row from a scan that reached a verdict, with the git run (scan-cache entry) it came from. */
@@ -44,7 +41,7 @@ type Observed = {
   displayName: string
   gitRun: object | null
   /** The branch owning the review context, with its links as they stood when git last confirmed it. */
-  owner: HostedReviewOwner
+  owner: HostedReviewOwner | undefined
 }
 
 export type HostedReviewLinkClear = {
@@ -88,12 +85,8 @@ export class WorkspaceGitIdentity {
       } else if (before.branch !== '' && row.displayNameMode === 'automatic') {
         this.detachedTitles.set(key, before.displayName)
       }
-      const unobserved = isUnobservedWorktreeIdentity(row)
-      const decision =
-        sameInstance && !unobserved
-          ? decideHostedReviewClear(before.owner, row.branch, row)
-          : { selection: false, push: false }
-      const updates = hostedReviewClearUpdates(decision, row)
+      const previousOwner = sameInstance ? before.owner : undefined
+      const updates = hostedReviewClearUpdates(previousOwner, row.branch, row)
       if (updates && row.hostId !== undefined) {
         clears.push({ target: hostWorktreeTarget({ id: row.id, hostId: row.hostId }), updates })
       }
@@ -102,23 +95,19 @@ export class WorkspaceGitIdentity {
         continue
       }
       const afterClear = updates ? { ...row, ...updates } : row
-      const previousOwner = sameInstance ? before.owner : undefined
-      let owner: HostedReviewOwner
-      if (unobserved) {
-        owner = previousOwner ?? { kind: 'unknown' }
-      } else if (row.branch === '') {
-        owner = detachedHostedReviewOwner(row, previousOwner)
+      let owner: HostedReviewOwner | undefined
+      if (row.branch === '') {
+        owner = previousOwner
       } else {
         const branchOwner = branchHostedReviewOwner(row.branch, afterClear)
         // A cached scan repeats an old branch; only a new git run (or a change) confirms links on it.
-        const confirmedOwner = sameInstance ? before.owner : undefined
         const repeatsCachedScan =
           sameInstance &&
           updates === null &&
-          confirmedOwner?.kind === 'branch' &&
-          confirmedOwner.branch === branchOwner.branch &&
+          previousOwner !== undefined &&
+          previousOwner.branch === branchOwner.branch &&
           (row.gitRun === null || row.gitRun === before.gitRun)
-        owner = repeatsCachedScan ? confirmedOwner : branchOwner
+        owner = repeatsCachedScan ? previousOwner : branchOwner
       }
       this.observed.set(key, {
         instanceId: row.instanceId,

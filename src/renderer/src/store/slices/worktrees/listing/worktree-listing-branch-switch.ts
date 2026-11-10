@@ -1,9 +1,6 @@
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import {
-  forgetDetachedOwner,
-  observeDetachedHostedReviewOwner
-} from '../metadata/detached-hosted-review-owners'
+import { forgetDetachedOwner } from '../metadata/detached-hosted-review-owners'
 import { worktreeCopyOwnerKey } from '../metadata/worktree-copy-review-clear'
 
 function indexUnambiguousWorktrees(
@@ -70,11 +67,6 @@ export function routeListingBranchSwitchesThroughGitIdentity(args: {
     hasBranchScopedReviewContext,
     updateWorktreeGitIdentity
   } = args
-  for (const worktree of incoming) {
-    if (worktree.branch === '') {
-      observeDetachedHostedReviewOwner(worktree.id, worktreeCopyOwnerKey(worktree), worktree, '')
-    }
-  }
   if (!requestStarted?.length || !current?.length) {
     return incoming
   }

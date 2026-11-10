@@ -8,13 +8,6 @@ vi.mock('./command-runner/git-exec-file', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
-
-// The rebase verdict itself is covered against real Git; these cases fake the Git process.
-vi.mock('./source-control/git-conflict-operation', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  readRebaseOperation: vi.fn(async () => ({ state: 'none', headDetached: false }))
-}))
-
 import { clearGitCapabilityStateForTests } from './command-runner/git-capability-state'
 import { gitFastForward, gitPush } from './remote'
 

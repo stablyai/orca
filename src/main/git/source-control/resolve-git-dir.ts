@@ -38,22 +38,3 @@ export async function resolveGitCommonDir(gitDir: string): Promise<string> {
     throw error
   }
 }
-
-/** Strict resolveGitDir: null unless the pointer resolves on this host to a directory with a readable HEAD. */
-export async function resolveVerifiedGitDir(
-  worktreePath: string,
-  options: Pick<GitRuntimeOptions, 'wslDistro'> = {}
-): Promise<string | null> {
-  const hostWorktreePath = resolveWorktreeHostPath(worktreePath, options)
-  if (!hostWorktreePath) {
-    return null
-  }
-  const gitDir = await resolveGitDir(worktreePath, options)
-  // A pruned or untranslatable pointer still resolves to a path; only HEAD proves a Git dir.
-  try {
-    await readFile(path.join(gitDir, 'HEAD'), 'utf-8')
-  } catch {
-    return null
-  }
-  return gitDir
-}

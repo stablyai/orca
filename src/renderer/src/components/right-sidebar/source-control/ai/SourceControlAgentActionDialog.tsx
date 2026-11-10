@@ -42,8 +42,6 @@ export type SourceControlAgentActionDialogProps = {
   launchSource: LaunchSource
   /** Set only for paused-operation recovery, which must not start over Orca's own running Git work. */
   recoveryContext?: RuntimeGitContext | null
-  /** A fresh owner-side check run at launch time, after agent and preference waits. */
-  admitLaunch?: () => Promise<boolean>
   savedAgentId?: TuiAgent | null
   onSaveAgentDefault?: (
     target: SourceControlAiWriteTarget,

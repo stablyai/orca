@@ -27,7 +27,6 @@ import {
 } from '../worktree-operation-options'
 import { areWorktreePathsEqual, translateWorktreePath } from './worktree-path-comparison'
 import { detectSparseCheckoutCached } from '../sparse-checkout/worktree-sparse-checkout-cache'
-import { annotateDetachedRebaseOperations } from './worktree-detached-rebase-annotation'
 
 const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
 
@@ -94,11 +93,7 @@ export async function listWorktreesStrict(
   const visibleWorktrees = options.includeCreatePreparations
     ? worktrees
     : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
-  return annotateDetachedRebaseOperations(
-    repoPath,
-    await annotateSparseCheckoutStatus(repoPath, visibleWorktrees, options),
-    options
-  )
+  return annotateSparseCheckoutStatus(repoPath, visibleWorktrees, options)
 }
 
 /** Reject scan failures to prevent pruning valid worktrees and tabs; confirmed missing/non-repos return []. */

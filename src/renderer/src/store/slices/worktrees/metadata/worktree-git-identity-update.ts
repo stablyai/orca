@@ -7,7 +7,6 @@ import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import { branchName } from '@/lib/source-control/branches/branch-name'
 import { detachedHeadAutoDerivedDisplayNames } from './detached-head-display-name'
 import {
-  decideHostedReviewClear,
   hostedReviewClearUpdates,
   type HostedReviewClearUpdates
 } from '../../../../../../shared/worktree/hosted-review-branch-ownership'
@@ -147,10 +146,7 @@ export function createUpdateWorktreeGitIdentity(
           hostId: worktree.hostId
         }
         const owner = observeDetachedHostedReviewOwner(worktreeId, copy.owner, worktree, nextBranch)
-        const clear = hostedReviewClearUpdates(
-          decideHostedReviewClear(owner, nextBranch, worktree),
-          worktree
-        )
+        const clear = hostedReviewClearUpdates(owner, nextBranch, worktree)
         if (clear) {
           shouldPersistHostedReviewClear = true
           clearedBranch = nextBranch

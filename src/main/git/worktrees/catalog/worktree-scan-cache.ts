@@ -5,7 +5,6 @@ import {
   listWorktreesStrict as listWorktreesStrictUnshared,
   listWorktreesStrictAllowingTrueEmpty as listWorktreesStrictAllowingTrueEmptyUnshared
 } from './worktree-listing'
-import { annotateDetachedRebaseOperations } from './worktree-detached-rebase-annotation'
 import type { GitWorktreeExecOptions } from '../worktree-operation-options'
 import { WORKTREE_LIST_TIMEOUT_MS } from '../worktree-operation-options'
 import { resolveGitAdmissionTier } from '../../command-runner/git-operation-executor'
@@ -90,11 +89,7 @@ async function runAnnotatedWorktreeScan(
   options: GitWorktreeExecOptions
 ): Promise<GitWorktreeInfo[]> {
   const worktrees = await listWorktreeGraph(repoPath, options)
-  return annotateDetachedRebaseOperations(
-    repoPath,
-    await annotateSparseCheckoutStatus(repoPath, worktrees, options),
-    options
-  )
+  return annotateSparseCheckoutStatus(repoPath, worktrees, options)
 }
 
 /** Git failures return []; matching callers coalesce, while AbortSignal callers stay isolated. */

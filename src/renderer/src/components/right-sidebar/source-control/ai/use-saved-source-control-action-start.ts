@@ -32,7 +32,7 @@ type SavedStartArgs = Omit<
   selection: CurrentActionSelection
   basePrompt: string
   connectionId?: string | null
-  onFallback: (reason: 'not-started' | 'refused') => void
+  onFallback: () => void
 }
 
 export function useSavedSourceControlActionStart() {
@@ -44,14 +44,14 @@ export function useSavedSourceControlActionStart() {
     }
     inFlight.current = true
     setIsStarting(true)
-    let onFallback = (_reason: 'not-started' | 'refused' = 'not-started'): void => {}
+    let onFallback = (): void => {}
     let signal: AbortSignal | undefined
     try {
       const args = typeof input === 'function' ? input() : input
       signal = args.signal
-      onFallback = (reason = 'not-started') => {
+      onFallback = () => {
         if (!signal?.aborted) {
-          args.onFallback(reason)
+          args.onFallback()
         }
       }
       signal?.throwIfAborted()
@@ -119,7 +119,7 @@ export function useSavedSourceControlActionStart() {
         onFallback()
         return
       }
-      const result = await runSourceControlAgentActionStart({
+      const launched = await runSourceControlAgentActionStart({
         ...args,
         recipe,
         agentLaunchPreferences,
@@ -133,8 +133,8 @@ export function useSavedSourceControlActionStart() {
         },
         saveTargetValue: 'none'
       })
-      if (result !== 'started') {
-        onFallback(result)
+      if (!launched) {
+        onFallback()
       }
     } catch (error) {
       if (

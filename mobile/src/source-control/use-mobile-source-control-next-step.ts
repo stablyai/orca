@@ -170,28 +170,21 @@ export function useMobileSourceControlNextStep({
 
   const resolveConflicts = useCallback(
     (scope: 'local' | 'review') => {
-      // The launch's scope follows the prompt it sends: only hosted-review work is gated.
-      void triage.launch(
-        'resolve-conflicts',
-        () => {
-          if (scope === 'review' && readyPr) {
-            return buildReviewConflictsPrompt({
-              prNumber: readyPr.pr.number,
-              baseRef: readyPr.pr.conflictSummary?.baseRef ?? readyPr.pr.baseRefName ?? null,
-              files: readyPr.pr.conflictSummary?.files ?? [],
-              worktreeId
-            })
-          }
-          return buildResolveConflictsPrompt({
-            conflictOperation: status?.conflictOperation ?? 'unknown',
-            entries: (status?.entries ?? []).filter(
-              (entry) => entry.conflictStatus === 'unresolved'
-            ),
-            worktreePath: splitWorktreeIdForFilesystem(worktreeId)?.worktreePath ?? null
+      void triage.launch('resolve-conflicts', () => {
+        if (scope === 'review' && readyPr) {
+          return buildReviewConflictsPrompt({
+            prNumber: readyPr.pr.number,
+            baseRef: readyPr.pr.conflictSummary?.baseRef ?? readyPr.pr.baseRefName ?? null,
+            files: readyPr.pr.conflictSummary?.files ?? [],
+            worktreeId
           })
-        },
-        scope === 'review' && readyPr ? 'review' : 'local'
-      )
+        }
+        return buildResolveConflictsPrompt({
+          conflictOperation: status?.conflictOperation ?? 'unknown',
+          entries: (status?.entries ?? []).filter((entry) => entry.conflictStatus === 'unresolved'),
+          worktreePath: splitWorktreeIdForFilesystem(worktreeId)?.worktreePath ?? null
+        })
+      })
     },
     [readyPr, status, triage, worktreeId]
   )

@@ -23,7 +23,6 @@ import { findGithubPrWorkspaceAttachment } from '@/lib/work-items/github/github-
 import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import { launchWorkItemDirect } from '@/lib/workspace/creation/work-item/launch-work-item-direct'
-import { confirmNoRebaseBeforeReviewAction } from '@/lib/review-action-rebase-check'
 import { readSourceControlLaunchRecipeAgentId } from '../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import { resolveRepoWorktreeLaunchPlatform } from '@/runtime/hosts/platform/execution-host-facts'
 import { reportAgentWorkspaceActivation } from '@/lib/workspace/activation/worktree-activation-outcome'
@@ -102,18 +101,18 @@ async function pickExistingWorktreeAgent(
     ensureAgentLaunchPreferences(useAppStore.getState(), workspace)
   ])
   const state = useAppStore.getState()
-  const row = state.allWorktrees().find((entry) => entry.id === worktreeId)
+  const repoId = state.allWorktrees().find((entry) => entry.id === worktreeId)?.repoId
   const agent = resolveChecksActionAgent(
     state,
     'fixChecks',
-    row?.repoId,
+    repoId,
     workspace,
     choices.detected,
     preferences,
     recipe
   )
   if (!agent) {
-    const repo = state.repos.find((entry) => entry.id === row?.repoId)
+    const repo = state.repos.find((entry) => entry.id === repoId)
     const savedAgent = readSourceControlLaunchRecipeAgentId(
       resolveSourceControlActionRecipe({ settings: state.settings, repo, actionId: 'fixChecks' })
     )
@@ -129,8 +128,7 @@ async function pickExistingWorktreeAgent(
           )
     )
   }
-  // Why after the agent waits: they can be long, and the rebase verdict must be fresh at launch.
-  return agent && (await confirmNoRebaseBeforeReviewAction(worktreeId)) ? agent : null
+  return agent
 }
 
 export function startFixChecksAgent(args: StartFixChecksAgentArgs): Promise<boolean> {

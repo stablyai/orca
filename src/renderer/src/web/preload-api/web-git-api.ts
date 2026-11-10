@@ -6,7 +6,6 @@ import { toRuntimeWorktreeSelector } from '../../runtime/rpc/targets/runtime-wor
 import { translate } from '@/i18n/i18n'
 import { callRuntimeResult } from './web-runtime-calls'
 import { mutateGitPath, mutateGitPaths, resolveGitConflict } from './web-git-mutations'
-import { webGitOperationStateApi } from './web-git-operation-state'
 import { requireGitStageWorktreeScopeReceipt } from '../../../../shared/git/paths/git-stage-worktree-scope'
 import { requireActiveEnvironment, updateEnvironmentFromResponse } from './web-runtime-session'
 import {
@@ -52,7 +51,6 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       includeLineStats,
       bypassEffectiveUpstreamNegativeCache,
       reuseLineStats,
-      verifyRebaseOperation,
       branchLineTotalMergeBase,
       requestToken
     }) => {
@@ -63,7 +61,6 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
         includeLineStats,
         bypassEffectiveUpstreamNegativeCache,
         reuseLineStats,
-        ...(verifyRebaseOperation ? { verifyRebaseOperation: true } : {}),
         ...(branchLineTotalMergeBase ? { branchLineTotalMergeBase } : {})
       }
       // Why: no token = nothing to cancel (pooled); a token routes via the subscription bridge so cancelStatus can abort.
@@ -95,7 +92,18 @@ export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     findHugeFoldersToIgnore: async () => [],
     appendGitignore: async () => false,
     ...createGitHistoryApi(),
-    ...webGitOperationStateApi,
+    mutationInFlight: async ({ worktreePath }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.mutationInFlight', {
+        worktree: toRuntimeWorktreeSelector(worktree.id)
+      })
+    },
+    conflictOperation: async ({ worktreePath }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.conflictOperation', {
+        worktree: toRuntimeWorktreeSelector(worktree.id)
+      })
+    },
     abortMerge: async ({ worktreePath }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       await callRuntimeResult('git.abortMerge', {

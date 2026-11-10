@@ -54,8 +54,6 @@ export type RunSourceControlAgentActionStartArgs = {
   launchPlatform?: NodeJS.Platform
   launchSource: LaunchSource
   recoveryContext?: RuntimeGitContext | null
-  /** A fresh owner-side check run at launch time, after agent and preference waits. */
-  admitLaunch?: () => Promise<boolean>
   signal?: AbortSignal
   onCreateAccepted?: () => void
   onStart?: (args: {
@@ -106,7 +104,6 @@ export async function runSourceControlAgentActionStart({
   launchPlatform,
   launchSource,
   recoveryContext,
-  admitLaunch,
   signal,
   onCreateAccepted,
   onStart,
@@ -115,20 +112,17 @@ export async function runSourceControlAgentActionStart({
   onLaunchAborted,
   onLaunched,
   onClose
-}: RunSourceControlAgentActionStartArgs): Promise<'started' | 'not-started' | 'refused'> {
+}: RunSourceControlAgentActionStartArgs): Promise<boolean> {
   const recipe = structuredClone(submittedRecipe)
   // Detection and delivery planning can outlive the state that opened the composer.
   if (signal?.aborted) {
-    return 'not-started'
+    return false
   }
   if (recoveryContext && !(await admitSourceControlRecovery(recoveryContext, signal))) {
-    return 'not-started'
-  }
-  if (admitLaunch && !(await admitLaunch())) {
-    return 'refused'
+    return false
   }
   if (signal?.aborted) {
-    return 'not-started'
+    return false
   }
   const state = useAppStore.getState()
   const settings = state.settings
@@ -232,7 +226,7 @@ export async function runSourceControlAgentActionStart({
       ...(launchChoice ? { launchChoice } : {})
     })
     if (result === 'cancelled') {
-      return 'not-started'
+      return false
     }
     launched = result
     if (launched) {
@@ -264,7 +258,7 @@ export async function runSourceControlAgentActionStart({
       launchSource
     })
     if (!result || 'refused' in result) {
-      return 'not-started'
+      return false
     }
     launched = true
     if (result.surface.kind === 'local-terminal' && (!placementWorkspaceId || inPlace)) {
@@ -297,7 +291,7 @@ export async function runSourceControlAgentActionStart({
         )
       )
     }
-    return 'not-started'
+    return false
   }
 
   const backgroundWorkspaceId =
@@ -309,5 +303,5 @@ export async function runSourceControlAgentActionStart({
   if (!signal?.aborted) {
     onClose()
   }
-  return 'started'
+  return true
 }

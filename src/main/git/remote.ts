@@ -12,7 +12,6 @@ import {
   withRepoRefMaintenancePaused
 } from './refs/maintenance/local-repo-ref-maintenance'
 import { validateGitPushTarget } from './push-target-validation'
-import { readRebaseOperation } from './source-control/git-conflict-operation'
 import { gitExecFileAsync } from './runner'
 import { fetchForkRemoteWithStaleRefspecRepair } from './refs/fork-remotes/fork-remote-stale-branch-refspec'
 import { runWithGitReadCacheInvalidation } from './source-control/git-read-cache-invalidation'
@@ -24,20 +23,6 @@ function explicitPushTarget(target: GitPushTarget): { remote: string; refspec: s
   return { remote: target.remoteName, refspec: `HEAD:${target.branchName}` }
 }
 
-/** A paused rebase's HEAD is partial work; pushing it to the review branch would publish it. */
-async function assertNoRebaseBeforeTargetedPush(
-  worktreePath: string,
-  options: GitRuntimeOptions
-): Promise<void> {
-  const rebase = await readRebaseOperation(worktreePath, options)
-  if (rebase.state === 'active') {
-    throw new Error('A rebase is in progress. Continue or abort it before pushing.')
-  }
-  if (rebase.state === 'unverifiable') {
-    throw new Error('Could not verify that no rebase is in progress, so the push was not started.')
-  }
-}
-
 export async function gitPush(
   worktreePath: string,
   _publish = false,
@@ -47,7 +32,6 @@ export async function gitPush(
   try {
     if (pushTarget) {
       await validateGitPushTarget(worktreePath, pushTarget, options)
-      await assertNoRebaseBeforeTargetedPush(worktreePath, options)
     }
     // Honor configured fork push targets; use origin/HEAD only for first publication.
     const target = pushTarget
