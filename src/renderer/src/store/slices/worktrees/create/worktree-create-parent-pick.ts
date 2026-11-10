@@ -2,7 +2,7 @@ import type { AppState } from '../../../types'
 
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
+import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
 import {
   type WorkspaceKey,
   folderWorkspaceKey,

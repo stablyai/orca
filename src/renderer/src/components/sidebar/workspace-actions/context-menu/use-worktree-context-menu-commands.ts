@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import type { useAppStore } from '@/store'
+import type { useAppStore } from '@/store/index'
 import type { Repo } from '../../../../../../shared/repo-types'
 import {
   getRepoExecutionHostId,
@@ -15,7 +15,7 @@ import {
 import { runSleepWorktrees } from '../sleep/sleep-worktree-flow'
 import { collectTwinHostsAlsoSlept } from '../sleep/sleep-twin-confirmation'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
-import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
+import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
 import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
 import { getWorktreeRowLocalPathOpenOwner } from '@/lib/workspace/ownership/worktree-row-open-in-owner'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'

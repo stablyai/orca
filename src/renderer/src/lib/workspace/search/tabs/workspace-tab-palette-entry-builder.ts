@@ -14,7 +14,7 @@ import { resolveOpenTabOccupantAgent } from '../../../open-tab-occupant-agent'
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
-} from '../../../worktree-default-display-name'
+} from '../../display/worktree-default-display-name'
 import {
   buildAgentMetadataTabIndex,
   collectAgentMetadataFromIndex
