@@ -25,6 +25,10 @@ describe('worker approval access', () => {
     expect(() => answer(undefined, 'allow')).toThrow(
       expect.objectContaining({ code: 'approval_requires_person' })
     )
+    // A paired device can carry a remote CLI, so it cannot allow either.
+    expect(() => answer({ kind: 'paired-device', deviceId: 'phone' }, 'allow')).toThrow(
+      expect.objectContaining({ code: 'approval_requires_person' })
+    )
     expect(answer({ kind: 'desktop' }, 'allow')).toEqual({ answeredBy: 'person', reason: null })
   })
 
@@ -36,9 +40,6 @@ describe('worker approval access', () => {
       answeredBy: 'coordinator',
       reason: 'Use a script file.'
     })
-    expect(answer({ kind: 'paired-device', deviceId: 'phone' }, 'deny')).toEqual({
-      answeredBy: 'person',
-      reason: null
-    })
+    expect(answer({ kind: 'desktop' }, 'deny')).toEqual({ answeredBy: 'person', reason: null })
   })
 })
