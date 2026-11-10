@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AppState } from '../../../types'
 import type { RuntimeEnvironmentCallRequest } from '../../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { makeWorktree } from '../worktree.test-fixture'
 import '../../../../../../shared/constants'
@@ -32,13 +31,13 @@ function seedCloudWorkspace() {
     hostId: 'runtime:cloud-env',
     runtimeOwnerEnvironmentId: 'cloud-env'
   })
-  store.setState({ worktreesByRepo: { repo1: [wt] } } as Partial<AppState>)
+  store.setState({ worktreesByRepo: { repo1: [wt] } })
   return { store, wt }
 }
 
 function calledMethods(): string[] {
   return runtimeEnvironmentCall.mock.calls.map(
-    ([call]) => (call as RuntimeEnvironmentCallRequest).method
+    ([call]: [RuntimeEnvironmentCallRequest]) => call.method
   )
 }
 
@@ -83,9 +82,9 @@ describe('Orca Cloud workspace delete', () => {
     Object.assign(mockApi.ephemeralVm, {
       preflightCloudDelete: vi.fn().mockResolvedValue({ ok: true, asleep: true })
     })
-    mockApi.ephemeralVm.listRuntimes.mockResolvedValue([
+    mockApi.ephemeralVm.listRuntimes.mockImplementation(async () => [
       { id: 'runtime-cloud', workspaceId: wt.id, cleanupStatus: 'not_started' }
-    ] as never)
+    ])
 
     const result = await store.getState().removeWorktree({ id: wt.id, executionHostId: null }, true)
 
