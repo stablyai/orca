@@ -1,4 +1,4 @@
-import { resolveEditorFontStack } from '@/lib/editor/appearance/editor-typography'
+import { resolveEditorFontStack } from '../../../../../shared/editor/editor-typography'
 
 /**
  * Markdown code follows only an explicitly chosen editor font, so an unset one keeps

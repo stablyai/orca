@@ -11,7 +11,7 @@ import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection
 import { MobileNativeChatNoticePill } from './MobileNativeChatNoticePill'
 import { scaledType } from './mobile-native-chat-message-styles'
 import { nativeChatUsageLimitStatusText } from './native-chat-usage-limit-copy'
-import { MobileNativeChatNoticeContext } from '../../mobile-native-chat-notice-context'
+import { MobileNativeChatNoticeContext } from './mobile-native-chat-notice-context'
 
 /** True from the reset on; re-renders once when it passes. */
 function useResetPassed(resetsAt: number | undefined): boolean {

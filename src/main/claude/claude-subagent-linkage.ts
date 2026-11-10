@@ -31,6 +31,7 @@ export type ClaudeSubagentLinkageDeps = {
   isForwardedParentTool?: (toolUseId: string) => boolean
   /** Map sidechain tool calls to their child owner to identify grandchildren's parents. */
   childOwnerRefOf?: (toolUseId: string) => string | null
+  parentTaskOf?: (canonicalId: string) => string | undefined
   spawnRefOf?: (canonicalId: string) => string | null
 }
 
@@ -62,14 +63,16 @@ export class ClaudeSubagentLinkage
   linkageForAgent = (agentId: string): AgentJournalProducerLinkage => {
     const spawnRef = this.deps.spawnRefOf?.(agentId) ?? null
     if (spawnRef === null) {
-      return { agentId, producerKind: 'agent' }
+      const parentAgentId = this.deps.parentTaskOf?.(agentId)
+      return { agentId, producerKind: 'agent', ...(parentAgentId ? { parentAgentId } : {}) }
     }
     const { linkage } = this.settledLinkageFor(spawnRef)
     const { parentAgentId, ...rest } = linkage
+    const parent = this.deps.parentTaskOf?.(agentId) ?? parentAgentId
     return {
       ...rest,
       agentId,
-      ...(parentAgentId === undefined || parentAgentId === agentId ? {} : { parentAgentId })
+      ...(parent === undefined || parent === agentId ? {} : { parentAgentId: parent })
     }
   }
 
@@ -125,6 +128,10 @@ export class ClaudeSubagentLinkage
     settled: boolean,
     depth: number
   ): ParentAgentVerdict {
+    const explicit = this.deps.parentTaskOf?.(this.deps.ids.canonical(parentToolUseId))
+    if (explicit !== undefined) {
+      return { kind: 'known', agentId: explicit }
+    }
     const ownerRef = this.deps.childOwnerRefOf?.(parentToolUseId) ?? null
     if (ownerRef === null || depth >= MAX_PARENT_RESOLUTION_DEPTH) {
       return { kind: 'known' }

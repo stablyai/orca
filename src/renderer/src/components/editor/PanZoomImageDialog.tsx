@@ -10,7 +10,7 @@ import { useAppStore } from '@/store'
 import {
   clipboardImageCopyErrorDescription,
   imageCopyFailedMessage
-} from '@/lib/clipboard-image-copy'
+} from '@/lib/clipboard/images/clipboard-image-copy'
 import { IMAGE_VIEWER_ZOOM_STEP } from './image-viewer-zoom'
 import { imageClipboardPngDataUrl } from './image-png-export'
 import type { PanZoomSize } from '../../../../shared/pan-zoom-view'

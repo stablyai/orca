@@ -1,5 +1,6 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import { isPeerCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { isStructuredWorkerHandle } from '../../../../../../shared/orchestration/workers/structured-worker-handle'
 import type {
   OrchestrationPartyIdentity as OrchestrationCallerIdentity,
@@ -27,8 +28,9 @@ export async function assertExplicitWorkerTerminalUsable(args: {
   const targetPane = runtime.getTerminalPaneKey(terminal)
   const callerPane = coordinator?.paneKey ?? runtime.getTerminalPaneKey(from)
   // Structured coordinators may have no showable terminal; compare their handle/pane identity, or session address for handle-less callers.
+  // A paired Orca's coordinator has no terminal here either; its address is its handle.
   const coordinatorHandle =
-    coordinator?.terminalHandle === null
+    coordinator?.terminalHandle === null || isPeerCaller(coordinator)
       ? coordinator.address
       : isStructuredWorkerHandle(from)
         ? from

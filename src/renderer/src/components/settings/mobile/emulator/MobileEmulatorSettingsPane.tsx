@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
@@ -146,8 +146,8 @@ export function MobileEmulatorSettingsPane({
       <SettingsGroup>
         <SearchableSetting
           title={t(
-            'auto.components.settings.MobileEmulatorSettingsPane.6593c9ddd3',
-            'Mobile Emulator'
+            'auto.components.settings.MobileEmulatorSettingsPane.d2d8632e0d',
+            'Mobile emulator'
           )}
           description={t(
             'auto.components.settings.MobileEmulatorSettingsPane.bc39d0f115',
@@ -158,8 +158,8 @@ export function MobileEmulatorSettingsPane({
         >
           <SettingsSwitchRow
             label={t(
-              'auto.components.settings.MobileEmulatorSettingsPane.700ddbf9b1',
-              'Enable Mobile Emulator'
+              'auto.components.settings.MobileEmulatorSettingsPane.b1e5af97e9',
+              'Enable mobile emulator'
             )}
             description={t(
               'auto.components.settings.MobileEmulatorSettingsPane.f9af91ea26',
@@ -234,8 +234,8 @@ export function MobileEmulatorSettingsPane({
       {enabled ? (
         <SearchableSetting
           title={t(
-            'auto.components.settings.MobileEmulatorSettingsPane.f2f8d97bb6',
-            'Agent Mobile Emulator Control'
+            'auto.components.settings.MobileEmulatorSettingsPane.fd698d2d47',
+            'Agent mobile emulator control'
           )}
           description={t(
             'auto.components.settings.MobileEmulatorSettingsPane.19d39113b6',

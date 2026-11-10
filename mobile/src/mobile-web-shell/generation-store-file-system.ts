@@ -1,6 +1,4 @@
-import { Directory, File, Paths } from 'expo-file-system'
-
-export const MOBILE_WEB_CACHE_DIRECTORY_NAME = 'mobile-web'
+import { Directory, File } from 'expo-file-system'
 
 export type GenerationDirectoryEntry = {
   readonly name: string
@@ -53,9 +51,9 @@ export function generationDirectoryPath(uri: string): string {
   return decodeURIComponent(uri.slice(FILE_URI_PREFIX.length))
 }
 
-export function createExpoGenerationFileSystem(): GenerationFileSystem {
+export function createExpoGenerationFileSystem(rootUri: string): GenerationFileSystem {
   return {
-    rootUri: new Directory(Paths.cache, MOBILE_WEB_CACHE_DIRECTORY_NAME).uri,
+    rootUri,
     async list(uri) {
       const directory = new Directory(uri)
       if (!directory.exists) {

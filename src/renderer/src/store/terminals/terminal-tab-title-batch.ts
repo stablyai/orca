@@ -8,6 +8,7 @@ import {
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { AppState } from '../types'
+import { replaceTabBuckets } from '../keyed-record-transitions'
 import {
   adoptTerminalTabOwnerMetadataOnlyBuckets,
   getTerminalTabOwners
@@ -138,19 +139,22 @@ function finishTitleStages(
     return { patch: null, runtimeGraphChanged: false }
   }
   const patch: TitlePatch = {}
+  const stageEntries = [...stages]
   if (tabsChanged) {
-    patch.tabsByWorktree = { ...state.tabsByWorktree }
+    patch.tabsByWorktree = replaceTabBuckets(
+      state.tabsByWorktree,
+      stageEntries.flatMap(([worktreeId, stage]) =>
+        stage.tabsChanged ? [[worktreeId, stage.tabs] as const] : []
+      )
+    )
   }
   if (unifiedTabsChanged) {
-    patch.unifiedTabsByWorktree = { ...state.unifiedTabsByWorktree }
-  }
-  for (const [worktreeId, stage] of stages) {
-    if (stage.tabsChanged) {
-      patch.tabsByWorktree![worktreeId] = stage.tabs
-    }
-    if (stage.unifiedTabsChanged) {
-      patch.unifiedTabsByWorktree![worktreeId] = stage.unifiedTabs
-    }
+    patch.unifiedTabsByWorktree = replaceTabBuckets(
+      state.unifiedTabsByWorktree,
+      stageEntries.flatMap(([worktreeId, stage]) =>
+        stage.unifiedTabsChanged ? [[worktreeId, stage.unifiedTabs] as const] : []
+      )
+    )
   }
   if (sortEpochIncrement > 0) {
     patch.sortEpoch = state.sortEpoch + sortEpochIncrement

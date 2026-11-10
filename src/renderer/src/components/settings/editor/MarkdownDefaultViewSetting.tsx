@@ -1,3 +1,4 @@
+import { GENERAL_SETTING_ANCHORS } from '../general/general-setting-anchors'
 import type React from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import {
@@ -21,8 +22,8 @@ export function MarkdownDefaultViewSetting({
   // Why: the store action keeps already-open Markdown tabs on the view they show.
   const setMarkdownDefaultViewMode = useAppStore((s) => s.setMarkdownDefaultViewMode)
   const title = t(
-    'auto.components.settings.GeneralEditorSettingsSection.markdownDefaultView',
-    'Default Markdown View'
+    'auto.components.settings.GeneralEditorSettingsSection.1dd79964bf',
+    'Default Markdown view'
   )
   const description = t(
     'auto.components.settings.GeneralEditorSettingsSection.markdownDefaultViewDesc',
@@ -31,6 +32,7 @@ export function MarkdownDefaultViewSetting({
 
   return (
     <SearchableSetting
+      id={GENERAL_SETTING_ANCHORS.markdownView}
       title={title}
       description={description}
       keywords={['markdown', 'default', 'view', 'source', 'rich', 'editor', 'raw']}
@@ -51,7 +53,7 @@ export function MarkdownDefaultViewSetting({
           },
           {
             value: 'rich',
-            label: t('auto.components.editor.EditorViewToggle.aff15f94f5', 'Rich Editor')
+            label: t('auto.components.editor.EditorViewToggle.bcaccaddf1', 'Rich editor')
           }
         ]}
       />

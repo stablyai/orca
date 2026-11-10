@@ -17,6 +17,7 @@ function performanceCoreThreads(): number {
 // Without the detector, audio is still cut at the decode bound, just not at pauses.
 type AudioSegmenter = {
   readonly heldSamples: number
+  readonly phraseOpen?: boolean
   push(samples: Float32Array): Float32Array[] | Promise<Float32Array[]>
   flush(): Float32Array[] | Promise<Float32Array[]>
 }
@@ -44,6 +45,7 @@ type StreamCoverage = {
   resampledSamples: number
   reportedSamples: number
   slowPhraseDecodes: number
+  speechPending: boolean
 }
 
 // Whisper pads every decode to a 30 s window, so each phrase costs a full decode. Where that takes longer than the
@@ -89,7 +91,12 @@ export async function createTranscribeCppRecognizer(
   if (!gguf) {
     throw new Error(`No .gguf model file in: ${init.files.join(', ')}`)
   }
+  // Device setup (Metal shader library, Vulkan drivers) and reading the weights each report done,
+  // so a cold disk or a busy machine isn't taken for a GPU that hung.
+  await transcribe.initialize()
+  post({ type: 'loading' })
   const model = await transcribe.TranscribeModel.load(join(init.modelDir, gguf))
+  post({ type: 'loading' })
   // The child runs one call at a time, so every stream can share one session.
   const session = model.createSession({ nThreads: performanceCoreThreads() })
   const { languages } = model.capabilities
@@ -121,7 +128,8 @@ export async function createTranscribeCppRecognizer(
       inputSamples: 0,
       resampledSamples: 0,
       reportedSamples: 0,
-      slowPhraseDecodes: 0
+      slowPhraseDecodes: 0,
+      speechPending: false
     }
     if (vad && vadModel) {
       stream.segmenter = new VadPauseSegmenter(
@@ -166,9 +174,15 @@ export async function createTranscribeCppRecognizer(
     })
   }
 
+  // Canceled streams, until their queued discard runs; also covers a finish that already closed its stream.
+  const canceled = new Set<string>()
+
   const decode = async (streamId: string, stream: StreamCoverage, chunks: Float32Array[]) => {
     let undecoded = chunks.reduce((total, chunk) => total + chunk.length, 0)
     for (const chunk of chunks) {
+      if (canceled.has(streamId)) {
+        return
+      }
       const startedAt = performance.now()
       const text = await transcribeChunk(chunk, stream.options)
       const decodeMs = performance.now() - startedAt
@@ -201,6 +215,14 @@ export async function createTranscribeCppRecognizer(
     }
   }
 
+  // Only pause-cut streams report it: without the detector, nothing tells speech from silence.
+  const notePendingSpeech = (streamId: string, stream: StreamCoverage, pending: boolean) => {
+    if (stream.vad && stream.speechPending !== pending) {
+      stream.speechPending = pending
+      post({ type: 'speech-pending', streamId, pending })
+    }
+  }
+
   const closeStream = (streamId: string): StreamCoverage | undefined => {
     const stream = streams.get(streamId)
     streams.delete(streamId)
@@ -219,7 +241,11 @@ export async function createTranscribeCppRecognizer(
       )
       stream.inputSamples += samples.length
       stream.resampledSamples += resampled.length
-      await decode(streamId, stream, await stream.segmenter.push(resampled))
+      const phrases = await stream.segmenter.push(resampled)
+      // A cut phrase stays pending until its text is posted.
+      notePendingSpeech(streamId, stream, phrases.length > 0 || !!stream.segmenter.phraseOpen)
+      await decode(streamId, stream, phrases)
+      notePendingSpeech(streamId, stream, !!stream.segmenter.phraseOpen)
     },
     async finish(streamId) {
       const stream = closeStream(streamId)
@@ -228,12 +254,17 @@ export async function createTranscribeCppRecognizer(
       }
       try {
         await decode(streamId, stream, await stream.segmenter.flush())
+        notePendingSpeech(streamId, stream, false)
       } finally {
         stream.vad?.dispose()
       }
     },
     discard(streamId) {
+      canceled.delete(streamId)
       closeStream(streamId)?.vad?.dispose()
+    },
+    cancel(streamId) {
+      canceled.add(streamId)
     }
   }
 }

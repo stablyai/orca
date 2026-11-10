@@ -29,7 +29,7 @@ import {
   type NativeChatPendingAttachmentChips,
   type NativeChatReservedAttachment
 } from './native-chat-session-attachment-drop'
-import { releaseBrowserAttachmentFiles } from '@/lib/browser-attachment-files'
+import { releaseBrowserAttachmentFiles } from '@/lib/files/drop/browser-attachment-files'
 import { attachNativeChatLocalAttachmentPaths } from './native-chat-local-attachment-drop'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '../../../../lib/structured-chat-tab-index'

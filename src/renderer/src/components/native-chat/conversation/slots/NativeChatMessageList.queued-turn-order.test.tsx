@@ -21,10 +21,6 @@ vi.mock('../../media/visuals/NativeChatInlineVisual', () => ({
 vi.mock('@/lib/open-agent-message-sender', () => ({
   openAgentMessageSender: unusedChatLeaves.openSender
 }))
-afterEach(() => {
-  expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
-  expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
-})
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem

@@ -37,8 +37,8 @@ import {
 } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import { readDetectedAgentsForTarget } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
-import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
-import { readChatProgram } from '@/lib/host-chat-program'
+import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
+import { readChatProgram } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { resolveAgentMenuSelection } from '@/lib/agent-session/launch/routing/agent-menu-selection'
 import { useHostAgentMenuSettings } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -51,11 +51,15 @@ export function useNewTabAgentMenuRows(
   detectionTarget: AgentDetectionTarget | undefined,
   options?: AgentMenuObservationOptions
 ): NewTabAgentMenuModel {
-  return useAgentMenuObservation(target, open, detectionTarget, options).model
+  // Only the new-tab menu opens setup chats; pickers that save an agent need one that runs.
+  return useAgentMenuObservation(target, open, detectionTarget, {
+    ...options,
+    offerAgentSetup: true
+  }).model
 }
 
 /** `wakeOnOpen`: `open` is the user opening this picker, a user act that may start its WSL distro. */
-export type AgentMenuObservationOptions = { wakeOnOpen?: boolean }
+export type AgentMenuObservationOptions = { wakeOnOpen?: boolean; offerAgentSetup?: boolean }
 
 export function useAgentMenuObservation(
   target: string | AgentMenuRowsTarget | null,
@@ -233,7 +237,9 @@ export function useAgentMenuObservation(
     chatAgents,
     chatProgram: (agent) =>
       unresolvedTarget ? 'unlearned' : readChatProgram(state, agent, input, detection.detectedIds),
-    hostChatAnswer: answerFor
+    hostChatAnswer: answerFor,
+    offerAgentSetup: options?.offerAgentSetup,
+    hostPlatform: facts.hostPlatform
   }).map((row) => ({ ...row, executionHostId }))
   const model: NewTabAgentMenuModel = loading
     ? {

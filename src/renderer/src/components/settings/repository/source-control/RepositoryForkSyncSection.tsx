@@ -162,7 +162,10 @@ export function RepositoryForkSyncSection({
 
   return (
     <SearchableSetting
-      title={t('auto.components.settings.RepositoryForkSyncSection.title', 'Keep Fork Up to Date')}
+      title={t(
+        'auto.components.settings.RepositoryForkSyncSection.1b00dcc746',
+        'Keep fork up to date'
+      )}
       description={t(
         'auto.components.settings.RepositoryForkSyncSection.description',
         'Safely fast-forward this fork from upstream.'
@@ -201,7 +204,10 @@ export function RepositoryForkSyncSection({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 space-y-1">
           <div className="text-sm font-semibold">
-            {t('auto.components.settings.RepositoryForkSyncSection.title', 'Keep Fork Up to Date')}
+            {t(
+              'auto.components.settings.RepositoryForkSyncSection.1b00dcc746',
+              'Keep fork up to date'
+            )}
           </div>
           <p className="text-xs text-muted-foreground">
             {t(
@@ -228,7 +234,7 @@ export function RepositoryForkSyncSection({
           <RefreshCw className={syncing ? 'size-3.5 animate-spin' : 'size-3.5'} />
           {syncing
             ? t('auto.components.settings.RepositoryForkSyncSection.syncing', 'Syncing')
-            : t('auto.components.settings.RepositoryForkSyncSection.syncNow', 'Sync Now')}
+            : t('auto.components.settings.RepositoryForkSyncSection.c64463b5fc', 'Sync now')}
         </Button>
       </div>
       <SettingsSegmentedControl<ForkSyncMode>
@@ -247,7 +253,7 @@ export function RepositoryForkSyncSection({
           },
           {
             value: 'safe-auto',
-            label: t('auto.components.settings.RepositoryForkSyncSection.safeAuto', 'Safe Auto'),
+            label: t('auto.components.settings.RepositoryForkSyncSection.7a1ea2076d', 'Safe auto'),
             disabled: syncing
           },
           {
