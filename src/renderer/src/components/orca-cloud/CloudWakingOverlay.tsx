@@ -232,7 +232,7 @@ export function CloudWakingOverlay({
               <p
                 className={cn(
                   'text-xs text-muted-foreground',
-                  passThrough ? 'text-right' : 'text-center'
+                  passThrough ? 'text-left' : 'text-center'
                 )}
               >
                 {hint}
