@@ -26,6 +26,7 @@ import {
   type RemoteRunLinkRow
 } from '../../db/remote-owned/remote-run-links'
 import { callRemoteOwnedServer, type RemoteOwnedRuntime } from './remote-owned-calls'
+import { REMOTE_SERVER_UNREACHABLE_CODES } from './remote-server-unreachable'
 
 const STOP_TIMEOUT_MS = 60_000
 const CANCEL_TIMEOUT_MS = 120_000
@@ -35,8 +36,7 @@ const RESEND_CONCURRENCY = 4
 
 /** Codes that mean the server never answered, or this Orca never sent: a resend keeps its key. */
 const NO_ANSWER_CODES = new Set([
-  'remote_runtime_unavailable',
-  'runtime_timeout',
+  ...REMOTE_SERVER_UNREACHABLE_CODES,
   'invalid_runtime_response',
   'peer_changed',
   'runtime_environment_changed',
