@@ -18872,6 +18872,8 @@
           "reloaded": "Reloaded"
         },
         "FolderWorkspaceSourceControl": {
+          "changeCount_one": "{{count}} change",
+          "changeCount_other": "{{count}} changes",
           "openWorktree": "Open this worktree",
           "reconnect": "Reconnect to see this worktree’s changes."
         },
