@@ -90,7 +90,6 @@ export async function startBrowserScreencast(
     isStopping,
     getSeq: framePacer.getSeq,
     queueFrame: framePacer.queueFrame,
-    holdPaint: options.holdPaint,
     applyDeviceMetricsOverride: () => {
       const generation = emulationGeneration
       const applied = deviceMetrics.apply()

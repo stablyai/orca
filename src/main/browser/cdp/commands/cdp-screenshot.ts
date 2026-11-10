@@ -284,9 +284,7 @@ export async function captureScreenshot(
     }
     const fallback = await readRemoteCliAdmittedPage(webContents.id, () =>
       withTimeout(
-        Promise.resolve().then(() =>
-          holdPaintUntilSettled(holdPaint, () => webContents.capturePage())
-        ),
+        holdPaintUntilSettled(holdPaint, () => webContents.capturePage()),
         FALLBACK_CAPTURE_TIMEOUT_MS,
         SCREENSHOT_TIMEOUT_MESSAGE
       )

@@ -4,8 +4,7 @@ import { readBrowserScreencastImageSize } from './browser-screencast-image-size'
 import { runDebuggerCommandWithTimeout } from './browser-screencast-debugger-command'
 import {
   holdPaintUntilCdpCaptureSettles,
-  holdPaintUntilSettled,
-  type CapturePaintHold
+  holdPaintUntilSettled
 } from '../debugger/guest-paint-hold'
 import type {
   BrowserScreencastOptions,
@@ -26,7 +25,6 @@ type BrowserScreencastSnapshotCaptureDeps = {
   getSeq: () => number
   queueFrame: (frame: PendingScreencastFrame) => void
   applyDeviceMetricsOverride: () => Promise<void>
-  holdPaint: CapturePaintHold
 }
 
 export type BrowserScreencastSnapshotCapture = {
@@ -40,7 +38,8 @@ export function createBrowserScreencastSnapshotCapture(
   deps: BrowserScreencastSnapshotCaptureDeps
 ): BrowserScreencastSnapshotCapture {
   const { webContents, dbg, options, isClosed, isStopping, getSeq, queueFrame } = deps
-  const { applyDeviceMetricsOverride, holdPaint } = deps
+  const { applyDeviceMetricsOverride } = deps
+  const { holdPaint } = options
 
   let snapshotGeneration = 0
   let navigationCaptureTimer: ReturnType<typeof setTimeout> | null = null
