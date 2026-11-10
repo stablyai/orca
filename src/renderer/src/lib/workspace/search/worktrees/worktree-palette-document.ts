@@ -102,18 +102,31 @@ function resolveIssueTitle(
   repo: Repo | undefined,
   sources: WorktreePaletteDocumentSources
 ): string {
-  if (worktree.linkedIssue == null || !repo || !sources.issueCache) {
+  if (worktree.linkedIssue == null) {
     return ''
   }
-  const key = getIssueCacheKey(
-    repo.path,
-    repo.id,
-    worktree.linkedIssue,
-    undefined,
-    repo.connectionId,
-    repo.executionHostId
+  const cached =
+    repo && sources.issueCache
+      ? sources.issueCache[
+          getIssueCacheKey(
+            repo.path,
+            repo.id,
+            worktree.linkedIssue,
+            undefined,
+            repo.connectionId,
+            repo.executionHostId
+          )
+        ]?.data?.title
+      : undefined
+  // The link's saved title covers an issue whose card never rendered to fill the cache.
+  return (
+    cached ||
+    getWorkspaceAttachments({ linkedItems: worktree.linkedItems }).find(
+      (item) =>
+        item.provider === 'github' && item.type === 'issue' && item.number === worktree.linkedIssue
+    )?.title ||
+    ''
   )
-  return sources.issueCache[key]?.data?.title ?? ''
 }
 
 function buildEvidence(

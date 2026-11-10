@@ -161,4 +161,22 @@ describe('worktree-palette-search', () => {
       })
     ])
   })
+
+  it("finds a linked issue by its saved title before the issue's card has rendered", () => {
+    const results = searchWorktrees(
+      [
+        makeWorktree({
+          id: 'wt-issue',
+          linkedIssue: 11704,
+          linkedItems: [
+            { provider: 'github', type: 'issue', number: 11704, title: 'verificacion de permisos' }
+          ]
+        })
+      ],
+      'verificacion',
+      repoMap
+    )
+
+    expect(results.map((result) => result.worktreeId)).toEqual(['wt-issue'])
+  })
 })
