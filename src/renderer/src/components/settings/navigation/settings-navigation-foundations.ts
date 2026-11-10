@@ -138,9 +138,15 @@ function findSettingsRowByVisibleTitle(title: string, root: HTMLElement): HTMLEl
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const element = node.parentElement
     // The pane's own h2 heading is not a setting row.
-    if (node.textContent?.trim().toLowerCase() === wanted && element && !element.closest('h2')) {
-      return element.closest<HTMLElement>('[data-settings-row]') ?? element
+    if (node.textContent?.trim().toLowerCase() !== wanted || !element || element.closest('h2')) {
+      continue
     }
+    // A group title stands for its whole card, not the heading text.
+    const groupCard = element
+      .closest('[data-settings-group-heading]')
+      ?.closest('section')
+      ?.querySelector<HTMLElement>('[data-settings-group-body]')?.parentElement
+    return groupCard ?? element.closest<HTMLElement>('[data-settings-row]') ?? element
   }
   return null
 }

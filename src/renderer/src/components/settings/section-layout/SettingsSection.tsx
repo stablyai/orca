@@ -91,7 +91,7 @@ export function SettingsSection({
         className={cn(
           grouped
             ? 'flex flex-col gap-8'
-            : 'rounded-xl border border-border/50 bg-card/50 px-7 py-6 shadow-xs [--settings-card-gutter:1.75rem]',
+            : 'rounded-xl border border-border/50 bg-card/50 px-7 py-6 shadow-xs',
           bodyClassName
         )}
       >

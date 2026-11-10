@@ -10,7 +10,8 @@ import {
 import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsDeepLinkTargetWatch } from '../navigation/settings-deep-link-target-watcher'
 import {
-  parseSettingsTitleTargetId,
+  applySettingsTargetHighlightBleed,
+  clearSettingsTargetHighlightBleed,
   SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME
 } from '../section-layout/settings-target-highlight'
 import {
@@ -151,17 +152,22 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
 
   useEffect(() => {
     const targetId = highlightedSettingsTarget?.id
-    if (!targetId || parseSettingsTitleTargetId(targetId) === null) {
+    const target = targetId ? getSettingsScrollTarget(targetId, contentScrollRef.current) : null
+    if (!target) {
       return
     }
-    const target = getSettingsScrollTarget(targetId, contentScrollRef.current)
-    // Tagged rows highlight themselves through SettingsTargetHighlightContext.
-    if (!target || target.hasAttribute('data-settings-search-title')) {
-      return
+    // Rows highlighted through SettingsTargetHighlightContext already carry the class.
+    const ownsClass = !target.classList.contains(SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME)
+    if (ownsClass) {
+      target.classList.add(SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME)
     }
-    const classNames = SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME.split(' ')
-    target.classList.add(...classNames)
-    return () => target.classList.remove(...classNames)
+    applySettingsTargetHighlightBleed(target)
+    return () => {
+      clearSettingsTargetHighlightBleed(target)
+      if (ownsClass) {
+        target.classList.remove(SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME)
+      }
+    }
   }, [highlightedSettingsTarget])
 
   const requestFontSuggestions = useCallback((): void => {

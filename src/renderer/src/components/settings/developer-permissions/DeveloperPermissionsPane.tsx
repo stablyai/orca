@@ -349,9 +349,8 @@ export function DeveloperPermissionsPane({
             <div key={permission.id} data-settings-row="">
               <div
                 data-settings-section={settingId}
-                // Already bleeds to the card edges, so no extra gutter.
                 className={cn(
-                  '-mx-5 flex items-center justify-between gap-4 px-5 py-3 [--settings-card-gutter:0px]',
+                  '-mx-5 flex items-center justify-between gap-4 px-5 py-3',
                   highlightedSettingId === settingId && SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME
                 )}
               >
