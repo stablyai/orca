@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { readFile, stat } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getAppEnvironment, hasAppEnvironment } from '../../../../../shared/app-environment'
 import {
@@ -46,8 +46,8 @@ export function hasBundledMobileWebBundle(): boolean {
   return getBundledMobileWebBundleRoot() !== undefined
 }
 
-// Linux package managers replace the install under a running app, so trust the cache only while manifest.json is unchanged.
-let cached: { identity: string; bundle: Promise<BundledMobileWebBundle | null> } | undefined
+// Linux package managers replace the install under a running app, so the cache holds only while manifest.json's bytes do.
+let cached: { root: string; raw: string; bundle: BundledMobileWebBundle | null } | undefined
 
 export async function loadBundledMobileWebBundle(): Promise<BundledMobileWebBundle | null> {
   const root = getBundledMobileWebBundleRoot()
@@ -55,20 +55,6 @@ export async function loadBundledMobileWebBundle(): Promise<BundledMobileWebBund
     return null
   }
   const manifestPath = join(root, MANIFEST_FILENAME)
-  const stats = await stat(manifestPath).catch(() => null)
-  const identity = stats
-    ? `${manifestPath}:${String(stats.ino)}:${String(stats.size)}:${String(stats.mtimeMs)}`
-    : manifestPath
-  if (cached?.identity !== identity) {
-    cached = { identity, bundle: readBundledMobileWebBundle(root, manifestPath) }
-  }
-  return cached.bundle
-}
-
-async function readBundledMobileWebBundle(
-  root: string,
-  manifestPath: string
-): Promise<BundledMobileWebBundle | null> {
   let raw: string
   try {
     raw = await readFile(manifestPath, 'utf8')
@@ -76,6 +62,17 @@ async function readBundledMobileWebBundle(
     console.warn(`[mobile-web-bundle] cannot read ${manifestPath}:`, error)
     return null
   }
+  if (cached?.root !== root || cached.raw !== raw) {
+    cached = { root, raw, bundle: parseBundledMobileWebBundle(root, manifestPath, raw) }
+  }
+  return cached.bundle
+}
+
+function parseBundledMobileWebBundle(
+  root: string,
+  manifestPath: string,
+  raw: string
+): BundledMobileWebBundle | null {
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
