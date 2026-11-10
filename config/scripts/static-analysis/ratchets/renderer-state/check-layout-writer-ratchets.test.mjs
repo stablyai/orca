@@ -36,7 +36,9 @@ describe('renderer layout writes', () => {
       "type Field = Pick<AppState, 'tabsByWorktree'>",
       "const read = state['unifiedTabsByWorktree']",
       "Object.hasOwn(requested, 'terminalLayoutsByTabId')",
-      'const { tabsByWorktree } = state'
+      'const { tabsByWorktree } = state',
+      "if (field === 'terminalLayoutsByTabId') inspect(state[field])",
+      "if ('tabsByWorktree' !== field) inspect(state[field])"
     ].join('\n')
     expect(countLayoutWrites(src, rendererRatchet, 'a.tsx')).toBe(5)
   })

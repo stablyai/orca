@@ -7,6 +7,7 @@ import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remot
 import { createTerminalTabOwnerIndex } from './terminal-tab-owner-index'
 import {
   changedKeys,
+  resyncTerminalMembershipWorkspaceIds,
   replaceMembership,
   outside,
   type Reverse
@@ -15,7 +16,7 @@ import { createTerminalMembershipRouteDomains } from './terminal-membership-rout
 
 type State = TerminalTabRetirementState
 type View = { worktreeId: string; ptyIds: string[] }
-const MEMBERSHIP_FIELDS = [
+const SEAM_MEMBERSHIP_FIELDS = [
   'ptyIdsByTabId',
   'terminalLayoutsByTabId',
   'lastKnownRelayPtyIdByTabId',
@@ -145,7 +146,7 @@ export function createTerminalPtyMembershipOwner() {
       if (previous?.tabsByWorktree !== state.tabsByWorktree) {
         const changes = previous
           ? changedKeys(previous.tabsByWorktree, state.tabsByWorktree)
-          : { keys: Object.keys(state.tabsByWorktree), reordered: true }
+          : { keys: resyncTerminalMembershipWorkspaceIds(state.tabsByWorktree), reordered: true }
         const keys = [...changes.keys]
         let sameTopology = !changes.reordered
         for (const id of keys) {
@@ -182,7 +183,10 @@ export function createTerminalPtyMembershipOwner() {
       if (previous?.unifiedTabsByWorktree !== state.unifiedTabsByWorktree) {
         const changes = previous
           ? changedKeys(previous.unifiedTabsByWorktree, state.unifiedTabsByWorktree)
-          : { keys: Object.keys(state.unifiedTabsByWorktree), reordered: true }
+          : {
+              keys: resyncTerminalMembershipWorkspaceIds(state.unifiedTabsByWorktree),
+              reordered: true
+            }
         const keys = [...changes.keys]
         let sameTopology = !changes.reordered
         for (const id of keys) {
@@ -224,7 +228,7 @@ export function createTerminalPtyMembershipOwner() {
         unified.getOwners(state.unifiedTabsByWorktree)
       }
       if (previous) {
-        for (const field of MEMBERSHIP_FIELDS) {
+        for (const field of SEAM_MEMBERSHIP_FIELDS) {
           if (previous[field] !== state[field]) {
             for (const id of changedKeys(previous[field], state[field]).keys) {
               if (

@@ -1,4 +1,9 @@
 import {
+  selectWorktreesByRepo,
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import {
   createWorktreeCatalogQueryOwner,
   findIndexedWorktrees,
   findIndexedDetectedWorktrees
@@ -84,8 +89,8 @@ export function createTerminalMembershipRouteDomains() {
 
   function refresh(state: State, workspace: string): TerminalPtyOwner {
     forget(workspace)
-    catalogs.known.ensure(state.worktreesByRepo)
-    catalogs.detected.ensure(state.detectedWorktreesByRepo)
+    catalogs.known.ensure(selectWorktreesByRepo(state))
+    catalogs.detected.ensure(selectDetectedWorktreesByRepo(state))
     const owner = resolveTerminalPtyOwner(state, workspace, 'spawn')
     owners.set(workspace, owner)
     const folder = parseWorkspaceKey(workspace)
@@ -107,8 +112,8 @@ export function createTerminalMembershipRouteDomains() {
     } else if (workspace !== FLOATING_TERMINAL_WORKTREE_ID) {
       const repos = new Set([getRepoIdFromWorktreeId(workspace)])
       for (const row of [
-        ...findIndexedWorktrees(state.worktreesByRepo, workspace),
-        ...findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, workspace)
+        ...findIndexedWorktrees(selectWorktreesByRepo(state), workspace),
+        ...findIndexedDetectedWorktrees(selectDetectedWorktreesByRepo(state), workspace)
       ]) {
         repos.add(row.repoId)
       }
@@ -143,14 +148,17 @@ export function createTerminalMembershipRouteDomains() {
     },
     accept(previous: State | null, state: State): ReadonlySet<string> {
       const affected = new Set<string>()
-      for (const id of catalogs.known.accept(state.worktreesByRepo, previous?.worktreesByRepo)) {
+      for (const id of catalogs.known.accept(
+        selectWorktreesByRepo(state),
+        previous ? selectWorktreesByRepo(previous) : undefined
+      )) {
         if (owners.has(id)) {
           affected.add(id)
         }
       }
       for (const id of catalogs.detected.accept(
-        state.detectedWorktreesByRepo,
-        previous?.detectedWorktreesByRepo
+        selectDetectedWorktreesByRepo(state),
+        previous ? selectDetectedWorktreesByRepo(previous) : undefined
       )) {
         if (owners.has(id)) {
           affected.add(id)
@@ -182,13 +190,12 @@ export function createTerminalMembershipRouteDomains() {
           addAll(folders.keys())
         }
       }
-      if (previous.folderWorkspaces !== state.folderWorkspaces) {
-        const ids = changedIds(previous.folderWorkspaces, state.folderWorkspaces, (r) => [
-          r.projectGroupId,
-          r.connectionId,
-          r.executionHostId,
-          r.folderPath
-        ])
+      if (selectFolderWorkspaces(previous) !== selectFolderWorkspaces(state)) {
+        const ids = changedIds(
+          selectFolderWorkspaces(previous),
+          selectFolderWorkspaces(state),
+          (r) => [r.projectGroupId, r.connectionId, r.executionHostId, r.folderPath]
+        )
         for (const id of ids) {
           addAll(workspacesByFolder.get(id) ?? [])
         }

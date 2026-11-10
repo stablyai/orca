@@ -58,3 +58,9 @@ export function outside(index: Reverse, key: string, tabId: string): boolean {
   const tabs = index.get(key)
   return tabs !== undefined && (tabs.size > 1 || !tabs.has(tabId))
 }
+
+export function resyncTerminalMembershipWorkspaceIds(
+  source: Readonly<Record<string, unknown>>
+): string[] {
+  return Object.keys(source)
+}

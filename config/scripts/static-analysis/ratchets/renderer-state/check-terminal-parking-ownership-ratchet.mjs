@@ -59,7 +59,7 @@ const OWNER_ROOTS = [
     inputs: []
   },
   {
-    rel: 'store/terminals/terminal-tab-owner-index.ts',
+    rel: 'store/terminals/terminal-tab-owner-index-state.ts',
     name: 'update',
     inputs: ['tabsByWorktree']
   },
@@ -76,12 +76,14 @@ const OWNER_ROOTS = [
   }
 ]
 const KEY_DIFFS = new Set([
+  `${RENDERER}store/terminals/terminal-pty-membership-deltas.ts#changedKeys`,
   `${RENDERER}store/terminals/terminal-parking-input-owner.ts#diffUnknownParkingRecordKeys`,
-  `${RENDERER}store/terminals/terminal-tab-owner-index.ts#diffUnknownTabOwnerKeys`,
+  `${RENDERER}store/terminals/terminal-tab-owner-index-state.ts#diffUnknownTabOwnerKeys`,
   `${RENDERER}store/terminals/sleeping-agent-record-index.ts#diffUnknownSleepingRecordKeys`,
   `${RENDERER}lib/workspace/tabs/worktree-tab-bucket-projection.ts#diffUnknownProjectionKeys`
 ])
 const COLD_RESYNCS = new Set([
+  `${RENDERER}store/terminals/terminal-pty-membership-deltas.ts#resyncTerminalMembershipWorkspaceIds`,
   `${RENDERER}store/terminals/terminal-parking-input-owner.ts#resyncTerminalParkingWorkspaceIds`,
   `${RENDERER}store/terminals/sleeping-agent-record-index.ts#resyncSleepingAgentRecordKeys`
 ])

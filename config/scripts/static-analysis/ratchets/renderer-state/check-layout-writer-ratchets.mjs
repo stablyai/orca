@@ -411,7 +411,16 @@ export function countLayoutWrites(sourceText, ratchet, fileName = 'file.tsx') {
         node.parent.expression.name.text === 'hasOwn'
       ) &&
       !ts.isLiteralTypeNode(node.parent) &&
-      !isSeamFieldNameConstant(node)
+      !isSeamFieldNameConstant(node) &&
+      !(
+        ts.isBinaryExpression(node.parent) &&
+        [
+          ts.SyntaxKind.EqualsEqualsToken,
+          ts.SyntaxKind.EqualsEqualsEqualsToken,
+          ts.SyntaxKind.ExclamationEqualsToken,
+          ts.SyntaxKind.ExclamationEqualsEqualsToken
+        ].includes(node.parent.operatorToken.kind)
+      )
     ) {
       count += 1
     }

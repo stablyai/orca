@@ -1,3 +1,4 @@
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { recordDraft } from '@/store/keyed-record-transitions'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
@@ -29,8 +30,8 @@ export function applyRemoveWorktreeSuccessState(
     const worktreeIds = [worktreeId]
     const omitByWorktree = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, worktreeIds)
     const omitByTabId = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, tabIds)
-    const worktreesDraft = recordDraft(s.worktreesByRepo)
-    for (const [repoId, rows] of Object.entries(s.worktreesByRepo)) {
+    const worktreesDraft = recordDraft(selectWorktreesByRepo(s))
+    for (const [repoId, rows] of Object.entries(selectWorktreesByRepo(s))) {
       const after = rows.filter((w) => w.id !== worktreeId)
       if (after.length !== rows.length) {
         worktreesDraft.set(repoId, after)

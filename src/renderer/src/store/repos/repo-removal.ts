@@ -1,3 +1,7 @@
+import {
+  selectWorktreesByRepo,
+  selectDetectedWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { getKnownRepoWorktreeIds } from './repo-removal-worktree-queries'
 export { getKnownRepoWorktreeIds, countOpenRepoTerminalTabs } from './repo-removal-worktree-queries'
 import { recordDraft } from '@/store/keyed-record-transitions'
@@ -153,7 +157,7 @@ export function createRepoRemovalActions(
           ownerHostId === LOCAL_EXECUTION_HOST_ID
             ? [
                 projectId,
-                ...(get().worktreesByRepo[projectId] ?? [])
+                ...(selectWorktreesByRepo(get())[projectId] ?? [])
                   .filter((worktree) => worktreeBelongsToHost(worktree, ownerHostId))
                   .flatMap((worktree) => (worktree.projectId ? [worktree.projectId] : []))
               ]
@@ -185,19 +189,19 @@ export function createRepoRemovalActions(
         get().clearLocalDetectedAgentContextsForProjects(localAgentContextProjectIds)
 
         set((s) => {
-          const worktreesDraft = recordDraft(s.worktreesByRepo)
-          const remainingWorktrees = (s.worktreesByRepo[projectId] ?? []).filter(
+          const worktreesDraft = recordDraft(selectWorktreesByRepo(s))
+          const remainingWorktrees = (selectWorktreesByRepo(s)[projectId] ?? []).filter(
             (worktree) => !worktreeBelongsToHost(worktree, ownerHostId)
           )
           if (remainingWorktrees.length > 0) {
-            if (remainingWorktrees.length !== s.worktreesByRepo[projectId]?.length) {
+            if (remainingWorktrees.length !== selectWorktreesByRepo(s)[projectId]?.length) {
               worktreesDraft.set(projectId, remainingWorktrees)
             }
           } else {
             worktreesDraft.delete(projectId)
           }
-          const detectedDraft = recordDraft(s.detectedWorktreesByRepo)
-          const detected = s.detectedWorktreesByRepo[projectId]
+          const detectedDraft = recordDraft(selectDetectedWorktreesByRepo(s))
+          const detected = selectDetectedWorktreesByRepo(s)[projectId]
           if (detected) {
             const remainingDetected = detected.worktrees.filter(
               (worktree) => !worktreeBelongsToHost(worktree, ownerHostId)
