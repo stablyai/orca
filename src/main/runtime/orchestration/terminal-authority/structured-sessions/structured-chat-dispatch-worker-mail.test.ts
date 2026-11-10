@@ -10,7 +10,6 @@ import {
   WAIT,
   call,
   clearChat,
-  codex,
   connectionFor,
   coordinatorRunAndTask,
   db,
@@ -58,11 +57,9 @@ async function heldDispatchMail(): Promise<string> {
 
 /** The chat's next turn, the person's; resolves to the session's provider once its edges ran. */
 async function nextTurn(sessionId: string): Promise<{ turns: { text: string }[] }> {
-  const before = codex.connections.length
   expect(await sendUserMessage(sessionId, 'again')).toMatchObject({ ok: true })
-  await vi.waitFor(() => expect(codex.connections.length).toBe(before + 1), WAIT)
+  await vi.waitFor(() => expect(connectionFor(sessionId).turns).toHaveLength(1), WAIT)
   const revived = connectionFor(sessionId)
-  await vi.waitFor(() => expect(revived.turns).toHaveLength(1), WAIT)
   await settleTurn(sessionId, 0)
   await idleEdges(sessionId)
   return revived

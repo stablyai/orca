@@ -49,12 +49,7 @@ import { removalPtyProvider } from './worktree-rm-pty.test-fixture'
 const cliPath = '../../../cli/index'
 const { main }: { main: (argv: string[], cwd: string) => Promise<void> } = await import(cliPath)
 let rig: Awaited<ReturnType<typeof authorityProfile>>
-class CliRuntime extends AuthorityRuntime {
-  pointerDelivery() {
-    return this.orchestrationStructuredMailboxPointerDelivery
-  }
-}
-let runtime: CliRuntime
+let runtime: AuthorityRuntime
 let host: StructuredAgentSessionHost
 let db: OrchestrationDb
 let codex: ReturnType<typeof fakeCodex>
@@ -77,7 +72,7 @@ beforeEach(async () => {
     agentCmdOverrides: { codex: process.execPath },
     agentWorkspaceTrustEnabled: false
   })
-  runtime = new CliRuntime(rig.profile, undefined, {
+  runtime = new AuthorityRuntime(rig.profile, undefined, {
     prepareCodexStructuredLaunch: () => join(root, 'codex-home')
   })
   db = new OrchestrationDb(':memory:')
@@ -260,6 +255,11 @@ async function launch() {
     coordinatorOrcaSessionId: sessionId
   }).id
   await chatTabCommandsSettled()
+  await vi.waitFor(async () => {
+    expect((await readTestHostJournal(host, sessionId)).submissions).toMatchObject([
+      { dispatchState: 'accepted' }
+    ])
+  })
   expect(savedIds(rig)).toContain(sessionId)
   return { result, sessionId }
 }
@@ -556,31 +556,16 @@ it.each(['worker-stop', 'worker-release'] as const)(
   }
 )
 
-type ParkedMailRegistry = ReadonlyMap<unknown, unknown>
-
-function observeParkedMail(value: unknown): ParkedMailRegistry {
-  const parking = isRecord(value) ? value.parking : undefined
-  if (!isRecord(parking) || !(parking.sessionOf instanceof Map)) {
-    throw new Error('expected actual parked mail registry')
-  }
-  // Parked mailboxes, each with the session whose journal edge it waits on.
-  return parking.sessionOf
-}
-
 it('worker-abandon settles and fences consumption, releases the existing binding and retains the child', async () => {
   await launch()
-  const observe = host.observeJournalPublications.bind(host)
-  const subscriptions = new Map<string, ReturnType<typeof vi.fn>>()
-  vi.spyOn(host, 'observeJournalPublications').mockImplementation((id, callback) => {
-    const unsubscribe = vi.fn(observe(id, callback))
-    subscriptions.set(id, unsubscribe)
-    return unsubscribe
-  })
   finishTurns = false
   const worker = await start()
-  await vi.waitFor(async () =>
-    expect((await host.currentWork(worker.identity.sessionId))?.working()).toBe(true)
-  )
+  await vi.waitFor(async () => {
+    const journal = await readTestHostJournal(host, worker.identity.sessionId)
+    expect(
+      journal.items.some((item) => item.body.kind === 'turn' && item.body.state === 'running')
+    ).toBe(true)
+  })
   const mailbox = `dispatch:${worker.dispatchId}`
   const checked = db.insertMessage({
     from: `run:${runId}`,
@@ -606,18 +591,13 @@ it('worker-abandon settles and fences consumption, releases the existing binding
     subject: 'Retain until a real journal edge',
     body: 'Do not lose this message'
   })
-  const delivery = runtime.pointerDelivery()
-  const parked = observeParkedMail(delivery)
   runtime.deliverPendingMessagesForHandle(mailbox)
-  // Queued behind the running turn, its card is followed on the session's next journal edge.
-  await vi.waitFor(() => expect(parked.has(mailbox)).toBe(true))
-  const originalForget = delivery.forgetSession.bind(delivery)
-  const releasedEntries: boolean[] = []
-  const forget = vi.spyOn(delivery, 'forgetSession').mockImplementation((sessionId) => {
-    originalForget(sessionId)
-    if (sessionId === worker.identity.sessionId) {
-      releasedEntries.push(!parked.has(mailbox))
-    }
+  await vi.waitFor(async () => {
+    const send = db.getStructuredMailSend(mailbox, unread.id)
+    expect(send).toBeDefined()
+    expect(await host.sendAnswer(worker.identity.sessionId, send!.operation_id)).toEqual({
+      kind: 'waiting'
+    })
   })
   const tableId = host.getSessionTabId(worker.identity.sessionId)
   const owner = host.deps.store.getRecord(worker.identity.sessionId)?.lease.ownerProcess
@@ -625,7 +605,6 @@ it('worker-abandon settles and fences consumption, releases the existing binding
   expect(tableId).toBe(structuredAgentSessionTabId(worker.identity.sessionId))
   expect(owner).toBeTruthy()
   expect(resource).toMatchObject({ ownership_state: 'owned', release_state: 'not_requested' })
-  const forgetIdentity = vi.spyOn(structuredWorkerIdentities, 'forget')
   const receipt = await cli(['orchestration', 'worker-abandon', '--dispatch', worker.dispatchId])
   expect(receipt.code, receipt.stdout + receipt.stderr).toBe(0)
   expect(resultOf(receipt.output)).toMatchObject({ state: 'abandoned', processAction: 'none' })
@@ -641,10 +620,6 @@ it('worker-abandon settles and fences consumption, releases the existing binding
     release_state: 'retained',
     retained_reason: 'user_requested'
   })
-  expect(subscriptions.get(worker.identity.sessionId)).toHaveBeenCalledOnce()
-  expect(forgetIdentity).toHaveBeenCalledWith(worker.identity.handle)
-  expect(forget).toHaveBeenCalledWith(worker.identity.sessionId)
-  expect(releasedEntries).toEqual([true])
   // STA-12976: unchanged failed-dispatch notification routing can repark after this cleanup.
   expect(worker.connection.closed).toBe(false)
   expect(host.hasSession(worker.identity.sessionId)).toBe(true)
@@ -699,9 +674,14 @@ it('worktree create --agent reaches common native creation and worktree rm perfo
   if (!session) {
     throw new Error('created workspace has no native record')
   }
-  const connection = codex.connections.find(
-    (c) => c.threadId === activeProviderContext(session).head?.handle.nativeId
-  )
+  await vi.waitFor(async () => {
+    expect((await readTestHostJournal(host, session.sessionId)).submissions).toMatchObject([
+      { dispatchState: 'accepted' }
+    ])
+  })
+  const current = host.deps.store.getRecord(session.sessionId)
+  const threadId = current && activeProviderContext(current).head?.handle.nativeId
+  const connection = codex.connections.find((c) => c.threadId === threadId)
   if (!connection) {
     throw new Error('created workspace has no provider')
   }

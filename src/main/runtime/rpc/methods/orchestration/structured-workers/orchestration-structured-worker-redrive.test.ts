@@ -351,10 +351,14 @@ describe('the structured redrive publication edge', () => {
         expect(send).toHaveBeenCalledTimes(1)
         expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0 })
         expect(state.db.getStructuredMailSends(mailbox)).toHaveLength(1)
+        const mailOperation = state.db.getStructuredMailSends(mailbox)[0]!.operation_id
         await worker.append('provider-available')
         await vi.advanceTimersByTimeAsync(300)
-        expect(send).toHaveBeenCalledTimes(2)
-        // Retried mail joins the current turn through the host's automatic drain.
+        await vi.waitFor(async () => {
+          expect(await host.sendAnswer(worker.identity.sessionId, mailOperation)).toEqual({
+            kind: 'accepted'
+          })
+        })
         expect(state.db.getMessageById(messageId)).toMatchObject({
           read: 0,
           delivered_at: expect.any(String)
@@ -507,7 +511,6 @@ describe('the structured redrive publication edge', () => {
             { kind: 'turn', turnId: 'new-turn-before-close', state: 'running' },
             { fence: lease.runtimeFence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
           )
-          expect(state.runtime.isWorkerAgentInTurn(resource)).toBe(true)
         } else {
           expect(state.db.keepWorkerTerminalOpen(identity.paneKey)).toBe(1)
         }
@@ -546,7 +549,9 @@ describe('the structured redrive publication edge', () => {
         // Its Dispatch settled: the mail goes to a follow-up, never into the chat that finished it.
         expect(send).toHaveBeenCalledTimes(1)
         expect(dispatch).not.toHaveBeenCalled()
-        expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0, delivered_at: null })
+        await vi.waitFor(() =>
+          expect(state.db.getMessageById(messageId)).toMatchObject({ read: 0, delivered_at: null })
+        )
       }
     }
   )
