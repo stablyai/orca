@@ -1,9 +1,10 @@
 // Private build only: `orca cloud …` command specs.
 import type { CommandSpec } from '../args'
 import { LOCAL_COMMAND_FLAGS } from '../args'
+import { ORCA_CLOUD_SANDBOX_SPEC } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
 
 const CREDENTIALS_NOTE =
-  'Credentials: ORCA_CLOUD_TOKEN (+ ORCA_CLOUD_API_URL), else ~/.config/orca-cloud/credentials.json (written by `orca cloud login`, and at boot inside an Orca Cloud workspace when the organization allows in-workspace CLI access). These commands call Orca Cloud over HTTPS and do not need the Orca app running.'
+  'Credentials: ORCA_CLOUD_TOKEN (+ ORCA_CLOUD_API_URL), else ~/.config/orca-cloud/credentials.json (written by `orca cloud login`, and at boot inside an Orca Cloud workspace when the team allows in-workspace CLI access). These commands call Orca Cloud over HTTPS and do not need the Orca app running.'
 const WORKSPACE_ARG_NOTE =
   '<workspace> is a workspace id (sbx_…), a workspace name, or `self` inside an Orca Cloud workspace.'
 const JSON_NOTE =
@@ -12,9 +13,10 @@ const JSON_NOTE =
 const PROGRESS_ACTIONS: ReadonlySet<string> = new Set(['sleep', 'wake'])
 
 const lifecycle = (
-  action: 'sleep' | 'wake' | 'archive' | 'destroy',
+  action: 'sleep' | 'wake' | 'archive' | 'delete' | 'destroy',
   summary: string,
-  notes: string[] = []
+  notes: string[] = [],
+  extra: Partial<CommandSpec> = {}
 ): CommandSpec => ({
   path: ['cloud', 'workspace', action],
   summary,
@@ -25,7 +27,7 @@ const lifecycle = (
     ...(PROGRESS_ACTIONS.has(action) ? ['progress'] : [])
   ],
   positionalArgs: ['workspace'],
-  ...(action === 'destroy' ? { destructive: true } : {}),
+  ...(action === 'delete' || action === 'destroy' ? { destructive: true } : {}),
   notes: [
     ...notes,
     ...(PROGRESS_ACTIONS.has(action)
@@ -34,9 +36,10 @@ const lifecycle = (
         ]
       : []),
     WORKSPACE_ARG_NOTE,
-    'A workspace token cannot sleep, archive or destroy its own workspace.'
+    'A workspace token cannot sleep, archive or delete its own workspace.'
   ],
-  examples: [`orca cloud workspace ${action} sbx_0123abcd --json`]
+  examples: [`orca cloud workspace ${action} sbx_0123abcd --json`],
+  ...extra
 })
 
 export const CLOUD_COMMAND_SPECS: CommandSpec[] = [
@@ -78,7 +81,7 @@ export const CLOUD_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...LOCAL_COMMAND_FLAGS, 'project', 'include-archived', 'all'],
     notes: [
       '--all also lists archived and hidden workspaces.',
-      'A workspace token (inside a VM) lists only the workspaces that workspace created.',
+      'A workspace token (inside a sandbox) lists only the workspaces that workspace created.',
       JSON_NOTE
     ],
     examples: ['orca cloud workspace list', 'orca cloud workspace list --all --json']
@@ -103,14 +106,14 @@ export const CLOUD_COMMAND_SPECS: CommandSpec[] = [
       'project',
       'repo',
       'ref',
-      'size',
       'region',
       'agent',
       'prompt'
     ],
     notes: [
-      'Returns once the VM is running. --prompt queues a first message for --agent (default claude), delivered as soon as the VM is up; follow it with `orca cloud messages`.',
-      'Inside a workspace (workspace token) the new workspace is recorded with origin "vm" and is visible to the workspace that created it.',
+      'Returns once the sandbox is running. --prompt queues a first message for --agent (default claude), delivered as soon as the sandbox is up; follow it with `orca cloud messages`.',
+      `Every sandbox is ${ORCA_CLOUD_SANDBOX_SPEC.vcpus} vCPU · ${ORCA_CLOUD_SANDBOX_SPEC.memoryGb} GB; there is no size to pick.`,
+      'Inside a workspace (workspace token) the new workspace is visible to the workspace that created it.',
       CREDENTIALS_NOTE,
       JSON_NOTE
     ],
@@ -119,10 +122,19 @@ export const CLOUD_COMMAND_SPECS: CommandSpec[] = [
       'orca cloud workspace create --repo https://github.com/acme/app --name fix-login --agent claude --prompt "Fix the login redirect"'
     ]
   },
-  lifecycle('sleep', 'Put an Orca Cloud workspace to sleep (disk kept, not billed)'),
-  lifecycle('wake', 'Wake a sleeping or archived Orca Cloud workspace'),
-  lifecycle('archive', 'Sleep an Orca Cloud workspace and hide it from default lists'),
-  lifecycle('destroy', 'Destroy an Orca Cloud workspace and its disk', ['This cannot be undone.']),
+  lifecycle(
+    'sleep',
+    'Put an Orca Cloud workspace to sleep (files are kept; asleep time is not billed)'
+  ),
+  lifecycle('wake', 'Wake an asleep or archived Orca Cloud workspace'),
+  lifecycle('archive', 'Put an Orca Cloud workspace to sleep and hide it from default lists'),
+  lifecycle('delete', 'Delete an Orca Cloud workspace and its sandbox for good', [
+    'This cannot be undone.'
+  ]),
+  // Renamed to `delete`; kept hidden so existing scripts keep working.
+  lifecycle('destroy', 'Delete an Orca Cloud workspace and its sandbox for good', [], {
+    hidden: true
+  }),
   {
     path: ['cloud', 'message'],
     summary: 'Send a message to an agent in an Orca Cloud workspace',
@@ -140,7 +152,7 @@ export const CLOUD_COMMAND_SPECS: CommandSpec[] = [
     positionalArgs: ['workspace'],
     notes: [
       'Without --session a new agent session starts with the text as its prompt; --session <handle> (from `orca cloud sessions` or a previous message) types it into that session.',
-      'A sleeping workspace is woken first. --wait polls until the message is delivered to the agent (default timeout 180s); it does not wait for the agent to finish.',
+      'An asleep workspace wakes first. --wait polls until the message is delivered to the agent (default timeout 180s); it does not wait for the agent to finish.',
       WORKSPACE_ARG_NOTE,
       JSON_NOTE
     ],
@@ -169,7 +181,7 @@ export const CLOUD_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...LOCAL_COMMAND_FLAGS, 'workspace'],
     positionalArgs: ['workspace'],
     notes: [
-      'Only a running workspace has live sessions; a sleeping one lists none.',
+      'Only a running workspace has live sessions; an asleep one lists none.',
       WORKSPACE_ARG_NOTE,
       JSON_NOTE
     ],
@@ -181,5 +193,31 @@ export const CLOUD_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca cloud projects list [--json]',
     allowedFlags: [...LOCAL_COMMAND_FLAGS],
     notes: [JSON_NOTE]
+  },
+  {
+    path: ['cloud', 'routine', 'list'],
+    summary: 'List Orca Cloud routines with their trigger and last run',
+    usage: 'orca cloud routine list [--json]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS],
+    notes: ['Needs the routines:read scope.', JSON_NOTE],
+    examples: ['orca cloud routine list', 'orca cloud routine list --json']
+  },
+  {
+    path: ['cloud', 'routine', 'run'],
+    summary: 'Run an Orca Cloud routine now',
+    usage:
+      'orca cloud routine run <routine> [--wait [--timeout <seconds>] [--progress text|json|none]] [--json]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'routine', 'wait', 'timeout', 'progress'],
+    positionalArgs: ['routine'],
+    notes: [
+      '<routine> is a routine id (rtn_…) or its exact name. Only the routine’s creator can run it. Needs the routines:write scope.',
+      'The run starts its own cloud workspace. Run states: Queued, Starting, Running, Posting results, Succeeded, Failed, Canceled, Timed out.',
+      '--wait follows the run until it finishes (default timeout: the routine’s time limit plus 15 minutes) and exits non-zero if it fails, times out or is canceled. State changes go to stderr.',
+      JSON_NOTE
+    ],
+    examples: [
+      'orca cloud routine run "Triage new issues"',
+      'orca cloud routine run rtn_0123abcd --wait --json'
+    ]
   }
 ]

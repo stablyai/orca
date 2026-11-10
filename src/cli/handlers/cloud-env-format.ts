@@ -15,9 +15,32 @@ export function formatOutcome(build: HostedEnvironmentBuildView): string {
   }
   if (build.status === 'failed') {
     const step = build.failedStep ? ` at the ${build.failedStep} step` : ''
-    return `Build #${build.number} failed${step}: ${build.error ?? 'unknown error'}.`
+    return `Build #${build.number} failed${step}. ${buildErrorText(build.error)}`
   }
   return `Build #${build.number} is ${build.status}.`
+}
+
+/** A build's error code in words (mirrors the desktop's buildErrorCopy); --json keeps the code. */
+export function buildErrorText(error: string | null): string {
+  if (error === 'install_failed' || (error !== null && /^exit_\d+$/.test(error))) {
+    return 'The install script stopped at a failing command.'
+  }
+  if (error !== null && /^provider_\d+$/.test(error)) {
+    return "Orca Cloud couldn't start a sandbox. Try again in a few minutes."
+  }
+  const known: Record<string, string> = {
+    clone_failed:
+      "A repository couldn't be cloned. Check that the Orca GitHub app can access it and the branch exists.",
+    record_failed: "Orca couldn't record the installed environment.",
+    timeout: 'The build ran past its time limit.',
+    snapshot_failed: 'Saving the snapshot failed.',
+    runtime_removed: 'The build sandbox was removed before it finished.',
+    boot_failed: 'The build sandbox failed to start.',
+    boot_timeout: 'The build sandbox took too long to start.',
+    vm_lost: 'Orca lost contact with the build sandbox.',
+    canceled: 'The build was canceled.'
+  }
+  return (error !== null && known[error]) || 'Something went wrong during the build.'
 }
 
 export function formatShow(data: CloudEnvironmentShowData): string {
@@ -75,10 +98,8 @@ function describeStaleness(recommendation: string, configChanged: boolean): stri
 
 function describeBuild(build: HostedEnvironmentBuildView): string {
   const parts = [`#${build.number} ${build.status}`]
-  if (build.status === 'failed') {
-    parts.push(
-      `${build.failedStep ? `at ${build.failedStep}` : ''}${build.error ? ` (${build.error})` : ''}`.trim()
-    )
+  if (build.status === 'failed' && build.failedStep) {
+    parts.push(`at ${build.failedStep}`)
   }
   if (build.durationMs !== null) {
     parts.push(formatDuration(build.durationMs))
@@ -94,7 +115,7 @@ export function formatBuilds(data: CloudEnvironmentBuildsData): string {
   }
   const outcomes = data.builds.map((build) =>
     build.status === 'failed'
-      ? `failed${build.failedStep ? ` at ${build.failedStep}` : ''}${build.error ? ` (${build.error})` : ''}`
+      ? `failed${build.failedStep ? ` at ${build.failedStep}` : ''}`
       : build.status
   )
   // Column width from the widest outcome, so a long failure never shifts the columns after it.

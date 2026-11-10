@@ -88,7 +88,7 @@ describe('orca cloud workspace wake progress', () => {
     )
     await run(handlers['cloud workspace wake'](ctx({ workspace: 'sbx_ab12' })), 5000)
     expect(stderr).toEqual(['- Waking sbx_ab12...', '- child is awake (took 4.8s).'])
-    expect(stdout.join('\n')).toContain('status: running')
+    expect(stdout.join('\n')).toContain('State: Running')
   })
 
   it('adds one reassurance line at 10 s', async () => {
@@ -155,8 +155,8 @@ describe('worktree create --on cloud progress', () => {
       13_000
     )
     expect(stderr).toEqual([
-      '- Creating an Orca Cloud workspace...',
-      '- Still starting (10s). This is taking longer than usual; your files are safe.',
+      '- Starting your cloud workspace...',
+      '- Still starting (10s). This is taking longer than usual.',
       '- Workspace sbx_ab12 is running (took 12.0s).'
     ])
   })
@@ -168,7 +168,7 @@ describe('worktree create --on cloud progress', () => {
       7000
     )
     expect(stderr).toEqual([
-      '- Creating an Orca Cloud workspace...',
+      '- Starting your cloud workspace...',
       '- Workspace sbx_ab12 is running (took 6.0s).'
     ])
   })
