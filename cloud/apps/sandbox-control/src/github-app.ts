@@ -33,6 +33,21 @@ export type GitHubAppMinter = {
    * Any other path is refused, so this can't be bent into acting for a customer account.
    */
   sourceRequest?(method: 'GET' | 'POST', path: string, body?: unknown): Promise<Response>
+  /**
+   * One page (100) of the repositories an installation can reach, read with a metadata-only
+   * installation token that never leaves this Worker. Callers check the account's binding first.
+   */
+  listInstallationRepositories?(installationId: number, page: number): Promise<{ repositories: GitHubListedRepo[]; totalCount: number }>
+  /** Owners (lowercased logins) with a pending install request for this app (GET /app/installation-requests). */
+  pendingRequestOwners?(): Promise<Set<string>>
+}
+
+export type GitHubListedRepo = {
+  id: number
+  fullName: string
+  private: boolean
+  defaultBranch: string | null
+  pushedAt: string | null
 }
 
 /** Whether `accountId` holds a live binding to the installation. */
@@ -50,6 +65,20 @@ const MintedToken = z.looseObject({
   expires_at: z.string(),
   repositories: z.array(z.looseObject({ id: z.number(), name: z.string() })).optional()
 })
+
+const InstallationRepositories = z.looseObject({
+  total_count: z.number().int().nonnegative(),
+  repositories: z.array(
+    z.looseObject({
+      id: z.number().int(),
+      full_name: z.string(),
+      private: z.boolean(),
+      default_branch: z.string().nullish(),
+      pushed_at: z.string().nullish()
+    })
+  )
+})
+const InstallationRequests = z.array(z.looseObject({ account: z.looseObject({ login: z.string() }) }))
 
 export function parseGitHubRepo(repoUrl: string): { owner: string; repo: string } | null {
   try {
@@ -117,8 +146,76 @@ export function createGitHubAppMinter(config: {
     return parsed.data
   }
 
+  const metadataTokens = new Map<number, { token: string; expiresAt: number }>()
+  async function metadataToken(installationId: number): Promise<string> {
+    const cached = metadataTokens.get(installationId)
+    if (cached && cached.expiresAt - now() > REFRESH_MARGIN_MS) {
+      return cached.token
+    }
+    const minted = await github('POST', `/app/installations/${installationId}/access_tokens`, { permissions: { metadata: 'read' } })
+    const body = MintedToken.safeParse(await minted.json().catch(() => null))
+    if (!minted.ok || !body.success) {
+      throw new Error(`github metadata token mint failed (${minted.status})`)
+    }
+    const token = { token: body.data.token, expiresAt: Date.parse(body.data.expires_at) }
+    metadataTokens.set(installationId, token)
+    return token.token
+  }
+  let requestOwners: { at: number; owners: Promise<Set<string>> } | null = null
+
   return {
     getInstallation: (installationId) => installationFor(`/app/installations/${installationId}`),
+
+    async listInstallationRepositories(installationId, page) {
+      const token = await metadataToken(installationId)
+      const response = await doFetch(`https://api.github.com/installation/repositories?per_page=100&page=${Math.max(1, Math.floor(page))}`, {
+        headers: {
+          authorization: `Bearer ${token}`,
+          accept: 'application/vnd.github+json',
+          'x-github-api-version': '2022-11-28',
+          'user-agent': 'orca-sandbox-control'
+        },
+        redirect: 'manual'
+      })
+      const body = InstallationRepositories.safeParse(await response.json().catch(() => null))
+      if (!response.ok || !body.success) {
+        throw new Error(`github installation repositories failed (${response.status})`)
+      }
+      return {
+        totalCount: body.data.total_count,
+        repositories: body.data.repositories.map((r) => ({
+          id: r.id,
+          fullName: r.full_name,
+          private: r.private,
+          defaultBranch: r.default_branch ?? null,
+          pushedAt: r.pushed_at ?? null
+        }))
+      }
+    },
+
+    pendingRequestOwners() {
+      // One app-wide list, shared by every repo-access check for a minute.
+      if (!requestOwners || now() - requestOwners.at > 60_000) {
+        const entry = {
+          at: now(),
+          owners: (async () => {
+            const response = await github('GET', '/app/installation-requests?per_page=100')
+            const body = InstallationRequests.safeParse(await response.json().catch(() => null))
+            if (!response.ok || !body.success) {
+              throw new Error(`github installation requests failed (${response.status})`)
+            }
+            return new Set(body.data.map((r) => r.account.login.toLowerCase()))
+          })()
+        }
+        entry.owners.catch(() => {
+          if (requestOwners === entry) {
+            requestOwners = null
+          }
+        })
+        requestOwners = entry
+      }
+      return requestOwners.owners
+    },
 
     appRequest: (method, path, body) => github(method, path, body),
 

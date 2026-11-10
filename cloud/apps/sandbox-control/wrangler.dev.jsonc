@@ -63,6 +63,8 @@
     // Snapshots are region-locked: the seed is an iad1 image; pdx1 builds its first image from source.
     "GOLDEN_SNAPSHOT_REGION": "iad1",
     "GITHUB_APP_SLUG": "orca-cloud-dev",
+    // Cloud setup pages (staging auth): GitHub installs started from a setup session return there.
+    "CLOUD_SETUP_ORIGIN": "https://auth-staging.onorca.dev",
     "EGRESS_PROXY_URL": "https://orca-sandbox-control-dev.lovecast.workers.dev/v1/egress/proxy"
   }
 }
