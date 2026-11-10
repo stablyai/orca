@@ -1485,7 +1485,6 @@
       "updateDesktop": "請更新 {{desktop}} 上的 Orca，以使用自動化。"
     },
     "emptyState": {
-      "connectedDescription": "您的電腦會顯示在這裡。所有資料皆採端對端加密。",
       "connectedTitle": "已連線",
       "description": "與電腦上的 Orca 配對，即可用手機查看代理程式狀態、開啟任何終端機，並推進工作。",
       "openDesktopDescription": "前往「設定」→「行動版」，產生配對用的 QR Code。",

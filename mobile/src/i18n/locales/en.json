@@ -591,11 +591,12 @@
       "openDesktopDescription": "Go to Settings → Mobile and generate a pairing QR code.",
       "scanCodeTitle": "Scan the code",
       "connectedTitle": "You're connected",
-      "connectedDescription": "Your desktop will appear here. Everything is encrypted end-to-end.",
       "title": "Connect your desktop",
       "description": "Pair with Orca on your computer to check on your agents, jump into any terminal, and drive work from your phone.",
       "pairDesktopButton": "Pair desktop",
-      "scanCodeBelowDescription": "Tap Pair desktop below, then point your camera at the QR code on your screen."
+      "scanCodeBelowDescription": "Tap Pair desktop below, then point your camera at the QR code on your screen.",
+      "connectedCloudDescription": "Your desktop and your Orca Cloud workspaces will appear here. Everything is encrypted end-to-end.",
+      "cloudNote": "Your Orca Cloud workspaces show up here once a desktop is paired."
     },
     "listFooter": {
       "hostPickerTitle": "Open Tasks On"
