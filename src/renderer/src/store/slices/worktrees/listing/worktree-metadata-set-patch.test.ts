@@ -73,10 +73,22 @@ describe('addressed workspace metadata records', () => {
     }
     // A listing that read metadata before the title was saved lands afterwards with the bare link.
     const late = { ...titled, worktreesByRepo: state().worktreesByRepo }
-    expect(sshRowLinks({ ...late, ...reapplyPendingIssueTitles(late) })).toEqual(issue('Fix login'))
+    expect(sshRowLinks({ ...late, ...reapplyPendingIssueTitles(late, titled) })).toEqual(
+      issue('Fix login')
+    )
 
     // The user unlinked the issue before a record for it arrived.
     const unlinked = state([])
     expect(patchWorktreeMetadataSet(unlinked, record(1, 'Fix login', 'e3'), local)).toBe(unlinked)
+  })
+
+  it('titles a link that the row lists only after its record arrived', () => {
+    // The record beats the listing that adds the link to an existing row.
+    const before = state([])
+    expect(patchWorktreeMetadataSet(before, record(1, 'Fix login', 'e4'), local)).toBe(before)
+    const listed = state()
+    expect(sshRowLinks({ ...listed, ...reapplyPendingIssueTitles(listed, before) })).toEqual(
+      issue('Fix login')
+    )
   })
 })

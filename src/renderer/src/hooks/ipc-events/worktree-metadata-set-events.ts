@@ -2,6 +2,8 @@ import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import { readWorkspaceMetadataSet } from '../../../../shared/worktree/workspace-metadata-set'
 import { useAppStore } from '../../store'
+import { getRuntimeEnvironmentRevision } from '../../runtime/rpc/environment-revisions/runtime-environment-revision'
+import { getRuntimeEnvironmentConnectionGeneration } from '../../store/slices/runtime-status/runtime-status-connection-generation'
 import {
   hasPendingIssueTitles,
   patchWorktreeMetadataSet,
@@ -15,7 +17,7 @@ let listingWatch: (() => void) | null = null
 function watchListings(): void {
   listingWatch ??= useAppStore.subscribe((state, previous) => {
     if (state.worktreesByRepo !== previous.worktreesByRepo && hasPendingIssueTitles()) {
-      useAppStore.setState(reapplyPendingIssueTitles)
+      useAppStore.setState(reapplyPendingIssueTitles(state, previous))
     }
   })
 }
@@ -47,7 +49,16 @@ export function applyHostWorkspaceRowEvent(
     return true
   }
   if (event.type === 'workspaceMetadataSet') {
-    apply(event, { kind: 'environment', environmentId })
+    const revision = getRuntimeEnvironmentRevision(environmentId)
+    const generation = getRuntimeEnvironmentConnectionGeneration(environmentId)
+    apply(event, {
+      kind: 'environment',
+      environmentId,
+      // A re-pair or reconnect retires these titles; the new producer sends its own.
+      isCurrent: () =>
+        getRuntimeEnvironmentRevision(environmentId) === revision &&
+        getRuntimeEnvironmentConnectionGeneration(environmentId) === generation
+    })
     return true
   }
   return false
