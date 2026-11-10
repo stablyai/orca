@@ -29,6 +29,17 @@ const projects: NewWorkspaceProjectOption[] = [
     detail: 'acme/web'
   }
 ]
+/** A plain folder (no git): the D3-for-folders frames. */
+const folderProjects: NewWorkspaceProjectOption[] = [
+  {
+    kind: 'project',
+    id: 'web',
+    projectId: 'web',
+    displayName: 'meeting-notes',
+    badgeColor: 'var(--muted-foreground)',
+    detail: '~/Documents/meeting-notes'
+  }
+]
 const hosts: ProjectHostSetupOption[] = [
   {
     kind: 'ready',
@@ -132,7 +143,7 @@ export function ComposerPreview({
         selectedRepoConnectionId={null}
         selectedRepoRequiresConnection={false}
         selectedRepoConnectInProgress={false}
-        projectOptions={projects}
+        projectOptions={folderProject ? folderProjects : projects}
         selectedProjectId="web"
         onProjectChange={() => {}}
         projectDescriptionId="fixture-project-description"
@@ -155,7 +166,7 @@ export function ComposerPreview({
         onConnectSelectedRepo={async () => {}}
         sshStatusLabel="Connected"
         connectButtonLabel="Connect"
-        selectedProjectName="acme/web"
+        selectedProjectName={folderProject ? 'meeting-notes' : 'acme/web'}
       />
       <NewWorkspaceComposerFooter
         createError={null}

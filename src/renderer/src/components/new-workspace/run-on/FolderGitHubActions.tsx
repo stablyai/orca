@@ -16,9 +16,9 @@ export function FolderGitHubActions({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <span className="mt-0.5 flex flex-wrap items-center gap-x-3">
+    <span className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
       {canChoose ? (
-        <Button type="button" variant="link" size="statusAction" onClick={onChooseRepository}>
+        <Button type="button" variant="outline" size="xs" onClick={onChooseRepository}>
           {t('components.newWorkspace.cloudOnly.chooseRepository', 'Choose a GitHub repository')}
         </Button>
       ) : null}
