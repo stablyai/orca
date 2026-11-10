@@ -304,8 +304,8 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
                 {t(
-                  'auto.components.settings.EphemeralVmRuntimesSection.cloudVmRefreshLabel',
-                  'Refresh Cloud VMs'
+                  'auto.components.settings.EphemeralVmRuntimesSection.cca21fb369',
+                  'Refresh cloud VMs'
                 )}
               </TooltipContent>
             </Tooltip>

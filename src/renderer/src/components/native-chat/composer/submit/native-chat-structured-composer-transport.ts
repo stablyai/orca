@@ -34,7 +34,11 @@ export type NativeChatStructuredComposerTransport = {
   sendBlockedReason?: string
   /** What a plain send does now, and whether Cmd/Ctrl+Enter would send it the other way. */
   sendFollowUp?: NativeChatSendFollowUp
-  dispatchCommand: (text: string) => Promise<StructuredAgentSessionCommandOutcome>
+  /** `onSent` fires once a conversation command leaves for the host, before its reply. */
+  dispatchCommand: (
+    text: string,
+    onSent?: () => void
+  ) => Promise<StructuredAgentSessionCommandOutcome>
   optionsSurface: SessionOptionsSurface
   optionSnapshot: SessionOptionDescriptor[]
   optionPickerRequest?: NativeChatOptionPickerRequest | null

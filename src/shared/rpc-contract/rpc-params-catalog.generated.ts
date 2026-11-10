@@ -32,6 +32,7 @@ import {
   DesktopBrowserBridgeResultParams
 } from '../desktop-browser-bridge-protocol'
 import { MobileWebBundleChunkParamsSchema } from '../mobile-web-bundle/bundle-rpc-contract'
+import { MobileWebBundleLocaleCatalogParamsSchema } from '../mobile-web-bundle/locale-catalog-contract'
 import { OrcadMigrationBlobChunkRequestSchema } from '../orcad-migration/orcad-migration-blob-transfer'
 import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration/orcad-migration-scrollback'
 import {
@@ -221,6 +222,7 @@ import {
   TapParams,
   TypeParams
 } from './emulator-params'
+import { EnvironmentDoctorParams } from './environment-doctor-params'
 import {
   FileCommitUpload,
   FileCopy,
@@ -505,6 +507,11 @@ import {
   TaskCreateParams,
   TaskListParams
 } from './orchestration-params'
+import {
+  PeerMailAckParams,
+  PeerMailDeliverParams,
+  PeerMailPullParams
+} from './orchestration-peer-mail-params'
 import { RequestShowParams } from './orchestration-runs-mutation-request-show-params'
 import {
   RunCreateParams,
@@ -574,6 +581,7 @@ import {
   ProjectGroupScanNested,
   ProjectGroupSelector,
   ProjectGroupUpdate,
+  ProjectGroupUpdateMany,
   RepoClone,
   RepoCreate,
   RepoHooksCheck,
@@ -615,7 +623,8 @@ import {
   DictationSetup,
   DictationStart,
   OpenAiSpeechKeySet,
-  SpeechModelAction
+  SpeechModelAction,
+  SpeechSetupRead
 } from './speech-params'
 import {
   RepoAddRemote,
@@ -735,6 +744,7 @@ import {
   WorktreeDetectedListParams,
   WorktreeForceDeleteBranch,
   WorktreeListParams,
+  WorktreePreviewNestedRemoval,
   WorktreePsParams,
   WorktreeRemove,
   WorktreeResolveCallerParent,
@@ -1036,6 +1046,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'emulator.tap': TapParams,
   'emulator.type': TypeParams,
   'emulator.unregisterActive': EmulatorUnregisterActiveParams,
+  'environment.doctor': EnvironmentDoctorParams,
   'files.browseServerDir': ServerDirectoryBrowse,
   'files.commitUpload': FileCommitUpload,
   'files.copy': FileCopy,
@@ -1310,7 +1321,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'mobileRelay.hosts.list': null,
   'mobileRelay.hosts.worktrees': MobileRelayHostWorktreesParamsSchema,
   'mobileRelay.projectSections': null,
+  'mobileWeb.bundle.brotliRange': MobileWebBundleChunkParamsSchema,
   'mobileWeb.bundle.chunk': MobileWebBundleChunkParamsSchema,
+  'mobileWeb.bundle.localeCatalog': MobileWebBundleLocaleCatalogParamsSchema,
   'mobileWeb.bundle.manifest': null,
   'mobileWeb.bundle.range': MobileWebBundleChunkParamsSchema,
   'nativeChat.readSession': NativeChatSession,
@@ -1355,6 +1368,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.inbox': InboxParams,
   'orchestration.partyLocation': PartyLocationParams,
   'orchestration.partyOpen': PartyLocationParams,
+  'orchestration.peerMailAck': PeerMailAckParams,
+  'orchestration.peerMailDeliver': PeerMailDeliverParams,
+  'orchestration.peerMailPull': PeerMailPullParams,
   'orchestration.reply': ReplyParams,
   'orchestration.requestShow': RequestShowParams,
   'orchestration.reset': ResetParams,
@@ -1428,6 +1444,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'projectGroup.moveProject': ProjectGroupMoveProject,
   'projectGroup.scanNested': ProjectGroupScanNested,
   'projectGroup.update': ProjectGroupUpdate,
+  'projectGroup.updateMany': ProjectGroupUpdateMany,
   'projectHostSetup.clone': ProjectHostSetupClone,
   'projectHostSetup.create': ProjectHostSetupCreate,
   'projectHostSetup.delete': ProjectHostSetupDelete,
@@ -1439,6 +1456,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'repo.add': RepoPath,
   'repo.addRemote': RepoAddRemote,
   'repo.baseRefDefault': RepoSelector,
+  'repo.checkCloneTarget': RepoClone,
   'repo.clone': RepoClone,
   'repo.create': RepoCreate,
   'repo.gitAvailable': null,
@@ -1521,7 +1539,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'speech.dictation.start': DictationStart,
   'speech.models.delete': SpeechModelAction,
   'speech.models.download': SpeechModelAction,
-  'speech.models.list': null,
+  'speech.models.list': SpeechSetupRead,
   'speech.openAiKey.clear': null,
   'speech.openAiKey.set': OpenAiSpeechKeySet,
   'speech.openAiKey.status': null,
@@ -1613,6 +1631,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.listRetiredNames': WorktreeDetectedListParams,
   'worktree.persistSortOrder': WorktreeSortOrder,
   'worktree.prefetchCreateBase': WorktreePrefetchCreateBase,
+  'worktree.previewNestedRemoval': WorktreePreviewNestedRemoval,
   'worktree.ps': WorktreePsParams,
   'worktree.resolveCallerParent': WorktreeResolveCallerParent,
   'worktree.resolveMrBase': WorktreeResolveMrBase,

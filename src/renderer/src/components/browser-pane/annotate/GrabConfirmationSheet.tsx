@@ -1,7 +1,7 @@
 import { Copy, Image, MessageSquarePlus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import type { BrowserGrabPayload } from '../../../../../shared/browser-grab-types'
+import type { BrowserGrabPayload } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function formatGrabPayloadAsText(payload: BrowserGrabPayload): string {

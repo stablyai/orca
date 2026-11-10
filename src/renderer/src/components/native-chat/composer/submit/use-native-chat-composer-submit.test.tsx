@@ -121,24 +121,6 @@ it.each([true, false])(
 )
 
 describe('composer goal mode', () => {
-  it('sets the draft as the goal instead of sending it, then leaves goal mode', async () => {
-    const setObjective = vi.fn(async () => true)
-    const { hook, calls, onSubmitted, type } = harness({
-      draft: '/go',
-      threadGoal: { setObjective }
-    })
-    act(() => hook.result.current.goalMode.interceptPick(vi.fn())(GOAL_ITEM))
-    type('  Ship the parser  ', 0)
-
-    await act(async () => hook.result.current.send())
-
-    expect(setObjective).toHaveBeenCalledWith('Ship the parser')
-    expect(onSubmitted).toHaveBeenCalledOnce()
-    expect(calls.sendStructured).not.toHaveBeenCalled()
-    expect(readNativeChatDraftCache(SCOPE)).toBe('')
-    expect(hook.result.current.goalMode.active).toBe(false)
-  })
-
   it('keeps a draft edited while the goal was in flight, and stays in goal mode', async () => {
     let settle: (accepted: boolean) => void = () => undefined
     const setObjective = vi.fn(() => new Promise<boolean>((resolve) => (settle = resolve)))

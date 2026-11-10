@@ -1,11 +1,11 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync, type ChildProcess } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { providerDiagnosticOf } from '../../shared/agent-session/failures/agent-session-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
-import type { SpawnedProcess, ProcessSpec } from '@orca/process-host/process-spec'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 
 import type { query, CanUseTool } from '@anthropic-ai/claude-agent-sdk'
 import {
@@ -89,7 +89,7 @@ function launchFor(
 }
 
 const spawned: ProcessSpec[] = []
-const spawnedChildren: SpawnedProcess[] = []
+const spawnedChildren: ChildProcess[] = []
 
 async function open(
   launch: ClaudeStreamJsonLaunch,
@@ -147,6 +147,20 @@ function processState(pid: number): 'running' | 'exited' {
 }
 
 describe('Claude stream-json connection', () => {
+  it('completes task Stop through the real SDK while semantic reading is paused', async () => {
+    const scenario = scriptScenario([HOLD_OPEN])
+    const connection = await open(launchFor(scenario))
+    await connection.initializationResult()
+    connection.pauseReading?.()
+    await connection.stopTask('owned-shell')
+    expect(scenario.readReport().controlRequests).toContainEqual(
+      expect.objectContaining({
+        request: expect.objectContaining({ subtype: 'stop_task', task_id: 'owned-shell' })
+      })
+    )
+    connection.resumeReading?.()
+  })
+
   it('settles a send only once the frame reached the child, and replays reach onMessage', async () => {
     const replay = {
       type: 'user',

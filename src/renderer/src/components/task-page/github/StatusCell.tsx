@@ -10,8 +10,8 @@ import {
 } from '@/components/task-page/github/task-page-github-status-state'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
-import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
-import { parseGitHubIssueOrPRLink } from '@/lib/github-links'
+import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
+import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
 import {
   getTaskPageGitHubDuplicateCandidates,
   validateTaskPageGitHubDuplicateTarget,

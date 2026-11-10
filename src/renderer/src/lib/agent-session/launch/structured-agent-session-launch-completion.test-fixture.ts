@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { sendMessageToAgent } from '../../agent-message-send'
+import { sendMessageToAgent } from '../messaging/agent-message-send'
 import { SendParams } from '../../../../../shared/rpc-contract/structured-agent-session-params'
 import type { Tab } from '../../../../../shared/tab-types'
 import { beginStructuredAgentLaunchSettlement } from './continuation/structured-agent-launch-settlement'

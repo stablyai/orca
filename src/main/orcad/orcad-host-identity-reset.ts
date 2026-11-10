@@ -45,7 +45,8 @@ export function resetHostIdentityUnderLock(userDataPath: string): HostIdentityRe
       ? { status: 'failed', message }
       : { status: 'incomplete', message }
   } finally {
-    lock.release()
+    // A reset is not a run; the next start must still report a crash that preceded it.
+    lock.release({ keepUnexpectedExit: true })
   }
   return { status: 'reset' }
 }

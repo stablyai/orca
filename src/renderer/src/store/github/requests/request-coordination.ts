@@ -1,4 +1,4 @@
-import type { PRCheckContract } from '@/lib/pr-check-observation-contract'
+import type { PRCheckContract } from '@/lib/source-control/checks/pr-check-observation-contract'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { IssueInfo, PRInfo } from '../../../../../shared/github/pull-request-types'

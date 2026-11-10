@@ -2,8 +2,8 @@ import { useEffect, useMemo } from 'react'
 import {
   listGitLabWorkItemsForSource,
   lookupGitLabWorkItemByPathForSource
-} from '@/lib/gitlab-work-item-source-lookup'
-import { parseGitLabIssueOrMRLink } from '@/lib/gitlab-links'
+} from '@/lib/work-items/gitlab/gitlab-work-item-source-lookup'
+import { parseGitLabIssueOrMRLink } from '../../../../shared/new-workspace/gitlab-links'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import { RESULT_LIMIT } from './smart-workspace-name-field-model'
 import type { useWorkItemSourceFoundation } from './use-work-item-source-foundation'

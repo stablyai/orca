@@ -7,7 +7,6 @@ import {
   type AgentSessionWireRefusal
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionTurnContext } from '../operations/structured-agent-session-turns'
-import './structured-agent-session-options-read'
 import { structuredAgentSessionOptionOverridesRefusal } from './structured-agent-session-option-intent'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'

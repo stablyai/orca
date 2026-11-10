@@ -2,11 +2,11 @@ import { useState } from 'react'
 import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
-import { ORCA_LINEAR_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+import { ORCA_LINEAR_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
 import { AgentSkillSetupPanel } from '../../skills/setup/AgentSkillSetupPanel'
 import { TaskSourceShowInTasksStep } from './TaskSourceShowInTasksStep'
 import { TaskSourceStepRow } from './TaskSourceStepRow'
-import { useLinearAgentSkillSetup } from '../../../hooks/use-linear-agent-skill-setup'
+import { useLinearAgentSkillSetup } from '../../../hooks/skills/installation/use-linear-agent-skill-setup'
 import { useTranslate } from '@/i18n/use-translate'
 
 type TaskSourceLinearSetupProps = {

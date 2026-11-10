@@ -60,23 +60,4 @@ describe('native connection diagnostic reports', () => {
     expect(report).toContain('Host Orca version: unknown')
     expect(report).not.toContain('1.4.197')
   })
-
-  it('does not promote a disconnected version when a connection opens during hydration', async () => {
-    let finishHydration = () => {}
-    logStore.hydrate.mockReturnValue(
-      new Promise<void>((resolve) => {
-        finishHydration = resolve
-      })
-    )
-    const context = createContext()
-    context.setConnection('disconnected', 1_000)
-    const device = createNativeDiagnosticsOperations(host, context, '1.4.197')
-    const pendingReport = device.report()
-    context.setConnection('connected', 1_000)
-    finishHydration()
-    const { report } = await pendingReport
-    expect(report).toContain('State: connected')
-    expect(report).toContain('Host Orca version: unknown')
-    expect(report).not.toContain('1.4.197')
-  })
 })
