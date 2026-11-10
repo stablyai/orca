@@ -661,8 +661,8 @@
       "openAccountsHint": "Opens this desktop’s accounts",
       "emptyTitle": "No usage yet"
     },
-    "needsYou": {
-      "heading": "Needs you",
+    "activeAgents": {
+      "heading": "Active",
       "seeAll": "See all agents"
     }
   },

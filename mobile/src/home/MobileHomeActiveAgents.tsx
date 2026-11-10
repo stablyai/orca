@@ -7,10 +7,10 @@ import { areStructurallyEqual } from '../worktree/structural-equality'
 import { MobileHomeSectionHeading } from './MobileHomeSectionHeading'
 
 // Enough to act on without pushing Desktops off the first screen; the Agents tab has the rest.
-const NEEDS_YOU_ROWS_SHOWN = 3
+const ACTIVE_ROWS_SHOWN = 3
 
-/** Feed's short list of agents waiting on the user; hidden when none are. */
-export const MobileHomeNeedsYou = memo(function MobileHomeNeedsYou(props: {
+/** Feed's short list of agents waiting on the user or working, those waiting first; hidden when none are. */
+export const MobileHomeActiveAgents = memo(function MobileHomeActiveAgents(props: {
   handlers: AgentListRowHandlers
   rows: readonly AgentListRow[]
   hosts: readonly HostProfile[]
@@ -24,14 +24,14 @@ export const MobileHomeNeedsYou = memo(function MobileHomeNeedsYou(props: {
   return (
     <>
       <MobileHomeSectionHeading
-        title={t('home.needsYou.heading', 'Needs you')}
+        title={t('home.activeAgents.heading', 'Active')}
         count={props.rows.length}
-        aside={t('home.needsYou.seeAll', 'See all agents')}
+        aside={t('home.activeAgents.seeAll', 'See all agents')}
         onAsidePress={props.onSeeAll}
         first
       />
       <MobileAgentListRows
-        rows={props.rows.slice(0, NEEDS_YOU_ROWS_SHOWN)}
+        rows={props.rows.slice(0, ACTIVE_ROWS_SHOWN)}
         footer="workspace"
         nameDesktop={props.hosts.length > 1}
         hosts={props.hosts}
