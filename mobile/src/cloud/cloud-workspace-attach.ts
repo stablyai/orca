@@ -79,7 +79,13 @@ export async function attachCloudWorkspace(args: {
   deviceLabel: string
   onPhase: (phase: CloudAttachPhase) => void
   signal?: AbortSignal
-}): Promise<{ hostId: string; paired: boolean }> {
+  /**
+   * Pair afresh through a new grant even if a host is saved: the saved one was refused (its orcad
+   * identity changed) or the workspace's snapshot signer changed, both signs of a rebuilt sandbox.
+   * The saved host is only replaced once the new pairing succeeds.
+   */
+  freshPairing?: boolean
+}): Promise<{ hostId: string; paired: boolean; replacedHostId?: string }> {
   args.onPhase('waking')
   try {
     await wakeCloudWorkspaceUntilReady(args.plane, args.sandboxId, args.signal)
@@ -91,7 +97,7 @@ export async function attachCloudWorkspace(args: {
     throw error
   }
   const existing = await cloudWorkspaceHostId(args.sandboxId)
-  if (existing) {
+  if (existing && !args.freshPairing) {
     args.onPhase('connected')
     return { hostId: existing, paired: false }
   }
@@ -153,7 +159,11 @@ export async function attachCloudWorkspace(args: {
     await recordCloudWorkspaceHost(args.sandboxId, hostId)
     await updateHostNameAndEndpoint(hostId, { personalName: args.title }).catch(() => undefined)
     args.onPhase('connected')
-    return { hostId, paired: true }
+    return {
+      hostId,
+      paired: true,
+      ...(existing && existing !== hostId ? { replacedHostId: existing } : {})
+    }
   } catch {
     throw new CloudAttachError('pairing_failed')
   } finally {
