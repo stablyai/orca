@@ -7980,6 +7980,13 @@
           "switched": "Switched to {{value0}}",
           "triggerLabel": "Team: {{value0}}, switch teams",
           "triggerPersonal": "Personal account, switch teams"
+        },
+        "DeleteCloudWorkspace": {
+          "title": "Delete {{name}}?",
+          "body": "Deletes the sandbox and its disk, including chats, terminals and uncommitted changes. This can't be undone. To keep a snapshot, archive it instead.",
+          "cancel": "Cancel",
+          "archiveInstead": "Archive instead",
+          "delete": "Delete workspace"
         }
       },
       "shared": {
