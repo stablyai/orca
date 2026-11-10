@@ -44,7 +44,9 @@ const POLL_MS = 3_000
 const MAX_WAIT_MS = 20 * 60_000
 // A transient poll failure is retried; this many in a row ends the setup.
 const MAX_POLL_FAILURES = 5
-const BROKER_FAILURES = new Set(['not_a_chatgpt_login', 'store_failed', 'cancelled'])
+function isBrokerFailure(error: string): error is 'not_a_chatgpt_login' | 'store_failed' {
+  return error === 'not_a_chatgpt_login' || error === 'store_failed'
+}
 
 function defaultSleep(ms: number, signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
@@ -144,9 +146,7 @@ export function startCodexBrokerSession(deps: CodexBrokerDriverDeps): CodexBroke
             ? { phase: 'idle' }
             : {
                 phase: 'failed',
-                error: BROKER_FAILURES.has(error)
-                  ? (error as 'not_a_chatgpt_login' | 'store_failed')
-                  : 'broker_unavailable'
+                error: isBrokerFailure(error) ? error : 'broker_unavailable'
               }
         )
         return

@@ -8,8 +8,11 @@ function fixture(...rows: OrcaCloudAgentSetupRowModel[]) {
     width: 520,
     render: () => (
       <div className="space-y-2 bg-background p-4">
-        {rows.map((row, index) => (
-          <OrcaCloudAgentSetupRowView key={index} row={row} />
+        {rows.map((row) => (
+          <OrcaCloudAgentSetupRowView
+            key={`${row.kind}:${row.kind === 'hidden' ? '' : row.agent}:${row.kind === 'covered' ? row.via : ''}`}
+            row={row}
+          />
         ))}
       </div>
     )

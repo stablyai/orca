@@ -38,7 +38,14 @@ export const spawnClaudeSetupTokenPty: SpawnSetupToken = async () => {
   // Like Orca's other Claude children: no inherited auth overrides, no parent session stamps.
   const env: NodeJS.ProcessEnv = buildClaudeChildProcessEnv()
   stripInheritedClaudeSessionEnv(env)
-  const childEnv = withCliRuntimeOnPath(command, { ...env, TERM: 'xterm-256color' })
+  const childEnv: Record<string, string> = {}
+  for (const [key, value] of Object.entries(
+    withCliRuntimeOnPath(command, { ...env, TERM: 'xterm-256color' })
+  )) {
+    if (value !== undefined) {
+      childEnv[key] = value
+    }
+  }
   const { file, args } = setupTokenInvocation(command)
   const pty = await import('node-pty')
   let child: ReturnType<typeof pty.spawn>
@@ -48,10 +55,12 @@ export const spawnClaudeSetupTokenPty: SpawnSetupToken = async () => {
       cols: COLUMNS,
       rows: 40,
       cwd: homedir(),
-      env: childEnv as Record<string, string>
+      env: childEnv
     })
   } catch (error) {
-    throw (error as { code?: unknown })?.code === 'ENOENT' ? enoent() : error
+    const missing =
+      typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
+    throw missing ? enoent() : error
   }
   const handle: SetupTokenProcess = {
     onData: (listener) => {

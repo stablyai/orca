@@ -110,7 +110,11 @@ function RowIcon({ kind }: { kind: OrcaCloudAgentSetupRowModel['kind'] }): React
       return <TriangleAlert aria-hidden className={`${base} text-status-warning-text`} />
     case 'killSwitch':
       return <Info aria-hidden className={`${base} text-muted-foreground`} />
-    default:
+    case 'covered':
+    case 'hidden':
+    case 'loading':
+    case 'notSetUp':
+    case 'signedOut':
       return <CircleDashed aria-hidden className={`${base} text-muted-foreground`} />
   }
 }

@@ -11,7 +11,8 @@ const START = {
 
 function harness(
   statuses: { status: 'pending' | 'active' | 'failed'; error?: string }[],
-  start = START
+  start = START,
+  stepMs = 100
 ) {
   let clock = 0
   const updates: OrcaCloudAgentSetup[] = []
@@ -25,7 +26,7 @@ function harness(
     onUpdate: (setup) => updates.push(setup),
     now: () => clock,
     sleep: async () => {
-      clock += 100
+      clock += stepMs
     }
   })
   return { session, updates, client }
@@ -75,14 +76,15 @@ describe('startCodexBrokerSession', () => {
   })
 
   it('caps the wait even if the broker says the code lasts for days', async () => {
+    // Each fake poll moves the clock a minute: the 20-minute cap ends it, not the broker's date.
     const { session, updates } = harness(
       Array.from({ length: 30 }, () => ({ status: 'pending' as const })),
-      { ...START, expiresAt: Number.MAX_SAFE_INTEGER }
+      { ...START, expiresAt: Number.MAX_SAFE_INTEGER },
+      60_000
     )
-    // The fake clock moves 100 ms per poll, so cap it via a short wait in this test.
-    await Promise.race([session.done, new Promise((resolve) => setTimeout(resolve, 50))])
-    await session.cancel()
+    await session.done
     expect(updates[1]).toMatchObject({ phase: 'device', expiresAt: 20 * 60_000 })
+    expect(updates.at(-1)).toEqual({ phase: 'failed', error: 'code_expired' })
   })
 
   it('maps a refused start to a code', async () => {

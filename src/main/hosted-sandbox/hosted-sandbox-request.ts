@@ -142,7 +142,7 @@ const SERVER_NAME = /^[a-z][a-z0-9_]{0,63}$/
 /** The `error` name of any error body, if it looks like a name (never free text). */
 function serverErrorName(payload: unknown): string | null {
   const error =
-    typeof payload === 'object' && payload !== null ? (payload as { error?: unknown }).error : null
+    typeof payload === 'object' && payload !== null && 'error' in payload ? payload.error : null
   return typeof error === 'string' && SERVER_NAME.test(error) ? error : null
 }
 

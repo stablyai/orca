@@ -206,9 +206,7 @@ export function runClaudeSetupToken(options: {
       },
       (error: unknown) => {
         const missing =
-          typeof error === 'object' &&
-          error !== null &&
-          (error as { code?: unknown }).code === 'ENOENT'
+          typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
         finish({ ok: false, error: missing ? 'no_cli' : 'capture_failed' }, 'none')
       }
     )

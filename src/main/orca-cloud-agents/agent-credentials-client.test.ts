@@ -81,7 +81,7 @@ describe('createAgentCredentialsClient', () => {
         i < 2 ? client.putClaude(TOKEN) : client.startCodexBroker()
       )
       expect(JSON.stringify(error)).not.toContain(TOKEN)
-      expect(String((error as Error).message)).not.toContain(TOKEN)
+      expect(error instanceof Error ? error.message : '').not.toContain(TOKEN)
       codes.push(agentCredentialsFailureCode(error))
     }
     expect(codes).toEqual([
