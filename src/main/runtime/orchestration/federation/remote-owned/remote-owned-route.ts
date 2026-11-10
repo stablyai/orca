@@ -12,8 +12,10 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
 import {
   getRemoteDispatch,
-  oweRemoteDispatchStop
+  oweRemoteDispatchStop,
+  remoteStopKey
 } from '../../db/remote-owned/remote-dispatch-records'
+import { OrchestrationError } from '../../orchestration-error'
 import { adoptRemoteAttempt } from '../../db/remote-owned/remote-placements'
 import {
   getOpenRemoteRunLink,
@@ -253,16 +255,20 @@ async function stopRemoteWorker(
   const dispatchId = subject.dispatchId!
   const server = remoteServerName(runtime, subject.link.environment_id)
   const owed = oweRemoteDispatchStop(db, dispatchId, forward?.key ?? `stop:${randomUUID()}`)
-  runtime.ensureOrchestrationFederationRelay(subject.link.run_id)
-  try {
-    return inServerTerms(
-      await sendOwedRemoteStop(runtime, owed?.record ?? getRemoteDispatch(db, dispatchId)!),
-      forward,
-      server
+  if (!owed) {
+    throw new OrchestrationError(
+      'dispatch_not_found',
+      `Worker Dispatch ${dispatchId} was not found.`
     )
+  }
+  runtime.ensureOrchestrationFederationRelay(subject.link.run_id)
+  // The server knows this attempt by its stop key; the caller knows only its own request ID.
+  const stopKey = forward && { key: remoteStopKey(owed.record), requestId: forward.requestId }
+  try {
+    return inServerTerms(await sendOwedRemoteStop(runtime, owed.record), stopKey, server)
   } catch (error) {
     if (!serverNeverAnswered(error) || !getOpenRemoteRunLink(db, subject.link.conversation_id)) {
-      throw inServerTerms(error, forward, server)
+      throw inServerTerms(error, stopKey, server)
     }
     return {
       dispatchId,

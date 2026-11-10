@@ -8,7 +8,7 @@ export function serverNeverAnswered(error: unknown): boolean {
 }
 
 export function errorData(error: unknown): Record<string, unknown> | undefined {
-  const data = error instanceof OrchestrationError ? error.data : undefined
+  const data = error instanceof Error && 'data' in error ? error.data : undefined
   return data && typeof data === 'object' && !Array.isArray(data)
     ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a non-array object's own fields, read as unknowns.
       (data as Record<string, unknown>)
@@ -37,10 +37,11 @@ export function inServerTerms<T>(
     }
     return item
   }
-  if (value instanceof OrchestrationError) {
+  if (value instanceof Error) {
+    const code = 'code' in value && typeof value.code === 'string' ? value.code : 'runtime_error'
     const data = swap(errorData(value) ?? {})
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an error stays an OrchestrationError with the same code.
-    return new OrchestrationError(value.code, String(swap(value.message)), {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an error stays an error with the same code.
+    return new OrchestrationError(code, String(swap(value.message)), {
       ...(data as Record<string, unknown>),
       server
     }) as T

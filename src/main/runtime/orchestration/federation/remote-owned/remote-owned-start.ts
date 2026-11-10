@@ -132,7 +132,7 @@ export async function startRemoteOwnedWorker(
         ...(task.task_title ? { taskTitle: task.task_title } : {}),
         adoptTaskId: task.id
       },
-      timeoutMs: Math.max(budgets.attachDeadlineMs - Date.now(), 1),
+      timeoutMs: budgets.attachDeadlineMs,
       requestId: forward.key,
       whileLink: ['open']
     })
@@ -168,7 +168,14 @@ export async function startRemoteOwnedWorker(
   const answer = inServerTerms(receipt, forward, server.name)
   return withRun(
     answer && typeof answer === 'object'
-      ? { ...answer, taskId, ...(started.data?.run ? { serverRun: started.data.run } : {}) }
+      ? {
+          ...answer,
+          // This Orca's Run and Task; the server's own Run for them is named apart.
+          taskId,
+          runId: run.id,
+          runCreated: bindRun().created,
+          ...(started.data?.run ? { serverRunId: started.data.run.id } : {})
+        }
       : answer
   )
 }
