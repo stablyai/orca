@@ -1,4 +1,5 @@
 import { existsSync, readdirSync } from 'node:fs'
+import { readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, normalize, parse, resolve, win32 } from 'node:path'
 import { normalizeAgentSessionsDir } from '../../session-scanner-values'
@@ -130,6 +131,61 @@ export function ompProfileSessionsDirs(
     for (const dir of candidates) {
       if (existsSync(dir)) {
         dirs.push(dir)
+      }
+    }
+  }
+  return dirs.sort().filter((dir, index) => dirs.indexOf(dir) === index)
+}
+
+/**
+ * Non-blocking variant of `ompProfileSessionsDirs` for request paths (native
+ * chat ID lookup) where a synchronous scan would stall the main process.
+ */
+export async function ompProfileSessionsDirsAsync(
+  options: {
+    env?: NodeJS.ProcessEnv
+    homeDir?: string
+    platform?: NodeJS.Platform
+  } = {}
+): Promise<string[]> {
+  const env = options.env ?? process.env
+  const home = options.homeDir ?? homedir()
+  const platform = options.platform ?? process.platform
+  if (env.OMP_CODING_AGENT_DIR?.trim()) {
+    return []
+  }
+  const profilesDir = join(home, env.PI_CONFIG_DIR || '.omp', 'profiles')
+  const xdgProfilesDir =
+    (platform === 'linux' || platform === 'darwin') && env.XDG_DATA_HOME
+      ? join(env.XDG_DATA_HOME, 'omp', 'profiles')
+      : undefined
+  const bases = [profilesDir, ...(xdgProfilesDir ? [xdgProfilesDir] : [])]
+  const entries = (
+    await Promise.all(
+      bases.map(async (dir) => {
+        try {
+          return await readdir(dir, { withFileTypes: true })
+        } catch {
+          return []
+        }
+      })
+    )
+  ).flat()
+  const dirs: string[] = []
+  for (const entry of entries) {
+    if (entry.name === 'default' || !entry.isDirectory() || !isSafeProfileName(entry.name)) {
+      continue
+    }
+    const candidates = [
+      join(profilesDir, entry.name, 'agent', 'sessions'),
+      ...(xdgProfilesDir ? [join(xdgProfilesDir, entry.name, 'sessions')] : [])
+    ]
+    for (const dir of candidates) {
+      try {
+        await stat(dir)
+        dirs.push(dir)
+      } catch {
+        continue
       }
     }
   }

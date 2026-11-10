@@ -2,7 +2,11 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ompProfileSessionsDirs, resolveOmpSessionsDir } from './omp-session-root'
+import {
+  ompProfileSessionsDirs,
+  ompProfileSessionsDirsAsync,
+  resolveOmpSessionsDir
+} from './omp-session-root'
 import { ompSessionsRootDirs } from '../../session-scanner-roots'
 import { AI_VAULT_AGENT_SOURCES } from '../../session-scanner-agent-sources'
 import { resolveSessionFilePath } from '../../../native-chat/session-file-resolver'
@@ -128,6 +132,32 @@ describe('ompProfileSessionsDirs', () => {
         platform: 'linux'
       })
     ).toEqual([dir])
+  })
+})
+
+describe('ompProfileSessionsDirsAsync', () => {
+  it('matches the sync scan across local, XDG, and invalid profiles', async () => {
+    const { home, xdg } = fixture()
+    const local = join(home, '.omp', 'profiles', 'qwen', 'agent', 'sessions')
+    const xdgVariant = join(xdg, 'omp', 'profiles', 'fast', 'sessions')
+    mkdirSync(local, { recursive: true })
+    mkdirSync(xdgVariant, { recursive: true })
+    mkdirSync(join(home, '.omp', 'profiles', 'work.', 'agent', 'sessions'), { recursive: true })
+    writeFileSync(join(home, '.omp', 'profiles', 'stray-file'), '')
+    const args = { env: { XDG_DATA_HOME: xdg }, homeDir: home, platform: 'linux' as const }
+    await expect(ompProfileSessionsDirsAsync(args)).resolves.toEqual(ompProfileSessionsDirs(args))
+  })
+
+  it('stays empty under the legacy OMP_CODING_AGENT_DIR override', async () => {
+    const { home } = fixture()
+    mkdirSync(join(home, '.omp', 'profiles', 'qwen', 'agent', 'sessions'), { recursive: true })
+    await expect(
+      ompProfileSessionsDirsAsync({
+        env: { OMP_CODING_AGENT_DIR: '/opt/omp' },
+        homeDir: home,
+        platform: 'linux'
+      })
+    ).resolves.toEqual([])
   })
 })
 

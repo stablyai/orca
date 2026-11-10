@@ -9,7 +9,7 @@ import {
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { forEachSessionFile } from '../ai-vault/session-scanner-discovery'
 import {
-  ompProfileSessionsDirs,
+  ompProfileSessionsDirsAsync,
   resolveOmpSessionsDir
 } from '../ai-vault/scanners/omp/omp-session-root'
 import {
@@ -189,7 +189,7 @@ async function resolveSessionFileById(
     // An explicit override pins one location; profile roots only join the env-resolved root.
     const hostDirs =
       override === undefined
-        ? uniqueDirs([...(root ? [root] : []), ...ompProfileSessionsDirs()])
+        ? uniqueDirs([...(root ? [root] : []), ...(await ompProfileSessionsDirsAsync())])
         : root
           ? [root]
           : []
