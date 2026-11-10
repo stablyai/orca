@@ -23,7 +23,10 @@ import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibilit
 import { readTerminalSpawnDeferral } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { remoteRestoreSpawnIntentParams } from '../../../../runtime/hosted-terminals/restoration/remote-restore-spawn-intent'
 import { createAgentSessionKeyboardOptions } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-keyboard-capability'
-import { agentProviderSessionForHostEnsure } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-ensure-provider-session'
+import {
+  agentProviderSessionForHostEnsure,
+  restoreSourcePaneOptions
+} from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-ensure-provider-session'
 import { createRemoteRuntimeDisconnectedInputGrace } from './input/remote-runtime-disconnected-input-grace'
 import {
   createRemoteRuntimeRecoveryInputHold,
@@ -249,6 +252,7 @@ export function createRemoteRuntimePtyTransport(
     launchConfig,
     resumeProviderSession,
     resumeOrigin,
+    resumeSourcePaneKey,
     launchToken,
     launchAgent,
     terminalColorQueryReplies,
@@ -3773,6 +3777,10 @@ export function createRemoteRuntimePtyTransport(
               resumeProviderSessionToSend
             )
           : undefined
+        const sourcePaneOptions =
+          ensureProviderSession && originOptions.resumeOrigin && resumeSourcePaneKey
+            ? await restoreSourcePaneOptions(createEnvironmentId, resumeSourcePaneKey)
+            : {}
         const result = await createWithUnknownOutcomeRecovery(
           'agent-session',
           (timeoutMs) =>
@@ -3784,6 +3792,7 @@ export function createRemoteRuntimePtyTransport(
                     kind: 'explicit',
                     ...keyboardOptions,
                     ...originOptions,
+                    ...sourcePaneOptions,
                     worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
                     agent: launchAgentToSend!,
                     providerSession: ensureProviderSession,

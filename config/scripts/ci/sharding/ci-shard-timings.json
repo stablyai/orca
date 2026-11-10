@@ -5885,7 +5885,6 @@
       "src/renderer/src/components/terminal-pane/pty-connection/output-restore/pty-connection-restored-baseline-shortfall.test.ts": 1902,
       "src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-spawn-and-startup.test.ts": 19652,
       "src/renderer/src/components/terminal-pane/pty-connection/spawn/pty-connection-spawn-deferred-sleep.test.ts": 6918,
-      "src/renderer/src/components/terminal-pane/pty-connection/startup/pty-connection-split-cwd-resolution.test.ts": 2139,
       "src/renderer/src/components/terminal-pane/pty-connection/tests/pty-connection-visibility-and-exit.test.ts": 18950,
       "src/renderer/src/components/terminal-pane/pty-connection/output-restore/pty-connection-visible-pane-output-pause-latch.test.ts": 1639,
       "src/renderer/src/components/terminal-pane/pty-connection/reattach/deferred-session-reattach-newer-daemon-hold.test.ts": 2570,

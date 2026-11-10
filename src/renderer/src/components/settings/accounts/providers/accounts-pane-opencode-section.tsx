@@ -32,8 +32,8 @@ export function renderOpenCodeAccountsSection(
 
         <SearchableSetting
           title={t(
-            'auto.components.settings.AccountsPane.36223200ac',
-            'OpenCode Go Session Cookie'
+            'auto.components.settings.AccountsPane.4d274a02f0',
+            'OpenCode Go session cookie'
           )}
           description={t(
             'auto.components.settings.AccountsPane.0335bd31d5',
@@ -91,7 +91,7 @@ export function renderOpenCodeAccountsSection(
         </SearchableSetting>
 
         <SearchableSetting
-          title={t('auto.components.settings.AccountsPane.02cb127710', 'OpenCode Go Workspace ID')}
+          title={t('auto.components.settings.AccountsPane.109431f707', 'OpenCode Go workspace id')}
           description={t(
             'auto.components.settings.AccountsPane.d70a5287a4',
             'Optional workspace ID override if the automatic lookup fails.'

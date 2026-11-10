@@ -22,7 +22,7 @@ it('searches and updates the selected dictation language', () => {
     />
   )
 
-  fireEvent.click(screen.getByRole('combobox', { name: 'Dictation Language' }))
+  fireEvent.click(screen.getByRole('combobox', { name: /dictation language/i }))
   fireEvent.change(screen.getByRole('combobox', { name: 'Search languages…' }), {
     target: { value: 'spanish' }
   })
@@ -55,6 +55,6 @@ it('keeps a selected language visible when the chosen model does not support it'
     />
   )
 
-  fireEvent.click(screen.getByRole('combobox', { name: 'Dictation Language' }))
+  fireEvent.click(screen.getByRole('combobox', { name: /dictation language/i }))
   expect(screen.getByRole('option', { name: 'Korean' })).toBeTruthy()
 })
