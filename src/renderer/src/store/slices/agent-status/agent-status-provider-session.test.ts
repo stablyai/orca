@@ -358,3 +358,73 @@ it('replaces only the captured pane resume handle and keeps a newer session thro
   store.getState().rememberSleepingAgentSession(resumed, newer)
   expect(store.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
 })
+
+it.each([
+  { incomingId: 'root-b', connectionId: 'ssh-a', keepsTurn: false },
+  { incomingId: 'root-a', connectionId: 'ssh-b', keepsTurn: false },
+  { incomingId: 'root-a', connectionId: undefined, keepsTurn: true },
+  { incomingId: undefined, connectionId: undefined, keepsTurn: true }
+])(
+  'scopes clockless Codex turn facts to their root: %j',
+  ({ incomingId, connectionId, keepsTurn }) => {
+    const store = createTestStore()
+    const paneKey = 'tab-1:leaf-1'
+    store.getState().setAgentStatus(
+      paneKey,
+      { state: 'done', agentType: 'codex', prompt: 'first', sessionBoundary: true },
+      undefined,
+      {
+        updatedAt: 2_000,
+        stateStartedAt: 2_000,
+        turnStartedAt: 1_000,
+        turnEndedAt: 2_000,
+        turnEndDisposition: 'identified'
+      },
+      { connectionId: 'ssh-a', worktreeId: 'wt-1' },
+      { providerSession: { key: 'session_id', id: 'root-a' } }
+    )
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'done', agentType: 'codex', prompt: '', sessionBoundary: true },
+        undefined,
+        { updatedAt: 3_000, stateStartedAt: 3_000 },
+        connectionId === undefined ? undefined : { connectionId, worktreeId: 'wt-1' },
+        incomingId === undefined
+          ? undefined
+          : { providerSession: { key: 'session_id', id: incomingId } }
+      )
+    const row = store.getState().agentStatusByPaneKey[paneKey]
+    if (keepsTurn) {
+      expect(row).toMatchObject({
+        turnStartedAt: 1_000,
+        turnEndedAt: 2_000,
+        turnEndDisposition: 'identified'
+      })
+    } else {
+      expect(row?.turnStartedAt).toBeUndefined()
+      expect(row?.turnEndedAt).toBeUndefined()
+      expect(row?.turnEndDisposition).toBeUndefined()
+    }
+    store.getState().setAgentStatus(
+      paneKey,
+      { state: 'done', agentType: 'codex', prompt: 'next', sessionBoundary: true },
+      undefined,
+      {
+        updatedAt: 5_000,
+        stateStartedAt: 5_000,
+        turnStartedAt: 4_000,
+        turnEndedAt: 5_000,
+        turnEndDisposition: 'identified'
+      },
+      undefined,
+      { providerSession: { key: 'session_id', id: 'root-c' } }
+    )
+    expect(store.getState().agentStatusByPaneKey[paneKey]).toMatchObject({
+      turnStartedAt: 4_000,
+      turnEndedAt: 5_000,
+      turnEndDisposition: 'identified'
+    })
+  }
+)

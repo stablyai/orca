@@ -1,3 +1,4 @@
+import { resolveResumeLaunchRecipe } from '../../../../../../shared/agent-launch/choices/resume-launch-recipe'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -50,6 +51,12 @@ export async function reopenWorkerTerminal(
 ): Promise<ReopenedWorker | null> {
   const resumed = await runtime.resumeAgentSessionInWorkspace(worktreeId, {
     ...session,
+    // Why always a recipe: without its own note the worker resumes unrecorded, never with another pane's.
+    launchConfig: resolveResumeLaunchRecipe(
+      session.launchConfig,
+      session.agent,
+      session.providerSession
+    ),
     // A retry of this follow-up reconciles the pane it may have started.
     mutationId: dispatchId
   })

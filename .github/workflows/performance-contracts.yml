@@ -19,7 +19,6 @@ on:
       # Contracts without the .performance suffix. Keep in sync with config/vitest.performance.config.ts;
       # without these a rename lands green and only breaks the next nightly.
       - 'src/main/runtime/session-tabs/session-tabs-phone-layout-moves.test.ts'
-      - 'src/renderer/src/components/terminal-pane/pty-connection/startup/saved-resume-cancellation.test.ts'
       - 'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-terminal-writer-acquire.test.ts'
       - 'src/shared/agent-launch/permissions/tui-agent-permission-choice.test.ts'
       - 'src/main/runtime/rpc/methods/projects/repo.test.ts'

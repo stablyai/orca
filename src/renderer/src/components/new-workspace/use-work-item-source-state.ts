@@ -1,6 +1,6 @@
 import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
 import { useRef, useState } from 'react'
-import type { RepoSlug } from '@/lib/github-links'
+import type { RepoSlug } from '../../../../shared/github/links'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'

@@ -88,7 +88,7 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-4 py-2">
+      <div data-settings-row="" className="flex items-center justify-between gap-4 py-2">
         <div className="space-y-0.5">
           <div className="flex items-center gap-2">
             <ShieldCheck className="size-4" />

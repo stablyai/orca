@@ -260,7 +260,7 @@ export function TerminalWindowsAdministratorSection(): React.JSX.Element {
               </Button>
             ) : (
               <Button variant="outline" size="sm" onClick={openManageSessions}>
-                {t('settings.terminal.windows.openManageSessions', 'Open Manage Sessions')}
+                {t('settings.terminal.windows.10aafff216', 'Open manage sessions')}
               </Button>
             )}
           </DialogFooter>

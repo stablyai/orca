@@ -192,8 +192,8 @@ export function TerminalAppearanceSection({
           <SettingsSubsectionHeader
             className="items-center"
             title={t(
-              'auto.components.settings.TerminalAppearanceSection.048aac8a64',
-              'Terminal Typography'
+              'auto.components.settings.TerminalAppearanceSection.5ae74b7796',
+              'Terminal typography'
             )}
             action={
               showConfigImports ? (
@@ -236,8 +236,8 @@ export function TerminalAppearanceSection({
 
             <SearchableSetting
               title={t(
-                'auto.components.settings.TerminalAppearanceSection.a408266e67',
-                'Font Family'
+                'auto.components.settings.TerminalAppearanceSection.a157b95a08',
+                'Font family'
               )}
               description={terminalTypographyEntries[1]?.description}
               keywords={
@@ -247,8 +247,8 @@ export function TerminalAppearanceSection({
             >
               <SettingsRow
                 label={t(
-                  'auto.components.settings.TerminalAppearanceSection.a408266e67',
-                  'Font Family'
+                  'auto.components.settings.TerminalAppearanceSection.a157b95a08',
+                  'Font family'
                 )}
                 control={
                   <FontAutocomplete

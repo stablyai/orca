@@ -128,9 +128,13 @@ function getRegisteredHandlers(): Map<string, (...args: unknown[]) => unknown> {
   return handlers
 }
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: path authorization reads only settings here; empty settings trust no floating cwd.
+const settingsOnlyStore = { getSettings: () => ({}) } as unknown as Parameters<
+  typeof registerClipboardHandlers
+>[0]
+
 function registerMockClipboardHandlers(): Map<string, (...args: unknown[]) => unknown> {
-  // SAFETY: Path authorization is mocked; these clipboard handlers do not read Store state.
-  registerClipboardHandlers({} as never)
+  registerClipboardHandlers(settingsOnlyStore)
   return getRegisteredHandlers()
 }
 
@@ -383,7 +387,7 @@ describe('registerClipboardHandlers', () => {
 
   it('rejects clipboard IPC from senders outside the current main renderer', async () => {
     setTrustedClipboardRendererWebContentsId(17)
-    registerClipboardHandlers({} as never)
+    registerClipboardHandlers(settingsOnlyStore)
 
     const handlers = getRegisteredHandlers()
     const untrustedEvent = makeClipboardEvent({ id: 42 })
@@ -419,7 +423,7 @@ describe('registerClipboardHandlers', () => {
         'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.'
       )
     )
-    registerClipboardHandlers({} as never)
+    registerClipboardHandlers(settingsOnlyStore)
 
     const handlers = getRegisteredHandlers()
     await expect(
@@ -432,7 +436,7 @@ describe('registerClipboardHandlers', () => {
   })
 
   it('rejects clipboard IPC from unpinned file://, destroyed, browser, and mismatched dev-origin senders', async () => {
-    registerClipboardHandlers({} as never)
+    registerClipboardHandlers(settingsOnlyStore)
 
     const handlers = getRegisteredHandlers()
     await expect(
@@ -467,7 +471,7 @@ describe('registerClipboardHandlers', () => {
       clipboardType === 'selection' ? 'selection secret' : 'standard secret'
     )
 
-    registerClipboardHandlers({} as never)
+    registerClipboardHandlers(settingsOnlyStore)
 
     const handlers = getRegisteredHandlers()
     await expect(
@@ -483,7 +487,7 @@ describe('registerClipboardHandlers', () => {
     const text = 'é'.repeat(300_000)
     clipboardReadTextMock.mockReturnValue(text)
 
-    registerClipboardHandlers({} as never)
+    registerClipboardHandlers(settingsOnlyStore)
 
     const handlers = getRegisteredHandlers()
     const result = handlers.get('clipboard:readText')?.(makeClipboardEvent(), {
@@ -508,7 +512,7 @@ describe('registerClipboardHandlers', () => {
       clipboardReadTextMock.mockReturnValue(value)
     })
 
-    registerClipboardHandlers({} as never)
+    registerClipboardHandlers(settingsOnlyStore)
 
     const handlers = getRegisteredHandlers()
     const result = handlers.get('clipboard:writeText')?.(makeClipboardEvent(), text)
@@ -527,7 +531,7 @@ describe('registerClipboardHandlers', () => {
   })
 
   it('rejects oversized text clipboard IPC writes before calling Electron clipboard', async () => {
-    registerClipboardHandlers({} as never)
+    registerClipboardHandlers(settingsOnlyStore)
 
     const handlers = getRegisteredHandlers()
     await expect(
@@ -581,7 +585,7 @@ describe('registerClipboardHandlers', () => {
         toPNG: () => png
       })
       try {
-        registerClipboardHandlers({} as never)
+        registerClipboardHandlers(settingsOnlyStore)
 
         const probe = getRegisteredHandlers().get('clipboard:hasImage')
         expect(probe?.(makeClipboardEvent())).toBe(true)
@@ -636,7 +640,7 @@ describe('registerClipboardHandlers', () => {
       throw new Error(`unexpected method: ${method}`)
     })
 
-    registerClipboardHandlers({} as never)
+    registerClipboardHandlers(settingsOnlyStore)
 
     const handlers = getRegisteredHandlers()
     await expect(
@@ -711,7 +715,7 @@ describe('registerClipboardHandlers', () => {
       throw new Error(`unexpected method: ${method}`)
     })
 
-    registerClipboardHandlers({} as never)
+    registerClipboardHandlers(settingsOnlyStore)
 
     const handlers = getRegisteredHandlers()
     await expect(
@@ -739,7 +743,7 @@ describe('registerClipboardHandlers', () => {
       toPNG: () => Buffer.alloc(CLIPBOARD_IMAGE_MAX_SOURCE_BYTES * 4)
     })
 
-    registerClipboardHandlers({} as never)
+    registerClipboardHandlers(settingsOnlyStore)
 
     await expect(
       getRegisteredHandlers().get('clipboard:saveImageAsTempFile')?.(
@@ -759,7 +763,7 @@ describe('registerClipboardHandlers', () => {
       toPNG: () => Buffer.alloc(CLIPBOARD_IMAGE_MAX_SOURCE_BYTES + 1)
     })
 
-    registerClipboardHandlers({} as never)
+    registerClipboardHandlers(settingsOnlyStore)
 
     const handlers = getRegisteredHandlers()
     await expect(
@@ -771,7 +775,7 @@ describe('registerClipboardHandlers', () => {
   })
 
   it('rejects oversized clipboard write-image data before decoding base64', () => {
-    registerClipboardHandlers({} as never)
+    registerClipboardHandlers(settingsOnlyStore)
 
     const handlers = getRegisteredHandlers()
     const dataUrl = [
@@ -792,7 +796,7 @@ describe('registerClipboardHandlers', () => {
       isEmpty: () => false
     })
 
-    registerClipboardHandlers({} as never)
+    registerClipboardHandlers(settingsOnlyStore)
 
     const handlers = getRegisteredHandlers()
     await expect(

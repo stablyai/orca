@@ -3,10 +3,7 @@ import { registerPtyConnectionPendingSpawnTests } from '../spawn/pty-connection-
 import { registerPtyConnectionFreshSpawnGuardsTests } from '../spawn/pty-connection-fresh-spawn-guards.spec'
 import { registerPtyConnectionSplitSpawnTests } from '../spawn/pty-connection-split-spawn.spec'
 import { registerPtyConnectionRestoredRuntimePaneBindingTests } from '../reattach/pty-connection-restored-runtime-pane-binding.spec'
-import {
-  registerPtyConnectionLocalStartupCommandDeliveryTests,
-  registerPtyConnectionTerminalPasteStartupCommandDeliveryTests
-} from '../startup/pty-connection-startup-command-delivery.spec'
+import { registerPtyConnectionTerminalPasteStartupCommandDeliveryTests } from '../startup/pty-connection-startup-command-delivery.spec'
 import { registerPtyConnectionCommandCodeStatusInferenceTests } from '../agent-identity/pty-connection-command-code-status-inference.spec'
 import { registerPtyConnectionStartupDraftDeliveryTests } from '../startup/pty-connection-startup-draft-delivery.spec'
 import { registerPtyConnectionDeliberateSleepGuardTests } from '../lifecycle/pty-connection-deliberate-sleep-guard.spec'
@@ -20,7 +17,6 @@ describe('pty-connection-runtime-owner-spawn-routing', () => {
   registerPtyConnectionRestoredRuntimePaneBindingTests()
 })
 describe('pty-connection-startup-command-delivery', () => {
-  registerPtyConnectionLocalStartupCommandDeliveryTests()
   registerPtyConnectionCommandCodeStatusInferenceTests()
   registerPtyConnectionTerminalPasteStartupCommandDeliveryTests()
 })

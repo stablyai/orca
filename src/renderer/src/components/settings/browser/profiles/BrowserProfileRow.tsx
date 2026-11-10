@@ -173,7 +173,7 @@ export function BrowserProfileRow({
               ) : (
                 <Import className="size-3" />
               )}
-              {t('auto.components.settings.BrowserProfileRow.cdec84552f', 'Import Cookies')}
+              {t('auto.components.settings.BrowserProfileRow.80bffd32bf', 'Import cookies')}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -214,7 +214,7 @@ export function BrowserProfileRow({
             )}
             {detectedBrowsers.length > 0 && <DropdownMenuSeparator />}
             <DropdownMenuItem onSelect={() => void handleImportFromFile()}>
-              {t('auto.components.settings.BrowserProfileRow.ebb78dfd6f', 'From File…')}
+              {t('auto.components.settings.BrowserProfileRow.bd7d68f138', 'From file…')}
             </DropdownMenuItem>
             <BrowserCookieImportDisclosure />
           </DropdownMenuContent>

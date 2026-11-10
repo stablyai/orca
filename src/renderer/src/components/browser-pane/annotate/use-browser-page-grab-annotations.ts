@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { translate } from '@/i18n/i18n'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
-import { imageCopyFailedMessage } from '@/lib/clipboard-image-copy'
+import { imageCopyFailedMessage } from '@/lib/clipboard/images/clipboard-image-copy'
 import {
   isBrowserAnnotationPageFull,
   type BrowserAnnotationIntent,

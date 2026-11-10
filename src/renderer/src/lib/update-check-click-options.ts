@@ -1,6 +1,6 @@
 import type { UpdateCheckOptions } from '../../../shared/update-status-types'
 import { translate } from '@/i18n/i18n'
-import { getShortcutPlatform } from './shortcut-platform'
+import { getShortcutPlatform } from './keyboard/shortcut-platform'
 
 type UpdateCheckClickEvent = Pick<MouseEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>
 
