@@ -12,6 +12,8 @@ export {
 } from './hosted-sandbox-request'
 import {
   HostedSandboxDesktopResponseSchema,
+  HostedSandboxDestroyResponseSchema,
+  type HostedSandboxDestroyResponse,
   HostedSandboxConfigResponseSchema,
   HostedGithubConnectResponseSchema,
   type HostedSandboxConfigResponse,
@@ -58,7 +60,7 @@ export type HostedSandboxControlPlaneClient = {
   resume(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxReadyResponse>
   renewLease(sandboxId: string, extendMs: number, signal?: AbortSignal): Promise<HostedSandboxView>
   rollover(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxReadyResponse>
-  destroy(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxView>
+  destroy(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxDestroyResponse['sandbox']>
   /** Idempotent wake; `waitMs` (max 30s) long-polls until orcad is ready. */
   wake(sandboxId: string, waitMs: number, signal?: AbortSignal): Promise<HostedWakeResponse>
   /** Status panel: state, live VM metrics, uptime, cost so far. */
@@ -173,7 +175,7 @@ export function createHostedSandboxControlPlaneClient(
       }),
     destroy: async (id, signal) =>
       (
-        await call('DELETE', sandboxPath(id), HostedSandboxStatusResponseSchema, {
+        await call('DELETE', sandboxPath(id), HostedSandboxDestroyResponseSchema, {
           kind: 'control',
           signal
         })

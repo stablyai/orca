@@ -90,7 +90,7 @@ export function createHostedSandboxDriver(
 
     async destroy(handle, ctx) {
       ctx?.onProgress?.({ phase: 'destroying' })
-      let view: HostedSandboxView
+      let view: { status: HostedSandboxView['status'] }
       try {
         view = await client.destroy(sandboxIdOf(handle), ctx?.signal)
       } catch (error) {
