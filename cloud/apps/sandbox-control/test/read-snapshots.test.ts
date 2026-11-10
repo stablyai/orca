@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { createPublicKey, verify } from 'node:crypto'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -353,5 +353,16 @@ describe('read snapshots of sleeping workspaces (E2EE)', () => {
     expect(checkReadSnapshotPin(pin, signer, snap.capturedAt - 1)).toEqual({ ok: false, reason: 'rollback' })
     // D1 relays the signature it was given, nothing more.
     expect(t.h.raw.prepare('SELECT signature FROM read_snapshots').get()).toEqual({ signature: JSON.stringify(sealed.signature) })
+  })
+
+  it('the VM signing key survives a broken file and refuses a relative state dir', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-sandbox-'))
+    const first = vm.signingKey(dir).publicKeyB64
+    expect(vm.signingKey(dir).publicKeyB64).toBe(first)
+    writeFileSync(join(dir, 'read-signing-key.pem'), '')
+    const replaced = vm.signingKey(dir).publicKeyB64
+    expect(replaced).not.toBe(first)
+    expect(vm.signingKey(dir).publicKeyB64).toBe(replaced)
+    expect(() => vm.signingKey('.orca-sandbox')).toThrow()
   })
 })

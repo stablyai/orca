@@ -113,9 +113,40 @@ export function checkReadSnapshotPin(
 }
 
 /**
- * A sealed grant (the pairing path) can carry the signer too; pairing with the workspace then pins
- * it, or re-pins it after the VM's disk was replaced (the user woke and paired with it again).
+ * A sealed grant (the pairing path) can carry the signer too. It only fills an empty pin: a grant is
+ * relayed by the control plane like a snapshot, so it must never replace a signer already pinned.
+ * Replacing one takes the person's explicit "trust the new copy" (forgetReadSnapshotSigner).
  */
 export function pinFromGrant(pin: ReadSnapshotPin | null, signerPublicKeyB64: string): ReadSnapshotPin {
+  if (pin?.signerPublicKeyB64) {
+    return pin
+  }
   return { signerPublicKeyB64, newestCapturedAt: pin?.newestCapturedAt ?? 0 }
+}
+
+/**
+ * The person chose to trust a workspace whose signer changed (its VM disk was replaced): the next
+ * signed copy pins again (trust on first use), and the rollback floor stays.
+ */
+export function forgetReadSnapshotSigner(pin: ReadSnapshotPin | null): ReadSnapshotPin | null {
+  return pin ? { signerPublicKeyB64: null, newestCapturedAt: pin.newestCapturedAt } : null
+}
+
+/**
+ * Store-side merge for a verdict, applied atomically against what is stored *now*: the floor only
+ * moves forward, and the signer changes only if the stored pin still has the signer the verdict was
+ * checked against (a concurrent grant pin or forget wins over a stale read).
+ */
+export function mergeReadSnapshotPin(
+  stored: ReadSnapshotPin | null,
+  checkedAgainst: ReadSnapshotPin | null,
+  next: ReadSnapshotPin
+): ReadSnapshotPin {
+  const storedSigner = stored?.signerPublicKeyB64 ?? null
+  const signer =
+    storedSigner === (checkedAgainst?.signerPublicKeyB64 ?? null) ? next.signerPublicKeyB64 : storedSigner
+  return {
+    signerPublicKeyB64: signer,
+    newestCapturedAt: Math.max(stored?.newestCapturedAt ?? 0, next.newestCapturedAt)
+  }
 }

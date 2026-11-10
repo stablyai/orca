@@ -48,21 +48,40 @@ const SIG_INFO = 'orca-cloud-read-sig-v1'
  * swapped doesn't verify. Same file for the grant script, which hands the public half to pairing devices.
  */
 function signingKey(stateDir) {
-  const file = path.join(stateDir, 'read-signing-key.pem')
-  let pem = null
-  try {
-    pem = fs.readFileSync(file, 'utf8')
-  } catch {}
-  if (!pem) {
-    fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 })
-    const fresh = crypto.generateKeyPairSync('ed25519').privateKey.export({ format: 'pem', type: 'pkcs8' })
-    try {
-      // wx: a concurrent first run keeps whichever key landed first.
-      fs.writeFileSync(file, fresh, { mode: 0o600, flag: 'wx' })
-    } catch {}
-    pem = fs.readFileSync(file, 'utf8')
+  if (!path.isAbsolute(stateDir)) {
+    throw new Error('no state dir')
   }
-  const privateKey = crypto.createPrivateKey(pem)
+  const file = path.join(stateDir, 'read-signing-key.pem')
+  const load = () => {
+    try {
+      const privateKey = crypto.createPrivateKey(fs.readFileSync(file, 'utf8'))
+      return privateKey.asymmetricKeyType === 'ed25519' ? privateKey : null
+    } catch {
+      return null
+    }
+  }
+  let privateKey = load()
+  if (!privateKey) {
+    fs.mkdirSync(stateDir, { recursive: true, mode: 0o700 })
+    // Written whole to a temp file, then linked into place: atomic, and a concurrent first run
+    // (grant + capture) keeps whichever key landed first. A broken file is replaced (devices that
+    // pinned the old signer then see "signer changed" until they trust the new one).
+    const temp = `${file}.${process.pid}.${crypto.randomBytes(4).toString('hex')}`
+    fs.writeFileSync(temp, crypto.generateKeyPairSync('ed25519').privateKey.export({ format: 'pem', type: 'pkcs8' }), { mode: 0o600 })
+    try {
+      fs.linkSync(temp, file)
+    } catch {
+      if (!load()) {
+        fs.renameSync(temp, file)
+      }
+    } finally {
+      fs.rmSync(temp, { force: true })
+    }
+    privateKey = load()
+    if (!privateKey) {
+      throw new Error('signing key unavailable')
+    }
+  }
   const publicKeyB64 = Buffer.from(crypto.createPublicKey(privateKey).export({ format: 'jwk' }).x, 'base64url').toString('base64')
   return { privateKey, publicKeyB64 }
 }
@@ -393,7 +412,8 @@ function fitToBudget(payload, maxBytes = MAX_PLAIN_BYTES) {
   return payload
 }
 
-const stateDir = path.join(process.env.HOME || '', '.orca-sandbox')
+// Fails closed without HOME (signingKey refuses a relative path).
+const stateDir = process.env.HOME ? path.join(process.env.HOME, '.orca-sandbox') : ''
 
 async function main() {
   const started = Date.now()
