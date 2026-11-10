@@ -198,7 +198,7 @@ export function SetupRow({
           title={
             <>
               {t('orcaCloudAccounts.deviceEnter', 'Enter')}{' '}
-              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm tracking-wider text-foreground">
+              <code className="select-all rounded bg-muted px-1.5 py-0.5 font-mono text-sm tracking-wider text-foreground">
                 {setup.userCode}
               </code>{' '}
               {t('orcaCloudAccounts.deviceOn', 'on {{host}}', {
@@ -217,12 +217,12 @@ export function SetupRow({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => actions.copyCode(setup.userCode)}
+                onClick={() => {
+                  actions.copyCode(setup.userCode)
+                  actions.reopen(agent)
+                }}
               >
-                {t('orcaCloudAccounts.copyCode', 'Copy code')}
-              </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={() => actions.reopen(agent)}>
-                {t('orcaCloudAccounts.openPage', 'Open page')}
+                {t('orcaCloudAccounts.copyAndOpen', 'Copy code and open')}
               </Button>
               {cancel}
             </>

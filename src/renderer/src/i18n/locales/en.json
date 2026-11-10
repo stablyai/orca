@@ -27615,8 +27615,6 @@
     "deviceEnter": "Enter",
     "deviceOn": "on {{host}}",
     "deviceGuard": "Only continue if you started this sign-in in Orca.",
-    "copyCode": "Copy code",
-    "openPage": "Open page",
     "pasteInstead": "Paste the token instead",
     "saving": "Saving to your Orca account…",
     "yourAccount": "Your {{product}} account",
@@ -27700,6 +27698,7 @@
       "team": "team key",
       "repository": "repository key",
       "personal": "your API key"
-    }
+    },
+    "copyAndOpen": "Copy code and open"
   }
 }
