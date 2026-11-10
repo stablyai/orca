@@ -15,7 +15,7 @@ import type { AgentLaunchRoutingInput } from '@/lib/agent-session/launch/routing
 import {
   getConnectionIdFromState,
   getRepoConnectionIdFromState
-} from '@/lib/connection-owner-resolution'
+} from '@/lib/workspace/ownership/connection-owner-resolution'
 import {
   getLocalProjectExecutionRuntimeContext,
   getLocalRepoProjectExecutionRuntimeContext

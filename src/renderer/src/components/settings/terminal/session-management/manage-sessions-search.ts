@@ -4,7 +4,7 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export const getManageSessionsSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.terminal.search.6f5d486a68', 'Manage Sessions'),
+    title: translate('auto.components.settings.terminal.search.bf8746544c', 'Manage sessions'),
     description: translate(
       'auto.components.settings.terminal.search.f72abc493c',
       'Recover from frozen terminals by killing sessions, clearing saved scrollback, or restarting the daemon.'

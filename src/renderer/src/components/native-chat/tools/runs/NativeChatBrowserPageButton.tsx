@@ -20,6 +20,19 @@ import type { NativeChatToolCallBlock } from '../../../../../../shared/native-ch
 const pageIdByRunCallId = new Map<string, string>()
 const REMEMBERED_RUNS_MAX = 500
 
+// Why: state, not a render-time Map read, so React Compiler's caches see the remembered page.
+function startRun(runCallId: string | null): {
+  runCallId: string | null
+  revision: number
+  rememberedPageId: string | undefined
+} {
+  return {
+    runCallId,
+    revision: getBrowserAgentActivityRevision(),
+    rememberedPageId: runCallId ? pageIdByRunCallId.get(runCallId) : undefined
+  }
+}
+
 /** Reveals the page a run of agent browser commands used; nothing for any other run. */
 export function NativeChatBrowserRunPageButton({
   calls
@@ -51,28 +64,28 @@ function BrowserPageButton({
   const owner = useNativeChatVisualOwner()
   const latest = useLastBrowserAgentActivity(owner?.worktreeId ?? null)
   // A call appears before its command reaches the browser, so only later activity is its own.
-  const [baseline, setBaseline] = useState(() => ({
-    runCallId,
-    revision: getBrowserAgentActivityRevision()
-  }))
+  const [baseline, setBaseline] = useState(() => startRun(runCallId))
   if (baseline.runCallId !== runCallId) {
-    setBaseline({ runCallId, revision: getBrowserAgentActivityRevision() })
+    setBaseline(startRun(runCallId))
   }
   const ownActivityPageId = latest && latest.revision > baseline.revision ? latest.pageId : null
-  const rememberedPageId = runCallId ? pageIdByRunCallId.get(runCallId) : undefined
+  if (runCallId && !pageId && !baseline.rememberedPageId && ownActivityPageId) {
+    setBaseline({ ...baseline, rememberedPageId: ownActivityPageId })
+  }
+  const rememberedPageId = baseline.rememberedPageId
   const targetPageId = pageId ?? rememberedPageId ?? latest?.pageId ?? null
   useEffect(() => {
-    if (!runCallId || pageId || rememberedPageId || !ownActivityPageId) {
+    if (!runCallId || !rememberedPageId || pageIdByRunCallId.get(runCallId) === rememberedPageId) {
       return
     }
-    pageIdByRunCallId.set(runCallId, ownActivityPageId)
+    pageIdByRunCallId.set(runCallId, rememberedPageId)
     if (pageIdByRunCallId.size > REMEMBERED_RUNS_MAX) {
       const oldest = pageIdByRunCallId.keys().next().value
       if (oldest !== undefined) {
         pageIdByRunCallId.delete(oldest)
       }
     }
-  }, [runCallId, pageId, rememberedPageId, ownActivityPageId])
+  }, [runCallId, rememberedPageId])
   const page = useAppStore((state) => {
     if (!targetPageId) {
       return null

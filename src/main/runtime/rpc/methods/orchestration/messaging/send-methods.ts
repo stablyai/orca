@@ -23,11 +23,11 @@ import {
 } from '../../../orchestration-mutation-receipt'
 import { replayMutationNudge } from './mutation-replay-nudge'
 import { handBackReplayTargets } from '../../../../orchestration/db/messages/helper-mailbox-hand-back'
-import { sendRemoteMessage } from './send-remote'
+import { sendRemoteMessage } from '../../../../orchestration/legacy-remote/legacy-remote'
 import { mayNameSession } from './session-recipient'
 import { sendPointToPointMessage } from './send-point-to-point'
 import { sendGroupMessage } from './send-group'
-import { sendFederatedControlMail } from './send-control-mail'
+import { sendFederatedControlMail } from '../../../../orchestration/legacy-remote-home/legacy-remote-home'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
@@ -38,6 +38,7 @@ import {
   settledDispatchId
 } from './settled-worker-follow-through'
 
+// `send --on <server>` is carried by withPeerMailSend (peer-mail-send.ts) before this handler runs.
 export const ORCHESTRATION_SEND_METHODS = [
   defineMethod({
     name: 'orchestration.send',

@@ -5,7 +5,10 @@ import { cn } from '@/lib/utils'
 import type { GitFileStatus } from '../../../../../../shared/git/status/git-status-types'
 import { FileExplorerRow } from './FileExplorerRow'
 import { InlineInputRow, type InlineInput } from '../mutations/file-explorer-inline-input-row'
-import { shouldShowIgnoredDecoration, STATUS_COLORS } from '../../../../lib/git-path-decoration'
+import {
+  shouldShowIgnoredDecoration,
+  STATUS_COLORS
+} from '../../../../lib/source-control/paths/git-path-decoration'
 import type { DirCache, FileExplorerOperationOwner, TreeNode } from '../tree/file-explorer-types'
 import type { FileExplorerRowProjection } from '../tree/file-explorer-row-projection'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'

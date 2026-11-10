@@ -1,4 +1,4 @@
-import { githubTaskBinding } from '@/lib/github-task-observation'
+import { githubTaskBinding } from '@/lib/work-items/github/github-task-observation'
 import { getWorkItemPageErrorTypes } from '../../../../../shared/github/work-item-page-errors'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'

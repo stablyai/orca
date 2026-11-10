@@ -6,7 +6,8 @@ import {
   type WorkerOutputArchiveCapture
 } from '../../../../orchestration/workers/archives/worker-output-archive'
 import type { WorkerTerminalResourceRow } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
-import { releaseUnknownRecovery, type WorkerReleaseReceipt } from './worker-release-completion'
+import type { WorkerReleaseReceipt } from './worker-release-completion'
+import { releaseUnknownRecovery } from './worker-release-unknown-recovery'
 import { archiveSummary } from './worker-terminal-resource-presentation'
 import { captureWorkerResumeSession } from './worker-resume-session-capture'
 

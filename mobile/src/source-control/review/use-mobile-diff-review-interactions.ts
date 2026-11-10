@@ -6,6 +6,7 @@ import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import type { ComposerState, ReviewScreenState } from './mobile-diff-review-screen-model'
 import type { ReviewSheet, ReviewSheetIntents } from './mobile-diff-review-sheets'
 import type { MobileReviewTerminalTab } from './review-terminal-reply-schema'
+import type { MobileDiffReviewNoteDraft } from './use-mobile-diff-review-note-draft'
 import { sourceFileDiffOpenRun } from '../mobile-source-file-open-operations'
 import { refusedRpcMessageOrFallback } from '../../transport/rpc/rpc-refusal-message'
 import { useMobileDiffReviewCommentActions } from './use-mobile-diff-review-comment-actions'
@@ -33,7 +34,7 @@ type InteractionInput = {
   selectKey: (key: string) => void
   moveSelection: (direction: 'next' | 'previous') => void
   remoteViewed: (item: MobileDiffReviewQueueItem, viewed: boolean) => Promise<boolean> | null
-  setComposerBody: Dispatch<SetStateAction<string>>
+  noteDraft: MobileDiffReviewNoteDraft
   setActionError: Dispatch<SetStateAction<string | null>>
   setBusyAction: Dispatch<SetStateAction<string | null>>
   sheets: ReviewSheetIntents
@@ -61,7 +62,7 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     selectKey,
     moveSelection,
     remoteViewed,
-    setComposerBody,
+    noteDraft,
     setActionError,
     setBusyAction,
     sheets,
@@ -99,7 +100,7 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     selectIndex,
     navigationRef,
     remoteViewed,
-    setComposerBody,
+    noteDraft,
     setActionError,
     sheets
   })

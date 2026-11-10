@@ -10,7 +10,7 @@ import {
 import {
   measureTextControlPasteByteLength,
   measureTextControlPasteByteLengthWithYield
-} from '@/lib/text-control-paste'
+} from '@/lib/text-input/paste/text-control-paste'
 import { translate } from '@/i18n/i18n'
 import { getRichMarkdownImageResolverContextVersion } from '../images/rich-markdown-image-context'
 import { trackRichMarkdownLargePasteHistory } from './rich-markdown-large-paste-history'

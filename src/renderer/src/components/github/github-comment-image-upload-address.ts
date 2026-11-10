@@ -4,7 +4,7 @@ import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-typ
 import {
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost
-} from '@/lib/github-source-runtime-context'
+} from '@/lib/work-items/github/github-source-runtime-context'
 
 export function githubCommentImageUploadAddress(args: {
   repoId?: string | null

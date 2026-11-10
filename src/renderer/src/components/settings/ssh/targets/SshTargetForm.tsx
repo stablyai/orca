@@ -156,7 +156,7 @@ export function SshTargetForm({
                   id="ssh-target-label"
                   value={form.label}
                   onChange={(e) => onFormChange((f) => ({ ...f, label: e.target.value }))}
-                  placeholder={t('auto.components.settings.SshTargetForm.b8dab0aa7b', 'My Server')}
+                  placeholder={t('auto.components.settings.SshTargetForm.bc9854a353', 'My server')}
                 />
               </div>
               <div className="space-y-1.5">
@@ -203,7 +203,7 @@ export function SshTargetForm({
               <div className="col-span-2 space-y-1.5">
                 <Label htmlFor="ssh-target-identity" className="flex items-center gap-1.5">
                   <FileKey className="size-3.5" />
-                  {t('auto.components.settings.SshTargetForm.63c0c145c1', 'Identity File')}
+                  {t('auto.components.settings.SshTargetForm.8349b7b4fa', 'Identity file')}
                 </Label>
                 <Input
                   id="ssh-target-identity"
@@ -239,7 +239,7 @@ export function SshTargetForm({
             </Button>
             <Button type="submit" size="sm" disabled={saving}>
               {isEditing
-                ? t('auto.components.settings.SshTargetForm.a62b4cb39a', 'Save Changes')
+                ? t('auto.components.settings.SshTargetForm.92ea40234c', 'Save changes')
                 : t('auto.components.settings.SshTargetForm.addHost', 'Add host')}
             </Button>
           </DialogFooter>

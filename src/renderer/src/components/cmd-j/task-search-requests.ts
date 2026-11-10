@@ -8,7 +8,7 @@ import { jiraStatusForTarget } from '@/runtime/jira/runtime-jira-project-client'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
 import { resolveJiraSourceHostId } from '../../../../shared/jira/jira-source-host'
-import { getJiraAccountLabel } from '@/lib/jira-account-label'
+import { getJiraAccountLabel } from '@/lib/work-items/jira/jira-account-label'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -28,7 +28,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PaletteFilterState } from './palette-filter'
 import { getTaskEligibleRepos } from '../task-page/task-page-default-repo-selection'
 import { getRepoBackedProviderAvailability } from '../task-source-provider-availability'
-import { getTaskPageRepoSourceContext } from '../../lib/task-repo-source-context'
+import { getTaskPageRepoSourceContext } from '../../lib/work-items/task-repo-source-context'
 import { searchJiraIssuesByKeyOrText } from '../jira-key-or-text-search'
 import { bindTaskPageJiraItemSourceContext } from '../task-page/jira/task-page-jira-item-source-context'
 import { makeCmdJTaskSearchResult, type CmdJTaskSearchResult } from './task-search-results'

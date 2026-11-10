@@ -106,8 +106,6 @@ export function settleStructuredAgentSessionChildExit<
   })
 }
 
-export { structuredAgentSessionEndedEventExit, type StructuredAgentSessionChildExit }
-
 export async function endExitedStructuredAgentSessionChildUnderSerialize<
   TSession extends StructuredAgentSessionChildExitSession
 >(

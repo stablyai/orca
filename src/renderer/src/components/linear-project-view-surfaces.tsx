@@ -1,5 +1,5 @@
-import { linearIssueReadError } from '@/lib/linear-read-error'
-import { taskProviderErrorText } from '@/lib/task-provider-error-copy'
+import { linearIssueReadError } from '@/lib/work-items/linear/linear-read-error'
+import { taskProviderErrorText } from '@/lib/work-items/task-provider-error-copy'
 import React from 'react'
 import { ArrowLeft, ArrowRight, ExternalLink, Layers3, LoaderCircle, RefreshCw } from 'lucide-react'
 

@@ -284,10 +284,22 @@ jobs:
               "${{ steps.apk.outputs.checksum }}"
           fi
 
-  # Keep site bump advisory after publication; failure only leaves its download link on the prior APK.
-  bump-apk-download:
+  # Advisory like the site bump: a failed mirror only leaves onorca.dev's "mirror link" on the prior APK.
+  release-mirror-r2:
     needs: android-build
     if: needs.android-build.outputs.publish_release == 'true'
+    uses: ./.github/workflows/release-mirror-r2.yml
+    with:
+      tag: mobile-android-v${{ needs.android-build.outputs.version }}
+      assets: app-release.apk
+    secrets: inherit
+
+  # Keep site bump advisory after publication; failure only leaves its download link on the prior APK.
+  # Why after the mirror: the site's mirror link uses the bumped version, so upload the APK first
+  # (success not required, so a mirror outage never blocks the bump).
+  bump-apk-download:
+    needs: [android-build, release-mirror-r2]
+    if: ${{ !cancelled() && needs.android-build.outputs.publish_release == 'true' }}
     runs-on: ubuntu-latest
     continue-on-error: true
     permissions:

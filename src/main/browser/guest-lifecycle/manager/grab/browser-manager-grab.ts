@@ -12,7 +12,7 @@ import type {
   BrowserGrabRect,
   BrowserGrabPayload,
   BrowserGrabScreenshot
-} from '../../../../../shared/browser-grab-types'
+} from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { BrowserManagerViewport } from '../viewport/browser-manager-viewport'
 
 export abstract class BrowserManagerGrab extends BrowserManagerViewport {

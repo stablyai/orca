@@ -29,7 +29,7 @@ vi.mock('./MobileNativeChatRewindDialog', () => ({ MobileNativeChatRewindDialog:
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
 }))
-vi.mock('../../MobileLinkActionSheet', () => ({ MobileLinkActionSheet: 'LinkActionSheet' }))
+vi.mock('./MobileLinkActionSheet', () => ({ MobileLinkActionSheet: 'LinkActionSheet' }))
 vi.mock('../visual/MobileImageViewerActions', () => ({
   MobileImageViewerActions: 'ImageViewerActions'
 }))

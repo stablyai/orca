@@ -3,6 +3,10 @@ export const SETUP_SCRIPT_IMPORT_PROVIDERS = [
   'conductor',
   'codex',
   'cmux',
+  'cursor',
+  'copilot',
+  'capy',
+  'devcontainer',
   'package-manager'
 ] as const
 

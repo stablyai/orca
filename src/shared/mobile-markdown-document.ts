@@ -1,5 +1,5 @@
-import { getClipboardTextByteLength, isClipboardTextByteLengthOverLimit } from './clipboard-text'
-import { clampUtf8TextPrefix } from './utf8-byte-limits'
+import { isClipboardTextByteLengthOverLimit } from './clipboard-text'
+import { clampUtf8TextPrefix, getUtf8ByteLength } from './utf8-byte-limits'
 
 export const MOBILE_MARKDOWN_EDIT_MAX_BYTES = 256 * 1024
 /** Over-budget mobile reads return a UTF-8-boundary prefix marked truncated. Matches the 2 MiB terminal snapshot; relay splice cap is 8 MiB. */
@@ -48,7 +48,7 @@ export function isMarkdownContentByteLengthOverLimit(content: string, maxBytes: 
 }
 
 export function utf8ByteLength(content: string): number {
-  return getClipboardTextByteLength(content)
+  return getUtf8ByteLength(content)
 }
 
 export function truncateMobileMarkdownRead(

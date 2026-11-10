@@ -1,4 +1,4 @@
-import type { RuntimeTerminalDriverState as DriverState } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../../shared/runtime-session-contracts'
 import { useCallback, useEffect, useId, useRef, useState, type ReactElement } from 'react'
 import { Minimize2, Smartphone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -13,7 +13,7 @@ import {
 import { useTranslate } from '@/i18n/use-translate'
 
 type Props = {
-  driver: DriverState
+  driver: RuntimeTerminalDriverState
   hasFitOverride: boolean
   onAction: () => void | Promise<void>
   onAllAction?: () => void | Promise<void>

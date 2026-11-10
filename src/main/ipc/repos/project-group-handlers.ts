@@ -12,6 +12,7 @@ import {
   ProjectGroupScanNestedArgs,
   ProjectGroupSelectorArgs,
   ProjectGroupUpdateArgs,
+  ProjectGroupUpdateManyArgs,
   parseProjectGroupIpcArgs
 } from './repo-ipc-arg-schemas'
 import {
@@ -49,6 +50,19 @@ export function registerProjectGroupHandlers(mainWindow: BrowserWindow, store: S
     )
     const updated = store.updateProjectGroup(args.groupId, args.updates)
     if (updated) {
+      notifyReposChanged(mainWindow)
+    }
+    return updated
+  })
+
+  ipcMain.handle('projectGroups:updateMany', (_event, rawArgs: unknown): ProjectGroup[] | null => {
+    const args = parseProjectGroupIpcArgs(
+      ProjectGroupUpdateManyArgs,
+      rawArgs,
+      'invalid_project_group_update_many_args'
+    )
+    const updated = store.updateProjectGroups(args.mutations)
+    if (updated?.length) {
       notifyReposChanged(mainWindow)
     }
     return updated

@@ -1,6 +1,6 @@
 import type { Duplex } from 'node:stream'
-import type { BrowserNetworkExecutionRouteResolver } from '../../network/execution-routes/browser-network-execution-route'
-import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser-network-tunnel-protocol'
+import type { BrowserNetworkExecutionRouteResolver } from '../../network/execution-routes/browser-network-execution-route-contract'
+import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import type { SshTargetSummary } from '../../../../shared/ssh-types'
 import { openExecutionRouteSocketAsDuplex } from '../../network/tunnels/execution-route-socket-duplex'
 import { RemoteBrowserSocksServer } from '../../network/tunnels/remote-browser-socks-server'

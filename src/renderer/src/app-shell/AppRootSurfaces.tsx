@@ -11,9 +11,9 @@ import NewWorkspaceComposerModal from '../components/NewWorkspaceComposerModal'
 import { CrashReportDialog } from '../components/crash-report/CrashReportDialog'
 import { MarkdownTemplatePicker } from '../components/editor/markdown/documents/MarkdownTemplatePicker'
 import RecentTabSwitcher from '../components/tab-bar/RecentTabSwitcher'
-import { SkillFreshnessUpdateDialog } from '../components/skills/SkillFreshnessUpdateDialog'
+import { SkillFreshnessUpdateDialog } from '../components/skills/freshness/SkillFreshnessUpdateDialog'
 import { StarNagAgentValueMomentObserver } from '../components/star-nag/StarNagAgentValueMomentObserver'
-import { NativeChatResumeOnRestartModal } from '../components/NativeChatResumeRuntimeModal'
+import { NativeChatResumeOnRestartModal } from '../components/native-chat-recovery/NativeChatResumeRuntimeModal'
 import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { TelemetryFirstLaunchSurface } from '../components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from '../components/ZoomOverlay'
@@ -57,7 +57,7 @@ const ProjectAddedDialog = lazy(
   () => import('../components/sidebar/project-admission/completion/ProjectAddedDialog')
 )
 const NodeDistMirrorDialog = lazy(
-  () => import('../components/settings/advanced/network/NodeDistMirrorDialog')
+  () => import('../components/ssh-host-recovery/NodeDistMirrorDialog')
 )
 const AiVaultSessionHistoryDialog = lazy(
   () => import('../components/right-sidebar/ai-vault/session-list/AiVaultSessionHistoryDialog')

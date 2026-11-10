@@ -26,8 +26,8 @@ const LOCAL_RUNTIME_SEARCH_ENTRY_IDS: ReadonlySet<string | undefined> = new Set(
 const getAllOrchestrationPaneSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
-      'auto.components.settings.orchestration.search.c34045764e',
-      'Agent Orchestration'
+      'auto.components.settings.orchestration.search.abafc3f10f',
+      'Agent orchestration'
     ),
     description: translate(
       'auto.components.settings.orchestration.search.e05ff36753',

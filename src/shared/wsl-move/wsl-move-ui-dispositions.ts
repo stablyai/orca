@@ -148,6 +148,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'pluginsAlphaNoticeDismissed',
   'codexTerminalServerIsolationNoticeSeen',
   'codexSharedSettingsNoticeSeen',
+  'speechModelUpdateNoticeSeen',
   'claudeDiffPanelNoticeSeen',
   'claudeAccountSignInNoticeSeen',
   'browserDefaultUrl',

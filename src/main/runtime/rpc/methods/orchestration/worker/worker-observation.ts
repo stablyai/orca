@@ -2,7 +2,6 @@ import { parseWorkerTerminalHostScope } from '../../../../../../shared/orchestra
 import type { RuntimeTerminalInteractiveWait } from '../../../../../../shared/runtime-terminal-contracts'
 import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
-import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
 import { projectWorkerFleet } from './worker-list-projection'
 import { createSessionWorkerLivenessReader } from '../../../../orchestration/workers/lifecycle/session-worker-liveness'
@@ -14,6 +13,7 @@ import type {
 } from '../../../../orchestration/db/orchestration-records'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { exposeDispatchContext } from './dispatch-context-exposure'
+import { resolvePinnedFederatedServer } from './pinned-federated-server'
 
 /** Recover live handles by recorded process incarnation so stale durable handles cannot hide and leak running workers. */
 export async function inspectWorkerTerminal(
@@ -251,19 +251,7 @@ export function exposeFederatedWorkerObservation(
   }
 }
 
-export function resolvePinnedFederatedServer(
-  runtime: WorkerTerminalReleaseRuntime,
-  federated: FederatedDispatchRow
-) {
-  const server = runtime.resolveOrchestrationWorkerServer(federated.environment_id)
-  if (server.peerFingerprint !== federated.peer_fingerprint) {
-    throw new OrchestrationError(
-      'peer_changed',
-      `Saved environment ${federated.environment_name} now identifies a different Orca server.`
-    )
-  }
-  return server
-}
+export { resolvePinnedFederatedServer }
 
 export async function callFederatedWorkerShow(
   runtime: WorkerTerminalReleaseRuntime,

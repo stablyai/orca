@@ -4,7 +4,10 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { useAppStore } from '@/store'
-import { notifyAgentLaunchFailure, agentLaunchRecoveryMessage } from './agent-launch-failure'
+import {
+  notifyAgentLaunchFailure,
+  agentLaunchRecoveryMessage
+} from './agent-session/launch/failure/agent-launch-failure'
 import { resolveAgentLaunchExecutionContext } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
 import {
   planAgentSessionLaunch,

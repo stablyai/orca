@@ -183,7 +183,7 @@ function drawnModelControls(state: StructuredAgentSessionOptionState) {
   return { catalog, models, ...shown, controls, values }
 }
 
-/** Without model evidence, retain saved nonstandard speed and allow Standard to disable it. */
+/** Without model evidence, a saved speed some model lists stays shown so Standard can turn it off. */
 function modellessControls(
   catalog: AgentSessionOptionCatalog,
   record: StructuredAgentSessionOptionRecord
@@ -198,7 +198,7 @@ function modellessControls(
       option.id === 'serviceTier' && option.kind.type === 'select' ? option.kind.choices : []
     )
     .find((choice) => choice.value === tier)
-  return [serviceTierOption([named ?? { value: tier, label: tier }])]
+  return named ? [serviceTierOption([named])] : []
 }
 
 function modelOptionSnapshot(state: StructuredAgentSessionOptionState): SessionOptionDescriptor[] {
