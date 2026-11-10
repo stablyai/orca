@@ -6,6 +6,7 @@ import { getClients, isAuthError } from './client'
 import { PROJECT_TEAMS_QUERY } from './linear-project-graphql'
 import type { LinearRawVariables, ProjectTeamsResponse } from './linear-project-nodes'
 import { coalesce, normalizeConcreteWorkspaceId } from './linear-project-models'
+import { linearConnectionHasNextPage } from './issue-context/pagination'
 
 export async function listProjectTeams(
   projectId: string,
@@ -55,7 +56,7 @@ export async function listProjectTeams(
           )
           const nextCursor = connection?.pageInfo?.endCursor ?? undefined
           if (
-            !connection?.pageInfo?.hasNextPage ||
+            !linearConnectionHasNextPage(connection) ||
             !nextCursor ||
             nextCursor === after ||
             nodes.length === 0

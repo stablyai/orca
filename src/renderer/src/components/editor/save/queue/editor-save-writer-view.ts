@@ -12,7 +12,7 @@ import {
 } from '@/store/slices/editor/buffers/editor-buffer-views'
 import { isCodeViewTab, type EditorSaveTrigger } from './editor-save-disk-precondition'
 import { canAutoSaveOpenFile } from '../../autosave/editor-autosave'
-import { editorDiscardEpoch } from '../flush/editor-discard-epoch'
+import { captureEditorDiscardGeneration } from '../flush/editor-discard-epoch'
 
 export function sameEditorSaveResource(state: AppState, source: OpenFile, view: OpenFile): boolean {
   const key = editorSaveResourceKey(source, state)
@@ -129,6 +129,6 @@ export function captureEditorSaveRequest(
     requestedDirty: state.openFiles.some((tab) => tab.id === captured.id && tab.isDirty),
     requestedFromCodeView: isCodeViewTab(state, captured),
     recordId,
-    discardEpoch: editorDiscardEpoch(recordId)
+    discardGeneration: captureEditorDiscardGeneration(recordId)
   }
 }

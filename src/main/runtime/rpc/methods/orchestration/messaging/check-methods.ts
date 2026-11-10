@@ -22,6 +22,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
     access: {
       kind: 'writes',
       caller: 'terminal',
+      callerPane: 'terminalPaneKey',
       targets: { run: 'run', ack: 'message' },
       collection: true
     },

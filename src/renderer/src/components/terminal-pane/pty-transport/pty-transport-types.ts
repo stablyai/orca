@@ -252,6 +252,8 @@ export type PtyTransport = {
   ownsRecovery?: () => boolean
   /** Typed input the host has not applied yet, which a remount would discard. */
   hasUndeliveredInput?: () => boolean
+  /** Input sent now is held and delivered to this pane's terminal once it connects. */
+  isHoldingInput?: () => boolean
   /** The user dismissed the error surface; the next occurrence of the same message must surface again. */
   notifyErrorSurfaceDismissed?: () => void
   getPtyId: () => string | null
