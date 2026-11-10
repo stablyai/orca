@@ -183,7 +183,9 @@ describe('Orca Cloud surfaces', () => {
       '12 keys waiting · they go to the terminal when it’s up'
     )
     // Still the pill (no skeleton cover), and recovery only once stuck.
-    expect(container.querySelector('[data-cloud-waking-overlay]')?.className).toContain('top-3')
+    expect(container.querySelector('[data-cloud-waking-overlay]')?.className).toContain(
+      'justify-end'
+    )
     expect(queryByRole('button', { name: 'Try again' })).toBeNull()
     rerender(
       <CloudWakingOverlay

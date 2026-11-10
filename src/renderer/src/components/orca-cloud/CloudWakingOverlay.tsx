@@ -132,7 +132,8 @@ export function CloudWakingOverlay({
       tabIndex={-1}
       className={cn(
         passThrough
-          ? 'pointer-events-none absolute inset-x-0 top-3 flex justify-center outline-none'
+          ? // Top-right, clear of the prompt line and what is being typed into it.
+            'pointer-events-none absolute inset-x-0 top-3 flex justify-end pr-3 outline-none'
           : 'absolute inset-0 bg-background outline-none',
         'motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150',
         'motion-safe:transition-opacity motion-safe:duration-200',
@@ -159,7 +160,7 @@ export function CloudWakingOverlay({
       <div
         className={
           passThrough
-            ? 'pointer-events-auto flex flex-col items-center gap-1.5 px-4'
+            ? 'pointer-events-auto flex flex-col items-end gap-1.5'
             : 'absolute inset-0 flex items-center justify-center p-4'
         }
       >
@@ -206,7 +207,8 @@ export function CloudWakingOverlay({
         ) : (
           <div
             className={cn(
-              'flex flex-col items-center text-card-foreground',
+              'flex flex-col text-card-foreground',
+              passThrough ? 'items-end' : 'items-center',
               hint && 'w-full max-w-xs gap-2 rounded-lg border border-border bg-card p-3 shadow-xs'
             )}
           >
@@ -226,7 +228,16 @@ export function CloudWakingOverlay({
                 {formatElapsedTime(seconds * 1000)}
               </span>
             </div>
-            {hint ? <p className="text-center text-xs text-muted-foreground">{hint}</p> : null}
+            {hint ? (
+              <p
+                className={cn(
+                  'text-xs text-muted-foreground',
+                  passThrough ? 'text-right' : 'text-center'
+                )}
+              >
+                {hint}
+              </p>
+            ) : null}
             {passThrough && pendingInput > 0 ? (
               <div
                 className="flex items-center gap-1.5 rounded-md border border-dashed border-border bg-card/95 py-0.5 pr-0.5 pl-2 text-xs shadow-xs"
