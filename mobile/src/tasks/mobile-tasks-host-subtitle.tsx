@@ -1,7 +1,7 @@
 import { StyleSheet, Text } from 'react-native'
 import { hostScreenStyles } from '../host-screen/host-screen-styles'
-import { useHostProfile } from '../transport/hosts/use-host-profile'
-import { useHostDisplay } from '../transport/hosts/use-host-display'
+import { useHostProfile } from '../host-catalog/use-host-profile'
+import { useHostDisplay } from '../host-descriptors/use-host-display'
 import { useMobileColorScheme } from './mobile-tasks-dependencies'
 
 export function MobileTasksHostSubtitle({ hostId }: { hostId: string }) {

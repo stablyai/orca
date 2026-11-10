@@ -3,7 +3,7 @@ import { View, Text, ScrollView, ActivityIndicator } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { ChevronLeft, RefreshCw, User } from 'lucide-react-native'
-import { loadHosts, peekHosts } from '../transport/hosts/host-store'
+import { loadHosts, peekHosts } from '../host-catalog/host-store'
 import { useForceReconnect, useHostClient } from '../transport/connection/host-client-hooks'
 import { useHostConnectionInputs } from '../transport/connection/client-context-connection-metrics'
 import { classifyConnection, isConnectionOutage } from '../transport/connection/connection-health'
@@ -16,22 +16,23 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-accounts-screen-styles'
 import { useNow } from '../hooks/use-now'
 import { ClaudeIcon, OpenAIIcon } from '../components/AgentIcons'
+import './usage/UsageBar'
 import {
   type ProviderKey,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
   getOtherUsageProviders,
   hasActiveProviderUsage
-} from '../components/AccountUsage'
+} from './usage/usage-selectors'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { getProviderDisplayName } from '../../../src/shared/usage-provider-windows'
 import { ProviderUsageWindows } from './ProviderUsageWindows'
 import {
   getActiveCodexAccountIdForRateLimitTarget,
   getCodexResetCreditSummary
-} from '../components/codex-reset-credit'
-import { CodexResetCreditAction } from '../components/CodexResetCreditAction'
-import { useCodexResetCreditAction } from '../components/use-codex-reset-credit-action'
+} from './usage/codex-reset-credit'
+import { CodexResetCreditAction } from './usage/CodexResetCreditAction'
+import { useCodexResetCreditAction } from './usage/use-codex-reset-credit-action'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'

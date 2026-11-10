@@ -24,9 +24,9 @@ import {
   worktreeMatchesHost
 } from '../../../../store/slices/worktrees/listing/worktree-host-ownership'
 import { joinPath } from '../../../../lib/path'
-import { extractIpcErrorMessage } from '../../../../lib/ipc-error'
+import { extractIpcErrorMessage } from '../../../../runtime/errors/ipc-error'
 import { Button } from '../../../ui/button'
-import { isWindowsUserAgent } from '../../../../lib/user-agent-platform'
+import { isWindowsUserAgent } from '../../../../app-shell/platform/user-agent-platform'
 import { McpConfigFileRow } from './McpConfigFileRow'
 import { McpMissingConfigList } from './McpMissingConfigList'
 import {
@@ -297,7 +297,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
 
   return (
     <SettingsGroup
-      title={t('auto.components.settings.McpConfigSection.55eea3ef47', 'MCP Configs')}
+      title={t('auto.components.settings.McpConfigSection.283bebb198', 'MCP configs')}
       description={
         <>
           {t(

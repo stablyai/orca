@@ -7,10 +7,11 @@ import { notifyAiVaultSessionQueued } from '@/components/right-sidebar/ai-vault/
 import '@/components/right-sidebar/ai-vault/session-list/ai-vault-session-filters'
 import { agentLabel } from '../../../shared/ai-vault/session-display/ai-vault-session-filters'
 
+/** Resolves to the new terminal tab's id when this client created it, else null. */
 export async function launchAiVaultSessionAndReveal(
   args: Parameters<typeof launchAiVaultSessionInNewTab>[0],
   describeFailure: (message: string) => string = (message) => message
-): Promise<void> {
+): Promise<string | null> {
   const launch = launchAiVaultSessionInNewTab(args)
   if (launch.tabId === null) {
     const outcome = await launch.runtimeLaunch
@@ -23,11 +24,12 @@ export async function launchAiVaultSessionAndReveal(
             { value0: agentLabel(args.agent) }
           )
       )
-      return
+      return null
     }
   }
   if (useAppStore.getState().activeWorktreeId !== args.worktreeId) {
     activateAiVaultResumeWorkspace(args.worktreeId)
   }
   notifyAiVaultSessionQueued(args.agent)
+  return launch.tabId
 }

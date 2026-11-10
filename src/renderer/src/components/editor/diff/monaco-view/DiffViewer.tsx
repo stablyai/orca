@@ -4,7 +4,10 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { useAppStore } from '@/store/index'
-import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
+import {
+  diffViewStateCache,
+  setWithLRU
+} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import { monacoTypographyOptions } from '@/lib/editor/appearance/editor-typography'
 import { useEditorTypography } from '@/hooks/use-editor-typography'
 import { useContextualCopySetup } from '../../useContextualCopySetup'
@@ -13,7 +16,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
-import { isDiffComment } from '@/lib/diff-comment-compat'
+import { isDiffComment } from '@/lib/source-control/review/comments/diff-comment-compat'
 import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from '../../editor-shortcuts'
 import { diffEditorScrollbarOptions } from './diff-editor-scrollbar-options'
 import { LargeDiffFallback } from '../large-files/LargeDiffFallback'
@@ -38,7 +41,7 @@ import {
   applyModelLanguage
 } from '@/lib/monaco-languages/plugin-syntax-editor-options'
 import { useMonacoTheme } from '@/hooks/use-monaco-theme'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { wholeFileDiffTintClass } from './whole-file-diff-tint'
 
 export default function DiffViewer({

@@ -11,7 +11,7 @@ import { serializeFolderLineage } from './folder-lineage-serialization'
 /** What a folder list row shows of a host row. */
 export type FolderListRow = Pick<
   Worktree,
-  'worktreeId' | 'hostId' | 'repo' | 'displayName' | 'branch'
+  'worktreeId' | 'hostId' | 'repoId' | 'repo' | 'displayName' | 'branch'
 >
 
 type FolderLineageRow = MobileLineageRow & Pick<Worktree, 'createdAt'>
@@ -36,6 +36,7 @@ export function toFolderListRow(row: Worktree): FolderListRow {
     listRow = {
       worktreeId: row.worktreeId,
       hostId: row.hostId,
+      repoId: row.repoId,
       repo: row.repo,
       displayName: row.displayName,
       branch: row.branch

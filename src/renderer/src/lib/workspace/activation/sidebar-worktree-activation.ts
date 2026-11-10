@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { EphemeralVmWorkspaceLifecycleResult } from '../../../../../shared/ephemeral-vm-runtimes'
-import { ephemeralVmErrorText } from '@/lib/ephemeral-vm-error-copy'
+import { ephemeralVmErrorText } from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
 import { ephemeralVmFailureFromError } from '../../../../../shared/ephemeral-vm-failure-copy'
 
 /** Coded failures render through the catalog; a thrown IPC error only has its message. */
