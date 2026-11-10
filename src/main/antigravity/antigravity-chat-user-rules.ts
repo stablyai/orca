@@ -74,7 +74,6 @@ export async function loadAntigravityUserRules(
       }
       seenCanonical.add(entry.canonicalPath)
       ruleBlocks.push(`<RULE[user_global]>\n${entry.content}\n</RULE[user_global]>`)
-      break
     }
 
     for (const filename of WORKSPACE_RULE_FILENAMES) {
@@ -85,7 +84,6 @@ export async function loadAntigravityUserRules(
       }
       seenCanonical.add(entry.canonicalPath)
       ruleBlocks.push(`<RULE[${entry.path}]>\n${entry.content}\n</RULE[${entry.path}]>`)
-      break
     }
 
     if (ruleBlocks.length === 0) {

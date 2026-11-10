@@ -81,6 +81,7 @@ export async function initializeAcpStructuredSession(
   } catch {
     sessionMeta = undefined
   }
+  assertStarting()
   const setup = {
     authMethodId,
     authMethodUnavailableMessage: spec.authMethodUnavailableMessage,

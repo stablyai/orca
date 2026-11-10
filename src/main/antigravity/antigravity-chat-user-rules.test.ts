@@ -133,6 +133,31 @@ describe('antigravity user rules', () => {
     )
   })
 
+  it('loads both AGENTS.md and GEMINI.md when a workspace has both', async () => {
+    const agentsPath = join(workspaceDir, 'AGENTS.md')
+    const geminiPath = join(workspaceDir, 'GEMINI.md')
+    await writeFile(agentsPath, 'Agents rule body', 'utf8')
+    await writeFile(geminiPath, 'Gemini rule body', 'utf8')
+
+    const rules = await loadAntigravityUserRules({
+      cwd: workspaceDir,
+      env: { HOME: homeDir }
+    })
+
+    expect(rules).toBe(
+      '<user_rules>\n' +
+        'The following are user-defined rules that you MUST ALWAYS FOLLOW WITHOUT ANY EXCEPTION. These rules take precedence over any other instructions.\n' +
+        'Review them carefully and always take them into account when you generate responses and code:\n' +
+        `<RULE[${agentsPath}]>\n` +
+        'Agents rule body\n' +
+        `</RULE[${agentsPath}]>\n` +
+        `<RULE[${geminiPath}]>\n` +
+        'Gemini rule body\n' +
+        `</RULE[${geminiPath}]>\n` +
+        '</user_rules>'
+    )
+  })
+
   it.skipIf(process.platform === 'win32')(
     'deduplicates symlinked workspace rule files',
     async () => {
