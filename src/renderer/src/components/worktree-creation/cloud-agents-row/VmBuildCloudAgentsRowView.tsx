@@ -238,7 +238,9 @@ function Lines({
     const text = readyLine(model, t)
     return (
       <>
-        <span className="truncate text-foreground">{text}</span>
+        <span title={text} className="truncate text-foreground">
+          {text}
+        </span>
         {line ? null : (
           <span className="truncate text-xs text-muted-foreground">
             {t('vmBuildAgents.readyDetail', 'Every cloud workspace uses it. Nothing to do here.')}
@@ -259,7 +261,7 @@ function Lines({
   const device = model.kind === 'setup' && model.setup.phase === 'device' ? model.setup : null
   return (
     <>
-      <span className="truncate text-foreground">
+      <span title={device ? undefined : text.title} className="truncate text-foreground">
         {device ? (
           <>
             {t('vmBuildAgents.deviceEnter', 'Enter')}{' '}
@@ -278,7 +280,9 @@ function Lines({
       {line ? (
         <span className="sr-only">{detail}</span>
       ) : (
-        <span className="truncate text-xs text-muted-foreground">{detail}</span>
+        <span title={detail} className="truncate text-xs text-muted-foreground">
+          {detail}
+        </span>
       )}
     </>
   )

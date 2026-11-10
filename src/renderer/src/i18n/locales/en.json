@@ -27717,8 +27717,6 @@
     "deviceEnter": "Enter",
     "deviceOn": "on {{host}}",
     "manage": "Manage",
-    "fromAccount": "from your Orca account",
-    "group": "{{agents}} · {{source}}",
     "separator": " · ",
     "stepOf": "{{step}} of {{of}}",
     "settingUp": "Setting up {{agent}}",
@@ -27739,6 +27737,8 @@
     "paused": "Orca account sign-in is paused",
     "pausedDetail": "This sign-in stays with this workspace",
     "error": "Couldn’t check agent sign-in",
-    "errorDetail": "The workspace still opens. Agents can sign in later."
+    "errorDetail": "The workspace still opens. Agents can sign in later.",
+    "groupAccount": "{{agents}} from your Orca account",
+    "groupKey": "{{agents}} with {{key}}"
   }
 }

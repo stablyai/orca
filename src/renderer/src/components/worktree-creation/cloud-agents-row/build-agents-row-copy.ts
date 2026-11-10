@@ -9,7 +9,7 @@ import type {
 import type { OrcaCloudAccountAgent } from '../../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
 import {
   agentName,
-  keySourceLabel,
+  keyPhrase,
   productName,
   setupFailureCopy
 } from '../../settings/agent-accounts/orca-cloud-accounts-copy'
@@ -26,15 +26,16 @@ export function agentList(agents: readonly OrcaCloudAccountAgent[], t: Translate
   }
 }
 
-function viaLabel(via: BuildAgentVia, t: Translate): string {
+/** One source group: "Claude and Codex from your Orca account" / "Codex with the team key". */
+function groupLabel(via: BuildAgentVia, agents: string, t: Translate): string {
   return via === 'account'
-    ? t('vmBuildAgents.fromAccount', 'from your Orca account')
-    : keySourceLabel(via, t)
+    ? t('vmBuildAgents.groupAccount', '{{agents}} from your Orca account', { agents })
+    : t('vmBuildAgents.groupKey', '{{agents}} with {{key}}', { agents, key: keyPhrase(via, t) })
 }
 
 /**
- * R1: "Claude and Codex · from your Orca account". Mixed sources read per source group in one line:
- * "Claude · from your Orca account · Codex · team key".
+ * R1: "Claude and Codex from your Orca account · nw@stably.ai". Mixed sources: one group per
+ * source, and the "·" separates groups only: "Claude from your Orca account · Codex with the team key".
  */
 export function readyLine(
   model: Extract<BuildAgentsRowModel, { kind: 'ready' }>,
@@ -44,12 +45,7 @@ export function readyLine(
   for (const entry of model.covered) {
     groups.set(entry.via, [...(groups.get(entry.via) ?? []), entry.agent])
   }
-  const parts = [...groups].map(([via, agents]) =>
-    t('vmBuildAgents.group', '{{agents}} · {{source}}', {
-      agents: agentList(agents, t),
-      source: viaLabel(via, t)
-    })
-  )
+  const parts = [...groups].map(([via, agents]) => groupLabel(via, agentList(agents, t), t))
   if (model.label) {
     parts.push(model.label)
   }
