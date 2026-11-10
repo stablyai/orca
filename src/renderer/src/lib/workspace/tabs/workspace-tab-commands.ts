@@ -6,6 +6,7 @@ import {
   resolvePinnedTabLabel
 } from '@/store/slices/tabs/closing/pinned-tab-close-guard'
 import { createWorkspaceTabCloseCommands } from '@/components/tab-group/workspace-tab-close-commands'
+import { hasUnsentBrowserNotes } from '@/store/slices/browser/annotations/browser-page-annotation'
 import { captureWorkspaceEmptiedReaction } from '@/components/tab-group/workspace-emptied-reaction'
 import {
   handleSwitchRecentTab,
@@ -189,7 +190,8 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
       guardPinnedTabClose({
         isPinned: tab.isPinned === true,
         tabLabel: resolvePinnedTabLabel(state, target.worktreeId, tab.id),
-        onClose: close
+        onClose: close,
+        unsentNotes: tab.contentType === 'browser' && hasUnsentBrowserNotes(state, tab.entityId)
       })
     }
     return true
