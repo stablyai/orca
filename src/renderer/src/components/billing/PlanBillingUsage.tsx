@@ -63,7 +63,7 @@ export function UsageSummary({
   const date = (ms: number): string =>
     new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(ms)
   const overLine = sandboxHoursOverLine(entitlement, t)
-  const warning = usageWarningLine(entitlement, t)
+  const warning = usageWarningLine(entitlement, t, locale)
   return (
     <div className="space-y-2">
       <div className="flex items-baseline justify-between gap-3 text-xs">
@@ -207,6 +207,12 @@ export function OverageControls({
           </p>
           <p id={descriptionId} className="text-xs text-muted-foreground">
             {optedIn ? descriptionOn : description}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'auto.components.billing.usageAlertsNote',
+              'Owners and admins are alerted in Orca at 75%, 90% and 100% of your team’s sandbox hours.'
+            )}
           </p>
         </div>
         <SettingsDisabledControlTooltip

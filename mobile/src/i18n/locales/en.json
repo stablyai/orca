@@ -591,11 +591,12 @@
       "openDesktopDescription": "Go to Settings → Mobile and generate a pairing QR code.",
       "scanCodeTitle": "Scan the code",
       "connectedTitle": "You're connected",
-      "connectedDescription": "Your desktop will appear here. Everything is encrypted end-to-end.",
       "title": "Connect your desktop",
       "description": "Pair with Orca on your computer to check on your agents, jump into any terminal, and drive work from your phone.",
       "pairDesktopButton": "Pair desktop",
-      "scanCodeBelowDescription": "Tap Pair desktop below, then point your camera at the QR code on your screen."
+      "scanCodeBelowDescription": "Tap Pair desktop below, then point your camera at the QR code on your screen.",
+      "connectedCloudDescription": "Your desktop and your Orca Cloud workspaces will appear here. Everything is encrypted end-to-end.",
+      "cloudNote": "Your Orca Cloud workspaces show up here once a desktop is paired."
     },
     "listFooter": {
       "hostPickerTitle": "Open Tasks On"
@@ -1371,7 +1372,9 @@
       "child": "Child",
       "children_one": "{{count}} child",
       "children_other": "{{count}} children",
-      "unsavedName": "Unsaved name: {{name}}"
+      "unsavedName": "Unsaved name: {{name}}",
+      "cloudWorkspaceState": "Cloud workspace, {{state}}",
+      "cloudWorkspace": "Cloud workspace"
     },
     "accountsSnapshot": {
       "invalidSnapshot": "Invalid accounts snapshot from host"
@@ -5051,7 +5054,8 @@
       "missing": "This workspace is gone or you no longer have access.",
       "signIn": "Sign in to Orca Cloud on this phone",
       "signInAction": "Sign in",
-      "unreachable": "Couldn’t reach Orca Cloud. Check your connection and try again."
+      "unreachable": "Couldn’t reach Orca Cloud. Check your connection and try again.",
+      "signInDetail": "This link opens a cloud workspace your team shared. Sign in to see it."
     },
     "action": {
       "openSession": "Open session",
@@ -5116,8 +5120,8 @@
       "emptyDetail": "Start one here. It keeps running while this phone and your computer sleep.",
       "new": "New cloud workspace",
       "createdAgo": "Created {{ago}} ago",
-      "openWorkspace": "Open {{title}}, {{detail}}",
-      "createdJustNow": "Created just now"
+      "createdJustNow": "Created just now",
+      "workspaceRowLabel": "Cloud workspace, {{title}}, {{detail}}"
     },
     "connect": {
       "signedOut": "Sign in to Orca on {{desktop}}, then try again.",

@@ -6,6 +6,7 @@ import {
   createCheckoutUrl,
   createPortalUrl,
   fetchEntitlement,
+  fetchTeamPlans,
   mintBillingToken
 } from './billing-client'
 
@@ -202,5 +203,47 @@ describe('billing client', () => {
     expect(
       (await fetchEntitlement(endpoints, 'bt', response({ plan: 'pro', offers: undefined }))).plan
     ).toBeNull()
+  })
+})
+
+describe('fetchTeamPlans', () => {
+  it('posts the team ids with the caller’s own token and returns validated rows', async () => {
+    const seen: Seen[] = []
+    const team = {
+      orgId: 'org_a',
+      plan: 'team',
+      planLabel: 'Team',
+      canStartSandbox: true
+    }
+    const teams = await fetchTeamPlans(
+      endpoints,
+      'bt',
+      ['org_a', 'org_b'],
+      fakeFetch(
+        {
+          'https://billing.example.test/v1/billing/team-plans': Response.json({ teams: [team] })
+        },
+        seen
+      )
+    )
+    expect(teams).toEqual([team])
+    expect(seen[0]?.init?.method).toBe('POST')
+    expect(JSON.parse(String(seen[0]?.init?.body))).toEqual({ orgIds: ['org_a', 'org_b'] })
+    expect(new Headers(seen[0]?.init?.headers).get('authorization')).toBe('Bearer bt')
+  })
+
+  it('rejects a malformed answer', async () => {
+    await expect(
+      fetchTeamPlans(
+        endpoints,
+        'bt',
+        ['org_a'],
+        fakeFetch({
+          'https://billing.example.test/v1/billing/team-plans': Response.json({
+            teams: [{ orgId: 'org_a', canStartSandbox: 'yes' }]
+          })
+        })
+      )
+    ).rejects.toThrow('invalid_billing_response')
   })
 })

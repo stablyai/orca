@@ -4,7 +4,8 @@ import { z } from 'zod'
 import type {
   OrcaBillingCheckoutArgs,
   OrcaBillingEntitlement,
-  OrcaBillingOverageArgs
+  OrcaBillingOverageArgs,
+  OrcaBillingTeamPlan
 } from '../../shared/orca-billing'
 import { ORCA_BILLING_INTERVALS, ORCA_BILLING_PLAN_IDS } from '../../shared/orca-billing'
 import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
@@ -253,4 +254,33 @@ export async function updateOverage(
       fetchImpl
     )
   )
+}
+
+const TeamPlansBody = z.object({
+  teams: z
+    .array(
+      z.object({
+        orgId: z.string().min(1).max(128),
+        plan: z.string().max(40).nullable(),
+        planLabel: z.string().max(40).nullable(),
+        canStartSandbox: z.boolean()
+      })
+    )
+    .max(20)
+})
+
+/** Plan state for other teams the caller is on (cloud start B2), read with the caller's own token. */
+export async function fetchTeamPlans(
+  endpoints: BillingEndpoints,
+  token: string,
+  orgIds: readonly string[],
+  fetchImpl: typeof fetch = fetch
+): Promise<OrcaBillingTeamPlan[]> {
+  const body = TeamPlansBody.safeParse(
+    await billingRequest(endpoints, token, 'POST', 'v1/billing/team-plans', { orgIds }, fetchImpl)
+  )
+  if (!body.success) {
+    throw new Error('invalid_billing_response')
+  }
+  return body.data.teams
 }

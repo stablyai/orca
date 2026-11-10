@@ -44,6 +44,7 @@ import { useDeleteWorktreeDialogTargets } from './use-delete-worktree-dialog-tar
 import { collectRemovalUnsavedFiles } from '@/components/editor/save/flush/removal-unsaved-editor-files'
 import { useDetachWorktreeDeleteChildren } from './use-detach-worktree-delete-children'
 import { useDeleteWorktreeDialogDismissal } from './use-delete-worktree-dialog-dismissal'
+import { DeleteCloudSandboxAgentsNote } from './DeleteCloudSandboxAgentsNote'
 
 const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const t = useTranslate()
@@ -348,6 +349,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
             dirtyChangeCountsByWorktreeId={dirtyChanges.counts}
             dirtyChangePreviewsByWorktreeId={dirtyChanges.previews}
           />
+
+          {!isBatchDelete && worktree ? <DeleteCloudSandboxAgentsNote worktree={worktree} /> : null}
 
           <RemovalUnsavedFilesNotice targets={unsavedTargets} enabled={isOpen} />
 

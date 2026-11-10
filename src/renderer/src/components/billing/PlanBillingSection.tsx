@@ -20,6 +20,7 @@ import { denyReasonCopy, openFailureCopy, overageFailureCopy } from './plan-bill
 import { PlanStatusBadge } from './PlanStatusBadge'
 import { useOrcaBillingStatus } from './use-orca-billing-status'
 import { useAppStore } from '@/store/index'
+import { usageAlertLevel } from '../../../../shared/orca-billing-usage-alerts'
 import { BILLING_CAPABILITY } from './register-plan-billing-menu-item'
 
 export function PlanBillingSection(): React.JSX.Element | null {
@@ -212,11 +213,17 @@ export function PlanBillingView({
         </div>
       ) : null}
 
-      {/* The overage card carries the cap-reached hint for admins; don't repeat it here. */}
+      {/* Admins already read these above: the overage card's cap-reached hint, and the usage
+          alert's out-of-hours sentence. */}
       {hasPlan &&
       entitlement.reason &&
       entitlement.payment.pastDueSince === null &&
-      !(entitlement.reason === 'overage_cap_reached' && entitlement.canManageBilling) ? (
+      !(
+        entitlement.canManageBilling &&
+        (entitlement.reason === 'overage_cap_reached' ||
+          (entitlement.reason === 'included_hours_exhausted' &&
+            usageAlertLevel(entitlement) === 100))
+      ) ? (
         <p className="text-xs text-muted-foreground">
           {denyReasonCopy(entitlement.reason, t, entitlement.canManageBilling)}
         </p>
