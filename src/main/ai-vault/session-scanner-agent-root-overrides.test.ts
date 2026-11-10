@@ -120,7 +120,10 @@ describe('agent scan roots from environment overrides', () => {
     vi.stubEnv('PI_CODING_AGENT_DIR', '/opt/pi-agent')
     vi.stubEnv('PI_CODING_AGENT_SESSION_DIR', '/mnt/transcripts')
     const { AI_VAULT_AGENT_SOURCES } = await import('./session-scanner-agent-sources.js')
-    expect(AI_VAULT_AGENT_SOURCES.pi?.rootDirs(NO_OPTIONS, NO_WSL)).toEqual(['/mnt/transcripts'])
+    expect(AI_VAULT_AGENT_SOURCES.pi?.rootDirs(NO_OPTIONS, NO_WSL)).toEqual([
+      '/mnt/transcripts',
+      join(homedir(), '.pi', 'agent', 'sessions')
+    ])
   })
 
   for (const testCase of CASES) {

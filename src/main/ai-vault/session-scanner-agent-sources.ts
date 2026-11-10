@@ -31,7 +31,7 @@ import { getHermesHome } from '../hermes/hermes-default-home'
 import { isClaudeProjectBucketDirectory } from './scanners/claude/claude-project-dir-encoding'
 import { SUBAGENT_DIR_NAME } from './scanners/claude/session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions } from './session-scanner-types'
-import { resolvePiSessionsDir } from './scanners/pi/pi-session-root'
+import { piSessionsRootDirs, resolvePiSessionsDir } from './scanners/pi/pi-session-root'
 import { primeAgentSessionsDirFromEnv } from './session-scanner-values'
 
 export const DEFAULT_CODEX_HOME_DIR = join(homedir(), '.codex')
@@ -228,11 +228,9 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
   },
   pi: {
     rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(options.piSessionsDir ?? piSessionHistorySessionsDir(), wslHomeDirs, [
-        '.pi',
-        'agent',
-        'sessions'
-      ]),
+      piSessionsRootDirs({ sessionsDir: options.piSessionsDir }).flatMap((rootDir) =>
+        sessionRootDirs(rootDir, wslHomeDirs, ['.pi', 'agent', 'sessions'])
+      ),
     extensions: ['.jsonl'],
     // OMP inherits PI_CODING_AGENT_DIR, so Pi's folder can hold OMP's task artifacts.
     directoryPredicate: isOmpConversationDirectory

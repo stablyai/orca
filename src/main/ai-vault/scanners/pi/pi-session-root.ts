@@ -34,6 +34,10 @@ function settingsSessionDir(agentHome: string): string | undefined {
   }
 }
 
+function defaultPiAgentSessionsDir(home: string): string {
+  return join(home, '.pi', 'agent', 'sessions')
+}
+
 export function resolvePiSessionsDir(
   options: { env?: NodeJS.ProcessEnv; homeDir?: string } = {}
 ): string {
@@ -43,5 +47,21 @@ export function resolvePiSessionsDir(
     absoluteDir(env.PI_CODING_AGENT_SESSION_DIR, home) ??
     absoluteDir(settingsSessionDir(agentHomeDir(env, home)), home) ??
     normalizeAgentSessionsDir(env.PI_CODING_AGENT_DIR?.trim() ?? '', '.pi')
+  )
+}
+
+/**
+ * Keep history from before an override took effect: the resolved root and the default agent home.
+ * An explicit scan option still replaces both, matching the Claude and OMP root handling.
+ */
+export function piSessionsRootDirs(
+  options: { env?: NodeJS.ProcessEnv; homeDir?: string; sessionsDir?: string } = {}
+): string[] {
+  if (options.sessionsDir !== undefined) {
+    return [options.sessionsDir]
+  }
+  const home = options.homeDir ?? homedir()
+  return [resolvePiSessionsDir(options), defaultPiAgentSessionsDir(home)].filter(
+    (root, index, roots) => root.length > 0 && roots.indexOf(root) === index
   )
 }

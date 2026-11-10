@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { resolvePiSessionsDir } from './pi-session-root'
+import { piSessionsRootDirs, resolvePiSessionsDir } from './pi-session-root'
 
 let tempDirs: string[] = []
 
@@ -76,5 +76,20 @@ describe('resolvePiSessionsDir', () => {
     expect(
       resolvePiSessionsDir({ env: {}, homeDir: await homeWithSettings({ sessionDir: 7 }) })
     ).toBe(join(homedir(), '.pi', 'agent', 'sessions'))
+  })
+
+  it('keeps the default agent home indexed after an override so older history survives', async () => {
+    const home = await homeWithSettings({ sessionDir: '/srv/from-settings' })
+    expect(piSessionsRootDirs({ env: {}, homeDir: home })).toEqual([
+      '/srv/from-settings',
+      join(home, '.pi', 'agent', 'sessions')
+    ])
+    expect(
+      piSessionsRootDirs({ env: { PI_CODING_AGENT_SESSION_DIR: '/srv/from-env' }, homeDir: home })
+    ).toEqual(['/srv/from-env', join(home, '.pi', 'agent', 'sessions')])
+  })
+
+  it('replaces the default home when a scan option names the root explicitly', () => {
+    expect(piSessionsRootDirs({ sessionsDir: '/mnt/explicit' })).toEqual(['/mnt/explicit'])
   })
 })
