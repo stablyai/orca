@@ -1,3 +1,4 @@
+import { preparePaneSleepAdmission } from './terminal/stop/pane-sleep-admission'
 import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
 import { conversationRecordReader } from './orchestration/addressing/session-lineage/structured-session-lineage'
 import type { RuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
@@ -289,6 +290,18 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     command: Layout.WindowLayoutCommand,
     run?: Pick<Layout.LayoutCommandRunOptions, 'admit' | 'visibility'>
   ): Promise<LayoutApplyReply> {
+    const targets = command.type === 'sleep' ? command.expectedTargets : undefined
+    const processAdmission = targets ? await preparePaneSleepAdmission(targets) : undefined
+    const callerAdmission = run?.admit
+    const admit: typeof callerAdmission = targets
+      ? (partitions) =>
+          processAdmission!() &&
+          targets.every(
+            (target) =>
+              command.type === 'sleep' && this.paneSleepTargetIsCurrent(command.workspace, target)
+          ) &&
+          (callerAdmission?.(partitions) ?? true)
+      : callerAdmission
     // Wait for live terminal placement before creating the first workspace surface.
     const placing = this.livePlacementSettledFor(command)
     const apply = (): Promise<LayoutApplyReply> =>
@@ -300,10 +313,11 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
             : [this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId) ?? []].flat(),
         command,
         (move) => rekeyMovedPaneOwners(this, move),
-        { ...this.layoutCommandRun(command), ...run }
+        { ...this.layoutCommandRun(command), ...run, ...(admit ? { admit } : {}) }
       )
     // Order sleep/wake after previously accepted hook statuses.
-    const reply = await (ORCA_LAYOUT_OWNER_IS_MAIN && ['sleep', 'wake'].includes(command.type)
+    const reply = await ((ORCA_LAYOUT_OWNER_IS_MAIN || targets !== undefined) &&
+    ['sleep', 'wake'].includes(command.type)
       ? this.inResumeRecordOrder(apply)
       : (placing?.then(apply) ?? apply()))
     // The frame precedes the reply so the window can wait for its visible change.

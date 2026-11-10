@@ -275,7 +275,7 @@ beforeEach(async () => {
     activeTabType: 'terminal',
     activeTabId: parent.tab.id,
     tabsByWorktree: { [parent.tab.worktreeId]: [parent.tab] },
-    retainedAgentsByPaneKey: {},
+
     migrationUnsupportedByPtyId: {},
     runtimeEnvironments: []
   })

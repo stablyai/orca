@@ -1,3 +1,7 @@
+import {
+  isResumablePaneRecord,
+  agentProviderSessionsEqual
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 // Restore terminal-less saved panes for pending-row activation and workspace wakes; main-owned layouts also handle triggers outside desktop restore.
 
 import type { OrcaRuntimeWithAgentSessionResumeOwnership as AgentSessionResume } from './agent-session-resume-ownership'
@@ -32,7 +36,6 @@ import { HistoryReader } from '../../../daemon/history/restoration/history-reade
 import { servesWslMovedPaneHistory } from '../../../orcad/orcad-migration-wsl-destination'
 import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-catalog/orcad-terminal-history-installer'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
 export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {
@@ -308,7 +311,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
         }
       )
       // A running resumed agent's record must not remain asleep.
-      if (created.tab.ptyId && resumedRecord) {
+      if (created.tab.ptyId && resumedRecord && isResumablePaneRecord(resumedRecord)) {
         const hostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
         void markResumedRecordLive(
           (edit) => this.commitWorkspaceSessionEdit(hostId, edit),

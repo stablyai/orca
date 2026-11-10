@@ -7,6 +7,7 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts
 import type {
   ActivityEvent,
   ActivityLiveAgentSnapshot,
+  ActivityPassiveAgentSnapshot,
   AgentPaneThread
 } from './activity-thread-types'
 
@@ -64,6 +65,7 @@ export function buildAgentPaneThreads(
   args: {
     events: ActivityEvent[]
     liveAgentByPaneKey: Record<string, ActivityLiveAgentSnapshot>
+    passiveAgentByPaneKey?: Record<string, ActivityPassiveAgentSnapshot>
     paneEntryByPaneKey?: Record<string, AgentStatusEntry>
     generatedTitlesEnabled?: boolean
   },
@@ -111,6 +113,28 @@ export function buildAgentPaneThreads(
         existing.responsePreview
       )
     }
+  }
+
+  for (const [paneKey, passive] of Object.entries(args.passiveAgentByPaneKey ?? {})) {
+    if (byPaneKey.has(paneKey)) {
+      continue
+    }
+    byPaneKey.set(paneKey, {
+      paneKey,
+      paneTitle: paneTitleForEntry(passive.entry, passive.tab, generatedTitlesEnabled),
+      worktree: passive.worktree,
+      repo: passive.repo,
+      tab: passive.tab,
+      agentType: passive.agentType,
+      currentAgentState: null,
+      currentAgentEntry: null,
+      paneEntry: passive.entry,
+      responsePreview: statusPreviewForEntry(passive.entry, passive.entry.state),
+      latestTimestamp: passive.timestamp,
+      latestEvent: null,
+      events: [],
+      unread: false
+    })
   }
 
   for (const [paneKey, liveAgent] of Object.entries(args.liveAgentByPaneKey)) {

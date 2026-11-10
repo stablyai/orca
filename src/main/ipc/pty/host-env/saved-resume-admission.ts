@@ -1,5 +1,6 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
+  resumablePaneRecord,
   normalizeAgentProviderSession,
   agentProviderSessionsEqual,
   type AgentProviderSessionMetadata,
@@ -216,11 +217,9 @@ export function savedResumeRecord(
     | undefined,
   paneKey: string | null
 ): SleepingAgentSessionRecord | undefined {
-  return paneKey
-    ? store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)?.sleepingAgentSessionsByPaneKey?.[
-        paneKey
-      ]
-    : undefined
+  const records =
+    store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)?.sleepingAgentSessionsByPaneKey
+  return resumablePaneRecord(paneKey ? records?.[paneKey] : undefined)
 }
 
 /** Runs only in the fresh branch, after stable/claimed owner adoption has settled. */

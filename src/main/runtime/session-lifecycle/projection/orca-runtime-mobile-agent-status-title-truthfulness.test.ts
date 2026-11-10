@@ -245,4 +245,47 @@ describe('mobile session tabs: a process started after its pane last reported', 
       'restoredUnconfirmed'
     )
   })
+  it('publishes accepted previous completion history while the next turn works', async () => {
+    const previousCompletion = {
+      kind: 'previous' as const,
+      end: {
+        state: 'done' as const,
+        prompt: 'first task',
+        startedAt: T0 - 1000,
+        turnEndedAt: T0 - 1000,
+        turnEndDisposition: 'identified' as const
+      },
+      lastAssistantMessage: 'first reply'
+    }
+    const runtime = await createRuntime([
+      {
+        paneKey: PANE_KEY,
+        state: 'working',
+        prompt: 'next task',
+        agentType: 'claude',
+        connectionId: null,
+        receivedAt: T0,
+        stateStartedAt: T0,
+        tabId: TAB_ID,
+        worktreeId: WORKTREE_ID,
+        providerSession: PROVIDER_SESSION,
+        previousCompletion
+      }
+    ])
+    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const tab = result.tabs[0]
+    expect(tab?.type === 'terminal' ? tab.agentStatus : null).toMatchObject({
+      state: 'working',
+      stateHistory: [
+        {
+          state: 'done',
+          prompt: 'first task',
+          startedAt: T0 - 1000,
+          turnEndedAt: T0 - 1000,
+          turnEndDisposition: 'identified'
+        }
+      ],
+      lastCompletedAssistantMessage: 'first reply'
+    })
+  })
 })

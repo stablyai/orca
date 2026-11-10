@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
     ptyIdsByTabId: {},
     terminalLayoutsByTabId: {},
     agentStatusByPaneKey: {},
-    retainedAgentsByPaneKey: {},
+
     runtimeAgentOrchestrationByPaneKey: {},
     setActiveWorktree: vi.fn(),
     markWorktreeVisited: vi.fn(),
@@ -203,7 +203,6 @@ describe('createTerminalHandleLinkProvider', () => {
     mocks.storeState.ptyIdsByTabId = {}
     mocks.storeState.terminalLayoutsByTabId = {}
     mocks.storeState.agentStatusByPaneKey = {}
-    mocks.storeState.retainedAgentsByPaneKey = {}
     mocks.storeState.runtimeAgentOrchestrationByPaneKey = {}
     vi.stubGlobal('window', {
       api: {

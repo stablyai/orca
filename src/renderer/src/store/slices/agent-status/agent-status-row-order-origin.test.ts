@@ -6,7 +6,6 @@ import { buildWorktreeAgentRows } from '@/components/sidebar/workspace-card/acti
 import { AGENT_STATE_HISTORY_MAX } from '../../../../../shared/agent-status/lifecycle/agent-state-history'
 import { makePaneKey, parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentStatusTiming } from './agent-status-contract'
-import { retainedAgentEntryFromLive } from './agent-status-pane-key-tab-binding'
 import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
 import {
   ENV,
@@ -45,7 +44,6 @@ function fixture(agentType = 'pi') {
     buildWorktreeAgentRows({
       tabs: [],
       entries: Object.values(store.getState().agentStatusByPaneKey),
-      retained: [],
       now: 1_000_000
     })
   return { store, write, rows }
@@ -85,7 +83,6 @@ describe('observed agent session row origin', () => {
       return buildWorktreeAgentRows({
         tabs: client.tabsByWorktree['wt-order'] ?? [],
         entries: Object.values(client.agentStatusByPaneKey),
-        retained: [],
         now: 1_000_000 + version
       })
     }
@@ -136,10 +133,6 @@ describe('observed agent session row origin', () => {
         2000
       )
       expect(rows().map((row) => row.paneKey)).toEqual(before)
-      const entry = store.getState().agentStatusByPaneKey[pane]
-      expect(retainedAgentEntryFromLive(store.getState(), 'wt-order', entry, agent).startedAt).toBe(
-        1000
-      )
     }
   )
 })
@@ -182,4 +175,85 @@ it('preserves origin through routing enrichment, WSL equivalence and pane transf
       { connectionId: 'different-host', worktreeId: workspace }
     )
   expect(rows()[0].startedAt).toBe(4000)
+})
+
+it('keeps the first session clock across transient SSH loss and provider-less replay', () => {
+  const store = createTestStore()
+  const publish = (at: number, state: 'working' | 'done', session?: string) =>
+    store
+      .getState()
+      .setAgentStatus(
+        pane,
+        { state, prompt: 'task', agentType: 'claude' },
+        undefined,
+        { updatedAt: at, stateStartedAt: at },
+        { worktreeId: 'wt-order', connectionId: 'ssh-a' },
+        session ? { providerSession: { key: 'session_id', id: session } } : undefined
+      )
+  publish(1000, 'working', 'A')
+  publish(5000, 'done', 'A')
+  store.getState().removeAgentStatus(pane)
+  publish(6000, 'done')
+  expect(store.getState().agentStatusByPaneKey[pane].firstStateStartedAt).toBe(1000)
+  expect(store.getState().agentConversationsByPaneKey[pane].providerSession?.id).toBe('A')
+  const conversations = store.getState().agentConversationsByPaneKey
+  publish(7000, 'done', 'A')
+  expect(store.getState().agentStatusByPaneKey[pane].firstStateStartedAt).toBe(1000)
+  expect(store.getState().agentConversationsByPaneKey).toBe(conversations)
+  store.getState().removeAgentStatus(pane)
+  publish(8000, 'working', 'B')
+  expect(store.getState().agentStatusByPaneKey[pane].firstStateStartedAt).toBe(8000)
+})
+
+it('keeps an old paired host session clock across omission and provider-less replay', () => {
+  let client = makeState()
+  const publish = (version: number, at: number, state: 'working' | 'done', session?: string) => {
+    client = {
+      ...client,
+      ...applyWebSessionTabsSnapshot(
+        client,
+        makeSnapshot(
+          [
+            {
+              type: 'terminal',
+              id: `tab-order::11111111-1111-4111-8111-111111111111`,
+              title: 'Claude',
+              parentTabId: 'tab-order',
+              leafId: '11111111-1111-4111-8111-111111111111',
+              isActive: true,
+              status: 'ready',
+              terminal: 'terminal-order',
+              agentStatus: {
+                paneKey: pane,
+                tabId: 'tab-order',
+                worktreeId: 'wt-order',
+                agentType: 'claude',
+                state,
+                prompt: 'task',
+                updatedAt: at,
+                stateStartedAt: at,
+                stateHistory: [],
+                ...(session ? { providerSession: { key: 'session_id' as const, id: session } } : {})
+              }
+            }
+          ],
+          { worktree: 'wt-order', snapshotVersion: version }
+        ),
+        ENV,
+        1_000_000 + version
+      )
+    }
+    return Object.values(client.agentStatusByPaneKey)[0]
+  }
+  const initial = publish(1, 1000, 'working', 'A')
+  expect(initial.firstStateStartedAt).toBe(1000)
+  expect(publish(2, 5000, 'done', 'A').firstStateStartedAt).toBe(1000)
+  client = { ...client, agentStatusByPaneKey: {} }
+  expect(publish(3, 6000, 'done').firstStateStartedAt).toBe(1000)
+  expect(client.agentConversationsByPaneKey?.[initial.paneKey].providerSession?.id).toBe('A')
+  const conversations = client.agentConversationsByPaneKey
+  publish(4, 7000, 'done', 'A')
+  expect(client.agentConversationsByPaneKey).toBe(conversations)
+  client = { ...client, agentStatusByPaneKey: {} }
+  expect(publish(5, 8000, 'working', 'B').firstStateStartedAt).toBe(8000)
 })

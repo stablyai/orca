@@ -1,3 +1,9 @@
+import {
+  resumablePaneRecord,
+  normalizeAgentProviderSession,
+  type AgentProviderSessionMetadata,
+  type SleepingAgentLaunchConfig
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
@@ -15,11 +21,6 @@ import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-co
 import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import { isSessionHeldByAnotherPane } from '@/lib/agent-session/identity/claude-session-pane-holders'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import {
-  normalizeAgentProviderSession,
-  type AgentProviderSessionMetadata,
-  type SleepingAgentLaunchConfig
-} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { resolveResumeLaunchRecipe } from '../../../../../shared/agent-launch/choices/resume-launch-recipe'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
@@ -55,7 +56,7 @@ export function resolveAgentAccountRestartResumeStartup(
   const state = useAppStore.getState()
   const paneKey = makePaneKey(args.tabId, args.leafId)
   const entry = state.agentStatusByPaneKey[paneKey]
-  const sleeping = state.sleepingAgentSessionsByPaneKey[paneKey]
+  const sleeping = resumablePaneRecord(state.sleepingAgentSessionsByPaneKey[paneKey])
   const agentType = entry?.agentType ?? sleeping?.agent
   if (agentType !== agent) {
     return null

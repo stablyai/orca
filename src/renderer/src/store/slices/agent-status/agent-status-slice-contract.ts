@@ -16,8 +16,6 @@ import type {
   DropAgentStatusByTabPrefixOptions,
   DropAgentStatusByWorktreeOptions,
   DropAgentStatusOptions,
-  DropHibernatedAgentPaneOptions,
-  RetainedAgentEntry,
   AllAgentSessionCaptureMode
 } from './agent-status-contract'
 import type {
@@ -29,7 +27,7 @@ import type {
   AgentProviderSessionMetadata,
   ResumableTuiAgent,
   SleepingAgentLaunchConfig,
-  SleepingAgentSessionRecord
+  OwnedPaneAgentRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentPaneConversationIdentity } from './agent-pane-conversation'
 import type { AgentStatusStateUpdate } from './agent-status-runtime'
@@ -40,7 +38,7 @@ export type AgentStatusSlice = {
   setAgentSenderPublication: (host: string, publication: AgentSenderPublication | undefined) => void
   /** Explicit agent status entries keyed by `${tabId}:${leafId}`; real-time only, not persisted. */
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
-  /** Host-reported conversation identity only; transient and independent of agent occupancy. */
+  /** Pane conversation identity and first session clock; transient and independent of agent occupancy. */
   agentConversationsByPaneKey: Record<string, AgentPaneConversationIdentity>
   /** Store-local committed row changes, using writer-known keys rather than map discovery. */
   subscribeAgentStatusChanges: (listener: AgentStatusChangeListener) => () => void
@@ -58,17 +56,11 @@ export type AgentStatusSlice = {
   /** Arm the shared freshness timer after an external mirror writes live rows. */
   scheduleAgentStatusFreshness: () => void
 
-  /** Retained "done" snapshots of agents gone from `agentStatusByPaneKey`, keyed by paneKey so pane re-appearance overwrites; shared by dashboard and sidebar hover. */
-  retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
-
   /** Durable agent sessions captured on sleep (not live rows); power the one-click CLI resume on wake. */
-  sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord>
+  sleepingAgentSessionsByPaneKey: Record<string, OwnedPaneAgentRecord>
 
   /** Ephemeral launch snapshots keyed by pane; hook payloads lack Orca launch settings, so the renderer supplies them from startup. */
   agentLaunchConfigByPaneKey: Record<string, AgentLaunchConfigRegistryEntry>
-
-  /** Pane keys explicitly torn down, forbidden from re-retention on next disappearance; a one-shot suppressor consumed by the retention sync. */
-  retentionSuppressedPaneKeys: Record<string, true>
 
   /** Terminal tabs explicitly closed this session; used to drop late in-flight IPC statuses and stale main-cache replays. */
   recentlyClosedAgentStatusTabIds: Record<string, true>
@@ -142,23 +134,19 @@ export type AgentStatusSlice = {
   /** Remove stale live rows while preserving pane launch and resume identity. */
   clearTransientAgentStatuses: (connectionId: string, clearedAt: number) => void
 
-  /** Remove a single entry AND suppress re-retention on its next disappearance (user-initiated teardown: X button, pane close). */
+  /** Dismiss a live row or remove a dead pane. */
   dropAgentStatus: (paneKey: string, opts?: DropAgentStatusOptions) => void
 
-  /** Remove all entries under a tab AND suppress re-retention for each (tab close — no rows may reappear). */
+  /** Retire a closed tab and remove its live entries. */
   dropAgentStatusByTabPrefix: (
     tabIdPrefix: string,
     opts?: DropAgentStatusByTabPrefixOptions
   ) => void
 
-  /** Remove one auto-hibernated completed-agent pane while preserving sibling live/retained rows in the same worktree. */
-  dropHibernatedAgentStatusPane: (
-    worktreeId: string,
-    paneKey: string,
-    opts?: DropHibernatedAgentPaneOptions
-  ) => void
+  /** Remove the live status of one auto-hibernated pane, preserving sibling rows. */
+  dropHibernatedAgentStatusPane: (worktreeId: string, paneKey: string) => void
 
-  /** Worktree sleep/remove sweeps tab prefixes plus main worktree attribution so pre-tab worker status cannot survive; suppress retention only for live rows. */
+  /** Sweep terminal status by tab and workspace attribution, including agents whose tabs have not hydrated. */
   dropAgentStatusByWorktree: (worktreeId: string, opts?: DropAgentStatusByWorktreeOptions) => void
 
   captureSleepingAgentSessionsByWorktree: (worktreeId: string, paneKeys?: string[]) => void
@@ -167,25 +155,10 @@ export type AgentStatusSlice = {
   clearSleepingAgentSession: (paneKey: string) => void
   /** Keeps a pane resume handle; replaces only the exact captured record, preserving newer work. */
   rememberSleepingAgentSession: (
-    record: SleepingAgentSessionRecord,
-    replaces?: SleepingAgentSessionRecord
+    record: OwnedPaneAgentRecord,
+    replaces?: OwnedPaneAgentRecord
   ) => void
   clearSleepingAgentSessionsByPaneKey: (paneKeys: readonly string[]) => void
   clearSleepingAgentSessionsByWorktree: (worktreeId: string) => void
   pruneSleepingAgentSessions: (validWorktreeIds: Set<string>) => void
-
-  /** Retain simultaneous disappearances in one set without intermediate states. */
-  retainAgents: (entries: RetainedAgentEntry[]) => void
-
-  dismissRetainedAgent: (paneKey: string) => void
-
-  /** Dismiss several retained entries in one set (Activity "Clear completed"). */
-  dismissRetainedAgents: (paneKeys: readonly string[]) => void
-
-  dismissRetainedAgentsByWorktree: (worktreeId: string) => void
-
-  pruneRetainedAgents: (validWorktreeIds: Set<string>) => void
-
-  /** Clear one-shot teardown suppressors after the retention sync declines to retain the row. */
-  clearRetentionSuppressedPaneKeys: (paneKeys: string[]) => void
 }

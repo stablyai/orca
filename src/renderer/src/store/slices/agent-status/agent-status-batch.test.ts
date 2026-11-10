@@ -5,11 +5,7 @@ import type { AppState } from '../../types'
 import './agent-status'
 import { resetAgentPaneAuthorityAliasesForTests } from './agent-pane-authority'
 import { MAX_LIVE_AGENT_STATUSES } from './agent-status-capacity-eviction'
-import type {
-  AgentStatusBatchUpdate,
-  AgentStatusChange,
-  RetainedAgentEntry
-} from './agent-status-contract'
+import type { AgentStatusBatchUpdate, AgentStatusChange } from './agent-status-contract'
 
 import { createTestStore } from '../../testing/app-store-test-fixture'
 import { makeTab } from '../../terminals/terminal-tab.test-fixture'
@@ -21,26 +17,8 @@ const SECOND_PANE = 'tab-1:22222222-2222-4222-8222-222222222222'
 function seedBatchStore() {
   const store = createTestStore()
   const tab = makeTab({ id: 'tab-1', worktreeId: 'wt-1', title: 'pi' })
-  const retainedEntry: AgentStatusEntry = {
-    paneKey: FIRST_PANE,
-    state: 'done',
-    prompt: 'old turn',
-    agentType: 'pi',
-    updatedAt: BASE_TIME - 100,
-    stateStartedAt: BASE_TIME - 200,
-    stateHistory: []
-  }
-  const retained: RetainedAgentEntry = {
-    entry: retainedEntry,
-    worktreeId: 'wt-1',
-    tab,
-    agentType: 'pi',
-    startedAt: BASE_TIME - 200
-  }
   store.setState({
     tabsByWorktree: { 'wt-1': [tab] },
-    retainedAgentsByPaneKey: { [FIRST_PANE]: retained },
-    retentionSuppressedPaneKeys: { [FIRST_PANE]: true },
     refreshGitHubForWorktreeIfStale: vi.fn().mockResolvedValue(undefined)
   } as Partial<AppState>)
   return store

@@ -1,3 +1,4 @@
+import { stageLocalPaneSleep } from './terminal-sleep-capture-intent'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
@@ -9,15 +10,11 @@ import { shutdownBufferCaptures } from '@/components/terminal-pane/snapshots/shu
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import '../slices/agent-status/agent-status'
-import {
-  collectHibernatedCompletionEvidenceForWorktree,
-  collectSleepingAgentSessionRecordsForWorktree
-} from '../slices/agent-status/agent-status-recovery-collection'
+import { collectSleepingAgentSessionRecordsForWorktree } from '../slices/agent-status/agent-status-recovery-collection'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { equalStringSets, sortedUniquePtyIds } from './terminal-pty-identities'
 import { resolveTerminalPtyOwner } from '@/lib/terminal-worktree-route'
 import { resolveTerminalTeardownOwner } from './terminal-teardown-owner'
-import { removePanesAttention } from '../slices/workspace-attention/subject-attention-transitions'
 import { settleAttentionRemovedBy } from '../slices/workspace-attention/attention-removal-follow-up'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { recordPaneSleepThroughLayoutOwner } from './terminal-sleep-layout-owner'
@@ -76,11 +73,6 @@ export function createTerminalPaneHibernationActions(
           captureMode: 'completed-agent-hibernation'
         }
       )
-      const retainedCompletionEvidence = collectHibernatedCompletionEvidenceForWorktree(
-        state,
-        worktreeId,
-        paneKeys
-      )
       if (!sleepingAgentSessionRecords[opts.paneKey]) {
         // Why: killing the PTY with no persisted resume record strands the pane unwakeable; abort instead of hibernating unrecoverably.
         throw new Error('agent_hibernation_capture_missing')
@@ -93,32 +85,17 @@ export function createTerminalPaneHibernationActions(
           // Don't let one tab's capture failure block the pane hibernation.
         }
       }
+      const localCapture = !runtimeEnvironmentId
+        ? await stageLocalPaneSleep(get, set, worktreeId, sleepingAgentSessionRecords, state)
+        : undefined
       // Why: store sleeping records before kill, since pty:exit can arrive first.
-      const sleepingRecordKeys = Object.keys(sleepingAgentSessionRecords)
-      const replacedSleepingRecords: Record<string, (typeof sleepingAgentSessionRecords)[string]> =
-        {}
-      for (const key of sleepingRecordKeys) {
-        const existing = state.sleepingAgentSessionsByPaneKey[key]
-        if (existing) {
-          replacedSleepingRecords[key] = existing
-        }
-      }
       const rollbackTargetShutdownState = (): void => {
         set((s) => {
           const next = { ...s.suppressedPtyExitIds }
           for (const ptyId of exitGuardPtyIds) {
             delete next[ptyId]
           }
-          const nextSleeping = { ...s.sleepingAgentSessionsByPaneKey }
-          for (const key of sleepingRecordKeys) {
-            const replaced = replacedSleepingRecords[key]
-            if (replaced) {
-              nextSleeping[key] = replaced
-            } else {
-              delete nextSleeping[key]
-            }
-          }
-          return { suppressedPtyExitIds: next, sleepingAgentSessionsByPaneKey: nextSleeping }
+          return { suppressedPtyExitIds: next }
         })
       }
       set((s) => ({
@@ -126,10 +103,14 @@ export function createTerminalPaneHibernationActions(
           ...s.suppressedPtyExitIds,
           ...Object.fromEntries(exitGuardPtyIds.map((ptyId) => [ptyId, true] as const))
         },
-        sleepingAgentSessionsByPaneKey: {
-          ...s.sleepingAgentSessionsByPaneKey,
-          ...sleepingAgentSessionRecords
-        }
+        ...(runtimeEnvironmentId
+          ? {
+              sleepingAgentSessionsByPaneKey: {
+                ...s.sleepingAgentSessionsByPaneKey,
+                ...sleepingAgentSessionRecords
+              }
+            }
+          : {})
       }))
       if (expectedRuntimePtyIds.length > 0) {
         if (!runtimeEnvironmentId) {
@@ -161,6 +142,7 @@ export function createTerminalPaneHibernationActions(
           )
         } catch (err) {
           rollbackTargetShutdownState()
+          await localCapture?.settle()
           throw err
         }
         const stoppedPtyIds = sortedUniquePtyIds(stopResult.stoppedPtyIds)
@@ -181,18 +163,25 @@ export function createTerminalPaneHibernationActions(
         // Why: pty.kill can flush final data before exit; unregister first so stale handlers can't fire phantom notifications during hibernation.
         const handlerSnapshots = unregisterPtyDataHandlers(rendererShutdownPtyIds) ?? []
         try {
-          await window.api.pty.kill(opts.ptyId, { keepHistory: true })
+          await window.api.pty.kill(opts.ptyId, {
+            keepHistory: true,
+            sleepCondition: localCapture?.conditionForPty(opts.ptyId)
+          })
         } catch (err) {
           restorePtyDataHandlersAfterFailedShutdown(handlerSnapshots)
           rollbackTargetShutdownState()
+          await localCapture?.settle()
           throw err
         }
         for (const snapshot of handlerSnapshots) {
           snapshot.commit?.()
         }
       }
+      if (localCapture && !localCapture.canCommit()) {
+        return
+      }
       // Switch point: main records the sleep this window decided, once the stop settled.
-      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && runtimeEnvironmentId) {
         recordPaneSleepThroughLayoutOwner(get(), worktreeId, sleepingAgentSessionRecords)
       }
       settleAttentionRemovedBy(set, get, () =>
@@ -254,14 +243,11 @@ export function createTerminalPaneHibernationActions(
             ...(nextRuntimePaneTitlesByTabId !== s.runtimePaneTitlesByTabId
               ? { runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId }
               : {}),
-            ...removePanesAttention(s, new Set([opts.paneKey])),
             lastTerminalInputAtByPaneKey: nextLastTerminalInputAtByPaneKey
           }
         })
       )
-      get().dropHibernatedAgentStatusPane(worktreeId, opts.paneKey, {
-        retainedCompletionEvidence
-      })
+      get().dropHibernatedAgentStatusPane(worktreeId, opts.paneKey)
     }
   }
 }

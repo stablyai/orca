@@ -1,3 +1,4 @@
+import { isResumablePaneRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { useAppStore } from '@/store/index'
 import type { PtyListedSession } from '../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import {
@@ -85,7 +86,7 @@ export function workspaceHasSleepingAgentSessions(
   worktreeId: string
 ): boolean {
   return Object.values(state.sleepingAgentSessionsByPaneKey).some(
-    (record) => record.worktreeId === worktreeId
+    (record) => isResumablePaneRecord(record) && record.worktreeId === worktreeId
   )
 }
 
@@ -123,7 +124,7 @@ function liveSleepingAgentClaims(
     )
   )
   for (const record of Object.values(store.sleepingAgentSessionsByPaneKey)) {
-    if (record.worktreeId !== worktreeId) {
+    if (!isResumablePaneRecord(record) || record.worktreeId !== worktreeId) {
       continue
     }
     const stable = parsePaneKey(record.paneKey)
@@ -249,7 +250,9 @@ export async function runWorktreeAgentActivationGate(
   )
   const hasUnclaimedRecovery = Object.values(store.sleepingAgentSessionsByPaneKey).some(
     (record) =>
-      record.worktreeId === worktreeId && !claims.keys.has(getProviderSessionClaimKey(record))
+      isResumablePaneRecord(record) &&
+      record.worktreeId === worktreeId &&
+      !claims.keys.has(getProviderSessionClaimKey(record))
   )
   // A surfaced PTY without a conversation claim may still own the sleeping session.
   if (

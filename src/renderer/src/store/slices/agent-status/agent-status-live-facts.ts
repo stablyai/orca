@@ -1,7 +1,10 @@
+import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+import type { AgentStatusTiming } from './agent-status-contract'
 import type { AppState } from '../../types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type {
   SleepingAgentLaunchConfig,
+  OwnedPaneAgentRecord,
   SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isSmartSortRelevantAgentChange } from '../../../../../shared/sidebar-list/smart-sort-agent-change'
@@ -16,12 +19,12 @@ import { liveResumeRecord } from '../../../../../shared/agent-session/lifecycle/
 import { agentMainAgentVerdict } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 
 export type AgentStatusLiveFacts = {
-  existingSleepingRecord: SleepingAgentSessionRecord | undefined
+  existingSleepingRecord: OwnedPaneAgentRecord | undefined
   liveRecoveryRecord: SleepingAgentSessionRecord | null
   migrationUnsupported: ReturnType<typeof pruneMigrationUnsupportedEntries>
   completionRefreshWorktreeId: string | null
   sortRelevantChange: boolean
-  retentionRelevantChange: boolean
+  aggregateRelevantChange: boolean
   boundaryResolved: boolean
 }
 
@@ -65,7 +68,7 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
     isSmartSortRelevantAgentChange(existing, entry, updatedAt) ||
     commandCodeNewTurn ||
     existing?.firstStateStartedAt !== entry.firstStateStartedAt
-  const doneRetentionFieldsChanged =
+  const doneRowFieldsChanged =
     existing?.state === 'done' &&
     entry.state === 'done' &&
     (entry.prompt !== existing.prompt ||
@@ -86,12 +89,12 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
   // Verdicts move no clocks: failures preserve done completion and working subagent state/start.
   const verdictChanged =
     !!existing && agentMainAgentVerdict(entry) !== agentMainAgentVerdict(existing)
-  const retentionRelevantChange =
+  const aggregateRelevantChange =
     sortRelevantChange ||
     attributionChanged ||
     existing?.workingMode !== entry.workingMode ||
     verdictChanged ||
-    doneRetentionFieldsChanged
+    doneRowFieldsChanged
   const existingSleepingRecord = state.sleepingAgentSessionsByPaneKey[paneKey]
   const liveRecoveryRecord = liveResumeRecord({
     entry,
@@ -111,7 +114,25 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
     migrationUnsupported,
     completionRefreshWorktreeId,
     sortRelevantChange,
-    retentionRelevantChange,
+    aggregateRelevantChange,
     boundaryResolved
+  }
+}
+
+export function agentSleepSuccessorEvidence(
+  state: AppState,
+  entry: AgentStatusEntry,
+  timing: AgentStatusTiming | undefined
+) {
+  const pane = parsePaneKey(entry.paneKey)
+  const ptyId = pane
+    ? state.terminalLayoutsByTabId[pane.tabId]?.ptyIdsByLeafId?.[pane.leafId]
+    : undefined
+  return {
+    updatedAt: entry.updatedAt,
+    evidenceObservedAt: timing?.evidenceObservedAt,
+    isReplay: timing?.isReplay,
+    restoredUnconfirmed: entry.restoredUnconfirmed,
+    stopping: ptyId ? (state.pendingPtyShutdownIds[ptyId] ?? 0) > 0 : false
   }
 }

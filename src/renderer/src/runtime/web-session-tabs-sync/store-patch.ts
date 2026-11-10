@@ -1,3 +1,4 @@
+import { historicalAgentCompletion } from './historical-agent-completion'
 import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/drafts/native-chat-draft-position-retirement'
 import {
   markStructuredAgentSessionLaunchesPublished,
@@ -51,6 +52,7 @@ export function applyWebSessionTabsStorePatch(
     paneKey: string
     worktreeId: string
     seedOnly?: true
+    fromHistory?: true
     payload: ReturnType<typeof pickParsedAgentStatusPayload> & {
       stateStartedAt: number
       turnEndedAt?: number
@@ -100,10 +102,28 @@ export function applyWebSessionTabsStorePatch(
             continue
           }
           const notificationStatus = clientOwnedNotification ? remapped : accepted
+          if (notificationStatus?.sessionBoundary) {
+            const history = historicalAgentCompletion(
+              notificationStatus,
+              state.agentStatusByPaneKey[notificationStatus.paneKey],
+              state.acknowledgedAgentsByPaneKey[notificationStatus.paneKey],
+              state.activityClearedAtByPaneKey[notificationStatus.paneKey],
+              allowCompletionNotification
+            )
+            if (history) {
+              acceptedNotificationStatuses.push({
+                paneKey: notificationStatus.paneKey,
+                worktreeId: notificationStatus.worktreeId ?? snapshot.worktree,
+                ...history
+              })
+            }
+            continue
+          }
           // Why: an unverifiable `done` restates an earlier turn or none, never a completion.
           if (
             !notificationStatus ||
-            (notificationStatus.state === 'done' && notificationStatus.restoredUnconfirmed)
+            (notificationStatus.state === 'done' &&
+              (notificationStatus.restoredUnconfirmed || notificationStatus.sessionBoundary))
           ) {
             continue
           }

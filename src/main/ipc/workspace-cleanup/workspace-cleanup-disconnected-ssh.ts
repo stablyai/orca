@@ -103,8 +103,7 @@ function createDisconnectedSshCandidate(
       cleanEditorTabCount: 0,
       browserTabCount: 0,
       diffCommentCount: meta.diffComments?.length ?? 0,
-      newestDiffCommentAt: getNewestWorkspaceCleanupDiffCommentAt(meta.diffComments),
-      retainedDoneAgentCount: 0
+      newestDiffCommentAt: getNewestWorkspaceCleanupDiffCommentAt(meta.diffComments)
     },
     git: {
       clean: null,

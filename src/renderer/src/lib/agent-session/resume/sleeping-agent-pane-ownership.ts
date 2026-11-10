@@ -1,3 +1,7 @@
+import {
+  isResumablePaneRecord,
+  type OwnedPaneAgentRecord
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { useAppStore } from '@/store/index'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentTurnEndedUncleanly } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
@@ -21,7 +25,10 @@ type AppStoreState = ReturnType<typeof useAppStore.getState>
 
 // Why live+done counts (#16308): workspace activation must not resume a finished turn's idle anchor.
 // Quit asks to keep work resumable and a live stopped or failed turn is unfinished.
-export function activationTreatsNoteAsFinished(record: SleepingAgentSessionRecord): boolean {
+export function activationTreatsNoteAsFinished(record: OwnedPaneAgentRecord): boolean {
+  if (!isResumablePaneRecord(record)) {
+    return true
+  }
   return (
     record.origin !== 'quit' &&
     !(record.origin === 'live' && agentTurnEndedUncleanly(record)) &&
@@ -44,7 +51,11 @@ function getLegacyProviderSessionKeysForTab(
 ): Set<string> {
   const keys = new Set<string>()
   for (const record of Object.values(state.sleepingAgentSessionsByPaneKey)) {
-    if (record.worktreeId === worktreeId && getLegacyPaneTabId(record) === tabId) {
+    if (
+      isResumablePaneRecord(record) &&
+      record.worktreeId === worktreeId &&
+      getLegacyPaneTabId(record) === tabId
+    ) {
       keys.add(getProviderSessionClaimKey(record))
     }
   }

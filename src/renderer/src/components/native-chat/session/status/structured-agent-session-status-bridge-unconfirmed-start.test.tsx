@@ -272,7 +272,7 @@ describe('a chat whose start was never confirmed', () => {
     store().setState({
       agentStatusByPaneKey: {},
       acknowledgedAgentsByPaneKey: {},
-      retainedAgentsByPaneKey: {},
+
       unifiedTabsByWorktree: {
         [WORKTREE_ID]: [chatTab(CLAUDE_SESSION, 'claude'), chatTab(CODEX_SESSION, 'codex')]
       }

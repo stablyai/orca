@@ -2,8 +2,13 @@ import { describe, expect, it } from 'vitest'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { SleepingAgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import {
+  buildAiVaultOriginalPaneIndex,
+  findOriginalAiVaultSessionPaneInIndex
+} from './ai-vault-original-pane-index'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import {
+  type OriginalPaneState,
   findAiVaultSessionLiveState,
   findOriginalAiVaultSessionPane
 } from './ai-vault-original-pane'
@@ -56,15 +61,15 @@ function makeLayout(leafId = LEAF_ID) {
   }
 }
 
-function makeState(overrides: Record<string, unknown> = {}) {
+function makeState(overrides: Partial<OriginalPaneState> = {}): OriginalPaneState {
   return {
     agentStatusByPaneKey: {},
-    retainedAgentsByPaneKey: {},
+    agentConversationsByPaneKey: {},
     sleepingAgentSessionsByPaneKey: {},
     tabsByWorktree: { 'wt-1': [makeTab()] },
     terminalLayoutsByTabId: { 'tab-1': makeLayout() },
     ...overrides
-  } as never
+  }
 }
 
 function makeEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
@@ -170,3 +175,29 @@ describe('findAiVaultSessionLiveState', () => {
     expect(findAiVaultSessionLiveState(state, baseSession)).toBeNull()
   })
 })
+
+it.each([true, false])(
+  'finds the original pane after live removal (provider known: %s)',
+  (known) => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    const state = makeState({
+      agentConversationsByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          worktreeId: 'wt-1',
+          executionHostId: 'local',
+          connectionId: null,
+          agent: 'codex',
+          ...(known
+            ? { providerSession: { key: 'session_id', id: 'session-1' } }
+            : { promptCandidates: ['fix the pane focus'] })
+        }
+      }
+    })
+    expect(findOriginalAiVaultSessionPane(state, baseSession)?.paneKey).toBe(paneKey)
+    expect(
+      findOriginalAiVaultSessionPaneInIndex(buildAiVaultOriginalPaneIndex(state), baseSession)
+        ?.paneKey
+    ).toBe(paneKey)
+  }
+)

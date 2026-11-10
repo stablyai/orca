@@ -1,3 +1,4 @@
+import { resumablePaneRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 /** Completed local agents retain cold-restore identity (#9454) without posing as unfinished work or resurrecting after pane removal. This path does not use paired-runtime web-tab recovery. */
 import { afterEach, describe, expect, it } from 'vitest'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
@@ -68,7 +69,9 @@ describe('a finished local agent', () => {
     seedLiveLocalCodexPane()
     reportTurnFinished(true)
 
-    const record = useAppStore.getState().sleepingAgentSessionsByPaneKey[PANE_KEY]
+    const record = resumablePaneRecord(
+      useAppStore.getState().sleepingAgentSessionsByPaneKey[PANE_KEY]
+    )
     expect(record?.state).toBe('done')
     expect(record?.interrupted).toBe(true)
     expect(activationTreatsNoteAsFinished(record!)).toBe(false)

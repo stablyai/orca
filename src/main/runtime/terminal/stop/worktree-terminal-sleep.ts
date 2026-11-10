@@ -5,8 +5,14 @@ import {
 } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/runtime-terminal-contracts'
 
-import { teardownRpcDeadline } from '../../workspaces/removal/worktree-teardown-deadline'
-import { sleptNothing } from './worktree-terminal-sleep-result'
+import {
+  sleptNothing,
+  unverifiedSleepResult,
+  stopSleepingTerminals,
+  markSleepingTerminalStops,
+  classifyTerminalSleepStops,
+  terminalSleepStopFailure
+} from './worktree-terminal-sleep-result'
 import type { WorktreeSleepScope } from './worktree-terminal-sleep-key'
 import { withoutCwdGuesses } from './worktree-pty-collection'
 // Renderer waits 15s; release the spawn fence and return verified failure before its deadline.
@@ -19,7 +25,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
     soleLivePtyId?: string
   ): Promise<RuntimeWorktreeTerminalSleepResult> {
     const sleepDeadline = Date.now() + WORKTREE_TERMINAL_SLEEP_TIMEOUT_MS
-    const releaseMutation = await this.acquireWorktreeTerminalMutation(
+    const release = await this.acquireWorktreeTerminalMutation(
       worktree.id,
       'exclusive',
       sleepDeadline
@@ -44,7 +50,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
           throw new Error('terminal_liveness_unavailable')
         }
         if (liveHere(refreshedPtyLiveness).size === 0) {
-          releaseMutation()
+          release()
           return sleptNothing()
         }
         this.emitClientEvent({
@@ -57,7 +63,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
         })
         this.terminalSleepStateByHostWorktree.delete(key)
       } catch (error) {
-        releaseMutation()
+        release()
         throw error
       }
     }
@@ -67,6 +73,8 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
     const pendingPtyIds = new Set<string>()
     let generation = 0
     let fullyCommitted = false
+    let settleResumeCapture: ((running: readonly string[]) => Promise<void>) | undefined
+    let provenRunningPtyIds: readonly string[] = []
     const settleReversibleStops = new Map<string, (stopped: boolean) => void>()
     try {
       const resolvedWorktrees = includeTargetResolvedWorktree(
@@ -150,34 +158,33 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
         throw new Error('terminal_worktree_sleep_unavailable')
       }
       const stopAndWait = ptyController.stopAndWait.bind(ptyController)
-
-      const orderedLivePtyIds = [...livePtyIds].sort()
-      for (const ptyId of orderedLivePtyIds) {
-        settleReversibleStops.set(
-          ptyId,
-          this.intentionalPtyStops.mark(
-            ptyId,
-            'reversible',
-            this.ptysById.get(ptyId)?.incarnationId ?? null
-          )
-        )
-      }
-      const stopResults = await Promise.allSettled(
-        orderedLivePtyIds.map(async (ptyId) => {
-          const stopped = await stopAndWait(ptyId, {
-            keepHistory: true,
-            deadlineMs: teardownRpcDeadline(sleepDeadline)
-          })
-          settleReversibleStops.get(ptyId)?.(stopped)
-          return { ptyId, stopped }
-        })
+      const captureTransaction = await this.sleepResumeRecords.prepare(
+        worktree.id,
+        resumeCapture,
+        () => this.terminalSleepStateByHostWorktree.get(key)?.generation === generation
       )
-      const successfulStopPtyIds = orderedLivePtyIds.filter((_, index) => {
-        const result = stopResults[index]
-        return result?.status === 'fulfilled' && result.value.stopped
-      })
-      const failedStopIndex = stopResults.findIndex((result) =>
-        result.status === 'rejected' ? true : !result.value.stopped
+
+      settleResumeCapture = captureTransaction.settle
+      const orderedLivePtyIds = [...livePtyIds].sort()
+      markSleepingTerminalStops(settleReversibleStops, orderedLivePtyIds, (ptyId) =>
+        this.intentionalPtyStops.mark(
+          ptyId,
+          'reversible',
+          this.ptysById.get(ptyId)?.incarnationId ?? null
+        )
+      )
+      const stopResults = await stopSleepingTerminals(
+        orderedLivePtyIds,
+        stopAndWait,
+        sleepDeadline,
+        (ptyId, stopped) => {
+          this.notifyMobileSessionTabsChanged(worktree.id)
+          settleReversibleStops.get(ptyId)?.(stopped)
+        }
+      )
+      const { successfulStopPtyIds, failedStopIndex } = classifyTerminalSleepStops(
+        orderedLivePtyIds,
+        stopResults
       )
 
       const postStopLiveness = await this.refreshPtyWorktreeRecordsFromController(
@@ -195,23 +202,20 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
           terminalHandlesByPtyId
         })
         // Why: the stops were acknowledged and their hook rows are gone; a retry has nothing to capture.
-        await this.sleepResumeRecords.persist(worktree.id, resumeCapture, successfulStopPtyIds)
+        if (!captureTransaction.staged) {
+          await this.sleepResumeRecords.persist(worktree.id, resumeCapture, successfulStopPtyIds)
+        }
         if (failedStopIndex !== -1) {
-          const failedStop = stopResults[failedStopIndex]
-          throw Object.assign(new Error('terminal_worktree_sleep_failed'), {
-            ptyId: orderedLivePtyIds[failedStopIndex],
-            ...(failedStop.status === 'rejected' ? { cause: failedStop.reason } : {})
-          })
+          throw terminalSleepStopFailure(
+            worktree.id,
+            orderedLivePtyIds[failedStopIndex],
+            stopResults[failedStopIndex]
+          )
         }
-        return {
-          stopped: successfulStopPtyIds.length,
-          stoppedPtyIds: successfulStopPtyIds,
-          livePtyIds: [...livePtyIds].sort(),
-          postStopVerified: false,
-          postStopFailure: 'terminal_liveness_unavailable'
-        }
+        return unverifiedSleepResult(successfulStopPtyIds, livePtyIds)
       }
       const remainingLivePtyIds = liveHere(postStopLiveness)
+      provenRunningPtyIds = [...remainingLivePtyIds]
       const provenStoppedPtyIds = orderedLivePtyIds.filter(
         (ptyId) => !remainingLivePtyIds.has(ptyId)
       )
@@ -223,29 +227,19 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
         committedPtyIds,
         terminalHandlesByPtyId
       })
-      await this.sleepResumeRecords.persist(worktree.id, resumeCapture, provenStoppedPtyIds)
+      if (!captureTransaction.staged) {
+        await this.sleepResumeRecords.persist(worktree.id, resumeCapture, provenStoppedPtyIds)
+      }
       if (failedStopIndex !== -1 && remainingLivePtyIds.size > 0) {
-        const failedStop = stopResults[failedStopIndex]
-        console.error('[runtime] worktree terminal sleep physical stop failed', {
-          worktreeId: worktree.id,
-          ptyId: orderedLivePtyIds[failedStopIndex],
-          cause: failedStop.status === 'rejected' ? failedStop.reason : 'stop_not_acknowledged'
-        })
-        throw Object.assign(new Error('terminal_worktree_sleep_failed'), {
-          ptyId: orderedLivePtyIds[failedStopIndex],
-          remainingLivePtyIds: [...remainingLivePtyIds].sort(),
-          ...(failedStop.status === 'rejected' ? { cause: failedStop.reason } : {})
-        })
+        throw terminalSleepStopFailure(
+          worktree.id,
+          orderedLivePtyIds[failedStopIndex],
+          stopResults[failedStopIndex],
+          [...remainingLivePtyIds]
+        )
       }
       if (remainingLivePtyIds.size > 0) {
-        return {
-          stopped: successfulStopPtyIds.length,
-          stoppedPtyIds: successfulStopPtyIds,
-          livePtyIds: [...livePtyIds].sort(),
-          postStopVerified: false,
-          postStopFailure: 'terminal_worktree_sleep_still_live',
-          remainingLivePtyIds: [...remainingLivePtyIds].sort()
-        }
+        return unverifiedSleepResult(successfulStopPtyIds, livePtyIds, remainingLivePtyIds)
       }
       const terminalHandles = this.getRecordedTerminalSleepHandles(
         committedPtyIds,
@@ -267,6 +261,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
         postStopVerified: true
       }
     } finally {
+      await settleResumeCapture?.(provenRunningPtyIds)
       for (const settleStop of settleReversibleStops.values()) {
         settleStop(false)
       }
@@ -302,7 +297,7 @@ export abstract class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends Orca
           this.terminalSleepStateByHostWorktree.delete(key)
         }
       }
-      releaseMutation()
+      release()
     }
   }
 }

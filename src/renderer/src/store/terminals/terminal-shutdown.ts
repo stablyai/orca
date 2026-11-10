@@ -1,12 +1,10 @@
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { stageLocalPaneSleep, type LocalPaneSleepCapture } from './terminal-sleep-capture-intent'
+import type { OwnedPaneAgentRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/snapshots/shutdown-buffer-captures'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import '../slices/agent-status/agent-status'
-import {
-  collectHibernatedCompletionEvidenceForWorktree,
-  collectSleepingAgentSessionRecordsForWorktree
-} from '../slices/agent-status/agent-status-recovery-collection'
+import { collectSleepingAgentSessionRecordsForWorktree } from '../slices/agent-status/agent-status-recovery-collection'
 import type { AgentStatusWorktreeShutdownReason } from '../slices/agent-status/agent-status-contract'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { equalStringSets, sortedUniquePtyIds } from './terminal-pty-identities'
@@ -57,9 +55,10 @@ export function createTerminalShutdownActions(
       // Only renderer-bound ids emit pane exit callbacks; raw RPC handles never enter this guard.
       const exitGuardPtyIds = rendererShutdownPtyIds
       // Main records a sleep it runs; the window takes main's records from its answer below.
-      let sleepingAgentSessionRecords: Record<string, SleepingAgentSessionRecord> =
+      const captureSource = get()
+      let sleepingAgentSessionRecords: Record<string, OwnedPaneAgentRecord> =
         keepIdentifiers && !hostStop
-          ? collectSleepingAgentSessionRecordsForWorktree(get(), worktreeId, {
+          ? collectSleepingAgentSessionRecordsForWorktree(captureSource, worktreeId, {
               paneKeys: opts?.sleepingPaneKeys,
               ...(shutdownReason === 'manual-sleep'
                 ? { captureMode: 'manual-worktree-sleep' }
@@ -69,14 +68,26 @@ export function createTerminalShutdownActions(
                 : {})
             })
           : {}
-      const retainedCompletionEvidence =
-        shutdownReason === 'auto-hibernate-completed-agent'
-          ? collectHibernatedCompletionEvidenceForWorktree(
-              get(),
-              worktreeId,
-              opts?.sleepingPaneKeys
-            )
-          : []
+      let localCapture: LocalPaneSleepCapture | undefined
+      if (
+        !hostStop &&
+        !runtimeEnvironmentId &&
+        Object.keys(sleepingAgentSessionRecords).length > 0
+      ) {
+        try {
+          localCapture = await stageLocalPaneSleep(
+            get,
+            set,
+            worktreeId,
+            sleepingAgentSessionRecords
+          )
+        } catch (error) {
+          if (shutdownReason === 'auto-hibernate-completed-agent') {
+            throw error
+          }
+          console.warn('[terminal-shutdown] could not persist sleep capture before stop', error)
+        }
+      }
       const guards = createTerminalShutdownGuardController({
         exitGuardPtyIds,
         get,
@@ -84,7 +95,10 @@ export function createTerminalShutdownActions(
         rendererShutdownPtyIds,
         runtimeOwnsRemotePtys: runtimeEnvironmentId !== null,
         set,
-        tabs
+        tabs,
+        sleepConditionForPty: localCapture?.conditionForPty,
+        guardSleepTargets:
+          shutdownReason === 'manual-sleep' || shutdownReason === 'auto-hibernate-completed-agent'
       })
 
       // Capture before kill; capture() can publish layout changes consumed by the final commit.
@@ -137,6 +151,7 @@ export function createTerminalShutdownActions(
           if (!guards.wasPartialRendererStopSettled()) {
             guards.rollbackShutdown()
           }
+          await localCapture?.settle()
           throw error
         }
       } else {
@@ -159,6 +174,7 @@ export function createTerminalShutdownActions(
           )
         } catch (error) {
           guards.rollbackShutdown()
+          await localCapture?.settle()
           throw error
         }
         const stoppedPtyIds = sortedUniquePtyIds(stopResult.stoppedPtyIds)
@@ -184,23 +200,27 @@ export function createTerminalShutdownActions(
           if (!guards.wasPartialRendererStopSettled()) {
             guards.rollbackShutdown()
           }
+          await localCapture?.settle()
           throw error
         }
       }
 
       guards.commitHandlerSnapshots()
       // Switch point: main records a sleep's resumes once the terminals stopped (none on removal).
-      if (ORCA_LAYOUT_OWNER_IS_MAIN && !hostStop) {
+      if (ORCA_LAYOUT_OWNER_IS_MAIN && !hostStop && runtimeEnvironmentId) {
         recordPaneSleepThroughLayoutOwner(get(), worktreeId, sleepingAgentSessionRecords)
       }
       commitTerminalShutdownState({
         exitGuardPtyIds,
         get,
         keepIdentifiers,
-        retainedCompletionEvidence,
         set,
         shutdownReason,
         sleepingAgentSessionRecords,
+        sleepAlreadyAdmitted: !hostStop && !runtimeEnvironmentId,
+        ...(keepIdentifiers && !runtimeEnvironmentId && !hostStop
+          ? { agentStatusAtStart: captureSource.agentStatusByPaneKey }
+          : {}),
         sleepingPaneKeys: opts?.sleepingPaneKeys,
         tabs,
         worktreeId

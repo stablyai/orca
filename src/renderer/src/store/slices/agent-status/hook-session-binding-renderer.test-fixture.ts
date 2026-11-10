@@ -1,3 +1,4 @@
+import { resumablePaneRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { expect } from 'vitest'
 import type { HookSessionBindingRendererFixture } from '../../../../../shared/agent-hook-listener/state/agent-hook-session-binding.test-fixture'
 import { getAgentResumeArgv } from '../../../../../shared/agent-launch/startup/agent-resume-argv'
@@ -58,7 +59,10 @@ export const expectReturnedRenderer: HookSessionBindingRendererFixture['expectRe
   expect(getAgentResumeArgv(agent, record.providerSession)).toEqual(
     agent === 'hermes' ? ['hermes', '--resume', id] : ['agy', '--conversation', id]
   )
-  expect(store.getState().sleepingAgentSessionsByPaneKey[paneKey]?.providerSession.id).toBe(id)
+  expect(
+    resumablePaneRecord(store.getState().sleepingAgentSessionsByPaneKey[paneKey])?.providerSession
+      .id
+  ).toBe(id)
   expect(
     sleepingRecordFromEntry({
       state: store.getState(),

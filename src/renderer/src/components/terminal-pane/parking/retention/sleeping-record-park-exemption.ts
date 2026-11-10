@@ -1,4 +1,4 @@
-import type { SleepingAgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { OwnedPaneAgentRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   parseLegacyNumericPaneKey,
   parsePaneKey
@@ -9,17 +9,17 @@ import { createWorktreeRecordSelector } from '@/store/terminals/worktree-termina
 const EMPTY_TAB_IDS: ReadonlySet<string> = new Set()
 
 type SleepingRecordParkExemptionState = {
-  sleepingAgentSessionsByPaneKey?: Record<string, SleepingAgentSessionRecord>
+  sleepingAgentSessionsByPaneKey?: Record<string, OwnedPaneAgentRecord>
 }
 
 let exemptTabIdsByWorktreeCache: {
-  records: Record<string, SleepingAgentSessionRecord>
+  records: Record<string, OwnedPaneAgentRecord>
   byWorktreeId: ReadonlyMap<string, ReadonlySet<string>>
 } | null = null
 
 /** Group consumable records by worktree once per record map; each mounted worktree then reads its bucket instead of rescanning every record. */
 function exemptTabIdsByWorktree(
-  records: Record<string, SleepingAgentSessionRecord>
+  records: Record<string, OwnedPaneAgentRecord>
 ): ReadonlyMap<string, ReadonlySet<string>> {
   if (exemptTabIdsByWorktreeCache?.records === records) {
     return exemptTabIdsByWorktreeCache.byWorktreeId

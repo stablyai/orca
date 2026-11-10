@@ -1,5 +1,5 @@
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { OwnedPaneAgentRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { RuntimeTerminalAttention } from '../../../../../shared/runtime-terminal-contracts'
 import type {
@@ -19,7 +19,7 @@ export type AgentHibernationPlannerSnapshot = {
   /** Driven by a phone; this window's own view is foregroundTerminalTabIds. */
   inUsePtyIds: string[]
   agentStatusByPaneKey: Record<string, AgentStatusEntry | undefined>
-  sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord | undefined>
+  sleepingAgentSessionsByPaneKey: Record<string, OwnedPaneAgentRecord | undefined>
   lastTerminalInputAtByPaneKey: Record<string, number | undefined>
   /** Per worktree, keyed by its host's PTY id: shown on a paired client or phone, and input from any client.
    *  Absent where the host can't report it. */

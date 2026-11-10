@@ -191,11 +191,10 @@ export function getWorktreeStatusLabel(status: WorktreeStatus): string {
 
 /**
  * Apply the WorktreeCard priority overlay on top of the title-heuristic base. Explicit agent rows may
- * promote the dot; sleep cleanup owns removing stale retained rows.
+ * promote the dot; sleep cleanup removes stale rows.
  *
  * Map args are narrowed to this worktree. `hasPermission`/`hasLiveWorking`/
  * `hasLiveDone` are fresh hook entries ({blocked,waiting} / {working} / {done});
- * `hasRetainedDone`/`hasRetainedFailed` are retained-agent snapshots scoped to this worktreeId.
  */
 export function resolveWorktreeStatus(args: {
   tabs: readonly Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>[]
@@ -211,11 +210,10 @@ export function resolveWorktreeStatus(args: {
   hasLiveWorking: boolean
   hasLiveMonitoring?: boolean
   hasFailed?: boolean
+  hasSleptFailed?: boolean
   hasInterrupted?: boolean
   hasUnconfirmed?: boolean
   hasLiveDone: boolean
-  hasRetainedDone: boolean
-  hasRetainedFailed?: boolean
 }): WorktreeStatus {
   const heuristic = getWorktreeStatus(
     args.tabs,

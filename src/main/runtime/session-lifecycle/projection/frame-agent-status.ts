@@ -20,3 +20,7 @@ export function frameAgentStatus(
     ...(turnCompletedAt !== undefined ? { projectedTurnCompletedAt: turnCompletedAt } : {})
   }
 }
+
+export function finiteTurnCompletedAt(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}

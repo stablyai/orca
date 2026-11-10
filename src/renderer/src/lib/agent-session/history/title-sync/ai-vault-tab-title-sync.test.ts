@@ -1,3 +1,4 @@
+import { resumablePaneRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { describe, expect, it, vi } from 'vitest'
 import type { AiVaultSessionTitlesResult } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import { resolveTerminalTabTitle } from '../../../../../../shared/tab-title-resolution'
@@ -150,7 +151,7 @@ describe('AI Vault tab title sync', () => {
       sleeping: true
     })
     const paneKey = 'tab-1:00000000-0000-4000-8000-000000000001'
-    const record = store.getState().sleepingAgentSessionsByPaneKey[paneKey]!
+    const record = resumablePaneRecord(store.getState().sleepingAgentSessionsByPaneKey[paneKey])!
     store.update({
       sleepingAgentSessionsByPaneKey: {
         [paneKey]: { ...record, providerSession: { key: 'session_id', id: 'codex-session' } }

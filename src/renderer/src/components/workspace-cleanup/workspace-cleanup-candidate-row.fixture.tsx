@@ -25,7 +25,7 @@ const NO_CONTEXT: WorkspaceCleanupCandidate['localContext'] = {
   browserTabCount: 0,
   diffCommentCount: 0,
   newestDiffCommentAt: null,
-  retainedDoneAgentCount: 0
+  finishedAgentCount: 0
 }
 const GIT_CLEAN = { clean: true, upstreamAhead: 0, upstreamBehind: 0, checkedAt: NOW }
 const GIT_UNKNOWN = { clean: null, upstreamAhead: null, upstreamBehind: null, checkedAt: null }
@@ -283,7 +283,7 @@ const OVERFLOW_ROW: Scenario = {
       ...NO_CONTEXT,
       terminalTabCount: 2,
       browserTabCount: 1,
-      retainedDoneAgentCount: 1
+      finishedAgentCount: 1
     }
   }),
   activity: 'Just now',

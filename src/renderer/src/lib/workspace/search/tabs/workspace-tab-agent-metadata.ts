@@ -1,6 +1,6 @@
-import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
+import { isDisplayOnlyPaneSleep } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { SleepingAgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { OwnedPaneAgentRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentStatusEvidenceObservedAt } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
@@ -33,8 +33,7 @@ export function maxAgentActivityAt(metadata: readonly AgentMetadata[]): number |
 
 export type WorkspaceTabAgentMetadataState = {
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
-  retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
-  sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord>
+  sleepingAgentSessionsByPaneKey: Record<string, OwnedPaneAgentRecord>
 }
 
 function normalizeText(value: string | null | undefined): string {
@@ -113,25 +112,27 @@ function collectLiveMetadata(
 }
 
 function collectSleepingMetadata(
-  record: SleepingAgentSessionRecord
+  record: OwnedPaneAgentRecord
 ): Pick<AgentMetadata, 'snippetCandidates' | 'textParts' | 'lastActivityAt'> {
+  const display = isDisplayOnlyPaneSleep(record)
+    ? { ...record.display, agent: record.display.agentType }
+    : record
   const textParts: string[] = []
   const snippetCandidates: string[] = []
-  addText(textParts, record.prompt)
-  addText(snippetCandidates, record.prompt)
-  addText(textParts, record.agent)
-  addText(textParts, record.state)
-  addText(textParts, record.terminalTitle)
-  addText(snippetCandidates, record.terminalTitle)
-  addProviderSession(textParts, record.providerSession)
-  return { textParts, snippetCandidates, lastActivityAt: record.updatedAt }
+  addText(textParts, display.prompt)
+  addText(snippetCandidates, display.prompt)
+  addText(textParts, display.agent)
+  addText(textParts, display.state)
+  addText(textParts, display.terminalTitle)
+  addText(snippetCandidates, display.terminalTitle)
+  addProviderSession(textParts, display.providerSession)
+  return { textParts, snippetCandidates, lastActivityAt: display.updatedAt }
 }
 
 export function collectAgentMetadataForTerminal({
   terminalTabId,
   worktreeId,
   agentStatusByPaneKey,
-  retainedAgentsByPaneKey,
   sleepingAgentSessionsByPaneKey
 }: WorkspaceTabAgentMetadataState & {
   terminalTabId: string
@@ -150,26 +151,6 @@ export function collectAgentMetadataForTerminal({
       })
     ) {
       metadataByPaneKey.set(paneKey, { paneKey, ...collectLiveMetadata(entry) })
-    }
-  }
-
-  for (const [paneKey, retained] of Object.entries(retainedAgentsByPaneKey)) {
-    if (metadataByPaneKey.has(paneKey)) {
-      continue
-    }
-    if (
-      agentRecordMatchesTab({
-        paneKey,
-        recordWorktreeId: retained.worktreeId,
-        recordTabId: retained.entry.tabId ?? retained.tab.id,
-        terminalTabId,
-        worktreeId
-      })
-    ) {
-      const metadata = collectLiveMetadata(retained.entry)
-      addText(metadata.textParts, retained.tab.title)
-      addText(metadata.snippetCandidates, retained.tab.title)
-      metadataByPaneKey.set(paneKey, { paneKey, ...metadata })
     }
   }
 
@@ -232,26 +213,6 @@ export function buildAgentMetadataTabIndex(
       worktreeId: entry.worktreeId,
       connectionId: entry.connectionId,
       metadata: { paneKey, ...collectLiveMetadata(entry) }
-    })
-  }
-
-  for (const [paneKey, retained] of Object.entries(state.retainedAgentsByPaneKey)) {
-    if (seenPaneKeys.has(paneKey)) {
-      continue
-    }
-    const tabId = retained.entry.tabId ?? retained.tab.id ?? getPaneKeyTabId(paneKey)
-    if (!tabId) {
-      continue
-    }
-    seenPaneKeys.add(paneKey)
-    const meta = collectLiveMetadata(retained.entry)
-    addText(meta.textParts, retained.tab.title)
-    addText(meta.snippetCandidates, retained.tab.title)
-    pushToIndex(index, tabId, {
-      paneKey,
-      worktreeId: retained.worktreeId,
-      connectionId: retained.entry.connectionId,
-      metadata: { paneKey, ...meta }
     })
   }
 

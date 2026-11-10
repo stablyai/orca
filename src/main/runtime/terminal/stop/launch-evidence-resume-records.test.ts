@@ -1,3 +1,4 @@
+import { resumablePaneRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 // A pane's saved recipe follows main's word on its launch, not the session the agent names.
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
@@ -94,12 +95,12 @@ describe('a pane saved recipe and the launch running in it', () => {
   it('gives an agent typed into a fresh shell none of the session earlier recipe', async () => {
     const { runtime, binding, savedAfterStatus } = makeRuntime(savedRecord('live'))
     runtime.registerPty(PTY_ID, TEST_WORKTREE_ID, null, { ...binding, freshSpawn: true })
-    const saved = await savedAfterStatus()
+    const saved = resumablePaneRecord(await savedAfterStatus())
     expect(saved?.state).toBe('working')
     expect(saved?.launchConfig).toBeUndefined()
   })
 
-  it('keeps a sleep snapshot for its wake without lending its recipe to a typed resume', async () => {
+  it('replaces a slept fact for a typed successor without lending its recipe', async () => {
     const { runtime, binding, getSession, savedAfterStatus } = makeRuntime(
       savedRecord('worktree-sleep')
     )
@@ -108,8 +109,11 @@ describe('a pane saved recipe and the launch running in it', () => {
       agentLaunchAuthority: { launchToken: 'launch-1', launchAgent: 'claude', launchConfig: RECIPE }
     })
     runtime.emitDaemonPtyTransientFact(PTY_ID, { kind: 'command-finished', exitCode: 0 })
-    expect(await savedAfterStatus()).toEqual(savedRecord('worktree-sleep'))
+    expect(await savedAfterStatus()).toMatchObject({ origin: 'live', state: 'working' })
+    expect(resumablePaneRecord(await savedAfterStatus())?.launchConfig).toBeUndefined()
     Object.assign(runtime, { getAgentProviderSessionSnapshotFn: () => [claudeRow()] })
-    expect(runtime.quitResumeRecordsFor(getSession())).toEqual([])
+    expect(runtime.quitResumeRecordsFor(getSession())).toMatchObject([
+      { origin: 'quit', state: 'working', providerSession: SESSION }
+    ])
   })
 })

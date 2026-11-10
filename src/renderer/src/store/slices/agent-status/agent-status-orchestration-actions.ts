@@ -53,10 +53,8 @@ export function createAgentStatusOrchestrationActions(
         }
         let nextLive = s.agentStatusByPaneKey
         let liveChanged = false
-        let nextRetained = s.retainedAgentsByPaneKey
-        let retainedChanged = false
 
-        for (const paneKey of new Set([...Object.keys(nextLive), ...Object.keys(nextRetained)])) {
+        for (const paneKey of Object.keys(nextLive)) {
           const runtimeOrchestration = canonicalOrchestrationForRow(canonicalState, paneKey)
           if (!runtimeOrchestration) {
             continue
@@ -87,34 +85,15 @@ export function createAgentStatusOrchestrationActions(
               }
             }
           }
-
-          const retainedEntry = nextRetained[paneKey]
-          if (retainedEntry) {
-            const merged = mergeCurrentOrchestrationContext(
-              retainedEntry.entry.orchestration,
-              runtimeOrchestration
-            )
-            if (merged !== retainedEntry.entry.orchestration) {
-              if (!retainedChanged) {
-                nextRetained = { ...nextRetained }
-                retainedChanged = true
-              }
-              nextRetained[paneKey] = {
-                ...retainedEntry,
-                entry: { ...retainedEntry.entry, orchestration: merged }
-              }
-            }
-          }
         }
 
-        if (!runtimeMapChanged && !liveChanged && !retainedChanged) {
+        if (!runtimeMapChanged && !liveChanged) {
           return s
         }
 
         return {
           ...(runtimeMapChanged ? { runtimeAgentOrchestrationByPaneKey: reconciled } : {}),
           ...(liveChanged ? { agentStatusByPaneKey: nextLive } : {}),
-          ...(retainedChanged ? { retainedAgentsByPaneKey: nextRetained } : {}),
           ...(liveChanged ? { agentStatusEpoch: s.agentStatusEpoch + 1 } : {})
         }
       })

@@ -1,3 +1,4 @@
+import { paneAgentRecordIdentity } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
@@ -27,6 +28,7 @@ function session(
 ): WorkspaceSessionState {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the lookup reads only the records and the tab's layout.
   return {
+    tabsByWorktree: { [WORKTREE]: [{ id: 'tab-1' }] },
     sleepingAgentSessionsByPaneKey: records,
     terminalLayoutsByTabId: { 'tab-1': { root, activeLeafId: LEFT, expandedLeafId: null } }
   } as unknown as WorkspaceSessionState
@@ -54,8 +56,9 @@ describe("main's lookup of a pane's numbered sleeping record", () => {
       'tab-1:2': { ...RECORD, providerSession: { key: 'session_id', id: 'conv-2' } }
     })
     const of = (leafId: string) =>
-      findPaneSleepingRecord(twoAgents, WORKTREE, { parentTabId: 'tab-1', leafId })?.record
-        .providerSession.id
+      paneAgentRecordIdentity(
+        findPaneSleepingRecord(twoAgents, WORKTREE, { parentTabId: 'tab-1', leafId })?.record
+      ).providerSession?.id
     expect(of(LEFT)).toBe('conv-1')
     expect(of(RIGHT)).toBe('conv-2')
   })
@@ -90,4 +93,13 @@ describe("main's lookup of a pane's numbered sleeping record", () => {
     expect(of(LEFT)).toMatchObject({ record: { paneKey: 'tab-1:3' } })
     expect(of(RIGHT)).toBeNull()
   })
+})
+
+it('keeps exact saved resume identity without a persisted layout, while display requires placement', () => {
+  const record = { ...RECORD, paneKey: `tab-1:${LEFT}` }
+  const saved = session(null, { [record.paneKey]: record })
+  saved.terminalLayoutsByTabId = {}
+  const pane = { parentTabId: 'tab-1', leafId: LEFT }
+  expect(findPaneSleepingRecord(saved, WORKTREE, pane)).toEqual({ record, aliases: [] })
+  expect(findPaneSleepingRecord(saved, WORKTREE, pane, true)).toBeNull()
 })

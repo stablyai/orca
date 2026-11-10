@@ -1,6 +1,6 @@
 // Loader separates layout from view selections, reported content facts and untouched carried fields; Serializer recombines them into compatible disk records.
 
-import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
+import type { OwnedPaneAgentRecord } from '../agent-session/lifecycle/agent-session-resume'
 import type { BrowserWorkspace } from '../browser-workspace-types'
 import type { ClosedTerminalTabTombstonesByTabId } from './closed-terminal-tab-tombstones'
 import type { TabGroup } from '../tab-types'
@@ -139,7 +139,7 @@ export type CarriedSessionFields = Pick<WorkspaceSessionState, CarriedSessionFie
   /** Pane layouts with no terminal tab; kept as stored so the rules check still reports them. */
   unownedTerminalLayouts: Record<string, TerminalLayoutSnapshot>
   /** Records naming no loaded pane (or, for closed tabs, workspace), kept as stored. */
-  unplacedSleepingRecords: Record<string, SleepingAgentSessionRecord>
+  unplacedSleepingRecords: Record<string, OwnedPaneAgentRecord>
   unplacedIncarnations: Record<string, string>
   unplacedClosedTabs: ClosedTerminalTabTombstonesByTabId
 }

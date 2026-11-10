@@ -1,4 +1,9 @@
 import { resolveAgentSessionStartedAt } from '../../../../shared/agent-session/lifecycle/agent-session-start-time'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import {
+  agentPaneConversationForEntry,
+  projectAgentPaneConversation
+} from '../../store/slices/agent-status/agent-pane-conversation'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { withMirroredEvidenceReceipt } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { agentEntryCompletionAt } from '../../../../shared/agent-status/lifecycle/agent-completion-time'
@@ -41,7 +46,12 @@ type MirroredAgentStatusPatch = Pick<
   'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'
 > &
   Partial<
-    Pick<WebSessionTabsSyncState, 'agentLaunchConfigByPaneKey' | 'sleepingAgentSessionsByPaneKey'>
+    Pick<
+      WebSessionTabsSyncState,
+      | 'agentLaunchConfigByPaneKey'
+      | 'sleepingAgentSessionsByPaneKey'
+      | 'agentConversationsByPaneKey'
+    >
   >
 
 export function buildMirroredAgentStatusPatch(
@@ -143,13 +153,16 @@ export function buildMirroredAgentStatusPatch(
             ...withHostProgramStatus(nextEntry, entry.programStatus),
             ...(entry.launchAttested !== undefined ? { launchAttested: entry.launchAttested } : {})
           }
-    const retained = existing ? undefined : state.retainedAgentsByPaneKey?.[entry.paneKey]
+    const conversation = existing
+      ? undefined
+      : agentPaneConversationForEntry(state, accepted, toRuntimeExecutionHostId(environmentId))
     nextByPaneKey.set(entry.paneKey, {
       ...accepted,
       firstStateStartedAt: resolveAgentSessionStartedAt({
         entry: accepted,
-        previous: existing ?? retained?.entry,
-        previousStartedAt: retained?.startedAt
+        previous:
+          existing ??
+          (conversation ? { ...conversation, agentType: conversation.agent } : undefined)
       })
     })
   }
@@ -168,7 +181,7 @@ export function buildMirroredAgentStatusPatch(
     ) {
       continue
     }
-    // The retirement sweep must see the live row to suppress ghost retention.
+    // Explicit retraction retires pane authority after the live-row patch.
     if (isMirroredAgentPaneKeyForTabs(paneKey, retractedTabIds)) {
       continue
     }
@@ -194,7 +207,15 @@ export function buildMirroredAgentStatusPatch(
   }
 
   let retirement: ReturnType<typeof retirePaneLaunchNote> = {}
+  let nextConversations = state.agentConversationsByPaneKey ?? {}
+  const originalConversations = nextConversations
   for (const [paneKey, entry] of nextByPaneKey) {
+    nextConversations = projectAgentPaneConversation(
+      { tabsByWorktree: state.tabsByWorktree, agentConversationsByPaneKey: nextConversations },
+      entry,
+      (entries) => (entries === originalConversations ? { ...entries } : entries),
+      toRuntimeExecutionHostId(environmentId)
+    )
     const existing = nextAgentStatusByPaneKey[paneKey]
     // The host's retirement of this pane's launch ends the client's copies of its note.
     if (retiresLaunch(existing, entry)) {
@@ -242,7 +263,7 @@ export function buildMirroredAgentStatusPatch(
     sortRelevantChange = sortRelevantChange || entrySortRelevantChange
   }
 
-  if (!changed) {
+  if (!changed && nextConversations === originalConversations) {
     return null
   }
 
@@ -250,6 +271,9 @@ export function buildMirroredAgentStatusPatch(
     agentStatusByPaneKey: nextAgentStatusByPaneKey,
     agentStatusEpoch: aggregateRelevantChange ? state.agentStatusEpoch + 1 : state.agentStatusEpoch,
     sortEpoch: sortRelevantChange ? state.sortEpoch + 1 : state.sortEpoch,
+    ...(nextConversations !== originalConversations
+      ? { agentConversationsByPaneKey: nextConversations }
+      : {}),
     ...retirement
   }
 }

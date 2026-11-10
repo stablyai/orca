@@ -4977,11 +4977,6 @@
             "behind": "{{behind}} geride",
             "activeAgents_other": "{{count}} etkin ajan",
             "activeAgents_one": "{{count}} etkin ajan",
-            "completedAgents_other": "{{count}} tamamlanmış ajan",
-            "completedAgents_one": "{{count}} tamamlanmış ajan",
-            "activeAndCompletedAgents": "{{active}}, {{completed}}",
-            "completedAgentsRetained_other": "{{count}} tamamlanmış ajan tutuluyor",
-            "completedAgentsRetained_one": "{{count}} tamamlanmış ajan tutuluyor",
             "noTrackedAgents": "Çalışan izlenen ajan yok",
             "noTerminalTabs": "Terminal sekmesi yok",
             "liveTerminalTabs_other": "{{count}} terminal sekmesinden {{live}} tanesi etkin",
@@ -20306,7 +20301,7 @@
           "pinned": "Sabitlendi",
           "unread": "Okunmadı",
           "comment": "Yorumu var",
-          "retainedDoneAgents": "Tamamlanmış ajan dökümleri",
+          "finishedAgents": "Tamamlanmış ajanlar",
           "contextPresence": "Açık sekmeler, terminaller, yorumlar",
           "completelyEmpty": "Kaybedecek bir şey yok",
           "noWorkspaces": "Çalışma alanı bulunamadı.",
@@ -20424,7 +20419,7 @@
               "comment": "Yorum",
               "prunable": "Budanabilir",
               "locked": "Kilitli",
-              "retainedAgents": "Tamamlanmış ajanlar"
+              "finishedAgents": "Tamamlanmış ajanlar"
             }
           },
           "forceDeleteRisk_other": "Şu anda {{count}} çalışma alanında risk var ve bunların zorla silinmesi gerekebilir",

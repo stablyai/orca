@@ -10,11 +10,7 @@ export const EMPTY_WORKTREE_AGENT_FRESHNESS_SIGNATURE = ''
 
 type WorktreeAgentFreshnessState = Pick<
   AppState,
-  | 'agentStatusByPaneKey'
-  | 'agentStatusEpoch'
-  | 'migrationUnsupportedByPtyId'
-  | 'retainedAgentsByPaneKey'
-  | 'tabsByWorktree'
+  'agentStatusByPaneKey' | 'agentStatusEpoch' | 'migrationUnsupportedByPtyId' | 'tabsByWorktree'
 >
 
 function buildWorktreeAgentFreshnessSignature(

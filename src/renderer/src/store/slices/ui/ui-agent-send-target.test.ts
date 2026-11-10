@@ -455,7 +455,7 @@ describe('createUISlice agent send target mode', () => {
 describe('createUISlice acknowledgeAgents notification dismissal', () => {
   const tabId = 'tab-ack'
   const livePaneKey = makePaneKey(tabId, '11111111-1111-4111-8111-111111111111')
-  const retainedPaneKey = makePaneKey('tab-retained', '22222222-2222-4222-8222-222222222222')
+  const missingPaneKey = makePaneKey('tab-missing', '22222222-2222-4222-8222-222222222222')
   const skippedPaneKey = makePaneKey('tab-skipped', '33333333-3333-4333-8333-333333333333')
 
   beforeEach(() => {
@@ -468,7 +468,7 @@ describe('createUISlice acknowledgeAgents notification dismissal', () => {
   })
 
   it.each([undefined, 'remote-host'])(
-    'dismisses unvisited live and retained notifications on %s',
+    'dismisses live notification IDs and includes missing-pane subjects on %s',
     (environmentId) => {
       const dismiss = vi.fn().mockResolvedValue({ dismissed: 0 })
       vi.stubGlobal('window', { api: { notifications: { dismiss } } })
@@ -485,21 +485,12 @@ describe('createUISlice acknowledgeAgents notification dismissal', () => {
           [livePaneKey]: makeAgentEntry(livePaneKey, 1_000),
           [skippedPaneKey]: makeAgentEntry(skippedPaneKey, 3_000)
         },
-        retainedAgentsByPaneKey: {
-          [retainedPaneKey]: {
-            entry: makeAgentEntry(retainedPaneKey, 2_000),
-            worktreeId: 'wt-retained',
-            tab: tab('tab-retained', 'wt-retained'),
-            agentType: 'codex',
-            startedAt: 2_000
-          }
-        },
         acknowledgedAgentsByPaneKey: {
           [skippedPaneKey]: 4_000
         }
       } satisfies Partial<AppState>)
 
-      store.getState().acknowledgeAgents([livePaneKey, retainedPaneKey, skippedPaneKey])
+      store.getState().acknowledgeAgents([livePaneKey, missingPaneKey, skippedPaneKey])
 
       const qualify = (id: string | null) =>
         environmentId ? JSON.stringify([`runtime:${environmentId}`, id]) : id
@@ -511,24 +502,17 @@ describe('createUISlice acknowledgeAgents notification dismissal', () => {
               paneKey: livePaneKey,
               stateStartedAt: 1_000
             })
-          ),
-          qualify(
-            buildAgentNotificationId({
-              worktreeId: 'wt-retained',
-              paneKey: retainedPaneKey,
-              stateStartedAt: 2_000
-            })
           )
         ],
-        [livePaneKey, retainedPaneKey, skippedPaneKey]
+        [livePaneKey, missingPaneKey, skippedPaneKey]
       )
 
       dismiss.mockClear()
       vi.setSystemTime(new Date('2026-06-02T12:00:01Z'))
-      store.getState().acknowledgeAgents([livePaneKey, retainedPaneKey])
+      store.getState().acknowledgeAgents([livePaneKey, missingPaneKey])
 
       // Nothing rebuilt twice; main still gets the subjects so it can retire what it announced.
-      expect(dismiss).toHaveBeenCalledWith([], [livePaneKey, retainedPaneKey])
+      expect(dismiss).toHaveBeenCalledWith([], [livePaneKey, missingPaneKey])
     }
   )
 })

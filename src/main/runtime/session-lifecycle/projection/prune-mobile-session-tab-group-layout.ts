@@ -1,3 +1,5 @@
+import { paneSleepAgentStatus } from '../../../../shared/agent-session/lifecycle/pane-sleep-agent-status'
+import { findPaneSleepingRecord } from './pane-sleeping-record'
 import { selectFreshAgentRowForMobileTab } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from '../../session-tabs/session-tabs-change-publication'
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
@@ -141,6 +143,15 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
       getProviderSessionRows: (paneKey) => this.getAgentProviderSessionRowsForPaneFn?.(paneKey),
       getProviderSessionSnapshot: () => this.getAgentProviderSessionSnapshotFn?.() ?? [],
       getStatusSnapshot: () => this.getAgentStatusSnapshotFn?.() ?? [],
+      getSleptAgentStatus: (worktreeId, tab) => {
+        const owned = findPaneSleepingRecord(
+          this.getWorkspaceSessionForWorktree(worktreeId),
+          worktreeId,
+          tab,
+          true
+        )
+        return owned ? paneSleepAgentStatus(owned.record) : null
+      },
       getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
       findPty: (worktreeId, tab, options) =>
         this.findPtyForMobileTerminalTab(worktreeId, tab, options),

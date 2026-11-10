@@ -20,6 +20,7 @@ vi.mock('electron', () => ({
     removeHandler: removeHandlerMock
   }
 }))
+vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
 import { registerRuntimeHandlers } from './runtime'
 import { EphemeralVmFailureError } from '../../shared/ephemeral-vm-failure-copy'
 
@@ -92,4 +93,43 @@ describe('registerRuntimeHandlers', () => {
     ).toThrow('Runtime graph sync must originate from the current main frame')
     expect(runtime.syncWindowGraph).not.toHaveBeenCalled()
   })
+})
+
+it('routes guarded pane sleep through the real desktop IPC dispatcher in shipped mode', async () => {
+  handleMock.mockClear()
+  const runtime = {
+    getRuntimeId: () => 'runtime-test',
+    applyLayoutCommand: vi.fn(async () => ({
+      ok: true,
+      result: { slept: ['tab:11111111-1111-4111-8111-111111111111'] }
+    }))
+  }
+  registerRuntimeHandlers(runtime as never)
+  const call = handleMock.mock.calls.find(([channel]) => channel === 'runtime:call')![1]
+  const sender = { id: 73, mainFrame: {}, on: vi.fn(), once: vi.fn() }
+  const command = {
+    type: 'sleep',
+    workspace: 'repo::/work',
+    tabId: 'tab',
+    recordOnly: true,
+    paneKeys: ['tab:11111111-1111-4111-8111-111111111111'],
+    records: [],
+    expectedTargets: [
+      {
+        paneKey: 'tab:11111111-1111-4111-8111-111111111111',
+        ptyId: 'pty',
+        ptyIncarnationId: 'inc',
+        authorityGeneration: 'authority'
+      }
+    ]
+  }
+  const reply = await call(
+    { sender, senderFrame: sender.mainFrame },
+    { method: 'layout.apply', params: { command } }
+  )
+  expect(reply).toMatchObject({
+    ok: true,
+    result: { ok: true, result: { slept: ['tab:11111111-1111-4111-8111-111111111111'] } }
+  })
+  expect(runtime.applyLayoutCommand).toHaveBeenCalledWith(command, undefined)
 })

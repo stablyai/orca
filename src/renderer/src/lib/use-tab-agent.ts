@@ -1,3 +1,5 @@
+import { agentTypeToIconAgent } from '../../../shared/agent-status/presentation/agent-type-icon-agent'
+import { paneAgentRecordIdentity } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -6,10 +8,8 @@ import { hasRemoteRuntimePtyForTab } from './tab-agent-remote-pty-selector'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   resolveFocusedCompletedTabAgent,
-  resolveFocusedRetainedTabAgent,
   resolveFocusedTabAgent,
   resolveSiblingCompletedTabAgent,
-  resolveSiblingRetainedTabAgent,
   resolveSiblingTabAgent
 } from './tab-agent'
 import {
@@ -29,45 +29,33 @@ type TabHookAgents = {
 
 /** Every mounted tab re-runs these on each store write; recompute only when this tab's hook inputs change. */
 function createTabHookAgentResolver(): (
-  s: Pick<AppState, 'agentStatusByPaneKey' | 'retainedAgentsByPaneKey' | 'terminalLayoutsByTabId'>,
+  s: Pick<AppState, 'agentStatusByPaneKey' | 'terminalLayoutsByTabId'>,
   tabId: string
 ) => TabHookAgents {
   let last: {
     tabId: string
     statuses: AppState['agentStatusByPaneKey']
-    retained: AppState['retainedAgentsByPaneKey']
     layout: AppState['terminalLayoutsByTabId'][string] | undefined
     agents: TabHookAgents
   } | null = null
   return (s, tabId) => {
     const statuses = s.agentStatusByPaneKey
-    const retained = s.retainedAgentsByPaneKey
     const layout = s.terminalLayoutsByTabId[tabId]
-    if (
-      last &&
-      last.tabId === tabId &&
-      last.statuses === statuses &&
-      last.retained === retained &&
-      last.layout === layout
-    ) {
+    if (last && last.tabId === tabId && last.statuses === statuses && last.layout === layout) {
       return last.agents
     }
     const agents: TabHookAgents = {
       focused: resolveFocusedTabAgent(statuses, layout, tabId),
       sibling: resolveSiblingTabAgent(statuses, layout, tabId),
-      focusedCompleted:
-        resolveFocusedCompletedTabAgent(statuses, layout, tabId) ??
-        resolveFocusedRetainedTabAgent(retained, layout, tabId),
-      siblingCompleted:
-        resolveSiblingCompletedTabAgent(statuses, layout, tabId) ??
-        resolveSiblingRetainedTabAgent(retained, layout, tabId)
+      focusedCompleted: resolveFocusedCompletedTabAgent(statuses, layout, tabId),
+      siblingCompleted: resolveSiblingCompletedTabAgent(statuses, layout, tabId)
     }
-    last = { tabId, statuses, retained, layout, agents }
+    last = { tabId, statuses, layout, agents }
     return agents
   }
 }
 
-/** Resolve pane identity, separate from activity, without foreground probes: live focused hook → process (normalized to owner group) → reuse/hookless title → completed/retained focused identity → sleeping session → launch → sibling fallback. Native OpenCode titles cannot displace durable ownership; local OSC 133;D suppresses exited idle identity. */
+/** Resolve pane identity, separate from activity, without foreground probes: live focused hook → process (normalized to owner group) → reuse/hookless title → completed focused identity → sleeping session → launch → sibling fallback. Native OpenCode titles cannot displace durable ownership; local OSC 133;D suppresses exited idle identity. */
 export function useTabAgent(tab: TerminalTab): TerminalAgent | null {
   const [resolveHookAgents] = useState(createTabHookAgentResolver)
   const focusedHookAgent = useAppStore((s) => resolveHookAgents(s, tab.id).focused)
@@ -94,7 +82,11 @@ export function useTabAgent(tab: TerminalTab): TerminalAgent | null {
   )
   // Why: a hibernated pane's session record is the freshest identity once PTY, hook, and process signals are all gone.
   const sleepingSessionAgent = useAppStore((s) =>
-    focusedPaneKey ? (s.sleepingAgentSessionsByPaneKey[focusedPaneKey]?.agent ?? null) : null
+    focusedPaneKey
+      ? (agentTypeToIconAgent(
+          paneAgentRecordIdentity(s.sleepingAgentSessionsByPaneKey[focusedPaneKey]).agent
+        ) ?? null)
+      : null
   )
 
   // Focused pane's PTY; only used to reset per-process-generation signals on respawn.

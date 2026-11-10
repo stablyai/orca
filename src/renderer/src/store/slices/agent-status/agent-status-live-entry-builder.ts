@@ -1,3 +1,10 @@
+import {
+  type OwnedPaneAgentRecord,
+  agentProviderSessionsEqual,
+  type AgentProviderSessionMetadata,
+  type SleepingAgentLaunchConfig,
+  type SleepingAgentSessionRecord
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { canonicalOrchestrationForRow } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import { resolveAgentSessionStartedAt } from '../../../../../shared/agent-session/lifecycle/agent-session-start-time'
 import { sameAgentStatusTerminalOwner } from '../../../../../shared/agent-status/identity/agent-status-terminal-owner'
@@ -7,12 +14,6 @@ import { resolveAgentStatusLiveEntryMainAgent } from './agent-status-live-entry-
 import { resolveAgentStatusLiveEntryStateHistory } from '../../../../../shared/agent-status/lifecycle/agent-status-live-entry-state-history'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { MigrationUnsupportedPtyEntry } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import {
-  agentProviderSessionsEqual,
-  type AgentProviderSessionMetadata,
-  type SleepingAgentLaunchConfig,
-  type SleepingAgentSessionRecord
-} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
@@ -31,7 +32,8 @@ import {
 } from './agent-status-launch-config'
 import { findAgentPaneWorktreeId, getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
 import { mergeCurrentOrchestrationContext } from './agent-status-orchestration-context'
-import { deriveAgentStatusLiveFacts } from './agent-status-live-facts'
+import { agentSleepSuccessorEvidence, deriveAgentStatusLiveFacts } from './agent-status-live-facts'
+import { agentPaneConversationForEntry } from './agent-pane-conversation'
 import { liveEntryChildFields } from './agent-status-live-entry-children'
 import {
   canReuseStatusProviderSession,
@@ -40,8 +42,9 @@ import {
 
 export type AgentStatusLiveEntryBuild = {
   entry: AgentStatusEntry
+  sleepSuccessorEvidence: ReturnType<typeof agentSleepSuccessorEvidence>
   existing: AgentStatusEntry | undefined
-  existingSleepingRecord: SleepingAgentSessionRecord | undefined
+  existingSleepingRecord: OwnedPaneAgentRecord | undefined
   liveRecoveryRecord: SleepingAgentSessionRecord | null
   launchConfigSource: SleepingAgentLaunchConfig | undefined
   registryEntry: AppState['agentLaunchConfigByPaneKey'][string] | undefined
@@ -55,7 +58,7 @@ export type AgentStatusLiveEntryBuild = {
   }
   commandCodeNewTurn: boolean
   sortRelevantChange: boolean
-  retentionRelevantChange: boolean
+  aggregateRelevantChange: boolean
   completionRefreshWorktreeId: string | null
   boundaryResolved: boolean
 }
@@ -262,11 +265,11 @@ export function buildAgentStatusLiveEntry(
         ? existing.sessionBoundary
         : undefined)
   }
-  const retained = existing ? undefined : state.retainedAgentsByPaneKey[paneKey]
+  const conversation = existing ? undefined : agentPaneConversationForEntry(state, entry)
   entry.firstStateStartedAt = resolveAgentSessionStartedAt({
     entry,
-    previous: existing ?? retained?.entry,
-    previousStartedAt: retained?.startedAt,
+    previous:
+      existing ?? (conversation ? { ...conversation, agentType: conversation.agent } : undefined),
     identity: { ...identity, ...routing, providerSession: metadata?.providerSession }
   })
   const facts = deriveAgentStatusLiveFacts({
@@ -281,6 +284,7 @@ export function buildAgentStatusLiveEntry(
   })
   return {
     entry,
+    sleepSuccessorEvidence: agentSleepSuccessorEvidence(state, entry, timing),
     existing,
     ...facts,
     launchConfigSource,

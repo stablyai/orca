@@ -4887,9 +4887,6 @@
             "ahead": "領先 {{ahead}}",
             "behind": "落後 {{behind}}",
             "activeAgents_other": "{{count}} 個作用中的代理程式",
-            "completedAgents_other": "{{count}} 個已完成的代理程式",
-            "activeAndCompletedAgents": "{{active}}、{{completed}}",
-            "completedAgentsRetained_other": "保留了 {{count}} 個已完成的代理程式",
             "noTrackedAgents": "沒有追蹤中的代理程式正在執行",
             "noTerminalTabs": "沒有終端機分頁",
             "liveTerminalTabs_other": "{{count}} 個終端機分頁中有 {{live}} 個執行中",
@@ -20014,7 +20011,7 @@
           "pinned": "已固定",
           "unread": "未讀",
           "comment": "有留言",
-          "retainedDoneAgents": "已完成的代理程式對話紀錄",
+          "finishedAgents": "已完成的代理程式",
           "contextPresence": "開啟中的分頁、終端機、留言",
           "completelyEmpty": "沒有需要保留的內容",
           "noWorkspaces": "未找到工作區。",
@@ -20132,7 +20129,7 @@
               "comment": "留言",
               "prunable": "可修剪",
               "locked": "已鎖定",
-              "retainedAgents": "已完成的代理程式"
+              "finishedAgents": "已完成的代理程式"
             }
           },
           "forceDeleteRisk_other": "{{count}} 個工作區目前存在風險，可能需要強制刪除",

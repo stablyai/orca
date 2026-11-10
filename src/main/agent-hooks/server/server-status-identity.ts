@@ -1,3 +1,6 @@
+import { mainAgentState } from '../../../shared/agent-status/lifecycle/main-agent-status'
+import { isNewTurnEvent } from '../../../shared/agent-hook-listener/provider-event-routing'
+import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentKind } from '../../../shared/telemetry-events'
 import { getAgentResumeArgv } from '../../../shared/agent-launch/startup/agent-resume-argv'
 import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -65,6 +68,7 @@ export function toAgentStatusIpcPayload(
       ? { evidenceObservedAt: entry.evidenceObservedAt }
       : {}),
     stateStartedAt: entry.stateStartedAt,
+    ...(entry.previousCompletion ? { previousCompletion: entry.previousCompletion } : {}),
     ...(entry.turnStartedAt !== undefined ? { turnStartedAt: entry.turnStartedAt } : {}),
     ...pickHostTurnEnd(entry),
     ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
@@ -86,4 +90,35 @@ export function paneCacheKeyTabId(key: string): string | null {
 
 export function paneCacheKeyMatchesTab(key: string, tabId: string): boolean {
   return paneCacheKeyTabId(key) === tabId
+}
+
+/** Only live main-agent turn boundaries establish a start; replay and child events preserve it. */
+export function resolveTurnStartedAt(
+  previous: EnrichedAgentHookEventPayload | undefined,
+  payload: AgentHookEventPayload,
+  at: number
+): number | undefined {
+  if (
+    payload.source !== undefined &&
+    payload.toolAgentId === undefined &&
+    payload.isReplay !== true &&
+    payload.providerSessionOnly !== true &&
+    isNewTurnEvent(payload.source, payload.hookEventName) &&
+    !(
+      payload.source === 'codex' &&
+      payload.hookEventName === 'SessionStart' &&
+      !payload.hasExplicitPrompt
+    )
+  ) {
+    return payload.payload.sessionBoundary === true ? undefined : at
+  }
+  // An undated return to work cannot inherit the completed turn's start.
+  if (
+    previous &&
+    mainAgentState(previous.payload) === 'done' &&
+    mainAgentState(payload.payload) !== 'done'
+  ) {
+    return undefined
+  }
+  return previous?.turnStartedAt
 }

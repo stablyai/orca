@@ -66,7 +66,7 @@ function mountChatConsumers(consumer: ChatStatusConsumer): void {
     tabsByWorktree: {},
     browserTabsByWorktree: {},
     agentStatusByPaneKey: {},
-    retainedAgentsByPaneKey: {},
+
     unifiedTabsByWorktree: { [TARGET_WORKTREE_ID]: [tab] },
     structuredChatSleptAtByPaneKey: { [structuredAgentSessionPaneKey(tab.id, tab.entityId)]: 1 }
   })

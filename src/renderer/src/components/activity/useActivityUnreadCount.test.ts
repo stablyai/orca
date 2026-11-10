@@ -22,8 +22,7 @@ function makeSource(entry: AgentStatusEntry, ackAt = 0) {
   return {
     acknowledgedAgentsByPaneKey: { [PANE]: ackAt },
     agentStatusByPaneKey: { [PANE]: entry },
-    migrationUnsupportedByPtyId: {},
-    retainedAgentsByPaneKey: {}
+    migrationUnsupportedByPtyId: {}
   }
 }
 
@@ -84,29 +83,8 @@ describe('countActivityUnread with Clear completed cutoffs', () => {
   })
 })
 
-describe('countActivityUnread source overlap', () => {
-  it('counts an overlapping live and retained pane only once', () => {
-    const entry = makeEntry({})
-    const source = {
-      acknowledgedAgentsByPaneKey: { [PANE]: 0 },
-      agentStatusByPaneKey: { [PANE]: entry },
-      retainedAgentsByPaneKey: {
-        [PANE]: {
-          entry,
-          worktreeId: 'wt-1',
-          tab: {} as never,
-          agentType: 'claude',
-          startedAt: 1_000
-        }
-      },
-      migrationUnsupportedByPtyId: {}
-    }
-    expect(countActivityUnread(source)).toBe(1)
-  })
-})
-
 describe('countActivityUnread working turns', () => {
-  it('counts fresh working, but not monitoring, historical, or retained working', () => {
+  it('counts fresh working, but not monitoring or historical work', () => {
     const entry = makeEntry({
       state: 'working',
       stateHistory: [{ state: 'working', prompt: 'old', startedAt: 1_000 }]
@@ -114,24 +92,6 @@ describe('countActivityUnread working turns', () => {
     expect(countActivityUnread(makeSource(entry), 2_000)).toBe(1)
     // Monitoring emits no unread event in the list (4b2e3dded0), so the badge must not count it.
     expect(countActivityUnread(makeSource({ ...entry, workingMode: 'monitoring' }), 2_000)).toBe(0)
-    expect(
-      countActivityUnread(
-        {
-          ...makeSource(entry),
-          agentStatusByPaneKey: {},
-          retainedAgentsByPaneKey: {
-            [PANE]: {
-              entry,
-              worktreeId: 'wt-1',
-              tab: {} as never,
-              agentType: 'claude',
-              startedAt: 1_000
-            }
-          }
-        },
-        2_000
-      )
-    ).toBe(0)
   })
 
   it('preserves receipts across heartbeats and counts the next turn', () => {

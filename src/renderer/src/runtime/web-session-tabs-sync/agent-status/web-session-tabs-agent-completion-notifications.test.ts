@@ -1,3 +1,8 @@
+import { getDefaultSettings } from '../../../../../shared/constants'
+import type {
+  observeAgentHookCompletionForNotification,
+  resetAgentHookCompletionNotificationCoordinators
+} from '@/hooks/agent-hook-completion-notifications'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusChange } from '@/store/slices/agent-status/agent-status-contract'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
@@ -94,18 +99,48 @@ function withoutAgentWorktree(
   }
 }
 
-function applySnapshot(snapshot: RuntimeMobileSessionTabsResult, live: boolean): void {
+function applySnapshot(
+  snapshot: RuntimeMobileSessionTabsResult,
+  live: boolean,
+  unbound = false
+): void {
   const decision = decideWebSessionTabsSnapshot(snapshot, ENVIRONMENT_ID)
   applyWebSessionTabsStorePatch(
-    (state, changedAgentPaneKeys) =>
-      applyWebSessionTabsSnapshot(
+    (state, changedAgentPaneKeys) => {
+      const patch = applyWebSessionTabsSnapshot(
         state,
         snapshot,
         ENVIRONMENT_ID,
         NOW,
         undefined,
         changedAgentPaneKeys
-      ),
+      )
+      if (!unbound) {
+        return patch
+      }
+      const tabId = toWebTerminalSurfaceTabId(HOST_TAB_ID)
+      return {
+        ...patch,
+        tabsByWorktree: {
+          ...(patch.tabsByWorktree ?? state.tabsByWorktree),
+          [WORKTREE_ID]: (
+            patch.tabsByWorktree?.[WORKTREE_ID] ??
+            state.tabsByWorktree[WORKTREE_ID] ??
+            []
+          ).map((tab) => ({ ...tab, ptyId: null }))
+        },
+        ptyIdsByTabId: { ...(patch.ptyIdsByTabId ?? state.ptyIdsByTabId), [tabId]: [] },
+        terminalLayoutsByTabId: {
+          ...(patch.terminalLayoutsByTabId ?? state.terminalLayoutsByTabId),
+          [tabId]: {
+            root: { type: 'leaf' as const, leafId: LEAF_ID },
+            activeLeafId: LEAF_ID,
+            expandedLeafId: null,
+            ptyIdsByLeafId: {}
+          }
+        }
+      }
+    },
     { frames: [{ environmentId: ENVIRONMENT_ID, worktreeId: snapshot.worktree, decision }] },
     snapshot,
     live
@@ -129,6 +164,198 @@ describe('paired session-tab agent completion notifications', () => {
     resetRendererOwnedAgentStatusPanesForTests()
     vi.unstubAllGlobals()
     vi.useRealTimers()
+  })
+
+  it.each([
+    'missed',
+    'first-live',
+    'first-live-aged',
+    'cold',
+    'seen',
+    'read',
+    'successor'
+  ] as const)(
+    'delivers only unseen canonical history through the real paired observer (%s)',
+    async (mode) => {
+      const actual = await vi.importActual<{
+        observeAgentHookCompletionForNotification: typeof observeAgentHookCompletionForNotification
+        resetAgentHookCompletionNotificationCoordinators: typeof resetAgentHookCompletionNotificationCoordinators
+      }>('@/hooks/agent-hook-completion-notifications')
+      const { setPresenceGated } = await import('@/hooks/agent-auto-ack-presence')
+      const { TEST_REPO } = await import('@/store/repos/repo.test-fixture')
+      const { makeWorktree } = await import('@/store/slices/worktrees/worktree.test-fixture')
+      vi.setSystemTime(NOW + (mode === 'first-live-aged' ? 60_000 : 300))
+      const dispatch = vi.fn(async () => ({ delivered: true }))
+      vi.stubGlobal('document', { visibilityState: 'hidden', hasFocus: () => false })
+      vi.stubGlobal('window', {
+        api: {
+          notifications: { dispatch },
+          github: { enqueuePRRefresh: vi.fn(async () => undefined) },
+          agentStatus: {}
+        }
+      })
+      useAppStore.setState({
+        settings: {
+          ...getDefaultSettings('/tmp/delete-retention-fixture'),
+          experimentalTerminalAttention: true
+        },
+        repos: [{ ...TEST_REPO, id: 'repo', executionHostId: 'runtime:web-env-1' }],
+        worktreesByRepo: {
+          repo: [makeWorktree({ id: WORKTREE_ID, repoId: 'repo', hostId: 'runtime:web-env-1' })]
+        },
+        activeWorktreeId: null,
+        refreshGitHubForWorktreeIfStale: vi.fn()
+      })
+      const markUnread = vi.fn(useAppStore.getState().markAgentAttentionUnread)
+      useAppStore.setState({ markAgentAttentionUnread: markUnread })
+      setPresenceGated(false)
+      actual.resetAgentHookCompletionNotificationCoordinators()
+      mocks.observeAgentHookCompletionForNotification.mockImplementation(
+        actual.observeAgentHookCompletionForNotification
+      )
+      const paneKey = makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID)
+      const end = {
+        state: 'done' as const,
+        prompt: 'first task',
+        startedAt: NOW + 100,
+        turnEndedAt: NOW + 110,
+        turnEndDisposition: 'identified' as const
+      }
+      const snapshot = (version: number, sleeping: boolean) => {
+        const next = makeAgentSnapshot(
+          version,
+          NOW + version * 100,
+          undefined,
+          sleeping ? 'done' : 'working',
+          NOW + 200
+        )
+        const surface = next.tabs[0]
+        if (surface.type !== 'terminal' || !surface.agentStatus) {
+          throw new Error('Missing fixture status')
+        }
+        surface.agentStatus.prompt = 'second task'
+        if (sleeping) {
+          surface.agentStatus.sessionBoundary = true
+        }
+        if (sleeping || mode === 'seen') {
+          surface.agentStatus.stateHistory = [end]
+        }
+        surface.agentStatus.lastCompletedAssistantMessage = 'First task finished.'
+        return next
+      }
+      try {
+        if (mode !== 'cold' && mode !== 'first-live' && mode !== 'first-live-aged') {
+          applySnapshot(snapshot(1, false), true, true)
+        }
+        if (mode === 'read') {
+          useAppStore.setState({ acknowledgedAgentsByPaneKey: { [paneKey]: NOW + 100 } })
+        }
+        applySnapshot(snapshot(2, true), mode !== 'cold', true)
+        if (mode === 'successor') {
+          applySnapshot(makeAgentSnapshot(3, NOW + 400, undefined, 'working', NOW + 400), true)
+        }
+        await vi.advanceTimersByTimeAsync(2_000)
+        const delivers = mode === 'missed' || mode === 'first-live' || mode === 'first-live-aged'
+        expect(dispatch).toHaveBeenCalledTimes(delivers ? 1 : 0)
+        if (delivers) {
+          expect(dispatch).toHaveBeenCalledWith(
+            expect.objectContaining({
+              agentPrompt: 'first task',
+              agentLastAssistantMessage: 'First task finished.',
+              notificationId: expect.stringContaining(String(NOW + 100))
+            })
+          )
+        }
+        expect({
+          marked: markUnread.mock.calls.length,
+          pane: Boolean(useAppStore.getState().unreadAgentCompletionPanes[paneKey]),
+          workspace: useAppStore.getState().worktreesByRepo.repo?.[0]?.isUnread
+        }).toEqual({
+          marked: delivers ? 1 : 0,
+          pane: delivers,
+          workspace: delivers
+        })
+      } finally {
+        actual.resetAgentHookCompletionNotificationCoordinators()
+        setPresenceGated(true)
+        mocks.observeAgentHookCompletionForNotification.mockReset()
+      }
+    }
+  )
+
+  it.each(['warm', 'cold-replay', 'first-live'] as const)(
+    'publishes passive sleeping Done without completion news (%s)',
+    (mode) => {
+      if (mode === 'warm') {
+        applySnapshot(makeAgentSnapshot(1, NOW), true)
+      }
+      const asleep = makeAgentSnapshot(mode === 'warm' ? 2 : 1, NOW + 100, undefined, 'done')
+      const surface = asleep.tabs[0]
+      if (surface.type !== 'terminal' || !surface.agentStatus) {
+        throw new Error('Expected terminal status')
+      }
+      surface.agentStatus.sessionBoundary = true
+      mocks.observeAgentHookCompletionForNotification.mockClear()
+      applySnapshot(asleep, mode !== 'cold-replay')
+      expect(mocks.observeAgentHookCompletionForNotification).not.toHaveBeenCalled()
+      const key = makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID)
+      expect(useAppStore.getState().agentStatusByPaneKey[key]?.sessionBoundary).toBe(true)
+    }
+  )
+
+  it('does not reannounce an unread earlier finish when the next working turn sleeps', () => {
+    const end = {
+      state: 'done' as const,
+      prompt: 'first task',
+      startedAt: NOW,
+      turnEndedAt: NOW + 10,
+      turnEndDisposition: 'identified' as const
+    }
+    applySnapshot(makeAgentSnapshot(1, NOW, undefined, 'working'), true)
+    applySnapshot(makeAgentSnapshot(2, NOW + 10, undefined, 'done', NOW), true)
+    const working = makeAgentSnapshot(3, NOW + 20, undefined, 'working', NOW + 20)
+    const current = working.tabs[0]
+    if (current.type !== 'terminal' || !current.agentStatus) {
+      throw new Error('Expected terminal status')
+    }
+    current.agentStatus.stateHistory = [end]
+    applySnapshot(working, true)
+    const asleep = makeAgentSnapshot(4, NOW + 30, undefined, 'done', NOW + 20)
+    const sleeping = asleep.tabs[0]
+    if (sleeping.type !== 'terminal' || !sleeping.agentStatus) {
+      throw new Error('Expected terminal status')
+    }
+    sleeping.agentStatus.sessionBoundary = true
+    sleeping.agentStatus.stateHistory = [end]
+    mocks.observeAgentHookCompletionForNotification.mockClear()
+    applySnapshot(asleep, true)
+    expect(mocks.observeAgentHookCompletionForNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        seedOnly: true,
+        payload: expect.objectContaining({
+          state: 'done',
+          stateStartedAt: NOW,
+          prompt: 'first task'
+        })
+      })
+    )
+  })
+
+  it('does not equate passive Done with a genuine completion having the same clocks', () => {
+    const asleep = makeAgentSnapshot(1, NOW, undefined, 'done')
+    const surface = asleep.tabs[0]
+    if (surface.type !== 'terminal' || !surface.agentStatus) {
+      throw new Error('Expected terminal status')
+    }
+    surface.agentStatus.sessionBoundary = true
+    applySnapshot(asleep, true)
+    mocks.observeAgentHookCompletionForNotification.mockClear()
+    applySnapshot(makeAgentSnapshot(2, NOW, undefined, 'done'), false)
+    expect(mocks.observeAgentHookCompletionForNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ payload: expect.objectContaining({ state: 'done' }) })
+    )
+    const key = makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID)
+    expect(useAppStore.getState().agentStatusByPaneKey[key]?.sessionBoundary).not.toBe(true)
   })
 
   it.each(['single', 'batch', 'operations'] as const)(

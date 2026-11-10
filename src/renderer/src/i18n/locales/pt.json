@@ -3551,13 +3551,6 @@
             "activeAgents_one": "{{count}} agente ativo",
             "activeAgents_other": "{{count}} agentes ativos",
             "activeAgents_many": "{{count}} agentes ativos",
-            "completedAgents_one": "{{count}} agente concluído",
-            "completedAgents_other": "{{count}} agentes concluídos",
-            "completedAgents_many": "{{count}} agentes concluídos",
-            "activeAndCompletedAgents": "{{active}}, {{completed}}",
-            "completedAgentsRetained_one": "{{count}} agente concluído mantido",
-            "completedAgentsRetained_other": "{{count}} agentes concluídos mantidos",
-            "completedAgentsRetained_many": "{{count}} agentes concluídos mantidos",
             "noTrackedAgents": "Nenhum agente monitorado em execução",
             "noTerminalTabs": "Nenhuma aba de terminal",
             "liveTerminalTabs_one": "{{live}} em execução de {{count}} aba de terminal",
@@ -21284,7 +21277,7 @@
           "pinned": "Fixado",
           "unread": "Não lido",
           "comment": "Tem comentário",
-          "retainedDoneAgents": "Transcrições de agentes concluídos",
+          "finishedAgents": "Agentes concluídos",
           "contextPresence": "Abas abertas, terminais, comentários",
           "completelyEmpty": "Nada a perder",
           "noWorkspaces": "Nenhum espaço de trabalho encontrado.",
@@ -21402,7 +21395,7 @@
               "comment": "Comentário",
               "prunable": "Removível",
               "locked": "Bloqueado",
-              "retainedAgents": "Agentes concluídos"
+              "finishedAgents": "Agentes concluídos"
             }
           },
           "forceDeleteRisk_one": "{{count}} espaço de trabalho apresenta riscos no momento e pode exigir uma exclusão forçada",

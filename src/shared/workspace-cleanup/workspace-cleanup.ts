@@ -72,7 +72,9 @@ export type WorkspaceCleanupCandidate = {
     browserTabCount: number
     diffCommentCount: number
     newestDiffCommentAt: number | null
-    retainedDoneAgentCount: number
+    finishedAgentCount?: number | null
+    /** Accepted from older hosts, never used as finished-agent evidence. */
+    retainedDoneAgentCount?: number
   }
   git: {
     clean: boolean | null

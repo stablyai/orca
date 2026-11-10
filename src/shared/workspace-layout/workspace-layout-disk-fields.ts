@@ -23,7 +23,6 @@ import type {
   LayoutEditorFile,
   LayoutGroup,
   LayoutLeaf,
-  LayoutSleepingRecord,
   LayoutTerminalCreation,
   LayoutTerminalPanes,
   LayoutTerminalTab,
@@ -67,8 +66,8 @@ type PartSources = {
     // `$key`: the map key the entry is stored under.
     // `ptyGeneration` is in memory only: a load starts every pane's count afresh.
     | Prefixed<'leaf', Exclude<keyof LayoutLeaf, 'sleeping' | 'resume' | 'ptyGeneration'> | '$key'>
-    | Prefixed<'leaf.sleeping', keyof LayoutSleepingRecord>
-    | Prefixed<'leaf.resume', keyof LayoutSleepingRecord>
+    | Prefixed<'leaf.sleeping', keyof SleepingAgentSessionRecord | 'display'>
+    | Prefixed<'leaf.resume', keyof SleepingAgentSessionRecord | 'display'>
     | Prefixed<'closedTab', keyof LayoutClosedTab>
   desktopView:
     | Prefixed<'view', Exclude<keyof DesktopLayoutView, 'groups' | 'panes' | 'editorDrafts'>>
@@ -225,10 +224,13 @@ const PANE_KEY = { from: 'leaf.$key', via: ['tab.entityId', 'tab.panes.root'] } 
 const paneRecord = <Source extends `leaf.${string}`>(from: Source) =>
   ({ from, via: ['tab.panes.root'] }) as const
 /** A resume record field: from a slept pane's record or a running agent's, never both. */
-const resumeRecord = <Field extends keyof LayoutSleepingRecord>(field: Field) =>
+const resumeRecord = <Field extends keyof SleepingAgentSessionRecord | 'display'>(field: Field) =>
   ({ ...paneRecord(`leaf.sleeping.${field}`), orFrom: `leaf.resume.${field}` }) as const
 
 const SLEEPING = {
+  kind: resumeRecord('kind'),
+  completion: resumeRecord('completion'),
+  display: paneRecord('leaf.sleeping.display'),
   paneKey: PANE_KEY,
   tabId: PANE_KEY,
   worktreeId: { from: 'workspace.worktreeId', via: ['tab.panes.root'] },
@@ -238,6 +240,12 @@ const SLEEPING = {
   state: resumeRecord('state'),
   capturedAt: resumeRecord('capturedAt'),
   updatedAt: resumeRecord('updatedAt'),
+  stateStartedAt: resumeRecord('stateStartedAt'),
+  firstStateStartedAt: resumeRecord('firstStateStartedAt'),
+  turnStartedAt: resumeRecord('turnStartedAt'),
+  turnEndedAt: resumeRecord('turnEndedAt'),
+  turnEndDisposition: resumeRecord('turnEndDisposition'),
+  lastAssistantMessageIsToolOutput: resumeRecord('lastAssistantMessageIsToolOutput'),
   terminalTitle: resumeRecord('terminalTitle'),
   lastAssistantMessage: resumeRecord('lastAssistantMessage'),
   interrupted: resumeRecord('interrupted'),
@@ -246,7 +254,7 @@ const SLEEPING = {
   launchConfig: resumeRecord('launchConfig'),
   origin: resumeRecord('origin'),
   restoreOnTabOpenOnly: resumeRecord('restoreOnTabOpenOnly')
-} as const satisfies Record<keyof SleepingAgentSessionRecord, DiskFieldWritten>
+} as const satisfies Record<keyof SleepingAgentSessionRecord | 'display', DiskFieldWritten>
 
 const INCARNATION = {
   incarnationId: paneRecord('leaf.incarnationId')
@@ -288,14 +296,12 @@ const LAYOUT_SESSION = {
   terminalSurfaceTombstonesByPaneKey: 'unwritten'
 } as const satisfies Record<LayoutOwnedSessionField, DiskFieldWritten>
 
-const OWNER_PREFIX = { view: 'view', fact: 'facts', carried: 'carried' } as const
-
 function sessionFields(): Record<string, DiskFieldWritten> {
   const fields: Record<string, DiskFieldWritten> = { ...LAYOUT_SESSION }
   for (const [field, owner] of Object.entries(SESSION_FIELD_OWNERS)) {
     if (owner === 'view' || owner === 'fact' || owner === 'carried') {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SESSION_FIELD_OWNERS types `field` as a key of the view, facts or carried fields.
-      fields[field] = { from: `${OWNER_PREFIX[owner]}.${field}` as LayoutSource }
+      fields[field] = { from: `${owner === 'fact' ? 'facts' : owner}.${field}` as LayoutSource }
     }
   }
   return fields
@@ -326,7 +332,6 @@ type FromOf<Entry> = Entry extends { from: infer From }
   ? From | (Entry extends { orFrom: infer OrFrom } ? OrFrom : never)
   : never
 
-/** Sources no disk field is written from; must stay `never`. */
 export type UnwrittenLayoutSource = Exclude<
   LayoutSource,
   | FromOf<TableEntry | (typeof LAYOUT_SESSION)[LayoutOwnedSessionField]>

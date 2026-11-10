@@ -17,11 +17,9 @@ import { buildWorktreeAgentRows } from './worktree-agent-rows'
 import {
   EMPTY_LIVE_ENTRIES,
   EMPTY_MIGRATION_UNSUPPORTED_ENTRIES,
-  EMPTY_RETAINED,
   EMPTY_TERMINAL_LAYOUTS,
-  selectLiveAgentStatusEntriesForWorktree,
+  selectPlacedAgentStatusEntriesForWorktree,
   selectMigrationUnsupportedEntriesForWorktree,
-  selectRetainedAgentEntriesForWorktree,
   selectTerminalLayoutsForWorktree
 } from './worktree-agent-row-selectors'
 import {
@@ -39,7 +37,7 @@ import {
 const EMPTY_AGENT_ROWS = Object.freeze([]) as unknown as DashboardAgentRow[]
 const subscribeToNothing = (): (() => void) => () => {}
 
-/** Share indexed worktree inputs across cards; derive live/retained row freshness from the available evidence. */
+/** Share indexed worktree inputs across cards; derive live row freshness from the available evidence. */
 export function useWorktreeAgentRows(worktreeId: string, active = true): DashboardAgentRow[] {
   const store = useAppStateView()
   const selectInputs = useMemo(() => {
@@ -47,11 +45,10 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     const readInputs = (state: AppState) =>
       [
         active ? state.tabsByWorktree[worktreeId] : EMPTY_TABS,
-        active ? selectLiveAgentStatusEntriesForWorktree(state, worktreeId) : EMPTY_LIVE_ENTRIES,
+        active ? selectPlacedAgentStatusEntriesForWorktree(state, worktreeId) : EMPTY_LIVE_ENTRIES,
         active
           ? selectMigrationUnsupportedEntriesForWorktree(state, worktreeId)
           : EMPTY_MIGRATION_UNSUPPORTED_ENTRIES,
-        active ? selectRetainedAgentEntriesForWorktree(state, worktreeId) : EMPTY_RETAINED,
         active ? selectRuntimePaneTitlesForWorktree(state, worktreeId) : EMPTY_RUNTIME_PANE_TITLES,
         active ? selectLivePtyIdsForWorktree(state, worktreeId) : EMPTY_LIVE_PTY_IDS,
         active ? selectTerminalLayoutsForWorktree(state, worktreeId) : EMPTY_TERMINAL_LAYOUTS,
@@ -82,7 +79,6 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     tabs,
     liveEntries,
     migrationUnsupported,
-    retained,
     runtimePaneTitlesByTabId,
     ptyIdsByTabId,
     terminalLayoutsByTabId,
@@ -114,7 +110,6 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
           store.getState().unifiedTabsByWorktree
         ),
         entries,
-        retained,
         runtimePaneTitlesByTabId,
         ptyIdsByTabId,
         terminalLayoutsByTabId,
@@ -130,7 +125,6 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     tabs,
     liveEntries,
     migrationUnsupported,
-    retained,
     runtimePaneTitlesByTabId,
     ptyIdsByTabId,
     terminalLayoutsByTabId,

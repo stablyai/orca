@@ -23,13 +23,11 @@ function usePetAnimationName(
 ): PetAnimationName {
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
-  const retainedAgentsByPaneKey = useAppStore((s) => s.retainedAgentsByPaneKey)
   // Scheduler ticks expire animation evidence even without other store updates; read the boundary clock before paint.
   const agentStatusNow = getAgentStatusEpochNow(agentStatusEpoch)
 
   return selectPetAnimationName({
     entries: Object.values(agentStatusByPaneKey),
-    retainedCount: Object.keys(retainedAgentsByPaneKey).length,
     dragging,
     dragAnimation,
     hovering,

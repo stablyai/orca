@@ -1,12 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type { ActivityEvent, AgentPaneThread } from './activity-thread-types'
 import { makeTab, makeWorktree } from './ActivityPrototypePage-test-fixtures'
 
 const mockStore = vi.hoisted(() => {
   const state = {
-    activityClearedAtByPaneKey: {} as Record<string, number>,
-    retainedAgentsByPaneKey: {} as Record<string, RetainedAgentEntry>
+    activityClearedAtByPaneKey: {} as Record<string, number>
   }
   return state
 })
@@ -70,24 +68,6 @@ const blockedThread = makeThread('t-blocked:1', { currentAgentState: 'blocked' }
 const doneThread = makeThread('t-done:1', { latestEvent: doneEvent(false) })
 const interruptedThread = makeThread('t-interrupted:1', { latestEvent: doneEvent(true) })
 
-function makeRetained(paneKey: string): RetainedAgentEntry {
-  return {
-    entry: {
-      state: 'done',
-      prompt: 'retained run',
-      updatedAt: 5_000,
-      stateStartedAt: 5_000,
-      paneKey,
-      stateHistory: [],
-      agentType: 'claude'
-    },
-    worktreeId: 'wt-1',
-    tab: makeTab(),
-    agentType: 'claude',
-    startedAt: 5_000
-  }
-}
-
 describe('isClearableActivityThread', () => {
   it('reads a live thread whose main agent failed as failed, but keeps it while subagents run', () => {
     const heldEntry = {
@@ -115,10 +95,9 @@ describe('isClearableActivityThread', () => {
 describe('clearCompletedActivity', () => {
   beforeEach(() => {
     mockStore.activityClearedAtByPaneKey = {}
-    mockStore.retainedAgentsByPaneKey = { 't-done:1': makeRetained('t-done:1') }
   })
 
-  it('plans cutoffs and retained removals for completed threads only', () => {
+  it('plans cutoffs for completed threads only', () => {
     const plan = planClearCompletedActivity(
       [workingThread, blockedThread, doneThread, interruptedThread],
       mockStore
@@ -126,7 +105,6 @@ describe('clearCompletedActivity', () => {
     expect(plan.clearedThreadCount).toBe(2)
     expect(plan.cutoffPatch).toEqual({ 't-done:1': 5_000, 't-interrupted:1': 5_000 })
     expect(plan.restorePatch).toEqual({ 't-done:1': null, 't-interrupted:1': null })
-    expect(plan.retainedSnapshots.map((r) => r.entry.paneKey)).toEqual(['t-done:1'])
   })
 
   it('stamps a real cutoff for a thread with no usable timestamp', () => {

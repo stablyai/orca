@@ -247,7 +247,7 @@ it.each([false, true])(
       buildWorktreeAgentRows({
         tabs: state.tabsByWorktree[WT] ?? [],
         entries: Object.values(state.agentStatusByPaneKey),
-        retained: [],
+
         now: NOW
       }).map((row) => row.paneKey)
     const update = (at: number, tick: number, session = 'A', origin?: number, stale = false) => {

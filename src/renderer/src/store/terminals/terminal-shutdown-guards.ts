@@ -1,3 +1,5 @@
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { PaneSleepStopCondition } from '../../../../shared/agent-session/lifecycle/pane-sleep-target'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
@@ -38,7 +40,9 @@ export function createTerminalShutdownGuardController({
   rendererShutdownPtyIds,
   runtimeOwnsRemotePtys,
   set,
-  tabs
+  tabs,
+  sleepConditionForPty,
+  guardSleepTargets
 }: {
   exitGuardPtyIds: readonly string[]
   get: TerminalStoreGet
@@ -48,6 +52,8 @@ export function createTerminalShutdownGuardController({
   runtimeOwnsRemotePtys: boolean
   set: TerminalStoreSet
   tabs: readonly TerminalTab[]
+  guardSleepTargets?: boolean
+  sleepConditionForPty?: (ptyId: string) => PaneSleepStopCondition | undefined
 }): TerminalShutdownGuardController {
   let handlerSnapshots: PtyDataHandlerShutdownSnapshot[] = []
   let partialRendererStopSettled = false
@@ -139,7 +145,47 @@ export function createTerminalShutdownGuardController({
   }> => {
     const localPtyIds = rendererShutdownPtyIds.filter((ptyId) => !isRemoteRuntimePtyId(ptyId))
     const results = await Promise.allSettled(
-      localPtyIds.map((ptyId) => window.api.pty.kill(ptyId, { keepHistory: keepIdentifiers }))
+      localPtyIds.map(async (ptyId) => {
+        let condition = sleepConditionForPty?.(ptyId)
+        if (guardSleepTargets && !condition) {
+          const state = get()
+          const tab = tabs.find((candidate) => state.ptyIdsByTabId[candidate.id]?.includes(ptyId))
+          const leafId =
+            tab &&
+            Object.entries(state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {}).find(
+              ([, id]) => id === ptyId
+            )?.[0]
+          const paneKey = tab && leafId ? `${tab.id}:${leafId}` : null
+          if (!tab || !paneKey || !parsePaneKey(paneKey)) {
+            throw new Error('sleep_target_changed')
+          }
+          const source = state.agentStatusByPaneKey[paneKey]
+          const observation = (await window.api.pty.inspectProcess(ptyId, { foregroundOnly: true }))
+            ?.foregroundObservation
+          if (
+            observation?.verdict !== 'observed' ||
+            observation.ptyId !== ptyId ||
+            get().agentStatusByPaneKey[paneKey] !== source ||
+            get().terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId?.[leafId!] !== ptyId
+          ) {
+            throw new Error('sleep_target_changed')
+          }
+          condition = {
+            workspace: tab.worktreeId,
+            target: {
+              paneKey,
+              ptyId,
+              ptyIncarnationId: observation.ptyIncarnationId,
+              authorityGeneration: observation.authorityGeneration,
+              sourceUpdatedAt: source?.updatedAt
+            }
+          }
+        }
+        await window.api.pty.kill(ptyId, {
+          keepHistory: keepIdentifiers,
+          ...(condition ? { sleepCondition: condition } : {})
+        })
+      })
     )
     const stoppedPtyIds = [
       ...(runtimeOwnsRemotePtys

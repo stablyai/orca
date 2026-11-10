@@ -63,7 +63,7 @@ function hasMarkersOnScreen(s: AppState, targets: readonly AutoAckTabTarget[]): 
   )
 }
 
-/** Visible/focused/present users acknowledge every visible target and unread flag. Scan live and retained rows because Codex exit can migrate done state mid-race (codex-agent-row-bold-stuck.md). */
+/** Visible/focused/present users acknowledge every visible target and unread flag. Scan the live rows and independent unread markers. */
 export function startOnScreenAttentionScan(
   store: ScanStore,
   env: OnScreenAttentionEnvironment
@@ -78,7 +78,7 @@ export function startOnScreenAttentionScan(
   let lastGroups: unknown = undefined
   let lastGroupLayouts: unknown = undefined
   let lastAgentStatus: unknown = undefined
-  let lastRetained: unknown = undefined
+  let lastSleeping: unknown = undefined
   let lastAcknowledged: unknown = undefined
   let lastLayouts: unknown = undefined
   let lastUnreadTerminalTabs: unknown = undefined
@@ -121,7 +121,7 @@ export function startOnScreenAttentionScan(
       s.groupsByWorktree === lastGroups &&
       s.layoutByWorktree === lastGroupLayouts &&
       s.agentStatusByPaneKey === lastAgentStatus &&
-      s.retainedAgentsByPaneKey === lastRetained &&
+      s.sleepingAgentSessionsByPaneKey === lastSleeping &&
       s.acknowledgedAgentsByPaneKey === lastAcknowledged &&
       s.terminalLayoutsByTabId === lastLayouts &&
       s.unreadTerminalTabs === lastUnreadTerminalTabs &&
@@ -140,7 +140,7 @@ export function startOnScreenAttentionScan(
     lastGroups = s.groupsByWorktree
     lastGroupLayouts = s.layoutByWorktree
     lastAgentStatus = s.agentStatusByPaneKey
-    lastRetained = s.retainedAgentsByPaneKey
+    lastSleeping = s.sleepingAgentSessionsByPaneKey
     lastAcknowledged = s.acknowledgedAgentsByPaneKey
     lastLayouts = s.terminalLayoutsByTabId
     lastUnreadTerminalTabs = s.unreadTerminalTabs
@@ -217,8 +217,7 @@ export function startOnScreenAttentionScan(
       // Keep explicit unread for unchanged active subject/turn; another subject or fresh turn lapses it.
       const lapsedProtections = computeLapsedManualUnreadProtections(
         {
-          liveTurns: s.agentStatusByPaneKey,
-          retainedTurns: s.retainedAgentsByPaneKey,
+          liveTurns: readAgentAttentionTurnRecords(s).liveTurns,
           manuallyUnreadTurnStartedAt: s.manuallyUnreadTurnsByPaneKey
         },
         activeSubjectKeys

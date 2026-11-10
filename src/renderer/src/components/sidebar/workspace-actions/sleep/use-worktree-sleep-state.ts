@@ -56,7 +56,7 @@ function selectWorktreeIdsWithLiveAgent(state: SleepStateInput): ReadonlySet<str
   return worktreeIds
 }
 
-/** Use the hide-sleeping predicate; retained done status alone cannot establish whether a workspace is asleep. */
+/** Use the hide-sleeping predicate; done status alone cannot establish whether a workspace is asleep. */
 export function selectIsSleepingWorktree(state: SleepStateInput, worktreeId: string): boolean {
   if (
     hasUnknownStructuredChat(

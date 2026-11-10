@@ -1,4 +1,4 @@
-/** Host tab retraction must sweep renderer status and plant close markers like local close (STA-4593). Client-owned rows bypass normal mirror deletion and lose their only reachable pane keys at retraction; done rows otherwise become retained ghosts. Exercise real mirror, retention and sidebar logic with fake clocks. */
+/** Host tab retraction sweeps renderer status and retires tab authority (STA-4593). */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   RuntimeMobileSessionTabsRemovedResult,
@@ -20,15 +20,8 @@ import {
   applyFreshWebSessionTabsSnapshots
 } from '../snapshot-api'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '../tracking-lifecycle'
-import {
-  buildRetainedAgentsSyncSnapshot,
-  collectRetainedAgentsOnDisappear
-} from '../../../components/dashboard/useRetainedAgents'
 import { buildWorktreeAgentRows } from '../../../components/sidebar/workspace-card/activity/worktree-agent-rows'
-import {
-  selectLiveAgentStatusEntriesForWorktree,
-  selectRetainedAgentEntriesForWorktree
-} from '../../../components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
+import { selectLiveAgentStatusEntriesForWorktree } from '../../../components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import {
   selectLivePtyIdsForWorktree,
   selectRuntimePaneTitlesForWorktree
@@ -54,7 +47,6 @@ const KEEP_LEAF = '11111111-1111-4111-8111-111111111111'
 const RETRACTED_LEAF = '22222222-2222-4222-8222-222222222222'
 
 type TestStore = ReturnType<typeof createTestStore>
-type RetainedSyncAgents = ReturnType<typeof buildRetainedAgentsSyncSnapshot>['currentAgents']
 
 function mirrorTabId(hostTabId: string): string {
   return toWebTerminalSurfaceTabId(hostTabId)
@@ -173,38 +165,6 @@ function replayClientByteStatus(
   return release
 }
 
-/** Byte-identical replay of useRetainedAgentsSync's effect body, minus React. */
-function replayRetainedAgentsSync(
-  store: TestStore,
-  previousAgents: RetainedSyncAgents,
-  now: number
-): RetainedSyncAgents {
-  const state = store.getState()
-  const { currentAgents, existingWorktreeIds, tabIndex } = buildRetainedAgentsSyncSnapshot({
-    repos: state.repos,
-    worktreesByRepo: state.worktreesByRepo,
-    folderWorkspaces: state.folderWorkspaces,
-    tabsByWorktree: state.tabsByWorktree,
-    agentStatusByPaneKey: state.agentStatusByPaneKey,
-    now
-  })
-  const { toRetain, consumedSuppressedPaneKeys } = collectRetainedAgentsOnDisappear({
-    previousAgents,
-    currentAgents,
-    retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
-    retentionSuppressedPaneKeys: state.retentionSuppressedPaneKeys,
-    recentlyClosedAgentStatusTabIds: state.recentlyClosedAgentStatusTabIds,
-    recentlyRetiredAgentStatusPaneKeys: state.recentlyRetiredAgentStatusPaneKeys,
-    tabIndex
-  })
-  store.getState().retainAgents(toRetain)
-  store.getState().pruneRetainedAgents(existingWorktreeIds)
-  if (consumedSuppressedPaneKeys.length > 0) {
-    store.getState().clearRetentionSuppressedPaneKeys(consumedSuppressedPaneKeys)
-  }
-  return currentAgents
-}
-
 function seedPairedClientStore(): TestStore {
   const store = createTestStore()
   seedStore(store, {
@@ -218,7 +178,6 @@ function seedPairedClientStore(): TestStore {
 type SidebarObservation = {
   tabIds: string[]
   rowPaneKeys: string[]
-  retainedPaneKeys: string[]
 }
 
 /** Byte-identical to useWorktreeAgentRows' inputs, minus React. */
@@ -228,7 +187,6 @@ function observeSidebar(store: TestStore, now: number): SidebarObservation {
   const rows = buildWorktreeAgentRows({
     tabs,
     entries: selectLiveAgentStatusEntriesForWorktree(state, WT),
-    retained: selectRetainedAgentEntriesForWorktree(state, WT),
     runtimePaneTitlesByTabId: selectRuntimePaneTitlesForWorktree(state, WT),
     ptyIdsByTabId: selectLivePtyIdsForWorktree(state, WT),
     terminalLayoutsByTabId: Object.fromEntries(
@@ -238,8 +196,7 @@ function observeSidebar(store: TestStore, now: number): SidebarObservation {
   })
   return {
     tabIds: tabs.map((tab) => tab.id),
-    rowPaneKeys: rows.filter((row) => row.rowSource !== 'subagent').map((row) => row.paneKey),
-    retainedPaneKeys: Object.keys(state.retainedAgentsByPaneKey)
+    rowPaneKeys: rows.filter((row) => row.rowSource !== 'subagent').map((row) => row.paneKey)
   }
 }
 
@@ -299,52 +256,6 @@ describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
     expect(
       observed.rowPaneKeys.filter((paneKey) => paneKey === GHOST_PANE_KEY),
       `the sidebar renders an agent row for a tab that no longer exists\n${evidence}`
-    ).toEqual([])
-  })
-
-  it('Mechanism C: a done agent whose tab the host retracted must not become a permanent retained row', () => {
-    const store = seedPairedClientStore()
-    let previousAgents: RetainedSyncAgents = new Map()
-    applyHostSnapshot(
-      store,
-      makeHostSnapshot({
-        snapshotVersion: 1,
-        hostTabIds: [KEEP_TAB, RETRACTED_TAB],
-        hostNow: T0 - 1_000
-      }),
-      T0
-    )
-    const release = replayClientByteStatus(store, RETRACTED_TAB, RETRACTED_LEAF, 'done', T0)
-    previousAgents = replayRetainedAgentsSync(store, previousAgents, T0 + 500)
-    expect([...previousAgents.keys()]).toContain(GHOST_PANE_KEY)
-
-    applyHostSnapshot(
-      store,
-      makeHostSnapshot({ snapshotVersion: 2, hostTabIds: [KEEP_TAB], hostNow: T0 + 1_000 }),
-      T0 + 2_000
-    )
-    // Require closeTab’s named marker, not merely an arbitrary retention suppressor.
-    expect(
-      store.getState().recentlyClosedAgentStatusTabIds[mirrorTabId(RETRACTED_TAB)],
-      'the paired retraction did not plant the closed-tab suppressor'
-    ).toBeDefined()
-    release()
-    previousAgents = replayRetainedAgentsSync(store, previousAgents, T0 + 2_500)
-
-    const observed = observeSidebar(store, T0 + 3_000)
-    const evidence = JSON.stringify(
-      { observed, retained: store.getState().retainedAgentsByPaneKey[GHOST_PANE_KEY] },
-      null,
-      2
-    )
-    // Host retraction needs the same closed-tab retention suppression as local close.
-    expect(
-      store.getState().retainedAgentsByPaneKey[GHOST_PANE_KEY],
-      `a host-retracted done agent was promoted into permanent retained state\n${evidence}`
-    ).toBeUndefined()
-    expect(
-      observed.rowPaneKeys.filter((paneKey) => paneKey === GHOST_PANE_KEY),
-      `the sidebar renders a retained ghost row for a tab that no longer exists\n${evidence}`
     ).toEqual([])
   })
 
@@ -446,73 +357,6 @@ describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
       'a returning mirrored tab was left permanently unable to acquire agent status'
     ).toBe('working')
     release2()
-  })
-
-  it('a retract-and-return flap must not strand a suppressor that eats a later real retention', () => {
-    const store = seedPairedClientStore()
-    let previousAgents: RetainedSyncAgents = new Map()
-    applyHostSnapshot(
-      store,
-      makeHostSnapshot({
-        snapshotVersion: 1,
-        hostTabIds: [KEEP_TAB, RETRACTED_TAB],
-        hostNow: T0 - 1_000
-      }),
-      T0
-    )
-    const release = replayClientByteStatus(store, RETRACTED_TAB, RETRACTED_LEAF, 'working', T0)
-    previousAgents = replayRetainedAgentsSync(store, previousAgents, T0 + 500)
-
-    // React can batch retraction/return into one retention interval while the pane stays mounted. Its next fresh write must lift the unconsumed one-shot suppressor or a later real completion is lost.
-    applyHostSnapshot(
-      store,
-      makeHostSnapshot({ snapshotVersion: 2, hostTabIds: [KEEP_TAB], hostNow: T0 + 1_000 }),
-      T0 + 2_000
-    )
-    applyHostSnapshot(
-      store,
-      makeHostSnapshot({
-        snapshotVersion: 3,
-        hostTabIds: [KEEP_TAB, RETRACTED_TAB],
-        hostNow: T0 + 2_500
-      }),
-      T0 + 3_000
-    )
-    vi.setSystemTime(T0 + 3_500)
-    markRendererOwnedAgentStatusWrite(GHOST_PANE_KEY)
-    store
-      .getState()
-      .setAgentStatus(
-        GHOST_PANE_KEY,
-        { state: 'done', prompt: 'review finished', agentType: 'codex' },
-        'codex',
-        undefined,
-        { tabId: mirrorTabId(RETRACTED_TAB), worktreeId: WT }
-      )
-    previousAgents = replayRetainedAgentsSync(store, previousAgents, T0 + 4_000)
-    expect(store.getState().agentStatusByPaneKey[GHOST_PANE_KEY]?.state).toBe('done')
-
-    // After unmount, ordinary disappearance of non-client-owned done status must remain retainable.
-    release()
-    applyHostSnapshot(
-      store,
-      makeHostSnapshot({
-        snapshotVersion: 4,
-        hostTabIds: [KEEP_TAB, RETRACTED_TAB],
-        hostNow: T0 + 600_000
-      }),
-      T0 + 601_000
-    )
-    expect(
-      store.getState().agentStatusByPaneKey[GHOST_PANE_KEY],
-      'precondition: the released done row must be removed by the mirror delete loop'
-    ).toBeUndefined()
-    previousAgents = replayRetainedAgentsSync(store, previousAgents, T0 + 601_500)
-
-    expect(
-      store.getState().retainedAgentsByPaneKey[GHOST_PANE_KEY],
-      'a stranded retraction suppressor ate a legitimate done-agent retention'
-    ).toBeDefined()
   })
 
   it('Mechanism A holds through the batch apply path a reconnect load uses', () => {

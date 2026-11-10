@@ -1,6 +1,8 @@
 import {
   hasSleptAgentToWake,
-  type SleepingAgentSessionRecord
+  isDisplayOnlyPaneSleep,
+  isResumablePaneRecord,
+  type OwnedPaneAgentRecord
 } from './agent-session/lifecycle/agent-session-resume'
 import type { ExecutionHostId } from './execution-host'
 
@@ -50,22 +52,23 @@ export type WorkspaceSleepNotice =
       stoppedPtyIds: string[] | null
       slept: boolean
       /** The agents main recorded for wake, which the window reads; null when another host keeps them. */
-      records: SleepingAgentSessionRecord[] | null
+      records: OwnedPaneAgentRecord[] | null
     }
   /** A phone or CLI's sleep that did not fully succeed; the window shows its own Sleep's toast. */
   | { worktreeId: string; phase: 'failed'; outcome: WorkspaceSleepOutcome }
 
 /** Main resumes pane-owned sleep captures and legacy running-agent captures; the window owns completed-agent hibernation. */
-export function isWorkspaceSleepRecord(record: SleepingAgentSessionRecord): boolean {
+export function isWorkspaceSleepRecord(record: OwnedPaneAgentRecord): boolean {
   return (
-    record.origin === 'worktree-sleep' &&
-    (record.state !== 'done' || record.restoreOnTabOpenOnly === true)
+    isDisplayOnlyPaneSleep(record) ||
+    (record.origin === 'worktree-sleep' &&
+      (record.state !== 'done' || record.restoreOnTabOpenOnly === true))
   )
 }
 
 /** Whether phone open needs a window: main cannot resume window-owned hibernation records. */
 export function hasWindowOnlyWakeRecord(
-  records: Readonly<Record<string, SleepingAgentSessionRecord>> | undefined,
+  records: Readonly<Record<string, OwnedPaneAgentRecord>> | undefined,
   worktreeId: string
 ): boolean {
   const windowWoken = Object.entries(records ?? {}).filter(
@@ -76,7 +79,7 @@ export function hasWindowOnlyWakeRecord(
 
 /** Main wakes sleep captures; a window wakes its hibernation. A headless host cannot wake the latter. */
 export function phoneWakeReport(
-  records: Readonly<Record<string, SleepingAgentSessionRecord>> | undefined,
+  records: Readonly<Record<string, OwnedPaneAgentRecord>> | undefined,
   worktreeId: string,
   hasWindow: boolean
 ): 'requested' | 'unsupported-headless' | 'not-applicable' {
@@ -88,6 +91,7 @@ export function phoneWakeReport(
   }
   const mainResumes = Object.values(records ?? {}).some(
     (record) =>
+      isResumablePaneRecord(record) &&
       record.worktreeId === worktreeId &&
       record.origin === 'worktree-sleep' &&
       record.state !== 'done'

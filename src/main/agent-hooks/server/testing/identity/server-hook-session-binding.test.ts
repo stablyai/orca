@@ -1,3 +1,4 @@
+import { paneAgentRecordIdentity } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { readSavedStatus } from '../persistence/last-status.test-fixtures'
 import type { BrowserWindow } from 'electron'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -144,7 +145,10 @@ function expectReturned(id = ROOT, agent: 'hermes' | 'antigravity' = 'hermes') {
     worktreeId: 'wt-1',
     launchConfigOf: () => undefined
   })
-  expect(checkpoint?.type === 'sleep' && checkpoint.records[0]?.providerSession.id).toBe(id)
+  expect(
+    checkpoint?.type === 'sleep' &&
+      paneAgentRecordIdentity(checkpoint.records[0]).providerSession?.id
+  ).toBe(id)
   expect(
     quitResumeRecords({
       statuses: [status],

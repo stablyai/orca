@@ -1,6 +1,7 @@
+import { paneAgentRecordIdentity } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isWorkspaceKey } from '../../../shared/workspace-scope'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { OwnedPaneAgentRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   PersistedOpenFile,
   WorkspaceSessionState
@@ -58,7 +59,7 @@ export function collectUnsupportedSessionItems(
       !retainedOrphanedSleepingAgentSession(record, scope, sourceTerminalTabIds)
     ) {
       items.push(
-        `a ${record.agent} session saved in ${worktreeLabel(record.worktreeId)} that cannot resume on the server: resume it here and let it finish, or close its tab`
+        `a ${paneAgentRecordIdentity(record).agent ?? 'agent'} session saved in ${worktreeLabel(record.worktreeId)} that cannot resume on the server: resume it here and let it finish, or close its tab`
       )
     }
   }
@@ -167,7 +168,7 @@ export function projectSessionToDestination(
 }
 
 export function transferableSleepingAgentSession(
-  record: SleepingAgentSessionRecord,
+  record: OwnedPaneAgentRecord,
   session: WorkspaceSessionState,
   scope: OrcadMigrationSourceScope,
   terminalTabIds: ReadonlySet<string>
@@ -181,7 +182,7 @@ export function transferableSleepingAgentSession(
 
 /** Closed panes keep their resume evidence on the source; migrating must not resurrect their tabs. */
 function retainedOrphanedSleepingAgentSession(
-  record: SleepingAgentSessionRecord,
+  record: OwnedPaneAgentRecord,
   scope: OrcadMigrationSourceScope,
   sourceTerminalTabIds: ReadonlySet<string>
 ): boolean {
@@ -195,7 +196,7 @@ function retainedOrphanedSleepingAgentSession(
 }
 
 function sleepingAgentSessionMayLeave(
-  record: SleepingAgentSessionRecord,
+  record: OwnedPaneAgentRecord,
   scope: OrcadMigrationSourceScope
 ): boolean {
   return (

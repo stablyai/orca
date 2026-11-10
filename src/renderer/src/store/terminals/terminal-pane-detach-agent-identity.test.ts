@@ -105,8 +105,6 @@ describe('syncPaneDetachPtyOwnership agent identity', () => {
       tabId: targetTabId,
       providerSession: { key: 'session_id', id: 'session-1' }
     })
-    expect(state.retentionSuppressedPaneKeys[sourcePaneKey]).toBeUndefined()
-    expect(state.retentionSuppressedPaneKeys[targetPaneKey]).toBeUndefined()
     expect(state.paneForegroundAgentByPaneKey[siblingPaneKey]).toEqual({
       agent: 'antigravity',
       shellForeground: false

@@ -1,8 +1,9 @@
+import type { PaneSleepTarget } from '../agent-session/lifecycle/pane-sleep-target'
 // Pure commands change layout only; runtime owns catalog/path/host-support/liveness refusals requiring external facts.
 
 import type { LayoutClientVisibility } from './workspace-layout-client-visibility'
 import type { LiveTerminalAdoption } from './workspace-layout-terminal-adoption'
-import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
+import type { OwnedPaneAgentRecord } from '../agent-session/lifecycle/agent-session-resume'
 import type { AgentType } from '../agent-status/contracts/agent-status-types'
 import type { AiVaultSessionTitle } from '../ai-vault/contracts/ai-vault-session-title'
 import type { TabContentType, TabGroupLayoutNode } from '../tab-types'
@@ -227,7 +228,11 @@ export type LayoutCommand =
   | (On & {
       type: 'sleep'
       paneKeys?: string[]
-      records: SleepingAgentSessionRecord[]
+      records: OwnedPaneAgentRecord[]
+      /** Local conditional settlement: replace only the exact staged capture, never a successor. */
+      expectedRecords?: OwnedPaneAgentRecord[]
+      expectedAbsentPaneKeys?: string[]
+      expectedTargets?: PaneSleepTarget[]
       /** Records how each agent resumes and stops nothing: the window's live and quit captures. */
       recordOnly?: true
     })
@@ -342,6 +347,7 @@ export type LayoutCommandResult = {
   closed?: string[]
   refused?: { tabId: string; code: 'tab_pinned' | 'editor_tab_has_unsaved_draft' }[]
   slept?: string[]
+  previousSleepRecords?: OwnedPaneAgentRecord[]
   woken?: string[]
   /** Old tab-bar id → new, for tabs a file rename re-ided; views move their selection with it. */
   renamedTabIds?: Record<string, string>

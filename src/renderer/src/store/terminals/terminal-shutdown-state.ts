@@ -1,5 +1,5 @@
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { OwnedPaneAgentRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { clearTransientTerminalState } from './terminal-transient-state'
 import {
   clearCommittedPtyShutdownSettlements,
@@ -8,10 +8,7 @@ import {
 } from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-exit-deferral'
 import '../slices/agent-status/agent-status'
 import { removeSleepingRecordsReplacedByManualWorktreeSleep } from '../slices/agent-status/agent-status-sleeping-records'
-import type {
-  AgentStatusWorktreeShutdownReason,
-  RetainedAgentEntry
-} from '../slices/agent-status/agent-status-contract'
+import type { AgentStatusWorktreeShutdownReason } from '../slices/agent-status/agent-status-contract'
 import type { TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { copyOnWriteRecord } from './terminal-shutdown-record'
 import { removeTabsAttention } from '../slices/workspace-attention/subject-attention-transitions'
@@ -21,21 +18,23 @@ export function commitTerminalShutdownState({
   exitGuardPtyIds,
   get,
   keepIdentifiers,
-  retainedCompletionEvidence,
   set,
   shutdownReason,
   sleepingAgentSessionRecords,
   sleepingPaneKeys,
+  sleepAlreadyAdmitted,
+  agentStatusAtStart,
   tabs,
   worktreeId
 }: {
   exitGuardPtyIds: readonly string[]
   get: TerminalStoreGet
   keepIdentifiers: boolean
-  retainedCompletionEvidence: readonly RetainedAgentEntry[]
   set: TerminalStoreSet
   shutdownReason: AgentStatusWorktreeShutdownReason
-  sleepingAgentSessionRecords: Record<string, SleepingAgentSessionRecord>
+  sleepingAgentSessionRecords: Record<string, OwnedPaneAgentRecord>
+  agentStatusAtStart?: ReturnType<TerminalStoreGet>['agentStatusByPaneKey']
+  sleepAlreadyAdmitted?: boolean
   sleepingPaneKeys?: readonly string[]
   tabs: readonly TerminalTab[]
   worktreeId: string
@@ -56,8 +55,11 @@ export function commitTerminalShutdownState({
         // Why `!== undefined`: an absent key is not an empty array, and the spread this
         // replaces created the key. Only an already-empty entry can be skipped.
         const current = state.ptyIdsByTabId[tab.id]
-        if (current === undefined || current.length > 0) {
-          ptyIdsByTabId.set(tab.id, [])
+        const remaining = keepIdentifiers
+          ? current?.filter((id) => !exitGuardPtyIds.includes(id))
+          : []
+        if (current === undefined || remaining?.length !== current.length) {
+          ptyIdsByTabId.set(tab.id, remaining ?? [])
         }
       }
       const suppressedPtyExitIds = copyOnWriteRecord(state.suppressedPtyExitIds)
@@ -123,16 +125,18 @@ export function commitTerminalShutdownState({
         codexRestartNoticeByPtyId: codexRestartNoticeByPtyId.read(),
         pendingIssueCommandSplitByTabId: pendingIssueCommandSplitByTabId.read(),
         terminalLayoutsByTabId: terminalLayoutsByTabId.read(),
-        ...removeTabsAttention(
-          state,
-          tabs.map((tab) => tab.id)
-        ),
+        ...(!keepIdentifiers
+          ? removeTabsAttention(
+              state,
+              tabs.map((tab) => tab.id)
+            )
+          : {}),
         lastTerminalInputAtByPaneKey: lastTerminalInputAtByPaneKey.read()
       }
     })
   )
 
-  if (keepIdentifiers) {
+  if (keepIdentifiers && !sleepAlreadyAdmitted) {
     set((state) => {
       const base =
         shutdownReason === 'manual-sleep'
@@ -150,16 +154,26 @@ export function commitTerminalShutdownState({
         }
       }
     })
-  } else {
+  } else if (!keepIdentifiers) {
     get().clearSleepingAgentSessionsByWorktree(worktreeId)
   }
 
-  get().dropAgentStatusByWorktree(worktreeId, {
-    shutdownReason,
-    sleepingPaneKeys,
-    retainedCompletionEvidence
-  })
-  get().clearPaneForegroundAgentByWorktree(worktreeId)
+  if (agentStatusAtStart) {
+    const tabIds = new Set(tabs.map((tab) => tab.id))
+    for (const [paneKey, entry] of Object.entries(agentStatusAtStart)) {
+      if (
+        (entry.worktreeId === worktreeId ||
+          tabIds.has(entry.tabId ?? paneKey.slice(0, paneKey.indexOf(':')))) &&
+        get().agentStatusByPaneKey[paneKey] === entry
+      ) {
+        get().dropHibernatedAgentStatusPane(worktreeId, paneKey)
+        get().clearPaneForegroundAgent(paneKey)
+      }
+    }
+  } else {
+    get().dropAgentStatusByWorktree(worktreeId, { shutdownReason })
+    get().clearPaneForegroundAgentByWorktree(worktreeId)
+  }
   const settledPtyIds = exitGuardPtyIds.filter((ptyId) => !get().isPtyShutdownPending(ptyId))
   markCommittedPtyShutdowns(settledPtyIds)
   settleDeferredPtyShutdownExits(settledPtyIds, 'committed')

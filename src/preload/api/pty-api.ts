@@ -1,3 +1,4 @@
+import type { PaneSleepStopCondition } from '../../shared/agent-session/lifecycle/pane-sleep-target'
 import type { RuntimeTerminalAttention } from '../../shared/runtime-terminal-contracts'
 import type { PaintedRestorePane } from '../../shared/painted-restore-ack'
 import type {
@@ -134,7 +135,10 @@ export type PtyApi = {
   clearBuffer: (id: string) => void
   resetInputModes: (id: string) => void
   killFenced: (request: PtyFencedTerminationRequest) => Promise<PtyFencedTerminationOutcome>
-  kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
+  kill: (
+    id: string,
+    opts?: { keepHistory?: boolean; sleepCondition?: PaneSleepStopCondition }
+  ) => Promise<void>
   /** Acknowledge the pane that actually painted the restored frame. */
   ackColdRestore: (id: string, pane?: PaintedRestorePane) => void
   /** Hidden-output recovery painted main's snapshot; retires the hidden-delivery drop latch. */
@@ -168,6 +172,7 @@ export type PtyApi = {
     options?: {
       expectedIncarnationId?: string
       scanChildProcesses?: boolean
+      foregroundOnly?: boolean
       steadyState?: boolean
     }
   ) => Promise<TerminalProcessInspection>

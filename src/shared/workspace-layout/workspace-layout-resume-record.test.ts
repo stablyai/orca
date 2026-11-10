@@ -1,3 +1,4 @@
+import { resumablePaneRecord } from '../agent-session/lifecycle/agent-session-resume'
 // Both live/quit resume records and sleep records round-trip through sleepingAgentSessionsByPaneKey, loading into separate mutually exclusive leaf fields.
 
 import { describe, expect, it } from 'vitest'
@@ -25,7 +26,10 @@ function sessionWith(origin: Origin): WorkspaceSessionState {
   const session = localDesktopSession()
   const paneKey = `term-agent:${leaf(3)}`
   session.sleepingAgentSessionsByPaneKey = {
-    [paneKey]: withOrigin(session.sleepingAgentSessionsByPaneKey![paneKey]!, origin)
+    [paneKey]: withOrigin(
+      resumablePaneRecord(session.sleepingAgentSessionsByPaneKey![paneKey])!,
+      origin
+    )
   }
   return session
 }

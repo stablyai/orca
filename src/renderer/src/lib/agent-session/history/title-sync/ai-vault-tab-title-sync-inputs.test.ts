@@ -5,10 +5,9 @@ import { aiVaultTitleSyncInputsChanged } from './ai-vault-tab-title-sync-inputs'
 
 function makeState(count = 1): AppState {
   const live: AppState['agentStatusByPaneKey'] = {}
-  const retained: AppState['retainedAgentsByPaneKey'] = {}
   const sleeping: AppState['sleepingAgentSessionsByPaneKey'] = {}
   const tabs: TerminalTab[] = []
-  for (let index = 0; index < count * 3; index++) {
+  for (let index = 0; index < count * 2; index++) {
     const tab: TerminalTab = {
       id: `tab-${index}`,
       worktreeId: 'wt-title',
@@ -34,14 +33,6 @@ function makeState(count = 1): AppState {
     tabs.push(tab)
     if (index < count) {
       live[entry.paneKey] = entry
-    } else if (index < count * 2) {
-      retained[entry.paneKey] = {
-        entry,
-        tab,
-        worktreeId: tab.worktreeId,
-        agentType: 'codex',
-        startedAt: 1
-      }
     } else {
       sleeping[entry.paneKey] = {
         ...entry,
@@ -53,7 +44,6 @@ function makeState(count = 1): AppState {
   }
   return {
     agentStatusByPaneKey: live,
-    retainedAgentsByPaneKey: retained,
     sleepingAgentSessionsByPaneKey: sleeping,
     tabsByWorktree: { 'wt-title': tabs },
     terminalLayoutsByTabId: {},

@@ -1,5 +1,10 @@
+import {
+  buildTabIndex,
+  paneIsPlaced,
+  paneCanReceiveHookCompletion,
+  type PaneCoordinatorLivenessSnapshot
+} from './agent-hook-completion-pane-lifetime'
 import { useAppStore } from '@/store'
-import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { createAgentCompletionCoordinator } from '@/components/terminal-pane/agent-completion/agent-completion-coordinator'
 import type {
   AgentCompletionCoordinator,
@@ -7,7 +12,6 @@ import type {
 } from '@/components/terminal-pane/agent-completion/agent-completion-coordinator-types'
 import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import { dispatchTerminalNotification } from '../components/terminal-pane/notifications/dispatch-terminal-notification'
-import { collectLeafIdsInOrder } from '../components/terminal-pane/layout/terminal-layout-leaf-traversal'
 import { getPtyIdForPaneKey } from './pane-key-pty-id'
 import { dispatchAgentHookTerminalLifecycle } from '@/components/terminal-pane/agent-completion/agent-hook-terminal-lifecycle'
 import { isAgentTaskCompleteTrackingEnabledFromState as isAgentHookCompletionTrackingEnabled } from '../components/terminal-pane/notifications/agent-task-complete-policy'
@@ -23,17 +27,9 @@ import {
 
 type CoordinatorEntry = {
   worktreeId: string
+  ptyId: string | null
   coordinator: AgentCompletionCoordinator
 }
-
-type StoreSnapshot = ReturnType<typeof useAppStore.getState>
-type WorktreeTab = NonNullable<StoreSnapshot['tabsByWorktree']>[string][number]
-// Index paneKey → tab once per prune instead of flattening all tabs per coordinator.
-type TabIndex = ReadonlyMap<string, WorktreeTab>
-type PaneCoordinatorLivenessSnapshot = Pick<
-  StoreSnapshot,
-  'tabsByWorktree' | 'ptyIdsByTabId' | 'terminalLayoutsByTabId' | 'suppressedPtyExitIds'
->
 
 const coordinatorsByPaneKey = new Map<string, CoordinatorEntry>()
 const paneKeysRequiringFreshWorking = new Set<string>()
@@ -46,19 +42,6 @@ function disposeCoordinatorForPaneKey(paneKey: string): void {
   coordinatorsByPaneKey.delete(paneKey)
   discardHookLaneCompletionRequests(paneKey)
   paneKeysRequiringFreshWorking.delete(paneKey)
-}
-
-function buildTabIndex(tabsByWorktree: StoreSnapshot['tabsByWorktree']): TabIndex {
-  const index = new Map<string, WorktreeTab>()
-  for (const tabs of Object.values(tabsByWorktree ?? {})) {
-    for (const tab of tabs) {
-      // Preserve first-wins lookup when tab IDs collide across worktrees.
-      if (!index.has(tab.id)) {
-        index.set(tab.id, tab)
-      }
-    }
-  }
-  return index
 }
 
 function pruneClosedPaneCoordinators(): void {
@@ -85,7 +68,7 @@ function pruneClosedPaneCoordinators(): void {
   lastPrunedLivenessSnapshot = livenessSnapshot
   const tabIndex = buildTabIndex(livenessSnapshot.tabsByWorktree)
   for (const paneKey of coordinatorsByPaneKey.keys()) {
-    if (!paneCanReceiveHookCompletion(paneKey, tabIndex)) {
+    if (!paneIsPlaced(paneKey, tabIndex)) {
       disposeCoordinatorForPaneKey(paneKey)
     }
   }
@@ -140,54 +123,8 @@ export function syncAgentHookCompletionNotificationsForStoreUpdate(
   return true
 }
 
-function paneHasLivePty(paneKey: string): boolean {
-  return getPtyIdForPaneKey(paneKey) !== null
-}
-
-function resolveTabById(
-  state: StoreSnapshot,
-  tabId: string,
-  tabIndex?: TabIndex
-): WorktreeTab | undefined {
-  if (tabIndex) {
-    return tabIndex.get(tabId)
-  }
-  for (const tabs of Object.values(state.tabsByWorktree ?? {})) {
-    const found = tabs.find((candidate) => candidate.id === tabId)
-    if (found) {
-      return found
-    }
-  }
-  return undefined
-}
-
-function paneKeyHasUnsuppressedPtyHint(
-  state: StoreSnapshot,
-  paneKey: string,
-  tabIndex?: TabIndex
-): boolean {
-  const parsed = parsePaneKey(paneKey)
-  if (!parsed) {
-    return false
-  }
-  const tab = resolveTabById(state, parsed.tabId, tabIndex)
-  if (!tab) {
-    return false
-  }
-  const layout = state.terminalLayoutsByTabId?.[parsed.tabId]
-  if (layout?.root && !collectLeafIdsInOrder(layout.root).includes(parsed.leafId)) {
-    return false
-  }
-  const leafPtyId = layout?.ptyIdsByLeafId?.[parsed.leafId]
-  // Sleep/shutdown preserves tabs but suppresses PTYs; absent hints remain valid during inactive-worktree hydration.
-  const ptyHints = [tab.ptyId, leafPtyId].filter((ptyId): ptyId is string => Boolean(ptyId))
-  return ptyHints.length === 0 || ptyHints.some((ptyId) => !state.suppressedPtyExitIds?.[ptyId])
-}
-
-function paneCanReceiveHookCompletion(paneKey: string, tabIndex?: TabIndex): boolean {
-  const state = useAppStore.getState()
-  // Native hooks prove live status even before inactive-worktree PTY maps hydrate.
-  return paneKeyHasUnsuppressedPtyHint(state, paneKey, tabIndex) || paneHasLivePty(paneKey)
+function completionPtyId(paneKey: string): string | null {
+  return getPtyIdForPaneKey(paneKey) ?? coordinatorsByPaneKey.get(paneKey)?.ptyId ?? null
 }
 
 function hookLaneDispatchEnabled(paneKey: string): boolean {
@@ -195,7 +132,7 @@ function hookLaneDispatchEnabled(paneKey: string): boolean {
 }
 
 function hookLaneOwnsTurnEnd(paneKey: string, snapshot: AgentCompletionStatusSnapshot): boolean {
-  return hookTurnEndEvidence(getPtyIdForPaneKey(paneKey), snapshot) === 'identified'
+  return hookTurnEndEvidence(completionPtyId(paneKey), snapshot) === 'identified'
 }
 
 function createCoordinator(paneKey: string, worktreeId: string): AgentCompletionCoordinator {
@@ -219,7 +156,7 @@ function createCoordinator(paneKey: string, worktreeId: string): AgentCompletion
           hookLaneDispatchEnabled(paneKey) &&
           coordinatorsByPaneKey.has(paneKey) &&
           snapshot !== undefined &&
-          hookLaneOwnsTurnEnd(paneKey, snapshot),
+          (snapshot.fromHistory === true || hookLaneOwnsTurnEnd(paneKey, snapshot)),
         submit: (onDispatchResult) =>
           dispatchTerminalNotification(worktreeId, {
             source: 'agent-task-complete',
@@ -242,7 +179,7 @@ function createCoordinator(paneKey: string, worktreeId: string): AgentCompletion
         agentStatusSnapshot: meta.agentStatus
       })
     },
-    isLive: () => paneCanReceiveHookCompletion(paneKey)
+    isLive: () => paneIsPlaced(paneKey)
   })
 }
 
@@ -250,13 +187,19 @@ export function observeAgentHookCompletionForNotification({
   paneKey,
   worktreeId,
   payload,
-  seedOnly
+  seedOnly,
+  fromHistory
 }: {
   paneKey: string
   worktreeId: string
   payload: AgentCompletionStatusSnapshot
   seedOnly?: boolean
+  fromHistory?: true
 }): void {
+  // The canonical row already remembers passive history; do not replay it into the live completion lane.
+  if (seedOnly === true && fromHistory) {
+    return
+  }
   // Why: replay seeds already passed indexed snapshot ownership; re-resolving every row makes startup batches quadratic.
   if (seedOnly !== true) {
     pruneClosedPaneCoordinators()
@@ -278,6 +221,7 @@ export function observeAgentHookCompletionForNotification({
     discardHookLaneCompletionRequests(paneKey)
     entry = {
       worktreeId,
+      ptyId: getPtyIdForPaneKey(paneKey),
       coordinator: createCoordinator(paneKey, worktreeId)
     }
     coordinatorsByPaneKey.set(paneKey, entry)
@@ -285,6 +229,7 @@ export function observeAgentHookCompletionForNotification({
       paneKeysRequiringFreshWorking.add(paneKey)
     }
   }
+  entry.ptyId = getPtyIdForPaneKey(paneKey) ?? entry.ptyId
   // Suppressed alerts still require accepted hooks to release pane-owned cursor/cache effects after quiet time.
   if (payload.state === 'working' && payload.turnCompletedAt === undefined && trackingEnabled) {
     paneKeysRequiringFreshWorking.delete(paneKey)
@@ -292,7 +237,11 @@ export function observeAgentHookCompletionForNotification({
   // Why: on a legacy pane the host's end facts must not change main's done identity or replay guard.
   const { turnEndedAt: _turnEndedAt, turnEndDisposition: _disposition, ...legacyPayload } = payload
   const observed =
-    hookTurnEndEvidence(getPtyIdForPaneKey(paneKey), payload) === 'legacy' ? legacyPayload : payload
+    !fromHistory && hookTurnEndEvidence(completionPtyId(paneKey), payload) === 'legacy'
+      ? legacyPayload
+      : fromHistory
+        ? { ...payload, fromHistory }
+        : payload
   if (seedOnly === true) {
     entry.coordinator.seedHookStatus(observed)
   } else {

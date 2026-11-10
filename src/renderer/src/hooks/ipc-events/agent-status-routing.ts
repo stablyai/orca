@@ -40,7 +40,10 @@ export function isSeenHostReplay(
   >,
   state: string,
   existing:
-    | Pick<AppState['agentStatusByPaneKey'][string], 'state' | 'stateStartedAt' | 'turnEndedAt'>
+    | Pick<
+        AppState['agentStatusByPaneKey'][string],
+        'state' | 'stateStartedAt' | 'turnEndedAt' | 'sessionBoundary'
+      >
     | undefined
 ): boolean {
   if (data.isReplay !== true) {
@@ -58,6 +61,7 @@ export function isSeenHostReplay(
   return (
     state !== 'done' ||
     (existing.state === 'done' &&
+      existing.sessionBoundary !== true &&
       existing.stateStartedAt === data.stateStartedAt &&
       existing.turnEndedAt === data.turnEndedAt)
   )

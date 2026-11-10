@@ -57,40 +57,6 @@ function makeSleepingRecord(
 }
 
 describe('manual sleep agent session capture', () => {
-  // Promoted checkpoint owns connection/transcript identity; retained pass must not overwrite it.
-  it('keeps a promoted live checkpoint that also has a retained row', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(NOW)
-    const store = createTestStore()
-    seedTabs(store)
-    const providerSession = { key: 'session_id', id: 'codex-shared' } as const
-    const entry = makeAgentEntry({ paneKey: 'tab-1:leaf-1', state: 'done', providerSession })
-    store.setState({
-      sleepingAgentSessionsByPaneKey: {
-        'tab-1:leaf-1': makeSleepingRecord({ providerSession, connectionId: 'conn-1' })
-      },
-      retainedAgentsByPaneKey: {
-        'tab-1:leaf-1': {
-          entry,
-          tab: makeTab({ id: 'tab-1', worktreeId: 'wt-1' }),
-          worktreeId: 'wt-1',
-          agentType: 'codex',
-          startedAt: entry.stateStartedAt
-        }
-      }
-    } as Partial<AppState>)
-
-    store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
-
-    const record = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
-    expect(record).toMatchObject({
-      origin: 'worktree-sleep',
-      state: 'working',
-      connectionId: 'conn-1'
-    })
-    expect(record.restoreOnTabOpenOnly).toBeUndefined()
-  })
-
   // Slept done panes stay passive until opened; repeated sleep has no live row and must preserve recovery (#11598).
   it('keeps a durable slept record whose pane was never woken across a second sleep', async () => {
     vi.useFakeTimers()
@@ -199,8 +165,49 @@ describe('manual sleep agent session capture', () => {
 
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:stale']).toMatchObject({
       origin: 'worktree-sleep',
-      updatedAt: NOW,
+      updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1,
       providerSession: { key: 'session_id', id: 'session-tab-1:stale' }
     })
   })
 })
+
+it.each([NOW - 1, NOW + 1])(
+  'identity-only evidence at %i keeps a resumable sleep until accepted successor activity',
+  (at) => {
+    const store = createTestStore()
+    seedTabs(store)
+    const record = makeSleepingRecord({
+      origin: 'worktree-sleep',
+      state: 'done',
+      capturedAt: NOW,
+      updatedAt: NOW - 1000
+    })
+    store.setState({
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record },
+      agentStatusByPaneKey: {}
+    })
+    store
+      .getState()
+      .recordAgentProviderSession(
+        record.paneKey,
+        'codex',
+        record.providerSession,
+        { updatedAt: at },
+        { tabId: 'tab-1', worktreeId: 'wt-1' }
+      )
+    expect(store.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
+    store
+      .getState()
+      .setAgentStatus(
+        record.paneKey,
+        { state: 'working', agentType: 'codex', prompt: 'new task' },
+        undefined,
+        { updatedAt: NOW + 2, stateStartedAt: NOW + 2 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        { providerSession: record.providerSession }
+      )
+    expect(store.getState().sleepingAgentSessionsByPaneKey[record.paneKey]?.origin).toBe('live')
+    store.getState().removeAgentStatus(record.paneKey)
+    expect(store.getState().sleepingAgentSessionsByPaneKey[record.paneKey]?.origin).toBe('live')
+  }
+)

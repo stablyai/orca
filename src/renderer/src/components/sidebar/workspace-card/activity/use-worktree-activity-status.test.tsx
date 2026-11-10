@@ -25,7 +25,6 @@ type MockState = {
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
   runtimeAgentOrchestrationByPaneKey: Record<string, NonNullable<AgentStatusEntry['orchestration']>>
   migrationUnsupportedByPtyId: Record<string, never>
-  retainedAgentsByPaneKey: Record<string, unknown>
   unifiedTabsByWorktree: Record<string, Tab[]>
   structuredChatSleptAtByPaneKey: Record<string, number | null>
   wslHostStatuses?: Record<string, { state: string; distro: string }>
@@ -98,7 +97,7 @@ describe('useWorktreeActivityStatus', () => {
       agentStatusByPaneKey: {},
       runtimeAgentOrchestrationByPaneKey: {},
       migrationUnsupportedByPtyId: {},
-      retainedAgentsByPaneKey: {},
+
       unifiedTabsByWorktree: {},
       structuredChatSleptAtByPaneKey: {}
     }

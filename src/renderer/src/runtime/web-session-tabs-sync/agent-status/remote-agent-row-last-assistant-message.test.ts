@@ -15,10 +15,7 @@ import {
 import { applyFreshWebSessionTabsSnapshot } from '../snapshot-api'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '../tracking-lifecycle'
 import { buildWorktreeAgentRows } from '../../../components/sidebar/workspace-card/activity/worktree-agent-rows'
-import {
-  selectLiveAgentStatusEntriesForWorktree,
-  selectRetainedAgentEntriesForWorktree
-} from '../../../components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
+import { selectLiveAgentStatusEntriesForWorktree } from '../../../components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import {
   selectLivePtyIdsForWorktree,
   selectRuntimePaneTitlesForWorktree
@@ -177,7 +174,6 @@ function observeRowMessages(store: TestStore, now: number): Record<string, strin
   const rows = buildWorktreeAgentRows({
     tabs,
     entries: selectLiveAgentStatusEntriesForWorktree(state, WT),
-    retained: selectRetainedAgentEntriesForWorktree(state, WT),
     runtimePaneTitlesByTabId: selectRuntimePaneTitlesForWorktree(state, WT),
     ptyIdsByTabId: selectLivePtyIdsForWorktree(state, WT),
     terminalLayoutsByTabId: Object.fromEntries(

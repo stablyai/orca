@@ -26,6 +26,7 @@ export type RuntimeAgentRowSnapshot = {
   updatedAt: number
   evidenceObservedAt?: number
   providerSession?: AgentProviderSessionMetadata
+  previousCompletion?: AgentStatusIpcPayload['previousCompletion']
   programStatus?: ProgramStatusFacet
 }
 
@@ -159,6 +160,7 @@ export function selectFreshAgentRowForMobileTab(args: {
     payload: pickParsedAgentStatusPayload(match),
     stateStartedAt: match.stateStartedAt ?? match.receivedAt,
     ...pickHostTurnEnd(match),
+    ...(match.previousCompletion ? { previousCompletion: match.previousCompletion } : {}),
     updatedAt: match.receivedAt,
     ...(match.providerSession ? { providerSession: match.providerSession } : {}),
     ...(match.programStatus ? { programStatus: match.programStatus } : {}),

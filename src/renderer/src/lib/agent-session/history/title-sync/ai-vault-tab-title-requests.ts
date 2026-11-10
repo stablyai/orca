@@ -1,3 +1,4 @@
+import { paneAgentRecordIdentity } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentProviderSessionMetadata } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   AgentStatusEntry,
@@ -117,6 +118,7 @@ function lastReportedCandidate(
   const repo = worktree ? getIndexedRepoMap(state.repos).get(worktree.repoId) : undefined
   if (
     !pane ||
+    !identity.providerSession?.id ||
     tab?.worktreeId !== identity.worktreeId ||
     (tab.leafIds && !tab.leafIds.has(pane.leafId)) ||
     identity.executionHostId !== getExecutionHostIdForWorktree(state, identity.worktreeId) ||
@@ -124,7 +126,7 @@ function lastReportedCandidate(
   ) {
     return null
   }
-  return { ...identity, priority: 0, refresh: false }
+  return { ...identity, providerSession: identity.providerSession, priority: 0, refresh: false }
 }
 
 function conversationRecords<T>(records: Record<string, T> | undefined, paneKey?: string): T[] {
@@ -136,12 +138,12 @@ export function collectAiVaultTitleRequests(state: AppState): AiVaultTitleReques
   return collectAgentPaneConversations(state, isAiVaultTitleAgent, { skipHostNamedTabs: true })
 }
 
-/** Each tab's conversation: live, sleeping, retained, then its last reported identity. */
+/** Each tab's conversation: live, sleeping, then its last reported identity. */
 export function collectAgentPaneConversations<Agent extends AgentType>(
   state: AppState,
   isAgent: (agent: AgentType | null | undefined) => agent is Agent,
   options: {
-    /** Skip retained and sleeping records: those remember a conversation after its agent exited. */
+    /** Skip sleeping records: those remember a conversation after its agent exited. */
     runningAgentsOnly?: boolean
     includeLastReported?: boolean
     pane?: { worktreeId: string; paneKey: string }
@@ -156,8 +158,7 @@ export function collectAgentPaneConversations<Agent extends AgentType>(
         tabId: tabIdFromPaneKey(
           options.pane.paneKey,
           state.agentStatusByPaneKey[options.pane.paneKey]?.tabId ??
-            state.sleepingAgentSessionsByPaneKey[options.pane.paneKey]?.tabId ??
-            state.retainedAgentsByPaneKey[options.pane.paneKey]?.entry.tabId
+            state.sleepingAgentSessionsByPaneKey[options.pane.paneKey]?.tabId
         )
       }
     : options.tab
@@ -185,7 +186,6 @@ export function collectAgentPaneConversations<Agent extends AgentType>(
   const records = <T>(record: Record<string, T> | undefined) =>
     conversationRecords(record, options.pane?.paneKey)
   const candidates = new Map<string, RequestCandidate<Agent>>()
-  const retained = options.runningAgentsOnly ? [] : records(state.retainedAgentsByPaneKey)
   const sleeping = options.runningAgentsOnly ? [] : records(state.sleepingAgentSessionsByPaneKey)
 
   if (!options.runningAgentsOnly || options.includeLastReported) {
@@ -197,23 +197,12 @@ export function collectAgentPaneConversations<Agent extends AgentType>(
     }
   }
 
-  for (const entry of retained) {
-    registerCandidate(state, tabsById, candidates, isAgent, {
-      agent: entry.agentType,
-      paneKey: entry.entry.paneKey,
-      priority: 10,
-      providerSession: entry.entry.providerSession,
-      refresh: false,
-      tabId: entry.entry.tabId,
-      worktreeId: entry.worktreeId
-    })
-  }
   for (const record of sleeping) {
     registerCandidate(state, tabsById, candidates, isAgent, {
-      agent: record.agent,
+      agent: paneAgentRecordIdentity(record).agent,
       paneKey: record.paneKey,
       priority: 20,
-      providerSession: record.providerSession,
+      providerSession: paneAgentRecordIdentity(record).providerSession,
       refresh: false,
       tabId: record.tabId,
       worktreeId: record.worktreeId

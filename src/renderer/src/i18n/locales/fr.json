@@ -4775,13 +4775,6 @@
             "activeAgents_one": "{{count}} agent actif",
             "activeAgents_other": "{{count}} agents actifs",
             "activeAgents_many": "{{count}} agents actifs",
-            "completedAgents_one": "{{count}} agent terminé",
-            "completedAgents_other": "{{count}} agents terminés",
-            "completedAgents_many": "{{count}} agents terminés",
-            "activeAndCompletedAgents": "{{active}}, {{completed}}",
-            "completedAgentsRetained_one": "{{count}} agent terminé conservé",
-            "completedAgentsRetained_other": "{{count}} agents terminés conservés",
-            "completedAgentsRetained_many": "{{count}} agents terminés conservés",
             "noTrackedAgents": "Aucun agent suivi en cours d’exécution",
             "noTerminalTabs": "Aucun onglet de terminal",
             "liveTerminalTabs_one": "{{live}} en cours d’exécution sur {{count}} onglet de terminal",
@@ -20348,7 +20341,7 @@
           "pinned": "Épinglés",
           "unread": "Non lus",
           "comment": "A un commentaire",
-          "retainedDoneAgents": "Transcriptions d'agents terminés",
+          "finishedAgents": "Agents terminés",
           "contextPresence": "Onglets, terminaux, commentaires ouverts",
           "completelyEmpty": "Plus rien à perdre",
           "noWorkspaces": "Aucun espace de travail trouvé.",
@@ -20466,7 +20459,7 @@
               "comment": "Commentaire",
               "prunable": "Nettoyable",
               "locked": "Verrouillé",
-              "retainedAgents": "Agents terminés"
+              "finishedAgents": "Agents terminés"
             }
           },
           "forceDeleteRisk_one": "{{count}} espace de travail présente actuellement un risque et peut nécessiter une suppression forcée",

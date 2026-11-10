@@ -148,7 +148,7 @@ describe('Cmd-J host-qualified candidate ownership', () => {
       {
         agentStatusByPaneKey: {},
         paneForegroundAgentByPaneKey: {},
-        retainedAgentsByPaneKey: {},
+
         sleepingAgentSessionsByPaneKey: {},
         terminalLayoutsByTabId: {}
       },

@@ -1,3 +1,4 @@
+import { resumablePaneRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { describe, expect, it } from 'vitest'
 
 import type { AppState } from '../../types'
@@ -28,7 +29,8 @@ describe('captureAllSleepingAgentSessions', () => {
       { providerSession: { key: 'session_id', id: 'codex-session-1' } }
     )
     expect(
-      store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.launchConfig
+      resumablePaneRecord(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1'])
+        ?.launchConfig
     ).toBeUndefined()
 
     store.getState().registerAgentLaunchConfig(
@@ -45,7 +47,10 @@ describe('captureAllSleepingAgentSessions', () => {
     )
 
     expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']).not.toHaveProperty('launchConfig')
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.launchConfig).toEqual({
+    expect(
+      resumablePaneRecord(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1'])
+        ?.launchConfig
+    ).toEqual({
       agentArgs: '--model gpt-5',
       agentEnv: { CODEX_PROFILE: 'captured' }
     })
@@ -71,7 +76,9 @@ describe('captureAllSleepingAgentSessions', () => {
       )
 
     store.getState().captureAllSleepingAgentSessions('quit')
-    const quitRecord = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
+    const quitRecord = resumablePaneRecord(
+      store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
+    )
     store.getState().captureAllSleepingAgentSessions('periodic')
 
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBe(quitRecord)
@@ -137,12 +144,14 @@ describe('captureAllSleepingAgentSessions', () => {
         { providerSession }
       )
 
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.launchConfig).toEqual(
-      launchConfig
-    )
     expect(
-      collectSleepingAgentSessionRecordsForWorktree(store.getState(), 'wt-1')['tab-1:leaf-1']
+      resumablePaneRecord(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1'])
         ?.launchConfig
+    ).toEqual(launchConfig)
+    expect(
+      resumablePaneRecord(
+        collectSleepingAgentSessionRecordsForWorktree(store.getState(), 'wt-1')['tab-1:leaf-1']
+      )?.launchConfig
     ).toEqual(launchConfig)
 
     store.getState().captureAllSleepingAgentSessions('quit')
@@ -207,7 +216,8 @@ describe('captureAllSleepingAgentSessions', () => {
     })
     expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']).not.toHaveProperty('launchConfig')
     expect(
-      store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.launchConfig
+      resumablePaneRecord(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1'])
+        ?.launchConfig
     ).toBeUndefined()
     expect(store.getState().agentLaunchConfigByPaneKey['tab-1:leaf-1']).toBeUndefined()
   })
@@ -311,7 +321,8 @@ describe('captureAllSleepingAgentSessions', () => {
     expect(entry?.providerSession).toBeUndefined()
     expect(entry).not.toHaveProperty('launchConfig')
     expect(
-      store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.launchConfig
+      resumablePaneRecord(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1'])
+        ?.launchConfig
     ).toBeUndefined()
   })
 })

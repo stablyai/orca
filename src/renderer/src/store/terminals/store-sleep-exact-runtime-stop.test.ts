@@ -335,71 +335,6 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
   })
 
-  it('commits pre-stop retained evidence when exact-stop clears live status during hibernation', async () => {
-    const store = createTestStore()
-    const wt = 'repo1::/path/wt1'
-    mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
-      if (args.method === 'terminal.stopExact') {
-        store.getState().removeAgentStatus('tab-1:live')
-        return Promise.resolve({
-          id: 'rpc-default',
-          ok: true,
-          result: { stoppedPtyIds: ['pty-1'], livePtyIds: ['pty-1'], postStopVerified: true },
-          _meta: { runtimeId: 'remote-runtime' }
-        })
-      }
-      return Promise.resolve(
-        createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
-          id: 'rpc-default',
-          ok: true,
-          result: {},
-          _meta: { runtimeId: 'remote-runtime' }
-        }
-      )
-    })
-
-    seedStore(store, {
-      settings: { ...getDefaultSettings('/tmp'), activeRuntimeEnvironmentId: 'runtime-1' },
-      worktreesByRepo: {
-        repo1: [makeRuntimeOwnedWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
-      },
-      tabsByWorktree: {
-        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex' })]
-      },
-      ptyIdsByTabId: { 'tab-1': [] }
-    })
-    store.getState().setAgentStatus(
-      'tab-1:live',
-      {
-        state: 'done',
-        prompt: 'resume live',
-        agentType: 'codex',
-        lastAssistantMessage: 'done'
-      },
-      'Codex',
-      { updatedAt: 1000, stateStartedAt: 1000 },
-      { tabId: 'tab-1', worktreeId: wt },
-      { providerSession: { key: 'session_id', id: 'live-session' } }
-    )
-
-    await store.getState().shutdownWorktreeTerminals(wt, {
-      keepIdentifiers: true,
-      shutdownReason: 'auto-hibernate-completed-agent',
-      sleepingPaneKeys: ['tab-1:live'],
-      expectedRuntimePtyIds: ['pty-1']
-    })
-
-    expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeUndefined()
-    expect(store.getState().retainedAgentsByPaneKey['tab-1:live']).toMatchObject({
-      worktreeId: wt,
-      entry: {
-        prompt: 'resume live',
-        lastAssistantMessage: 'done',
-        providerSession: { key: 'session_id', id: 'live-session' }
-      }
-    })
-  })
-
   it('does not commit stale pre-stop evidence when exact-stop changes live status', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
@@ -465,8 +400,6 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
 
     expect(store.getState().agentStatusByPaneKey['tab-1:live']).toBeUndefined()
-    expect(store.getState().retainedAgentsByPaneKey['tab-1:live']).toBeUndefined()
-    expect(store.getState().retentionSuppressedPaneKeys['tab-1:live']).toBe(true)
   })
 
   it('does not commit sleep state when exact runtime stop fails', async () => {

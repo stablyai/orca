@@ -1,3 +1,4 @@
+import type { PreviousPaneCompletion } from '../../agent-session/lifecycle/pane-agent-completion'
 // Keep transport envelopes separate from status vocabulary; re-export through agent-status-types for existing consumers.
 
 import type { StructuredHostStatus } from '../../agent-hook-listener/listener-event'
@@ -40,6 +41,7 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   /** Fully qualified provider identity; never a credential or mailbox lookup key. */
   providerAlias?: AgentStatusProviderAlias
   paneKey: string
+  previousCompletion?: PreviousPaneCompletion
   /** Live host acknowledgement of this renderer’s exact pane retirement. */
   authorityRestartId?: string
   launchToken?: string

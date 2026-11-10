@@ -43,6 +43,8 @@ export type ActivityLiveAgentSnapshot = {
   migrationUnsupportedPtyId?: string
 }
 
+export type ActivityPassiveAgentSnapshot = Omit<ActivityLiveAgentSnapshot, 'state'>
+
 // Why: keyed per agent pane (tab + leaf id), not per workspace, so the list shows one row per agent; paneKey is `${tabId}:${leafId}`.
 export type AgentPaneThread = {
   paneKey: string

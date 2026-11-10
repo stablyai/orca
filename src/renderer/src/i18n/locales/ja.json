@@ -4414,9 +4414,6 @@
             "ahead": "{{ahead}} コミット先行",
             "behind": "{{behind}} コミット遅延",
             "activeAgents_other": "稼働中の Agent {{count}} 件",
-            "completedAgents_other": "完了した Agent {{count}} 件",
-            "activeAndCompletedAgents": "{{active}}、{{completed}}",
-            "completedAgentsRetained_other": "完了した Agent {{count}} 件を保持",
             "noTrackedAgents": "追跡中の Agent は実行されていません",
             "noTerminalTabs": "ターミナルタブなし",
             "liveTerminalTabs_other": "ターミナルタブ {{count}} 個中 {{live}} 個が稼働中",
@@ -19600,7 +19597,7 @@
           "pinned": "ピン留め済み",
           "unread": "未読",
           "comment": "コメントあり",
-          "retainedDoneAgents": "完成した Agent のトランスクリプト",
+          "finishedAgents": "完成した Agent",
           "contextPresence": "タブ、ターミナル、コメントを開く",
           "completelyEmpty": "失うものは何も残っていない",
           "noWorkspaces": "ワークスペースが見つかりません。",
@@ -19718,7 +19715,7 @@
               "comment": "コメント",
               "prunable": "剪定可能",
               "locked": "ロックされています",
-              "retainedAgents": "完成した Agent"
+              "finishedAgents": "完成した Agent"
             }
           },
           "forceDeleteRisk_other": "現在 {{count}} 件のワークスペースにリスクがあり、強制削除が必要になる可能性があります",

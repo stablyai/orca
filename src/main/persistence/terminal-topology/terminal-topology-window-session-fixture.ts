@@ -1,4 +1,4 @@
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { OwnedPaneAgentRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { Tab } from '../../../shared/tab-types'
 import type {
   TerminalPaneLayoutNode,
@@ -144,7 +144,7 @@ class WindowSession {
     )
   }
 
-  setSleeping(records: Record<string, SleepingAgentSessionRecord>): void {
+  setSleeping(records: Record<string, OwnedPaneAgentRecord>): void {
     this.session.sleepingAgentSessionsByPaneKey = records
   }
 

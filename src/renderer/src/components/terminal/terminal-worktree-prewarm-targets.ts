@@ -1,3 +1,4 @@
+import { isResumablePaneRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { getSleepingRecordTabId } from '@/lib/sleeping-agent-wake-requests'
@@ -25,6 +26,9 @@ export function selectRevealTerminalTabIds(state: AppState, worktreeId: string):
 export function selectSleepingTabIds(state: AppState, worktreeId: string): Set<string> {
   const tabIds = new Set<string>()
   for (const record of Object.values(state.sleepingAgentSessionsByPaneKey)) {
+    if (!isResumablePaneRecord(record)) {
+      continue
+    }
     const tabId = record.worktreeId === worktreeId ? getSleepingRecordTabId(record) : null
     if (tabId) {
       tabIds.add(tabId)

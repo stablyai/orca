@@ -1,3 +1,4 @@
+import { resumablePaneRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { expect, it } from 'vitest'
 
 import type { AppState } from '../../types'
@@ -53,7 +54,8 @@ it('a paired host retiring a launch ends its note for OSC updates and cold resto
       ...buildMirroredAgentStatusPatch(state, [], [surface], [], 'env', 'wt', new Set(), tick())
     } as Partial<AppState>)
   }
-  const note = () => store.getState().sleepingAgentSessionsByPaneKey[PANE]?.launchConfig
+  const note = () =>
+    resumablePaneRecord(store.getState().sleepingAgentSessionsByPaneKey[PANE])?.launchConfig
 
   store.getState().registerAgentLaunchConfig(PANE, NOTE, {
     agentType: 'claude',

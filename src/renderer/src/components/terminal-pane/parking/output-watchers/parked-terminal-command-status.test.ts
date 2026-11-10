@@ -19,7 +19,6 @@ const ROUTING = { connectionId: null }
 type MockStoreState = {
   tabsByWorktree: Record<string, { id: string; launchAgent?: AgentType }[]>
   agentStatusByPaneKey: Record<string, AgentStatusEntry | undefined>
-  retainedAgentsByPaneKey: Record<string, { agentType: AgentType } | undefined>
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry>
   agentLaunchConfigByPaneKey: Record<string, { identity: { agentType?: AgentType } } | undefined>
   runtimePaneTitlesByTabId: Record<string, Record<number, string | undefined>>
@@ -51,7 +50,7 @@ function makeMockStoreState(): MockStoreState {
   return {
     tabsByWorktree: { [WORKTREE_ID]: [{ id: TAB_ID }] },
     agentStatusByPaneKey: {},
-    retainedAgentsByPaneKey: {},
+
     paneForegroundAgentByPaneKey: {},
     agentLaunchConfigByPaneKey: {},
     runtimePaneTitlesByTabId: { [TAB_ID]: { [PANE_ID]: '✳ Build feature' } },

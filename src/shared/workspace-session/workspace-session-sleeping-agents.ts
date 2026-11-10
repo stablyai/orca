@@ -1,3 +1,4 @@
+import { paneAgentCompletionSchema } from '../agent-status/lifecycle/agent-state-history-schema'
 import { z } from 'zod'
 import { getAgentResumeArgv } from '../agent-launch/startup/agent-resume-argv'
 import {
@@ -87,6 +88,8 @@ export const sleepingAgentLaunchConfigSchema = z.preprocess((raw) => {
 
 export const sleepingAgentSessionRecordSchema = z
   .object({
+    kind: z.undefined().optional(),
+    completion: paneAgentCompletionSchema,
     paneKey: z.string().refine((value) => value.length > 0),
     tabId: terminalTabIdSchema.optional(),
     worktreeId: z.string().min(1),
@@ -96,6 +99,12 @@ export const sleepingAgentSessionRecordSchema = z
     state: z.enum(['working', 'blocked', 'waiting', 'done']),
     capturedAt: z.number().finite().positive(),
     updatedAt: z.number().finite().positive(),
+    stateStartedAt: z.number().finite().optional(),
+    firstStateStartedAt: z.number().finite().optional(),
+    turnStartedAt: z.number().finite().optional(),
+    turnEndedAt: z.number().finite().optional(),
+    turnEndDisposition: z.enum(['identified', 'ambiguous']).optional(),
+    lastAssistantMessageIsToolOutput: z.boolean().optional(),
     terminalTitle: z.string().optional(),
     lastAssistantMessage: z.string().optional(),
     interrupted: z.boolean().optional(),
@@ -112,8 +121,43 @@ export const sleepingAgentSessionRecordSchema = z
     { message: 'provider session is not resumable for this agent', path: ['providerSession'] }
   )
 
+export const displayOnlyPaneSleepSchema = z
+  .object({
+    kind: z.literal('display-only'),
+    completion: paneAgentCompletionSchema,
+    paneKey: z.string().min(1),
+    tabId: terminalTabIdSchema.optional(),
+    worktreeId: z.string().min(1),
+    origin: z.literal('worktree-sleep'),
+    capturedAt: z.number().finite().positive(),
+    connectionId: z.string().nullable().optional(),
+    display: z.object({
+      state: z.literal('done'),
+      agentType: z.string().optional(),
+      providerSession: agentProviderSessionSchema.optional(),
+      prompt: z.string(),
+      updatedAt: z.number().finite().positive(),
+      stateStartedAt: z.number().finite(),
+      firstStateStartedAt: z.number().finite().optional(),
+      turnStartedAt: z.number().finite().optional(),
+      turnEndedAt: z.number().finite().optional(),
+      turnEndDisposition: z.enum(['identified', 'ambiguous']).optional(),
+      terminalTitle: z.string().optional(),
+      lastAssistantMessage: z.string().optional(),
+      lastAssistantMessageIsToolOutput: z.boolean().optional(),
+      interrupted: z.boolean().optional(),
+      mainAgent: z.unknown().transform(normalizeMainAgentStatusField).optional()
+    })
+  })
+  .strict()
+
+export const ownedPaneAgentRecordSchema = z.union([
+  displayOnlyPaneSleepSchema,
+  sleepingAgentSessionRecordSchema
+])
+
 export const sleepingAgentSessionsByPaneKeySchema = salvagingRecord(
   z.string().refine((paneKey) => !isUnsafeObjectKey(paneKey)),
-  sleepingAgentSessionRecordSchema,
+  ownedPaneAgentRecordSchema,
   (paneKey, record) => record.paneKey === paneKey
 ).transform((records) => (Object.keys(records).length > 0 ? records : undefined))

@@ -1,7 +1,10 @@
+import {
+  isResumablePaneRecord,
+  isPaneSleepRecord
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
 import type { WorkspaceLayoutLoadContext } from '../../../../shared/workspace-layout/workspace-layout-load-types'
-import { isPaneSleepRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   pairedRuntimeHostOfBinding,
   terminalHoldsPane,
@@ -147,7 +150,7 @@ export function mainTerminalSourceInputs(
     incarnations: session.terminalPtyIncarnationsByPaneKey,
     sleeping: Object.entries(session.sleepingAgentSessionsByPaneKey ?? {}).map(([key, record]) => [
       key,
-      isPaneSleepRecord(record)
+      isResumablePaneRecord(record) && isPaneSleepRecord(record)
     ]),
     retired: session.terminalSurfaceTombstonesByPaneKey,
     closedTabs: session.closedTerminalTabTombstonesByTabId,

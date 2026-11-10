@@ -187,10 +187,9 @@ export function resolveTerminalTabActivityStatus({
     hasFailed: flags?.hasFailed ?? false,
     hasInterrupted: flags?.hasInterrupted ?? false,
     hasUnconfirmed: flags?.hasUnconfirmed ?? false,
-    hasLiveDone: flags?.hasLiveDone ?? false,
+    hasLiveDone: flags?.hasLiveDone ?? false
     // Why: retained/orchestration promotions are worktree-aggregate concerns;
     // a tab reflects its own live panes and title only.
-    hasRetainedDone: false
   })
 }
 

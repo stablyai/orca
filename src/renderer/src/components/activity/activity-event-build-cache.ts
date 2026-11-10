@@ -10,13 +10,15 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type {
   ActivityEvent,
   ActivityLiveAgentSnapshot,
-  ActivityLiveAgentState
+  ActivityLiveAgentState,
+  ActivityPassiveAgentSnapshot
 } from './activity-thread-types'
 import { buildPaneActivityEvents } from './activity-pane-events'
 import {
   buildActivityTabContext,
   buildActivityTabHostIndex,
   type ActivityTabContext,
+  type ActivityEventOwner,
   type ActivityTabHostIndex
 } from './activity-event-builder-context'
 import type { BuildActivityEventsArgs } from './activity-event-builder'
@@ -47,6 +49,19 @@ type PaneActivityCacheEntry = {
 export type ActivityEventBuildCache = {
   panes: Map<string, PaneActivityCacheEntry>
   tabs?: ActivityTabIndexes
+  owners?: { inputs: unknown[]; rows: Map<string, ActivityEventOwner> }
+  sleep?: {
+    rows: Map<
+      string,
+      {
+        inputs: unknown[]
+        source: AgentStatusEntry
+        rowEntry: AgentStatusEntry
+        passive: ActivityPassiveAgentSnapshot
+        events: ActivityEvent[]
+      }
+    >
+  }
 }
 
 export function createActivityEventBuildCache(): ActivityEventBuildCache {

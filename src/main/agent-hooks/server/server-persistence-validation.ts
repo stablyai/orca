@@ -1,3 +1,4 @@
+import { previousPaneCompletionSchema } from '../../../shared/agent-status/lifecycle/agent-state-history-schema'
 import { readAgentProcessPresence } from '../../../shared/agent-status/process/agent-process-presence'
 import { createHash } from 'node:crypto'
 
@@ -151,6 +152,7 @@ export function sanitizeHydratedEntry(
   const turnStartedAt = record.turnStartedAt
   const turnEndedAt = record.turnEndedAt
   const hostTurn = readHostTurnRecord(record.hostTurn)
+  const previousCompletion = previousPaneCompletionSchema.safeParse(record.previousCompletion)
   return {
     paneKey,
     agentPresence: readAgentProcessPresence(record.agentPresence),
@@ -181,7 +183,8 @@ export function sanitizeHydratedEntry(
     ...(isTurnEndDisposition(record.turnEndDisposition)
       ? { turnEndDisposition: record.turnEndDisposition }
       : {}),
-    ...(hostTurn ? { hostTurn } : {})
+    ...(hostTurn ? { hostTurn } : {}),
+    ...(previousCompletion.success ? { previousCompletion: previousCompletion.data } : {})
   }
 }
 

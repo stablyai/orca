@@ -5,6 +5,11 @@ import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-f
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { findFolderWorkspaceOwner } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
 import { useAppStore } from '@/store/index'
+import {
+  selectWorktreesByRepo,
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { openDesktopStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { findStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 import { flashFocusedPaneRim } from '@/components/terminal-pane/input/focus/focused-pane-rim-flash'
@@ -32,7 +37,19 @@ export function useAiVaultOriginalPaneActions(): {
   const originalPaneLookupState = useAppStore(
     useShallow((s) => ({
       agentStatusByPaneKey: s.agentStatusByPaneKey,
-      retainedAgentsByPaneKey: s.retainedAgentsByPaneKey,
+      agentConversationsByPaneKey: s.agentConversationsByPaneKey,
+      repos: s.repos,
+      worktreesByRepo: selectWorktreesByRepo(s),
+      detectedWorktreesByRepo: selectDetectedWorktreesByRepo(s),
+      folderWorkspaces: selectFolderWorkspaces(s),
+      projectGroups: s.projectGroups,
+      restoredRuntimeHostIdByWorkspaceSessionKey: s.restoredRuntimeHostIdByWorkspaceSessionKey,
+      activeWorkspaceExecutionHostId: s.activeWorkspaceExecutionHostId,
+      activeWorktreeId: s.activeWorktreeId,
+      runtimeEnvironments: s.runtimeEnvironments,
+      runtimeEnvironmentCatalogHydrated: s.runtimeEnvironmentCatalogHydrated,
+      removedRuntimeEnvironmentIds: s.removedRuntimeEnvironmentIds,
+      settings: s.settings,
       sleepingAgentSessionsByPaneKey: s.sleepingAgentSessionsByPaneKey,
       tabsByWorktree: s.tabsByWorktree,
       terminalLayoutsByTabId: s.terminalLayoutsByTabId,

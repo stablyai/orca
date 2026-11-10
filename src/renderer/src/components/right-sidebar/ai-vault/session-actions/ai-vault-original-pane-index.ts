@@ -1,4 +1,6 @@
+import { paneAgentRecordIdentity } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentRowDisplayDotState } from '@/lib/agent-status/presentation/agent-row-dot-state'
+import { agentPaneConversationForEntry } from '@/store/slices/agent-status/agent-pane-conversation'
 import type { AgentDotState } from '@/components/AgentStateDot'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
@@ -9,7 +11,7 @@ import {
 } from './ai-vault-original-pane'
 
 type LiveEntry = NonNullable<OriginalPaneState['agentStatusByPaneKey'][string]>
-type RetainedEntry = NonNullable<OriginalPaneState['retainedAgentsByPaneKey'][string]>
+type ConversationEntry = NonNullable<OriginalPaneState['agentConversationsByPaneKey'][string]>
 type SleepingEntry = NonNullable<OriginalPaneState['sleepingAgentSessionsByPaneKey'][string]>
 
 type ProviderIndex<T> = Map<string, T[]>
@@ -19,8 +21,8 @@ export type AiVaultOriginalPaneIndex = {
   state: OriginalPaneState
   liveByProvider: ProviderIndex<LiveEntry>
   liveWithoutProviderByAgent: AgentIndex<LiveEntry>
-  retainedByProvider: ProviderIndex<RetainedEntry>
-  retainedWithoutProviderByAgent: AgentIndex<RetainedEntry>
+  conversationsByProvider: ProviderIndex<ConversationEntry>
+  conversationsWithoutProviderByAgent: AgentIndex<ConversationEntry>
   sleepingByProvider: ProviderIndex<SleepingEntry>
 }
 
@@ -41,8 +43,8 @@ function appendToIndex<T>(index: Map<string, T[]>, key: string, value: T): void 
 export function buildAiVaultOriginalPaneIndex(state: OriginalPaneState): AiVaultOriginalPaneIndex {
   const liveByProvider: ProviderIndex<LiveEntry> = new Map()
   const liveWithoutProviderByAgent: AgentIndex<LiveEntry> = new Map()
-  const retainedByProvider: ProviderIndex<RetainedEntry> = new Map()
-  const retainedWithoutProviderByAgent: AgentIndex<RetainedEntry> = new Map()
+  const conversationsByProvider: ProviderIndex<ConversationEntry> = new Map()
+  const conversationsWithoutProviderByAgent: AgentIndex<ConversationEntry> = new Map()
   const sleepingByProvider: ProviderIndex<SleepingEntry> = new Map()
 
   for (const entry of Object.values(state.agentStatusByPaneKey)) {
@@ -55,25 +57,29 @@ export function buildAiVaultOriginalPaneIndex(state: OriginalPaneState): AiVault
       appendToIndex(liveWithoutProviderByAgent, entry.agentType, entry)
     }
   }
-  for (const retained of Object.values(state.retainedAgentsByPaneKey)) {
-    if (!retained?.agentType) {
+  for (const conversation of Object.values(state.agentConversationsByPaneKey)) {
+    if (
+      state.agentStatusByPaneKey[conversation.paneKey] ||
+      !agentPaneConversationForEntry(state, { ...conversation, agentType: conversation.agent })
+    ) {
       continue
     }
-    if (retained.entry.providerSession) {
+    if (conversation.providerSession) {
       appendToIndex(
-        retainedByProvider,
-        providerKey(retained.agentType, retained.entry.providerSession.id),
-        retained
+        conversationsByProvider,
+        providerKey(conversation.agent, conversation.providerSession.id),
+        conversation
       )
-    } else if (retained.entry.providerSession === undefined) {
-      appendToIndex(retainedWithoutProviderByAgent, retained.agentType, retained)
+    } else {
+      appendToIndex(conversationsWithoutProviderByAgent, conversation.agent, conversation)
     }
   }
   for (const record of Object.values(state.sleepingAgentSessionsByPaneKey)) {
-    if (record) {
+    const identity = paneAgentRecordIdentity(record)
+    if (identity.agent && identity.providerSession) {
       appendToIndex(
         sleepingByProvider,
-        providerKey(record.agent, record.providerSession.id),
+        providerKey(identity.agent, identity.providerSession.id),
         record
       )
     }
@@ -83,8 +89,8 @@ export function buildAiVaultOriginalPaneIndex(state: OriginalPaneState): AiVault
     state,
     liveByProvider,
     liveWithoutProviderByAgent,
-    retainedByProvider,
-    retainedWithoutProviderByAgent,
+    conversationsByProvider,
+    conversationsWithoutProviderByAgent,
     sleepingByProvider
   }
 }
@@ -131,26 +137,26 @@ export function findOriginalAiVaultSessionPaneInIndex(
       promptMatchedTargets.push(target)
     }
   }
-  for (const retained of index.retainedByProvider.get(key) ?? []) {
+  for (const conversation of index.conversationsByProvider.get(key) ?? []) {
     const target = resolveOriginalPaneTarget({
       state: index.state,
-      paneKey: retained.entry.paneKey,
-      worktreeIdHint: retained.worktreeId,
-      tabIdHint: retained.entry.tabId ?? retained.tab.id
+      paneKey: conversation.paneKey,
+      worktreeIdHint: conversation.worktreeId,
+      tabIdHint: undefined
     })
     if (target) {
       return target
     }
   }
-  for (const retained of index.retainedWithoutProviderByAgent.get(session.agent) ?? []) {
-    if (!promptsMatchSession(session, retained.entry)) {
+  for (const conversation of index.conversationsWithoutProviderByAgent.get(session.agent) ?? []) {
+    if (!promptsMatchSession(session, conversation)) {
       continue
     }
     const target = resolveOriginalPaneTarget({
       state: index.state,
-      paneKey: retained.entry.paneKey,
-      worktreeIdHint: retained.worktreeId,
-      tabIdHint: retained.entry.tabId ?? retained.tab.id
+      paneKey: conversation.paneKey,
+      worktreeIdHint: conversation.worktreeId,
+      tabIdHint: undefined
     })
     if (target) {
       promptMatchedTargets.push(target)

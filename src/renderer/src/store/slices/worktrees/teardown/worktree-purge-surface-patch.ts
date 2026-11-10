@@ -49,8 +49,9 @@ export function buildWorktreePurgeSurfacePatch(
     migrationUnsupportedByPtyId: omitByPtyId(s.migrationUnsupportedByPtyId),
     suppressedPtyExitIds: omitByPtyId(s.suppressedPtyExitIds),
     pendingPaneAccountRestarts: omitByPtyId(s.pendingPaneAccountRestarts),
-    // Evict bulk-purged agent/unread/input state; retainedAgents and orchestration self-heal via pruning/full sync.
+    // Bulk purges skip pane teardown, so evict its agent identity and activity state here.
     agentStatusByPaneKey: nextAgentStatusByPaneKey,
+    agentConversationsByPaneKey: omitByPaneKeyTabPrefix(s.agentConversationsByPaneKey),
     ...(nextAgentStatusByPaneKey !== s.agentStatusByPaneKey
       ? { agentStatusEpoch: s.agentStatusEpoch + 1 }
       : {}),

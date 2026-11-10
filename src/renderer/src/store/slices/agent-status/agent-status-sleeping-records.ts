@@ -2,6 +2,7 @@ import type { AppState } from '../../types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { agentTurnEndedUncleanly } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type {
+  OwnedPaneAgentRecord,
   SleepingAgentLaunchConfig,
   SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -53,28 +54,16 @@ export function markManualSleepLazyRestore(record: SleepingAgentSessionRecord): 
 }
 
 // Fresh captures replace provisional live/legacy checkpoints; explicit sleep/quit records may be the only surviving resume handle.
-export function isDurableSleepingCapture(record: SleepingAgentSessionRecord): boolean {
+export function isDurableSleepingCapture(record: OwnedPaneAgentRecord): boolean {
   return record.origin === 'worktree-sleep' || record.origin === 'quit'
 }
 
-// Manual sleep kills PTY; capture resume identity without wake-side staleness discard. Preserve state so done panes resume lazily in place.
-export function manualSleepCaptureEntry(
-  entry: AgentStatusEntry,
-  capturedAt: number
-): AgentStatusEntry {
-  if (!entry.mainAgent) {
-    return { ...entry, updatedAt: capturedAt, interrupted: false }
-  }
-  const { outcome: _outcome, ...mainAgent } = entry.mainAgent
-  return { ...entry, updatedAt: capturedAt, interrupted: false, mainAgent }
-}
-
 export function removeSleepingRecordsReplacedByManualWorktreeSleep(
-  records: Record<string, SleepingAgentSessionRecord>,
+  records: Record<string, OwnedPaneAgentRecord>,
   worktreeId: string,
   paneKeys?: readonly string[],
-  replacements?: Readonly<Record<string, SleepingAgentSessionRecord>>
-): { records: Record<string, SleepingAgentSessionRecord>; changed: boolean } {
+  replacements?: Readonly<Record<string, OwnedPaneAgentRecord>>
+): { records: Record<string, OwnedPaneAgentRecord>; changed: boolean } {
   const allowedPaneKeys = paneKeys ? new Set(paneKeys) : null
   let next = records
   let changed = false

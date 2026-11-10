@@ -15,8 +15,7 @@ export function bindCommandCodeOutputStatus(session: ConnectPanePtySession): voi
     return canCommandCodeOutputOwnPane({
       foregroundAgent: foreground?.agent,
       shellForeground: foreground?.shellForeground,
-      paneOwnerAgent: session.getAuthoritativePaneAgent(),
-      retainedPaneOwnerAgent: state.retainedAgentsByPaneKey[session.cacheKey]?.agentType
+      paneOwnerAgent: session.getAuthoritativePaneAgent()
     })
   }
 

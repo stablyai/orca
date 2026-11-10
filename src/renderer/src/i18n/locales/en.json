@@ -5379,11 +5379,6 @@
             "behind": "{{behind}} behind",
             "activeAgents_one": "{{count}} active agent",
             "activeAgents_other": "{{count}} active agents",
-            "completedAgents_one": "{{count}} completed agent",
-            "completedAgents_other": "{{count}} completed agents",
-            "activeAndCompletedAgents": "{{active}}, {{completed}}",
-            "completedAgentsRetained_one": "{{count}} completed agent retained",
-            "completedAgentsRetained_other": "{{count}} completed agents retained",
             "noTrackedAgents": "No tracked agents running",
             "noTerminalTabs": "No terminal tabs",
             "liveTerminalTabs_one": "{{live}} live of {{count}} terminal tab",
@@ -21088,7 +21083,7 @@
           "pinned": "Pinned",
           "unread": "Unread",
           "comment": "Has comment",
-          "retainedDoneAgents": "Finished agent transcripts",
+          "finishedAgents": "Finished agents",
           "contextPresence": "Open tabs, terminals, comments",
           "completelyEmpty": "Nothing left to lose",
           "noWorkspaces": "No workspaces found.",
@@ -21206,7 +21201,7 @@
               "comment": "Comment",
               "prunable": "Prunable",
               "locked": "Locked",
-              "retainedAgents": "Finished agents"
+              "finishedAgents": "Finished agents"
             }
           },
           "forceDeleteRisk_one": "{{count}} workspace currently shows risk and may need a force delete",

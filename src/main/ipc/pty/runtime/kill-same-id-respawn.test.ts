@@ -108,3 +108,98 @@ describe('a stop of a PTY whose incarnation was stamped mid-stop', () => {
     expectRetired(h)
   })
 })
+
+describe('a slept pane conditional stop', () => {
+  function conditionalHarness() {
+    const h = harness()
+    const inspection = vi.fn(async () => ({
+      foregroundProcess: 'claude',
+      hasChildProcesses: true,
+      foregroundObservation: {
+        verdict: 'observed',
+        source: 'pty-master',
+        foregroundKind: 'non-shell',
+        processName: 'claude',
+        ptyId: PTY_ID,
+        ptyIncarnationId: 'inc-stopped',
+        authorityGeneration: 'authority-1',
+        capturedAgeMs: 0,
+        observationEpoch: 1
+      }
+    }))
+    const provider = Object.assign(
+      providerWhose(() => {}, []),
+      { inspectProcess: inspection }
+    )
+    const shutdown = vi.fn(h.ports.shutdownProviderAndDetectExit)
+    const current = vi.fn(() => true)
+    const ports = {
+      ...h.ports,
+      shutdownProviderAndDetectExit: shutdown,
+      runtime: {
+        ...h.runtime,
+        paneSleepStopIsCurrent: current,
+        runWorktreeTerminalMutation: async (_workspace: string, run: () => Promise<void>) => run()
+      }
+    }
+    ptyOwnership.set(PTY_ID, LOCAL_EXECUTION_HOST_ID)
+    ptyIncarnationById.set(PTY_ID, 'inc-stopped')
+    setLocalPtyProvider(provider)
+    const condition = {
+      workspace: 'repo::/sleep',
+      target: {
+        paneKey: 'tab:leaf',
+        ptyId: PTY_ID,
+        ptyIncarnationId: 'inc-stopped',
+        authorityGeneration: 'authority-1',
+        sourceUpdatedAt: 1
+      }
+    }
+    return { ports, shutdown, current, inspection, condition }
+  }
+  it('checks the process again after provider startup and never stops a replacement', async () => {
+    const h = conditionalHarness()
+    h.ports.getLocalPtyProviderStartupPromise = () => {
+      ptyIncarnationById.set(PTY_ID, 'inc-replacement')
+      return undefined
+    }
+    await expect(
+      stopRendererOwnedPty(asKillIpcDeps(h.ports), {
+        id: PTY_ID,
+        keepHistory: true,
+        sleepCondition: h.condition
+      })
+    ).rejects.toThrow('sleep_target_changed')
+    expect(h.shutdown).not.toHaveBeenCalled()
+    expect(h.ports.runtime.markPtyStopRequested).not.toHaveBeenCalled()
+    expect(ptyIncarnationById.get(PTY_ID)).toBe('inc-replacement')
+  })
+  it('does not stop a same-process successor that retired the staged capture', async () => {
+    const h = conditionalHarness()
+    h.current.mockReturnValue(false)
+    await expect(
+      stopRendererOwnedPty(asKillIpcDeps(h.ports), {
+        id: PTY_ID,
+        keepHistory: true,
+        sleepCondition: h.condition
+      })
+    ).rejects.toThrow('sleep_target_changed')
+    expect(h.shutdown).not.toHaveBeenCalled()
+    expect(h.ports.runtime.markPtyStopRequested).not.toHaveBeenCalled()
+  })
+  it('keeps terminal history when the exact pane still admits its stop', async () => {
+    const h = conditionalHarness()
+    await stopRendererOwnedPty(asKillIpcDeps(h.ports), {
+      id: PTY_ID,
+      keepHistory: true,
+      sleepCondition: h.condition
+    })
+    expect(h.shutdown).toHaveBeenCalledWith(expect.anything(), PTY_ID, {
+      immediate: true,
+      keepHistory: true
+    })
+    expect(h.ports.sendPtyExitToRenderer).toHaveBeenCalledWith(
+      expect.objectContaining({ id: PTY_ID, incarnationId: 'inc-stopped' })
+    )
+  })
+})

@@ -1,18 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import type {
-  TerminalLayoutSnapshot,
-  TerminalTab
-} from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
+import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
 
 const LEAF_ID_1 = '22222222-2222-4222-8222-222222222222'
-const LEAF_ID_1_SECOND = '77777777-7777-4777-8777-777777777777'
 const PANE_KEY_1 = makePaneKey('tab-1', LEAF_ID_1)
 const PANE_KEY_2 = makePaneKey('tab-2', '33333333-3333-4333-8333-333333333333')
 const PANE_KEY_3 = makePaneKey('tab-3', '55555555-5555-4555-8555-555555555555')
@@ -50,97 +45,7 @@ function makeEntry(
   }
 }
 
-function makeRetained(
-  paneKey: string,
-  worktreeId: string,
-  startedAt: number,
-  overrides?: Partial<RetainedAgentEntry>
-): RetainedAgentEntry {
-  const tab = makeTab(paneKey.slice(0, paneKey.indexOf(':')))
-  return {
-    entry: makeEntry(paneKey, startedAt),
-    worktreeId,
-    tab,
-    agentType: 'claude',
-    startedAt,
-    ...overrides
-  }
-}
-
-function makeSinglePaneLayout(leafId: string): TerminalLayoutSnapshot {
-  return {
-    root: { type: 'leaf', leafId },
-    activeLeafId: leafId,
-    expandedLeafId: null
-  }
-}
-
-function makeSplitPaneLayout(firstLeafId: string, secondLeafId: string): TerminalLayoutSnapshot {
-  return {
-    root: {
-      type: 'split',
-      direction: 'horizontal',
-      first: { type: 'leaf', leafId: firstLeafId },
-      second: { type: 'leaf', leafId: secondLeafId }
-    },
-    activeLeafId: firstLeafId,
-    expandedLeafId: null
-  }
-}
-
 describe('buildWorktreeAgentRows', () => {
-  it('prefers a live row over a retained snapshot with the same paneKey', () => {
-    const liveEntry = makeEntry(PANE_KEY_1, 2000)
-    const rows = buildWorktreeAgentRows({
-      tabs: [makeTab('tab-1')],
-      entries: [liveEntry],
-      retained: [makeRetained(PANE_KEY_1, 'wt-1', 1000)],
-      now: 3000
-    })
-
-    expect(rows).toHaveLength(1)
-    expect(rows[0].entry).toBe(liveEntry)
-    expect(rows[0].startedAt).toBe(2000)
-  })
-
-  it('dedupes retained legacy numeric rows for a single current stable pane', () => {
-    const liveEntry = makeEntry(PANE_KEY_1, 2000, {
-      state: 'working',
-      agentType: 'copilot',
-      prompt: 'current turn'
-    })
-    const rows = buildWorktreeAgentRows({
-      tabs: [makeTab('tab-1')],
-      entries: [liveEntry],
-      retained: [makeRetained('tab-1:1', 'wt-1', 1000), makeRetained('tab-1:2', 'wt-1', 1500)],
-      terminalLayoutsByTabId: {
-        'tab-1': makeSinglePaneLayout(LEAF_ID_1)
-      },
-      now: 3000
-    })
-
-    expect(rows.map((row) => row.paneKey)).toEqual([PANE_KEY_1])
-  })
-
-  it('keeps a retained legacy numeric row for a different split pane', () => {
-    const liveEntry = makeEntry(PANE_KEY_1, 2000, {
-      state: 'working',
-      agentType: 'copilot',
-      prompt: 'current turn'
-    })
-    const rows = buildWorktreeAgentRows({
-      tabs: [makeTab('tab-1')],
-      entries: [liveEntry],
-      retained: [makeRetained('tab-1:1', 'wt-1', 1000), makeRetained('tab-1:2', 'wt-1', 1500)],
-      terminalLayoutsByTabId: {
-        'tab-1': makeSplitPaneLayout(LEAF_ID_1, LEAF_ID_1_SECOND)
-      },
-      now: 3000
-    })
-
-    expect(rows.map((row) => row.paneKey)).toEqual(['tab-1:2', PANE_KEY_1])
-  })
-
   it('keeps simultaneous worktree-attributed agents in a deterministic order', () => {
     const first = makeEntry(PANE_KEY_1, 1000, {
       state: 'working',
@@ -165,7 +70,7 @@ describe('buildWorktreeAgentRows', () => {
       buildWorktreeAgentRows({
         tabs: [],
         entries,
-        retained: [],
+
         now: 2000
       }).map((row) => row.paneKey)
 
@@ -193,7 +98,7 @@ describe('buildWorktreeAgentRows', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],
       entries: [child],
-      retained: [],
+
       runtimePaneTitlesByTabId: {
         'tab-1': {
           1: 'Codex working'
@@ -203,7 +108,11 @@ describe('buildWorktreeAgentRows', () => {
         'tab-1': ['pty-parent']
       },
       terminalLayoutsByTabId: {
-        'tab-1': makeSinglePaneLayout(LEAF_ID_1)
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_ID_1 },
+          activeLeafId: LEAF_ID_1,
+          expandedLeafId: null
+        }
       },
       now: 2000
     })

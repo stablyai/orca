@@ -8,7 +8,6 @@ import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { registerAgentSubjectReadCapture } from '@/attention/agent-subject-read-actions'
 import ActivityPrototypePage from './ActivityPrototypePage'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -71,28 +70,22 @@ afterEach(() => {
   document.body.replaceChildren()
 })
 
-function seedRetainedThread(stampedAt: number, lastAssistantMessage: string): void {
+function seedCompletedThread(stampedAt: number, lastAssistantMessage: string): void {
   useAppStore.setState({
     repos: [repo],
     worktreesByRepo: { [repo.id]: [worktree] },
-    tabsByWorktree: { [worktree.id]: [] },
-    retainedAgentsByPaneKey: {
+    tabsByWorktree: { [worktree.id]: [tab] },
+    agentStatusByPaneKey: {
       [PANE_A]: {
-        entry: {
-          state: 'done',
-          prompt: PROMPT,
-          updatedAt: stampedAt,
-          stateStartedAt: stampedAt,
-          paneKey: PANE_A,
-          terminalTitle: 'Claude',
-          stateHistory: [],
-          agentType: 'claude',
-          lastAssistantMessage
-        },
-        worktreeId: worktree.id,
-        tab,
+        state: 'done',
+        prompt: PROMPT,
+        updatedAt: stampedAt,
+        stateStartedAt: stampedAt,
+        paneKey: PANE_A,
+        terminalTitle: 'Claude',
+        stateHistory: [],
         agentType: 'claude',
-        startedAt: stampedAt
+        lastAssistantMessage
       }
     },
     activeRepoId: repo.id,
@@ -101,12 +94,7 @@ function seedRetainedThread(stampedAt: number, lastAssistantMessage: string): vo
 }
 
 function seedThreadStampedByLocalClock(): void {
-  seedRetainedThread(Date.now() - 60_000, 'finished locally')
-}
-
-// Remote clock skew can place a turn after the local acknowledgement time.
-function seedThreadStampedAheadOfLocalClock(): void {
-  seedRetainedThread(Date.now() + 60_000, 'finished on the execution host')
+  seedCompletedThread(Date.now() - 60_000, 'finished locally')
 }
 
 async function mountActivityPage(): Promise<void> {
@@ -135,62 +123,7 @@ async function selectSeededThread(): Promise<void> {
   })
 }
 
-function countAcknowledgeWrites(): { readonly count: () => number; stop: () => void } {
-  let writes = 0
-  const unsubscribe = useAppStore.subscribe((next, prev) => {
-    if (next.acknowledgedAgentsByPaneKey !== prev.acknowledgedAgentsByPaneKey) {
-      writes += 1
-    }
-  })
-  return { count: () => writes, stop: unsubscribe }
-}
-
 describe('Activity auto mark-read loop (React #185)', () => {
-  it('re-acknowledges when a new turn lands on the still-selected thread', async () => {
-    const intents: string[] = []
-    // An automatic read is a view: it must not claim the edges a click would cover.
-    const stopCapture = registerAgentSubjectReadCapture(PANE_A, (intent) => {
-      intents.push(intent)
-      return null
-    })
-    seedThreadStampedAheadOfLocalClock()
-    await mountActivityPage()
-    const acknowledgeWrites = countAcknowledgeWrites()
-
-    try {
-      await selectSeededThread()
-      expect(acknowledgeWrites.count()).toBe(1)
-
-      const nextTurnAt = Date.now() + 120_000
-      await act(async () => {
-        useAppStore.setState((s) => {
-          const previous = s.retainedAgentsByPaneKey[PANE_A]
-          return {
-            retainedAgentsByPaneKey: {
-              [PANE_A]: {
-                ...previous,
-                startedAt: nextTurnAt,
-                entry: {
-                  ...previous.entry,
-                  updatedAt: nextTurnAt,
-                  stateStartedAt: nextTurnAt,
-                  lastAssistantMessage: 'second turn on the execution host'
-                }
-              }
-            }
-          }
-        })
-        await new Promise((resolve) => setTimeout(resolve, 50))
-      })
-    } finally {
-      acknowledgeWrites.stop()
-      stopCapture()
-    }
-
-    expect(acknowledgeWrites.count()).toBe(2)
-    expect(intents).toEqual(['view', 'view'])
-  })
-
   it('leaves the selected thread unread after the user marks it unread', async () => {
     seedThreadStampedByLocalClock()
     await mountActivityPage()

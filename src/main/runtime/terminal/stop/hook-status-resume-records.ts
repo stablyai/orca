@@ -10,6 +10,7 @@ import {
 } from '../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
 import {
   isPaneSleepRecord,
+  type OwnedPaneAgentRecord,
   normalizeAgentProviderSession,
   type SleepingAgentLaunchConfig,
   type SleepingAgentSessionRecord
@@ -32,7 +33,7 @@ export type PaneLaunchConfigOf = (
 /** Main's word on the launch, else the pane's earlier record of this session when main can't tell. */
 function statusLaunchConfig(
   statement: SleepingAgentLaunchConfig | null | undefined,
-  existing: SleepingAgentSessionRecord | undefined,
+  existing: OwnedPaneAgentRecord | undefined,
   status: ResumeRecordStatus,
   keepsEarlier = true
 ): SleepingAgentLaunchConfig | undefined {
@@ -45,7 +46,7 @@ function statusLaunchConfig(
  *  replaces it nor inherits its recipe. */
 function keepsSleepSnapshot(
   statement: SleepingAgentLaunchConfig | null | undefined,
-  existing: SleepingAgentSessionRecord | undefined,
+  existing: OwnedPaneAgentRecord | undefined,
   status: ResumeRecordStatus
 ): boolean {
   return (
@@ -73,10 +74,21 @@ export function resumeStatusFromHookRow(
     state: row.state,
     prompt: row.prompt,
     updatedAt: row.receivedAt,
+    stateStartedAt: row.stateStartedAt,
+    previousCompletion: row.previousCompletion,
+    sessionBoundary: row.sessionBoundary,
+    turnCompletedAt: row.turnCompletedAt,
+    turnStartedAt: row.turnStartedAt,
+    turnEndedAt: row.turnEndedAt,
+    turnEndDisposition: row.turnEndDisposition,
+    isReplay: row.isReplay,
+    restoredUnconfirmed: row.restoredUnconfirmed,
+    evidenceObservedAt: row.evidenceObservedAt,
     ...(providerSession ? { providerSession } : {}),
     // Why: the SSH host boundary keeps the id; a WSL relay tag is local transport.
     connectionId: isLocalHookConnectionId(row.connectionId) ? null : row.connectionId,
     lastAssistantMessage: row.lastAssistantMessage,
+    lastAssistantMessageIsToolOutput: row.lastAssistantMessageIsToolOutput,
     interrupted: row.interrupted,
     ...(row.mainAgent ? { mainAgent: row.mainAgent } : {}),
     ...(row.worktreeId ? { worktreeId: row.worktreeId } : {})
@@ -109,9 +121,6 @@ export function hookStatusResumeCommand(args: {
   const existing = session.sleepingAgentSessionsByPaneKey?.[status.paneKey]
   const retainsResumableIdentity = statusRetainsResumableIdentity(status, status.providerSession)
   const statement = args.launchConfigOf(status.paneKey, status.agentType)
-  if (keepsSleepSnapshot(statement, existing, status)) {
-    return null
-  }
   const live = liveResumeRecord({
     entry: status,
     retainsResumableIdentity,
@@ -125,7 +134,7 @@ export function hookStatusResumeCommand(args: {
       status.state !== 'done' || retainsResumableIdentity
     )
   })
-  const change = liveResumeRecordChange(existing, live)
+  const change = liveResumeRecordChange(existing, live, status)
   if (!change) {
     return null
   }
@@ -161,5 +170,15 @@ export function quitResumeRecords(args: {
     })
     // Only a pane this partition holds keeps a record here.
     return record && tabFor(record.worktreeId) ? [record] : []
+  })
+}
+
+export function resumeStatusesFromHookRows(
+  rows: AgentStatusIpcPayload[],
+  previous: ReadonlyMap<string, PreviousHookStatus>
+): ResumeRecordStatus[] {
+  return rows.flatMap((row) => {
+    const status = resumeStatusFromHookRow(row, previous.get(row.paneKey))
+    return status ? [status] : []
   })
 }

@@ -1,11 +1,11 @@
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { OwnedPaneAgentRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { isWorkspaceSleepRecord } from '../../../../shared/workspace-sleep'
+import { isExplicitPaneSleepRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import { recordLayoutApply } from '@/runtime/workspace-layout/commands/layout-apply-send'
 import type { AppState } from '../types'
 
-type SleepingRecords = Readonly<Record<string, SleepingAgentSessionRecord>>
+type SleepingRecords = Readonly<Record<string, OwnedPaneAgentRecord>>
 
 /** Each tab's entries; a legacy pane key names no pane main holds. */
 function byTab<T>(entries: readonly T[], paneKeyOf: (entry: T) => string): Map<string, T[]> {
@@ -44,9 +44,9 @@ export function changedSleepingRecords(
   state: HeldRecordsState,
   previous: SleepingRecords,
   next: SleepingRecords
-): { recorded: SleepingAgentSessionRecord[]; dropped: [string, SleepingAgentSessionRecord][] } {
-  const held = ([paneKey, record]: [string, SleepingAgentSessionRecord]): boolean =>
-    !isWorkspaceSleepRecord(record) &&
+): { recorded: OwnedPaneAgentRecord[]; dropped: [string, OwnedPaneAgentRecord][] } {
+  const held = ([paneKey, record]: [string, OwnedPaneAgentRecord]): boolean =>
+    !isExplicitPaneSleepRecord(record) &&
     (state.tabsByWorktree[record.worktreeId]?.some(
       (tab) => tab.id === parsePaneKey(paneKey)?.tabId
     ) ??

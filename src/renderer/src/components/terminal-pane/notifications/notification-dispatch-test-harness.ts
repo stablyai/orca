@@ -29,7 +29,6 @@ export type NotificationDispatchMockState = {
   suppressedPtyExitIds: Record<string, boolean>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
   browserTabsByWorktree: Record<string, unknown[]>
-  retainedAgentsByPaneKey: Record<string, { worktreeId: string }>
   agentLaunchConfigByPaneKey: Record<
     string,
     { launchConfig?: { agentArgs: string }; identity: { agentType?: string } }
@@ -102,7 +101,7 @@ function buildNotificationDispatchMockState(): NotificationDispatchMockState {
       }
     },
     browserTabsByWorktree: {},
-    retainedAgentsByPaneKey: {},
+
     agentLaunchConfigByPaneKey: {},
     agentStatusByPaneKey: { [PANE_KEY]: makeAgentStatus(PANE_KEY) },
     runtimeAgentOrchestrationByPaneKey: {},

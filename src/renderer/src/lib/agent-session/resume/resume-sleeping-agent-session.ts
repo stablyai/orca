@@ -1,9 +1,10 @@
-import { useAppStore } from '@/store/index'
-import { isWorkspaceSleepRecord } from '../../../../../shared/workspace-sleep'
 import {
+  isResumablePaneRecord,
   agentProviderSessionsEqual,
   type SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { useAppStore } from '@/store/index'
+import { isWorkspaceSleepRecord } from '../../../../../shared/workspace-sleep'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { getProviderSessionClaimKey } from '../../../../../shared/sleeping-record-legacy-pane-key'
@@ -156,6 +157,7 @@ function providerSessionOwnedElsewhere(
   // Claim keys handle same-workspace duplicates; finished notes, moved hosts and foreign-machine records cannot claim sessions.
   return Object.values(state.sleepingAgentSessionsByPaneKey).some(
     (other) =>
+      isResumablePaneRecord(other) &&
       other.worktreeId !== record.worktreeId &&
       other.agent === record.agent &&
       !isInvalidWorktreeActivationRecord(other) &&
@@ -175,7 +177,9 @@ function isInvalidWorktreeActivationRecord(record: SleepingAgentSessionRecord): 
     return true
   }
   return (
-    record.state !== 'done' && record.capturedAt - record.updatedAt > AGENT_STATUS_STALE_AFTER_MS
+    record.origin !== 'worktree-sleep' &&
+    record.state !== 'done' &&
+    record.capturedAt - record.updatedAt > AGENT_STATUS_STALE_AFTER_MS
   )
 }
 
@@ -222,6 +226,7 @@ export function resumeSleepingAgentSessionsForWorktree(
   }
   // Main resumes workspace sleep records in their own panes; only stranded ones get a fresh tab here.
   const worktreeRecords = Object.values(state.sleepingAgentSessionsByPaneKey)
+    .filter(isResumablePaneRecord)
     .filter(
       (record) =>
         record.worktreeId === worktreeId &&

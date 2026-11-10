@@ -1,3 +1,4 @@
+import { rankWorktreeStatus } from '../../../../../../shared/worktree-status-rollup'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
@@ -89,7 +90,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
         [paneKey]: makeAgentStatusEntry({ paneKey, worktreeId, state: 'working' })
       },
       migrationUnsupportedByPtyId: {},
-      retainedAgentsByPaneKey: {},
+
       runtimeAgentOrchestrationByPaneKey: {}
     }
 
@@ -110,8 +111,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
     const replacementPaneKey = makePaneKey('tab-3', LEAF_ID)
     const sharedInputs = {
       migrationUnsupportedByPtyId: {},
-      runtimeAgentOrchestrationByPaneKey: {},
-      retainedAgentsByPaneKey: {}
+      runtimeAgentOrchestrationByPaneKey: {}
     }
     const initial: AgentActivityInput = {
       ...sharedInputs,
@@ -174,8 +174,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
       agentStatusEpoch: 0,
       agentStatusByPaneKey: { [paneKey]: entry },
       migrationUnsupportedByPtyId: {},
-      runtimeAgentOrchestrationByPaneKey: {},
-      retainedAgentsByPaneKey: {}
+      runtimeAgentOrchestrationByPaneKey: {}
     }
 
     const summary = selectWorktreeAgentActivitySummary(state, 'repo::/wt-1')
@@ -186,3 +185,78 @@ describe('selectWorktreeAgentActivitySummary', () => {
     expect(summary.hasLiveDone).toBe(false)
   })
 })
+
+it.each([false, true])(
+  'keeps an aged slept completion in the card until its exact pane closes (failed=%s)',
+  (failed) => {
+    const worktreeId = 'repo::/wt-sleep'
+    const paneKey = makePaneKey('sleep-tab', LEAF_ID)
+    vi.spyOn(Date, 'now').mockReturnValue(2_000_000)
+    const state: AgentActivityInput = {
+      tabsByWorktree: { [worktreeId]: [makeTab('sleep-tab', worktreeId)] },
+      terminalLayoutsByTabId: {
+        'sleep-tab': {
+          root: { type: 'leaf', leafId: LEAF_ID },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null,
+          ptyIdsByLeafId: {}
+        }
+      },
+      sleepingAgentSessionsByPaneKey: {
+        [paneKey]: {
+          kind: 'display-only',
+          paneKey,
+          tabId: 'sleep-tab',
+          worktreeId,
+          origin: 'worktree-sleep',
+          capturedAt: 1_500,
+          completion: { kind: 'current' },
+          display: {
+            state: 'done',
+            prompt: 'finished task',
+            updatedAt: 1_000,
+            stateStartedAt: 1_000,
+            ...(failed
+              ? { mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 1_000 } as const }
+              : {})
+          }
+        }
+      },
+      agentStatusEpoch: 0,
+      agentStatusByPaneKey: {},
+      migrationUnsupportedByPtyId: {},
+      runtimeAgentOrchestrationByPaneKey: {}
+    }
+    const summary = selectWorktreeAgentActivitySummary(state, worktreeId)
+    expect(summary.hasFailed).toBe(false)
+    expect(summary.hasSleptFailed).toBe(failed)
+    expect(rankWorktreeStatus('active', summary)).toBe(failed ? 'failed' : 'done')
+    const awakeKey = makePaneKey('awake-tab', LEAF_ID)
+    const working = selectWorktreeAgentActivitySummary(
+      {
+        ...state,
+        tabsByWorktree: {
+          [worktreeId]: [...state.tabsByWorktree[worktreeId], makeTab('awake-tab', worktreeId)]
+        },
+        agentStatusByPaneKey: {
+          [awakeKey]: {
+            ...makeAgentStatusEntry({ paneKey: awakeKey, state: 'working', worktreeId }),
+            updatedAt: 2_000_000
+          }
+        }
+      },
+      worktreeId
+    )
+    expect(rankWorktreeStatus('active', working)).toBe('working')
+    expect(rankWorktreeStatus('monitoring', summary)).toBe('monitoring')
+    expect(summary.hasLiveDone).toBe(!failed)
+    expect(summary.agentStatusPaneIdsByTabId['sleep-tab']).toEqual(new Set([LEAF_ID]))
+    const closed = selectWorktreeAgentActivitySummary(
+      { ...state, terminalLayoutsByTabId: {} },
+      worktreeId
+    )
+    expect(closed.hasLiveDone).toBe(false)
+    expect(closed.hasFailed).toBe(false)
+    expect(closed.hasSleptFailed).toBe(false)
+  }
+)

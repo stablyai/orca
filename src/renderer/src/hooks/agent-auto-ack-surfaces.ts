@@ -1,3 +1,4 @@
+import { sleptAgentStatusByPaneKey } from '@/components/sidebar/workspace-card/activity/worktree-slept-agent-index'
 import type { useAppStore } from '@/store'
 import type { AgentAttentionSurface } from '@/attention/agent-attention-contract'
 import {
@@ -29,7 +30,7 @@ export function surfaceForAutoAckTarget(
 export function readAgentAttentionTurnRecords(state: StoreSnapshot): AgentAttentionTurnRecords {
   return {
     liveTurns: state.agentStatusByPaneKey,
-    retainedTurns: state.retainedAgentsByPaneKey,
+    sleepingTurns: sleptAgentStatusByPaneKey(state),
     acknowledgedTurnStartedAt: state.acknowledgedAgentsByPaneKey
   }
 }

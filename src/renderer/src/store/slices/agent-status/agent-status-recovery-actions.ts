@@ -1,4 +1,4 @@
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { OwnedPaneAgentRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import { collectSleepingAgentSessionRecordsForWorktree } from './agent-status-recovery-collection'
@@ -48,7 +48,7 @@ export function createAgentStatusRecoveryActions(
     captureAllSleepingAgentSessions: (mode) => {
       set((s) => {
         const capturedAt = Date.now()
-        const next: Record<string, SleepingAgentSessionRecord> = {
+        const next: Record<string, OwnedPaneAgentRecord> = {
           ...s.sleepingAgentSessionsByPaneKey
         }
         let changed = false
@@ -90,7 +90,7 @@ export function createAgentStatusRecoveryActions(
     clearSleepingAgentSessionsByWorktree: (worktreeId) => {
       set((s) => {
         let changed = false
-        const next: Record<string, SleepingAgentSessionRecord> = {}
+        const next: Record<string, OwnedPaneAgentRecord> = {}
         const removed: string[] = []
         for (const [paneKey, record] of Object.entries(s.sleepingAgentSessionsByPaneKey)) {
           if (record.worktreeId === worktreeId) {
@@ -120,7 +120,7 @@ export function createAgentStatusRecoveryActions(
     pruneSleepingAgentSessions: (validWorktreeIds) => {
       set((s) => {
         let changed = false
-        const next: Record<string, SleepingAgentSessionRecord> = {}
+        const next: Record<string, OwnedPaneAgentRecord> = {}
         const removed: string[] = []
         for (const [paneKey, record] of Object.entries(s.sleepingAgentSessionsByPaneKey)) {
           if (!validWorktreeIds.has(record.worktreeId)) {

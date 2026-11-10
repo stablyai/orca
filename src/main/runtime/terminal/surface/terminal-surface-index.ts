@@ -1,3 +1,4 @@
+import { isResumablePaneRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 // Project main-owned panes from layout, including older builds' spilled local tabs; paired-server workspaces remain window-mirrored (#18202).
 
 import {
@@ -16,7 +17,8 @@ import type {
   WorkspaceLayout
 } from '../../../../shared/workspace-layout/workspace-layout-model'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
-import { bindingOf } from './pane-live-facts'
+import { bindingOf, type MainPaneFacts, type BoundTerminal } from './pane-live-facts'
+export type { MainPaneFacts, BoundTerminal } from './pane-live-facts'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
@@ -30,11 +32,6 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import { loadChatTabLayout } from '../../agent-session/agent-session-tab-layout'
 
 type LoadedPartition = Pick<LoadedWorkspaceLayout, 'layout' | 'desktopView' | 'facts'>
-
-export type MainPaneFacts = { binding: string; sleeping: boolean; incarnationId?: string }
-
-/** The terminal a pane's binding names: same workspace, and the stamped incarnation if any. */
-export type BoundTerminal = { worktreeId: string; incarnationId: string | null }
 
 /** Main's terminal surfaces, in the window graph's shape so the graph's readers take them as is. */
 export type MainTerminalSurfaces = {
@@ -168,7 +165,7 @@ export class TerminalSurfaceIndex {
             }
             paneFacts.set(`${tab.entityId}::${leafId}`, {
               binding: bindingOf(leaf),
-              sleeping: leaf.sleeping !== undefined,
+              sleeping: leaf.sleeping !== undefined && isResumablePaneRecord(leaf.sleeping),
               ...(leaf.incarnationId ? { incarnationId: leaf.incarnationId } : {})
             })
           }

@@ -17,6 +17,7 @@ export type AgentPaneActivityFlags = {
   hasLiveWorking: boolean
   hasLiveMonitoring: boolean
   hasFailed: boolean
+  hasSleptFailed?: boolean
   hasInterrupted: boolean
   hasUnconfirmed: boolean
   hasLiveDone: boolean
@@ -70,10 +71,7 @@ export function applyAgentPaneActivityFlags(
 /** Overlay explicit agent evidence on the terminal-title heuristic; the sidebar dot's priority order. */
 export function rankWorktreeStatus(
   heuristic: WorktreeStatus,
-  flags: Partial<AgentPaneActivityFlags> & {
-    hasRetainedDone?: boolean
-    hasRetainedFailed?: boolean
-  }
+  flags: Partial<AgentPaneActivityFlags>
 ): WorktreeStatus {
   if (flags.hasPermission) {
     return 'permission'
@@ -93,8 +91,8 @@ export function rankWorktreeStatus(
   if (flags.hasLiveMonitoring || heuristic === 'monitoring') {
     return 'monitoring'
   }
-  // Why: a departed agent's failure has no expiry, so it must not pin the card over live work.
-  if (flags.hasRetainedFailed) {
+  // A sleeping failure has no expiry and must not hide current work.
+  if (flags.hasSleptFailed) {
     return 'failed'
   }
   // Why: an end Orca cannot prove is not a finish, and unlike a user's Stop it is news.
@@ -105,7 +103,7 @@ export function rankWorktreeStatus(
   if (flags.hasInterrupted) {
     return 'interrupted'
   }
-  if (flags.hasLiveDone || flags.hasRetainedDone) {
+  if (flags.hasLiveDone) {
     return 'done'
   }
   return heuristic

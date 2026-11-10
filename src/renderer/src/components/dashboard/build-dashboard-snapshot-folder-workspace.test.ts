@@ -89,7 +89,7 @@ function state(): DashboardSnapshotState {
     projectGroups: [projectGroup()],
     tabsByWorktree: { [WORKSPACE_ID]: [tab()] },
     agentStatusByPaneKey: { [PANE_KEY]: entry() },
-    retainedAgentsByPaneKey: {},
+
     migrationUnsupportedByPtyId: {},
     runtimeAgentOrchestrationByPaneKey: {},
     terminalLayoutsByTabId: {

@@ -1,27 +1,9 @@
 import type { AppState } from '../../types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalPaneLayoutNode } from '../../../../../shared/workspace-layout/terminal-tab-types'
-import type { RetainedAgentEntry } from './agent-status-contract'
 import '../../../../../shared/agent-status/contracts/agent-status-types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { getTabIdFromPaneKey } from './agent-status-pane-key-tab-binding'
-
-const MAX_RETAINED_AGENTS = 500
-
-export function capRetainedAgents(
-  retained: Record<string, RetainedAgentEntry>,
-  maxEntries = MAX_RETAINED_AGENTS
-): Record<string, RetainedAgentEntry> {
-  const keys = Object.keys(retained)
-  if (keys.length <= maxEntries) {
-    return retained
-  }
-  const capped: Record<string, RetainedAgentEntry> = {}
-  for (const key of keys.slice(keys.length - maxEntries)) {
-    capped[key] = retained[key]
-  }
-  return capped
-}
 
 // Why: missed pane teardown can leak heavy live rows in any state and amplify every status-map copy (#9872).
 export const MAX_LIVE_AGENT_STATUSES = 500

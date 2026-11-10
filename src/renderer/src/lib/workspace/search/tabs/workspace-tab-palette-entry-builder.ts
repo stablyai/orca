@@ -49,7 +49,6 @@ export function buildSearchableWorkspaceTabEntries({
   tabsByWorktree,
   openFiles,
   agentStatusByPaneKey,
-  retainedAgentsByPaneKey,
   sleepingAgentSessionsByPaneKey,
   activeGroupIdByWorktree,
   groupsByWorktree,
@@ -79,7 +78,6 @@ export function buildSearchableWorkspaceTabEntries({
   }
   const agentIndex = buildAgentMetadataTabIndex({
     agentStatusByPaneKey,
-    retainedAgentsByPaneKey,
     sleepingAgentSessionsByPaneKey
   })
   const ambiguousWorktreeIds = findAmbiguousWorktreeIds(ownershipWorktrees ?? worktrees)
@@ -202,7 +200,6 @@ export function buildSearchableWorkspaceTabEntries({
             launchAgent: terminalTab?.launchAgent,
             layout: terminalLayoutsByTabId?.[tab.entityId],
             agentStatusByPaneKey,
-            retainedAgentsByPaneKey,
             sleepingAgentSessionsByPaneKey,
             paneForegroundAgentByPaneKey
           })

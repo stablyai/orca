@@ -9,10 +9,7 @@ import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-p
 
 type OrchestrationIndexState = Pick<
   AppState,
-  | 'agentStatusByPaneKey'
-  | 'retainedAgentsByPaneKey'
-  | 'runtimeAgentOrchestrationByPaneKey'
-  | 'tabsByWorktree'
+  'agentStatusByPaneKey' | 'runtimeAgentOrchestrationByPaneKey' | 'tabsByWorktree'
 > &
   VisibleOrchestrationState
 
@@ -31,7 +28,6 @@ type TabMembershipCache = {
 type PaneWorktreeProjectionCache = {
   runtimeSource: OrchestrationIndexState['runtimeAgentOrchestrationByPaneKey']
   liveSource: OrchestrationIndexState['agentStatusByPaneKey']
-  retainedSource: OrchestrationIndexState['retainedAgentsByPaneKey']
   representedSource: OrchestrationIndexState['unifiedTabsByWorktree']
   paneWorktreeIds: readonly (string | undefined)[]
 }
@@ -39,7 +35,7 @@ type PaneWorktreeProjectionCache = {
 type OrchestrationIndexCache = {
   runtimeSource: OrchestrationIndexState['runtimeAgentOrchestrationByPaneKey']
   tabsSource: OrchestrationIndexState['tabsByWorktree']
-  /** @see projectPaneWorktreeIds — the build's whole view of the live and retained maps. */
+  /** @see projectPaneWorktreeIds — the build's whole view of the live map. */
   paneWorktreeIds: readonly (string | undefined)[]
   recordsByWorktree: ReadonlyMap<string, RuntimeOrchestrationRecord>
 }
@@ -78,19 +74,17 @@ export function _getWorktreeAgentOrchestrationIndexBuildCountForTest(): number {
   return indexBuildCount
 }
 
-/** Key on live/retained attribution for exact runtime pane keys, preserving early SSH rows and ignoring stale entry.paneKey fields. */
+/** Key on live attribution for exact runtime pane keys, preserving early SSH rows and ignoring stale entry.paneKey fields. */
 function projectPaneWorktreeIds(
   runtimeSource: OrchestrationIndexState['runtimeAgentOrchestrationByPaneKey'],
   runtimeEntries: readonly [string, AgentStatusOrchestrationContext][],
   agentStatusByPaneKey: OrchestrationIndexState['agentStatusByPaneKey'],
-  retainedAgentsByPaneKey: OrchestrationIndexState['retainedAgentsByPaneKey'],
   state: OrchestrationIndexState
 ): readonly (string | undefined)[] {
   // Cache by map identity so all cards share one attribution scan per publication.
   if (
     paneWorktreeProjectionCache?.runtimeSource === runtimeSource &&
     paneWorktreeProjectionCache.liveSource === agentStatusByPaneKey &&
-    paneWorktreeProjectionCache.retainedSource === retainedAgentsByPaneKey &&
     paneWorktreeProjectionCache.representedSource === state.unifiedTabsByWorktree
   ) {
     return paneWorktreeProjectionCache.paneWorktreeIds
@@ -102,7 +96,6 @@ function projectPaneWorktreeIds(
   for (const [paneKey, context] of runtimeEntries) {
     paneWorktreeIds.push(
       agentStatusByPaneKey[paneKey]?.worktreeId,
-      retainedAgentsByPaneKey[paneKey]?.worktreeId,
       represented.get(paneKey),
       represented.size > 0 && context.parentPaneKey
         ? represented.get(context.parentPaneKey)
@@ -112,7 +105,6 @@ function projectPaneWorktreeIds(
   paneWorktreeProjectionCache = {
     runtimeSource,
     liveSource: agentStatusByPaneKey,
-    retainedSource: retainedAgentsByPaneKey,
     representedSource: state.unifiedTabsByWorktree,
     paneWorktreeIds
   }
@@ -204,28 +196,24 @@ function buildIndex(
         targets.add(worktreeId)
       }
     }
-    // Keep parent links reachable before child tabs hydrate or after their status is retained.
+    // Keep parent links reachable before child tabs hydrate or after their live status disappears.
     if (parsedParent) {
       for (const worktreeId of worktreeIdsByTabId.get(parsedParent.tabId) ?? []) {
         targets.add(worktreeId)
       }
     }
     const liveWorktreeId = paneWorktreeIds[projectionCursor]
-    const retainedWorktreeId = paneWorktreeIds[projectionCursor + 1]
-    const representedWorktreeId = paneWorktreeIds[projectionCursor + 2]
-    const parentWorktreeId = paneWorktreeIds[projectionCursor + 3]
+    const representedWorktreeId = paneWorktreeIds[projectionCursor + 1]
+    const parentWorktreeId = paneWorktreeIds[projectionCursor + 2]
     if (representedWorktreeId) {
       targets.add(representedWorktreeId)
     }
     if (parentWorktreeId) {
       targets.add(parentWorktreeId)
     }
-    projectionCursor += 4
+    projectionCursor += 3
     if (typeof liveWorktreeId === 'string') {
       targets.add(liveWorktreeId)
-    }
-    if (typeof retainedWorktreeId === 'string') {
-      targets.add(retainedWorktreeId)
     }
 
     for (const worktreeId of targets) {
@@ -253,7 +241,7 @@ export function selectWorktreeAgentOrchestrationIndex(
   state: OrchestrationIndexState
 ): ReadonlyMap<string, RuntimeOrchestrationRecord> {
   const runtimeAgentOrchestrationByPaneKey = selectVisibleAgentOrchestration(state)
-  // Cache context entries separately so unrelated live/retained churn cannot force enumeration.
+  // Cache context entries separately so unrelated live churn cannot force enumeration.
   if (runtimeEntriesCache?.source !== runtimeAgentOrchestrationByPaneKey) {
     runtimeEntriesCache = {
       source: runtimeAgentOrchestrationByPaneKey,
@@ -275,7 +263,6 @@ export function selectWorktreeAgentOrchestrationIndex(
     runtimeAgentOrchestrationByPaneKey,
     runtimeEntries,
     state.agentStatusByPaneKey ?? EMPTY_SOURCE,
-    state.retainedAgentsByPaneKey ?? EMPTY_SOURCE,
     state
   )
   if (

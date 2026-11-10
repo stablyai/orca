@@ -1,3 +1,7 @@
+import {
+  isPaneSleepRecord,
+  isResumablePaneRecord
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import type {
@@ -57,7 +61,12 @@ export function createAgentStatusProviderSessionActions(
       settleAttentionRemovedBy(set, get, () =>
         set((s, changedPaneKeys) => {
           const existingStatus = s.agentStatusByPaneKey[paneKey]
-          const existingRecord = s.sleepingAgentSessionsByPaneKey[paneKey]
+          const ownedRecord = s.sleepingAgentSessionsByPaneKey[paneKey]
+          if (ownedRecord && isPaneSleepRecord(ownedRecord)) {
+            return s
+          }
+          const existingRecord =
+            ownedRecord && isResumablePaneRecord(ownedRecord) ? ownedRecord : undefined
           if (
             (existingStatus && updatedAt < existingStatus.updatedAt) ||
             (existingRecord && updatedAt < existingRecord.updatedAt)
@@ -135,13 +144,6 @@ export function createAgentStatusProviderSessionActions(
             changedPaneKeys.add(paneKey)
             delete nextLive[paneKey]
           }
-          const nextRetained =
-            paneKey in s.retainedAgentsByPaneKey
-              ? { ...s.retainedAgentsByPaneKey }
-              : s.retainedAgentsByPaneKey
-          if (nextRetained !== s.retainedAgentsByPaneKey) {
-            delete nextRetained[paneKey]
-          }
           const retiredPaneKeys = new Set([paneKey])
           // Identity mismatch clears sleeping launch config; clear registry too or returning old identity reuses stale args/env.
           let nextLaunchConfigs = s.agentLaunchConfigByPaneKey
@@ -164,7 +166,6 @@ export function createAgentStatusProviderSessionActions(
             ...(nextConversations !== s.agentConversationsByPaneKey
               ? { agentConversationsByPaneKey: nextConversations }
               : {}),
-            retainedAgentsByPaneKey: nextRetained,
             sleepingAgentSessionsByPaneKey: {
               ...s.sleepingAgentSessionsByPaneKey,
               [paneKey]: record

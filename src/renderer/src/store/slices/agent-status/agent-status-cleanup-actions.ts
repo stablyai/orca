@@ -51,7 +51,7 @@ export function createAgentStatusCleanupActions(
 
     removeAgentStatus: (paneKey) => {
       const current = get()
-      // PTY exit may mean unverified SSH loss; retained-only panes keep ack/cutoff/manual-unread state. Sweep only rows actually present (preserveActivityClearedState).
+      // Transient PTY loss removes occupancy; conversation identity survives until explicit pane retirement.
       if (
         !(paneKey in current.agentStatusByPaneKey) &&
         !(paneKey in current.agentLaunchConfigByPaneKey) &&

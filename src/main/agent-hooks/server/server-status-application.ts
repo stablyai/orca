@@ -1,3 +1,5 @@
+import { sameAgentStatusSessionOwner } from '../../../shared/agent-status/identity/agent-status-terminal-owner'
+import { previousPaneCompletion } from '../../../shared/agent-session/lifecycle/pane-agent-completion'
 import { deriveCliWriterTopology } from './cli-writer-observation'
 import { leadReplyOf, withAcceptedReply } from './server-accepted-reply'
 import { createHash } from 'node:crypto'
@@ -13,46 +15,14 @@ import type {
   AgentStatusObservationOrigin
 } from '../../../shared/agent-status/contracts/agent-status-observation'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
-import { mainAgentState } from '../../../shared/agent-status/lifecycle/main-agent-status'
 import { previousCodexTurnContext } from '../../../shared/agent-hook-listener/providers/codex-session-start'
 import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-state'
 import type { EnrichedAgentHookEventPayload } from './server-types'
-import { agentTypeToPromptSentAgentKind } from './server-status-identity'
+import { resolveTurnStartedAt, agentTypeToPromptSentAgentKind } from './server-status-identity'
 import { AgentHookServerStatusDisposition } from './server-status-disposition'
 
 // Evicting remembered evidence makes later replay fall back to its arrival time.
 const MAX_REMEMBERED_EVIDENCE_OBSERVATIONS = 1024
-
-/** Only live main-agent turn boundaries establish a start; replay and child events preserve it. */
-function resolveTurnStartedAt(
-  previous: EnrichedAgentHookEventPayload | undefined,
-  payload: AgentHookEventPayload,
-  at: number
-): number | undefined {
-  if (
-    payload.source !== undefined &&
-    payload.toolAgentId === undefined &&
-    payload.isReplay !== true &&
-    payload.providerSessionOnly !== true &&
-    isNewTurnEvent(payload.source, payload.hookEventName) &&
-    !(
-      payload.source === 'codex' &&
-      payload.hookEventName === 'SessionStart' &&
-      !payload.hasExplicitPrompt
-    )
-  ) {
-    return payload.payload.sessionBoundary === true ? undefined : at
-  }
-  // An undated return to work cannot inherit the completed turn's start.
-  if (
-    previous &&
-    mainAgentState(previous.payload) === 'done' &&
-    mainAgentState(payload.payload) !== 'done'
-  ) {
-    return undefined
-  }
-  return previous?.turnStartedAt
-}
 
 export abstract class AgentHookServerStatusApplication extends AgentHookServerStatusDisposition {
   protected refreshTerminalStatusEvidence(
@@ -85,6 +55,13 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
         ...payload,
         receivedAt: now,
         evidenceObservedAt: now,
+        previousCompletion: newRun
+          ? undefined
+          : previousPaneCompletion({
+              ...(mutationBefore ?? previous).payload,
+              ...(mutationBefore ?? previous),
+              updatedAt: (mutationBefore ?? previous).receivedAt
+            }),
         stateStartedAt,
         observation: this.stampObservation(payload, 'osc', now)
       },
@@ -181,6 +158,17 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
       {
         ...event,
         receivedAt: now,
+        previousCompletion:
+          previousTurn &&
+          previousTurn.payload.agentType === payload.payload.agentType &&
+          sameAgentStatusSessionOwner(previousTurn, payload)
+            ? previousPaneCompletion({
+                ...previousTurn.payload,
+                ...previousTurn,
+                updatedAt: previousTurn.receivedAt
+              })
+            : undefined,
+
         evidenceObservedAt: observedAt ?? this.resolveEvidenceObservedAt(payload, previous, now),
         stateStartedAt,
         // Producers cannot declare a main-agent turn start.

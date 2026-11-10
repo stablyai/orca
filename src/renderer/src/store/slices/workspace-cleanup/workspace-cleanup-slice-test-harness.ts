@@ -32,7 +32,7 @@ export function makeCandidate(
       browserTabCount: 0,
       diffCommentCount: 0,
       newestDiffCommentAt: null,
-      retainedDoneAgentCount: 0
+      finishedAgentCount: 0
     },
     git: {
       clean: true,
@@ -52,7 +52,7 @@ export function makeState(overrides: Partial<AppState> = {}): AppState {
     openFiles: [],
     editorDrafts: {},
     browserTabsByWorktree: {},
-    retainedAgentsByPaneKey: {},
+
     activeWorktreeId: null,
     agentStatusByPaneKey: {},
     runtimePaneTitlesByTabId: {},
@@ -72,7 +72,7 @@ export function createCleanupTestStore(removeWorktree: ReturnType<typeof vi.fn> 
         openFiles: [],
         editorDrafts: {},
         browserTabsByWorktree: {},
-        retainedAgentsByPaneKey: {},
+
         activeWorktreeId: null,
         agentStatusByPaneKey: {},
         runtimePaneTitlesByTabId: {},

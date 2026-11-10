@@ -1,10 +1,11 @@
+import { paneAgentRecordIdentity } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { OwnedPaneAgentRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { PaneForegroundAgentEntry } from '../../../store/slices/agent-status/pane-foreground-agent'
 
 export type PaneAgentSessionIdState = {
   agentStatusByPaneKey: Record<string, AgentStatusEntry | undefined>
-  sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord | undefined>
+  sleepingAgentSessionsByPaneKey: Record<string, OwnedPaneAgentRecord | undefined>
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry | undefined>
 }
 
@@ -21,5 +22,8 @@ export function resolvePaneAgentSessionId(
   if (live && live.restoredUnconfirmed !== true) {
     return live.providerSession?.id ?? null
   }
-  return state.sleepingAgentSessionsByPaneKey[paneKey]?.providerSession.id ?? null
+  return (
+    paneAgentRecordIdentity(state.sleepingAgentSessionsByPaneKey[paneKey]).providerSession?.id ??
+    null
+  )
 }

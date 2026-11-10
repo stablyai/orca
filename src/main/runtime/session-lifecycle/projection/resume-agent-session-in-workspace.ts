@@ -1,11 +1,12 @@
-import { OrcaRuntimeWithAgentSessionResumeOwnership } from './agent-session-resume-ownership'
-import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
+  isResumablePaneRecord,
   agentProviderSessionsEqual,
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata,
   type SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { OrcaRuntimeWithAgentSessionResumeOwnership } from './agent-session-resume-ownership'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   getConnectionExecutionHostId,
@@ -135,12 +136,14 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
     }
     const records = Object.values(
       this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey ?? {}
-    ).filter(
-      (record) =>
-        worktreeIdsEqual(record.worktreeId, worktreeId) &&
-        record.agent === session.agent &&
-        agentProviderSessionsEqual(record.agent, record.providerSession, session.providerSession)
     )
+      .filter(isResumablePaneRecord)
+      .filter(
+        (record) =>
+          worktreeIdsEqual(record.worktreeId, worktreeId) &&
+          record.agent === session.agent &&
+          agentProviderSessionsEqual(record.agent, record.providerSession, session.providerSession)
+      )
     if (records.some((record) => !this.isPaneOwnedResumeRecord(record))) {
       return refuse('window_owns_wake')
     }

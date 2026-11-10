@@ -4993,11 +4993,6 @@
             "behind": "{{behind}} zurück",
             "activeAgents_one": "{{count}} aktiver Agent",
             "activeAgents_other": "{{count}} aktive Agenten",
-            "completedAgents_one": "{{count}} abgeschlossener Agent",
-            "completedAgents_other": "{{count}} abgeschlossene Agenten",
-            "activeAndCompletedAgents": "{{active}}, {{completed}}",
-            "completedAgentsRetained_one": "{{count}} abgeschlossener Agent beibehalten",
-            "completedAgentsRetained_other": "{{count}} abgeschlossene Agenten beibehalten",
             "noTrackedAgents": "Keine erfassten Agenten aktiv",
             "noTerminalTabs": "Keine Terminal-Tabs",
             "liveTerminalTabs_one": "{{live}} aktiv von {{count}} Terminal-Tab",
@@ -20324,7 +20319,7 @@
           "pinned": "Angeheftet",
           "unread": "Ungelesen",
           "comment": "Mit Kommentar",
-          "retainedDoneAgents": "Protokolle abgeschlossener Agenten",
+          "finishedAgents": "Abgeschlossene Agenten",
           "contextPresence": "Offene Tabs, Terminals, Kommentare",
           "completelyEmpty": "Nichts mehr zu verlieren",
           "noWorkspaces": "Keine Arbeitsbereiche gefunden.",
@@ -20442,7 +20437,7 @@
               "comment": "Kommentar",
               "prunable": "Bereinigbar",
               "locked": "Gesperrt",
-              "retainedAgents": "Abgeschlossene Agenten"
+              "finishedAgents": "Abgeschlossene Agenten"
             }
           },
           "forceDeleteRisk_one": "{{count}} Arbeitsbereich weist derzeit Risiken auf und muss möglicherweise zwangsweise gelöscht werden",

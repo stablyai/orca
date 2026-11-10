@@ -1,6 +1,7 @@
-import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
+import { agentTypeToIconAgent } from '../../../shared/agent-status/presentation/agent-type-icon-agent'
+import { paneAgentRecordIdentity } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { OwnedPaneAgentRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
@@ -8,10 +9,8 @@ import type { TerminalAgent } from '../../../shared/agent-status/identity/termin
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   resolveFocusedCompletedTabAgent,
-  resolveFocusedRetainedTabAgent,
   resolveFocusedTabAgent,
   resolveSiblingCompletedTabAgent,
-  resolveSiblingRetainedTabAgent,
   resolveSiblingTabAgent
 } from './tab-agent'
 import { resolveTabAgentFromSignalSnapshot } from '../../../shared/tab-agent-from-signals'
@@ -24,8 +23,7 @@ export type OpenTabOccupantAgentInput = {
   launchAgent?: TuiAgent
   layout?: TerminalLayoutSnapshot
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
-  retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
-  sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord>
+  sleepingAgentSessionsByPaneKey: Record<string, OwnedPaneAgentRecord>
   paneForegroundAgentByPaneKey?: Record<string, PaneForegroundAgentEntry>
 }
 
@@ -37,24 +35,29 @@ export function resolveOpenTabOccupantAgent({
   launchAgent,
   layout,
   agentStatusByPaneKey,
-  retainedAgentsByPaneKey,
   sleepingAgentSessionsByPaneKey,
   paneForegroundAgentByPaneKey
 }: OpenTabOccupantAgentInput): TerminalAgent | null {
   const hookAgent = resolveFocusedTabAgent(agentStatusByPaneKey, layout, tabId)
   const siblingHookAgent = resolveSiblingTabAgent(agentStatusByPaneKey, layout, tabId)
-  const focusedCompletedHookAgent =
-    resolveFocusedCompletedTabAgent(agentStatusByPaneKey, layout, tabId) ??
-    resolveFocusedRetainedTabAgent(retainedAgentsByPaneKey, layout, tabId)
-  const siblingCompletedHookAgent =
-    resolveSiblingCompletedTabAgent(agentStatusByPaneKey, layout, tabId) ??
-    resolveSiblingRetainedTabAgent(retainedAgentsByPaneKey, layout, tabId)
+  const focusedCompletedHookAgent = resolveFocusedCompletedTabAgent(
+    agentStatusByPaneKey,
+    layout,
+    tabId
+  )
+  const siblingCompletedHookAgent = resolveSiblingCompletedTabAgent(
+    agentStatusByPaneKey,
+    layout,
+    tabId
+  )
   const focusedPaneKey = focusedPaneKeyFor(tabId, layout)
   const processAgent = focusedPaneKey
     ? (paneForegroundAgentByPaneKey?.[focusedPaneKey]?.agent ?? null)
     : null
   const sleepingSessionAgent = focusedPaneKey
-    ? (sleepingAgentSessionsByPaneKey[focusedPaneKey]?.agent ?? null)
+    ? (agentTypeToIconAgent(
+        paneAgentRecordIdentity(sleepingAgentSessionsByPaneKey[focusedPaneKey]).agent
+      ) ?? null)
     : null
   return resolveTabAgentFromSignalSnapshot({
     title: title?.trim() || '',

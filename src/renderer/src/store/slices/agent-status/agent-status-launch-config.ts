@@ -1,13 +1,14 @@
+import {
+  resumablePaneRecord,
+  agentProviderSessionsEqual,
+  type AgentProviderSessionMetadata,
+  type SleepingAgentLaunchConfig
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AppState } from '../../types'
 import type {
   AgentStatusEntry,
   AgentType
 } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import {
-  agentProviderSessionsEqual,
-  type AgentProviderSessionMetadata,
-  type SleepingAgentLaunchConfig
-} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   AgentLaunchConfigRegistryEntry,
   AgentLaunchConfigRegistrationMetadata
@@ -145,7 +146,8 @@ export function invocationLaunchConfig(args: {
   agentType: AgentStatusEntry['agentType']
   providerSession: AgentProviderSessionMetadata | undefined
 }): SleepingAgentLaunchConfig | undefined {
-  const { record, agentType, providerSession } = args
+  const { agentType, providerSession } = args
+  const record = resumablePaneRecord(args.record)
   if (args.statement !== undefined || args.launchAttested === false) {
     return args.statement ?? undefined
   }
@@ -190,7 +192,7 @@ export function retirePaneLaunchNote(state: PaneNoteCopies, paneKey: string): Pa
     const { [paneKey]: _retired, ...rest } = state.agentLaunchConfigByPaneKey
     patch.agentLaunchConfigByPaneKey = rest
   }
-  const record = state.sleepingAgentSessionsByPaneKey?.[paneKey]
+  const record = resumablePaneRecord(state.sleepingAgentSessionsByPaneKey?.[paneKey])
   if (record?.launchConfig) {
     const { launchConfig: _note, ...withoutNote } = record
     patch.sleepingAgentSessionsByPaneKey = {

@@ -1,4 +1,5 @@
 import { useDeferredValue, useMemo, useRef } from 'react'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import { buildActivityEvents } from './activity-event-builder'
@@ -34,7 +35,8 @@ const EMPTY_GROUPS: ActivityThreadGroup[] = []
 const EMPTY_ACTIVITY_BUILD: ReturnType<typeof buildActivityEvents> = {
   events: [],
   liveAgentByPaneKey: {},
-  paneEntryByPaneKey: {}
+  paneEntryByPaneKey: {},
+  passiveAgentByPaneKey: {}
 }
 
 /** Every Activity thread before any view filter: store data to events and threads. */
@@ -43,6 +45,7 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
   allThreads: AgentPaneThread[]
 } {
   const storeData = useAllAgentPaneThreadStoreData()
+  const t = useTranslate()
   // Why: agentStatusEpoch is a dep (not used in the body) so the memo recomputes when freshness boundaries expire even without new PTY data.
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   const chatNames = useStructuredChatTabNames()
@@ -56,7 +59,8 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
   const {
     events: allEvents,
     liveAgentByPaneKey,
-    paneEntryByPaneKey
+    paneEntryByPaneKey,
+    passiveAgentByPaneKey
   } = useMemo(
     () => {
       const now = Date.now()
@@ -76,25 +80,33 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
         {
           chatNames,
           agentStatusByPaneKey: storeData.agentStatusByPaneKey,
+          sleepingAgentStatusByPaneKey: storeData.sleepingAgentStatusByPaneKey,
           runtimeAgentOrchestrationByPaneKey: storeData.runtimeAgentOrchestrationByPaneKey,
           migrationUnsupportedByPtyId: storeData.migrationUnsupportedByPtyId,
-          retainedAgentsByPaneKey: storeData.retainedAgentsByPaneKey,
           tabsByWorktree: storeData.tabsByWorktree,
           unifiedTabsByWorktree: storeData.activityTabs,
           worktreeMap: storeData.worktreeMap,
           repoMap: storeData.repoMap,
           repos: storeData.repos,
           resolveWorktree: storeData.getKnownWorktreeById,
+          ownerCatalog: [
+            storeData.worktreesByRepo,
+            storeData.detectedWorktreesByRepo,
+            storeData.folderWorkspaces,
+            storeData.projectGroups,
+            storeData.floatingWorkspacePath
+          ],
           acknowledgedAgentsByPaneKey: storeData.acknowledgedAgentsByPaneKey,
           activityClearedAtByPaneKey: storeData.activityClearedAtByPaneKey,
           // Why: Date.now() is read in the memo body (not a dep) so stale-decay recomputes when agentStatusEpoch ticks, not on wall-clock time.
           now
         },
-        eventBuildCacheRef.current
+        eventBuildCacheRef.current,
+        t
       )
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [storeData, agentStatusEpoch, chatNames, badgeOnly]
+    [storeData, agentStatusEpoch, chatNames, badgeOnly, t]
   )
 
   const allThreads = useMemo(
@@ -106,11 +118,19 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
             : allEvents,
           liveAgentByPaneKey,
           paneEntryByPaneKey,
+          passiveAgentByPaneKey: badgeOnly ? undefined : passiveAgentByPaneKey,
           generatedTitlesEnabled: storeData.generatedTitlesEnabled
         },
         threadReuseCacheRef.current
       ),
-    [allEvents, liveAgentByPaneKey, paneEntryByPaneKey, storeData.generatedTitlesEnabled, badgeOnly]
+    [
+      allEvents,
+      liveAgentByPaneKey,
+      paneEntryByPaneKey,
+      passiveAgentByPaneKey,
+      storeData.generatedTitlesEnabled,
+      badgeOnly
+    ]
   )
 
   return { storeData, allThreads }

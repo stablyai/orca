@@ -34,7 +34,6 @@ export function useWorkspaceSpaceDecisionProjection(bindings: WorkspaceSpaceMana
     remoteStatusesByWorktree,
     repoMap,
     repos,
-    retainedAgentsByPaneKey,
     runtimePaneTitlesByTabId,
     settings,
     tabsByWorktree,
@@ -55,17 +54,9 @@ export function useWorkspaceSpaceDecisionProjection(bindings: WorkspaceSpaceMana
       groupWorkspaceSpaceDecisionInputs(sourceRows, tabsByWorktree, {
         agentStatusByPaneKey,
         migrationUnsupportedByPtyId,
-        retainedAgentsByPaneKey,
         openFiles
       }),
-    [
-      sourceRows,
-      tabsByWorktree,
-      agentStatusByPaneKey,
-      migrationUnsupportedByPtyId,
-      retainedAgentsByPaneKey,
-      openFiles
-    ]
+    [sourceRows, tabsByWorktree, agentStatusByPaneKey, migrationUnsupportedByPtyId, openFiles]
   )
   const decisionDetailsByWorktreeId = useMemo(() => {
     // Use the epoch’s clock so delete readiness and the store agree when hook evidence becomes stale.
@@ -88,7 +79,6 @@ export function useWorkspaceSpaceDecisionProjection(bindings: WorkspaceSpaceMana
           agentStatusByPaneKey,
           migrationUnsupportedByPtyId,
           runtimePaneTitlesByTabId,
-          retainedAgentsByPaneKey,
           openFiles,
           editorDrafts,
           browserTabsByWorktree,
@@ -125,7 +115,6 @@ export function useWorkspaceSpaceDecisionProjection(bindings: WorkspaceSpaceMana
     repoMap,
     repos,
     remoteStatusesByWorktree,
-    retainedAgentsByPaneKey,
     migrationUnsupportedByPtyId,
     runtimePaneTitlesByTabId,
     settings,

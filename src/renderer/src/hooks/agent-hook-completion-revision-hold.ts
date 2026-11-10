@@ -116,10 +116,12 @@ export function submitHookLaneCompletion(
   const isCurrent = (): boolean => {
     const row = useAppStore.getState().agentStatusByPaneKey[paneKey]
     return (
-      row?.state === 'done' &&
-      row.stateStartedAt === segment &&
-      row.turnEndedAt === done?.turnEndedAt &&
-      lane.keepsAuthority()
+      lane.keepsAuthority() &&
+      (!row ||
+        row.sessionBoundary === true ||
+        (row.state === 'done' &&
+          row.stateStartedAt === segment &&
+          row.turnEndedAt === done?.turnEndedAt))
     )
   }
   let requests = requestsByPaneKey.get(paneKey)

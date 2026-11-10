@@ -313,7 +313,7 @@ describe('a chat whose start failed', () => {
     store().setState({
       agentStatusByPaneKey: {},
       acknowledgedAgentsByPaneKey: {},
-      retainedAgentsByPaneKey: {},
+
       unifiedTabsByWorktree: { [WORKTREE_ID]: [structuredTab] }
     })
   })

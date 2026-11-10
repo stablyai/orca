@@ -109,7 +109,9 @@ test('does not respawn an agent whose turn already finished', async (// oxlint-d
 
     const liveRecord = await page.evaluate((paneKey) => {
       const record = window.__store?.getState().sleepingAgentSessionsByPaneKey[paneKey]
-      return record ? { state: record.state, origin: record.origin } : null
+      return record && record.kind !== 'display-only'
+        ? { state: record.state, origin: record.origin }
+        : null
     }, descriptor.paneKey)
     expect(liveRecord, 'a finished turn leaves a resume record').not.toBeNull()
     expect(liveRecord?.state, 'the done turn stays done').toBe('done')

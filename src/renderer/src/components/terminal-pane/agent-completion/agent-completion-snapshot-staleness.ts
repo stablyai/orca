@@ -1,11 +1,23 @@
+import { completionHistoryContains } from '../../../../../shared/agent-status/lifecycle/agent-completion-history'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentCompletionStatusSnapshot } from './agent-completion-coordinator-types'
 
 export function isSupersededAgentCompletionSnapshot(
-  storedAgentStatus: Pick<AgentStatusEntry, 'state' | 'stateStartedAt' | 'turnEndedAt'> | undefined,
+  storedAgentStatus:
+    | (Pick<AgentStatusEntry, 'state' | 'stateStartedAt' | 'turnEndedAt'> &
+        Partial<Pick<AgentStatusEntry, 'stateHistory' | 'sessionBoundary' | 'agentType'>>)
+    | undefined,
   snapshot: AgentCompletionStatusSnapshot | undefined
 ): boolean {
   if (!storedAgentStatus || !snapshot) {
+    return false
+  }
+  if (
+    storedAgentStatus.sessionBoundary &&
+    storedAgentStatus.stateHistory &&
+    storedAgentStatus.agentType === snapshot.agentType &&
+    completionHistoryContains({ stateHistory: storedAgentStatus.stateHistory }, snapshot)
+  ) {
     return false
   }
   const comparableStateStartedAt = snapshot.localStateStartedAt ?? snapshot.stateStartedAt

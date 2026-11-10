@@ -5,13 +5,12 @@ import { getPaneKeyTabId } from './workspace-space-presentation'
 
 type GroupedInputs = Pick<
   WorkspaceDecisionInputs,
-  'agentStatusByPaneKey' | 'migrationUnsupportedByPtyId' | 'retainedAgentsByPaneKey' | 'openFiles'
+  'agentStatusByPaneKey' | 'migrationUnsupportedByPtyId' | 'openFiles'
 >
 
 type Bucket = {
   agentStatuses: [string, WorkspaceDecisionInputs['agentStatusByPaneKey'][string]][]
   migrations: [string, WorkspaceDecisionInputs['migrationUnsupportedByPtyId'][string]][]
-  retainedAgents: [string, WorkspaceDecisionInputs['retainedAgentsByPaneKey'][string]][]
   openFiles: WorkspaceDecisionInputs['openFiles'][number][]
 }
 
@@ -33,7 +32,6 @@ export function groupWorkspaceSpaceDecisionInputs(
     buckets.set(row.worktreeId, {
       agentStatuses: [],
       migrations: [],
-      retainedAgents: [],
       openFiles: []
     })
     for (const tab of tabsByWorktree[row.worktreeId] ?? []) {
@@ -64,9 +62,6 @@ export function groupWorkspaceSpaceDecisionInputs(
       buckets.get(owner)?.migrations.push([key, entry])
     }
   }
-  for (const [key, entry] of Object.entries(inputs.retainedAgentsByPaneKey)) {
-    buckets.get(entry.worktreeId)?.retainedAgents.push([key, entry])
-  }
   for (const file of inputs.openFiles) {
     buckets.get(file.worktreeId)?.openFiles.push(file)
   }
@@ -74,7 +69,6 @@ export function groupWorkspaceSpaceDecisionInputs(
     result.set(id, {
       agentStatusByPaneKey: Object.fromEntries(bucket.agentStatuses),
       migrationUnsupportedByPtyId: Object.fromEntries(bucket.migrations),
-      retainedAgentsByPaneKey: Object.fromEntries(bucket.retainedAgents),
       openFiles: bucket.openFiles
     })
   }

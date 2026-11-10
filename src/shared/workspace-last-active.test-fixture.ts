@@ -20,7 +20,7 @@ export function makeCleanupCandidate(
       browserTabCount: 0,
       diffCommentCount: 0,
       newestDiffCommentAt: null,
-      retainedDoneAgentCount: 0
+      finishedAgentCount: 0
     },
     git: { clean: true, upstreamAhead: 0, upstreamBehind: 0, checkedAt: 1 },
     fingerprint: 'f',

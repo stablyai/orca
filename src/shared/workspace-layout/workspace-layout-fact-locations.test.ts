@@ -1,3 +1,5 @@
+import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
+import { resumablePaneRecord } from '../agent-session/lifecycle/agent-session-resume'
 // Verify each disk-field source by mutation/save, including duplicate fields that must share one source. Types cover all model/side-data and disk fields.
 
 import { describe, expect, it } from 'vitest'
@@ -132,7 +134,7 @@ function populate(loaded: LoadedWorkspaceLayout): LoadedWorkspaceLayout {
     ...SLEPT_PANE_RECORD
   }
   for (const holder of ['leaf.sleeping', 'leaf.resume'] as const) {
-    const record = (field: keyof LayoutSleepingRecord, value: unknown) =>
+    const record = (field: keyof SleepingAgentSessionRecord, value: unknown) =>
       fill(loaded, `${holder}.${field}` as const, value)
     record('terminalTitle', 'claude')
     record('lastAssistantMessage', 'done')
@@ -275,7 +277,7 @@ describe('each on-disk field has one source', () => {
     for (const origin of [undefined, 'worktree-sleep', 'quit', 'live'] as const) {
       const session = localDesktopSession()
       const paneKey = Object.keys(session.sleepingAgentSessionsByPaneKey!)[0]!
-      const stored = session.sleepingAgentSessionsByPaneKey![paneKey]!
+      const stored = resumablePaneRecord(session.sleepingAgentSessionsByPaneKey![paneKey])!
       const { origin: _origin, ...rest } = stored
       session.sleepingAgentSessionsByPaneKey![paneKey] = origin ? { ...rest, origin } : rest
       const reloaded = loadWorkspaceLayout(LOCAL_EXECUTION_HOST_ID, session, {

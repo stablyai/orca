@@ -1,13 +1,19 @@
 import {
   agentProviderSessionsEqual,
   isPaneSleepRecord,
+  isResumablePaneRecord,
+  type OwnedPaneAgentRecord,
   type SleepingAgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
 /** An older window capture of a still-running agent, which no pane has claimed yet. */
-export function isUnclaimedRunningSleepRecord(record: SleepingAgentSessionRecord): boolean {
-  return record.origin === 'worktree-sleep' && record.state !== 'done'
+export function isUnclaimedRunningSleepRecord(
+  record: OwnedPaneAgentRecord
+): record is SleepingAgentSessionRecord {
+  return (
+    isResumablePaneRecord(record) && record.origin === 'worktree-sleep' && record.state !== 'done'
+  )
 }
 
 /** The host's own pane-owned capture form (#11598), which no wake resumes a second time. */
@@ -15,8 +21,9 @@ function paneOwnedForm(record: SleepingAgentSessionRecord): SleepingAgentSession
   return { ...record, state: 'done', restoreOnTabOpenOnly: true }
 }
 
-function sameRecord(a: SleepingAgentSessionRecord, b: SleepingAgentSessionRecord): boolean {
+function sameRecord(a: OwnedPaneAgentRecord, b: SleepingAgentSessionRecord): boolean {
   return (
+    isResumablePaneRecord(a) &&
     a.origin === b.origin &&
     a.state === b.state &&
     a.capturedAt === b.capturedAt &&
@@ -70,7 +77,12 @@ export async function markResumedRecordLive(
 ): Promise<void> {
   await commit((session) => {
     const stored = session.sleepingAgentSessionsByPaneKey?.[paneKey]
-    if (!stored || !isPaneSleepRecord(stored) || !sameRecord(stored, resumed)) {
+    if (
+      !stored ||
+      !isResumablePaneRecord(stored) ||
+      !isPaneSleepRecord(stored) ||
+      !sameRecord(stored, resumed)
+    ) {
       return null
     }
     return {

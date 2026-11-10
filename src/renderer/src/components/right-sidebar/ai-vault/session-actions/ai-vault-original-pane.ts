@@ -1,5 +1,8 @@
+import { paneAgentRecordIdentity } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentRowDisplayDotState } from '@/lib/agent-status/presentation/agent-row-dot-state'
 import type { AppState } from '@/store/types'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
+import { agentPaneConversationForEntry } from '@/store/slices/agent-status/agent-pane-conversation'
 import { resolveRuntimePaneTitleLeafId } from '../../../../../../shared/runtime-pane-title-leaf-id'
 import type { AgentDotState } from '@/components/AgentStateDot'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
@@ -22,11 +25,12 @@ export type AiVaultOriginalPaneTarget = {
 export type OriginalPaneState = Pick<
   AppState,
   | 'agentStatusByPaneKey'
-  | 'retainedAgentsByPaneKey'
+  | 'agentConversationsByPaneKey'
   | 'sleepingAgentSessionsByPaneKey'
   | 'tabsByWorktree'
   | 'terminalLayoutsByTabId'
->
+> &
+  WorktreeRuntimeOwnerState
 
 function agentMatches(session: AiVaultSession, agent: string | undefined): boolean {
   return agent === session.agent
@@ -78,9 +82,10 @@ function sessionPromptCandidates(session: AiVaultSession): string[] {
 
 function entryPromptCandidates(entry: {
   prompt?: string
+  promptCandidates?: readonly string[]
   stateHistory?: readonly { prompt: string }[]
 }): string[] {
-  const candidates = new Set<string>()
+  const candidates = new Set<string>(entry.promptCandidates ?? [])
   const prompt = normalizeMatchText(entry.prompt)
   if (prompt) {
     candidates.add(prompt)
@@ -239,42 +244,34 @@ export function findOriginalAiVaultSessionPane(
     }
   }
 
-  for (const retained of Object.values(state.retainedAgentsByPaneKey)) {
+  for (const conversation of Object.values(state.agentConversationsByPaneKey)) {
     if (
-      agentMatches(session, retained.agentType) &&
-      providerSessionMatches(session, retained.entry.providerSession?.id)
+      state.agentStatusByPaneKey[conversation.paneKey] ||
+      !agentMatches(session, conversation.agent) ||
+      !agentPaneConversationForEntry(state, { ...conversation, agentType: conversation.agent })
     ) {
-      const target = resolveOriginalPaneTarget({
-        state,
-        paneKey: retained.entry.paneKey,
-        worktreeIdHint: retained.worktreeId,
-        tabIdHint: retained.entry.tabId ?? retained.tab.id
-      })
-      if (target) {
-        return target
-      }
+      continue
     }
-    if (
-      agentMatches(session, retained.agentType) &&
-      retained.entry.providerSession === undefined &&
-      promptsMatchSession(session, retained.entry)
-    ) {
-      const target = resolveOriginalPaneTarget({
-        state,
-        paneKey: retained.entry.paneKey,
-        worktreeIdHint: retained.worktreeId,
-        tabIdHint: retained.entry.tabId ?? retained.tab.id
-      })
-      if (target) {
-        promptMatchedTargets.push(target)
-      }
+    const target = resolveOriginalPaneTarget({
+      state,
+      paneKey: conversation.paneKey,
+      worktreeIdHint: conversation.worktreeId
+    })
+    if (!target) {
+      continue
+    }
+    if (providerSessionMatches(session, conversation.providerSession?.id)) {
+      return target
+    }
+    if (!conversation.providerSession && promptsMatchSession(session, conversation)) {
+      promptMatchedTargets.push(target)
     }
   }
 
   for (const record of Object.values(state.sleepingAgentSessionsByPaneKey)) {
     if (
-      agentMatches(session, record.agent) &&
-      providerSessionMatches(session, record.providerSession.id)
+      agentMatches(session, paneAgentRecordIdentity(record).agent) &&
+      providerSessionMatches(session, paneAgentRecordIdentity(record).providerSession?.id)
     ) {
       const target = resolveOriginalPaneTarget({
         state,

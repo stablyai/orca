@@ -92,7 +92,7 @@ function makeHostCandidate(
       browserTabCount: 0,
       diffCommentCount: 0,
       newestDiffCommentAt: null,
-      retainedDoneAgentCount: 0
+      finishedAgentCount: 0
     },
     git: {
       clean: true,

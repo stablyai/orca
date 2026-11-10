@@ -28,7 +28,6 @@ export function pickSpaceWindowState(state: AppState) {
     migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
     runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
     agentStatusEpoch: state.agentStatusEpoch,
-    retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
     openFiles: state.openFiles,
     editorDrafts: state.editorDrafts,
     browserTabsByWorktree: state.browserTabsByWorktree,

@@ -1,6 +1,9 @@
 // Per-execution-host layout data; view selection, content facts and drafts stay beside it. Disk-field tables assign each persisted field one source.
 
-import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
+import type {
+  OwnedPaneAgentRecord,
+  SleepingAgentSessionRecord
+} from '../agent-session/lifecycle/agent-session-resume'
 import type { AgentType } from '../agent-status/contracts/agent-status-types'
 import type { AiVaultSessionTitle } from '../ai-vault/contracts/ai-vault-session-title'
 import type { PersistedClientHostedBrowserPage } from '../workspace-session/client-hosted-browser-page-record'
@@ -64,10 +67,8 @@ export type LayoutBrowserTab = Pick<
 >
 
 /** A sleeping agent record minus what its pane key and workspace already say. */
-export type LayoutSleepingRecord = Omit<
-  SleepingAgentSessionRecord,
-  'paneKey' | 'tabId' | 'worktreeId'
->
+type WithoutPaneOwner<T> = T extends unknown ? Omit<T, 'paneKey' | 'tabId' | 'worktreeId'> : never
+export type LayoutSleepingRecord = WithoutPaneOwner<OwnedPaneAgentRecord>
 
 export type LayoutClosedTab = Omit<ClosedTerminalTabTombstone, 'worktreeId'>
 
@@ -84,7 +85,7 @@ export type LayoutLeaf = {
   /** Slept pane record; mutually exclusive with resume. */
   sleeping?: LayoutSleepingRecord
   /** Running-agent resume record (live/quit origin); mutually exclusive with sleeping. */
-  resume?: LayoutSleepingRecord
+  resume?: WithoutPaneOwner<SleepingAgentSessionRecord>
 }
 
 export type WorkspaceLayout = {

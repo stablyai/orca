@@ -11,7 +11,7 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig,
-  SleepingAgentSessionRecord
+  OwnedPaneAgentRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
@@ -34,7 +34,7 @@ import type {
 
 /** Main's answer to a sleep it ran; on success, the wake records it keeps (null: another host's). */
 export type HostTerminalStop =
-  | { failed: false; records: readonly SleepingAgentSessionRecord[] | null }
+  | { failed: false; records: readonly OwnedPaneAgentRecord[] | null }
   | { failed: true; stoppedPtyIds: readonly string[] }
 
 export type TerminalActions = {

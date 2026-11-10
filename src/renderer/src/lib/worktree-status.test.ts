@@ -43,8 +43,7 @@ describe('resolveWorktreeStatus', () => {
       },
       hasPermission: false,
       hasLiveWorking: false,
-      hasLiveDone: true,
-      hasRetainedDone: false
+      hasLiveDone: true
     })
 
     expect(status).toBe('done')
@@ -69,8 +68,7 @@ describe('resolveWorktreeStatus', () => {
       },
       hasPermission: false,
       hasLiveWorking: false,
-      hasLiveDone: true,
-      hasRetainedDone: false
+      hasLiveDone: true
     })
 
     expect(status).toBe('working')

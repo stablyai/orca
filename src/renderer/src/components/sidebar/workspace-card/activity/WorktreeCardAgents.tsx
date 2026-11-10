@@ -22,7 +22,6 @@ import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion
 import { useTranslate } from '@/i18n/use-translate'
 import { agentSendDisabledReasonLabel } from '@/lib/agent-session/messaging/agent-send-disabled-reason-label'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { activateRetainedAgentRow } from './activate-retained-agent-row'
 import { selectAgentRowsUnread } from './worktree-card-agent-ack-inputs'
 import { opensClaudeParentConversation } from '@/lib/agent-session/navigation/claude-agent-row-view'
 import { lineageAncestorPaneKeys } from './worktree-card-agent-lineage-disclosure'
@@ -75,7 +74,6 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   const languageRevision = useUiLanguageRevision()
   const { agentActivityDisplayMode, showAgentModels } = useWorktreeAgentDisplay()
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
-  const dismissRetainedAgent = useAppStore((s) => s.dismissRetainedAgent)
   const { targetMode: agentSendPopoverTargetMode, agentStatusEpoch } = useAppStore(
     useShallow((s) => selectSendTargetControlInputs(s, worktreeId))
   )
@@ -97,9 +95,8 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   const handleDismissAgent = useCallback(
     (paneKey: string) => {
       dropAgentStatus(paneKey)
-      dismissRetainedAgent(paneKey)
     },
-    [dropAgentStatus, dismissRetainedAgent]
+    [dropAgentStatus]
   )
 
   const isAgentSendTargetModeActive = agentSendPopoverTargetMode !== null
@@ -155,10 +152,6 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   )
 
   const handleActivateAgentTab = useWorktreeAgentActivation(worktreeId)
-  const handleActivateRetainedAgent = useCallback(
-    (tabId: string, paneKey: string) => activateRetainedAgentRow(worktreeId, tabId, paneKey),
-    [worktreeId]
-  )
 
   const now = useNow(30_000)
   const lineageTree = useMemo(() => buildAgentRowLineageTree(agents), [agents])
@@ -272,9 +265,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           agent={agent}
           showModel={showAgentModels}
           onDismiss={handleDismissAgent}
-          onActivate={
-            agent.rowSource === 'retained' ? handleActivateRetainedAgent : handleActivateAgentTab
-          }
+          onActivate={handleActivateAgentTab}
           now={now}
           // Keep rows bold until visiting the tab auto-acknowledges attention.
           isUnvisited={unvisitedByPaneKey[agent.paneKey] ?? false}
@@ -336,9 +327,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
               : undefined
           }
           isUnvisited={unvisitedByPaneKey[agent.paneKey] ?? false}
-          onActivate={
-            agent.rowSource === 'retained' ? handleActivateRetainedAgent : handleActivateAgentTab
-          }
+          onActivate={handleActivateAgentTab}
           sendTargetStatus={sendTarget?.status}
           sendTargetDisabledReason={sendTarget?.disabledReason}
           onSendTargetClick={isAgentSendTargetModeActive ? handleSendTargetClick : undefined}

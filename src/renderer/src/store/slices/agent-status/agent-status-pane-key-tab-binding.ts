@@ -1,13 +1,10 @@
-import { agentEntrySessionStartedAt } from '../../../../../shared/agent-session/lifecycle/agent-session-start-time'
 import type { AppState } from '../../types'
 import type {
   AgentStatusEntry,
-  AgentType,
   ParsedAgentStatusPayload
 } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { tabHasProtectedTitle } from '../../../../../shared/agent-status/presentation/agent-generated-tab-title-rules'
-import type { DropAgentStatusByWorktreeOptions, RetainedAgentEntry } from './agent-status-contract'
 import type { AgentStatusTabPrefixDropState } from './agent-status-drop-reducer'
 
 export function paneKeyMatchesAnyTabPrefix(paneKey: string, tabPrefixes: string[]): boolean {
@@ -114,7 +111,10 @@ export function isRecentlyClosedAgentStatusTab(
   return closedTabs[tabId] === true
 }
 
-export function findAgentPaneWorktreeId(state: AppState, paneKey: string): string | null {
+export function findAgentPaneWorktreeId(
+  state: Pick<AppState, 'tabsByWorktree'>,
+  paneKey: string
+): string | null {
   const tabId = getTabIdFromPaneKey(paneKey)
   if (!tabId) {
     return null
@@ -137,62 +137,4 @@ export function findTabForAgentEntry(
     return undefined
   }
   return (state.tabsByWorktree[worktreeId] ?? []).find((tab) => tab.id === tabId)
-}
-
-export function getRetainedFallbackTab(entry: AgentStatusEntry, worktreeId: string): TerminalTab {
-  const tabId = entry.tabId ?? getTabIdFromPaneKey(entry.paneKey) ?? entry.paneKey
-  return {
-    id: tabId,
-    ptyId: null,
-    worktreeId,
-    title: entry.terminalTitle ?? 'Agent',
-    customTitle: null,
-    color: null,
-    sortOrder: 0,
-    createdAt: agentEntrySessionStartedAt(entry)
-  }
-}
-
-export function retainedAgentEntryFromLive(
-  state: AppState,
-  worktreeId: string,
-  entry: AgentStatusEntry,
-  agentType: AgentType
-): RetainedAgentEntry {
-  const tab =
-    findTabForAgentEntry(state, worktreeId, entry) ?? getRetainedFallbackTab(entry, worktreeId)
-  return {
-    entry,
-    worktreeId,
-    tab,
-    agentType,
-    startedAt: agentEntrySessionStartedAt(entry)
-  }
-}
-
-export function shouldReplaceRetainedWithLive(
-  retained: RetainedAgentEntry | undefined,
-  live: RetainedAgentEntry
-): boolean {
-  if (!retained) {
-    return true
-  }
-  if (live.startedAt !== retained.startedAt) {
-    return live.startedAt > retained.startedAt
-  }
-  const retainedSessionId = retained.entry.providerSession?.id
-  const liveSessionId = live.entry.providerSession?.id
-  if (retainedSessionId && liveSessionId && retainedSessionId !== liveSessionId) {
-    return live.entry.updatedAt >= retained.entry.updatedAt
-  }
-  return live.entry.updatedAt > retained.entry.updatedAt
-}
-
-export function normalizePaneKeySet(
-  paneKeys: DropAgentStatusByWorktreeOptions['sleepingPaneKeys']
-): ReadonlySet<string> | null {
-  if (!paneKeys) {
-    return null
-  }
-  return paneKeys instanceof Set ? paneKeys : new Set(paneKeys)
 }

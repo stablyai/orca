@@ -62,19 +62,6 @@ export function createAgentStatusAuthorityActions(
             changedPaneKeys.add(key)
           }
           hadLive = retiredLivePaneKeys.length > 0
-          let nextRetentionSuppressedPaneKeys = removePaneKeys(
-            s.retentionSuppressedPaneKeys,
-            retiredPaneKeySet
-          )
-          if (
-            retiredLivePaneKeys.length > 0 &&
-            nextRetentionSuppressedPaneKeys === s.retentionSuppressedPaneKeys
-          ) {
-            nextRetentionSuppressedPaneKeys = { ...nextRetentionSuppressedPaneKeys }
-          }
-          for (const key of retiredLivePaneKeys) {
-            nextRetentionSuppressedPaneKeys[key] = true
-          }
           return {
             agentStatusByPaneKey: removePaneKeys(s.agentStatusByPaneKey, retiredPaneKeySet),
             agentConversationsByPaneKey: removePaneKeys(
@@ -85,7 +72,6 @@ export function createAgentStatusAuthorityActions(
               s.runtimeAgentOrchestrationByPaneKey,
               retiredPaneKeySet
             ),
-            retainedAgentsByPaneKey: removePaneKeys(s.retainedAgentsByPaneKey, retiredPaneKeySet),
             sleepingAgentSessionsByPaneKey: options?.preserveSleepingAgentSession
               ? s.sleepingAgentSessionsByPaneKey
               : removePaneKeys(s.sleepingAgentSessionsByPaneKey, retiredPaneKeySet),
@@ -115,7 +101,6 @@ export function createAgentStatusAuthorityActions(
               retiredPaneKeySet
             ),
             cacheTimerByKey: removePaneKeys(s.cacheTimerByKey, retiredPaneKeySet),
-            retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
             recentlyRetiredAgentStatusPaneKeys: boundRecentlyRetiredAgentStatusPaneKeys(
               s.recentlyRetiredAgentStatusPaneKeys,
               retiredPaneKeys,
@@ -202,7 +187,7 @@ export function createAgentStatusAuthorityActions(
             to,
             (identity) => ({ ...identity, paneKey: to })
           ),
-          // Bump epoch on live pane-key moves so retention/sidebar consumers observe the remap.
+          // Bump epoch on live pane-key moves so sidebar consumers observe the remap.
           ...(from in s.agentStatusByPaneKey
             ? { agentStatusEpoch: s.agentStatusEpoch + 1, sortEpoch: s.sortEpoch + 1 }
             : {}),
@@ -210,16 +195,6 @@ export function createAgentStatusAuthorityActions(
             s.runtimeAgentOrchestrationByPaneKey,
             from,
             to
-          ),
-          retainedAgentsByPaneKey: movePaneKeyedRecord(
-            s.retainedAgentsByPaneKey,
-            from,
-            to,
-            (retained) => ({
-              ...retained,
-              entry: { ...retained.entry, paneKey: to, tabId: targetTabId },
-              tab: targetTabId ? { ...retained.tab, id: targetTabId } : retained.tab
-            })
           ),
           sleepingAgentSessionsByPaneKey: movePaneKeyedRecord(
             s.sleepingAgentSessionsByPaneKey,
@@ -254,8 +229,7 @@ export function createAgentStatusAuthorityActions(
             from,
             to
           ),
-          cacheTimerByKey: movePaneKeyedRecord(s.cacheTimerByKey, from, to),
-          retentionSuppressedPaneKeys: movePaneKeyedRecord(s.retentionSuppressedPaneKeys, from, to)
+          cacheTimerByKey: movePaneKeyedRecord(s.cacheTimerByKey, from, to)
         }
       })
       if (typeof window !== 'undefined') {
