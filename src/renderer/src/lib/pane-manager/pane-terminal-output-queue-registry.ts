@@ -95,8 +95,8 @@ export const BACKGROUND_DRAIN_INTERVAL_MS = 16
 export const HIGH_PRIORITY_DRAIN_INTERVAL_MS = 4
 export const BACKGROUND_CHUNK_CHARS = 16 * 1024
 export const MAX_WRITES_PER_DRAIN = 2
-// Eight × 16KB gives ~1.3ms parse/tick (~30MB/s) within the time budget; two writes limited the ~100MB/s parser to ~8MB/s.
-export const HIGH_PRIORITY_MAX_WRITES_PER_DRAIN = 8
+// Sixteen × 16KB gives fast foreground drain for dense 24-bit RGB normal-buffer streams within the 8ms time budget.
+export const HIGH_PRIORITY_MAX_WRITES_PER_DRAIN = 16
 export const DRAIN_TIME_BUDGET_MS = 8
 export const LARGE_BACKLOG_CHARS = 512 * 1024
 // Why mutable: the cap scales with the user's scrollback setting (terminalOutputBacklogCapChars), configured when settings apply; the chunk-count cap stays fixed.

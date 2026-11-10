@@ -2,6 +2,32 @@
 export const SYNCHRONIZED_OUTPUT_START_SEQUENCE = '\x1b[?2026h'
 export const SYNCHRONIZED_OUTPUT_END_SEQUENCE = '\x1b[?2026l'
 export const SYNCHRONIZED_OUTPUT_MARKER_TAIL_CHARS = SYNCHRONIZED_OUTPUT_START_SEQUENCE.length - 1
+/** Guard up to 64 chars so dense 24-bit RGB SGR/CSI sequences (e.g. \x1b[38;2;r;g;b;48;2;r;g;bm) are never severed across chunk splits. */
+const MAX_ESCAPE_SEQUENCE_GUARD_CHARS = 64
+
+function hasUnterminatedEscapeAtBoundary(
+  data: string,
+  escapeIndex: number,
+  limit: number
+): boolean {
+  if (limit - escapeIndex < SYNCHRONIZED_OUTPUT_START_SEQUENCE.length) {
+    return true
+  }
+  const nextChar = data.charAt(escapeIndex + 1)
+  if (nextChar !== '[') {
+    return false
+  }
+  for (let i = escapeIndex + 2; i < limit; i++) {
+    const code = data.charCodeAt(i)
+    if (code >= 0x40 && code <= 0x7e) {
+      return false
+    }
+    if (code < 0x20 || code > 0x3f) {
+      return false
+    }
+  }
+  return true
+}
 
 export type SynchronizedOutputScan = {
   /** A start marker landed inside THIS chunk. */
@@ -92,14 +118,11 @@ export function resolveSynchronizedOutputSafeSplit(
   if (data.length <= limit) {
     return data.length
   }
-  // Cut before an ESC whose marker cannot finish by the limit.
+  // Cut before an ESC whose marker or CSI/SGR sequence cannot finish by the limit.
   let candidate = limit
-  const guardStart = Math.max(0, limit - SYNCHRONIZED_OUTPUT_MARKER_TAIL_CHARS)
+  const guardStart = Math.max(0, limit - MAX_ESCAPE_SEQUENCE_GUARD_CHARS)
   const escapeIndex = data.lastIndexOf('\x1b', limit - 1)
-  if (
-    escapeIndex >= guardStart &&
-    limit - escapeIndex < SYNCHRONIZED_OUTPUT_START_SEQUENCE.length
-  ) {
+  if (escapeIndex >= guardStart && hasUnterminatedEscapeAtBoundary(data, escapeIndex, limit)) {
     candidate = escapeIndex
   }
   if (!scanSynchronizedOutput(data.slice(0, candidate), markerTail, wasActive).active) {
