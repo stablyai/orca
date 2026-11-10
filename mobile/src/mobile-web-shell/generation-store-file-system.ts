@@ -1,4 +1,5 @@
 import { Directory, File } from 'expo-file-system'
+import { Platform } from 'react-native'
 
 export type GenerationDirectoryEntry = {
   readonly name: string
@@ -127,7 +128,23 @@ export function createExpoGenerationFileSystem(rootUri: string): GenerationFileS
       }
     },
     async moveDirectory(fromUri, toUri) {
-      new Directory(fromUri).move(new Directory(toUri))
+      const from = new Directory(fromUri)
+      // Below API 26, Expo 55's move copies a directory without its contents; its copy is recursive.
+      if (Platform.OS === 'android' && Number(Platform.Version) < 26) {
+        const to = new Directory(toUri)
+        try {
+          from.copy(to)
+        } catch (error) {
+          // Readers trust a generation by its manifest, so a failed copy must leave no partial tree.
+          if (to.exists) {
+            to.delete()
+          }
+          throw error
+        }
+        from.delete()
+        return
+      }
+      from.move(new Directory(toUri))
     },
     async moveFile(fromUri, toUri) {
       new File(fromUri).move(new File(toUri))
