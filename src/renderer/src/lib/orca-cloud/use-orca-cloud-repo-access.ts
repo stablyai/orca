@@ -9,6 +9,7 @@ import { normalizeGitRemoteUrl } from '../../../../shared/git/remotes/git-remote
 import type { HostedGithubRepoAccessResponse } from '../../../../shared/hosted-sandbox/hosted-github-wire'
 import type { Repo } from '../../../../shared/repo-types'
 import { cloudWorkspaceApi } from './orca-cloud-workspace-store'
+import { useOrcaCloudIdentityKey } from './orca-cloud-identity'
 
 export type OrcaCloudRepoAccessState =
   | 'ok'
@@ -71,8 +72,9 @@ type CacheEntry = { at: number; value: HostedGithubRepoAccessResponse | null }
 const cache = new Map<string, CacheEntry>()
 const inflight = new Map<string, Promise<HostedGithubRepoAccessResponse | null>>()
 
-function cacheKey(repoUrl: string, setupSessionId: string | undefined): string {
-  return `${repoUrl.toLowerCase()}\0${setupSessionId ?? ''}`
+// Keyed by identity too: a sign-out or team switch must not reuse another identity's "Done".
+function cacheKey(repoUrl: string, setupSessionId: string | undefined, identity = ''): string {
+  return `${repoUrl.toLowerCase()}\0${setupSessionId ?? ''}\0${identity}`
 }
 
 /** Forget cached answers (sign-in changes, a finished install). */
@@ -91,9 +93,9 @@ export function invalidateOrcaCloudRepoAccess(repoUrl?: string): void {
 /** One answer per repository at a time; null means "couldn't tell" (signed out, offline). */
 export async function fetchOrcaCloudRepoAccess(
   repoUrl: string,
-  options: { setupSessionId?: string; force?: boolean; now?: number } = {}
+  options: { setupSessionId?: string; force?: boolean; now?: number; identity?: string } = {}
 ): Promise<HostedGithubRepoAccessResponse | null> {
-  const key = cacheKey(repoUrl, options.setupSessionId)
+  const key = cacheKey(repoUrl, options.setupSessionId, options.identity)
   const now = options.now ?? Date.now()
   const cached = cache.get(key)
   // Only real answers are cached: "couldn't tell" asks again next time.
@@ -149,7 +151,8 @@ export function useOrcaCloudRepoAccess(
   const [tick, setTick] = useState(0)
   const onGranted = useRef(options.onGranted)
   onGranted.current = options.onGranted
-  const key = repoUrl ? cacheKey(repoUrl, setupSessionId) : ''
+  const identity = useOrcaCloudIdentityKey()
+  const key = repoUrl ? cacheKey(repoUrl, setupSessionId, identity) : ''
   const current = answer?.key === key ? answer.value : undefined
   const state = !repoUrl ? 'not-github' : repoAccessState(current?.access)
   const waiting = state === 'needs-install' || state === 'pending-approval'
@@ -161,15 +164,17 @@ export function useOrcaCloudRepoAccess(
       return
     }
     let cancelled = false
-    void fetchOrcaCloudRepoAccess(repoUrl, { setupSessionId, force: tick > 0 }).then((value) => {
-      if (!cancelled) {
-        setAnswer({ key, value })
+    void fetchOrcaCloudRepoAccess(repoUrl, { setupSessionId, identity, force: tick > 0 }).then(
+      (value) => {
+        if (!cancelled) {
+          setAnswer({ key, value })
+        }
       }
-    })
+    )
     return () => {
       cancelled = true
     }
-  }, [enabled, repoUrl, setupSessionId, key, tick])
+  }, [enabled, repoUrl, setupSessionId, identity, key, tick])
 
   useEffect(() => {
     if (!enabled || !poll || !waiting) {

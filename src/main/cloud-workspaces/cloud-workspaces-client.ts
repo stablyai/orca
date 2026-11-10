@@ -2,6 +2,7 @@
 // hosted sandbox driver: a short-lived Orca token (aud=orca-sandbox), never a provider credential.
 import { z } from 'zod'
 import { errorMessage } from '../../shared/error-message'
+import { HOSTED_SANDBOX_STATUSES } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
 import type { SealedReadSnapshot } from '../../shared/cloud-workspaces/read-snapshot'
 import {
   CloudReadSnapshotResponseSchema,
@@ -19,6 +20,10 @@ import {
 } from '../../shared/cloud-workspaces/cloud-workspaces-wire'
 
 const NoteSentSchema = z.object({ ok: z.literal(true) })
+/** DELETE and POST suspend on /v1/sandboxes/:id answer with the sandbox's new state, not `{ok}`. */
+const SandboxStateSchema = z.object({
+  sandbox: z.object({ id: z.string(), status: z.enum(HOSTED_SANDBOX_STATUSES) })
+})
 
 export class CloudWorkspacesError extends Error {
   constructor(
@@ -175,15 +180,19 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
     },
     /** Owner or team admin: put the sandbox to sleep (counts as a person choosing to sleep it). */
     async sleep(id: string): Promise<void> {
-      await call(
-        'POST',
-        `/v1/sandboxes/${encodeURIComponent(id)}/suspend`,
-        NoteSentSchema.passthrough()
-      )
+      await call('POST', `/v1/sandboxes/${encodeURIComponent(id)}/suspend`, SandboxStateSchema)
     },
     /** Owner or team admin: delete the sandbox and its disk (grants revoked server-side). */
     async destroy(id: string): Promise<void> {
-      await call('DELETE', `/v1/sandboxes/${encodeURIComponent(id)}`, NoteSentSchema.passthrough())
+      const { sandbox } = await call(
+        'DELETE',
+        `/v1/sandboxes/${encodeURIComponent(id)}`,
+        SandboxStateSchema
+      )
+      // Why: only "destroyed" means the sandbox stopped billing; anything else isn't a delete.
+      if (sandbox.status !== 'destroyed') {
+        throw new CloudWorkspacesError(200, 'not_destroyed', sandbox.status)
+      }
     },
     async listGrants(id: string) {
       return (await call('GET', `${ws(id)}/grants`, CloudWorkspaceGrantListSchema)).grants
