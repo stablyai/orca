@@ -20,8 +20,11 @@ export async function reapplyOrcaCloudTransfer(args: {
   archiveAfter: boolean
 }): Promise<void> {
   const api = window.api?.orcaCloudWorkspace
-  const run = api?.reapplyTransferToLocal ? claimMoveRun() : null
-  if (!api || run === null) {
+  if (!api) {
+    return
+  }
+  const run = claimMoveRun()
+  if (run === null) {
     return
   }
   const startedAt = Date.now()
@@ -78,7 +81,7 @@ export async function reapplyOrcaCloudTransfer(args: {
  */
 export async function offerPendingCloudTransfers(): Promise<number> {
   const api = window.api?.orcaCloudWorkspace
-  if (!api?.listPendingTransfers || !api.reapplyTransferToLocal) {
+  if (!api) {
     return 0
   }
   const pending = await api.listPendingTransfers().catch(() => [])
