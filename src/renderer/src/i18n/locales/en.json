@@ -24778,5 +24778,14 @@
       "dismiss": "Dismiss",
       "cancelDownload": "Cancel download"
     }
+  },
+  "usage": {
+    "failure": {
+      "unavailable": "Usage is unavailable. Try Refresh to reconnect.",
+      "setting": "The tracking change could not be confirmed. Try changing it again.",
+      "refresh": "The previous Refresh could not be completed. Try Refresh again.",
+      "read": "Usage could not be loaded. Try Refresh again.",
+      "retry": "Refresh"
+    }
   }
 }
