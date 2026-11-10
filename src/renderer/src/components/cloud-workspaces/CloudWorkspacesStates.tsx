@@ -1,8 +1,7 @@
 // Loading, empty and error states for the cloud workspaces list, and the new-section dialog.
 import React, { useState } from 'react'
-import { List } from 'lucide-react'
+import { Cloud, List } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Cloud } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { openNewCloudWorkspace } from '@/hooks/ipc-events/new-workspace-command'
 import {
