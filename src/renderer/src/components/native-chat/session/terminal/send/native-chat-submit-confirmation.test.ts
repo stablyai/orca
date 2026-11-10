@@ -102,4 +102,10 @@ describe('composerStillHoldsSubmittedText', () => {
     expect(composerStillHoldsSubmittedText(null, 'hello')).toBe(false)
     expect(composerStillHoldsSubmittedText('a different draft', 'hello')).toBe(false)
   })
+
+  it('does not claim an image-only send is still held', () => {
+    // An image placeholder is not the sent text; matching it would press Enter a second time.
+    expect(composerStillHoldsSubmittedText('[image]', '')).toBe(false)
+    expect(composerStillHoldsSubmittedText('[image]', '   ')).toBe(false)
+  })
 })

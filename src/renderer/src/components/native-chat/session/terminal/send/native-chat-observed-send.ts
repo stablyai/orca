@@ -25,7 +25,8 @@ export function composerStillHoldsSubmittedText(line: string | null, sent: strin
   }
   const expected = sent.replace(/\s+/gu, ' ').trim()
   if (!expected) {
-    return true
+    // An image-only send leaves no text to identify; a placeholder line proves nothing about Enter.
+    return false
   }
   if (current.includes(expected)) {
     return true
