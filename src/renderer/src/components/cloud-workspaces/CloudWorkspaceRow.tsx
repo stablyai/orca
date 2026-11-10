@@ -15,7 +15,6 @@ import { CloudWorkspaceRowMenu, type RowActions } from './CloudWorkspaceRowMenu'
 import {
   formatSandboxHours,
   formatRelative,
-  formatUsdMicros,
   memberName,
   presenceSummary,
   presentMembers,
@@ -112,7 +111,13 @@ export function CloudWorkspaceRow({
     }
   }, [highlighted])
   const canOpen = w.access !== 'none'
-  const cost = formatUsdMicros(w.cost.totalUsdMicros, intlLocale)
+  // Hours are what the plan meters; a per-workspace dollar figure would overstate the bill.
+  const hours = formatSandboxHours(w.cost.computeMs, intlLocale)
+  const usage = t('auto.components.cloudWorkspaces.rowSandboxHours', '{{hours}} sandbox hours', {
+    count: sandboxHours(w.cost.computeMs),
+    hours,
+    defaultValue_one: '{{hours}} sandbox hour'
+  })
   const lastActive = formatRelative(w.lastActivityAt, now, t, intlLocale)
   const presence = presenceSummary(
     presentMembers(w.presence, selfId),
@@ -128,15 +133,15 @@ export function CloudWorkspaceRow({
       : t('auto.components.cloudWorkspaces.sharedWithTeam', 'Shared with team')
   const description = presence
     ? t(
-        'auto.components.cloudWorkspaces.rowDescriptionWithPresence',
-        'Cost {{cost}}. Last active {{lastActive}}. {{visibility}}. {{presence}}.',
-        { cost, lastActive, visibility, presence }
+        'auto.components.cloudWorkspaces.rowDescriptionWithPresence2',
+        '{{usage}}. Last active {{lastActive}}. {{visibility}}. {{presence}}.',
+        { usage, lastActive, visibility, presence }
       )
     : t(
-        'auto.components.cloudWorkspaces.rowDescription',
-        'Cost {{cost}}. Last active {{lastActive}}. {{visibility}}.',
+        'auto.components.cloudWorkspaces.rowDescription2',
+        '{{usage}}. Last active {{lastActive}}. {{visibility}}.',
         {
-          cost,
+          usage,
           lastActive,
           visibility
         }
@@ -290,30 +295,20 @@ export function CloudWorkspaceRow({
       />
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="w-14 text-right text-xs tabular-nums text-muted-foreground">{cost}</span>
+          <span className="w-14 text-right text-xs tabular-nums text-muted-foreground">
+            {hours}
+          </span>
         </TooltipTrigger>
         <TooltipContent side="top">
-          <div className="font-medium">{t('auto.components.cloudWorkspaces.cost', 'Cost')}</div>
+          <div className="font-medium">
+            {t('auto.components.cloudWorkspaces.sandboxHoursTitle', 'Sandbox hours')}
+          </div>
           <div>
             {t(
-              'auto.components.cloudWorkspaces.sandboxHoursCost',
-              '{{hours}} sandbox hours × {{rate}}/hour = {{cost}}',
-              {
-                count: sandboxHours(w.cost.computeMs),
-                hours: formatSandboxHours(w.cost.computeMs, intlLocale),
-                rate: formatUsdMicros(w.cost.rateUsdMicrosPerHour, intlLocale),
-                cost: formatUsdMicros(w.cost.computeUsdMicros, intlLocale),
-                defaultValue_one: '{{hours}} sandbox hour × {{rate}}/hour = {{cost}}'
-              }
+              'auto.components.cloudWorkspaces.sandboxHoursHint',
+              'Sandbox hours this workspace has used.'
             )}
           </div>
-          {w.cost.tokenUsdMicros !== null && (
-            <div>
-              {t('auto.components.cloudWorkspaces.modelTokensCost', 'Model tokens {{value0}}', {
-                value0: formatUsdMicros(w.cost.tokenUsdMicros, intlLocale)
-              })}
-            </div>
-          )}
         </TooltipContent>
       </Tooltip>
       {/* Last activity, with Open fading in over the same slot on hover or keyboard focus. */}

@@ -8,7 +8,10 @@
 // runs it as Standard, so it also counts 1x.
 // Included hours are a MONTHLY per-seat allowance pooled across the org, for annual plans too.
 import { z } from 'zod'
-import { ORCA_CLOUD_IDLE_SLEEP_MINUTES } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
+import {
+  ORCA_CLOUD_IDLE_SLEEP_MINUTES,
+  ORCA_CLOUD_OVERAGE_CENTS_PER_HOUR
+} from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 import type { Env } from './env'
 
 export const PLAN_IDS = ['team'] as const
@@ -70,9 +73,9 @@ export const DEFAULT_PLANS: PlanCatalog = {
     machineSizes: ['standard', 'large'],
     // Same constant the control plane enforces and serves (GET /v1/config); never a literal here.
     idleSleepMinutes: ORCA_CLOUD_IDLE_SLEEP_MINUTES,
-    // The one overage rate: entitlements, the spend-cap math, the desktop and the e2e all read it from
-    // here. STRIPE_PRICE_OVERAGE must be a metered price with this unit_amount (stripe-test-setup.ts).
-    overageCentsPerHour: 100,
+    // Shared with the control plane's workspace cost; entitlements, the spend-cap math, the desktop and
+    // the e2e read it from here. STRIPE_PRICE_OVERAGE must be a metered price with this unit_amount.
+    overageCentsPerHour: ORCA_CLOUD_OVERAGE_CENTS_PER_HOUR,
     defaultSpendCapCents: 2500,
     maxSpendCapCents: 500_000,
     warnAtPercent: [80, 100],

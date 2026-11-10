@@ -231,7 +231,7 @@ export const panelMovedToComputer = defineFixture({
               orcadAlive: true
             },
             uptimeMs: 3_600_000,
-            usage: { totalMs: 2.4 * 3_600_000, centsPerHour: 75, costCents: 180 },
+            usage: { totalMs: 2.4 * 3_600_000, centsPerHour: 100, costCents: 240 },
             archive: null,
             checkedAt: NOW
           },

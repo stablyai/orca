@@ -43,24 +43,25 @@ export function isCloudStatusTransitional(status: CloudWorkspaceStatus): boolean
   return status === 'creating' || status === 'waking' || status === 'stopping'
 }
 
-const formatters = new Map<string, Intl.NumberFormat>()
+const hourFormatters = new Map<string, Intl.NumberFormat>()
 
-function usd(value: number): string {
+/** Sandbox hours with one decimal ("3.2"), two under an hour ("0.25"), like the desktop. */
+export function cloudSandboxHours(ms: number): { value: number; label: string } {
+  const hours = ms / 3_600_000
+  const digits = hours < 1 ? 2 : 1
+  const value = Math.round(hours * 10 ** digits) / 10 ** digits
   const locale = getUiIntlLocale()
-  try {
-    let format = formatters.get(locale)
-    if (!format) {
-      format = new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD' })
-      formatters.set(locale, format)
+  const key = `${locale}:${digits}`
+  let format = hourFormatters.get(key)
+  if (!format) {
+    try {
+      format = new Intl.NumberFormat(locale, { maximumFractionDigits: digits })
+    } catch {
+      format = new Intl.NumberFormat('en-US', { maximumFractionDigits: digits })
     }
-    return format.format(value)
-  } catch {
-    return `$${value.toFixed(2)}`
+    hourFormatters.set(key, format)
   }
-}
-
-export function formatCloudCost(value: number): string {
-  return value > 0 && value < 0.01 ? `<${usd(0.01)}` : usd(value)
+  return { value, label: format.format(value) }
 }
 
 /** "owner/repo · branch" from a GitHub URL, or null for an empty project. */

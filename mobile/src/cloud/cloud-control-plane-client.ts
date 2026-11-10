@@ -39,7 +39,8 @@ export type CloudWorkspace = {
   createdAt: number
   lastActivityAt: number | null
   /** Compute spend so far, when the registry reports it. */
-  cost: { usd: number; usdPerHour: number | null } | null
+  /** Awake time so far, from the team registry; the plan meters hours, not per-workspace dollars. */
+  sandboxMs: number | null
   createdByUserId: string | null
 }
 const SANDBOX_STATUS: Record<string, CloudWorkspaceStatus> = {
@@ -91,10 +92,7 @@ function fromRegistry(row: TeamWorkspace): CloudWorkspace {
     machineSize: row.machineSize,
     createdAt: row.createdAt,
     lastActivityAt: row.lastActivityAt,
-    cost: {
-      usd: row.cost.totalUsdMicros / 1_000_000,
-      usdPerHour: row.cost.rateUsdMicrosPerHour ? row.cost.rateUsdMicrosPerHour / 1_000_000 : null
-    },
+    sandboxMs: row.cost.computeMs,
     createdByUserId: row.createdBy
   }
 }
@@ -109,7 +107,7 @@ function fromSandbox(row: z.infer<typeof SandboxViewSchema>): CloudWorkspace {
     machineSize: row.machineSize,
     createdAt: row.createdAt,
     lastActivityAt: null,
-    cost: null,
+    sandboxMs: null,
     createdByUserId: null
   }
 }

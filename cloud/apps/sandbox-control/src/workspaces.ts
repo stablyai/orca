@@ -14,10 +14,14 @@ import type { MachineSize } from './entitlements'
 import { getSandbox, touchActivity, updateRegistry, type SandboxRow } from './store'
 import { memberNamesFor } from './member-names'
 import { sandboxView } from './wire'
+import { ORCA_CLOUD_OVERAGE_CENTS_PER_HOUR } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 
 export const PRESENCE_TTL_MS = 45_000
-/** Billing's overage rate (75¢ per standard hour, large weighs 2) in USD micros per wall-clock hour. */
-export const COMPUTE_USD_MICROS_PER_HOUR: Record<MachineSize, number> = { standard: 750_000, large: 1_500_000 }
+/** Billing's overage price per awake hour in USD micros; every size counts 1x (legacy large too). */
+export const COMPUTE_USD_MICROS_PER_HOUR: Record<MachineSize, number> = {
+  standard: ORCA_CLOUD_OVERAGE_CENTS_PER_HOUR * 10_000,
+  large: ORCA_CLOUD_OVERAGE_CENTS_PER_HOUR * 10_000
+}
 
 export type WorkspaceAccess = 'owner' | 'granted' | 'can_open' | 'none'
 
