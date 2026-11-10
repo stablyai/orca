@@ -562,14 +562,20 @@ describe('chat worker approvals', () => {
   function chat() {
     const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
     const prompts = new Map<string, ChatWorkerPrompt>()
+    const unreadable = { now: false }
     const report = chatWorkerTurnStopReporter(
       ctx.deps,
       (run) => run(),
-      async (_sessionId, itemId) => prompts.get(itemId) ?? null
+      async (_sessionId, itemId) => {
+        if (unreadable.now) {
+          throw new Error('journal unreadable')
+        }
+        return prompts.get(itemId) ?? null
+      }
     )
     const idle = () => ({ status: 'idle' as const, lastAssistantMessage: '' })
     const all = () => ctx.db.getUnreadRunMailbox(ctx.run.id, 100)
-    return { ctx, prompts, report, idle, all }
+    return { ctx, prompts, unreadable, report, idle, all }
   }
 
   it('escalates one open approval once, with its structured payload', async () => {
@@ -621,6 +627,26 @@ describe('chat worker approvals', () => {
       allowedActions: [],
       outcome: { by: 'worker-chat', decision: 'deny' }
     })
+  })
+
+  it('keeps watching a reported approval through an unreadable chat', async () => {
+    const { prompts, unreadable, report, idle, all } = chat()
+    prompts.set('item_1', { revision: 1, body: approval(null) })
+    report(promptEvent('item_1'), idle)
+    await settle()
+
+    prompts.set('item_1', { revision: 2, body: approval('deny') })
+    unreadable.now = true
+    report(finished('turn-2'), idle)
+    await settle()
+    expect(all().filter((message) => message.type === 'status')).toHaveLength(0)
+
+    unreadable.now = false
+    report(finished('turn-3'), idle)
+    await settle()
+    const closing = all().filter((message) => message.type === 'status')
+    expect(closing).toHaveLength(1)
+    expect(closing[0].body).toContain("Denied in the worker's own chat")
   })
 
   it('tells the coordinator a plain prompt needs a person, not a message', async () => {

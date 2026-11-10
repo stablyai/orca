@@ -4,7 +4,7 @@ import { codexApprovalItem } from '../../../../codex/structured/prompts/codex-st
 import { CODEX_MCP_ELICITATION_METHOD } from '../../../../codex/structured/prompts/codex-prompt-registry'
 import { claudeApprovalItem } from '../../../../claude/structured/journal/claude-structured-prompt-items'
 import type { AgentJournalPromptOption } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { workerApprovalOption } from './worker-approval'
+import { chatAnswerOutcome, workerApprovalOption } from './worker-approval'
 
 function acpOptions(kinds: string[]): AgentJournalPromptOption[] {
   const body = acpPermissionPresentation({
@@ -66,5 +66,26 @@ describe('worker approval option', () => {
   it('allows only once, never for the session', () => {
     expect(pick(acpOptions(['allow_always', 'reject_once']), 'allow')).toBeNull()
     expect(pick(acpOptions(['allow_once', 'allow_always', 'reject_once']), 'allow')).toBe('opt_0')
+  })
+})
+
+describe('chat answer outcome', () => {
+  it('tells a reason only when it went to the worker as mail', () => {
+    expect(
+      chatAnswerOutcome({ by: 'person', decision: 'allow', reason: 'ok', reasonMailed: false })
+    ).toEqual({ by: 'person', decision: 'allow', reason: null, reasonDelivered: false })
+    expect(
+      chatAnswerOutcome({
+        by: 'coordinator',
+        decision: 'deny',
+        reason: 'use a script file',
+        reasonMailed: true
+      })
+    ).toEqual({
+      by: 'coordinator',
+      decision: 'deny',
+      reason: 'use a script file',
+      reasonDelivered: false
+    })
   })
 })

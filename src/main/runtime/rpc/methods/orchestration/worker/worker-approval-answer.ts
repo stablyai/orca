@@ -3,8 +3,14 @@ import { ApprovalAnswerParams } from '../../../../../../shared/rpc-contract/orch
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { structuredMailboxCustody } from '../../../../orchestration/mailbox/routing/structured-session-mail-target'
 import { answerChatWorkerApproval } from '../../../../orchestration/workers/approvals/chat-worker-approval-prompt'
-import { workerApprovalPayload } from '../../../../orchestration/workers/approvals/worker-approval'
-import { reportWorkerApprovalClosed } from '../../../../orchestration/workers/turn-stops/worker-turn-stop-report'
+import {
+  chatAnswerOutcome,
+  workerApprovalPayload
+} from '../../../../orchestration/workers/approvals/worker-approval'
+import {
+  reportWorkerApprovalClosed,
+  stopReportId
+} from '../../../../orchestration/workers/turn-stops/worker-turn-stop-report'
 import { workerApprovalAccess } from './worker-approval-access'
 import { formatOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
 
@@ -64,10 +70,13 @@ export const ORCHESTRATION_WORKER_APPROVAL_METHODS = [
       }
       const notify = (handle: string, type: string): void =>
         runtime.notifyMessageArrived(handle, type)
-      // Chat prompts take no deny message, so the reason reaches the worker as its next mail.
+      // Chat prompts take no deny message, so the reason reaches the worker as its next mail, once.
+      const reasonId = stopReportId(dispatch.id, `approval:${params.prompt}:reason`)
       const reasonMessage =
         params.decision === 'deny' && access.reason
-          ? db.insertMessage({
+          ? (db.getMessageById(reasonId) ??
+            db.insertMessage({
+              id: reasonId,
               from:
                 params.from ??
                 (orchestrationCaller
@@ -77,7 +86,7 @@ export const ORCHESTRATION_WORKER_APPROVAL_METHODS = [
               subject: `Denied: ${answered.prompt.body.displayName ?? answered.prompt.body.title}`,
               body: access.reason,
               runId: dispatch.run_id
-            })
+            }))
           : null
       if (reasonMessage) {
         notify(reasonMessage.to_handle, reasonMessage.type)
@@ -95,12 +104,12 @@ export const ORCHESTRATION_WORKER_APPROVAL_METHODS = [
               dispatchId: dispatch.id,
               taskId: dispatch.task_id
             },
-            outcome: {
+            outcome: chatAnswerOutcome({
               by: access.answeredBy,
               decision: params.decision,
               reason: access.reason,
-              reasonDelivered: false
-            }
+              reasonMailed: reasonMessage !== null
+            })
           })
         },
         { notify }

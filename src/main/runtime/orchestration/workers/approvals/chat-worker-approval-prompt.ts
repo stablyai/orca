@@ -15,19 +15,16 @@ export type ChatWorkerPromptReader = (
   itemId: string
 ) => Promise<ChatWorkerPrompt | null>
 
-/** The approval item by its journal id, pending or settled; null for anything else or an unreadable chat. */
+/** The approval item by its journal id, pending or settled; null when the chat has no such item.
+ *  Throws when the chat cannot be read, which proves nothing about the prompt. */
 export const readChatWorkerPrompt: ChatWorkerPromptReader = async (sessionId, itemId) => {
   const host = getStructuredAgentSessionHost()
   if (!host) {
-    return null
+    throw new Error('No chat host is running.')
   }
-  try {
-    const snapshot = await host.journalCurrentRead(sessionId)
-    const item = snapshot.items.find((candidate) => candidate.itemId === itemId)
-    return item?.body.kind === 'approval' ? { revision: item.revision, body: item.body } : null
-  } catch {
-    return null
-  }
+  const snapshot = await host.journalCurrentRead(sessionId)
+  const item = snapshot.items.find((candidate) => candidate.itemId === itemId)
+  return item?.body.kind === 'approval' ? { revision: item.revision, body: item.body } : null
 }
 
 export type ChatWorkerApprovalAnswer =
@@ -47,15 +44,22 @@ export async function answerChatWorkerApproval(input: {
   readPrompt?: ChatWorkerPromptReader
 }): Promise<ChatWorkerApprovalAnswer> {
   const { sessionId, approvalId, decision } = input
-  const prompt = await (input.readPrompt ?? readChatWorkerPrompt)(sessionId, approvalId)
-  const host = getStructuredAgentSessionHost()
-  const fence = host?.deps.store.getConversation(sessionId)?.currentFence
-  if (!prompt || prompt.body.resolution.state !== 'pending' || !host || fence === undefined) {
+  const read = input.readPrompt ?? readChatWorkerPrompt
+  const prompt = await read(sessionId, approvalId).catch(() => undefined)
+  if (prompt === undefined) {
     return {
       ok: false,
-      code: 'approval_not_open',
-      message: `Approval ${approvalId} is no longer open; nothing was answered.`
+      code: 'approval_refused',
+      message: `Orca could not read the worker's chat, so ${approvalId} was not answered. Try again.`
     }
+  }
+  const notOpen: ChatWorkerApprovalAnswer = {
+    ok: false,
+    code: 'approval_not_open',
+    message: `Approval ${approvalId} is no longer open; nothing was answered.`
+  }
+  if (!prompt) {
+    return notOpen
   }
   const option = workerApprovalOption(prompt.body.options, decision)
   if (!option) {
@@ -68,9 +72,24 @@ export async function answerChatWorkerApproval(input: {
           : `Approval ${approvalId} offers no way to allow just this request. A person must answer it on the worker.`
     }
   }
+  const callerKey = `${ORCHESTRATION_APPROVAL_CALLER_PREFIX}${input.dispatchId}`
+  const { resolution } = prompt.body
+  // A retry of this Dispatch's own answer: the same receipt, and no second effect.
+  if (
+    resolution.state === 'resolved' &&
+    resolution.resolvedBy === callerKey &&
+    resolution.selectedOptionId === option.id
+  ) {
+    return { ok: true, prompt, optionLabel: option.label }
+  }
+  const host = getStructuredAgentSessionHost()
+  const fence = host?.deps.store.getConversation(sessionId)?.currentFence
+  if (resolution.state !== 'pending' || !host || fence === undefined) {
+    return notOpen
+  }
   const fields = { itemId: approvalId, expectedRevision: prompt.revision, optionId: option.id }
   const result = await host.respondToPrompt(
-    { callerKey: `${ORCHESTRATION_APPROVAL_CALLER_PREFIX}${input.dispatchId}` },
+    { callerKey },
     {
       envelope: {
         sessionId,
@@ -87,11 +106,19 @@ export async function answerChatWorkerApproval(input: {
     }
   )
   if (!result.ok) {
-    return {
-      ok: false,
-      code: 'approval_refused',
-      message: `The worker's chat did not take the answer to ${approvalId}: ${result.refusal.message}`
-    }
+    // Answered meanwhile, in the worker's chat or by another call: not this call's refusal.
+    const now = await read(sessionId, approvalId).catch(() => null)
+    return now && now.body.resolution.state !== 'pending'
+      ? notOpen
+      : {
+          ok: false,
+          code: 'approval_refused',
+          message: `The worker's chat did not take the answer to ${approvalId}: ${result.refusal.message}`
+        }
+  }
+  // A same-option answer already on record also succeeds; it is this call's only if Orca recorded it here.
+  if (result.value.resolution.resolvedBy !== callerKey) {
+    return notOpen
   }
   return { ok: true, prompt, optionLabel: option.label }
 }

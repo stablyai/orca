@@ -8,7 +8,8 @@ import {
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
-import { evaluateTuiIdle, isTuiIdleReadyVerdict, type TuiIdleVerdict } from './tui-idle-evidence'
+import { evaluateTuiIdle, type TuiIdleVerdict } from './tui-idle-evidence'
+import { terminalDeliveryRefusal } from './terminal-delivery-refusal'
 import { ptyTuiIdleEvidence } from './tui-idle-evidence-source'
 import { TUI_IDLE_QUIESCENCE_MS } from './terminal-idle-policy'
 import { USER_INPUT_HOLD_CAP_MS } from './claude-open-dialog-hold'
@@ -120,32 +121,31 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
    *  steer text sent mid-turn, so only dialogs, drafts and unsettled terminals hold mail. Callers
    *  separately require live status evidence. */
   protected isAgentSettledForDelivery(ptyId: string): boolean {
-    const pty = this.ptysById.get(ptyId)
-    if (!pty || this.ptyDeliveryHold(ptyId)) {
-      return false
-    }
-    const { verdict, readScreenInputVeto } = this.deliveryTuiVerdict(pty)
-    // The ranking vetoes overlays only on ready verdicts; an overlay refuses input mid-turn too.
-    // Only a recognized agent queues mid-turn text; an unknown program would read it as stdin.
-    return verdict.kind === 'working'
-      ? !!this.getPaneTerminalAgent(ptyId) && readScreenInputVeto() !== true
-      : isTuiIdleReadyVerdict(verdict)
+    return this.deliveryRefusal(ptyId) === null
   }
 
-  /** Why delivery holds mail for this worker terminal now, for a send receipt. Only holds that wait
-   *  on a person count; settling output or a restoring screen clears by itself. */
+  /** Why delivery would hold mail for this worker terminal now, for a send receipt: the gate's own reason. */
   readTerminalMailHold(terminalHandle: string): MailboxDeliveryHold | null {
     const ptyId = this.getOrchestrationMailboxTerminalForHandle(terminalHandle)?.ptyId
-    const pty = ptyId ? this.ptysById.get(ptyId) : undefined
-    if (!ptyId || !pty) {
-      return null
+    const refusal = ptyId ? this.deliveryRefusal(ptyId) : null
+    return refusal === 'no-terminal' ? null : refusal
+  }
+
+  private deliveryRefusal(ptyId: string): MailboxDeliveryHold | 'no-terminal' | null {
+    const pty = this.ptysById.get(ptyId)
+    if (!pty) {
+      return 'no-terminal'
     }
     const hold = this.ptyDeliveryHold(ptyId)
     if (hold) {
-      return hold === 'restoring' ? null : { kind: hold }
+      return { kind: hold }
     }
-    const { verdict } = this.deliveryTuiVerdict(pty)
-    return verdict.kind === 'blocked' ? { kind: 'blocked', reason: verdict.reason } : null
+    const { verdict, readScreenInputVeto } = this.deliveryTuiVerdict(pty)
+    return terminalDeliveryRefusal({
+      verdict,
+      recognizedAgent: !!this.getPaneTerminalAgent(ptyId),
+      readScreenInputVeto
+    })
   }
 
   private deliveryTuiVerdict(pty: RuntimePtyWorktreeRecord) {

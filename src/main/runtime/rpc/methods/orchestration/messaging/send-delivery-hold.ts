@@ -1,7 +1,7 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { structuredMailboxCustody } from '../../../../orchestration/mailbox/routing/structured-session-mail-target'
-import { readStructuredSessionGateFacts } from '../../../../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host'
+import { readStructuredMailAdmitFacts } from '../../../../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host'
 import {
   describeMailboxDeliveryHold,
   readMailboxDeliveryHold
@@ -22,7 +22,7 @@ export async function sendDeliveryHoldWarning(
       const custody = structuredMailboxCustody(mailbox, db)
       return typeof custody === 'object' ? custody.sessionId : null
     },
-    readChatFacts: readStructuredSessionGateFacts,
+    readChatAdmit: readStructuredMailAdmitFacts,
     terminalFor: (mailbox) => {
       if (!mailbox.startsWith('dispatch:')) {
         return mailbox
