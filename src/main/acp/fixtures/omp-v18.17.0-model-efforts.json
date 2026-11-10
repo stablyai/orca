@@ -1,0 +1,102 @@
+{
+  "new": {
+    "configOptions": [
+      {
+        "id": "model",
+        "name": "Model",
+        "category": "model",
+        "type": "select",
+        "currentValue": "fake/wide",
+        "options": [
+          { "value": "fake/wide", "name": "Wide", "description": "fake/wide" },
+          { "value": "fake/narrow", "name": "Narrow", "description": "fake/narrow" },
+          {
+            "value": "apple/on-device",
+            "name": "Apple AFM 3 Core Advanced",
+            "description": "apple/on-device"
+          }
+        ]
+      },
+      {
+        "id": "thinking",
+        "name": "Thinking",
+        "category": "thought_level",
+        "type": "select",
+        "currentValue": "high",
+        "options": [
+          { "value": "off", "name": "Off" },
+          { "value": "auto", "name": "Auto", "description": "Auto-detect per prompt" },
+          { "value": "minimal", "name": "minimal" },
+          { "value": "low", "name": "low" },
+          { "value": "medium", "name": "medium" },
+          { "value": "high", "name": "high" },
+          { "value": "xhigh", "name": "xhigh" }
+        ]
+      }
+    ]
+  },
+  "narrow": {
+    "configOptions": [
+      {
+        "id": "model",
+        "name": "Model",
+        "category": "model",
+        "type": "select",
+        "currentValue": "fake/narrow",
+        "options": [
+          { "value": "fake/wide", "name": "Wide", "description": "fake/wide" },
+          { "value": "fake/narrow", "name": "Narrow", "description": "fake/narrow" },
+          {
+            "value": "apple/on-device",
+            "name": "Apple AFM 3 Core Advanced",
+            "description": "apple/on-device"
+          }
+        ]
+      },
+      {
+        "id": "thinking",
+        "name": "Thinking",
+        "category": "thought_level",
+        "type": "select",
+        "currentValue": "high",
+        "options": [
+          { "value": "off", "name": "Off" },
+          { "value": "auto", "name": "Auto", "description": "Auto-detect per prompt" },
+          { "value": "low", "name": "low" },
+          { "value": "high", "name": "high" }
+        ]
+      }
+    ]
+  },
+  "unresolved": {
+    "configOptions": [
+      {
+        "id": "model",
+        "name": "Model",
+        "category": "model",
+        "type": "select",
+        "currentValue": "fake/wide",
+        "options": [
+          { "value": "fake/wide", "name": "Wide", "description": "fake/wide" },
+          { "value": "fake/narrow", "name": "Narrow", "description": "fake/narrow" },
+          {
+            "value": "apple/on-device",
+            "name": "Apple AFM 3 Core Advanced",
+            "description": "apple/on-device"
+          }
+        ]
+      },
+      {
+        "id": "thinking",
+        "name": "Thinking",
+        "category": "thought_level",
+        "type": "select",
+        "currentValue": "off",
+        "options": [
+          { "value": "off", "name": "Off" },
+          { "value": "auto", "name": "Auto", "description": "Auto-detect per prompt" }
+        ]
+      }
+    ]
+  }
+}
