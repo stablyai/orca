@@ -8,6 +8,7 @@ import {
   getEphemeralVmRecipeResultPairingCode
 } from '../../shared/ephemeral-vm-recipes'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
+import { getPreferredPairedRuntimeConnection } from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   EphemeralVmFailureError,
   ephemeralVmFailureFromError,
@@ -28,8 +29,10 @@ import {
 import type { VmWakeRequest } from '../runtime/workspaces/sleep/workspace-sleep-platform'
 import { getRuntimeRecipeContext } from '../ipc/ephemeral-vm-recipe-context'
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
+import { reconnectSharedControlIfIdle } from '../ipc/runtime-environments/runtime-environment-shared-control-reconnect'
 import {
   getRemoteRuntimeSharedControlDiagnostics,
+  ensureRemoteRuntimeSharedControlConnection,
   getRuntimeEnvironmentStatusOwner,
   reconnectRemoteRuntimeSharedControlConnection
 } from '../ipc/runtime-environments/runtime-environment-request-connections'
@@ -139,7 +142,12 @@ export async function resumeEphemeralVmWorkspace(
       userDataPath,
       environmentId: runtime.runtimeEnvironmentId,
       pairingCode,
-      invalidateTransport: invalidateRuntimeEnvironmentTransport
+      invalidateTransport: invalidateRuntimeEnvironmentTransport,
+      // The wake's own reconnect proves the kept token; a separate probe first would put one more
+      // connection setup between the click and the terminal.
+      confirmInBackground: true,
+      onRepairedInBackground: (repaired) =>
+        noteRecipeVmWakePairing(repaired.id, repaired.pairingRevision ?? repaired.createdAt, true)
     })
     noteRecipeVmWakePairing(
       environment.id,
@@ -148,7 +156,11 @@ export async function resumeEphemeralVmWorkspace(
     )
   }
   if (connection.type !== 'ssh' && runtime.runtimeEnvironmentId) {
-    reestablishWokenServer(userDataPath, runtime.runtimeEnvironmentId)
+    reestablishWokenServer(userDataPath, runtime.runtimeEnvironmentId, {
+      // A hosted VM always runs a shared-control server, so its control socket can dial alongside
+      // the health probe instead of after the probe confirms the capability (one setup saved).
+      preopenSharedControl: runtime.recipe?.provider === 'orca-cloud'
+    })
   }
   // Suspend tore down the runtime-owned SSH transport, so an SSH VM reconnects even when its
   // recipe had no resume step to run.
@@ -204,10 +216,23 @@ function isPairedServerContactLost(environmentId: string): boolean {
 
 /** Nothing retried this server's control socket or health probe while its VM slept; reopen them.
  *  On the next turn, once this wake is no longer pending, so the reopen is not refused as waking. */
-function reestablishWokenServer(userDataPath: string, environmentId: string): void {
+function reestablishWokenServer(
+  userDataPath: string,
+  environmentId: string,
+  options: { preopenSharedControl?: boolean } = {}
+): void {
   setTimeout(() => {
     try {
-      reconnectRemoteRuntimeSharedControlConnection(environmentId)
+      if (options.preopenSharedControl) {
+        ensureRemoteRuntimeSharedControlConnection(
+          environmentId,
+          getPreferredPairedRuntimeConnection(resolveEnvironment(userDataPath, environmentId))
+        )
+      }
+      reconnectSharedControlIfIdle({
+        getDiagnostics: () => getRemoteRuntimeSharedControlDiagnostics(environmentId),
+        reconnectNow: () => reconnectRemoteRuntimeSharedControlConnection(environmentId)
+      })
       void getRuntimeEnvironmentStatusOwner(userDataPath, environmentId)
         .refresh({ reconnect: true })
         .catch(() => {})

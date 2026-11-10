@@ -22,6 +22,7 @@ import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environmen
 import { autoResumeAgentsAfterRollover, listRestartOfferIds } from './hosted-agent-auto-resume'
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import { toReady } from './hosted-sandbox-driver'
+import { noteWakeTimeline } from './cloud-wake-timeline'
 import { createHostedRuntimeEnvironmentCall } from './hosted-runtime-environment-call'
 import {
   NOT_CLOUD,
@@ -87,7 +88,11 @@ export function installHostedWorkspaceService(deps: {
       userDataPath: deps.userDataPath,
       environmentId: runtimeEnvironmentId,
       pairingCode: ready.connection.pairingCode,
-      invalidateTransport: invalidateRuntimeEnvironmentTransport
+      invalidateTransport: invalidateRuntimeEnvironmentTransport,
+      // Restart/rollover: the reconnect proves the kept token; re-pair later only if refused.
+      confirmInBackground: true,
+      onRepairedInBackground: (repaired) =>
+        noteRecipeVmWakePairing(repaired.id, repaired.pairingRevision ?? repaired.createdAt, true)
     })
     noteRecipeVmWakePairing(
       environment.id,
@@ -113,11 +118,9 @@ export function installHostedWorkspaceService(deps: {
       if (event.phase === 'ready' || event.phase === 'failed') {
         wakes.delete(event.workspaceId)
       }
-      broadcast(CH.wakeProgress, {
-        ...event,
-        source,
-        at: Date.now()
-      } satisfies CloudWakeProgressEvent)
+      const at = Date.now()
+      noteWakeTimeline({ ...event, source }, at)
+      broadcast(CH.wakeProgress, { ...event, source, at } satisfies CloudWakeProgressEvent)
       if (event.phase === 'connecting' && event.source !== 'restart') {
         void announceReadyWhenRunning(event.workspaceId, event.startedAt)
       }

@@ -10,6 +10,11 @@ import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electr
 
 const SAVED_PAIRING_PROBE_TIMEOUT_MS = 10_000
 
+// The newest resume per environment. A background confirmation may only re-pair for the resume that
+// started it: a later resume (Restart right after a wake) owns the environment's pairing now.
+const latestResume = new Map<string, number>()
+let resumeSequence = 0
+
 export type ResumedRuntimePairingOutcome = {
   environment: KnownRuntimeEnvironment
   reusedPairing: boolean
@@ -27,20 +32,56 @@ export async function applyResumedRuntimePairing(args: {
   pairingCode: string
   invalidateTransport: (environmentId: string) => unknown
   probeSavedPairing?: (connection: PairedRuntimeConnection) => Promise<unknown>
+  /**
+   * Confirm a kept token off the critical path: answer at once and re-pair later only if the
+   * server turns out to have lost the device. For wakes, where every connection setup is latency.
+   */
+  confirmInBackground?: boolean
+  /** Called when a background confirmation had to re-pair (the environment's pairing changed). */
+  onRepairedInBackground?: (environment: KnownRuntimeEnvironment) => void
   now?: number
 }): Promise<ResumedRuntimePairingOutcome> {
+  const resume = ++resumeSequence
+  latestResume.set(args.environmentId, resume)
   const { repairFromFreshOffer, ...refreshed } = refreshEnvironmentFromResumePairingCode(
     args.userDataPath,
     args.environmentId,
     { pairingCode: args.pairingCode, now: args.now }
   )
-  const outcome = refreshed.reusedPairing
-    ? await confirmSavedPairing(refreshed, repairFromFreshOffer, args.probeSavedPairing)
-    : refreshed
   // Why also on an unchanged endpoint: the VM restarted, so any open socket is already dead.
-  // Why after the probe: reconnecting first would dial with a token about to be replaced.
+  if (!refreshed.reusedPairing) {
+    void args.invalidateTransport(args.environmentId)
+    return refreshed
+  }
+  // Why before the probe: a kept token is almost always still valid, so the real connection dials
+  // while the probe confirms it instead of after (one connection setup off the wake path). In the
+  // rare case the server lost the device, the re-pair below drops that socket and dials again.
   void args.invalidateTransport(args.environmentId)
-  return outcome
+  const isCurrent = (): boolean => latestResume.get(args.environmentId) === resume
+  // A stale confirmation must not overwrite the pairing a newer resume wrote.
+  const guardedRepair = (): KnownRuntimeEnvironment =>
+    isCurrent() ? repairFromFreshOffer() : refreshed.environment
+  const confirmed = confirmSavedPairing(refreshed, guardedRepair, args.probeSavedPairing).then(
+    (outcome) => {
+      if (outcome.environment === refreshed.environment) {
+        // Kept, or superseded by a newer resume before the re-pair: nothing changed here.
+        return { ...outcome, reusedPairing: true }
+      }
+      void args.invalidateTransport(args.environmentId)
+      return outcome
+    }
+  )
+  if (!args.confirmInBackground) {
+    return confirmed
+  }
+  void confirmed
+    .then((outcome) => {
+      if (!outcome.reusedPairing) {
+        args.onRepairedInBackground?.(outcome.environment)
+      }
+    })
+    .catch(() => undefined)
+  return refreshed
 }
 
 async function confirmSavedPairing(
