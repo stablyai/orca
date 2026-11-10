@@ -62,8 +62,13 @@ export function toOrcaCloudRunTargetAccess(
       return { state: 'out-of-hours', cause: 'cap', canManageBilling }
     case 'payment':
       return { state: 'payment-issue', canManageBilling }
-    default:
-      // No plan (or a reason this build doesn't know): the plan is what fixes it.
+    // Billing's account answer never carries the start-gate reasons; anything else is no plan,
+    // which the plan fixes.
+    case 'plan':
+    case 'teamLimit':
+    case 'memberLimit':
+    case 'machineSize':
+    case 'other':
       return { state: 'no-plan', lapsed: entitlement.reason === 'subscription_inactive' }
   }
 }

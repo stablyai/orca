@@ -53,6 +53,9 @@ export function classifyEntitlementDenial(
       return 'memberLimit'
     case 'machine_size_not_in_plan':
       return 'machineSize'
+    case null:
+    case undefined:
+      return 'other'
     default:
       return 'other'
   }
