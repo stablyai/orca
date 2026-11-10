@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ChevronDown, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -149,7 +149,8 @@ function SessionOptionPopover(props: {
     (descriptor) =>
       descriptor.settable &&
       !pendingIds.has(descriptor.id) &&
-      (!props.isWorking || descriptor.transport === 'agent-session')
+      // While the agent works a choice is queued; a chat session applies it to the next message itself.
+      descriptor.settable
   )
   // Why here: this unmounts with the pill, so a picker that went away comes back closed.
   const [open, setOpen] = useState(false)
@@ -182,9 +183,31 @@ function SessionOptionPopover(props: {
       ? nativeChatSessionOptionDisabledReason(options[0]?.disabledReason, say)
       : null
 
+  // A terminal agent can't take a change mid-reply: hold it and apply it once the reply finishes.
+  const [queued, setQueued] = useState<
+    ReadonlyMap<string, { descriptor: SessionOptionDescriptor; value: SessionOptionValue }>
+  >(new Map())
+  const onSetRef = useRef(props.onSet)
+  useLayoutEffect(() => {
+    onSetRef.current = props.onSet
+  })
+  useEffect(() => {
+    if (props.isWorking || queued.size === 0) {
+      return
+    }
+    for (const { descriptor, value } of queued.values()) {
+      onSetRef.current(descriptor, value)
+    }
+    setQueued(new Map())
+  }, [props.isWorking, queued])
   // Different descriptors can save together; hold only a repeat of the same pick.
   const set = (descriptor: SessionOptionDescriptor, value: SessionOptionValue): void => {
     if (pendingIds.has(descriptor.id)) {
+      return
+    }
+    if (props.isWorking && descriptor.transport !== 'agent-session') {
+      focusReturn.notePick()
+      setQueued((current) => new Map(current).set(descriptor.id, { descriptor, value }))
       return
     }
     focusReturn.notePick()
@@ -279,6 +302,28 @@ function SessionOptionPopover(props: {
               'components.native-chat.composer.optionsApplyNext',
               'The agent is working. Changes apply to your next message.'
             )}
+          </p>
+        ) : props.isWorking || queued.size > 0 ? (
+          <p className="px-3 pt-2 text-xs text-muted-foreground">
+            {queued.size > 0
+              ? t(
+                  'components.native-chat.composer.optionsQueued',
+                  'Queued: {{choices}}. Applied when this reply finishes.',
+                  {
+                    choices: [...queued.values()]
+                      .map(({ descriptor, value }) =>
+                        descriptor.kind.type === 'select'
+                          ? (descriptor.kind.choices.find((choice) => choice.value === value)
+                              ?.label ?? String(value))
+                          : String(value)
+                      )
+                      .join(', ')
+                  }
+                )
+              : t(
+                  'components.native-chat.composer.optionsQueueHint',
+                  'The agent is working. Your choice is queued and applied when this reply finishes.'
+                )}
           </p>
         ) : null}
         {model.kind.type === 'select' && !model.action ? (
