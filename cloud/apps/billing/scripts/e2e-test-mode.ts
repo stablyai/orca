@@ -70,7 +70,7 @@ const ids: Record<string, string> = {}
 
 async function token(org: string, user = `user_${org}`): Promise<string> {
   const now = Math.floor(Date.now() / 1000)
-  return new SignJWT({ sub: user, org, orgRole: 'owner', email: `e2e+${user}@example.com`, purpose: 'billing' })
+  return new SignJWT({ sub: user, org, orgRole: 'owner', email: `e2e+${user === `user_${org}` ? org : user}@example.com`, purpose: 'billing' })
     .setProtectedHeader({ alg: 'ES256', kid: jwk.kid })
     .setIssuer(issuer)
     .setAudience('orca-billing')
@@ -487,7 +487,7 @@ const grantedT = await billing('POST', '/v1/billing/trial', orgT)
 check('trial granted with no card: status trial, can start, 1 sandbox at a time, no overage', grantedT.status === 200 &&
   grantedT.body.status === 'trial' && grantedT.body.canStartSandbox === true && grantedT.body.limits?.maxConcurrentSandboxes === 1 &&
   grantedT.body.trial?.includedSeconds === 2 * HOUR && grantedT.body.overage?.active === false, grantedT)
-const trialCustomers = await stripe<{ data: Array<{ metadata: Record<string, string> }> }>('GET', '/v1/customers', { email: `e2e+user_${orgT}@example.com`, limit: 10 })
+const trialCustomers = await stripe<{ data: Array<{ metadata: Record<string, string> }> }>('GET', '/v1/customers', { email: `e2e+${orgT}@example.com`, limit: 10 })
 check('trial created nothing in Stripe (no customer)', trialCustomers.data.length === 0, trialCustomers.data.length)
 const secondRunning = await billing('POST', '/v1/internal/entitlements/check', null, { accountId: accountT, machineSize: 'standard', runningSandboxes: 1 }).then((r) => r.body)
 check('trial runs 1 sandbox at a time (concurrency_limit)', secondRunning.allow === false && secondRunning.reason === 'concurrency_limit', secondRunning)
