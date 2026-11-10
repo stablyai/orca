@@ -57,7 +57,9 @@ export function useRuntimePortRowForwarding(
   /** Host actions after the forward items (Orca Cloud: Share…). */
   extraMenuItems?: (port: WorkspacePort) => ReactNode,
   /** Orca Cloud: copy says "sandbox", and offline offers Wake. */
-  isSandbox = false
+  isSandbox = false,
+  /** Host row buttons after Open (Orca Cloud: Share…). */
+  extraActions?: (port: WorkspacePort) => ReactNode
 ): RuntimePortRowForwarding | null {
   const t = useTranslate()
   const environmentId = runtimeTarget?.kind === 'environment' ? runtimeTarget.environmentId : null
@@ -197,6 +199,7 @@ export function useRuntimePortRowForwarding(
           </>
         )
       },
+      hostActions: extraActions,
       copyAddress: (port) => {
         const existing = forwardFor(port)
         return existing ? `localhost:${existing.localPort}` : undefined
@@ -204,6 +207,7 @@ export function useRuntimePortRowForwarding(
     }
   }, [
     environmentId,
+    extraActions,
     extraMenuItems,
     failures,
     forward,

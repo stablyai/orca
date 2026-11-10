@@ -2291,7 +2291,7 @@
         "hostNotReachable": "Host not reachable",
         "failedAnnouncement": "Couldn't forward :{{value0}}. {{value1}}",
         "busyInUseHere": "localhost:{{value0}} in use on this computer",
-        "listenFailedRetry": "Couldn't listen on this computer. Retry or pick another port"
+        "listenFailedTryAgain": "Couldn't listen on this computer. Try again or pick another port."
       },
       "orcaCloud": {
         "workspaceActions": {
@@ -4193,15 +4193,12 @@
             "openingGitHub": "Opening GitHub…",
             "connectGitHub": "Connect GitHub",
             "planBody2": "Cloud workspaces are part of the Team plan. Nothing was created, and you weren’t charged.",
-            "planBodyMember2": "Ask an owner or admin to choose a Team plan. Nothing was created, and you weren’t charged.",
             "outOfHoursTitle": "Out of sandbox hours",
             "outOfHoursBody": "Your team has used this month’s sandbox hours. Turn on overage to keep starting sandboxes. Nothing was created, and you weren’t charged.",
-            "outOfHoursBodyMember": "Your team has used this month’s sandbox hours. Ask an owner or admin to add hours. Nothing was created, and you weren’t charged.",
             "spendCapReachedTitle": "Spend cap reached",
             "spendCapReachedBody": "Your team has reached this month’s spend cap. Raise it to keep starting sandboxes. Nothing was created, and you weren’t charged.",
             "paymentFailedTitle": "Payment failed",
             "paymentFailedBody": "New sandboxes can’t start until the payment goes through. Nothing was created, and you weren’t charged.",
-            "paymentFailedBodyMember": "New sandboxes can’t start until the payment goes through. Ask an owner or admin to update the payment method. Nothing was created, and you weren’t charged.",
             "teamLimitTitle": "You’re at your team’s limit of running sandboxes",
             "limitBody": "Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
             "teamLimitBody": "Your team can run {{value0}} sandboxes at once ({{value1}} per seat). Put one to sleep or delete it, then try again. Nothing was created, and you weren’t charged.",
@@ -4217,7 +4214,11 @@
             "connectGitHubFailed": "Couldn’t open GitHub. Try again in a moment.",
             "noGithubRemoteBody2": "Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub, then try again. Nothing was created, and you weren’t charged.",
             "howToPushToGitHub": "How to push to GitHub",
-            "spendCapReachedBodyMember2": "Your team has reached this month’s spend cap. Ask an owner or admin to raise the spend cap. Nothing was created, and you weren’t charged."
+            "useThisComputer": "Use this computer instead",
+            "planBodyMember3": "Nothing was created, and you weren’t charged. Ask an owner or admin to choose a Team plan.",
+            "outOfHoursBodyMember2": "Your team has used this month’s sandbox hours. Nothing was created, and you weren’t charged. Ask an owner or admin to add hours.",
+            "spendCapReachedBodyMember3": "Your team has reached this month’s spend cap. Nothing was created, and you weren’t charged. Ask an owner or admin to raise the spend cap.",
+            "paymentFailedBodyMember2": "New sandboxes can’t start until the payment goes through. Nothing was created, and you weren’t charged. Ask an owner or admin to update the payment method."
           },
           "VmBuildLog": {
             "jumpToError": "Jump to first error",
@@ -7934,13 +7935,11 @@
           "title": "Let {{editor}} find your cloud workspaces?",
           "body": "{{editor}} connects through ~/.ssh/config. Orca will add this line at the top. Nothing else in the file changes.",
           "cancel": "Cancel",
-          "confirm": "Add Line and Open"
+          "addLineAndOpen": "Add line and open"
         },
         "CloudSsh": {
           "noEditors": "Install VS Code or Cursor to open over SSH.",
           "menu": "SSH",
-          "copyCommand": "Copy SSH Command",
-          "revoke": "Revoke SSH Access",
           "firstUseHint": "Your first connection adds this computer’s key.",
           "unsupportedImage": "SSH isn’t available here",
           "unsupportedImageDetail": "This workspace was created before Orca Cloud supported SSH. New workspaces have it.",
@@ -7953,7 +7952,6 @@
           "failed": "Couldn’t set up SSH",
           "forwardFailedDetail": "Orca couldn’t reach the workspace. Check your connection and try again.",
           "failedDetail": "Orca Cloud didn’t answer. Try again in a moment.",
-          "retry": "Retry",
           "settingUp": "Setting up SSH…",
           "waking": "Waking the workspace…",
           "addingKey": "Adding this computer’s key…",
@@ -7969,7 +7967,10 @@
           "includeRemoveFailed": "Couldn’t edit ~/.ssh/config",
           "includeRemoved": "Removed from ~/.ssh/config",
           "includeRemovedDetail": "Editors no longer see Orca Cloud hosts. Opening one in an editor asks again.",
-          "revokedUnreachableDetail": "Deleted here. Orca couldn’t reach the workspace, so its copy is removed the next time this computer connects."
+          "revokedUnreachableDetail": "Deleted here. Orca couldn’t reach the workspace, so its copy is removed the next time this computer connects.",
+          "copySshCommand": "Copy SSH command",
+          "revokeSshAccess": "Revoke SSH access",
+          "tryAgain": "Try again"
         },
         "teamSwitcher": {
           "create": "Create a team…",
@@ -14240,26 +14241,57 @@
         "ports": {
           "autoForward": "Auto-forward ports",
           "exclusive": "Same port number only",
-          "exclusiveDescription": "If the port is taken here, skip it instead of remapping.",
           "range": "Auto-forward port range",
           "rangeDescription": "Ports outside this range aren't auto-forwarded.",
           "rangeStart": "Lowest port",
           "rangeEnd": "Highest port",
           "notify": "Notify when a port is forwarded",
           "search": {
-            "title": "Port Forwarding",
             "ports": "ports",
             "forward": "forward",
             "localhost": "localhost",
             "tunnel": "tunnel",
             "devServer": "dev server",
-            "descriptionSandboxes": "Forward dev servers in sandboxes and on remote hosts to this computer."
+            "descriptionSandboxes": "Forward dev servers in sandboxes and on remote hosts to this computer.",
+            "titleSentenceCase": "Port forwarding"
           },
           "rangeInvalid": "\"{{value0}}\" isn't a usable port. Use a port from 1 to 65535, lowest first.",
           "needsAutoForward": "Turn on Auto-forward ports to change this.",
-          "autoForwardDescriptionSandboxes": "Forward dev servers in sandboxes and on remote hosts to this computer."
+          "autoForwardDescriptionSandboxes": "Forward dev servers in sandboxes and on remote hosts to this computer.",
+          "exclusiveDescriptionInUse": "If the port is in use on this computer, skip it instead of remapping."
+        },
+        "orcaCloudPredictiveWake": {
+          "title": "Wake sleeping workspaces early",
+          "description": "A sleeping cloud workspace starts waking when you point at it or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after the idle time.",
+          "group": "Orca Cloud",
+          "description_one": "Starts waking a sleeping sandbox when you point at its workspace or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after {{count}} minute idle. Early wakes count toward your sandbox hours.",
+          "description_other": "Starts waking a sleeping sandbox when you point at its workspace or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after {{count}} minutes idle. Early wakes count toward your sandbox hours."
         },
         "cloudApi": {
+          "keys": {
+            "createdMine": "Created {{time}}",
+            "createdByPerson": "Created by <person></person> {{time}}",
+            "lastUsed": "Last used {{time}}",
+            "neverUsed": "Never used",
+            "expired": "Expired",
+            "expires": "Expires {{time}}",
+            "revokeLabel": "Revoke {{keyName}}",
+            "revoke": "Revoke",
+            "create": "Create key",
+            "listTitle": "Keys",
+            "scopeAdmin": "As a team admin you see every key on your team and can revoke any of them.",
+            "scopeMember": "You see the keys you created. Team admins see every key on the team.",
+            "scopePersonal": "Use keys with the Orca Cloud API, the orca CLI and MCP clients.",
+            "refresh": "Refresh Orca API keys",
+            "loading": "Loading Orca API keys",
+            "unavailable": "Your keys appear here once Orca Cloud is reachable.",
+            "emptyTitle": "No Orca API keys yet",
+            "emptyBody": "Create a key to start workspaces, message agents and run routines from scripts, CI or any MCP client.",
+            "listLabel": "Orca API keys",
+            "customScopeCount_one": "Custom · {{count}} scope",
+            "customScopeCount_other": "Custom · {{count}} scopes",
+            "scopesLabel": "{{preset}}: {{scopes}}"
+          },
           "approve": {
             "title": "Approve an app",
             "description": "When Claude, Cursor or another MCP client opens the Orca Cloud approval page, paste a one-time code from here instead of an API key. That page shows which website the app will return to; check it before you paste.",
@@ -14333,29 +14365,8 @@
             "loading": "Loading activity",
             "empty": "Nothing has happened yet."
           },
-          "keys": {
-            "create": "Create key",
-            "listTitle": "Keys",
-            "scopeAdmin": "As a team admin you see every key on your team and can revoke any of them.",
-            "scopeMember": "You see the keys you created. Team admins see every key on the team.",
-            "scopePersonal": "Use keys with the Orca Cloud API, the orca CLI and MCP clients.",
-            "refresh": "Refresh Orca API keys",
-            "loading": "Loading Orca API keys",
-            "emptyTitle": "No Orca API keys yet",
-            "emptyBody": "Create a key to start workspaces, message agents and run routines from scripts, CI or any MCP client.",
-            "listLabel": "Orca API keys",
-            "createdMine": "Created {{time}}",
-            "createdByPerson": "Created by <person></person> {{time}}",
-            "lastUsed": "Last used {{time}}",
-            "neverUsed": "Never used",
-            "expired": "Expired",
-            "expires": "Expires {{time}}",
-            "revokeLabel": "Revoke {{keyName}}",
-            "revoke": "Revoke",
-            "customScopeCount_one": "Custom · {{count}} scope",
-            "customScopeCount_other": "Custom · {{count}} scopes",
-            "scopesLabel": "{{preset}}: {{scopes}}"
-          },
+          "pageErrorDetail": "Keys, connected apps and team settings are unavailable until Orca Cloud answers.",
+          "retry": "Try again",
           "revoke": {
             "title": "Revoke “{{keyName}}”?",
             "body": "Anything using {{keyPrefix}} stops working immediately. This cannot be undone.",
@@ -14370,13 +14381,13 @@
             "body": "Orca API keys and routines belong to your team. Sign in to manage them.",
             "signIn": "Sign in to Orca"
           },
-          "retry": "Try again",
           "apps": {
             "unnamed": "Unnamed app",
             "title": "Connected apps",
             "descriptionAdmin": "MCP clients anyone on your team approved. A connection lasts 90 days, or until you disconnect it or revoke the key that approved it.",
             "description": "MCP clients you approved. A connection lasts 90 days, or until you disconnect it or revoke the key that approved it.",
             "loading": "Loading connected apps",
+            "unavailable": "Connected apps appear here once Orca Cloud is reachable.",
             "emptyTitle": "No apps connected",
             "emptyBody": "Add the MCP server URL to Claude, Cursor or another client. When it asks you to approve, use a one-time code.",
             "listLabel": "Connected apps",
@@ -14424,7 +14435,7 @@
             "invalid": "Orca Cloud rejected that request. Check the fields and try again.",
             "rateLimitedFor": "Too many requests. Try again in {{seconds}} seconds.",
             "rateLimited": "Too many requests. Try again in a minute.",
-            "network": "Couldn’t reach Orca Cloud, so nothing was changed. Check your connection and try again.",
+            "network": "Couldn’t reach Orca Cloud. Check your connection and try again.",
             "invalidResponse": "Orca Cloud sent an answer this version of Orca does not understand. Update Orca and try again.",
             "server": "Orca Cloud had a problem and nothing was changed. Try again in a moment."
           },
@@ -14478,8 +14489,7 @@
             "more": "Show older runs",
             "pr": "Pull request",
             "comment": "Comment",
-            "openWorkspace": "Open workspace",
-            "why": "Why:"
+            "openWorkspace": "Open workspace"
           },
           "new": "New routine",
           "listTitle": "Your routines",
@@ -14604,6 +14614,15 @@
             "webhook": "Webhook",
             "manual": "Manual"
           },
+          "runError": {
+            "startFailed": "The workspace couldn’t start, so nothing was charged.",
+            "workspaceLost": "The workspace went to sleep or was deleted before the run finished.",
+            "postFailed": "The run finished, but Orca couldn’t post the results.",
+            "queueExpired": "The run waited too long to start and was skipped.",
+            "interrupted": "Orca Cloud restarted during the run.",
+            "routineChanged": "The routine changed while this run was queued.",
+            "generic": "The run failed."
+          },
           "event": {
             "prOpened": "PR opened",
             "prLabeled": "PR labeled",
@@ -14621,13 +14640,6 @@
           "keywordCloud": "cloud",
           "sectionTitle": "Routines",
           "sectionDescription": "Agents that run in Orca Cloud on a schedule, on GitHub events or from a webhook."
-        },
-        "orcaCloudPredictiveWake": {
-          "title": "Wake sleeping workspaces early",
-          "description": "A sleeping cloud workspace starts waking when you point at it or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after the idle time.",
-          "group": "Orca Cloud",
-          "description_one": "Starts waking a sleeping sandbox when you point at its workspace or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after {{count}} minute idle. Early wakes count toward your sandbox hours.",
-          "description_other": "Starts waking a sleeping sandbox when you point at its workspace or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after {{count}} minutes idle. Early wakes count toward your sandbox hours."
         }
       },
       "right": {
@@ -14804,7 +14816,6 @@
             "e740075063": "Remove",
             "b3548e59f4": "Edit",
             "fe2730d050": "Copy {{value0}}",
-            "b22b128b2a": "Open in Browser",
             "75aeea592f": "Open {{value0}} in Browser",
             "de349d4560": "opens {{value0}}",
             "907eb53ed2": "Forward a Port",
@@ -14825,10 +14836,6 @@
             "729be0b4e5": "Kind",
             "0f1d8cd324": "Bind",
             "1c1c18cefc": "Address",
-            "f9528da632": "Stop Process",
-            "a223459512": "Show Details",
-            "bdac206faf": "Copy Details",
-            "792baeb7ed": "Copy Address",
             "d41a8241ec": "Port",
             "a2a9fc6899": "No local ports detected",
             "f59c783b7a": "Port scan unavailable on {{value0}}: {{value1}}",
@@ -14863,7 +14870,13 @@
             "localPortRequiresPrivileges": "Port {{port}} requires elevated privileges. Use a local port ≥ 1024.",
             "remoteEmpty": "No ports yet. Dev servers started here are forwarded to localhost.",
             "remoteEmptyOff": "No ports yet. Auto-forward is off.",
-            "turnOnInSettings": "Turn on in Ports settings"
+            "turnOnInSettings": "Turn on in Ports settings",
+            "openInBrowser": "Open in browser",
+            "moreActionsForPort": "More actions for port {{port}}",
+            "stopProcess": "Stop process",
+            "copyAddress": "Copy address",
+            "copyDetails": "Copy details",
+            "showDetails": "Show details"
           },
           "Search": {
             "1abfb25a66": "Type to search in files",
@@ -16197,7 +16210,6 @@
           "RuntimePortForward": {
             "pending": "Forwarding…",
             "useAnother": "Use another port",
-            "retry": "Retry",
             "forward": "Forward to localhost",
             "copied": "Copied {{value0}}",
             "localAddress": "localhost:{{value0}}",
@@ -16211,7 +16223,8 @@
             "stopAndSkip": "Stop and don't auto-forward :{{value0}}",
             "sandboxAsleep": "Sandbox is asleep",
             "remappedInUseOnComputer": "({{value0}} in use on this computer)",
-            "wake": "Wake"
+            "wake": "Wake",
+            "tryAgain": "Try again"
           },
           "CloudShare": {
             "alreadyShared": "Already shared",
@@ -16263,7 +16276,6 @@
             "portInvalid": "Enter a port from 1 to 65535. Ports 2222, 6768 and 6769 are used by Orca.",
             "portLabel": "Port",
             "publicNote": "Anyone with this link can open port {{value0}} without signing in. Turn it off anytime in Ports → Shared links.",
-            "retry": "Retry",
             "revokeFailed": "Couldn’t turn it off. Try again.",
             "revoked": "Turned off",
             "revokedAnnouncement": "Link turned off",
@@ -16279,7 +16291,9 @@
             "turnOff": "Turn off",
             "turnOffLink": "Turn off link",
             "wakeHint": "Otherwise the link works only while the workspace is awake. Wake time counts toward your usage.",
-            "wakeLabel": "Let visitors wake the workspace"
+            "wakeLabel": "Let visitors wake the workspace",
+            "tryAgain": "Try again",
+            "sharePortLabel": "Share port {{port}}…"
           }
         }
       },
@@ -16603,7 +16617,9 @@
             "orcaCloudAskPayment": "Ask an owner or admin to update the payment method.",
             "orcaCloudIdleSleep_one": "Sleeps after {{count}} minute idle",
             "orcaCloudIdleSleep_other": "Sleeps after {{count}} minutes idle",
-            "orcaCloudAskAddHoursOnly": "Ask an owner or admin to add hours."
+            "orcaCloudAskAddHoursOnly": "Ask an owner or admin to add hours.",
+            "orcaCloudAskChoosePlan": "Ask an owner or admin to choose one.",
+            "orcaCloudAskRaiseSpendCap": "Ask an owner or admin to raise the spend cap."
           },
           "projectCombobox": {
             "recentHeading": "Recent",
@@ -20508,8 +20524,6 @@
           "nextInvoice": "Next invoice (est.)",
           "nextInvoiceOn": "{{value0}} · {{value1}}",
           "notAnEmail": "Not an email address",
-          "perMonth": "{{value0}}/month",
-          "perYear": "{{value0}}/year",
           "planEnds": "Plan ends",
           "rateLimited": "Too many team changes at once. Wait a minute and try again.",
           "readOnly": "Only owners and admins can invite people or change roles.",
@@ -20568,7 +20582,9 @@
           "nowOwner": "{{value0}} is now an owner",
           "perSeatPerMonth": "{{value0}} per seat per month",
           "createInvalid2": "Use letters, numbers, spaces or underscores (up to 64).",
-          "nameTaken": "That team name is taken. Try another."
+          "nameTaken": "That team name is taken. Try another.",
+          "totalPerMonth": "{{total}} per month",
+          "totalPerYear": "{{total}} per year"
         },
         "manageBilling": "Manage billing",
         "comparePlans": "Compare plans",
@@ -20589,8 +20605,6 @@
           "loadFailed": "Could not load plans. Try again in a moment.",
           "currentPlan": "Current plan",
           "billedMonthly": "Billed monthly",
-          "totalYear": "{{value0}} / year",
-          "totalMonth": "{{value0}} / month",
           "checkout": "Continue to checkout",
           "entLead": "Everything in Team, plus:",
           "entHint": "Tell us about your team and where you run.",
@@ -20613,7 +20627,7 @@
           "was": "Was",
           "featureHours4": "{{value0}} sandbox hours per seat each month, pooled across your team",
           "featureSpec": "Every sandbox gets {{value0}} vCPU · {{value1}} GB",
-          "featureOverage5": "Optional overage at {{value0}}/hour, up to a monthly spend cap you set ({{value1}} by default)",
+          "featureOverage6": "Optional overage at {{rate}} per sandbox hour, up to a monthly spend cap you set ({{cap}} by default)",
           "footTerms4": "Prices in USD, before tax. Overage is off until an owner or admin turns it on. Cancel anytime; your plan runs to the end of the billing period.",
           "lockedBody2": "Only an owner or admin of your team can choose a plan. Ask one of them to open Plan & billing in Orca.",
           "vpSecretsBody4": "API keys you add to Orca are never written to the sandbox. Agents and terminals get them as environment variables.",
@@ -20624,7 +20638,9 @@
           "perSeatPerMonth": "per seat per month",
           "seatsPerMember_one": "{{count}} seat, one per team member",
           "seatsPerMember_other": "{{count}} seats, one per team member",
-          "vpWakeBody2": "Idle sandboxes sleep to save hours and wake with your files as you left them."
+          "vpWakeBody2": "Idle sandboxes sleep to save hours and wake with your files as you left them.",
+          "totalPerMonth": "{{total}} per month",
+          "totalPerYear": "{{total}} per year"
         },
         "capLabel2": "Monthly spend cap",
         "capSaved": "Saved",
@@ -20642,13 +20658,10 @@
           "opening": "Opening secure checkout…",
           "openingBody": "Stripe’s checkout opens in your browser.",
           "paid": "Payment confirmed",
-          "perMo": "/mo",
-          "perYr": "/yr",
           "planAnnual": "{{value0}} · Annual",
           "planMonthly": "{{value0}} · Monthly",
           "renewsNote": "Renews {{value0}}. Before tax. Seats follow your team.",
           "reopen": "Reopen checkout",
-          "seatsTimes2": "{{value0}} × {{value1}}{{value2}}",
           "subtitle": "Pay on Stripe’s secure page in your browser. Orca picks it up the moment it goes through.",
           "timedOut": "Still waiting for Stripe",
           "timedOutBody": "If you already paid, confirmation can take a minute. Otherwise reopen checkout.",
@@ -20659,7 +20672,11 @@
           "secured2": "Payments by Stripe · Cards, Apple Pay and Link · Bank verification",
           "canceledBody2": "Nothing was charged. You can choose a plan again any time.",
           "titleCanceled": "Checkout canceled",
-          "titlePaid": "Welcome to Orca Cloud"
+          "titlePaid": "Welcome to Orca Cloud",
+          "lineItemMonthly_one": "{{seats}} × {{price}} per seat per month",
+          "lineItemMonthly_other": "{{seats}} × {{price}} per seat per month",
+          "lineItemYearly_one": "{{seats}} × {{price}} per seat, billed yearly",
+          "lineItemYearly_other": "{{seats}} × {{price}} per seat, billed yearly"
         },
         "health": {
           "ending": "Ending",
@@ -20670,11 +20687,11 @@
         "paymentAskAdmin": "Ask an owner or admin to update the payment method.",
         "upgrade": {
           "askOwner": "Ask an owner or admin to upgrade.",
-          "body2": "Hosted sandboxes for the whole team. Agents keep running when you close your laptop. {{value0}}/seat/month.",
           "bodyNoPrice": "Hosted sandboxes for the whole team. Agents keep running when you close your laptop.",
           "cta": "See plans",
           "menuItem": "Upgrade to Orca Cloud",
-          "title": "Upgrade to use Orca Cloud"
+          "title": "Upgrade to use Orca Cloud",
+          "body3": "Hosted sandboxes for the whole team. Agents keep running when you close your laptop. {{price}} per seat per month."
         },
         "upsellLineNoPrice": "Orca Cloud runs agents in hosted sandboxes for your whole team.",
         "askAdmin2": "Ask an owner or admin to change the plan.",
@@ -20685,7 +20702,7 @@
         "enterpriseContactSales": "Contact sales",
         "openForbidden2": "Only an owner or admin can manage billing.",
         "openSignedOut2": "Sign in to Orca again to manage your team.",
-        "overageDescription5": "Optional overage at {{value0}}/hour, up to a monthly spend cap you set ({{value1}} by default).",
+        "overageDescription6": "Optional overage at {{rate}} per sandbox hour, up to a monthly spend cap you set ({{cap}} by default).",
         "overageHoursOnly": "{{value0}} overage hours this month",
         "overageMemberHint": "Owners and admins can change overage.",
         "overageOffRead": "Off",
@@ -20705,7 +20722,7 @@
         "sandboxHoursUsedMonth": "{{value0}} of {{value1}} sandbox hours used this month",
         "warn100b": "All of this month’s sandbox hours are used.",
         "warnPercent2": "You’ve used {{value0}}% of this month’s sandbox hours.",
-        "overageDescriptionOn2": "Optional overage at {{value0}}/hour, up to a monthly spend cap you set.",
+        "overageDescriptionOn3": "Optional overage at {{rate}} per sandbox hour, up to a monthly spend cap you set.",
         "reasonCapMember3": "Spend cap reached. Ask an owner or admin to raise the spend cap. Your files are safe.",
         "reasonGraceExpired3": "Payment failed. New sandboxes can’t start and running sandboxes are asleep. Update your payment method. Your files are safe.",
         "reasonGraceExpiredMember2": "Payment failed. New sandboxes can’t start and running sandboxes are asleep. Ask an owner or admin to update the payment method. Your files are safe.",
@@ -20855,7 +20872,8 @@
         "workspaceLinkCopied": "Workspace link copied",
         "you": "You",
         "youAreTyping": "You are typing",
-        "youAreViewing": "You are viewing"
+        "youAreViewing": "You are viewing",
+        "routines": "Routines"
       },
       "orcaCloud": {
         "QueuedPrompt": {
@@ -26203,7 +26221,6 @@
     "tryAgain": "Try again",
     "startAnyway": "Start without signing in",
     "errors": {
-      "portBusy": "Port {{port}} is busy on this computer.",
       "portBusyDetail": "Another {{agent}} sign-in is probably open. Close it and try again.",
       "timeout": "Sign-in timed out.",
       "timeoutDetail": "Nothing came back from the browser in time.",
@@ -26211,7 +26228,8 @@
       "declinedDetail": "{{site}} reported that the sign-in was declined.",
       "offline": "Can't reach {{host}}.",
       "offlineDetail": "Your prompt stays here until it reconnects.",
-      "failed": "Sign-in failed."
+      "failed": "Sign-in failed.",
+      "portInUse": "Port {{port}} is in use on this computer."
     },
     "cancelledToast": "Sign-in cancelled. The agent did not start.",
     "copyPrompt": "Copy prompt",

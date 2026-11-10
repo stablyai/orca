@@ -137,10 +137,21 @@ describe('RunTargetCombobox', () => {
 
   it('opens the plans page instead of building when there is no plan', () => {
     const onRecipeChange = vi.fn()
-    render({ state: 'no-plan', lapsed: false }, onRecipeChange)
+    render({ state: 'no-plan', lapsed: false, canManageBilling: true }, onRecipeChange)
     press('ArrowDown')
     press('Enter')
     expect(openPlansPage).toHaveBeenCalledWith('sandbox')
+    expect(onRecipeChange).not.toHaveBeenCalled()
+  })
+
+  it('tells a member without a plan to ask an owner or admin instead of opening plans', () => {
+    const onRecipeChange = vi.fn()
+    render({ state: 'no-plan', lapsed: false, canManageBilling: false }, onRecipeChange)
+    expect(container.textContent).toContain('Ask an owner or admin')
+    expect(container.textContent).not.toContain('Upgrade')
+    press('ArrowDown')
+    press('Enter')
+    expect(openPlansPage).not.toHaveBeenCalled()
     expect(onRecipeChange).not.toHaveBeenCalled()
   })
 

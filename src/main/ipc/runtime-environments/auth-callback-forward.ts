@@ -157,7 +157,7 @@ export class AuthCallbackForward {
         ok: false,
         code: busy ? 'port_busy' : 'listen_failed',
         message: busy
-          ? `Port ${this.request.port} is busy on this computer.`
+          ? `Port ${this.request.port} is in use on this computer.`
           : 'Orca could not listen for the sign-in on this computer.'
       }
     }

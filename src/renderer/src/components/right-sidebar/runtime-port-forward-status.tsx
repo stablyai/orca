@@ -134,7 +134,7 @@ export function RuntimePortForwardStatus({
           }
         : {
             icon: <RotateCw aria-hidden />,
-            label: t('auto.components.right.sidebar.RuntimePortForward.retry', 'Retry')
+            label: t('auto.components.right.sidebar.RuntimePortForward.tryAgain', 'Try again')
           }
       : {
           icon: <Plug aria-hidden />,

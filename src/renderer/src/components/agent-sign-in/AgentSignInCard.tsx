@@ -336,7 +336,7 @@ function AgentSignInError({
     case 'port_busy':
       return (
         <ErrorLine
-          title={t('agentSignIn.errors.portBusy', 'Port {{port}} is busy on this computer.', {
+          title={t('agentSignIn.errors.portInUse', 'Port {{port}} is in use on this computer.', {
             port: String(view.port ?? '')
           })}
           detail={t(

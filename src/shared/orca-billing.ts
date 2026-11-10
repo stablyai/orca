@@ -16,10 +16,55 @@ export type OrcaBillingDenyReason =
   | 'included_hours_exhausted'
   | 'overage_cap_reached'
 
+/**
+ * What a plan refusal means, whatever surface shows it. Billing's account reasons plus the control
+ * plane's start-gate reasons (concurrency, machine size) map to one category; each surface keeps its
+ * own wording for the category. Unknown reasons (a newer service) fall to `other`.
+ */
+export type OrcaEntitlementDenialKind =
+  | 'plan'
+  | 'hours'
+  | 'spendCap'
+  | 'payment'
+  | 'teamLimit'
+  | 'memberLimit'
+  | 'machineSize'
+  | 'other'
+
+export function classifyEntitlementDenial(
+  reason: string | null | undefined
+): OrcaEntitlementDenialKind {
+  // 'no plan' is the hosted provider's older log line for a missing plan.
+  switch (reason) {
+    case 'no_subscription':
+    case 'subscription_inactive':
+    case 'no plan':
+      return 'plan'
+    case 'included_hours_exhausted':
+      return 'hours'
+    case 'overage_cap_reached':
+      return 'spendCap'
+    case 'payment_past_due':
+    case 'payment_grace_expired':
+      return 'payment'
+    case 'concurrency_limit':
+      return 'teamLimit'
+    case 'member_concurrency_limit':
+      return 'memberLimit'
+    case 'machine_size_not_in_plan':
+      return 'machineSize'
+    case null:
+    case undefined:
+      return 'other'
+    default:
+      return 'other'
+  }
+}
+
 export type OrcaBillingOffers = {
   team: {
     label: string
-    /** Display only, e.g. "$50/seat/mo"; Stripe charges the configured price. */
+    /** Display only, e.g. "$50 per seat per month"; Stripe charges the configured price. */
     monthlyPriceLabel: string
     annualPriceLabel: string
     /** Per-seat prices in cents for totals and the annual saving; null from older services. */

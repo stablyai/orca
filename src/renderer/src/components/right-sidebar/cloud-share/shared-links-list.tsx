@@ -142,7 +142,7 @@ export function SharedLinksList({
               retryLabel={
                 needsSignIn
                   ? undefined
-                  : t('auto.components.right.sidebar.CloudShare.retry', 'Retry')
+                  : t('auto.components.right.sidebar.CloudShare.tryAgain', 'Try again')
               }
               onRetry={needsSignIn ? undefined : onRetry}
               retrying={retrying}

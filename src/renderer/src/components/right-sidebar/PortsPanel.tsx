@@ -7,7 +7,11 @@ import { LocalWorkspacePortsPanel } from './local-workspace-ports-panel'
 import { SshPortsPanel } from './ssh-ports-panel'
 import { HostScopedPortsPanel } from './host-scoped-ports-panel'
 import { CloudSharedLinksSection } from './cloud-share/cloud-shared-links-section'
-import { SharePortMenuItem, useSharePortAction } from './cloud-share/use-share-port-action'
+import {
+  SharePortButton,
+  SharePortMenuItem,
+  useSharePortAction
+} from './cloud-share/use-share-port-action'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import {
   getPortsPanelOwnerKey,
@@ -38,6 +42,12 @@ export default function PortsPanel({ isVisible }: { isVisible: boolean }): React
     ),
     [shareAvailable, openShareDialog]
   )
+  const sharePortActions = useCallback(
+    (port: WorkspacePort) => (
+      <SharePortButton port={port.port} action={{ available: shareAvailable, openShareDialog }} />
+    ),
+    [shareAvailable, openShareDialog]
+  )
   const scopedHost = useMemo(
     () =>
       host.kind === 'host-scoped' && workspaceId
@@ -62,6 +72,7 @@ export default function PortsPanel({ isVisible }: { isVisible: boolean }): React
           runtimeTarget={host.target}
           sshForwardTargetId={sshForwardTargetId}
           portMenuItems={shareAvailable ? sharePortMenuItems : undefined}
+          portActions={shareAvailable ? sharePortActions : undefined}
           isSandbox={shareAvailable}
           footer={(activePorts) => (
             <CloudSharedLinksSection
