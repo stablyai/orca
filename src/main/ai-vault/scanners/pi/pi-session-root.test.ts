@@ -70,23 +70,46 @@ describe('resolvePiSessionsDir', () => {
   })
 
   it('skips a relative or malformed settings value instead of resolving it against a cwd', async () => {
-    expect(
-      resolvePiSessionsDir({ env: {}, homeDir: await homeWithSettings({ sessionDir: 'rel' }) })
-    ).toBe(join(homedir(), '.pi', 'agent', 'sessions'))
-    expect(
-      resolvePiSessionsDir({ env: {}, homeDir: await homeWithSettings({ sessionDir: 7 }) })
-    ).toBe(join(homedir(), '.pi', 'agent', 'sessions'))
+    const relative = await homeWithSettings({ sessionDir: 'rel' })
+    expect(resolvePiSessionsDir({ env: {}, homeDir: relative })).toBe(
+      join(relative, '.pi', 'agent', 'sessions')
+    )
+    const malformed = await homeWithSettings({ sessionDir: 7 })
+    expect(resolvePiSessionsDir({ env: {}, homeDir: malformed })).toBe(
+      join(malformed, '.pi', 'agent', 'sessions')
+    )
   })
 
-  it('keeps the default agent home indexed after an override so older history survives', async () => {
+  it('keeps the configured agent home indexed after an override so older history survives', async () => {
     const home = await homeWithSettings({ sessionDir: '/srv/from-settings' })
     expect(piSessionsRootDirs({ env: {}, homeDir: home })).toEqual([
       '/srv/from-settings',
       join(home, '.pi', 'agent', 'sessions')
     ])
     expect(
-      piSessionsRootDirs({ env: { PI_CODING_AGENT_SESSION_DIR: '/srv/from-env' }, homeDir: home })
-    ).toEqual(['/srv/from-env', join(home, '.pi', 'agent', 'sessions')])
+      piSessionsRootDirs({
+        env: { PI_CODING_AGENT_DIR: '/opt/.pi/agent' },
+        homeDir: home
+      })
+    ).toEqual(['/opt/.pi/agent/sessions'])
+    expect(
+      piSessionsRootDirs({
+        env: {
+          PI_CODING_AGENT_DIR: '/opt/.pi/agent',
+          PI_CODING_AGENT_SESSION_DIR: '/mnt/transcripts'
+        },
+        homeDir: home
+      })
+    ).toEqual(['/mnt/transcripts', '/opt/.pi/agent/sessions'])
+  })
+
+  it('ignores a relative PI_CODING_AGENT_DIR instead of resolving it against a cwd', () => {
+    expect(
+      resolvePiSessionsDir({ env: { PI_CODING_AGENT_DIR: 'rel/dir' }, homeDir: '/srv/home' })
+    ).toBe(join('/srv/home', '.pi', 'agent', 'sessions'))
+    expect(
+      resolvePiSessionsDir({ env: { PI_CODING_AGENT_DIR: '~/agent' }, homeDir: '/srv/home' })
+    ).toBe(join('/srv/home', 'agent', 'sessions'))
   })
 
   it('replaces the default home when a scan option names the root explicitly', () => {

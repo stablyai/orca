@@ -25,6 +25,7 @@ import {
   codexHomeSessionsDir,
   ompSessionsRootDirs,
   sessionRootDirs,
+  uniqueDirs,
   wslHomeSessionDirs
 } from './session-scanner-roots'
 import { getHermesHome } from '../hermes/hermes-default-home'
@@ -43,6 +44,7 @@ const COPILOT_SESSIONS_DIR = join(
 const CURSOR_PROJECTS_DIR = join(homedir(), '.cursor', 'projects')
 const CODEBUDDY_PROJECTS_DIR = join(homedir(), '.codebuddy', 'projects')
 const ROVO_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
+/** The session root Pi itself would use, for transcript import and discovery. */
 export function piSessionHistorySessionsDir(): string {
   return resolvePiSessionsDir()
 }
@@ -228,9 +230,10 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
   },
   pi: {
     rootDirs: (options, wslHomeDirs) =>
-      piSessionsRootDirs({ sessionsDir: options.piSessionsDir }).flatMap((rootDir) =>
-        sessionRootDirs(rootDir, wslHomeDirs, ['.pi', 'agent', 'sessions'])
-      ),
+      uniqueDirs([
+        ...piSessionsRootDirs({ sessionsDir: options.piSessionsDir }),
+        ...wslHomeDirs.map((homeDir) => join(homeDir, '.pi', 'agent', 'sessions'))
+      ]),
     extensions: ['.jsonl'],
     // OMP inherits PI_CODING_AGENT_DIR, so Pi's folder can hold OMP's task artifacts.
     directoryPredicate: isOmpConversationDirectory

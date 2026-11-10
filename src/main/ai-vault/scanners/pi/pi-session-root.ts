@@ -6,9 +6,9 @@ import { asRecord } from '../../session-scanner-record-value'
 import { normalizeAgentSessionsDir } from '../../session-scanner-values'
 
 // Pi resolves a session root as --session-dir, then PI_CODING_AGENT_SESSION_DIR, then the
-// user-level settings.json sessionDir, then the agent home. A relative value resolves against the
-// writer's working directory, which the scanner has no single answer for, so it is skipped instead
-// of being guessed at.
+// user-level settings.json sessionDir, then the agent home. A configured value that Pi would
+// resolve against the writer's working directory is skipped, because the scanner has no single
+// answer for it.
 function absoluteDir(value: string | undefined, home: string): string | undefined {
   const trimmed = value?.trim() ?? ''
   if (!trimmed) {
@@ -18,6 +18,7 @@ function absoluteDir(value: string | undefined, home: string): string | undefine
   return resolveAbsoluteDirOverride(expanded.replace(/[\\/]+$/, ''), '') || undefined
 }
 
+/** Pi's agent directory: the configured override when usable, otherwise the default home. */
 function agentHomeDir(env: NodeJS.ProcessEnv, home: string): string {
   return absoluteDir(env.PI_CODING_AGENT_DIR, home) ?? join(home, '.pi', 'agent')
 }
@@ -34,10 +35,11 @@ function settingsSessionDir(agentHome: string): string | undefined {
   }
 }
 
-function defaultPiAgentSessionsDir(home: string): string {
-  return join(home, '.pi', 'agent', 'sessions')
+function normalizedAgentSessionsDir(env: NodeJS.ProcessEnv, home: string): string {
+  return normalizeAgentSessionsDir(agentHomeDir(env, home), '.pi')
 }
 
+/** The session root Pi would use: the explicit override, the settings value, or the agent home. */
 export function resolvePiSessionsDir(
   options: { env?: NodeJS.ProcessEnv; homeDir?: string } = {}
 ): string {
@@ -46,13 +48,13 @@ export function resolvePiSessionsDir(
   return (
     absoluteDir(env.PI_CODING_AGENT_SESSION_DIR, home) ??
     absoluteDir(settingsSessionDir(agentHomeDir(env, home)), home) ??
-    normalizeAgentSessionsDir(env.PI_CODING_AGENT_DIR?.trim() ?? '', '.pi')
+    normalizedAgentSessionsDir(env, home)
   )
 }
 
 /**
- * Keep history from before an override took effect: the resolved root and the default agent home.
- * An explicit scan option still replaces both, matching the Claude and OMP root handling.
+ * Roots to index: the resolved root and the configured agent home, so transcripts written before an
+ * override stay visible. An explicit scan option replaces both, matching the Claude and OMP roots.
  */
 export function piSessionsRootDirs(
   options: { env?: NodeJS.ProcessEnv; homeDir?: string; sessionsDir?: string } = {}
@@ -60,8 +62,8 @@ export function piSessionsRootDirs(
   if (options.sessionsDir !== undefined) {
     return [options.sessionsDir]
   }
+  const env = options.env ?? process.env
   const home = options.homeDir ?? homedir()
-  return [resolvePiSessionsDir(options), defaultPiAgentSessionsDir(home)].filter(
-    (root, index, roots) => root.length > 0 && roots.indexOf(root) === index
-  )
+  const roots = [resolvePiSessionsDir(options), normalizedAgentSessionsDir(env, home)]
+  return roots.filter((root, index) => root.length > 0 && roots.indexOf(root) === index)
 }
