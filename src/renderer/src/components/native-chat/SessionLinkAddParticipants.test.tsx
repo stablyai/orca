@@ -9,13 +9,16 @@ import { TranslationScopeContext, type Translate } from '@/i18n/use-translate'
 vi.mock('@/i18n/i18n', () => ({ translate: (_: string, fallback: string) => fallback }))
 afterEach(cleanup)
 
+const english: Translate = (key, fallback) => (typeof fallback === 'string' ? fallback : key)
+const russian: Translate = (key, fallback) =>
+  key === 'components.sessionLink.addSelected'
+    ? 'Добавить выбранных агентов'
+    : english(key, fallback)
+const englishScope = { t: english, intlLocale: 'en' }
+const russianScope = { t: russian, intlLocale: 'ru' }
+
 it('updates translated controls without losing the selected participant', async () => {
   const add = vi.fn(async () => true)
-  const english: Translate = (key, fallback) => (typeof fallback === 'string' ? fallback : key)
-  const russian: Translate = (key, fallback) =>
-    key === 'components.sessionLink.addSelected'
-      ? 'Добавить выбранных агентов'
-      : english(key, fallback)
   const card = (
     <SessionLinkAddParticipants
       candidates={[partner]}
@@ -25,15 +28,11 @@ it('updates translated controls without losing the selected participant', async 
     />
   )
   const view = render(
-    <TranslationScopeContext.Provider value={{ t: english, intlLocale: 'en' }}>
-      {card}
-    </TranslationScopeContext.Provider>
+    <TranslationScopeContext.Provider value={englishScope}>{card}</TranslationScopeContext.Provider>
   )
   expect(screen.getByRole('button', { name: 'Add selected agents' })).toBeTruthy()
   view.rerender(
-    <TranslationScopeContext.Provider value={{ t: russian, intlLocale: 'ru' }}>
-      {card}
-    </TranslationScopeContext.Provider>
+    <TranslationScopeContext.Provider value={russianScope}>{card}</TranslationScopeContext.Provider>
   )
   fireEvent.click(screen.getByRole('button', { name: 'Добавить выбранных агентов' }))
   await waitFor(() => expect(add).toHaveBeenCalledExactlyOnceWith([partner.sessionId]))
