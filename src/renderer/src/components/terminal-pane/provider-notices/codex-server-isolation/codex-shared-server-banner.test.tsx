@@ -15,6 +15,7 @@ import {
 } from '../terminal-notice-lifetime'
 import {
   installIpcPtyWindow,
+  restorePtySpecWindow,
   type PtyExitPayload
 } from '../../pty-transport/ipc/pty-transport-test-harness'
 import { closeTerminalTab } from '../../../terminal/terminal-tab-actions'
@@ -69,6 +70,14 @@ function setState(settings: Partial<GlobalSettings>, agent: 'codex' | null = 'co
     paneForegroundAgentByPaneKey: agent ? { [PANE_KEY]: { agent, shellForeground: false } } : {},
     updateSettings
   })
+}
+
+function installPtyEvents(sinks: Parameters<typeof installIpcPtyWindow>[1]): void {
+  const domWindow = window
+  installIpcPtyWindow(domWindow, sinks)
+  const api = window.api
+  restorePtySpecWindow(domWindow)
+  Object.defineProperty(domWindow, 'api', { configurable: true, value: api })
 }
 
 async function renderBanner(): Promise<void> {
@@ -180,7 +189,7 @@ describe('CodexSharedServerBanner', () => {
   it('keeps a live dismissal through detach and loss, then shows for a later attached lifetime', async () => {
     retireTerminalNoticeLifetime(admitted)
     let exit: ((payload: PtyExitPayload) => void) | undefined
-    installIpcPtyWindow(window, {
+    installPtyEvents({
       exit: (callback) => {
         exit = callback
       }
@@ -240,7 +249,7 @@ describe('CodexSharedServerBanner', () => {
   it('keeps dismissal after an unstamped buffered exit, then accepts a stamped death', async () => {
     retireTerminalNoticeLifetime(admitted)
     let exit: ((payload: PtyExitPayload) => void) | undefined
-    installIpcPtyWindow(window, {
+    installPtyEvents({
       exit: (callback) => {
         exit = callback
       }
@@ -282,7 +291,7 @@ describe('CodexSharedServerBanner', () => {
   it('keeps dismissal on shutdown rollback and resets it on committed retirement', async () => {
     retireTerminalNoticeLifetime(admitted)
     let exit: ((payload: PtyExitPayload) => void) | undefined
-    installIpcPtyWindow(window, {
+    installPtyEvents({
       exit: (callback) => {
         exit = callback
       }
