@@ -7,7 +7,7 @@ import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { optionPreviewFont, prepareOptionPreview } from './mobile-native-chat-option-preview'
 
-const MAX_HEIGHT = 96
+const MAX_HEIGHT = 96 - spacing.sm * 2
 
 export function MobileNativeChatOptionThumbnail({
   label,
@@ -87,6 +87,11 @@ const styles = themedStyleSheet(() => ({
     color: colors.textSecondary,
     fontSize: typography.metaSize,
     fontWeight: '600',
-    marginTop: spacing.xs
+    position: 'absolute',
+    right: spacing.xs,
+    bottom: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.pill,
+    backgroundColor: colors.bgRaised
   }
 }))
