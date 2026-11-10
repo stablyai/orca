@@ -22,7 +22,7 @@
 1 src/renderer/src/components/sidebar/worktree-list/navigation/pending-reveal-inputs.ts # reads a passed-in copy
 1 src/renderer/src/components/sidebar/worktree-list/navigation/use-pending-reveal.ts # reads a passed-in copy
 2 src/renderer/src/components/sidebar/worktree-list/viewport/VirtualizedWorktreeViewport.tsx # reads a passed-in copy
-2 src/renderer/src/components/skills/skill-install-workspace-choices.ts # reads a passed-in copy
+2 src/renderer/src/components/skills/installation/skill-install-workspace-choices.ts # reads a passed-in copy
 1 src/renderer/src/components/terminal-pane/links/files/terminal-worktree-path-link.ts # P5b-2 must clear: loosely typed state param
 1 src/renderer/src/components/workspace-space/space-window-state.ts # reads a passed-in copy
 1 src/renderer/src/hooks/composer-state/composer-source-state.ts # P5b-2 must clear: composer store snapshot
@@ -36,7 +36,7 @@
 1 src/renderer/src/runtime/hosts/wsl/local-project-runtime-workspace.ts # P5b-2 must clear: optional state field defaults to empty
 1 src/renderer/src/lib/resolved-worktree-execution-host.ts # P5b-2 must clear: loosely typed state param
 2 src/renderer/src/lib/workspace/ownership/runtime-session-mirror-owners.ts # P5b-2 must clear: optional state fields default to empty
-2 src/renderer/src/lib/terminal-worktree-route.ts # P5b-2 must clear: the unattributed-twin check reads both catalogs directly
+2 src/renderer/src/lib/workspace/ownership/terminal-worktree-route.ts # P5b-2 must clear: the unattributed-twin check reads both catalogs directly
 3 src/renderer/src/lib/typing-latency/diagnostic-summary.ts # P5b-2 must clear: optional state field
 2 src/renderer/src/lib/unread-badge-count.ts # reads a passed-in copy
 1 src/renderer/src/lib/workspace-directory.ts # P5b-2 must clear: optional state field defaults to empty

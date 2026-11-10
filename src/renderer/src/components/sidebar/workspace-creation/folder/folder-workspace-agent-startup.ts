@@ -2,11 +2,11 @@ import {
   resolveAgentStartupPlanInputs,
   type AgentStartupSettings
 } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import { resolveRepoExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'
 import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
 import type { AppState } from '@/store/types'
-import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
+import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/work-items/linked-work-item-context'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,

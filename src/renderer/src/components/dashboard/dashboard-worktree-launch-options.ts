@@ -17,7 +17,7 @@ import {
   worktreeLaunchWorkspace,
   type AgentLaunchRouteView
 } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { agentsOfferedForLaunch } from '@/lib/host-chat-program'
+import { agentsOfferedForLaunch } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type DashboardLaunchDetectionState = Pick<

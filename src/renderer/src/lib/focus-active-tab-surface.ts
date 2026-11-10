@@ -1,6 +1,6 @@
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import { useAppStore } from '@/store'
-import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 
 const EDITOR_SURFACES = [
   '.monaco-editor textarea',

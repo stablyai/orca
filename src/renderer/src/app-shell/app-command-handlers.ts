@@ -1,7 +1,7 @@
-import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
+import { canShowRightSidebarForView, canToggleRightSidebar } from '@/lib/right-sidebar-visibility'
 import { runBuiltInOrReplacement } from '@/lib/plugin-command-replacements'
 import { agentsShortcutHandlers } from './agents-shortcut-handlers'
-import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
+import { isFloatingWorkspacePanelFocused } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
@@ -271,7 +271,7 @@ export function createAppCommandHandlers(
     [
       'sidebar.right.toggle',
       () =>
-        canRevealRightSidebar
+        canToggleRightSidebar(activeView)
           ? claim('sidebar.right.toggle', () => actions.toggleRightSidebar())
           : false
     ],

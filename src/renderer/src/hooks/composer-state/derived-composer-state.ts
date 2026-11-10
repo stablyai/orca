@@ -4,17 +4,17 @@ import { useMemo } from 'react'
 import { normalizeSparseDirectoryLines, sparseDirectoriesMatch } from '@/lib/sparse-paths'
 import {
   parseGitHubIssueOrPRNumber,
-  parseGitHubIssueOrPRLink,
-  normalizeGitHubLinkQuery
-} from '@/lib/github-links'
+  parseGitHubIssueOrPRLink
+} from '../../../../shared/github/links'
+import { normalizeGitHubLinkQuery } from '../../../../shared/new-workspace/github-links'
 import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+import { getWorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
 import {
-  getLinkedWorkItemProvider,
   canUseIssueCommandForLinkedItemProvider,
   getWorkspaceSeedName,
   DEFAULT_ISSUE_COMMAND_TEMPLATE,
   renderIssueCommandTemplate
-} from '@/lib/new-workspace'
+} from '@/lib/workspace/creation/new-workspace'
 import { getSetupConfig } from '../../../../shared/orca-hook-setup-config'
 import { deriveWorkspaceSetupState } from '@/lib/workspace/creation/setup/workspace-setup-preparation'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
@@ -139,7 +139,7 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     selectedRepoIsGit,
     isSetupCheckPending
   )
-  const linkedWorkItemProvider = linkedWorkItem ? getLinkedWorkItemProvider(linkedWorkItem) : null
+  const linkedWorkItemProvider = linkedWorkItem ? getWorkspaceSourceProvider(linkedWorkItem) : null
 
   // Blank unseeded names need globally unique creature names; exclude retired paths too.
   const retiredNamesRefreshKey = useMemo(

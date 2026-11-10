@@ -13,7 +13,7 @@ vi.mock('@/store/plugins/catalog/plugin-contribution-catalog', async (importOrig
   ...(await importOriginal<typeof PluginPanels>()),
   usePluginCommands: () => []
 }))
-vi.mock('@/lib/shortcut-platform', () => ({ getShortcutPlatform: () => 'darwin' }))
+vi.mock('@/lib/keyboard/shortcut-platform', () => ({ getShortcutPlatform: () => 'darwin' }))
 vi.mock('./app-window-chrome', () => ({ shortcutPlatform: 'darwin' }))
 
 const initial = useAppStore.getState()

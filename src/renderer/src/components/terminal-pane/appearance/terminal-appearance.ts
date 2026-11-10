@@ -4,7 +4,7 @@ import type { GlobalSettings } from '../../../../../shared/global-settings-types
 import { resolveTerminalFontWeights } from '../../../../../shared/terminal/appearance/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../../shared/terminal/appearance/terminal-ligatures'
 import { resolvePaneStyleOptions, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
-import { buildFontFamily } from '@/lib/monospace-font-family'
+import { buildFontFamily } from '@/app-shell/appearance/monospace-font-family'
 import { pluginFontFamilyWhenLoaded } from '@/store/plugins/appearance/plugin-fonts'
 import '@/lib/pane-manager/pane-tree-ops'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-fit'
@@ -31,7 +31,7 @@ import { normalizeTerminalLineHeight } from '../../../../../shared/terminal/appe
 import { maybePushMode2031Flip } from '../emulation/terminal-mode-2031-replies'
 import { resolveTerminalMinimumContrastRatio } from '../../../../../shared/terminal-themes/terminal-contrast-correction'
 import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/terminal/images/terminal-inline-images-settings'
-import { windowBackdropActive } from '@/lib/window-backdrop'
+import { windowBackdropActive } from '@/app-shell/appearance/window-backdrop'
 import { contrastRatio, over, type Rgba } from '../../../../../shared/color/rgba-contrast'
 import { getTerminalFontSizeOverride } from './terminal-font-size-overrides'
 

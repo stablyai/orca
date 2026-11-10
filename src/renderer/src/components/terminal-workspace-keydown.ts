@@ -6,13 +6,15 @@ import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-p
 import { useAppStore } from '../store'
 import { agentsScopeShortcutOwnsChord } from '../app-shell/agents-shortcut-handlers'
 import {
-  createFloatingWorkspaceBrowserTab,
-  createFloatingWorkspaceMarkdownTab,
-  createFloatingWorkspaceTerminalTab,
   handleEmptyFloatingWorkspacePanelCloseShortcut,
   isEventTargetInsideFloatingWorkspacePanel,
   isFloatingWorkspacePanelFocused
-} from '@/lib/floating-workspace-terminal-actions'
+} from '@/components/floating-terminal/floating-workspace-terminal-actions'
+import {
+  createFloatingWorkspaceBrowserTab,
+  createFloatingWorkspaceMarkdownTab,
+  createFloatingWorkspaceTerminalTab
+} from '@/components/floating-terminal/floating-workspace-tab-creation'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import {
   ensureClientCreationActionAllowed,

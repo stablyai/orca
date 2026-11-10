@@ -15,9 +15,8 @@ import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-t
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { ActivityEvent, ActivityLiveAgentSnapshot } from './activity-thread-types'
 import { capActivityEvents } from './activity-event-cap'
-import { newestActivityHistoryEntries } from './activity-pane-events'
+import './activity-pane-events'
 import {
-  createActivityEventBuildCache,
   resolveActivityTabIndexes,
   resolvePaneBuild,
   type ActivityEventBuildCache
@@ -29,8 +28,6 @@ import {
   type ActivityEventOwner
 } from './activity-event-builder-context'
 import type { Translate } from '@/i18n/use-translate'
-
-export { createActivityEventBuildCache, type ActivityEventBuildCache, newestActivityHistoryEntries }
 
 export type BuildActivityEventsArgs = {
   chatNames: StructuredChatTabNames

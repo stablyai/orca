@@ -8,7 +8,7 @@ vi.mock('../store', () => ({
   useAppStore: Object.assign(vi.fn(), { getState: () => ({}) })
 }))
 
-vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
+vi.mock('@/components/floating-terminal/floating-workspace-terminal-actions', () => ({
   isFloatingWorkspacePanelFocused: () => false
 }))
 

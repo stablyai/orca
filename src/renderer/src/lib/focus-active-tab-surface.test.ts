@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => {
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(vi.fn(), { getState: () => mocks.state })
 }))
-vi.mock('./focus-terminal-tab-surface', () => ({
+vi.mock('@/components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: mocks.focusTerminalTabSurface
 }))
 vi.mock('@/components/browser-pane/host-guest/browser-focus', () => ({
