@@ -21,6 +21,9 @@ function tierFor(percent: number): SpeechModelQualityTier {
   return TIER_CEILINGS.find(([ceiling]) => percent <= ceiling)?.[1] ?? 1
 }
 
+// System locales that name a language differently from the speech engines' codes.
+const LOCALE_LANGUAGE_ALIASES: Readonly<Record<string, string>> = { nb: 'no', nn: 'no', fil: 'tl' }
+
 /** The language ratings follow: the dictation language, or the system's when that is Auto-detect. */
 export function speechModelRatingLanguage(
   dictationLanguage: string | undefined,
@@ -29,7 +32,8 @@ export function speechModelRatingLanguage(
   if (dictationLanguage && dictationLanguage !== DICTATION_LANGUAGE_AUTO) {
     return dictationLanguage
   }
-  return systemLocale?.split(/[-_]/)[0]?.toLowerCase() || undefined
+  const language = systemLocale?.split(/[-_]/)[0]?.toLowerCase()
+  return (language && LOCALE_LANGUAGE_ALIASES[language]) || language || undefined
 }
 
 export function speechModelQuality(

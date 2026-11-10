@@ -8,7 +8,10 @@ import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import { ContextualTourOverlay } from './ContextualTourOverlay'
-import { GeneralWorkspaceSettingsSection } from '../settings/general/GeneralWorkspaceSettingsSection'
+import { GeneralPane } from '../settings/general/GeneralPane'
+import type { GeneralSubPage } from '../settings/general/general-sub-pages'
+import { SettingsTargetHighlightProvider } from '../settings/section-layout/settings-target-highlight'
+import { TooltipProvider } from '../ui/tooltip'
 import { useSettingsPageEffects } from '../settings/page/use-settings-page-effects'
 import { useSettingsRepoScrollEffects } from '../settings/navigation/use-settings-repo-scroll-effects'
 import type { SettingsStoreModel } from '../settings/page/use-settings-store-model'
@@ -58,7 +61,8 @@ beforeEach(() => {
     projectGroupingUpgradeTipAudience: audience,
     persistedUIReady: true,
     contextualToursAutoEligible: false,
-    activeModal: 'none'
+    activeModal: 'none',
+    refreshRemoteServerUpdates: async () => {}
   })
   const header = document.createElement('div')
   header.dataset.sidebarSectionTitle = 'projects'
@@ -129,10 +133,10 @@ it('consumes the audience when a separate mode is chosen before first display', 
   expect(screen.queryByText('Your checkouts were combined')).toBeNull()
 })
 
-vi.mock('../settings/general/WorkspaceDirectorySetting', () => ({
-  WorkspaceDirectorySetting: () => null
+vi.mock('../settings/updates/GeneralUpdateSettingsSection', () => ({
+  GeneralUpdateSettingsSection: () => null
 }))
-vi.mock('../settings/general/OpenInMenuSetting', () => ({ OpenInMenuSetting: () => null }))
+vi.mock('../settings/cli/install/CliSection', () => ({ CliSection: () => null }))
 const noChange = () => {}
 const loaded = async () => {}
 function SettingsDestination() {
@@ -153,9 +157,10 @@ function SettingsDestination() {
   const [activeSectionId, setActiveSectionId] = useState('appearance')
   const [mountedSectionIds, setMountedSectionIds] = useState(new Set<string>())
   const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
-  const [highlightedSettingsTargetId, setHighlightedSettingsTargetId] = useState<string | null>(
-    null
-  )
+  const [highlightedSettingsTarget, setHighlightedSettingsTarget] = useState<{
+    id: string
+  } | null>(null)
+  const [generalSubPage, setGeneralSubPage] = useState<GeneralSubPage | null>(null)
   const pendingNavSectionRef = useRef<string | null>(null)
   const pendingScrollTargetRef = useRef<string | null>(null)
   const contentScrollRef = useRef<HTMLDivElement>(null)
@@ -182,8 +187,10 @@ function SettingsDestination() {
     setMountedSectionIds,
     pendingNavRequestTick,
     setPendingNavRequestTick,
-    highlightedSettingsTargetId,
-    setHighlightedSettingsTargetId,
+    highlightedSettingsTarget,
+    setHighlightedSettingsTarget,
+    generalSubPage,
+    setGeneralSubPage,
     fetchSettings: loaded,
     fetchKeybindings: loaded,
     refreshModelStates: loaded,
@@ -213,11 +220,17 @@ function SettingsDestination() {
     <div ref={contentScrollRef}>
       {activeSectionId === 'general' && mountedSectionIds.has('general') ? (
         <section id="general">
-          <GeneralWorkspaceSettingsSection
-            settings={state.settings!}
-            updateSettings={state.updateSettings}
-            highlightedSettingId={highlightedSettingsTargetId}
-          />
+          <TooltipProvider>
+            <SettingsTargetHighlightProvider value={highlightedSettingsTarget?.id ?? null}>
+              <GeneralPane
+                settings={state.settings!}
+                updateSettings={state.updateSettings}
+                fontSuggestions={[]}
+                subPage={generalSubPage}
+                onSelectSubPage={setGeneralSubPage}
+              />
+            </SettingsTargetHighlightProvider>
+          </TooltipProvider>
         </section>
       ) : null}
     </div>

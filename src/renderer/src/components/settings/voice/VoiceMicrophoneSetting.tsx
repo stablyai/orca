@@ -181,7 +181,7 @@ export function VoiceMicrophoneSetting({
   const showAccessHint = voiceSettings.enabled && devices.length === 0
 
   return (
-    <div className="flex items-center justify-between gap-4 py-2">
+    <div data-settings-row="" className="flex items-center justify-between gap-4 py-2">
       <div className="min-w-0 space-y-0.5">
         <Label>{t('auto.components.settings.VoiceMicrophoneSetting.label', 'Microphone')}</Label>
         <p className="text-xs text-muted-foreground">

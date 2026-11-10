@@ -287,8 +287,8 @@ function SparsePresetSettingsView({
     <section ref={sectionRef}>
       <SettingsGroup
         title={t(
-          'auto.components.settings.SparsePresetSettingsSection.388513be2d',
-          'Sparse Checkout Presets'
+          'auto.components.settings.SparsePresetSettingsSection.124ff6ea6c',
+          'Sparse checkout presets'
         )}
         description={t(
           'auto.components.settings.SparsePresetSettingsSection.17f8c4ce10',
@@ -303,7 +303,7 @@ function SparsePresetSettingsView({
             disabled={!!draft || presets === undefined || deletingPresetId !== null}
           >
             <Plus className="size-3.5" />
-            {t('auto.components.settings.SparsePresetSettingsSection.d7565029a9', 'New Preset')}
+            {t('auto.components.settings.SparsePresetSettingsSection.683e781027', 'New preset')}
           </Button>
         }
       >

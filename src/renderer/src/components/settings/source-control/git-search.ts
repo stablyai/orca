@@ -5,7 +5,7 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.git.search.68bd65fdb8', 'Branch Prefix'),
+    title: translate('auto.components.settings.git.search.25eac7e904', 'Branch prefix'),
     description: translate(
       'auto.components.settings.git.search.5ecd91c5ef',
       'Prefix added to branch names when creating worktrees.'
@@ -17,10 +17,7 @@ export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
-    title: translate(
-      'auto.components.settings.git.search.jiraIssueKeyCasingTitle',
-      'Jira Key Casing'
-    ),
+    title: translate('auto.components.settings.git.search.f760fc929e', 'Jira key casing'),
     description: translate(
       'auto.components.settings.git.search.jiraIssueKeyCasingDescription',
       'Casing of the Jira issue key in the workspace and branch names Orca suggests for new Jira-linked workspaces, such as PROJ-123-fix-login instead of proj-123-fix-login. Existing workspaces and names you type are never changed.'
@@ -35,8 +32,8 @@ export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.git.search.f8bda25f29',
-      'Keep Local Main Up to Date'
+      'auto.components.settings.git.search.410e821889',
+      'Keep local main up to date'
     ),
     description: translate(
       'auto.components.settings.git.search.0e993bf00f',
@@ -62,8 +59,8 @@ export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.git.search.sourceControlGroupOrderTitle',
-      'Source Control Group Order'
+      'auto.components.settings.git.search.85983bb4f9',
+      'Source control group order'
     ),
     description: translate(
       'auto.components.settings.git.search.sourceControlGroupOrderDescription',
@@ -88,10 +85,7 @@ export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
-    title: translate(
-      'auto.components.settings.git.search.compareAgainstUpstreamTitle',
-      'Default Compare Base'
-    ),
+    title: translate('auto.components.settings.git.search.1ad8060ddc', 'Default compare base'),
     description: translate(
       'auto.components.settings.git.search.compareAgainstUpstreamDescription',
       "Choose which base Source Control uses by default for committed-change comparisons. Branch upstream follows the current branch automatically and falls back to the repository default branch when no upstream exists. You can still change the compare base per worktree from that worktree's Git panel. Pull Request and rebase targets don't change."

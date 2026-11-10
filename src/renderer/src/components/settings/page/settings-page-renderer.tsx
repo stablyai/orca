@@ -1,3 +1,6 @@
+import { SettingsTargetHighlightProvider } from '../section-layout/settings-target-highlight'
+import { SettingsHeader } from '../navigation/SettingsHeader'
+import { getGeneralSubPageTitle } from '../general/general-sub-pages'
 import { ActiveSettingsSectionProvider } from '../section-layout/SettingsSection'
 import { SettingsContentScrollElementProvider } from './settings-content-scroll-element'
 import { SettingsSidebar } from '../navigation/SettingsSidebar'
@@ -102,14 +105,34 @@ export function renderSettingsPage(
       />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {!model.isWebClient &&
-        shouldShowSettingsHostScopePicker(model.settingsHostScope, model.runtimeEnvironments) ? (
-          <SettingsHostScopePicker
-            scope={model.settingsHostScope}
-            environments={model.runtimeEnvironments}
-            onChoose={model.setSettingsHostChoice}
-          />
-        ) : null}
+        <SettingsHeader
+          title={
+            navigation.navSections.find((section) => section.id === model.activeSectionId)?.title ??
+            t('settings.breadcrumb.settings', 'Settings')
+          }
+          subPageTitle={
+            model.activeSectionId === 'general' &&
+            !model.settingsSearchQuery.trim() &&
+            model.generalSubPage
+              ? getGeneralSubPageTitle(model.generalSubPage, t)
+              : undefined
+          }
+          onGeneral={() => void actions.scrollToSection('general')}
+          onClose={interactions.closeSettingsPageWithPromptGuard}
+          hostPicker={
+            !model.isWebClient &&
+            shouldShowSettingsHostScopePicker(
+              model.settingsHostScope,
+              model.runtimeEnvironments
+            ) ? (
+              <SettingsHostScopePicker
+                scope={model.settingsHostScope}
+                environments={model.runtimeEnvironments}
+                onChoose={model.setSettingsHostChoice}
+              />
+            ) : null
+          }
+        />
         <div
           ref={interactions.setContentScrollNode}
           className={cn(
@@ -122,61 +145,65 @@ export function renderSettingsPage(
         >
           <div
             className={cn(
-              'mx-auto flex w-full flex-col gap-10 px-8 pt-10',
+              'mx-auto flex w-full flex-col gap-6 px-8 pt-6',
               view.isFocusedShortcutsPane ? 'h-full pb-6' : 'pb-24',
-              view.isFocusedSetupGuidePane || view.isWidePluginsPane ? 'max-w-6xl' : 'max-w-4xl'
+              view.isFocusedSetupGuidePane || view.isWidePluginsPane ? 'max-w-6xl' : 'max-w-[784px]'
             )}
           >
             <SettingsContentScrollElementProvider value={interactions.contentScrollElement}>
               <ActiveSettingsSectionProvider value={model.activeSectionId}>
-                {navigation.visibleNavSections.length === 0 ? (
-                  <div className="flex min-h-[24rem] items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card/30 text-sm text-muted-foreground">
-                    {t(
-                      'auto.components.settings.Settings.noSettingsFoundForQuery',
-                      'No settings found for "{{value0}}"',
-                      { value0: model.settingsSearchQuery.trim() }
-                    )}
-                  </div>
-                ) : (
-                  <>
-                    {renderAgentsSettingsSection(context, t)}
-                    {renderAccountsSettingsSection(context, t)}
-                    {renderOrchestrationSettingsSection(context, t)}
-                    {renderLinearSettingsSection(context, t)}
-                    {renderDesktopCapabilitySettingsSections(context, t)}
-                    {renderOrcaAccountSettingsSection(context, t)}
-                    {renderSetupGuideSettingsSection(context, t)}
-                    {renderGeneralSettingsSection(context, t)}
-                    {renderIntegrationsSettingsSection(context, t)}
-                    {renderMobileSettingsSection(context, t)}
-                    {renderAutomationsSettingsSection(context, t)}
-                    {renderArtifactsSettingsSection(context, t)}
-                    {renderShareSkillsSettingsSection(context, t)}
-                    {renderSessionHistorySettingsSection(context, t)}
-                    {renderGitSettingsSection(context, t)}
-                    {renderTasksSettingsSection(context, t)}
-                    {renderTerminalSettingsSection(context, t)}
-                    {renderQuickCommandsSettingsSection(context, t)}
-                    {renderBrowserSettingsSection(context, t)}
-                    {renderMobileEmulatorSettingsSection(context, t)}
-                    {renderFloatingWorkspaceSettingsSection(context, t)}
-                    {renderAppearanceSettingsSection(context, t)}
-                    {renderChatSettingsSection(context)}
-                    {renderInputSettingsSection(context, t)}
-                    {renderNotificationsSettingsSection(context, t)}
-                    {renderShortcutsSettingsSection(context, t)}
-                    {renderStatsSettingsSection(context, t)}
-                    {renderServersSettingsSection(context, t)}
-                    {renderSshSettingsSection(context, t)}
-                    {renderDeveloperPermissionsSettingsSection(context, t)}
-                    {renderPrivacySettingsSection(context, t)}
-                    {renderAdvancedSettingsSection(context, t)}
-                    {renderDevSettingsSection(context, t)}
-                    {renderExperimentalSettingsSection(context, t)}
-                    {renderPluginsSettingsSection(context)}
-                  </>
-                )}
-                {renderProjectSettingsSections(context, t)}
+                <SettingsTargetHighlightProvider
+                  value={model.highlightedSettingsTarget?.id ?? null}
+                >
+                  {navigation.visibleNavSections.length === 0 ? (
+                    <div className="flex min-h-[24rem] items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card/30 text-sm text-muted-foreground">
+                      {t(
+                        'auto.components.settings.Settings.noSettingsFoundForQuery',
+                        'No settings found for "{{value0}}"',
+                        { value0: model.settingsSearchQuery.trim() }
+                      )}
+                    </div>
+                  ) : (
+                    <>
+                      {renderAgentsSettingsSection(context, t)}
+                      {renderAccountsSettingsSection(context, t)}
+                      {renderOrchestrationSettingsSection(context, t)}
+                      {renderLinearSettingsSection(context, t)}
+                      {renderDesktopCapabilitySettingsSections(context, t)}
+                      {renderOrcaAccountSettingsSection(context, t)}
+                      {renderSetupGuideSettingsSection(context, t)}
+                      {renderGeneralSettingsSection(context, t)}
+                      {renderIntegrationsSettingsSection(context, t)}
+                      {renderMobileSettingsSection(context, t)}
+                      {renderAutomationsSettingsSection(context, t)}
+                      {renderArtifactsSettingsSection(context, t)}
+                      {renderShareSkillsSettingsSection(context, t)}
+                      {renderSessionHistorySettingsSection(context, t)}
+                      {renderGitSettingsSection(context, t)}
+                      {renderTasksSettingsSection(context, t)}
+                      {renderTerminalSettingsSection(context, t)}
+                      {renderQuickCommandsSettingsSection(context, t)}
+                      {renderBrowserSettingsSection(context, t)}
+                      {renderMobileEmulatorSettingsSection(context, t)}
+                      {renderFloatingWorkspaceSettingsSection(context, t)}
+                      {renderAppearanceSettingsSection(context, t)}
+                      {renderChatSettingsSection(context)}
+                      {renderInputSettingsSection(context, t)}
+                      {renderNotificationsSettingsSection(context, t)}
+                      {renderShortcutsSettingsSection(context, t)}
+                      {renderStatsSettingsSection(context, t)}
+                      {renderServersSettingsSection(context, t)}
+                      {renderSshSettingsSection(context, t)}
+                      {renderDeveloperPermissionsSettingsSection(context, t)}
+                      {renderPrivacySettingsSection(context, t)}
+                      {renderAdvancedSettingsSection(context, t)}
+                      {renderDevSettingsSection(context, t)}
+                      {renderExperimentalSettingsSection(context, t)}
+                      {renderPluginsSettingsSection(context)}
+                    </>
+                  )}
+                  {renderProjectSettingsSections(context, t)}
+                </SettingsTargetHighlightProvider>
               </ActiveSettingsSectionProvider>
             </SettingsContentScrollElementProvider>
           </div>

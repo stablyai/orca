@@ -17,7 +17,7 @@ export function BrowserSearchEngineSetting({
   const t = useTranslate()
   return (
     <SearchableSetting
-      title={t('auto.components.settings.BrowserPane.0d9c987f21', 'Default Search Engine')}
+      title={t('auto.components.settings.BrowserPane.e25fd16b91', 'Default search engine')}
       description={t(
         'auto.components.settings.BrowserPane.7b225c78f5',
         'Search engine used when typing non-URL text in the address bar.'
@@ -39,7 +39,7 @@ export function BrowserSearchEngineSetting({
     >
       <div className="space-y-0.5">
         <Label>
-          {t('auto.components.settings.BrowserPane.0d9c987f21', 'Default Search Engine')}
+          {t('auto.components.settings.BrowserPane.e25fd16b91', 'Default search engine')}
         </Label>
         <p className="text-xs text-muted-foreground">
           {t(

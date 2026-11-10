@@ -27,12 +27,14 @@ export function ProjectGroupingSetting({
   settings,
   updateSettings,
   projectId,
-  forceVisible = false
+  forceVisible = false,
+  id
 }: {
   settings: GlobalSettings
   updateSettings: (updates: SettingsUpdate) => void
   projectId?: string
   forceVisible?: boolean
+  id?: string
 }) {
   const t = useTranslate()
   const options = groupingOptions(t)
@@ -69,6 +71,7 @@ export function ProjectGroupingSetting({
   }
   return (
     <SearchableSetting
+      id={id}
       forceVisible={forceVisible}
       title={title}
       description={description}

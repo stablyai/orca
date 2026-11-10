@@ -1,8 +1,8 @@
-import type { SettingsUpdate } from '@/store/slices/settings/create-settings-slice'
-import { ProjectGroupingSetting } from '../ProjectGroupingSetting'
+import { GENERAL_SETTING_ANCHORS } from './general-setting-anchors'
+import { getGeneralSubPageTitle, type GeneralSubPage } from './general-sub-pages'
 import type React from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { OpenInMenuSetting } from './OpenInMenuSetting'
+import { OpenInMenuEditor, type useOpenInMenuDraft } from './OpenInMenuSetting'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { WorkspaceDirectorySetting } from './WorkspaceDirectorySetting'
@@ -12,16 +12,18 @@ import { GLOBAL_WORKTREE_VISIBILITY_SETTINGS_TARGET_ID } from '@/lib/settings-na
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 type GeneralWorkspaceSettingsSectionProps = {
-  highlightedSettingId?: string | null
+  openInDraft: ReturnType<typeof useOpenInMenuDraft>
+  page: GeneralSubPage
   settings: GlobalSettings
-  updateSettings: (updates: SettingsUpdate) => void
+  updateSettings: (updates: Partial<GlobalSettings>) => void
   updateSettingsOrThrow?: (updates: Partial<GlobalSettings>) => void | Promise<void>
   defaultsSupported?: boolean
   sourceDefaultsSupported?: boolean
 }
 
 export function GeneralWorkspaceSettingsSection({
-  highlightedSettingId,
+  page,
+  openInDraft,
   settings,
   updateSettings,
   updateSettingsOrThrow = updateSettings,
@@ -30,36 +32,46 @@ export function GeneralWorkspaceSettingsSection({
 }: GeneralWorkspaceSettingsSectionProps): React.JSX.Element {
   const t = useTranslate()
   return (
-    <>
-      <div
-        id="general-projects"
-        data-settings-section="general-projects"
-        data-highlighted={highlightedSettingId === 'general-projects' ? 'true' : undefined}
-        className="scroll-mt-6 rounded-md transition-[background-color,box-shadow] duration-500 data-[highlighted=true]:bg-accent data-[highlighted=true]:ring-2 data-[highlighted=true]:ring-inset data-[highlighted=true]:ring-ring/50 motion-reduce:transition-none"
-      >
-        <SettingsGroup title={t('settings.projectGrouping.projects', 'Projects')}>
-          <ProjectGroupingSetting settings={settings} updateSettings={updateSettings} />
-        </SettingsGroup>
-      </div>
-
-      <SettingsGroup
-        title={t(
-          'auto.components.settings.GeneralWorkspaceSettingsSection.7511097c5d',
-          'Workspace'
-        )}
-        description={t(
-          'auto.components.settings.GeneralWorkspaceSettingsSection.e2955d9ccb',
-          'Configure where new workspaces are created.'
-        )}
-      >
-        <WorkspaceDirectorySetting settings={settings} updateSettings={updateSettings} />
-
+    <SettingsGroup title={getGeneralSubPageTitle(page, t)}>
+      {page === 'folder' ? (
+        <div>
+          <WorkspaceDirectorySetting settings={settings} updateSettings={updateSettings} />
+          <SearchableSetting
+            id={GENERAL_SETTING_ANCHORS.nesting}
+            title={t('settings.general.folder.perProject', 'Folder per project')}
+            description={t(
+              'auto.components.settings.GeneralWorkspaceSettingsSection.4fbf910ded',
+              'Create workspaces inside a repo-named subfolder.'
+            )}
+            keywords={[
+              'nest',
+              'nested',
+              'subfolder',
+              'directory',
+              t(
+                'auto.components.settings.GeneralWorkspaceSettingsSection.a8ce626e4b',
+                'Nest workspaces'
+              )
+            ]}
+          >
+            <SettingsSwitchRow
+              label={t('settings.general.folder.perProject', 'Folder per project')}
+              description={t(
+                'auto.components.settings.GeneralWorkspaceSettingsSection.4fbf910ded',
+                'Create workspaces inside a repo-named subfolder.'
+              )}
+              checked={settings.nestWorkspaces}
+              onChange={() => updateSettings({ nestWorkspaces: !settings.nestWorkspaces })}
+            />
+          </SearchableSetting>
+        </div>
+      ) : page === 'worktrees' ? (
         <div
-          id={GLOBAL_WORKTREE_VISIBILITY_SETTINGS_TARGET_ID}
           data-settings-section={GLOBAL_WORKTREE_VISIBILITY_SETTINGS_TARGET_ID}
           className="scroll-mt-6"
         >
           <SearchableSetting
+            id={GENERAL_SETTING_ANCHORS.worktrees}
             title={t(
               'auto.components.settings.GeneralWorkspaceSettingsSection.externalWorktrees',
               'External worktrees'
@@ -92,144 +104,13 @@ export function GeneralWorkspaceSettingsSection({
             />
           </SearchableSetting>
         </div>
-
-        <SearchableSetting
-          title={t(
-            'auto.components.settings.GeneralWorkspaceSettingsSection.ba3480642f',
-            'Nest Workspaces'
-          )}
-          description={t(
-            'auto.components.settings.GeneralWorkspaceSettingsSection.4fbf910ded',
-            'Create workspaces inside a repo-named subfolder.'
-          )}
-          keywords={['nested', 'subfolder', 'directory']}
-        >
-          <SettingsSwitchRow
-            label={t(
-              'auto.components.settings.GeneralWorkspaceSettingsSection.ba3480642f',
-              'Nest Workspaces'
-            )}
-            description={t(
-              'auto.components.settings.GeneralWorkspaceSettingsSection.4fbf910ded',
-              'Create workspaces inside a repo-named subfolder.'
-            )}
-            checked={settings.nestWorkspaces}
-            onChange={() => updateSettings({ nestWorkspaces: !settings.nestWorkspaces })}
-          />
-        </SearchableSetting>
-
-        {/* Keep this ID stable: the delete-worktree Don’t ask again toast deep-links here. */}
-        <div id="general-skip-delete-worktree-confirm" className="scroll-mt-6">
+      ) : (
+        <div data-settings-section="general-open-in-apps" className="scroll-mt-6">
           <SearchableSetting
+            id={GENERAL_SETTING_ANCHORS.openIn}
             title={t(
-              'auto.components.settings.GeneralWorkspaceSettingsSection.9f380934cf',
-              'Ask Before Deleting Workspaces'
-            )}
-            description={t(
-              'auto.components.settings.GeneralWorkspaceSettingsSection.5734db82af',
-              'Show a confirmation dialog before deleting a workspace.'
-            )}
-            keywords={['delete', 'worktree', 'confirm', 'dialog', 'skip', 'prompt']}
-          >
-            <SettingsSwitchRow
-              label={t(
-                'auto.components.settings.GeneralWorkspaceSettingsSection.9f380934cf',
-                'Ask Before Deleting Workspaces'
-              )}
-              description={t(
-                'auto.components.settings.GeneralWorkspaceSettingsSection.28bc3d085e',
-                'Show a confirmation before deleting a workspace from the context menu. Failed deletes still surface a Force Delete fallback.'
-              )}
-              checked={!settings.skipDeleteWorktreeConfirm}
-              onChange={() =>
-                updateSettings({
-                  skipDeleteWorktreeConfirm: !settings.skipDeleteWorktreeConfirm
-                })
-              }
-            />
-          </SearchableSetting>
-        </div>
-
-        <div id="general-skip-delete-automation-confirm" className="scroll-mt-6">
-          <SearchableSetting
-            title={t(
-              'auto.components.settings.GeneralWorkspaceSettingsSection.ea98373cd8',
-              'Ask Before Deleting Automations'
-            )}
-            description={t(
-              'auto.components.settings.GeneralWorkspaceSettingsSection.d2dd2ca2e3',
-              'Show a confirmation dialog before deleting an automation and its run history.'
-            )}
-            keywords={['delete', 'automation', 'confirm', 'dialog', 'skip', 'prompt']}
-          >
-            <SettingsSwitchRow
-              label={t(
-                'auto.components.settings.GeneralWorkspaceSettingsSection.ea98373cd8',
-                'Ask Before Deleting Automations'
-              )}
-              description={t(
-                'auto.components.settings.GeneralWorkspaceSettingsSection.824b98a0d9',
-                'Show a confirmation before deleting automations and their run history.'
-              )}
-              checked={!settings.skipDeleteAutomationConfirm}
-              onChange={() =>
-                updateSettings({
-                  skipDeleteAutomationConfirm: !settings.skipDeleteAutomationConfirm
-                })
-              }
-            />
-          </SearchableSetting>
-        </div>
-
-        <div id="general-skip-delete-artifact-confirm" className="scroll-mt-6">
-          <SearchableSetting
-            title={t(
-              'auto.components.settings.GeneralWorkspaceSettingsSection.31e300af1c',
-              'Ask Before Deleting Artifacts'
-            )}
-            description={t(
-              'auto.components.settings.GeneralWorkspaceSettingsSection.fb29a73a17',
-              'Show a confirmation dialog before deleting a shared artifact and breaking its public link.'
-            )}
-            keywords={[
-              'delete',
-              'artifact',
-              'share',
-              'link',
-              'confirm',
-              'dialog',
-              'skip',
-              'prompt'
-            ]}
-          >
-            <SettingsSwitchRow
-              label={t(
-                'auto.components.settings.GeneralWorkspaceSettingsSection.31e300af1c',
-                'Ask Before Deleting Artifacts'
-              )}
-              description={t(
-                'auto.components.settings.GeneralWorkspaceSettingsSection.bf46474e33',
-                'Show a confirmation before deleting a shared artifact. Anyone holding its public link loses access.'
-              )}
-              checked={!settings.skipDeleteArtifactConfirm}
-              onChange={() =>
-                updateSettings({
-                  skipDeleteArtifactConfirm: !settings.skipDeleteArtifactConfirm
-                })
-              }
-            />
-          </SearchableSetting>
-        </div>
-
-        <div
-          id="general-open-in-apps"
-          data-settings-section="general-open-in-apps"
-          className="scroll-mt-6"
-        >
-          <SearchableSetting
-            title={t(
-              'auto.components.settings.GeneralWorkspaceSettingsSection.008f92085f',
-              'Open In Apps'
+              'auto.components.settings.GeneralWorkspaceSettingsSection.ad65d146f6',
+              'Open in apps'
             )}
             description={t(
               'auto.components.settings.GeneralWorkspaceSettingsSection.3d538a98f7',
@@ -253,13 +134,14 @@ export function GeneralWorkspaceSettingsSection({
             ]}
             className="space-y-3 py-3"
           >
-            <OpenInMenuSetting
+            <OpenInMenuEditor
+              draftOwner={openInDraft}
               applications={settings.openInApplications}
               updateSettings={updateSettings}
             />
           </SearchableSetting>
         </div>
-      </SettingsGroup>
-    </>
+      )}
+    </SettingsGroup>
   )
 }

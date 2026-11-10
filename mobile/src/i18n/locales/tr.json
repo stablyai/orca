@@ -1339,7 +1339,18 @@
     },
     "announce": {
       "typedInto": "{{target}} içine yazıldı",
-      "insertedIn": "{{target}} içine eklendi"
+      "insertedIn": "{{target}} içine eklendi",
+      "listeningOnPhone": "Dinleniyor. Bu telefonda yazıya dökülüyor.",
+      "listeningOn": "Dinleniyor. {{computer}} üzerinde yazıya dökülüyor.",
+      "listeningOnComputer": "Dinleniyor. Bilgisayarda yazıya dökülüyor.",
+      "finishing": "Tamamlanıyor.",
+      "inserted": "Eklendi.",
+      "cancelled": "Dikte iptal edildi.",
+      "movedTo": "Bu telefon yazıya dökmeyi bıraktı. {{computer}} üzerinde devam ediliyor.",
+      "movedToComputer": "Bu telefon yazıya dökmeyi bıraktı. Bilgisayarda devam ediliyor.",
+      "stoppedKept": "Dikte durdu. {{reason}}. Kaydınız saklandı.",
+      "stoppedKeptGeneric": "Dikte durdu. Kaydınız saklandı.",
+      "stillListening": "Dinlemeye devam ediliyor."
     },
     "pill": {
       "open": "Aç",

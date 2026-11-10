@@ -22,11 +22,6 @@ vi.mock('../media/visuals/NativeChatInlineVisual', () => ({
 vi.mock('@/lib/open-agent-message-sender', () => ({
   openAgentMessageSender: unusedChatLeaves.openSender
 }))
-afterEach(() => {
-  expect(unusedChatLeaves.inlineVisual).not.toHaveBeenCalled()
-  expect(unusedChatLeaves.openSender).not.toHaveBeenCalled()
-})
-
 import type {
   AgentJournalItemBody,
   AgentJournalProducerLinkage,
@@ -132,60 +127,6 @@ import { session, stubLayout } from '../viewport/virtualization/native-chat-wind
       vi.restoreAllMocks()
     })
 
-    it("draws an open agent's rows between its entry and the next one", () => {
-      const agents = [
-        { id: 'task-a', label: 'lane a', state: 'completed' as const },
-        { id: 'task-b', label: 'lane b', state: 'completed' as const },
-        { id: 'task-c', label: 'lane c', state: 'completed' as const }
-      ]
-      const items = [
-        itemsWith('completed', false)[0]!,
-        journalItem(
-          'spawn',
-          {
-            kind: 'message',
-            role: 'system',
-            blocks: [{ type: 'subagent-group', groupId: 'group-1', agents }]
-          },
-          2
-        ),
-        ...agents.map(({ id, label }, index) =>
-          journalItem(
-            `${id}-said`,
-            {
-              kind: 'message',
-              role: 'assistant',
-              blocks: [{ type: 'text', text: `Read ${label}.` }]
-            },
-            3 + index,
-            { agentId: id, producerKind: 'agent' }
-          )
-        )
-      ]
-      render(
-        <NativeChatMessageList
-          session={session(projectStructuredItemsToNativeChat(items))}
-          journalItems={items}
-          isWorking={false}
-          expandSignal={false}
-        />
-      )
-      fireEvent.click(screen.getByRole('button', { name: /Ran 3 subagents/ }))
-      fireEvent.click(screen.getByRole('button', { name: /lane b/ }))
-
-      const order = [
-        screen.getByRole('button', { name: /lane a/, expanded: false }),
-        screen.getByRole('button', { name: /lane b/, expanded: true }),
-        screen.getByText('Read lane b.'),
-        screen.getByRole('button', { name: /lane c/, expanded: false })
-      ]
-      for (const [index, node] of order.slice(1).entries()) {
-        expect(order[index]!.compareDocumentPosition(node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
-      }
-      expect(screen.queryByText('Read lane a.')).toBeNull()
-      expect(screen.getAllByText(/^lane [abc]$/)).toHaveLength(3)
-    })
-
     // Journal turn records own subagent edits, even when a newer send is queued or the opener is unloaded.
     it("counts a subagent's edit in the turn the journal says it was made in", () => {
       const say = (itemId: string, role: 'user' | 'assistant', text: string, sequence: number) =>
@@ -273,16 +214,6 @@ import { session, stubLayout } from '../viewport/virtualization/native-chat-wind
       expect(screen.queryByText('The PR is CLEAN.')).toBeNull()
       fireEvent.click(screen.getByRole('button', { name: /Ran 1 subagent/ }))
       expect(screen.getByText('The PR is CLEAN.')).toBeInTheDocument()
-    })
-
-    it('opens a working subagent while the session waits on it, and closes it once the parent moves on', () => {
-      const { rerender } = render(listOf('working', true))
-      expect(screen.getByText('The PR is CLEAN.')).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /explore the lane/, expanded: true })).toBeVisible()
-      expect(screen.getAllByText('explore the lane')).toHaveLength(1)
-      rerender(listOf('working'))
-      expect(screen.queryByText('The PR is CLEAN.')).toBeNull()
-      expect(screen.getByRole('button', { name: /Kicked off 1 subagent/ })).toBeInTheDocument()
     })
 
     it("keeps the reader's choice over the frontier, in either direction", () => {

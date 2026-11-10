@@ -50,7 +50,7 @@ export function VoiceModelUnloadSetting({
 
   return (
     <SettingsRow
-      label={t('components.settings.voice.modelUnload.title', 'Unload Speech Model')}
+      label={t('components.settings.voice.modelUnload.94afd37271', 'Unload speech model')}
       description={
         isCloudModel
           ? t(

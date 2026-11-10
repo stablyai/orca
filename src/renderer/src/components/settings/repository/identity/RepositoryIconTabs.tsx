@@ -124,7 +124,7 @@ function RepositoryIconTabsView({
           onClick={() => void onUseGitHubAvatar()}
         >
           <Github className="size-3.5" />
-          {t('auto.components.settings.RepositoryIconPicker.39da8a10bf', 'Use GitHub Avatar')}
+          {t('auto.components.settings.RepositoryIconPicker.cc76342291', 'Use GitHub avatar')}
         </Button>
         <p className="text-xs text-muted-foreground">
           {t(

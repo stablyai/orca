@@ -36,11 +36,50 @@ it('resolves a custom Claude command against the login shell PATH', async () => 
   }
 })
 
+it('isolates inherited Claude stamps before applying launch settings', () => {
+  const sources = {
+    command: 'claude',
+    prefixArgs: [],
+    overlay: undefined,
+    inheritedEnv: {
+      CLAUDE_CODE_ENTRYPOINT: 'cli',
+      CLAUDECODE: '1',
+      CLAUDE_CODE_MESSAGING_SOCKET: 'parent-socket',
+      CLAUDE_AGENT_SDK_VERSION: 'parent-sdk',
+      CLAUDE_EFFORT: 'parent-effort',
+      CLAUDE_CODE_HTTP_PROXY: 'http://user-proxy'
+    }
+  }
+  const options = { runtimeOnPath: false }
+  expect(claudeChildEnv(sources, undefined, options)).toEqual({
+    CLAUDE_CODE_ENTRYPOINT: 'orca',
+    CLAUDE_CODE_HTTP_PROXY: 'http://user-proxy'
+  })
+  const overlay = { CLAUDE_CODE_ENTRYPOINT: 'custom', CLAUDE_EFFORT: 'configured-effort' }
+  expect(claudeChildEnv({ ...sources, overlay }, undefined, options)).toEqual({
+    ...overlay,
+    CLAUDE_CODE_HTTP_PROXY: 'http://user-proxy'
+  })
+})
+
 it('keeps a differently cased Windows launch value over the Orca default', () => {
-  const inherited = { Claude_Code_Entrypoint: 'cli', PATH: 'C:\\bin' }
+  const inherited = {
+    Claude_Code_Entrypoint: 'cli',
+    CLAUDE_CODE_MESSAGING_TOKEN: 'parent-token',
+    Claude_Agent_Sdk_Version: 'parent-sdk',
+    PATH: 'C:\\bin'
+  }
   expect(
-    withOrcaClaudeEntrypoint(inherited, { claude_code_entrypoint: 'company-client' }, 'win32')
-  ).toEqual({ PATH: 'C:\\bin', CLAUDE_CODE_ENTRYPOINT: 'company-client' })
+    withOrcaClaudeEntrypoint(
+      inherited,
+      { claude_code_entrypoint: 'company-client', claude_agent_sdk_version: 'configured-sdk' },
+      'win32'
+    )
+  ).toEqual({
+    PATH: 'C:\\bin',
+    CLAUDE_CODE_ENTRYPOINT: 'company-client',
+    CLAUDE_AGENT_SDK_VERSION: 'configured-sdk'
+  })
   expect(withOrcaClaudeEntrypoint(inherited, undefined, 'win32')).toEqual({
     PATH: 'C:\\bin',
     CLAUDE_CODE_ENTRYPOINT: 'orca'

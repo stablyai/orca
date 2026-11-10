@@ -8,6 +8,7 @@ import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-c
 import type { NativeChatTranscriptWindow } from './use-native-chat-transcript-window'
 import type { ReaderGesture } from '../scroll/native-chat-autoscroll'
 import { NativeChatForwardedGestureContext } from '../scroll/native-chat-reader-scroll-input'
+import type { NativeChatNewRowsMarkerState } from '../new-rows/native-chat-new-rows-marker'
 import {
   NativeChatReplyRevealsContext,
   useNativeChatReplyReveals
@@ -19,12 +20,14 @@ export function NativeChatTranscriptItems({
   loadedMessageIds,
   context,
   window,
+  newRowsMarker,
   forwardGesture
 }: {
   slots: readonly NativeChatTranscriptSlot[]
   loadedMessageIds: ReadonlySet<string>
   context: NativeChatTranscriptRowContext
   window: NativeChatTranscriptWindow
+  newRowsMarker?: NativeChatNewRowsMarkerState
   /** A reader gesture a row's visual frame took before the transcript could see it. */
   forwardGesture: (gesture: ReaderGesture) => void
 }): React.JSX.Element {
@@ -44,7 +47,13 @@ export function NativeChatTranscriptItems({
               <Fragment key={item.key}>
                 <div aria-hidden style={{ height: Math.max(0, item.start - previousEnd) }} />
                 <div data-index={item.index} ref={window.measureRow} className="flow-root w-full">
-                  <NativeChatTranscriptRow slot={slot} context={context} />
+                  <NativeChatTranscriptRow
+                    slot={slot}
+                    context={context}
+                    newRowsMarker={
+                      rowKeys[item.index] === newRowsMarker?.key ? newRowsMarker : undefined
+                    }
+                  />
                 </div>
               </Fragment>
             )

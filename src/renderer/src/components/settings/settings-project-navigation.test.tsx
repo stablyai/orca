@@ -104,7 +104,8 @@ it.each(['host', 'folder'] as const)(
         setMountedSectionIds,
         setPendingNavRequestTick,
         setSettingsHostChoice: noop,
-        setHighlightedSettingsTargetId: noop,
+        setHighlightedSettingsTarget: noop,
+        setGeneralSubPage: noop,
         setQuickCommandAddIntentSignal: noop,
         setRemoteServerAddIntentSignal: noop,
         setSshHostAddIntentSignal: noop

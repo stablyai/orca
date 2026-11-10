@@ -6,12 +6,9 @@ import { ProjectGroupingSetting } from './ProjectGroupingSetting'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { GeneralWorkspaceSettingsSection } from './general/GeneralWorkspaceSettingsSection'
 import type { ReactNode } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
-vi.mock('./general/WorkspaceDirectorySetting', () => ({ WorkspaceDirectorySetting: () => null }))
-vi.mock('./general/OpenInMenuSetting', () => ({ OpenInMenuSetting: () => null }))
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -34,25 +31,10 @@ afterEach(() => {
   container.remove()
 })
 
-function renderSection(
-  updateSettings: (updates: SettingsUpdate) => void | Promise<void>,
-  options: {
-    defaultsSupported?: boolean
-    sourceDefaultsSupported?: boolean
-    worktreeVisibilityDefaults?: ReturnType<typeof getDefaultSettings>['worktreeVisibilityDefaults']
-  } = {}
-): void {
+function renderSection(updateSettings: (updates: SettingsUpdate) => void): void {
   const settings = getDefaultSettings('/home/user')
-  settings.worktreeVisibilityDefaults = options.worktreeVisibilityDefaults
   act(() => {
-    root.render(
-      <GeneralWorkspaceSettingsSection
-        settings={settings}
-        updateSettings={updateSettings}
-        defaultsSupported={options.defaultsSupported}
-        sourceDefaultsSupported={options.sourceDefaultsSupported}
-      />
-    )
+    root.render(<ProjectGroupingSetting settings={settings} updateSettings={updateSettings} />)
   })
 }
 
@@ -60,9 +42,7 @@ describe('project grouping settings', () => {
   it('exposes all three grouping choices and writes the selected default', async () => {
     const update = vi.fn()
     renderSection(update)
-    const select = container.querySelector<HTMLButtonElement>(
-      '#general-projects [role="combobox"]'
-    )!
+    const select = container.querySelector<HTMLButtonElement>('[role="combobox"]')!
     expect(select.textContent).toContain('By repository')
     await act(async () => {
       select.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))

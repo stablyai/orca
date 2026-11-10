@@ -1,4 +1,4 @@
-import { persistFreshPaneBinding } from '../spawn-commit-binding'
+import { persistFreshPaneBinding } from './fresh-pane-binding'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../../persistence/restoring-sessions/workspace-session-write-rollback'
 import { cloneWorkspaceSessionState } from '../../../persistence/restoring-sessions/session-owner-fields'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
