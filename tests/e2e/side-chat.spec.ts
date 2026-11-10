@@ -170,24 +170,18 @@ process.stdin.resume()
   await orcaPage.screenshot({ path: testInfo.outputPath('side-chat-finished.png') })
 
   // The side chat goes away with its parent, like Codex discarding it with the thread.
+  const tab = orcaPage.locator(`[data-testid="sortable-tab"][data-tab-id="${tabId}"]`)
+  await expect(tab).toHaveCount(1)
   await orcaPage.evaluate(
     ({ tabId, leafId }) =>
       window.dispatchEvent(
-        new CustomEvent('orca-close-terminal-pane', { detail: { tabId, leafId } })
+        new CustomEvent('orca-close-terminal-pane', {
+          detail: { tabId, leafId, lastPaneCloseReason: 'user' }
+        })
       ),
     { tabId, leafId: parentLeafId }
   )
-  await expect
-    .poll(() =>
-      orcaPage.evaluate(
-        (id) =>
-          Object.values(window.__store!.getState().tabsByWorktree)
-            .flat()
-            .some((tab) => tab.id === id),
-        tabId
-      )
-    )
-    .toBe(false)
+  await expect(tab).toHaveCount(0)
 })
 
 test('closes a restored side chat pane whose ephemeral fork is gone', async ({
