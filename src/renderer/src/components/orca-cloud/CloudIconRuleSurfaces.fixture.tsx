@@ -130,7 +130,7 @@ export const paletteRows = defineFixture({
   store: { settings: getDefaultSettings('/home/fixture'), repos: [repo] },
   setup: seedCloud,
   render: () => (
-    <Command className="rounded-lg border border-border bg-popover">
+    <Command>
       <CommandList>
         {[cloudRunning, cloudRow, localRow].map((worktree) => (
           <WorktreeJumpPaletteWorktreeRow

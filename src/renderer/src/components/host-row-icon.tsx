@@ -79,7 +79,7 @@ export function vmStateToDot(state: ExecutionHostVmState | null): CloudDotState 
       return 'wakeFailed'
     case 'provision_failed':
       return 'failed'
-    default:
+    case null:
       return 'running'
   }
 }
