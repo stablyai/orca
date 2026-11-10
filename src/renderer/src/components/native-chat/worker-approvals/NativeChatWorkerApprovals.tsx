@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { openOrchestrationCrewAgent } from '@/lib/open-agent-message-sender'
 import { useOrchestrationCrew } from '@/components/orchestration-crew/use-orchestration-crew'
 import { NativeChatApprovalCard } from '../prompts/NativeChatApprovalCard'
@@ -200,8 +201,8 @@ function useSecondClock(active: boolean): number {
       return
     }
     setNow(Date.now())
-    const timer = setInterval(() => setNow(Date.now()), 1_000)
-    return () => clearInterval(timer)
+    // Stops while the window is hidden; a visible card shows the time again at once.
+    return installWindowVisibilityInterval({ run: () => setNow(Date.now()), intervalMs: 1_000 })
   }, [active])
   return now
 }
