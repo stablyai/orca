@@ -67,12 +67,17 @@ async function checkAgent(
   }
 }
 
-type Cached = { report: HostAgentSignInReport; at: number; generation: number }
+type Cached = { report: HostAgentSignInReport; at: number }
 
-/** One cache per main process; concurrent asks for a target share one check. */
+/**
+ * One cache per main process, keyed by target and connection generation, so a report from before a
+ * reconnect is never reused. Concurrent asks share one check; a forced ask while one runs queues a
+ * single follow-up behind it instead of opening more remote sessions.
+ */
 export class SshAgentSignInStatus {
   private readonly cache = new Map<string, Cached>()
   private readonly inFlight = new Map<string, Promise<HostAgentSignInReport>>()
+  private readonly queuedForce = new Map<string, Promise<HostAgentSignInReport>>()
 
   constructor(
     private readonly connection: (
@@ -86,40 +91,69 @@ export class SshAgentSignInStatus {
     if (!conn || !conn.connected()) {
       return { ok: false, error: 'disconnected' }
     }
-    const generation = conn.getConnectGeneration()
-    const cached = this.cache.get(targetId)
-    if (
-      !force &&
-      cached &&
-      cached.generation === generation &&
-      this.now() - cached.at < REPORT_TTL_MS
-    ) {
+    const key = `${targetId}\u0000${conn.getConnectGeneration()}`
+    const cached = this.cache.get(key)
+    if (!force && cached && this.now() - cached.at < REPORT_TTL_MS) {
       return { ok: true, report: cached.report }
     }
-    let pending = this.inFlight.get(targetId)
-    if (!pending || force) {
-      pending = (async () => {
-        const agents = await Promise.all(
-          HOST_AGENT_SIGN_IN_AGENTS.map((agent) => checkAgent(conn, agent))
-        )
-        return { checkedAt: this.now(), agents }
-      })()
-      this.inFlight.set(targetId, pending)
-    }
     try {
-      const report = await pending
-      this.cache.set(targetId, { report, at: this.now(), generation })
+      const report = await this.check(key, conn, force)
+      this.cache.set(key, { report, at: this.now() })
       return { ok: true, report }
     } catch {
       return { ok: false, error: 'unknown' }
-    } finally {
-      if (this.inFlight.get(targetId) === pending) {
-        this.inFlight.delete(targetId)
-      }
     }
   }
 
+  private check(
+    key: string,
+    conn: SshStatusTransport,
+    force: boolean
+  ): Promise<HostAgentSignInReport> {
+    const running = this.inFlight.get(key)
+    if (running) {
+      if (!force) {
+        return running
+      }
+      // A check begun before a sign-in finished can't answer a forced recheck: one queued follow-up.
+      let queued = this.queuedForce.get(key)
+      if (!queued) {
+        queued = running
+          .catch(() => undefined)
+          .then(() => {
+            this.queuedForce.delete(key)
+            return this.start(key, conn)
+          })
+        this.queuedForce.set(key, queued)
+      }
+      return queued
+    }
+    return this.start(key, conn)
+  }
+
+  private start(key: string, conn: SshStatusTransport): Promise<HostAgentSignInReport> {
+    const pending = (async () => {
+      const agents = await Promise.all(
+        HOST_AGENT_SIGN_IN_AGENTS.map((agent) => checkAgent(conn, agent))
+      )
+      return { checkedAt: this.now(), agents }
+    })()
+    this.inFlight.set(key, pending)
+    void pending
+      .catch(() => undefined)
+      .finally(() => {
+        if (this.inFlight.get(key) === pending) {
+          this.inFlight.delete(key)
+        }
+      })
+    return pending
+  }
+
   forget(targetId: string): void {
-    this.cache.delete(targetId)
+    for (const key of this.cache.keys()) {
+      if (key.startsWith(`${targetId}\u0000`)) {
+        this.cache.delete(key)
+      }
+    }
   }
 }

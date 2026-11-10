@@ -8,14 +8,19 @@ import type {
   SshAgentSignInFlow,
   SshAgentSignInFlowError
 } from '../../../shared/ssh-agent-sign-in-types'
-import { parseClaudePastedCodeSignInLink } from '../../claude-accounts/claude-pasted-code-login'
+import { stripAnsiEscapeSequences } from '../../../shared/ansi-escape-sequences'
 import {
   DEVICE_AUTH_TIMEOUT_MS,
   parseCodexDeviceAuthPrompt
 } from '../../codex-accounts/codex-device-auth-prompt'
 
 const CLAUDE_LOGIN_TIMEOUT_MS = 600_000
-const MAX_SCAN_CHARS = 8_000
+// Output is read line by line: a line is capped, the window holds the last few lines (Codex prints
+// its link, marker and code on separate lines), and a host that prints this much without a sign-in
+// link fails the flow, so a hostile stream can't keep the main process scanning.
+const MAX_LINE_CHARS = 4_096
+const WINDOW_LINES = 12
+const MAX_OUTPUT_WITHOUT_LINK = 256 * 1024
 const COMMAND_NOT_FOUND = 127
 // The paste code is short; anything longer or multi-line is not a code and is refused unsent.
 const MAX_CODE_CHARS = 512
@@ -35,6 +40,50 @@ export type SshLoginChannel = {
   /** Writes to the CLI's stdin. */
   write(text: string): void
   close(): void
+}
+
+// Claude Code's own OAuth app and paste-code callback, read from the CLI (2.1.318–2.1.322:
+// CLIENT_ID and MANUAL_REDIRECT_URL in its production OAuth config). A link with anything else is
+// not the CLI's sign-in link and is never shown.
+export const CLAUDE_CODE_CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e'
+export const CLAUDE_CODE_REDIRECT_URI = 'https://platform.claude.com/oauth/code/callback'
+const CLAUDE_AUTHORIZE_HOSTS = new Set(['claude.ai', 'claude.com'])
+// Bounded tokens keep each scan linear in the line length.
+const LINK_TOKEN = /https:\/\/\S{1,2048}/g
+
+/** The paste-code sign-in link Claude Code printed on this line, pinned to its real app; else null. */
+export function pinnedClaudeSignInLink(line: string): string | null {
+  let found: string | null = null
+  for (const match of stripAnsiEscapeSequences(line).matchAll(LINK_TOKEN)) {
+    try {
+      const url = new URL(match[0])
+      if (
+        CLAUDE_AUTHORIZE_HOSTS.has(url.hostname) &&
+        url.pathname.endsWith('/oauth/authorize') &&
+        url.searchParams.get('code') === 'true' &&
+        url.searchParams.get('client_id') === CLAUDE_CODE_CLIENT_ID &&
+        url.searchParams.get('redirect_uri') === CLAUDE_CODE_REDIRECT_URI
+      ) {
+        // The last one wins: anything a login shell printed earlier never takes its place.
+        found = url.toString()
+      }
+    } catch {
+      // Not a link.
+    }
+  }
+  return found
+}
+
+/** Splits streamed output into complete, capped lines; a partial line waits for its newline. */
+export function lineReader(onLine: (line: string) => void): (chunk: string) => void {
+  let pending = ''
+  return (chunk) => {
+    const parts = `${pending}${chunk}`.split(/\r?\n/)
+    pending = (parts.pop() ?? '').slice(-MAX_LINE_CHARS)
+    for (const part of parts) {
+      onLine(part.slice(0, MAX_LINE_CHARS))
+    }
+  }
 }
 
 export type SshLoginTransport = {
@@ -159,23 +208,40 @@ export class SshAgentSignInFlows {
       () => this.fail(active, 'timeout'),
       agent === 'claude' ? CLAUDE_LOGIN_TIMEOUT_MS : DEVICE_AUTH_TIMEOUT_MS
     )
-    let scanned = ''
-    const onOutput = (chunk: string): void => {
+    const recent: string[] = []
+    let seen = 0
+    const onLine = (line: string): void => {
       if (active.closed || active.flow.phase !== 'starting') {
         return
       }
-      scanned = `${scanned}${chunk}`.slice(-MAX_SCAN_CHARS)
       if (agent === 'claude') {
-        const url = parseClaudePastedCodeSignInLink(scanned)
+        const url = pinnedClaudeSignInLink(line)
         if (url) {
           this.update(active, { phase: 'needsCode', url })
         }
         return
       }
-      const prompt = parseCodexDeviceAuthPrompt(scanned)
+      recent.push(line)
+      if (recent.length > WINDOW_LINES) {
+        recent.shift()
+      }
+      // Codex's parser wants the code line to end in whitespace; each line here ends in a newline.
+      const prompt = parseCodexDeviceAuthPrompt(`${recent.join('\n')}\n`)
       if (prompt) {
         this.update(active, { phase: 'device', url: prompt.url, userCode: prompt.userCode })
       }
+    }
+    const read = lineReader(onLine)
+    const onOutput = (chunk: string): void => {
+      if (active.closed || active.flow.phase !== 'starting') {
+        return
+      }
+      seen += chunk.length
+      if (seen > MAX_OUTPUT_WITHOUT_LINK) {
+        this.fail(active, 'failed')
+        return
+      }
+      read(chunk)
     }
     channel.onOutput(onOutput)
     channel.onError(() => this.fail(active, 'disconnected'))
@@ -188,9 +254,16 @@ export class SshAgentSignInFlows {
         this.finish(active, { phase: 'signedIn' })
         return
       }
+      // No exit status means the connection dropped, not that the CLI refused the code.
       this.fail(
         active,
-        code === COMMAND_NOT_FOUND ? 'notInstalled' : active.codeSent ? 'rejected' : 'failed'
+        code === null
+          ? 'disconnected'
+          : code === COMMAND_NOT_FOUND
+            ? 'notInstalled'
+            : active.codeSent
+              ? 'rejected'
+              : 'failed'
       )
     })
   }
