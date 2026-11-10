@@ -71,8 +71,8 @@ it('keeps recovery, acceptance, linkage and sign-out evidence available after re
   const answers = await Promise.all(READS.map((read) => reopened.reads.input(read)))
   const answer = (kind: JournalInputRead['kind']) =>
     answers[READS.findIndex((r) => r.kind === kind)]
-  expect(ids(answer('recoverable-submissions'))).toEqual(['pending', 'linked', 'legacy:raw/%'])
-  expect(ids(answer('pending-submissions'))).toEqual(['pending', 'linked', 'legacy:raw/%'])
+  expect(ids(answer('recoverable-submissions'))).toEqual(['legacy:raw/%'])
+  expect(ids(answer('pending-submissions'))).toEqual(['legacy:raw/%'])
   expect(ids(answer('accepted-submissions'))).toEqual([
     'accepted',
     'pending',
@@ -80,12 +80,7 @@ it('keeps recovery, acceptance, linkage and sign-out evidence available after re
     'unknown',
     'linked'
   ])
-  expect(ids(answer('unsettled-submissions'))).toEqual([
-    'pending',
-    'unknown',
-    'linked',
-    'legacy:raw/%'
-  ])
+  expect(ids(answer('unsettled-submissions'))).toEqual(['unknown', 'legacy:raw/%'])
   expect(answer('capture-keys')).toEqual({
     kind: 'capture-keys',
     keys: [

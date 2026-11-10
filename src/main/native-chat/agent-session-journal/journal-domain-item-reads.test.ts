@@ -7,9 +7,7 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { migrateJournalDomainSchema } from './journal-domain-schema'
-import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
-import { writeJournalDomainItemNames } from './journal-domain-item-names'
-import { journalDomainItemReadColumns } from './journal-domain-item-read-columns'
+import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
 import { readJournalDomainItems, type JournalDomainItemRead } from './journal-sql-item-reads'
 
 import { runJournalTransaction } from './database/journal-database'
@@ -45,36 +43,13 @@ function chat() {
     placement: { ordinal?: number; hidden?: boolean } = {}
   ) => {
     const ordinal = placement.ordinal ?? item.sequence
-    const payload = JSON.stringify(item)
-    const metadata = journalDomainHistoryMetadata(item, payload)
-    db.prepare(`INSERT INTO journal_items
-      (session_id,epoch,item_id,ordinal,revision,sequence,sequence_index,owner_fence,payload_json,hidden,
-       root,subagent_row,subagent_group_key,turn_marker,wire_bytes,
-       kind,message_role,turn_id,opener_item_id,context_clear,goal_transition,
-       producer_agent_id,producer_parent_ref,producer_attempt,prompt,signed_out)
-      VALUES(?,?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-      target.sessionId,
-      target.epoch,
-      item.itemId,
-      ordinal,
-      item.revision,
-      item.sequence,
-      item.sequenceIndex ?? 0,
-      payload,
-      Number(placement.hidden ?? false),
-      metadata.root,
-      metadata.subagentRow,
-      metadata.subagentGroupKey,
-      metadata.turnMarker,
-      metadata.wireBytes,
-      ...journalDomainItemReadColumns(item)
-    )
-    writeJournalDomainItemNames(
-      db,
-      target,
-      item,
-      { ordinal, hidden: placement.hidden ?? false },
-      metadata.namedSubagentIds
+    runJournalTransaction(db, () =>
+      writeJournalDomainCurrentItem(db, target, {
+        item,
+        ordinal,
+        hidden: placement.hidden ?? false,
+        ownerFence: 1
+      })
     )
   }
   const alias = (providerItemId: string, itemId: string) =>

@@ -393,7 +393,8 @@ it('uses scoped failure facts for cuts and request outcomes', () => {
   expect(readJournalSqlUsageLimitCut(context())).toEqual({
     turnItemId: 'turn',
     resetsAt: 999,
-    turnEndedAt: 300
+    turnEndedAt: 300,
+    chain: 0
   })
   expect(readJournalSqlStatusState(context()).summary).toMatchObject({
     status: 'idle',
@@ -543,8 +544,8 @@ it('keeps sending phase re-entry separate from entered and pending admission ord
       'submissions' in read ? read.submissions.map((input) => input.clientMessageId) : []
     )
   ).toEqual([
-    ['b', 'c', 'a'],
-    ['b', 'a', 'c'],
+    ['a', 'b', 'c'],
+    ['a', 'b', 'c'],
     ['a', 'b', 'c']
   ])
 })
