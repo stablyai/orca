@@ -1,3 +1,4 @@
+import { runLifecycleWriteTransaction } from '../db/lifecycle-write-transaction-runner'
 import 'node:fs'
 import 'node:os'
 import 'node:path'
@@ -159,7 +160,7 @@ describe('keyed orchestration presentation', () => {
       db.db.prepare('UPDATE tasks SET task_title = ? WHERE id = ?').run('Committed title', task.id)
       expect(projection.getForPaneKey(TERMINAL_WORKER_PANE)?.taskTitle).toBe('Committed title')
       expect(() =>
-        db.db.transaction(() => {
+        runLifecycleWriteTransaction(db.db, 'projection_rollback', () => {
           db.db
             .prepare('UPDATE tasks SET task_title = ? WHERE id = ?')
             .run('Rolled back title', task.id)
@@ -167,7 +168,7 @@ describe('keyed orchestration presentation', () => {
             'Rolled back title'
           )
           throw new Error('rollback')
-        })()
+        })
       ).toThrow('rollback')
       expect(projection.getForPaneKey(TERMINAL_WORKER_PANE)?.taskTitle).toBe('Committed title')
       db.db

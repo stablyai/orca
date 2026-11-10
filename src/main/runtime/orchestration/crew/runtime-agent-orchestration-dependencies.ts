@@ -1,9 +1,21 @@
-import { mintAgentStatusFleetEvidence } from '../../../ipc/agent-status-ipc-boundary'
+import {
+  mintAgentStatusFleetEvidence,
+  type ObservedAgentStatusPaneIdentity
+} from '../../../ipc/agent-status-ipc-boundary'
 import { readAgentOrchestrationProjectionRecords } from '../addressing/orchestration-fleet-agent-status-snapshot'
 import type { RuntimeAgentOrchestrationDependencies } from './runtime-agent-orchestration-projection'
 import { OrcaRuntimeWithRuntimeId } from '../../construction/runtime-identity-state'
+import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
 
 export abstract class OrcaRuntimeWithAgentOrchestrationDependencies extends OrcaRuntimeWithRuntimeId {
+  abstract getAgentStatusTerminalHandleForPaneKey(paneKey: string): string | undefined
+  abstract getAgentStatusOrchestrationContextForPaneKey(
+    paneKey: string
+  ): AgentStatusOrchestrationContext | undefined
+  abstract readonly readObservedAgentStatusPaneIdentityFn: (
+    paneKey: string
+  ) => ObservedAgentStatusPaneIdentity
+
   protected agentOrchestrationDependencies(bound?: Partial<RuntimeAgentOrchestrationDependencies>) {
     return {
       getDb: () => this.getOrchestrationDbIfAvailable(),
