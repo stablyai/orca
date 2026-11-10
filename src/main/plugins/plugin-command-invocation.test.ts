@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { parsePluginManifest } from '../../shared/plugins/manifest/plugin-manifest'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import { assertPluginWorkerCommand, workerCommandArgs } from './plugin-command-invocation'
+import type { PluginWorkspaceCommandArgs } from '../../shared/plugins/contributions/plugin-workspace-command-args'
 
 function plugin(capabilities = [{ kind: 'workspace:read' }]): ValidDiscoveredPlugin {
   const parsed = parsePluginManifest({
@@ -33,17 +34,19 @@ function plugin(capabilities = [{ kind: 'workspace:read' }]): ValidDiscoveredPlu
   }
 }
 
-const worktree = {
+type Workspace = PluginWorkspaceCommandArgs['worktree']
+
+const worktree: Workspace = {
   path: '/work/game',
   displayName: 'game',
   branch: 'feature',
-  host: 'local' as const
+  host: 'local'
 }
 
 async function argsFor(
   commandId: string,
   args: unknown,
-  resolved: typeof worktree | null = worktree,
+  resolved: Workspace | null = worktree,
   target = plugin()
 ) {
   const resolve = vi.fn(async () => resolved)
@@ -64,12 +67,26 @@ describe('worker command args', () => {
     expect(resolve).toHaveBeenCalledWith('r::/work/game')
   })
 
+  it('resolves a badge subfolder on the workspace host and refuses one outside it', async () => {
+    const request = { worktreeId: 'r::/work/game', folder: 'Games\\Racer' }
+    const ssh = await argsFor('open-project', request, { ...worktree, host: 'ssh' })
+    await expect(ssh.result).resolves.toMatchObject({
+      folder: { path: '/work/game/Games/Racer', relativePath: 'Games/Racer' }
+    })
+    const outside = await argsFor('open-project', { ...request, folder: '../other' })
+    await expect(outside.result).rejects.toThrow('That folder is not inside this workspace.')
+  })
+
   it('never forwards the worktree id, which embeds the folder path', async () => {
     const request = { worktreeId: 'r::/work/game' }
     await expect((await argsFor('refresh', request)).result).resolves.toBeUndefined()
     await expect(
       (await argsFor('open-project', request, worktree, plugin([]))).result
     ).resolves.toBeUndefined()
+    const malformed = { ...request, folder: 'x'.repeat(2000) }
+    await expect((await argsFor('open-project', malformed)).result).rejects.toThrow(
+      'Invalid workspace command request.'
+    )
   })
 
   it('fails when the workspace is not reachable from this computer', async () => {

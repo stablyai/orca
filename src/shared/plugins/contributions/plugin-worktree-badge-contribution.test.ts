@@ -40,9 +40,12 @@ function issues(raw: unknown): string {
 }
 
 describe('contributes.worktreeBadges', () => {
-  it('accepts an SVG or a panel icon name and defaults the host to any', () => {
+  it('accepts an SVG or a panel icon name and defaults to any host and the workspace folder', () => {
     const svg = parsePluginManifest(manifest({}))
-    expect(svg.ok && svg.manifest.contributes.worktreeBadges[0]?.when.host).toBe('any')
+    expect(svg.ok && svg.manifest.contributes.worktreeBadges[0]?.when).toMatchObject({
+      host: 'any',
+      searchDepth: 0
+    })
     expect(issues(manifest({ icon: 'package', when: { pathExists: ['a'], host: 'local' } }))).toBe(
       ''
     )
@@ -52,6 +55,12 @@ describe('contributes.worktreeBadges', () => {
     expect(issues(manifest({ icon: 'gamepad-2' }))).toContain('worktreeBadges[0].icon')
     expect(issues(manifest({ icon: '../outside.svg' }))).toContain('worktreeBadges[0].icon')
     expect(issues(manifest({ icon: 'icons/engine.png' }))).toContain('worktreeBadges[0].icon')
+  })
+
+  it('bounds how deep a badge searches subfolders', () => {
+    const when = (searchDepth: number) => ({ pathExists: ['project.godot'], searchDepth })
+    expect(issues(manifest({ when: when(3) }))).toBe('')
+    expect(issues(manifest({ when: when(4) }))).toContain('worktreeBadges[0].when.searchDepth')
   })
 
   it('refuses marker paths that leave the workspace folder', () => {

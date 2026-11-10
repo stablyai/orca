@@ -1700,6 +1700,17 @@
                 ]
               ]
             },
+            "searchDepth": {
+              "default": 0,
+              "description": "Also look for `pathExists` in subfolders this many levels down, and list each folder that holds one; its commands then run on that folder. Hidden folders, `node_modules`, symbolic links and folders inside a match are skipped, and the search stops after 256 folders. Defaults to 0, the workspace folder only.",
+              "x-orca-since": "1.4.256",
+              "examples": [
+                2
+              ],
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 3
+            },
             "host": {
               "default": "any",
               "description": "`local` leaves out workspaces on SSH hosts, such as for commands that start a desktop app. Defaults to `any`.",

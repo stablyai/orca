@@ -6,7 +6,9 @@ export const pluginWorkspaceCommandRequestSchema = z.strictObject({
   worktreeId: z
     .string()
     .min(1)
-    .max(32 * 1024)
+    .max(32 * 1024),
+  /** The workspace subfolder picked from a badge's list. Main checks it, so a bad one fails. */
+  folder: z.string().max(1024).optional()
 })
 
 export type PluginWorkspaceCommandRequest = z.infer<typeof pluginWorkspaceCommandRequestSchema>
@@ -21,6 +23,13 @@ export type PluginWorkspaceCommandArgs = {
     /** Empty for folder workspaces. */
     branch: string
     host: 'local' | 'ssh'
+  }
+  /** The subfolder the user picked from a badge's list; absent for the workspace folder. */
+  folder?: {
+    /** Absolute path on the workspace's host. */
+    path: string
+    /** Relative to the workspace folder, with `/` separators. */
+    relativePath: string
   }
 }
 

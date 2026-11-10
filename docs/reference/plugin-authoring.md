@@ -318,7 +318,11 @@ commands on it.
     "id": "unity-project",
     "title": "Unity project",
     "icon": "icons/unity.svg",
-    "when": { "pathExists": ["ProjectSettings/ProjectVersion.txt"], "host": "local" },
+    "when": {
+      "pathExists": ["ProjectSettings/ProjectVersion.txt"],
+      "searchDepth": 2,
+      "host": "local"
+    },
     "commands": ["unity.open"]
   }
 ],
@@ -326,21 +330,32 @@ commands on it.
 ```
 
 `icon` is a panel icon name or a monochrome `.svg` in the plugin, which Orca draws in the text
-color. `"host": "local"` leaves out workspaces on SSH hosts, such as for a command that starts a
-desktop app; the default, `any`, checks those over SSH. Badges need `workspace:read` and
-`engines.orca` `>=1.4.256`, and each command must be a worker command with `"when": "workspace"`.
+color. Badges need `workspace:read` and `engines.orca` `>=1.4.256`, and each command must be a
+worker command with `"when": "workspace"`.
+
+`searchDepth` (0 to 3, default 0) also looks for the marker in subfolders that many levels down,
+for a workspace that holds several projects. The menu then lists each matching folder, relative to
+the workspace, and runs the command on the one picked. Orca skips hidden folders, `node_modules`
+and symbolic links, does not look inside a folder that already matched, and stops after 256
+folders.
 
 Run from a badge, the context menu, the palette or a shortcut, the command's handler gets the
-workspace it ran on. A handler that returns `{ message }` shows it as a toast:
+workspace it ran on, and `folder` when it was picked from a badge's list. A handler that returns
+`{ message }` shows it as a toast:
 
 ```js
-orca.commands.register('unity.open', async ({ worktree }) => {
+orca.commands.register('unity.open', async ({ worktree, folder }) => {
   // worktree: { path, displayName, branch, host: 'local' | 'ssh' }; branch is '' for folders.
-  return { message: `Opening ${worktree.displayName}` }
+  // folder: { path, relativePath } with '/' separators, or undefined for the workspace folder.
+  await openProject(folder?.path ?? worktree.path)
+  return { message: `Opening ${folder?.relativePath ?? worktree.displayName}` }
 })
 ```
 
-Workspaces of a paired Orca server get no badges, since the command would run on this computer.
+Badges show on workspaces this computer serves, including folder workspaces. Workspaces Orca
+reaches through a server, such as a paired Orca server, get none, since the command runs on this
+computer. `"host": "local"` also leaves out workspaces on SSH hosts, such as for a command that
+starts a desktop app.
 
 ### Custom editors
 

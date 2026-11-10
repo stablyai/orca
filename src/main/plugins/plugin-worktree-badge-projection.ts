@@ -18,7 +18,11 @@ export async function projectPluginWorktreeBadges(
       id: badge.id,
       title: badge.title,
       icon: await resolveBadgeIcon(plugin.rootDir, badge.icon),
-      when: { pathExists: [...badge.when.pathExists], host: badge.when.host },
+      when: {
+        pathExists: [...badge.when.pathExists],
+        searchDepth: badge.when.searchDepth,
+        host: badge.when.host
+      },
       commands: [...badge.commands]
     }))
   )

@@ -14,6 +14,9 @@ export const PLUGIN_WORKTREE_BADGE_LIMIT = 16
 export const PLUGIN_WORKTREE_BADGE_PATH_LIMIT = 8
 export const PLUGIN_WORKTREE_BADGE_COMMAND_LIMIT = 8
 export const PLUGIN_WORKTREE_BADGE_SVG_MAX_BYTES = 32 * 1024
+export const PLUGIN_WORKTREE_BADGE_MAX_SEARCH_DEPTH = 3
+/** Bounds a subfolder search of a huge workspace, such as a game depot, to a few hundred reads. */
+export const PLUGIN_WORKTREE_BADGE_MAX_SEARCHED_FOLDERS = 256
 
 const SINCE = PLUGIN_WORKTREE_BADGES_SINCE
 
@@ -55,6 +58,19 @@ export const pluginWorktreeBadgeContributionSchema = z
               `The badge shows when the workspace folder holds any of these paths, relative to the folder. At most ${PLUGIN_WORKTREE_BADGE_PATH_LIMIT}.`,
               SINCE,
               [['ProjectSettings/ProjectVersion.txt']]
+            )
+          ),
+        searchDepth: z
+          .number()
+          .int()
+          .min(0)
+          .max(PLUGIN_WORKTREE_BADGE_MAX_SEARCH_DEPTH)
+          .default(0)
+          .meta(
+            pluginFieldDoc(
+              `Also look for \`pathExists\` in subfolders this many levels down, and list each folder that holds one; its commands then run on that folder. Hidden folders, \`node_modules\`, symbolic links and folders inside a match are skipped, and the search stops after ${PLUGIN_WORKTREE_BADGE_MAX_SEARCHED_FOLDERS} folders. Defaults to 0, the workspace folder only.`,
+              SINCE,
+              [2]
             )
           ),
         host: z
@@ -101,7 +117,7 @@ export type PluginWorktreeBadgeEntry = {
   id: string
   title: string
   icon: PluginWorktreeBadgeIcon
-  when: { pathExists: string[]; host: 'local' | 'any' }
+  when: { pathExists: string[]; searchDepth: number; host: 'local' | 'any' }
   commands: string[]
 }
 

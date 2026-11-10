@@ -6,13 +6,16 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { ActivePluginWorktreeBadge } from '@/store/plugins/worktree-badges/plugin-worktree-badges'
 import { PluginWorktreeBadgeIcon } from './PluginWorktreeBadgeIcon'
-import { PluginWorktreeBadgeCommandItems } from './WorktreePluginBadgeMenuItems'
+import {
+  PluginWorktreeBadgeCommandItems,
+  pluginWorktreeBadgeMenuTitle
+} from './WorktreePluginBadgeMenuItems'
 import {
   useMatchingPluginWorktreeBadges,
   type PluginBadgeRepo,
-  type PluginBadgeWorktree
+  type PluginBadgeWorktree,
+  type PluginWorktreeBadgeMatch
 } from './use-matching-plugin-worktree-badges'
 
 type BadgeProps = {
@@ -21,10 +24,11 @@ type BadgeProps = {
 }
 
 function WorktreeCardPluginBadge({
-  badge,
+  match,
   worktreeId,
   onPointerDown
-}: BadgeProps & { badge: ActivePluginWorktreeBadge }): React.JSX.Element {
+}: BadgeProps & { match: PluginWorktreeBadgeMatch }): React.JSX.Element {
+  const { badge } = match
   return (
     <DropdownMenu modal={false}>
       <Tooltip>
@@ -56,17 +60,18 @@ function WorktreeCardPluginBadge({
       {/* Why: React events bubble through portals, so menu clicks must not reach the card. */}
       <DropdownMenuContent
         align="start"
-        className="w-52"
+        className="w-56"
         onClick={(event) => event.stopPropagation()}
       >
-        <DropdownMenuLabel>{badge.title}</DropdownMenuLabel>
-        <PluginWorktreeBadgeCommandItems badge={badge} worktreeId={worktreeId} />
+        <DropdownMenuLabel>{pluginWorktreeBadgeMenuTitle(match)}</DropdownMenuLabel>
+        <PluginWorktreeBadgeCommandItems match={match} worktreeId={worktreeId} folderFirst />
       </DropdownMenuContent>
     </DropdownMenu>
   )
 }
 
-/** Plugin badges beside the workspace name; each opens a menu of the plugin's workspace commands. */
+/** Plugin badges beside the workspace name; each opens a menu of the plugin's workspace commands,
+ *  one per project folder the badge found. */
 export function WorktreeCardPluginBadges({
   worktree,
   repo,
@@ -77,16 +82,16 @@ export function WorktreeCardPluginBadges({
   repo: PluginBadgeRepo
   isActive: boolean
 }): React.JSX.Element | null {
-  const badges = useMatchingPluginWorktreeBadges(worktree, repo, isActive)
-  if (badges.length === 0) {
+  const matches = useMatchingPluginWorktreeBadges(worktree, repo, isActive)
+  if (matches.length === 0) {
     return null
   }
   return (
     <>
-      {badges.map((badge) => (
+      {matches.map((match) => (
         <WorktreeCardPluginBadge
-          key={badge.key}
-          badge={badge}
+          key={match.badge.key}
+          match={match}
           worktreeId={worktree.id}
           onPointerDown={onPointerDown}
         />

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
-import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import { getRuntimeTargetForWorktreeOwner } from '@/lib/file-owner-runtime-target'
 import {
@@ -12,17 +11,25 @@ import {
 } from '../../../../../../shared/execution-host'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import { findPluginBadgeFolders, type PluginBadgeSearchRoot } from './plugin-badge-folder-search'
 
 export type PluginBadgeWorktree = Pick<Worktree, 'id' | 'path' | 'hostId'>
 export type PluginBadgeRepo = Pick<Repo, 'connectionId' | 'executionHostId'> | null | undefined
 
-type PathTarget = { path: string; connectionId: string | null }
-type PathCheck = { exists: boolean; checkedAt: number; pending: boolean }
+/** A badge matching a workspace, with the folders that hold its marker; `''` is the workspace
+ *  folder itself. */
+export type PluginWorktreeBadgeMatch = {
+  badge: ActivePluginWorktreeBadge
+  folders: readonly string[]
+}
 
-// Why: a new workspace can still be syncing files when its card mounts, so a miss is re-checked.
-const MISS_RECHECK_MS = 30_000
+type BadgeWhen = ActivePluginWorktreeBadge['when']
+type FolderScan = { folders: readonly string[]; checkedAt: number; pending: boolean }
 
-let checks: ReadonlyMap<string, PathCheck> = new Map()
+// Why: a new workspace can still be syncing files when its card mounts, so a scan is repeated.
+const RESCAN_AFTER_MS = 30_000
+
+let scans: ReadonlyMap<string, FolderScan> = new Map()
 const listeners = new Set<() => void>()
 
 function subscribe(listener: () => void): () => void {
@@ -30,49 +37,46 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-function getChecks(): ReadonlyMap<string, PathCheck> {
-  return checks
+function getScans(): ReadonlyMap<string, FolderScan> {
+  return scans
 }
 
-function setCheck(key: string, check: PathCheck): void {
-  checks = new Map(checks).set(key, check)
+function setScan(key: string, scan: FolderScan): void {
+  scans = new Map(scans).set(key, scan)
   listeners.forEach((listener) => listener())
 }
 
-function checkKey(target: PathTarget, relativePath: string): string {
-  return `${target.connectionId ?? ''}\0${joinPath(target.path, relativePath)}`
+function scanKey(root: PluginBadgeSearchRoot, when: BadgeWhen): string {
+  return [root.connectionId ?? '', root.path, when.searchDepth, ...when.pathExists].join('\0')
 }
 
-function requestPathCheck(target: PathTarget, relativePath: string, now: number): void {
-  const key = checkKey(target, relativePath)
-  const previous = checks.get(key)
-  if (
-    previous &&
-    (previous.pending || previous.exists || now - previous.checkedAt < MISS_RECHECK_MS)
-  ) {
+function requestFolderScan(root: PluginBadgeSearchRoot, when: BadgeWhen, now: number): void {
+  const key = scanKey(root, when)
+  const previous = scans.get(key)
+  if (previous && (previous.pending || now - previous.checkedAt < RESCAN_AFTER_MS)) {
     return
   }
-  setCheck(key, { exists: false, checkedAt: previous?.checkedAt ?? 0, pending: true })
-  void window.api.fs
-    .pathExists({
-      filePath: joinPath(target.path, relativePath),
-      ...(target.connectionId ? { connectionId: target.connectionId } : {})
-    })
-    // Why: an unreachable SSH host reads as a miss and is retried after the recheck delay.
-    .catch(() => false)
-    .then((exists) => setCheck(key, { exists, checkedAt: Date.now(), pending: false }))
+  // Why keep the folders: the badge must not flicker while a rescan runs.
+  setScan(key, {
+    folders: previous?.folders ?? [],
+    checkedAt: previous?.checkedAt ?? 0,
+    pending: true
+  })
+  void findPluginBadgeFolders(root, when)
+    .catch(() => [])
+    .then((folders) => setScan(key, { folders, checkedAt: Date.now(), pending: false }))
 }
 
 /** Badges whose `when` matches the workspace. A new `recheckToken` (such as on activation)
- *  re-checks misses older than the recheck delay. */
+ *  repeats scans older than the rescan delay. */
 export function useMatchingPluginWorktreeBadges(
   worktree: PluginBadgeWorktree,
   repo: PluginBadgeRepo,
   recheckToken?: unknown
-): ActivePluginWorktreeBadge[] {
+): PluginWorktreeBadgeMatch[] {
   const badges = usePluginWorktreeBadges()
   // Why: plugin commands run in this app's plugin host, which cannot reach a paired server's
-  // workspaces, so their folders are never checked.
+  // workspaces, so their folders are never searched.
   const ownedHere = useAppStore(
     (state) =>
       badges.length > 0 && getRuntimeTargetForWorktreeOwner(state, worktree.id)?.kind === 'local'
@@ -80,32 +84,32 @@ export function useMatchingPluginWorktreeBadges(
   const connectionId = getSshTargetIdForExecutionHost(
     getWorktreeExecutionHostId(worktree, repo ?? undefined)
   )
-  const target = useMemo(
+  const root = useMemo(
     () => (ownedHere && worktree.path ? { path: worktree.path, connectionId } : null),
     [ownedHere, worktree.path, connectionId]
   )
   const candidates = useMemo(
-    () =>
-      target ? badges.filter((badge) => badge.when.host === 'any' || !target.connectionId) : [],
-    [badges, target]
+    () => (root ? badges.filter((badge) => badge.when.host === 'any' || !root.connectionId) : []),
+    [badges, root]
   )
-  const pathChecks = useSyncExternalStore(subscribe, getChecks, getChecks)
+  const folderScans = useSyncExternalStore(subscribe, getScans, getScans)
 
   useEffect(() => {
-    if (!target) {
+    if (!root) {
       return
     }
     const now = Date.now()
-    for (const badge of candidates) {
-      badge.when.pathExists.forEach((relativePath) => requestPathCheck(target, relativePath, now))
-    }
-  }, [candidates, target, recheckToken])
+    candidates.forEach((badge) => requestFolderScan(root, badge.when, now))
+  }, [candidates, root, recheckToken])
 
-  return target
-    ? candidates.filter((badge) =>
-        badge.when.pathExists.some(
-          (relativePath) => pathChecks.get(checkKey(target, relativePath))?.exists === true
-        )
-      )
-    : []
+  return useMemo(
+    () =>
+      root
+        ? candidates.flatMap((badge) => {
+            const folders = folderScans.get(scanKey(root, badge.when))?.folders ?? []
+            return folders.length > 0 ? [{ badge, folders }] : []
+          })
+        : [],
+    [candidates, root, folderScans]
+  )
 }

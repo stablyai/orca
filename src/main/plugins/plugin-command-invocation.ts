@@ -1,4 +1,7 @@
+import { join, posix } from 'node:path'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
+import { isSafePluginRelativePath } from '../../shared/plugins/installation/plugin-path-safety'
+import { isPluginJsonObject } from '../../shared/plugins/manifest/plugin-json-object'
 import type { PluginWorkerController } from './workers/plugin-worker-controller'
 import { runPluginReplacementWithinDeadline } from './plugin-command-replacement-deadline'
 import {
@@ -28,16 +31,30 @@ export function assertPluginWorkerCommand(
   return command
 }
 
-/** The args the handler receives: a `{ worktreeId }` request becomes the workspace it names. */
+/** Args a client built as a workspace request: `worktreeId`, and at most `folder` beside it. */
+function isWorkspaceCommandRequestShape(args: unknown): boolean {
+  return (
+    isPluginJsonObject(args) &&
+    'worktreeId' in args &&
+    Object.keys(args).every((key) => key === 'worktreeId' || key === 'folder')
+  )
+}
+
+/** The args the handler receives: a `{ worktreeId, folder? }` request becomes the workspace, and
+ *  the subfolder, it names. */
 export async function workerCommandArgs(
   plugin: ValidDiscoveredPlugin,
   command: PluginCommand,
   args: unknown,
   resolveWorkspace: PluginCommandWorkspaceResolver | undefined
 ): Promise<unknown> {
-  const request = pluginWorkspaceCommandRequestSchema.safeParse(args)
-  if (!request.success) {
+  if (!isWorkspaceCommandRequestShape(args)) {
     return args
+  }
+  const request = pluginWorkspaceCommandRequestSchema.safeParse(args)
+  // Why refuse, not pass through: a malformed request still carries the id and its path.
+  if (!request.success) {
+    throw new Error('Invalid workspace command request.')
   }
   const canReadWorkspace = plugin.manifest.capabilities.some(
     (capability) => capability.kind === 'workspace:read'
@@ -51,7 +68,17 @@ export async function workerCommandArgs(
   if (!worktree) {
     throw new Error('This workspace is not available on this computer.')
   }
-  return { worktree } satisfies PluginWorkspaceCommandArgs
+  const { folder } = request.data
+  if (!folder) {
+    return { worktree } satisfies PluginWorkspaceCommandArgs
+  }
+  if (!isSafePluginRelativePath(folder)) {
+    throw new Error('That folder is not inside this workspace.')
+  }
+  const relativePath = folder.replaceAll('\\', '/')
+  // Why posix for SSH: the remote path is POSIX even when this computer runs Windows.
+  const path = (worktree.host === 'ssh' ? posix.join : join)(worktree.path, relativePath)
+  return { worktree, folder: { path, relativePath } } satisfies PluginWorkspaceCommandArgs
 }
 
 /** `run.plugin` is the approved plugin (null when it is not): a palette or CLI run of its command. */
