@@ -2295,7 +2295,8 @@
       },
       "orcaCloud": {
         "workspaceActions": {
-          "unavailable": "Orca Cloud is unavailable."
+          "unavailable": "Orca Cloud is unavailable.",
+          "archiveSleepFailed": "It’s still running. Your files are safe."
         }
       }
     },
@@ -26605,7 +26606,13 @@
     "recovery": {
       "reconnectingTitle": "Reconnecting to {{workspaceName}}…",
       "reconnectingBody": "The connection dropped. Orca is retrying; your files and chats are safe."
-    }
+    },
+    "unarchiveFailedNamed": "Couldn’t unarchive {{name}}",
+    "unarchivedNamed": "Unarchived {{name}}",
+    "unarchivedAsleep": "It’s asleep. Opening it wakes it.",
+    "archiveFailedNamed": "Couldn’t archive {{name}}",
+    "archivedNamed": "Archived {{name}}",
+    "archivedWorkspace": "Archived the workspace"
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",

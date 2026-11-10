@@ -12,7 +12,7 @@ import {
 } from '../orca-cloud/cloud-workspace-actions'
 import { describeError } from './cloud-workspace-errors'
 
-type HomeArchiveDeps = {
+export type HomeArchiveDeps = {
   localWorktreeId: (sandboxId: string) => Promise<string | null>
   patchArchived: (
     sandboxId: string,
