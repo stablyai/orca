@@ -127,6 +127,13 @@ export class SessionFileInventory {
     }
   }
 
+  async observeForRead(path: string, args: DiscoverSessionFilesArgs, limit: number) {
+    const file = await this.observations.observe(path, args, false, limit, true)
+    const change = this.observations.changes.get(path)
+    this.observations.changes.delete(path)
+    return file ? { file, force: change?.force ?? false, changed: change !== undefined } : undefined
+  }
+
   async drain(
     args: DiscoverSessionFilesArgs,
     overdue: () => boolean,

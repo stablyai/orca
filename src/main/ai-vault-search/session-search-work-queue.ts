@@ -73,6 +73,10 @@ export class SessionSearchWorkQueue {
     return preferred.first ?? (preferred === this.changed ? this.backlog : this.changed).first
   }
 
+  get(path: string): SessionSearchWork | undefined {
+    return this.changed.get(path) ?? this.backlog.get(path)
+  }
+
   acknowledge(work: SessionSearchWork, retry: boolean): void {
     const path = work.candidate.file.path
     const queue = this.changed.has(path) ? this.changed : this.backlog

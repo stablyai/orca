@@ -35,6 +35,19 @@ function groupKey(candidate: SessionFileCandidate, root: string): string {
 /** Ordinary paths own one record; only competing aliases allocate a group and selected set. */
 export class SessionSearchCandidateInventory extends SessionSearchCandidatePublications {
   private readonly sourceOrders = new Map<string, ReadonlyMap<string, number>>()
+  rootFor(candidate: SessionFileCandidate): string | undefined {
+    const owner = this.byPath.get(candidate.file.path)
+    for (const key of typeof owner === 'string' ? [owner] : (owner ?? [])) {
+      const row = rows(this.groups.get(key)).find(
+        (row) =>
+          row.candidate.agent === candidate.agent && row.candidate.file.path === candidate.file.path
+      )
+      if (row) {
+        return row.root
+      }
+    }
+    return undefined
+  }
   has(path: string, agent?: string | null): boolean {
     const owner = this.byPath.get(path)
     if (!agent) {
@@ -51,13 +64,14 @@ export class SessionSearchCandidateInventory extends SessionSearchCandidatePubli
     removed: ReadonlySet<string>,
     options: AiVaultScanOptions,
     invalidated: ReadonlySet<string> = new Set(),
-    removedCandidates: ReadonlyMap<string, ReadonlySet<string>> = new Map()
+    removedCandidates: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
+    partial = false
   ): Promise<{ candidates: SessionFileCandidate[]; suppressed: Set<string>; forced: Set<string> }> {
     const scopes = new Set(
       discoveries.map((discovery) => `${discovery.agent}:${discovery.rootDir}`)
     )
     for (const scope of this.sourceOrders.keys()) {
-      if (!scopes.has(scope)) {
+      if (!partial && !scopes.has(scope)) {
         this.sourceOrders.delete(scope)
       }
     }

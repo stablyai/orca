@@ -23,7 +23,13 @@ export class SessionInventoryFiles {
     private readonly scheduleParent: (path: string) => void,
     private readonly forgetDirty: (path: string) => void
   ) {}
-  async observe(path: string, args: DiscoverSessionFilesArgs, force: boolean, limit: number) {
+  async observe(
+    path: string,
+    args: DiscoverSessionFilesArgs,
+    force: boolean,
+    limit: number,
+    readOwed = false
+  ) {
     if (!this.failures.mayAttempt(path)) {
       return
     }
@@ -46,7 +52,7 @@ export class SessionInventoryFiles {
       }
       this.failures.fail(
         path,
-        force,
+        force || readOwed,
         observation.missing ? undefined : { agent: args.agent, ...observation.issue }
       )
       // Only apparent absence needs a parent membership proof.
@@ -65,7 +71,7 @@ export class SessionInventoryFiles {
       codexHome: null
     })
     if (!metadataOnly && observation.file.sidecar === 'unknown') {
-      this.failures.fail(path, force)
+      this.failures.fail(path, force || readOwed)
       file.sidecar = previous?.sidecar ?? 'unknown'
     } else {
       this.failures.delete(path)
@@ -117,6 +123,7 @@ export class SessionInventoryFiles {
       })
     }
     retainRecentSessionFile(this.recent, file, limit)
+    return !metadataOnly && observation.file.sidecar === 'unknown' ? undefined : file
   }
 
   forget(path: string): void {

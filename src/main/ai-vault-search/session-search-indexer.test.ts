@@ -1,5 +1,8 @@
 import './session-search-worker.test-fixture'
-import { notifySessionSearchRootChanges } from './session-search-watcher.test-fixture'
+import {
+  notifySessionSearchFileChange,
+  notifySessionSearchRootChanges
+} from './session-search-watcher.test-fixture'
 import { mkdirSync, rmSync } from 'node:fs'
 import { appendFile, chmod, mkdir, rm, stat, utimes } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -152,6 +155,7 @@ it('reflects a grown transcript within one reconcile interval', async () => {
     path,
     `${claudeLines(['quarantine the leaking pty'], SESSION_ID, 10).join('\n')}\n`
   )
+  notifySessionSearchFileChange(path)
   await nextCycle()
 
   expect(sessionsMatching('quarantine')).toEqual([SESSION_ID])
@@ -282,6 +286,7 @@ it.skipIf(!CAN_DENY_READ)('stops re-reading a transcript it cannot read', async 
     await chmod(path, 0o644)
     const later = new Date(Date.now() + 60_000)
     await utimes(path, later, later)
+    notifySessionSearchFileChange(path)
     await nextCycle()
 
     expect(sessionsMatching('mode')).toEqual([SESSION_ID])

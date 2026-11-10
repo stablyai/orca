@@ -127,6 +127,7 @@ export async function renameReplaceTranscript(
   await rename(replacement, path)
   const later = new Date(before.mtimeMs + 5_000)
   await utimes(path, later, later)
+  notifySessionSearchFileChange(path)
 }
 
 export async function writeMessageGraphTranscript(

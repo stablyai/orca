@@ -90,6 +90,21 @@ export class SessionSearchDiscoveryInventory implements SessionDiscoveryContext 
     return map
   }
 
+  async observeForRead(agent: string, rootDir: string, path: string) {
+    const root = this.roots.get(`${agent}:${rootDir}`)
+    // Container rows retain their source-owned admission and are never filesystem paths.
+    if (!root) {
+      return null
+    }
+    const change = await root.inventory.observeForRead(path, root.args, this.recentLimit)
+    if (change) {
+      for (const observer of root.dependencies.values()) {
+        observer.addFile(path)
+      }
+    }
+    return change
+  }
+
   async files(args: DiscoverSessionFilesArgs): Promise<SessionFileDiscovery> {
     const key = `${args.agent}:${args.rootDir}`
     this.seen.add(key)

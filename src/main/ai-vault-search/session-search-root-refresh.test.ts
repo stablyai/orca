@@ -26,36 +26,33 @@ afterEach(async () => {
   await harness.cleanup()
 })
 
-it('refreshes roots on scheduled full sweeps and reuses them on recent cycles', async () => {
+it('finds a changed session location on maintenance after ordinary cycles reuse the old location', async () => {
   const clock = new FakeSessionSearchClock()
   let roots = harness.roots
-  const resolveRoots = vi.fn(async () => roots)
+  const resolveRoots = async () => roots
   indexer = new SessionSearchIndexer({
     databasePath: harness.databasePath,
     roots,
     resolveRoots,
     historyDays: null,
     clock,
-    fullSweepEveryCycles: 1
+    fullSweepEveryCycles: 2
   })
   await indexer.start()
-  expect(resolveRoots).toHaveBeenCalledTimes(1)
   const newRoot = join(harness.root, 'late')
   const id = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
   await writeClaudeTranscript(join(newRoot, 'project', `${id}.jsonl`), ['a late conversation'], id)
   roots = { ...roots, claudeProjectsDir: newRoot }
   clock.advance(20_000)
   await indexer.settled()
-  expect(resolveRoots).toHaveBeenCalledTimes(1)
   expect(indexer.status().filesIndexed).toBe(0)
   clock.advance(20_000)
   await indexer.settled()
-  expect(resolveRoots).toHaveBeenCalledTimes(2)
-  expect(indexer.status().filesIndexed).toBe(1)
-  clock.advance(20_000)
-  await indexer.settled()
-  expect(resolveRoots).toHaveBeenCalledTimes(2)
-  expect(indexer.status().filesIndexed).toBe(1)
+  expect(
+    harness.read((db) =>
+      db.prepare("SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'late'").get()
+    )
+  ).toEqual({ n: 2 })
 })
 
 it('does not access a closed store when pending discovery completes', async () => {
@@ -80,10 +77,15 @@ it('does not access a closed store when pending discovery completes', async () =
 
 it('retries discovery after failure without silently sweeping stale roots', async () => {
   const errors = vi.fn()
-  const resolveRoots = vi
-    .fn()
-    .mockRejectedValueOnce(new Error('unavailable'))
-    .mockResolvedValue(harness.roots)
+  let unavailable = true
+  const path = join(harness.claudeProjectDir, 'recovery.jsonl')
+  await writeClaudeTranscript(path, ['recovered conversation'], 'recovery')
+  const resolveRoots = async () => {
+    if (unavailable) {
+      throw new Error('unavailable')
+    }
+    return harness.roots
+  }
   indexer = new SessionSearchIndexer({
     databasePath: harness.databasePath,
     roots: harness.roots,
@@ -94,7 +96,14 @@ it('retries discovery after failure without silently sweeping stale roots', asyn
   await indexer.start()
   expect(errors).toHaveBeenCalledTimes(1)
   expect(indexer.status().lastSweepCompletedAt).toBeNull()
+  expect(indexer.status().filesIndexed).toBe(0)
+  unavailable = false
   await indexer.reconcile()
-  expect(resolveRoots).toHaveBeenCalledTimes(2)
-  expect(indexer.status().lastSweepCompletedAt).not.toBeNull()
+  expect(
+    harness.read((db) =>
+      db
+        .prepare("SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'recovered'")
+        .get()
+    )
+  ).toEqual({ n: 2 })
 })

@@ -147,7 +147,46 @@ export async function runSessionSearchPass(
     const read = await runSessionSearchIndexPass(store, state.queue, {
       signal,
       overdue: readOverdue,
-      publications: state.candidates
+      publications: state.candidates,
+      admit: async (work) => {
+        const { candidate } = work
+        const path = candidate.file.path
+        const rootDir = state.candidates.rootFor(candidate)
+        if (rootDir === undefined) {
+          return undefined
+        }
+        const observation = await state.discovery.observeForRead(candidate.agent, rootDir, path)
+        if (observation === null) {
+          return work
+        }
+        if (!observation) {
+          // Observation debt owns retry/holdout; accepted facts cannot certify a refused input.
+          state.queue.acknowledge(work, false)
+          return undefined
+        }
+        if (!observation.changed) {
+          return work
+        }
+        const refreshed = await state.candidates.update(
+          [{ agent: candidate.agent, rootDir, files: [observation.file] }],
+          new Set(),
+          { ...args.roots, signal },
+          observation.force ? new Set([path]) : new Set(),
+          new Map(),
+          true
+        )
+        for (const suppressed of refreshed.suppressed) {
+          state.queue.remove(suppressed)
+        }
+        for (const selected of refreshed.candidates) {
+          const force = observation.force || refreshed.forced.has(selected.file.path)
+          if (force) {
+            state.candidates.requirePublication(selected.file.path)
+          }
+          state.queue.enqueue(selected, store, force, !args.full)
+        }
+        return state.queue.get(path)
+      }
     })
     await state.candidates.reconcilePublications(store, readOverdue, signal, (path) =>
       state.queue.hasPublicationDebt(path)

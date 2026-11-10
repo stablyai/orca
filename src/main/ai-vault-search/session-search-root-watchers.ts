@@ -4,6 +4,7 @@ import { WatcherProcessSupervisor } from '../ipc/filesystem/watcher-process/parc
 import type { WatcherProcessSubscription } from '../ipc/filesystem/watcher-process/parcel-watcher-process-subscription'
 import type { WatcherProcessEvent } from '../ipc/filesystem/watcher-process/parcel-watcher-process-protocol'
 import { throwIfAiVaultScanCancelled } from '../ai-vault/ai-vault-scan-cancellation'
+import { RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS } from '../../shared/file-watch/runtime-file-watch-limits'
 export type SessionSearchRootWatch = {
   identity: string
   subscription?: WatcherProcessSubscription
@@ -127,6 +128,7 @@ export class SessionSearchRootWatchers {
         { mode },
         {
           signal: this.owner.signal,
+          subscribeTimeoutMs: RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS,
           onInterruption: () => {
             watch.reconcile = true
           },

@@ -14,7 +14,7 @@ import {
 import { fileIdentity } from './session-search-file-cursor'
 import { sessionSearchReadDecision } from './session-search-read-decision'
 import type { SessionSearchIndexStore } from './session-search-store'
-import type { SessionSearchWorkQueue } from './session-search-work-queue'
+import type { SessionSearchWork, SessionSearchWorkQueue } from './session-search-work-queue'
 
 export async function runSessionSearchIndexPass(
   store: SessionSearchIndexStore,
@@ -23,6 +23,7 @@ export async function runSessionSearchIndexPass(
     signal?: AbortSignal
     overdue?: () => boolean
     publications?: SessionSearchCandidateInventory
+    admit?: (work: SessionSearchWork) => Promise<SessionSearchWork | undefined>
   }
 ): Promise<{ stats: SessionParseStats; outOfTime: boolean; left: number }> {
   const stats = createSessionParseStats()
@@ -36,9 +37,16 @@ export async function runSessionSearchIndexPass(
       outOfTime = true
       break
     }
-    const work = queue.next()
+    let work = queue.next()
     if (!work) {
       break
+    }
+    if (options.admit) {
+      work = await options.admit(work)
+      if (!work) {
+        consumed++
+        continue
+      }
     }
     const { candidate } = work
     const path = candidate.file.path
@@ -120,6 +128,7 @@ export async function runSessionSearchIndexPass(
       queue.acknowledge(work, false)
       continue
     }
+    const failuresBeforeRead = row?.failCount ?? 0
     try {
       await parseAgentSessionFileCached(
         candidate,
@@ -132,12 +141,19 @@ export async function runSessionSearchIndexPass(
       await store.flush?.()
     } catch (error) {
       throwIfAiVaultScanCancelled(options.signal)
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw error
+      }
       console.warn(
         '[ai-vault-search] indexing skipped',
         candidate.agent,
         error instanceof Error ? error.name : 'ParseError'
       )
-      store.setFileState(path, 'failed', candidate.file.mtimeMs)
+      // The attached transcript consumer may already have settled this failed attempt.
+      await store.flush?.()
+      if ((store.fileRow(path)?.failCount ?? 0) <= failuresBeforeRead) {
+        store.setFileState(path, 'failed', candidate.file.mtimeMs)
+      }
       await store.flush?.()
     }
     const committed = store.fileRow(path)

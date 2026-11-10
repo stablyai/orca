@@ -1,4 +1,5 @@
 import { systemSessionSearchClock, type SessionSearchClock } from './session-search-clock'
+import { waitForAiVaultScan } from '../ai-vault/ai-vault-scan-cancellation'
 import {
   DEFAULT_SESSION_SEARCH_FULL_SWEEP_EVERY_CYCLES,
   DEFAULT_SESSION_SEARCH_PASS_DEADLINE_FRACTION,
@@ -246,7 +247,7 @@ export class SessionSearchIndexer {
     this.sweepInProgress ||= full
     try {
       if (maintenance && this.options.resolveRoots) {
-        const roots = await this.options.resolveRoots(signal)
+        const roots = await waitForAiVaultScan(this.options.resolveRoots(signal), signal)
         if (signal.aborted) {
           return
         }
