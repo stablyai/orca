@@ -81,7 +81,8 @@ export function buildFileLinkActions(
   column: number | null,
   deps: TerminalFileLinkActionDeps,
   sourceOwner: HttpLinkSourceOwner | undefined,
-  t: Translate = translate
+  t: Translate = translate,
+  options?: { directoryHint?: boolean }
 ): FileLinkActions {
   const mappedPath = mapTerminalFilePath(
     filePath,
@@ -196,7 +197,15 @@ export function buildFileLinkActions(
                   'auto.components.terminal.pane.TerminalLinkActionPopover.switchWorkspace',
                   'Switch workspace'
                 )
-              : t('auto.components.terminal.pane.TerminalLinkActionPopover.openFile', 'Open file'),
+              : options?.directoryHint
+                ? t(
+                    'auto.components.terminal.pane.TerminalLinkActionPopover.openFolder',
+                    'Open folder'
+                  )
+                : t(
+                    'auto.components.terminal.pane.TerminalLinkActionPopover.openFile',
+                    'Open file'
+                  ),
             run: () => openDetectedFilePath(filePath, line, column, deps)
           },
           ...(systemDefaultRow ? { alternate: systemDefaultRow } : {})
