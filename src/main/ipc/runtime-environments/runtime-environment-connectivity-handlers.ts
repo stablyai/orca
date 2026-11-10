@@ -287,12 +287,8 @@ function registerPassiveCallHandler(
           getUserDataPath(),
           environment.id,
           args.method,
-          await withHostAgentApiKeyEnv(
-            getUserDataPath(),
-            environment.id,
-            args.method,
-            accounts.params,
-            () => callRuntimeEnvironment(getUserDataPath(), environment.id, 'status.get', undefined)
+          await withHostAgentApiKeyEnv(environment.id, args.method, accounts.params, () =>
+            callRuntimeEnvironment(getUserDataPath(), environment.id, 'status.get', undefined)
           ),
           args.timeoutMs,
           args.expectedEnvironmentPairingRevision,

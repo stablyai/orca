@@ -2,17 +2,17 @@
 // host those keys ride each agent launch as plain env. An Orca Cloud VM must never hold a model key,
 // so they are not sent there at all: the user saves a key as a personal Cloud secret instead (one key
 // per click), and the VM then gets a placeholder the egress proxy swaps.
+import { app } from 'electron'
 import {
   resolveAgentApiKeyLaunchEnv,
   withAgentApiKeyLaunchEnv
 } from '../agent-api-keys/agent-api-key-launch-env'
+import { withAgentApiKeyRuntimeEnv } from '../agent-api-keys/agent-api-key-runtime-call'
 import { isCloudSshAlias } from '../cloud-ssh/cloud-ssh-config'
 import { getSshTargetRegistryStore } from '../ssh/targets/ssh-target-registry'
-import { getConnectionExecutionHostId } from '../../shared/execution-host'
-import { withAgentApiKeyRuntimeEnv } from '../agent-api-keys/agent-api-key-runtime-call'
 import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
-import { toRuntimeExecutionHostId } from '../../shared/execution-host'
+import { getConnectionExecutionHostId, toRuntimeExecutionHostId } from '../../shared/execution-host'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 
 /** Orca Cloud sandboxes answer on Vercel Sandbox routes. */
@@ -73,13 +73,12 @@ export async function desktopKeyValueForCloud(
  * (the VM then only sees egress placeholders).
  */
 export async function withHostAgentApiKeyEnv(
-  userDataPath: string,
   environmentId: string,
   method: string,
   params: unknown,
   readStatus: Parameters<typeof withAgentApiKeyRuntimeEnv>[3]
 ): Promise<unknown> {
-  if (isOrcaCloudRuntimeEnvironment(userDataPath, environmentId)) {
+  if (isOrcaCloudRuntimeEnvironment(app.getPath('userData'), environmentId)) {
     return params
   }
   return withAgentApiKeyRuntimeEnv(environmentId, method, params, readStatus)

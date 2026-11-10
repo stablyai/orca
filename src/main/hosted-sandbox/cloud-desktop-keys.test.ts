@@ -5,6 +5,7 @@ const environments = new Map<string, { source?: string; endpoints: { endpoint: s
 let launchEnv: Record<string, string> = {}
 const launchCalls: unknown[][] = []
 
+vi.mock('electron', () => ({ app: { getPath: () => '/u' } }))
 vi.mock('../../shared/ephemeral-vm-runtime-store', () => ({
   listEphemeralVmRuntimes: () => runtimes
 }))
@@ -90,13 +91,7 @@ describe('withHostAgentApiKeyEnv', () => {
     const { withHostAgentApiKeyEnv } = await import('./cloud-desktop-keys')
     const readStatus = vi.fn()
     expect(
-      await withHostAgentApiKeyEnv(
-        '/u',
-        'env-cloud',
-        'terminal.createAgentSession',
-        params,
-        readStatus
-      )
+      await withHostAgentApiKeyEnv('env-cloud', 'terminal.createAgentSession', params, readStatus)
     ).toBe(params)
     expect(launchCalls).toEqual([])
     expect(readStatus).not.toHaveBeenCalled()
