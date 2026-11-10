@@ -103,9 +103,7 @@ export function BuildHistoryList({
                       : ''}
                   </span>
                   {build.active ? (
-                    <Badge variant="statusActive">
-                      {t('cloudEnvironment.history.active', 'Active')}
-                    </Badge>
+                    <Badge variant="tag">{t('cloudEnvironment.history.active', 'Active')}</Badge>
                   ) : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-x-2 text-2xs text-muted-foreground">

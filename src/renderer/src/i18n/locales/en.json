@@ -26715,7 +26715,8 @@
       "restartToRecover": "Restart to recover. Files are kept and Orca resumes your agents after the restart.",
       "startFailed": "The sandbox couldn’t start. Nothing was lost.",
       "wakeFailed": "Couldn’t wake the sandbox. Your files and chats are safe.",
-      "sleepsWhenIdle": "Sleeps in {{minutes}} min if idle"
+      "sleepsWhenIdleMinutes_one": "Sleeps in {{count}} minute if idle",
+      "sleepsWhenIdleMinutes_other": "Sleeps in {{count}} minutes if idle"
     },
     "restarting": "Restarting…",
     "restart": "Restart",

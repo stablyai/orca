@@ -180,9 +180,14 @@ export function CloudWorkspaceStatusPanel({
       ? t('orcaCloudWorkspace.detail.restarting', 'Orca resumes your agents after the restart.')
       : state === 'running'
         ? // The control plane's idle timer; older control planes omit it (their timer is 15 min).
-          t('orcaCloudWorkspace.detail.sleepsWhenIdle', 'Sleeps in {{minutes}} min if idle', {
-            minutes: status?.idleSleepMinutes ?? 15
-          })
+          t(
+            'orcaCloudWorkspace.detail.sleepsWhenIdleMinutes',
+            'Sleeps in {{count}} minutes if idle',
+            {
+              count: status?.idleSleepMinutes ?? 15,
+              defaultValue_one: 'Sleeps in {{count}} minute if idle'
+            }
+          )
         : cloudStateDetail(state, t)
   const showMeters = Boolean(metrics) && (state === 'running' || state === 'unresponsive')
   const showAgo = Boolean(entry?.fetchedAt && showUpdatedAgo(entry.fetchedAt, now))

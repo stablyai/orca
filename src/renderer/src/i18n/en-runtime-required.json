@@ -2314,6 +2314,10 @@
       "moreFiles_one": "{{count}} more file not shown",
       "moreFiles_other": "{{count}} more files not shown"
     },
+    "detail": {
+      "sleepsWhenIdleMinutes_one": "Sleeps in {{count}} minute if idle",
+      "sleepsWhenIdleMinutes_other": "Sleeps in {{count}} minutes if idle"
+    },
     "idleSleptMinutes_one": "{{name}} slept after {{count}} minute idle",
     "idleSleptMinutes_other": "{{name}} slept after {{count}} minutes idle",
     "overlay": {
