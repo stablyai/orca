@@ -10,7 +10,7 @@ import { TabHoverCard } from './TabHoverCard'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getDropIndicatorClasses,
@@ -34,7 +34,7 @@ import {
   terminalTabHasUnreadActivity
 } from './terminal-tab-activity-status'
 import { useTerminalTabActivity } from './use-terminal-tab-activity'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import type { NativeChatTabSession } from './tab-session-history-switch'
 import type { StructuredChatTabNamingFailure } from '@/runtime/native-chat/naming/structured-conversation-name'
 import { useNativeChatNamingFailure } from './use-native-chat-naming-failure'

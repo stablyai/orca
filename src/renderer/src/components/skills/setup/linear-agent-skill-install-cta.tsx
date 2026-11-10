@@ -20,7 +20,7 @@ import {
   ORCA_LINEAR_SKILL_NAME
 } from '@/lib/skills/installation/agent-feature-skill-names'
 import { getLinearAgentSkillUpdateTarget } from '@/lib/skills/installation/linear-agent-skill-update-target'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { getLinearAgentSkillSetupInlineRuntimeCopy } from '../../sidebar/linear-agent-skill-setup-copy'
 import type { LinearAgentSkillPromptSettings } from '../../sidebar/linear-agent-skill-runtime'
 import { useIntegrationSubordinateRowClass } from '../../integrations/presentation/integration-card-presentation'

@@ -5,7 +5,7 @@ import {
 } from '@/components/orchestration-crew/NativeChatCrewPanel'
 import { NativeChatUsageLimitActionsProvider } from '@/components/native-chat/usage/NativeChatUsageLimitActions'
 import { useNativeChatHandOff } from '@/components/native-chat/pane/actions/use-native-chat-hand-off'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from '@/components/native-chat/appearance/native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from '@/components/native-chat/appearance/use-native-chat-store-appearance-style'
 import { useRef, useState } from 'react'

@@ -1,7 +1,7 @@
 import React from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { getVisibleAutomationSetupDecision } from './automation-setup-decision'
 import type { AutomationDraft } from './AutomationEditorDialog'

@@ -15,13 +15,13 @@ import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
 import { getOpenFileExecutionHostId } from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import { resolveReviewRepository } from '@/lib/review-owner'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { STATUS_COLORS } from '../../lib/source-control/paths/git-path-decoration'
 import { STATUS_LABELS } from '../../../../shared/git/status/git-status-labels'
 
 import { getUntitledFileRoot } from '@/components/editor/untitled-file-rename-path'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,

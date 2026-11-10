@@ -4,7 +4,7 @@ import { AUTOMATIONS_TABLE_GRID_CLASS } from './automations-table-layout'
 import {
   LIST_TABLE_HEADER_CLASS,
   LIST_TABLE_STICKY_HEADER_CELL_CLASS
-} from '@/lib/list-table-layout'
+} from '@/lib/list-interaction/list-table-layout'
 import { AutomationListSortHeader } from './AutomationListSortHeader'
 import type { AutomationListSort, AutomationListSortField } from './automation-list-view'
 

@@ -1,7 +1,7 @@
 import { PanelsTopLeft, RefreshCw } from 'lucide-react'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
-import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
@@ -29,7 +29,7 @@ import { ClaudeSwitcherMenu } from './ClaudeSwitcherMenu'
 import { CodexSwitcherMenu } from './CodexSwitcherMenu'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { AntigravityUsageMenu } from './AntigravityUsageMenu'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { ProviderSegment, UsageOverflowChip, getUsageTone } from './StatusBarProviderSegment'
 import {
   UsageUnitLabel,

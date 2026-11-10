@@ -7,9 +7,12 @@ import { toast } from 'sonner'
 
 import { LinearIssueMarkdownDescriptionEditor } from '@/components/LinearIssueMarkdownDescriptionEditor'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
-import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
+import {
+  getScreenSubmitShortcutLabel,
+  isScreenSubmitShortcut
+} from '@/lib/keyboard/screen-submit-shortcut'
 import { linearUpdateIssue } from '@/runtime/linear/runtime-linear-issue-client'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'

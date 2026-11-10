@@ -56,7 +56,7 @@ import { createStructuredChatSleptAtSlice } from './slices/agent-status/structur
 import { createStructuredChatCompanionWritesSlice } from './slices/agent-status/structured-chat-companion-writes'
 import { createEphemeralVmLifecycleSlice } from './slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import { createWorkspaceAttentionSlice } from './slices/workspace-attention/workspace-attention-slice'
-import { e2eConfig } from '@/lib/e2e-config'
+import { e2eConfig } from '@/app-shell/startup/e2e-config'
 import type { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
 import {
   registerHttpLinkStoreAccessor,
@@ -75,8 +75,8 @@ import { attachEditorBufferIdentityEvents } from './slices/editor/buffers/editor
 import {
   registerRendererMemoryProfileContributor,
   summarizeStateCollectionSizes
-} from '@/lib/renderer-memory-profile'
-import { estimateStateCollectionKB } from '@/lib/state-collection-byte-estimate'
+} from '@/diagnostics/memory/renderer-memory-profile'
+import { estimateStateCollectionKB } from '@/diagnostics/memory/state-collection-byte-estimate'
 import { registerWindowsPathAccessEnvironments } from '@/lib/files/os-open/windows-path-access'
 import { STORE_OBSERVER_INSTALLERS } from './store-observer-installers'
 
