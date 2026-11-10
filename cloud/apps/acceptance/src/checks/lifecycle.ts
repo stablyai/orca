@@ -324,7 +324,7 @@ export const lifecycleChecks: Record<string, Check> = {
     // gets the launcher block (3000), a second worktree on the same VM gets its own registry block, both
     // are persisted and survive sleep/wake. The local half (distinct blocks, stable across app restart)
     // was proven in the real app on m4air (desktop-20261110-033734).
-    const box = await ctx.sandboxes.create(ctx.solo, { workspaceId: `w9-ports-${ctx.run.file.runId}`, repo: { url: config.testRepo } })
+    const box = await ctx.sandboxes.create(ctx.solo, { workspaceId: `w9-ports-${ctx.run.file.runId}`, repo: { url: config.testRepo }, ...(process.env.ORCA_ACCEPTANCE_REGION ? { region: process.env.ORCA_ACCEPTANCE_REGION } : {}) })
     if (box.status !== 200) {
       return { status: 'fail', detail: `create ${box.status}` }
     }
