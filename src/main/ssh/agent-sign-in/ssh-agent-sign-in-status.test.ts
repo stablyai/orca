@@ -73,4 +73,39 @@ describe('SshAgentSignInStatus', () => {
       'notInstalled'
     ])
   })
+
+  it('a forced ask while one runs queues a single follow-up, not more remote sessions', async () => {
+    exec.mockReset()
+    let release: () => void = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    exec.mockImplementation(async () => {
+      await gate
+      return '{"loggedIn":true}'
+    })
+    const status = new SshAgentSignInStatus(() => transport())
+    const first = status.read('devbox')
+    const forced = [
+      status.read('devbox', true),
+      status.read('devbox', true),
+      status.read('devbox', true)
+    ]
+    expect(exec).toHaveBeenCalledTimes(2)
+    release()
+    await Promise.all([first, ...forced])
+    // The first check (two agents) plus one queued follow-up (two agents).
+    expect(exec).toHaveBeenCalledTimes(4)
+  })
+
+  it('never reuses a report from before a reconnect', async () => {
+    exec.mockReset()
+    exec.mockResolvedValue('{"loggedIn":true}')
+    let generation = 1
+    const status = new SshAgentSignInStatus(() => transport(true, generation))
+    await status.read('devbox')
+    generation = 2
+    await status.read('devbox')
+    expect(exec).toHaveBeenCalledTimes(4)
+  })
 })
