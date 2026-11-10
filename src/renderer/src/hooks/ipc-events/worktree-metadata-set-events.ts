@@ -1,3 +1,4 @@
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-exit-deferral'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import { readWorkspaceMetadataSet } from '../../../../shared/worktree/workspace-metadata-set'
@@ -9,6 +10,7 @@ import {
   hasPendingIssueTitles,
   patchWorktreeMetadataSet,
   reapplyPendingIssueTitles,
+  takeEvictedTitleListings,
   type MetadataSetSource
 } from '../../store/slices/worktrees/listing/worktree-metadata-set-patch'
 
@@ -21,7 +23,8 @@ function watchListings(): void {
       selectWorktreesByRepo(state) !== selectWorktreesByRepo(previous) &&
       hasPendingIssueTitles()
     ) {
-      useAppStore.setState(reapplyPendingIssueTitles(state, previous))
+      // Updater form: another subscriber may have written since this notification's snapshot.
+      useAppStore.setState((current) => reapplyPendingIssueTitles(current, previous))
     }
   })
 }
@@ -33,6 +36,17 @@ function apply(record: unknown, source: MetadataSetSource): void {
   }
   watchListings()
   useAppStore.setState((state) => patchWorktreeMetadataSet(state, set, source))
+  // Rare (more titles in flight than the cap): a listing begun after their writes carries them.
+  for (const evicted of takeEvictedTitleListings()) {
+    void useAppStore
+      .getState()
+      .fetchWorktrees(
+        evicted.repoId,
+        evicted.source.kind === 'environment'
+          ? { executionHostId: toRuntimeExecutionHostId(evicted.source.environmentId) }
+          : { forceLocalOwner: true }
+      )
+  }
 }
 
 /** This app's own host: the record names the host its row lives on. */

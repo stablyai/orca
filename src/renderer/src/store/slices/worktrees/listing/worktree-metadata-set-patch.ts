@@ -25,7 +25,8 @@ type PendingTitles = {
   worktreeId: string
   match: (row: Worktree) => boolean
   titles: Map<string, string>
-  until: number
+  source: MetadataSetSource
+  repoId: string
   // The row object last checked; an unchanged row needs no second look.
   checkedRow: Worktree | null
   // False once the producer's pairing or connection was replaced: its titles no longer apply.
@@ -33,12 +34,12 @@ type PendingTitles = {
 }
 
 const MAX_PENDING_TITLES = 500
-// Longer than a listing round trip, so a listing begun before the write has landed by then.
-const PENDING_TITLE_MS = 60_000
-// Titles a listing that read metadata before the producer's write could still drop, for a while,
-// by repo; a producer's new epoch drops its entries.
+// Titles a listing that read metadata before the producer's write could still drop, by repo. An entry
+// lives until its producer's epoch, pairing or connection changes, or the cap evicts it; filling only
+// present untitled links keeps an old entry harmless.
 const pendingByRepo = new Map<string, Map<string, PendingTitles>>()
 const epochByStream = new Map<string, string>()
+const evictedListings: { repoId: string; source: MetadataSetSource }[] = []
 let pendingCount = 0
 
 function deletePending(repoId: string, key: string): void {
@@ -95,11 +96,7 @@ function withTitles(row: Worktree, titles: Map<string, string>): Worktree | null
 }
 
 // Checks one repo's pending titles against its rows: O(rows + pending), skipping rows already checked.
-function fillRepo(
-  state: AppState,
-  repoId: string,
-  now: number
-): Pick<AppState, 'worktreesByRepo'> | null {
+function fillRepo(state: AppState, repoId: string): Pick<AppState, 'worktreesByRepo'> | null {
   const entries = pendingByRepo.get(repoId)
   const rows = selectWorktreesByRepo(state)[repoId]
   if (!entries || !rows) {
@@ -116,7 +113,7 @@ function fillRepo(
   })
   let next: Worktree[] | null = null
   for (const [key, entry] of entries) {
-    if (now > entry.until || !entry.isCurrent()) {
+    if (!entry.isCurrent()) {
       deletePending(repoId, key)
       continue
     }
@@ -165,20 +162,20 @@ export function patchWorktreeMetadataSet(
   if (titles.size === 0) {
     return state
   }
-  const now = Date.now()
   if (pendingCount >= MAX_PENDING_TITLES) {
-    prunePending((entry) => now <= entry.until && entry.isCurrent())
+    prunePending((entry) => entry.isCurrent())
   }
   deletePending(set.repoId, key)
   if (pendingCount >= MAX_PENDING_TITLES) {
     const [oldestRepo, oldestEntries] = pendingByRepo.entries().next().value ?? []
-    const oldestKey = oldestEntries?.keys().next().value
-    if (oldestRepo && oldestKey) {
+    const [oldestKey, oldest] = oldestEntries?.entries().next().value ?? []
+    if (oldestRepo && oldestKey && oldest) {
       deletePending(oldestRepo, oldestKey)
+      // Its title can no longer be refilled; the repo's next listing, begun now, carries it.
+      evictedListings.push({ repoId: oldestRepo, source: oldest.source })
     }
   }
-  // Kept until it expires: the row may list the link only after this record, and filling only
-  // present untitled links means a removed link is never brought back.
+  // Kept even when the row does not list the link yet: it may only after this record.
   const entries = pendingByRepo.get(set.repoId) ?? new Map<string, PendingTitles>()
   pendingByRepo.set(set.repoId, entries)
   entries.set(key, {
@@ -187,12 +184,13 @@ export function patchWorktreeMetadataSet(
     worktreeId: set.worktreeId,
     match: rowMatcher(state, set, source),
     titles,
-    until: now + PENDING_TITLE_MS,
+    source,
+    repoId: set.repoId,
     checkedRow: null,
     isCurrent: source.kind === 'environment' ? source.isCurrent : () => true
   })
   pendingCount++
-  return fillRepo(state, set.repoId, now) ?? state
+  return fillRepo(state, set.repoId) ?? state
 }
 
 export function hasPendingIssueTitles(): boolean {
@@ -204,7 +202,6 @@ export function reapplyPendingIssueTitles(
   state: AppState,
   previous: AppState
 ): Pick<AppState, 'worktreesByRepo'> | AppState {
-  const now = Date.now()
   let current = state
   let changed = false
   for (const repoId of pendingByRepo.keys()) {
@@ -212,11 +209,18 @@ export function reapplyPendingIssueTitles(
     if (selectWorktreesByRepo(state)[repoId] === selectWorktreesByRepo(previous)[repoId]) {
       continue
     }
-    const next = fillRepo(current, repoId, now)
+    const next = fillRepo(current, repoId)
     if (next) {
       current = { ...current, ...next }
       changed = true
     }
   }
   return changed ? { worktreesByRepo: selectWorktreesByRepo(current) } : state
+}
+
+/** Repos whose evicted titles need a fresh listing, each once. */
+export function takeEvictedTitleListings(): { repoId: string; source: MetadataSetSource }[] {
+  const byRepo = new Map(evictedListings.map((entry) => [entry.repoId, entry]))
+  evictedListings.length = 0
+  return [...byRepo.values()]
 }
