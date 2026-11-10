@@ -4,7 +4,8 @@
 
 import { randomBytes } from 'node:crypto'
 import type { Stats } from 'node:fs'
-import { copyFile, rm, stat, utimes } from 'node:fs/promises'
+import { copyFile, readdir, rm, stat, utimes } from 'node:fs/promises'
+import { join } from 'node:path'
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
 
 export const CHECKPOINT_REF_ROOT = 'refs/orca/checkpoints/'
@@ -44,13 +45,21 @@ export class WorktreeCheckpointError extends Error {
       | 'merge-conflicts'
       | 'blocked-path'
       | 'unsafe-path'
-      | 'snapshot-failed',
+      | 'snapshot-failed'
+      /** Files changed before the restore failed; `undoRef` puts them back. */
+      | 'partial',
     message: string,
-    readonly paths: string[] = []
+    readonly paths: string[] = [],
+    readonly undoRef?: string
   ) {
     super(message)
     this.name = 'WorktreeCheckpointError'
   }
+}
+
+export function gitExitCode(error: unknown): number | null {
+  const code = error && typeof error === 'object' && 'code' in error ? error.code : null
+  return typeof code === 'number' ? code : null
 }
 
 export function defaultCheckpointGit(cwd: string): CheckpointGit {
@@ -105,6 +114,30 @@ export async function resolveCommit(repo: CheckpointRepo, rev: string): Promise<
   }
 }
 
+const TEMP_INDEX_PREFIX = 'orca-checkpoint-'
+const STALE_TEMP_INDEX_MS = 60 * 60 * 1000
+const swept = new Set<string>()
+
+/** Removes temp indexes a crashed process left behind (once per git dir per process). */
+async function sweepStaleTempIndexes(gitDir: string): Promise<void> {
+  if (swept.has(gitDir)) {
+    return
+  }
+  swept.add(gitDir)
+  const names = await readdir(gitDir).catch(() => [])
+  for (const name of names) {
+    if (!name.startsWith(TEMP_INDEX_PREFIX)) {
+      continue
+    }
+    const path = join(gitDir, name)
+    const info = await stat(path).catch(() => null)
+    // ctime, not mtime: a live temp index carries the user index's (possibly old) mtime.
+    if (info && Date.now() - Math.max(info.ctimeMs, info.mtimeMs) > STALE_TEMP_INDEX_MS) {
+      await rm(path, { force: true })
+    }
+  }
+}
+
 /** Runs `run` against a private copy of the user's index (stat data included, so `add -A` stays
  *  incremental on large repos). The copy is deleted afterwards; the user's index is only read. */
 export async function withTempIndex<T>(
@@ -112,7 +145,8 @@ export async function withTempIndex<T>(
   seedFromUserIndex: boolean,
   run: (env: Record<string, string>) => Promise<T>
 ): Promise<T> {
-  const file = `${repo.gitDir}/orca-checkpoint-${process.pid}-${randomBytes(6).toString('hex')}.index`
+  await sweepStaleTempIndexes(repo.gitDir)
+  const file = `${repo.gitDir}/${TEMP_INDEX_PREFIX}${process.pid}-${randomBytes(6).toString('hex')}.index`
   try {
     if (seedFromUserIndex) {
       await seedTempIndex(repo.indexFile, file)

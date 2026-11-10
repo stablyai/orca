@@ -4,8 +4,16 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { openCheckpointRepo, type CheckpointRepo } from './worktree-checkpoint-git'
-import { captureWorktreeCheckpoint, readWorktreeCheckpoint } from './worktree-checkpoint-snapshot'
+import {
+  openCheckpointRepo,
+  type CheckpointRepo,
+  WorktreeCheckpointError
+} from './worktree-checkpoint-git'
+import {
+  captureWorktreeCheckpoint,
+  CHECKPOINT_MAX_UNTRACKED_BYTES,
+  readWorktreeCheckpoint
+} from './worktree-checkpoint-snapshot'
 import { previewWorktreeRestore, restoreWorktreeCheckpoint } from './worktree-checkpoint-restore'
 import { listCheckpointRefs, pruneCheckpointRefs } from './worktree-checkpoint-retention'
 
@@ -230,6 +238,82 @@ describe('worktree checkpoints', () => {
     expect(await read('a.txt/inside.log')).toBe('ignored content\n')
   })
 
+  it('refuses when an ignored file now sits where the checkpoint has a folder', async () => {
+    await put('cache/x.txt', 'tracked then\n')
+    await capture()
+    await rm(join(dir, 'cache'), { recursive: true })
+    await put('.gitignore', 'ignored/\n*.log\ncache\n')
+    await put('cache', 'precious ignored file\n')
+    await expect(restore()).rejects.toMatchObject({ reason: 'blocked-path' })
+    expect(await read('cache')).toBe('precious ignored file\n')
+  })
+
+  it('snapshots past an unreadable file and refuses to overwrite it', async () => {
+    await put('secret.txt', 'v1\n')
+    await capture()
+    await put('secret.txt', 'unreadable now\n')
+    await chmod(join(dir, 'secret.txt'), 0o000)
+    await put('a.txt', 'agent\n')
+    try {
+      const later = await capture('refs/orca/checkpoints/s1/turn/t2')
+      expect(await git('show', `${later.commit}:a.txt`)).toBe('agent')
+      await expect(restore()).rejects.toMatchObject({ reason: 'blocked-path' })
+      expect(await read('a.txt')).toBe('agent\n')
+    } finally {
+      await chmod(join(dir, 'secret.txt'), 0o644)
+    }
+    expect(await read('secret.txt')).toBe('unreadable now\n')
+  })
+
+  it('leaves large untracked files out of snapshots and alone on restore', async () => {
+    await capture()
+    await put('big.bin', Buffer.alloc(CHECKPOINT_MAX_UNTRACKED_BYTES + 1, 7))
+    await put('a.txt', 'agent\n')
+    const later = await capture('refs/orca/checkpoints/s1/turn/t2')
+    await expect(git('cat-file', '-e', `${later.commit}:big.bin`)).rejects.toThrow()
+    await restore()
+    expect((await stat(join(dir, 'big.bin'))).size).toBe(CHECKPOINT_MAX_UNTRACKED_BYTES + 1)
+    expect(await read('a.txt')).toBe('a1\n')
+  })
+
+  it('leaves skip-worktree and assume-unchanged files alone', async () => {
+    await capture()
+    await git('update-index', '--skip-worktree', 'a.txt')
+    await git('update-index', '--assume-unchanged', 'keep/b.txt')
+    await put('a.txt', 'local only\n')
+    await put('keep/b.txt', 'local too\n')
+    await put('new.txt', 'agent\n')
+    const result = await restore()
+    expect(result.changes.map((c) => c.path)).toEqual(['new.txt'])
+    expect(await read('a.txt')).toBe('local only\n')
+    expect(await read('keep/b.txt')).toBe('local too\n')
+  })
+
+  it('names its undo point when a restore fails partway', async () => {
+    await put('locked/keep.txt', 'k\n')
+    await put('locked/gone.txt', 'g\n')
+    await capture()
+    await rm(join(dir, 'locked/gone.txt'))
+    await put('extra.txt', 'agent\n')
+    await chmod(join(dir, 'locked'), 0o555)
+    try {
+      const error = await restore().then(
+        () => null,
+        (failure: unknown) => failure
+      )
+      expect(error).toBeInstanceOf(WorktreeCheckpointError)
+      const undoRef = error instanceof WorktreeCheckpointError ? error.undoRef : undefined
+      expect(error).toMatchObject({ reason: 'partial' })
+      expect(existsSync(join(dir, 'extra.txt'))).toBe(false)
+      await chmod(join(dir, 'locked'), 0o755)
+      const undo = await readWorktreeCheckpoint(repo, undoRef ?? '')
+      await restoreWorktreeCheckpoint(repo, undo!, { ref: 'refs/orca/checkpoints/s1/undo/u9', now: NOW })
+      expect(await read('extra.txt')).toBe('agent\n')
+    } finally {
+      await chmod(join(dir, 'locked'), 0o755)
+    }
+  })
+
   it('works on an unborn branch', async () => {
     await rm(join(dir, '.git'), { recursive: true })
     await git('init', '-q')
@@ -263,6 +347,17 @@ describe('worktree checkpoints', () => {
       now: NOW
     })
     expect(await listCheckpointRefs(repo, 'refs/orca/checkpoints/')).toEqual([])
+    await capture('refs/orca/checkpoints/s1/turn/fresh')
+    await pruneCheckpointRefs(repo, {
+      prefix: 'refs/orca/checkpoints/s1/turn/',
+      keep: 0,
+      maxAgeMs: -60_000,
+      now: NOW,
+      protect: ['refs/orca/checkpoints/s1/turn/fresh']
+    })
+    expect(await listCheckpointRefs(repo, 'refs/orca/checkpoints/')).toEqual([
+      'refs/orca/checkpoints/s1/turn/fresh'
+    ])
   })
 
   it('rejects plain folders', async () => {

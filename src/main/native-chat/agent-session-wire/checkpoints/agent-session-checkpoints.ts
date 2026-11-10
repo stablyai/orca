@@ -6,6 +6,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   AGENT_SESSION_CHECKPOINT_UNDO_ID,
+  agentSessionCheckpointPartialMessage,
   agentSessionCheckpointRefusalMessage,
   type AgentSessionCheckpointPreview,
   type AgentSessionCheckpointRestoreResult
@@ -39,7 +40,7 @@ export const CHECKPOINT_CAPTURE_TIMEOUT_MS = 15_000
 export type AgentSessionCheckpointsDeps = {
   record: (sessionId: string) => AgentSessionRecord | null
   resolveWorkspacePath?: (workspaceId: string) => Promise<string>
-  /** True while the chat has a turn running; restores wait for it to finish. */
+  /** True while any chat in this chat's worktree has a turn running; restores refuse then. */
   isBusy: (sessionId: string) => boolean
   logger: StructuredAgentSessionLogger
   now: () => number
@@ -113,7 +114,8 @@ export function createAgentSessionCheckpoints(deps: AgentSessionCheckpointsDeps)
           prefix: `${sessionPrefix(sessionId)}turn/`,
           keep: TURN_CHECKPOINTS_KEPT,
           maxAgeMs: CHECKPOINT_MAX_AGE_MS,
-          now: deps.now()
+          now: deps.now(),
+          protect: [turnRef(sessionId, itemId)]
         })
       })
     } catch (error) {
@@ -173,36 +175,47 @@ export function createAgentSessionCheckpoints(deps: AgentSessionCheckpointsDeps)
     sessionId: string,
     ref: string
   ): Promise<AgentSessionCheckpointRestoreResult> => {
-    if (deps.isBusy(sessionId)) {
-      refuse('busy')
-    }
-    const found = await target(sessionId, ref).catch((error: unknown) => {
+    const repo = await repoFor(sessionId).catch((error: unknown) => {
       if (error instanceof WorktreeCheckpointError && error.reason === 'not-a-repo') {
         refuse('not-a-repo')
       }
       throw error
     })
-    if (!found) {
+    if (!repo) {
       refuse('none')
     }
     const now = deps.now()
     const undoId = `${now}-${randomBytes(4).toString('hex')}`
+    const undoRef = `${sessionPrefix(sessionId)}undo/${undoId}`
     try {
-      const result = await serialize(found.repo.root, () =>
-        restoreWorktreeCheckpoint(found.repo, found.checkpoint, {
-          ref: `${sessionPrefix(sessionId)}undo/${undoId}`,
+      // Look up and check busy inside the queue: a capture queued first runs first, and the turn
+      // it starts must make this restore refuse rather than rewrite files under a working agent.
+      const result = await serialize(repo.root, async () => {
+        if (deps.isBusy(sessionId)) {
+          refuse('busy')
+        }
+        const checkpoint = await readWorktreeCheckpoint(repo, ref)
+        if (!checkpoint) {
+          refuse('none')
+        }
+        return restoreWorktreeCheckpoint(repo, checkpoint, {
+          ref: undoRef,
           now,
           labels: { sessionId }
         })
-      )
-      void pruneCheckpointRefs(found.repo, {
+      })
+      void pruneCheckpointRefs(repo, {
         prefix: `${sessionPrefix(sessionId)}undo/`,
         keep: UNDO_CHECKPOINTS_KEPT,
         maxAgeMs: CHECKPOINT_MAX_AGE_MS,
-        now
+        now,
+        protect: [undoRef]
       }).catch(() => undefined)
       return { changedFiles: result.changes.length, headMoved: result.headMoved, undoId }
     } catch (error) {
+      if (error instanceof WorktreeCheckpointError && error.reason === 'partial') {
+        throw new Error(agentSessionCheckpointPartialMessage(undoId))
+      }
       if (
         error instanceof WorktreeCheckpointError &&
         (error.reason === 'merge-conflicts' ||
@@ -261,7 +274,18 @@ export function hostAgentSessionCheckpoints(host: CheckpointHost): AgentSessionC
     checkpoints = createAgentSessionCheckpoints({
       record: (sessionId) => deps.store.getRecord(sessionId),
       ...(deps.resolveWorkspacePath ? { resolveWorkspacePath: deps.resolveWorkspacePath } : {}),
-      isBusy: (sessionId) => host.readStatusSummary(sessionId)?.status === 'working',
+      // Any chat working in the same worktree could be writing the files a restore rewrites.
+      isBusy: (sessionId) => {
+        const location = deps.store.getRecord(sessionId)?.location
+        return deps.store
+          .listConversations()
+          .some(
+            (record) =>
+              record.location.workspaceId === location?.workspaceId &&
+              record.location.executionHostId === location.executionHostId &&
+              host.readStatusSummary(record.sessionId)?.status === 'working'
+          )
+      },
       logger: deps.logger,
       now: () => deps.now?.() ?? Date.now()
     })

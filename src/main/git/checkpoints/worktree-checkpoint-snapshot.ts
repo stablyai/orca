@@ -4,9 +4,13 @@
 // or the stash list.
 
 import { z } from 'zod'
+import { lstat } from 'node:fs/promises'
+import { join } from 'node:path'
 import {
+  type CheckpointGitOptions,
   type CheckpointRepo,
   CHECKPOINT_REF_ROOT,
+  gitExitCode,
   resolveCommit,
   withTempIndex,
   WorktreeCheckpointError
@@ -48,30 +52,74 @@ export type CaptureOptions = {
   forceInclude?: (tree: string) => Promise<string[]>
 }
 
+/** Untracked files above this are left out of snapshots (like ignored files): hashing them every
+ *  turn would bloat the object store. A restore that would overwrite one still saves it first. */
+export const CHECKPOINT_MAX_UNTRACKED_BYTES = 10 * 1024 * 1024
+
+async function largeUntrackedPaths(
+  repo: CheckpointRepo,
+  options: CheckpointGitOptions
+): Promise<string[]> {
+  const out = await repo.git(['ls-files', '-o', '--exclude-standard', '-z'], options)
+  const large: string[] = []
+  for (const path of out.split('\0')) {
+    const stat = path ? await lstat(join(repo.root, path)).catch(() => null) : null
+    if (stat?.isFile() && stat.size > CHECKPOINT_MAX_UNTRACKED_BYTES) {
+      large.push(path)
+    }
+  }
+  return large
+}
+
+/** `add --ignore-errors` exits 1 after skipping files it couldn't read; everything else is in. */
+async function addSkippingUnreadable(
+  repo: CheckpointRepo,
+  args: string[],
+  options: CheckpointGitOptions
+): Promise<void> {
+  try {
+    await repo.git(['add', '--ignore-errors', ...args], options)
+  } catch (error) {
+    if (gitExitCode(error) !== 1) {
+      throw error
+    }
+  }
+}
+
 /** Writes the working tree's tree into the object store without recording a ref. */
 export async function captureWorktreeTree(
   repo: CheckpointRepo,
   options: CaptureOptions = {}
 ): Promise<WorktreeTree> {
-  const run = { signal: options.signal, timeoutMs: options.timeoutMs }
+  // One deadline for the whole capture, not one per git command.
+  const deadline = options.timeoutMs === undefined ? null : Date.now() + options.timeoutMs
+  const run = (env?: Record<string, string>): CheckpointGitOptions => ({
+    ...(options.signal ? { signal: options.signal } : {}),
+    ...(deadline === null ? {} : { timeoutMs: Math.max(1, deadline - Date.now()) }),
+    ...(env ? { env } : {})
+  })
   const head = await resolveCommit(repo, 'HEAD')
+  const large = await largeUntrackedPaths(repo, run())
   return withTempIndex(repo, true, async (env) => {
     let indexTree: string | null = null
     try {
       // The temp index is a byte copy of the user's, so this is exactly what they had staged.
-      indexTree = (await repo.git(['write-tree'], { ...run, env })).trim() || null
+      indexTree = (await repo.git(['write-tree'], run(env))).trim() || null
     } catch {
       indexTree = null
     }
-    await repo.git(['add', '-A', '--ignore-errors'], { ...run, env })
-    let tree = (await repo.git(['write-tree'], { ...run, env })).trim()
+    await addSkippingUnreadable(repo, ['-A', '--pathspec-from-file=-', '--pathspec-file-nul'], {
+      ...run(env),
+      stdin: `${[':/', ...large.map((path) => `:(exclude,literal)${path}`)].join('\0')}\0`
+    })
+    let tree = (await repo.git(['write-tree'], run(env))).trim()
     const forced = options.forceInclude ? await options.forceInclude(tree) : []
     if (forced.length > 0) {
-      await repo.git(
-        ['add', '-f', '--ignore-errors', '--pathspec-from-file=-', '--pathspec-file-nul'],
-        { ...run, env, stdin: `${forced.map(literalPathspec).join('\0')}\0` }
-      )
-      tree = (await repo.git(['write-tree'], { ...run, env })).trim()
+      await repo.git(['add', '-f', '--pathspec-from-file=-', '--pathspec-file-nul'], {
+        ...run(env),
+        stdin: `${forced.map(literalPathspec).join('\0')}\0`
+      })
+      tree = (await repo.git(['write-tree'], run(env))).trim()
     }
     if (!tree) {
       throw new WorktreeCheckpointError('snapshot-failed', 'git write-tree returned no tree.')

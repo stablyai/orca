@@ -3,17 +3,22 @@
 // so the restore itself can always be undone. HEAD and the branch never move: commits made after
 // the checkpoint stay on the branch. The staged state comes back only while HEAD is unchanged.
 
-import { lstat, realpath, rm, rmdir } from 'node:fs/promises'
+import { realpath, rm, rmdir } from 'node:fs/promises'
 import { dirname, join, relative, sep } from 'node:path'
 import {
   type CheckpointRepo,
-  diffTrees,
-  isSafeRelativePath,
   resolveCommit,
   type TreeChange,
   withTempIndex,
   WorktreeCheckpointError
 } from './worktree-checkpoint-git'
+import {
+  assertNoConflicts,
+  assertWritable,
+  hiddenIndexPaths,
+  overwrittenUnsnapshottedPaths,
+  restoreChanges
+} from './worktree-checkpoint-restore-guards'
 import {
   captureWorktreeTree,
   type WorktreeCheckpoint,
@@ -39,71 +44,8 @@ export async function previewWorktreeRestore(
 ): Promise<WorktreeRestorePreview> {
   const now = await captureWorktreeTree(repo)
   return {
-    changes: await diffTrees(repo, now.tree, target.tree),
+    changes: await restoreChanges(repo, now.tree, target.tree, await hiddenIndexPaths(repo)),
     headMoved: now.head !== target.head
-  }
-}
-
-async function assertNoConflicts(repo: CheckpointRepo): Promise<void> {
-  const unmerged = await repo.git(['ls-files', '-u', '-z'])
-  if (unmerged.length > 0) {
-    throw new WorktreeCheckpointError(
-      'merge-conflicts',
-      'The worktree has unresolved merge conflicts; resolve or abort them first.'
-    )
-  }
-}
-
-/** Paths the checkpoint has that the working tree's snapshot lacks but that exist on disk: ignored
- *  files the restore would overwrite. They go into the undo checkpoint first. */
-function overwrittenIgnoredPaths(repo: CheckpointRepo, target: WorktreeCheckpoint) {
-  return async (tree: string): Promise<string[]> => {
-    const added = (await diffTrees(repo, tree, target.tree)).filter((c) => c.status === 'A')
-    const present: string[] = []
-    for (const change of added) {
-      if (isSafeRelativePath(change.path) && (await existsNoFollow(join(repo.root, change.path)))) {
-        present.push(change.path)
-      }
-    }
-    return present
-  }
-}
-
-async function existsNoFollow(path: string): Promise<boolean> {
-  try {
-    await lstat(path)
-    return true
-  } catch {
-    return false
-  }
-}
-
-/** Refuses before any write when a path to write is now a directory, or any path is unsafe. */
-async function assertWritable(repo: CheckpointRepo, changes: TreeChange[]): Promise<void> {
-  const unsafe = changes.filter((change) => !isSafeRelativePath(change.path))
-  if (unsafe.length > 0) {
-    throw new WorktreeCheckpointError(
-      'unsafe-path',
-      'The checkpoint names paths outside the worktree.',
-      unsafe.map((change) => change.path)
-    )
-  }
-  const blocked: string[] = []
-  for (const change of changes) {
-    if (change.status === 'D') {
-      continue
-    }
-    const stat = await lstat(join(repo.root, change.path)).catch(() => null)
-    if (stat?.isDirectory()) {
-      blocked.push(change.path)
-    }
-  }
-  if (blocked.length > 0) {
-    throw new WorktreeCheckpointError(
-      'blocked-path',
-      'A folder now sits where the checkpoint has a file.',
-      blocked
-    )
   }
 }
 
@@ -159,24 +101,13 @@ async function restoreIndexEntries(
   }
 }
 
-export async function restoreWorktreeCheckpoint(
+async function applyChanges(
   repo: CheckpointRepo,
   target: WorktreeCheckpoint,
-  undo: { ref: string; labels?: Record<string, string>; now: number }
-): Promise<WorktreeRestoreResult> {
-  await assertNoConflicts(repo)
-  // Saving the undo point first is what makes the restore safe: a failure below leaves it to restore.
-  const before = await captureWorktreeTree(repo, {
-    forceInclude: overwrittenIgnoredPaths(repo, target)
-  })
-  const changes = await diffTrees(repo, before.tree, target.tree)
-  await assertWritable(repo, changes)
-  const undoCheckpoint = await writeWorktreeCheckpoint(repo, undo.ref, before, {
-    kind: 'undo',
-    createdAt: undo.now,
-    ...(undo.labels ? { labels: undo.labels } : {})
-  })
+  changes: TreeChange[]
+): Promise<void> {
   const rootReal = await realpath(repo.root)
+  // Deletes first, so a file can take the place of a folder (or a case-only rename) it replaces.
   for (const change of changes) {
     if (change.status === 'D') {
       await removeWorktreeFile(rootReal, repo.root, change.path)
@@ -192,6 +123,36 @@ export async function restoreWorktreeCheckpoint(
         stdin: `${writes.join('\0')}\0`
       })
     })
+  }
+}
+
+export async function restoreWorktreeCheckpoint(
+  repo: CheckpointRepo,
+  target: WorktreeCheckpoint,
+  undo: { ref: string; labels?: Record<string, string>; now: number }
+): Promise<WorktreeRestoreResult> {
+  await assertNoConflicts(repo)
+  const hidden = await hiddenIndexPaths(repo)
+  // Saving the undo point first is what makes the restore safe: a failure below leaves it to restore.
+  const before = await captureWorktreeTree(repo, {
+    forceInclude: overwrittenUnsnapshottedPaths(repo, target)
+  })
+  const changes = await restoreChanges(repo, before.tree, target.tree, hidden)
+  await assertWritable(repo, changes)
+  const undoCheckpoint = await writeWorktreeCheckpoint(repo, undo.ref, before, {
+    kind: 'undo',
+    createdAt: undo.now,
+    ...(undo.labels ? { labels: undo.labels } : {})
+  })
+  try {
+    await applyChanges(repo, target, changes)
+  } catch (error) {
+    throw new WorktreeCheckpointError(
+      'partial',
+      `Some files were not restored: ${error instanceof Error ? error.message : String(error)}`,
+      [],
+      undoCheckpoint.ref
+    )
   }
   const head = await resolveCommit(repo, 'HEAD')
   const headMoved = head !== target.head

@@ -21864,6 +21864,7 @@
         "restoreBlocked": "Files weren't restored because a folder now sits where a restored file goes. Nothing on disk changed.",
         "restoreMissing": "Files weren't restored because the snapshot for this message is gone. Nothing on disk changed.",
         "restoreFailed": "Orca couldn't restore every file. Check the worktree before continuing.",
+        "restorePartial": "Orca couldn't restore every file. Undo puts back the files it changed.",
         "undoRestore": "Undo",
         "undoneRestore": "Files are back to how they were before the rewind."
       },

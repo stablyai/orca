@@ -34,7 +34,9 @@ export const AGENT_SESSION_CHECKPOINT_RESTORE_REFUSALS = [
   'busy',
   'merge-conflicts',
   'blocked-path',
-  'unsafe-path'
+  'unsafe-path',
+  /** Not a refusal: some files changed before the restore failed; the error names the undo id. */
+  'partial'
 ] as const
 export type AgentSessionCheckpointRestoreRefusal =
   (typeof AGENT_SESSION_CHECKPOINT_RESTORE_REFUSALS)[number]
@@ -55,6 +57,17 @@ export function agentSessionCheckpointRefusalOf(
   const match = /agent_session_checkpoint_([a-z-]+)/.exec(message)
   const reason = match?.[1]
   return AGENT_SESSION_CHECKPOINT_RESTORE_REFUSALS.find((value) => value === reason) ?? null
+}
+
+export function agentSessionCheckpointPartialMessage(undoId: string): string {
+  return `${REFUSAL_PREFIX}partial undo=${undoId}`
+}
+
+/** The undo id a partial restore names, so the client can still offer Undo. */
+export function agentSessionCheckpointPartialUndoIdOf(error: unknown): string | null {
+  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
+  const undoId = /agent_session_checkpoint_partial undo=([0-9]+-[0-9a-f]+)/.exec(message)?.[1]
+  return undoId && AGENT_SESSION_CHECKPOINT_UNDO_ID.test(undoId) ? undoId : null
 }
 
 /** Undo ids are the last segment of a host-generated ref name. */

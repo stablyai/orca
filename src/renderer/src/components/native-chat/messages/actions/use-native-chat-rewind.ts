@@ -57,8 +57,8 @@ export function useNativeChatRewind(input: RewindInput) {
           const restore = restoreFilesFor.current === fields.itemId
           restoreFilesFor.current = null
           if (restore && checkpoints && outcome.kind === 'done') {
-            // The host queues the next turn's snapshot behind this restore, so a send can't race it.
-            void restoreNativeChatRewindFiles(checkpoints, fields.itemId)
+            // Awaited, so the rewind stays pending (sends wait) until the files are back.
+            await restoreNativeChatRewindFiles(checkpoints, fields.itemId)
           }
           return outcome
         },

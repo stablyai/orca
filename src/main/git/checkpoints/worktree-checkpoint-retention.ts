@@ -39,7 +39,15 @@ export async function deleteCheckpointRefs(repo: CheckpointRepo, refs: string[])
 /** Deletes all but the newest `keep` refs under `prefix`, plus any checkpoint older than `maxAgeMs`. */
 export async function pruneCheckpointRefs(
   repo: CheckpointRepo,
-  input: { prefix: string; keep: number; maxAgeMs: number; now: number }
+  input: {
+    prefix: string
+    keep: number
+    maxAgeMs: number
+    now: number
+    /** Never deleted here, whatever its date says (a clock that ran ahead must not prune the
+     *  checkpoint just written). */
+    protect?: string[]
+  }
 ): Promise<string[]> {
   if (!input.prefix.startsWith(CHECKPOINT_REF_ROOT)) {
     throw new Error(`checkpoint prefixes live under ${CHECKPOINT_REF_ROOT}: ${input.prefix}`)
@@ -49,7 +57,8 @@ export async function pruneCheckpointRefs(
   const tooOld = (await listRefs(repo, CHECKPOINT_REF_ROOT))
     .filter((entry) => entry.committedAt < cutoff)
     .map((entry) => entry.ref)
-  const doomed = [...new Set([...overCount, ...tooOld])]
+  const kept = new Set(input.protect ?? [])
+  const doomed = [...new Set([...overCount, ...tooOld])].filter((ref) => !kept.has(ref))
   await deleteCheckpointRefs(repo, doomed)
   return doomed
 }

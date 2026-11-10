@@ -2,6 +2,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { ConfirmationDialogOptions } from '@/components/confirmation-dialog-context'
 import {
+  agentSessionCheckpointPartialUndoIdOf,
   agentSessionCheckpointRefusalOf,
   type AgentSessionCheckpointPreview,
   type AgentSessionCheckpointRestoreResult
@@ -127,6 +128,11 @@ function failureText(error: unknown): string {
         'components.native-chat.rewind.restoreMissing',
         "Files weren't restored because the snapshot for this message is gone. Nothing on disk changed."
       )
+    case 'partial':
+      return translate(
+        'components.native-chat.rewind.restorePartial',
+        "Orca couldn't restore every file. Undo puts back the files it changed."
+      )
     case 'not-a-repo':
     case 'unsafe-path':
     case null:
@@ -147,15 +153,21 @@ export async function restoreNativeChatRewindFiles(
     result = await client.restore(itemId)
   } catch (error) {
     console.warn('[native-chat-rewind] file restore failed', error)
-    toast.error(failureText(error))
+    const undoId = agentSessionCheckpointPartialUndoIdOf(error)
+    toast.error(
+      failureText(error),
+      undoId ? { action: undoAction(client, undoId), duration: Infinity } : undefined
+    )
     return
   }
-  toast.success(restoredText(result.changedFiles), {
-    action: {
-      label: translate('components.native-chat.rewind.undoRestore', 'Undo'),
-      onClick: () => void undoNativeChatRewindFiles(client, result.undoId)
-    }
-  })
+  toast.success(restoredText(result.changedFiles), { action: undoAction(client, result.undoId) })
+}
+
+function undoAction(client: NativeChatCheckpointClient, undoId: string) {
+  return {
+    label: translate('components.native-chat.rewind.undoRestore', 'Undo'),
+    onClick: () => void undoNativeChatRewindFiles(client, undoId)
+  }
 }
 
 async function undoNativeChatRewindFiles(
