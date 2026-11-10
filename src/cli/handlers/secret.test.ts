@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { RuntimeClientError } from '../runtime/types'
+import { normalizeCommandPositionals, parseArgs, validateCommandAndFlags } from '../args'
+import { COMMAND_SPECS } from '../specs'
 import { parseSecretRequestWait, runSecretRequest, type SecretRequestCliInput } from './secret'
 
 const HINT =
@@ -45,6 +47,17 @@ const base: SecretRequestCliInput = {
 }
 
 describe('orca secret request', () => {
+  it('parses the documented `--wait <sec>` form', () => {
+    const paths = COMMAND_SPECS.map((spec) => spec.path)
+    const argv = ['secret', 'request', 'NPM_TOKEN', '--reason', 'Publish', '--wait', '300']
+    const parsed = parseArgs(argv, paths, COMMAND_SPECS)
+    expect(parsed.flags.get('wait')).toBe('300')
+    expect(parseSecretRequestWait(parsed.flags.get('wait'))).toBe(300)
+    const normalized = normalizeCommandPositionals(COMMAND_SPECS, parsed)
+    expect(() => validateCommandAndFlags(COMMAND_SPECS, normalized)).not.toThrow()
+    expect(normalized.flags.get('name')).toBe('NPM_TOKEN')
+  })
+
   it('names no terminal or agent: orcad derives them from verified launch evidence', async () => {
     const h = harness({ request: { requestId: 'sr_abcdefgh', status: 'pending' } })
     await runSecretRequest({ ...base, scope: 'repo' }, h.deps)
