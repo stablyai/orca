@@ -24,6 +24,8 @@ import { callRemoteOwnedServer } from './remote-owned-calls'
 import { remoteForwardKey, type RemoteForwardKey } from './remote-forward-caller'
 import { inServerTerms, serverNeverAnswered } from './remote-owned-answers'
 import { sendOwedRemoteStop } from './remote-owed-actions'
+import { offlineRemoteWorkerShow, remoteServerName } from './remote-owned-reads'
+import { explainRemoteServerFailure, isRemoteServerUnreachable } from './remote-server-unreachable'
 import { serverOwnsPlacedWorkers, startRemoteOwnedWorker } from './remote-owned-start'
 
 type Routed = { handled: false } | { handled: true; result: unknown }
@@ -79,7 +81,7 @@ export async function routeRemoteOwnedCall(
   }
   return {
     handled: true,
-    result: await forwardToLink(runtime, subject.link, request.method, access, values, forward)
+    result: await forwardToLink(runtime, subject, request.method, access, values, forward)
   }
 }
 
@@ -127,7 +129,7 @@ async function routeServerCall(
     return {
       handled: true,
       result: link
-        ? await forwardToLink(runtime, link, request.method, access, values)
+        ? await forwardToLink(runtime, { link }, request.method, access, values)
         : await runtime.callOrchestrationWorkerServer(
             server.environmentId,
             request.method,
@@ -208,25 +210,36 @@ function paramsForServer(access: OrchestrationMethodAccessDeclaration, values: V
 
 async function forwardToLink(
   runtime: OrcaRuntimeService,
-  link: RemoteRunLinkRow,
+  { link, dispatchId }: RemoteSubject,
   method: string,
   access: OrchestrationMethodAccessDeclaration,
   values: Values,
   forward?: RemoteForwardKey
 ): Promise<unknown> {
-  const server = runtime.resolveOrchestrationWorkerServer(link.environment_id).name
+  const db = runtime.getOrchestrationDb()
+  const server = remoteServerName(runtime, link.environment_id)
+  const params = paramsForServer(access, values)
   try {
     const answer = await callRemoteOwnedServer(runtime, link, {
       method,
-      params: paramsForServer(access, values),
+      params,
       timeoutMs: FORWARD_TIMEOUT_MS,
       ...(forward ? { requestId: forward.key } : {}),
       whileLink: ['open']
     })
-    seedNamedDispatches(runtime.getOrchestrationDb(), link, answer)
+    seedNamedDispatches(db, link, answer)
     return inServerTerms(answer, forward, server)
   } catch (error) {
-    throw inServerTerms(error, forward, server)
+    const record = dispatchId ? getRemoteDispatch(db, dispatchId) : undefined
+    if (record && method === 'orchestration.workerShow' && isRemoteServerUnreachable(error)) {
+      // The server is off: what this Orca last heard about the worker, never its output.
+      return offlineRemoteWorkerShow(runtime, record)
+    }
+    throw inServerTerms(
+      explainRemoteServerFailure(error, { server, method, params, dispatchId }),
+      forward,
+      server
+    )
   }
 }
 
@@ -238,7 +251,7 @@ async function stopRemoteWorker(
 ): Promise<unknown> {
   const db = runtime.getOrchestrationDb()
   const dispatchId = subject.dispatchId!
-  const server = runtime.resolveOrchestrationWorkerServer(subject.link.environment_id).name
+  const server = remoteServerName(runtime, subject.link.environment_id)
   const owed = oweRemoteDispatchStop(db, dispatchId, forward?.key ?? `stop:${randomUUID()}`)
   runtime.ensureOrchestrationFederationRelay(subject.link.run_id)
   try {
