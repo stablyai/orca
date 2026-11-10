@@ -2273,7 +2273,8 @@
         "checkingVmEnvironment": "Checking VM environment…",
         "vmChecksFailed": "Environment checks failed",
         "preparingCloudEnvironment": "Preparing environment…",
-        "startingSandbox": "Starting sandbox…"
+        "startingSandbox": "Starting sandbox…",
+        "cloningRepository": "Cloning the repository…"
       },
       "duplicatePairedServers": {
         "ambiguousSameServer": "{{value0}} and {{value1}} are the same server paired twice. Remove one in Settings > Remote Orca Servers."
@@ -26671,7 +26672,6 @@
     "thisWorkspaceTitle": "This workspace",
     "overlay": {
       "restarting": "Restarting…",
-      "unarchiving": "Restoring from archive…",
       "waking": "Waking…",
       "connecting": "Connecting…",
       "terminalStalledTitle": "Couldn’t reconnect the terminal",
@@ -26684,14 +26684,15 @@
       "stalled": "Orca Cloud stopped responding while waking.",
       "pendingKeys_one": "{{count}} key waiting · it goes to the terminal when it’s up",
       "pendingKeys_other": "{{count}} keys waiting · they go to the terminal when it’s up",
-      "clearPendingKeys": "Discard waiting keys"
+      "clearPendingKeys": "Discard waiting keys",
+      "unarchivingNow": "Unarchiving…"
     },
     "announce": {
       "restarting": "Restarting {{name}}.",
-      "unarchiving": "Restoring {{name}} from archive.",
       "waking": "Waking {{name}}.",
       "archived": "{{name}} is archived.",
-      "asleep": "{{name}} is asleep."
+      "asleep": "{{name}} is asleep.",
+      "unarchivingNamed": "Unarchiving {{name}}."
     },
     "dismiss": "Dismiss",
     "restartSandbox": "Restart sandbox",
@@ -26710,16 +26711,15 @@
       "archived": "Kept as a snapshot. Unarchive to work in it again.",
       "waking": "Waking…",
       "asleepSafe": "Your files and chats are safe. Opening it wakes it.",
-      "starting": "Starting the sandbox…",
       "restartToRecover": "Restart to recover. Files are kept and Orca resumes your agents after the restart.",
       "startFailed": "The sandbox couldn’t start. Nothing was lost.",
-      "wakeFailed": "Couldn’t wake the sandbox. Your files and chats are safe."
+      "wakeFailed": "Couldn’t wake the sandbox. Your files and chats are safe.",
+      "sleepsWhenIdle": "Sleeps in {{minutes}} min if idle"
     },
     "restarting": "Restarting…",
     "restart": "Restart",
     "sandboxTitle": "Sandbox",
     "statusUnavailable": "Status unavailable",
-    "statusUnavailableDetail": "Orca Cloud didn’t answer.",
     "loading": "Loading status",
     "cpu": "CPU",
     "cpuValue": "{{percent}}% of {{cpus}} vCPU",
@@ -26797,7 +26797,8 @@
     "deletedNamed": "Deleted {{name}}",
     "deleteFailedNamed": "Couldn’t delete {{name}}",
     "productName": "Orca Cloud",
-    "cloudMarkLabel": "Cloud workspace · {{state}}"
+    "cloudMarkLabel": "Cloud workspace · {{state}}",
+    "statusUnavailableTitle": "Couldn’t get the sandbox status."
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",
@@ -27107,18 +27108,18 @@
       "intro": "This creates a local workspace from {{name}}:",
       "branch": "The branch and its commits",
       "changes": "Uncommitted changes and untracked files",
-      "chats": "Claude and Codex chats, so agents can resume here",
       "branchTaken": "{{branch}} is already checked out on this computer",
       "branchTakenDetail": "It will be {{newName}}. Chats already on this computer are kept.",
       "action": "Move to this computer",
       "branchNamed": "Branch {{branch}} and its commits",
       "changesCount_one": "{{count}} uncommitted change, plus untracked files",
       "changesCount_other": "{{count}} uncommitted changes, plus untracked files",
-      "chatsCount_one": "{{count}} agent chat, so the agent can resume here",
-      "chatsCount_other": "{{count}} agent chats, so agents can resume here",
       "archiveAfter": "Archive the cloud workspace afterwards",
       "stopsAgents_one": "Stops {{count}} running agent",
-      "stopsAgents_other": "Stops {{count}} running agents"
+      "stopsAgents_other": "Stops {{count}} running agents",
+      "chatsContinue_one": "{{count}} agent chat, so you can continue it here",
+      "chatsContinue_other": "{{count}} agent chats, so you can continue them here",
+      "chatsContinueAny": "Claude and Codex chats, so you can continue them here"
     },
     "cancel": "Cancel",
     "steps": "Steps",

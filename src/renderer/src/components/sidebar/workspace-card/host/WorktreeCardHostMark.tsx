@@ -89,7 +89,8 @@ export function WorktreeCardHostStateWord({
   )
   const t = useTranslate()
   const state = cloud.isCloud ? cloud.state : vmDot
-  if (!state || state === 'running') {
+  // Unknown is not a state to name (the panel shows a placeholder until the first read).
+  if (!state || state === 'running' || state === 'unknown') {
     return null
   }
   return (

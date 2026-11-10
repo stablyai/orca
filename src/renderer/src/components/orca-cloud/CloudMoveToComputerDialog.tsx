@@ -1,5 +1,5 @@
 // "Move to this computer" dialog host: mounted once in App, renders whatever move is open.
-import React, { useEffect } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import {
   Dialog,
@@ -156,6 +156,7 @@ export function CloudMoveToComputerDialogHost({
   runningAgentsFor: (workspaceId: string) => number
 }): React.JSX.Element | null {
   const t = useTranslate()
+  const titleRef = useRef<HTMLHeadingElement>(null)
   const state = useCloudMoveState()
   const now = useNow(1_000, state.stage === 'running')
   useHiddenMoveToast(state, t)
@@ -184,9 +185,16 @@ export function CloudMoveToComputerDialogHost({
         className="top-[18vh] max-w-md translate-y-0"
         // No X while a move runs: Hide keeps it going behind a notice instead.
         showCloseButton={!running}
+        // Start on the title, not the primary action: Enter must not start a move (or archive).
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          titleRef.current?.focus()
+        }}
       >
         <DialogHeader>
-          <DialogTitle>{cloudMoveTitle(state, t)}</DialogTitle>
+          <DialogTitle ref={titleRef} tabIndex={-1} className="outline-none">
+            {cloudMoveTitle(state, t)}
+          </DialogTitle>
           <DialogDescription className="sr-only">
             {t('orcaCloudMove.description', 'Copy this cloud workspace to a local workspace.')}
           </DialogDescription>

@@ -178,7 +178,12 @@ export function CloudWorkspaceStatusPanel({
     ? null
     : restarting
       ? t('orcaCloudWorkspace.detail.restarting', 'Orca resumes your agents after the restart.')
-      : cloudStateDetail(state, t)
+      : state === 'running'
+        ? // The control plane's idle timer; older control planes omit it (their timer is 15 min).
+          t('orcaCloudWorkspace.detail.sleepsWhenIdle', 'Sleeps in {{minutes}} min if idle', {
+            minutes: status?.idleSleepMinutes ?? 15
+          })
+        : cloudStateDetail(state, t)
   const showMeters = Boolean(metrics) && (state === 'running' || state === 'unresponsive')
   const showAgo = Boolean(entry?.fetchedAt && showUpdatedAgo(entry.fetchedAt, now))
   const hasActions = canArchive || canRestart || restarting || state === 'archived'
@@ -201,11 +206,19 @@ export function CloudWorkspaceStatusPanel({
             </span>
             <span className="inline-flex items-center gap-1.5 text-foreground">
               <CloudStateDot state={unavailable ? 'unknown' : state} size="md" />
-              {unavailable
-                ? t('orcaCloudWorkspace.statusUnavailable', 'Status unavailable')
-                : restarting
-                  ? t('orcaCloudWorkspace.state.restarting', 'Restarting')
-                  : cloudStateLabel(state, t)}
+              {unavailable ? (
+                t('orcaCloudWorkspace.statusUnavailable', 'Status unavailable')
+              ) : restarting ? (
+                t('orcaCloudWorkspace.state.restarting', 'Restarting')
+              ) : state === 'unknown' ? (
+                // Not yet read: a placeholder, not a word that reads like a state.
+                <>
+                  <Skeleton shape="small" className="h-3 w-14" aria-hidden="true" />
+                  <span className="sr-only">{cloudStateLabel(state, t)}</span>
+                </>
+              ) : (
+                cloudStateLabel(state, t)
+              )}
             </span>
           </div>
           {detail ? <p className="mt-0.5 text-muted-foreground">{detail}</p> : null}
@@ -217,7 +230,7 @@ export function CloudWorkspaceStatusPanel({
       {unavailable ? (
         <InlineError
           tone="neutral"
-          title={t('orcaCloudWorkspace.statusUnavailableDetail', 'Orca Cloud didn’t answer.')}
+          title={t('orcaCloudWorkspace.statusUnavailableTitle', 'Couldn’t get the sandbox status.')}
           retryLabel={t('orcaCloudWorkspace.tryAgain', 'Try again')}
           retrying={entry?.loading}
           onRetry={() => void refreshCloudWorkspaceStatus(workspaceId)}

@@ -21,6 +21,7 @@ import type { CloudWakeProgressEvent } from '../../../../shared/hosted-sandbox/c
 import { CloudArchivedWorkspaceView, type ArchiveLoad } from './CloudArchivedWorkspaceView'
 import { CloudWakingOverlay } from './CloudWakingOverlay'
 import { CloudWorkspaceNotice } from './CloudWorkspaceNotice'
+import { useConfirmedRestart } from './use-cloud-panel-actions'
 import { useCloudVersionSkewNotice } from './use-cloud-version-skew-notice'
 import { CloudWorkspaceOfflineView } from './offline/CloudWorkspaceOfflineView'
 import { useCloudOfflineData } from './offline/use-cloud-offline-data'
@@ -28,11 +29,7 @@ import { useCloudWorkspaceView } from './use-cloud-workspace-view'
 import { useWakeInput, useWakeInputNotices } from './use-wake-input'
 import { useWakeAttachHold } from './use-wake-attach-hold'
 import { clearWakeInput } from '@/components/terminal-pane/input/wake-input-buffer'
-import {
-  runRestartCloudWorkspace,
-  runUnarchiveCloudWorkspace,
-  wakeCloudWorkspace
-} from './cloud-workspace-actions'
+import { runUnarchiveCloudWorkspace, wakeCloudWorkspace } from './cloud-workspace-actions'
 
 /** A wake that settles faster than this never shows the overlay (no skeleton flash). */
 const SHOW_DELAY_MS = 300
@@ -301,7 +298,7 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
 
   // Checked once the sandbox answers; inside the protocol range nothing shows.
   const versionSkewNotice = useCloudVersionSkewNotice(workspaceId, view.state === 'running')
-  const restart = useCallback(() => void runRestartCloudWorkspace(workspaceId), [workspaceId])
+  const restart = useConfirmedRestart(workspaceId)
   const wake = useCallback(() => {
     dismissCloudWake(workspaceId)
     void wakeCloudWorkspace(workspaceId)
@@ -315,7 +312,7 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
       ? overlay.wake.source === 'restart'
         ? t('orcaCloudWorkspace.announce.restarting', 'Restarting {{name}}.', { name: label })
         : overlay.wake.source === 'unarchive'
-          ? t('orcaCloudWorkspace.announce.unarchiving', 'Restoring {{name}} from archive.', {
+          ? t('orcaCloudWorkspace.announce.unarchivingNamed', 'Unarchiving {{name}}.', {
               name: label
             })
           : t('orcaCloudWorkspace.announce.waking', 'Waking {{name}}.', { name: label })

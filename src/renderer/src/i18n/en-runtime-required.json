@@ -2288,8 +2288,8 @@
     "confirm": {
       "changesCount_one": "{{count}} uncommitted change, plus untracked files",
       "changesCount_other": "{{count}} uncommitted changes, plus untracked files",
-      "chatsCount_one": "{{count}} agent chat, so the agent can resume here",
-      "chatsCount_other": "{{count}} agent chats, so agents can resume here",
+      "chatsContinue_one": "{{count}} agent chat, so you can continue it here",
+      "chatsContinue_other": "{{count}} agent chats, so you can continue them here",
       "stopsAgents_one": "Stops {{count}} running agent",
       "stopsAgents_other": "Stops {{count}} running agents"
     },
