@@ -1,3 +1,4 @@
+import { SessionObservationRetries } from './session-observation-retries'
 import type { FileWithMtime } from './session-scanner-types'
 import { observeSessionFile, type DiscoverSessionFilesArgs } from './session-scanner-discovery'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
@@ -12,7 +13,7 @@ export type SessionFileChange = { file: FileWithMtime; force: boolean }
 export class SessionInventoryFiles {
   readonly files = new Map<string, FileWithMtime>()
   readonly dependencies = new Map<string, Set<string>>()
-  readonly failures = new Map<string, boolean>()
+  readonly failures = new SessionObservationRetries()
   readonly changes = new Map<string, SessionFileChange>()
   readonly removed = new Set<string>()
   readonly recent = new Map<string, FileWithMtime>()
@@ -23,12 +24,16 @@ export class SessionInventoryFiles {
     private readonly forgetDirty: (path: string) => void
   ) {}
   async observe(path: string, args: DiscoverSessionFilesArgs, force: boolean, limit: number) {
+    if (!this.failures.mayAttempt(path)) {
+      return
+    }
+    force ||= this.failures.force(path)
+    const previous = this.files.get(path)
     const observation = await observeSessionFile(
       path,
-      !force && this.dependencyByFile.has(path)
-        ? () => this.dependencyByFile.get(path)
-        : args.contentDependencyPath,
-      args.signal
+      args.contentDependencyPath,
+      args.signal,
+      !force && previous ? { file: previous, path: this.dependencyByFile.get(path) } : undefined
     )
     throwIfAiVaultScanCancelled(args.signal)
     if ('issue' in observation) {
@@ -39,30 +44,38 @@ export class SessionInventoryFiles {
       if (!observation.missing) {
         recordSessionScanIssue(args.issues, { agent: args.agent, ...observation.issue })
       }
-      this.failures.set(path, force || (this.failures.get(path) ?? false))
-      // A successful parent listing, never a refused stat, can remove membership.
-      this.scheduleParent(path)
+      this.failures.fail(
+        path,
+        force,
+        observation.missing ? undefined : { agent: args.agent, ...observation.issue }
+      )
+      // Only apparent absence needs a parent membership proof.
+      if (observation.missing) {
+        this.scheduleParent(path)
+      }
       return
-    }
-    const metadataOnly = sidecarEnrichesWithoutReparse({
-      agent: args.agent,
-      file: observation.file,
-      codexHome: null
-    })
-    this.failures.delete(path)
-    if (!metadataOnly && observation.file.sidecar === 'unknown') {
-      this.failures.set(path, force)
     }
     const file = {
       ...observation.file,
       modifiedAt: new Date(observation.file.mtimeMs).toISOString()
     }
+    const metadataOnly = sidecarEnrichesWithoutReparse({
+      agent: args.agent,
+      file,
+      codexHome: null
+    })
+    if (!metadataOnly && observation.file.sidecar === 'unknown') {
+      this.failures.fail(path, force)
+      file.sidecar = previous?.sidecar ?? 'unknown'
+    } else {
+      this.failures.delete(path)
+    }
     const old = this.files.get(path)
     const dependency = metadataOnly ? undefined : observation.sidecarPath
-    const previous = this.dependencyByFile.get(path)
-    if (previous !== dependency) {
-      if (previous) {
-        this.removeDependency(previous, path)
+    const previousDependency = this.dependencyByFile.get(path)
+    if (previousDependency !== dependency) {
+      if (previousDependency) {
+        this.removeDependency(previousDependency, path)
       }
       if (dependency) {
         const owners = this.dependencies.get(dependency) ?? new Set<string>()

@@ -6,6 +6,7 @@ import type { SessionFileDiscovery } from './session-scanner-types'
 export type SessionDiscoveryDependency = {
   path: string
   mode?: 'shallow' | 'recursive'
+  eventsOnly?: boolean
   fileKey?: (path: string) => string | null
   eventKey?: (path: string) => string | null
   metadata?: boolean
@@ -19,7 +20,8 @@ export type SessionDiscoveryContext = {
     paths: readonly string[],
     read: (paths: readonly string[], limit: number) => Promise<SessionFileDiscovery>,
     limit: number,
-    issues: readonly AiVaultScanIssue[]
+    issues: readonly AiVaultScanIssue[],
+    enumerationComplete?: boolean
   ): Promise<SessionFileDiscovery>
   artifacts(root: string): Map<string, string>
 }
@@ -39,7 +41,11 @@ export function discoverSessionContainer(
   paths: readonly string[],
   read: (paths: readonly string[], limit: number) => Promise<SessionFileDiscovery>,
   limit: number,
-  issues: readonly AiVaultScanIssue[]
+  issues: readonly AiVaultScanIssue[],
+  enumerationComplete = true
 ): Promise<SessionFileDiscovery> {
-  return currentSessionDiscovery()?.container(key, paths, read, limit, issues) ?? read(paths, limit)
+  return (
+    currentSessionDiscovery()?.container(key, paths, read, limit, issues, enumerationComplete) ??
+    read(paths, limit)
+  )
 }

@@ -52,7 +52,10 @@ export type DiscoverSessionFilesArgs = {
   issues: AiVaultScanIssue[]
   extensions: string[]
   filePredicate?: (path: string) => boolean
-  contentDependencyPath?: (path: string) => string | undefined | Promise<string | undefined>
+  contentDependencyPath?: (
+    path: string,
+    signal?: AbortSignal
+  ) => string | undefined | Promise<string | undefined>
   directoryPredicate?: (name: string, depth: number) => boolean
   // Sees each listing the walk already made, so callers can read layout without another readdir.
   onDirectoryEntries?: (dirPath: string, entries: readonly Dirent[]) => void

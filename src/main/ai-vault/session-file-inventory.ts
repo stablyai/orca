@@ -3,6 +3,7 @@ import {
   type SessionInventoryDirectory as Directory
 } from './session-file-inventory-directories'
 import type { Dirent } from 'node:fs'
+import { SessionObservationRetries } from './session-observation-retries'
 import { dirname, join, relative } from 'node:path'
 import { wslGatedReaddir, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
@@ -35,10 +36,9 @@ export class SessionFileInventory {
   }
   private readonly directories: SessionInventoryDirectories
   private readonly dirty = new Map<string, boolean>()
-  private readonly walks: Walk[] = []
-  private readonly scheduled = new Set<string>()
+  private readonly walks = new Map<string, Walk>()
   private readonly trailing = new Set<string>()
-  private readonly failures = new Set<string>()
+  private readonly failures = new SessionObservationRetries()
   private reconcileAgain = false
   private reconciling = false
   private chooseDirty = true
@@ -56,16 +56,32 @@ export class SessionFileInventory {
 
   get pending(): boolean {
     return (
-      this.walks.length > 0 ||
+      this.walks.size > 0 ||
       this.dirty.size > 0 ||
       this.reconcileAgain ||
-      this.failures.size > 0 ||
-      this.observations.failures.size > 0
+      this.failures.pending ||
+      this.observations.failures.pending
     )
   }
 
+  begin(wake: boolean, args: DiscoverSessionFilesArgs): void {
+    this.failures.begin(wake)
+    this.observations.failures.begin(wake)
+    this.failures.report(args.issues)
+    this.observations.failures.report(args.issues)
+  }
+
+  wakeFailures(): void {
+    this.failures.wake()
+    this.observations.failures.wake()
+  }
+
+  get refused(): boolean {
+    return this.failures.size > 0 || this.observations.failures.size > 0
+  }
+
   get walking(): boolean {
-    return this.walks.length > 0 || this.reconcileAgain
+    return this.walks.size > 0 || this.reconcileAgain
   }
 
   reconcile(): void {
@@ -78,7 +94,11 @@ export class SessionFileInventory {
     this.schedule(this.root, true)
   }
 
-  invalidate(path: string, force = true): void {
+  invalidate(path: string, force = true, wake = true): void {
+    if (wake) {
+      this.failures.wake(path)
+      this.observations.failures.wake(path)
+    }
     if (this.dirty.size >= 16_384) {
       this.reconcile()
       this.reconcileAgain = true
@@ -88,12 +108,12 @@ export class SessionFileInventory {
   }
 
   private schedule(path: string, reconcile = false): void {
-    if (!isInsideSessionRoot(this.root, path) || this.scheduled.has(path)) {
+    if (!isInsideSessionRoot(this.root, path) || this.walks.has(path)) {
       return
     }
+    this.directories.addDirectory(path)
     const rel = relative(this.root, path)
-    this.walks.push({ path, depth: rel ? rel.split(/[\\/]/).length : 0, offset: 0, reconcile })
-    this.scheduled.add(path)
+    this.walks.set(path, { path, depth: rel ? rel.split(/[\\/]/).length : 0, offset: 0, reconcile })
   }
 
   async pollRecent(args: DiscoverSessionFilesArgs, limit: number): Promise<void> {
@@ -112,8 +132,8 @@ export class SessionFileInventory {
     recentLimit: number
   ): Promise<{ changes: SessionFileChange[]; removed: string[]; removedDirectories: string[] }> {
     let consumed = 0
-    while ((this.dirty.size || this.walks.length) && (consumed === 0 || !overdue())) {
-      if (this.dirty.size && (!this.walks.length || this.chooseDirty)) {
+    while ((this.dirty.size || this.walks.size) && (consumed === 0 || !overdue())) {
+      if (this.dirty.size && (!this.walks.size || this.chooseDirty)) {
         this.chooseDirty = false
         await this.drainDirty(args, recentLimit)
         consumed++
@@ -121,7 +141,11 @@ export class SessionFileInventory {
       }
       this.chooseDirty = true
       throwIfAiVaultScanCancelled(args.signal)
-      const walk = this.walks[0]
+      const walk = this.walks.values().next().value!
+      if (!this.failures.mayAttempt(walk.path)) {
+        this.walks.delete(walk.path)
+        continue
+      }
       if (!walk.entries) {
         try {
           walk.entries = await wslGatedReaddir(walk.path, 'scan', args.signal)
@@ -152,11 +176,7 @@ export class SessionFileInventory {
           } else {
             this.issue(walk.path, error, args)
           }
-          const index = this.walks.indexOf(walk)
-          if (index !== -1) {
-            this.walks.splice(index, 1)
-          }
-          this.scheduled.delete(walk.path)
+          this.walks.delete(walk.path)
           continue
         }
       }
@@ -183,15 +203,13 @@ export class SessionFileInventory {
       }
       consumed++
       if (walk.offset === walk.entries.length) {
-        // Children may have been pushed above this frame.
-        this.walks.splice(this.walks.indexOf(walk), 1)
-        this.scheduled.delete(walk.path)
+        this.walks.delete(walk.path)
         if (this.trailing.delete(walk.path)) {
           this.schedule(walk.path)
         }
       }
     }
-    if (!this.walks.length) {
+    if (!this.walks.size) {
       this.reconciling = false
       if (this.reconcileAgain) {
         this.reconcileAgain = false
@@ -227,7 +245,7 @@ export class SessionFileInventory {
         const stat = await wslGatedStat(path, 'scan', args.signal)
         this.failures.delete(path)
         if (stat.isDirectory()) {
-          if (!isInsideSessionRoot(this.root, path) || this.scheduled.has(path)) {
+          if (!isInsideSessionRoot(this.root, path) || this.walks.has(path)) {
             this.trailing.add(path)
           } else {
             this.schedule(path)
@@ -248,35 +266,25 @@ export class SessionFileInventory {
   }
 
   private removeDirectory(path: string): void {
-    for (let index = this.walks.length - 1; index >= 0; index--) {
-      const walk = this.walks[index]
-      if (isInsideSessionRoot(path, walk.path)) {
-        this.walks.splice(index, 1)
-        this.scheduled.delete(walk.path)
-        this.trailing.delete(walk.path)
-      }
-    }
-    for (const failed of this.failures) {
-      if (isInsideSessionRoot(path, failed)) {
-        this.failures.delete(failed)
-      }
-    }
     this.directories.get(dirname(path))?.children.delete(path)
     this.directories.removeTree(
       path,
       (file) => this.observations.forget(file),
       (directory) => {
+        this.walks.delete(directory)
+        this.trailing.delete(directory)
+        this.failures.delete(directory)
         this.removedDirectories.add(directory)
       }
     )
   }
 
   retryFailures(): void {
-    for (const path of this.failures) {
+    for (const [path] of this.failures.runnable()) {
       this.schedule(path, true)
     }
-    for (const [path, force] of this.observations.failures) {
-      this.invalidate(path, force)
+    for (const [path, force] of this.observations.failures.runnable()) {
+      this.invalidate(path, force, false)
     }
   }
 
@@ -285,11 +293,9 @@ export class SessionFileInventory {
   }
 
   private issue(path: string, error: unknown, args: DiscoverSessionFilesArgs) {
-    this.failures.add(path)
-    recordSessionScanIssue(args.issues, {
-      agent: args.agent,
-      path,
-      ...scanIssueTextFromError(error)
-    })
+    const issue = { agent: args.agent, path, ...scanIssueTextFromError(error) }
+    this.directories.addDirectory(path)
+    this.failures.fail(path, false, issue)
+    recordSessionScanIssue(args.issues, issue)
   }
 }

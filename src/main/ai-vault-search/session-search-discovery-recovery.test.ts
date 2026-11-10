@@ -10,6 +10,7 @@ import * as filesystem from '../native-chat/wsl-transcript-fs-access'
 import * as parser from '../ai-vault/parse-cache/session-scanner-parse-cache'
 import * as policy from './session-search-filesystem'
 import { SessionSearchIndexer } from './session-search-indexer'
+import { SessionFileInventory } from '../ai-vault/session-file-inventory'
 import {
   FakeSessionSearchClock,
   openSessionSearchIndexerHarness,
@@ -225,63 +226,309 @@ it.each([40, 400])(
   }
 )
 
-it('observes remote message-only edits through polling without a native notification', async () => {
-  const harness = await openSessionSearchIndexerHarness('ss-polling-content')
-  const clock = new FakeSessionSearchClock()
-  const storage = harness.roots.opencodeStorageDir!
-  const primary = join(storage, 'session', 'project', 'ses_remote.json')
-  const messages = join(storage, 'message', 'ses_remote')
-  const polling = vi.spyOn(policy, 'sessionSearchRequiresPolling').mockResolvedValue(true)
-  const subject = new SessionSearchIndexer({
-    databasePath: harness.databasePath,
-    roots: harness.roots,
-    historyDays: null,
-    clock
-  })
-  try {
-    await mkdir(join(storage, 'session', 'project'), { recursive: true })
-    await mkdir(messages, { recursive: true })
-    await writeFile(primary, JSON.stringify({ id: 'ses_remote', directory: '/repo/remote' }))
-    await writeFile(
-      join(messages, 'msg_1.json'),
-      JSON.stringify({
-        role: 'user',
-        content: [{ type: 'text', text: 'originalremote' }],
-        time: { created: 1777634000000 }
-      })
-    )
-    await subject.start()
-    await writeFile(
-      join(messages, 'msg_2.json'),
-      JSON.stringify({
-        role: 'assistant',
-        content: [{ type: 'text', text: 'remoteinputneedle' }],
-        time: { created: 1777634001000 }
-      })
-    )
-    clock.advance(20000)
-    await subject.settled()
-    expect(
-      harness.read((db) =>
-        db
-          .prepare(
-            "SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'remoteinputneedle'"
-          )
-          .get()
+it.each([200, 2000])(
+  'preserves legacy polling admission with %s message files',
+  async (population) => {
+    const harness = await openSessionSearchIndexerHarness('ss-polling-content')
+    const clock = new FakeSessionSearchClock()
+    const storage = harness.roots.opencodeStorageDir!
+    const primary = join(storage, 'session', 'project', 'ses_remote.json')
+    const messages = join(storage, 'message', 'ses_remote')
+    const polling = vi.spyOn(policy, 'sessionSearchRequiresPolling').mockResolvedValue(true)
+    const subject = new SessionSearchIndexer({
+      databasePath: harness.databasePath,
+      roots: harness.roots,
+      historyDays: null,
+      clock
+    })
+    try {
+      await mkdir(join(storage, 'session', 'project'), { recursive: true })
+      await mkdir(messages, { recursive: true })
+      await writeFile(primary, JSON.stringify({ id: 'ses_remote', directory: '/repo/remote' }))
+      await writeFile(
+        join(messages, 'msg_1.json'),
+        JSON.stringify({
+          role: 'user',
+          content: [{ type: 'text', text: 'originalremote' }],
+          time: { created: 1777634000000 }
+        })
       )
-    ).toEqual({ n: 1 })
-    expect(
-      harness.read((db) =>
-        db
-          .prepare(
-            "SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'originalremote'"
-          )
-          .get()
+      for (let index = 0; index < population; index++) {
+        await writeFile(join(messages, `msg_archived_${index}.json`), '{}')
+      }
+      await subject.start()
+      const stats = vi.spyOn(filesystem, 'wslGatedStat')
+      clock.advance(20000)
+      await subject.settled()
+      expect(stats.mock.calls.filter(([path]) => String(path).startsWith(messages))).toHaveLength(0)
+      stats.mockRestore()
+      await writeFile(
+        join(messages, 'msg_2.json'),
+        JSON.stringify({
+          role: 'assistant',
+          content: [{ type: 'text', text: 'remoteinputneedle' }],
+          time: { created: 1777634001000 }
+        })
       )
-    ).toEqual({ n: 1 })
-  } finally {
-    polling.mockRestore()
-    await subject.close()
-    await harness.cleanup()
+      clock.advance(20000)
+      await subject.settled()
+      expect(
+        harness.read((db) =>
+          db
+            .prepare(
+              "SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'remoteinputneedle'"
+            )
+            .get()
+        )
+      ).toEqual({ n: 0 })
+      await writeFile(
+        primary,
+        JSON.stringify({ id: 'ses_remote', directory: '/repo/remote', title: 'Updated primary' })
+      )
+      clock.advance(20000)
+      await subject.settled()
+      expect(
+        harness.read((db) =>
+          db
+            .prepare(
+              "SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'remoteinputneedle'"
+            )
+            .get()
+        )
+      ).toEqual({ n: 1 })
+      expect(
+        harness.read((db) =>
+          db
+            .prepare(
+              "SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'originalremote'"
+            )
+            .get()
+        )
+      ).toEqual({ n: 1 })
+    } finally {
+      polling.mockRestore()
+      await subject.close()
+      await harness.cleanup()
+    }
   }
-})
+)
+
+it.each(['first-file', 'accepted-file', 'directory'] as const)(
+  'settles a persistently refused %s and recovers after a delivered change',
+  async (kind) => {
+    const harness = await openSessionSearchIndexerHarness('ss-refused-observation')
+    const clock = new FakeSessionSearchClock()
+    const directory = join(harness.claudeProjectDir, 'refused')
+    const path = join(directory, 'history.jsonl')
+    const subject = new SessionSearchIndexer({
+      databasePath: harness.databasePath,
+      roots: harness.roots,
+      historyDays: null,
+      clock,
+      fullSweepEveryCycles: 1000
+    })
+    const stat = filesystem.wslGatedStat,
+      readdir = filesystem.wslGatedReaddir
+    let refused = kind !== 'accepted-file'
+    const statProbe = vi.spyOn(filesystem, 'wslGatedStat').mockImplementation((input, ...rest) => {
+      if (refused && kind !== 'directory' && input === path) {
+        return Promise.reject(Object.assign(new Error('fixture stat refusal'), { code: 'EACCES' }))
+      }
+      return stat(input, ...rest)
+    })
+    const directoryProbe = vi
+      .spyOn(filesystem, 'wslGatedReaddir')
+      .mockImplementation((input, ...rest) => {
+        if (refused && kind === 'directory' && input === directory) {
+          return Promise.reject(
+            Object.assign(new Error('fixture listing refusal'), { code: 'EACCES' })
+          )
+        }
+        return readdir(input, ...rest)
+      })
+    try {
+      await writeClaudeTranscript(path, ['retainedrefusalneedle'], 'refused')
+      await subject.start()
+      if (kind === 'accepted-file') {
+        refused = true
+        notifySessionSearchFileChange(path)
+      }
+      for (let cycle = 0; cycle < 4; cycle++) {
+        clock.advance(20000)
+        await subject.settled()
+      }
+      expect(subject.status().phase).toBe('current')
+      statProbe.mockClear()
+      directoryProbe.mockClear()
+      clock.advance(20000)
+      await subject.settled()
+      expect(statProbe.mock.calls.filter(([input]) => input === path)).toHaveLength(0)
+      expect(directoryProbe.mock.calls.filter(([input]) => input === directory)).toHaveLength(0)
+      refused = false
+      await appendFile(path, `${claudeLines(['awakenedneedle'], 'refused', 20).join('\n')}\n`)
+      notifySessionSearchFileChange(kind === 'directory' ? directory : path)
+      for (let cycle = 0; cycle < 2; cycle++) {
+        clock.advance(20000)
+        await subject.settled()
+      }
+      expect(
+        harness.read((db) =>
+          db
+            .prepare(
+              "SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'awakenedneedle'"
+            )
+            .get()
+        )
+      ).toEqual({ n: 2 })
+      expect(
+        harness.read((db) =>
+          db
+            .prepare(
+              "SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'retainedrefusalneedle'"
+            )
+            .get()
+        )
+      ).toEqual({ n: 2 })
+      expect(subject.status().phase).toBe('current')
+    } finally {
+      statProbe.mockRestore()
+      directoryProbe.mockRestore()
+      await subject.close()
+      await harness.cleanup()
+    }
+  }
+)
+
+it.each([false, true])(
+  'tracks the selected Kimi wire with polling=%s and retains refused input recovery',
+  async (pollingMode) => {
+    const harness = await openSessionSearchIndexerHarness('ss-kimi-selected')
+    const clock = new FakeSessionSearchClock()
+    const root = join(harness.root, 'kimi-home', 'sessions')
+    const directory = join(root, 'workspace', 'session_selected')
+    const path = join(directory, 'state.json')
+    const wire = (id: string) => join(directory, 'agents', id, 'wire.jsonl')
+    const message = (text: string) =>
+      `${JSON.stringify({ type: 'context.append_message', message: { role: 'user', origin: { kind: 'user' }, content: text } })}\n`
+    const polling = vi.spyOn(policy, 'sessionSearchRequiresPolling').mockResolvedValue(pollingMode)
+    const actual = filesystem.wslGatedStat
+    let refused = false
+    const stats = vi.spyOn(filesystem, 'wslGatedStat').mockImplementation((input, ...rest) => {
+      if (refused && input === wire('lead')) {
+        return Promise.reject(
+          Object.assign(new Error('fixture sidecar refusal'), { code: 'EACCES' })
+        )
+      }
+      return actual(input, ...rest)
+    })
+    const subject = new SessionSearchIndexer({
+      databasePath: harness.databasePath,
+      roots: { ...harness.roots, kimiSessionsDir: root },
+      historyDays: null,
+      clock,
+      fullSweepEveryCycles: 1000
+    })
+    const matches = (term: string) =>
+      harness.read((db) =>
+        db.prepare('SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH ?').get(term)
+      )
+    try {
+      await mkdir(join(directory, 'agents', 'lead'), { recursive: true })
+      await mkdir(join(directory, 'agents', 'main'), { recursive: true })
+      await mkdir(join(directory, 'agents', 'next'), { recursive: true })
+      await writeFile(
+        path,
+        JSON.stringify({ title: 'Selected agent', agents: { lead: { type: 'main' } } })
+      )
+      await writeFile(wire('lead'), message('originalselectedneedle'))
+      await writeFile(wire('main'), message('nonselectedneedle'))
+      await subject.start()
+      expect(matches('originalselectedneedle')).toEqual({ n: 1 })
+      expect(matches('nonselectedneedle')).toEqual({ n: 0 })
+      await appendFile(wire('lead'), message('ordinarywireupdate'))
+      notifySessionSearchFileChange(wire('lead'))
+      clock.advance(20000)
+      await subject.settled()
+      expect(matches('ordinarywireupdate')).toEqual({ n: 1 })
+      refused = true
+      notifySessionSearchFileChange(wire('lead'))
+      for (let cycle = 0; cycle < 4; cycle++) {
+        clock.advance(20000)
+        await subject.settled()
+      }
+      expect(subject.status().phase).toBe('current')
+      refused = false
+      await appendFile(wire('lead'), message('wireupdatedneedle'))
+      if (pollingMode) {
+        await subject.reconcile({ full: true })
+      } else {
+        notifySessionSearchFileChange(wire('lead'))
+      }
+      for (let cycle = 0; cycle < 2; cycle++) {
+        clock.advance(20000)
+        await subject.settled()
+      }
+      expect(matches('wireupdatedneedle')).toEqual({ n: 1 })
+      await writeFile(wire('next'), message('newselectionneedle'))
+      await writeFile(
+        path,
+        JSON.stringify({ title: 'Selected agent', agents: { next: { type: 'main' } } })
+      )
+      notifySessionSearchFileChange(path)
+      clock.advance(20000)
+      await subject.settled()
+      expect(matches('newselectionneedle')).toEqual({ n: 1 })
+      expect(matches('originalselectedneedle')).toEqual({ n: 0 })
+      expect(matches('wireupdatedneedle')).toEqual({ n: 0 })
+    } finally {
+      stats.mockRestore()
+      polling.mockRestore()
+      await subject.close()
+      await harness.cleanup()
+    }
+  }
+)
+
+it.each([40, 400])(
+  'cancels an unobserved %s-directory frontier while its sibling completes',
+  async (population) => {
+    const harness = await openSessionSearchIndexerHarness('ss-cancel-frontier')
+    const root = harness.claudeProjectDir
+    const removed = join(root, 'a-removed'),
+      kept = join(root, 'z-kept')
+    await mkdir(kept, { recursive: true })
+    await writeFile(join(kept, 'kept.jsonl'), '{}\n')
+    for (let index = 0; index < population; index++) {
+      await mkdir(join(removed, `child-${index}`), { recursive: true })
+    }
+    const inventory = new SessionFileInventory(root)
+    const args = {
+      rootDir: root,
+      agent: 'claude' as const,
+      limit: Infinity,
+      extensions: ['.jsonl'],
+      issues: []
+    }
+    const listings = vi.spyOn(filesystem, 'wslGatedReaddir')
+    try {
+      await inventory.drain(args, () => true, 12)
+      let quanta = 0
+      await inventory.drain(args, () => ++quanta >= Math.ceil(population / 16), 12)
+      await rm(removed, { recursive: true })
+      inventory.invalidate(removed)
+      listings.mockClear()
+      const found: string[] = []
+      for (let cycle = 0; cycle < population && inventory.pending; cycle++) {
+        found.push(
+          ...(await inventory.drain(args, () => true, 12)).changes.map((change) => change.file.path)
+        )
+      }
+      expect(inventory.pending).toBe(false)
+      expect(found).toContain(join(kept, 'kept.jsonl'))
+      expect(listings.mock.calls.filter(([path]) => path.startsWith(`${removed}/`))).toHaveLength(0)
+    } finally {
+      listings.mockRestore()
+      await harness.cleanup()
+    }
+  }
+)

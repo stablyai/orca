@@ -90,6 +90,7 @@ export type SessionFileCandidate = {
 }
 
 export type SessionFileDiscovery = {
+  sourceOrder?: ReadonlyMap<string, number>
   complete?: boolean
   agent: AiVaultAgent
   rootDir: string
@@ -181,7 +182,10 @@ export type AiVaultAgentSource = {
   extensions: readonly string[]
   filePredicate?: (filePath: string) => boolean
   // Sidecar stats affect freshness and recency; async resolution supports non-derived paths.
-  contentDependencyPath?: (filePath: string) => string | undefined | Promise<string | undefined>
+  contentDependencyPath?: (
+    filePath: string,
+    signal?: AbortSignal
+  ) => string | undefined | Promise<string | undefined>
   // Return false to skip a directory; depth 0 is a child of the root.
   directoryPredicate?: (name: string, depth: number) => boolean
   // Share the per-agent limit across alternate roots for one install.

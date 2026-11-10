@@ -101,3 +101,62 @@ it.each([40, 400])(
     }
   }
 )
+
+it('settles a refused JSONL observer without losing its accepted title and wakes it on delivery', async () => {
+  const harness = await openSessionSearchIndexerHarness('ss-refused-title-index')
+  const clock = new FakeSessionSearchClock()
+  const root = harness.roots.codexSessionsDir!
+  const index = join(dirname(root), 'session_index.jsonl')
+  const fixture = codexFixture()
+  const subject = new SessionSearchIndexer({
+    databasePath: harness.databasePath,
+    roots: { ...harness.roots, kimiSessionsDir: join(harness.root, 'kimi-home', 'sessions') },
+    historyDays: null,
+    clock,
+    fullSweepEveryCycles: 1000
+  })
+  const actual = filesystem.wslGatedStat
+  let refused = false
+  const probe = vi.spyOn(filesystem, 'wslGatedStat').mockImplementation((path, ...rest) => {
+    if (refused && path === index) {
+      return Promise.reject(
+        Object.assign(new Error('fixture refused title index'), { code: 'EACCES' })
+      )
+    }
+    return actual(path, ...rest)
+  })
+  try {
+    await mkdir(root, { recursive: true })
+    await writeFile(join(root, fixture.fileName), `${fixture.seedLines.join('\n')}\n`)
+    await writeFile(
+      index,
+      `${JSON.stringify({ id: CODEX_FIXTURE_SESSION_ID, thread_name: 'Accepted title' })}\n`
+    )
+    await subject.start()
+    refused = true
+    for (let cycle = 0; cycle < 4; cycle++) {
+      clock.advance(20000)
+      await subject.settled()
+    }
+    expect(subject.status().phase).toBe('current')
+    expect(harness.read((db) => db.prepare('SELECT title FROM sessions').get())).toEqual({
+      title: 'Accepted title'
+    })
+    refused = false
+    await appendFile(
+      index,
+      `${JSON.stringify({ id: CODEX_FIXTURE_SESSION_ID, thread_name: 'Recovered title' })}\n`
+    )
+    notifySessionSearchFileChange(index)
+    clock.advance(20000)
+    await subject.settled()
+    expect(harness.read((db) => db.prepare('SELECT title FROM sessions').get())).toEqual({
+      title: 'Recovered title'
+    })
+    expect(subject.status().phase).toBe('current')
+  } finally {
+    probe.mockRestore()
+    await subject.close()
+    await harness.cleanup()
+  }
+})

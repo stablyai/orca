@@ -22,17 +22,19 @@ export async function discoverOpenCodeSessions(args: {
   issues: AiVaultScanIssue[]
   scopePaths?: readonly string[]
   signal?: AbortSignal
+  enumerationComplete?: boolean
 }): Promise<SessionFileDiscovery> {
   const walksScope = scopeWalksAgentFiles('opencode', args.scopePaths)
   const listSqlite = (
     scopePaths?: readonly string[],
     dbPaths = args.dbPaths,
-    limit = args.limitPerAgent
+    limit = args.limitPerAgent,
+    requestIssues = args.issues
   ) =>
     listOpenCodeSqliteSessionsViaWorker({
       dbPaths,
       limit,
-      issues: args.issues,
+      issues: requestIssues,
       scopePaths,
       signal: args.signal
     })
@@ -46,6 +48,7 @@ export async function discoverOpenCodeSessions(args: {
       searchDependencies: [
         {
           path: join(args.storageDir, 'message'),
+          eventsOnly: true,
           fileKey: (path) => sessionIdFromLegacyFilePath(path),
           eventKey: (path) =>
             path.slice(join(args.storageDir, 'message').length + 1).split(/[\\/]/)[0] ?? null
@@ -58,17 +61,19 @@ export async function discoverOpenCodeSessions(args: {
       `opencode:${args.storageDir}`,
       args.dbPaths,
       async (paths, limit) => {
-        const before = args.issues.length
-        const candidates = await listSqlite(undefined, paths, limit)
+        const requestIssues: AiVaultScanIssue[] = []
+        const candidates = await listSqlite(undefined, paths, limit, requestIssues)
+        args.issues.push(...requestIssues)
         return {
           agent: 'opencode',
           rootDir: args.storageDir,
           files: candidates.map((candidate) => candidate.file),
-          complete: !args.issues.slice(before).some((issue) => issue.kind !== 'notice')
+          complete: !requestIssues.some((issue) => issue.kind !== 'notice')
         }
       },
       args.limitPerAgent,
-      args.issues
+      args.issues,
+      args.enumerationComplete
     ),
     walksScope ? listSqlite(args.scopePaths) : undefined
   ])
@@ -92,6 +97,7 @@ export async function discoverOpenCodeSessions(args: {
 
   return {
     agent: 'opencode' as const,
+    sourceOrder: sqliteDiscovery.sourceOrder,
     rootDir: fileDiscovery.rootDir,
     files: [
       ...(currentSessionDiscovery()

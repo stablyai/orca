@@ -1,3 +1,5 @@
+import { currentSessionDiscovery } from '../../session-discovery-context'
+import { wslGatedReadFile } from '../../../native-chat/wsl-transcript-fs-access'
 import { createSessionJsonlDependency } from '../../session-jsonl-dependency'
 import type { SessionDiscoveryDependency } from '../../session-discovery-context'
 import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
@@ -123,14 +125,6 @@ export const kimiSearchDependencies: (root: string) => readonly SessionDiscovery
   root
 ) => [
   {
-    path: root,
-    fileKey: (path) => basename(dirname(path)),
-    eventKey: (path) =>
-      basename(path) === 'wire.jsonl'
-        ? (path.split(/[\\/]/).find((segment) => segment.startsWith('session_')) ?? null)
-        : null
-  },
-  {
     path: dirname(root),
     mode: 'shallow',
     fileKey: (path) => basename(dirname(path)),
@@ -142,3 +136,14 @@ export const kimiSearchDependencies: (root: string) => readonly SessionDiscovery
       )
   }
 ]
+
+export async function kimiSearchWirePath(
+  statePath: string,
+  signal?: AbortSignal
+): Promise<string | undefined> {
+  if (!currentSessionDiscovery()) {
+    return undefined
+  }
+  const value: unknown = JSON.parse(await wslGatedReadFile(statePath, 'utf-8', 'scan', signal))
+  return kimiPrimaryAgentWirePath(statePath, asRecord(value))
+}

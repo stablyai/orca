@@ -105,6 +105,7 @@ export class SessionSearchDiscoveryInventory implements SessionDiscoveryContext 
       this.roots.set(key, root)
     }
     root.args = args
+    root.inventory.begin(this.force || this.maintenance, args)
     if (this.maintenance) {
       root.fallback = await this.watchers.requiresPolling(args.rootDir)
     }
@@ -134,6 +135,9 @@ export class SessionSearchDiscoveryInventory implements SessionDiscoveryContext 
         if (watch.failed && !root.inventory.walking) {
           root.inventory.reconcile()
         }
+        if (!watch.failed && (watch.reconcile || root.identity !== watch.identity)) {
+          root.inventory.wakeFailures()
+        }
         root.identity = watch.identity
         for (const event of watch.events.values()) {
           root.inventory.invalidate(event.path)
@@ -160,6 +164,10 @@ export class SessionSearchDiscoveryInventory implements SessionDiscoveryContext 
       })
     )
     for (const { dependency, observer, watch: auxiliary } of auxiliaries) {
+      observer.begin(
+        this.force || this.maintenance || !!(auxiliary?.reconcile && !auxiliary.failed),
+        args
+      )
       const eventKeys = await observer.changedKeys(auxiliary, args, this.overdue)
       for (const key of eventKeys) {
         for (const path of observer.owners(key)) {
@@ -179,6 +187,14 @@ export class SessionSearchDiscoveryInventory implements SessionDiscoveryContext 
       }
       for (const observer of root.dependencies.values()) {
         observer.addFile(change.file.path)
+      }
+    }
+    for (const observer of root.dependencies.values()) {
+      for (const path of observer.settleDelivered()) {
+        root.inventory.invalidate(path)
+      }
+      if (!root.inventory.walking && !root.inventory.refused) {
+        observer.discardUnowned()
       }
     }
     for (const path of delta.removedDirectories) {
@@ -202,9 +218,17 @@ export class SessionSearchDiscoveryInventory implements SessionDiscoveryContext 
     paths: readonly string[],
     read: (paths: readonly string[], limit: number) => Promise<SessionFileDiscovery>,
     _limit: number,
-    issues: readonly AiVaultScanIssue[]
+    issues: readonly AiVaultScanIssue[],
+    enumerationComplete = true
   ): Promise<SessionFileDiscovery> {
-    return this.containers.discover(key, paths, read, issues, this.owner.signal)
+    return this.containers.discover(
+      key,
+      paths,
+      read,
+      issues,
+      this.owner.signal,
+      enumerationComplete
+    )
   }
 
   async end(): Promise<void> {

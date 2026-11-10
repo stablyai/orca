@@ -8,6 +8,23 @@ export class SessionInventoryDirectories extends Map<string, SessionInventoryDir
     super()
   }
 
+  addDirectory(path: string): void {
+    let child = path
+    while (isInsideSessionRoot(this.root, child)) {
+      if (!this.has(child)) {
+        this.set(child, { files: new Set(), children: new Set() })
+      }
+      if (child === this.root) {
+        return
+      }
+      const parent = dirname(child)
+      const node = this.get(parent) ?? { files: new Set<string>(), children: new Set<string>() }
+      node.children.add(child)
+      this.set(parent, node)
+      child = parent
+    }
+  }
+
   addFile(path: string): void {
     let child = path
     let directory = dirname(child)

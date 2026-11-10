@@ -1,5 +1,6 @@
 import {
   kimiSearchDependencies,
+  kimiSearchWirePath,
   resolveKimiSessionsDir
 } from './scanners/kimi/session-scanner-kimi-paths'
 import * as devin from './scanners/devin/session-scanner-devin-db'
@@ -282,7 +283,8 @@ export const AI_VAULT_AGENT_SOURCES: Record<AiVaultDeletableAgent, AiVaultAgentS
     // Match session state files rather than sibling agent wire transcripts.
     filePredicate: (filePath) =>
       basename(filePath) === 'state.json' && basename(dirname(filePath)).startsWith('session_'),
-    searchDependencies: kimiSearchDependencies
+    searchDependencies: kimiSearchDependencies,
+    contentDependencyPath: kimiSearchWirePath
   },
   muse: {
     rootDirs: (options, wslHomeDirs) =>

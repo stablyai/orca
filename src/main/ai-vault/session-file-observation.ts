@@ -11,12 +11,28 @@ export type SessionFileObservation =
 
 export async function observeSessionFile(
   path: string,
-  contentDependencyPath?: (path: string) => string | undefined | Promise<string | undefined>,
-  signal?: AbortSignal
+  contentDependencyPath?: (
+    path: string,
+    signal?: AbortSignal
+  ) => string | undefined | Promise<string | undefined>,
+  signal?: AbortSignal,
+  knownDependency?: { file: FileWithMtime; path?: string }
 ): Promise<SessionFileObservation> {
   try {
     const fileStat = await wslGatedStat(path, 'scan', signal)
-    const sidecarPath = contentDependencyPath ? await contentDependencyPath(path) : undefined
+    const previous = knownDependency?.file
+    const unchanged =
+      previous &&
+      previous.mtimeMs === fileStat.mtimeMs &&
+      previous.sizeBytes === fileStat.size &&
+      previous.dev === fileStat.dev &&
+      previous.ino === fileStat.ino
+    const sidecarPath =
+      unchanged && knownDependency.path
+        ? knownDependency.path
+        : contentDependencyPath
+          ? await contentDependencyPath(path, signal)
+          : undefined
     const sidecar = sidecarPath ? await observeSessionSidecar(sidecarPath, signal) : 'none'
     return {
       file: {

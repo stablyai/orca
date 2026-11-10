@@ -1,10 +1,11 @@
+import { SESSION_INPUT_FAILURES_BEFORE_HELD_OUT } from '../ai-vault/session-observation-retries'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import type { SessionParseReadRequirement } from '../ai-vault/parse-cache/session-scanner-parse-cache'
 import { requiresWholeRead, type SessionSearchIndexedFile } from './session-search-file-cursor'
 import type { SessionSearchFileRow } from './session-search-store'
 
 // Allow transient rewrite failures before holding out a file at an unchanged mtime.
-export const SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT = 3
+export const SESSION_SEARCH_FAILURES_BEFORE_HELD_OUT = SESSION_INPUT_FAILURES_BEFORE_HELD_OUT
 
 /** any forces a read; whole also discards the session-list resume point to recover missing spans. */
 export type SessionSearchReadDecision = 'skip' | SessionParseReadRequirement

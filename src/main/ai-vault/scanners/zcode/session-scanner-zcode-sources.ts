@@ -37,12 +37,13 @@ export function zcodeDiscoveries(
     const list = (
       scopePaths?: readonly string[],
       paths: readonly string[] = [dbPath],
-      count = limit
+      count = limit,
+      requestIssues = issues
     ) =>
       listZcodeSqliteSessionsViaWorker({
         dbPaths: paths,
         limit: count,
-        issues,
+        issues: requestIssues,
         scopePaths,
         signal: options.signal
       }).then((candidates) => candidates.map((candidate) => candidate.file))
@@ -51,12 +52,14 @@ export function zcodeDiscoveries(
         `zcode:${dbPath}`,
         [dbPath],
         async (paths, count) => {
-          const before = issues.length
+          const requestIssues: AiVaultScanIssue[] = []
+          const files = await list(undefined, paths, count, requestIssues)
+          issues.push(...requestIssues)
           return {
             agent: 'zcode',
             rootDir: dbPath,
-            files: await list(undefined, paths, count),
-            complete: !issues.slice(before).some((issue) => issue.kind !== 'notice')
+            files,
+            complete: !requestIssues.some((issue) => issue.kind !== 'notice')
           }
         },
         limit,
@@ -66,6 +69,7 @@ export function zcodeDiscoveries(
     ])
     return {
       agent: 'zcode' as const,
+      sourceOrder: discovery.sourceOrder,
       rootDir: dbPath,
       files: discovery.files,
       ...(scopeFiles ? { scopeFiles } : {})

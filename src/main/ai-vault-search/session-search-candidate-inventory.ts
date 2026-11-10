@@ -34,6 +34,7 @@ function groupKey(candidate: SessionFileCandidate, root: string): string {
 
 /** Ordinary paths own one record; only competing aliases allocate a group and selected set. */
 export class SessionSearchCandidateInventory {
+  private readonly sourceOrders = new Map<string, ReadonlyMap<string, number>>()
   private readonly groups = new Map<string, Group>()
   private readonly byPath = new Map<string, string | Set<string>>()
   private readonly selected = new Map<string, Set<string>>()
@@ -55,6 +56,14 @@ export class SessionSearchCandidateInventory {
     invalidated: ReadonlySet<string> = new Set(),
     removedCandidates: ReadonlyMap<string, ReadonlySet<string>> = new Map()
   ): Promise<{ candidates: SessionFileCandidate[]; suppressed: Set<string>; forced: Set<string> }> {
+    const scopes = new Set(
+      discoveries.map((discovery) => `${discovery.agent}:${discovery.rootDir}`)
+    )
+    for (const scope of this.sourceOrders.keys()) {
+      if (!scopes.has(scope)) {
+        this.sourceOrders.delete(scope)
+      }
+    }
     const previous = new Map<string, Set<string>>()
     const forced = new Set<string>()
     const touch = (key: string) => {
@@ -97,6 +106,17 @@ export class SessionSearchCandidateInventory {
       }
     }
     for (const discovery of discoveries) {
+      const scope = `${discovery.agent}:${discovery.rootDir}`
+      if (discovery.sourceOrder && this.sourceOrders.get(scope) !== discovery.sourceOrder) {
+        this.sourceOrders.set(scope, discovery.sourceOrder)
+        for (const key of this.selected.keys()) {
+          if (
+            rows(this.groups.get(key)).some((row) => `${row.candidate.agent}:${row.root}` === scope)
+          ) {
+            touch(key)
+          }
+        }
+      }
       for (const candidate of discoveryFileCandidates(discovery, discovery.files, options)) {
         const path = candidate.file.path,
           key = groupKey(candidate, discovery.rootDir)
@@ -159,6 +179,21 @@ export class SessionSearchCandidateInventory {
             )
           )
         : members
+      eligible.sort((left, right) => {
+        const rank = (row: Row) => {
+          const source = splitOpenCodeSqliteCandidate(
+            row.candidate.file.path,
+            row.candidate.agent === 'zcode' ? 'zcode' : 'opencode'
+          )
+          return source
+            ? (this.sourceOrders.get(`${row.candidate.agent}:${row.root}`)?.get(source.dbPath) ??
+                Infinity)
+            : Infinity
+        }
+        return (
+          right.candidate.file.mtimeMs - left.candidate.file.mtimeMs || rank(left) - rank(right)
+        )
+      })
       const ranked = await sessionCandidatesFromDiscoveries(
         eligible.map(({ candidate, root }) => ({
           agent: candidate.agent,
