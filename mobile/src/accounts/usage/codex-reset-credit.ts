@@ -1,20 +1,20 @@
 import {
   buildCodexResetCreditExpectedScope,
   type CodexResetCreditExpectedScope
-} from '../../../src/shared/codex-reset-credit-scope'
+} from '../../../../src/shared/codex-reset-credit-scope'
 import {
   codexResetCreditConsume,
   type MobileCodexResetCreditRpcSender,
   type MobileCodexResetCreditSendScope
 } from './codex-reset-credit-consume-operations'
 import { CodexResetCreditExpectedScopeSchema } from './codex-reset-credit-reply-schema'
-import { randomV4Uuid } from '../platform/random-v4-uuid'
-import { translate } from '../i18n/mobile-i18n'
+import { randomV4Uuid } from '../../platform/random-v4-uuid'
+import { translate } from '../../i18n/mobile-i18n'
 import {
   decodeAccountsSnapshot,
   type AccountsSnapshot,
   type ProviderRateLimits
-} from './accounts-snapshot'
+} from '../accounts-snapshot'
 
 export type CodexResetCreditOutcome = 'reset' | 'nothingToReset' | 'noCredit' | 'alreadyRedeemed'
 

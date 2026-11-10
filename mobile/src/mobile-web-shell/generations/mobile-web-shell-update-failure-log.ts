@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { MobileWebBundleErrorCodeSchema } from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
+import { MobileWebBundleErrorCodeSchema } from '../../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
 import { joinUri } from './generation-cache-uri'
 import type { GenerationFileSystem } from './generation-store-file-system'
 import {
@@ -7,7 +7,7 @@ import {
   MOBILE_WEB_SHELL_UPDATE_FAILURE_REASONS,
   MOBILE_WEB_SHELL_UPDATE_FAILURE_WALLS,
   type MobileWebShellUpdateFailure
-} from './mobile-web-shell-update-failure'
+} from '../mobile-web-shell-update-failure'
 
 // Keep enough history to distinguish one bad download from repeated failures without growing diagnostic storage.
 export const MAX_UPDATE_FAILURES_PER_HOST = 5

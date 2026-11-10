@@ -2,7 +2,7 @@ import {
   MobileWebBundleManifestReadSchema,
   shellDownloadedAssets,
   type MobileWebBundleManifestRead
-} from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
+} from '../../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import { MANIFEST_FILE_NAME } from './generation-asset-path'
 import { joinUri } from './generation-cache-uri'
 import { parseJson } from './generation-host-order'

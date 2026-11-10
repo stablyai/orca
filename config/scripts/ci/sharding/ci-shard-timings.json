@@ -7850,7 +7850,6 @@
       "tests/e2e/agent-launch-cli.unit.test.ts": 2379,
       "tests/e2e/agent-launch-setup-choice.unit.test.ts": 2657,
       "tests/e2e/agent-model-catalog-renderer-cache.unit.test.ts": 2029,
-      "tests/e2e/ai-vault-account-stream.unit.test.ts": 4506,
       "tests/e2e/ai-vault-manual-name-clear.unit.test.ts": 21206,
       "tests/e2e/automation-chat-reopen.unit.test.ts": 6262,
 

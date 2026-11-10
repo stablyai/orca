@@ -1,8 +1,8 @@
-import type { MobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
+import type { MobileWebBundleManifestRead } from '../../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import type {
   MobileWebBundleFetchResult,
   MobileWebBundleReusableAssets
-} from '../transport/web-bundle/mobile-web-bundle-fetch'
+} from '../../transport/web-bundle/mobile-web-bundle-fetch'
 import { joinUri } from './generation-cache-uri'
 import { createGenerationHostOrder, withHostLast } from './generation-host-order'
 import { createDeferredCommits } from './generation-deferred-commits'
@@ -18,7 +18,7 @@ import {
   listGenerationHostDirectories
 } from './generation-host-directories'
 import { isHostCacheKey } from './host-cache-key'
-import type { MobileWebShellUpdateFailure } from './mobile-web-shell-update-failure'
+import type { MobileWebShellUpdateFailure } from '../mobile-web-shell-update-failure'
 import {
   forgetHostUpdateFailuresIn,
   readUpdateFailureLog,
