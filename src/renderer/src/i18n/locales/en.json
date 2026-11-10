@@ -2291,7 +2291,7 @@
         "hostNotReachable": "Host not reachable",
         "failedAnnouncement": "Couldn't forward :{{value0}}. {{value1}}",
         "busyInUseHere": "localhost:{{value0}} in use on this computer",
-        "listenFailedRetry": "Couldn't listen on this computer. Retry or pick another port"
+        "listenFailedTryAgain": "Couldn't listen on this computer. Try again or pick another port."
       },
       "orcaCloud": {
         "workspaceActions": {
@@ -7934,13 +7934,11 @@
           "title": "Let {{editor}} find your cloud workspaces?",
           "body": "{{editor}} connects through ~/.ssh/config. Orca will add this line at the top. Nothing else in the file changes.",
           "cancel": "Cancel",
-          "confirm": "Add Line and Open"
+          "addLineAndOpen": "Add line and open"
         },
         "CloudSsh": {
           "noEditors": "Install VS Code or Cursor to open over SSH.",
           "menu": "SSH",
-          "copyCommand": "Copy SSH Command",
-          "revoke": "Revoke SSH Access",
           "firstUseHint": "Your first connection adds this computer’s key.",
           "unsupportedImage": "SSH isn’t available here",
           "unsupportedImageDetail": "This workspace was created before Orca Cloud supported SSH. New workspaces have it.",
@@ -7953,7 +7951,6 @@
           "failed": "Couldn’t set up SSH",
           "forwardFailedDetail": "Orca couldn’t reach the workspace. Check your connection and try again.",
           "failedDetail": "Orca Cloud didn’t answer. Try again in a moment.",
-          "retry": "Retry",
           "settingUp": "Setting up SSH…",
           "waking": "Waking the workspace…",
           "addingKey": "Adding this computer’s key…",
@@ -7969,7 +7966,10 @@
           "includeRemoveFailed": "Couldn’t edit ~/.ssh/config",
           "includeRemoved": "Removed from ~/.ssh/config",
           "includeRemovedDetail": "Editors no longer see Orca Cloud hosts. Opening one in an editor asks again.",
-          "revokedUnreachableDetail": "Deleted here. Orca couldn’t reach the workspace, so its copy is removed the next time this computer connects."
+          "revokedUnreachableDetail": "Deleted here. Orca couldn’t reach the workspace, so its copy is removed the next time this computer connects.",
+          "copySshCommand": "Copy SSH command",
+          "revokeSshAccess": "Revoke SSH access",
+          "tryAgain": "Try again"
         },
         "teamSwitcher": {
           "create": "Create a team…",
@@ -14240,24 +14240,24 @@
         "ports": {
           "autoForward": "Auto-forward ports",
           "exclusive": "Same port number only",
-          "exclusiveDescription": "If the port is taken here, skip it instead of remapping.",
           "range": "Auto-forward port range",
           "rangeDescription": "Ports outside this range aren't auto-forwarded.",
           "rangeStart": "Lowest port",
           "rangeEnd": "Highest port",
           "notify": "Notify when a port is forwarded",
           "search": {
-            "title": "Port Forwarding",
             "ports": "ports",
             "forward": "forward",
             "localhost": "localhost",
             "tunnel": "tunnel",
             "devServer": "dev server",
-            "descriptionSandboxes": "Forward dev servers in sandboxes and on remote hosts to this computer."
+            "descriptionSandboxes": "Forward dev servers in sandboxes and on remote hosts to this computer.",
+            "titleSentenceCase": "Port forwarding"
           },
           "rangeInvalid": "\"{{value0}}\" isn't a usable port. Use a port from 1 to 65535, lowest first.",
           "needsAutoForward": "Turn on Auto-forward ports to change this.",
-          "autoForwardDescriptionSandboxes": "Forward dev servers in sandboxes and on remote hosts to this computer."
+          "autoForwardDescriptionSandboxes": "Forward dev servers in sandboxes and on remote hosts to this computer.",
+          "exclusiveDescriptionInUse": "If the port is in use on this computer, skip it instead of remapping."
         },
         "orcaCloudPredictiveWake": {
           "title": "Wake sleeping workspaces early",
@@ -14434,7 +14434,7 @@
             "invalid": "Orca Cloud rejected that request. Check the fields and try again.",
             "rateLimitedFor": "Too many requests. Try again in {{seconds}} seconds.",
             "rateLimited": "Too many requests. Try again in a minute.",
-            "network": "Couldn’t reach Orca Cloud, so nothing was changed. Check your connection and try again.",
+            "network": "Couldn’t reach Orca Cloud. Check your connection and try again.",
             "invalidResponse": "Orca Cloud sent an answer this version of Orca does not understand. Update Orca and try again.",
             "server": "Orca Cloud had a problem and nothing was changed. Try again in a moment."
           },
@@ -14614,7 +14614,7 @@
             "manual": "Manual"
           },
           "runError": {
-            "startFailed": "The workspace couldn’t start. Nothing was charged.",
+            "startFailed": "The workspace couldn’t start, so nothing was charged.",
             "workspaceLost": "The workspace went to sleep or was deleted before the run finished.",
             "postFailed": "The run finished, but Orca couldn’t post the results.",
             "queueExpired": "The run waited too long to start and was skipped.",
@@ -14815,7 +14815,6 @@
             "e740075063": "Remove",
             "b3548e59f4": "Edit",
             "fe2730d050": "Copy {{value0}}",
-            "b22b128b2a": "Open in Browser",
             "75aeea592f": "Open {{value0}} in Browser",
             "de349d4560": "opens {{value0}}",
             "907eb53ed2": "Forward a Port",
@@ -14836,10 +14835,6 @@
             "729be0b4e5": "Kind",
             "0f1d8cd324": "Bind",
             "1c1c18cefc": "Address",
-            "f9528da632": "Stop Process",
-            "a223459512": "Show Details",
-            "bdac206faf": "Copy Details",
-            "792baeb7ed": "Copy Address",
             "d41a8241ec": "Port",
             "a2a9fc6899": "No local ports detected",
             "f59c783b7a": "Port scan unavailable on {{value0}}: {{value1}}",
@@ -14874,7 +14869,13 @@
             "localPortRequiresPrivileges": "Port {{port}} requires elevated privileges. Use a local port ≥ 1024.",
             "remoteEmpty": "No ports yet. Dev servers started here are forwarded to localhost.",
             "remoteEmptyOff": "No ports yet. Auto-forward is off.",
-            "turnOnInSettings": "Turn on in Ports settings"
+            "turnOnInSettings": "Turn on in Ports settings",
+            "openInBrowser": "Open in browser",
+            "moreActionsForPort": "More actions for port {{port}}",
+            "stopProcess": "Stop process",
+            "copyAddress": "Copy address",
+            "copyDetails": "Copy details",
+            "showDetails": "Show details"
           },
           "Search": {
             "1abfb25a66": "Type to search in files",
@@ -16208,7 +16209,6 @@
           "RuntimePortForward": {
             "pending": "Forwarding…",
             "useAnother": "Use another port",
-            "retry": "Retry",
             "forward": "Forward to localhost",
             "copied": "Copied {{value0}}",
             "localAddress": "localhost:{{value0}}",
@@ -16222,7 +16222,8 @@
             "stopAndSkip": "Stop and don't auto-forward :{{value0}}",
             "sandboxAsleep": "Sandbox is asleep",
             "remappedInUseOnComputer": "({{value0}} in use on this computer)",
-            "wake": "Wake"
+            "wake": "Wake",
+            "tryAgain": "Try again"
           },
           "CloudShare": {
             "alreadyShared": "Already shared",
@@ -16274,7 +16275,6 @@
             "portInvalid": "Enter a port from 1 to 65535. Ports 2222, 6768 and 6769 are used by Orca.",
             "portLabel": "Port",
             "publicNote": "Anyone with this link can open port {{value0}} without signing in. Turn it off anytime in Ports → Shared links.",
-            "retry": "Retry",
             "revokeFailed": "Couldn’t turn it off. Try again.",
             "revoked": "Turned off",
             "revokedAnnouncement": "Link turned off",
@@ -16290,7 +16290,9 @@
             "turnOff": "Turn off",
             "turnOffLink": "Turn off link",
             "wakeHint": "Otherwise the link works only while the workspace is awake. Wake time counts toward your usage.",
-            "wakeLabel": "Let visitors wake the workspace"
+            "wakeLabel": "Let visitors wake the workspace",
+            "tryAgain": "Try again",
+            "sharePortLabel": "Share port {{port}}…"
           }
         }
       },
@@ -26259,7 +26261,6 @@
     "tryAgain": "Try again",
     "startAnyway": "Start without signing in",
     "errors": {
-      "portBusy": "Port {{port}} is busy on this computer.",
       "portBusyDetail": "Another {{agent}} sign-in is probably open. Close it and try again.",
       "timeout": "Sign-in timed out.",
       "timeoutDetail": "Nothing came back from the browser in time.",
@@ -26267,7 +26268,8 @@
       "declinedDetail": "{{site}} reported that the sign-in was declined.",
       "offline": "Can't reach {{host}}.",
       "offlineDetail": "Your prompt stays here until it reconnects.",
-      "failed": "Sign-in failed."
+      "failed": "Sign-in failed.",
+      "portInUse": "Port {{port}} is in use on this computer."
     },
     "cancelledToast": "Sign-in cancelled. The agent did not start.",
     "copyPrompt": "Copy prompt",

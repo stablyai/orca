@@ -262,7 +262,7 @@ export const error = defineFixture({
       routines={{
         status: 'error',
         code: 'network',
-        message: 'Could not reach Orca Cloud. Check your connection and try again.'
+        message: 'Couldn’t reach Orca Cloud. Check your connection and try again.'
       }}
     />
   )

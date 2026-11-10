@@ -218,12 +218,18 @@ export function ShareLinkRow({
       data-state={state}
     >
       <div className="flex items-center gap-2">
-        <div className={cn('flex min-w-0 flex-1 items-center gap-2', !active && 'opacity-60')}>
-          <div className="flex size-5 shrink-0 items-center justify-center text-muted-foreground">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          {/* Dim the icon and port only: the Expired / Turned off status keeps full muted contrast. */}
+          <div
+            className={cn(
+              'flex size-5 shrink-0 items-center justify-center text-muted-foreground',
+              !active && 'opacity-60'
+            )}
+          >
             <ShareAudienceIcon audience={share.audience} />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 items-center gap-1.5">
+            <div className={cn('flex min-w-0 items-center gap-1.5', !active && 'opacity-60')}>
               {showPort && (
                 <span className="text-xs font-medium text-foreground">:{share.port}</span>
               )}

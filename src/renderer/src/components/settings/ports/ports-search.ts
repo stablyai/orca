@@ -4,7 +4,7 @@ import { translateSearchKeyword } from '../search/settings-search-keywords'
 
 export const getPortsPaneSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.ports.search.title', 'Port Forwarding'),
+    title: translate('auto.components.settings.ports.search.titleSentenceCase', 'Port forwarding'),
     description: translate(
       'auto.components.settings.ports.search.descriptionSandboxes',
       'Forward dev servers in sandboxes and on remote hosts to this computer.'

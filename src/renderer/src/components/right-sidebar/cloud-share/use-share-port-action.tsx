@@ -1,7 +1,9 @@
 import React, { useCallback, useState } from 'react'
 import { Share2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
 import { ContextMenuItem } from '@/components/ui/context-menu'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import {
@@ -142,5 +144,43 @@ export function SharePortMenuItem({
       <Share2 size={13} />
       {t('auto.components.right.sidebar.CloudShare.menuShare', 'Share…')}
     </ContextMenuItem>
+  )
+}
+
+/** "Share…" as a port row hover/focus button, so sharing doesn't need a right-click. */
+export function SharePortButton({
+  port,
+  action
+}: {
+  port: number
+  action: Pick<SharePortAction, 'available' | 'openShareDialog'>
+}): React.JSX.Element | null {
+  const t = useTranslate()
+  if (!action.available || SHARE_RESERVED_PORTS.includes(port)) {
+    return null
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="text-muted-foreground hover:text-foreground"
+          onClick={() => action.openShareDialog(port)}
+          aria-label={t(
+            'auto.components.right.sidebar.CloudShare.sharePortLabel',
+            'Share port {{port}}…',
+            { port }
+          )}
+          aria-haspopup="dialog"
+        >
+          <Share2 size={13} />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {t('auto.components.right.sidebar.CloudShare.menuShare', 'Share…')}
+      </TooltipContent>
+    </Tooltip>
   )
 }

@@ -30,6 +30,7 @@ import {
   openCloudWorkspace
 } from './open-cloud-workspace'
 import { useCloudWorkspaces, useCloudWorkspacesAvailable } from './use-cloud-workspaces'
+import { useOrcaAccountKey } from '@/hooks/use-orca-account-key'
 
 const INITIAL_FILTERS: CloudWorkspacesFilters = {
   scope: 'team',
@@ -82,7 +83,14 @@ export function CloudWorkspacesHome({
   const available = useCloudWorkspacesAvailable()
   const orgId = cloud?.activeOrgId
   const selfId = cloud?.userId ?? null
+  const account = useOrcaAccountKey()
   const [filters, setFilters] = useState(INITIAL_FILTERS)
+  // Owner and repo filters name the previous team's people and repos; a team switch starts over.
+  const [filtersAccount, setFiltersAccount] = useState(account)
+  if (filtersAccount !== account) {
+    setFiltersAccount(account)
+    setFilters(INITIAL_FILTERS)
+  }
   const [opening, setOpening] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const [sectionFor, setSectionFor] = useState<CloudWorkspace | null>(null)
@@ -92,7 +100,8 @@ export function CloudWorkspacesHome({
   const scope = orgId ? filters.scope : 'mine'
   const { state, stale, reading, refresh, replace } = useCloudWorkspaces(
     { scope, archived: filters.archived ? 'only' : 'exclude' },
-    Boolean(cloud)
+    Boolean(cloud),
+    account
   )
 
   // Relative "last active" times tick while the window is visible; hidden windows skip the work.
