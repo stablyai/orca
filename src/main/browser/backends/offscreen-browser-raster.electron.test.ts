@@ -2,7 +2,7 @@ import { runProcess } from '@orca/process-host'
 import { resolve } from 'node:path'
 import { expect, it } from 'vitest'
 
-// Let the child's 35 s deadline report a failure before Vitest tears down its parent.
+// Let the Electron launcher's 35 s deadline report before Vitest ends its parent.
 it('streams requested density, capped fallback frames and CSS-coordinate clicks', async () => {
   const result = await runProcess({
     program: process.execPath,

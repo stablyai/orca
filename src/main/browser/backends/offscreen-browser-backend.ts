@@ -49,8 +49,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
 
     // Keep the output-scale change opt-in until broader host/client coverage is verified.
     const rasterScaleFactor = Number(process.env.ORCA_EXPERIMENTAL_BROWSER_RASTER_SCALE)
-    const useOffscreenRaster =
-      Number.isFinite(rasterScaleFactor) && rasterScaleFactor >= 1 && rasterScaleFactor <= 3
+    const useOffscreenRaster = rasterScaleFactor >= 1 && rasterScaleFactor <= 3
     const win = new BrowserWindow({
       show: false,
       frame: !useOffscreenRaster,

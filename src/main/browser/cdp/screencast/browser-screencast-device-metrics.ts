@@ -20,45 +20,24 @@ export function createBrowserScreencastDeviceMetrics(
 ): BrowserScreencastDeviceMetrics {
   let deviceMetricsOverridden = false
   let metricsGeneration = 0
-  let originalSurfaceSize: { width: number; height: number } | null = null
+  const surface = webContents.isOffscreen() ? BrowserWindow.fromWebContents(webContents) : null
+  let originalSurfaceSize: [number, number] | null = null
 
-  const resizeOffscreenSurface = (width: number, height: number): void => {
-    if (webContents.isDestroyed() || webContents.isCrashed() || !webContents.isOffscreen?.()) {
-      return
-    }
-    const owner = BrowserWindow.fromWebContents(webContents)
-    if (!owner || owner.isDestroyed()) {
-      return
-    }
-    const [currentWidth, currentHeight] = owner.getContentSize()
-    if (!originalSurfaceSize) {
-      originalSurfaceSize = { width: currentWidth, height: currentHeight }
-    }
-    if (currentWidth !== width || currentHeight !== height) {
-      // CDP emulation alone does not resize the physical surface feeding live frames.
-      owner.setContentSize(width, height)
-    }
-  }
-
-  const restoreOffscreenSurface = (): void => {
-    const original = originalSurfaceSize
-    originalSurfaceSize = null
-    if (!original || webContents.isDestroyed() || webContents.isCrashed()) {
-      return
-    }
-    const owner = BrowserWindow.fromWebContents(webContents)
-    if (owner && !owner.isDestroyed()) {
-      owner.setContentSize(original.width, original.height)
-    }
-  }
   const sendViewportCommand = (method: string, params: Record<string, unknown>): Promise<unknown> =>
     runDebuggerCommandWithTimeout(method, () => sendGuestCdpCommand(webContents, method, params))
 
   const clearDeviceMetricsOverride = async (): Promise<void> => {
     metricsGeneration += 1
-    restoreOffscreenSurface()
+    const original = originalSurfaceSize
+    originalSurfaceSize = null
     deviceMetricsOverridden = false
-    if (webContents.isDestroyed() || webContents.isCrashed() || !dbg.isAttached()) {
+    if (webContents.isDestroyed() || webContents.isCrashed()) {
+      return
+    }
+    if (original && surface) {
+      surface.setContentSize(...original)
+    }
+    if (!dbg.isAttached()) {
       return
     }
     await sendDebuggerCommand(dbg, 'Emulation.clearDeviceMetricsOverride')
@@ -75,7 +54,14 @@ export function createBrowserScreencastDeviceMetrics(
     }
     const deviceScaleFactor = positiveNumber(options.deviceScaleFactor) ?? 1
     const generation = metricsGeneration
-    resizeOffscreenSurface(viewportWidth, viewportHeight)
+    if (surface && !webContents.isDestroyed() && !webContents.isCrashed()) {
+      const currentSize = surface.getContentSize()
+      originalSurfaceSize ??= currentSize
+      if (currentSize[0] !== viewportWidth || currentSize[1] !== viewportHeight) {
+        // CDP emulation alone does not resize the physical surface feeding live frames.
+        surface.setContentSize(viewportWidth, viewportHeight)
+      }
+    }
     // Navigation can drop emulation; restore client viewport metrics before fallback captures.
     await sendViewportCommand('Emulation.setDeviceMetricsOverride', {
       width: viewportWidth,
@@ -84,7 +70,7 @@ export function createBrowserScreencastDeviceMetrics(
       mobile: options.mobile === true
     })
     // A late CDP reply must not reclaim a surface released during debugger detach.
-    if (generation !== metricsGeneration || !dbg.isAttached()) {
+    if (generation !== metricsGeneration) {
       return
     }
     deviceMetricsOverridden = true

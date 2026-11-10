@@ -170,7 +170,7 @@ export async function startBrowserScreencast(
   const handleDetach = (): void => {
     // Close before notifying owners that may call stop in response.
     finish()
-    void deviceMetrics.clear().catch(() => {})
+    void deviceMetrics.clear()
     options.onError?.('Browser debugger detached while streaming.')
   }
 

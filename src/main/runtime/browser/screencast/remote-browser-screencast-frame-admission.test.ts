@@ -1,5 +1,4 @@
 import { Buffer } from 'node:buffer'
-import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
@@ -13,24 +12,7 @@ import { E2EEChannel } from '../../rpc/e2ee-channel'
 import { sendRemoteBrowserScreencastFrame } from './remote-browser-screencast-frame-admission'
 import type { RpcBinarySender } from '../../rpc/rpc-binary-sender'
 
-function createMockWebContents() {
-  let attached = false
-  const dbg = new EventEmitter() as EventEmitter & {
-    isAttached: ReturnType<typeof vi.fn>
-    attach: ReturnType<typeof vi.fn>
-    detach: ReturnType<typeof vi.fn>
-    sendCommand: ReturnType<typeof vi.fn>
-  }
-  dbg.isAttached = vi.fn(() => attached)
-  dbg.attach = vi.fn(() => {
-    attached = true
-  })
-  dbg.detach = vi.fn(() => {
-    attached = false
-  })
-  dbg.sendCommand = vi.fn(async () => ({}))
-  return { isDestroyed: vi.fn(() => false), debugger: dbg }
-}
+import { createMockScreencastWebContents as createMockWebContents } from '../../../browser/cdp/screencast/browser-screencast-web-contents-test-double'
 
 // Use real E2EE admission to catch oversized frames before they close the transport with 1013.
 function createRuntimeBinarySender() {

@@ -1,28 +1,10 @@
 import { Buffer } from 'node:buffer'
-import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 
 import { createBrowserScreencastMessageHandler } from './browser-screencast-cdp-events'
 import { startBrowserScreencast } from './browser-screencast-stream'
 
-function createWebContents() {
-  let attached = false
-  const debuggerApi = new EventEmitter() as EventEmitter & {
-    isAttached: ReturnType<typeof vi.fn>
-    attach: ReturnType<typeof vi.fn>
-    detach: ReturnType<typeof vi.fn>
-    sendCommand: ReturnType<typeof vi.fn>
-  }
-  debuggerApi.isAttached = vi.fn(() => attached)
-  debuggerApi.attach = vi.fn(() => {
-    attached = true
-  })
-  debuggerApi.detach = vi.fn(() => {
-    attached = false
-  })
-  debuggerApi.sendCommand = vi.fn(async () => ({}))
-  return { isDestroyed: vi.fn(() => false), isCrashed: vi.fn(() => false), debugger: debuggerApi }
-}
+import { createMockScreencastWebContents as createWebContents } from './browser-screencast-web-contents-test-double'
 
 describe('browser screencast lifecycle', () => {
   it('restarts the screencast and retimes the pacer when the shared frame budget changes', async () => {
