@@ -25,6 +25,21 @@ function plainTerminalHandle(ctx: RpcContext): string | null {
 }
 
 /**
+ * The terminal an agent's own CLI call came from, as orcad attests it: a token-launched terminal
+ * proves its launch token, a plain one must match handle and pane key. Never read from params.
+ */
+export function verifiedCallerTerminalHandle(ctx: RpcContext): string | null {
+  // Agents reach orcad through the local CLI only; paired devices are people, not agents.
+  if (ctx.caller?.kind !== 'local-cli') {
+    return null
+  }
+  const authority = ctx.runtime.verifyOrchestrationCompatibilityCaller(
+    ctx.orchestrationCompatibilityEvidence
+  )
+  return authority?.terminalHandle ?? plainTerminalHandle(ctx)
+}
+
+/**
  * Who drove me? For an agent's own tools: the caller is the terminal or structured session orcad
  * attests from its launch evidence, so one agent can never read (or claim) another agent's sender.
  */
@@ -40,10 +55,7 @@ function turnSender(ctx: RpcContext): TurnSenderResult {
       sender: drivingDeviceFor(agentSessionSenderKey(sessionId))
     }
   }
-  const authority = ctx.runtime.verifyOrchestrationCompatibilityCaller(
-    ctx.orchestrationCompatibilityEvidence
-  )
-  const handle = authority?.terminalHandle ?? plainTerminalHandle(ctx)
+  const handle = verifiedCallerTerminalHandle(ctx)
   if (!handle) {
     return { caller: null, sender: null }
   }

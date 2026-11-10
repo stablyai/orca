@@ -93,6 +93,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  cloud messages            List or show messages sent to a cloud workspace',
   '  cloud sessions            List agent sessions in a cloud workspace',
   '  cloud projects list       List Orca Cloud projects',
+  '  secret request            Ask the person for a secret this workspace needs',
   '',
   'Automations:',
   '  automations list          List scheduled Orca automations',
