@@ -160,6 +160,10 @@ export function registerCloudSecretsHandlers(userDataPath: string): void {
     if (nameError) {
       return { ok: false, error: nameError }
     }
+    // Only keys the workspace gets as a stand-in: anything else would sit there in full.
+    if (!cloudSecretSwapped(envName)) {
+      return { ok: false, error: 'not_swappable' }
+    }
     const value = await desktopKeyValueForCloud(agent, envName)
     if (!value) {
       return { ok: false, error: 'not_found' }

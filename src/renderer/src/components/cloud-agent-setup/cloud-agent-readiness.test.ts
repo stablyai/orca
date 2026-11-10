@@ -52,3 +52,31 @@ describe('offerableDesktopKeys', () => {
     ).toEqual([{ id: 'k-0002', agent: 'gemini', envName: 'GEMINI_API_KEY', hint: '0002' }])
   })
 })
+
+describe('offerableDesktopKeys: only keys a workspace gets as a stand-in', () => {
+  it('never offers a key the proxy cannot swap (it would sit on the VM in full)', () => {
+    const all = { kind: 'all' } as const
+    expect(
+      offerableDesktopKeys(
+        [
+          {
+            id: 'a',
+            agent: 'claude',
+            envName: 'AWS_BEARER_TOKEN_BEDROCK',
+            hint: 'aaaa',
+            hostScope: all
+          },
+          {
+            id: 'b',
+            agent: 'opencode',
+            envName: 'OPENROUTER_API_KEY',
+            hint: 'bbbb',
+            hostScope: all
+          },
+          { id: 'c', agent: 'cursor', envName: 'CURSOR_API_KEY', hint: 'cccc', hostScope: all }
+        ],
+        []
+      ).map((key) => key.envName)
+    ).toEqual(['CURSOR_API_KEY'])
+  })
+})

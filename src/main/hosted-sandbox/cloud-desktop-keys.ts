@@ -2,7 +2,13 @@
 // host those keys ride each agent launch as plain env. An Orca Cloud VM must never hold a model key,
 // so they are not sent there at all: the user saves a key as a personal Cloud secret instead (one key
 // per click), and the VM then gets a placeholder the egress proxy swaps.
-import { resolveAgentApiKeyLaunchEnv } from '../agent-api-keys/agent-api-key-launch-env'
+import {
+  resolveAgentApiKeyLaunchEnv,
+  withAgentApiKeyLaunchEnv
+} from '../agent-api-keys/agent-api-key-launch-env'
+import { isCloudSshAlias } from '../cloud-ssh/cloud-ssh-config'
+import { getSshTargetRegistryStore } from '../ssh/targets/ssh-target-registry'
+import { getConnectionExecutionHostId } from '../../shared/execution-host'
 import { withAgentApiKeyRuntimeEnv } from '../agent-api-keys/agent-api-key-runtime-call'
 import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
@@ -77,4 +83,35 @@ export async function withHostAgentApiKeyEnv(
     return params
   }
   return withAgentApiKeyRuntimeEnv(environmentId, method, params, readStatus)
+}
+
+/**
+ * An SSH target that reaches an Orca Cloud workspace (`orca ssh` writes `orca-*` aliases that proxy
+ * through the Orca CLI; OpenSSH config Includes can surface them as targets).
+ */
+export function isOrcaCloudSshConnection(connectionId: string | null | undefined): boolean {
+  if (!connectionId) {
+    return false
+  }
+  const target = getSshTargetRegistryStore()?.getSshTarget(connectionId)
+  if (!target) {
+    return false
+  }
+  return (
+    [target.configHost, target.host, target.label].some(
+      (value) => value !== undefined && isCloudSshAlias(value)
+    ) || /\bssh-proxy\b/.test(target.proxyCommand ?? '')
+  )
+}
+
+/** A local or SSH launch env with this computer's Agent API Keys, except over SSH into an Orca Cloud workspace. */
+export async function withHostAgentApiKeyLaunchEnv(
+  env: Record<string, string> | undefined,
+  agent: TuiAgent | undefined,
+  connectionId: string | null | undefined
+): Promise<Record<string, string> | undefined> {
+  if (isOrcaCloudSshConnection(connectionId)) {
+    return env
+  }
+  return withAgentApiKeyLaunchEnv(env, agent, getConnectionExecutionHostId(connectionId))
 }

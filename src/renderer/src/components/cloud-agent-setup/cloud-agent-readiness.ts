@@ -1,4 +1,5 @@
 import type { AgentApiKeySummary } from '../../../../shared/agent-api-keys/agent-api-key-catalog'
+import { cloudSecretSwapped } from '../../../../shared/cloud-secrets/cloud-secret-rules'
 import type { CloudEffectiveSecret } from '../../../../shared/cloud-secrets/cloud-secrets-wire'
 
 export type CloudSetupAgent = 'claude' | 'codex'
@@ -58,7 +59,13 @@ export function offerableDesktopKeys(
   const seen = new Set<string>()
   const offers: CloudOfferableDesktopKey[] = []
   for (const key of desktopKeys) {
-    if (key.hostScope.kind !== 'all' || inCloud.has(key.envName) || seen.has(key.envName)) {
+    // Only keys a workspace gets as a stand-in; anything else would sit on the VM in full.
+    if (
+      key.hostScope.kind !== 'all' ||
+      !cloudSecretSwapped(key.envName) ||
+      inCloud.has(key.envName) ||
+      seen.has(key.envName)
+    ) {
       continue
     }
     seen.add(key.envName)

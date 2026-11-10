@@ -21,7 +21,18 @@ vi.mock('../agent-api-keys/agent-api-key-launch-env', () => ({
   resolveAgentApiKeyLaunchEnv: async (...args: unknown[]) => {
     launchCalls.push(args)
     return launchEnv
+  },
+  withAgentApiKeyLaunchEnv: async (env: Record<string, string> | undefined, ...args: unknown[]) => {
+    launchCalls.push(args)
+    return { ...env, ...launchEnv }
   }
+}))
+const sshTargets = new Map<
+  string,
+  { host: string; label: string; configHost?: string; proxyCommand?: string }
+>()
+vi.mock('../ssh/targets/ssh-target-registry', () => ({
+  getSshTargetRegistryStore: () => ({ getSshTarget: (id: string) => sshTargets.get(id) })
 }))
 
 const { desktopKeyValueForCloud, isOrcaCloudRuntimeEnvironment } =
@@ -32,6 +43,7 @@ beforeEach(() => {
   environments.clear()
   launchEnv = {}
   launchCalls.length = 0
+  sshTargets.clear()
 })
 
 describe('isOrcaCloudRuntimeEnvironment', () => {
@@ -88,5 +100,33 @@ describe('withHostAgentApiKeyEnv', () => {
     ).toBe(params)
     expect(launchCalls).toEqual([])
     expect(readStatus).not.toHaveBeenCalled()
+  })
+})
+
+describe('withHostAgentApiKeyLaunchEnv (SSH)', () => {
+  it('sends no desktop keys over SSH into an Orca Cloud workspace, and does elsewhere', async () => {
+    const { withHostAgentApiKeyLaunchEnv } = await import('./cloud-desktop-keys')
+    launchEnv = { CURSOR_API_KEY: 'key_real' }
+    sshTargets.set('t-cloud', {
+      host: 'orca-api-7f3a',
+      label: 'orca-api-7f3a',
+      configHost: 'orca-api-7f3a'
+    })
+    sshTargets.set('t-proxy', {
+      host: 'box',
+      label: 'box',
+      proxyCommand: '/Applications/Orca.app/bin/orca ssh-proxy env-1'
+    })
+    sshTargets.set('t-devbox', { host: 'devbox.lan', label: 'devbox' })
+    expect(await withHostAgentApiKeyLaunchEnv({ A: '1' }, 'cursor', 't-cloud')).toEqual({ A: '1' })
+    expect(await withHostAgentApiKeyLaunchEnv({ A: '1' }, 'cursor', 't-proxy')).toEqual({ A: '1' })
+    expect(launchCalls).toEqual([])
+    expect(await withHostAgentApiKeyLaunchEnv({ A: '1' }, 'cursor', 't-devbox')).toEqual({
+      A: '1',
+      CURSOR_API_KEY: 'key_real'
+    })
+    expect(await withHostAgentApiKeyLaunchEnv(undefined, 'cursor', null)).toEqual({
+      CURSOR_API_KEY: 'key_real'
+    })
   })
 })
