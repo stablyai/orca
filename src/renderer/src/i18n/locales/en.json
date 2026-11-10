@@ -17475,6 +17475,22 @@
           "heading": "This editor needs the Orca desktop app",
           "openSource": "Open Source"
         },
+        "NewFileDialog": {
+          "title": "New file",
+          "description": "Name your file and pick a folder. Leave the name empty to use the suggested name.",
+          "name": "Name",
+          "folder": "Folder",
+          "browse": "Browse folders",
+          "browseUnavailable": "Folder picker unavailable for remote files",
+          "cancel": "Cancel",
+          "create": "Create",
+          "nameHasSeparators": "Name cannot contain path separators",
+          "folderEmpty": "Folder path cannot be empty",
+          "folderOutsideWorkspace": "Folder must be inside the current workspace",
+          "nameTaken": "A file with that name already exists",
+          "createFailed": "Couldn't create the file.",
+          "sshUnsupported": "Creating files in SSH workspaces isn't supported yet."
+        },
         "MarkdownDefaultViewContextMenu": {
           "label": "Default Markdown View"
         }
@@ -23837,7 +23853,8 @@
       "128cce6e6d": "Set title…",
       "e9da9f872a": "Send review notes to agent",
       "1524825c2c": "Toggle workspace board",
-      "d286d1ab85": "Clear pane title"
+      "d286d1ab85": "Clear pane title",
+      "tabNewFile": "New file…"
     },
     "group": {
       "global": "Global",

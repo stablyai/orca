@@ -8,6 +8,7 @@ import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useTranslate } from '@/i18n/use-translate'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import NewWorkspaceComposerModal from '../components/NewWorkspaceComposerModal'
+import NewFileModal from '../components/editor/NewFileModal'
 import { CrashReportDialog } from '../components/crash-report/CrashReportDialog'
 import { MarkdownTemplatePicker } from '../components/editor/markdown/documents/MarkdownTemplatePicker'
 import RecentTabSwitcher from '../components/tab-bar/RecentTabSwitcher'
@@ -186,6 +187,11 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
       {activeModal === 'new-workspace-composer' ? (
         <ModalBoundary boundaryId="modal.new-workspace-composer" resetKey>
           <NewWorkspaceComposerModal />
+        </ModalBoundary>
+      ) : null}
+      {activeModal === 'new-file' ? (
+        <ModalBoundary boundaryId="modal.new-file" resetKey>
+          <NewFileModal />
         </ModalBoundary>
       ) : null}
       <Suspense fallback={null}>
