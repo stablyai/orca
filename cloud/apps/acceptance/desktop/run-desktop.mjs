@@ -176,8 +176,17 @@ async function launchApp(userData, label) {
   })
   child.stdout.removeAllListeners('data')
   child.stderr.removeAllListeners('data')
-  child.stdout.pipe(out)
-  child.stderr.pipe(out)
+  // From here on, every app log line carries a wall-clock stamp so it can be lined up with steps.
+  const stamp = (stream) => {
+    let rest = ''
+    stream.on('data', (d) => {
+      const lines = (rest + d.toString()).split('\n')
+      rest = lines.pop() ?? ''
+      for (const l of lines) out.write(`${new Date().toISOString()} ${l}\n`)
+    })
+  }
+  stamp(child.stdout)
+  stamp(child.stderr)
   log('instance', instance.cdpUrl, instance.rendererUrl, 'runner pid', child.pid)
   const deadline = Date.now() + 300_000
   let seen = null
@@ -603,6 +612,7 @@ async function uiDelete(step, name, label, timeoutMs = 90_000, watchAfterMs = 0)
   const dialog = (await d.innerText()).replace(/\s+/g, ' ')
   await shot(step, `${label}-confirm`)
   const t0 = Date.now()
+  const clickedAt = new Date(t0).toISOString()
   await d.getByRole('button', { name: /^Delete( Workspace)?$/ }).click()
   let outcome = null
   while (Date.now() - t0 < timeoutMs) {
@@ -621,6 +631,8 @@ async function uiDelete(step, name, label, timeoutMs = 90_000, watchAfterMs = 0)
   }
   outcome ??= { kind: 'timeout' }
   outcome.ms = Date.now() - t0
+  outcome.clickedAt = clickedAt
+  outcome.doneAt = new Date().toISOString()
   if (outcome.kind === 'removed' && watchAfterMs) {
     // Teardown can fail after the row is gone; look for the error wherever the app puts it.
     const t1 = Date.now()
