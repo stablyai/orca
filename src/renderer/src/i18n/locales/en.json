@@ -20980,6 +20980,16 @@
         "questionNotSentDetail": "Your question is still in this chat. Send /btw again to retry.",
         "questionUnconfirmed": "{{agent}} couldn't confirm the side chat got your question",
         "questionUnconfirmedDetail": "Check the side chat before asking again. Your question is still in this chat."
+      },
+      "mcp": {
+        "structuredHandoff": "Open a terminal copy of this conversation, run /mcp, and choose a server to authenticate. Continue in that terminal after signing in. Your original chat and draft stay here.",
+        "terminalHandoff": "Open this session’s terminal, run /mcp, and choose a server to authenticate. Return to Chat when finished; your draft stays here.",
+        "unavailable": "The terminal is unavailable here. Open this conversation in Claude on its execution host and run /mcp to sign in.",
+        "remoteBrowser": "Use a browser on the computer running Claude so the sign-in callback reaches that computer.",
+        "interactiveSignIn": "Sign in to MCP servers through Claude’s terminal.",
+        "preparing": "Preparing terminal…",
+        "openCopy": "Open terminal copy",
+        "openTerminal": "Open terminal"
       }
     },
     "tab": {

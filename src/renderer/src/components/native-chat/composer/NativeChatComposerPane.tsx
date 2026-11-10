@@ -105,7 +105,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       disabled ||
       (structuredTransport?.runtime === 'remote' && structuredTransport.sessionPending === true)
 
-    const { picker, orcaCommands } = useNativeChatComposerCommandPicker({
+    const { picker, orcaCommands, mcpNotice } = useNativeChatComposerCommandPicker({
       mode: editSession ? 'edit' : launchPrompt || pending ? 'launch' : undefined,
       agent,
       terminalTabId,
@@ -116,16 +116,16 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       disabled,
       isComposing: imeEnterGesture.isComposing,
       structuredTransport,
+      onSwitchToTerminal,
+      targetPtyId,
       editor: { textareaRef, setDraft, setCaret, setActiveSuggestion },
       setNotice
     })
     const {
       autocomplete,
-      classifySend,
       clearSkillOrigin,
       completeItem,
       completeMention,
-      dismiss,
       handleDraftOrCaretChange
     } = picker
     const mentionFiles = useNativeChatMentionFiles({
@@ -254,7 +254,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       launchDraft: launchSeed?.launchDraft,
       launchDraftResolved: launchSeed?.launchDraftResolved === true,
       readTerminalDraft: launchSeed?.readTerminalDraft,
-      classifySend,
+      classifySend: picker.classifySend,
       onOptimisticSend,
       optimisticSendOutcome,
       terminalTabId
@@ -331,7 +331,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       dispatchPickerCommand: editSession
         ? chooseEditItem
         : goalMode.interceptPick(orcaCommands.interceptPick(dispatchPickerCommand)),
-      dismissPicker: dismiss,
+      dismissPicker: picker.dismiss,
       interrupt: editSession?.cancel ?? interrupt,
       send,
       hasAttachments: imageAttachments.length > 0,
@@ -369,7 +369,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
           autocomplete={autocomplete}
           mentionFiles={mentionFiles}
           activeSuggestion={activeSuggestion}
-          notices={notices}
+          notices={mcpNotice ? [...notices, mcpNotice] : notices}
           imageAttachments={imageAttachments}
           numberImages={Boolean(structuredTransport)}
           attachmentEnvironmentId={structuredTransport?.runtimeEnvironmentId ?? undefined}

@@ -11,6 +11,9 @@ import {
 } from './use-native-chat-resume-command'
 import type { NativeChatStructuredComposerTransport } from '../submit/native-chat-structured-composer-transport'
 import { useNativeChatSideChatCommand } from './use-native-chat-side-chat-command'
+import { useNativeChatMcpCommand } from './use-native-chat-mcp-command'
+import type { NativeChatComposerNotice } from '../controls/native-chat-composer-notice'
+import { nativeChatComposerTargetIsRemote } from '../submit/native-chat-composer-target'
 
 type PickerArgs = Parameters<typeof useNativeChatPickerState>[0]
 type ResumeArgs = Parameters<typeof useNativeChatResumeCommand>[0]
@@ -31,9 +34,23 @@ export function useNativeChatComposerCommandPicker(
       /** An edit saves into a queued message; a launch prompt has no session to resume and
        *  lists its workspace's skills. */
       mode?: 'edit' | 'launch'
+      onSwitchToTerminal?: () => void
+      targetPtyId: string | null
     }
-): { picker: NativeChatPickerState; orcaCommands: NativeChatResumeCommand } {
-  const { structuredTransport, editor, setNotice, mode, ...pickerArgs } = args
+): {
+  picker: NativeChatPickerState
+  orcaCommands: NativeChatResumeCommand
+  mcpNotice: NativeChatComposerNotice | null
+} {
+  const {
+    structuredTransport,
+    editor,
+    setNotice,
+    mode,
+    onSwitchToTerminal,
+    targetPtyId,
+    ...pickerArgs
+  } = args
   const { agent, terminalTabId } = pickerArgs
   const { agentCommands, sessionSkills } = useNativeChatComposerCatalog(agent, structuredTransport)
   const reported = structuredTransport?.sessionCommands
@@ -70,7 +87,19 @@ export function useNativeChatComposerCommandPicker(
     setNotice
   })
   const side = useNativeChatSideChatCommand({ structuredTransport, picker, editor })
-  // `/btw` and `/resume` never collide, so each draft and pick has at most one owner.
+  const mcp = useNativeChatMcpCommand({
+    enabled: mode === undefined,
+    agent,
+    terminalTabId,
+    draft: pickerArgs.draft,
+    remote: structuredTransport
+      ? structuredTransport.runtime === 'remote'
+      : nativeChatComposerTargetIsRemote(targetPtyId),
+    structuredTransport,
+    onSwitchToTerminal,
+    picker
+  })
+  const { consume: mcpConsume, matchesDraft: mcpMatches, interceptPick: mcpIntercept } = mcp
   const { consume: sideConsume, matchesDraft: sideMatches, interceptPick: sideIntercept } = side
   const {
     consume: resumeConsume,
@@ -79,11 +108,21 @@ export function useNativeChatComposerCommandPicker(
   } = resume
   const orcaCommands = useMemo(
     (): NativeChatResumeCommand => ({
-      matchesDraft: (draft) => sideMatches(draft) || resumeMatches(draft),
-      consume: (draft) => sideConsume(draft) || resumeConsume(draft),
-      interceptPick: (pick) => sideIntercept(resumeIntercept(pick))
+      matchesDraft: (draft) => mcpMatches(draft) || sideMatches(draft) || resumeMatches(draft),
+      consume: (draft) => mcpConsume(draft) || sideConsume(draft) || resumeConsume(draft),
+      interceptPick: (pick) => mcpIntercept(sideIntercept(resumeIntercept(pick)))
     }),
-    [resumeConsume, resumeIntercept, resumeMatches, sideConsume, sideIntercept, sideMatches]
+    [
+      mcpConsume,
+      mcpIntercept,
+      mcpMatches,
+      resumeConsume,
+      resumeIntercept,
+      resumeMatches,
+      sideConsume,
+      sideIntercept,
+      sideMatches
+    ]
   )
-  return { picker, orcaCommands }
+  return { picker, orcaCommands, mcpNotice: mcp.notice }
 }
