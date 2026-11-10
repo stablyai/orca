@@ -34,11 +34,16 @@ function withExecutionHostAgentPresentation<T extends { presentation?: 'backgrou
 }
 
 /** Carried keys ride the account env the launch already merges over its plan; nothing downstream keeps the request. */
-function withKeyEnvFolded<
+export function withKeyEnvFolded<
   T extends { accountEnv?: Record<string, string>; keyEnv?: Record<string, string> }
 >(params: T): T {
   if (!params.keyEnv) {
     return params
+  }
+  // An Orca Cloud VM never takes a desktop's keys (they would sit here in plaintext); its agents
+  // get Cloud secrets as egress placeholders instead. The desktop already withholds them.
+  if (process.env.ORCA_IS_CLOUD === '1') {
+    return { ...params, keyEnv: undefined }
   }
   const accountEnv = withAgentKeyLaunchEnv(params.accountEnv, params.keyEnv)
   const folded: T = { ...params, keyEnv: undefined, ...(accountEnv ? { accountEnv } : {}) }

@@ -6,8 +6,11 @@ import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'
 import { cloudSecretsErrorCopy } from '../settings/cloud-secrets/cloud-secrets-copy'
+import type { CloudSecretsErrorCode } from '../../../../shared/cloud-secrets/cloud-secrets-wire'
+import { CloudDesktopKeysOffer } from './CloudDesktopKeysOffer'
 import {
   CLOUD_SETUP_AGENTS,
+  type CloudOfferableDesktopKey,
   type CloudAgentCredentialSource,
   type CloudAgentReadiness,
   type CloudSetupAgent
@@ -30,6 +33,7 @@ export type CloudAgentSetupSaved = { agents: CloudSetupAgent[]; scope: CloudAgen
 type KeyOption = Exclude<CloudAgentSetupOption, 'sign-in'>
 
 const KEY_OPTIONS: readonly KeyOption[] = ['api-key', 'gateway', 'custom']
+const NO_DESKTOP_KEYS: readonly CloudOfferableDesktopKey[] = []
 const EMPTY_DRAFTS: Record<KeyOption, CloudAgentSetupDraft> = {
   'api-key': EMPTY_DRAFT,
   gateway: EMPTY_DRAFT,
@@ -43,18 +47,16 @@ function agentStatusLine(readiness: CloudAgentReadiness, t: Translate): string {
     const state =
       source === 'team'
         ? t('cloudAgentSetup.status.team', 'provided by your team')
-        : source === 'desktop-key'
-          ? t('cloudAgentSetup.status.desktopKey', 'API key from Orca on this computer')
-          : source === 'cloud-secret'
-            ? t('cloudAgentSetup.status.cloudSecret', 'your cloud secret')
-            : t('cloudAgentSetup.status.none', 'not set up')
+        : source === 'cloud-secret'
+          ? t('cloudAgentSetup.status.cloudSecret', 'your cloud secret')
+          : t('cloudAgentSetup.status.none', 'not set up')
     return `${AGENT_NAME[agent]}: ${state}`
   }).join(' · ')
 }
 
 /** "Your team provides Claude and Codex access · …": one clause per source, agents grouped. */
 export function cloudAgentReadinessSummary(readiness: CloudAgentReadiness, t: Translate): string {
-  const sources: CloudAgentCredentialSource[] = ['desktop-key', 'team', 'cloud-secret']
+  const sources: CloudAgentCredentialSource[] = ['team', 'cloud-secret']
   return sources
     .flatMap((source) => {
       const agents = CLOUD_SETUP_AGENTS.filter((agent) => readiness[agent] === source)
@@ -66,16 +68,6 @@ export function cloudAgentReadinessSummary(readiness: CloudAgentReadiness, t: Tr
           ? t('cloudAgentSetup.source.both', 'Claude and Codex')
           : AGENT_NAME[agents[0]]
       switch (source) {
-        case 'desktop-key':
-          return [
-            t(
-              'cloudAgentSetup.source.desktopKey',
-              '{{agent}} uses the API key from Orca on this computer',
-              {
-                agent
-              }
-            )
-          ]
         case 'team':
           return [
             t('cloudAgentSetup.source.team', 'Your team provides {{agent}} access', { agent })
@@ -139,6 +131,9 @@ export type CloudAgentSetupViewProps = {
    * ask before a typed key is thrown away.
    */
   escapeGuardRef?: React.Ref<() => boolean>
+  /** This computer's Agent API Keys no Cloud secret covers yet, each offered with its own Save. */
+  desktopKeys?: readonly CloudOfferableDesktopKey[]
+  onSaveDesktopKey?: (key: CloudOfferableDesktopKey) => Promise<CloudSecretsErrorCode | null>
   /** Fixtures only. */
   initialOption?: CloudAgentSetupOption
   initialFailure?: CloudAgentSetupFailure | null
@@ -155,6 +150,8 @@ export function CloudAgentSetupView({
   focusOnOpen = false,
   steadyHeight = false,
   escapeGuardRef,
+  desktopKeys = NO_DESKTOP_KEYS,
+  onSaveDesktopKey,
   initialOption,
   initialFailure = null
 }: CloudAgentSetupViewProps): React.JSX.Element {
@@ -287,6 +284,9 @@ export function CloudAgentSetupView({
           <CircleCheck aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
           <span>{summary}</span>
         </div>
+      ) : null}
+      {onSaveDesktopKey ? (
+        <CloudDesktopKeysOffer keys={desktopKeys} onSave={onSaveDesktopKey} />
       ) : null}
       <Tabs
         value={option}

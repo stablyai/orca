@@ -26704,13 +26704,11 @@
     "shareDetail": "Every teammate’s cloud agents use it.",
     "status": {
       "team": "provided by your team",
-      "desktopKey": "API key from Orca on this computer",
       "cloudSecret": "your cloud secret",
       "none": "not set up"
     },
     "source": {
       "both": "Claude and Codex",
-      "desktopKey": "{{agent}} uses the API key from Orca on this computer",
       "team": "Your team provides {{agent}} access",
       "cloudSecret": "{{agent}} uses your cloud secret"
     },
@@ -26754,7 +26752,15 @@
     "discardQuestion": "Discard the key you typed?",
     "discard": "Discard",
     "keepEditing": "Keep editing",
-    "signInHandedOff": "Continues in the Agent sign-in row below."
+    "signInHandedOff": "Continues in the Agent sign-in row below.",
+    "desktopKeys": {
+      "title": "Keys on this computer",
+      "detail": "Cloud workspaces don’t get the API keys saved in Orca on this computer. Save one as a personal Cloud secret and the workspace only ever sees a stand-in for it.",
+      "saved": "Saved as a Cloud secret",
+      "saveLabel": "Save {{name}} as a personal Cloud secret",
+      "save": "Save as personal Cloud secret",
+      "retry": "Try again"
+    }
   },
   "cloudSecrets": {
     "editor": {
@@ -26900,7 +26906,8 @@
       "syntax": "Not a NAME=value line.",
       "unterminatedQuote": "The closing quote is missing.",
       "overridden": "Set again further down; the later line is used.",
-      "unknown": "Something went wrong in Orca Cloud. Nothing was changed. Try again."
+      "unknown": "Something went wrong in Orca Cloud. Nothing was changed. Try again.",
+      "notSwappable": "A workspace would get this key in full, so Orca doesn’t save it from here. Add it in Cloud secrets if you accept that."
     },
     "vm": {
       "badge": "Stored on workspace",

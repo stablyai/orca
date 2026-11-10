@@ -3,7 +3,12 @@ import {
   cloudSecretsErrorCode,
   type CloudSecretsErrorCode
 } from '../../../../shared/cloud-secrets/cloud-secrets-wire'
-import { deriveCloudAgentReadiness, type CloudAgentReadiness } from './cloud-agent-readiness'
+import {
+  deriveCloudAgentReadiness,
+  offerableDesktopKeys,
+  type CloudAgentReadiness,
+  type CloudOfferableDesktopKey
+} from './cloud-agent-readiness'
 import {
   cloudAgentSetupProblem,
   cloudAgentSetupWrite,
@@ -17,7 +22,13 @@ const NOT_CONFIGURED: CloudSecretsErrorCode = 'not_configured'
 
 export type CloudAgentSetupModel =
   | { status: 'loading' }
-  | { status: 'ready'; readiness: CloudAgentReadiness; canShare: boolean }
+  | {
+      status: 'ready'
+      readiness: CloudAgentReadiness
+      canShare: boolean
+      /** This computer's keys that no Cloud secret covers yet: offered, never sent unasked. */
+      desktopKeys: CloudOfferableDesktopKey[]
+    }
 
 /**
  * What a new cloud workspace already has for agents (desktop keys, team and cloud secrets) and how to
@@ -33,9 +44,12 @@ export function useCloudAgentSetup(args: {
     choice: CloudAgentSetupChoice,
     scope: CloudAgentSetupScope
   ) => Promise<CloudAgentSetupFailure | null>
+  saveDesktopKey: (key: CloudOfferableDesktopKey) => Promise<CloudSecretsErrorCode | null>
 } {
   const { repo, runtimeEnvironmentId = null, enabled = true } = args
   const [model, setModel] = useState<CloudAgentSetupModel>({ status: 'loading' })
+  // Bumped after a save so the model re-reads what the cloud now has.
+  const [generation, setGeneration] = useState(0)
 
   useEffect(() => {
     if (!enabled) {
@@ -53,14 +67,16 @@ export function useCloudAgentSetup(args: {
       const view = cloud?.ok ? cloud.value : null
       setModel({
         status: 'ready',
-        readiness: deriveCloudAgentReadiness(desktop?.keys ?? [], view?.secrets ?? []),
-        canShare: view?.caller.canWrite.org === true
+        readiness: deriveCloudAgentReadiness(view?.secrets ?? []),
+        canShare: view?.caller.canWrite.org === true,
+        // Without the cloud's answer nothing is offered: a save could shadow a key the team set.
+        desktopKeys: view ? offerableDesktopKeys(desktop?.keys ?? [], view.secrets) : []
       })
     })
     return () => {
       cancelled = true
     }
-  }, [repo, enabled])
+  }, [repo, enabled, generation])
 
   const save = useCallback(
     async (
@@ -99,5 +115,29 @@ export function useCloudAgentSetup(args: {
     [runtimeEnvironmentId]
   )
 
-  return { model, save }
+  const saveDesktopKey = useCallback(
+    async (key: CloudOfferableDesktopKey): Promise<CloudSecretsErrorCode | null> => {
+      const api = window.api.cloudSecrets
+      if (!api?.saveDesktopKey) {
+        return NOT_CONFIGURED
+      }
+      const result = await api
+        .saveDesktopKey({ agent: key.agent, envName: key.envName })
+        .catch(() => null)
+      if (!result) {
+        return UNKNOWN
+      }
+      if (!result.ok) {
+        return result.error
+      }
+      if (runtimeEnvironmentId) {
+        void api.refreshEnv({ runtimeEnvironmentId }).catch(() => undefined)
+      }
+      setGeneration((value) => value + 1)
+      return null
+    },
+    [runtimeEnvironmentId]
+  )
+
+  return { model, save, saveDesktopKey }
 }
