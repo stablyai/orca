@@ -8,14 +8,33 @@ import { DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { useTranslate } from '@/i18n/use-translate'
 import type { CloudSshWorktree } from '../cloud-ssh/use-cloud-ssh-status'
 import { DeleteCloudSandboxAgentsNote } from './DeleteCloudSandboxAgentsNote'
+import { useAppStore } from '@/store'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import { CloudStateDot } from '@/components/orca-cloud/CloudStateDot'
+import { cloudStateLabel } from '@/components/orca-cloud/cloud-state-copy'
+import { useCloudWorkspaceView } from '@/components/orca-cloud/use-cloud-workspace-view'
 import { runArchiveCloudWorkspace } from '@/components/orca-cloud/cloud-workspace-actions'
 
 export function DeleteCloudWorkspaceHeader({
-  worktree
+  worktree,
+  dirtyCounts
 }: {
-  worktree: CloudSshWorktree & { displayName?: string }
+  worktree: CloudSshWorktree & { displayName?: string; repoId?: string; branch?: string }
+  /** Per-target change counts; only trusted while the sandbox runs (asleep, nothing can be checked). */
+  dirtyCounts: ReadonlyMap<string, number>
 }): React.JSX.Element {
+  const uncommittedCount = dirtyCounts.get(
+    worktree.hostId ? getWorktreeHostIdentity(worktree) : worktree.id
+  )
   const t = useTranslate()
+  const view = useCloudWorkspaceView(worktree.id)
+  const repoName = useAppStore(
+    (s) => s.repos.find((repo) => repo.id === worktree.repoId)?.displayName ?? null
+  )
+  const where = [repoName, worktree.branch?.replace(/^refs\/heads\//, '')]
+    .filter(Boolean)
+    .join(' · ')
+  const running = view.state === 'running'
   return (
     <>
       <DialogTitle className="text-sm">
@@ -29,6 +48,27 @@ export function DeleteCloudWorkspaceHeader({
           "Deletes the sandbox and its disk, including chats, terminals and uncommitted changes. This can't be undone. To keep a snapshot, archive it instead."
         )}
       </DialogDescription>
+      {/* The files live in the sandbox: name, repo and branch, and its state; no local path. */}
+      <div className="mt-2 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-xs">
+        <div className="truncate font-medium text-foreground">{worktree.displayName}</div>
+        <div className="mt-0.5 flex items-center gap-1.5 text-muted-foreground">
+          <CloudStateDot state={view.state} />
+          <span>{cloudStateLabel(view.state, t)}</span>
+          {where ? <span className="truncate">· {where}</span> : null}
+        </div>
+        {running && uncommittedCount !== undefined ? (
+          <div className="mt-0.5 text-muted-foreground">
+            {t(
+              'auto.components.sidebar.DeleteCloudWorkspace.uncommitted',
+              '{{count}} uncommitted changes',
+              {
+                count: uncommittedCount,
+                defaultValue_one: '{{count}} uncommitted change'
+              }
+            )}
+          </div>
+        ) : null}
+      </div>
       <DeleteCloudSandboxAgentsNote worktree={worktree} />
     </>
   )
@@ -39,31 +79,32 @@ export function DeleteCloudWorkspaceFooter({
   onCancel,
   onArchive,
   onDelete,
-  confirmButtonRef
+  cancelButtonRef
 }: {
   isDeleting: boolean
   onCancel: () => void
   onArchive: () => void
   onDelete: () => void
-  confirmButtonRef: React.RefObject<HTMLButtonElement | null>
+  /** Initial focus: deleting the sandbox is irreversible, so Enter must not do it. */
+  cancelButtonRef: React.RefObject<HTMLButtonElement | null>
 }): React.JSX.Element {
   const t = useTranslate()
   return (
     <>
-      <Button variant="ghost" size="sm" onClick={onCancel} disabled={isDeleting}>
+      <Button
+        ref={cancelButtonRef}
+        variant="ghost"
+        size="sm"
+        onClick={onCancel}
+        disabled={isDeleting}
+      >
         {t('auto.components.sidebar.DeleteCloudWorkspace.cancel', 'Cancel')}
       </Button>
       <Button variant="outline" size="sm" onClick={onArchive} disabled={isDeleting}>
         <Archive />
         {t('auto.components.sidebar.DeleteCloudWorkspace.archiveInstead', 'Archive instead')}
       </Button>
-      <Button
-        ref={confirmButtonRef}
-        variant="destructive"
-        size="sm"
-        onClick={onDelete}
-        disabled={isDeleting}
-      >
+      <Button variant="destructive" size="sm" onClick={onDelete} disabled={isDeleting}>
         {isDeleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
         {t('auto.components.sidebar.DeleteCloudWorkspace.delete', 'Delete workspace')}
       </Button>

@@ -1,5 +1,6 @@
 // Loading, empty and error states for the cloud workspaces list, and the new-section dialog.
 import React, { useState } from 'react'
+import { List } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -42,13 +43,21 @@ export function ErrorState({
     <InlineError
       className="m-1"
       title={describeInlineError(error, reason, t)}
-      retryLabel={
-        atLimit
-          ? t('auto.components.cloudWorkspaces.showCloudWorkspaces', 'Show cloud workspaces')
-          : t('orcaCloudWorkspace.tryAgain', 'Try again')
-      }
+      retryLabel={atLimit ? undefined : t('orcaCloudWorkspace.tryAgain', 'Try again')}
       retrying={retrying}
-      onRetry={atLimit ? () => openCloudWorkspacesHome({ running: true }) : onRetry}
+      onRetry={atLimit ? undefined : onRetry}
+      action={
+        atLimit ? (
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={() => openCloudWorkspacesHome({ running: true })}
+          >
+            <List aria-hidden />
+            {t('auto.components.cloudWorkspaces.showCloudWorkspaces', 'Show cloud workspaces')}
+          </Button>
+        ) : undefined
+      }
     />
   )
 }

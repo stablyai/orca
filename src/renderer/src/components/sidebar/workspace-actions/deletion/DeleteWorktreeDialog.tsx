@@ -322,7 +322,10 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
       >
         <DialogHeader>
           {isCloud && worktree ? (
-            <cloudDelete.DeleteCloudWorkspaceHeader worktree={worktree} />
+            <cloudDelete.DeleteCloudWorkspaceHeader
+              worktree={worktree}
+              dirtyCounts={dirtyChanges.counts}
+            />
           ) : (
             <DeleteWorktreeDialogHeading
               isBatchDelete={isBatchDelete}
@@ -335,17 +338,19 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         </DialogHeader>
 
         <div className="scrollbar-sleek max-h-[50vh] min-w-0 space-y-4 overflow-y-auto">
-          <DeleteWorktreeTargetPreview
-            isBatchDelete={isBatchDelete}
-            worktree={worktree}
-            worktrees={worktrees}
-            collisionWorktrees={allWorktrees}
-            hostLabelById={hostLabelById}
-            deleteStateByWorktreeId={deleteStateByWorktreeId}
-            changeCheckStatesByWorktreeId={dirtyChanges.checkStates}
-            dirtyChangeCountsByWorktreeId={dirtyChanges.counts}
-            dirtyChangePreviewsByWorktreeId={dirtyChanges.previews}
-          />
+          {isCloud ? null : (
+            <DeleteWorktreeTargetPreview
+              isBatchDelete={isBatchDelete}
+              worktree={worktree}
+              worktrees={worktrees}
+              collisionWorktrees={allWorktrees}
+              hostLabelById={hostLabelById}
+              deleteStateByWorktreeId={deleteStateByWorktreeId}
+              changeCheckStatesByWorktreeId={dirtyChanges.checkStates}
+              dirtyChangeCountsByWorktreeId={dirtyChanges.counts}
+              dirtyChangePreviewsByWorktreeId={dirtyChanges.previews}
+            />
+          )}
 
           <RemovalUnsavedFilesNotice targets={unsavedTargets} enabled={isOpen} />
 
@@ -379,7 +384,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
               onArchive={() => cloudDelete.archiveInsteadOfDelete(worktree, closeModal)}
               // The dialog is the consent: an asleep sandbox is deleted without waking it.
               onDelete={() => handleDelete(true)}
-              confirmButtonRef={confirmButtonRef}
+              cancelButtonRef={confirmButtonRef}
             />
           ) : (
             <DeleteWorktreeDialogFooter

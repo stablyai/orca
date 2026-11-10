@@ -927,6 +927,10 @@
           "foundRepositories_one": "Found {{count}} repository in {{path}}.",
           "foundRepositories_other": "Found {{count}} repositories in {{path}}."
         },
+        "DeleteCloudWorkspace": {
+          "uncommitted_one": "{{count}} uncommitted change",
+          "uncommitted_other": "{{count}} uncommitted changes"
+        },
         "DeleteWorktreeDialog": {
           "removeBatchFolder_one": "Remove <target>{{count}} workspace</target> from Orca. Project folders on disk will not be deleted.",
           "removeBatchFolder_other": "Remove <target>{{count}} workspaces</target> from Orca. Project folders on disk will not be deleted.",
