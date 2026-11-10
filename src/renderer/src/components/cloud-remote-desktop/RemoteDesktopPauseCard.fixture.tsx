@@ -32,7 +32,8 @@ function pauseFixture(message: string, tone: 'neutral' | 'error', width = 640) {
               <div className="h-6 rounded-t-md bg-[#d8d8d8]" />
             </div>
           </div>
-          <div id="orca_pause" className="open">
+          {/* The page's own open state: a class its stylesheet (not Tailwind) defines. */}
+          <div id="orca_pause" ref={(node) => node?.classList.add('open')}>
             <div role={tone === 'neutral' ? 'status' : 'alert'}>
               <p>{message}</p>
               <button type="button">Reconnect</button>

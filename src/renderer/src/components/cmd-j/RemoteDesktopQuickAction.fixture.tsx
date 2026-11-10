@@ -5,6 +5,7 @@ import type { WorktreeJumpPaletteController } from '../worktree-jump/use-worktre
 import type { QuickActionPaletteItem } from '../worktree-jump/worktree-jump-palette-model'
 import { getRemoteDesktopQuickAction } from './remote-desktop-quick-action'
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the action row only calls handleSelectItem.
 const controller = { handleSelectItem: () => {} } as unknown as WorktreeJumpPaletteController
 
 /** "Open remote desktop" in the palette while an Orca Cloud workspace is active (hidden otherwise). */
@@ -18,15 +19,17 @@ export const paletteRow = defineFixture({
     }
     return (
       <div className="bg-background p-2">
-        <Command value={entry.id} className="rounded-lg border border-border bg-popover">
-          <CommandList className="p-1">
-            <WorktreeJumpPaletteActionRow
-              entry={entry}
-              renderKey={entry.id}
-              controller={controller}
-            />
-          </CommandList>
-        </Command>
+        <div className="overflow-hidden rounded-lg border border-border bg-popover p-1">
+          <Command value={entry.id}>
+            <CommandList>
+              <WorktreeJumpPaletteActionRow
+                entry={entry}
+                renderKey={entry.id}
+                controller={controller}
+              />
+            </CommandList>
+          </Command>
+        </div>
       </div>
     )
   }
