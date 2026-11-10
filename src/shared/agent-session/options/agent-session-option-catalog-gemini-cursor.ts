@@ -60,16 +60,33 @@ const CURSOR_THINKING: CatalogOption = {
   apply: { composedIntoModel: true }
 }
 
+// Newer cursor-agent lists `id - Label` rows (`auto - Auto (default)`); older hosts printed
+// bare `id` rows. Both shapes stay parseable so discovery keeps working across CLI versions.
+const CURSOR_LABELED_ROW = /^([a-z0-9][a-z0-9._-]*)\s+-\s+(.+)$/i
+const CURSOR_ROW_MARKER = /\s+\((?:default|current)\)$/i
+
 function parseCursorModels(stdout: string): CatalogModel[] {
   const seen = new Set<string>()
   const models: CatalogModel[] = []
-  for (const line of stdout.split(/\r?\n/)) {
-    const match = line.trim().match(/^(?:[-*]\s+)?([a-z0-9][a-z0-9._-]*)(?:\s+\(.*\))?$/i)
+  for (const rawLine of stdout.split(/\r?\n/)) {
+    const line = rawLine.trim().replace(/^(?:[-*]\s+)/, '')
+    const labeled = CURSOR_LABELED_ROW.exec(line)
+    const match = labeled ?? line.match(/^([a-z0-9][a-z0-9._-]*)(?:\s+\(.*\))?$/i)
     const id = match?.[1]
     if (!id || id.toLowerCase() === 'models' || seen.has(id)) {
       continue
     }
     seen.add(id)
+    if (labeled) {
+      const label = labeled[2].replace(CURSOR_ROW_MARKER, '').trim()
+      models.push({
+        id,
+        label: label || (id === 'auto' ? 'Auto' : id),
+        ...(/\(default\)$/i.test(labeled[2]) ? { isDefault: true } : {}),
+        options: []
+      })
+      continue
+    }
     models.push({ id, label: id === 'auto' ? 'Auto' : id, options: [] })
   }
   return models
