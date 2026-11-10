@@ -13,10 +13,10 @@ import {
 } from '../../../../src/shared/cloud-secrets/cloud-secret-rules'
 import { AGENT_API_KEY_PRESETS } from '../../../../src/shared/agent-api-keys/agent-api-key-catalog'
 
-const AGENT_API_KEY_PRESET_NAMES = Object.values(AGENT_API_KEY_PRESETS).flatMap((presets) => (presets ?? []).map((preset) => preset.envName))
 import { egressSecretHosts, encodeEgressSecretHosts } from '../src/secret-egress'
 import { ENV_COMMAND } from '../src/sandbox-vm-commands'
 import { createHarness } from './harness'
+const AGENT_API_KEY_PRESET_NAMES = Object.values(AGENT_API_KEY_PRESETS).flatMap((presets) => (presets ?? []).map((preset) => preset.envName))
 
 const KEK = Buffer.alloc(32, 7).toString('base64')
 const PROXY_URL = 'https://sandbox.test/v1/egress/proxy'
