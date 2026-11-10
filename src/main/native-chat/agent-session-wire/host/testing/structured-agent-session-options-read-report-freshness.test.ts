@@ -11,8 +11,16 @@ import {
   hostTestCatalogReadOperation,
   hostTestOptionsReadStore,
   hostTestRestingOptionsJournal,
-  hostTestRestingOptionsRecord
+  hostTestRestingOptionsRecord,
+  HOST_TEST_NOW as NOW,
+  HOST_TEST_SESSION as SESSION,
+  hostTestOperationId
 } from './structured-agent-session-host-test-data'
+import {
+  createQueuedMessageTestRig,
+  QUEUED_RIG_CALLER
+} from './structured-agent-session-queued-message-rig.test-fixture'
+import { appendUsageLimitedTurn } from './structured-agent-session-rewind-usage-limit.test-fixture'
 
 const RESPONSE_REPORT = { model: 'opus[1m]', reportedModel: 'claude-opus-4-8' }
 // Claude's confirmed init model stands in for a report when no response named one.
@@ -63,15 +71,13 @@ function claudeOptionsRead(answer: Record<string, unknown> = RESPONSE_REPORT) {
     },
     sessions
   } as unknown as StructuredAgentSessionMutationContext
-  const pick = (model: string, saved = true) => {
-    if (saved) {
-      record.options.model = model
-    }
+  const pick = (model: string) => {
+    record.options.model = model
     noteStructuredAgentSessionOptionPick(
       { deps: { adapter: {} }, sessions },
       { sessionId: 'session-1', fence: 2 },
       { key: 'model', value: model },
-      saved
+      true
     )
   }
   /** Run `during` while the read is between its live snapshot and its answer. */
@@ -87,12 +93,11 @@ function claudeOptionsRead(answer: Record<string, unknown> = RESPONSE_REPORT) {
   return { read, pick, sessions, session }
 }
 
-it('keeps a live fallback report that no pick has replaced, including an old client empty no-op', async () => {
-  const host = claudeOptionsRead()
+it('keeps a live fallback report that no pick has replaced', async () => {
   expect(await claudeOptionsRead(CONFIRMED_INIT).read()).toMatchObject({
     reportedModel: 'opus[1m]'
   })
-  expect(await host.read(() => host.pick('', false))).toMatchObject({
+  expect(await claudeOptionsRead().read()).toMatchObject({
     model: 'opus[1m]',
     reportedModel: 'claude-opus-4-8'
   })
@@ -125,3 +130,53 @@ it('drops a report from a child that ended or was replaced while the read was in
     expect(current.reportedModel).toBeUndefined()
   }
 })
+
+it.each([
+  [
+    'retires the report when the user picks back to it',
+    QUEUED_RIG_CALLER,
+    ['sonnet', 'opus[1m]'],
+    undefined
+  ],
+  [
+    'keeps the report through an old client empty no-op',
+    { ...QUEUED_RIG_CALLER, readsOptionsWithoutModel: false },
+    [''],
+    'claude-opus-4-8'
+  ]
+] as const)(
+  'after a usage-limited turn, a pick made while recovery choices load %s',
+  async (_, caller, models, reportedModel) => {
+    const rig = await createQueuedMessageTestRig({ agent: 'claude' })
+    try {
+      const pick = async (value: string) => {
+        const fields = { key: 'model', value }
+        return rig.host.setOption(caller, {
+          envelope: rig.envelope(fields, 'agentSession.setOption', hostTestOperationId()),
+          ...fields
+        })
+      }
+      expect(await pick('opus[1m]')).toMatchObject({ ok: true })
+      rig.host.deps.adapter.readOptions = async () => ({ models: [], current: RESPONSE_REPORT })
+      const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+      await appendUsageLimitedTurn(journal, NOW, 'quota')
+      const recovering = Promise.withResolvers<void>()
+      const released = Promise.withResolvers<undefined>()
+      rig.host.deps.resolveLaunchEnv = () => {
+        recovering.resolve()
+        return released.promise
+      }
+      const answer = rig.host.readOptions(SESSION)
+      await recovering.promise
+      for (const model of models) {
+        expect(await pick(model)).toMatchObject({ ok: true })
+      }
+      released.resolve(undefined)
+      const { current } = await answer
+      expect(current.model).toBe('opus[1m]')
+      expect(current.reportedModel).toBe(reportedModel)
+    } finally {
+      await rig.dispose()
+    }
+  }
+)
