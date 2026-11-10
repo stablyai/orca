@@ -5766,7 +5766,8 @@
             "triggerAria": "{{status}}. Click to open agent updates.",
             "title": "Agent updates · {{count}}",
             "updateAll": "Update all",
-            "restartHint": "Restart running sessions to use the new version"
+            "restartHint": "Restart running sessions to use the new version",
+            "updateRequestFailed": "Could not start the update"
           },
           "InlineUsageBars": {
             "now": "now",
