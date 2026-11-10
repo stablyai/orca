@@ -107,16 +107,19 @@ describe('edge evacuation sweep', () => {
     expect(events).toEqual([{ event: 'orca_relay_edge_drain_sent', outcome: 'drained', controls: 1 }])
   })
 
-  it('reads the region from the stored preference, else the default region', async () => {
+  it('leaves region scope to the assign path: a stored preference outside it drains nobody', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const h = await harness({ allowUsers: new Set(['user-team']) })
+    // On the edge by their asks; one stored preference says a region outside the scope.
     await h.insert(hostId(1), EDGE_CELL_ID, 'user-team')
     await h.insert(hostId(2), EDGE_CELL_ID, 'user-team')
-    await h.insert(hostId(3), EDGE_CELL_ID, 'user-team')
     await h.prefer(hostId(1), 'asia-east2', 'user-team')
     await h.prefer(hostId(2), 'us-central1', 'user-team')
+    // Not in the cohort at all: drained whatever its stored region.
+    await h.insert(hostId(3), EDGE_CELL_ID, 'user-other')
+    await h.prefer(hostId(3), 'us-central1', 'user-other')
     await h.evacuation.sweep()
-    expect(h.admin.drained).toEqual([hostId(1)])
+    expect(h.admin.drained).toEqual([hostId(3)])
   })
 
   it(`drains at most ${EDGE_EVACUATION_BATCH} per tick, the rest on the next, and not again within the cooldown`, async () => {
