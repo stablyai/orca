@@ -137,7 +137,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/gitlab/gitlab-known-host-retirement.test.ts',
   'src/main/window/main-window-updater-deferred-setup.test.ts',
   'src/renderer/src/components/terminal-pane/host-state/terminal-pane-host-state-memo.test.ts',
-  'src/renderer/src/components/automations/use-automation-runs-dashboard-payload.test.tsx',
+  'src/renderer/src/components/automations/runs/use-automation-runs-dashboard-payload.test.tsx',
   'src/main/native-chat/agent-session-journal/**/*.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-terminal-writer-acquire.test.ts',
   'src/main/runtime/agent-session/records/agent-session-conversation-name-store.test.ts',
@@ -169,7 +169,13 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/claude/claude-agent-sdk-contract-pins.test.ts',
   'config/scripts/orcad-distribution/server-bundle/profile-state-worker-smoke.test.mjs',
   'config/scripts/desktop-distribution/runtime-verification/process-host-dev-rebuild.test.ts',
-  'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts'
+  'config/scripts/test-runtime/node-worker/vitest-node-runtime-pool.test.ts',
+  // Reopen WAL-backed row caches read-only, which Bun on macOS cannot.
+  'src/main/agent-hooks/server/testing/identity/server-hook-session-binding.test.ts',
+  'src/main/runtime/push/notifications/mobile-notification-dismissal-store.test.ts',
+  'src/main/runtime/push/notifications/mobile-notification-dismissal-read-failure.test.ts',
+  'src/main/ipc/notifications-subject-retirement.test.ts',
+  'src/main/ipc/notifications-external-acknowledgement.test.ts'
 ]
 
 /** `filters` limits the SQLite import scan to the tests a filtered CLI run can select. */

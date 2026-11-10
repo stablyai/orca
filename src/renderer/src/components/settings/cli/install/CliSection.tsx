@@ -8,7 +8,7 @@ import { ORCA_CLI_SKILL_NAME } from '@/lib/skills/installation/agent-feature-ski
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
@@ -19,11 +19,11 @@ import { CliRegistrationDialog } from './CliRegistrationDialog'
 import {
   getSelectedAgentRuntime,
   getSkillDiscoveryTargetForRuntime
-} from '../../../../lib/skill-runtime-command'
+} from '../../../../lib/skills/runtime/skill-runtime-command'
 import { WslCliRegistration } from './WslCliRegistration'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { useCliRegistrationActions } from './use-cli-registration-actions'
-import { useLocalCliSkillFreshnessName } from '../../../../hooks/use-local-cli-skill-freshness-name'
+import { useLocalCliSkillFreshnessName } from '../../../../hooks/skills/freshness/use-local-cli-skill-freshness-name'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 

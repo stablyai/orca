@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger
 } from '../../ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
+import { floatingWorkspaceUnavailableReason } from '@/lib/floating-workspace-availability'
 
 function openFailureMessage(reason: string): string {
   switch (reason) {
@@ -69,6 +70,12 @@ export function KeybindingsFileActions(): React.JSX.Element {
   }
 
   const editKeybindingsInOrca = async (): Promise<void> => {
+    // The editor opens in the floating workspace, which a browser tab cannot host.
+    const unavailable = floatingWorkspaceUnavailableReason()
+    if (unavailable) {
+      toast.info(unavailable)
+      return
+    }
     try {
       const filePath = await prepareKeybindingsPath()
       if (!filePath) {

@@ -209,6 +209,7 @@ describe('grants scoped to the route the page was opened for', () => {
         native: [
           'fault',
           'rpcEnvelope',
+          'hostCatalogs',
           'navigate',
           'storage',
           'native.browser.local',

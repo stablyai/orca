@@ -7,9 +7,8 @@ import { BridgeHostRequests } from './bridge-host-requests'
 import { BridgeHostSubscriptions } from './bridge-host-subscriptions'
 import { createBridgeHostStreamFrames } from './bridge-host-stream-frames'
 import {
-  BRIDGE_FAULT_GRANT,
   BRIDGE_PROTOCOL_VERSION,
-  BRIDGE_RPC_ENVELOPE_GRANT,
+  BRIDGE_SHELL_GRANTS,
   readBridgeClientMessage,
   type BridgeClientMessage
 } from './bridge/bridge-envelope'
@@ -32,8 +31,7 @@ export type { BridgeHost, BridgeHostDiagnostic, BridgeHostOptions } from './brid
 export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
   const { client, buildId, sessionId, pageRoutes, host } = options
   const granted: readonly string[] = [
-    BRIDGE_FAULT_GRANT,
-    BRIDGE_RPC_ENVELOPE_GRANT,
+    ...BRIDGE_SHELL_GRANTS,
     ...options.routeGrants,
     ...BRIDGE_IMPLICIT_NATIVE_VERBS
   ]

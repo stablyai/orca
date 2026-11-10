@@ -26,6 +26,10 @@ import type { OrcadPeerDesktopsResult } from '../../../shared/orcad-peer-desktop
 import type { RpcBinarySender } from './rpc-binary-sender'
 import type { RpcMethodPermission } from './rpc-method-permission'
 import type { OrcadFeatureRequirement } from './orcad-feature-readiness'
+import {
+  runsOrchestrationAccessCheck,
+  type OrchestrationMethodAccessDeclaration
+} from './methods/orchestration/access/orchestration-method-access'
 import type {
   RegisterDeviceKeyParams,
   RegisterDeviceKeyResult
@@ -238,6 +242,8 @@ type RpcMethodWithParams<P> = {
   readonly permission: RpcMethodPermission
   readonly params: ZodType | null
   readonly requires?: OrcadFeatureRequirement<P>
+  // Set only by defineOrchestrationMethod, whose checked handler the registry requires.
+  readonly orchestrationAccess?: OrchestrationMethodAccessDeclaration
   readonly handler: (params: P, ctx: RpcContext) => unknown
 }
 
@@ -246,6 +252,7 @@ type RpcStreamingMethodWithParams<P> = {
   readonly permission: RpcMethodPermission
   readonly params: ZodType | null
   readonly requires?: OrcadFeatureRequirement<P>
+  readonly orchestrationAccess?: OrchestrationMethodAccessDeclaration
   readonly stream: true
   readonly handler: (params: P, ctx: RpcContext, emit: (result: unknown) => void) => Promise<void>
 }
@@ -291,6 +298,10 @@ export function buildRegistry(methods: readonly RpcAnyMethodDeclaration[]): RpcR
   for (const method of eraseRpcMethods(methods)) {
     if (registry.has(method.name)) {
       throw new Error(`duplicate_rpc_method:${method.name}`)
+    }
+    // No orchestration method exists without its access check.
+    if (method.name.startsWith('orchestration.') && !runsOrchestrationAccessCheck(method)) {
+      throw new Error(`orchestration_method_without_access:${method.name}`)
     }
     registry.set(method.name, method)
   }

@@ -5,6 +5,7 @@ export const PAIRED_DESKTOP_METHODS = [
   // Device and pairing concerns of the phone's own pairing.
   'mobileWeb.bundle.brotliRange',
   'mobileWeb.bundle.chunk',
+  'mobileWeb.bundle.localeCatalog',
   'mobileWeb.bundle.manifest',
   'mobileWeb.bundle.range',
   'notifications.getMissedSince',

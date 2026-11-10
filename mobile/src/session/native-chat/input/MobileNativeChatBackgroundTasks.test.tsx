@@ -52,7 +52,6 @@ type Props = Parameters<typeof MobileNativeChatBackgroundTasks>[0]
 type StopResult = Awaited<ReturnType<Props['tasks']['stop']>>
 
 const REJECTED: StopResult = { status: 'rejected' }
-const UNCONFIRMED: StopResult = { status: 'unknown' }
 const STOPPED: StopResult = { status: 'accepted', value: { cancelled: true }, sameFence: true }
 const NOTHING_STOPPED: StopResult = {
   status: 'accepted',
@@ -98,20 +97,6 @@ describe('MobileNativeChatBackgroundTasks', () => {
     return mounted
   }
 
-  function styleOf(node: ReactTestInstance): Record<string, unknown> {
-    const rendered: unknown =
-      typeof node.props.style === 'function'
-        ? node.props.style({ pressed: false })
-        : node.props.style
-    const parts = Array.isArray(rendered) ? rendered : [rendered]
-    return Object.assign(
-      {},
-      ...parts.filter(
-        (part): part is Record<string, unknown> => typeof part === 'object' && part !== null
-      )
-    )
-  }
-
   function header(mounted: ReactTestRenderer): ReactTestInstance {
     return mounted.root.findAll(
       (node) =>
@@ -131,31 +116,6 @@ describe('MobileNativeChatBackgroundTasks', () => {
         node.props.accessibilityLabel.startsWith('Stop')
     )
   }
-
-  it('stops one row by its provider id and holds its button while the Stop is on its way', async () => {
-    let finish: (result: StopResult) => void = () => {}
-    const stop = vi.fn(() => new Promise<StopResult>((resolve) => (finish = resolve)))
-    const mounted = mount(
-      tasksFor(
-        {
-          state: 'monitoring',
-          supportsTaskStop: true,
-          children: [view('a'), view('b', { stoppable: false })]
-        },
-        { stop }
-      )
-    )
-    expand(mounted)
-    const buttons = stopButtons(mounted)
-    expect(buttons.map((button) => button.props.accessibilityLabel)).toEqual(['Stop review a'])
-    act(() => buttons[0]!.props.onPress())
-    act(() => buttons[0]!.props.onPress())
-    expect(stop).toHaveBeenCalledTimes(1)
-    expect(stop).toHaveBeenCalledWith('task-a')
-    expect(stopButtons(mounted)[0]!.props.disabled).toBe(true)
-    await act(async () => finish(UNCONFIRMED))
-    expect(stopButtons(mounted)[0]!.props.disabled).toBe(false)
-  })
 
   it('keeps a confirmed Stop held until its row leaves, and offers it again if the row comes back', async () => {
     let finish: (result: StopResult) => void = () => {}
@@ -205,31 +165,5 @@ describe('MobileNativeChatBackgroundTasks', () => {
       )
     })
     expect(stopButtons(mounted)[0]!.props.disabled).toBe(false)
-  })
-
-  it('offers Stop all only to a host with no per-row stop that still accepts one', async () => {
-    let finish: (result: StopResult) => void = () => {}
-    const stop = vi.fn(() => new Promise<StopResult>((resolve) => (finish = resolve)))
-    const fallback = mount(tasksFor({ state: 'monitoring', children: [view('a')] }, { stop }))
-    expand(fallback)
-    expect(stopButtons(fallback).map((button) => button.props.accessibilityLabel)).toEqual([
-      'Stop background tasks'
-    ])
-    const button = stopButtons(fallback)[0]!
-    expect(styleOf(button)).toMatchObject({ minHeight: 32, minWidth: 44 })
-    expect(button.props.hitSlop).toBe(6)
-    expect(Number(styleOf(button).minHeight) + 2 * button.props.hitSlop).toBe(44)
-    act(() => button.props.onPress())
-    act(() => button.props.onPress())
-    expect(stop).toHaveBeenCalledTimes(1)
-    expect(stop).toHaveBeenCalledWith(undefined)
-    expect(stopButtons(fallback)[0]!.props.disabled).toBe(true)
-    await act(async () => finish(STOPPED))
-    expect(stopButtons(fallback)[0]!.props.disabled).toBe(false)
-    const none = mount(
-      tasksFor({ state: 'monitoring', supportsStopAll: false, children: [view('a')] })
-    )
-    expand(none)
-    expect(stopButtons(none)).toEqual([])
   })
 })

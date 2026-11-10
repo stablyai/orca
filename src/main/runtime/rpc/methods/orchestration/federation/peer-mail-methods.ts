@@ -1,4 +1,5 @@
-import { defineMethod, type RpcContext } from '../../../core'
+import type { RpcContext } from '../../../core'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isGeneratedId } from '../../../../orchestration/db/generated-id'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
@@ -48,8 +49,17 @@ function pendingReplies(db: OrchestrationDb, peerFingerprint: string): Federatio
 }
 
 export const ORCHESTRATION_PEER_MAIL_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.peerMailDeliver',
+    access: {
+      kind: 'localOnly',
+      targets: {
+        conversationId: 'conversation',
+        messageId: 'message',
+        to: 'party',
+        threadId: 'message'
+      }
+    },
     permission: 'workspace',
     params: PeerMailDeliverParams,
     handler: async (params, ctx) => {
@@ -134,8 +144,9 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
       return { message: { id: params.messageId, to } }
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.peerMailPull',
+    access: { kind: 'localOnly', targets: {} },
     permission: 'workspace',
     params: PeerMailPullParams,
     handler: async (params, ctx) => {
@@ -157,8 +168,9 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
       }
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.peerMailAck',
+    access: { kind: 'localOnly', targets: {} },
     permission: 'workspace',
     params: PeerMailAckParams,
     handler: (params, ctx) => {
