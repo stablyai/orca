@@ -22,7 +22,7 @@ import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/client-hos
 import { useEditorGroupFileDropOwner } from '../editor/use-editor-group-file-drop-owner'
 import { cn } from '@/lib/utils'
 import { UNFOCUSED_SPLIT_GROUP_OPACITY } from './split-group-dim'
-import { useWindowBackdropActive } from '@/lib/window-backdrop'
+import { useWindowBackdropActive } from '@/app-shell/appearance/window-backdrop'
 import { useThemeBackgroundStore } from '@/store/appearance/theme-background'
 import { EditorRevealFlash } from './EditorRevealFlash'
 import { SplitPaneLanding } from './SplitPaneLanding'

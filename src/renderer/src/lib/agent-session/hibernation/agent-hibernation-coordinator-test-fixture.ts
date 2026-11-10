@@ -9,7 +9,7 @@ import type { AppState } from '@/store/types'
 import { DEFAULT_AGENT_HIBERNATION_IDLE_MS } from './agent-hibernation-planner'
 import { resetAgentHibernationCoordinatorForTests } from './agent-hibernation-coordinator'
 import { hydrateDrivers } from '../../pane-manager/mobile-driver-state'
-import { resetForegroundTerminalTabIdsForTests } from '../../foreground-terminal-tabs'
+import { resetForegroundTerminalTabIdsForTests } from '../../../components/terminal-pane/parking/retention/foreground-terminal-tabs'
 import { resetAgentHibernationOutputActivityForTests } from './agent-hibernation-output-activity'
 import {
   observeHibernationPtyBindings,

@@ -47,7 +47,8 @@ describe('deferHiddenAgentResume', () => {
   })
 
   it('releases the hold under a record key the pane no longer holds', async () => {
-    const { isPaneSpawnDeferred } = await import('@/lib/pane-spawn-deferral-registry')
+    const { isPaneSpawnDeferred } =
+      await import('@/components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry')
     const session = hiddenPaneSession()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: deferHiddenAgentResume reads only the record entry.
     const legacyStartup = {

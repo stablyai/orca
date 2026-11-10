@@ -1,8 +1,8 @@
 import {
   readBrowserAttachmentFile,
   releaseBrowserAttachmentFiles
-} from '@/lib/browser-attachment-files'
-import { userNamedFileAccess } from '@/lib/local-file-access'
+} from '@/lib/files/drop/browser-attachment-files'
+import { userNamedFileAccess } from '@/lib/files/access/local-file-access'
 import {
   nativeChatAttachmentOwnerChangedNotice,
   nativeChatAttachmentUnreadableNotice

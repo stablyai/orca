@@ -5,7 +5,7 @@ import {
   type EditorRequestCmdSaveDetail
 } from './editor/autosave/editor-autosave'
 import { getEditorCmdSaveFileId } from './editor/save/commands/editor-cmd-save-target'
-import { isEventTargetInsideFloatingWorkspacePanel } from '@/lib/floating-workspace-terminal-actions'
+import { isEventTargetInsideFloatingWorkspacePanel } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 
 type EditorShortcutContext = {
   event: KeyboardEvent

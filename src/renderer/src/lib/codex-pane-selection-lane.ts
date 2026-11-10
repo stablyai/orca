@@ -23,7 +23,7 @@ import { wslHostDistroForTarget } from '../runtime/provider-accounts/ownership/w
 import {
   getCachedWindowsTerminalCapabilities,
   hasCachedWindowsTerminalCapabilities
-} from './windows-terminal-capabilities'
+} from '../runtime/hosts/capabilities/windows-terminal-capabilities'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo

@@ -64,7 +64,7 @@ export const PLUGIN_PANEL_BRIDGE_API = {
   }),
   'events.subscribe': spec({
     summary:
-      "Delivers a workspace or agent event to this panel as `orca.on(event)`; needs the event's read capability. The frame APIs call it for you.",
+      "Delivers a workspace, agent or editor event to this panel as `orca.on(event)`; needs the event's read capability, when it has one. The frame APIs call it for you.",
     since: 2,
     scope: 'plugin-private',
     capability: null,
