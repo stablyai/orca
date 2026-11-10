@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { useBillingState } from '../../billing/billing-summary-store'
 import { accountMenuUsageLines } from '../../billing/plan-billing-usage-copy'
@@ -53,6 +53,7 @@ function AccountAvatar({
 
 export function SidebarAccountMenu(): React.JSX.Element {
   const t = useTranslate()
+  const locale = useIntlLocale()
   const authStatus = useAppStore((s) => s.orcaProfileAuthStatus)
   const signingIn = useAppStore((s) => Boolean(s.orcaProfileSignInProgress))
   const connectCurrentOrcaProfile = useAppStore((s) => s.connectCurrentOrcaProfile)
@@ -70,7 +71,7 @@ export function SidebarAccountMenu(): React.JSX.Element {
 
   const identity = getAccountMenuIdentity(authStatus)
   // The team is named once, on the switcher below; the header carries the plan's hours instead.
-  const usage = accountMenuUsageLines(useBillingState().result, t)
+  const usage = accountMenuUsageLines(useBillingState().result, t, locale)
   const visibleItems = selectVisibleAccountMenuItems(registeredItems, authStatus)
   // Freeze the item list while the menu is open: a billing answer arriving mid-read must not
   // swap rows under the pointer (e.g. Upgrade replacing Plan & billing).

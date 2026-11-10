@@ -181,6 +181,10 @@ export function isOrcaBillingInterval(value: unknown): value is OrcaBillingInter
 
 /** Where Stripe's hosted pages send the browser back: the Worker's return page opens this link. */
 export const ORCA_BILLING_RETURN_CHANNEL = 'billing:return'
+
+/** Target sent with `ui:openSettings` to land on Settings › Orca account (Plan & billing). */
+export const ORCA_PLAN_BILLING_SETTINGS_TARGET = { pane: 'orca-account' } as const
+export type OrcaOpenSettingsTarget = typeof ORCA_PLAN_BILLING_SETTINGS_TARGET
 export type OrcaBillingReturn = { kind: 'checkout-success' | 'checkout-cancel' | 'portal' }
 
 /** Parses `orca://billing/return?checkout=success|cancel` or `?portal=return`; anything else is null. */

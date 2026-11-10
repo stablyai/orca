@@ -48,30 +48,58 @@ describe('sandbox hours copy', () => {
   })
 
   it('warns at the level billing reports until the hours run out', () => {
-    expect(usageWarningLine(team({ usageWarningPercent: null }), t)).toBeNull()
-    expect(usageWarningLine(team({ usageWarningPercent: 75 }), t)).toBe(
+    expect(usageWarningLine(team({ usageWarningPercent: null }), t, 'en')).toBeNull()
+    expect(usageWarningLine(team({ usageWarningPercent: 75 }), t, 'en')).toBe(
       'Your team has used 75% of this month’s sandbox hours.'
     )
-    expect(usageWarningLine(team({ usageWarningPercent: 90 }), t)).toBe(
+    expect(usageWarningLine(team({ usageWarningPercent: 90 }), t, 'en')).toBe(
       'Your team has used 90% of this month’s sandbox hours.'
     )
-    expect(usageWarningLine(team({ usageWarningPercent: 80 }), t)).toBe(
+    expect(usageWarningLine(team({ usageWarningPercent: 80 }), t, 'en')).toBe(
       'Your team has used 80% of this month’s sandbox hours.'
     )
-    expect(usageWarningLine(team({ usageWarningPercent: 100 }), t)).toBeNull()
+  })
+
+  it('says what happens next at 100%, by overage', () => {
+    const out = { usedSeconds: 120 * HOUR, remainingIncludedSeconds: 0, usageWarningPercent: 100 }
+    expect(usageWarningLine(team(out), t, 'en')).toBe(
+      'Your team has used all of this month’s sandbox hours. Running sandboxes go to sleep and new ones can’t start. Turn on overage to keep going.'
+    )
+    expect(
+      usageWarningLine(
+        team({ ...out, overage: { ...sampleTeam.overage, optedIn: true, spendCapCents: 2500 } }),
+        t,
+        'en'
+      )
+    ).toBe(
+      'Your team has used all of this month’s sandbox hours. Overage is on, up to your $25 spend cap.'
+    )
   })
 
   it('states the actual share used, floored, not the level that triggered it', () => {
-    expect(usageWarningLine(team({ usedSeconds: 119 * HOUR, usageWarningPercent: 90 }), t)).toBe(
-      'Your team has used 99% of this month’s sandbox hours.'
-    )
-    expect(usageWarningLine(team({ usedSeconds: 92 * HOUR, usageWarningPercent: 75 }), t)).toBe(
-      'Your team has used 76% of this month’s sandbox hours.'
-    )
+    expect(
+      usageWarningLine(team({ usedSeconds: 119 * HOUR, usageWarningPercent: 90 }), t, 'en')
+    ).toBe('Your team has used 99% of this month’s sandbox hours.')
+    expect(
+      usageWarningLine(team({ usedSeconds: 92 * HOUR, usageWarningPercent: 75 }), t, 'en')
+    ).toBe('Your team has used 76% of this month’s sandbox hours.')
     // Never "100%" while billing still reports hours left.
-    expect(usageWarningLine(team({ usedSeconds: 119.9 * HOUR, usageWarningPercent: 90 }), t)).toBe(
-      'Your team has used 99% of this month’s sandbox hours.'
-    )
+    expect(
+      usageWarningLine(team({ usedSeconds: 119.9 * HOUR, usageWarningPercent: 90 }), t, 'en')
+    ).toBe('Your team has used 99% of this month’s sandbox hours.')
+  })
+
+  it('shows the warning to owners and admins only: members are not alerted', () => {
+    const member = team({
+      usedSeconds: 110 * HOUR,
+      usageWarningPercent: 90,
+      canManageBilling: false
+    })
+    expect(usageWarningLine(member, t, 'en')).toBeNull()
+    expect(accountMenuUsageLines({ status: 'ok', entitlement: member }, t, 'en')).toEqual({
+      hoursLeft: '78.5 sandbox hours left',
+      warning: null
+    })
   })
 
   it('turns the hours bar to the warning tone at 90%', () => {
@@ -87,7 +115,8 @@ describe('sandbox hours copy', () => {
           status: 'ok',
           entitlement: team({ remainingIncludedSeconds: 20 * HOUR, usageWarningPercent: 90 })
         },
-        t
+        t,
+        'en'
       )
     ).toEqual({
       hoursLeft: '20 sandbox hours left',
@@ -96,9 +125,10 @@ describe('sandbox hours copy', () => {
     expect(
       accountMenuUsageLines(
         { status: 'ok', entitlement: team({ plan: null, planLabel: null, status: 'none' }) },
-        t
+        t,
+        'en'
       )
     ).toBeNull()
-    expect(accountMenuUsageLines({ status: 'failed', error: 'offline' }, t)).toBeNull()
+    expect(accountMenuUsageLines({ status: 'failed', error: 'offline' }, t, 'en')).toBeNull()
   })
 })
