@@ -70,6 +70,10 @@ test('synchronous system theme callbacks do not reenter appearance configuration
       start() {}
       dispose() {}
     },
+    DefaultNetworkObserver: class {
+      start() {}
+      stop() {}
+    },
     ...appearance,
     ConfigurationConstant: {
       ColorMode: { COLOR_MODE_NOT_SET: -1, COLOR_MODE_DARK: 0, COLOR_MODE_LIGHT: 1 }

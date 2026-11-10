@@ -757,3 +757,33 @@ test('a socket close reconnects the supervised session and stop cancels further 
     'stopped'
   ])
 })
+
+test('a network change replaces a stranded handshake and ignores the old socket closing', async (t) => {
+  const previousPath = createRpcPeer({ authenticate: false })
+  const currentPath = createRpcPeer()
+  let availablePath = previousPath
+  let now = 10_000
+  const { HostSession } = loadArkts('transport/HostSession.ets', ['HostSession'], {
+    ...currentPath,
+    SpikeRpcClient: function () {
+      return new availablePath.SpikeRpcClient()
+    },
+    Date: { now: () => now },
+    directPath: () => 'lan',
+    LOG_LEVEL_INFO: 'info',
+    LOG_LEVEL_SUCCESS: 'success',
+    LOG_LEVEL_WARN: 'warn'
+  })
+  const session = new HostSession(meta, 'synthetic-token')
+  t.after(() => session.stop())
+  session.start()
+  assert.equal(session.getPhase(), 'connecting')
+
+  availablePath = currentPath
+  now += 3000
+  session.revive(true)
+  await new Promise(setImmediate)
+  assert.equal(session.getPhase(), 'connected')
+  previousPath.close()
+  assert.equal(session.getPhase(), 'connected')
+})

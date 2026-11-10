@@ -11,6 +11,7 @@ import { directPath, RelayHostReachability } from '../diagnostics/ConnectionDiag
 
 export type SessionPhase = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'stopped' | 'auth-failed';
 type Listener = (phase: SessionPhase, detail: string) => void;
+const STALE_DIAL_AGE_MS = 2000;
 
 export class HostSession {
   private client: SpikeRpcClient | null = null;
@@ -20,6 +21,7 @@ export class HostSession {
   private context: common.Context | null;
   private stopped: boolean = true;
   private attempt: number = 0;
+  private dialStartedAt: number = 0;
   private reconnectTimer: number = -1;
   private probeTimer: number = -1;
   private upgradeTimer: number = -1;
@@ -79,11 +81,20 @@ export class HostSession {
     if (upgrade) { upgrade.close(); }
     this.publish('stopped', '已断开');
   }
-  revive(): void {
+  revive(networkChanged: boolean = false): void {
     if (this.stopped) { return; }
     if (this.reconnectTimer >= 0) { this.dial(); return; }
     let client = this.client;
-    if (this.phase === 'connected' && client) { this.checkHealth(client); }
+    if (!client) { return; }
+    if (this.phase === 'connected') {
+      this.checkHealth(client);
+      if (networkChanged && this.activePath === 'relay' && !this.upgradeClient) { this.scheduleDirectUpgrade(client, 0); }
+    } else if (networkChanged && this.pendingPath && Date.now() - this.dialStartedAt >= STALE_DIAL_AGE_MS) {
+      this.useRelayNext = this.pendingPath === 'relay';
+      this.graceNext = this.graceNext || this.usingGrace;
+      this.client = null; client.close();
+      this.dial();
+    }
   }
   private clearTimers(): void {
     if (this.reconnectTimer >= 0) { clearTimeout(this.reconnectTimer); this.reconnectTimer = -1; }
@@ -96,6 +107,7 @@ export class HostSession {
     this.usingGrace = false;
     let useRelay = this.useRelayNext && this.meta.relay !== undefined && this.credential !== null;
     this.useRelayNext = false; this.pendingPath = useRelay ? 'relay' : this.localPath;
+    this.dialStartedAt = Date.now();
     let client = new SpikeRpcClient(useRelay ? 30000 : 10000); this.client = client;
     client.setFflate(fflateModule); client.setLogSink((line: string): void => this.log(line));
     client.onSocketClosed((): void => this.retry(client));
@@ -143,6 +155,7 @@ export class HostSession {
       let next = await resolveRelayEndpoint(endpoint, token, this.meta.publicKeyB64);
       if (this.stopped || this.client !== client) { throw new Error('Connection cancelled'); }
       if (this.context) { await updateRelayCredential(this.context, this.meta.id, credential, next, this.relayFence(credential)); }
+      if (this.stopped || this.client !== client) { throw new Error('Connection cancelled'); }
       this.meta.relay = next; endpoint = next;
     }
     if (this.stopped || this.client !== client) { throw new Error('Connection cancelled'); }
@@ -230,7 +243,8 @@ export class HostSession {
       if (this.healthClient === client) { this.healthClient = null; }
     });
   }
-  private scheduleDirectUpgrade(relay: SpikeRpcClient): void {
+  private scheduleDirectUpgrade(relay: SpikeRpcClient, delay: number = 30000): void {
+    if (this.upgradeTimer >= 0) { clearTimeout(this.upgradeTimer); }
     this.upgradeTimer = setTimeout((): void => {
       this.upgradeTimer = -1;
       if (this.stopped || this.client !== relay) { return; }
@@ -238,14 +252,16 @@ export class HostSession {
       candidate.setFflate(fflateModule); candidate.setLogSink((line: string): void => this.log(line));
       candidate.connect(this.meta.endpoint, this.token, this.meta.publicKeyB64, 'v2').then(async (): Promise<void> => {
         await settleRuntimeCapabilities(candidate);
-        if (this.stopped || this.client !== relay) { candidate.close(); return; }
+        if (this.stopped || this.client !== relay || this.upgradeClient !== candidate) { candidate.close(); return; }
         this.clearTimers(); this.upgradeClient = null; this.client = candidate;
         candidate.onSocketClosed((): void => this.retry(candidate));
         this.markConnected(false); relay.close(); this.probeLater(candidate);
       }).catch((): void => {
-        candidate.close(); this.upgradeClient = null;
+        candidate.close();
+        if (this.upgradeClient !== candidate) { return; }
+        this.upgradeClient = null;
         if (!this.stopped && this.client === relay) { this.scheduleDirectUpgrade(relay); }
       });
-    }, 30000);
+    }, delay);
   }
 }

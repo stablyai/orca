@@ -66,6 +66,9 @@ test('a newer external pairing link replaces the pending confirmation and keeps 
     ShellWindowRegions: class {
       start() {}
     },
+    DefaultNetworkObserver: class {
+      start() {}
+    },
     setAppearanceListener() {},
     parseLaunchRoute,
     router,

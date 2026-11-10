@@ -1,5 +1,6 @@
 import { dropHomePrewarm, dropPrewarmForMemoryPressure } from '../webshell/HomeShellPrewarm';
 import { closeIdleDesktopConnections, reviveDesktopConnections } from '../transport/DesktopConnections';
+import { DefaultNetworkObserver } from '../transport/DefaultNetworkObserver';
 import { AbilityConstant, UIAbility, Want, Configuration, ConfigurationConstant } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window, router } from '@kit.ArkUI';
@@ -14,6 +15,8 @@ export default class EntryAbility extends UIAbility {
   private observedStage: window.WindowStage | null = null;
   private inactiveNotified: boolean = false;
   private backgrounded: boolean = false;
+  private networkChangedWhileBackgrounded: boolean = false;
+  private networkObserver: DefaultNetworkObserver | null = null;
   private mainWindow: window.Window | null = null;
   private windowRegions: ShellWindowRegions | null = null;
   private appliedColorMode: number = -99;
@@ -117,11 +120,17 @@ export default class EntryAbility extends UIAbility {
           familyName: 'Geist', familySrc: $rawfile('fonts/Geist-Variable.ttf')
         });
       } catch (e) { hilog.warn(0x0000, 'OrcaEntry', 'Custom font could not be registered'); }
+      this.networkObserver = new DefaultNetworkObserver((): void => {
+        if (this.backgrounded) { this.networkChangedWhileBackgrounded = true; }
+        else { reviveDesktopConnections('network-change'); }
+      });
+      this.networkObserver.start();
       this.windowReady = true;
     });
   }
   onConfigurationUpdate(config: Configuration): void { applyUiLanguage(); if (config.colorMode !== undefined) { setSystemAppearance(config.colorMode); } }
   onWindowStageDestroy(): void {
+    this.networkObserver?.stop(); this.networkObserver = null; this.networkChangedWhileBackgrounded = false;
     closeIdleDesktopConnections(); dropHomePrewarm(); this.windowReady = false;
     try { this.observedStage?.off('windowStageEvent', this.windowStageChanged); } catch (e) {}
     this.observedStage = null;
@@ -133,8 +142,9 @@ export default class EntryAbility extends UIAbility {
   }
   onForeground(): void {
     if (!this.observedStage) { this.inactiveNotified = false; }
-    let resumed = this.backgrounded; this.backgrounded = false;
-    reviveDesktopConnections(resumed); this.refreshKeyboardArea(); this.windowRegions?.refresh();
+    const reason = this.networkChangedWhileBackgrounded ? 'network-change' : this.backgrounded ? 'app-resume' : undefined;
+    this.backgrounded = false; this.networkChangedWhileBackgrounded = false;
+    reviveDesktopConnections(reason); this.refreshKeyboardArea(); this.windowRegions?.refresh();
     this.context.eventHub.emit('orcaForeground'); this.styleSystemBars();
   }
   onBackground(): void {

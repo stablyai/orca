@@ -153,3 +153,70 @@ test('leaving diagnostics closes a late desktop socket and cannot settle a new r
   assert.equal(await current, true)
   assert.equal(sockets[1].opened, false)
 })
+
+test('default-network recovery reacts to a new route and a return from offline, but not initial or repeated events', () => {
+  const listeners = new Map()
+  let netId = 4
+  let gateway = '10.0.2.2'
+  let pending
+  const changes = []
+  const { DefaultNetworkObserver } = loadArkts(
+    'transport/DefaultNetworkObserver.ets',
+    ['DefaultNetworkObserver'],
+    {
+      connection: {
+        getDefaultNetSync: () => ({ netId }),
+        getConnectionPropertiesSync: () => ({
+          interfaceName: 'eth0',
+          linkAddresses: [{ address: { address: '10.0.2.15' }, prefixLength: 24 }],
+          routes: [{ interface: 'eth0', gateway: { address: gateway }, isDefaultRoute: true }]
+        }),
+        createNetConnection: () => ({
+          on: (event, callback) => listeners.set(event, callback),
+          register: (callback) => callback(),
+          unregister() {}
+        })
+      },
+      setTimeout: (callback) => {
+        pending = callback
+        return 1
+      },
+      clearTimeout: () => {
+        pending = undefined
+      }
+    }
+  )
+  const watch = new DefaultNetworkObserver(() => changes.push(netId))
+  const flush = () => {
+    const callback = pending
+    pending = undefined
+    callback?.()
+  }
+  watch.start()
+  listeners.get('netAvailable')()
+  flush()
+  assert.deepEqual(changes, [])
+
+  gateway = '10.0.2.3'
+  listeners.get('netConnectionPropertiesChange')()
+  flush()
+  listeners.get('netAvailable')()
+  flush()
+  assert.deepEqual(changes, [4])
+
+  netId = 0
+  listeners.get('netLost')()
+  flush()
+  assert.deepEqual(changes, [4])
+  netId = 4
+  listeners.get('netAvailable')()
+  flush()
+  listeners.get('netLost')()
+  listeners.get('netAvailable')()
+  flush()
+  netId = 9
+  listeners.get('netAvailable')()
+  watch.stop()
+  flush()
+  assert.deepEqual(changes, [4, 4, 4])
+})

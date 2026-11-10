@@ -7,6 +7,7 @@ import { RelayCredential } from './RelayProtocol';
 import { SpikeRpcClient } from './SpikeRpcClient';
 
 type ProfileChange = 'name' | 'endpoint' | 'paired';
+type RevivalReason = 'app-resume' | 'network-change';
 
 type DesktopListener = (phase: SessionPhase, detail: string) => void;
 export type DesktopCredentialStatus = 'ready' | 'missing' | 'temporarily-unavailable';
@@ -65,8 +66,8 @@ export function forgetDesktopConnection(hostId: string): void {
   connection?.forget();
 }
 
-export function reviveDesktopConnections(resumed: boolean = false): void {
-  desktops.forEach((connection: DesktopConnection): void => connection.revive(resumed));
+export function reviveDesktopConnections(reason?: RevivalReason): void {
+  desktops.forEach((connection: DesktopConnection): void => connection.revive(reason));
 }
 
 export class DesktopConnection {
@@ -240,10 +241,14 @@ export class DesktopConnection {
     else { this.publish('stopped', '已断开'); }
   }
 
-  revive(resumed: boolean = false): void {
+  revive(reason?: RevivalReason): void {
     if (this.removed || this.paused || !this.wanted) { return; }
-    if (resumed) { appendLog(this.context, LOG_LEVEL_INFO, 'App resumed', '', this.hostId, 'app-resumed').catch(() => {}); }
-    if (this.session) { this.session.revive(); }
+    if (reason) {
+      let network = reason === 'network-change';
+      appendLog(this.context, LOG_LEVEL_INFO, network ? 'Network changed' : 'App resumed', '', this.hostId,
+        network ? 'network-changed' : 'app-resumed').catch(() => {});
+    }
+    if (this.session) { this.session.revive(reason === 'network-change'); }
     else { this.connect(); }
   }
 }
