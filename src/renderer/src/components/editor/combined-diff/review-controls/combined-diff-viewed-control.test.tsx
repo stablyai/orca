@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { toast } from 'sonner'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { GitDiffTextResult } from '../../../../../../shared/git/diff/git-diff-compare-types'
@@ -156,10 +157,12 @@ beforeEach(() => {
   for (const key of getReviewedDiffs().keys()) {
     setDiffReviewed(key, null)
   }
+  vi.spyOn(toast, 'error').mockImplementation(() => '')
   stat.mockReset().mockResolvedValue({ mtime: 123, size: 5, isDirectory: false })
 })
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   useAppStore.setState(useAppStore.getInitialState(), true)
 })
 
@@ -326,6 +329,7 @@ it.each([123, 124])(
       })
     )
     expect(checkbox.getAttribute('aria-checked')).toBe(mtime === 123 ? 'true' : 'false')
+    expect(toast.error).toHaveBeenCalledTimes(mtime === 123 ? 0 : 1)
     expect(screen.queryByLabelText('Diff contents')).toBeNull()
     expect(checkbox.hasAttribute('disabled')).toBe(false)
   }

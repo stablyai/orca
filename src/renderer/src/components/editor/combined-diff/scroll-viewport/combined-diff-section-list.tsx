@@ -157,6 +157,7 @@ export function CombinedDiffSectionList({
                     return (
                       <>
                         <CombinedDiffViewedControl
+                          onExpand={() => toggleSection(virtualItem.index)}
                           loadForReview={() => loadSectionForReview(virtualItem.index)}
                           file={file}
                           section={section}

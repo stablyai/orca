@@ -19,7 +19,10 @@ import {
 } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { isWslDistroNotRunningRefusal } from '../../../../shared/wsl-distro-not-running-refusal'
 
-const inFlightDiffReads = new Map<string, InFlightContentRead<DiffContent>>()
+const inFlightDiffReads = new Map<
+  string,
+  InFlightContentRead<{ result: DiffContent; beforeTime: number | null | undefined }>
+>()
 
 export type EditorPanelDiffContentLoader = (
   file: OpenFile | null,
@@ -109,11 +112,11 @@ export function useEditorPanelDiffContentLoader({
                 (stat) => stat.mtime,
                 (error: unknown) => (isMissingRuntimePathError(error) ? null : undefined)
               )
-        const beforeTime = await readReviewMetadata()
         let pending = inFlightDiffReads.get(key)
         if (!pending) {
-          const promise: Promise<DiffContent> =
-            effectiveDiffSource === 'commit'
+          const promise = (async () => {
+            const beforeTime = await readReviewMetadata()
+            const result: DiffContent = await (effectiveDiffSource === 'commit'
               ? commitCompare
                 ? getRuntimeGitCommitDiff(
                     {
@@ -167,7 +170,9 @@ export function useEditorPanelDiffContentLoader({
                         : {})
                     },
                     wake
-                  )
+                  ))
+            return { result, beforeTime }
+          })()
           pending = { externalEventGeneration: options?.externalEventGeneration, promise }
           inFlightDiffReads.set(key, pending)
           queueMicrotask(() => {
@@ -176,7 +181,7 @@ export function useEditorPanelDiffContentLoader({
             }
           })
         }
-        const result = await pending.promise
+        const { result, beforeTime } = await pending.promise
         if (diffReadGenerationRef.current[file.id] !== generation) {
           return
         }

@@ -78,7 +78,14 @@ async function requestCombinedViewedMark({
           )
     operation.assertCurrent()
     assertLoadedCurrent?.()
-    if (!isMounted() || expectedTime !== modifiedTime || !isCurrentSection(modifiedTime)) {
+    if (!isMounted()) {
+      return
+    }
+    if (expectedTime !== modifiedTime) {
+      onFailure()
+      return
+    }
+    if (!isCurrentSection(modifiedTime)) {
       return
     }
     setDiffReviewed(key, {
@@ -105,9 +112,11 @@ export function CombinedDiffViewedControl({
   file,
   section,
   setSections,
-  loadForReview
+  loadForReview,
+  onExpand
 }: {
   loadForReview?: () => ReturnType<typeof fetchCombinedDiffSection>
+  onExpand?: () => void
   file: OpenFile
   section: DiffSection
   setSections: Dispatch<SetStateAction<DiffSection[]>>
@@ -176,11 +185,15 @@ export function CombinedDiffViewedControl({
     }
     if (viewed) {
       setDiffReviewed(identity.key, null)
-      setSections((sections) =>
-        sections.map((current) =>
-          current.key === section.key ? { ...current, collapsed: false } : current
+      if (section.collapsed && onExpand) {
+        onExpand()
+      } else {
+        setSections((sections) =>
+          sections.map((current) =>
+            current.key === section.key ? { ...current, collapsed: false } : current
+          )
         )
-      )
+      }
       return
     }
     setPending(true)
