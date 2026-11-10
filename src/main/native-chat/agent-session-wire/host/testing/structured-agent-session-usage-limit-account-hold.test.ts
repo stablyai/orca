@@ -191,3 +191,23 @@ it('extends a weekly hold for a session window still spent at the weekly reset',
   await rig!.settleAccepted(id, 'continued')
   expect((await rig!.submission(id))?.dispatchState).toBe('accepted')
 })
+
+it('rebuilds a covering hold beside a spent window of unknown reset, then settles after the release', async () => {
+  const chat = await heldChat(false)
+  const weeklyReset = chat.cut.resetsAt + 96 * HOUR
+  const sessionUnknown = { usedPercent: 100, resetsAt: null }
+  // A restart two days after the cut: the covering week holds it; the unknown session refuses for now.
+  expect(
+    await chat.pass(chat.cut.resetsAt + 48 * HOUR, (now) =>
+      weekly(100, weeklyReset, now, sessionUnknown)
+    )
+  ).toEqual([])
+  expect(chat.state()).toMatchObject({ state: 'failed', continueAt: weeklyReset })
+  // A fresh reading of this System Default home with room releases the refusal.
+  const sent = await chat.pass(weeklyReset + 15_000, (now) => weekly(0, null, now))
+  expect(sent).toHaveLength(1)
+  const id = sent[0]!.clientMessageId
+  await eventually(async () => expect((await rig!.submission(id))?.handedOverAt).toBeDefined())
+  await rig!.settleAccepted(id, 'continued')
+  expect((await rig!.submission(id))?.dispatchState).toBe('accepted')
+})

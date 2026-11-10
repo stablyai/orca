@@ -13,7 +13,10 @@ export function weekly(
   usedPercent: number,
   resetsAt: number | null,
   updatedAt: number,
-  session = { usedPercent: 3, resetsAt: updatedAt + HOUR }
+  session: { usedPercent: number; resetsAt: number | null } = {
+    usedPercent: 3,
+    resetsAt: updatedAt + HOUR
+  }
 ) {
   return {
     provider: 'codex',
@@ -36,23 +39,8 @@ export type FleetSources = {
   limits: ProviderRateLimits | null
 }
 
-/** The production sweep over `count` due chats sharing one launch home, attributed through the
- *  production account sources. Dispatch is answered as superseded, which spends no budget. */
-export function usageLimitFleet(options: {
-  count: number
-  provider: 'claude' | 'codex'
-  now: number
-  sources: FleetSources
-  /** In send preparation, before the send's synchronous admission check. */
-  preparing?: (id: string) => void
-  /** After a send passed admission. */
-  dispatching?: (id: string) => void
-}) {
-  const { sources } = options
-  let clock = options.now
-  const ids = Array.from({ length: options.count }, (_, index) => `chat-${index}`)
-  const calls = { launchHome: 0, reader: 0 }
-  const dispatched: string[] = []
+/** The production account sources over fake owners; a test replaces their objects to move them. */
+export function fakeAccountSources(sources: FleetSources) {
   let suspension: { reached: () => void; gate: Promise<void> } | undefined
   const production = usageLimitAccountSources({
     rateLimits: () => ({
@@ -73,6 +61,36 @@ export function usageLimitFleet(options: {
     claudeLaunchEnv: () => ({}),
     processEnvironment: {}
   })
+  return {
+    production,
+    /** Holds the next shell-environment read open, after it took its env, until released. */
+    suspendNextShellRead: () => {
+      let release = () => {}
+      let reached = () => {}
+      const reachedPromise = new Promise<void>((resolve) => (reached = resolve))
+      const gate = new Promise<void>((resolve) => (release = resolve))
+      suspension = { reached, gate }
+      return { reached: reachedPromise, release }
+    }
+  }
+}
+
+/** The production sweep over `count` due chats sharing one launch home, attributed through the
+ *  production account sources. Dispatch is answered as superseded, which spends no budget. */
+export function usageLimitFleet(options: {
+  count: number
+  provider: 'claude' | 'codex'
+  now: number
+  sources: FleetSources
+  /** After a send passed admission. */
+  dispatching?: (id: string) => void
+}) {
+  const { sources } = options
+  let clock = options.now
+  const ids = Array.from({ length: options.count }, (_, index) => `chat-${index}`)
+  const calls = { launchHome: 0, reader: 0 }
+  const dispatched: string[] = []
+  const { production, suspendNextShellRead } = fakeAccountSources(sources)
   const record = (id: string) => ({
     ...hostTestRestingOptionsRecord(id),
     provider: options.provider,
@@ -117,7 +135,6 @@ export function usageLimitFleet(options: {
     serialize: (_id, run) => run(),
     send: async (params) => {
       const id = params.envelope.sessionId
-      options.preparing?.(id)
       params.beforeRun?.()
       dispatched.push(id)
       options.dispatching?.(id)
@@ -134,14 +151,6 @@ export function usageLimitFleet(options: {
       clock = at
       await sweep.tick()
     },
-    /** Holds the next shell-environment read open, after it took its env, until released. */
-    suspendNextShellRead: () => {
-      let release = () => {}
-      let reached = () => {}
-      const reachedPromise = new Promise<void>((resolve) => (reached = resolve))
-      const gate = new Promise<void>((resolve) => (release = resolve))
-      suspension = { reached, gate }
-      return { reached: reachedPromise, release }
-    }
+    suspendNextShellRead
   }
 }
