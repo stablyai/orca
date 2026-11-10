@@ -75,6 +75,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     projectGrouping: props.projectGrouping
   })
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
+  const showCardStatus = useAppStore((s) => s.worktreeCardProperties.includes('status'))
   const {
     handleOpenRepoSettings,
     handleOpenWorktreeVisibility,
@@ -345,6 +346,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     settings,
     projectActions,
     newCardStyle,
+    showCardStatus,
     projectGroups,
     session,
     runtime,
