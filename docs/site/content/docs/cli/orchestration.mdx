@@ -86,6 +86,12 @@ orca orchestration worker-keep-open --dispatch <dispatchId>
 orca orchestration worker-start --task <taskId> --retry-of <dispatchId> --worktree current --agent codex
 ```
 
+When a chat worker stops at a permission prompt, the escalation names the prompt. Deny it with a reason and the worker carries on; only a person can allow it:
+
+```bash
+orca orchestration deny --dispatch <dispatchId> --prompt <approvalId> --reason "<what to do instead>"
+```
+
 Do not leave completed worker terminals open just to re-read output — use `worker-read` after `worker-release`. Do not substitute a broad `terminal close` when release returns `release_pending` or `release_unknown`; follow the receipt's recovery action.
 
 ## Federated workers (optional)

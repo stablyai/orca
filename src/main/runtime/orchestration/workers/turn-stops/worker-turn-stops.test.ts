@@ -15,6 +15,8 @@ import '../../db/attempt-outcome-projection'
 import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 import { TerminalWorkerTurnStops } from './terminal-worker-turn-stops'
 import { reportWorkerTurnStop } from './worker-turn-stop-report'
+import type { ChatWorkerPrompt } from '../approvals/chat-worker-approval-prompt'
+import type { AgentJournalApprovalItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 
 const PANE = makePaneKey('tab-worker', '11111111-1111-4111-8111-111111111111')
 const HANDLE = 'term_worker'
@@ -506,5 +508,130 @@ describe('remote worker turn stops', () => {
     enqueueFederationRelay.mockClear()
     reportWorkerTurnStop(db, target, { ...stop, stopKey: 'k2' }, deps)
     expect(enqueueFederationRelay).not.toHaveBeenCalled()
+  })
+})
+
+describe('chat worker approvals', () => {
+  const promptEvent = (promptId: string): AgentSessionTurnCompletionEvent => ({
+    type: 'prompt',
+    prompt: {
+      scope: {
+        executionHostId: LOCAL_EXECUTION_HOST_ID,
+        wslDistro: null,
+        workspaceId: 'repo::/tmp/wt',
+        workspaceKind: 'git-worktree'
+      },
+      sessionId: CHAT_SESSION,
+      promptId,
+      raisedAt: 1
+    }
+  })
+  const finished = (turnId: string): AgentSessionTurnCompletionEvent => ({
+    type: 'completion',
+    completion: {
+      scope: {
+        executionHostId: LOCAL_EXECUTION_HOST_ID,
+        wslDistro: null,
+        workspaceId: 'repo::/tmp/wt',
+        workspaceKind: 'git-worktree'
+      },
+      sessionId: CHAT_SESSION,
+      turnId,
+      outcome: 'success',
+      completedAt: 2
+    }
+  })
+  const approval = (selected: string | null): AgentJournalApprovalItem => ({
+    kind: 'approval',
+    title: 'Allow Bash?',
+    detail: 'rm -rf build',
+    options: [
+      { id: 'allow', label: 'Allow', intent: 'allow_once' },
+      { id: 'deny', label: 'Deny', intent: 'reject_once' }
+    ],
+    resolution: selected
+      ? {
+          state: 'resolved',
+          selectedOptionId: selected,
+          resolvedBy: 'desktop-renderer',
+          resolvedAt: 2
+        }
+      : { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+  })
+
+  function chat() {
+    const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
+    const prompts = new Map<string, ChatWorkerPrompt>()
+    const report = chatWorkerTurnStopReporter(
+      ctx.deps,
+      (run) => run(),
+      async (_sessionId, itemId) => prompts.get(itemId) ?? null
+    )
+    const idle = () => ({ status: 'idle' as const, lastAssistantMessage: '' })
+    const all = () => ctx.db.getUnreadRunMailbox(ctx.run.id, 100)
+    return { ctx, prompts, report, idle, all }
+  }
+
+  it('escalates one open approval once, with its structured payload', async () => {
+    const { ctx, prompts, report, idle } = chat()
+    prompts.set('item_1', { revision: 1, body: approval(null) })
+
+    report(promptEvent('item_1'), idle)
+    report(promptEvent('item_1'), idle)
+    await settle()
+
+    const mail = ctx.mail()
+    expect(mail).toHaveLength(1)
+    expect(mail[0].subject).toBe('Worker is waiting on approval')
+    expect(mail[0].body).toContain(
+      `orchestration deny --dispatch ${ctx.dispatch.id} --prompt item_1`
+    )
+    expect(mail[0].body).not.toContain('Answer it with')
+    expect(JSON.parse(mail[0].payload ?? '{}').approval).toEqual({
+      v: 1,
+      approvalId: 'item_1',
+      state: 'open',
+      worker: {
+        handle: formatOrcaSessionAddress(CHAT_SESSION),
+        dispatchId: ctx.dispatch.id,
+        taskId: ctx.dispatch.task_id
+      },
+      summary: { title: 'Allow Bash?', detail: 'rm -rf build', reason: null },
+      allowedActions: ['allow', 'deny']
+    })
+  })
+
+  it('closes a reported approval once after it is answered in the worker chat', async () => {
+    const { prompts, report, idle, all } = chat()
+    prompts.set('item_1', { revision: 1, body: approval(null) })
+    report(promptEvent('item_1'), idle)
+    await settle()
+
+    prompts.set('item_1', { revision: 2, body: approval('deny') })
+    report(finished('turn-2'), idle)
+    report(finished('turn-3'), idle)
+    await settle()
+
+    const closing = all().filter((message) => message.type === 'status')
+    expect(closing).toHaveLength(1)
+    expect(closing[0].body).toContain("Denied in the worker's own chat")
+    expect(JSON.parse(closing[0].payload ?? '{}').approval).toMatchObject({
+      approvalId: 'item_1',
+      state: 'answered',
+      allowedActions: [],
+      outcome: { by: 'worker-chat', decision: 'deny' }
+    })
+  })
+
+  it('tells the coordinator a plain prompt needs a person, not a message', async () => {
+    const { ctx, report, idle } = chat()
+
+    report(promptEvent('question_1'), idle)
+    await settle()
+
+    const [mail] = ctx.mail()
+    expect(mail.subject).toBe('Worker is waiting on a prompt')
+    expect(mail.body).toContain('A message does not answer it')
+    expect(mail.body).not.toContain('Answer it with')
   })
 })

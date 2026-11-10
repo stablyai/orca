@@ -166,6 +166,12 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'dispatch_preamble_undelivered',
   'question_not_found',
   'answer_conflict',
+  // A worker's permission prompt: only a person allows; Orca answers chat prompts only, while open.
+  'approval_requires_person',
+  'approval_unsupported',
+  'approval_not_open',
+  'approval_option_missing',
+  'approval_refused',
   'stale_delivery',
   'invalid_argument',
   // Preserve archive-hook failure so callers can retry, waive or skip it (#19334).
