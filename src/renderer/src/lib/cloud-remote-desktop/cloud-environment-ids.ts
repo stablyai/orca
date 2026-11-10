@@ -33,6 +33,11 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
+/** Non-React read of the last loaded list; call refreshCloudEnvironmentIds first when it matters. */
+export function isKnownCloudEnvironment(environmentId: string): boolean {
+  return ids.has(environmentId)
+}
+
 export function useIsCloudEnvironment(environmentId: string | null): boolean {
   return useSyncExternalStore(subscribe, () => (environmentId ? ids.has(environmentId) : false))
 }
