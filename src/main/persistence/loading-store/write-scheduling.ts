@@ -117,11 +117,8 @@ function scheduleDomainSave(
     listener(dirtyDomains)
   }
   runtime.automationListProjectionCache = null
-  // A named automationRuns save must not write an older pending run list.
-  if (
-    dirtyDomains?.includes('automationRuns') &&
-    runtime.pendingAutomationRunsAfter !== undefined
-  ) {
+  // A named automationRuns save supersedes older run lists, including one a failed in-flight write restores.
+  if (dirtyDomains?.includes('automationRuns')) {
     runtime.pendingAutomationRunsAfter = runtime.state.automationRuns
   }
   const trackedDomains = runtime.dirtyProfileStateDomains
