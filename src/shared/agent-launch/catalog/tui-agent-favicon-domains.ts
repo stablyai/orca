@@ -4,6 +4,7 @@ import type { TuiAgent } from './tui-agent'
 export const TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>> = {
   grok: 'x.ai',
   'mimo-code': 'mimo.xiaomi.com',
+  'gajae-code': 'gajae-code.com',
   ante: 'antigma.ai',
   trae: 'www.trae.cn',
   muse: 'dev.meta.ai',
