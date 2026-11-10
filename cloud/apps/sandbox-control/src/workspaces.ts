@@ -292,6 +292,9 @@ export async function patchWorkspace(
   } else if (!canManage(caller, row)) {
     throw new WorkspaceError(canSee(caller, row) ? 'forbidden' : 'not_found', 'owner_or_admin_only')
   }
+  if (patch.archived === true) {
+    throw new WorkspaceError('invalid_request', 'archive_via_lifecycle')
+  }
   if (patch.visibility === 'team' && !row.account_id.includes('org:')) {
     // A personal account has no team to share with.
     throw new WorkspaceError('invalid_request', 'personal_account')
@@ -310,7 +313,9 @@ export async function patchWorkspace(
     ...(patch.branch !== undefined ? { repo_branch: patch.branch } : {}),
     ...(patch.visibility !== undefined ? { visibility: patch.visibility } : {}),
     ...(patch.section !== undefined ? { section: patch.section } : {}),
-    ...(patch.archived !== undefined ? { archived_at: patch.archived ? (row.archived_at ?? now) : null } : {}),
+    // Archiving is a lifecycle change (archiveSandbox stops the VM, then sets archived_at); this edit
+    // can only clear a label left by an older label-only archive.
+    ...(patch.archived === false ? { archived_at: null } : {}),
     ...(patch.ownerUserId !== undefined ? { user_id: patch.ownerUserId } : {}),
     ...(patch.tokenUsdMicros !== undefined ? { token_usd_micros: patch.tokenUsdMicros } : {})
   })

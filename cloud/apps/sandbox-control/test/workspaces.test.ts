@@ -103,6 +103,11 @@ describe('workspace registry', () => {
 
   it('refuses to archive a sandbox that is starting or mid-transition, and leaves the row unchanged', async () => {
     const t = await team()
+    for (const status of ['creating', 'suspending']) {
+      t.h.raw.prepare(`UPDATE sandboxes SET status = ? WHERE id = ?`).run(status, t.id)
+      const busy = await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { archived: true })
+      expect(busy).toMatchObject({ status: 409, body: { reason: `sandbox_${status}` } })
+    }
     t.h.raw.prepare(`UPDATE sandboxes SET status = 'resuming' WHERE id = ?`).run(t.id)
     const res = await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { archived: true })
     expect(res).toMatchObject({ status: 409, body: { error: 'conflict', reason: 'sandbox_resuming' } })
@@ -110,6 +115,18 @@ describe('workspace registry', () => {
       status: 'resuming',
       archived_at: null
     })
+  })
+
+  it('archives an asleep sandbox without waking it', async () => {
+    const t = await team()
+    await t.req(t.alice, 'POST', `/v1/sandboxes/${t.id}/suspend`)
+    const { START_COMMAND } = await import('../src/sandbox-vm-commands')
+    const starts = t.h.vercel.commands.filter((c) => c.command === START_COMMAND).length
+    const res = await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { archived: true })
+    expect(res.status).toBe(200)
+    expect(t.h.raw.prepare('SELECT status FROM sandboxes WHERE id = ?').get(t.id)).toEqual({ status: 'archived' })
+    expect(t.h.vercel.commands.filter((c) => c.command === START_COMMAND)).toHaveLength(starts)
+    expect(t.h.vercel.boxes.get(`orca-test-${t.id}`)!.status).toBe('stopped')
   })
 
   it('never labels a running sandbox archived when the archive itself fails', async () => {
