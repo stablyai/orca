@@ -3,6 +3,7 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { getLastBillingStatus } from '@/components/billing/billing-summary-store'
 import { sandboxLimitFromBilling } from '@/components/worktree-creation/vm-build-failure-copy'
+import { classifyEntitlementDenial } from '../../../../shared/orca-billing'
 
 /**
  * Whose seat a start counts against. The per-seat running cap counts the workspace owner's seat,
@@ -23,7 +24,8 @@ export function describeError(
     )
   }
   if (error === 'entitlement_denied') {
-    if (reason === 'concurrency_limit') {
+    const denial = classifyEntitlementDenial(reason)
+    if (denial === 'teamLimit') {
       const limit = sandboxLimitFromBilling(getLastBillingStatus())
       return limit
         ? t(
@@ -36,7 +38,7 @@ export function describeError(
             "You're at your team's limit of running sandboxes. Put one to sleep or delete it, then try again."
           )
     }
-    if (reason === 'member_concurrency_limit') {
+    if (denial === 'memberLimit') {
       return describeSeatLimit(owner, t)
     }
     return t(

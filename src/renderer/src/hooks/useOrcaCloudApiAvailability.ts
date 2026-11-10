@@ -5,6 +5,7 @@ import type { CloudApiAvailability } from '../../../shared/cloud-api/cloud-api-t
 // Settings navigation and the panes share it, so the sections never flicker in and out.
 let availability: CloudApiAvailability | null = null
 let probing = false
+const RETRY_MS = 5_000
 const listeners = new Set<() => void>()
 
 function probe(): void {
@@ -17,16 +18,20 @@ function probe(): void {
     return
   }
   probing = true
-  void bridge
-    .availability()
-    .catch((): CloudApiAvailability => ({ status: 'unconfigured' }))
-    .then((next) => {
+  void bridge.availability().then(
+    (next) => {
       availability = next
       probing = false
       for (const listener of listeners) {
         listener()
       }
-    })
+    },
+    () => {
+      // A failed probe is not "unconfigured": retry shortly instead of hiding the pages for good.
+      probing = false
+      setTimeout(probe, RETRY_MS)
+    }
+  )
 }
 
 function subscribe(listener: () => void): () => void {

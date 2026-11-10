@@ -14259,7 +14259,38 @@
           "needsAutoForward": "Turn on Auto-forward ports to change this.",
           "autoForwardDescriptionSandboxes": "Forward dev servers in sandboxes and on remote hosts to this computer."
         },
+        "orcaCloudPredictiveWake": {
+          "title": "Wake sleeping workspaces early",
+          "description": "A sleeping cloud workspace starts waking when you point at it or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after the idle time.",
+          "group": "Orca Cloud",
+          "description_one": "Starts waking a sleeping sandbox when you point at its workspace or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after {{count}} minute idle. Early wakes count toward your sandbox hours.",
+          "description_other": "Starts waking a sleeping sandbox when you point at its workspace or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after {{count}} minutes idle. Early wakes count toward your sandbox hours."
+        },
         "cloudApi": {
+          "keys": {
+            "createdMine": "Created {{time}}",
+            "createdByPerson": "Created by <person></person> {{time}}",
+            "lastUsed": "Last used {{time}}",
+            "neverUsed": "Never used",
+            "expired": "Expired",
+            "expires": "Expires {{time}}",
+            "revokeLabel": "Revoke {{keyName}}",
+            "revoke": "Revoke",
+            "create": "Create key",
+            "listTitle": "Keys",
+            "scopeAdmin": "As a team admin you see every key on your team and can revoke any of them.",
+            "scopeMember": "You see the keys you created. Team admins see every key on the team.",
+            "scopePersonal": "Use keys with the Orca Cloud API, the orca CLI and MCP clients.",
+            "refresh": "Refresh Orca API keys",
+            "loading": "Loading Orca API keys",
+            "unavailable": "Your keys appear here once Orca Cloud is reachable.",
+            "emptyTitle": "No Orca API keys yet",
+            "emptyBody": "Create a key to start workspaces, message agents and run routines from scripts, CI or any MCP client.",
+            "listLabel": "Orca API keys",
+            "customScopeCount_one": "Custom · {{count}} scope",
+            "customScopeCount_other": "Custom · {{count}} scopes",
+            "scopesLabel": "{{preset}}: {{scopes}}"
+          },
           "approve": {
             "title": "Approve an app",
             "description": "When Claude, Cursor or another MCP client opens the Orca Cloud approval page, paste a one-time code from here instead of an API key. That page shows which website the app will return to; check it before you paste.",
@@ -14333,29 +14364,8 @@
             "loading": "Loading activity",
             "empty": "Nothing has happened yet."
           },
-          "keys": {
-            "create": "Create key",
-            "listTitle": "Keys",
-            "scopeAdmin": "As a team admin you see every key on your team and can revoke any of them.",
-            "scopeMember": "You see the keys you created. Team admins see every key on the team.",
-            "scopePersonal": "Use keys with the Orca Cloud API, the orca CLI and MCP clients.",
-            "refresh": "Refresh Orca API keys",
-            "loading": "Loading Orca API keys",
-            "emptyTitle": "No Orca API keys yet",
-            "emptyBody": "Create a key to start workspaces, message agents and run routines from scripts, CI or any MCP client.",
-            "listLabel": "Orca API keys",
-            "createdMine": "Created {{time}}",
-            "createdByPerson": "Created by <person></person> {{time}}",
-            "lastUsed": "Last used {{time}}",
-            "neverUsed": "Never used",
-            "expired": "Expired",
-            "expires": "Expires {{time}}",
-            "revokeLabel": "Revoke {{keyName}}",
-            "revoke": "Revoke",
-            "customScopeCount_one": "Custom · {{count}} scope",
-            "customScopeCount_other": "Custom · {{count}} scopes",
-            "scopesLabel": "{{preset}}: {{scopes}}"
-          },
+          "pageErrorDetail": "Keys, connected apps and team settings are unavailable until Orca Cloud answers.",
+          "retry": "Try again",
           "revoke": {
             "title": "Revoke “{{keyName}}”?",
             "body": "Anything using {{keyPrefix}} stops working immediately. This cannot be undone.",
@@ -14370,13 +14380,13 @@
             "body": "Orca API keys and routines belong to your team. Sign in to manage them.",
             "signIn": "Sign in to Orca"
           },
-          "retry": "Try again",
           "apps": {
             "unnamed": "Unnamed app",
             "title": "Connected apps",
             "descriptionAdmin": "MCP clients anyone on your team approved. A connection lasts 90 days, or until you disconnect it or revoke the key that approved it.",
             "description": "MCP clients you approved. A connection lasts 90 days, or until you disconnect it or revoke the key that approved it.",
             "loading": "Loading connected apps",
+            "unavailable": "Connected apps appear here once Orca Cloud is reachable.",
             "emptyTitle": "No apps connected",
             "emptyBody": "Add the MCP server URL to Claude, Cursor or another client. When it asks you to approve, use a one-time code.",
             "listLabel": "Connected apps",
@@ -14478,8 +14488,7 @@
             "more": "Show older runs",
             "pr": "Pull request",
             "comment": "Comment",
-            "openWorkspace": "Open workspace",
-            "why": "Why:"
+            "openWorkspace": "Open workspace"
           },
           "new": "New routine",
           "listTitle": "Your routines",
@@ -14604,6 +14613,15 @@
             "webhook": "Webhook",
             "manual": "Manual"
           },
+          "runError": {
+            "startFailed": "The workspace couldn’t start. Nothing was charged.",
+            "workspaceLost": "The workspace went to sleep or was deleted before the run finished.",
+            "postFailed": "The run finished, but Orca couldn’t post the results.",
+            "queueExpired": "The run waited too long to start and was skipped.",
+            "interrupted": "Orca Cloud restarted during the run.",
+            "routineChanged": "The routine changed while this run was queued.",
+            "generic": "The run failed."
+          },
           "event": {
             "prOpened": "PR opened",
             "prLabeled": "PR labeled",
@@ -14621,13 +14639,6 @@
           "keywordCloud": "cloud",
           "sectionTitle": "Routines",
           "sectionDescription": "Agents that run in Orca Cloud on a schedule, on GitHub events or from a webhook."
-        },
-        "orcaCloudPredictiveWake": {
-          "title": "Wake sleeping workspaces early",
-          "description": "A sleeping cloud workspace starts waking when you point at it or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after the idle time.",
-          "group": "Orca Cloud",
-          "description_one": "Starts waking a sleeping sandbox when you point at its workspace or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after {{count}} minute idle. Early wakes count toward your sandbox hours.",
-          "description_other": "Starts waking a sleeping sandbox when you point at its workspace or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after {{count}} minutes idle. Early wakes count toward your sandbox hours."
         }
       },
       "right": {
@@ -20508,8 +20519,6 @@
           "nextInvoice": "Next invoice (est.)",
           "nextInvoiceOn": "{{value0}} · {{value1}}",
           "notAnEmail": "Not an email address",
-          "perMonth": "{{value0}}/month",
-          "perYear": "{{value0}}/year",
           "planEnds": "Plan ends",
           "rateLimited": "Too many team changes at once. Wait a minute and try again.",
           "readOnly": "Only owners and admins can invite people or change roles.",
@@ -20568,7 +20577,9 @@
           "nowOwner": "{{value0}} is now an owner",
           "perSeatPerMonth": "{{value0}} per seat per month",
           "createInvalid2": "Use letters, numbers, spaces or underscores (up to 64).",
-          "nameTaken": "That team name is taken. Try another."
+          "nameTaken": "That team name is taken. Try another.",
+          "totalPerMonth": "{{total}} per month",
+          "totalPerYear": "{{total}} per year"
         },
         "manageBilling": "Manage billing",
         "comparePlans": "Compare plans",
@@ -20589,8 +20600,6 @@
           "loadFailed": "Could not load plans. Try again in a moment.",
           "currentPlan": "Current plan",
           "billedMonthly": "Billed monthly",
-          "totalYear": "{{value0}} / year",
-          "totalMonth": "{{value0}} / month",
           "checkout": "Continue to checkout",
           "entLead": "Everything in Team, plus:",
           "entHint": "Tell us about your team and where you run.",
@@ -20624,7 +20633,9 @@
           "perSeatPerMonth": "per seat per month",
           "seatsPerMember_one": "{{count}} seat, one per team member",
           "seatsPerMember_other": "{{count}} seats, one per team member",
-          "vpWakeBody2": "Idle sandboxes sleep to save hours and wake with your files as you left them."
+          "vpWakeBody2": "Idle sandboxes sleep to save hours and wake with your files as you left them.",
+          "totalPerMonth": "{{total}} per month",
+          "totalPerYear": "{{total}} per year"
         },
         "capLabel2": "Monthly spend cap",
         "capSaved": "Saved",
@@ -20642,13 +20653,10 @@
           "opening": "Opening secure checkout…",
           "openingBody": "Stripe’s checkout opens in your browser.",
           "paid": "Payment confirmed",
-          "perMo": "/mo",
-          "perYr": "/yr",
           "planAnnual": "{{value0}} · Annual",
           "planMonthly": "{{value0}} · Monthly",
           "renewsNote": "Renews {{value0}}. Before tax. Seats follow your team.",
           "reopen": "Reopen checkout",
-          "seatsTimes2": "{{value0}} × {{value1}}{{value2}}",
           "subtitle": "Pay on Stripe’s secure page in your browser. Orca picks it up the moment it goes through.",
           "timedOut": "Still waiting for Stripe",
           "timedOutBody": "If you already paid, confirmation can take a minute. Otherwise reopen checkout.",
@@ -20659,7 +20667,11 @@
           "secured2": "Payments by Stripe · Cards, Apple Pay and Link · Bank verification",
           "canceledBody2": "Nothing was charged. You can choose a plan again any time.",
           "titleCanceled": "Checkout canceled",
-          "titlePaid": "Welcome to Orca Cloud"
+          "titlePaid": "Welcome to Orca Cloud",
+          "lineItemMonthly_one": "{{seats}} × {{price}} per seat per month",
+          "lineItemMonthly_other": "{{seats}} × {{price}} per seat per month",
+          "lineItemYearly_one": "{{seats}} × {{price}} per seat, billed yearly",
+          "lineItemYearly_other": "{{seats}} × {{price}} per seat, billed yearly"
         },
         "health": {
           "ending": "Ending",
@@ -20670,11 +20682,11 @@
         "paymentAskAdmin": "Ask an owner or admin to update the payment method.",
         "upgrade": {
           "askOwner": "Ask an owner or admin to upgrade.",
-          "body2": "Hosted sandboxes for the whole team. Agents keep running when you close your laptop. {{value0}}/seat/month.",
           "bodyNoPrice": "Hosted sandboxes for the whole team. Agents keep running when you close your laptop.",
           "cta": "See plans",
           "menuItem": "Upgrade to Orca Cloud",
-          "title": "Upgrade to use Orca Cloud"
+          "title": "Upgrade to use Orca Cloud",
+          "body3": "Hosted sandboxes for the whole team. Agents keep running when you close your laptop. {{price}} per seat per month."
         },
         "upsellLineNoPrice": "Orca Cloud runs agents in hosted sandboxes for your whole team.",
         "askAdmin2": "Ask an owner or admin to change the plan.",
@@ -20857,7 +20869,8 @@
         "youAreTyping": "You are typing",
         "youAreViewing": "You are viewing",
         "view": "View",
-        "viewAsleep": "View read-only copy"
+        "viewAsleep": "View read-only copy",
+        "routines": "Routines"
       },
       "orcaCloud": {
         "QueuedPrompt": {

@@ -205,6 +205,12 @@
         }
       },
       "billing": {
+        "checkout": {
+          "lineItemMonthly_one": "{{seats}} × {{price}} per seat per month",
+          "lineItemMonthly_other": "{{seats}} × {{price}} per seat per month",
+          "lineItemYearly_one": "{{seats}} × {{price}} per seat, billed yearly",
+          "lineItemYearly_other": "{{seats}} × {{price}} per seat, billed yearly"
+        },
         "plans": {
           "seatsPerMember_one": "{{count}} seat, one per team member",
           "seatsPerMember_other": "{{count}} seats, one per team member"

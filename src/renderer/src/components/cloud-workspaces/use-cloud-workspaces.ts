@@ -27,13 +27,22 @@ function setAvailable(value: boolean): void {
   }
 }
 
+const AVAILABILITY_RETRY_MS = 5_000
+
 export function cloudWorkspacesAvailable(): Promise<boolean> {
-  availability ??= (
-    window.api.cloudWorkspaces?.available().catch(() => false) ?? Promise.resolve(false)
-  ).then((value) => {
-    setAvailable(value)
-    return value
-  })
+  availability ??= (window.api.cloudWorkspaces?.available() ?? Promise.resolve(false)).then(
+    (value) => {
+      setAvailable(value)
+      return value
+    },
+    () => {
+      // A failed probe is not an answer: forget it and ask again shortly, so one transient
+      // error doesn't hide Orca Cloud until the app restarts.
+      availability = null
+      setTimeout(() => void cloudWorkspacesAvailable(), AVAILABILITY_RETRY_MS)
+      return false
+    }
+  )
   return availability
 }
 

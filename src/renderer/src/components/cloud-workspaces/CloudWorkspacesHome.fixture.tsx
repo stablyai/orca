@@ -165,3 +165,25 @@ export const asleepNotSealedForKey = defineFixture({
   render: () => <CloudWorkspacesHome />,
   interact: openAsleepRow
 })
+
+/** Builds with Orca Cloud routines get a Routines entry next to the list they fill. */
+export const withRoutinesEntry = defineFixture({
+  width: WIDTH,
+  store: { orcaProfileAuthStatus: AUTH_STATUS },
+  setup: () => {
+    const rows = teamWorkspaces()
+    stubCloudWorkspacesApi(() => Promise.resolve({ ok: true, value: rows }))
+    Object.assign(window.api, {
+      cloudApi: {
+        availability: async () => ({ status: 'ready', controlPlaneUrl: 'https://api.orca.dev' })
+      }
+    })
+  },
+  render: () => <CloudWorkspacesHome />,
+  interact: () =>
+    waitFor(
+      () =>
+        document.querySelector('[data-cloud-workspace-row]') !== null &&
+        [...document.querySelectorAll('button')].some((b) => b.textContent === 'Routines')
+    )
+})

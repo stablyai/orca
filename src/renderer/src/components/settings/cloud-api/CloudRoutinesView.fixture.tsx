@@ -146,8 +146,7 @@ const RUNS: RoutineRunPage = {
       status: 'failed',
       startedAt: NOW - 45 * HOUR,
       durationMs: 38_000,
-      error:
-        'The agent could not clone acme/api: the Orca Cloud GitHub App is not installed on this repository.'
+      error: 'start_failed:clone_failed'
     }),
     run({ id: 'r1', status: 'timed_out', startedAt: NOW - 69 * HOUR, durationMs: 30 * MIN }),
     run({
@@ -161,6 +160,63 @@ const RUNS: RoutineRunPage = {
 }
 
 const loadRuns: LoadRoutineRuns = async () => ({ ok: true, data: RUNS })
+
+/** Every failure code the control plane sends, as people read it (codes never on screen). */
+const FAILED_RUNS: RoutineRunPage = {
+  nextBefore: null,
+  runs: [
+    run({
+      id: 'f1',
+      status: 'failed',
+      startedAt: NOW - 1 * HOUR,
+      durationMs: 21_000,
+      error: 'start_failed:clone_failed'
+    }),
+    run({
+      id: 'f2',
+      status: 'failed',
+      startedAt: NOW - 3 * HOUR,
+      durationMs: 412_000,
+      error: 'workspace_lost:suspended'
+    }),
+    run({
+      id: 'f3',
+      status: 'failed',
+      startedAt: NOW - 5 * HOUR,
+      durationMs: 380_000,
+      error: 'post_failed:github_403'
+    }),
+    run({
+      id: 'f4',
+      status: 'cancelled',
+      startedAt: NOW - 8 * HOUR,
+      durationMs: null,
+      error: 'queue_expired'
+    }),
+    run({
+      id: 'f5',
+      status: 'failed',
+      startedAt: NOW - 12 * HOUR,
+      durationMs: 95_000,
+      error: 'agent_interrupted'
+    }),
+    run({
+      id: 'f6',
+      status: 'cancelled',
+      startedAt: NOW - 20 * HOUR,
+      durationMs: null,
+      error: 'routine_changed'
+    }),
+    run({
+      id: 'f7',
+      status: 'failed',
+      startedAt: NOW - 26 * HOUR,
+      durationMs: 4_000,
+      error: 'something_new'
+    })
+  ]
+}
+const loadFailedRuns: LoadRoutineRuns = async () => ({ ok: true, data: FAILED_RUNS })
 const loadNoRuns: LoadRoutineRuns = async () => ({ ok: true, data: { runs: [], nextBefore: null } })
 const loadRunsFailing: LoadRoutineRuns = async () => ({ ok: false, error: 'network' })
 
@@ -310,4 +366,11 @@ export const webhookCreated = defineFixture({
 export const deleteConfirm = defineFixture({
   width: 820,
   render: () => <CloudRoutinesView {...props} initial={{ deleteId: 'rt_fix' }} />
+})
+
+export const runHistoryFailures = defineFixture({
+  width: 820,
+  render: () => (
+    <CloudRoutinesView {...props} loadRuns={loadFailedRuns} initial={{ historyFor: 'rt_fix' }} />
+  )
 })

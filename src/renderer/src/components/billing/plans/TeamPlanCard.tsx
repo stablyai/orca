@@ -130,11 +130,11 @@ export function TeamPlanCard({
         {total === null ? null : (
           <p className="text-sm font-medium tabular-nums" aria-live="polite">
             {interval === 'year'
-              ? t('auto.components.billing.plans.totalYear', '{{value0}} / year', {
-                  value0: formatCents(total, locale)
+              ? t('auto.components.billing.plans.totalPerYear', '{{total}} per year', {
+                  total: formatCents(total, locale)
                 })
-              : t('auto.components.billing.plans.totalMonth', '{{value0}} / month', {
-                  value0: formatCents(total, locale)
+              : t('auto.components.billing.plans.totalPerMonth', '{{total}} per month', {
+                  total: formatCents(total, locale)
                 })}
           </p>
         )}
