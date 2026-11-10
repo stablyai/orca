@@ -22,6 +22,13 @@ describe('focus dependency observation', () => {
 
   it('counts routing, action gates and escaped or non-setup dependency sets', () => {
     const mutations = [
+      source.replace(
+        'forget(workspace)\n    catalogs.',
+        'forget(workspace)\n    dispatch(state)\n    catalogs.'
+      ),
+      source.replace('owners.set(workspace, owner)', 'owners.set(workspace, focusRoute(state))'),
+      source.replace('return owner\n  }', 'return focusRoute(state)\n  }'),
+      source.replace('owners.delete(workspace)', 'dispatch(workspace); owners.delete(workspace)'),
       source.replace('addAll(setups)', 'dispatch(setups)'),
       source.replace('addAll(setups)', 'return state'),
       source.replace('addAll(setups)', 'addAll(setups); dispatch()'),

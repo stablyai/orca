@@ -1,4 +1,5 @@
 import ts from 'typescript-api'
+import { REFRESH_CONTRACT, FORGET_CONTRACT } from './terminal-route-invalidation-contract.mjs'
 
 const ROUTE_DOMAINS = 'src/renderer/src/store/terminals/terminal-membership-route-domains.ts'
 const READER = 'getSingleFocusedRuntimeEnvironmentId'
@@ -160,6 +161,9 @@ export function focusInvalidationReaderSpans(rel, source) {
   }
   const refresh = refreshes[0],
     forget = forgets[0]
+  if (!shape(refresh, REFRESH_CONTRACT) || !shape(forget, FORGET_CONTRACT)) {
+    return []
+  }
   if (
     refresh.parameters.map((node) => node.name.getText(file)).join(',') !== 'state,workspace' ||
     forget.parameters.map((node) => node.name.getText(file)).join(',') !== 'workspace'
