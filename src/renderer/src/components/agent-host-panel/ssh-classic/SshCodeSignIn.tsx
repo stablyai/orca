@@ -148,6 +148,7 @@ export function SshCodeSignIn({
               autoComplete="off"
               spellCheck={false}
               aria-label={t('agentHostPanel.ssh.codeLabel', 'Code from claude.ai')}
+              placeholder={t('agentHostPanel.ssh.codePlaceholder', 'Paste the code')}
               value={code}
               onChange={(event) => setCode(event.target.value)}
               className="h-7 min-w-0 flex-1"

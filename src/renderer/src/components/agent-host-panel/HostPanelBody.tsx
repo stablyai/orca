@@ -2,7 +2,6 @@
 // answer; sections 2–3 read only this computer (Agent API keys, the recipe env summary).
 import React, { useEffect, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
-import { Button } from '@/components/ui/button'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import type { AgentApiKeySummary } from '../../../../shared/agent-api-keys/agent-api-key-catalog'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -69,14 +68,14 @@ export function HostKeysRows({ keys }: { keys: AgentApiKeySummary[] | null }): R
     return (
       <p className="text-xs text-muted-foreground">
         {t('agentHostPanel.keys.noneHere', 'No keys apply to this host.')}{' '}
-        <Button
+        {/* The footer's link style, so it reads as a link. */}
+        <button
           type="button"
-          variant="link"
-          size="xs"
+          className="text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:outline-[var(--focus-ring)]"
           onClick={() => openAgentHostSettings('agentApiKeys')}
         >
           {t('agentHostPanel.keys.addOne', 'Add one in Agent API keys')}
-        </Button>
+        </button>
       </p>
     )
   }

@@ -228,7 +228,7 @@ function sectionHelp(
             : passed,
         environment: t(
           'agentHostPanel.help.envSsh',
-          'Agents on {{host}} get its shell profile. Orca doesn’t add variables on SSH hosts.',
+          'Agents on {{host}} use its shell profile. Orca doesn’t add variables on SSH hosts.',
           { host }
         )
       }
