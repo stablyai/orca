@@ -46,7 +46,11 @@ export type PRComment = {
   isBot?: boolean
   /** True only when the gh account that read the thread wrote it (GraphQL's flag, or its login on REST reads); absent from older hosts. */
   viewerDidAuthor?: boolean
+  /** Review summaries only: a verdict GitHub shows even when the review has no body. */
+  reviewState?: PRReviewVerdict
 }
+
+export type PRReviewVerdict = 'APPROVED' | 'CHANGES_REQUESTED'
 
 export type GitHubIssueTimelineTarget = {
   type: 'issue' | 'pr'

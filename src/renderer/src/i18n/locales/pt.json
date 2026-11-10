@@ -2737,6 +2737,12 @@
               "6d5d52b53f": "Limite de substituições de autor de bot atingido"
             }
           }
+        },
+        "review": {
+          "state": {
+            "approved": "aprovou",
+            "changesRequested": "solicitou alterações"
+          }
         }
       },
       "resume": {

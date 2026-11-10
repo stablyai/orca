@@ -2038,6 +2038,12 @@
               "6d5d52b53f": "Bot author override limit reached"
             }
           }
+        },
+        "review": {
+          "state": {
+            "approved": "approved",
+            "changesRequested": "requested changes"
+          }
         }
       },
       "resume": {

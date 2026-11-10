@@ -21,6 +21,11 @@ export function getPRCommentGroupActionState(group: PRCommentGroup): PRCommentGr
 
 /** Groups the agent can address via the resolve-comments workflow. */
 export function isPRCommentGroupQueueableForAI(group: PRCommentGroup): boolean {
+  const root = getPRCommentGroupRoot(group)
+  // A verdict-only review gives the agent nothing to address.
+  if (root.reviewState && !root.body.trim()) {
+    return false
+  }
   return getPRCommentGroupActionState(group) !== 'resolved'
 }
 

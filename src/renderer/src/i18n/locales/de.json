@@ -1631,6 +1631,12 @@
               "6d5d52b53f": "Limit für Überschreibungen von Bot-Autoren erreicht"
             }
           }
+        },
+        "review": {
+          "state": {
+            "approved": "hat genehmigt",
+            "changesRequested": "hat Änderungen angefordert"
+          }
         }
       },
       "resume": {

@@ -1148,6 +1148,12 @@
               "6d5d52b53f": "Se alcanzó el límite de autores de bots personalizados"
             }
           }
+        },
+        "review": {
+          "state": {
+            "approved": "aprobó",
+            "changesRequested": "solicitó cambios"
+          }
         }
       },
       "resume": {

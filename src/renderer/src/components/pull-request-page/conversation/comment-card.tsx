@@ -23,6 +23,7 @@ import type { MentionOption } from '../page-types'
 import { loadPRFileContents } from '../cache/file-content'
 import { CommentReplyForm } from '../comments/reply-form'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { getPRReviewStateLabel } from '@/lib/source-control/review/comments/pr-review-state-label'
 
 export function ConversationCommentCard({
   comment,
@@ -84,6 +85,11 @@ export function ConversationCommentCard({
         >
           {comment.author}
         </span>
+        {comment.reviewState && (
+          <span className="shrink-0 text-[12px] text-muted-foreground">
+            {getPRReviewStateLabel(comment.reviewState, t)}
+          </span>
+        )}
         <span className="shrink-0 text-[12px] text-muted-foreground">
           · {formatRelativeTime(comment.createdAt, intlLocale)}
         </span>

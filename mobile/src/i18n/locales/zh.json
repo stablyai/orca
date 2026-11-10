@@ -1772,7 +1772,9 @@
       "resolve": "解决",
       "unresolve": "标记为未解决",
       "yearsAgo_one": "{{count}} 年前",
-      "yearsAgo_other": "{{count}} 年前"
+      "yearsAgo_other": "{{count}} 年前",
+      "approved": "已批准",
+      "changesRequested": "已请求更改"
     },
     "commentsSection": {
       "comment": "评论",

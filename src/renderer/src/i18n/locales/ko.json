@@ -1140,6 +1140,12 @@
               "6d5d52b53f": "봇 작성자 재정의 한도에 도달했습니다"
             }
           }
+        },
+        "review": {
+          "state": {
+            "approved": "승인함",
+            "changesRequested": "변경 요청함"
+          }
         }
       },
       "resume": {

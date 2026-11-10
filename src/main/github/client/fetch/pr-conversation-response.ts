@@ -3,7 +3,7 @@ import type { Nodes } from 'mdast'
 import { z } from 'zod'
 import remarkParse from 'remark-parse'
 import { unified } from 'unified'
-import type { PRComment } from '../../../../shared/github/comments/comment-types'
+import type { PRComment, PRReviewVerdict } from '../../../../shared/github/comments/comment-types'
 import { mapGraphQLReactionGroups } from '../../comments/comment-reactions'
 import { tailDiffHunk } from '../../../../shared/github/comments/pr-comment-diff-hunk'
 import { viewerAuthorship } from '../../../source-control/comment-viewer-authorship'
@@ -18,6 +18,7 @@ const commentSchema = z.object({
   bodyHTML: z.unknown().optional(),
   createdAt: z.string(),
   submittedAt: z.string().nullish(),
+  state: z.string().nullish(),
   url: z.string(),
   viewerDidAuthor: z.boolean().nullish().catch(undefined),
   reactionGroups: z
@@ -123,6 +124,28 @@ function hasVisibleReviewBody(body: string | null | undefined): boolean {
   return reviewMarkdown.parse(body).children.some(hasVisibleNode)
 }
 
+function reviewVerdict(state: string | null | undefined): PRReviewVerdict | undefined {
+  return state === 'APPROVED' || state === 'CHANGES_REQUESTED' ? state : undefined
+}
+
+function isVisibleReview(review: { body?: string | null; state?: string | null }): boolean {
+  return Boolean(reviewVerdict(review.state)) || hasVisibleReviewBody(review.body)
+}
+
+// A review kept only for its verdict drops its metadata-only body so every surface sees it as empty.
+function reviewStateFields(review: { body?: string | null; state?: string | null }): {
+  reviewState?: PRReviewVerdict
+  body?: string
+} {
+  const verdict = reviewVerdict(review.state)
+  if (!verdict) {
+    return {}
+  }
+  return hasVisibleReviewBody(review.body)
+    ? { reviewState: verdict }
+    : { reviewState: verdict, body: '' }
+}
+
 export function parsePRConversationSources(
   stdout: string,
   strictSource?: string
@@ -182,8 +205,8 @@ export function mapPRConversationSources(sources: PRConversationSources): {
     reviewSummaries: reviews
       ? reviews.nodes
           .filter(hasDatabaseId)
-          .filter((c) => hasVisibleReviewBody(c.body))
-          .map(mapGraphQLComment)
+          .filter(isVisibleReview)
+          .map((c) => ({ ...mapGraphQLComment(c), ...reviewStateFields(c) }))
       : undefined,
     reviewComments: threads
       ? threads.nodes.flatMap((thread) =>
@@ -224,6 +247,7 @@ const restCommentSchema = z.object({
   body_html: z.unknown().optional(),
   created_at: z.string().optional(),
   submitted_at: z.string().nullish(),
+  state: z.string().nullish(),
   html_url: z.string()
 })
 
@@ -234,7 +258,7 @@ export function parseRestPRCommentPage(
 ): { comments: PRComment[]; rawIds: number[]; hasMore: boolean } {
   const rows = z.array(restCommentSchema).parse(JSON.parse(stdout))
   const comments = rows
-    .filter((c) => !reviews || hasVisibleReviewBody(c.body))
+    .filter((c) => !reviews || isVisibleReview(c))
     .map((c) => ({
       id: c.id,
       author: c.user?.login ?? 'ghost',
@@ -244,7 +268,8 @@ export function parseRestPRCommentPage(
       createdAt: (reviews ? c.submitted_at : c.created_at) ?? '',
       url: c.html_url,
       isBot: c.user?.type === 'Bot',
-      ...viewerAuthorship(c.user?.login, viewerLogin)
+      ...viewerAuthorship(c.user?.login, viewerLogin),
+      ...(reviews ? reviewStateFields(c) : {})
     }))
   return { comments, rawIds: rows.map((row) => row.id), hasMore: rows.length >= 100 }
 }

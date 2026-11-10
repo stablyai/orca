@@ -22,6 +22,7 @@ import { loadPRFileContents } from '../load-item-details/pr-file-content-cache'
 import { CommentReplyForm } from './comment-reply-form'
 import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { getPRReviewStateLabel } from '@/lib/source-control/review/comments/pr-review-state-label'
 
 export type ConversationCommentCardContext = {
   repoPath: string | null
@@ -73,6 +74,11 @@ export function renderCommentCard(
         >
           {comment.author}
         </span>
+        {comment.reviewState && (
+          <span className="shrink-0 text-[12px] text-muted-foreground">
+            {getPRReviewStateLabel(comment.reviewState, t)}
+          </span>
+        )}
         <span className="shrink-0 text-[12px] text-muted-foreground">
           · {formatRelativeTime(comment.createdAt, intlLocale)}
         </span>

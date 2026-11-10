@@ -1607,6 +1607,12 @@
               "6d5d52b53f": "Bot yazarı geçersiz kılma sınırına ulaşıldı"
             }
           }
+        },
+        "review": {
+          "state": {
+            "approved": "onayladı",
+            "changesRequested": "değişiklik istedi"
+          }
         }
       },
       "resume": {

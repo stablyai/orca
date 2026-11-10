@@ -1990,7 +1990,9 @@
       "deleteComment": "Excluir comentário",
       "unresolveThread": "Reabrir discussão",
       "resolveThread": "Resolver thread",
-      "replyPlaceholder": "Escreva uma resposta…"
+      "replyPlaceholder": "Escreva uma resposta…",
+      "approved": "aprovou",
+      "changesRequested": "solicitou alterações"
     },
     "commentsSection": {
       "comment": "Comentar",

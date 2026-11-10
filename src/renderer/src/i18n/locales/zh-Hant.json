@@ -1579,6 +1579,12 @@
               "6d5d52b53f": "已達到機器人作者覆寫上限"
             }
           }
+        },
+        "review": {
+          "state": {
+            "approved": "已核准",
+            "changesRequested": "已要求變更"
+          }
         }
       },
       "resume": {

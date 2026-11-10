@@ -1563,7 +1563,9 @@
       "unresolve": "Unresolve",
       "resolve": "Resolve",
       "replyPlaceholder": "Write a reply…",
-      "deleteConfirmMessage": "This permanently deletes the comment on GitHub."
+      "deleteConfirmMessage": "This permanently deletes the comment on GitHub.",
+      "approved": "approved",
+      "changesRequested": "requested changes"
     },
     "commentsSection": {
       "all": "All",

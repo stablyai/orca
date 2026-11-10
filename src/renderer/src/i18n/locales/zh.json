@@ -1211,6 +1211,12 @@
               "6d5d52b53f": "已达到机器人作者覆盖上限"
             }
           }
+        },
+        "review": {
+          "state": {
+            "approved": "已批准",
+            "changesRequested": "已请求更改"
+          }
         }
       },
       "resume": {

@@ -18,6 +18,7 @@ import type { PRCommentGroupActionState } from '@/lib/source-control/review/comm
 import type { PRCommentPresentationClasses } from './pr-comment-presentation'
 import { formatPrCommentRelativeTime } from '../../../../../../shared/source-control/review-comments/pr-comment-time'
 import { useTranslate } from '@/i18n/use-translate'
+import { getPRReviewStateLabel } from '@/lib/source-control/review/comments/pr-review-state-label'
 import {
   buildCopyText,
   CommentLocationLabel,
@@ -130,6 +131,9 @@ export function CommentRow({
   const canSaveEdit =
     !images.pending && !submittingEdit && trimmedDraft.length > 0 && trimmedDraft !== comment.body
   const relativeTime = formatPrCommentRelativeTime(comment.createdAt, now)
+  const reviewStateLabel = comment.reviewState
+    ? getPRReviewStateLabel(comment.reviewState, t)
+    : null
 
   const authorAvatar = comment.authorAvatarUrl ? (
     <img
@@ -205,6 +209,7 @@ export function CommentRow({
             : presentation.commentHeaderMeta
         }
       >
+        {reviewStateLabel ? <span>{reviewStateLabel}</span> : null}
         {relativeTime ? <span>{relativeTime}</span> : null}
         {automated ? (
           <span className={presentation.botBadge}>
@@ -246,6 +251,9 @@ export function CommentRow({
         {selectionControl}
         {authorAvatar}
         {authorName}
+        {reviewStateLabel ? (
+          <span className="shrink-0 text-[11px] text-muted-foreground">{reviewStateLabel}</span>
+        ) : null}
         {relativeTime ? (
           <span className={presentation.time} aria-hidden={presentation.time === 'hidden'}>
             {presentation.useCardLayout ? `· ${relativeTime}` : relativeTime}

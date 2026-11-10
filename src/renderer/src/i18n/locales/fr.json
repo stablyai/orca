@@ -1402,6 +1402,12 @@
               "6d5d52b53f": "Limite de remplacement d'auteur de bot atteinte"
             }
           }
+        },
+        "review": {
+          "state": {
+            "approved": "a approuvé",
+            "changesRequested": "a demandé des modifications"
+          }
         }
       },
       "resume": {
