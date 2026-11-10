@@ -5,8 +5,9 @@ import { createStore } from 'zustand/vanilla'
 import { createClaudeUsageSlice } from './usage-provider-slices'
 import { useUsageObservation } from './use-usage-observation'
 import type { AppState } from '../../types'
+import type { ClaudeUsageScanState } from '../../../../../shared/claude-usage-types'
 
-const scanState = {
+const scanState: ClaudeUsageScanState = {
   enabled: true,
   isScanning: false,
   lastScanStartedAt: null,
@@ -217,6 +218,76 @@ it('joins the startup-ready signal and bounds selection storms while retaining a
   expect(api.refresh.mock.calls.map(([options]) => options?.force)).toEqual([false, true])
   expect(store.getState().claudeUsageRange).toBe('all')
   expect(api.getSnapshot.mock.calls.at(-1)?.[0]).toMatchObject({ range: 'all' })
+})
+
+it.each([false, true])(
+  'owns queued explicit refresh across ordinary failure=%s',
+  async (failed) => {
+    const { store, api } = fixture()
+    const background = deferred<typeof scanState>()
+    const forcedState = deferred<typeof scanState>()
+    const forcedScan = deferred<typeof scanState>()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    api.getScanState.mockResolvedValueOnce(scanState).mockReturnValueOnce(forcedState.promise)
+    api.refresh.mockReturnValueOnce(background.promise).mockReturnValueOnce(forcedScan.promise)
+    const first = store.getState().fetchClaudeUsage()
+    await vi.waitFor(() => expect(api.refresh).toHaveBeenCalledTimes(1))
+    expect(store.getState().claudeUsageSummary).toMatchObject({ inputTokens: 123 })
+    expect(store.getState().claudeUsageScanState?.isScanning).toBe(false)
+
+    const forced = store.getState().refreshClaudeUsage()
+    expect(store.getState().claudeUsageScanState?.isScanning).toBe(true)
+    const busy: boolean[] = []
+    const unsubscribe = store.subscribe((state) => {
+      busy.push(state.claudeUsageScanState?.isScanning ?? false)
+    })
+    if (failed) {
+      background.reject(new Error('Catalog unavailable'))
+    } else {
+      background.resolve(scanState)
+    }
+    await vi.waitFor(() => expect(api.getScanState).toHaveBeenCalledTimes(2))
+    expect(store.getState().claudeUsageScanState?.isScanning).toBe(true)
+    expect(busy.every(Boolean)).toBe(true)
+    forcedState.resolve(scanState)
+    await vi.waitFor(() => expect(api.refresh).toHaveBeenCalledTimes(2))
+    expect(busy.length).toBeGreaterThan(0)
+    expect(busy.every(Boolean)).toBe(true)
+    expect(store.getState().claudeUsageSummary).toMatchObject({ inputTokens: 123 })
+    unsubscribe()
+    forcedScan.resolve(scanState)
+    await Promise.all([first, forced])
+    expect(store.getState().claudeUsageScanState?.isScanning).toBe(false)
+  }
+)
+
+it('shows first-load scanning without masking a reported scan on answered data', async () => {
+  const { store, api } = fixture()
+  const background = deferred<typeof scanState>()
+  api.getSnapshot.mockResolvedValueOnce({
+    ...snapshot,
+    scanState: { ...scanState, lastScanCompletedAt: null, hasAnyClaudeData: false }
+  })
+  api.refresh.mockReturnValueOnce(background.promise)
+  const first = store.getState().fetchClaudeUsage()
+  await vi.waitFor(() => expect(api.refresh).toHaveBeenCalledTimes(1))
+  expect(store.getState().claudeUsageScanState?.isScanning).toBe(true)
+  background.resolve(scanState)
+  await first
+  expect(store.getState().claudeUsageScanState?.isScanning).toBe(false)
+
+  const scanning = deferred<typeof scanState>()
+  api.getScanState.mockResolvedValueOnce({ ...scanState, isScanning: true })
+  api.getSnapshot.mockResolvedValueOnce({
+    ...snapshot,
+    scanState: { ...scanState, isScanning: true }
+  })
+  api.refresh.mockReturnValueOnce(scanning.promise)
+  const next = store.getState().fetchClaudeUsage()
+  await vi.waitFor(() => expect(api.refresh).toHaveBeenCalledTimes(2))
+  expect(store.getState().claudeUsageScanState?.isScanning).toBe(true)
+  scanning.resolve(scanState)
+  await next
 })
 
 it('does not publish an obsolete selection or swallow force after refresh has finished', async () => {

@@ -358,7 +358,7 @@ it('uses the asynchronous host catalog and stops admission without persisting an
   const refresh = store.refresh(true)
   abort.abort(new Error('Backend stopping'))
   catalog.resolve({ repoIds: [], worktreesByRepo: [] })
-  await refresh
+  await expect(refresh).rejects.toThrow('Backend stopping')
   store.stopScanAdmission()
   await store.refresh(true)
   await store.flush()

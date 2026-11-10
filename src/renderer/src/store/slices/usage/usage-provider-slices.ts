@@ -60,7 +60,7 @@ function createUsageProviderSlice<
     const project = async (
       api: UsageApi<T>,
       current: Operation,
-      loading: boolean
+      beforeRefresh: boolean
     ): Promise<void> => {
       while (!current.disconnected) {
         const { scope, range } = read()
@@ -71,8 +71,10 @@ function createUsageProviderSlice<
         if (scope !== read().scope || range !== read().range) {
           continue
         }
+        const loading = pending === 2 || (beforeRefresh && current.intent === 2)
         if (
-          loading &&
+          beforeRefresh &&
+          current.intent > 0 &&
           snapshot.scanState.lastScanCompletedAt === null &&
           !config.hasCachedData(snapshot.scanState)
         ) {
@@ -87,7 +89,7 @@ function createUsageProviderSlice<
       }
     }
     const request = (intent: Intent, recovery = false): Promise<void> => {
-      if (intent > 0) {
+      if (intent === 2) {
         markLoading()
       }
       if (operation) {
@@ -139,7 +141,10 @@ function createUsageProviderSlice<
               }
               if (state) {
                 update({
-                  scanState: next > 0 && state.enabled ? { ...state, isScanning: true } : state
+                  scanState:
+                    (next === 2 || pending === 2) && state.enabled
+                      ? { ...state, isScanning: true }
+                      : state
                 })
                 if (state.enabled) {
                   await project(api, current, next > 0)
@@ -158,7 +163,9 @@ function createUsageProviderSlice<
                 }
               }
             } catch (error) {
-              stopLoading()
+              if (pending !== 2) {
+                stopLoading()
+              }
               if (current.readOnFailure) {
                 queueIntent(0)
               }
