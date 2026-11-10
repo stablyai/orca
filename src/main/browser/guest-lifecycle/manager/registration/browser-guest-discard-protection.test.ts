@@ -74,7 +74,9 @@ it('binds edit protection to the current main-frame document and real lifecycle 
     expect(readBrowserGuestDiscardProtection(guest).reason).toBe('audio')
     audible = false
     historyLength = 2
+    changed.mockClear()
     guest.emit('did-navigate-in-page', {}, 'https://example.test/step-2', true)
+    expect(changed).toHaveBeenCalledTimes(1)
     expect(readBrowserGuestDiscardProtection(guest).reason).toBe('history')
     changed.mockClear()
     guest.emit('did-navigate-in-page', {}, 'https://example.test/step-3', true)
