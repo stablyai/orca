@@ -26,6 +26,8 @@ import {
 } from '../../../../../../shared/program-status/presentation'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useCloudAgentRowSignIn } from '@/components/orca-cloud/use-cloud-agent-row-sign-in'
+import { cloudAgentRowSignInLabel } from '@/lib/orca-cloud/cloud-agent-row-sign-in'
 
 function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
@@ -139,9 +141,14 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   // Child agentType contains its name, not a provider; nesting conveys identity without a misleading letter icon.
   const hideIcon = hideIdentityIcon || agent.rowSource === 'subagent'
   const { presentation, dotStateOverride } = resolveRowProgramStatus(agent)
-  const dotState = dotStateOverride ?? getAgentDotState(agent)
+  const reportedDotState = dotStateOverride ?? getAgentDotState(agent)
+  // Orca Cloud only: an agent that started without a sign-in never ran, so it is not "Done".
+  const cloudSignIn = useCloudAgentRowSignIn(agent, reportedDotState)
+  const dotState = cloudSignIn ? 'permission' : reportedDotState
   const conversationName = useAgentRowConversationName(agent)
-  const primary = getCompactAgentPrimary(agent, conversationName)
+  const primary = cloudSignIn
+    ? cloudAgentRowSignInLabel(cloudSignIn, t)
+    : getCompactAgentPrimary(agent, conversationName)
   const isLineageChild = agent.lineage?.depth === 1
   // Hold assistant text per positive turn clock; commit in an effect so discarded renders cannot cache messages.
   const turn = agent.entry.stateStartedAt

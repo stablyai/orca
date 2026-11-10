@@ -27963,6 +27963,8 @@
     }
   },
   "agentSignInStrip": {
+    "rowNotSignedIn": "Not signed in",
+    "rowExpired": "Sign-in expired",
     "sandbox": "the sandbox",
     "queued": "Queued prompt: {{prompt}}",
     "pasteLabel": "Code from claude.ai",
