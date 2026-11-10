@@ -2137,6 +2137,12 @@
           "discarded_other": "Unsaved edits in {{count}} files will be discarded:"
         }
       }
+    },
+    "confirmation": {
+      "itemList": {
+        "showMore_one": "Show {{count}} more",
+        "showMore_other": "Show {{count}} more"
+      }
     }
   },
   "dashboard": {
