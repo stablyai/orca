@@ -72,8 +72,10 @@ describe('NativeChatBrowserRunPageButton', () => {
     expect(screen.getByRole('button').getAttribute('title')).toBe('First')
   })
 
-  it("ignores another chat's agent driving a different page before this run's command lands", () => {
+  it("ignores other agents driving a different page before this run's command lands", () => {
     state.browserPagesByWorkspace = { 'ws-1': [page('p1', 'Mine'), page('p2', 'Theirs')] }
+    // An earlier run in this chat, so it is known to claim its activity.
+    setBrowserAgentPageActive('p1', true, 'wt-1', undefined, 'session-1')
     const { container } = render(
       <NativeChatBrowserRunPageButton
         calls={[
@@ -88,9 +90,10 @@ describe('NativeChatBrowserRunPageButton', () => {
       { wrapper }
     )
 
+    act(() => setBrowserAgentPageActive('p2', true, 'wt-1'))
     act(() => setBrowserAgentPageActive('p2', true, 'wt-1', undefined, 'session-2'))
     act(() => setBrowserAgentPageActive('p1', true, 'wt-1', undefined, 'session-1'))
-    act(() => setBrowserAgentPageActive('p2', true, 'wt-1', undefined, 'session-2'))
+    act(() => setBrowserAgentPageActive('p2', true, 'wt-1'))
     expect(within(container).getByRole('button').getAttribute('title')).toBe('Mine')
   })
 })

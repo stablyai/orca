@@ -118,18 +118,15 @@ export function useBrowserAgentControllerHost(
   return useSyncExternalStore(subscribe, read, read)
 }
 
-/** What this chat's agent, or an agent no chat claimed in its worktree, drove most recently. */
+/** What this chat's agent drove most recently; until it has claimed any, what an unclaimed agent in its worktree did. */
 export function useLastBrowserAgentActivity(
   worktreeId: string | null,
   chatSessionId: string | null
 ): BrowserAgentActivityMark | null {
-  const read = (): BrowserAgentActivityMark | null => {
-    const own = chatSessionId ? lastActivityByChatSession.get(chatSessionId) : undefined
-    const unclaimed = worktreeId ? lastUnclaimedActivityByWorktree.get(worktreeId) : undefined
-    if (!own || !unclaimed) {
-      return own ?? unclaimed ?? null
-    }
-    return own.revision > unclaimed.revision ? own : unclaimed
-  }
+  // A chat that claimed activity names itself on this host, so unclaimed activity is another agent's.
+  const read = (): BrowserAgentActivityMark | null =>
+    (chatSessionId ? lastActivityByChatSession.get(chatSessionId) : undefined) ??
+    (worktreeId ? lastUnclaimedActivityByWorktree.get(worktreeId) : undefined) ??
+    null
   return useSyncExternalStore(subscribe, read, read)
 }
