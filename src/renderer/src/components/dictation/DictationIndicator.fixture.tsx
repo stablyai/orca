@@ -5,13 +5,17 @@ import { publishDictationMeter, resetDictationMeter } from './dictation-meter-st
 import type { DictationFailureKind } from './dictation-toasts'
 import type { SpeechModelUpdateTarget } from './speech-model-update-target'
 import type { SpeechModelManifest, SpeechModelState } from '../../../../shared/speech-types'
-import type { DictationQueuedSendKind } from './use-dictation-queued-send'
+import type {
+  DictationAutoSendCountdown,
+  DictationQueuedSendKind
+} from './use-dictation-queued-send'
 import type { DictationCleanupNotice } from './use-dictation-cleanup'
 
 function PaneWithPill({
   captureLive = true,
   failure = null,
   queued = null,
+  autoSend = null,
   setup = null,
   cleaning = false,
   notice = null
@@ -19,6 +23,7 @@ function PaneWithPill({
   captureLive?: boolean
   failure?: DictationFailureKind | null
   queued?: DictationQueuedSendKind | null
+  autoSend?: DictationAutoSendCountdown | null
   setup?: SpeechModelUpdateTarget | null
   cleaning?: boolean
   notice?: DictationCleanupNotice['kind'] | null
@@ -41,6 +46,7 @@ function PaneWithPill({
             notice: notice ? { kind: notice, anchor } : null,
             dismissNotice: () => {}
           }}
+          autoSend={autoSend}
           setup={setup}
           onSetupClose={() => {}}
         />
@@ -179,6 +185,18 @@ export const queuedTerminalEnter = defineFixture({
   store: { dictationState: 'stopping' },
   setup: resetDictationMeter,
   render: () => <PaneWithPill queued="terminal" />
+})
+
+function PaneCountingDown() {
+  const [deadline] = useState(() => performance.now() + 2000)
+  return <PaneWithPill autoSend={{ deadline, delayMs: 2000 }} />
+}
+
+export const autoSendCountdown = defineFixture({
+  width: 520,
+  store: { dictationState: 'stopping' },
+  setup: resetDictationMeter,
+  render: () => <PaneCountingDown />
 })
 
 function speechModel(id: string, label: string): SpeechModelManifest {

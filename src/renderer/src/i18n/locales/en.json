@@ -17969,7 +17969,8 @@
           "finish": "Finish",
           "oneMinuteLeft": "One minute left.",
           "sendsWhenLanded": "Sends when the text lands",
-          "entersWhenLanded": "Presses Enter when the text lands"
+          "entersWhenLanded": "Presses Enter when the text lands",
+          "sendingIn": "Sending in {{duration}}"
         },
         "DictationPillFailure": {
           "discard": "Discard recording",

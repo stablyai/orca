@@ -35,8 +35,8 @@ export function useNativeChatComposerEditSession({
   sendStructured,
   ptyCommandRouting,
   setNotice,
-  disabled,
-  sendHeld,
+  saveHeld,
+  launchPrompt,
   sendMessage,
   completeItem
 }: {
@@ -51,8 +51,10 @@ export function useNativeChatComposerEditSession({
   sendStructured: (text: string) => void
   ptyCommandRouting: Parameters<typeof useNativeChatPickerCommandDispatch>[0]
   setNotice: (text: string) => void
-  disabled: boolean
-  sendHeld: boolean
+  /** The composer is disabled or its Send is held, so an edit can't be saved yet. */
+  saveHeld: boolean
+  /** Enter in a launch prompt starts an agent, which a dictation must never do on its own. */
+  launchPrompt: boolean
   sendMessage: (intent?: NativeChatComposerSendIntent) => void
   completeItem: (item: NativeChatPickerItem) => void
 }) {
@@ -109,18 +111,18 @@ export function useNativeChatComposerEditSession({
     },
     [editSession, setNotice, acceptsText]
   )
-  const sendOrQueue = useSendAfterDictation(root, sendMessage)
+  const sendOrQueue = useSendAfterDictation(root, sendMessage, !isEditing && !launchPrompt)
   const send = useCallback(
     (intent?: NativeChatComposerSendIntent) => {
       if (!editSession) {
         sendOrQueue(intent)
         return
       }
-      if (!disabled && !sendHeld && editSession.canSave) {
+      if (!saveHeld && editSession.canSave) {
         editSession.save()
       }
     },
-    [disabled, editSession, sendHeld, sendOrQueue]
+    [editSession, saveHeld, sendOrQueue]
   )
   const submit = useLatestHandler(() => send())
   // The pane's own handle object, so its identity changes only when that handle does.

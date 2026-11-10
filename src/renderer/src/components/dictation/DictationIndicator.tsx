@@ -3,7 +3,8 @@ import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
-import { useTranslate } from '@/i18n/use-translate'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'
@@ -21,7 +22,10 @@ import { DictationSetupPill } from './DictationSetupPill'
 import { loadSpeechCatalog } from './speech-model-update-check'
 import type { SpeechModelUpdateTarget } from './speech-model-update-target'
 import type { DictationFailureKind } from './dictation-toasts'
-import type { DictationQueuedSendKind } from './use-dictation-queued-send'
+import type {
+  DictationAutoSendCountdown,
+  DictationQueuedSendKind
+} from './use-dictation-queued-send'
 import type { DictationCleanupNotice } from './use-dictation-cleanup'
 import { DictationCleanupNoticePill } from './DictationCleanupNoticePill'
 
@@ -29,6 +33,17 @@ import { DictationCleanupNoticePill } from './DictationCleanupNoticePill'
 const FINISH_SPINNER_DELAY_MS = 200
 // The timer warns a minute before cloud dictation stops.
 const CLOUD_LIMIT_WARNING_SECONDS = CLOUD_DICTATION_MAX_SECONDS - 60
+// Intl formatter caches key on option identity, so these must be module constants.
+const SECONDS_NARROW: Intl.NumberFormatOptions = {
+  style: 'unit',
+  unit: 'second',
+  unitDisplay: 'narrow'
+}
+const SECONDS_LONG: Intl.NumberFormatOptions = {
+  style: 'unit',
+  unit: 'second',
+  unitDisplay: 'long'
+}
 
 type DictationIndicatorProps = {
   /** The mic is recording (and buffering) while the speech engine is still starting. */
@@ -44,6 +59,8 @@ type DictationIndicatorProps = {
     notice: DictationCleanupNotice | null
     dismissNotice: () => void
   }
+  /** Set while "Send when dictation ends" counts down to sending the landed words. */
+  autoSend: DictationAutoSendCountdown | null
 }
 
 type DictationSetupProps = {
@@ -124,6 +141,28 @@ function useDelayedFlag(on: boolean, delayMs: number): boolean {
   return delayed
 }
 
+function secondsUntil(deadline: number): number {
+  return Math.max(0, Math.ceil((deadline - performance.now()) / 1000))
+}
+
+// Mounted per countdown, so it starts at the full delay; a hidden window takes the send over anyway.
+function DictationAutoSendSeconds({ deadline }: { deadline: number }) {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const [seconds, setSeconds] = useState(() => secondsUntil(deadline))
+  useEffect(
+    () =>
+      installWindowVisibilityInterval({
+        run: () => setSeconds(secondsUntil(deadline)),
+        intervalMs: 250
+      }),
+    [deadline]
+  )
+  return t('auto.components.dictation.DictationIndicator.sendingIn', 'Sending in {{duration}}', {
+    duration: uiNumberFormat(SECONDS_NARROW, intlLocale).format(seconds)
+  })
+}
+
 // Only this re-renders per meter tick, not the whole pill.
 function DictationPillMeter({ recording, status }: { recording: boolean; status: string }) {
   const t = useTranslate()
@@ -160,8 +199,16 @@ function DictationPendingDots() {
   )
 }
 
-function DictationPill({ captureLive, anchor, failure, queued, cleanup }: DictationIndicatorProps) {
+function DictationPill({
+  captureLive,
+  anchor,
+  failure,
+  queued,
+  autoSend,
+  cleanup
+}: DictationIndicatorProps) {
   const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const dictationState = useAppStore((state) => state.dictationState)
   const liveText = useAppStore((state) => state.liveText)
   const isHoldMode = useAppStore((state) => state.settings?.voice?.dictationMode === 'hold')
@@ -172,7 +219,7 @@ function DictationPill({ captureLive, anchor, failure, queued, cleanup }: Dictat
   const recording = dictationState === 'listening' || (dictationState === 'starting' && captureLive)
   // Counts recorded time, so it waits for the mic to open.
   const seconds = useElapsedSeconds(recording)
-  const showSpinner = useDelayedFlag(finishing, FINISH_SPINNER_DELAY_MS)
+  const showSpinner = useDelayedFlag(finishing && !autoSend, FINISH_SPINNER_DELAY_MS)
   const nearCloudLimit = cloudModel && seconds >= CLOUD_LIMIT_WARNING_SECONDS
   const failedKind = dictationState === 'error' ? failure : null
   const { committed, speechPending } = liveText
@@ -197,9 +244,15 @@ function DictationPill({ captureLive, anchor, failure, queued, cleanup }: Dictat
     : finishing
       ? t('auto.components.dictation.DictationIndicator.finishing', 'Finishing…')
       : t('auto.components.dictation.DictationIndicator.listening', 'Listening…')
+  // Announced once with the whole delay; the live seconds would re-announce every tick.
+  const autoSendAnnouncement = autoSend
+    ? t('auto.components.dictation.DictationIndicator.sendingIn', 'Sending in {{duration}}', {
+        duration: uiNumberFormat(SECONDS_LONG, intlLocale).format(autoSend.delayMs / 1000)
+      })
+    : null
   const announced = nearCloudLimit
     ? `${status} ${t('auto.components.dictation.DictationIndicator.oneMinuteLeft', 'One minute left.')}`
-    : (queuedStatus ?? status)
+    : (autoSendAnnouncement ?? queuedStatus ?? status)
   const cancelLabel = cleaning
     ? t('components.dictation.DictationIndicator.skipCleanup', 'Skip cleanup and insert as heard')
     : t('auto.components.dictation.DictationIndicator.cancel', 'Cancel')
@@ -217,17 +270,23 @@ function DictationPill({ captureLive, anchor, failure, queued, cleanup }: Dictat
         <>
           <DictationPillCloseButton label={cancelLabel} />
           <DictationPillMeter recording={recording} status={announced} />
-          {queuedStatus ? (
+          {autoSend || queuedStatus ? (
             <span
               aria-hidden
               className="flex min-w-0 flex-1 items-center gap-1.5 text-muted-foreground"
             >
-              {queued === 'chat' ? (
+              {autoSend || queued === 'chat' ? (
                 <ArrowUp className="size-3.5 shrink-0" />
               ) : (
                 <CornerDownLeft className="size-3.5 shrink-0" />
               )}
-              <span className="truncate">{queuedStatus}</span>
+              <span className="truncate">
+                {autoSend ? (
+                  <DictationAutoSendSeconds key={autoSend.deadline} deadline={autoSend.deadline} />
+                ) : (
+                  queuedStatus
+                )}
+              </span>
             </span>
           ) : !cleaning && (committed || tentative || speechPending) ? (
             // Right-aligned so the newest words stay in view; older ones fade off the left edge.
