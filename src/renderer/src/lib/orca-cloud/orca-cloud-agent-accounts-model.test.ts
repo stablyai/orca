@@ -9,6 +9,8 @@ import {
 function status(overrides: {
   claude?: OrcaCloudAgentsStatus['credentials']['claude']
   enabled?: boolean
+  /** Omitted: an older server that sends only providerEnabled. */
+  provider?: 'on' | 'off' | 'disabled'
   covered?: boolean
   defaultSource?: 'sign-in' | 'key' | null
 }): OrcaCloudAgentsStatus {
@@ -16,7 +18,8 @@ function status(overrides: {
     credentials: {
       claude: overrides.claude ?? { state: 'none' },
       codex: { state: 'none' },
-      providerEnabled: { claude: overrides.enabled ?? true, codex: true }
+      providerEnabled: { claude: overrides.enabled ?? true, codex: true },
+      ...(overrides.provider ? { providerState: { claude: overrides.provider, codex: 'on' } } : {})
     },
     sources: {
       defaults: { claude: overrides.defaultSource ?? null },
@@ -86,6 +89,14 @@ describe('orcaCloudAccountRow', () => {
       orcaCloudAccountRow('claude', status({ claude: ACTIVE, enabled: false }), IDLE, null)
     ).toEqual({ kind: 'killSwitch' })
     const browser = { phase: 'browser', startedAt: 1, canReopen: false } as const
+    expect(
+      orcaCloudAccountRow(
+        'claude',
+        status({ claude: ACTIVE, enabled: false, provider: 'disabled' }),
+        IDLE,
+        null
+      )
+    ).toEqual({ kind: 'killSwitch' })
     expect(orcaCloudAccountRow('claude', status({}), browser, null)).toEqual({
       kind: 'setup',
       setup: browser
@@ -93,6 +104,31 @@ describe('orcaCloudAccountRow', () => {
     expect(
       orcaCloudAccountRow('claude', status({}), { phase: 'failed', error: 'denied' }, null)
     ).toEqual({ kind: 'failed', error: 'denied' })
+  })
+})
+
+describe('flag off vs kill switch', () => {
+  it('reads a never-offered provider as unavailable, not paused', () => {
+    const off = status({ enabled: false, provider: 'off' })
+    expect(orcaCloudAccountRow('claude', off, IDLE, null)).toEqual({ kind: 'unavailable' })
+    expect(orcaCloudAgentCoverage('claude', off, null)).toEqual({ kind: 'unavailable' })
+    // A key still covers it either way.
+    expect(
+      orcaCloudAgentCoverage(
+        'claude',
+        status({ enabled: false, provider: 'off', covered: true }),
+        'team'
+      )
+    ).toEqual({ kind: 'key', keyKind: 'team' })
+  })
+
+  it('never trusts a providerState that contradicts providerEnabled', () => {
+    expect(
+      orcaCloudAccountRow('claude', status({ enabled: false, provider: 'on' }), IDLE, null)
+    ).toEqual({ kind: 'killSwitch' })
+    expect(
+      orcaCloudAccountRow('claude', status({ enabled: true, provider: 'off' }), IDLE, null).kind
+    ).toBe('notSetUp')
   })
 })
 

@@ -27700,6 +27700,8 @@
       "repository": "repository key",
       "personal": "your API key"
     },
-    "copyAndOpen": "Copy code and open"
+    "copyAndOpen": "Copy code and open",
+    "unavailable": "Signs in for each cloud workspace",
+    "unavailableDetail": "Signing in once with your {{product}} account isn’t available in Orca Cloud yet. Each new cloud workspace asks you to sign in."
   }
 }

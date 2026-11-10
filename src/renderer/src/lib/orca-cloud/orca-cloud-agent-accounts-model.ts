@@ -3,6 +3,7 @@
 import type { CloudEffectiveSecret } from '../../../../shared/cloud-secrets/cloud-secrets-wire'
 import {
   isUsableAgentCredential,
+  orcaCloudProviderState,
   type AgentKeyKind,
   type OrcaCloudAccountAgent,
   type OrcaCloudAgentSetup,
@@ -62,8 +63,10 @@ export type OrcaCloudAccountRow =
       covered: boolean
     }
   | { kind: 'expired'; keyKind: AgentKeyKind | null; covered: boolean }
-  /** §5c: the provider's Orca-account path is off. Info only; the stored credential is kept. */
+  /** §5c: the provider's Orca-account path is paused (kill switch). Info only; the stored credential is kept. */
   | { kind: 'killSwitch' }
+  /** This server never offered the provider (flag off): nothing to set up, nothing paused. */
+  | { kind: 'unavailable' }
 
 export function orcaCloudAccountRow(
   agent: OrcaCloudAccountAgent,
@@ -74,8 +77,13 @@ export function orcaCloudAccountRow(
   const credential = status.credentials[agent]
   const covered = status.sources.coveredByKey[agent]
   const fallbackKey = covered ? (keyKind ?? 'team') : null
-  if (!status.credentials.providerEnabled[agent]) {
-    return { kind: 'killSwitch' }
+  switch (orcaCloudProviderState(status.credentials, agent)) {
+    case 'off':
+      return { kind: 'unavailable' }
+    case 'disabled':
+      return { kind: 'killSwitch' }
+    case 'on':
+      break
   }
   if (setup.phase === 'failed') {
     return { kind: 'failed', error: setup.error }
@@ -113,6 +121,8 @@ export type OrcaCloudAgentCoverage =
   | { kind: 'expired' }
   /** §5c without a key: each new cloud workspace asks once. */
   | { kind: 'killSwitch' }
+  /** Flag off without a key: no Orca-account path here, so nothing to show. */
+  | { kind: 'unavailable' }
 
 export function orcaCloudAgentCoverage(
   agent: OrcaCloudAccountAgent,
@@ -120,9 +130,9 @@ export function orcaCloudAgentCoverage(
   keyKind: AgentKeyKind | null
 ): OrcaCloudAgentCoverage {
   const credential = status.credentials[agent]
-  const enabled = status.credentials.providerEnabled[agent]
+  const provider = orcaCloudProviderState(status.credentials, agent)
   const covered = status.sources.coveredByKey[agent]
-  const usable = enabled && isUsableAgentCredential(credential.state)
+  const usable = provider === 'on' && isUsableAgentCredential(credential.state)
   const source = status.sources.effective?.[agent]?.source ?? status.sources.defaults[agent] ?? null
   const key: OrcaCloudAgentCoverage = { kind: 'key', keyKind: keyKind ?? 'team' }
   if (usable && (source === 'sign-in' || !covered)) {
@@ -131,8 +141,8 @@ export function orcaCloudAgentCoverage(
   if (covered) {
     return key
   }
-  if (!enabled) {
-    return { kind: 'killSwitch' }
+  if (provider !== 'on') {
+    return { kind: provider === 'off' ? 'unavailable' : 'killSwitch' }
   }
   return credential.state === 'expired' || credential.state === 'revoked'
     ? { kind: 'expired' }

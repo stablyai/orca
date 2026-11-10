@@ -95,6 +95,8 @@ describe('Orca-account credentials (D11)', () => {
     expect(put.status).toBe(200)
     expect(put.body.claude).toMatchObject({ state: 'active', label: 'mia@example.com' })
     expect(put.body.providerEnabled).toEqual({ claude: true, codex: false })
+    // Codex's flag was never turned on: `off`, which clients word differently from the kill switch.
+    expect(put.body.providerState).toEqual({ claude: 'on', codex: 'off' })
     expect(JSON.stringify(put.body)).not.toContain(SETUP_TOKEN)
     // Someone else sees nothing of Mia's.
     expect((await h.call('GET', '/v1/agent-credentials', { bearer: await as('bob') })).body.claude.state).toBe('none')
@@ -197,7 +199,9 @@ describe('egress-time Source (D10) and shared workspaces (D13)', () => {
     const env = lastEnv(START_COMMAND)
     expect(env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
     expect(env.ANTHROPIC_API_KEY).toBeUndefined()
-    expect((await h.call('GET', '/v1/agent-credentials', { bearer: mia })).body.providerEnabled.claude).toBe(false)
+    const view = (await h.call('GET', '/v1/agent-credentials', { bearer: mia })).body
+    expect(view.providerEnabled.claude).toBe(false)
+    expect(view.providerState.claude).toBe('disabled')
   })
 })
 
