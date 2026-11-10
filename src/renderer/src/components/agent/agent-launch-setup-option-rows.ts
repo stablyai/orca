@@ -1,3 +1,4 @@
+import { agentPickerCatalogAuthoritative } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
 import { agentPickerCatalogView } from '../../../../shared/agent-launch/picker/agent-launch-picker-source'
 import { agentPickerModelMenu } from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 import {
@@ -264,13 +265,7 @@ export function agentLaunchSetupCatalogState(
                         agent: entry.label
                       })
                     : null
-  const canSearch =
-    hasModels &&
-    entry.catalog.origin !== 'unknown' &&
-    !entry.catalog.listingInProgress &&
-    entry.catalogRead !== 'pending' &&
-    entry.catalogRead !== 'failed' &&
-    entry.catalogRead !== 'unsupported'
+  const canSearch = hasModels && agentPickerCatalogAuthoritative(entry)
   return { hasModels, catalogPending, catalogMessage, canSearch }
 }
 

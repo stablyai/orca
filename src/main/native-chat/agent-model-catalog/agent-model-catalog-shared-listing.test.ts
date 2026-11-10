@@ -6,10 +6,7 @@ import {
 } from '../structured-agent-command-resolution'
 import { AgentModelCatalogStore, type AgentModelCatalogSuccess } from './agent-model-catalog-store'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
-import {
-  joinHostModelListingWait,
-  isHostModelListingWaitInFlight
-} from '../../../shared/host-model-listing-waits'
+import { agentModelCatalogFingerprint } from './agent-model-catalog-fingerprint'
 
 function listing(id: string): AgentModelCatalogSuccess {
   return {
@@ -98,7 +95,6 @@ it('finishes a shared listing for a folder that joined before the first reader g
     vi.useRealTimers()
   })
   const h = sharedListingHarness()
-  const started = Date.now()
   void h.service.demand({ agent: 'codex', workspacePath: '/a', deadline: Date.now() + 1_000 })
   await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
   const b = h.service.read({
@@ -110,8 +106,6 @@ it('finishes a shared listing for a folder that joined before the first reader g
   await vi.advanceTimersByTimeAsync(2_000)
   // The first reader is gone, but the listing it started is still running for the folder that joined.
   expect(h.runs[0]?.signal?.aborted).toBe(false)
-  // Its requests carry the refresh's own budget, not the first reader's deadline.
-  expect(h.runs[0]?.deadline).toBe(started + 30_000)
   h.discovery.resolve({ ...listing('shared'), complete: true, configured: {} })
   await vi.advanceTimersByTimeAsync(0)
   expect(await b).toMatchObject({ models: [{ id: 'shared' }] })
@@ -138,51 +132,79 @@ it.each(['retired', 'stopped'] as const)(
   }
 )
 
-it('never starts a queued shared listing once its budget has run out, nor a replacement', async () => {
+it('keeps a queued listing only while a refresh or reader still waits on it', async () => {
   vi.useFakeTimers()
   onTestFinished(() => {
     vi.useRealTimers()
   })
   const h = sharedListingHarness()
-  // Two other CLIs hold both discovery slots past every budget below.
+  // Two other CLIs hold both discovery slots.
   for (const busy of ['/busy-1', '/busy-2']) {
     void h.service.demand({ agent: 'codex', workspacePath: busy })
   }
   await vi.waitFor(() => expect(h.run).toHaveBeenCalledTimes(2))
-  void h.service.demand({ agent: 'codex', workspacePath: '/a', deadline: Date.now() + 1_000 })
-  void h.service.demand({ agent: 'codex', workspacePath: '/b', deadline: Date.now() + 2_000 })
-  await vi.advanceTimersByTimeAsync(31_000)
+  void h.service.demand({ agent: 'codex', workspacePath: '/own-dropped' })
+  void h.service.demand({ agent: 'codex', workspacePath: '/own-waited' })
+  await vi.advanceTimersByTimeAsync(25_000)
+  void h.service.read({ agent: 'codex', workspacePath: '/own-waited', waitForListing: true })
+  await vi.advanceTimersByTimeAsync(15_000)
   h.listingFor('/busy-1').resolve(listing('busy'))
   h.listingFor('/busy-2').resolve(listing('busy'))
   await vi.advanceTimersByTimeAsync(60_000)
+  expect(h.runs.map((entry) => entry.identity)).toEqual(['/busy-1', '/busy-2', '/own-waited'])
+})
+
+it('retires queued discovery before shutdown releases an admission slot', async () => {
+  vi.useFakeTimers()
+  onTestFinished(() => {
+    vi.useRealTimers()
+  })
+  const h = sharedListingHarness()
+  for (const workspacePath of ['/busy-1', '/busy-2', '/own-queued']) {
+    void h.service.demand({ agent: 'codex', workspacePath })
+  }
+  await vi.advanceTimersByTimeAsync(0)
+  expect(h.service.snapshot({ agent: 'codex', workspacePath: '/own-queued' })).toMatchObject({
+    listingInProgress: true
+  })
+
+  const stopped = h.service.stop()
+  h.listingFor('/busy-1').resolve(listing('busy'))
+  h.listingFor('/busy-2').resolve(listing('busy'))
+  await vi.advanceTimersByTimeAsync(0)
+  await stopped
+
   expect(h.runs.map((entry) => entry.identity)).toEqual(['/busy-1', '/busy-2'])
 })
 
-it.each([5, 50])(
-  'runs two of %i folders with their own CLIs at a time, starts none after its budget, and leaves nothing behind',
-  async (folders) => {
-    vi.useFakeTimers()
-    onTestFinished(() => {
-      vi.useRealTimers()
-    })
-    const h = sharedListingHarness()
-    for (let index = 0; index < folders; index++) {
-      void h.service.demand({ agent: 'codex', workspacePath: `/own-${index}` })
-    }
-    await vi.advanceTimersByTimeAsync(0)
-    expect(h.run).toHaveBeenCalledTimes(2)
-    await vi.advanceTimersByTimeAsync(30_000)
-    expect(h.runs.every((entry) => entry.signal?.aborted)).toBe(true)
-    // No reader asked again, so nothing replaces the expired work.
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(h.run).toHaveBeenCalledTimes(2)
-    for (let index = 0; index < folders; index++) {
-      expect(
-        h.service.snapshot({ agent: 'codex', workspacePath: `/own-${index}` })
-      ).not.toHaveProperty('listingInProgress')
-    }
+it('reports an expired captured wait and lets the next reader finish its queued listing', async () => {
+  vi.useFakeTimers()
+  onTestFinished(() => {
+    vi.useRealTimers()
+  })
+  const h = sharedListingHarness()
+  for (const workspacePath of ['/busy-1', '/busy-2']) {
+    void h.service.demand({ agent: 'codex', workspacePath })
   }
-)
+  await vi.advanceTimersByTimeAsync(0)
+  const params = { agent: 'codex', workspacePath: '/own-waited', waitForListing: true }
+  const operation = h.service.captureRead(params)
+  const request = { ...params, operation, deadline: operation.deadline }
+  const first = h.service.read(request)
+  await vi.advanceTimersByTimeAsync(30_000)
+  expect(await first).toEqual({ origin: 'unknown', listingInProgress: true, waitExpired: true })
+
+  operation.controller.abort()
+  expect(await h.service.read(request)).toEqual({ origin: 'unknown' })
+
+  const next = h.service.read(params)
+  await vi.advanceTimersByTimeAsync(0)
+  h.listingFor('/busy-1').resolve(listing('busy'))
+  h.listingFor('/own-waited').resolve(listing('fresh'))
+  await vi.advanceTimersByTimeAsync(0)
+  expect(await next).toMatchObject({ origin: 'probe', models: [{ id: 'fresh' }] })
+  expect(await next).not.toHaveProperty('waitExpired')
+})
 
 it("never answers a newly picked folder with the previous folder's late listing", async () => {
   const h = sharedListingHarness()
@@ -326,98 +348,88 @@ it('settles each reader at its own deadline or cancellation, and stops the listi
   expect(h.service.snapshot({ agent: 'codex', workspacePath: '/a' }).origin).toBe('unknown')
 })
 
-it.each(['cold', 'warm'] as const)(
-  'ends queued %s discovery within its original deadline and preserves existing observations',
-  async (mode) => {
-    vi.useFakeTimers()
-    const store = new AgentModelCatalogStore()
-    let failing = false
-    const run = vi.fn(
-      (
-        _home: AgentSessionAccountHome,
-        options?: { signal?: AbortSignal; workspacePath?: string }
-      ) =>
-        new Promise<AgentModelCatalogSuccess>((resolve, reject) => {
-          const timer = setTimeout(
-            () =>
-              failing
-                ? reject(new Error('offline'))
-                : resolve({
-                    ...listing(options?.workspacePath ?? 'listed'),
-                    complete: true,
-                    configured: {}
-                  }),
-            12_000
-          )
-          options?.signal?.addEventListener(
-            'abort',
-            () => {
-              clearTimeout(timer)
-              reject(new Error('stopped'))
-            },
-            { once: true }
-          )
-        })
-    )
-    const service = createAgentModelCatalogService({
-      store,
-      getConversation: () => undefined,
-      getRecord: () => undefined,
-      drivesRecord: () => true,
-      resolveAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/account' }),
-      // Each folder resolves its own CLI (a project-local install), so each lists separately.
-      probes: {
-        codex: Object.assign(run, {
-          resolve: async (
-            home: AgentSessionAccountHome,
-            _cwd: string,
-            _lookup?: unknown,
-            _operation?: unknown,
-            launchDirectory?: string
-          ) => ({
-            identity: launchDirectory,
-            run: (signal?: AbortSignal) => run(home, { signal, workspacePath: launchDirectory })
-          })
-        })
-      }
-    })
-    const read = (path: string, waitForListing = false) =>
-      waitForListing
-        ? service.read({ agent: 'codex', workspacePath: path, waitForListing })
-        : discover(service, { agent: 'codex', workspacePath: path })
-    const replies: unknown[] = []
-    let leave = () => {}
-    try {
-      if (mode === 'warm') {
-        const initial = read('/5', true)
-        await vi.advanceTimersByTimeAsync(12_000)
-        await initial
-        await vi.advanceTimersByTimeAsync(120_001)
-      }
-      failing = false
-      await Promise.all(['/1', '/2', '/3', '/4', '/5'].map((path) => read(path)))
-      const follow = vi.fn(() => read('/5', true))
-      const owner = { close() {} }
-      leave = joinHostModelListingWait('queued', follow, (reply) => replies.push(reply), owner)
-      const second = joinHostModelListingWait('queued', follow, () => {}, owner)
-      await vi.advanceTimersByTimeAsync(30_000)
-      expect(replies[0]).not.toHaveProperty('listingInProgress')
-      expect(follow).toHaveBeenCalledTimes(1)
-
-      await vi.advanceTimersByTimeAsync(7_000)
-      expect(replies.at(-1)).not.toHaveProperty('listingInProgress')
-      expect(isHostModelListingWaitInFlight('queued', owner)).toBe(false)
-      if (mode === 'warm') {
-        expect(replies.at(-1)).toMatchObject({ models: [{ id: '/5' }] })
-      } else {
-        expect(replies.at(-1)).toEqual({ origin: 'unknown' })
-      }
-      expect(run).toHaveBeenCalledTimes(mode === 'warm' ? 6 : 5)
-      second()
-    } finally {
-      leave()
-      service.stop()
-      vi.useRealTimers()
+it('publishes cached catalogs immediately and completes queued discoveries after admission', async () => {
+  vi.useFakeTimers()
+  const store = new AgentModelCatalogStore()
+  let warming = true
+  const probe =
+    (agent: string) => (_home: AgentSessionAccountHome, options?: { signal?: AbortSignal }) =>
+      new Promise<AgentModelCatalogSuccess>((resolve, reject) => {
+        // ast-grep-ignore: test-no-real-time-wait -- Fake timers simulate probe execution after queued admission.
+        const timer = setTimeout(
+          () =>
+            resolve({
+              ...listing(warming ? 'saved' : `${agent}-fresh`),
+              complete: true,
+              configured: {}
+            }),
+          agent === 'pi' || agent === 'gemini' ? 20_000 : 15_000
+        )
+        options?.signal?.addEventListener(
+          'abort',
+          () => {
+            clearTimeout(timer)
+            reject(new Error('stopped'))
+          },
+          { once: true }
+        )
+      })
+  const service = createAgentModelCatalogService({
+    store,
+    getConversation: () => undefined,
+    getRecord: () => undefined,
+    drivesRecord: () => true,
+    resolveAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/account' }),
+    probes: {
+      pi: probe('pi'),
+      gemini: probe('gemini'),
+      claude: probe('claude'),
+      codex: probe('codex')
     }
+  })
+  try {
+    const saved = service.read({ agent: 'claude', waitForListing: true })
+    await vi.advanceTimersByTimeAsync(15_000)
+    await saved
+    warming = false
+    await vi.advanceTimersByTimeAsync(120_001)
+
+    for (const agent of ['pi', 'gemini', 'claude', 'codex']) {
+      await discover(service, { agent })
+    }
+    expect(await service.read({ agent: 'claude' })).toMatchObject({
+      models: [{ id: 'saved' }],
+      listingInProgress: true
+    })
+
+    const expired = service.read({
+      agent: 'claude',
+      waitForListing: true,
+      deadline: Date.now() + 5_000
+    })
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(await expired).toMatchObject({
+      models: [{ id: 'saved' }],
+      listingInProgress: true,
+      waitExpired: true
+    })
+
+    await vi.advanceTimersByTimeAsync(15_000)
+    const warm = service.read({ agent: 'claude', waitForListing: true })
+    const cold = service.read({ agent: 'codex', waitForListing: true })
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(await warm).toMatchObject({ models: [{ id: 'claude-fresh' }] })
+    expect(await cold).toMatchObject({ models: [{ id: 'codex-fresh' }] })
+    const account = agentModelCatalogFingerprint({
+      agent: 'claude',
+      accountHome: { variable: 'CODEX_HOME', path: '/account' },
+      wslDistro: null
+    })
+    expect(store.observation(account)).toMatchObject({
+      models: [{ id: 'claude-fresh', isDefault: false }]
+    })
+  } finally {
+    await service.stop()
+    vi.useRealTimers()
   }
-)
+})

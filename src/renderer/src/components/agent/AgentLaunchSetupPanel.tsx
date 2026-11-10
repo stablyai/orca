@@ -23,7 +23,7 @@ import {
 import { useTranslate } from '@/i18n/use-translate'
 import { agentModelChoiceChips } from './launch-settings/agent-model-choice-chips'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { AgentDefaultArgsInput } from './launch-settings/AgentLaunchDefaultsEditor'
 import { NativeChatSessionOptionRows } from '../native-chat/session/options/controls/NativeChatSessionOptionRows'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'

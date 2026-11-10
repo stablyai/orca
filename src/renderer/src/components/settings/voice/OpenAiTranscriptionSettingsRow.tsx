@@ -44,8 +44,8 @@ export function OpenAiTranscriptionSettingsRow({
         }
       : {
           title: t(
-            'auto.components.settings.OpenAiTranscriptionSettingsRow.27e0cb656d',
-            'OpenAI Transcription'
+            'auto.components.settings.OpenAiTranscriptionSettingsRow.ff28e99b54',
+            'OpenAI transcription'
           ),
           configured: t(
             'auto.components.settings.OpenAiTranscriptionSettingsRow.b59b9b2b51',
@@ -70,7 +70,7 @@ export function OpenAiTranscriptionSettingsRow({
         }
 
   return (
-    <div className="flex items-center justify-between gap-4 py-2">
+    <div data-settings-row="" className="flex items-center justify-between gap-4 py-2">
       <div className="min-w-0 space-y-0.5">
         <div className="flex items-center gap-2">
           <Cloud className="size-4 shrink-0 text-muted-foreground" />

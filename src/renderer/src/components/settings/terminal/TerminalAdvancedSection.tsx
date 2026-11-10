@@ -107,7 +107,7 @@ export function TerminalAdvancedSection({
       )}
     >
       <SearchableSetting
-        title={t('auto.components.settings.TerminalPane.9df53f7c14', 'Scrollback Rows')}
+        title={t('auto.components.settings.TerminalPane.143ca8e340', 'Scrollback rows')}
         description={t(
           'auto.components.settings.TerminalPane.c3810b2b42',
           'Retained desktop terminal rows.'
@@ -116,7 +116,7 @@ export function TerminalAdvancedSection({
       >
         <SettingsRow
           alignTop={scrollbackMode === 'custom'}
-          label={t('auto.components.settings.TerminalPane.9df53f7c14', 'Scrollback Rows')}
+          label={t('auto.components.settings.TerminalPane.143ca8e340', 'Scrollback rows')}
           description={t(
             'auto.components.settings.TerminalPane.81d86b2dd2',
             'Retained desktop terminal rows for new and open panes.'
@@ -196,7 +196,7 @@ export function TerminalAdvancedSection({
       {hostScope ? <TerminalLimitSetting scope={hostScope} /> : null}
 
       <SearchableSetting
-        title={t('auto.components.settings.TerminalPane.4bebcc2b2c', 'Word Separators')}
+        title={t('auto.components.settings.TerminalPane.8abcfcf8d3', 'Word separators')}
         description={t(
           'settings.terminal.wordSeparators.description',
           'Characters treated as word boundaries for double-click selection, including space.'
@@ -204,7 +204,7 @@ export function TerminalAdvancedSection({
         keywords={['word', 'separator', 'boundary', 'double-click', 'selection']}
       >
         <SettingsRow
-          label={t('auto.components.settings.TerminalPane.4bebcc2b2c', 'Word Separators')}
+          label={t('auto.components.settings.TerminalPane.8abcfcf8d3', 'Word separators')}
           description={t(
             'settings.terminal.wordSeparators.description',
             'Characters treated as word boundaries for double-click selection, including space.'
@@ -249,7 +249,7 @@ export function TerminalAdvancedSection({
         getTerminalWindowsPowershellImplementationSearchEntry()
       ) ? (
         <SearchableSetting
-          title={t('auto.components.settings.TerminalPane.fe20f79dd1', 'PowerShell Version')}
+          title={t('auto.components.settings.TerminalPane.1be0263c55', 'PowerShell version')}
           description={t(
             'auto.components.settings.TerminalPane.3d88af864d',
             'Choose whether the PowerShell shell option launches Windows PowerShell or PowerShell 7+ for new terminal panes.'
@@ -267,7 +267,7 @@ export function TerminalAdvancedSection({
         >
           <SettingsRow
             alignTop
-            label={t('auto.components.settings.TerminalPane.fe20f79dd1', 'PowerShell Version')}
+            label={t('auto.components.settings.TerminalPane.1be0263c55', 'PowerShell version')}
             description={
               pwshAvailable ? (
                 t(
@@ -299,8 +299,8 @@ export function TerminalAdvancedSection({
             control={
               <SettingsSegmentedControl
                 ariaLabel={t(
-                  'auto.components.settings.TerminalPane.fe20f79dd1',
-                  'PowerShell Version'
+                  'auto.components.settings.TerminalPane.1be0263c55',
+                  'PowerShell version'
                 )}
                 value={powerShellImplementation}
                 onChange={(value) =>

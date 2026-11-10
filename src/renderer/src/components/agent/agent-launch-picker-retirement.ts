@@ -1,5 +1,8 @@
 import { agentPickerCatalogView } from '../../../../shared/agent-launch/picker/agent-launch-picker-source'
-import type { AgentPickerRetainedSetup } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
+import {
+  agentPickerCatalogAuthoritative,
+  type AgentPickerRetainedSetup
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import { launchDraftSources } from '../native-chat/drafts/native-chat-launch-draft-source'
 
@@ -28,9 +31,10 @@ export function retireAgentPickerSetups(
       const entry = entriesByKey.get(
         currentKey ?? JSON.stringify([retained.target?.key, retained.agent])
       )
-      const catalog = entry && agentPickerCatalogView(entry, retained.draft.surface).catalog
+      const view = entry && agentPickerCatalogView(entry, retained.draft.surface)
+      const catalog = view && agentPickerCatalogAuthoritative(view) ? view.catalog : undefined
       let models = catalog && memberships.get(catalog)
-      if (!models && catalog && catalog.origin !== 'unknown' && !catalog.listingInProgress) {
+      if (!models && catalog) {
         models = new Map(
           catalog.models.map((model) => [
             model.id,

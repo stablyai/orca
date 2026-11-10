@@ -15,7 +15,7 @@ import {
   SOURCE_CONTROL_TREE_FILE_PADDING_PX,
   SOURCE_CONTROL_TREE_INDENT_PX
 } from './row-layout'
-import { STATUS_COLORS } from '../../../../lib/git-path-decoration'
+import { STATUS_COLORS } from '../../../../lib/source-control/paths/git-path-decoration'
 import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 import { useTranslate } from '@/i18n/use-translate'
 

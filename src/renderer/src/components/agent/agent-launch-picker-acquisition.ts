@@ -19,6 +19,7 @@ import type {
 
 /** Pending local IPC outlives observers; matching menus must retain its physical owner. */
 const pending = new Map<string, AgentPickerAcquisition>()
+type ReadKind = 'catalog' | 'refresh' | 'support'
 type SupportRead = {
   state: 'queued' | 'pending' | 'settled'
   value?: AgentPickerEntry['structured']
@@ -28,9 +29,8 @@ class AgentPickerAcquisition {
   readonly observers = new Set<Observer>()
   entries: AgentPickerEntry[]
   settingsPending = false
-  private outstanding = { catalog: 0, support: 0 }
-  private queued: Record<'catalog' | 'support', Set<number>>
-  private deferredCatalogs = new Set<number>()
+  private outstanding = { catalog: 0, refresh: 0, support: 0 }
+  private queued: Record<ReadKind, Set<number>>
   private supports = new Map<number, SupportRead>()
   private jobs: AgentPickerCatalogJob[]
   private defaults: AgentPickerEntry[]
@@ -54,6 +54,7 @@ class AgentPickerAcquisition {
     }
     this.queued = {
       catalog: new Set(this.jobs.map((_, index) => index)),
+      refresh: new Set(),
       support: new Set(this.supports.keys())
     }
   }
@@ -84,9 +85,9 @@ class AgentPickerAcquisition {
         const view = agentPickerSourceView(this.entries[job.index], job.source)
         if (
           view.catalogRead !== 'pending' &&
-          (this.deferredCatalogs.has(index) ||
-            view.catalog.origin === 'unknown' ||
+          (view.catalog.origin === 'unknown' ||
             view.catalogRead === 'failed' ||
+            view.catalogRead === 'unsupported' ||
             view.catalog.unavailable !== undefined ||
             view.catalog.listingInProgress)
         ) {
@@ -106,9 +107,13 @@ class AgentPickerAcquisition {
       }
       this.entries = this.project()
     }
-    const stopDemand = observer.subscribeDemand?.(() => this.admit('catalog'))
+    const stopDemand = observer.subscribeDemand?.(() => {
+      this.admit('catalog')
+      this.admit('refresh')
+    })
     observer.publish(this.entries)
     this.admit('catalog')
+    this.admit('refresh')
     this.admit('support')
     return () => {
       stopDemand?.()
@@ -174,28 +179,26 @@ class AgentPickerAcquisition {
       })
   }
 
-  private async readCatalog(entry: AgentPickerEntry, index: number) {
-    this.deferredCatalogs.delete(index)
+  private async readCatalog(entry: AgentPickerEntry, index: number, waitForListing: boolean) {
     const job = this.jobs[index]
-    const saved = await this.reads.catalog(entry, false, job.source)
-    if (!saved?.listingInProgress) {
-      return saved
+    const catalog = await this.reads.catalog(entry, waitForListing, job.source)
+    // An open picker waits on a running listing, and again when a wait used its whole budget.
+    const refresh =
+      this.observers.size > 0 &&
+      (waitForListing ? catalog?.waitExpired : catalog?.listingInProgress) === true
+    if (refresh) {
+      this.queued.refresh.add(index)
     }
-    if (saved.origin !== 'unknown') {
-      this.entries = updateAgentPickerCatalog(this.entries, job, { catalog: saved })
-      this.publish()
-    }
-    if (!this.observers.size) {
-      this.deferredCatalogs.add(index)
-      return saved
-    }
-    return this.reads.catalog(entry, true, job.source)
+    this.entries = updateAgentPickerCatalog(this.entries, job, {
+      ...(catalog ? { catalog } : {}),
+      catalogRead: !catalog ? 'failed' : refresh ? 'pending' : 'settled'
+    })
   }
 
-  private admit(kind: 'catalog' | 'support') {
+  private admit(kind: ReadKind) {
     while (this.observers.size && this.outstanding[kind] < 2 && this.queued[kind].size) {
       const usable = [...this.queued[kind]].filter((index) => {
-        if (kind !== 'catalog') {
+        if (kind === 'support') {
           return true
         }
         const job = this.jobs[index],
@@ -214,7 +217,7 @@ class AgentPickerAcquisition {
       const index =
         usable.find((index) =>
           priorities.includes(
-            this.entries[kind === 'catalog' ? this.jobs[index].index : index].agent
+            this.entries[kind !== 'support' ? this.jobs[index].index : index].agent
           )
         ) ?? usable[0]
       if (index === undefined) {
@@ -222,35 +225,24 @@ class AgentPickerAcquisition {
       }
       this.queued[kind].delete(index)
       this.outstanding[kind]++
-      const entry = this.entries[kind === 'catalog' ? this.jobs[index].index : index]
+      const entry = this.entries[kind !== 'support' ? this.jobs[index].index : index]
       if (kind === 'support') {
         this.supports.set(index, { state: 'pending' })
       }
       const read =
-        kind === 'catalog'
-          ? this.readCatalog(entry, index)
-              .then((catalog) => {
-                const resume = this.deferredCatalogs.has(index) && this.observers.size > 0
-                if (resume) {
-                  this.queued.catalog.add(index)
-                }
-                this.entries = updateAgentPickerCatalog(this.entries, this.jobs[index], {
-                  ...(catalog ? { catalog } : {}),
-                  catalogRead: resume ? 'pending' : 'settled'
-                })
+        kind !== 'support'
+          ? this.readCatalog(entry, index, kind === 'refresh').catch((error: unknown) => {
+              const unsupported =
+                typeof error === 'object' &&
+                error !== null &&
+                'code' in error &&
+                (error.code === 'method_not_found' ||
+                  error.code === 'structured_agent_session_unsupported' ||
+                  error.code === 'forbidden')
+              this.entries = updateAgentPickerCatalog(this.entries, this.jobs[index], {
+                catalogRead: unsupported ? 'unsupported' : 'failed'
               })
-              .catch((error: unknown) => {
-                const unsupported =
-                  typeof error === 'object' &&
-                  error !== null &&
-                  'code' in error &&
-                  (error.code === 'method_not_found' ||
-                    error.code === 'structured_agent_session_unsupported' ||
-                    error.code === 'forbidden')
-                this.entries = updateAgentPickerCatalog(this.entries, this.jobs[index], {
-                  catalogRead: unsupported ? 'unsupported' : 'failed'
-                })
-              })
+            })
           : this.reads
               .support(entry)
               .catch(() => undefined)
@@ -264,6 +256,9 @@ class AgentPickerAcquisition {
           this.outstanding[kind]--
           this.publish()
           this.admit(kind)
+          if (kind === 'catalog') {
+            this.admit('refresh')
+          }
           this.retire()
         })
     }
@@ -274,6 +269,7 @@ class AgentPickerAcquisition {
       !this.observers.size &&
       !this.settingsPending &&
       !this.outstanding.catalog &&
+      !this.outstanding.refresh &&
       !this.outstanding.support
     ) {
       pending.delete(this.key)

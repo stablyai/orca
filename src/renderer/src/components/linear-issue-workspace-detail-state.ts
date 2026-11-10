@@ -3,7 +3,7 @@ import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
 import { useLinearIssuePublication } from '@/hooks/useLinearIssuePublication'
 import { translate } from '@/i18n/i18n'
-import { taskProviderErrorText } from '@/lib/task-provider-error-copy'
+import { taskProviderErrorText } from '@/lib/work-items/task-provider-error-copy'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'

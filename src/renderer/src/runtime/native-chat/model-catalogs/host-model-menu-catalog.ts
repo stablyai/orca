@@ -31,6 +31,18 @@ function retained(answer: AgentSessionModelCatalogResult | undefined) {
     : answer
 }
 
+function withListingStatus(
+  held: AgentSessionModelCatalogResult,
+  answer: AgentSessionModelCatalogResult
+): AgentSessionModelCatalogResult {
+  const { waitExpired: _waitExpired, ...catalog } = held
+  return {
+    ...catalog,
+    listingInProgress: true,
+    ...(answer.waitExpired ? { waitExpired: true } : {})
+  }
+}
+
 function keyOf(scope: HostModelMenuScope) {
   return JSON.stringify([
     structuredAgentSessionHostKey(scope.target),
@@ -109,7 +121,10 @@ class HostModelMenuCatalog {
       this.retire()
     }
   }
-  read(reuseHeld = false): Promise<AgentSessionModelCatalogResult | undefined> {
+  read(
+    reuseHeld = false,
+    waitForListing?: boolean
+  ): Promise<AgentSessionModelCatalogResult | undefined> {
     if (this.pending) {
       return this.pending
     }
@@ -123,6 +138,7 @@ class HostModelMenuCatalog {
       : undefined
     if (
       reuseHeld &&
+      waitForListing !== true &&
       completedAt !== undefined &&
       Date.now() - completedAt < CLI_REUSE_INTERVAL_MS
     ) {
@@ -145,15 +161,15 @@ class HostModelMenuCatalog {
     this.publish({ ...this.snapshot, pending: true })
     let contextUnresolved = false
     const operation: Promise<AgentSessionModelCatalogResult | undefined> = Promise.resolve()
-      .then(() => request(false))
+      .then(() => request(waitForListing ?? false))
       .then(async (plain) => {
         if (!current()) {
           return this.pending !== operation ? this.pending : undefined
         }
-        if (plain?.listingInProgress) {
+        if (waitForListing === undefined && plain?.listingInProgress) {
           this.publish({
             ...this.snapshot,
-            answer: retained(this.snapshot.answer) ?? plain,
+            answer: withListingStatus(retained(this.snapshot.answer) ?? plain, plain),
             pending: true
           })
           return request(true)
@@ -187,10 +203,10 @@ class HostModelMenuCatalog {
           )
         }
         const shown = answer?.listingInProgress
-          ? (this.held() ?? answer)
+          ? withListingStatus(this.held() ?? answer, answer)
           : answer
             ? this.held()
-            : retained(this.snapshot.answer)
+            : (this.held() ?? retained(this.snapshot.answer))
         this.publish({ answer: shown, pending: false, attempted: true })
         return shown
       })

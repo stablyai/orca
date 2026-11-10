@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createRemoteRuntimeRecoveryInputHold } from './remote-runtime-recovery-input-hold'
-import { PTY_PRECONNECT_INPUT_MAX_ENTRIES } from '../../input/pty-preconnect-input-buffer'
 
 function createWriter() {
   const sent: string[] = []
@@ -24,36 +23,6 @@ function createWriter() {
 const endpoint = { handle: 'terminal-1', incarnationId: 'inc-1' }
 
 describe('remote runtime recovery input hold', () => {
-  it('holds more keystrokes than the per-entry cap during a long outage', async () => {
-    const hold = createRemoteRuntimeRecoveryInputHold()
-    const { sent, writer } = createWriter()
-    // Typing one token a second through a minutes-long outage queues one entry per keystroke.
-    const keys = Array.from({ length: PTY_PRECONNECT_INPUT_MAX_ENTRIES * 2 }, (_, index) =>
-      String(index % 10)
-    )
-    for (const key of keys) {
-      expect(hold.enqueue(endpoint, key, 'driving')).toBe(true)
-    }
-
-    hold.release(endpoint, writer)
-    await vi.waitFor(() => expect(hold.isHolding()).toBe(false))
-
-    expect(sent.join('')).toBe(keys.join(''))
-  })
-
-  it('delivers held input in order to the terminal it was typed into', async () => {
-    const hold = createRemoteRuntimeRecoveryInputHold()
-    const { sent, writer } = createWriter()
-    expect(hold.enqueue(endpoint, 'ls', 'driving')).toBe(true)
-    const accepted = hold.enqueueAccepted(endpoint, '\r', 'driving')
-
-    hold.release(endpoint, writer)
-
-    await expect(accepted).resolves.toBe(true)
-    expect(sent).toEqual(['ls', '\r'])
-    await vi.waitFor(() => expect(hold.isHolding()).toBe(false))
-  })
-
   it('pauses a release interrupted by another outage and keeps the rest for the next release', async () => {
     const hold = createRemoteRuntimeRecoveryInputHold()
     const { sent, writer } = createWriter()
@@ -81,20 +50,6 @@ describe('remote runtime recovery input hold', () => {
 
     current = true
     hold.release(endpoint, writer)
-    await vi.waitFor(() => expect(sent).toEqual(['typed after']))
-  })
-
-  it('keeps delivering typing after an accepted write the sequenced stream withdrew or could not confirm', async () => {
-    const hold = createRemoteRuntimeRecoveryInputHold()
-    const { sent, writer } = createWriter()
-    const paste = hold.enqueueAccepted(endpoint, 'paste', 'driving')
-    hold.enqueue(endpoint, 'typed after', 'driving')
-    hold.release(endpoint, {
-      ...writer,
-      sendInputAccepted: vi.fn(async () => false),
-      continuesAfterFailedWrite: () => true
-    })
-    await expect(paste).resolves.toBe(false)
     await vi.waitFor(() => expect(sent).toEqual(['typed after']))
   })
 

@@ -54,11 +54,13 @@ export function agentPickerModelCatalogReads(input: {
   return {
     catalog: async (
       entry: AgentPickerEntry,
-      _wait = false,
+      waitForListing = false,
       source: ModelCatalogSource = 'structured'
     ) =>
       resolveScope(entry, source).then((scope) =>
-        scope ? hostModelMenuCatalog(scope).read(source === 'cli') : { origin: 'unknown' as const }
+        scope
+          ? hostModelMenuCatalog(scope).read(source === 'cli', waitForListing)
+          : { origin: 'unknown' as const }
       ),
     observeCatalog: (
       entry: AgentPickerEntry,

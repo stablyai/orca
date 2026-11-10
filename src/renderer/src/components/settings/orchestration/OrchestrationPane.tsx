@@ -99,7 +99,7 @@ export function OrchestrationPane({
 
   return (
     <SearchableSetting
-      title={t('auto.components.settings.OrchestrationPane.191ac34567', 'Agent Orchestration')}
+      title={t('auto.components.settings.OrchestrationPane.8a94078d05', 'Agent orchestration')}
       description={t(
         'auto.components.settings.OrchestrationPane.2aacdb0517',
         'Coordinate coding agents across handoffs, worktree handovers, and child-agent work.'

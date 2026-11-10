@@ -4,7 +4,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
-import { branchName } from '@/lib/git-utils'
+import { branchName } from '@/lib/source-control/branches/branch-name'
 import { detachedHeadAutoDerivedDisplayNames } from './detached-head-display-name'
 import {
   applyHostedReviewLinkClear,
