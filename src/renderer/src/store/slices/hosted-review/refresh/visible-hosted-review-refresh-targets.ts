@@ -260,8 +260,6 @@ export function visibleHostedReviewRefreshInputsChanged(
     state.tabsByWorktree !== previous.tabsByWorktree ||
     state.ptyIdsByTabId !== previous.ptyIdsByTabId ||
     state.browserTabsByWorktree !== previous.browserTabsByWorktree ||
-    state.unifiedTabsByWorktree !== previous.unifiedTabsByWorktree ||
-    state.agentStatusByPaneKey !== previous.agentStatusByPaneKey ||
-    state.agentStatusEpoch !== previous.agentStatusEpoch
+    state.unifiedTabsByWorktree !== previous.unifiedTabsByWorktree
   )
 }

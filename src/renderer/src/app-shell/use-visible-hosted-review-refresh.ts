@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/store'
+import { selectIsSleepingWorktree } from '@/components/sidebar/workspace-actions/sleep/use-worktree-sleep-state'
 import { isWindowVisible } from '@/lib/window-visibility-interval'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { createVisibleHostedReviewRefreshScheduler } from '@/store/slices/hosted-review/refresh/visible-hosted-review-refresh-scheduler'
@@ -15,8 +16,12 @@ export function useVisibleHostedReviewRefresh({ enabled }: { enabled: boolean })
       return
     }
     const scheduler = createVisibleHostedReviewRefreshScheduler()
+    let sleepingWorktreeIds = new Set<string>()
     const update = (): void => {
       const state = useAppStore.getState()
+      sleepingWorktreeIds = new Set(
+        (state.visibleReviewWorktreeIds ?? []).filter((id) => selectIsSleepingWorktree(state, id))
+      )
       const selectedOnly = isWebClientLocation()
       scheduler.update([
         ...getVisibleHostedReviewRefreshTargets(state, useAppStore.getState, { selectedOnly }),
@@ -29,7 +34,17 @@ export function useVisibleHostedReviewRefresh({ enabled }: { enabled: boolean })
       scheduler.setVisible(isWindowVisible())
     }
     const unsubscribe = useAppStore.subscribe((state, previous) => {
-      if (visibleHostedReviewRefreshInputsChanged(state, previous)) {
+      const activityChanged =
+        state.agentStatusByPaneKey !== previous.agentStatusByPaneKey ||
+        state.agentStatusEpoch !== previous.agentStatusEpoch ||
+        state.structuredChatSleptAtByPaneKey !== previous.structuredChatSleptAtByPaneKey
+      if (
+        visibleHostedReviewRefreshInputsChanged(state, previous) ||
+        (activityChanged &&
+          (state.visibleReviewWorktreeIds ?? []).some(
+            (id) => sleepingWorktreeIds.has(id) !== selectIsSleepingWorktree(state, id)
+          ))
+      ) {
         update()
       }
     })
