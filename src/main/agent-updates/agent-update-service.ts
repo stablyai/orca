@@ -17,6 +17,7 @@ let rows: AgentUpdateRow[] = []
 let checking = false
 let checkedAt: number | null = null
 let retryNotBefore = 0
+let checkedSettingsKey: string | null = null
 let inFlightCheck: Promise<AgentUpdatesState> | null = null
 // Why: "update all" must not run several `npm install -g` at once, so every run joins one queue.
 let runQueue: Promise<void> = Promise.resolve()
@@ -31,6 +32,18 @@ export function onAgentUpdatesChanged(listener: AgentUpdatesListener): () => voi
   return () => {
     listeners.delete(listener)
   }
+}
+
+// Why: a check is only valid for the settings it ran with; disabling an agent or changing its command must not wait out the cache.
+function settingsKey(settings: AgentUpdateSettings): string {
+  return JSON.stringify([
+    [...settings.disabledTuiAgents].sort(),
+    Object.entries(settings.agentCmdOverrides).sort(([a], [b]) => a.localeCompare(b))
+  ])
+}
+
+function isDisabled(agent: TuiAgent, settings: AgentUpdateSettings): boolean {
+  return settings.disabledTuiAgents.includes(agent)
 }
 
 function notify(): void {
@@ -75,6 +88,7 @@ function mergeCheckedRows(checked: readonly AgentUpdateRow[]): AgentUpdateRow[] 
 
 async function runCheck(settings: AgentUpdateSettings): Promise<AgentUpdatesState> {
   checking = true
+  checkedSettingsKey = settingsKey(settings)
   notify()
   try {
     const { rows: checked, sourcesReachable } = await checkAgentUpdates(settings)
@@ -102,11 +116,17 @@ async function runCheck(settings: AgentUpdateSettings): Promise<AgentUpdatesStat
 export async function refreshAgentUpdates(
   settings: AgentUpdateSettings
 ): Promise<AgentUpdatesState> {
+  const settingsChanged =
+    checkedSettingsKey !== null && checkedSettingsKey !== settingsKey(settings)
   if (inFlightCheck) {
-    return inFlightCheck
+    // Why: the running check read the old settings, so check again once it ends.
+    return settingsChanged ? inFlightCheck.then(() => refreshAgentUpdates(settings)) : inFlightCheck
   }
   const now = Date.now()
-  if ((checkedAt !== null && now - checkedAt < AGENT_UPDATE_CACHE_TTL_MS) || now < retryNotBefore) {
+  const reusable =
+    !settingsChanged &&
+    ((checkedAt !== null && now - checkedAt < AGENT_UPDATE_CACHE_TTL_MS) || now < retryNotBefore)
+  if (reusable) {
     const kept = withoutDoneRows(rows)
     if (kept.length !== rows.length) {
       setRows(kept)
@@ -139,11 +159,21 @@ function applyOutcome(agent: TuiAgent, outcome: AgentUpdateRunOutcome): void {
   )
 }
 
+function dropRows(agents: ReadonlySet<TuiAgent>): void {
+  setRows(rows.filter((entry) => !agents.has(entry.agent)))
+}
+
 async function runSequentially(
   targets: readonly AgentUpdateRow[],
-  settings: AgentUpdateSettings
+  getSettings: () => AgentUpdateSettings
 ): Promise<void> {
   for (const target of targets) {
+    // Why: a queued update can start long after the click, so read the settings again.
+    const settings = getSettings()
+    if (isDisabled(target.agent, settings)) {
+      dropRows(new Set([target.agent]))
+      continue
+    }
     let outcome: AgentUpdateRunOutcome
     try {
       outcome = await runAgentUpdate(target.agent, target.current, settings)
@@ -161,9 +191,14 @@ async function runSequentially(
 /** Marks every requested row running at once, then updates them one at a time. */
 export async function startAgentUpdates(
   agents: readonly TuiAgent[],
-  settings: AgentUpdateSettings
+  getSettings: () => AgentUpdateSettings
 ): Promise<void> {
   const requested = new Set(agents)
+  const settings = getSettings()
+  const disabled = new Set([...requested].filter((agent) => isDisabled(agent, settings)))
+  if (disabled.size > 0) {
+    dropRows(disabled)
+  }
   const targets = rows.filter(
     (entry) => requested.has(entry.agent) && entry.run?.state !== 'running'
   )
@@ -178,7 +213,7 @@ export async function startAgentUpdates(
   )
   // Why: second line of defence; a rejected queue would block every later run.
   runQueue = runQueue
-    .then(() => runSequentially(targets, settings))
+    .then(() => runSequentially(targets, getSettings))
     .catch((error) => console.error('[agent-updates] update run failed', error))
   await runQueue
 }

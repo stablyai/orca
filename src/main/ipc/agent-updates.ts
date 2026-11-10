@@ -36,6 +36,6 @@ export function registerAgentUpdatesHandlers(store: Pick<Store, 'getSettings'>):
   ipcMain.handle('agentUpdates:update', (event, value: unknown): Promise<void> => {
     assertTrustedSender(event)
     const request = AgentUpdateRequestSchema.parse(value)
-    return startAgentUpdates(request.agents, readSettings())
+    return startAgentUpdates(request.agents, readSettings)
   })
 }
