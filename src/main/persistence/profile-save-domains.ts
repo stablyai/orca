@@ -13,6 +13,12 @@ export const WORKSPACE_LINEAGE_DOMAINS = [
   'crossStoreLineageByChildKey'
 ] as const
 
+/** Records that carry sort stamps and unread flags: worktree metadata and folder workspaces. */
+export const WORKSPACE_RECORD_DOMAINS: readonly string[] = [
+  ...WORKTREE_METADATA_DOMAINS,
+  'folderWorkspaces'
+]
+
 /** Repo, project, folder, lineage and SSH catalog domains; listeners read these as a catalog change. */
 export const WORKSPACE_CATALOG_SAVE_DOMAINS: readonly string[] = [
   'repos',

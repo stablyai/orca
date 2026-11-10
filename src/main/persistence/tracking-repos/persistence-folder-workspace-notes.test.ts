@@ -304,6 +304,8 @@ describe('Store', () => {
     })
 
     const store = await createStore()
+    // Drain the load's whole save so the edit below saves only what it names.
+    store.flush()
     store.updateFolderWorkspace('fw-1', { diffComments: [] })
     store.flush()
 
