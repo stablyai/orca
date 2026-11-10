@@ -138,16 +138,16 @@ export function OverageControls({
   const changed = capValid && capDollars.trim() !== savedDollars
   const paymentFailed = entitlement.payment.pastDueSince !== null
   const description = t(
-    'auto.components.billing.overageDescription6',
-    'Optional overage at {{rate}} per sandbox hour, up to a monthly spend cap you set ({{cap}} by default).',
+    'auto.components.billing.overageDescription7',
+    'Optional overage at {{rate}} per sandbox hour, billed by the minute, up to a monthly spend cap you set ({{cap}} by default).',
     {
       rate: formatRateCents(overage.centsPerHour, locale),
       cap: formatCents(entitlement.offers?.team.defaultSpendCapCents ?? 2500, locale)
     }
   )
   const descriptionOn = t(
-    'auto.components.billing.overageDescriptionOn3',
-    'Optional overage at {{rate}} per sandbox hour, up to a monthly spend cap you set.',
+    'auto.components.billing.overageDescriptionOn4',
+    'Optional overage at {{rate}} per sandbox hour, billed by the minute, up to a monthly spend cap you set.',
     { rate: formatRateCents(overage.centsPerHour, locale) }
   )
   const capPercent =
@@ -303,8 +303,8 @@ export function OverageControls({
               {capValid && entitlement.reason === 'overage_cap_reached' ? (
                 <p className="basis-full text-xs text-muted-foreground">
                   {t(
-                    'auto.components.billing.capReachedHint',
-                    'Raise the cap to keep starting sandboxes. Your files are safe.'
+                    'auto.components.billing.capReachedHint2',
+                    'Raise the cap to start sandboxes again. Your sandboxes are asleep, and your files are safe.'
                   )}
                 </p>
               ) : null}

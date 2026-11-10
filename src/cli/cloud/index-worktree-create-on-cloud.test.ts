@@ -147,12 +147,12 @@ describe('orca worktree create --on cloud via main()', () => {
     [
       { error: 'entitlement_denied', reason: 'included_hours_exhausted' },
       'cloud_out_of_hours',
-      "Your team is out of sandbox hours. Nothing was created, and you weren't charged."
+      "Your team is out of sandbox hours. Running sandboxes go to sleep and new ones can't start. Nothing was created, and you weren't charged."
     ],
     [
       { error: 'entitlement_denied', reason: 'overage_cap_reached' },
       'cloud_spend_cap_reached',
-      "Your team reached its monthly spend cap. Nothing was created, and you weren't charged."
+      "Your team reached its monthly spend cap. Running sandboxes go to sleep and new ones can't start. Nothing was created, and you weren't charged."
     ],
     [
       { error: 'conflict', reason: 'concurrent_transition' },

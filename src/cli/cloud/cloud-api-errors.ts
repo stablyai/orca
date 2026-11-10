@@ -143,6 +143,8 @@ export function cloudApiError(
     )
   }
   const safety = creating ? NOTHING_CREATED : FILES_SAFE
+  // Out of hours or at the spend cap, billing puts the team's running sandboxes to sleep (never deletes).
+  const GO_TO_SLEEP = "Running sandboxes go to sleep and new ones can't start."
   if (
     code === 'entitlement_denied' &&
     (reason === 'concurrency_limit' || reason === 'member_concurrency_limit')
@@ -170,14 +172,14 @@ export function cloudApiError(
     if (reason === 'included_hours_exhausted') {
       return new RuntimeClientError(
         'cloud_out_of_hours',
-        `Your team is out of sandbox hours. ${safety}`,
+        `Your team is out of sandbox hours. ${GO_TO_SLEEP} ${safety}`,
         data(['Ask an owner or admin to add hours.'])
       )
     }
     if (reason === 'overage_cap_reached') {
       return new RuntimeClientError(
         'cloud_spend_cap_reached',
-        `Your team reached its monthly spend cap. ${safety}`,
+        `Your team reached its monthly spend cap. ${GO_TO_SLEEP} ${safety}`,
         data(['Ask an owner or admin to raise the spend cap.'])
       )
     }
