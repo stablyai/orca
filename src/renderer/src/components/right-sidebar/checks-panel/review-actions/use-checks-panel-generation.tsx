@@ -4,7 +4,7 @@ import { useCallback } from 'react'
 import type { PullRequestGenerationOutcome } from '../../hosted-review/creation/create-pull-request-dialog-field-model'
 import { settlePullRequestGenerationRequest } from '../../hosted-review/creation/pull-request-generation-request-outcome'
 import { useAppStore } from '@/store/index'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
 import {
   generateRuntimePullRequestFields,

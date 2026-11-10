@@ -1,6 +1,6 @@
 import type { BrowserCookieImportFailure } from './browser-cookie-import-failure-copy'
-import type { GoogleCookieClearLocalReceipt } from './browser-google-cookie-clear'
-import type { ManagedBrowserProfileOwner } from './browser-profile-scope'
+import type { GoogleCookieClearLocalReceipt } from './browser/cookies/browser-google-cookie-clear'
+import type { ManagedBrowserProfileOwner } from './browser/profiles/browser-profile-scope'
 export type BrowserHistoryEntry = {
   url: string
   normalizedUrl: string

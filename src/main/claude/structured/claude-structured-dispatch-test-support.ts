@@ -1,3 +1,4 @@
+import { ClaudeJournalBoundDelivery } from '../claude-journal-bound-delivery'
 import { vi, type Mock } from 'vitest'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { retireClaudeDispatchWaiters } from './claude-structured-dispatch'
@@ -21,6 +22,7 @@ export function sessionFor(send: Mock = vi.fn().mockResolvedValue(undefined)): C
     dispatchWaiters: [],
     retiredDispatchWaiters: [],
     replayContentFallbackBlocked: false,
+    delivery: new ClaudeJournalBoundDelivery(),
     backgroundTasks: new ClaudeBackgroundTaskTracker(),
     childWork: new ClaudeChildWorkDecoder(),
     commands: new ClaudeSlashCommandCatalog(),

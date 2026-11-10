@@ -1,10 +1,10 @@
 import { useMemo } from 'react'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { AgentTypeIcon } from '@/lib/agent-type-icon'
+import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { cn } from '@/lib/utils'
-import { getAgentLabel } from '@/lib/agent-catalog'
-import { mapAgentStatusStateToVisualStatus } from '@/lib/agent-status'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { mapAgentStatusStateToVisualStatus } from '@/lib/agent-status/aggregation/worktree-agent-status'
 import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
 import {
   useAgentMessageSenderViews,

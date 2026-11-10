@@ -1,7 +1,9 @@
 import { webContents } from 'electron'
 import { BrowserCertificateTrustController } from '../../certificate-trust/browser-certificate-trust-controller'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
+import '../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
+// oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { BrowserManagerEventForwarding } from './browser-manager-event-forwarding'
 
 type OpenLinkInTab = (url: string, activate: boolean) => void

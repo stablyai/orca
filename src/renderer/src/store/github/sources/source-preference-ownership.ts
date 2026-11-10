@@ -5,7 +5,7 @@ import type { TaskSourceContext } from '../../../../../shared/work-items/task-so
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { CacheEntry } from '../cache/cache-model'
 import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
-import { githubTaskBinding } from '@/lib/github-task-observation'
+import { githubTaskBinding } from '@/lib/work-items/github/github-task-observation'
 import {
   bindingKey,
   type BindingIncarnation,

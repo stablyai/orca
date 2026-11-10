@@ -4,9 +4,10 @@ import {
   getTerminalQuickCommandBody,
   isTerminalAgentQuickCommand
 } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
-import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { useTranslate } from '@/i18n/use-translate'
-import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-feedback'
+import { useClipboardTextCopyFeedback } from '@/hooks/clipboard/use-clipboard-text-copy-feedback'
 import type { HostedTerminalQuickCommand } from '@/hooks/use-terminal-quick-command-hosts'
 import { cn } from '@/lib/utils'
 

@@ -5,7 +5,7 @@ import {
 } from '../../../../shared/clipboard-image'
 import type { PanZoomSize } from '../../../../shared/pan-zoom-view'
 import { svgMarkupDataUri } from '../../../../shared/file-preview/svg-document'
-import { blobToBase64, convertImageBlobToPng } from '../../lib/image-blob-png'
+import { blobToBase64, convertImageBlobToPng } from '../../lib/clipboard/images/image-blob-png'
 
 const PREFERRED_PIXEL_RATIO = 2
 // Chromium returns a blank canvas when a side exceeds this.

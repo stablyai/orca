@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react'
 import { shallow } from 'zustand/shallow'
-import type { AgentCatalogEntry } from '@/lib/agent-catalog'
+import type { AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
 import type {
   AgentLaunchRouteStore,
   ProspectiveWorkspace

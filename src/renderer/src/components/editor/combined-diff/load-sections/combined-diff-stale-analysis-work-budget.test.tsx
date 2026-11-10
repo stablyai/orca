@@ -80,7 +80,6 @@ function useViewer(props: Viewer) {
   const [sections, setSections] = useState<DiffSection[]>([])
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
   const [generation, setGeneration] = useState(0)
-  const [, setSideBySide] = useState(false)
   const registry = useCombinedDiffSectionLoadRegistry(sections)
   const restore = useCombinedDiffViewRestore({
     entrySet: props.entrySet,
@@ -90,7 +89,6 @@ function useViewer(props: Viewer) {
     setGeneration,
     setSectionHeights,
     setSections,
-    setSideBySide,
     viewStateKey: props.viewStateKey
   })
   const loader = useCombinedDiffSectionLoader({

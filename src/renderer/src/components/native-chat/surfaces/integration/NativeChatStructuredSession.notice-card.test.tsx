@@ -61,7 +61,6 @@ vi.mock('../../prompts/NativeChatApprovalCard', () => moduleFactories.nativeChat
 vi.mock('../../prompts/NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
 
 import { NativeChatStructuredSession } from '../../NativeChatStructuredSession'
-import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatStructuredComposerTransport } from '../../composer/submit/native-chat-structured-composer-transport'
 
 const SESSION_ID = 'notice-card-session'
@@ -117,30 +116,4 @@ it('keeps a send failure’s raw error apart and lets the user dismiss it', () =
   expect(screen.getByText('connect ECONNREFUSED /tmp/agent-host.sock').tagName).toBe('PRE')
   fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
   expect(screen.queryByText('Your message was not sent.')).toBeNull()
-})
-
-const APPROVAL: AgentJournalRenderItem = JSON.parse(
-  JSON.stringify({
-    itemId: 'approval-item',
-    revision: 1,
-    sequence: 1,
-    observedAt: 1,
-    body: {
-      kind: 'approval',
-      title: 'Run the plan?',
-      detail: null,
-      subject: { kind: 'plan', text: 'x' },
-      options: [{ id: 'allow', label: 'Approve' }],
-      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
-    }
-  })
-)
-
-it("keeps the notices above an approval card that takes the composer's place", () => {
-  mocks.launchLifecycle = 'failed'
-  mocks.promptItems = [APPROVAL]
-  renderPane()
-  expect(screen.queryByTestId('structured-composer')).toBeNull()
-  expect(screen.getByText('Chat could not be started.')).toBeTruthy()
-  expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
 })

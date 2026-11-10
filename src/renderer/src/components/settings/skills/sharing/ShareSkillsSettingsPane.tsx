@@ -144,7 +144,7 @@ export function ShareSkillsSettingsPane(): React.JSX.Element {
               </p>
             </div>
             <Button type="button" variant="outline" size="sm" onClick={openSkillsSharedLinks}>
-              {t('auto.components.settings.shareSkills.manageInSkills', 'Manage in Skills')}
+              {t('auto.components.settings.shareSkills.57e360b791', 'Manage in skills')}
               <ArrowRight className="size-3.5" />
             </Button>
           </section>
@@ -188,7 +188,7 @@ export function ShareSkillsSettingsPane(): React.JSX.Element {
               </span>
               <span className="min-w-0 flex-1 space-y-0.5">
                 <span className="block text-sm font-medium text-foreground">
-                  {t('auto.components.settings.shareSkills.openSkills', 'Open Skills')}
+                  {t('auto.components.settings.shareSkills.c07ba8ab0b', 'Open skills')}
                 </span>
                 <span className="block text-xs font-normal text-muted-foreground">
                   {t(

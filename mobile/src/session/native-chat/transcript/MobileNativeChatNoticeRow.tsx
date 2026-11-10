@@ -21,7 +21,7 @@ import {
   readWholeAgentSessionFailureFact
 } from '../../../../../src/shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../../src/shared/agent-session/failures/agent-session-failure-words'
-import { agentSessionRemoteSignInCommand } from '../../../../../src/shared/agent-session/lifecycle/agent-session-sign-in'
+import { agentSessionSignInCommand } from '../../../../../src/shared/agent-session/lifecycle/agent-session-setup-commands'
 import { nativeChatOrcaStopRowText } from '../../../../../src/shared/native-chat/native-chat-orca-stop-words'
 import {
   MobileNativeChatForkedFromContext,
@@ -73,7 +73,15 @@ function noticeLineText(
   // Only reword text fully described by its fact; other host text stays as written.
   const context = { agentName: names.agentName }
   const surface =
-    failure?.kind === 'savedConversationMissing' || failure?.kind === 'pluginInputRequired'
+    failure &&
+    [
+      'savedConversationMissing',
+      'pluginInputRequired',
+      'modelUnavailable',
+      'providerUnavailable',
+      'providerSafetyStopped',
+      'providerResponseFailed'
+    ].includes(failure.kind)
       ? (['row', 'rejection'] as const).find(
           (candidate) => notice.text === agentSessionFailureSentence(failure, candidate, context)
         )
@@ -119,7 +127,7 @@ export function MobileNativeChatNoticeRow({
   const failureDetail = agentSessionFailureDetailText(failure)
   const signInCommand =
     failure?.kind === 'notSignedIn'
-      ? agentSessionRemoteSignInCommand(names.agentName, failure.account)
+      ? agentSessionSignInCommand(names.agentName, { account: failure.account, remote: true })
       : null
   const runInTerminal = names.onRunInTerminal
   const detail = failureDetail?.trim() !== lineText.trim() ? failureDetail : undefined
@@ -157,17 +165,21 @@ export function MobileNativeChatNoticeRow({
     case 'settled-permission': {
       const agent = names.agentName ?? look.agent
       const summary =
-        look.decision === 'denied'
-          ? t('chat.notice.permissionDenied', '{{agent}} denied permission. View details.', {
+        look.decision === 'approved'
+          ? t('chat.notice.safetyReviewApproved', '{{agent}} approved this action. View details.', {
               agent
             })
-          : t(
-              'chat.notice.safetyReview',
-              '{{agent}} reported a safety review warning. View details.',
-              {
+          : look.decision === 'denied'
+            ? t('chat.notice.permissionDenied', '{{agent}} denied permission. View details.', {
                 agent
-              }
-            )
+              })
+            : t(
+                'chat.notice.safetyReview',
+                '{{agent}} reported a safety review warning. View details.',
+                {
+                  agent
+                }
+              )
       return (
         <View>
           <MobileNativeChatNoticeDisclosure

@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import type { BrowserPageContextMenuState } from '../describe-page/browser-page-types'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { BrowserPageContextMenuItems } from './browser-page-context-menu-items'
 
 export function BrowserPageContextMenu({

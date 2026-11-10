@@ -5,8 +5,8 @@ import type { TaskSourceContext } from '../../../../../shared/work-items/task-so
 import React, { useMemo, useState, useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
-import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
-import { parseGitHubIssueOrPRLink } from '@/lib/github-links'
+import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
+import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
@@ -19,7 +19,7 @@ import { LoaderCircle, ChevronDown, Check } from 'lucide-react'
 import type { TaskPageGitHubWorkItemMutationRunner } from '../linear/task-page-linear-jira-list-model'
 import { GitHubAssigneeAvatar } from './Avatars'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 export function GHAssigneesCell({
   item,
   repo,

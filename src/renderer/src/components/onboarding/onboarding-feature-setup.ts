@@ -7,7 +7,7 @@ import {
   ORCA_LINEAR_SKILL_NAME,
   ORCA_CLI_SKILL_NAME,
   ORCHESTRATION_SKILL_NAME
-} from '@/lib/agent-feature-skill-names'
+} from '@/lib/skills/installation/agent-feature-skill-names'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser/browser-use-setup-state'
 import { e2eConfig } from '@/lib/e2e-config'
 import {

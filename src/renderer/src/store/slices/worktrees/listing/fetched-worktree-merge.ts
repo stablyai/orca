@@ -29,7 +29,7 @@ import { buildWorktreePurgeState } from '../teardown/worktree-purge-state'
 import { flushPurgedWorkspaceEdits } from '../teardown/removed-workspace-unsaved-files'
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import { isDisplayNamePersistencePending } from '../metadata/worktree-meta-persist'
-import { branchName } from '@/lib/git-utils'
+import { branchName } from '@/lib/source-control/branches/branch-name'
 import {
   forgetAuthoritativelyRemovedWorktrees,
   forgetPersistedWorktreeMetaForRemovals,

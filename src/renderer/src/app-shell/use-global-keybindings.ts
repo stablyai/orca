@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { getSelectedTextForFileSearch } from '../lib/file-search-selection'
-import { registerAppCommandDispatcher } from '@/lib/app-command-dispatch'
+import { registerAppCommandDispatcher } from '@/lib/app-commands/app-command-dispatch'
 import { executePluginCommand } from '@/lib/plugin-command-execution'
 import { runBuiltInOrReplacement } from '@/lib/plugin-command-replacements'
 import {
@@ -34,7 +34,7 @@ import {
 } from './app-command-handlers'
 import type { AppChromeLayout } from './use-app-chrome-layout'
 import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { textInputOwnsComposition } from '../../../shared/text-input-shortcut-policy'
 import { isAgentTerminalPreviewTarget } from '../components/dashboard-popout/agent-terminal-preview-target'
 

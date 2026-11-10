@@ -10,7 +10,7 @@ import {
   BrowserClientFileChannelWriteResult
 } from '../../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
 import type { BrowserClientHostedPageInventory } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
-import type { BrowserDownloadFinishedEvent } from '../../../../shared/browser-guest-events'
+import type { BrowserDownloadFinishedEvent } from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import type { BrowserClientFileChannelTransport } from './browser-client-file-channel-transport'
 import type { BrowserClientDownloadRouteOutcome } from './browser-client-download-routing'
 

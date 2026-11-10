@@ -3,11 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { normalizeHookPayload } from '../../../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
-import { createShedSubagentsField } from '../../../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { createHookListenerState } from '../../../../../shared/agent-hook-listener/listener-state'
 import { pollCodexTranscriptStatus } from '../../../../../shared/agent-hook-listener/providers/codex-transcript-poll'
 import { transcriptPollUpdate } from '../../../../../shared/agent-hook-listener/transcript-poll-policy'
 import { buildRelayHookEnvelope } from '../../../../../wsl-guest/agent-hook-envelope-build'
+import { buildCachedPaneReplayEnvelope } from '../../../../../wsl-guest/agent-hook-cached-pane-status'
+import type { AgentHookEventPayload } from '../../../../../shared/agent-hook-listener/listener-event'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
 import { PANE, buildBody } from '../server.test-fixtures'
 
@@ -101,6 +102,27 @@ describe('remote Codex transcript completion', () => {
         .sort()
     ).toEqual([CHILD, SECOND_CHILD])
 
+    const compact = normalizeHookPayload(
+      hostState,
+      'codex',
+      buildBody({ hook_event_name: 'SessionStart', source: 'compact', session_id: 'root' }),
+      'production'
+    )
+    if (!compact) {
+      throw new Error('Root compact was rejected')
+    }
+    server.ingestRemote(buildRelayHookEnvelope(compact, 'codex'), 'wsl:Ubuntu')
+    const beforeReplay = server.getStatusSnapshot()[0]
+    expect(beforeReplay).toMatchObject({
+      mainAgent: { state: 'done' },
+      subagents: [{ id: CHILD }, { id: SECOND_CHILD }]
+    })
+    server.ingestRemote(
+      buildCachedPaneReplayEnvelope({ event: compact, meta: { source: 'codex' } }),
+      'wsl:Ubuntu'
+    )
+    expect(server.getStatusSnapshot()[0]).toEqual(beforeReplay)
+
     appendFileSync(childPath, line('task_complete'))
     const oneRemaining = pollCodexTranscriptStatus(
       hostState,
@@ -162,53 +184,12 @@ describe('remote Codex transcript completion', () => {
   })
 })
 
-describe('remote Codex truncated transcript snapshots', () => {
-  it('keeps live work when a changed roster was shed to fit the relay frame', () => {
-    const server = new AgentHookServer()
-    const children = [
-      { id: CHILD, state: 'working' as const, startedAt: 1 },
-      { id: SECOND_CHILD, state: 'working' as const, startedAt: 2 }
-    ]
-    server.ingestRemote(
-      {
-        paneKey: PANE,
-        source: 'codex',
-        hookEventName: 'SubagentStart',
-        toolAgentId: SECOND_CHILD,
-        payload: {
-          agentType: 'codex',
-          prompt: 'Run the checks',
-          state: 'working',
-          mainAgent: { state: 'done', stateStartedAt: 1 },
-          subagents: children
-        }
-      },
-      'wsl:Ubuntu'
-    )
-    server.ingestRemote(
-      {
-        paneKey: PANE,
-        source: 'codex',
-        toolAgentId: SECOND_CHILD,
-        shedFields: [createShedSubagentsField([children[1]!])],
-        payload: {
-          agentType: 'codex',
-          prompt: 'Run the checks',
-          state: 'working',
-          mainAgent: { state: 'done', stateStartedAt: 1 }
-        }
-      },
-      'wsl:Ubuntu'
-    )
-    expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({ state: 'working' })
-    expect(server.getStatusSnapshotForPane(PANE)[0]?.subagents).toHaveLength(2)
-  })
-})
-
 describe('remote Codex unlabelled roster removals', () => {
-  const childStart = (id: string, startedAt: number) => ({
+  const childStart = (id: string, startedAt: number): AgentHookEventPayload => ({
     paneKey: PANE,
+    connectionId: null,
     source: 'codex',
+    providerSession: { key: 'session_id', id: 'root' },
     hookEventName: 'SubagentStart',
     toolAgentId: id,
     payload: {
@@ -222,6 +203,7 @@ describe('remote Codex unlabelled roster removals', () => {
   const emptyPoll = (mainState: 'working' | 'done', toolAgentId?: string) => ({
     paneKey: PANE,
     source: 'codex',
+    providerSession: { key: 'session_id', id: 'root' },
     toolAgentId,
     payload: {
       agentType: 'codex',
@@ -236,15 +218,65 @@ describe('remote Codex unlabelled roster removals', () => {
     server.beginRemoteRelaySession('wsl:Ubuntu')
     server.ingestRemote(childStart(CHILD, 1), 'wsl:Ubuntu')
     server.beginRemoteRelaySession('wsl:Ubuntu')
+    const replay = buildCachedPaneReplayEnvelope({
+      event: { ...childStart(CHILD, 1), hookEventName: 'SessionStart', toolAgentId: undefined },
+      meta: { source: 'codex' }
+    })
+    server.ingestRemote(replay, 'wsl:Ubuntu')
     server.ingestRemote(emptyPoll('done'), 'wsl:Ubuntu')
     expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({
       state: 'working',
       subagents: [expect.objectContaining({ id: CHILD })]
     })
+    server._getStateForTests().codexSubagentRosterByPaneKey.delete(PANE)
+    server.ingestRemote(replay, 'wsl:Ubuntu')
+    server.ingestRemote(emptyPoll('done'), 'wsl:Ubuntu')
+    expect(server.getStatusSnapshotForPane(PANE)[0]?.subagents?.map((child) => child.id)).toEqual([
+      CHILD
+    ])
 
     server.ingestRemote(childStart(CHILD, 1), 'wsl:Ubuntu')
     server.ingestRemote(emptyPoll('done'), 'wsl:Ubuntu')
     expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({ state: 'done' })
     expect(server.getStatusSnapshotForPane(PANE)[0]?.subagents).toBeUndefined()
   })
+
+  it.each([100, 1000])(
+    'releases %i completed child lifetimes across cached starts',
+    (lifetimes) => {
+      const server = new AgentHookServer()
+      const state = server._getStateForTests()
+      server.beginRemoteRelaySession('wsl:Ubuntu')
+      server.ingestRemote(childStart(CHILD, 1), 'wsl:Ubuntu')
+      for (let index = 0; index < lifetimes; index++) {
+        const next = childStart(`completed-${index}`, index + 2)
+        server.ingestRemote(next, 'wsl:Ubuntu')
+        server.ingestRemote(
+          buildCachedPaneReplayEnvelope({
+            event: { ...next, hookEventName: 'SessionStart', toolAgentId: undefined },
+            meta: { source: 'codex' }
+          }),
+          'wsl:Ubuntu'
+        )
+        server.ingestRemote(
+          {
+            ...emptyPoll('done'),
+            payload: {
+              ...emptyPoll('done').payload,
+              subagents: [{ id: CHILD, state: 'working', startedAt: 1 }]
+            }
+          },
+          'wsl:Ubuntu'
+        )
+        expect(
+          server.getStatusSnapshotForPane(PANE)[0]?.subagents?.map((child) => child.id)
+        ).toEqual([CHILD])
+        expect(state.codexSubagentRosterByPaneKey.get(PANE)?.size).toBe(1)
+      }
+      server.ingestRemote(emptyPoll('done'), 'wsl:Ubuntu')
+      expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({ state: 'done' })
+      expect(server.getStatusSnapshotForPane(PANE)[0]?.subagents).toBeUndefined()
+      expect(state.codexSubagentRosterByPaneKey.get(PANE)?.size).toBe(0)
+    }
+  )
 })

@@ -1,5 +1,5 @@
 import type { PaneTitleOverlayRect } from './pane-title-overlay-rects'
-import { ImeInput } from '@/lib/ime-text-field'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import type { CSSProperties, RefObject } from 'react'
 import { MessageSquarePlus, SquareSplitVertical, SquareTerminal, X } from 'lucide-react'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
@@ -11,7 +11,7 @@ import {
   canCloseTerminalPane,
   terminalPaneCloseLabel
 } from '../layout/close/terminal-pane-close-affordance'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import type { PtyTransport } from '../pty-transport/pty-transport-types'
 import { TerminalPaneHeaderDropSurface } from '../input/file-drop/TerminalPaneHeaderDropSurface'
 import { TerminalPaneResumeInChatButton } from '../chat/TerminalPaneResumeInChatButton'

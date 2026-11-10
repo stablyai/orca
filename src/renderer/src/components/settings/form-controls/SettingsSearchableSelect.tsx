@@ -39,6 +39,7 @@ type SettingsSearchableSelectProps = {
   groups: readonly SettingsSearchableSelectGroup[]
   onValueChange: (value: string) => void
   searchPlaceholder: string
+  compact?: boolean
   emptyText?: string
   open?: boolean
   disabled?: boolean
@@ -67,6 +68,7 @@ function SettingsSearchableSelectControl({
   onValueChange,
   searchPlaceholder,
   emptyText,
+  compact = false,
   open: controlledOpen,
   disabled = false,
   onOpenChange,
@@ -153,14 +155,16 @@ function SettingsSearchableSelectControl({
       <PopoverTrigger asChild>
         <Button
           type="button"
-          variant="outline"
+          variant={compact ? 'ghost' : 'outline'}
           size="sm"
           role="combobox"
           aria-expanded={open && !disabled}
           aria-label={ariaLabel}
           disabled={disabled}
           onKeyDown={handleTriggerKeyDown}
-          className="min-w-[220px] justify-between"
+          className={
+            compact ? 'w-auto min-w-0 max-w-56 justify-between' : 'min-w-[220px] justify-between'
+          }
         >
           <span className="inline-flex min-w-0 flex-1 items-center gap-2">
             {selected?.icon}

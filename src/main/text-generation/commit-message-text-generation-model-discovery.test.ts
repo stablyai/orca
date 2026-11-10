@@ -3,9 +3,11 @@ import type * as ChildProcess from 'node:child_process'
 import type * as CliCommandResolution from '../../shared/node-cli-command-resolution'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { discoverCommitMessageModelsLocal } from './commit-message-text-generation'
+import agentPickerCliRecordings from '../../shared/fixtures/agent-picker-cli-recordings.json'
 import { PROVIDER_SPAWN_FAILURE_MARKER } from '../provider-process/provider-spawn-failure-report'
 import {
   createChildTerminationExpectation,
+  answerCodexAppServer,
   createMockDiscoveryChild,
   spawnedAgentArgv,
   withPlatform
@@ -34,6 +36,13 @@ vi.mock('child_process', async (importOriginal) => {
 })
 
 const spawnMock = vi.mocked(spawn)
+
+function spawnChildren(...children: ReturnType<typeof createMockDiscoveryChild>[]): void {
+  for (const child of children) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: discovery reads only the pid, kill, stdio streams and events the mock child implements.
+    spawnMock.mockReturnValueOnce(child as unknown as ReturnType<typeof spawn>)
+  }
+}
 
 function spawnError(errno: string): Error {
   return Object.assign(new Error(`spawn claude ${errno}`), { code: errno })
@@ -336,6 +345,113 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
     }
   })
 
+  it('lists Codex models from app-server model/list without hidden rows, then releases the home once it stops', async () => {
+    vi.useFakeTimers()
+    const child = createMockDiscoveryChild()
+    const nextChild = createMockDiscoveryChild()
+    spawnChildren(child, nextChild)
+    const env = { CODEX_HOME: '/managed/codex-model-list-home' }
+    answerCodexAppServer(child, [
+      { data: agentPickerCliRecordings.modelList.data, nextCursor: 'page-2' },
+      {
+        data: [
+          {
+            id: 'codex-auto-review',
+            model: 'codex-auto-review',
+            displayName: 'Codex Auto Review',
+            hidden: true
+          }
+        ],
+        nextCursor: null
+      }
+    ])
+
+    try {
+      const first = discoverCommitMessageModelsLocal('codex', env)
+      await vi.advanceTimersByTimeAsync(0)
+      await expect(first).resolves.toEqual({
+        success: true,
+        catalogOrigin: 'probe',
+        defaultModelId: 'gpt-5.6-sol',
+        capability: expect.objectContaining({ defaultModelId: 'gpt-5.6-sol' }),
+        models: [
+          {
+            id: 'gpt-5.6-sol',
+            label: 'GPT-5.6-Sol',
+            description: 'Latest frontier agentic coding model.',
+            thinkingLevels: [
+              { id: 'low', label: 'Low' },
+              { id: 'medium', label: 'Medium' },
+              { id: 'high', label: 'High' },
+              { id: 'xhigh', label: 'Extra high' },
+              { id: 'max', label: 'Max' },
+              { id: 'ultra', label: 'Ultra' }
+            ],
+            defaultThinkingLevel: 'low',
+            isDefault: true
+          }
+        ]
+      })
+      expect(spawnedAgentArgv(spawnMock.mock.calls[0])).toContain('app-server')
+      expect(child.stdin.end).toHaveBeenCalled()
+
+      // A different command shares the home lock but not the cached listing.
+      const next = discoverCommitMessageModelsLocal('codex', env, 'codex')
+      await vi.advanceTimersByTimeAsync(1_499)
+      expect(child.kill).not.toHaveBeenCalled()
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+      // A child that ignores stdin EOF is stopped after the grace; its exit frees the home.
+      await vi.advanceTimersByTimeAsync(1)
+      await expectChildTerminated(child)
+      child.emit('exit', null, 'SIGKILL')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(spawnMock).toHaveBeenCalledTimes(2)
+
+      answerCodexAppServer(nextChild, [
+        { data: [{ id: 'gpt-5.5', model: 'gpt-5.5', displayName: 'GPT-5.5' }], nextCursor: null }
+      ])
+      await vi.advanceTimersByTimeAsync(0)
+      await expect(next).resolves.toMatchObject({ success: true, defaultModelId: 'gpt-5.5' })
+      // An app-server that exits on stdin EOF is never killed.
+      nextChild.emit('exit', 0, null)
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(nextChild.kill).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('lists again for a different Codex home when Windows env names differ only in case', async () => {
+    const listing = {
+      data: [{ id: 'gpt-5.5', model: 'gpt-5.5', displayName: 'GPT-5.5' }],
+      nextCursor: null
+    }
+    for (const home of ['C:\\accounts\\a', 'C:\\accounts\\b']) {
+      const child = createMockDiscoveryChild()
+      spawnChildren(child)
+      answerCodexAppServer(child, [listing])
+      await expect(
+        discoverCommitMessageModelsLocal('codex', { codex_home: 'C:\\shell', CODEX_HOME: home })
+      ).resolves.toMatchObject({ success: true })
+      child.emit('exit', 0, null)
+    }
+    expect(spawnMock).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([
+    ['an unsupported model/list', { rpcError: { code: -32601, message: 'Method not found' } }],
+    ['an unreadable page', { data: 'not-a-list', nextCursor: null }]
+  ])('keeps the built-in Codex list when the app-server returns %s', async (name, page) => {
+    const child = createMockDiscoveryChild()
+    spawnChildren(child)
+    answerCodexAppServer(child, [page])
+
+    await expect(
+      discoverCommitMessageModelsLocal('codex', { CODEX_HOME: `/managed/codex-${name}` })
+    ).resolves.toMatchObject({ success: false })
+    child.emit('exit', 0, null)
+  })
+
   it('keeps the Codex home locked after a discovery timeout until the child closes', async () => {
     vi.useFakeTimers()
     const firstChild = createMockDiscoveryChild()
@@ -346,7 +462,8 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
     try {
       const first = discoverCommitMessageModelsLocal('codex', env)
       await vi.advanceTimersByTimeAsync(0)
-      const second = discoverCommitMessageModelsLocal('codex', env)
+      // A different command shares the home lock but not the in-flight listing.
+      const second = discoverCommitMessageModelsLocal('codex', env, 'codex')
       await vi.advanceTimersByTimeAsync(60_000)
 
       await expect(first).resolves.toMatchObject({
@@ -359,15 +476,9 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
       firstChild.emit('close', null)
       await vi.advanceTimersByTimeAsync(0)
       expect(spawnMock).toHaveBeenCalledTimes(2)
-      secondChild.stdout.emit(
-        'data',
-        Buffer.from(
-          JSON.stringify({
-            models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5' }]
-          })
-        )
-      )
-      secondChild.emit('close', 0)
+      answerCodexAppServer(secondChild, [
+        { data: [{ id: 'gpt-5.5', model: 'gpt-5.5', displayName: 'GPT-5.5' }], nextCursor: null }
+      ])
       await expect(second).resolves.toMatchObject({
         success: true,
         defaultModelId: 'gpt-5.5'
@@ -387,7 +498,8 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
     try {
       const first = discoverCommitMessageModelsLocal('codex', env)
       await vi.advanceTimersByTimeAsync(0)
-      const second = discoverCommitMessageModelsLocal('codex', env)
+      // A different command shares the home lock but not the in-flight listing.
+      const second = discoverCommitMessageModelsLocal('codex', env, 'codex')
       await vi.advanceTimersByTimeAsync(60_000)
       await expect(first).resolves.toMatchObject({ success: false })
       expect(spawnMock).toHaveBeenCalledTimes(1)
@@ -397,15 +509,9 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
       await vi.advanceTimersByTimeAsync(0)
       expect(spawnMock).toHaveBeenCalledTimes(2)
 
-      secondChild.stdout.emit(
-        'data',
-        Buffer.from(
-          JSON.stringify({
-            models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5' }]
-          })
-        )
-      )
-      secondChild.emit('close', 0)
+      answerCodexAppServer(secondChild, [
+        { data: [{ id: 'gpt-5.5', model: 'gpt-5.5', displayName: 'GPT-5.5' }], nextCursor: null }
+      ])
       await expect(second).resolves.toMatchObject({
         success: true,
         defaultModelId: 'gpt-5.5'

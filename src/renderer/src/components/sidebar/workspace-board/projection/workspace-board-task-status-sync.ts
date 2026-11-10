@@ -3,7 +3,7 @@ import { confirmLinearIssueWrite } from '@/store/slices/linear/linear-issue-publ
 import { linearGetIssue, linearUpdateIssue } from '@/runtime/linear/runtime-linear-issue-client'
 import { linearTeamStates } from '@/runtime/linear/runtime-linear-project-client'
 import type { LinearMutationResult } from '@/runtime/linear/runtime-linear-client'
-import type { RowLessSource as RuntimeLinearSettings } from '@/lib/default-creation-host'
+import type { RowLessSource as RuntimeLinearSettings } from '@/runtime/hosts/selection/default-creation-host'
 import type { LinearIssue } from '../../../../../../shared/linear/issue-types'
 import type { LinearWorkflowState } from '../../../../../../shared/linear/workspace-types'
 import type {

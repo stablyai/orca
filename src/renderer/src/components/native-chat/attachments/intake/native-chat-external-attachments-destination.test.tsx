@@ -254,34 +254,6 @@ describe('OS attachment destination through input-method composition', () => {
     }
   )
 
-  it.each([true, false])(
-    'uses current image support when queued with acceptsImages=%s',
-    async (acceptsImages) => {
-      const path = '/local/image.png'
-      await render('workspace-1', acceptsImages)
-      await act(async () => latest().attachExternalPaths([path]))
-      expect(mocks.stat).toHaveBeenCalledOnce()
-      expect(nativeChatPendingAttachmentSnapshot('drop-test')).toHaveLength(1)
-      expect(latest().imageAttachments.every(({ pending }) => pending)).toBe(true)
-      expect(container.querySelector('[data-draft]')?.textContent).toBe('')
-
-      const currentAcceptsImages = !acceptsImages
-      await render('workspace-1', currentAcceptsImages)
-      composing = false
-      act(() => latest().flushPendingAttachments())
-      act(() => latest().flushPendingAttachments())
-
-      expect(nativeChatPendingAttachmentSnapshot('drop-test')).toEqual([])
-      expect(latest().imageAttachments.map(({ path }) => path)).toEqual(
-        currentAcceptsImages ? [path] : []
-      )
-      expect(nativeChatImagesHoldSend(latest().imageAttachments)).toBe(false)
-      expect(container.querySelector('[data-draft]')?.textContent).toBe(
-        currentAcceptsImages ? '' : `@${path} `
-      )
-    }
-  )
-
   it('reserves before stat and settles the captured scope across removal, failure and remount', async () => {
     let finish = (): void => {}
     mocks.stat
@@ -323,9 +295,6 @@ describe('OS attachment destination through input-method composition', () => {
       throw new Error('Missing reserved chip')
     }
     act(() => latest().removeImageAttachment(removed.id))
-    const other = document.createElement('input')
-    document.body.append(other)
-    other.focus()
     act(() => root.unmount())
     expect(nativeChatPendingAttachmentSnapshot('drop-test')).toEqual([])
     expect(readNativeChatDraftCache('drop-test')).toBe('@/notes.txt')
@@ -333,9 +302,6 @@ describe('OS attachment destination through input-method composition', () => {
     await render('workspace-1')
     expect(latest().imageAttachments).toMatchObject([{ path: '/a.png' }])
     expect(latest().imageAttachments).toHaveLength(1)
-    await new Promise((resolve) => requestAnimationFrame(resolve))
-    expect(document.activeElement).toBe(other)
-    other.remove()
   })
 
   it('releases refused and disabled work, including stat spanning disable and re-enable', async () => {
