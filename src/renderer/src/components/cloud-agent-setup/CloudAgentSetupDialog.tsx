@@ -72,7 +72,16 @@ export function CloudAgentSetupDialog({
     }
   }
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // The close button and a click outside ask first too; Escape was already asked below.
+        if (!next && escapeGuard.current?.()) {
+          return
+        }
+        onOpenChange(next)
+      }}
+    >
       <DialogContent
         className="sm:max-w-xl"
         onEscapeKeyDown={(event) => {

@@ -138,13 +138,22 @@ export function PasteRowEditor({
           density="compact"
           value={row.name}
           onChange={(event) => {
-            const typed = event.target.value
+            const input = event.target
+            const typed = input.value
+            const caret = input.selectionStart
+            const name = normalizeSecretName(typed)
             onChange({
-              name: normalizeSecretName(typed),
-              typedNormalized: row.typedNormalized || /[\s-]/.test(typed),
+              name,
+              // The pasted spelling no longer describes this name once it is edited.
+              renamedFrom: null,
+              typedNormalized: typed !== '' && (row.typedNormalized || /[\s-]/.test(typed)),
               parseIssue: null,
               serverError: null
             })
+            // Rewriting keeps the length, so the caret can stay where the user is typing.
+            if (name !== typed && caret !== null) {
+              requestAnimationFrame(() => input.setSelectionRange(caret, caret))
+            }
           }}
           aria-label={t('cloudSecrets.paste.nameLabel', 'Name, line {{line}}', {
             line: String(row.line)

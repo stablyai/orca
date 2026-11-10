@@ -171,7 +171,9 @@ export function CloudAgentSetupView({
   const summary = readiness ? cloudAgentReadinessSummary(readiness, t) : ''
   // A stray Escape must not throw away a key that was typed or pasted: ask first.
   const typedKey = KEY_OPTIONS.some((entry) => drafts[entry].key.trim() !== '')
-  const [confirmDiscard, setConfirmDiscard] = useState(false)
+  const [askedToDiscard, setConfirmDiscard] = useState(false)
+  // The question lapses with what it guards: a cleared key, or a save under way.
+  const confirmDiscard = askedToDiscard && typedKey && !saving
   const returnFocus = useRef<HTMLElement | null>(null)
   const holdEscape = (): boolean => {
     if (saving || !typedKey || confirmDiscard) {
@@ -227,6 +229,7 @@ export function CloudAgentSetupView({
     }
     const choice = choiceFor(option, draft)
     const scope: CloudAgentSetupScope = canShare && share ? 'org' : 'personal'
+    setConfirmDiscard(false)
     setSaving(true)
     setFailure(null)
     const result = await onSave(choice, scope)
@@ -263,6 +266,10 @@ export function CloudAgentSetupView({
         // Escape from a portaled Select or menu bubbles here too; let it close only that.
         if (event.key === 'Escape' && !saving && isOwnKeyEvent(event)) {
           event.stopPropagation()
+          // The dialog's own Escape handler runs first and has already asked.
+          if (event.nativeEvent.defaultPrevented) {
+            return
+          }
           if (!holdEscape()) {
             onCancel()
           }

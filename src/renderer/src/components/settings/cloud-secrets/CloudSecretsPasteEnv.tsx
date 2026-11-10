@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import {
@@ -75,13 +75,29 @@ export function CloudSecretsPasteEnv({
     )
 
   // A row that leaves the list takes focus with it; land on the given row's first control instead.
-  const focusRow = (id: string | null): void => {
-    requestAnimationFrame(() => {
-      const row = id ? listRef.current?.querySelector(`[data-paste-row="${id}"]`) : null
-      const target = row?.querySelector<HTMLElement>('input, button') ?? textRef.current
-      target?.focus()
-    })
+  // 'fix' is the first editable row, which is the first one needing a fix since those sort first.
+  // Applied after the commit that removes the row, so the target is read from the new list.
+  const pendingFocus = useRef<string | 'fix' | null | undefined>(undefined)
+  const focusRow = (id: string | 'fix' | null): void => {
+    pendingFocus.current = id
   }
+  useEffect(() => {
+    const id = pendingFocus.current
+    if (id === undefined) {
+      return
+    }
+    pendingFocus.current = undefined
+    const list = listRef.current
+    const target =
+      id === 'fix'
+        ? list?.querySelector<HTMLElement>('[data-paste-row] input')
+        : id
+          ? list
+              ?.querySelector(`[data-paste-row="${id}"]`)
+              ?.querySelector<HTMLElement>('input, button')
+          : null
+    ;(target ?? textRef.current)?.focus()
+  }, [rows])
 
   const remove = (id: string): void => {
     const at = order.findIndex(({ row }) => row.id === id)
@@ -101,6 +117,14 @@ export function CloudSecretsPasteEnv({
     }
     setSaving(true)
     setFailure(null)
+    // Rows this save settles (sent, or a duplicate of a sent name), as they were when sent.
+    const settled = new Map(
+      rows.flatMap((row, index) =>
+        issues[index] === null || issues[index] === 'overridden'
+          ? [[row.id, `${row.name}=${row.value}`] as const]
+          : []
+      )
+    )
     const result = await onSave(batch)
     setSaving(false)
     if (typeof result === 'string') {
@@ -110,18 +134,20 @@ export function CloudSecretsPasteEnv({
     const errors = new Map(
       result.errors.map((entry) => [entry.name, cloudSecretsErrorCode(entry.reason)])
     )
-    // Saved values leave the form at once; only rows that still need attention stay.
-    const kept = rows.flatMap((row, index) =>
-      errors.has(row.name)
-        ? [{ ...row, serverError: errors.get(row.name) ?? null }]
-        : issues[index] !== null && issues[index] !== 'overridden'
-          ? [row]
-          : []
+    // Saved values leave the form at once. Rows that still need attention stay, and so does anything
+    // pasted or edited while the request was out.
+    setRows((current) =>
+      current.flatMap((row) => {
+        const sentAs = settled.get(row.id)
+        if (sentAs === undefined || sentAs !== `${row.name}=${row.value}`) {
+          return [row]
+        }
+        const error = errors.get(row.name)
+        return error ? [{ ...row, serverError: error }] : []
+      })
     )
-    setRows(kept)
     if (errors.size > 0) {
-      // Rows that need a fix sort first, so the first editable kept row is the one to fix.
-      focusRow(kept.find((row) => !isUnreadable(row))?.id ?? kept[0]?.id ?? null)
+      focusRow('fix')
     }
   }
 
@@ -240,10 +266,20 @@ export function CloudSecretsPasteEnv({
         <p
           id={`${formId}-summary`}
           className={
-            failure || tooMany ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'
+            failure || tooMany
+              ? 'min-w-0 text-xs text-destructive'
+              : 'min-w-0 text-xs text-muted-foreground'
           }
         >
-          {summary}
+          {/* Counts wrap between segments, never between a number and its noun. */}
+          {failure || tooMany
+            ? summary
+            : summary?.split(' · ').map((part, index) => (
+                <Fragment key={part}>
+                  {index > 0 ? ' · ' : ''}
+                  <span className="whitespace-nowrap">{part}</span>
+                </Fragment>
+              ))}
         </p>
         <div className="flex shrink-0 gap-2">
           <Button type="button" variant="ghost" size="sm" onClick={() => !saving && onCancel()}>

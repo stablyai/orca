@@ -82,6 +82,16 @@ describe('CloudSecretsPasteEnv', () => {
     expect(status.textContent).toBe('1 ready')
   })
 
+  it('keeps rows edited while a save was out', async () => {
+    let finish: (value: CloudSecretBatchResult) => void = () => {}
+    const onSave = vi.fn(() => new Promise<CloudSecretBatchResult>((resolve) => (finish = resolve)))
+    renderPaste('A=1\nB=2', onSave)
+    fireEvent.click(screen.getByRole('button', { name: /Save 2 secrets/ }))
+    fireEvent.change(nameInputs()[1], { target: { value: 'C' } })
+    await act(async () => finish({ secrets: [], deleted: [], errors: [] }))
+    expect(nameInputs().map((input) => input.value)).toEqual(['C'])
+  })
+
   it('tells the user the paste field is paste only', () => {
     renderPaste('')
     expect(screen.getByRole('textbox').getAttribute('aria-describedby')).toContain('-hint')

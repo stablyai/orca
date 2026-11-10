@@ -291,7 +291,8 @@ export function VmBuildCloudAgentStepView({
       data-vm-build-cloud-agent={state}
       onFocus={() => setFocusInside(true)}
       onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) {
+        // Switching to another app blurs too; focus comes back here, so the row must stay.
+        if (document.hasFocus() && !event.currentTarget.contains(event.relatedTarget)) {
           setFocusInside(false)
         }
       }}

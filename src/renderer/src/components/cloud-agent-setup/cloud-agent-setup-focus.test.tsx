@@ -102,6 +102,17 @@ describe('CloudAgentSetupView Escape', () => {
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
 
+  it('drops the question once the key is cleared', () => {
+    const onCancel = renderView()
+    const key = document.querySelector('input[type="password"]') as HTMLInputElement
+    fireEvent.change(key, { target: { value: 'sk-ant-api03-abc' } })
+    fireEvent.keyDown(key, { key: 'Escape' })
+    fireEvent.change(key, { target: { value: '' } })
+    expect(screen.queryByText('Discard the key you typed?')).toBeNull()
+    fireEvent.keyDown(key, { key: 'Escape' })
+    expect(onCancel).toHaveBeenCalledTimes(1)
+  })
+
   it('Keep editing keeps the draft', () => {
     const onCancel = renderView()
     const key = document.querySelector('input[type="password"]') as HTMLInputElement
