@@ -38,7 +38,7 @@ function GitHistoryRefBadge({
           {refLabel}
         </TooltipContent>
       </Tooltip>
-      {workspace && <GitGraphRefWorkspaceAgents worktree={workspace} />}
+      {workspace && <GitGraphRefWorkspaceAgents worktree={workspace} focusable={false} />}
     </span>
   )
 }
