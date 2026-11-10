@@ -140,6 +140,16 @@
       "seconds_other": "{{count}}s"
     }
   },
+  "cloud": {
+    "snapshot": {
+      "git": {
+        "files_one": "{{count}} changed file",
+        "files_other": "{{count}} changed files",
+        "more_one": "and {{count}} more",
+        "more_other": "and {{count}} more"
+      }
+    }
+  },
   "components": {
     "codexResetCredit": {
       "available_one": "{{count}} reset available",

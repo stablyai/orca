@@ -6,14 +6,13 @@ const SBX = 'sbx_0123456789abcdef01234567'
 const KEY = 'rk_aaaaaaaaaaaaaaaaaaaaaaaa'
 
 function clientAnswering(status: number, body: unknown) {
-  const fetch = vi.fn(
-    async (_url: URL | RequestInfo, _init?: RequestInit) =>
-      new Response(JSON.stringify(body), { status })
+  const fetch = vi.fn<typeof globalThis.fetch>(
+    async () => new Response(JSON.stringify(body), { status })
   )
   const client = createCloudWorkspacesClient({
     baseUrl: 'https://cp.example.test',
     getAccessToken: async () => 'tok',
-    fetch: fetch as unknown as typeof globalThis.fetch
+    fetch
   })
   return { client, fetch }
 }

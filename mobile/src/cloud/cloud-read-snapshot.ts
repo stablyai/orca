@@ -125,14 +125,14 @@ export function resetCloudReadSnapshotPins(): void {
   newestShown.clear()
 }
 
-const NOT_FOUND_STATES = new Set(['no_snapshot', 'not_sealed_for_key', 'not_found'])
 type MissingState = 'no_snapshot' | 'not_sealed_for_key' | 'not_found'
 
+const isMissingState = (code: string): code is MissingState =>
+  code === 'no_snapshot' || code === 'not_sealed_for_key' || code === 'not_found'
+
 function missingState(error: unknown): MissingState | null {
-  return error instanceof CloudRequestError &&
-    error.status === 404 &&
-    NOT_FOUND_STATES.has(error.code)
-    ? (error.code as MissingState)
+  return error instanceof CloudRequestError && error.status === 404 && isMissingState(error.code)
+    ? error.code
     : null
 }
 

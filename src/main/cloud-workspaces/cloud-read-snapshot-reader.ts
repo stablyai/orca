@@ -15,9 +15,9 @@ export type ReaderKeyAccess = {
   /** Who is asking (profile, user, account); null when signed out. Registrations are per identity. */
   identity: () => string | null
   /** This profile's key (created on first use), or why there can be none. */
-  load: () => ReaderKeyLoad
+  load: () => Promise<ReaderKeyLoad>
   /** The key only if one already exists (sign-out must not create one just to delete it). */
-  peek?: () => CloudReaderKey | null
+  peek?: () => Promise<CloudReaderKey | null>
 }
 
 type Registration = { identity: string; publicKeyB64: string; keyId: string; at: number }
@@ -42,7 +42,7 @@ export function createReadSnapshotReader(deps: {
     if (!identity) {
       throw new CloudWorkspacesError(401, 'unauthorized')
     }
-    const loaded = deps.readerKey.load()
+    const loaded = await deps.readerKey.load()
     if (!loaded.ok) {
       return { unavailable: loaded }
     }
@@ -128,7 +128,7 @@ export function createReadSnapshotReader(deps: {
      */
     async revoke(timeoutMs: number): Promise<void> {
       const identity = deps.readerKey.identity()
-      const key = deps.readerKey.peek?.() ?? null
+      const key = (await deps.readerKey.peek?.()) ?? null
       if (!identity || !key) {
         return
       }

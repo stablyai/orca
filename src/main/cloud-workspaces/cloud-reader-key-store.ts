@@ -2,14 +2,14 @@
 // workspace seals its read snapshot to every registered reader key allowed to open it; the secret
 // half never leaves this machine. It is sealed by the OS keychain (safeStorage at level 'os'); with
 // no real keychain the feature is off rather than keeping a long-lived secret in the clear.
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { assessSecretProtection } from '../host/electron-secret-store'
 import { guardedSafeStorage } from '../host/safe-storage-availability'
 import { writeSecureJsonFile } from '../../shared/secure-storage/secure-file'
 import { base64ToBytes, bytesToBase64 } from '../../shared/cloud-workspaces/sealed-grant'
 import { getOrcaProfileDirectory } from '../orca-profiles/profile-storage-paths'
-import { generateGrantRecipientKey, nodeSealedGrantPrimitives } from './sealed-grant-node'
+import { generateGrantRecipientKey, x25519PublicKeyOf } from './sealed-grant-node'
 
 export const READER_KEY_FILE_NAME = 'cloud-reader-key.json.enc'
 
@@ -63,11 +63,21 @@ export function createCloudReaderKeyStore(deps: {
   now?: () => number
 }) {
   const cache = new Map<string, CloudReaderKey>()
+  // One load per key file at a time, so two first reads can never mint two keys.
+  const loading = new Map<string, Promise<ReaderKeyLoad>>()
 
-  function decode(path: string, codec: ReaderKeyCodec): CloudReaderKey | null {
+  /** The sealed key on disk, or null when there is none or this keychain cannot open it. */
+  async function readExisting(path: string, codec: ReaderKeyCodec): Promise<CloudReaderKey | null> {
+    let text: string
     try {
-      const parsed = JSON.parse(readFileSync(path, 'utf8')) as Partial<PersistedReaderKey>
+      text = await readFile(path, 'utf8')
+    } catch {
+      return null
+    }
+    try {
+      const parsed: unknown = JSON.parse(text)
       if (
+        !isRecord(parsed) ||
         parsed.version !== 1 ||
         parsed.format !== 'electron-safe-storage-v1' ||
         typeof parsed.ciphertext !== 'string'
@@ -78,34 +88,59 @@ export function createCloudReaderKeyStore(deps: {
       if (secretKey.length !== 32) {
         return null
       }
-      return {
-        secretKey,
-        publicKeyB64: bytesToBase64(
-          nodeSealedGrantPrimitives.x25519PublicKey(secretKey) as Uint8Array
-        )
-      }
+      return { secretKey, publicKeyB64: bytesToBase64(x25519PublicKeyOf(secretKey)) }
     } catch {
       return null
     }
   }
 
+  async function loadUncached(path: string, codec: ReaderKeyCodec): Promise<ReaderKeyLoad> {
+    const existing = await readExisting(path, codec)
+    if (existing) {
+      cache.set(path, existing)
+      return { ok: true, key: existing }
+    }
+    // A new key only means snapshots taken before it are not readable here until the next sleep.
+    const fresh = generateGrantRecipientKey()
+    try {
+      const persisted: PersistedReaderKey = {
+        version: 1,
+        format: 'electron-safe-storage-v1',
+        createdAt: (deps.now ?? Date.now)(),
+        ciphertext: codec.encrypt(bytesToBase64(fresh.secretKey)).toString('base64')
+      }
+      // Once per profile; the shared writer applies owner-only permissions (and Windows ACLs).
+      writeSecureJsonFile(path, persisted)
+    } catch (error) {
+      fresh.secretKey.fill(0)
+      return {
+        ok: false,
+        reason: 'storage_failed',
+        message: `Could not save this device’s reader key: ${String(error).slice(0, 120)}`
+      }
+    }
+    const key = { secretKey: fresh.secretKey, publicKeyB64: fresh.publicKeyB64 }
+    cache.set(path, key)
+    return { ok: true, key }
+  }
+
   return {
     /** The profile's existing key, if any; never creates one. */
-    peek(profileId: string): CloudReaderKey | null {
+    async peek(profileId: string): Promise<CloudReaderKey | null> {
       const codec = deps.codec()
       const path = deps.pathFor(profileId)
       const cached = cache.get(path)
-      if (cached || !codec || !existsSync(path)) {
+      if (cached || !codec) {
         return cached ?? null
       }
-      const existing = decode(path, codec)
+      const existing = await readExisting(path, codec)
       if (existing) {
         cache.set(path, existing)
       }
       return existing
     },
     /** The profile's key, created on first use. A key the keychain can no longer open is replaced. */
-    load(profileId: string): ReaderKeyLoad {
+    async load(profileId: string): Promise<ReaderKeyLoad> {
       const codec = deps.codec()
       if (!codec) {
         return { ok: false, reason: 'keychain_unavailable', message: KEYCHAIN_MESSAGE }
@@ -115,41 +150,27 @@ export function createCloudReaderKeyStore(deps: {
       if (cached) {
         return { ok: true, key: cached }
       }
-      const existing = existsSync(path) ? decode(path, codec) : null
-      if (existing) {
-        cache.set(path, existing)
-        return { ok: true, key: existing }
+      let pending = loading.get(path)
+      if (!pending) {
+        pending = loadUncached(path, codec).finally(() => loading.delete(path))
+        loading.set(path, pending)
       }
-      // A new key only means snapshots taken before it are not readable here until the next sleep.
-      const fresh = generateGrantRecipientKey()
-      try {
-        const persisted: PersistedReaderKey = {
-          version: 1,
-          format: 'electron-safe-storage-v1',
-          createdAt: (deps.now ?? Date.now)(),
-          ciphertext: codec.encrypt(bytesToBase64(fresh.secretKey)).toString('base64')
-        }
-        writeSecureJsonFile(path, persisted)
-      } catch (error) {
-        fresh.secretKey.fill(0)
-        return {
-          ok: false,
-          reason: 'storage_failed',
-          message: `Could not save this device’s reader key: ${String(error).slice(0, 120)}`
-        }
-      }
-      const key = { secretKey: fresh.secretKey, publicKeyB64: fresh.publicKeyB64 }
-      cache.set(path, key)
-      return { ok: true, key }
+      return pending
     },
     /** Sign-out: the next account on this profile gets a new key (never one an old account knew). */
-    clear(profileId: string): void {
+    async clear(profileId: string): Promise<void> {
       const path = deps.pathFor(profileId)
+      // A first load still in flight would otherwise write its key back after this.
+      await loading.get(path)
       cache.get(path)?.secretKey.fill(0)
       cache.delete(path)
-      rmSync(path, { force: true })
+      await rm(path, { force: true })
     }
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 export type CloudReaderKeyStore = ReturnType<typeof createCloudReaderKeyStore>
@@ -204,9 +225,9 @@ export async function revokeCloudReaderKeyBestEffort(
 }
 
 /** Sign-out / profile reset hook: drop the profile's reader key (memory and disk). */
-export function clearCloudReaderKey(profileId: string, userDataPath: string): void {
+export async function clearCloudReaderKey(profileId: string, userDataPath: string): Promise<void> {
   try {
-    getCloudReaderKeyStore(userDataPath).clear(profileId)
+    await getCloudReaderKeyStore(userDataPath).clear(profileId)
   } catch (error) {
     console.error(`[orca-cloud] clearing the reader key failed: ${String(error)}`)
   }

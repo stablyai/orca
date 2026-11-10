@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { store, options } = vi.hoisted(() => ({
-  store: new Map<string, string>(),
-  options: [] as unknown[]
-}))
+const { store, options } = vi.hoisted(() => {
+  const options: unknown[] = []
+  return { store: new Map<string, string>(), options }
+})
 vi.mock('expo-secure-store', () => ({
   WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY',
   getItemAsync: vi.fn(async (key: string, opts: unknown) => {

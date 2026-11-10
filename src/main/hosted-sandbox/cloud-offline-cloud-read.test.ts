@@ -2,7 +2,16 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ReadSnapshot } from '../../shared/cloud-workspaces/read-snapshot'
 import { createCloudReadMemo } from './cloud-offline-cloud-read'
 
-const snap = { v: 1, capturedAt: 1 } as ReadSnapshot
+const snap: ReadSnapshot = {
+  v: 1,
+  workspaceId: 'sbx',
+  snapshotId: 'snap',
+  capturedAt: 1,
+  reason: 'sleep',
+  git: null,
+  pr: null,
+  sessions: []
+}
 
 describe('createCloudReadMemo', () => {
   it('reads once per workspace while fresh, again after forget', async () => {

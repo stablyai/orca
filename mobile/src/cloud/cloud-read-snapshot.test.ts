@@ -127,19 +127,20 @@ function fakePlane(handle: (call: Call) => { status: number; body: unknown }): {
   calls: Call[]
 } {
   const calls: Call[] = []
+  const fakeFetch: typeof fetch = async (input, init) => {
+    const call = {
+      method: init?.method ?? 'GET',
+      url: String(input),
+      body: init?.body ? JSON.parse(String(init.body)) : undefined
+    }
+    calls.push(call)
+    const reply = handle(call)
+    return new Response(JSON.stringify(reply.body), { status: reply.status })
+  }
   const plane: CloudControlPlane = {
     baseUrl: 'https://cloud.test',
     token: () => 'tok',
-    fetch: (async (url: string, init: RequestInit) => {
-      const call = {
-        method: init.method ?? 'GET',
-        url,
-        body: init.body ? JSON.parse(String(init.body)) : undefined
-      }
-      calls.push(call)
-      const reply = handle(call)
-      return new Response(JSON.stringify(reply.body), { status: reply.status })
-    }) as typeof fetch
+    fetch: fakeFetch
   }
   return { plane, calls }
 }
@@ -261,13 +262,12 @@ describe('readCloudWorkspaceSnapshot', () => {
       call.method === 'PUT' ? registered() : { status: 404, body: { error: 'not_sealed_for_key' } }
     )
     await readCloudWorkspaceSnapshot(plane, 'sbx_1')
-    await new Promise((resolve) => setTimeout(resolve, 20))
     expect(calls.map((c) => c.method)).toEqual(['PUT', 'GET'])
   })
 
   it('refuses a snapshot older than one already shown for the workspace (rollback pin)', async () => {
     const key = await loadCloudReaderKey('ds_1')
-    const keyId = 'rk_' + 'c'.repeat(24)
+    const keyId = `rk_${'c'.repeat(24)}`
     const seal = (snapshotId: string, capturedAt: number) =>
       sealLikeVm({
         readerPublicKeyB64: key.publicKeyB64,

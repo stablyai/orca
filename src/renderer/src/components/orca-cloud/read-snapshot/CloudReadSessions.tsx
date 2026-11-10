@@ -7,13 +7,12 @@ import type {
   ReadSnapshotAgentStatus,
   ReadSnapshotSession
 } from '../../../../../shared/cloud-workspaces/read-snapshot'
-import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
-import type { TerminalAgent } from '../../../../../shared/agent-status/identity/terminal-agent'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { agentStatusLabel } from './cloud-read-snapshot-format'
 
 /** The app's agent names ("Claude", "Codex"); an id it does not know is shown as sent. */
 function agentDisplayName(agent: string): string {
-  return getAgentLabel(agent as TerminalAgent)
+  return getAgentCatalog().find((entry) => entry.id === agent)?.label ?? agent
 }
 
 /** Messages shown before "Show more": enough to see where the agent left off. */

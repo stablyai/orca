@@ -185,7 +185,7 @@ export async function signOutCurrentOrcaProfile(
   // Cached Orca Cloud transcripts and queued prompts belong to the signed-out account.
   resetCloudOfflineData()
   // The next account signed in on this profile gets its own reader key.
-  clearCloudReaderKey(active.profile.id, userDataPath)
+  await clearCloudReaderKey(active.profile.id, userDataPath)
   try {
     clearRelayRegionPreferenceCache(userDataPath)
   } catch {

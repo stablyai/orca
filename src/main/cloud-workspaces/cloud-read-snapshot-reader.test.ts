@@ -54,11 +54,11 @@ function setup(options: { identity?: string | null; keychain?: boolean } = {}) {
   let identity: string | null = options.identity === undefined ? 'me' : options.identity
   const readerKey: ReaderKeyAccess = {
     identity: () => identity,
-    load: () =>
+    load: async () =>
       options.keychain === false
         ? { ok: false, reason: 'keychain_unavailable', message: 'no keychain' }
         : { ok: true, key },
-    peek: () => (options.keychain === false ? null : key)
+    peek: async () => (options.keychain === false ? null : key)
   }
   let now = 10_000
   const ids = [KEY_A]

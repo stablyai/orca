@@ -38,7 +38,7 @@ export function CloudReadSnapshotSheet({
   return (
     <Sheet open={workspace !== null} onOpenChange={(open) => !open && onClose()}>
       <SheetContent
-        className="w-full gap-0 overflow-y-auto scrollbar-sleek p-6 sm:max-w-xl"
+        className="w-full sm:max-w-xl"
         aria-describedby={undefined}
         // Land on the title, not on "Wake to continue": opening to read must never be one Enter
         // away from waking the sandbox.
@@ -50,7 +50,8 @@ export function CloudReadSnapshotSheet({
         {/* The view's own heading is the visible title; Radix needs one for the dialog name. */}
         <SheetTitle className="sr-only">{title}</SheetTitle>
         {workspace ? (
-          <div className="pr-6">
+          // The sheet owns its frame; this wrapper scrolls and pads (clear of the close button).
+          <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek p-6 pr-12">
             <CloudReadSnapshotView
               title={title}
               state={state}
