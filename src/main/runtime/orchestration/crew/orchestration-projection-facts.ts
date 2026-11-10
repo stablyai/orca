@@ -11,6 +11,7 @@ import {
 } from './orchestration-projection-invalidations'
 import { projectionNeedsRebuild, acknowledgeProjectionDebt } from './orchestration-projection-debt'
 import { PresentationDispatchIndex } from './presentation-dispatch-index'
+import { withPresentationCompletionSource } from '../db/dispatch-context/presentation-completion-source'
 type Fact = { value: unknown; dependencies: readonly string[]; owners: Set<string> }
 const sources = new WeakMap<OrchestrationDb, OrchestrationProjectionFacts>()
 const views = new WeakMap<OrchestrationDb, OrchestrationProjectionFacts>()
@@ -24,6 +25,7 @@ export class OrchestrationProjectionFacts {
   private readonly owned = new Map<string, Set<string>>()
   private owner: string | undefined
   private version: unknown
+  private revision: number | undefined
   private cold = true
   private previousNow = -Infinity
 
@@ -106,32 +108,42 @@ export class OrchestrationProjectionFacts {
 
   refresh(now: number): void {
     try {
-      const version = this.db.db.pragma('data_version', { simple: true })
-      const overflow = !this.transient && projectionNeedsRebuild(this.db)
-      const cold = this.cold || version !== this.version || now < this.previousNow || overflow
-      if (cold) {
-        this.reset()
-      }
-      const previousSize = this.candidates.size
-      const dirty = this.transient || cold ? [] : projectionDirtyKeys(this.db)
-      const affected = new Set<string>()
-      for (const key of dirty) {
-        for (const factKey of this.dependencies.get(key) ?? []) {
-          for (const owner of this.facts.get(factKey)?.owners ?? []) {
-            affected.add(owner)
+      withPresentationCompletionSource(this.db.db, now, ({ version, revision }) => {
+        const overflow = !this.transient && projectionNeedsRebuild(this.db)
+        const cold =
+          this.cold ||
+          version !== this.version ||
+          revision !== this.revision ||
+          now < this.previousNow ||
+          overflow
+        if (cold) {
+          this.reset()
+        }
+        const previousSize = this.candidates.size
+        const dirty = this.transient || cold ? [] : projectionDirtyKeys(this.db)
+        const affected = new Set<string>()
+        for (const key of dirty) {
+          for (const factKey of this.dependencies.get(key) ?? []) {
+            for (const owner of this.facts.get(factKey)?.owners ?? []) {
+              affected.add(owner)
+            }
           }
         }
-      }
-      for (const owner of affected) {
-        this.release(owner)
-      }
-      this.candidates.refresh(now, dirty, cold)
-      if (!this.transient && (cold || dirty.length > 0 || this.candidates.size !== previousSize)) {
-        acknowledgeProjectionDebt(this.db, this.candidates.size)
-      }
-      this.cold = false
-      this.version = version
-      this.previousNow = now
+        for (const owner of affected) {
+          this.release(owner)
+        }
+        this.candidates.refresh(now, dirty, cold)
+        if (
+          !this.transient &&
+          (cold || dirty.length > 0 || this.candidates.size !== previousSize)
+        ) {
+          acknowledgeProjectionDebt(this.db, this.candidates.size)
+        }
+        this.cold = false
+        this.version = version
+        this.revision = revision
+        this.previousNow = now
+      })
     } catch (error) {
       // A retry discards partial indexes before consuming the still-unacknowledged obligation.
       this.cold = true

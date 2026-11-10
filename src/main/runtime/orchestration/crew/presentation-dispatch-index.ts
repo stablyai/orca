@@ -1,4 +1,5 @@
 import { DispatchPresentationDeadlines } from './dispatch-presentation-deadlines'
+import { dispatchCompletionEpoch } from '../db/dispatch-context/dispatch-completion-epoch'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { DispatchContextRow } from '../db/orchestration-records'
@@ -81,10 +82,10 @@ export class PresentationDispatchIndex {
   private put(row: Candidate): void {
     this.candidates.set(row.id, row)
     if (!active(row) && row.completed_at) {
-      const completed = Date.parse(
-        row.completed_at.includes('T') ? row.completed_at : `${row.completed_at.replace(' ', 'T')}Z`
-      )
-      this.expiry.set(row.id, completed + AGENT_STATUS_STALE_AFTER_MS)
+      const completed = dispatchCompletionEpoch(row.completed_at)
+      if (completed !== null) {
+        this.expiry.set(row.id, completed + AGENT_STATUS_STALE_AFTER_MS)
+      }
     }
     for (const key of this.keys(row)) {
       const bucket = this.addresses.get(key) ?? new Set()

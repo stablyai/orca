@@ -1,7 +1,14 @@
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { DispatchContextRow } from '../orchestration-records'
 import type { OrchestrationDb } from '../orchestration-db'
-import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
+import {
+  DISPATCH_CONTEXT_COLUMN_LIST,
+  DISPATCH_CONTEXT_COLUMNS,
+  selectColumns
+} from '../row-column-lists'
+import { dispatchCompletionEpoch } from './dispatch-completion-epoch'
+import { withPresentationCompletionSource } from './presentation-completion-source'
+import { completionTable } from './presentation-completion-schema'
 function presentationAddressKey(column: string, address: string | null): string {
   return `${column}:${address}`
 }
@@ -11,12 +18,8 @@ export function isRecentPresentationDispatch(dispatch: DispatchContextRow, now: 
   if (!dispatch.completed_at || dispatch.status === 'pending' || dispatch.status === 'dispatched') {
     return false
   }
-  const completedAt = Date.parse(
-    dispatch.completed_at.includes('T')
-      ? dispatch.completed_at
-      : `${dispatch.completed_at.replace(' ', 'T')}Z`
-  )
-  return Number.isFinite(completedAt) && now - completedAt <= AGENT_STATUS_STALE_AFTER_MS
+  const completedAt = dispatchCompletionEpoch(dispatch.completed_at)
+  return completedAt !== null && now - completedAt <= AGENT_STATUS_STALE_AFTER_MS
 }
 
 export type PresentationDispatchCandidate = DispatchContextRow & { presentation_order: number }
@@ -26,15 +29,19 @@ export function readPresentationDispatchCandidates(
   db: OrchestrationDb,
   now: number
 ): PresentationDispatchCandidate[] {
-  const rows = db.db
-    .prepare(`SELECT rowid AS presentation_order, ${DISPATCH_CONTEXT_COLUMN_LIST}
+  return withPresentationCompletionSource(db.db, now, () => {
+    const rows = db.db
+      .prepare(`SELECT rowid AS presentation_order, ${DISPATCH_CONTEXT_COLUMN_LIST}
     FROM dispatch_contexts WHERE status IN ('pending', 'dispatched')
-    UNION ALL SELECT rowid AS presentation_order, ${DISPATCH_CONTEXT_COLUMN_LIST}
-    FROM dispatch_contexts WHERE status NOT IN ('pending', 'dispatched')
-      AND julianday(completed_at) >= julianday(?)`)
-    .all(new Date(now - AGENT_STATUS_STALE_AFTER_MS).toISOString())
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: complete schema-owned dispatch projection plus SQLite rowid.
-  return rows as PresentationDispatchCandidate[]
+    UNION ALL SELECT d.rowid AS presentation_order, ${selectColumns(DISPATCH_CONTEXT_COLUMNS, 'd')}
+    FROM temp.${completionTable} c INDEXED BY orchestration_presentation_completion_epoch
+    CROSS JOIN dispatch_contexts d ON d.id = c.id WHERE c.epoch >= ?`)
+      .all(now - AGENT_STATUS_STALE_AFTER_MS)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: complete schema-owned dispatch projection plus SQLite rowid.
+    return (rows as PresentationDispatchCandidate[]).sort(
+      (a, b) => a.presentation_order - b.presentation_order
+    )
+  })
 }
 
 /** Active first, otherwise latest per address; an older eligible completion never resurfaces. */
