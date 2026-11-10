@@ -53,6 +53,7 @@ export function createAgentPickerInventorySource(
         } else {
           demand.delete(agent)
         }
+        demandListeners.forEach((listener) => listener())
       }
     },
     subscribe: (listener) => {
@@ -89,7 +90,8 @@ export type AgentPickerAcquisitionReads = {
   catalog: (
     entry: AgentPickerEntry,
     waitForListing: boolean,
-    source?: ModelCatalogSource
+    source: ModelCatalogSource | undefined,
+    signal: AbortSignal
   ) => Promise<AgentPickerEntry['catalog'] | undefined>
   observeCatalog?: (
     entry: AgentPickerEntry,

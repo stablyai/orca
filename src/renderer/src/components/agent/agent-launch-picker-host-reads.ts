@@ -55,13 +55,18 @@ export function agentPickerModelCatalogReads(input: {
     catalog: async (
       entry: AgentPickerEntry,
       waitForListing = false,
-      source: ModelCatalogSource = 'structured'
+      source: ModelCatalogSource = 'structured',
+      signal: AbortSignal
     ) =>
-      resolveScope(entry, source).then((scope) =>
-        scope
-          ? hostModelMenuCatalog(scope).read(source === 'cli', waitForListing)
-          : { origin: 'unknown' as const }
-      ),
+      signal.aborted
+        ? Promise.resolve(undefined)
+        : resolveScope(entry, source).then((scope) =>
+            signal.aborted
+              ? undefined
+              : scope
+                ? hostModelMenuCatalog(scope).read(source === 'cli', waitForListing, signal)
+                : { origin: 'unknown' as const }
+          ),
     observeCatalog: (
       entry: AgentPickerEntry,
       publish: (snapshot: HostModelMenuSnapshot & { invalidated?: boolean }) => void,

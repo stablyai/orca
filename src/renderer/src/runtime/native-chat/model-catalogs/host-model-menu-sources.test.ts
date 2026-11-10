@@ -44,7 +44,10 @@ it.each([3, 30])(
       structured.subscribe(() => {}),
       terminal.subscribe(notices)
     ]).flat()
-    const reads = Array.from({ length: count }, () => [structured.read(), terminal.read()]).flat()
+    const reads = Array.from({ length: count }, () => [
+      structured.read(false, undefined, new AbortController().signal),
+      terminal.read(false, undefined, new AbortController().signal)
+    ]).flat()
     stops.forEach((stop) => stop())
     expect(hostModelMenuCatalog({ ...base, sourceKey: 'cli', request })).toBe(terminal)
     const stop = terminal.subscribe(notices)
@@ -88,8 +91,8 @@ it.each(['structured-first', 'cli-first'])(
       terminal = hostModelMenuCatalog({ ...base, sourceKey: 'cli', request })
     const stopChat = chat.subscribe(() => {}),
       stopCli = terminal.subscribe(() => {})
-    const chatRead = chat.read(),
-      cliRead = terminal.read()
+    const chatRead = chat.read(false, undefined, new AbortController().signal),
+      cliRead = terminal.read(false, undefined, new AbortController().signal)
     if (order === 'structured-first') {
       acp.resolve(positive('base'))
       await chatRead
@@ -116,7 +119,7 @@ it.each(['structured-first', 'cli-first'])(
       const successor = hostModelMenuCatalog({ ...base, sourceKey: 'cli', request })
       const detach = successor.subscribe(() => {})
       request.mockRejectedValueOnce(new Error('offline'))
-      expect(await successor.read()).toEqual(negative)
+      expect(await successor.read(false, undefined, new AbortController().signal)).toEqual(negative)
       expect(
         readHostModelCatalogSnapshot(
           target,
@@ -146,7 +149,7 @@ it.each(['structured-first', 'cli-first'])(
       })
       const closeReopened = reopened.subscribe(() => {})
       request.mockRejectedValueOnce(new Error('reopen offline'))
-      expect(await reopened.read()).toEqual(negative)
+      expect(await reopened.read(false, undefined, new AbortController().signal)).toEqual(negative)
       closeReopened()
       detach()
     }
@@ -154,7 +157,7 @@ it.each(['structured-first', 'cli-first'])(
     request.mockReturnValueOnce(late.promise)
     const owner = hostModelMenuCatalog({ ...base, sourceKey: 'cli', request })
     const detach = owner.subscribe(() => {})
-    const reading = owner.read()
+    const reading = owner.read(false, undefined, new AbortController().signal)
     await Promise.resolve()
     forgetHostModelCatalogSnapshots(target)
     late.resolve(positive('stale'))
@@ -162,7 +165,9 @@ it.each(['structured-first', 'cli-first'])(
     expect(owner.snapshot.answer).toBeUndefined()
     expect(chat.snapshot.answer).toBeUndefined()
     request.mockResolvedValueOnce(positive('replacement'))
-    expect(await owner.read()).toMatchObject({ models: [{ id: 'replacement' }] })
+    expect(await owner.read(false, undefined, new AbortController().signal)).toMatchObject({
+      models: [{ id: 'replacement' }]
+    })
     detach()
     stopChat()
   }
@@ -180,7 +185,7 @@ it.each([3, 30])(
         request: async () => positive('variant')
       })
       const stop = owner.subscribe(() => {})
-      await owner.read()
+      await owner.read(false, undefined, new AbortController().signal)
       stop()
       forgetHostModelCatalogSnapshots(target, ['antigravity'])
     }
@@ -199,7 +204,7 @@ it.each([3, 30])(
     }
     const old = hostModelMenuCatalog(scope)
     const stop = old.subscribe(() => {})
-    const reading = old.read()
+    const reading = old.read(false, undefined, new AbortController().signal)
     await Promise.resolve()
     forgetHostModelCatalogSnapshots(target, ['antigravity'])
     stop()

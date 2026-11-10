@@ -72,11 +72,13 @@ it('uses the paired invocation eligibility and never forwards desktop command ov
       settings: { agentCmdOverrides: command ? { antigravity: command } : {} },
       serverSettings: async () => ({ agentCmdOverrides: { antigravity: 'agy' } })
     })
-  expect(await reads('agy-beta').catalog(sourceEntry(), false, 'cli')).toEqual({
+  expect(
+    await reads('agy-beta').catalog(sourceEntry(), false, 'cli', new AbortController().signal)
+  ).toEqual({
     origin: 'unknown'
   })
   expect(mocks.discover).not.toHaveBeenCalled()
-  await reads('agy').catalog(sourceEntry(), false, 'cli')
+  await reads('agy').catalog(sourceEntry(), false, 'cli', new AbortController().signal)
   expect(mocks.discover).toHaveBeenCalledWith({ ...cliContext, prefs: undefined }, 'antigravity')
   expect(mocks.structured).not.toHaveBeenCalled()
 })
@@ -96,7 +98,7 @@ it('uses the guest CLI route, retains its last good list on failure, and never f
     settings: {}
   })
   const entry = { ...sourceEntry(), catalogRead: 'unsupported' as const }
-  const answer = await reads.catalog(entry, false, 'cli')
+  const answer = await reads.catalog(entry, false, 'cli', new AbortController().signal)
   expect(answer).toMatchObject({
     models: [
       { id: 'gemini-3.8-flash-high' },
@@ -107,7 +109,7 @@ it('uses the guest CLI route, retains its last good list on failure, and never f
   })
   expect(mocks.discover).toHaveBeenCalledWith({ ...cliContext, prefs: undefined }, 'antigravity')
   mocks.discover.mockResolvedValueOnce({ success: false, error: 'offline' })
-  expect(await reads.catalog(entry, false, 'cli')).toEqual(answer)
+  expect(await reads.catalog(entry, false, 'cli', new AbortController().signal)).toEqual(answer)
   mocks.discover.mockClear()
   const remote = { kind: 'environment', environmentId: 'remote-global' } as const
   const global = agentPickerModelCatalogReads({
@@ -118,7 +120,7 @@ it('uses the guest CLI route, retains its last good list on failure, and never f
     settings: {},
     serverSettings: async () => ({})
   })
-  expect(await global.catalog(entry, false, 'cli')).toBeUndefined()
+  expect(await global.catalog(entry, false, 'cli', new AbortController().signal)).toBeUndefined()
   expect(mocks.discover).not.toHaveBeenCalled()
   const overridden = agentPickerModelCatalogReads({
     target,
@@ -127,7 +129,9 @@ it('uses the guest CLI route, retains its last good list on failure, and never f
     nativeRuntime: false,
     settings: { agentCmdOverrides: { antigravity: 'MODE=x agy' } }
   })
-  expect(await overridden.catalog(entry, false, 'cli')).toEqual({ origin: 'unknown' })
+  expect(await overridden.catalog(entry, false, 'cli', new AbortController().signal)).toEqual({
+    origin: 'unknown'
+  })
   expect(mocks.discover).not.toHaveBeenCalled()
 })
 
@@ -229,13 +233,13 @@ it('reuses a held CLI answer on reopen until account invalidation', async () => 
   })
   const entry = sourceEntry()
   const stop = reads.observeCatalog(entry, () => {}, 'cli')
-  const answer = await reads.catalog(entry, false, 'cli')
+  const answer = await reads.catalog(entry, false, 'cli', new AbortController().signal)
   stop()
   const stopReopened = reads.observeCatalog(entry, () => {}, 'cli')
-  expect(await reads.catalog(entry, false, 'cli')).toEqual(answer)
+  expect(await reads.catalog(entry, false, 'cli', new AbortController().signal)).toEqual(answer)
   expect(mocks.discover).toHaveBeenCalledTimes(1)
   forgetHostModelCatalogSnapshots(target, ['antigravity'])
-  await reads.catalog(entry, false, 'cli')
+  await reads.catalog(entry, false, 'cli', new AbortController().signal)
   expect(mocks.discover).toHaveBeenCalledTimes(2)
   stopReopened()
 })

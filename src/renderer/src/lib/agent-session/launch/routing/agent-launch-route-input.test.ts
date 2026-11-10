@@ -203,17 +203,22 @@ describe('buildAgentLaunchRouteInput', () => {
         nativeRuntime: agentPickerUsesNativeRuntime(route, 'win32', 'C:\\repo'),
         settings: {},
         serverSettings: async () => ({})
-      }).catalog({
-        agent: 'codex',
-        catalogRead: 'pending',
-        label: 'Codex',
-        rows: [],
-        surfaces: ['chat', 'terminal'],
-        defaultSurface: 'chat',
-        terminal: {},
-        structured: {},
-        catalog: { origin: 'unknown' }
-      })
+      }).catalog(
+        {
+          agent: 'codex',
+          catalogRead: 'pending',
+          label: 'Codex',
+          rows: [],
+          surfaces: ['chat', 'terminal'],
+          defaultSurface: 'chat',
+          terminal: {},
+          structured: {},
+          catalog: { origin: 'unknown' }
+        },
+        false,
+        undefined,
+        new AbortController().signal
+      )
       expect(
         modelMenuOptions(answer, {
           agent: 'codex',

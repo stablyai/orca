@@ -79,7 +79,7 @@ it('preserves scoped retirement across owner handoff and rejected reopen without
       expect(successor).not.toBe(a)
       expect(successor.snapshot.answer).toEqual(retired)
       mocks.call.mockRejectedValueOnce(new Error('reopen offline'))
-      await successor.read()
+      await successor.read(false, undefined, new AbortController().signal)
       expect(successor.snapshot.answer).toEqual(retired)
       recordHostModelCatalogSnapshot(target, 'codex', 'id:b', catalog('other-new'))
       expect(successor.snapshot.answer).toEqual(retired)
@@ -114,7 +114,7 @@ it.each([
     const owner = hostModelMenuCatalog(scope)
     const stop = owner.subscribe(() => {})
     mocks.call.mockResolvedValueOnce(answer)
-    expect(await owner.read()).toEqual(answer)
+    expect(await owner.read(false, undefined, new AbortController().signal)).toEqual(answer)
     expect(owner.snapshot.answer).toEqual(answer)
     const read = () =>
       readHostModelCatalogSnapshot(target, 'codex', {
@@ -132,7 +132,7 @@ it.each([
     const detach = successor.subscribe(() => {})
     expect(successor).not.toBe(owner)
     mocks.call.mockRejectedValueOnce(new Error('reopen offline'))
-    expect(await successor.read()).toEqual(answer)
+    expect(await successor.read(false, undefined, new AbortController().signal)).toEqual(answer)
     recordHostModelCatalogSnapshot(target, 'codex', 'id:sibling', catalog('sibling'))
     expect(successor.snapshot.answer).toEqual(answer)
     expect(
@@ -145,10 +145,10 @@ it.each([
     mocks.call
       .mockResolvedValueOnce({ origin: 'unknown', listingInProgress: true })
       .mockRejectedValueOnce(new Error('refresh offline'))
-    expect(await successor.read()).toEqual(answer)
+    expect(await successor.read(false, undefined, new AbortController().signal)).toEqual(answer)
     expect(read()).toEqual(answer)
     mocks.call.mockResolvedValueOnce(catalog('replacement'))
-    await successor.read()
+    await successor.read(false, undefined, new AbortController().signal)
     expect(successor.snapshot.answer).toMatchObject({ models: [{ id: 'replacement' }] })
     forgetHostModelCatalogSnapshots(target)
     expect(successor.snapshot.answer).toBeUndefined()
@@ -192,7 +192,7 @@ it.each(['codex', 'claude'])(
       }
     })
     mocks.call.mockResolvedValueOnce(answer)
-    expect(await owner.read()).toEqual(expected)
+    expect(await owner.read(false, undefined, new AbortController().signal)).toEqual(expected)
     expect(owner.snapshot.answer).toEqual(expected)
     expect(settled).toEqual([expected])
     const read = (worktree: string | null | undefined) =>
@@ -220,18 +220,20 @@ it.each(['codex', 'claude'])(
     const successor = hostModelMenuCatalog(scope)
     const detach = successor.subscribe(() => {})
     mocks.call.mockRejectedValueOnce(new Error('reopen offline'))
-    expect(await successor.read()).toEqual(expected)
+    expect(await successor.read(false, undefined, new AbortController().signal)).toEqual(expected)
     for (const replacement of [
       { origin: 'probe', fetchedAt: 4, models: [] },
       { origin: 'unknown' }
     ] satisfies AgentSessionModelCatalogResult[]) {
       mocks.call.mockResolvedValueOnce(replacement)
-      expect(await successor.read()).toEqual(replacement)
+      expect(await successor.read(false, undefined, new AbortController().signal)).toEqual(
+        replacement
+      )
       expect(successor.snapshot.answer).toEqual(replacement)
     }
     const universal = { ...answer, defaultHoldsInEveryWorkspace: true as const }
     mocks.call.mockResolvedValueOnce(universal)
-    expect(await successor.read()).toEqual(universal)
+    expect(await successor.read(false, undefined, new AbortController().signal)).toEqual(universal)
     forgetHostModelCatalogSnapshots(target)
     expect(read(null)).toBeUndefined()
     recordHostModelCatalogSnapshot(target, agent, 'id:only', answer)
@@ -252,7 +254,7 @@ it('fences late negative account and workspace replies after invalidation', asyn
       const scope = { target, agent: 'codex', worktree }
       const owner = hostModelMenuCatalog(scope)
       const stop = owner.subscribe(() => {})
-      const reading = owner.read()
+      const reading = owner.read(false, undefined, new AbortController().signal)
       await vi.waitFor(() =>
         expect(mocks.call.mock.calls.at(-1)?.[2]).toEqual({
           agent: 'codex',

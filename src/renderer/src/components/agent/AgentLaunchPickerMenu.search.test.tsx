@@ -194,7 +194,8 @@ it('requests the CLI catalog when the subscribed new-tab menu opens on a termina
       expect(read).toHaveBeenCalledWith(
         expect.objectContaining({ agent: 'antigravity' }),
         false,
-        'cli'
+        'cli',
+        expect.any(AbortSignal)
       )
     )
     expect(await screen.findByRole('menuitem', { name: /Gemini 3.8 Flash \(Low\)/ })).toBeTruthy()

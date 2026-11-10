@@ -9,7 +9,7 @@ export {
   useAgentPickerInventoryEntries,
   type AgentPickerInventorySource
 } from './agent-picker-inventory-source'
-import { modelCatalogSource } from '../../../../shared/agent-session/options/model-catalog-source'
+import { AgentPickerSourceDemand, agentPickerCatalogDemanded } from './agent-picker-source-demand'
 import { shallow } from 'zustand/shallow'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type {
@@ -29,6 +29,7 @@ class AgentPickerAcquisition {
   readonly observers = new Set<Observer>()
   entries: AgentPickerEntry[]
   settingsPending = false
+  private demand = new AgentPickerSourceDemand()
   private outstanding = { catalog: 0, refresh: 0, support: 0 }
   private queued: Record<ReadKind, Set<number>>
   private supports = new Map<number, SupportRead>()
@@ -108,6 +109,7 @@ class AgentPickerAcquisition {
       this.entries = this.project()
     }
     const stopDemand = observer.subscribeDemand?.(() => {
+      this.demand.reconcile((index) => this.usesSource(index))
       this.admit('catalog')
       this.admit('refresh')
     })
@@ -118,6 +120,7 @@ class AgentPickerAcquisition {
     return () => {
       stopDemand?.()
       this.observers.delete(observer)
+      this.demand.reconcile((index) => this.usesSource(index))
       if (!this.observers.size) {
         this.catalogSubscriptions.forEach((stop) => stop())
         this.catalogSubscriptions = []
@@ -181,10 +184,18 @@ class AgentPickerAcquisition {
 
   private async readCatalog(entry: AgentPickerEntry, index: number, waitForListing: boolean) {
     const job = this.jobs[index]
-    const catalog = await this.reads.catalog(entry, waitForListing, job.source)
+    const signal = this.demand.signal(index)
+    const catalog = await this.reads.catalog(entry, waitForListing, job.source, signal)
+    if (signal.aborted && (!catalog || catalog.listingInProgress)) {
+      this.queued.catalog.add(index)
+    }
+    if (signal.aborted && !catalog) {
+      return
+    }
     // An open picker waits on a running listing, and again when a wait used its whole budget.
     const refresh =
-      this.observers.size > 0 &&
+      !signal.aborted &&
+      this.usesSource(index) &&
       (waitForListing ? catalog?.waitExpired : catalog?.listingInProgress) === true
     if (refresh) {
       this.queued.refresh.add(index)
@@ -195,20 +206,18 @@ class AgentPickerAcquisition {
     })
   }
 
+  private usesSource(index: number) {
+    const job = this.jobs[index]
+    return agentPickerCatalogDemanded(this.entries[job.index], job.source, this.observers)
+  }
+
   private admit(kind: ReadKind) {
     while (this.observers.size && this.outstanding[kind] < 2 && this.queued[kind].size) {
       const usable = [...this.queued[kind]].filter((index) => {
         if (kind === 'support') {
           return true
         }
-        const job = this.jobs[index],
-          entry = this.entries[job.index]
-        return [...this.observers].some(
-          (observer) =>
-            observer.usesSource?.(entry, job.source) ??
-            (job.source !== 'cli' ||
-              modelCatalogSource(entry.agent, entry.defaultSurface) === job.source)
-        )
+        return this.usesSource(index)
       })
       if (!usable.length) {
         break
@@ -256,8 +265,8 @@ class AgentPickerAcquisition {
           this.outstanding[kind]--
           this.publish()
           this.admit(kind)
-          if (kind === 'catalog') {
-            this.admit('refresh')
+          if (kind !== 'support') {
+            this.admit(kind === 'catalog' ? 'refresh' : 'catalog')
           }
           this.retire()
         })

@@ -52,8 +52,8 @@ it('switching PowerShell to WSL invalidates a fresh native list and its in-fligh
   }
   const owner = hostModelMenuCatalog(scope)
   const stop = owner.subscribe(() => {})
-  await owner.read(true)
-  const pending = owner.read()
+  await owner.read(true, undefined, new AbortController().signal)
+  const pending = owner.read(false, undefined, new AbortController().signal)
   await Promise.resolve()
   const successor = {
     ...previous,
@@ -61,7 +61,9 @@ it('switching PowerShell to WSL invalidates a fresh native list and its in-fligh
   }
   store.getState.mockReturnValue(successor)
   change(successor, previous)
-  expect(await owner.read(true)).toMatchObject({ models: [{ id: 'ubuntu-model' }] })
+  expect(await owner.read(true, undefined, new AbortController().signal)).toMatchObject({
+    models: [{ id: 'ubuntu-model' }]
+  })
   late.resolve(native)
   await pending
   expect(owner.snapshot.answer).toMatchObject({ models: [{ id: 'ubuntu-model' }] })

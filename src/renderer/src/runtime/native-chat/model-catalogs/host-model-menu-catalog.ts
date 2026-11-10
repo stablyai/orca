@@ -1,4 +1,5 @@
 import type { AgentSessionModelCatalogResult } from '../../../../../shared/agent-session/agent-session-wire'
+import { HostModelMenuPhases } from './host-model-menu-phases'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { structuredAgentSessionHostKey } from '../host-capabilities/structured-agent-session-host-capability'
 import { callStructuredAgentSession } from '../requests/structured-agent-session-call'
@@ -24,11 +25,6 @@ export type HostModelMenuSnapshot = {
   generation: number
 }
 type Reader = (waitForListing: boolean) => Promise<AgentSessionModelCatalogResult | undefined>
-type PhaseResult = {
-  answer?: AgentSessionModelCatalogResult
-  reply?: AgentSessionModelCatalogResult
-  waited?: boolean
-}
 const owners = new Map<string, HostModelMenuCatalog>()
 function withoutWaitExpiry(answer: AgentSessionModelCatalogResult) {
   if (!answer.waitExpired) {
@@ -69,7 +65,15 @@ const CLI_REUSE_INTERVAL_MS = 10 * 60 * 1000
 class HostModelMenuCatalog {
   listeners = new Set<() => void>()
   snapshot: HostModelMenuSnapshot
-  private pending?: { waited: boolean; result: Promise<PhaseResult> }
+  private phases = new HostModelMenuPhases(
+    (waited, current) => this.requestPhase(waited, current),
+    () => ({
+      ...withoutWaitExpiry(this.snapshot.answer ?? { origin: 'unknown' }),
+      listingInProgress: true
+    }),
+    () => this.reuseHeld(),
+    () => this.syncPhases()
+  )
   private unsubscribe?: () => void
   constructor(readonly scope: HostModelMenuScope) {
     this.snapshot = {
@@ -113,54 +117,47 @@ class HostModelMenuCatalog {
   }
   subscribe = (listener: () => void) => {
     this.listeners.add(listener)
+    this.watch()
+    return () => {
+      this.listeners.delete(listener)
+      this.retire()
+    }
+  }
+  private watch() {
     this.unsubscribe ??= subscribeHostModelCatalogSnapshot(
       this.scope.target,
       this.scope.agent,
       (change) => {
         if (change.forgotten) {
-          // An older account's physical read may finish, but cannot own this generation.
-          this.pending = undefined
-          this.publish({ pending: false })
+          this.phases.invalidate()
+          this.syncPhases()
         } else {
           this.publish({ ...this.snapshot, answer: this.held() })
         }
       },
       this.scope.sourceKey
     )
-    return () => {
-      this.listeners.delete(listener)
-      this.retire()
-    }
   }
-  async read(
-    reuseHeld = false,
-    waitForListing?: boolean,
-    signal?: AbortSignal
-  ): Promise<AgentSessionModelCatalogResult | undefined> {
-    const generation = this.snapshot.generation
-    let result = await this.readPhase(reuseHeld, waitForListing ?? false)
-    while (
-      waitForListing === undefined &&
-      result.reply?.listingInProgress &&
-      (!result.waited || result.reply.waitExpired) &&
-      generation === this.snapshot.generation &&
-      !signal?.aborted &&
-      (signal !== undefined || this.listeners.size > 0)
-    ) {
-      result = await this.readPhase(false, true)
-    }
-    return result.answer
+  private syncPhases() {
+    const generation = hostModelCatalogGeneration(
+      this.scope.target,
+      this.scope.agent,
+      this.scope.sourceKey
+    )
+    this.publish({
+      ...(this.snapshot.generation === generation ? this.snapshot : {}),
+      pending: this.phases.pending
+    })
+    this.retire()
   }
-  private readPhase(reuseHeld: boolean, waitForListing: boolean): Promise<PhaseResult> {
-    const { target, agent, worktree } = this.scope
-    const generation = hostModelCatalogGeneration(target, agent, this.scope.sourceKey)
-    const current = () =>
-      generation === hostModelCatalogGeneration(target, agent, this.scope.sourceKey)
-    if (this.pending) {
-      return waitForListing && !this.pending.waited
-        ? this.pending.result.then(() => (current() ? this.readPhase(false, true) : {}))
-        : this.pending.result
+  read(reuseHeld: boolean, waitForListing: boolean | undefined, signal: AbortSignal) {
+    if (signal.aborted) {
+      return Promise.resolve(undefined)
     }
+    this.watch()
+    return this.phases.read(reuseHeld, waitForListing, signal)
+  }
+  private reuseHeld() {
     const completedAt = this.scope.sourceKey
       ? hostModelCatalogCompletedAttempt(
           this.scope.target,
@@ -169,16 +166,14 @@ class HostModelMenuCatalog {
           this.scope.sourceKey
         )
       : undefined
-    if (
-      reuseHeld &&
-      waitForListing !== true &&
-      completedAt !== undefined &&
-      Date.now() - completedAt < CLI_REUSE_INTERVAL_MS
-    ) {
+    if (completedAt !== undefined && Date.now() - completedAt < CLI_REUSE_INTERVAL_MS) {
       this.publish({ ...this.snapshot, pending: false, attempted: true })
-      this.retire()
-      return Promise.resolve({ answer: retained(this.held() ?? this.snapshot.answer) })
+      return { answer: retained(this.held() ?? this.snapshot.answer) }
     }
+    return undefined
+  }
+  private async requestPhase(waitForListing: boolean, current: () => boolean) {
+    const { target, agent, worktree } = this.scope
     const request: Reader =
       this.scope.request ??
       ((waitForListing) =>
@@ -187,58 +182,47 @@ class HostModelMenuCatalog {
           ...(worktree ? { worktree } : {}),
           ...(waitForListing ? { waitForListing: true } : {})
         }))
-    this.publish({ ...this.snapshot, answer: retained(this.snapshot.answer), pending: true })
     let contextUnresolved = false
-    const operation: Promise<PhaseResult> = Promise.resolve()
-      .then(() => request(waitForListing))
-      .catch((error) => {
-        contextUnresolved = error instanceof ModelMenuContextUnresolvedError
-        return undefined
-      })
-      .then((answer) => {
-        if (!current()) {
-          return this.pending?.result !== operation ? (this.pending?.result ?? {}) : {}
-        }
-        if (this.scope.sourceKey && !contextUnresolved && !answer?.listingInProgress) {
-          hostModelCatalogCompletedAttempt(
-            target,
-            agent,
-            worktree ?? null,
-            this.scope.sourceKey,
-            Date.now()
-          )
-        }
-        if (answer) {
-          recordHostModelCatalogSnapshot(
-            target,
-            agent,
-            worktree ?? null,
-            withoutWaitExpiry(answer),
-            this.scope.sourceKey
-          )
-        }
-        const shown = answer?.listingInProgress
-          ? withListingStatus(this.held() ?? answer, {
-              ...answer,
-              waitExpired: waitForListing && answer.waitExpired ? true : undefined
-            })
-          : answer
-            ? this.held()
-            : retained(this.held() ?? this.snapshot.answer)
-        this.publish({ answer: shown, pending: false, attempted: true })
-        return { answer: shown, reply: answer, waited: waitForListing }
-      })
-      .finally(() => {
-        if (this.pending?.result === operation) {
-          this.pending = undefined
-        }
-        this.retire()
-      })
-    this.pending = { waited: waitForListing, result: operation }
-    return operation
+    let answer: AgentSessionModelCatalogResult | undefined
+    try {
+      answer = await request(waitForListing)
+    } catch (error) {
+      contextUnresolved = error instanceof ModelMenuContextUnresolvedError
+    }
+    if (!current()) {
+      return {}
+    }
+    if (this.scope.sourceKey && !contextUnresolved && !answer?.listingInProgress) {
+      hostModelCatalogCompletedAttempt(
+        target,
+        agent,
+        worktree ?? null,
+        this.scope.sourceKey,
+        Date.now()
+      )
+    }
+    if (answer) {
+      recordHostModelCatalogSnapshot(
+        target,
+        agent,
+        worktree ?? null,
+        withoutWaitExpiry(answer),
+        this.scope.sourceKey
+      )
+    }
+    const shown = answer?.listingInProgress
+      ? withListingStatus(this.held() ?? answer, {
+          ...answer,
+          waitExpired: waitForListing && answer.waitExpired ? true : undefined
+        })
+      : answer
+        ? this.held()
+        : retained(this.held() ?? this.snapshot.answer)
+    this.publish({ answer: shown, pending: this.phases.pending, attempted: true })
+    return { answer: shown, reply: answer, waited: waitForListing }
   }
   private retire() {
-    if (!this.listeners.size && !this.pending) {
+    if (!this.listeners.size && !this.phases.busy) {
       this.unsubscribe?.()
       this.unsubscribe = undefined
       if (owners.get(keyOf(this.scope)) === this) {

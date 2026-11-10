@@ -41,7 +41,7 @@ it.each([3, 30])(
       hostModelMenuCatalog({ target, agent: 'codex' })
     )
     const stops = owners.map((owner) => owner.subscribe(() => {}))
-    const reads = owners.map((owner) => owner.read())
+    const reads = owners.map((owner) => owner.read(false, undefined, new AbortController().signal))
     await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
     expect(mocks.call.mock.calls.map((call) => call[2])).toEqual([
       { agent: 'codex' },
@@ -78,10 +78,10 @@ it('drops a late reply after an account switch and consumes a plain legacy listi
   mocks.call.mockReturnValueOnce(old.promise).mockResolvedValueOnce(catalog('new-account'))
   const owner = hostModelMenuCatalog({ target, agent: 'codex' })
   const stop = owner.subscribe(() => {})
-  const pending = owner.read()
+  const pending = owner.read(false, undefined, new AbortController().signal)
   await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(1))
   forgetHostModelCatalogSnapshots(target)
-  await owner.read()
+  await owner.read(false, undefined, new AbortController().signal)
   old.resolve(catalog('old-account'))
   await pending
   expect(owner.snapshot.answer).toMatchObject({ models: [{ id: 'new-account' }] })
@@ -98,8 +98,8 @@ it('keeps a last-good catalog through a pending refresh and transport failure', 
     .mockReturnValueOnce(wait.promise)
   const owner = hostModelMenuCatalog({ target, agent: 'codex', worktree: 'id:refresh' })
   const stop = owner.subscribe(() => {})
-  await owner.read()
-  const refresh = owner.read()
+  await owner.read(false, undefined, new AbortController().signal)
+  const refresh = owner.read(false, undefined, new AbortController().signal)
   await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(3))
   expect(owner.snapshot.answer).toMatchObject({ models: [{ id: 'last-good' }] })
   expect(owner.snapshot.pending).toBe(true)
@@ -123,8 +123,8 @@ it('never restores a catalog retired or invalidated during a failed refresh', as
     const worktree = `id:${invalidate}`
     const owner = hostModelMenuCatalog({ target, agent: 'codex', worktree })
     const stop = owner.subscribe(() => {})
-    await owner.read()
-    const refresh = owner.read()
+    await owner.read(false, undefined, new AbortController().signal)
+    const refresh = owner.read(false, undefined, new AbortController().signal)
     await vi.waitFor(() => expect(mocks.call.mock.calls.at(-1)?.[2].waitForListing).toBe(true))
     if (invalidate !== 'account') {
       recordHostModelCatalogSnapshot(
@@ -151,7 +151,7 @@ it('never restores a catalog retired or invalidated during a failed refresh', as
       mocks.call
         .mockResolvedValueOnce({ origin: 'unknown', listingInProgress: true })
         .mockRejectedValueOnce(new Error('still offline'))
-      await owner.read()
+      await owner.read(false, undefined, new AbortController().signal)
       recordHostModelCatalogSnapshot(target, 'codex', 'id:unrelated', catalog('other'))
       expect(owner.snapshot.answer).toEqual({ origin: 'unknown' })
     }
@@ -262,7 +262,12 @@ it('keeps native-only answers out of guest and differing paired-command routes',
       serverSettings: async () => ({ agentCmdOverrides: { codex: '/server/codex' } })
     }
   ]) {
-    const answer = await agentPickerModelCatalogReads(input).catalog(entry)
+    const answer = await agentPickerModelCatalogReads(input).catalog(
+      entry,
+      false,
+      undefined,
+      new AbortController().signal
+    )
     const menu = modelMenuOptions(answer, {
       agent: 'codex',
       surface: 'terminal',
