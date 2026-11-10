@@ -70,6 +70,20 @@ async function runVmEnvironmentCheck(
  * build sheet; it resolves true to continue (passed, unsupported, or "Open anyway") and false to cancel.
  * Nothing here tears the VM down: only cancelling does, so a degraded open keeps the VM that provisioned.
  */
+/** The user decided: fold the wait into pausedMs so the clock resumes where it stopped. */
+export function resumeBuildClock(creationId: string, now = Date.now()): void {
+  const state = useAppStore.getState()
+  const entry = state.pendingWorktreeCreations[creationId]
+  if (entry?.waitingSince === undefined) {
+    return
+  }
+  state.updatePendingWorktreeCreation(creationId, {
+    pausedMs: (entry.pausedMs ?? 0) + Math.max(0, now - entry.waitingSince),
+    waitingSince: undefined,
+    resumedAt: now
+  })
+}
+
 export async function gateVmCreateOnEnvironmentCheck(
   creationId: string,
   environmentId: string,
@@ -105,13 +119,15 @@ export async function gateVmCreateOnEnvironmentCheck(
       })
       return true
     }
+    const failedAt = Date.now()
     update(creationId, {
       environmentCheck: {
         status: 'failed',
         checks: result.checks,
         startedAt,
-        finishedAt: Date.now()
-      }
+        finishedAt: failedAt
+      },
+      waitingSince: failedAt
     })
     if (useAppStore.getState().activePendingCreationId !== creationId) {
       // The paused build keeps its VM running, so a background create must say it needs the user.
@@ -126,6 +142,7 @@ export async function gateVmCreateOnEnvironmentCheck(
     if (decision === 'cancel' || !isPending()) {
       return false
     }
+    resumeBuildClock(creationId)
     if (decision === 'open-anyway') {
       toast.warning(
         translate(

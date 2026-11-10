@@ -98,8 +98,8 @@ export function vmBuildFailureCopy(
               'Your team has reached this month’s spend cap. Raise it to keep starting sandboxes. Nothing was created, and you weren’t charged.'
             )
           : t(
-              'auto.components.worktree.creation.VmBuildFailureCard.spendCapReachedBodyMember',
-              'Your team has reached this month’s spend cap. Ask an owner or admin to add hours. Nothing was created, and you weren’t charged.'
+              'auto.components.worktree.creation.VmBuildFailureCard.spendCapReachedBodyMember2',
+              'Your team has reached this month’s spend cap. Ask an owner or admin to raise the spend cap. Nothing was created, and you weren’t charged.'
             )
       }
     case 'payment':

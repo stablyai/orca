@@ -176,6 +176,12 @@ export type PendingWorktreeCreation = {
   provisioningLogStamps?: readonly number[]
   /** VM creates: the provisioned VM's environment checks, run before the workspace is created. */
   environmentCheck?: PendingVmEnvironmentCheck
+  /** VM creates: since when failed checks have waited on the user; the build clock stops meanwhile. */
+  waitingSince?: number
+  /** VM creates: time already spent waiting on the user this run, left out of the build clock. */
+  pausedMs?: number
+  /** VM creates: when the user last resumed the build; the clock never reads earlier than this. */
+  resumedAt?: number
   /** VM creates: the provisioned VM's runtime environment, known once it answers. */
   vmEnvironmentId?: string
   // Local git checkout meter; absent when git emits none or creation runs over SSH/runtime.

@@ -45,8 +45,8 @@ function phaseLabel(phase: string, t: Translate): string | null {
       )
     case 'rolling-over':
       return t(
-        'auto.components.worktree.creation.orcaCloudBuildLog.rollingOver',
-        'Starting a fresh session…'
+        'auto.components.worktree.creation.orcaCloudBuildLog.rollingOver2',
+        'Restarting the sandbox…'
       )
     case 'destroying':
       return t(

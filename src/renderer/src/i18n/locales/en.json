@@ -4102,7 +4102,6 @@
             "outOfHoursBodyMember": "Your team has used this month’s sandbox hours. Ask an owner or admin to add hours. Nothing was created, and you weren’t charged.",
             "spendCapReachedTitle": "Spend cap reached",
             "spendCapReachedBody": "Your team has reached this month’s spend cap. Raise it to keep starting sandboxes. Nothing was created, and you weren’t charged.",
-            "spendCapReachedBodyMember": "Your team has reached this month’s spend cap. Ask an owner or admin to add hours. Nothing was created, and you weren’t charged.",
             "paymentFailedTitle": "Payment failed",
             "paymentFailedBody": "New sandboxes can’t start until the payment goes through. Nothing was created, and you weren’t charged.",
             "paymentFailedBodyMember": "New sandboxes can’t start until the payment goes through. Ask an owner or admin to update the payment method. Nothing was created, and you weren’t charged.",
@@ -4120,7 +4119,8 @@
             "snapshotBody3": "The sandbox starts from a saved copy of your environment, and that copy couldn’t be found. Nothing was created, and you weren’t charged. Try again, or contact support if it keeps happening.",
             "connectGitHubFailed": "Couldn’t open GitHub. Try again in a moment.",
             "noGithubRemoteBody2": "Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub, then try again. Nothing was created, and you weren’t charged.",
-            "howToPushToGitHub": "How to push to GitHub"
+            "howToPushToGitHub": "How to push to GitHub",
+            "spendCapReachedBodyMember2": "Your team has reached this month’s spend cap. Ask an owner or admin to raise the spend cap. Nothing was created, and you weren’t charged."
           },
           "VmBuildLog": {
             "jumpToError": "Jump to first error",
@@ -4139,7 +4139,6 @@
             "connecting": "Connecting to the sandbox…",
             "resuming": "Waking the sandbox…",
             "suspending": "Putting the sandbox to sleep…",
-            "rollingOver": "Starting a fresh session…",
             "destroying": "Deleting the sandbox…",
             "denyNoPlan": "Your account has no active Team plan.",
             "denySpendCap": "This month’s spend cap is reached.",
@@ -4157,7 +4156,8 @@
             "denyConcurrency2": "You’re at your team’s limit of running sandboxes.",
             "denyMemberConcurrency2": "You’re at your limit of running sandboxes.",
             "denyMachineSize2": "This sandbox size isn’t part of your plan.",
-            "refusedProvider2": "Orca Cloud is unavailable right now."
+            "refusedProvider2": "Orca Cloud is unavailable right now.",
+            "rollingOver2": "Restarting the sandbox…"
           },
           "environmentCheckCopy": {
             "gitMissing": "git isn’t installed.",
@@ -20913,6 +20913,13 @@
       "webPairingRefused": {
         "title": "Orca refused this browser",
         "retry": "Try again"
+      }
+    },
+    "app": {
+      "shell": {
+        "TitlebarMainStrip": {
+          "sidebarAfterBuild": "Available when the workspace is ready"
+        }
       }
     }
   },
