@@ -5,7 +5,7 @@ import {
 } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AppState } from '../types'
-import { resolveTerminalHostOwnership } from '@/lib/terminal-worktree-route'
+import { resolveTerminalHostOwnership } from '@/lib/workspace/ownership/terminal-worktree-route'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'

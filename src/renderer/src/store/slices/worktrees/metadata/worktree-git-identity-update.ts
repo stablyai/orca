@@ -14,8 +14,6 @@ import {
 import { observeDetachedHostedReviewOwner } from './detached-hosted-review-owners'
 import {
   applyHostedReviewLinkClear,
-  canonicalHostedReviewBranchIdentity,
-  CLEARED_HOSTED_REVIEW_LINK_UPDATES,
   getHostedReviewLinkMutationGeneration,
   getHostedReviewLinkUpdates,
   hostedReviewLinkClearTombstonesByCopy,
@@ -23,6 +21,10 @@ import {
   rememberHostedReviewLinkClear,
   resolveHostedReviewLinkWorktreeId
 } from './hosted-review-link-mutation'
+import {
+  canonicalHostedReviewBranchIdentity,
+  CLEARED_HOSTED_REVIEW_LINK_UPDATES
+} from '../../../../../../shared/worktree/hosted-review-links'
 import {
   reviewClearTombstoneKey,
   worktreeCopyOwnerKey,

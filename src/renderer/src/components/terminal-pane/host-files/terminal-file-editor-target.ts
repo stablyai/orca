@@ -1,4 +1,4 @@
-import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
+import { findWorkspaceFileRoute } from '@/lib/files/access/runtime-workspace-file-route'
 import {
   isPathInsideWorktree,
   toWorktreeRelativePath

@@ -7,7 +7,8 @@ import type {
   HostQualifiedKnownWorktreeResult,
   SshExecutionHostId
 } from '../../../../../../shared/detected-worktree-provider-contract'
-import { areDetectedWorktreeResultsEqual, areWorktreesEqual } from './worktree-catalog-visibility'
+import { areDetectedWorktreeResultsEqual } from './worktree-catalog-visibility'
+import { catalogRowsEqual } from '../../../../lib/catalog-reconciliation/catalog-row-reconciliation'
 import {
   getProjectHostSetupForRepoHost,
   repoHasExactlyOneExecutionHostOwner,
@@ -143,7 +144,7 @@ export async function runKnownSshWorktreeFetch(
       executionHostId,
       matchOptions
     )
-    const worktreesChanged = !areWorktreesEqual(state.worktreesByRepo[repoId], worktrees)
+    const worktreesChanged = !catalogRowsEqual(state.worktreesByRepo[repoId], worktrees)
     const detectedChanged = !areDetectedWorktreeResultsEqual(
       state.detectedWorktreesByRepo[repoId],
       detected

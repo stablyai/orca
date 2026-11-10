@@ -16,7 +16,7 @@ import {
   applyCachedPluginAppTheme,
   applyDocumentTheme,
   readCachedPluginAppTheme
-} from './lib/document-theme'
+} from './app-shell/appearance/document-theme'
 import { installTypingLatencyDiagnostic } from './lib/typing-latency/diagnostic'
 import { installAppKeyboardRouter } from './lib/keyboard/app-keyboard-router'
 import { shouldEnableReactGrab } from './lib/react-grab-dev-gate'
@@ -28,9 +28,9 @@ import { SkillWarningPreviewLauncher } from './components/skills/installation/pr
 import { installBrowserClientPageRenderer } from './components/browser-pane/browser-client-page-renderer-installation'
 import { registerBrowserClientPageGuestMessageHandler } from './components/browser-pane/browser-client-page-retained-elements'
 import { handleGuestWindowCloseMessage } from './components/browser-pane/host-guest/browser-page-window-close'
-import { installOsFileDropCancellationGuard } from './lib/os-file-drop-cancellation-guard'
+import { installOsFileDropCancellationGuard } from './lib/files/drop/os-file-drop-cancellation-guard'
 import { installBodyOverlayAttributes } from './lib/body-overlay-attributes'
-import { applyWindowMaterialToDocument } from './lib/window-material-runtime'
+import { applyWindowMaterialToDocument } from './app-shell/appearance/window-material-runtime'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)

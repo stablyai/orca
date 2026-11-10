@@ -2,11 +2,14 @@ import { afterPendingEntityTabs } from '@/runtime/workspace-layout/intents/layou
 import { toast } from 'sonner'
 import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
-import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
+import {
+  isLocalPathOpenBlocked,
+  showLocalPathOpenBlockedToast
+} from '@/lib/files/os-open/local-path-open-guard'
 import { getLinkSourceLocalOpenOwner } from '@/lib/link-source-local-open-owner'
 import { openHttpLink } from '@/lib/browser/navigation/http-link-routing'
 import { translate } from '@/i18n/i18n'
-import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
+import { requireRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 import { statRuntimePath } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { useAppStore } from '@/store/index'
 import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'

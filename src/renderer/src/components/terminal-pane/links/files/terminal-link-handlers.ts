@@ -24,7 +24,7 @@ import { isTerminalLinkDirectActivation } from '../gestures/terminal-link-activa
 import { getTerminalBufferPositionForMouseEvent } from '../../input/pointer/terminal-mouse-buffer-position'
 import type { TerminalLinkActionContext } from '../terminal-link-action-request'
 import { handleTerminalFileLink } from './terminal-file-link-actions'
-import { showFileLinkOpenFailureToast } from '@/lib/file-link-open-failure-toast'
+import { showFileLinkOpenFailureToast } from '@/lib/files/open/file-link-open-failure-toast'
 
 export type LinkHandlerDeps = {
   worktreeId: string
