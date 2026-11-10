@@ -1119,7 +1119,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         return json({ sandbox: view(destroyed) })
       }
       case 'POST suspend': {
-        // `{ reason: 'idle' }` is the desktop's idle timer; anything else (no body: CLI, phone,
+        // `{ reason: 'idle' }` is the desktop's idle timer; anything else (no body: phone,
         // older desktops) is someone choosing to sleep it, which predictive wake must respect.
         const body = (await readJson(request).catch(() => ({}))) as { reason?: unknown } | null
         const suspended = await suspendSandbox(life, row)

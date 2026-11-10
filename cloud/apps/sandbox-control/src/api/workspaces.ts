@@ -2,7 +2,7 @@
 // a name, a project, an origin and archive/hidden flags on top of the desktop lifecycle.
 import type { MachineSize } from '../entitlements'
 import { createSandbox, destroySandbox, resumeSandbox, suspendSandbox, type LifecycleDeps } from '../lifecycle'
-import { getSandbox, type SandboxRow } from '../store'
+import { getSandbox, markUserSlept, type SandboxRow } from '../store'
 import { archiveSandbox, unarchiveSandbox } from '../workspace-lifecycle'
 import { ApiError } from './caller'
 import { randomId } from './keys'
@@ -169,11 +169,14 @@ export async function createWorkspace(
   return (await getSandbox(life.db, ready.row.id)) as WorkspaceRow
 }
 
+/** Always someone's choice (CLI, API key, phone): recorded so desktops' predictive wake leaves it be. */
 export async function sleepWorkspace(life: LifecycleDeps, row: WorkspaceRow): Promise<WorkspaceRow> {
-  if (row.status === 'suspended') {
-    return row
-  }
-  return (await suspendSandbox(life, row)) as WorkspaceRow
+  const slept = row.status === 'suspended' ? row : ((await suspendSandbox(life, row)) as WorkspaceRow)
+  // A hint only: the sleep already happened, so a failed write never fails it.
+  await markUserSlept(life.db, row.id, life.now()).catch((error: unknown) =>
+    console.log(JSON.stringify({ event: 'user_slept_write_failed', error: String(error) }))
+  )
+  return slept
 }
 
 export async function wakeWorkspace(life: LifecycleDeps, row: WorkspaceRow): Promise<WorkspaceRow> {

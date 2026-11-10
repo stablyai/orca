@@ -83,6 +83,8 @@ describe('public API: workspaces', () => {
     const ws = created.body.workspace
     expect(ws).toMatchObject({ name: 'fix', status: 'running', origin: 'api', projectId: project.body.project.id, repoUrl: 'https://github.com/acme/app' })
     expect((await h.call('POST', `/v1/workspaces/${ws.id}/sleep`, { bearer: secret })).body.workspace.status).toBe('sleeping')
+    // A CLI/API sleep is a deliberate one: desktops' predictive wake reads it from status.
+    expect((h.raw.prepare('SELECT user_slept_at FROM sandboxes WHERE id = ?').get(ws.id) as any).user_slept_at).toBe(h.now())
     expect((await h.call('POST', `/v1/workspaces/${ws.id}/wake`, { bearer: secret })).body.workspace.status).toBe('running')
     const archived = await h.call('POST', `/v1/workspaces/${ws.id}/archive`, { bearer: secret })
     expect(archived.body.workspace).toMatchObject({ status: 'sleeping', archived: true })
