@@ -76,6 +76,7 @@ describe('getMermaidConfig', () => {
       ['nodeTextColor', 'mainBkg'],
       ['textColor', 'clusterBkg'],
       ['taskTextColor', 'taskBkgColor'],
+      ['taskTextClickableColor', 'taskBkgColor'],
       ['taskTextDarkColor', 'activeTaskBkgColor']
     ])
   })

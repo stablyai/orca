@@ -67,6 +67,8 @@ function darkThemeVariables(colors: MermaidThemeColors): Record<string, string |
     excludeBkgColor: colors.background,
     doneTaskBkgColor: colors.background,
     doneTaskBorderColor: colors.border,
+    // Base's dark-blue clickable label is drawn for light bars, inside and beside the bar.
+    taskTextClickableColor: colors.foreground,
     activeTaskBkgColor: surface(colors.secondary)
   }
 }
