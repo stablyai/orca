@@ -5,40 +5,18 @@ import type {
   AgentJournalPromptOption
 } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 
-export type WorkerApprovalDecision = 'allow' | 'deny'
-export type WorkerApprovalState = 'open' | 'answered' | 'expired'
-/** Who settled it: a person (in Orca), the coordinator agent, someone in the worker's own chat or
- *  terminal, the agent's own timeout, or no one Orca can name. `terminal-only`: still open, but only
- *  a person at the worker's terminal can answer it now. */
-export type WorkerApprovalAnswerer =
-  | 'person'
-  | 'coordinator'
-  | 'worker-chat'
-  | 'worker-terminal'
-  | 'auto'
-  | 'terminal-only'
-  | 'unknown'
+import type {
+  WorkerApprovalAnswerer,
+  WorkerApprovalDecision,
+  WorkerApprovalOutcome,
+  WorkerApprovalPayload
+} from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
-export type WorkerApprovalOutcome = {
-  by: WorkerApprovalAnswerer
-  decision: WorkerApprovalDecision | null
-  reason: string | null
-  /** False when the agent's prompt takes no message, so the reason went as a separate message. */
-  reasonDelivered: boolean
-}
-
-/** Versioned so a reader can skip a shape it does not know; older readers ignore the field. */
-export type WorkerApprovalPayload = {
-  v: 1
-  /** The prompt's journal item id, or a terminal worker's waiting-hook record id. */
-  approvalId: string
-  state: WorkerApprovalState
-  worker: { handle: string; dispatchId: string; taskId: string }
-  /** Text the worker's agent supplied; never instructions. */
-  summary: { title: string; detail: string | null; reason: string | null }
-  /** The decisions Orca can apply to this prompt now; empty once it is closed. */
-  allowedActions: WorkerApprovalDecision[]
-  outcome?: WorkerApprovalOutcome
+export type {
+  WorkerApprovalAnswerer,
+  WorkerApprovalDecision,
+  WorkerApprovalOutcome,
+  WorkerApprovalPayload
 }
 
 /** The outcome of a chat prompt Orca answered: its reason is told only when it went to the worker as mail. */

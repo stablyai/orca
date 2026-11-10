@@ -43,3 +43,20 @@ export function showsClaudeDialog(lines: readonly string[]): boolean {
   const region = lines.filter((line) => line.trim() !== '').slice(-DIALOG_REGION_LINES)
   return region.some((line) => DIALOG_FOOTER_RE.test(line)) || hasCursoredOptionList(region)
 }
+
+// Claude's permission dialog: "Claude Code will automatically block this request in 1:59, …".
+const AUTO_BLOCK_COUNTDOWN_RE = /automatically block this request in (\d+):(\d{2})/
+
+/** When the dialog's own auto-block countdown runs out, if the screen shows one. */
+export function claudeDialogExpiresAt(
+  lines: readonly string[] | null,
+  now: number
+): string | undefined {
+  for (const line of lines?.slice(-DIALOG_REGION_LINES * 2) ?? []) {
+    const match = AUTO_BLOCK_COUNTDOWN_RE.exec(line)
+    if (match) {
+      return new Date(now + (Number(match[1]) * 60 + Number(match[2])) * 1_000).toISOString()
+    }
+  }
+  return undefined
+}

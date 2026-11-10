@@ -9,7 +9,10 @@ import type {
   ClaudePermissionHolds
 } from '../../../../agent-hooks/server/claude-permission-hook-hold'
 import type { AgentHookEventPayload } from '../../../../../shared/agent-hook-listener/listener-event'
-import { showsClaudeDialog } from '../../../terminal/wait/claude-open-dialog-hold'
+import {
+  claudeDialogExpiresAt,
+  showsClaudeDialog
+} from '../../../terminal/wait/claude-open-dialog-hold'
 import { claudeToolClose } from './claude-tool-result-close'
 import type { ClaudeToolClose, ClaudeToolResult } from './claude-tool-result-close'
 import { firstWithin } from './first-within'
@@ -54,6 +57,7 @@ export type TerminalWorkerApprovalHoldsDeps = Pick<WorkerTurnStopReportDeps, 'no
     transcriptPath: string
     toolUseId: string
   }) => Promise<ClaudeToolResult | null>
+  now: () => number
   setTimer: (run: () => void, delayMs: number) => { cancel: () => void }
 }
 
@@ -73,6 +77,7 @@ type Hold = {
   dialogSeen: boolean
   /** Its PostToolUse arrived while an answer was in flight: the tool ran. */
   ranSeen: boolean
+  expiresAt?: string
   /** The coordinator was told about it, so it is owed one closing line. */
   reported: boolean
   timer: { cancel: () => void } | null
@@ -123,7 +128,7 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
       db: worker.db,
       dispatch: worker.dispatch,
       summary: {
-        title: event.payload.toolName ?? 'Tool call',
+        title: `Allow ${event.payload.toolName ?? 'this tool call'}?`,
         detail: event.payload.toolInput ?? null,
         reason: null
       },
@@ -235,6 +240,7 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
         return
       }
       hold.dialogSeen ||= shown === true
+      hold.expiresAt ??= claudeDialogExpiresAt(lines, this.deps.now())
       this.watchDialog(hold)
     }, DIALOG_POLL_MS)
   }
@@ -341,6 +347,7 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
       worker: { handle: hold.handle, dispatchId: hold.dispatch.id, taskId: hold.dispatch.task_id },
       summary: hold.summary,
       allowedActions: outcome ? [] : ['allow', 'deny'],
+      ...(hold.expiresAt && !outcome ? { expiresAt: hold.expiresAt } : {}),
       ...(outcome ? { outcome } : {})
     }
   }

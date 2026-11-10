@@ -89,6 +89,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
       const ptyId = this.getPtyRecordForPaneKey(paneKey)?.ptyId
       return ptyId ? (this.readCaughtUpRuledScreen(ptyId)?.lines ?? null) : null
     },
+    now: Date.now,
     setTimer: unrefTimer
   })
   // The execution host observes its own panes, so local, SSH and paired-server workers are all seen.

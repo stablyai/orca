@@ -2,7 +2,12 @@ import { z } from 'zod'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { OrchestrationCoordinatorKey } from '../addressing/orchestration-caller-identity'
 import type { OrchestrationDb } from '../db/orchestration-db'
+import { exposeUtcTimestamp } from '../db/utc-timestamp'
 import { currentRunCoordinatorOrcaSessionIdSql } from '../db/runs/run-coordinator-orca-session'
+import {
+  WorkerApprovalPayloadSchema,
+  type WorkerApprovalPayload
+} from '../../../../shared/orchestration/approvals/worker-approval-payload'
 
 const nullable = z.string().nullable()
 export const CrewAssignment = z.object({
@@ -128,6 +133,51 @@ export function readCrewTraffic(
   `)
       .all(JSON.stringify(aliases), cutoff, JSON.stringify(aliases), cutoff)
   )
+}
+
+// Why a bound: one coordinator's recent approvals; an older open one is long past any worker's wait.
+const CREW_APPROVAL_ROWS = 100
+
+/** Each worker approval's newest message to this party: open ones, and ones closed since `closedSince`. Oldest first. */
+export function readCrewApprovals(
+  db: OrchestrationDb,
+  aliases: string[],
+  closedSince: string
+): { approval: WorkerApprovalPayload; at: string }[] {
+  const rows = z
+    .object({ payload: z.string(), created_at: z.string(), recent: z.number() })
+    .array()
+    .parse(
+      db.db
+        .prepare(`SELECT payload, created_at, julianday(created_at) >= julianday(?) AS recent FROM messages
+      WHERE to_handle IN (SELECT value FROM json_each(?)) AND payload LIKE '%"approval":%'
+      ORDER BY sequence DESC LIMIT ${CREW_APPROVAL_ROWS}`)
+        .all(closedSince, JSON.stringify(aliases))
+    )
+  const seen = new Set<string>()
+  const shown: { approval: WorkerApprovalPayload; at: string }[] = []
+  for (const row of rows) {
+    const approval = readApproval(row.payload)
+    if (!approval || seen.has(approval.approvalId)) {
+      continue
+    }
+    seen.add(approval.approvalId)
+    if (approval.state === 'open' || row.recent === 1) {
+      shown.push({ approval, at: exposeUtcTimestamp(row.created_at) ?? row.created_at })
+    }
+  }
+  return shown.toReversed()
+}
+
+const ApprovalCarrier = z.object({ approval: WorkerApprovalPayloadSchema })
+
+function readApproval(payload: string): WorkerApprovalPayload | null {
+  try {
+    const parsed = ApprovalCarrier.safeParse(JSON.parse(payload))
+    return parsed.success ? parsed.data.approval : null
+  } catch {
+    return null
+  }
 }
 
 export function readCrewQuestions(db: OrchestrationDb, aliases: string[]) {

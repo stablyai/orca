@@ -1,0 +1,91 @@
+import type { AgentJournalApprovalItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { ChatApproval } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
+import type {
+  WorkerApprovalDecision,
+  WorkerApprovalPayload
+} from '../../../../../shared/orchestration/approvals/worker-approval-payload'
+import type { Translate } from '@/i18n/use-translate'
+
+/** The card a worker's open approval shows: its own words, and only the answers Orca can give. */
+export function workerApprovalCard(approval: WorkerApprovalPayload, t: Translate): ChatApproval {
+  const { title, detail, reason } = approval.summary
+  return {
+    title,
+    ...(reason ? { decisionReason: reason } : {}),
+    ...(detail ? { detail } : {}),
+    options: approval.allowedActions.map((decision) => ({
+      label:
+        decision === 'allow'
+          ? t('components.native-chat.approval.allow', 'Allow')
+          : t('components.native-chat.approval.deny', 'Deny'),
+      send: decision
+    }))
+  }
+}
+
+export function isWorkerApprovalDecision(value: string): value is WorkerApprovalDecision {
+  return value === 'allow' || value === 'deny'
+}
+
+/** A closed approval as the answered-prompt row reads it. */
+export function workerApprovalReceiptBody(
+  approval: WorkerApprovalPayload,
+  at: string,
+  t: Translate
+): AgentJournalApprovalItem {
+  const decision = approval.outcome?.decision ?? null
+  return {
+    kind: 'approval',
+    title: approval.summary.title,
+    detail: approval.summary.detail,
+    options: [
+      { id: 'allow', label: t('components.native-chat.approval.allow', 'Allow') },
+      { id: 'deny', label: t('components.native-chat.approval.deny', 'Deny') }
+    ],
+    resolution: {
+      state: decision ? 'resolved' : 'cancelled',
+      selectedOptionId: decision,
+      resolvedBy: null,
+      resolvedAt: Date.parse(at)
+    }
+  }
+}
+
+/** Who answered, from the closing message's evidence; anything it does not name is "No longer open". */
+export function workerApprovalReceiptText(approval: WorkerApprovalPayload, t: Translate): string {
+  const outcome = approval.outcome
+  const decision = outcome?.decision ?? null
+  const by = outcome?.by
+  switch (decision === null && by !== 'terminal-only' ? 'unknown' : by) {
+    case 'person':
+      return decision === 'allow'
+        ? t('components.native-chat.approval.allowedByYou', 'Allowed by you')
+        : t('components.native-chat.approval.deniedByYou', 'Denied by you')
+    case 'coordinator':
+      return t('components.native-chat.approval.deniedByCoordinator', 'Denied by coordinator')
+    case 'worker-terminal':
+      return decision === 'allow'
+        ? t('components.native-chat.approval.allowedInTerminal', "Allowed in the worker's terminal")
+        : t('components.native-chat.approval.deniedInTerminal', "Denied in the worker's terminal")
+    case 'worker-chat':
+      return t('components.native-chat.approval.answeredInChat', "Answered in the worker's chat")
+    case 'auto':
+      return t('components.native-chat.approval.autoDenied', 'Auto-denied by Claude after 2:00')
+    case 'terminal-only':
+      return t(
+        'components.native-chat.approval.answerInTerminal',
+        "Answer it in the worker's terminal"
+      )
+    default:
+      return t('components.native-chat.approval.noLongerOpen', 'No longer open')
+  }
+}
+
+/** Seconds left before the agent decides on its own, as m:ss; null once past or unknown. */
+export function workerApprovalTimeLeft(expiresAt: string | undefined, now: number): string | null {
+  const left = expiresAt ? Math.ceil((Date.parse(expiresAt) - now) / 1_000) : Number.NaN
+  if (!Number.isFinite(left) || left <= 0) {
+    return null
+  }
+  return `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
+}

@@ -14,13 +14,16 @@ import {
 export function NativeChatResolutionReceipt({
   body,
   disclosureId,
-  awaiting = true
+  awaiting = true,
+  outcome
 }: {
   body: NativeChatResolvedPrompt
   /** Message this receipt stands in for; keys the question row's disclosure. */
   disclosureId?: string
   /** False once the prompting agent ends: report the pending question without implying anyone still waits. */
   awaiting?: boolean
+  /** A worker's prompt in its coordinator's chat: who answered it, in place of "Resolved · Answered on <device>". */
+  outcome?: { worker: string; text: string; reason?: string }
 }): React.JSX.Element | null {
   const t = useTranslate()
   const askDisclosureKey = disclosureId === undefined ? undefined : `ask:${disclosureId}`
@@ -48,6 +51,13 @@ export function NativeChatResolutionReceipt({
       className="space-y-1 border-l border-border pl-3 text-xs text-chat-foreground-faint"
       data-native-chat-receipt={body.kind}
     >
+      {outcome ? (
+        <div>
+          {t('components.native-chat.approval.worker', 'Worker · {{name}}', {
+            name: outcome.worker
+          })}
+        </div>
+      ) : null}
       {body.kind === 'question' ? (
         <NativeChatAwaitingInputRow
           pending={false}
@@ -83,25 +93,43 @@ export function NativeChatResolutionReceipt({
           </div>
         )
       })}
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span>
-          {resolution.state === 'cancelled'
-            ? t('components.native-chat.receipt.cancelled', NATIVE_CHAT_RECEIPT_COPY.cancelled)
-            : t('components.native-chat.receipt.resolved', NATIVE_CHAT_RECEIPT_COPY.resolved)}
-        </span>
-        {resolution.resolvedBy ? (
-          <span>
-            {resolution.state === 'cancelled'
-              ? t(
-                  'components.native-chat.receipt.cancelledBy',
-                  NATIVE_CHAT_RECEIPT_COPY.cancelledBy,
-                  { device }
-                )
-              : t('components.native-chat.receipt.resolver', NATIVE_CHAT_RECEIPT_COPY.resolver, {
-                  device
-                })}
+      {outcome?.reason ? (
+        <p className="line-clamp-3 whitespace-pre-wrap break-words">
+          <span className="font-medium">
+            {t('components.native-chat.approval.reason', 'Reason')}:{' '}
           </span>
-        ) : null}
+          {outcome.reason}
+        </p>
+      ) : null}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        {outcome ? (
+          <span>{outcome.text}</span>
+        ) : (
+          <>
+            <span>
+              {resolution.state === 'cancelled'
+                ? t('components.native-chat.receipt.cancelled', NATIVE_CHAT_RECEIPT_COPY.cancelled)
+                : t('components.native-chat.receipt.resolved', NATIVE_CHAT_RECEIPT_COPY.resolved)}
+            </span>
+            {resolution.resolvedBy ? (
+              <span>
+                {resolution.state === 'cancelled'
+                  ? t(
+                      'components.native-chat.receipt.cancelledBy',
+                      NATIVE_CHAT_RECEIPT_COPY.cancelledBy,
+                      { device }
+                    )
+                  : t(
+                      'components.native-chat.receipt.resolver',
+                      NATIVE_CHAT_RECEIPT_COPY.resolver,
+                      {
+                        device
+                      }
+                    )}
+              </span>
+            ) : null}
+          </>
+        )}
         <NativeChatMessageTimestamp timestamp={resolution.resolvedAt} />
       </div>
     </div>

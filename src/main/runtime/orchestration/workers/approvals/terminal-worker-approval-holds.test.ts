@@ -21,6 +21,7 @@ const HANDLE = 'term_worker'
 const DIALOG = [
   ' Bash command',
   ' │ rm -rf build',
+  ' ⚠ Claude Code will automatically block this request in 1:42, to avoid holding up an unattended session',
   ' Do you want to proceed?',
   ' ❯ 1. Yes',
   '   2. No',
@@ -68,6 +69,7 @@ function setup(options: { canAnswer?: boolean } = {}) {
     readScreen: () => screen.lines,
     readToolResult: async ({ transcriptPath, toolUseId }) =>
       transcriptPath === '/t/session.jsonl' && toolUseId === 'tool-1' ? screen.result : null,
+    now: () => Date.UTC(2026, 10, 10, 12, 0, 0),
     setTimer: (run) => {
       const timer = { run, cancelled: false }
       timers.push(timer)
@@ -223,6 +225,13 @@ describe('terminal worker approval holds', () => {
 
     expect(await deny(ctx, approvalId)).toMatchObject({ ok: false, code: 'approval_not_open' })
     expect(asked.replies).toEqual([])
+  })
+
+  it("carries Claude's on-screen countdown as the time the prompt decides itself", async () => {
+    const { holds, tick, dispatch } = setup()
+    holds.admit(hook('tool-1').request)
+    await tick()
+    expect(holds.takeOpenApproval(PANE, dispatch.id)?.expiresAt).toBe('2026-11-10T12:01:42.000Z')
   })
 
   it('releases both prompts when a second opens in the same pane', () => {
