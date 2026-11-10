@@ -1,8 +1,3 @@
-import type { OwnedPaneAgentRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import {
-  isPaneSleepRecord,
-  isResumablePaneRecord
-} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
@@ -13,6 +8,9 @@ import type {
 } from './agent-status-contract'
 import {
   agentProviderSessionsEqual,
+  isPaneSleepRecord,
+  isResumablePaneRecord,
+  type OwnedPaneAgentRecord,
   type ResumableTuiAgent,
   type AgentProviderSessionMetadata,
   type SleepingAgentSessionRecord

@@ -61,7 +61,7 @@ function seedTabs(store: ReturnType<typeof createTestStore>): void {
         ptyIdsByLeafId: { [LEAF]: 'pty-1', [OTHER]: 'pty-2' }
       }
     }
-  } as Partial<AppState>)
+  } satisfies Partial<AppState>)
 }
 
 function makeSleepingRecord(
@@ -111,7 +111,7 @@ describe('manual sleep agent session capture', () => {
           origin: 'worktree-sleep'
         })
       }
-    } as Partial<AppState>)
+    } satisfies Partial<AppState>)
 
     const currentTabs = store.getState().tabsByWorktree
     seedTabs(store)
@@ -143,7 +143,7 @@ describe('manual sleep agent session capture', () => {
           providerSession: { key: 'session_id', id: 'pi-session-1' }
         })
       }
-    } as Partial<AppState>)
+    } satisfies Partial<AppState>)
 
     store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
 
@@ -171,7 +171,7 @@ describe('manual sleep agent session capture', () => {
           interrupted: true
         })
       }
-    } as Partial<AppState>)
+    } satisfies Partial<AppState>)
 
     store.getState().setActiveWorktree(null)
     await store.getState().shutdownWorktreeTerminals('wt-1', { keepIdentifiers: true })
@@ -204,7 +204,7 @@ describe('manual sleep agent session capture', () => {
           paneKey: 'tab-1:11111111-1111-4111-8111-111111111111'
         })
       }
-    } as Partial<AppState>)
+    } satisfies Partial<AppState>)
 
     await store.getState().shutdownWorktreeTerminals('wt-1', { keepIdentifiers: true })
 
