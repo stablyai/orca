@@ -46,6 +46,31 @@ function questionRequest(method: string, params: unknown): AcpRequestPresentatio
 }
 
 const WARNING_MAX_CHARS = 512
+const CLOUD_CODE_ASSIST_ERROR = 'Cloud Code Assist API error'
+const cloudCodeAssistBodySchema = z.looseObject({
+  error: z.looseObject({
+    message: z.string()
+  })
+})
+
+// The chat card shows the provider sentence. The ACP error text itself is unchanged.
+function cloudCodeAssistMessage(text: string): string | undefined {
+  const markerAt = text.indexOf(CLOUD_CODE_ASSIST_ERROR)
+  if (markerAt === -1) {
+    return undefined
+  }
+  const jsonAt = text.indexOf('{', markerAt)
+  if (jsonAt === -1) {
+    return undefined
+  }
+  try {
+    const parsed = cloudCodeAssistBodySchema.safeParse(JSON.parse(text.slice(jsonAt)))
+    const message = parsed.success ? parsed.data.error.message.trim() : ''
+    return message || undefined
+  } catch {
+    return undefined
+  }
+}
 const securityWarningSchema = z.looseObject({
   'agy.security.warning': z.looseObject({
     title: z.string().optional(),
@@ -109,6 +134,7 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
 
 export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   request: (method, params) => questionRequest(method, params) ?? warnedApproval(method, params),
+  promptErrorDetail: (error) => cloudCodeAssistMessage(error.message),
   normalizeToolUpdate,
   // Avoid using the full command line as the tool name.
   toolName: (update) => (update.kind === 'execute' ? 'execute' : undefined),
