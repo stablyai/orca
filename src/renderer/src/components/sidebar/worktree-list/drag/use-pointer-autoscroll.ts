@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import type React from 'react'
-import { getWorktreeSidebarDragAutoscroll } from '../../worktree-sidebar-drag-autoscroll'
+import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
 import type { WorktreeDragRuntime } from './use-runtime'
 import type { WorktreeDragSession } from './use-session'
 import type { WorktreePointerDrag } from './row-state'

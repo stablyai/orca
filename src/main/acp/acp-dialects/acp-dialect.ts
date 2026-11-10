@@ -1,3 +1,4 @@
+import type { AgentSessionAccountKind } from '../../../shared/agent-session/agent-session-availability'
 import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
 import type { AgentSessionUsageLimit } from '../../../shared/agent-session/failures/agent-session-usage-limit'
 import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -7,14 +8,23 @@ import type {
   NativeChatSubagentState
 } from '../../../shared/native-chat/native-chat-types'
 import type { ProviderTimelineRequestBody } from '../../native-chat/agent-session-timeline/provider-timeline-event'
-import type { AcpAgentError } from '../acp-errors'
+import type { AcpAgentError } from '../transport/acp-errors'
 import type { AgentSessionOptionChoice } from '../../../shared/agent-session/agent-session-wire'
 import type {
   AvailableCommand,
+  ClientCapabilities,
   InitializeResponse,
   ModelInfo,
+  SessionNotification,
   ToolCallUpdate
 } from '../generated/acp-protocol.generated'
+
+export const pendingAcpResolution = {
+  state: 'pending',
+  selectedOptionId: null,
+  resolvedBy: null,
+  resolvedAt: null
+} as const
 
 export type AcpRequestPresentation = {
   body: ProviderTimelineRequestBody
@@ -40,6 +50,23 @@ export type AcpSubagentUpdate = {
   result?: string
   /** Ambiguous task reports apply only to known subagents. */
   knownOnly?: true
+  /** The provider started this subagent again; reopens it after an ending. */
+  restart?: true
+  /** The subagent that spawned this one; absent for the main agent's. */
+  ownerId?: string
+}
+
+/** A subagent's own report, relayed on its root session; it never opens or ends the root's turns. */
+export type AcpChildSessionReport = {
+  rootSessionId: string
+  agentId: string
+  /** Set for a child of another child. */
+  parentAgentId?: string
+  label?: string
+  state?: NativeChatSubagentState
+  /** The child began an execution. */
+  started?: true
+  update?: SessionNotification
 }
 
 export type AcpDialectNotification =
@@ -56,6 +83,7 @@ export type AcpDialectNotification =
       usage?: AgentSessionContextUsage
       backgroundTasks?: AcpBackgroundTaskUpdate[]
       subagents?: AcpSubagentUpdate[]
+      child?: AcpChildSessionReport
     }
 
 /** Hook denial completes the turn rather than recording a user Stop. */
@@ -67,6 +95,8 @@ export type AcpTurnEnding = {
   durationMs?: number
   failureDetail?: string
   notSignedIn?: boolean
+  /** The agent had no model for the prompt; why (selection or sign-in) is unknown. */
+  modelNotSelected?: boolean
   usageLimit?: AgentSessionUsageLimit
   /** Structured error data shows the model provider failed; runtime only. */
   providerFailure?: boolean
@@ -75,6 +105,11 @@ export type AcpTurnEnding = {
 
 /** Undefined means a normally ended /compact succeeded. */
 export type AcpCompactionReply = { outcome: 'skipped' | 'failed'; detail: string }
+
+/** What the agent's own model command reported: the model it now runs, or why it refused. */
+export type AcpModelCommandReply =
+  | { applied: string }
+  | { refused: 'notSignedIn' | 'modelUnavailable'; detail: string }
 
 /** Hooks interpret extensions; lifecycle and row identity stay shared. */
 export type AcpDialect = {
@@ -87,6 +122,8 @@ export type AcpDialect = {
     request(sessionId: string, id: string): { method: string; params: unknown }
     response(value: unknown, id: string): { cancelled: boolean; state?: NativeChatSubagentState }
   }
+  /** Subagents are child sessions that `session/close` interrupts; a user's Stop also ends them. */
+  childSessionStop?: { supported(initialized: InitializeResponse): boolean }
   backgroundTaskStop?: {
     /** Probe without a target to establish support without killing a task. */
     probe: { method: string; params: unknown }
@@ -121,6 +158,8 @@ export type AcpDialect = {
   }
   /** Native thinking choices remain valid across models; the agent clamps unsupported levels. */
   clampsUnlistedEffort?: true
+  /** Opt-in because advertising forms changes agent behaviour; requests use the generic handlers. */
+  clientCapabilities?: Pick<ClientCapabilities, 'elicitation' | '_meta'>
   /** Claimed permission requests are never auto-approved. */
   request?(method: string, params: unknown): AcpRequestPresentation | undefined
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined
@@ -135,8 +174,21 @@ export type AcpDialect = {
   hookBlock?(meta: unknown): AcpHookBlock | undefined
   failedTurnText?(stopReason: string): string
   compactionReply?(text: string): AcpCompactionReply | undefined
+  /** The agent's own model command resolves selections its model option cannot name. */
+  modelCommand?: {
+    /** Only the model option's own "unknown model" refusal sends the value to the command. */
+    refusedByOption(error: AcpAgentError): boolean
+    /** The prompt failed because no model resolved, not because the agent is signed out. */
+    noModel(error: AcpAgentError): boolean
+    /** The first release whose command resolves what its option refuses; older ones take ids only. */
+    resolvesSelectorsFrom: string
+    text(value: string): string
+    reply(text: string): AcpModelCommandReply
+  }
   /** Hide these commands and reject command-only prompts before dispatch. */
   withheldCommands?: readonly string[]
+  /** Which sign-in a not-signed-in chat needs; absent is the agent's usual one. */
+  signInAccount?: AgentSessionAccountKind
   /** Which session rows are the agent's own built-ins, as this process's initialize response proves. */
   builtinCommands?(initialized: InitializeResponse): (command: AvailableCommand) => boolean
 }

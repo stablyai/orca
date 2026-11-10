@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import '../../../shared/protocol-version'
 import {
   BROWSER_CLIENT_AUTOMATION_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
@@ -6,8 +7,8 @@ import {
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
   BROWSER_SCREENCAST_RUNTIME_CAPABILITY
-} from '../../../shared/protocol-version'
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+} from '../../../shared/browser/runtime/browser-runtime-capabilities'
+import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 const {
   handleMock,
@@ -26,7 +27,7 @@ const {
 }))
 
 vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
-vi.mock('../../../shared/runtime-environment-store', () => ({
+vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   resolveEnvironment: resolveEnvironmentMock
 }))
 vi.mock('./runtime-environment-status-probe', () => ({

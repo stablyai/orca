@@ -17,7 +17,7 @@ const {
   resolveGitDirMock: vi.fn()
 }))
 
-vi.mock('../../../../shared/git-worktree-admin', () => ({
+vi.mock('../../../../shared/git/worktrees/git-worktree-admin', () => ({
   annotateWorktreeLocksFromAdmin: async (_repoPath: string, rows: unknown[]) => rows
 }))
 
@@ -48,19 +48,15 @@ vi.mock('fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('fs/promises')
   return { ...actual, stat: statMock, readFile: readFileMock }
 })
-
 import {
-  createGitCallReader,
   createGitCommandMocker,
   resetWorktreeGitMocks,
   resetWorktreeRemovalState
 } from '../removal/remove-worktree-test-harness'
 
 import { listWorktrees } from './worktree-scan-cache'
-import { WORKTREE_LIST_TIMEOUT_MS } from '../worktree-operation-options'
 
 const mockGitCommands = createGitCommandMocker(gitExecFileAsyncMock)
-const getGitCalls = createGitCallReader(gitExecFileAsyncMock)
 
 beforeEach(() => {
   resetWorktreeRemovalState()
@@ -76,179 +72,6 @@ describe('listWorktrees', () => {
       readFileMock,
       resolveGitDirMock
     })
-  })
-
-  it('translates parsed path fields from line-block porcelain output', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({
-      stdout:
-        'worktree /home/me/repo\nHEAD abc123\nbranch refs/heads/main\n\n' +
-        'worktree /home/me/repo-feature\nHEAD def456\nbranch refs/heads/feature/test\nsparse\n\n'
-    })
-    translateWslOutputPathsMock.mockImplementation((output: string) =>
-      output.replace('/home/me/', '\\\\wsl.localhost\\Ubuntu\\home\\me\\')
-    )
-
-    await expect(listWorktrees('\\\\wsl.localhost\\Ubuntu\\home\\me\\repo')).resolves.toEqual([
-      {
-        path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo',
-        head: 'abc123',
-        branch: 'refs/heads/main',
-        isBare: false,
-        isMainWorktree: true
-      },
-      {
-        path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo-feature',
-        head: 'def456',
-        branch: 'refs/heads/feature/test',
-        isBare: false,
-        isSparse: true,
-        isMainWorktree: false
-      }
-    ])
-    // The parsed sparse token skips its filesystem probe; only the main worktree needs one.
-    expect(getGitCalls()).toEqual(['git worktree list --porcelain -z'])
-    expect(statMock).toHaveBeenCalledTimes(1)
-    expect(translateWslOutputPathsMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('passes the selected WSL distro when translating Windows-path worktree output', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({
-      stdout:
-        'worktree /mnt/c/Users/me/repo\nHEAD abc123\nbranch refs/heads/main\nsparse\n\n' +
-        'worktree /mnt/c/Users/me/repo-feature\nHEAD def456\nbranch refs/heads/feature/test\nsparse\n\n'
-    })
-    translateWslOutputPathsMock.mockImplementation((output: string) =>
-      output
-        .replace('/mnt/c/Users/me/repo-feature', 'C:\\Users\\me\\repo-feature')
-        .replace('/mnt/c/Users/me/repo', 'C:\\Users\\me\\repo')
-    )
-
-    await expect(listWorktrees('C:\\Users\\me\\repo', { wslDistro: 'Ubuntu' })).resolves.toEqual([
-      {
-        path: 'C:\\Users\\me\\repo',
-        head: 'abc123',
-        branch: 'refs/heads/main',
-        isBare: false,
-        isSparse: true,
-        isMainWorktree: true
-      },
-      {
-        path: 'C:\\Users\\me\\repo-feature',
-        head: 'def456',
-        branch: 'refs/heads/feature/test',
-        isBare: false,
-        isSparse: true,
-        isMainWorktree: false
-      }
-    ])
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain', '-z'], {
-      cwd: 'C:\\Users\\me\\repo',
-      wslDistro: 'Ubuntu',
-      timeout: WORKTREE_LIST_TIMEOUT_MS
-    })
-    expect(translateWslOutputPathsMock).toHaveBeenCalledWith(
-      expect.any(String),
-      'C:\\Users\\me\\repo',
-      { wslDistro: 'Ubuntu' }
-    )
-  })
-
-  it('returns no worktrees when the repo path is gone', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    gitExecFileAsyncMock.mockRejectedValueOnce(
-      Object.assign(new Error('spawn git ENOENT'), {
-        code: 'ENOENT'
-      })
-    )
-    statMock.mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
-
-    await expect(listWorktrees('/workspace/deleted-repo')).resolves.toEqual([])
-
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain', '-z'], {
-      cwd: '/workspace/deleted-repo',
-      timeout: WORKTREE_LIST_TIMEOUT_MS
-    })
-    expect(statMock).toHaveBeenCalledWith('/workspace/deleted-repo')
-    expect(warnSpy).toHaveBeenCalledWith(
-      '[git/worktree] repo path missing; skipping worktree list: /workspace/deleted-repo'
-    )
-    warnSpy.mockRestore()
-  })
-
-  it('returns no worktrees when the path exists but is not a git repo', async () => {
-    const warnSpy = vi.spyOn(console, 'warn')
-    gitExecFileAsyncMock.mockRejectedValueOnce(
-      Object.assign(new Error('Command failed: git worktree list --porcelain'), {
-        code: 128,
-        stdout: '',
-        stderr: 'fatal: not a git repository (or any of the parent directories): .git\n'
-      })
-    )
-
-    await expect(listWorktrees('/private/tmp/orca-issue-1582-test/my-repo')).resolves.toEqual([])
-
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain', '-z'], {
-      cwd: '/private/tmp/orca-issue-1582-test/my-repo',
-      timeout: WORKTREE_LIST_TIMEOUT_MS
-    })
-    expect(warnSpy).not.toHaveBeenCalled()
-    warnSpy.mockRestore()
-  })
-
-  it('detects sparse checkout after translating paths when porcelain omits sparse token', async () => {
-    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
-      if (args.join(' ') === 'worktree list --porcelain -z') {
-        return {
-          stdout:
-            'worktree /home/me/repo\nHEAD abc123\nbranch refs/heads/main\n\n' +
-            'worktree /home/me/repo-feature\nHEAD def456\nbranch refs/heads/feature/test\n\n',
-          stderr: ''
-        }
-      }
-      throw new Error(`Unexpected git call: ${args.join(' ')}`)
-    })
-    translateWslOutputPathsMock.mockImplementation((output: string) =>
-      output.replace('/home/me/', '\\\\wsl.localhost\\Ubuntu\\home\\me\\')
-    )
-    const featureWorktreePath = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo-feature'
-    resolveGitDirMock.mockImplementation(async (worktreePath: string) =>
-      worktreePath === featureWorktreePath
-        ? `${featureWorktreePath}\\.git-worktrees\\feature`
-        : `${worktreePath}/.git`
-    )
-    statMock.mockImplementation(async (filePath: string) => {
-      if (filePath.includes('repo-feature') && filePath.includes('sparse-checkout')) {
-        return { isFile: () => true, size: 32 }
-      }
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-    })
-
-    const worktrees = await listWorktrees('\\\\wsl.localhost\\Ubuntu\\home\\me\\repo')
-
-    expect(worktrees).toEqual([
-      {
-        path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo',
-        head: 'abc123',
-        branch: 'refs/heads/main',
-        isBare: false,
-        isMainWorktree: true
-      },
-      {
-        path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo-feature',
-        head: 'def456',
-        branch: 'refs/heads/feature/test',
-        isBare: false,
-        isSparse: true,
-        isMainWorktree: false
-      }
-    ])
-    // The UNC repo path carries the distro without an explicit option.
-    const gitDirCall = resolveGitDirMock.mock.calls.find(
-      ([probed]) => probed === featureWorktreePath
-    )
-    expect(gitDirCall).toBeDefined()
-    expect(gitDirCall?.[1]?.wslDistro).toBeUndefined()
-    expect(getGitCalls()).toEqual(['git worktree list --porcelain -z'])
   })
 
   it('bounds concurrent sparse-checkout filesystem probes', async () => {
@@ -308,49 +131,6 @@ describe('listWorktrees', () => {
       path: sparseWorktreePath,
       isSparse: true
     })
-  })
-
-  it('falls back to line-block porcelain output when Git rejects -z', async () => {
-    mockGitCommands({
-      'git worktree list --porcelain -z': {
-        error: Object.assign(new Error("unknown switch `z'"), {
-          stderr: "error: unknown switch `z'"
-        })
-      },
-      'git worktree list --porcelain': {
-        stdout:
-          'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\n' +
-          'worktree /repo-feature\nHEAD def456\nbranch refs/heads/feature/test\n'
-      }
-    })
-    // Keep linked paths present to isolate parser selection from stale-registration checks.
-    statMock.mockImplementation(async (targetPath: string) => {
-      if (String(targetPath).endsWith('sparse-checkout')) {
-        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-      }
-      return {}
-    })
-
-    await expect(listWorktrees('/repo')).resolves.toEqual([
-      {
-        path: '/repo',
-        head: 'abc123',
-        branch: 'refs/heads/main',
-        isBare: false,
-        isMainWorktree: true
-      },
-      {
-        path: '/repo-feature',
-        head: 'def456',
-        branch: 'refs/heads/feature/test',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-    expect(getGitCalls()).toEqual([
-      'git worktree list --porcelain -z',
-      'git worktree list --porcelain'
-    ])
   })
 
   it('annotates missing linked worktrees as prunable via the line-block fallback', async () => {

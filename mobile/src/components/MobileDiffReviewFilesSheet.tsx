@@ -6,10 +6,10 @@ import {
   compactSourceControlTree,
   flattenSourceControlTree,
   type SourceControlTreeNode
-} from '../../../src/shared/source-control-tree'
-import { STATUS_LABELS } from '../../../src/shared/git-status-labels'
+} from '../../../src/shared/source-control/listing/source-control-tree'
+import { STATUS_LABELS } from '../../../src/shared/git/status/git-status-labels'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import type { MobileDiffReviewQueueItem } from '../session/mobile-diff-review-queue'
+import type { MobileDiffReviewQueueItem } from '../source-control/review/mobile-diff-review-queue'
 import { statusColor } from '../source-control/mobile-git-status'
 import { colors, pressedStyle, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'

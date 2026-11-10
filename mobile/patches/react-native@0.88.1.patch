@@ -121,3 +121,34 @@ index 8c1a443f9e5f769ea0a1e50e818ab7aae63c72b2..cf6aa26c9a1b6469f110fb0d39e2456b
      AttributedString::Range selectionRange;
      // ScrollView-like metrics
      Size contentSize;
+diff --git a/Libraries/WebSocket/WebSocket.js b/Libraries/WebSocket/WebSocket.js
+index 2eccf43..b5dfad2 100644
+--- a/Libraries/WebSocket/WebSocket.js
++++ b/Libraries/WebSocket/WebSocket.js
+@@ -90,6 +90,8 @@ class WebSocket extends EventTarget {
+   _eventEmitter: NativeEventEmitter<WebSocketEventDefinitions>;
+   _subscriptions: Array<EventSubscription>;
+   _binaryType: ?BinaryType;
++  // Orca: opt-in per socket; binary messages arrive as {base64} so the app decodes them natively.
++  orcaBinaryAsBase64: boolean = false;
+ 
+   bufferedAmount: number;
+   extension: ?string;
+@@ -241,11 +243,14 @@ class WebSocket extends EventTarget {
+         if (ev.id !== this._socketId) {
+           return;
+         }
+-        let data: Blob | BlobData | ArrayBuffer | string = ev.data;
++        let data: Blob | BlobData | ArrayBuffer | string | {base64: string} =
++          ev.data;
+         switch (ev.type) {
+           case 'binary':
+-            // $FlowFixMe[incompatible-type]
+-            data = base64.toByteArray(ev.data).buffer;
++            data = this.orcaBinaryAsBase64
++              ? {base64: ev.data}
++              : // $FlowFixMe[incompatible-type]
++                base64.toByteArray(ev.data).buffer;
+             break;
+           case 'blob':
+             data = BlobManager.createFromOptions(ev.data);

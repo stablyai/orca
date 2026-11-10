@@ -1,5 +1,5 @@
-import { isTerminalLeafId } from '../stable-pane-id'
-import type { TerminalLayoutSnapshot, TerminalPaneLayoutNode } from '../terminal-tab-types'
+import { isTerminalLeafId } from './stable-pane-id'
+import type { TerminalLayoutSnapshot, TerminalPaneLayoutNode } from './terminal-tab-types'
 
 /** The pane a rootless layout names: its active leaf, else its only bound leaf. */
 export function resolveRootlessTerminalLayoutLeafId(

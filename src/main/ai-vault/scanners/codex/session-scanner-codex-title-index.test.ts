@@ -1,140 +1,143 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
-import {
-  _getCodexSessionIndexTitleCacheSizeForTest,
-  _hasCodexSessionIndexTitleCacheEntryForTest,
-  _readCachedCodexSessionIndexTitlesForTest,
-  _storeCodexSessionIndexTitleCacheEntryForTest,
-  readCodexSessionIndexTitle,
-  resetCodexSessionIndexTitleCacheForTests
-} from './session-scanner-codex-title-index'
-
-const CACHE_LIMIT = 64
+import { readCodexIndexUpdate } from './session-scanner-codex-index-read'
+import { parseAgentSessionFileCached } from '../../parse-cache/session-scanner-parse-cache'
+import { resetSessionParseCacheForTests } from '../../parse-cache/session-parse-cache-store'
+import { appendFile, mkdir, mkdtemp, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { resetCodexSessionIndexTitleCacheForTests } from './session-scanner-codex-title-index'
 
 let tempRoots: string[] = []
 
 afterEach(async () => {
+  vi.restoreAllMocks()
+  resetSessionParseCacheForTests()
   resetCodexSessionIndexTitleCacheForTests()
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
 })
 
-async function createCodexHome(index: number): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-codex-title-index-'))
+async function indexHome() {
+  const root = await mkdtemp(join(tmpdir(), 'orca-codex-index-'))
   tempRoots.push(root)
-  const codexHome = join(root, `codex-home-${index}`)
-  await mkdir(join(codexHome, 'sessions'), { recursive: true })
-  await writeFile(
-    join(codexHome, 'session_index.jsonl'),
-    `${JSON.stringify({ id: `session-${index}`, thread_name: `Title ${index}` })}\n`
-  )
-  return codexHome
+  return { root, path: join(root, 'session_index.jsonl') }
 }
+const entry = (id: string, thread_name: string) => `${JSON.stringify({ id, thread_name })}\n`
 
-async function readTitle(codexHome: string, index: number): Promise<string | null> {
-  return readCodexSessionIndexTitle(
-    join(codexHome, 'sessions', `session-${index}.jsonl`),
-    codexHome,
-    `session-${index}`
-  )
-}
-
-describe('codex session index title cache', () => {
-  it('caps cached title indexes by Codex home', async () => {
-    const homes: string[] = []
-
-    for (let index = 0; index < CACHE_LIMIT + 1; index++) {
-      const codexHome = await createCodexHome(index)
-      homes.push(codexHome)
-      expect(await readTitle(codexHome, index)).toBe(`Title ${index}`)
-    }
-
-    expect(_getCodexSessionIndexTitleCacheSizeForTest()).toBe(CACHE_LIMIT)
-    expect(_hasCodexSessionIndexTitleCacheEntryForTest(homes[0])).toBe(false)
-    expect(_hasCodexSessionIndexTitleCacheEntryForTest(homes[CACHE_LIMIT])).toBe(true)
+describe('incremental Codex session names', () => {
+  it('rereads an EOF title observed after stat when growth invalidates its record', async () => {
+    const { path } = await indexHome()
+    await writeFile(path, entry('head', 'Head') + entry('tail', 'Original'))
+    const beforeAppend = await stat(path)
+    await appendFile(path, entry('tail', 'EOF name').trimEnd())
+    const first = await readCodexIndexUpdate(path, beforeAppend)
+    expect([...first.titles]).toEqual([
+      ['head', 'Head'],
+      ['tail', 'EOF name']
+    ])
+    await appendFile(path, `invalid\n${entry('new', 'New name')}`)
+    const next = await readCodexIndexUpdate(path, await stat(path), first)
+    expect([...next.titles]).toEqual([
+      ['head', 'Head'],
+      ['tail', 'Original'],
+      ['new', 'New name']
+    ])
   })
 
-  it('refreshes cache recency when an existing Codex home is reused', async () => {
-    const homes: string[] = []
-    for (let index = 0; index < CACHE_LIMIT; index++) {
-      const codexHome = await createCodexHome(index)
-      homes.push(codexHome)
-      await readTitle(codexHome, index)
-    }
-
-    await readTitle(homes[0], 0)
-    const extraHome = await createCodexHome(CACHE_LIMIT)
-    await readTitle(extraHome, CACHE_LIMIT)
-
-    expect(_getCodexSessionIndexTitleCacheSizeForTest()).toBe(CACHE_LIMIT)
-    expect(_hasCodexSessionIndexTitleCacheEntryForTest(homes[0])).toBe(true)
-    expect(_hasCodexSessionIndexTitleCacheEntryForTest(homes[1])).toBe(false)
+  it('rebuilds on replacement, a growing rewrite, and shrink instead of retaining removed names', async () => {
+    const { path } = await indexHome()
+    const head = entry('head', 'Unchanged head')
+    await writeFile(path, head + entry('removed', 'Gone'))
+    let cached = await readCodexIndexUpdate(path, await stat(path))
+    await writeFile(`${path}.replacement`, head + entry('retained', 'A longer replacement title'))
+    await rename(`${path}.replacement`, path)
+    cached = await readCodexIndexUpdate(path, await stat(path), cached)
+    expect([...cached.titles.keys()]).toEqual(['head', 'retained'])
+    await writeFile(
+      path,
+      entry('rewritten', 'A completely rewritten and substantially longer first record than before')
+    )
+    cached = await readCodexIndexUpdate(path, await stat(path), cached)
+    expect([...cached.titles.keys()]).toEqual(['rewritten'])
+    await writeFile(path, entry('short', 'Short'))
+    cached = await readCodexIndexUpdate(path, await stat(path), cached)
+    expect([...cached.titles]).toEqual([['short', 'Short']])
   })
 
-  it('does not resurrect a pending cache hit after that home is evicted', async () => {
-    let resolveSlowTitles: (titles: Map<string, string>) => void = () => {}
-    const slowTitles = new Promise<Map<string, string>>((resolve) => {
-      resolveSlowTitles = resolve
-    })
-    _storeCodexSessionIndexTitleCacheEntryForTest('slow-home', 'stable', slowTitles)
-    const pendingHit = _readCachedCodexSessionIndexTitlesForTest('slow-home', 'stable')
+  it.each(['dev', 'ino'] as const)(
+    'rereads an A,B index replaced by A,C,D when %s is unavailable',
+    async (missing) => {
+      const { path } = await indexHome()
+      await writeFile(path, entry('A', 'Title A') + entry('B', 'Title B'))
+      const first = await readCodexIndexUpdate(
+        path,
+        Object.assign(await stat(path), { [missing]: 0 })
+      )
+      await writeFile(
+        `${path}.replacement`,
+        entry('A', 'Title A') + entry('C', 'Title C') + entry('D', 'Title D')
+      )
+      await rename(`${path}.replacement`, path)
+      const next = await readCodexIndexUpdate(
+        path,
+        Object.assign(await stat(path), { [missing]: 0 }),
+        first
+      )
+      expect([...next.titles]).toEqual([
+        ['A', 'Title A'],
+        ['C', 'Title C'],
+        ['D', 'Title D']
+      ])
+    }
+  )
 
-    for (let index = 0; index < CACHE_LIMIT; index += 1) {
-      _storeCodexSessionIndexTitleCacheEntryForTest(
-        `replacement-home-${index}`,
-        `signature-${index}`,
-        Promise.resolve(new Map([[`session-${index}`, `Title ${index}`]]))
+  it('keeps the indexed rename over a recorded session_meta title when the rollout grows', async () => {
+    const { root, path } = await indexHome()
+    const rollout = join(root, 'sessions', 'rollout.jsonl')
+    await mkdir(join(root, 'sessions'))
+    // Recorded CLI session_meta shape; private instructions omitted and paths/identity anonymized.
+    const meta = {
+      timestamp: '2026-11-05T16:21:02.828Z',
+      type: 'session_meta',
+      payload: {
+        id: 'recorded-session',
+        timestamp: '2026-11-05T16:21:02.674Z',
+        cwd: '/repo/app',
+        originator: 'codex_exec',
+        cli_version: '0.162.1',
+        source: 'exec',
+        model_provider: 'codex-lb',
+        title: 'Original metadata name'
+      }
+    }
+    await writeFile(rollout, `${JSON.stringify(meta)}\n`)
+    const read = async () => {
+      const stats = await stat(rollout)
+      return parseAgentSessionFileCached(
+        {
+          agent: 'codex',
+          codexHome: root,
+          file: {
+            path: rollout,
+            mtimeMs: stats.mtimeMs,
+            modifiedAt: stats.mtime.toISOString(),
+            sizeBytes: stats.size
+          }
+        },
+        'darwin'
       )
     }
-    expect(_getCodexSessionIndexTitleCacheSizeForTest()).toBe(CACHE_LIMIT)
-    expect(_hasCodexSessionIndexTitleCacheEntryForTest('slow-home')).toBe(false)
-
-    const titles = new Map([['slow-session', 'Slow title']])
-    resolveSlowTitles(titles)
-
-    await expect(pendingHit).resolves.toBe(titles)
-    expect(_getCodexSessionIndexTitleCacheSizeForTest()).toBe(CACHE_LIMIT)
-    expect(_hasCodexSessionIndexTitleCacheEntryForTest('slow-home')).toBe(false)
-  })
-
-  it('does not replace a newer same-home entry when an older cache hit resolves', async () => {
-    let resolveOldTitles: (titles: Map<string, string>) => void = () => {}
-    const oldTitles = new Promise<Map<string, string>>((resolve) => {
-      resolveOldTitles = resolve
-    })
-    _storeCodexSessionIndexTitleCacheEntryForTest('same-home', 'old', oldTitles)
-    const pendingOldHit = _readCachedCodexSessionIndexTitlesForTest('same-home', 'old')
-
-    const newTitles = new Map([['new-session', 'New title']])
-    _storeCodexSessionIndexTitleCacheEntryForTest('same-home', 'new', Promise.resolve(newTitles))
-    const resolvedOldTitles = new Map([['old-session', 'Old title']])
-    resolveOldTitles(resolvedOldTitles)
-
-    await expect(pendingOldHit).resolves.toBe(resolvedOldTitles)
-    await expect(_readCachedCodexSessionIndexTitlesForTest('same-home', 'new')).resolves.toBe(
-      newTitles
+    expect((await read())?.title).toBe('Original metadata name')
+    await writeFile(path, entry('recorded-session', 'Renamed in the index'))
+    expect((await read())?.title).toBe('Renamed in the index')
+    await appendFile(
+      rollout,
+      `${JSON.stringify({
+        timestamp: '2026-11-05T10:00:00.000Z',
+        type: 'event_msg',
+        payload: { type: 'user_message', message: 'Continue working' }
+      })}\n`
     )
-    expect(_getCodexSessionIndexTitleCacheSizeForTest()).toBe(1)
-  })
-
-  it('preserves a newer same-home entry when an older cache hit rejects', async () => {
-    let rejectOldTitles: (error: Error) => void = () => {}
-    const oldTitles = new Promise<Map<string, string>>((_resolve, reject) => {
-      rejectOldTitles = reject
-    })
-    _storeCodexSessionIndexTitleCacheEntryForTest('same-home', 'old', oldTitles)
-    const pendingOldHit = _readCachedCodexSessionIndexTitlesForTest('same-home', 'old')
-
-    const newTitles = new Map([['new-session', 'New title']])
-    _storeCodexSessionIndexTitleCacheEntryForTest('same-home', 'new', Promise.resolve(newTitles))
-    rejectOldTitles(new Error('old read failed'))
-
-    await expect(pendingOldHit).rejects.toThrow('old read failed')
-    await expect(_readCachedCodexSessionIndexTitlesForTest('same-home', 'new')).resolves.toBe(
-      newTitles
-    )
-    expect(_getCodexSessionIndexTitleCacheSizeForTest()).toBe(1)
+    expect((await read())?.title).toBe('Renamed in the index')
   })
 })

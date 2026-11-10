@@ -1,4 +1,4 @@
-import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
 import {
   recordTerminalOutputQueueDebugPressure as recordQueueDebugPressure,
   terminalOutputSchedulerDebugEnabled as debugEnabled,
@@ -82,6 +82,7 @@ export function replaceBacklogWithWarning(
   }
   clearForegroundRelease(entry)
   recordQueueDebugPressure()
+  entry.onBacklogReplaced?.()
   if (shouldNotify) {
     entry.onBackgroundBacklogDropped?.()
   }

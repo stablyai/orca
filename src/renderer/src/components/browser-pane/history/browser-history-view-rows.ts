@@ -1,6 +1,6 @@
 import type { BrowserHistoryEntry } from '../../../../../shared/browser-workspace-types'
-import type { WorkspaceDocHistoryEntry } from '../../../../../shared/workspace-doc-history'
-import { startOfLocalDay } from '../../../../../shared/automation-cron-occurrence'
+import type { WorkspaceDocHistoryEntry } from '../../../../../shared/workspace-session/workspace-doc-history'
+import { startOfLocalDay } from '../../../../../shared/automations/scheduling/automation-cron-occurrence'
 import {
   listBrowserHistoryRecents,
   type BrowserAddressBarSuggestion

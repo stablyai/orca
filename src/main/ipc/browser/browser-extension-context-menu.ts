@@ -1,8 +1,8 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
-import type { BrowserExtensionContextMenuPayload } from '../../../shared/browser-extension-context-menu-types'
-import { isChromeExtensionId } from '../../../shared/browser-extension-url'
-import { browserManager } from '../../browser/browser-manager'
+import type { BrowserExtensionContextMenuPayload } from '../../../shared/browser/extensions/browser-extension-context-menu-types'
+import { isChromeExtensionId } from '../../../shared/browser/extensions/browser-extension-url'
+import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import {
   buildBrowserExtensionActionContextMenu,
   runBrowserExtensionContextMenuClick

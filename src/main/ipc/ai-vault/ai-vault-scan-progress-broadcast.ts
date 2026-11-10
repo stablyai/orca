@@ -1,5 +1,5 @@
 import { BrowserWindow, ipcMain } from 'electron'
-import { AI_VAULT_SCAN_PROGRESS_CHANNEL } from '../../../shared/ai-vault-scan-progress'
+import { AI_VAULT_SCAN_PROGRESS_CHANNEL } from '../../../shared/ai-vault/scanning/ai-vault-scan-progress'
 import {
   localAiVaultScanProgress,
   onLocalAiVaultScanProgress

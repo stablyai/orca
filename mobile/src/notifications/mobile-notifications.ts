@@ -1,10 +1,10 @@
 import { requestNotificationCatchup } from './push-dismissal-reconciliation'
 import { dismissHostPushNotification } from './push-socket-dismissal'
 import type { DismissNotificationEvent } from './desktop-notification-events'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { waitForPushFallback } from './push-fallback'
 import { getHostPushSupported, getHostPushSupportCompletion } from './push-registration'
-import { loadHostCatalog } from '../transport/host-store'
+import { loadHostCatalog } from '../host-catalog/host-store'
 import { deriveHostFingerprint } from './push-host-fingerprint'
 import { presentForegroundPush } from './android-foreground-push'
 import {
@@ -17,7 +17,7 @@ import {
   mobilePushAlertContent
 } from '../../../src/shared/mobile-push-alert'
 import { reserveNotificationCooldown } from '../../../src/shared/notification-burst-cooldown'
-import type { MobileNotificationDispatchEvent } from '../../../src/main/runtime/runtime-mobile-notification-controller'
+import type { MobileNotificationDispatchEvent } from '../../../src/main/runtime/push/notifications/runtime-mobile-notification-controller'
 
 export {
   ensureNotificationPermissions,

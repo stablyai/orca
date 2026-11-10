@@ -5,7 +5,7 @@
     "version": "3.0.3",
     "advisory": "GHSA-vfj7-8cjw-p6xm",
     "owner": "Orca maintainers",
-    "reason": "Parser and AST walkers reject excessive nesting via the patch merged in #31681, covered by dependency-security-patches.test.mjs. Remove when a fixed upstream release is available.",
+    "reason": "Parser and AST walkers reject excessive nesting via the patch merged in #31681. Remove when a fixed upstream release is available.",
     "expires": "2026-11-20",
     "patch": {
       "path": "patches/braces@3.0.3.patch",
@@ -18,7 +18,7 @@
     "version": "3.0.3",
     "advisory": "GHSA-vfj7-8cjw-p6xm",
     "owner": "Orca maintainers",
-    "reason": "Parser and AST walkers reject excessive nesting via the patch merged in #31681, covered by dependency-security-patches.test.mjs. Remove when a fixed upstream release is available.",
+    "reason": "Parser and AST walkers reject excessive nesting via the patch merged in #31681. Remove when a fixed upstream release is available.",
     "expires": "2026-11-20",
     "patch": {
       "path": "../../config/patches/braces@3.0.3.patch",
@@ -31,7 +31,7 @@
     "version": "3.0.3",
     "advisory": "GHSA-vfj7-8cjw-p6xm",
     "owner": "Orca maintainers",
-    "reason": "Parser and AST walkers reject excessive nesting via the patch merged in #31681, covered by dependency-security-patches.test.mjs. Remove when a fixed upstream release is available.",
+    "reason": "Parser and AST walkers reject excessive nesting via the patch merged in #31681. Remove when a fixed upstream release is available.",
     "expires": "2026-11-20",
     "patch": {
       "path": "../patches/braces@3.0.3.patch",

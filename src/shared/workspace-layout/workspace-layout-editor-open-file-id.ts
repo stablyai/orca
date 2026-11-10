@@ -1,4 +1,4 @@
-import { ownedEditorFileId } from '../workspace-session-pane-ownership'
+import { ownedEditorFileId } from '../workspace-session/workspace-session-pane-ownership'
 import { editorTabFile, sameEditorFile } from './workspace-layout-editor-tab-file'
 import type { LayoutEditorFile, WorkspaceLayout } from './workspace-layout-model'
 

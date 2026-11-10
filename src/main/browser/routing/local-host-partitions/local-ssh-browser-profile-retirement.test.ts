@@ -60,13 +60,13 @@ vi.mock('../../cookies/staging/browser-session-cookie-staging', () => ({
   applyPendingBrowserCookieImports() {},
   clearPendingBrowserCookieImport() {}
 }))
-vi.mock('../../sessions/browser-session-partition-policies', () => ({
+vi.mock('../../sessions/partition-policies/browser-session-partition-policies', () => ({
   installBrowserSessionPartitionPolicies: state.policy,
   clearBrowserSessionPartitionPolicies: state.clearPolicy,
   forgetBrowserSessionPartitionConfiguration() {},
   retireBrowserSessionUserAgentPolicy() {}
 }))
-vi.mock('../../sessions/browser-session-proxy', () => ({
+vi.mock('../../sessions/proxy/browser-session-proxy', () => ({
   invalidateBrowserSessionProxyApplication() {}
 }))
 vi.mock('../../../network/proxy-settings', () => ({ async retireProxySessionApplication() {} }))
@@ -80,13 +80,15 @@ vi.mock('../../extensions/profile-sessions/browser-extension-session-loader', ()
 vi.mock('../../../persistence/loading-store/user-data-path', () => ({
   getCanonicalUserDataPath: () => state.directory
 }))
-vi.mock('../../identity/browser-identity-mode-store', () => ({
+vi.mock('../../identity/mode/browser-identity-mode-store', () => ({
   async markBrowserIdentityMigrationNoticePending() {}
 }))
-vi.mock('../../site-settings/browser-site-permission-store', () => ({
+vi.mock('../../site-settings/permissions/browser-site-permission-store', () => ({
   forgetBrowserSitePermissions() {}
 }))
-vi.mock('../../site-settings/browser-site-display-store', () => ({ forgetBrowserSiteDisplay() {} }))
+vi.mock('../../site-settings/display/browser-site-display-store', () => ({
+  forgetBrowserSiteDisplay() {}
+}))
 vi.mock('../../network/egress/browser-route-webrtc-policy', () => ({
   enforceBrowserRouteWebRtcPolicy() {}
 }))
@@ -97,7 +99,7 @@ vi.mock('./local-ssh-browser-route', () => ({
 }))
 
 import { session } from 'electron'
-import { browserSessionRegistry as registry } from '../../sessions/browser-session-registry'
+import { browserSessionRegistry as registry } from '../../sessions/profiles/browser-session-registry'
 import {
   configureBrowserRoutePartitionBindingsForOrcaProfile,
   currentBrowserRoutePartitionBindingStore
@@ -105,6 +107,7 @@ import {
 import { isBrowserRoutePartitionRetainedByAnyOwner } from '../partitions/browser-route-partition-retention'
 import {
   isLocalSshBrowserPartition,
+  localSshBrowserProfileIdForSession,
   prepareLocalSshBrowserPartition,
   releaseLocalSshBrowserPartitionsForTarget
 } from './local-ssh-browser-partitions'
@@ -166,6 +169,12 @@ describe('deleted browser profile SSH partitions', () => {
     })
     const removed = [guest(first.partition), guest(second.partition)]
     const live = guest(survivor.partition)
+    expect(localSshBrowserProfileIdForSession(session.fromPartition(first.partition))).toBe(
+      retired.id
+    )
+    expect(localSshBrowserProfileIdForSession(session.fromPartition(survivor.partition))).toBe(
+      sibling.id
+    )
     for (const contents of removed) {
       contents.session.clearStorageData.mockImplementation(async () => {
         expect(contents.isDestroyed()).toBe(true)
@@ -177,6 +186,7 @@ describe('deleted browser profile SSH partitions', () => {
     expect(removed.every((contents) => contents.isDestroyed())).toBe(true)
     for (const { partition } of [first, second]) {
       expect(isLocalSshBrowserPartition(partition)).toBe(false)
+      expect(localSshBrowserProfileIdForSession(session.fromPartition(partition))).toBeNull()
       expect(isBrowserRoutePartitionRetainedByAnyOwner(partition)).toBe(false)
       expect(session.fromPartition(partition).clearStorageData).toHaveBeenCalledTimes(1)
       expect(session.fromPartition(partition).clearCache).toHaveBeenCalledTimes(1)

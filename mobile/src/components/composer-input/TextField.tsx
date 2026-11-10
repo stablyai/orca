@@ -1,11 +1,12 @@
 import type { ReactNode, Ref } from 'react'
 import {
+  Text,
   TextInput,
   View,
   type StyleProp,
+  type TextInputInstance,
   type TextInputProps,
-  type ViewStyle,
-  type TextInputInstance
+  type ViewStyle
 } from 'react-native'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -18,6 +19,8 @@ type TextFieldProps = Omit<TextInputProps, 'style' | 'placeholderTextColor' | 's
   leading?: ReactNode
   /** A control after the text, e.g. a clear chip. */
   trailing?: ReactNode
+  /** A caption that stays above the text, e.g. what the field types into. */
+  label?: string
   monospace?: boolean
   style?: StyleProp<ViewStyle>
 }
@@ -27,6 +30,7 @@ export function TextField({
   inputRef,
   leading,
   trailing,
+  label,
   monospace = false,
   style,
   editable = true,
@@ -36,21 +40,33 @@ export function TextField({
 }: TextFieldProps): React.JSX.Element {
   useMobileColorScheme()
   const focus = useInputFocus({ onFocus, onBlur })
+  const input = (
+    <TextInput
+      ref={inputRef}
+      editable={editable}
+      placeholderTextColor={colors.textMuted}
+      selectionColor={colors.accentBlue}
+      style={[styles.fieldText, monospace && styles.mono]}
+      {...inputProps}
+      onFocus={focus.onFocus}
+      onBlur={focus.onBlur}
+    />
+  )
   return (
     <View
       style={[styles.field, focus.focused && styles.focused, !editable && styles.disabled, style]}
     >
       {leading}
-      <TextInput
-        ref={inputRef}
-        editable={editable}
-        placeholderTextColor={colors.textMuted}
-        selectionColor={colors.accentBlue}
-        style={[styles.fieldText, monospace && styles.mono]}
-        {...inputProps}
-        onFocus={focus.onFocus}
-        onBlur={focus.onBlur}
-      />
+      {label ? (
+        <View style={styles.labelledText}>
+          <Text style={styles.fieldLabel} numberOfLines={1}>
+            {label}
+          </Text>
+          {input}
+        </View>
+      ) : (
+        input
+      )}
       {trailing}
     </View>
   )

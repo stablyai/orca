@@ -1,28 +1,28 @@
 /** E1: open a temporary bridge for incumbent census before activation. Unproven state is unverifiable, never zero; WSL has no standing deploy tunnel. */
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
-import { parsePairingCode } from '../../../shared/pairing'
-import type { PairingOffer } from '../../../shared/mobile-relay-pairing-offer'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
+import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/orcad-managed-runtime'
 import {
   type OrcadTerminalCensus,
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
 } from '../../../shared/orcad-terminal-census'
 import type { ServeReadiness } from '../../server/serve-readiness'
-import { probeActiveOrcadReadiness } from '../../ssh/orcad-active-readiness'
+import { probeActiveOrcadReadiness } from '../../managed-server/activation/orcad-active-readiness'
 import { orcadBoundPort } from '../../managed-server/lifecycle/orcad-managed-bound-port'
 import { managedOrcadInstallDir } from '../../managed-server/lifecycle/orcad-managed-runtime-context'
 import { wakeStoppedManagedOrcad } from '../../managed-server/lifecycle/orcad-managed-wake'
 import type { OrcadRemoteContext } from '../../managed-server/install/orcad-remote-context'
-import type { OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
+import type { OrcadSlotOptions } from '../../managed-server/activation/orcad-recovery-slot'
 import { readRemoteOrcadBuildHash } from '../../managed-server/install/orcad-remote-build-hash'
 import {
   requestOrcadTerminalCensus,
   type OrcadTerminalCensusRequestOptions
-} from '../../ssh/orcad-terminal-census-client'
-import { updateTerminalCounts } from '../../ssh/orcad-fenced-stop'
-import { tunneledOrcadPairingCode } from '../../ssh/orcad-tunneled-pairing'
+} from '../../managed-server/lifecycle/orcad-terminal-census-client'
+import { updateTerminalCounts } from '../../managed-server/activation/orcad-fenced-stop'
+import { tunneledOrcadPairingCode } from '../../managed-server/lifecycle/orcad-tunneled-pairing'
 import type { StartedPortForward } from '../../ssh/port-forwarding/ssh-port-forward-provider'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import { listenWslOrcadStdioBridge } from './wsl-orcad-stdio-bridge'
 

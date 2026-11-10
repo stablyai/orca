@@ -234,12 +234,26 @@ export class AdvertisedUrlWatcher {
     observations: readonly AdvertisedUrlListenerObservation[]
   ): void {
     const observedByPort = observedListenersByPort(observations)
-    const worktreeSet = new Set(worktreeIds)
+    this.reconcileObservedWorkspaces(new Map(worktreeIds.map((id) => [id, observedByPort])))
+  }
+
+  reconcileWorkspaces(
+    observations: ReadonlyMap<string, readonly AdvertisedUrlListenerObservation[]>
+  ): void {
+    this.reconcileObservedWorkspaces(
+      new Map([...observations].map(([id, listeners]) => [id, observedListenersByPort(listeners)]))
+    )
+  }
+
+  private reconcileObservedWorkspaces(
+    observations: ReadonlyMap<string, Map<number, number | undefined>>
+  ): void {
     const removedEvents: AdvertisedUrlChangeEvent[] = []
 
     for (const [key, entry] of this.cache) {
       const worktreeId = worktreeIdFromCacheKey(key, entry.port)
-      if (!worktreeSet.has(worktreeId)) {
+      const observedByPort = observations.get(worktreeId)
+      if (!observedByPort) {
         continue
       }
       const current = observedByPort.has(entry.port)
@@ -264,7 +278,7 @@ export class AdvertisedUrlWatcher {
       }
     }
 
-    for (const worktreeId of worktreeSet) {
+    for (const [worktreeId, observedByPort] of observations) {
       this.scanSnapshots.delete(worktreeId)
       this.scanSnapshots.set(worktreeId, new Map(observedByPort))
       while (this.scanSnapshots.size > MAX_ADVERTISED_URL_SCAN_SNAPSHOTS) {

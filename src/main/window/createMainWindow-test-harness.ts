@@ -145,7 +145,11 @@ export function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
 }
 
 export type RendererRecoveryWindowHarness = {
-  browserWindowInstance: { loadFile: Mock<() => Promise<void>>; loadURL: Mock<() => Promise<void>> }
+  browserWindowInstance: {
+    loadFile: Mock<() => Promise<void>>
+    loadURL: Mock<() => Promise<void>>
+    webContents: { send: Mock }
+  }
   windowHandlers: Record<string, (...args: any[]) => void>
 }
 

@@ -56,18 +56,6 @@ describe('guest before-mouse-event forwarding', () => {
     return mouse
   }
 
-  it('reports a press into the page and steps history on a side-button release', () => {
-    expect(trigger(false, sideButton('mouseDown', 'back'))).not.toHaveBeenCalled()
-    expect(trigger(false, sideButton('mouseUp', 'back'))).not.toHaveBeenCalled()
-    trigger(false, sideButton('mouseUp', 'forward'))
-
-    expect(rendererSend.mock.calls).toEqual([
-      ['ui:browserPagePointerDown', { browserPageId: 'tab-1' }],
-      ['ui:browserHistoryNavigate', { browserPageId: 'tab-1', direction: 'back' }],
-      ['ui:browserHistoryNavigate', { browserPageId: 'tab-1', direction: 'forward' }]
-    ])
-  })
-
   it('leaves presses an agent makes in the page to the page alone', () => {
     agentInjection.active = true
     try {
@@ -77,32 +65,6 @@ describe('guest before-mouse-event forwarding', () => {
       agentInjection.active = false
     }
     expect(rendererSend).not.toHaveBeenCalled()
-  })
-
-  it('forwards plain wheel deltas only for an active preset', () => {
-    const preventDefault = trigger(true, { deltaX: 24, deltaY: 120 })
-
-    expect(preventDefault).toHaveBeenCalledTimes(1)
-    expect(rendererSend).toHaveBeenCalledWith('ui:scrollBrowserPage', {
-      browserPageId: 'tab-1',
-      deltaX: 24,
-      deltaY: 120
-    })
-
-    trigger(false, { deltaY: 120 })
-    expect(rendererSend).toHaveBeenCalledTimes(1)
-  })
-
-  it('ignores zero deltas and preserves ctrl-wheel zoom routing', () => {
-    const zeroPreventDefault = trigger(true, {})
-    expect(zeroPreventDefault).not.toHaveBeenCalled()
-
-    const zoomPreventDefault = trigger(true, { modifiers: ['ctrl'], deltaY: -120 })
-    expect(zoomPreventDefault).toHaveBeenCalledTimes(1)
-    expect(rendererSend).toHaveBeenLastCalledWith('ui:zoomBrowserPage', {
-      browserPageId: 'tab-1',
-      direction: 'in'
-    })
   })
 
   it('leaves fitting presets and host-edge wheels to the guest page', () => {

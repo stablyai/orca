@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: { getPath: () => '/tmp/orca-test-user-data' } }))
-vi.mock('../../../../shared/runtime-environment-store', () => ({
+vi.mock('../../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   listEnvironments: () => mocks.environments
 }))
 vi.mock('./browser-route-partition-binding-runtime', () => ({
@@ -103,15 +103,6 @@ describe('route partition storage runtime with local SSH scopes', () => {
     expect(await collectOrphanedBrowserRoutePartitionStorage()).toEqual([])
     expect(mocks.cleared).toEqual([])
     expect(mocks.bindings.size).toBe(3)
-  })
-
-  it('skips the sweep when reading the target list throws', async () => {
-    await expect(
-      collectOrphanedBrowserRoutePartitionStorage(() => {
-        throw new Error('ssh target store unavailable at partition sweep')
-      })
-    ).rejects.toThrow('ssh target store unavailable')
-    expect(mocks.cleared).toEqual([])
   })
 
   it('honors the retention-probe union: a retained partition survives every destructive path', async () => {

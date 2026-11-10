@@ -1,14 +1,14 @@
 import { randomUUID } from 'node:crypto'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../shared/agent-status-types'
-import { isRecord } from '../shared/agent-status-child-work-value-guards'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../shared/agent-status/contracts/agent-status-freshness'
+import { isRecord } from '../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import { normalizeAgentProviderSession } from '../shared/agent-session/lifecycle/agent-session-resume'
-import { normalizeHostTurnRevision } from '../shared/agent-hook-interrupt-reconciliation'
+import { normalizeHostTurnRevision } from '../shared/agent-hook-listener/transport/agent-hook-interrupt-reconciliation'
 import {
   opensNewTurn,
   restatesAnotherPrompt,
   resolveCancelVerdictLatch,
   type CancelVerdictLatchDecision
-} from '../shared/agent-hook-cancel-verdict-latch'
+} from '../shared/agent-hook-listener/state/agent-hook-cancel-verdict-latch'
 import {
   markClaudeLeadTurnInterrupted,
   setClaudeMainAgentTurnState
@@ -16,7 +16,7 @@ import {
 import { claudeRowHasUnlistedLiveWork } from '../shared/agent-hook-listener/providers/claude-pane-hold-evidence'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
-import type { AgentHookSource } from '../shared/agent-hook-relay'
+import type { AgentHookSource } from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import type { CachedPaneEnvelopeMeta } from './agent-hook-cached-pane-status'
 
 export type RelayInterruptHost = {

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
 import { z } from 'zod'
-import { BROWSER_EXTENSION_EVENT_CHANNEL } from '../../../../shared/browser-extension-channels'
+import { BROWSER_EXTENSION_EVENT_CHANNEL } from '../../../../shared/browser/extensions/browser-extension-channels'
 import { emitBrowserExtensionWorkerStartEvent } from '../api-runtime/browser-extension-api-host'
 import {
   BrowserExtensionApiError,

@@ -1,25 +1,25 @@
 import {
   useBundledSkillInstallAction,
   type BundledSkillInstallActionState
-} from '@/hooks/use-bundled-skill-install-action'
+} from '@/hooks/skills/installation/use-bundled-skill-install-action'
 import { bundledSkillSetupActionLabel } from '../skills/setup/bundled-skill-setup-copy'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { useOnboardingSkillRuntime } from '@/hooks/skills/runtime/use-onboarding-skill-runtime'
 import { FeatureSetupInlineTerminal } from '../onboarding/FeatureSetupInlineTerminal'
-import { buildAgentFeatureSkillInstallCommand } from '@/lib/agent-feature-install-commands'
-import { buildSkillCommandForRuntime } from '../../lib/skill-runtime-command'
+import { buildAgentFeatureSkillInstallCommand } from '@/lib/skills/installation/agent-feature-install-commands'
+import { buildSkillCommandForRuntime } from '../../lib/skills/runtime/skill-runtime-command'
 import type { OnboardingFeatureSetupRuntimeContext } from '../onboarding/onboarding-feature-setup-runtime'
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Check, Download, Globe2, Loader2, MonitorCog, Workflow } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Check, Download, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
 import { AgentCapabilityStatusNote, AgentCapabilityStatusPill } from './AgentCapabilityStatusBadges'
 import {
   bundledSkillInstallNeedsAttention,
   useBundledSkillInstall,
   type BundledSkillInstall
-} from '@/hooks/use-bundled-skill-install'
+} from '@/hooks/skills/installation/use-bundled-skill-install'
 import { BundledSkillInstallStatus } from '../skills/setup/BundledSkillInstallStatus'
 import {
   DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION,
@@ -38,16 +38,30 @@ import {
   type AgentCapabilityInstallStatus
 } from './agent-capability-setup-status'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { capabilitiesSetupBusyLabel, capabilityToggleLabel } from './agent-capability-setup-copy'
-import { track } from '@/lib/telemetry'
+import { AGENT_CAPABILITY_SETUP_ROWS } from './agent-capability-setup-rows'
+import { track } from '@/diagnostics/telemetry/telemetry'
 
-export function AgentCapabilitiesSetupAction(props: {
+type AgentCapabilitiesSetupActionProps = {
   onOrchestrationSkillInstalledChange: (installed: boolean) => void
   onBrowserUseSkillInstalledChange: (installed: boolean) => void
-}): React.JSX.Element {
+}
+
+export function AgentCapabilitiesSetupAction(
+  props: AgentCapabilitiesSetupActionProps
+): React.JSX.Element {
+  const runtime = useOnboardingSkillRuntime()
+  return <AgentCapabilitiesSetupForRuntime key={runtime.setupKey} {...props} runtime={runtime} />
+}
+
+function AgentCapabilitiesSetupForRuntime(
+  props: AgentCapabilitiesSetupActionProps & {
+    runtime: ReturnType<typeof useOnboardingSkillRuntime>
+  }
+): React.JSX.Element {
   const { onBrowserUseSkillInstalledChange, onOrchestrationSkillInstalledChange } = props
-  const capabilitySetupStatus = useAgentCapabilitySetupStatus()
-  const { readiness } = capabilitySetupStatus
+  const { readiness, installStatus } = useAgentCapabilitySetupStatus()
   const featureSetupDefaultsAppliedRef = useRef(false)
   const featureSetupChangedByUserRef = useRef(false)
   const [featureSetup, setFeatureSetup] = useState<OnboardingFeatureSetupSelection>(
@@ -55,19 +69,20 @@ export function AgentCapabilitiesSetupAction(props: {
   )
   const [setupBusyLabel, setSetupBusyLabel] = useState<string | null>(null)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  const activeRuntime = useActiveProjectSkillRuntime()
+  const activeRuntime = props.runtime
   const [wslSetup, setWslSetup] = useState<{
     command: string
     runtime: OnboardingFeatureSetupRuntimeContext
     selection: OnboardingFeatureSetupSelection
   } | null>(null)
   const legacyWsl = activeRuntime.agentRuntime?.runtime === 'wsl'
-  const skillInstall = useBundledSkillInstall()
+  const skillInstall = useBundledSkillInstall({ target: activeRuntime.bundledSkillTarget })
   const installSkills = skillInstall.install
   const installAction = useBundledSkillInstallAction(
     onboardingFeatureSetupSkillNames(featureSetup),
     {
       enabled: !legacyWsl && hasSelectedOnboardingFeatureSetup(featureSetup),
+      target: activeRuntime.bundledSkillTarget,
       refreshKey: skillInstall.state.kind
     }
   )
@@ -188,70 +203,12 @@ export function AgentCapabilitiesSetupAction(props: {
           setupBusyLabel={setupBusyLabel}
           onStartFeatureSetup={() => void handleStartFeatureSetup()}
           allReady={isAgentCapabilityReadinessComplete(readiness)}
-          installStatus={capabilitySetupStatus.installStatus}
+          installStatus={installStatus}
         />
       )}
     </div>
   )
 }
-
-type AgentCapabilitySetupRow = {
-  id: OnboardingFeatureSetupId
-  title: string
-  description: string
-  icon: ReactNode
-}
-
-const AGENT_CAPABILITY_SETUP_ROWS: readonly AgentCapabilitySetupRow[] = [
-  {
-    id: 'orchestration',
-    get title() {
-      return translate(
-        'auto.components.feature.wall.AgentCapabilitiesSetupAction.ac07f8887f',
-        'Agent Orchestration'
-      )
-    },
-    get description() {
-      return translate(
-        'auto.components.feature.wall.AgentCapabilitiesSetupAction.c61c91e642',
-        'Let agents coordinate through Orca to keep large, multi-step tasks moving to completion.'
-      )
-    },
-    icon: <Workflow className="size-4" />
-  },
-  {
-    id: 'browserUse',
-    get title() {
-      return translate(
-        'auto.components.feature.wall.AgentCapabilitiesSetupAction.e638da007a',
-        'Agent Browser Use'
-      )
-    },
-    get description() {
-      return translate(
-        'auto.components.feature.wall.AgentCapabilitiesSetupAction.5e8fe5a72d',
-        "Give agents direct access to Orca's browser so they can test pages, capture screenshots, and act on what they see."
-      )
-    },
-    icon: <Globe2 className="size-4" />
-  },
-  {
-    id: 'computerUse',
-    get title() {
-      return translate(
-        'auto.components.feature.wall.AgentCapabilitiesSetupAction.362a07517d',
-        'Computer Use'
-      )
-    },
-    get description() {
-      return translate(
-        'auto.components.feature.wall.AgentCapabilitiesSetupAction.1b51644c2d',
-        'Let agents control the desktop, moving the cursor, clicking, and typing in any app.'
-      )
-    },
-    icon: <MonitorCog className="size-4" />
-  }
-]
 
 function AgentCapabilitySetupControls(props: {
   featureSetup: OnboardingFeatureSetupSelection
@@ -263,6 +220,7 @@ function AgentCapabilitySetupControls(props: {
   allReady: boolean
   installStatus: Record<OnboardingFeatureSetupId, AgentCapabilityInstallStatus>
 }): React.JSX.Element {
+  const t = useTranslate()
   const hasSelectedFeatures = hasSelectedOnboardingFeatureSetup(props.featureSetup)
   const installState = props.skillInstall.state
   const showSetupAction =
@@ -285,7 +243,7 @@ function AgentCapabilitySetupControls(props: {
       {showSetupAction && showAllReady ? (
         <p className="mt-6 flex items-center gap-1.5 text-sm text-muted-foreground">
           <Check className="size-4" />
-          {translate('auto.components.skills.skillPlanOpCopy.installed', 'Installed')}
+          {t('auto.components.skills.skillPlanOpCopy.installed', 'Installed')}
         </p>
       ) : showSetupAction ? (
         <div className="mt-6 flex items-center">
@@ -308,13 +266,13 @@ function AgentCapabilitySetupControls(props: {
             )}
             {props.setupBusyLabel ??
               (props.installAction?.kind === 'replace'
-                ? translate(
+                ? t(
                     'auto.components.settings.AgentSkillSetupPanel.replaceWithOrcaCopy',
                     "Replace with Orca's copy"
                   )
                 : props.installAction?.kind === 'run' && props.installAction.changes
-                  ? bundledSkillSetupActionLabel(props.installAction.changes)
-                  : translate(
+                  ? bundledSkillSetupActionLabel(props.installAction.changes, t)
+                  : t(
                       'auto.components.feature.wall.AgentCapabilitiesSetupAction.installSkills',
                       'Install skills'
                     ))}
@@ -342,6 +300,7 @@ function AgentCapabilitySetupChecklist(props: {
   onChange: (value: OnboardingFeatureSetupSelection) => void
   installStatus: Record<OnboardingFeatureSetupId, AgentCapabilityInstallStatus>
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <section className="mt-6">
       <div className="grid gap-3 md:grid-cols-3">
@@ -354,7 +313,7 @@ function AgentCapabilitySetupChecklist(props: {
               type="button"
               role="checkbox"
               aria-checked={selected}
-              aria-label={capabilityToggleLabel(selected, row.title)}
+              aria-label={capabilityToggleLabel(selected, row.title, t)}
               className={cn(
                 'flex min-h-24 flex-col rounded-lg border px-4 py-3.5 text-left transition-colors',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',

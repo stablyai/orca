@@ -1,25 +1,25 @@
-import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
+import { canShowRightSidebarForView, canToggleRightSidebar } from '@/lib/right-sidebar-visibility'
 import { runBuiltInOrReplacement } from '@/lib/plugin-command-replacements'
-import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
+import { isFloatingWorkspacePanelFocused } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { shouldShowWorktreeHistoryControls } from '../lib/titlebar-worktree-history-controls'
-import { TOGGLE_WORKSPACE_BOARD_EVENT } from '../components/sidebar/useWorkspaceBoardPanel'
+import { TOGGLE_WORKSPACE_BOARD_EVENT } from '../components/sidebar/workspace-board/surface/useWorkspaceBoardPanel'
 import {
   getRenderedLineageChipKeys,
   resolveChildWorkspacesToggleGroupKey
-} from '../components/sidebar/child-workspaces-toggle-target'
+} from '../components/sidebar/workspace-card/identity/child-workspaces-toggle-target'
 import { requestTerminalTabRename } from '../components/tab-bar/terminal-tab-rename-request'
 import {
   deleteHoveredWorkspaceImmediately,
   resolveHoveredWorkspaceDeleteTarget
-} from '../components/sidebar/hovered-workspace-delete'
-import { useAppStore } from '../store'
-import type { usePluginCommands } from '@/store/plugin-panels'
+} from '../components/sidebar/workspace-actions/deletion/hovered-workspace-delete'
+import { useAppStore } from '../store/index'
+import type { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { isGitRepoKind } from '../../../shared/repo-kind'
-import { openPluginsSettings } from '@/lib/open-plugins-settings'
+import { openPluginsSettings } from '@/components/settings/navigation/open-plugins-settings'
 import { resolveActiveTabRenameTarget } from './active-tab-rename-target'
 import { createPluginsSettingsShortcutHandler } from './plugin-settings-shortcut-handler'
 import type {
@@ -270,7 +270,7 @@ export function createAppCommandHandlers(
     [
       'sidebar.right.toggle',
       () =>
-        canRevealRightSidebar
+        canToggleRightSidebar(activeView)
           ? claim('sidebar.right.toggle', () => actions.toggleRightSidebar())
           : false
     ],

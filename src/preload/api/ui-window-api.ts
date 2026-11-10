@@ -8,6 +8,8 @@ import type {
 
 export type UiWindowApi = {
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
+  /** The clipboard's HTML when it may carry links; empty otherwise. */
+  readClipboardLinkHtml: () => Promise<string>
   readSelectionClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   saveClipboardImageAsTempFile: (args?: {
     connectionId?: string | null
@@ -65,9 +67,14 @@ export type UiWindowApi = {
   maximize: () => void
   isMaximized: () => Promise<boolean>
   onMaximizeChanged: (callback: (isMaximized: boolean) => void) => () => void
+  /** Focused, shown and not minimized, from the window itself. */
+  isWindowActive: () => Promise<boolean>
+  onWindowActiveChanged: (callback: (active: boolean) => void) => () => void
   requestClose: () => void
   popupMenu: () => void
   onWindowCloseRequested: (callback: (data: { isQuitting: boolean }) => void) => () => void
   confirmWindowClose: () => void
+  /** The user kept the window after a close request, which also cancels a pending quit. */
+  cancelWindowClose: () => void
   notifyWindowRevealed: () => void
 }

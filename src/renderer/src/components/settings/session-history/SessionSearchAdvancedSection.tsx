@@ -5,18 +5,19 @@ import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { SettingsRow } from '../form-controls/SettingsFormControls'
 
 /** Shared by the Clear row and its confirm dialog so both promise the same thing. */
-export function sessionSearchClearDescription(enabled: boolean): string {
+export function sessionSearchClearDescription(enabled: boolean, t: Translate = translate): string {
   return enabled
-    ? translate(
+    ? t(
         'sessionHistory.settings.deleteEnabled',
         'Turns off search and removes the searchable copy from this computer. Your agent sessions are not affected.'
       )
-    : translate(
+    : t(
         'sessionHistory.settings.deleteDisabled',
         'Removes the searchable copy from this computer. Your agent sessions are not affected.'
       )
@@ -37,6 +38,7 @@ export function SessionSearchAdvancedSection({
   onError: (message: string | null) => void
   onCleared: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const confirm = useConfirmationDialog()
   const mounted = useMountedRef()
   const [open, setOpen] = useState(false)
@@ -48,12 +50,9 @@ export function SessionSearchAdvancedSection({
     onError(null)
     try {
       const accepted = await confirm({
-        title: translate(
-          'sessionHistory.settings.deleteTitle',
-          'Clear search data on this computer?'
-        ),
+        title: t('sessionHistory.settings.deleteTitle', 'Clear search data on this computer?'),
         description: sessionSearchClearDescription(wasEnabled),
-        confirmLabel: translate('sessionHistory.settings.delete', 'Clear'),
+        confirmLabel: t('sessionHistory.settings.delete', 'Clear'),
         confirmVariant: 'destructive'
       })
       if (!accepted || !mounted.current) {
@@ -68,18 +67,16 @@ export function SessionSearchAdvancedSection({
         onCleared()
         toast.success(
           wasEnabled
-            ? translate(
+            ? t(
                 'sessionHistory.settings.clearedAndTurnedOff',
                 'Search turned off and search data cleared.'
               )
-            : translate('sessionHistory.settings.cleared', 'Search data cleared.')
+            : t('sessionHistory.settings.cleared', 'Search data cleared.')
         )
       }
     } catch {
       if (mounted.current) {
-        onError(
-          translate('sessionHistory.settings.clearError', 'Could not clear search data. Try again.')
-        )
+        onError(t('sessionHistory.settings.clearError', 'Could not clear search data. Try again.'))
       }
     } finally {
       if (mounted.current) {
@@ -89,18 +86,18 @@ export function SessionSearchAdvancedSection({
   }
 
   return (
-    <div className="border-t border-border">
+    <div data-settings-row="" className="py-2">
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger asChild>
           <Button type="button" variant="ghost" size="xs">
-            {translate('sessionHistory.settings.advanced', 'Advanced')}
+            {t('sessionHistory.settings.advanced', 'Advanced')}
             <ChevronDown className={cn('size-4 transition-transform', open && 'rotate-180')} />
           </Button>
         </CollapsibleTrigger>
         <CollapsibleContent>
           <SettingsRow
-            label={translate('sessionHistory.settings.deleteIndexCopy', 'Clear search data')}
-            description={sessionSearchClearDescription(enabled)}
+            label={t('sessionHistory.settings.deleteIndexCopy', 'Clear search data')}
+            description={sessionSearchClearDescription(enabled, t)}
             control={
               <Button
                 variant="outline"
@@ -108,7 +105,7 @@ export function SessionSearchAdvancedSection({
                 disabled={busy || disabled}
                 onClick={() => void clearIndex()}
               >
-                {translate('sessionHistory.settings.delete', 'Clear')}
+                {t('sessionHistory.settings.delete', 'Clear')}
               </Button>
             }
           />

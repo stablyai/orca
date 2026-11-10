@@ -58,7 +58,9 @@ export const bottomDrawerStyles = themedStyleSheet(() => ({
     paddingTop: spacing.sm,
     paddingBottom: spacing.md
   },
+  // Gives up height to the sheet's cap so a list the sheet scrolls itself shrinks instead of clipping.
   staticContent: {
+    flexShrink: 1,
     minHeight: 0
   },
   staticContentFill: {

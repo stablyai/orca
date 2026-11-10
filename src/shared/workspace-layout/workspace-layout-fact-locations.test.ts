@@ -15,7 +15,7 @@ import type { LayoutSleepingRecord } from './workspace-layout-model'
 import { localDesktopSession } from './workspace-layout-profile.test-fixture'
 import { saveWorkspaceLayout } from './workspace-layout-save'
 import { addWorkspace, GIT_KEY, leaf } from './workspace-layout-session.test-fixture'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 
 /** Do not mutate identity fields: broken references would test integrity rather than fact ownership. */
 const IDENTITY_SOURCES = new Set<LayoutSource>([

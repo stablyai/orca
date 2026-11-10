@@ -17,8 +17,12 @@ const CLAUDE_TRANSCRIPT_IMPORT = directoryTranscriptImport({
     join(homedir(), '.claude'),
     ...(getClaudeProfileRouter()?.accountHomes() ?? [])
   ],
-  findTranscript: ({ providerSessionId, store, strictErrors }) =>
-    resolveSessionFilePath('claude', providerSessionId, { claudeProjectsDir: store, strictErrors })
+  findTranscript: ({ providerSessionId, store, workspaceCwd, strictErrors }) =>
+    resolveSessionFilePath('claude', providerSessionId, {
+      claudeProjectsDir: store,
+      cwd: workspaceCwd,
+      strictErrors
+    })
 })
 
 const CLAUDE_SESSION_HISTORY: StructuredAgentSessionHistory = {

@@ -1,10 +1,11 @@
-import { z } from 'zod'
+import * as z from 'zod'
+import { BRIDGE_APP_INACTIVE_FRAME } from './bridge-app-inactive'
 import { salvagedOptional } from '../../../../src/shared/zod-salvage'
 import { SUPPORTED_UI_LOCALES } from '../../../../src/shared/ui-locale'
-import { NODE_PLATFORM_NAMES } from '../../transport/mobile-runtime-host-platform'
-import { RpcEnvelopeFieldsSchema } from '../../transport/rpc-envelope-fields'
-import { isRpcResponse } from '../../transport/rpc-response-shape'
-import type { RpcResponse } from '../../transport/types'
+import { NODE_PLATFORM_NAMES } from '../../transport/connection/mobile-runtime-host-platform'
+import { RpcEnvelopeFieldsSchema } from '../../transport/rpc/rpc-envelope-fields'
+import { isRpcResponse } from '../../transport/rpc/rpc-response-shape'
+import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import { BridgeConnectionSnapshotSchema } from './bridge-connection-snapshot'
 import { BridgeErrorCaptureSchema } from './bridge-error-capture'
 import { BridgeInitRouteSchema, type BridgeInitRoute } from './bridge-init-route'
@@ -31,10 +32,12 @@ export {
   BRIDGE_EXTERNAL_LINK_GRANT,
   BRIDGE_FAULT_GRANT,
   BRIDGE_FOREGROUND_NUDGE_REASONS,
+  BRIDGE_HOST_CATALOGS_GRANT,
   BRIDGE_ID_PATTERN,
   BRIDGE_NAVIGATE_BACK_NOTIFY,
   BRIDGE_PROTOCOL_VERSION,
-  BRIDGE_RPC_ENVELOPE_GRANT
+  BRIDGE_RPC_ENVELOPE_GRANT,
+  BRIDGE_SHELL_GRANTS
 } from './bridge-frame-fields'
 import {
   isPageStorageKey,
@@ -150,7 +153,9 @@ const BridgeClientMessageSchema = z.discriminatedUnion('type', [
       .optional()
       .catch(undefined),
     // Pages that read `connectionPath` frames say so; older pages never receive one.
-    connectionPathFrames: z.literal(true).optional().catch(undefined)
+    connectionPathFrames: z.literal(true).optional().catch(undefined),
+    // Pages that read `appInactive` frames say so; older pages never receive one.
+    appInactiveFrames: z.literal(true).optional().catch(undefined)
   }),
   z.object({
     v: versionSchema,
@@ -236,6 +241,10 @@ const BridgeHostMessageSchema = z.union([
   }),
   // Back names no destination; only the native stack knows what screen lies beneath.
   z.object({ v: versionSchema, type: z.literal(BRIDGE_BACK_FRAME) }),
+  // Native booted this page ahead of its screen and keeps its ready for the screen that adopts it.
+  z.object({ v: versionSchema, type: z.literal('parked') }),
+  // The app is leaving the foreground: save what a hide would save (bridge-app-inactive.ts).
+  z.object({ v: versionSchema, type: z.literal(BRIDGE_APP_INACTIVE_FRAME) }),
   // One press on the shell's key rail. Sent only to a page granted the rail, which knows the frame.
   z.object({
     v: versionSchema,

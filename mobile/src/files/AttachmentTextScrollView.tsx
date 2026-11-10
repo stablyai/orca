@@ -3,8 +3,8 @@ import { Platform, ScrollView, Text, View, type ScrollViewInstance } from 'react
 import type {
   AttachmentTextSource,
   AttachmentTextWindow
-} from '../../../src/shared/attachment-text-source'
-import { AttachmentTextViewport } from '../../../src/shared/attachment-text-viewport'
+} from '../../../src/shared/attachment-text/attachment-text-source'
+import { AttachmentTextViewport } from '../../../src/shared/attachment-text/attachment-text-viewport'
 import { chatAttachmentPreviewStyles as styles } from './mobile-file-preview-styles'
 
 function scrollElement(view: ScrollViewInstance | null): HTMLElement | null {

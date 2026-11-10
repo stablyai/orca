@@ -1,8 +1,11 @@
 import { OnboardingLanguageSwitcher } from './OnboardingLanguageSwitcher'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { cn } from '@/lib/utils'
-import { isEditableTarget } from '@/lib/editable-target'
-import { getScreenSubmitModifierLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
+import { cn } from '@/lib/class-names'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
+import {
+  getScreenSubmitModifierLabel,
+  isScreenSubmitShortcut
+} from '@/lib/keyboard/screen-submit-shortcut'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 import { AgentStep } from './AgentStep'
@@ -15,109 +18,11 @@ import { OnboardingSkipConfirmationDialog } from './OnboardingSkipConfirmationDi
 import { OnboardingFooter } from './OnboardingFooter'
 import { shouldRequestOnboardingSkipConfirmation } from './onboarding-dismiss-target'
 import logo from '../../../../../resources/logo.svg'
-import { translate } from '@/i18n/i18n'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
-
-const stepCopy = {
-  agent: {
-    get title() {
-      return translate(
-        'auto.components.onboarding.OnboardingFlow.198b148b3c',
-        'Pick your default agent'
-      )
-    },
-    get subtitle() {
-      return translate(
-        'auto.components.onboarding.OnboardingFlow.322fc50a18',
-        "Orca works with every CLI agent. Choose the one you'll reach for most. Switch any time."
-      )
-    }
-  },
-  theme: {
-    get title() {
-      return translate(
-        'auto.components.onboarding.OnboardingFlow.f396db9f20',
-        'Make it feel like home'
-      )
-    },
-    get subtitle() {
-      return translate(
-        'auto.components.onboarding.OnboardingFlow.04ae28d8ca',
-        'Pick the look you want to stare at for hours.'
-      )
-    }
-  },
-  notifications: {
-    get title() {
-      return translate(
-        'auto.components.onboarding.OnboardingFlow.b054332836',
-        'Set up notifications'
-      )
-    },
-    get subtitle() {
-      return translate(
-        'auto.components.onboarding.OnboardingFlow.ff92d15436',
-        'Orca will notify you when agents are done or need help.'
-      )
-    }
-  },
-  integrations: {
-    get title() {
-      return translate(
-        'auto.components.onboarding.OnboardingFlow.ae3b00ca82',
-        'Set up GitHub tasks'
-      )
-    },
-    get subtitle() {
-      return translate(
-        'auto.components.onboarding.OnboardingFlow.97c42cda00',
-        'Install the GitHub CLI to:'
-      )
-    }
-  },
-  windows_terminal: {
-    get title() {
-      return translate(
-        'auto.components.onboarding.OnboardingFlow.windowsTerminalTitle',
-        'Set Windows terminal defaults'
-      )
-    },
-    get subtitle() {
-      return translate(
-        'auto.components.onboarding.OnboardingFlow.windowsTerminalSubtitle',
-        'Choose the DEFAULT Shell for new panes and how right-click behaves in the terminal.'
-      )
-    }
-  }
-} as const
-
-const stepTooltipLabels = {
-  agent: {
-    get value() {
-      return translate('components.onboarding.flow.stepTooltip.agent', 'Default Agent')
-    }
-  },
-  theme: {
-    get value() {
-      return translate('components.onboarding.flow.stepTooltip.theme', 'Appearance')
-    }
-  },
-  windows_terminal: {
-    get value() {
-      return translate('components.onboarding.flow.stepTooltip.windowsTerminal', 'Windows Terminal')
-    }
-  },
-  notifications: {
-    get value() {
-      return translate('components.onboarding.flow.stepTooltip.notifications', 'Notifications')
-    }
-  },
-  integrations: {
-    get value() {
-      return translate('components.onboarding.flow.stepTooltip.integrations', 'Integrations')
-    }
-  }
-} as const
+import { useTranslate } from '@/i18n/use-translate'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { useScrollEdgeFades } from '@/lib/list-interaction/use-scroll-edge-fades'
+import { AgentSurfaceStep } from './AgentSurfaceStep'
+import { stepCopy, stepTooltipLabels } from './onboarding-step-copy'
 
 type OnboardingFlowProps = {
   onboarding: OnboardingState
@@ -128,17 +33,22 @@ export default function OnboardingFlow({
   onboarding,
   onOnboardingChange
 }: OnboardingFlowProps): React.JSX.Element {
+  const t = useTranslate()
   const flow = useOnboardingFlow(onboarding, onOnboardingChange)
+  const stepFades = useScrollEdgeFades<HTMLDivElement>()
   const continueShortcutModifierLabel = getScreenSubmitModifierLabel()
   const { currentStep, stepIndex, busyLabel } = flow
-  const copy = stepCopy[currentStep.id]
-  const shouldShowSkipToProjectSetup = currentStep.id !== 'notifications'
+  const copy =
+    currentStep.id === 'agent' && flow.agentSurface === 'chat'
+      ? stepCopy.agent_chat
+      : stepCopy[currentStep.id]
+  const shouldShowSetUpLater = currentStep.id !== 'notifications'
   const shouldShowFooterBusy = Boolean(busyLabel)
   const footerPrimaryLabel =
     busyLabel ??
-    (currentStep.id === 'notifications'
-      ? translate('components.onboarding.flow.actions.addFirstProject', 'Add your first project')
-      : translate('components.onboarding.flow.actions.continue', 'Continue'))
+    (currentStep.id === 'notifications' && !flow.hasSelectedWorkspace
+      ? t('components.onboarding.flow.actions.addFirstProject', 'Add your first project')
+      : t('components.onboarding.flow.actions.continue', 'Continue'))
   const [languagePickerOpen, setLanguagePickerOpen] = useState(false)
   const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
   const skipConfirmAdvancedViaRef = useRef<'button' | 'keyboard'>('button')
@@ -195,7 +105,7 @@ export default function OnboardingFlow({
   }, [requestSkipConfirmation, skipConfirmOpen, languagePickerOpen])
 
   return (
-    <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+    <TooltipProvider skipDelayDuration={0}>
       <div
         className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black/50 p-4 text-foreground"
         data-onboarding-overlay
@@ -214,10 +124,7 @@ export default function OnboardingFlow({
         <section
           ref={flow.setLifecycleRootRef}
           role="dialog"
-          aria-label={translate(
-            'auto.components.onboarding.OnboardingFlow.277ba45540',
-            'Orca onboarding'
-          )}
+          aria-label={t('auto.components.onboarding.OnboardingFlow.277ba45540', 'Orca onboarding')}
           aria-modal="true"
           data-onboarding-modal
           className={cn(
@@ -234,9 +141,7 @@ export default function OnboardingFlow({
                   aria-hidden="true"
                   className="h-7 w-auto shrink-0 invert dark:invert-0"
                 />
-                <span>
-                  {translate('auto.components.onboarding.OnboardingFlow.a249f81538', 'Orca')}
-                </span>
+                <span>{t('auto.components.onboarding.OnboardingFlow.a249f81538', 'Orca')}</span>
               </div>
               <OnboardingLanguageSwitcher
                 open={languagePickerOpen}
@@ -263,7 +168,7 @@ export default function OnboardingFlow({
                               ? 'w-6 bg-muted-foreground/70 hover:bg-foreground/80'
                               : 'w-6 bg-muted-foreground/25 hover:bg-muted-foreground/45'
                         )}
-                        aria-label={translate(
+                        aria-label={t(
                           'auto.components.onboarding.OnboardingFlow.adaa0aa627',
                           'Go to onboarding step {{value0}}: {{value1}}',
                           { value0: progressIdx + 1, value1: stepTooltipLabel }
@@ -279,7 +184,7 @@ export default function OnboardingFlow({
                 )
               })}
               <span className="ml-3 text-xs font-medium text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.onboarding.OnboardingFlow.stepOfTotal',
                   '{{current}} of {{total}}',
                   { current: flow.progressStepIndex + 1, total: flow.progressSteps.length }
@@ -290,10 +195,7 @@ export default function OnboardingFlow({
             <div className="mt-8 shrink-0">
               {stepIndex === 0 && (
                 <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                  {translate(
-                    'auto.components.onboarding.OnboardingFlow.1b5e182e9f',
-                    'Welcome to Orca'
-                  )}
+                  {t('auto.components.onboarding.OnboardingFlow.1b5e182e9f', 'Welcome to Orca')}
                 </div>
               )}
               <h1 className="text-[34px] font-semibold leading-[1.15] tracking-tight text-foreground">
@@ -307,16 +209,33 @@ export default function OnboardingFlow({
             </div>
 
             <div
+              ref={stepFades.ref}
               className={cn(
                 'min-h-0 flex-1 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
                 // Agent permissions stay outside the capped grid scroll; other steps use the outer scroller.
                 currentStep.id === 'agent'
                   ? 'mt-10 flex flex-col overflow-hidden'
-                  : cn('scrollbar-sleek overflow-y-auto pr-1', 'mt-10')
+                  : cn('scrollbar-sleek overflow-y-auto pr-1', 'mt-10', stepFades.className)
               )}
             >
+              {currentStep.id === 'agent_surface' && (
+                <AgentSurfaceStep
+                  agentSurface={flow.agentSurface}
+                  onSelect={flow.setAgentSurface}
+                  noChatAgentDetected={
+                    !flow.isDetectingAgents &&
+                    flow.chatDetected !== null &&
+                    flow.chatDetected.length === 0
+                  }
+                />
+              )}
               {currentStep.id === 'agent' && (
                 <AgentStep
+                  agentSurface={flow.agentSurface}
+                  onAgentSurfaceChange={flow.setAgentSurface}
+                  chatAgents={flow.chatAgents}
+                  chatDetected={flow.chatDetected}
+                  nativeChatProviders={flow.settings?.nativeChatProviders}
                   selectedAgent={flow.selectedAgent}
                   onSelect={flow.setSelectedAgent}
                   detectedSet={flow.detectedSet}
@@ -331,6 +250,8 @@ export default function OnboardingFlow({
                   onThemeChange={flow.setTheme}
                   settings={flow.settings}
                   updateSettings={flow.updateSettings}
+                  lookBaseline={flow.themeLookBaseline}
+                  onLookBaselineChange={flow.setThemeLookBaseline}
                 />
               )}
               {currentStep.id === 'notifications' && (
@@ -346,9 +267,9 @@ export default function OnboardingFlow({
             </div>
 
             <OnboardingFooter
-              shouldShowSkipToProjectSetup={shouldShowSkipToProjectSetup}
+              shouldShowSetUpLater={shouldShowSetUpLater}
               busyLabel={busyLabel}
-              onSkipToRepo={() => void flow.skipToRepo()}
+              onSetUpLater={() => void flow.setUpLater()}
               stepIndex={stepIndex}
               onBack={flow.back}
               showPrimary

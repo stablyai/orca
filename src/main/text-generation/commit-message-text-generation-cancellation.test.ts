@@ -10,6 +10,7 @@ import {
   generatePullRequestFieldsFromContext
 } from './commit-message-text-generation'
 import {
+  answerCodexAppServer,
   createChildTerminationExpectation,
   createMockDiscoveryChild,
   spawnedAgentArgv,
@@ -52,6 +53,31 @@ beforeEach(() => {
   terminateWindowsProcessTreeMock.mockResolvedValue(undefined)
   spawnMock.mockClear()
 })
+
+function generationSpawns() {
+  return spawnMock.mock.calls.filter((call) => !spawnedAgentArgv(call).includes('mcp'))
+}
+
+function policyProbeChild() {
+  const child = createMockDiscoveryChild()
+  child.stdin.end.mockImplementation(() =>
+    queueMicrotask(() => {
+      child.stdout.emit('data', Buffer.from('[]'))
+      child.emit('close', 0)
+    })
+  )
+  return child
+}
+
+function generationChildren(...children: ReturnType<typeof createMockDiscoveryChild>[]) {
+  spawnMock.mockImplementation((...args) => {
+    const child = spawnedAgentArgv(args).includes('mcp') ? policyProbeChild() : children.shift()
+    if (!child) {
+      throw new Error('Unexpected generation process')
+    }
+    return child
+  })
+}
 
 describe('generateCommitMessageFromContext on the Windows direct-child path', () => {
   const largePatch = Array.from(
@@ -468,7 +494,7 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
   it('publishes Codex cancellation immediately but holds its home lock until close', async () => {
     const firstChild = createMockDiscoveryChild()
     const secondChild = createMockDiscoveryChild()
-    spawnMock.mockReturnValueOnce(firstChild as never).mockReturnValueOnce(secondChild as never)
+    generationChildren(firstChild, secondChild)
     const env = { CODEX_HOME: '/managed/codex-generation-home' }
     const context = { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' }
     const params = { agentId: 'codex' as const, model: 'gpt-5.5' }
@@ -478,7 +504,7 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
       cwd: '/repo',
       env
     })
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(generationSpawns()).toHaveLength(1))
     cancelGenerateCommitMessageLocal('/repo')
 
     await expect(first).resolves.toEqual({
@@ -494,10 +520,10 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
       env
     })
     await Promise.resolve()
-    expect(spawnMock).toHaveBeenCalledTimes(1)
+    expect(generationSpawns()).toHaveLength(1)
 
     firstChild.emit('close', null)
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(generationSpawns()).toHaveLength(2))
     secondChild.stdout.emit('data', Buffer.from('Update README\n'))
     secondChild.emit('close', 0)
     await expect(second).resolves.toMatchObject({ success: true, message: 'Update README' })
@@ -506,7 +532,7 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
   it('releases the Codex home on root exit when a descendant holds stdio open', async () => {
     const firstChild = createMockDiscoveryChild()
     const secondChild = createMockDiscoveryChild()
-    spawnMock.mockReturnValueOnce(firstChild as never).mockReturnValueOnce(secondChild as never)
+    generationChildren(firstChild, secondChild)
     const env = { CODEX_HOME: '/managed/codex-descendant-home' }
     const context = { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' }
     const params = { agentId: 'codex' as const, model: 'gpt-5.5' }
@@ -516,7 +542,7 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
       cwd: '/descendant-repo',
       env
     })
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(generationSpawns()).toHaveLength(1))
     cancelGenerateCommitMessageLocal('/descendant-repo')
     await expect(first).resolves.toMatchObject({ canceled: true })
     await expectChildTerminated(firstChild)
@@ -529,7 +555,7 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
       cwd: '/descendant-repo-2',
       env
     })
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(generationSpawns()).toHaveLength(2))
     secondChild.stdout.emit('data', Buffer.from('Update README\n'))
     secondChild.emit('close', 0)
     await expect(second).resolves.toMatchObject({ success: true, message: 'Update README' })
@@ -546,7 +572,7 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
     )
     const firstChild = createMockDiscoveryChild()
     const secondChild = createMockDiscoveryChild()
-    spawnMock.mockReturnValueOnce(firstChild as never).mockReturnValueOnce(secondChild as never)
+    generationChildren(firstChild, secondChild)
     const env = { CODEX_HOME: 'C:\\managed\\codex-generation-home' }
     const context = { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' }
     const params = { agentId: 'codex' as const, model: 'gpt-5.5' }
@@ -557,7 +583,7 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
         cwd: 'C:\\repo',
         env
       })
-      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+      await vi.waitFor(() => expect(generationSpawns()).toHaveLength(1))
       cancelGenerateCommitMessageLocal('C:\\repo')
       await expect(first).resolves.toMatchObject({ canceled: true })
 
@@ -568,10 +594,10 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
       })
       firstChild.emit('close', null)
       await Promise.resolve()
-      expect(spawnMock).toHaveBeenCalledTimes(1)
+      expect(generationSpawns()).toHaveLength(1)
 
       finishTreeKill()
-      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+      await vi.waitFor(() => expect(generationSpawns()).toHaveLength(2))
       secondChild.stdout.emit('data', Buffer.from('Update README\n'))
       secondChild.emit('close', 0)
       await expect(second).resolves.toMatchObject({ success: true, message: 'Update README' })
@@ -583,10 +609,10 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
   it('cancels Codex generation promptly while it is queued behind the home lock', async () => {
     const discoveryChild = createMockDiscoveryChild()
     const laterChild = createMockDiscoveryChild()
-    spawnMock.mockReturnValueOnce(discoveryChild as never).mockReturnValueOnce(laterChild as never)
+    generationChildren(discoveryChild, laterChild)
     const env = { CODEX_HOME: '/managed/codex-queued-home' }
     const blocker = discoverCommitMessageModelsLocal('codex', env)
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(generationSpawns()).toHaveLength(1))
 
     const queued = generateCommitMessageFromContext(
       { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' },
@@ -600,23 +626,125 @@ describe('generateCommitMessageFromContext on the Windows direct-child path', ()
       error: 'Generation canceled.',
       canceled: true
     })
-    expect(spawnMock).toHaveBeenCalledTimes(1)
+    expect(generationSpawns()).toHaveLength(1)
 
-    discoveryChild.stdout.emit(
-      'data',
-      Buffer.from(JSON.stringify({ models: [{ slug: 'gpt-5.5', display_name: 'GPT-5.5' }] }))
-    )
-    discoveryChild.emit('close', 0)
+    answerCodexAppServer(discoveryChild, [
+      { data: [{ id: 'gpt-5.5', model: 'gpt-5.5', displayName: 'GPT-5.5' }], nextCursor: null }
+    ])
     await expect(blocker).resolves.toMatchObject({ success: true })
+    discoveryChild.emit('close', 0)
 
     const later = generateCommitMessageFromContext(
       { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+later' },
       { agentId: 'codex', model: 'gpt-5.5' },
       { kind: 'local', cwd: '/later-repo', env }
     )
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(generationSpawns()).toHaveLength(2))
     laterChild.stdout.emit('data', Buffer.from('Update later\n'))
     laterChild.emit('close', 0)
     await expect(later).resolves.toMatchObject({ success: true, message: 'Update later' })
+  })
+
+  it.each(['root-first', 'tree-first'] as const)(
+    'cancels a live Codex policy probe and retains its home until both stop proofs (%s)',
+    async (order) => {
+      const stopped = Promise.withResolvers<void>()
+      terminateWindowsProcessTreeMock.mockReturnValueOnce(stopped.promise)
+      const probe = createMockDiscoveryChild()
+      const later = createMockDiscoveryChild()
+      const laterSpawned = Promise.withResolvers<void>()
+      spawnMock.mockImplementationOnce(() => probe)
+      spawnMock.mockImplementation((...args) => {
+        if (spawnedAgentArgv(args).includes('mcp')) {
+          return policyProbeChild()
+        }
+        laterSpawned.resolve()
+        return later
+      })
+      const env = { CODEX_HOME: `C:\\managed\\probe-${order}` }
+      const context = { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' }
+      const params = { agentId: 'codex' as const, model: 'gpt-5.5' }
+      const first = generateCommitMessageFromContext(context, params, {
+        kind: 'local',
+        cwd: `/probe-${order}`,
+        env
+      })
+      await vi.waitFor(() => expect(probe.stdin.end).toHaveBeenCalled())
+      cancelGenerateCommitMessageLocal(`/probe-${order}`)
+      await expect(first).resolves.toMatchObject({ canceled: true })
+      const second = generateCommitMessageFromContext(context, params, {
+        kind: 'local',
+        cwd: `/after-probe-${order}`,
+        env
+      })
+      // Late valid output cannot start the canceled semantic operation.
+      probe.stdout.emit('data', Buffer.from('[]'))
+      if (order === 'root-first') {
+        probe.emit('exit', null, 'SIGKILL')
+      } else {
+        stopped.resolve()
+        await expectChildTerminated(probe)
+      }
+      await new Promise<void>((done) => setImmediate(done))
+      expect(generationSpawns()).toHaveLength(0)
+      if (order === 'root-first') {
+        stopped.resolve()
+      } else {
+        probe.emit('exit', null, 'SIGKILL')
+      }
+      await laterSpawned.promise
+      later.stdout.emit('data', Buffer.from('Update README\n'))
+      later.emit('close', 0)
+      await expect(second).resolves.toMatchObject({ success: true, message: 'Update README' })
+      expect(generationSpawns()).toHaveLength(1)
+    }
+  )
+
+  it.each(['error', 'nonzero-close'] as const)(
+    'observes late policy-probe errors without stopping an exited child (%s)',
+    async (failure) => {
+      const probe = createMockDiscoveryChild()
+      spawnMock.mockReturnValue(probe)
+      const pending = generateCommitMessageFromContext(
+        { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' },
+        { agentId: 'codex', model: 'gpt-5.5' },
+        { kind: 'local', cwd: `/probe-${failure}`, env: { CODEX_HOME: `/probe-${failure}-home` } }
+      )
+      await vi.waitFor(() => expect(probe.stdin.end).toHaveBeenCalled())
+      if (failure === 'error') {
+        probe.emit('error', new Error('Live failure'))
+      } else {
+        probe.emit('close', 1)
+      }
+      await expect(pending).resolves.toMatchObject({ success: false })
+      expect(terminateWindowsProcessTreeMock).toHaveBeenCalledTimes(failure === 'error' ? 1 : 0)
+      expect(() => probe.emit('error', new Error('Late failure'))).not.toThrow()
+      probe.emit('exit', 1, null)
+      expect(() => probe.emit('error', new Error('After exit'))).not.toThrow()
+      expect(terminateWindowsProcessTreeMock).toHaveBeenCalledTimes(failure === 'error' ? 1 : 0)
+      expect(generationSpawns()).toHaveLength(0)
+    }
+  )
+
+  it('publishes the task deadline during a live probe without starting a semantic child', async () => {
+    const deadline = new AbortController()
+    const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal)
+    const probe = createMockDiscoveryChild()
+    spawnMock.mockReturnValue(probe)
+    try {
+      const pending = generateCommitMessageFromContext(
+        { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' },
+        { agentId: 'codex', model: 'gpt-5.5' },
+        { kind: 'local', cwd: '/probe-deadline', env: { CODEX_HOME: '/probe-deadline-home' } }
+      )
+      await vi.waitFor(() => expect(probe.stdin.end).toHaveBeenCalled())
+      deadline.abort(new DOMException('The operation timed out', 'TimeoutError'))
+      await expect(pending).resolves.toMatchObject({ success: false, errorCode: 'timedOut' })
+      probe.stdout.emit('data', Buffer.from('[]'))
+      probe.emit('exit', null, 'SIGKILL')
+      expect(generationSpawns()).toHaveLength(0)
+    } finally {
+      timeout.mockRestore()
+    }
   })
 })

@@ -1,11 +1,12 @@
-import { CrewSubscribeParams } from '../../../../../shared/orchestration-crew'
+import { CrewSubscribeParams } from '../../../../../shared/orchestration/orchestration-crew'
 import { subscribeCrew } from '../../../orchestration/crew/crew-stream'
-import { defineStreamingMethod } from '../../core'
+import { defineOrchestrationStreamingMethod } from './access/orchestration-method-access'
 
 let sequence = 0
 export const ORCHESTRATION_CREW_METHODS = [
-  defineStreamingMethod({
+  defineOrchestrationStreamingMethod({
     name: 'orchestration.crewSubscribe',
+    access: { kind: 'localOnly', targets: { party: 'party' } },
     permission: 'workspace',
     params: CrewSubscribeParams,
     handler: async ({ party }, { runtime, signal, connectionId }, emit) => {

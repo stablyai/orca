@@ -6,13 +6,11 @@ import {
 import {
   BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_PAGES,
   type BrowserClientHostedPageInventory,
-  type BrowserClientHostCommandEvent,
-  type BrowserClientHostCommandResult
-} from '../../../../shared/browser-client-host-protocol'
-import {
-  cleanupRetainedBrowserClientPage,
-  type BrowserClientPageRendererIdentity
-} from '../lifecycle/browser-client-page-cleanup'
+  type BrowserClientHostCommandEvent
+} from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
+import { cleanupRetainedBrowserClientPage } from '../lifecycle/browser-client-page-cleanup'
+import type { BrowserClientPageRendererIdentity } from '../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 import { assertBrowserClientPageAdmission } from '../lifecycle/browser-client-page-admission'
 import { createReservedBrowserClientPage } from '../lifecycle/browser-client-page-creation'
 import { retireSupersededExecutionHostPages } from '../lifecycle/browser-client-page-execution-host-supersession'
@@ -279,7 +277,7 @@ export class BrowserClientPageCommandExecutor {
 
   private async cleanupPage(
     page: BrowserClientRetainedPage,
-    previousRendererPage?: BrowserClientPageRendererIdentity,
+    previousRendererPage?: Readonly<BrowserClientPageRendererIdentity>,
     releaseUploads = true
   ): Promise<void> {
     page.releaseAvailabilityWatch?.()

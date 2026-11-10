@@ -1,18 +1,18 @@
-import { BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY } from '../../../../shared/browser-client-profile-switch-protocol'
+import { BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY } from '../../../../shared/browser/client-hosting/browser-client-profile-switch-protocol'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { app } from 'electron'
 import {
   BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY,
   BROWSER_CLIENT_EXPECT_URL_HOST_CAPABILITY
-} from '../../../../shared/browser-client-automation-protocol'
-import { BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY } from '../../../../shared/browser-client-file-channel-protocol'
-import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser-client-host-protocol'
-import type { PairedRuntimeConnection } from '../../../../shared/paired-runtime-connection'
+} from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
+import { BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY } from '../../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
+import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment
-} from '../../../../shared/runtime-environments'
+} from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { BrowserClientNetworkRouteRegistry } from '../../network/client-routes/browser-client-network-route-registry'
 import {
   browserAuthorityExecutionHostStorageIdentity,
@@ -25,8 +25,8 @@ import { BrowserClientFileChannelTransport } from '../file-transfers/browser-cli
 import { registerBrowserClientHostEnvironmentRoutes } from './browser-client-host-environment-routes'
 import { BrowserClientPageCommandExecutor } from '../../client-pages/execution/browser-client-page-command-executor'
 import { createBrowserClientPageGuestBinding } from '../../client-pages/lifecycle/browser-client-page-guest-binding'
-import { browserManager } from '../../browser-manager'
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { BrowserClientUploadStaging } from '../file-transfers/browser-client-upload-staging'
 import {
   executeBrowserClientPageAutomation,

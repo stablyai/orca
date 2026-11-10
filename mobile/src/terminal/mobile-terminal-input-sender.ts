@@ -4,10 +4,11 @@ import {
   TERMINAL_ORDERED_INPUT_WINDOW,
   terminalOrderedInputControls,
   terminalOrderedInputByteLength
-} from '../../../src/shared/terminal-ordered-input'
-import { getTerminalInputByteLength } from '../../../src/shared/terminal-input'
-import type { RpcClient, SendRequestOptions } from '../transport/rpc-client'
-import type { RpcResponse } from '../transport/types'
+} from '../../../src/shared/terminal/input/terminal-ordered-input'
+import { getTerminalInputByteLength } from '../../../src/shared/terminal/input/terminal-input'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { SendRequestOptions } from '../transport/rpc/unvalidated-rpc-request-port'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { terminalInputSend, terminalInputSessionOpen } from './mobile-terminal-operations'
 import { TERMINAL_LIVE_INPUT_MAX_BYTES } from './terminal-live-input'
 

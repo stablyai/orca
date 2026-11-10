@@ -1,10 +1,15 @@
+import './session-search-worker.test-fixture'
 import { existsSync } from 'node:fs'
-import { utimes } from 'node:fs/promises'
+import { unlink, utimes } from 'node:fs/promises'
+import * as fileRemoval from '../../shared/windows-transient-lock-removal'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
 import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'
+import * as searchSchema from './session-search-schema'
+import { SessionSearchReaders } from './session-search-readers'
 import { SessionSearchInstance } from './session-search-instance'
+import { SessionSearchIndexer } from './session-search-indexer'
 import {
   openSessionSearchIndexerHarness,
   writeClaudeTranscript,
@@ -28,7 +33,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.restoreAllMocks()
-  instance?.close()
+  await instance?.close()
   resetTranscriptConsumersForTests()
   resetSessionParseCacheForTests()
   await harness.cleanup()
@@ -71,25 +76,7 @@ it('constructs nothing and touches no disk while the setting is off', async () =
     kind: 'unavailable',
     reason: 'disabled'
   })
-  expect(subject.status()).toMatchObject({ enabled: false, phase: 'idle', generation: 0 })
-  expect(errors).toEqual([])
-})
-
-it('indexes and answers once the setting is on', async () => {
-  await writeClaudeTranscript(
-    transcriptPath(RECENT_SESSION_ID),
-    ['a distinctive conversation'],
-    RECENT_SESSION_ID
-  )
-  const subject = newInstance()
-  subject.apply({ enabled: true, historyDays: null })
-  await subject.settled()
-
-  expect(await searchFor('distinctive')).toEqual([RECENT_SESSION_ID])
-  const status = subject.status()
-  expect(status.enabled).toBe(true)
-  expect(status.filesIndexed).toBeGreaterThan(0)
-  expect(status.generation).toBeGreaterThan(0)
+  expect(await subject.status()).toMatchObject({ enabled: false, phase: 'idle', generation: 0 })
   expect(errors).toEqual([])
 })
 
@@ -117,26 +104,6 @@ it('closes the live pair and starts a new one on a settings change', async () =>
   expect(errors).toEqual([])
 })
 
-it('leaves nothing running and no live claim when the setting goes off', async () => {
-  await writeClaudeTranscript(
-    transcriptPath(RECENT_SESSION_ID),
-    ['a conversation'],
-    RECENT_SESSION_ID
-  )
-  const subject = newInstance()
-  subject.apply({ enabled: true, historyDays: null })
-  await subject.settled()
-  expect(subject.running).toBe(true)
-
-  subject.apply({ enabled: false, historyDays: null })
-  expect(subject.running).toBe(false)
-  expect(existsSync(harness.databasePath)).toBe(true)
-  subject.apply({ enabled: true, historyDays: null })
-  await subject.settled()
-  expect(subject.running).toBe(true)
-  expect(errors).toEqual([])
-})
-
 it('removes the database on clear and rebuilds only while consent stands', async () => {
   await writeClaudeTranscript(
     transcriptPath(RECENT_SESSION_ID),
@@ -148,16 +115,71 @@ it('removes the database on clear and rebuilds only while consent stands', async
   await subject.settled()
   expect(await searchFor('distinctive')).toEqual([RECENT_SESSION_ID])
 
-  subject.clear()
+  await subject.clear()
   expect(subject.running).toBe(true)
   expect(existsSync(harness.databasePath)).toBe(true)
   await subject.settled()
   expect(await searchFor('distinctive')).toEqual([RECENT_SESSION_ID])
 
   subject.apply({ enabled: false, historyDays: null })
-  subject.clear()
+  await subject.clear()
   expect(subject.running).toBe(false)
   expect(existsSync(harness.databasePath)).toBe(false)
+  expect(errors).toEqual([])
+})
+
+it('never reports the deleted index while re-enabling a cleared search', async () => {
+  for (const id of [RECENT_SESSION_ID, ANCIENT_SESSION_ID]) {
+    await writeClaudeTranscript(transcriptPath(id), ['searchable conversation'], id)
+  }
+  const subject = newInstance()
+  const initialEnable = subject.apply({ enabled: true, historyDays: null })
+  expect(await subject.status()).toMatchObject({
+    enabled: true,
+    phase: 'indexing',
+    filesIndexed: 0,
+    messagesIndexed: 0
+  })
+  await initialEnable
+  await subject.settled()
+  expect(await subject.status()).toMatchObject({ filesIndexed: 2, messagesIndexed: 4 })
+
+  await subject.apply({ enabled: false, historyDays: null })
+  await subject.clear()
+  expect(existsSync(harness.databasePath)).toBe(false)
+  await unlink(transcriptPath(ANCIENT_SESSION_ID))
+
+  let release!: () => void
+  let opening!: () => void
+  const blocked = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const started = new Promise<void>((resolve) => {
+    opening = resolve
+  })
+  const initialize = SessionSearchIndexer.prototype.initialize
+  vi.spyOn(SessionSearchIndexer.prototype, 'initialize').mockImplementationOnce(async function (
+    this: SessionSearchIndexer
+  ) {
+    opening()
+    await blocked
+    await initialize.call(this)
+  })
+  const enabling = subject.apply({ enabled: true, historyDays: null })
+  try {
+    await started
+    expect(await subject.status()).toMatchObject({
+      enabled: true,
+      phase: 'indexing',
+      filesIndexed: 0,
+      messagesIndexed: 0
+    })
+  } finally {
+    release()
+    await enabling
+  }
+  await subject.settled()
+  expect(await subject.status()).toMatchObject({ filesIndexed: 1, messagesIndexed: 2 })
   expect(errors).toEqual([])
 })
 
@@ -173,9 +195,9 @@ it('refuses a page cursor minted before clear even when the rebuilt generation m
     throw new Error('expected a paged result')
   }
 
-  subject.clear()
+  await subject.clear()
   await subject.settled()
-  expect(subject.status().generation).toBe(first.generation)
+  expect((await subject.status()).generation).toBe(first.generation)
   expect(
     await subject.search({ query: 'shared clear fence', limit: 1, cursor: first.page.cursor })
   ).toMatchObject({ kind: 'stale-cursor', generation: first.generation })
@@ -209,42 +231,47 @@ it('keeps pagination stable when the clock crosses retention before a purge', as
   expect(errors).toEqual([])
 })
 
-it('reports being switched off before blaming a scope it does not know', async () => {
+it('propagates query failures while status remains available without a reader', async () => {
   const subject = newInstance()
-  subject.apply({ enabled: false, historyDays: null })
+  await subject.apply({ enabled: true, historyDays: null })
   await subject.settled()
-
-  expect(await subject.search({ query: 'anything' }, { kind: 'unknown' })).toEqual({
-    kind: 'unavailable',
-    reason: 'disabled'
-  })
+  const before = await subject.status()
+  vi.spyOn(SessionSearchReaders.prototype, 'query').mockRejectedValue(new Error('reader failed'))
+  await expect(subject.search({ query: 'needle' })).rejects.toThrow('reader failed')
+  expect(await subject.status()).toEqual(before)
 })
 
-it('reports not being ready before blaming a scope it does not know', async () => {
+it('rejects a failed clear and keeps the transition chain usable for another clear', async () => {
   const subject = newInstance()
-  subject.apply({ enabled: true, historyDays: null })
-  await subject.settled()
-  subject.close()
-
-  expect(await subject.search({ query: 'anything' }, { kind: 'unknown' })).toEqual({
-    kind: 'unavailable',
-    reason: 'not-ready'
-  })
+  const remove = vi
+    .spyOn(searchSchema, 'removeSessionSearchDatabaseAsync')
+    .mockRejectedValueOnce(new Error('unlink denied'))
+  await expect(subject.clear()).rejects.toThrow('unlink denied')
+  await expect(subject.clear()).resolves.toBeUndefined()
+  expect(remove).toHaveBeenCalledTimes(2)
 })
 
-it('answers scope-unknown once it is switched on and ready', async () => {
-  await writeClaudeTranscript(
-    transcriptPath(RECENT_SESSION_ID),
-    ['a distinctive conversation'],
-    RECENT_SESSION_ID
-  )
+it('keeps serving while an asynchronous clear deletion outlives its deadline', async () => {
   const subject = newInstance()
-  subject.apply({ enabled: true, historyDays: null })
-  await subject.settled()
-
-  expect(await subject.search({ query: 'distinctive' }, { kind: 'unknown' })).toEqual({
-    kind: 'unavailable',
-    reason: 'scope-unknown'
+  let reject!: (error: Error) => void
+  const blocked = new Promise<void>((_resolve, fail) => {
+    reject = fail
   })
-  expect(await searchFor('distinctive')).toEqual([RECENT_SESSION_ID])
+  const remove = vi.spyOn(fileRemoval, 'removeTree').mockReturnValue(blocked)
+  vi.useFakeTimers()
+  try {
+    const clear = expect(subject.clear()).rejects.toThrow('Could not complete')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(remove).toHaveBeenCalled()
+    expect(await subject.status()).toMatchObject({ enabled: false })
+    await vi.advanceTimersByTimeAsync(10_000)
+    await clear
+    expect(await subject.search({ query: 'responsive' })).toMatchObject({ reason: 'disabled' })
+    reject(new Error('file remains locked'))
+    await subject.close()
+    expect(errors).toContainEqual(new Error('file remains locked'))
+  } finally {
+    vi.useRealTimers()
+    remove.mockRestore()
+  }
 })

@@ -26,15 +26,18 @@ const { transport, resetTransport } = vi.hoisted(() => {
   }
 })
 
-vi.mock('../../src/renderer/src/components/native-chat/native-chat-session-transport', () => ({
-  getNativeChatSessionTransport: () => transport
-}))
+vi.mock(
+  '../../src/renderer/src/components/native-chat/session/terminal/read/native-chat-session-transport',
+  () => ({
+    getNativeChatSessionTransport: () => transport
+  })
+)
 
-import {
-  useNativeChatLiveSession,
-  type NativeChatLiveSession,
-  type UseNativeChatLiveSessionArgs
-} from '../../src/renderer/src/components/native-chat/use-native-chat-live-session'
+import { useNativeChatLiveSession } from '../../src/renderer/src/components/native-chat/session/terminal/read/use-native-chat-live-session'
+import type {
+  UseNativeChatLiveSessionArgs,
+  NativeChatLiveSession
+} from '../../src/renderer/src/components/native-chat/session/terminal/read/native-chat-live-session-contract'
 
 describe('useNativeChatLiveSession — file watcher pagination composition', () => {
   const AGENT = 'claude' as const
@@ -91,7 +94,7 @@ describe('useNativeChatLiveSession — file watcher pagination composition', () 
     const { readNativeChatTranscriptTail, subscribeNativeChatTranscript } =
       await import('../../src/main/native-chat/transcript-watch')
     const { createNativeChatMessageListProjection } =
-      await import('../../src/renderer/src/components/native-chat/native-chat-message-list-projection')
+      await import('../../src/renderer/src/components/native-chat/conversation/projection/native-chat-message-list-projection')
     const directory = await mkdtemp(join(tmpdir(), 'pr31794-live-'))
     const filePath = join(directory, 'session.jsonl')
     const line = (n: number) =>

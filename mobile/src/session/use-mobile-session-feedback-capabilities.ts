@@ -1,9 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { Animated, Easing, Platform } from 'react-native'
 import { translate } from '../i18n/mobile-i18n'
-import { reconcileMobileSessionCreateWarningState } from './mobile-session-create-warning-state'
-import type { MobileSessionTerminalRuntimeModel } from './use-mobile-session-terminal-runtime'
-import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
+import { reconcileMobileSessionCreateWarningState } from './tabs/mobile-session-create-warning-state'
+import type { MobileSessionTerminalRuntimeModel } from '../terminal/session/use-mobile-session-terminal-runtime'
+import type { StructuredAgentSessionHostSupport } from './native-chat/agent-session/mobile-structured-agent-session-host-support'
 
 // A strong ease-out both ways; the presentation turns this fade into a short rise.
 const TOAST_EASING = Easing.bezier(0.23, 1, 0.32, 1)

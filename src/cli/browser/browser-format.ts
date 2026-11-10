@@ -10,7 +10,7 @@ import type {
   BrowserTabProfileCloneResult,
   BrowserTabProfileShowResult,
   BrowserTabShowResult
-} from '../../shared/runtime-browser-contracts'
+} from '../../shared/browser/runtime/runtime-browser-contracts'
 
 export function formatSnapshot(result: BrowserSnapshotResult): string {
   // Older runtimes leave url and title unset.

@@ -1,4 +1,4 @@
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type {
   Project,
@@ -18,17 +18,19 @@ import { FolderWorkspacePersistenceOperations } from '../restoring-sessions/fold
 import { ProjectHostPersistenceOperations } from '../tracking-repos/project-host-operations'
 
 import type { StoreRuntimeState } from './store-runtime-state'
-import type { RepoLifecycleOperations } from './repo-lifecycle-operations'
-import type { WriteSchedulingOperations } from './write-scheduling'
-import type { MetadataLineageOperations } from './metadata-lineage-operations'
+
 import {
+  type RepoLifecycleOperations,
   hydrateRepo,
   updateRepoBackedProjectHostSetup,
   updateIndependentProjectHostSetup,
   pruneMobileClientTabSelections
 } from './repo-lifecycle-operations'
-import { scheduleSave } from './write-scheduling'
-import { removeWorkspaceLineageForFolderParent } from './metadata-lineage-operations'
+import { type WriteSchedulingOperations, scheduleSave } from './write-scheduling'
+import {
+  type MetadataLineageOperations,
+  removeWorkspaceLineageForRemovedFolder
+} from './metadata-lineage-operations'
 import { bumpLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-worktree-scan-generation'
 import { dropOrcadTerminalRestoreHintsForWorktrees } from '../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
@@ -136,6 +138,12 @@ export class ProjectCollectionOperations {
     return getProjectGroupOperations(this).deleteProjectGroup(groupId)
   }
 
+  updateProjectGroups(
+    mutations: Parameters<ProjectGroupPersistenceOperations['updateProjectGroups']>[0]
+  ): ProjectGroup[] | null {
+    return getProjectGroupOperations(this).updateProjectGroups(mutations)
+  }
+
   getFolderWorkspaces(): FolderWorkspace[] {
     return getFolderWorkspaceOperations(this).getFolderWorkspaces()
   }
@@ -220,8 +228,8 @@ export function getProjectGroupOperations(
     new ProjectGroupPersistenceOperations({
       state: owner[projectCollectionOperationsContext].runtime.state,
       scheduleSave: () => scheduleSave(owner[projectCollectionOperationsContext].scheduling),
-      removeWorkspaceLineageForFolderParent: (folderWorkspaceId) =>
-        removeWorkspaceLineageForFolderParent(
+      removeWorkspaceLineageForRemovedFolder: (folderWorkspaceId) =>
+        removeWorkspaceLineageForRemovedFolder(
           owner[projectCollectionOperationsContext].metadata,
           folderWorkspaceId
         ),
@@ -241,8 +249,8 @@ export function getFolderWorkspaceOperations(
     new FolderWorkspacePersistenceOperations({
       state: owner[projectCollectionOperationsContext].runtime.state,
       scheduleSave: () => scheduleSave(owner[projectCollectionOperationsContext].scheduling),
-      removeWorkspaceLineageForFolderParent: (folderWorkspaceId) =>
-        removeWorkspaceLineageForFolderParent(
+      removeWorkspaceLineageForRemovedFolder: (folderWorkspaceId) =>
+        removeWorkspaceLineageForRemovedFolder(
           owner[projectCollectionOperationsContext].metadata,
           folderWorkspaceId
         ),

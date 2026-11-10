@@ -3,8 +3,8 @@ import { z } from 'zod'
 import {
   getChromeExtensionOrigin,
   parseChromeExtensionUrl
-} from '../../../../shared/browser-extension-url'
-import { browserManager } from '../../browser-manager'
+} from '../../../../shared/browser/extensions/browser-extension-url'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import { getBrowserExtensionContextSignal } from '../api-runtime/browser-extension-context-lifetime'
 import { getHostSessionState } from '../api-runtime/browser-extension-contexts'

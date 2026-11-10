@@ -1,13 +1,14 @@
 import { Badge } from '@/components/ui/badge'
-import { formatTimeAgo } from '@/components/right-sidebar/ai-vault-session-time'
-import { cn } from '@/lib/utils'
+import { recomputeOn } from '@/lib/recompute-on'
+import { formatTimeAgo } from '@/components/right-sidebar/ai-vault/session-list/ai-vault-session-time'
+import { cn } from '@/lib/class-names'
 import { useNow } from '@/hooks/use-now'
-import { translate } from '@/i18n/i18n'
-import type { OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
+import { useTranslate } from '@/i18n/use-translate'
+import type { OrchestrationCrewRow } from '../../../../shared/orchestration/orchestration-crew'
 
 export function CrewRowTime({ at, className }: { at?: string; className?: string }) {
   // Re-render on the sidebar's shared coarse tick so "2m ago" keeps advancing while the panel is open.
-  useNow(30_000)
+  const now = useNow(30_000)
   if (!at) {
     return null
   }
@@ -18,17 +19,16 @@ export function CrewRowTime({ at, className }: { at?: string; className?: string
       dateTime={date.toISOString()}
       className={cn('shrink-0 text-2xs text-muted-foreground', className)}
     >
-      {formatTimeAgo(date.getTime())}
+      {recomputeOn([now], () => formatTimeAgo(date.getTime()))}
     </time>
   ) : null
 }
 
 export function CrewRowDetails({ row }: { row: OrchestrationCrewRow }) {
+  const t = useTranslate()
   return (
     <dl className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs [overflow-wrap:anywhere]">
-      <dt className="text-muted-foreground">
-        {translate('components.orchestrationCrew.task', 'Task')}
-      </dt>
+      <dt className="text-muted-foreground">{t('components.orchestrationCrew.task', 'Task')}</dt>
       <dd className="min-w-0">
         {row.task ? (
           <>
@@ -38,26 +38,26 @@ export function CrewRowDetails({ row }: { row: OrchestrationCrewRow }) {
             {row.task.title}
           </>
         ) : (
-          translate('components.orchestrationCrew.noTask', 'No shared task')
+          t('components.orchestrationCrew.noTask', 'No shared task')
         )}
       </dd>
       {row.pendingQuestion ? (
         <>
           <dt className="text-status-warning">
-            {translate('components.orchestrationCrew.asksYou', 'Asks you')}
+            {t('components.orchestrationCrew.asksYou', 'Asks you')}
           </dt>
           <dd className="min-w-0 whitespace-pre-wrap">{row.pendingQuestion.preview}</dd>
         </>
       ) : row.latest ? (
         <>
           <dt className="text-muted-foreground">
-            {translate('components.orchestrationCrew.latest', 'Latest')}
+            {t('components.orchestrationCrew.latest', 'Latest')}
           </dt>
           <dd className="min-w-0">
             <span className="text-2xs text-muted-foreground">
               {row.latest.direction === 'to'
-                ? translate('components.orchestrationCrew.to', 'To')
-                : translate('components.orchestrationCrew.from', 'From')}{' '}
+                ? t('components.orchestrationCrew.to', 'To')
+                : t('components.orchestrationCrew.from', 'From')}{' '}
               {row.label} · <CrewRowTime at={row.latest.at} />
             </span>
             <blockquote className="mt-1 whitespace-pre-wrap border-l border-border pl-2">

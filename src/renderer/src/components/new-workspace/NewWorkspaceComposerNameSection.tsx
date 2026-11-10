@@ -1,8 +1,8 @@
 import React from 'react'
 import { AlertTriangle } from 'lucide-react'
 import SmartWorkspaceNameField from '@/components/new-workspace/SmartWorkspaceNameField'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import { shouldShowComposerBaseRefPicker } from './base-ref-picker-visibility'
 import { ComposerBaseRefPicker } from './ComposerBaseRefPicker'
 import { ComposerBranchChoice } from './ComposerBranchChoice'
@@ -91,6 +91,7 @@ export function NewWorkspaceComposerNameSection({
   onBaseBranchChange,
   startFromResetHint
 }: NewWorkspaceComposerNameSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const showBaseRefPicker =
     Boolean(onBaseBranchChange) &&
     shouldShowComposerBaseRefPicker({
@@ -104,13 +105,10 @@ export function NewWorkspaceComposerNameSection({
       <div className="flex items-center justify-between gap-2">
         <label className="min-w-0 truncate text-xs font-medium text-muted-foreground">
           {selectedRepoIsGit
-            ? translate('auto.components.NewWorkspaceComposerCard.ac3748dcda', 'Create From')
-            : translate(
-                'auto.components.NewWorkspaceComposerCard.0ee17638fe',
-                'Workspace name'
-              )}{' '}
+            ? t('auto.components.NewWorkspaceComposerCard.ac3748dcda', 'Create From')
+            : t('auto.components.NewWorkspaceComposerCard.0ee17638fe', 'Workspace name')}{' '}
           <span className="text-muted-foreground/70">
-            {translate('auto.components.NewWorkspaceComposerCard.0c5d6a479c', '[Optional]')}
+            {t('auto.components.NewWorkspaceComposerCard.0c5d6a479c', '[Optional]')}
           </span>
         </label>
         {showBaseRefPicker && onBaseBranchChange ? (
@@ -142,7 +140,7 @@ export function NewWorkspaceComposerNameSection({
         githubSourceContext={smartNameGitHubSourceContext}
         jiraSourceContext={smartNameJiraSourceContext}
         disabled={selectedRepoRequiresConnection}
-        disabledPlaceholder={translate(
+        disabledPlaceholder={t(
           'auto.components.NewWorkspaceComposerCard.connectProjectFirst',
           'Connect this project first'
         )}

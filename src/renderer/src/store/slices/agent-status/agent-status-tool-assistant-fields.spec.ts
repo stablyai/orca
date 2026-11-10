@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import '../../../../../shared/agent-status-freshness'
+import '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AppState } from '../../types'
-import { createTestStore } from '../store-test-helpers'
+import { createTestStore } from '../../testing/app-store-test-fixture'
 
 export function registerAgentStatusToolAssistantFieldsTests(): void {
   describe('agent status tool + assistant fields', () => {

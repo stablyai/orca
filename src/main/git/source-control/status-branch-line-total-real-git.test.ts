@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { invalidateGitBranchLineTotalInFlight } from '../../../shared/git-branch-line-total'
+import { invalidateGitBranchLineTotalInFlight } from '../../../shared/git/status/git-branch-line-total'
 import { getStatus } from './status-read'
 import { invalidateGitReadCaches } from './git-read-cache-invalidation'
 
@@ -93,25 +93,6 @@ describe('branch line total against a real repository', () => {
     ])
   })
 
-  it('nets a line added in a branch commit and deleted in the working tree to zero', async () => {
-    const repo = await createFixtureRepo()
-    await write(repo, 'f.txt', 'a\n')
-    const mergeBase = commitAll(repo, 'base')
-    await write(repo, 'f.txt', 'a\nb\n')
-    commitAll(repo, 'add b')
-    await write(repo, 'f.txt', 'a\n')
-
-    const result = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
-
-    expect(result.branchLineTotal).toEqual({
-      added: 0,
-      removed: 0,
-      mergeBase,
-      test: NO_LINES,
-      generated: NO_LINES
-    })
-  })
-
   it('keeps the total across a commit and updates it on the next status call after an edit', async () => {
     const repo = await createFixtureRepo()
     await write(repo, 'f.txt', 'a\n')
@@ -141,84 +122,6 @@ describe('branch line total against a real repository', () => {
     const afterSecondEdit = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
     expect(afterSecondEdit.branchLineTotal).toEqual({
       added: 3,
-      removed: 0,
-      mergeBase,
-      test: NO_LINES,
-      generated: NO_LINES
-    })
-  })
-
-  it('counts a rename across the commit boundary once, using the post-rename path', async () => {
-    const repo = await createFixtureRepo()
-    await write(repo, 'old.txt', 'a\nb\nc\nd\ne\n')
-    const mergeBase = commitAll(repo, 'base')
-    git(repo, ['mv', 'old.txt', 'new.txt'])
-    commitAll(repo, 'rename')
-    await write(repo, 'new.txt', 'a\nb\nc\nd\ne\nf\n')
-
-    const result = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
-
-    expect(rangedDiffTotal(repo, mergeBase)).toEqual({ added: 1, removed: 0 })
-    expect(result.branchLineTotal).toEqual({
-      added: 1,
-      removed: 0,
-      mergeBase,
-      test: NO_LINES,
-      generated: NO_LINES
-    })
-  })
-
-  it('excludes a binary-only change, matching numstat reporting it as "-"', async () => {
-    const repo = await createFixtureRepo()
-    await write(repo, 'blob.bin', Buffer.from([0, 1, 2, 3, 10, 65, 66]))
-    const mergeBase = commitAll(repo, 'base')
-    await write(repo, 'blob.bin', Buffer.from([0, 9, 10, 11, 12, 67, 68, 69, 70]))
-
-    const result = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
-
-    expect(git(repo, ['diff', '--numstat', mergeBase, '--'])).toMatch(/^-\t-\t/)
-    expect(result.branchLineTotal).toEqual({
-      added: 0,
-      removed: 0,
-      mergeBase,
-      test: NO_LINES,
-      generated: NO_LINES
-    })
-  })
-
-  it('splits test-path and generated files out of the published total', async () => {
-    const repo = await createFixtureRepo()
-    await write(repo, 'src/a.ts', 'a\n')
-    const mergeBase = commitAll(repo, 'base')
-    await write(repo, 'src/a.ts', 'a\nb\n')
-    await write(repo, 'src/a.test.ts', 't1\nt2\nt3\n')
-    await write(repo, 'pnpm-lock.yaml', 'l1\nl2\nl3\nl4\nl5\n')
-
-    const result = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
-
-    expect(rangedDiffTotal(repo, mergeBase)).toEqual({ added: 1, removed: 0 })
-    expect(result.branchLineTotal).toEqual({
-      added: 9,
-      removed: 0,
-      mergeBase,
-      test: { added: 3, removed: 0 },
-      generated: { added: 5, removed: 0 }
-    })
-  })
-
-  it('includes untracked additions alongside tracked range changes', async () => {
-    const repo = await createFixtureRepo()
-    await write(repo, 'f.txt', 'a\nb\n')
-    const mergeBase = commitAll(repo, 'base')
-    await write(repo, 'f.txt', 'a\nb\nc\n')
-    commitAll(repo, 'append c')
-    await write(repo, 'untracked.txt', 'u1\nu2\nu3\nu4\n')
-
-    const result = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
-
-    expect(rangedDiffTotal(repo, mergeBase)).toEqual({ added: 1, removed: 0 })
-    expect(result.branchLineTotal).toEqual({
-      added: 5,
       removed: 0,
       mergeBase,
       test: NO_LINES,

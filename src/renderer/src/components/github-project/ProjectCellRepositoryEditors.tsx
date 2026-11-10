@@ -2,8 +2,8 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import React, { useMemo, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useRepoAssigneesBySlug, useRepoLabelsBySlug } from '@/hooks/useGitHubSlugMetadata'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import type { GitHubProjectRow } from '../../../../shared/github/project-types'
 import { EmptyProjectCell, ProjectLabelChip, ProjectUserChip } from './ProjectCellValueEditors'
 
@@ -23,6 +23,7 @@ export function ProjectAssigneesCell({
 }: RepositoryEditorProps & {
   onEditAssignees?: (add: string[], remove: string[]) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const assignees = row.content.assignees
   const [open, setOpen] = useState(false)
   const [owner, repo] = (row.content.repository ?? '').split('/')
@@ -57,15 +58,12 @@ export function ProjectAssigneesCell({
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={translate(
-            'auto.components.github.project.ProjectCell.f7cdb78efb',
-            'Assignees'
-          )}
+          aria-label={t('auto.components.github.project.ProjectCell.f7cdb78efb', 'Assignees')}
           className="flex h-full w-full cursor-pointer flex-wrap items-center gap-1 px-1 text-xs text-muted-foreground hover:text-foreground"
         >
           {content ?? (
             <EmptyProjectCell
-              label={translate('auto.components.github.project.ProjectCell.36341ffc66', 'Assign')}
+              label={t('auto.components.github.project.ProjectCell.36341ffc66', 'Assign')}
             />
           )}
         </button>
@@ -109,6 +107,7 @@ export function ProjectLabelsCell({
 }: RepositoryEditorProps & {
   onEditLabels?: (add: string[], remove: string[]) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const labels = row.content.labels
   const [open, setOpen] = useState(false)
   const [owner, repo] = (row.content.repository ?? '').split('/')
@@ -130,15 +129,12 @@ export function ProjectLabelsCell({
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={translate('auto.components.github.project.ProjectCell.8ae56a88a6', 'Labels')}
+          aria-label={t('auto.components.github.project.ProjectCell.8ae56a88a6', 'Labels')}
           className="flex h-full w-full cursor-pointer flex-wrap items-center gap-1 px-1"
         >
           {content ?? (
             <EmptyProjectCell
-              label={translate(
-                'auto.components.github.project.ProjectCell.2e26a06c70',
-                'Add label'
-              )}
+              label={t('auto.components.github.project.ProjectCell.2e26a06c70', 'Add label')}
             />
           )}
         </button>
@@ -147,10 +143,7 @@ export function ProjectLabelsCell({
         <RepositoryEditorState owner={owner} repo={repo} loading={metadata.loading} />
         {owner && repo && !metadata.loading && metadata.data.length === 0 ? (
           <div className="px-2 py-1 text-xs text-muted-foreground">
-            {translate(
-              'auto.components.github.project.ProjectCell.4b5b871da8',
-              'No labels in this repo.'
-            )}
+            {t('auto.components.github.project.ProjectCell.4b5b871da8', 'No labels in this repo.')}
           </div>
         ) : null}
         {owner && repo && !metadata.loading
@@ -185,19 +178,17 @@ function RepositoryEditorState({
   repo?: string
   loading: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!owner || !repo) {
     return (
       <div className="px-2 py-1 text-xs text-muted-foreground">
-        {translate(
-          'auto.components.github.project.ProjectCell.54cac64427',
-          'Row has no repo slug.'
-        )}
+        {t('auto.components.github.project.ProjectCell.54cac64427', 'Row has no repo slug.')}
       </div>
     )
   }
   return loading ? (
     <div className="px-2 py-1 text-xs text-muted-foreground">
-      {translate('auto.components.github.project.ProjectCell.2219e945ef', 'Loading…')}
+      {t('auto.components.github.project.ProjectCell.2219e945ef', 'Loading…')}
     </div>
   ) : null
 }

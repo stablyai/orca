@@ -1,13 +1,11 @@
-import type { InstalledBrowserExtension } from '../../../../shared/browser-extension-types'
-import { isChromeExtensionId } from '../../../../shared/browser-extension-url'
+import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
+import { isChromeExtensionId } from '../../../../shared/browser/extensions/browser-extension-url'
 import type {
   BrowserExtensionInstallPromptRequest,
   ChromeWebStoreReply
-} from '../../../../shared/browser-extension-webstore'
-import {
-  summarizeManifestPermissions,
-  type BrowserExtensionPermissionSummary
-} from '../permissions/browser-extension-permission-summary'
+} from '../../../../shared/browser/extensions/browser-extension-webstore'
+import { summarizeManifestPermissions } from '../permissions/browser-extension-permission-summary'
+import type { BrowserExtensionAccessLists as BrowserExtensionPermissionSummary } from '../../../../shared/browser/extensions/browser-extension-permission-warnings'
 
 /**
  * The store page's install state machine (Chromium's webstorePrivate semantics): begin validates

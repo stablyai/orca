@@ -1,21 +1,21 @@
 import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
-} from '../../shared/runtime-file-contracts'
+} from '../../shared/file-access/runtime-editor-file-open'
 import { ipcRenderer } from 'electron'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
-import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
+import type { TerminalTabCreateReply } from '../../shared/workspace-layout/terminal-reveal-identity'
 import type {
   AgentLaunchTabPublishReply,
   AgentLaunchTabViewerRule,
   AgentLaunchTabPublishRequest
 } from '../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import type { AgentLaunchPaneVerdictEvent } from '../../shared/agent-launch/contracts/agent-launch-pane-verdict'
-import type { PaneLaunchRecipe } from '../../shared/terminal-attachment-launch-result'
+import type { PaneLaunchRecipe } from '../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import type {
   TerminalPaneRevealReply,
   TerminalPaneRevealRequest
-} from '../../shared/terminal-pane-reveal'
+} from '../../shared/workspace-layout/terminal-pane-reveal'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig

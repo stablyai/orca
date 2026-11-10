@@ -1,5 +1,5 @@
 import { BrowserWindow } from 'electron'
-import { getChromeExtensionOrigin } from '../../../../shared/browser-extension-url'
+import { getChromeExtensionOrigin } from '../../../../shared/browser/extensions/browser-extension-url'
 
 const nativePages = new WeakSet<Electron.WebContents>()
 // Why: web-contents-created fires inside the BrowserWindow constructor, before nativePages.add.

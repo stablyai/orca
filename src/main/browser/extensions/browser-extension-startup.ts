@@ -1,7 +1,7 @@
 import { removeRetiredBrowserExtensionProfileStorage } from './profile-storage/browser-extension-retired-profile-storage'
 import { app, webContents } from 'electron'
 import { isBrowserExtensionNativePage } from './api-runtime/browser-extension-native-page'
-import { BROWSER_EXTENSIONS_CHANGED_CHANNEL } from '../../../shared/browser-extension-types'
+import { BROWSER_EXTENSIONS_CHANGED_CHANNEL } from '../../../shared/browser/extensions/browser-extension-types'
 import {
   installBrowserExtensionApiHost,
   getBrowserExtensionProfileIdForSession
@@ -10,14 +10,14 @@ import {
   isBrowserExtensionSupportEnabled,
   setBrowserExtensionSupportEnabled
 } from './browser-extension-support'
-import { browserSessionRegistry } from '../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
 import {
   attachBrowserExtensionsToProfileSession,
   detachBrowserExtensionsFromAllProfileSessions
 } from './profile-sessions/browser-extension-session-loader'
 import { notifyBrowserExtensionActionsChanged } from './actions/browser-extension-action-registry'
 import { registerBrowserExtensionNamespaces } from './register-browser-extension-namespaces'
-import { observeBrowserExtensionTabLifecycle } from './api/tabs-lifecycle'
+import { observeBrowserExtensionTabLifecycle } from './tabs-and-windows/browser-extension-tab-lifecycle'
 import { observeBrowserExtensionWebNavigation } from './api/web-navigation'
 import { observeBrowserExtensionCommands } from './api/commands'
 import { observeBrowserExtensionDnrContents } from './declarative-net-request/session/browser-extension-dnr-contents'

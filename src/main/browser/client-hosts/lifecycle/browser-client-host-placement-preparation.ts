@@ -1,10 +1,10 @@
-import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser-client-host-protocol'
+import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type {
   BrowserClientHostPlacementPreference,
   BrowserPageCreationPlacement
-} from '../../../../shared/browser-client-host-placement'
-import { expectsBrowserClientHosting } from '../../../../shared/browser-client-hosting-eligibility'
-import type { KnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+} from '../../../../shared/browser/client-hosting/browser-client-host-placement'
+import { expectsBrowserClientHosting } from '../../../../shared/browser/client-hosting/browser-client-hosting-eligibility'
+import type { KnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
 

@@ -1,9 +1,9 @@
 import React from 'react'
 import { ChevronDown, LoaderCircle, Pencil } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const checkIcon = (
   <svg className="size-2.5" viewBox="0 0 12 12" fill="none">
@@ -32,19 +32,17 @@ export function GHEditSectionAssigneesColumn({
   onPopoverOpenChange: (open: boolean) => void
   onToggle: (login: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <section className="min-w-0">
       <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-        <span>{translate('auto.components.GitHubItemDialog.83ac703dda', 'Assignees')}</span>
+        <span>{t('auto.components.GitHubItemDialog.83ac703dda', 'Assignees')}</span>
         <Popover open={popoverOpen} onOpenChange={onPopoverOpenChange}>
           <PopoverTrigger asChild>
             <button
               type="button"
               disabled={isPending || repoAssignees.loading}
-              aria-label={translate(
-                'auto.components.GitHubItemDialog.76adcf5fe2',
-                'Edit assignees'
-              )}
+              aria-label={t('auto.components.GitHubItemDialog.76adcf5fe2', 'Edit assignees')}
               className="rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50"
             >
               {isPending ? (
@@ -95,7 +93,7 @@ export function GHEditSectionAssigneesColumn({
       </div>
       {localAssignees.length === 0 ? (
         <div className="text-[12px] text-muted-foreground">
-          {translate('auto.components.GitHubItemDialog.c67de9e2fe', 'No one assigned')}
+          {t('auto.components.GitHubItemDialog.c67de9e2fe', 'No one assigned')}
         </div>
       ) : (
         <ul className="flex flex-col gap-1.5">
@@ -139,6 +137,7 @@ export function GHEditSectionAssigneesPill({
   onPopoverOpenChange: (open: boolean) => void
   onToggle: (login: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Popover open={popoverOpen} onOpenChange={onPopoverOpenChange}>
       <PopoverTrigger asChild>
@@ -149,7 +148,7 @@ export function GHEditSectionAssigneesPill({
         >
           {localAssignees.length === 0 ? (
             <span className="text-muted-foreground">
-              {translate('auto.components.GitHubItemDialog.c6f37a563d', '+ Assignee')}
+              {t('auto.components.GitHubItemDialog.c6f37a563d', '+ Assignee')}
             </span>
           ) : (
             localAssignees.map((login) => (

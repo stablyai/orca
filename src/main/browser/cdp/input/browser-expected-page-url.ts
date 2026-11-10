@@ -1,12 +1,12 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { isRecord } from '../../../../shared/agent-status-child-work-value-guards'
+import { isRecord } from '../../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import {
   BROWSER_EXPECTED_URL_MISMATCH_CODE,
   clipUrlForMismatch,
   expectedUrlMismatchMessage,
   isSameBrowserUrl,
   type BrowserExpectedUrlMismatch
-} from '../../../../shared/browser-expected-url'
+} from '../../../../shared/browser/client-hosting/browser-expected-url'
 import { BrowserError } from '../../browser-error'
 
 export function browserExpectedUrlMismatchError(

@@ -1,11 +1,12 @@
 import { readFile, stat } from 'node:fs/promises'
 import type { WebContents } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import type {
-  WarpThemeImportPreview,
-  WarpThemeImportSource
-} from '../../shared/terminal-custom-themes'
-import { makeCustomTerminalThemeSelection } from '../../shared/terminal-custom-themes'
+
+import {
+  type WarpThemeImportPreview,
+  type WarpThemeImportSource,
+  makeCustomTerminalThemeSelection
+} from '../../shared/terminal-themes/terminal-custom-themes'
 import { parseWarpThemeYamlWithTimeout } from './parser-runner'
 import { sanitizeReadError } from './theme-file-scanner'
 import {

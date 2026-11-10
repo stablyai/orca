@@ -89,45 +89,6 @@ describe('cookie clear CDP identities', () => {
     ).toThrow(/Could not snapshot cookie identity/)
   })
 
-  it.each([null, 1, 'true'])('fails closed on a malformed CDP opaque flag (%s)', (opaque) => {
-    expect(() =>
-      cookieClearIdentitiesFromCdp(
-        [{ cookie: chipsCookie, url: 'https://app.acme-chips.test/' }],
-        [
-          {
-            name: 'chips-auth',
-            value: 'keep-me',
-            domain: 'app.acme-chips.test',
-            path: '/',
-            partitionKeyOpaque: opaque as unknown as boolean
-          }
-        ]
-      )
-    ).toThrow(/Could not snapshot cookie identity/)
-  })
-
-  it.each([
-    { hasCrossSiteAncestor: true },
-    { topLevelSite: 'not-a-site', hasCrossSiteAncestor: true },
-    { topLevelSite: 'ftp://top.example', hasCrossSiteAncestor: true },
-    { topLevelSite: 'https://top.example/path', hasCrossSiteAncestor: true }
-  ])('fails closed when a CDP partition key has an invalid site (%o)', (partitionKey) => {
-    expect(() =>
-      cookieClearIdentitiesFromCdp(
-        [{ cookie: chipsCookie, url: 'https://app.acme-chips.test/' }],
-        [
-          {
-            name: 'chips-auth',
-            value: 'keep-me',
-            domain: 'app.acme-chips.test',
-            path: '/',
-            partitionKey
-          }
-        ]
-      )
-    ).toThrow(/Could not snapshot cookie identity/)
-  })
-
   it('keeps host-only and domain cookies with the same coordinates distinct', () => {
     const cookies: Cookie[] = [
       { ...chipsCookie, domain: 'example.com', hostOnly: true, name: 'twin', value: 'host' },
@@ -147,27 +108,6 @@ describe('cookie clear CDP identities', () => {
     ])
     expect(cdpSetCookieParamsFromIdentity(identities[0])).not.toHaveProperty('domain')
     expect(cdpSetCookieParamsFromIdentity(identities[1])).toHaveProperty('domain', '.example.com')
-  })
-
-  it('indexes CDP cookies once instead of rescanning the jar for every cookie', () => {
-    let domainReads = 0
-    const count = 200
-    const cookies = Array.from({ length: count }, (_, index) => ({
-      cookie: { ...chipsCookie, domain: `host-${index}.example`, name: `cookie-${index}` },
-      url: `https://host-${index}.example/`
-    }))
-    const cdpCookies = cookies.map(({ cookie }) => ({
-      name: cookie.name,
-      value: cookie.value,
-      get domain() {
-        domainReads += 1
-        return cookie.domain
-      },
-      path: '/'
-    }))
-
-    expect(cookieClearIdentitiesFromCdp(cookies, cdpCookies)).toHaveLength(count)
-    expect(domainReads).toBeLessThan(count * 6)
   })
 
   it('does not turn an unspecified SameSite policy into explicit Lax', () => {

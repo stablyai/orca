@@ -1,9 +1,9 @@
 import type {
   BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent,
-  BrowserClientHostCommandResult,
   BrowserClientHostLeaseAuthority
-} from '../../../../shared/browser-client-host-protocol'
+} from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import { isBrowserClientHostAuthorityReplaced } from './browser-client-host-authority-replacement'
 import { BrowserClientHostAuthorityReplacementWait } from './browser-client-host-authority-replacement-wait'
 import {
@@ -11,7 +11,7 @@ import {
   closeBrowserClientHostComposition,
   fenceBrowserClientHostComposition
 } from './paired-runtime-browser-client-host-teardown'
-import type { BrowserClientPageNetworkRoute } from '../../client-pages/lifecycle/browser-client-page-cleanup'
+import type { BrowserClientPageNetworkRoute } from '../../network/client-routes/browser-client-page-network-route'
 import type { BrowserClientPageAuthorityIdentity as BrowserClientHostAuthorityTransitionInput } from '../../client-pages/execution/browser-client-page-command-executor-dependencies'
 import {
   type ComposedBrowserClientNetworkRoutes,

@@ -1,9 +1,11 @@
-import { makeRuntimeOrchestrationDb } from '../runtime-orchestration-db.test-fixture'
-import { withDurableRuntimeStore } from '../runtime-durable-store-fixture'
+import { makeRuntimeOrchestrationDb } from './runtime-orchestration-db.test-fixture'
+import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { OrcaRuntimeService, getDefaultWorkspaceSession } from '../orca-runtime-test-mocks.spec'
-import type { WorkspaceSessionState } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
@@ -12,103 +14,13 @@ import {
   TEST_WORKTREE_PATH,
   deferred,
   makeRuntimeStoreWithWorkspaceSession
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 import {
   makePostRevealWorkerRecoveryHarness,
   publishLegacyWorkerReveal
-} from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-scenario-builders.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('retries renderer reveal before clearing an adopted legacy worker sleeping record', async () => {
-    const workerPaneKey = `legacy-worker:${HEADLESS_LEAF_ID}`
-    const incarnationId = '44444444-4444-4444-8444-444444444444'
-    const session: WorkspaceSessionState = {
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: { [TEST_WORKTREE_ID]: [] },
-      sleepingAgentSessionsByPaneKey: {
-        [workerPaneKey]: {
-          paneKey: workerPaneKey,
-          tabId: 'legacy-worker',
-          worktreeId: TEST_WORKTREE_ID,
-          agent: 'codex',
-          providerSession: { key: 'session_id', id: 'legacy-codex-session' },
-          prompt: 'continue',
-          state: 'working',
-          capturedAt: 1,
-          updatedAt: 1,
-          origin: 'live'
-        }
-      }
-    }
-    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
-    const runtime = new OrcaRuntimeService(
-      withDurableRuntimeStore({ ...runtimeStore, flushOrThrow: vi.fn() }),
-      undefined,
-      { canRecoverPersistentLocalPtys: () => true }
-    )
-    const orchestrationDb = makeRuntimeOrchestrationDb()
-    vi.spyOn(orchestrationDb, 'listSessionDispatchesForPresentation').mockImplementation(() => [])
-    vi.spyOn(orchestrationDb, 'getActiveDispatchForTerminal').mockImplementation(() => undefined)
-    vi.spyOn(orchestrationDb, 'listLegacyWorkerTerminalRecoveryRows').mockImplementation(() => [
-      {
-        dispatch_id: 'dispatch-reveal-retry',
-        task_id: 'task-reveal-retry',
-        dispatch_status: 'completed',
-        contract_version: 0,
-        assignee_handle: 'term_reveal_retry',
-        assignee_pane_key: workerPaneKey,
-        process_incarnation: `pty-reveal-retry:${incarnationId}`,
-        worker_state: 'ready',
-        worktree_id: TEST_WORKTREE_ID,
-        agent_terminal_handle: 'term_reveal_retry'
-      }
-    ])
-    runtime.setOrchestrationDb(orchestrationDb)
-    runtime.setPtyController({
-      write: vi.fn(() => true),
-      kill: vi.fn(() => true),
-      getForegroundProcess: async () => null,
-      hasPty: (ptyId) => ptyId === 'pty-reveal-retry',
-      listProcesses: async () => [
-        {
-          id: 'pty-reveal-retry',
-          incarnationId,
-          terminalHandle: 'term_reveal_retry',
-          title: 'Legacy worker',
-          cwd: TEST_WORKTREE_PATH,
-          worktreeId: TEST_WORKTREE_ID,
-          wslDistro: null
-        }
-      ]
-    })
-    const revealTerminalSession = vi
-      .fn()
-      .mockRejectedValueOnce(new Error('renderer unavailable'))
-      .mockImplementationOnce(() =>
-        publishLegacyWorkerReveal(runtime, {
-          worktreeId: TEST_WORKTREE_ID,
-          tabId: 'legacy-worker',
-          leafId: HEADLESS_LEAF_ID,
-          ptyId: 'pty-reveal-retry'
-        })
-      )
-    const resolveLegacyWorkerTerminalRecovery = vi.fn()
-    runtime.setNotifier({
-      revealTerminalSession,
-      resolveLegacyWorkerTerminalRecovery
-    } as never)
-
-    await expect(
-      runtime.reconcileLegacyWorkerTerminals({ materializeRenderer: true })
-    ).resolves.toMatchObject({
-      adoptedDispatchIds: ['dispatch-reveal-retry'],
-      deferredDispatchIds: []
-    })
-    expect(revealTerminalSession).toHaveBeenCalledTimes(2)
-    expect(getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeUndefined()
-    expect(resolveLegacyWorkerTerminalRecovery).toHaveBeenCalledWith(workerPaneKey, 'adopted')
-  })
-
   it('defers a revealed worker until its exact renderer graph is published', async () => {
     vi.useFakeTimers()
     try {

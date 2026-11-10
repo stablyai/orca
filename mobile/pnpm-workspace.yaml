@@ -19,3 +19,6 @@ patchedDependencies:
   react-native-webview@14.0.1: patches/react-native-webview@14.0.1.patch
   react-native@0.88.1: patches/react-native@0.88.1.patch
   react-native-libsodium@1.7.0: patches/react-native-libsodium@1.7.0.patch
+  deepmerge@4.3.1: patches/deepmerge@4.3.1.patch
+  glob@13.0.6: patches/glob@13.0.6.patch
+  minimatch@10.2.5: patches/minimatch@10.2.5.patch

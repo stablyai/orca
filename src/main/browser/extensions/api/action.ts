@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { getChromeExtensionOrigin } from '../../../../shared/browser-extension-url'
+import { getChromeExtensionOrigin } from '../../../../shared/browser/extensions/browser-extension-url'
 import { iconFromImageData } from '../actions/browser-extension-action-icon'
 import {
   getBrowserExtensionActionState,

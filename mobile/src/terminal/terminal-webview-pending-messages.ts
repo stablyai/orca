@@ -39,6 +39,8 @@ export function createTerminalWebViewPendingMessages() {
       if (dropped?.type === 'write') {
         pendingWriteCodeUnits = Math.max(0, pendingWriteCodeUnits - dropped.data.length)
         pendingWriteCount = Math.max(0, pendingWriteCount - 1)
+        // A write that will never be parsed still returns its output credit.
+        dropped.onParsed?.()
       }
     }
   }

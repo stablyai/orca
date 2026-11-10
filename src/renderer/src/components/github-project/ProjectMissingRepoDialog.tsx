@@ -8,8 +8,8 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { translate } from '@/i18n/i18n'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { useTranslate } from '@/i18n/use-translate'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type MissingRepo = { owner: string; repo: string; url: string | null }
 
@@ -22,19 +22,20 @@ export function ProjectMissingRepoDialog({
   onClose: () => void
   onAddRepo: () => void | Promise<unknown>
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Dialog open={missingRepo !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {translate(
+            {t(
               'auto.components.github.project.ProjectViewWrapper.7037c8f5f1',
               'Repository not in Orca'
             )}
           </DialogTitle>
           <DialogDescription>
             {missingRepo
-              ? translate(
+              ? t(
                   'auto.components.github.project.ProjectViewWrapper.1850fceac8',
                   "{{value0}}/{{value1}} isn't added to Orca. Add it to start work, or open in GitHub.",
                   { value0: missingRepo.owner, value1: missingRepo.repo }
@@ -44,7 +45,7 @@ export function ProjectMissingRepoDialog({
         </DialogHeader>
         <DialogFooter className="gap-2 sm:justify-end">
           <Button variant="ghost" onClick={onClose}>
-            {translate('auto.components.github.project.ProjectViewWrapper.dffa899f36', 'Cancel')}
+            {t('auto.components.github.project.ProjectViewWrapper.dffa899f36', 'Cancel')}
           </Button>
           {missingRepo?.url ? (
             <Button
@@ -54,10 +55,7 @@ export function ProjectMissingRepoDialog({
                 onClose()
               }}
             >
-              {translate(
-                'auto.components.github.project.ProjectViewWrapper.23b87ba9f7',
-                'Open in GitHub'
-              )}
+              {t('auto.components.github.project.ProjectViewWrapper.23b87ba9f7', 'Open in GitHub')}
             </Button>
           ) : null}
           <Button
@@ -66,7 +64,7 @@ export function ProjectMissingRepoDialog({
               void onAddRepo()
             }}
           >
-            {translate('auto.components.github.project.ProjectViewWrapper.840c268665', 'Add repo')}
+            {t('auto.components.github.project.ProjectViewWrapper.840c268665', 'Add repo')}
           </Button>
         </DialogFooter>
       </DialogContent>

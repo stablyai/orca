@@ -2,7 +2,7 @@ import {
   isAiVaultScanCancelledError,
   type AiVaultListArgs,
   type AiVaultListResult
-} from '../../shared/ai-vault-types'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
   abandonRemoteSessionScanOnCancel,
   throwIfAiVaultScanCancelled
@@ -80,6 +80,9 @@ function runtimeScanArgs(
   }
   if (listArgs?.scopePaths !== undefined) {
     scanArgs.scopePaths = listArgs.scopePaths
+  }
+  if (listArgs?.scopeOnly === true) {
+    scanArgs.scopeOnly = true
   }
   if (listArgs?.includeAntigravityIdeSessions === true) {
     scanArgs.includeAntigravityIdeSessions = true

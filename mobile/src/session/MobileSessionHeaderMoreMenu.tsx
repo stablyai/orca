@@ -27,7 +27,6 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
   useMobileColorScheme()
   const t = useMobileTranslation()
   const {
-    isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
     showHeaderMoreActions,
     setShowHeaderMoreActions,
@@ -56,7 +55,7 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
           }
         ]
       : []),
-    ...(actionsCollapsed && !isFolderWorkspaceRoute && !isFloatingWorkspaceRoute
+    ...(actionsCollapsed && !isFloatingWorkspaceRoute
       ? [
           {
             id: 'sourceControl',

@@ -9,6 +9,20 @@ export function getRepositoryHookScriptTextareaRows(script: string): number {
   return clampRows(lineCount + 1, 4, 14)
 }
 
+// Uncapped, unlike the textarea row scan; a trailing newline adds no visible line.
+export function countScriptLines(text: string): number {
+  const end = text.endsWith('\n') ? text.length - 1 : text.length
+  let lines = 1
+  for (
+    let index = text.indexOf('\n');
+    index !== -1 && index < end;
+    index = text.indexOf('\n', index + 1)
+  ) {
+    lines += 1
+  }
+  return lines
+}
+
 function countScriptTextareaLines(text: string, maxLines: number): number {
   if (text.length === 0) {
     return 1

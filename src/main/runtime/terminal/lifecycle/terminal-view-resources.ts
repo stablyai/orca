@@ -4,20 +4,20 @@ import type {
 } from '../query/terminal-identity-read-context'
 import type { CrewRuntimeReaders } from '../../orchestration/crew/crew-runtime-watch'
 import { TerminalIdentitySource } from '../identity/terminal-identity-source'
-import type { WaitBlockedCheckState } from '../../wait-blocked-check-state'
+import type { WaitBlockedCheckState } from '../wait/wait-blocked-check-state'
 import { OrcaRuntimeWithStopRequestedPtyIds } from '../../construction/runtime-service-state'
-import { RuntimeSubscriptionRegistry } from '../../runtime-subscription-registry'
-import { RuntimeMobileNotificationController } from '../../runtime-mobile-notification-controller'
+import { RuntimeSubscriptionRegistry } from '../../client/runtime-subscription-registry'
+import { RuntimeMobileNotificationController } from '../../push/notifications/runtime-mobile-notification-controller'
 import type {
   ProviderBufferAcquisition,
   RuntimeHeadlessTerminal,
   RuntimePtyTitleTrackerEntry,
   RuntimeVisibleTerminalState
-} from '../../runtime-terminal-state-records'
-import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+} from '../records/runtime-terminal-state-records'
+import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
-import type { createAgentStatusOscProcessor } from '../../../../shared/agent-status-osc'
-import { RuntimeTerminalViewSubscribers } from '../../runtime-terminal-view-subscribers'
+import type { createAgentStatusOscProcessor } from '../../../../shared/agent-status/transport/agent-status-osc'
+import { RuntimeTerminalViewSubscribers } from '../view/runtime-terminal-view-subscribers'
 import { MainDaemonAttachments } from './main-daemon-attachments'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 
@@ -123,7 +123,17 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
 
   protected providerVisibleRetryAtByPtyId = new Map<string, number>()
 
+  /** PTYs whose screen has shown no agent dialog since this runtime attached; their restored permission waits are spent. */
+  protected restoredAgentDialogRuledOutPtys = new Set<string>()
+
   protected providerSnapshotsWithLiveModeTransition = new WeakSet<PtyProviderBufferSnapshot>()
+
+  /** Forgets the provider frame facts of a PTY whose screen restarts or ends. */
+  protected forgetProviderVisibleState(ptyId: string): void {
+    this.providerVisibleStateByPtyId.delete(ptyId)
+    this.providerVisibleRetryAtByPtyId.delete(ptyId)
+    this.restoredAgentDialogRuledOutPtys.delete(ptyId)
+  }
 
   protected ptyLifecycleGenerationById = new Map<string, number>()
 
@@ -174,8 +184,8 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
     }
   >()
 
-  // Desktop mode prevents mobile fit until a deliberate gesture; absent mode defaults to auto, and restart clears modes.
-  protected mobileDisplayModes = new Map<string, 'desktop'>()
+  // Desktop mode prevents mobile fit until a deliberate gesture; absent mode uses the host default, and restart clears modes.
+  protected mobileDisplayModes = new Map<string, 'auto' | 'desktop'>()
 
   // Keep independent client records per PTY; subscribedAt selects restore baseline, lastActedAt selects the active viewport (docs/mobile-presence-lock.md).
   protected mobileSubscribers = new Map<
@@ -195,18 +205,15 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
   >()
 
   protected readonly mainDaemonAttachments = new MainDaemonAttachments({
-    isUnattachedLocalCandidate: (ptyId) => {
-      if (
-        this.headlessTerminals.has(ptyId) ||
-        this.providerSnapshotPreferredPtys.has(ptyId) ||
-        this.pendingPtyRegistrationIncarnations.has(ptyId) ||
-        parseAppSshPtyId(ptyId)
-      ) {
+    isAttachableLocalSession: (ptyId) => {
+      if (this.pendingPtyRegistrationIncarnations.has(ptyId) || parseAppSshPtyId(ptyId)) {
         return false
       }
       const pty = this.ptysById.get(ptyId)
       return pty !== undefined && pty.connectionId === null && pty.connected
     },
+    hasMainTerminalState: (ptyId) =>
+      this.headlessTerminals.has(ptyId) || this.providerSnapshotPreferredPtys.has(ptyId),
     attachProvider: (ptyId) => this.ptyController?.attach?.(ptyId) ?? null
   })
 

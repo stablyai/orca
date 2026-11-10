@@ -1,9 +1,9 @@
 import React from 'react'
 import type { KeybindingActionId, KeybindingInput } from '../../../../../shared/keybindings/types'
-import { cn } from '../../../lib/utils'
+import { cn } from '../../../lib/class-names'
 import { ShortcutCommandBlock } from './ShortcutCommandBlock'
 import type { ShortcutRowsByGroup } from './ShortcutFilterRail'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const EMPTY_BINDINGS: readonly string[] = []
 
@@ -42,6 +42,7 @@ export function ShortcutRowsList({
   onDisableAction: (actionId: KeybindingActionId) => void
   onEnableAction: (actionId: KeybindingActionId) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   if (groups.length === 0) {
     return (
       <div
@@ -50,7 +51,7 @@ export function ShortcutRowsList({
           className
         )}
       >
-        {translate(
+        {t(
           'auto.components.settings.ShortcutRowsList.4ce3cd24d9',
           'No shortcuts match those filters.'
         )}

@@ -1,6 +1,6 @@
 import React from 'react'
 import { Activity, CircleCheck, CircleDashed } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
@@ -14,25 +14,11 @@ import {
   StateIndicatorTooltip,
   type StateIndicatorTooltipSide
 } from '@/components/StateIndicatorTooltip'
+import type { AgentListStatus } from '../../../shared/agent-status/presentation/agent-list-status'
 
 // Share state glyphs across agent surfaces. Keep the agent identity icon separate; completion uses a check while sidebar StatusIndicator uses an emerald dot/tooltip.
 
-export type AgentDotState =
-  | 'working'
-  | 'monitoring'
-  | 'blocked'
-  | 'waiting'
-  | 'interrupted'
-  // Transcript-derived failure is an outcome, distinct from live blocked attention.
-  | 'failed'
-  | 'done'
-  | 'idle'
-  // A live PTY with stale reporting proves only missing evidence, not idle/work/completion.
-  | 'unverifiable'
-  // The turn ended without a proven outcome; use the missing-evidence glyph, never completion.
-  | 'unconfirmed'
-  // Sidebar combines blocked/waiting as permission; retain its vocabulary with the shared question glyph/token.
-  | 'permission'
+export type AgentDotState = AgentListStatus
 
 /** Return the accessible label shared by every visual agent-state marker. */
 export function agentStateLabel(state: AgentDotState): string {

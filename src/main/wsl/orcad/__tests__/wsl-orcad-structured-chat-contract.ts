@@ -7,15 +7,14 @@ import type {
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent
 } from '../../../../shared/agent-session/agent-session-wire'
-import type { PairedRuntimeConnection } from '../../../../shared/paired-runtime-connection'
+import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
-import {
-  subscribeRemoteRuntimeRequest,
-  type RemoteRuntimeSubscription
-} from '../../../../shared/remote-runtime/remote-runtime-client'
+import '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
+import type { RemoteRuntimeTransportSubscription } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import { claudeSessionIdForOrcaSession } from '../../../claude/structured/claude-structured-session-id'
 import { packagedClaudeChatScenario } from '../../../orcad/orcad-structured-chat-scenario'
-import { quotePosixShell } from '../../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import { wslClaudeChatScenario } from './wsl-orcad-chat-scenario'
 import { envelope } from './wsl-orcad-chat-envelope'
 import { exerciseScriptedProviderChats } from './wsl-orcad-scripted-provider-chat'
@@ -69,9 +68,9 @@ async function exerciseChat(
   const text: string[] = []
   const errors: Error[] = []
   let dropping = false
-  let subscription: RemoteRuntimeSubscription | undefined
+  let subscription: RemoteRuntimeTransportSubscription | undefined
   const subscribe = async () =>
-    subscribeRemoteRuntimeRequest<AgentSessionSubscribeEvent>(
+    subscribeRemoteRuntimeTransport<AgentSessionSubscribeEvent>(
       lane.pairing(),
       'agentSession.subscribe',
       { sessionId },

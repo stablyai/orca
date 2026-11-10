@@ -1,14 +1,16 @@
-import { ImeTextarea } from '@/lib/ime-text-field'
+import { useGitHubTextareaImages } from '@/components/github/use-github-textarea-images'
+import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import React, { useCallback, useId, useMemo, useState } from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { filterGitHubMentionOptions } from '@/components/github/github-mention-option-filter'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
 import type { MentionOption, MentionQuery } from '../page-types'
 import { findMentionQuery } from './query'
 
 export function MentionTextarea({
-  value,
-  onValueChange,
+  value: body,
+  onValueChange: setBody,
   onKeyDown,
   placeholder,
   rows,
@@ -16,8 +18,10 @@ export function MentionTextarea({
   wrapperClassName,
   mentionOptions,
   mentionError,
-  textareaRef
+  textareaRef,
+  imageUpload
 }: {
+  imageUpload?: GitHubImageIntake
   value: string
   onValueChange: (value: string) => void
   onKeyDown?: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void
@@ -29,6 +33,12 @@ export function MentionTextarea({
   mentionOptions: MentionOption[]
   textareaRef: React.RefObject<HTMLTextAreaElement | null>
 }): React.JSX.Element {
+  const images = useGitHubTextareaImages(textareaRef, body, setBody, {
+    ...imageUpload,
+    enabled: imageUpload?.enabled !== false
+  })
+  const value = images.value
+  const onValueChange = images.change
   const listboxId = useId()
   const [mentionQuery, setMentionQuery] = useState<MentionQuery | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
@@ -115,7 +125,9 @@ export function MentionTextarea({
         </div>
       )}
       <ImeTextarea
-        ref={textareaRef}
+        ref={images.attachDrop}
+        onPaste={images.onPaste}
+        onBeforeInput={images.onBeforeInput}
         role="combobox"
         aria-expanded={showSuggestions}
         aria-controls={showSuggestions ? listboxId : undefined}

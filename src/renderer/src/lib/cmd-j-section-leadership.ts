@@ -78,3 +78,17 @@ export function shouldIntentSectionLeadPaletteSections(args: {
   }
   return args.bestIntentQualityRank < args.bestEntityQualityRank
 }
+
+/** A source section leads on a better best match, or on an equal one when it prefers ties. */
+export function shouldExtraSectionLeadPaletteSections(args: {
+  bestEntityQualityRank: number
+  bestExtraQualityRank: number
+  leadsOnTie: boolean
+}): boolean {
+  if (args.bestExtraQualityRank === NO_PALETTE_QUALITY_RANK) {
+    return false
+  }
+  return args.leadsOnTie
+    ? args.bestExtraQualityRank <= args.bestEntityQualityRank
+    : args.bestExtraQualityRank < args.bestEntityQualityRank
+}

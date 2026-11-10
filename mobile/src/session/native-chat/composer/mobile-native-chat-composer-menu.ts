@@ -1,6 +1,7 @@
 import type { AgentSessionConversationCommand } from '../../../../../src/shared/agent-session/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from '../../../../../src/shared/agent-session/agent-session-wire'
 import {
+  getAgentAnsweredNativeChatCommands,
   getNativeChatAgentProfile,
   type NativeChatAgentProfile
 } from '../../../../../src/shared/native-chat/native-chat-agent-profiles'
@@ -19,7 +20,6 @@ import type {
   SlashCommandSuggestion
 } from '../../../../../src/shared/native-chat/input/native-chat-slash-commands'
 import { structuredSessionSlashCommands } from '../../../../../src/shared/agent-session/view/structured-agent-session-composer'
-import { getMobileNativeChatCommands } from '../mobile-native-chat-send-classification'
 
 // Why: the menu is a plain ScrollView right above a streaming transcript, so it mounts a bounded
 // number of rows; typing narrows the rest.
@@ -46,11 +46,13 @@ const NO_DISCOVERY: NativeChatSkillDiscoverySnapshot = { status: 'ready', skills
 export function mobileComposerCatalog({
   agent,
   structured,
-  discovery = NO_DISCOVERY
+  discovery = NO_DISCOVERY,
+  interactionModeSupported = false
 }: {
   agent: string | null
   structured: MobileComposerStructuredCatalog | undefined
   discovery?: NativeChatSkillDiscoverySnapshot
+  interactionModeSupported?: boolean
 }): MobileComposerCatalog {
   if (!agent) {
     return { profile: null, commands: [], discovery: NO_DISCOVERY, sessionSkills: [] }
@@ -61,9 +63,10 @@ export function mobileComposerCatalog({
         agent,
         structured.conversationCommands,
         reported,
-        structured.compactInstructions
+        structured.compactInstructions,
+        interactionModeSupported
       )
-    : getMobileNativeChatCommands(agent)
+    : getAgentAnsweredNativeChatCommands(agent)
   return {
     profile: getNativeChatAgentProfile(agent),
     commands: nativeChatPickerCommands(agent, commands, discovery.skills),

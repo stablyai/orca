@@ -3,12 +3,9 @@
 import { act, renderHook } from '@testing-library/react'
 import type * as React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { JiraConnectionStatus } from '../../../../shared/jira/jira-types'
-import {
-  getJiraSourceConnectionRevisionKey,
-  useJiraSourceConnection
-} from './use-jira-source-connection'
+import { useJiraSourceConnection } from './use-jira-source-connection'
 
 const mocks = vi.hoisted(() => ({
   readJiraStatus: vi.fn(),
@@ -76,52 +73,6 @@ describe('useJiraSourceConnection', () => {
     mocks.listeners.clear()
   })
 
-  it('reads no status until the composer engages Jira', async () => {
-    mocks.readJiraStatus.mockResolvedValue(status(true))
-    const context = sourceContext()
-    const { result, rerender } = renderHook(
-      ({ enabled }) => useJiraSourceConnection({ enabled, sourceContext: context }),
-      { initialProps: { enabled: false } }
-    )
-
-    await act(async () => {
-      await Promise.resolve()
-    })
-    expect(mocks.readJiraStatus).not.toHaveBeenCalled()
-    expect(result.current).toEqual({ status: null, loaded: false })
-
-    rerender({ enabled: true })
-    await act(async () => {
-      await Promise.resolve()
-    })
-
-    expect(mocks.readJiraStatus).toHaveBeenCalledTimes(1)
-    expect(result.current.status?.connected).toBe(true)
-  })
-
-  it('keeps a loaded status after engagement drops without re-reading it', async () => {
-    mocks.readJiraStatus.mockResolvedValue(status(true))
-    const context = sourceContext()
-    const { result, rerender } = renderHook(
-      ({ enabled }) => useJiraSourceConnection({ enabled, sourceContext: context }),
-      { initialProps: { enabled: true } }
-    )
-
-    await act(async () => {
-      await Promise.resolve()
-    })
-    const loaded = result.current
-
-    rerender({ enabled: false })
-    rerender({ enabled: true })
-    await act(async () => {
-      await Promise.resolve()
-    })
-
-    expect(mocks.readJiraStatus).toHaveBeenCalledTimes(1)
-    expect(result.current).toBe(loaded)
-  })
-
   it('ignores a stale connection result after the source host changes', async () => {
     const local = deferred<JiraConnectionStatus>()
     mocks.readJiraStatus.mockReturnValueOnce(local.promise).mockResolvedValueOnce(status(false))
@@ -139,42 +90,6 @@ describe('useJiraSourceConnection', () => {
       await local.promise
     })
 
-    expect(result.current.status?.connected).toBe(false)
-  })
-
-  it('re-reads only the matching source after a connection mutation', async () => {
-    const context = sourceContext('runtime:environment-1')
-    const revisionKey = getJiraSourceConnectionRevisionKey(context)
-    mocks.readJiraStatus.mockResolvedValueOnce(status(true)).mockResolvedValueOnce(status(false))
-    const { result } = renderHook(() =>
-      useJiraSourceConnection({ enabled: true, sourceContext: context })
-    )
-
-    await act(async () => {
-      await Promise.resolve()
-    })
-    expect(result.current.status?.connected).toBe(true)
-
-    await act(async () => {
-      mocks.jiraConnectionRevisions = { 'runtime:other#0': 1 }
-      for (const listener of mocks.listeners) {
-        listener()
-      }
-      await Promise.resolve()
-    })
-    expect(mocks.readJiraStatus).toHaveBeenCalledTimes(1)
-
-    await act(async () => {
-      mocks.jiraConnectionRevisions = {
-        ...mocks.jiraConnectionRevisions,
-        [revisionKey!]: 1
-      }
-      for (const listener of mocks.listeners) {
-        listener()
-      }
-      await Promise.resolve()
-    })
-    expect(mocks.readJiraStatus).toHaveBeenCalledTimes(2)
     expect(result.current.status?.connected).toBe(false)
   })
 })

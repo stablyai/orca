@@ -2,8 +2,6 @@ import type { ReactNode } from 'react'
 import { Label } from '../../ui/label'
 import { SelectTrigger, SelectValue } from '../../ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
-import { translate } from '@/i18n/i18n'
-import type { SourceControlActionChoiceRoute } from '../../../../../shared/source-control-action-options'
 
 export function SourceControlActionOptionField({
   label,
@@ -21,15 +19,6 @@ export function SourceControlActionOptionField({
       {hint ? <p className="text-[11px] text-muted-foreground">{hint}</p> : null}
     </div>
   )
-}
-
-/** Says which launches a saved choice reaches when it is not both. */
-export function sourceControlActionRouteHint(route: SourceControlActionChoiceRoute): string | null {
-  return route === 'chats'
-    ? translate('settings.sourceControl.actionModel.chatsOnly', 'Applies to chats only')
-    : route === 'terminals'
-      ? translate('settings.sourceControl.actionModel.terminalsOnly', 'Applies to terminals only')
-      : null
 }
 
 export function SourceControlActionOptionTrigger({

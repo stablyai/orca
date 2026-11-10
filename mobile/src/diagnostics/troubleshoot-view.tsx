@@ -9,7 +9,6 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
-  ChevronLeft,
   ChevronDown,
   ChevronUp,
   Activity,
@@ -18,11 +17,12 @@ import {
   XCircle,
   AlertTriangle
 } from 'lucide-react-native'
-import { colors, spacing, pressedStyle } from '../theme/mobile-theme'
+import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { troubleshootCommonIssues } from './troubleshoot-common-issues'
 import { troubleshootScreenStyles as styles } from './troubleshoot-screen-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { SettingsNavBar, settingsScreenStyles } from '../settings/settings-screen-frame'
 import { LIST_LEADING_INSET, ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 export type DiagnosticStatus = 'idle' | 'running' | 'done'
 
@@ -73,24 +73,18 @@ export function TroubleshootView({
     []
   )
   return (
-    <View ref={rootRef} style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
-      <View style={styles.topRow}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back', 'Back')}
-          style={({ pressed }) => [styles.backButton, pressed && pressedStyle]}
-          onPress={onBack}
-        >
-          <ChevronLeft size={22} color={colors.textSecondary} />
-        </Pressable>
-        <Text style={styles.heading}>
-          {t('diagnostics.troubleshootView.title', 'Troubleshooting')}
-        </Text>
-      </View>
+    <View ref={rootRef} style={[settingsScreenStyles.container, { paddingTop: insets.top }]}>
+      <SettingsNavBar
+        title={t('diagnostics.troubleshootView.title', 'Troubleshooting')}
+        onBack={onBack}
+      />
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          settingsScreenStyles.scrollContent,
+          { paddingBottom: insets.bottom + spacing.xl }
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <Pressable
@@ -184,8 +178,6 @@ export function TroubleshootView({
             </View>
           ))}
         </ListGroup>
-
-        <View style={{ height: spacing.xl }} />
       </ScrollView>
     </View>
   )

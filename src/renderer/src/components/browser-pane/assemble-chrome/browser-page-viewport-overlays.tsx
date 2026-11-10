@@ -23,6 +23,7 @@ import type { BrowserLoadFailureAutoRetry } from '../navigate/browser-load-failu
 import BrowserFind from './BrowserFind'
 import { BrowserNewTabPage } from '../new-tab/BrowserNewTabPage'
 import { BrowserGuestAnnotateOverlays } from '../annotate/browser-guest-annotate-overlays'
+import { BrowserPasswordFillDropdown } from '../passwords/BrowserPasswordFillDropdown'
 import type { MarkupModeController } from '../annotate/useMarkupMode'
 import type { GrabModeHook } from '../annotate/useGrabMode'
 import type { BrowserOverlayViewport } from '../describe-page/browser-annotation-geometry'
@@ -33,6 +34,7 @@ import type { useBrowserPageGrabAnnotations } from '../annotate/use-browser-page
 
 export function BrowserPageViewportOverlays({
   markup,
+  isActive,
   feedbackBadgeRef,
   findOpen,
   setFindOpen,
@@ -52,11 +54,13 @@ export function BrowserPageViewportOverlays({
   markupControlsContainer,
   browserOverlayViewport,
   worktreeId,
+  importProfileId,
   grab,
   annotationSend,
   grabAnnotations
 }: {
   markup: MarkupModeController
+  isActive: boolean
   feedbackBadgeRef: RefObject<BrowserPageFeedbackBadgeHandle | null>
   findOpen: boolean
   setFindOpen: Dispatch<SetStateAction<boolean>>
@@ -76,6 +80,7 @@ export function BrowserPageViewportOverlays({
   markupControlsContainer: HTMLDivElement | null
   browserOverlayViewport: BrowserOverlayViewport
   worktreeId: string
+  importProfileId: string | null
   grab: GrabModeHook
   annotationSend: ReturnType<typeof useBrowserPageAnnotationSend>
   grabAnnotations: ReturnType<typeof useBrowserPageGrabAnnotations>
@@ -98,7 +103,18 @@ export function BrowserPageViewportOverlays({
         currentUrl={browserTab.url}
       />
       <BrowserPageFeedbackBadge ref={feedbackBadgeRef} />
-      <BrowserFind isOpen={findOpen} onClose={() => setFindOpen(false)} webviewRef={webviewRef} />
+      <BrowserPasswordFillDropdown
+        isActive={isActive}
+        browserPageId={browserTab.id}
+        containerRef={containerRef}
+        webviewRef={webviewRef}
+      />
+      <BrowserFind
+        browserPageId={browserTab.id}
+        isOpen={findOpen}
+        onClose={() => setFindOpen(false)}
+        webviewRef={webviewRef}
+      />
       <BrowserLinkStatusBubble browserPageId={browserTab.id} />
       {showFailureOverlay && browserTab.loadError ? (
         <BrowserPageLoadFailure
@@ -123,7 +139,13 @@ export function BrowserPageViewportOverlays({
           }}
         />
       ) : null}
-      {isBlankTab ? <BrowserNewTabPage worktreeId={worktreeId} onOpenUrl={navigateToUrl} /> : null}
+      {isBlankTab ? (
+        <BrowserNewTabPage
+          worktreeId={worktreeId}
+          onOpenUrl={navigateToUrl}
+          importProfileId={importProfileId}
+        />
+      ) : null}
     </>
   )
 }

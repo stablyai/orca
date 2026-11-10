@@ -2,7 +2,7 @@
 import type {
   PathSource,
   ShellHydrationFailureReason
-} from '../../shared/shell-path-hydration-types'
+} from '../../shared/shell/launch/shell-path-hydration-types'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
 import { getAzureDevOpsAuthStatus } from '../azure-devops/client'
 import { getBitbucketAuthStatus } from '../bitbucket/client'
@@ -23,7 +23,7 @@ import {
   findRunnableLocalCommand,
   isCommandAvailable
 } from '../ipc/preflight-command-exec'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import {
   detectRemoteWindowsTerminalCapabilities,
   type RemoteWindowsTerminalCapabilities

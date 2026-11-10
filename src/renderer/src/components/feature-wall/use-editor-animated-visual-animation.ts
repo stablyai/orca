@@ -6,6 +6,7 @@ import {
   codeBlockHTML,
   type EditorAnimatedVisualRefs
 } from './editor-animated-visual-markup'
+import { forceLayoutReflow } from '@/lib/overlay-interaction/force-layout-reflow'
 
 export function useEditorAnimatedVisualAnimation(
   reducedMotion: boolean,
@@ -165,7 +166,7 @@ export function useEditorAnimatedVisualAnimation(
         cursor.style.opacity = '0'
         cursor.style.transform = 'translate(-30px, 80px)'
         // Force reflow so the next transition takes effect.
-        void cursor.offsetWidth
+        forceLayoutReflow(cursor)
         cursor.style.transition = ''
         await wait(EDITOR_ANIMATION_TIMING.preHoverMs)
         if (cancelled) {

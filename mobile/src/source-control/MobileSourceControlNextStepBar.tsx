@@ -22,14 +22,15 @@ import type { MobileSourceControlPrimaryAction } from './mobile-source-control-p
 import { AgentLaunchNotice } from '../components/AgentLaunchNotice'
 import { ConfirmModal } from '../components/ConfirmModal'
 import type { MobileMergeConfirm } from './use-mobile-source-control-next-step'
-import type { MobileAgentLaunchAvailability } from '../session/mobile-agent-launch-availability'
-import type { PrAiTriageLaunchNotice } from '../session/use-mobile-pr-ai-triage'
+import type { MobileAgentLaunchAvailability } from '../session/agent-launch/mobile-agent-launch-availability'
+import type { PrAiTriageLaunchNotice } from './review/use-mobile-pr-ai-triage'
 import type {
   MobileNextStepBarView,
   MobileNextStepIcon,
   MobileNextStepTone
 } from './mobile-source-control-next-step'
 import { styles as sourceControlStyles } from './mobile-source-control-styles'
+import { useMobileDictationClearance } from '../dictation/mobile-dictation-host-context'
 
 const ICONS: Record<MobileNextStepIcon, LucideIcon> = {
   push: ArrowUp,
@@ -84,13 +85,20 @@ export function MobileSourceControlNextStepBar({
   const [composerFocused, setComposerFocused] = useState(false)
   // The bar rides the keyboard only for its own commit box; for any other field it steps aside.
   const lift = composerFocused && view.kind === 'composer' ? keyboardLift : 0
-  if ((view.kind === 'hidden' && !notice) || (keyboardLift > 0 && lift === 0)) {
+  const hidden = (view.kind === 'hidden' && !notice) || (keyboardLift > 0 && lift === 0)
+  const [barHeight, setBarHeight] = useState(0)
+  // A dictation pill floats above this bar instead of over its buttons.
+  useMobileDictationClearance(hidden ? 0 : barHeight + lift)
+  if (hidden) {
     return null
   }
   const reason = view.kind === 'button' ? view.reason : null
   return (
     <View
-      onLayout={(event) => onHeightChange(event.nativeEvent.layout.height)}
+      onLayout={(event) => {
+        setBarHeight(event.nativeEvent.layout.height)
+        onHeightChange(event.nativeEvent.layout.height)
+      }}
       style={[
         styles.bar,
         {

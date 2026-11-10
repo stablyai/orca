@@ -22,7 +22,7 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeFsPromisesModule>()),
   stat: mocks.stat
 }))
-vi.mock('./transcript-native-watcher', () => ({
+vi.mock('../../shared/transcript-native-watcher', () => ({
   createTranscriptNativeWatcher: () => ({
     bind: mocks.bind,
     dispose: mocks.dispose,

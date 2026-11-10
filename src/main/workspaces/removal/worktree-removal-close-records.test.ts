@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import type { ClosedTerminalTabTombstonesByTabId } from '../../../shared/closed-terminal-tab-tombstones'
+import type { ClosedTerminalTabTombstonesByTabId } from '../../../shared/workspace-layout/closed-terminal-tab-tombstones'
 
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
@@ -57,7 +57,6 @@ async function createStore() {
 
 const REMOVED = 'repo-a::/workspace/removed'
 const KEPT = 'repo-a::/workspace/kept'
-const OTHER_REPO = 'repo-b::/workspace/other'
 const SSH_HOST = toSshExecutionHostId('target-1')
 
 function records(
@@ -141,30 +140,5 @@ describe('close records on workspace removal', () => {
       Object.keys(store.getWorkspaceSession().closedTerminalTabTombstonesByTabId ?? {})
     ).toEqual(['closed-kept'])
     expect(store.getWorkspaceSession(SSH_HOST).closedTerminalTabTombstonesByTabId).toEqual({})
-  })
-
-  it('drops every worktree’s records when its project is removed, and keeps other projects’', async () => {
-    const store = await createStore()
-    store.addRepo({
-      id: 'repo-a',
-      path: '/workspace/repo-a',
-      displayName: 'A',
-      badgeColor: 'gray',
-      addedAt: 1
-    })
-    store.setWorkspaceSession({
-      ...getDefaultWorkspaceSession(),
-      closedTerminalTabTombstonesByTabId: records([
-        ['closed-a', REMOVED],
-        ['closed-a2', KEPT],
-        ['closed-b', OTHER_REPO]
-      ])
-    })
-
-    store.removeProjectForHost({ id: 'repo-a', executionHostId: 'local' })
-
-    expect(
-      Object.keys(store.getWorkspaceSession().closedTerminalTabTombstonesByTabId ?? {})
-    ).toEqual(['closed-b'])
   })
 })

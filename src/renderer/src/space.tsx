@@ -4,20 +4,20 @@ import { useTranslation } from 'react-i18next'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmationDialogProvider } from './components/confirmation-dialog'
-import DeleteWorktreeDialog from './components/sidebar/DeleteWorktreeDialog'
-import PreservedBranchBatchReviewModal from './components/sidebar/PreservedBranchBatchReviewModal'
+import DeleteWorktreeDialog from './components/sidebar/workspace-actions/deletion/DeleteWorktreeDialog'
+import PreservedBranchBatchReviewModal from './components/sidebar/workspace-actions/deletion/PreservedBranchBatchReviewModal'
 import WorkspaceSpacePage from './components/workspace-space/WorkspaceSpacePage'
 import {
   isSpaceWindowState,
   selectSpaceWindowAnalysis
 } from './components/workspace-space/space-window-state'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
-import { applyDocumentTheme } from './lib/document-theme'
-import { resolvePaintedTheme } from './lib/terminal-app-theme'
-import { buildAppFontFamily } from './lib/app-font-family'
-import { getOrCreateRendererRoot } from './lib/react-renderer-root'
+import { applyDocumentTheme } from './app-shell/appearance/document-theme'
+import { resolvePaintedTheme } from './app-shell/appearance/terminal-app-theme'
+import { buildAppFontFamily } from './app-shell/appearance/app-font-family'
+import { getOrCreateRendererRoot } from './app-shell/startup/react-renderer-root'
 import { I18nProvider } from './i18n/I18nProvider'
-import { useAppStore } from './store'
+import { useAppStore } from './store/index'
 import { installBodyOverlayAttributes } from './lib/body-overlay-attributes'
 import { useReduceVisualEffects } from './hooks/use-reduce-visual-effects'
 
@@ -84,7 +84,7 @@ function SpaceWindowRoot(): React.JSX.Element {
         'Close and reopen Space to try again.'
       )}
     >
-      <TooltipProvider delayDuration={400}>
+      <TooltipProvider>
         <ConfirmationDialogProvider>
           <div className="app-layout">
             <WorkspaceSpacePage />

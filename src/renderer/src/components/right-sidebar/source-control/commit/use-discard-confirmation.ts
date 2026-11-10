@@ -1,25 +1,25 @@
 import { useCallback, useState } from 'react'
-import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
+import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { toast } from 'sonner'
-import { getConnectionId } from '@/lib/connection-context'
+import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
 import { basename } from '@/lib/path'
-import { bulkUnstageRuntimeGitPaths } from '@/runtime/runtime-git-working-tree-client'
+import { bulkUnstageRuntimeGitPaths } from '@/runtime/source-control/git/runtime-git-working-tree-client'
 import { translate } from '@/i18n/i18n'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import {
   getDiscardAllPaths,
   runDiscardAllForArea,
   type DiscardAllArea
-} from '../../../../../../shared/source-control-discard-all-sequence'
+} from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 import { discardDeletesEntryFile } from './discard-confirmation'
-import { readIpcErrorMessage } from '@/lib/ipc-error'
+import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import {
   dismissSourceControlEntryFailureToast,
   showSourceControlEntryFailureToast
 } from './source-control-entry-failure-toast'
 import type { PendingDiscardConfirmation } from './discard-dialog'
-import type { SourceControlEntryGroups } from '../../../../../../shared/source-control-section-order'
+import type { SourceControlEntryGroups } from '../../../../../../shared/source-control/listing/source-control-section-order'
 
 export function useSourceControlDiscardConfirmation({
   activeRepoTarget,
@@ -44,6 +44,7 @@ export function useSourceControlDiscardConfirmation({
   discardSingle: (path: string) => Promise<void>
   refreshActiveGitStatusAfterMutation: () => Promise<void>
 }) {
+  const scope = useSourceControlScope()
   const [pendingDiscard, setPendingDiscard] = useState<PendingDiscardConfirmation | null>(null)
   // Reset during render so a worktree switch cannot paint its predecessor's confirmation.
   const [pendingDiscardWorktreeId, setPendingDiscardWorktreeId] = useState(activeWorktreeId)
@@ -88,7 +89,7 @@ export function useSourceControlDiscardConfirmation({
       }
       setIsExecutingBulk(true)
       try {
-        const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+        const connectionId = sourceControlConnectionId(scope, activeWorktreeId)
         // Aggregate per-file errors into one toast rather than spamming partial failures.
         const errors: unknown[] = []
         const result = await runDiscardAllForArea(area, paths, {
@@ -161,6 +162,7 @@ export function useSourceControlDiscardConfirmation({
       }
     },
     [
+      scope,
       activeRepoTarget,
       worktreePath,
       activeWorktreeId,

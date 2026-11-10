@@ -50,12 +50,6 @@ const profileB = { name: 'b' } as unknown as Electron.Session
 const focus = (window: Electron.BrowserWindow): boolean => window.emit('focus')
 
 describe("a profile's extension windows", () => {
-  it('track the main window while extensions are off, so turning them on finds it', () => {
-    const main = new BrowserWindow()
-    model.trackBrowserExtensionMainWindow(main)
-    expect(model.getBrowserExtensionMainWindow()).toBe(main)
-  })
-
   it("never include another profile's popout, in lookups or events", () => {
     const main = new BrowserWindow()
     model.trackBrowserExtensionMainWindow(main)

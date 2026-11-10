@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { InstalledBrowserExtension } from '../../../../shared/browser-extension-types'
+import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 
 const ID = 'nngceckbapebfimnlniiiahkandclblb'
 
@@ -9,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   load: vi.fn(async (_profileId: string): Promise<unknown> => ({}))
 }))
 
-vi.mock('../../sessions/browser-session-registry', () => ({
+vi.mock('../../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
     listProfiles: () => [...mocks.enabled.keys()].map((id) => ({ id })),
     getEnabledExtensionIds: (profileId: string) => mocks.enabled.get(profileId) ?? []

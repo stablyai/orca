@@ -1,4 +1,4 @@
-import { BROWSER_EXTENSION_API_SCHEME } from '../../../../shared/browser-extension-worker-api'
+import { BROWSER_EXTENSION_API_SCHEME } from '../../../../shared/browser/extensions/browser-extension-worker-api'
 
 /** Registered at preflight with the other privileged schemes; Electron freezes the table at ready. */
 export const BROWSER_EXTENSION_API_CUSTOM_SCHEME: Electron.CustomScheme = {

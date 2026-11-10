@@ -3,9 +3,9 @@ import type {
   ProviderCheckSummary,
   GitHubOwnerRepo,
   RpcClient,
-  HostedReviewDecision,
   LinearMobileIssue
 } from './mobile-tasks-dependencies'
+import type { HostedReviewDecision } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 
 export type RepoSummary = {
   id: string
@@ -33,6 +33,7 @@ export type GitHubWorkItem = {
   author: string | null
   branchName?: string
   baseRefName?: string
+  headSha?: string
   isCrossRepository?: boolean
   additions?: number
   deletions?: number
@@ -177,6 +178,8 @@ export type DetailComment = {
   authorAvatarUrl?: string
   user?: { displayName?: string }
   isBot?: boolean
+  // True when the host's gh/glab account wrote it; older hosts send it only for GitHub GraphQL reads.
+  viewerDidAuthor?: boolean
   body: string
   createdAt?: string
   url?: string
@@ -243,14 +246,15 @@ export type DetailPayload =
       comments: DetailComment[]
       labels: string[]
       assignees: string[]
-      pipelineJobs: Array<{
+      pipelineJobs: {
         id?: number
         name: string
         stage: string
         status: string
+        allowFailure?: boolean
         webUrl?: string | null
         duration?: number | null
-      }>
+      }[]
     }
   | {
       provider: 'linear'

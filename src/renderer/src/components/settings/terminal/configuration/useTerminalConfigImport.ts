@@ -6,7 +6,7 @@ import {
   type TerminalConfigImportFormat,
   type TerminalConfigImportPreview,
   type TerminalConfigImportSource
-} from '../../../../../../shared/terminal-config-import-preview'
+} from '../../../../../../shared/terminal/appearance/terminal-config-import-preview'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 
 export type UseTerminalConfigImportReturn = {

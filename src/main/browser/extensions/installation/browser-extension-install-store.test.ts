@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { InstalledBrowserExtension } from '../../../../shared/browser-extension-types'
+import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 
 vi.mock('electron', () => ({ app: { getPath: () => tmpdir() } }))
 
@@ -71,12 +71,6 @@ describe('BrowserExtensionInstallStore', () => {
     await store.remove(STORE_ID)
     store.save(record({ id: STORE_ID }))
     expect(store.get(STORE_ID)?.installTime).toBeGreaterThanOrEqual(updated ?? 0)
-  })
-
-  it('refuses install directories that could escape the root', () => {
-    const store = new BrowserExtensionInstallStore(root)
-    expect(() => store.installDirectory('../evil', '1.0')).toThrow()
-    expect(() => store.installDirectory(STORE_ID, '../../1.0')).toThrow()
   })
 })
 

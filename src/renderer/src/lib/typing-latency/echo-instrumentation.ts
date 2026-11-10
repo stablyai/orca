@@ -1,6 +1,6 @@
 /** Measure input → onData dispatch → first onWriteParsed → onRender paint per pane. Overlapping inputs remain an ambiguous burst; opaque terminal output cannot be apportioned across them. */
 import { getUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
-import { subscribeToTerminalUserInput } from '@/components/terminal-pane/terminal-user-input-signal'
+import { subscribeToTerminalUserInput } from '@/components/terminal-pane/input/terminal-user-input-signal'
 import type { Terminal } from '@xterm/xterm'
 import {
   clearEchoDispatchSelection,

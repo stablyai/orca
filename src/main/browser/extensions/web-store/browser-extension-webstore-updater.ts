@@ -5,8 +5,8 @@ import { join } from 'node:path'
 import {
   hasBrowserExtensionWarnings,
   newBrowserExtensionWarnings
-} from '../../../../shared/browser-extension-permission-warnings'
-import type { InstalledBrowserExtension } from '../../../../shared/browser-extension-types'
+} from '../../../../shared/browser/extensions/browser-extension-permission-warnings'
+import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import {
   forgetHeldBrowserExtensionUpdate,
   getHeldBrowserExtensionUpdate,
@@ -24,11 +24,13 @@ import { downloadWebStoreCrx, isAllowedCrxDownloadUrl } from './browser-extensio
 import {
   commitStagedWebStoreExtension,
   discardStagedWebStoreExtension,
-  isBrowserExtensionBusy,
   stageWebStoreExtension,
-  withBrowserExtensionLock,
   type StagedWebStoreExtension
 } from '../installation/browser-extension-webstore-install'
+import {
+  isBrowserExtensionBusy,
+  withBrowserExtensionLock
+} from '../installation/browser-extension-mutation-lock'
 
 /**
  * Background updates for store installs. Request shape follows electron-chrome-web-store's

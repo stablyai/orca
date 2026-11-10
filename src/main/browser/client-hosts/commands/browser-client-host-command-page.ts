@@ -1,7 +1,6 @@
-import type {
-  BrowserClientHostCommandEvent,
-  BrowserClientHostCommandResult
-} from '../../../../shared/browser-client-host-protocol'
+import { sameBrowserClientPageAuthority } from './browser-client-host-command-authority'
+import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import {
   createPageState,
   type CommandRecord,
@@ -124,11 +123,17 @@ function commandsMatch(
     return (
       first.command.browserProfileId === second.command.browserProfileId &&
       first.command.executionHostKey === second.command.executionHostKey &&
-      sameCommandAuthority(first.command.previousAuthority, second.command.previousAuthority)
+      sameBrowserClientPageAuthority(
+        first.command.previousAuthority,
+        second.command.previousAuthority
+      )
     )
   }
   if (first.command.type === 'closePage' && second.command.type === 'closePage') {
-    return sameCommandAuthority(first.command.targetAuthority, second.command.targetAuthority)
+    return sameBrowserClientPageAuthority(
+      first.command.targetAuthority,
+      second.command.targetAuthority
+    )
   }
   return false
 }
@@ -218,29 +223,4 @@ export function removeScheduledCommandPage(
       readyPages.splice(index, 1)
     }
   }
-}
-
-function sameCommandAuthority(
-  left: {
-    authorityRuntimeId: string
-    authorityEpoch: string
-    browserHostClientId: string
-    browserHostGeneration: number
-    pageHostGeneration: number
-  },
-  right: {
-    authorityRuntimeId: string
-    authorityEpoch: string
-    browserHostClientId: string
-    browserHostGeneration: number
-    pageHostGeneration: number
-  }
-): boolean {
-  return (
-    left.authorityRuntimeId === right.authorityRuntimeId &&
-    left.authorityEpoch === right.authorityEpoch &&
-    left.browserHostClientId === right.browserHostClientId &&
-    left.browserHostGeneration === right.browserHostGeneration &&
-    left.pageHostGeneration === right.pageHostGeneration
-  )
 }

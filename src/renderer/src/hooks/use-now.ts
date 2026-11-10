@@ -1,8 +1,8 @@
-import { useSyncExternalStore } from 'react'
+import { useCallback, useSyncExternalStore } from 'react'
 import {
   installWindowVisibilityInterval,
   type WindowVisibilityIntervalTimer
-} from '@/lib/window-visibility-interval'
+} from '@/lib/window-activity/window-visibility-interval'
 
 type ClockDeps = {
   now: () => number
@@ -74,10 +74,21 @@ const subscribeWhileDisabled = (): (() => void) => () => {}
 
 /** Share coarse label ticks across rows to avoid N timers/commits. Disabled callers activate through a passive effect and may first read arbitrarily stale time; deadlines must use Date.now() in the acting effect. */
 export function useNow(intervalMs: number, enabled = true): number {
+  return useNowSnapshot(intervalMs, readNow, enabled)
+}
+
+const readNow = (now: number): number => now
+
+export function useNowSnapshot<T>(
+  intervalMs: number,
+  select: (now: number) => T,
+  enabled = true
+): T {
   const clock = getSharedNowClock(intervalMs)
+  const getSnapshot = useCallback(() => select(clock.getSnapshot()), [clock, select])
   return useSyncExternalStore(
     enabled ? clock.subscribe : subscribeWhileDisabled,
-    clock.getSnapshot,
-    clock.getSnapshot
+    getSnapshot,
+    getSnapshot
   )
 }

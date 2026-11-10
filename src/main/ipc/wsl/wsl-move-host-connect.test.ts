@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as WslHostStore from '../../../shared/runtime-environment-wsl-host-store'
+import type * as WslHostStore from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
 import { WslHostService } from '../../wsl/host-lifecycle/wsl-host-service'
 import {
   UBUNTU,
@@ -11,17 +11,20 @@ import {
 import { connectWslMoveHostService } from './wsl-move-host-connect'
 
 const removal = vi.hoisted(() => ({ pending: false }))
-vi.mock('../../../shared/runtime-environment-wsl-host-store', async (importOriginal) => {
-  const actual = await importOriginal<typeof WslHostStore>()
-  return {
-    ...actual,
-    // E11 (#33843): `pendingStop` is optional until that PR lands, so the record gains it here.
-    findWslHostDeployment: (...args: Parameters<typeof actual.findWslHostDeployment>) => {
-      const record = actual.findWslHostDeployment(...args)
-      return record && removal.pending ? { ...record, pendingStop: { reason: 'x' } } : record
+vi.mock(
+  '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof WslHostStore>()
+    return {
+      ...actual,
+      // E11 (#33843): `pendingStop` is optional until that PR lands, so the record gains it here.
+      findWslHostDeployment: (...args: Parameters<typeof actual.findWslHostDeployment>) => {
+        const record = actual.findWslHostDeployment(...args)
+        return record && removal.pending ? { ...record, pendingStop: { reason: 'x' } } : record
+      }
     }
   }
-})
+)
 
 describe('the move driver reaching its WSL host', () => {
   let userDataPath: string

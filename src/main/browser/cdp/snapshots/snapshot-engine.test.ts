@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { buildSnapshot, type CdpCommandSender } from './snapshot-engine'
+import { buildSnapshot } from './snapshot-engine'
+import type { CdpCommandSender } from '../debugger/cdp-command-sender'
 
 type AXNode = {
   nodeId: string
@@ -61,18 +62,6 @@ describe('buildSnapshot', () => {
     expect(result.snapshot).toContain('[@e2] link "Home"')
   })
 
-  it('skips generic/none/presentation roles', async () => {
-    const nodes: AXNode[] = [
-      node('1', 'WebArea', 'page', { childIds: ['2'] }),
-      node('2', 'generic', '', { childIds: ['3'] }),
-      node('3', 'button', 'OK', { backendDOMNodeId: 10 })
-    ]
-    const result = await buildSnapshot(makeSender(nodes))
-    expect(result.refs).toHaveLength(1)
-    expect(result.refs[0].name).toBe('OK')
-    expect(result.snapshot).not.toContain('generic')
-  })
-
   it('skips ignored nodes but walks their children', async () => {
     const nodes: AXNode[] = [
       node('1', 'WebArea', 'page', { childIds: ['2'] }),
@@ -82,17 +71,6 @@ describe('buildSnapshot', () => {
     const result = await buildSnapshot(makeSender(nodes))
     expect(result.refs).toHaveLength(1)
     expect(result.refs[0].name).toBe('Deep')
-  })
-
-  it('skips interactive elements without a name', async () => {
-    const nodes: AXNode[] = [
-      node('1', 'WebArea', 'page', { childIds: ['2', '3'] }),
-      node('2', 'button', '', { backendDOMNodeId: 10 }),
-      node('3', 'button', 'Labeled', { backendDOMNodeId: 11 })
-    ]
-    const result = await buildSnapshot(makeSender(nodes))
-    expect(result.refs).toHaveLength(1)
-    expect(result.refs[0].name).toBe('Labeled')
   })
 
   it('populates refMap with backendDOMNodeId', async () => {

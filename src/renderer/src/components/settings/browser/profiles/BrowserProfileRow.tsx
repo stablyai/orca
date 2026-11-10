@@ -1,6 +1,6 @@
 import { Import, Loader2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
+import { emitBrowserCookieImportToast } from '@/lib/browser/cookies/browser-cookie-import-toast'
 import type {
   BrowserCookieImportSummary,
   BrowserSessionProfile
@@ -20,9 +20,10 @@ import {
 import { BrowserCookieImportDisclosure } from '../../../BrowserCookieImportDisclosure'
 import { BrowserCookieImportMachineNotice } from '../../../BrowserCookieImportMachineNotice'
 import { useAppStore } from '../../../../store/index'
-import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/constants'
-import { translate } from '@/i18n/i18n'
-import { browserCookieImportFailureText } from '@/lib/browser-cookie-import-error-copy'
+import '../../../../../../shared/constants'
+import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/browser/browser-family-labels'
+import { useTranslate } from '@/i18n/use-translate'
+import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
 
 type DetectedBrowser = {
   family: string
@@ -53,6 +54,7 @@ export function BrowserProfileRow({
   onSelect,
   isDefault
 }: BrowserProfileRowProps): React.JSX.Element {
+  const t = useTranslate()
   const isImporting = importState?.profileId === profile.id && importState.status === 'importing'
   const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
 
@@ -68,7 +70,7 @@ export function BrowserProfileRow({
       emitBrowserCookieImportToast(
         result.summary,
         browserProfile
-          ? translate(
+          ? t(
               'auto.components.settings.BrowserProfileRow.a3f8c2d1e0b4',
               'Imported {{value0}} cookies from {{value1}} ({{value2}}) into {{value3}}.',
               {
@@ -78,7 +80,7 @@ export function BrowserProfileRow({
                 value3: profile.label
               }
             )
-          : translate(
+          : t(
               'auto.components.settings.BrowserProfileRow.b4e9d3f2a1c5',
               'Imported {{value0}} cookies from {{value1}} into {{value2}}.',
               {
@@ -99,7 +101,7 @@ export function BrowserProfileRow({
     if (result.ok) {
       emitBrowserCookieImportToast(
         result.summary,
-        translate(
+        t(
           'auto.components.settings.BrowserProfileRow.b4c167764d',
           'Imported {{value0}} cookies from file into {{value1}}.',
           { value0: result.summary.importedCookies, value1: profile.label }
@@ -113,7 +115,7 @@ export function BrowserProfileRow({
 
   const sourceLabel = profile.source
     ? `${BROWSER_FAMILY_LABELS[profile.source.browserFamily] ?? profile.source.browserFamily}${profile.source.profileName ? ` (${profile.source.profileName})` : ''}`
-    : translate('auto.components.settings.BrowserProfileRow.796d846483', 'No cookies imported')
+    : t('auto.components.settings.BrowserProfileRow.796d846483', 'No cookies imported')
 
   // Use role=button because nested dropdown/trash buttons make a native button invalid and trigger hydration warnings.
   return (
@@ -138,7 +140,7 @@ export function BrowserProfileRow({
           <span className="truncate text-sm font-medium">{profile.label}</span>
           {isActive ? (
             <span className="shrink-0 rounded border border-border/50 px-1.5 text-[10px] font-medium leading-4 text-foreground/80">
-              {translate('auto.components.settings.BrowserProfileRow.c29648fe5b', 'Active')}
+              {t('auto.components.settings.BrowserProfileRow.c29648fe5b', 'Active')}
             </span>
           ) : null}
         </div>
@@ -165,7 +167,7 @@ export function BrowserProfileRow({
               ) : (
                 <Import className="size-3" />
               )}
-              {translate('auto.components.settings.BrowserProfileRow.cdec84552f', 'Import Cookies')}
+              {t('auto.components.settings.BrowserProfileRow.80bffd32bf', 'Import cookies')}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -174,11 +176,9 @@ export function BrowserProfileRow({
               browser.profiles.length > 1 ? (
                 <DropdownMenuSub key={browser.family}>
                   <DropdownMenuSubTrigger>
-                    {translate(
-                      'auto.components.settings.BrowserProfileRow.c5a273a809',
-                      'From {{value0}}',
-                      { value0: browser.label }
-                    )}
+                    {t('auto.components.settings.BrowserProfileRow.c5a273a809', 'From {{value0}}', {
+                      value0: browser.label
+                    })}
                   </DropdownMenuSubTrigger>
                   <DropdownMenuPortal>
                     <DropdownMenuSubContent>
@@ -200,17 +200,15 @@ export function BrowserProfileRow({
                   key={browser.family}
                   onSelect={() => void handleImportFromBrowser(browser.family)}
                 >
-                  {translate(
-                    'auto.components.settings.BrowserProfileRow.c5a273a809',
-                    'From {{value0}}',
-                    { value0: browser.label }
-                  )}
+                  {t('auto.components.settings.BrowserProfileRow.c5a273a809', 'From {{value0}}', {
+                    value0: browser.label
+                  })}
                 </DropdownMenuItem>
               )
             )}
             {detectedBrowsers.length > 0 && <DropdownMenuSeparator />}
             <DropdownMenuItem onSelect={() => void handleImportFromFile()}>
-              {translate('auto.components.settings.BrowserProfileRow.ebb78dfd6f', 'From File…')}
+              {t('auto.components.settings.BrowserProfileRow.bd7d68f138', 'From file…')}
             </DropdownMenuItem>
             <BrowserCookieImportDisclosure />
           </DropdownMenuContent>
@@ -225,7 +223,7 @@ export function BrowserProfileRow({
               const ok = await useAppStore.getState().clearDefaultSessionCookies()
               if (ok) {
                 toast.success(
-                  translate(
+                  t(
                     'auto.components.settings.BrowserProfileRow.2d4bea7f35',
                     'Default cookies cleared.'
                   )
@@ -244,7 +242,7 @@ export function BrowserProfileRow({
               const ok = await useAppStore.getState().deleteBrowserSessionProfile(profile.id)
               if (ok) {
                 toast.success(
-                  translate(
+                  t(
                     'auto.components.settings.BrowserProfileRow.8e636cae25',
                     'Profile "{{value0}}" removed.',
                     { value0: profile.label }
