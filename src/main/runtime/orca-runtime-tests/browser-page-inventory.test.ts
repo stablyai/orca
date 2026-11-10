@@ -87,6 +87,7 @@ function fixture(runtime = createRuntime()) {
     }),
     tabSwitch: vi.fn(async (_index, _worktree, id) => ({ browserPageId: id, switched: 0 }))
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this bridge implements the list, registration and switch methods reached by the runtime.
   runtime.setAgentBrowserBridge(bridge as never)
   electronMocks.webContents.fromId.mockReturnValue({ isDestroyed: () => false })
   const sync = (snapshots = publication(), extra: Partial<RuntimeSyncWindowGraph> = {}) =>
@@ -136,6 +137,7 @@ describe('accepted saved browser page inventory', () => {
     })
     const window = { isDestroyed: () => false, webContents: contents }
     electronMocks.BrowserWindow.fromId.mockReturnValue(window)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: readiness only needs this window's IPC emitter and send transport.
     watchBrowserMainWindowReadiness(window as never)
     ipc.emit('browser:tabRequestsReady')
     expect(await runtime.browserTabSwitch({ page: 'A' })).toMatchObject({
@@ -206,6 +208,7 @@ describe('accepted saved browser page inventory', () => {
     })
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
     const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-1' }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the existing runtime store fixture supplies the methods used by hydration and catalog reads.
     const runtime = new OrcaRuntimeService({
       ...runtimeStore,
       getRepos: () => [remoteRepo],
@@ -219,9 +222,13 @@ describe('accepted saved browser page inventory', () => {
       listProcesses: async () => []
     })
     const { sync, list } = fixture(runtime)
+    electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false })
     sync()
     await vi.advanceTimersByTimeAsync(100)
     const before = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    expect(before.tabs).toEqual(
+      expect.arrayContaining([expect.objectContaining({ browserPageId: 'C' })])
+    )
     const events: RuntimeMobileSessionTabsResult[] = []
     const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
     sync([], { unchangedMobileSessionWorktrees: [TEST_WORKTREE_ID] })
@@ -275,7 +282,7 @@ describe('accepted saved browser page inventory', () => {
     await vi.advanceTimersByTimeAsync(100)
     const initial = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
     expect(initial.tabs).toEqual(
-      expect.arrayContaining([expect.objectContaining({ title: 'Before' })])
+      expect.arrayContaining([expect.objectContaining({ browserPageId: 'C', title: 'C' })])
     )
     const events: RuntimeMobileSessionTabsResult[] = []
     const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
@@ -313,9 +320,20 @@ describe('accepted saved browser page inventory', () => {
         paneTitle: null
       }
     ]
-    const terminalState = {
+    const terminalState: Partial<AppState> = {
       tabsByWorktree: {
-        [TEST_WORKTREE_ID]: [{ id: 'terminal', title: 'Before', customTitle: null, ptyId: null }]
+        [TEST_WORKTREE_ID]: [
+          {
+            id: 'terminal',
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Before',
+            customTitle: null,
+            ptyId: null,
+            color: null,
+            createdAt: 1,
+            sortOrder: 0
+          }
+        ]
       },
       terminalLayoutsByTabId: {
         terminal: {
@@ -324,7 +342,7 @@ describe('accepted saved browser page inventory', () => {
           expandedLeafId: null
         }
       }
-    } as Partial<AppState>
+    }
     sync(publication(undefined, undefined, terminalState), { tabs, leaves })
     await vi.advanceTimersByTimeAsync(100)
     const initial = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
