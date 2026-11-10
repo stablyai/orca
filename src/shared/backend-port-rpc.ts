@@ -10,7 +10,6 @@ export type BackendPort = {
 
 type Pending = { resolve(value: unknown): void; reject(error: Error): void }
 const MAX_REQUESTS = 32
-const MAX_REQUEST_BYTES = 64 * 1024
 
 /** Responses retain a credit until consumed, bounding a slow document's native port queue. */
 export class BackendPortRpc {
@@ -53,9 +52,6 @@ export class BackendPortRpc {
       this.pending.set(id, { resolve, reject })
       try {
         const request = { id, method, params }
-        if (JSON.stringify(request).length > MAX_REQUEST_BYTES) {
-          throw new Error('Usage request is too large.')
-        }
         this.port.postMessage(request)
       } catch (error) {
         this.pending.delete(id)
