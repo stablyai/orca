@@ -32,6 +32,7 @@ import { ORCA_SERVE_SUPERVISED_ENV } from '../../shared/serve-supervised-termina
 import { startOrcadEventLoopWatchdog } from './orcad-event-loop-watchdog'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { installOrcadWorkProbes } from './orcad-work-verdict'
+import { startOrcadWorkVerdictBeacon } from './orcad-work-verdict-beacon'
 import { orcadPostReadyDeps, startOrcadPostReadyWork } from './orcad-post-ready-work'
 
 let closeOrcadObservability = (): Promise<void> => Promise.resolve()
@@ -351,6 +352,7 @@ async function startOrcadRuntime(
     emulatorsBusy: async () =>
       (await runtime.getEmulatorBridge()?.hasLiveManagedSessions()) ?? false
   })
+  registerCleanup(startOrcadWorkVerdictBeacon(() => runtime.terminalRunFacts.readLatestInputAt()))
   await idleExitStartup.start({
     rpc,
     agentStates: () => agentHookServer.getStatusSnapshot(),

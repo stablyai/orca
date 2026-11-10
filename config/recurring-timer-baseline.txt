@@ -43,6 +43,7 @@
 1 src/main/orcad/orcad-event-loop-watchdog.ts
 1 src/main/orcad/orcad-lock-clone-machine.ts
 1 src/main/orcad/orcad-stop-request-listener.ts
+1 src/main/orcad/orcad-work-verdict-beacon.ts
 1 src/main/plugins/catalog/plugin-auto-updater.ts
 1 src/main/plugins/catalog/plugin-kill-list-service.ts
 1 src/main/plugins/installation/plugin-git-repository.ts
