@@ -32,3 +32,9 @@ export function getActiveRpcCaller(): RpcCallerIdentity | undefined {
 export function getActiveRpcAgentSessionId(): string | undefined {
   return activeCall.getStore()?.agentSessionId
 }
+
+/** Re-enters this call later, for work a queue runs from inside another caller's call. */
+export function captureActiveRpcCall(): <T>(run: () => T) => T {
+  const call = activeCall.getStore()
+  return (run) => (call ? activeCall.run(call, run) : activeCall.exit(run))
+}
