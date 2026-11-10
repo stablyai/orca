@@ -30,7 +30,6 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { sshConnectVerb } from '@/ssh/ssh-connect-verb'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import { runtimePairingRepairRoute } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { isOrcaCloudRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 import { AgentHostPanelMenuItem } from '../../../agent-host-panel/AgentHostPanelMenuItem'
 
 import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
@@ -45,9 +44,7 @@ import { HostRenameDialog } from '../../HostRenameDialog'
 import { HostRemoveDialog } from '../../HostRemoveDialog'
 import { RuntimeRepairDialog } from '../../../runtime-access/RuntimeRepairDialog'
 import { resolveHostRemoval } from '../../host-rename-remove'
-import { HostAgentSignOutDialog, HostAgentSignOutMenuItems } from './HostAgentSignOutMenuItems'
 import { CloudMcpSyncMenuItem } from './CloudMcpSyncMenuItem'
-import type { HostAgentSignInAgent } from '../../../../../../shared/host-agent-sign-in-status'
 
 function blockedTitle(
   reason: 'client-too-old' | 'server-too-old',
@@ -83,7 +80,6 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
   const [renameOpen, setRenameOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
   const [repairOpen, setRepairOpen] = useState(false)
-  const [signOutAgent, setSignOutAgent] = useState<HostAgentSignInAgent | null>(null)
   const mountedRef = useMountedRef()
   const sshStatus = useAppStore((s) => {
     const parsed = parseExecutionHostId(row.hostId)
@@ -98,11 +94,6 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
   const repairRoute = useAppStore((s) => {
     const environment = s.runtimeEnvironments.find((entry) => entry.id === runtimeEnvironmentId)
     return environment ? runtimePairingRepairRoute(environment) : 'access-link'
-  })
-  // Orca Cloud: one "Agent accounts & secrets…" entry; there is nothing to sign out of per sandbox.
-  const cloudHost = useAppStore((s) => {
-    const environment = s.runtimeEnvironments.find((entry) => entry.id === runtimeEnvironmentId)
-    return environment ? isOrcaCloudRuntimeEnvironment(environment) : false
   })
   const repairableWithAccessLink = repairRoute === 'access-link'
   const stoppedWslDistro = useAppStore((s) =>
@@ -308,20 +299,12 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
             {t('auto.components.sidebar.HostSectionHeaderMenu.2d3e4f5a6b', 'Check connection')}
           </DropdownMenuItem>
         )}
-        {cloudHost ? (
+        {row.kind !== 'local' ? (
           <AgentHostPanelMenuItem
             hostId={row.hostId}
             host={{ label: row.label, health: row.health }}
           />
         ) : null}
-        {runtimeEnvironmentId && !cloudHost && row.health !== 'blocked' && (
-          <HostAgentSignOutMenuItems
-            environmentId={runtimeEnvironmentId}
-            hostLabel={row.label}
-            open={open}
-            onSignOut={setSignOutAgent}
-          />
-        )}
         <DropdownMenuSeparator />
         {runtimeEnvironmentId && (
           <CloudMcpSyncMenuItem
@@ -353,14 +336,6 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
         hostId={row.hostId}
         derivedLabel={row.label}
       />
-      {runtimeEnvironmentId && (
-        <HostAgentSignOutDialog
-          environmentId={runtimeEnvironmentId}
-          hostLabel={row.label}
-          agent={signOutAgent}
-          onClose={() => setSignOutAgent(null)}
-        />
-      )}
       {runtimeEnvironmentId && (
         <RuntimeRepairDialog
           open={repairOpen}

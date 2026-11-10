@@ -1,6 +1,11 @@
 // The app's one "Agent accounts & secrets" sheet. Opened through openAgentHostPanel({ hostId, focus });
 // it resolves the host from renderer state and never connects, wakes, starts or resumes it.
-import React from 'react'
+import React, { useState, useSyncExternalStore } from 'react'
+import {
+  readHostAgentSignInReport,
+  subscribeHostAgentSignInReports
+} from '@/runtime/provider-accounts/sign-in/host-agent-sign-in-status-client'
+import { formatDate } from '../settings/agent-accounts/orca-cloud-account-row-shell'
 import { Sheet } from '@/components/ui/sheet'
 import { useTranslate } from '@/i18n/use-translate'
 import { hostCapabilities } from './agent-host-capabilities'
@@ -11,6 +16,7 @@ import {
 } from './agent-host-panel-store'
 import { AgentHostPanelView } from './AgentHostPanelView'
 import { useCloudHostPanelBody } from './CloudHostPanelBody'
+import { useHostPanelBody } from './HostPanelBody'
 import { openAgentHostSettings } from './open-agent-host-settings'
 import { useResolvedAgentHost, type ResolvedAgentHost } from './use-agent-host'
 
@@ -41,14 +47,55 @@ export function CloudHostPanel({
   )
 }
 
+const NO_ENVIRONMENT = '\u0000'
+
+/** Every other kind: the host's own sign-ins, this computer's keys that apply, one env line. */
+export function HostPanel({ host }: { host: ResolvedAgentHost }): React.JSX.Element {
+  const t = useTranslate()
+  const [generation, setGeneration] = useState(0)
+  const cached = useSyncExternalStore(subscribeHostAgentSignInReports, () =>
+    readHostAgentSignInReport(host.environmentId ?? NO_ENVIRONMENT)
+  )
+  const capabilities = hostCapabilities(
+    host.kind,
+    host.availability,
+    { host: host.label, date: cached ? formatDate(cached.checkedAt) : null },
+    t
+  )
+  const body = useHostPanelBody(host, capabilities, generation, () =>
+    setGeneration((value) => value + 1)
+  )
+  return (
+    <AgentHostPanelView
+      capabilities={capabilities}
+      subject={host.label}
+      dot={
+        host.kind === 'recipe'
+          ? host.availability === 'available'
+            ? 'running'
+            : host.availability === 'suspended'
+              ? 'sleeping'
+              : 'unknown'
+          : null
+      }
+      agents={body.agents}
+      keys={body.keys}
+      environment={body.environment}
+      onFooterLink={openAgentHostSettings}
+    />
+  )
+}
+
 export function AgentHostPanel(): React.JSX.Element {
   const request = useAgentHostPanelRequest()
   const host = useResolvedAgentHost(request)
-  // v1: Orca Cloud hosts; the other kinds follow with their own section 1.
-  const cloud = host?.kind === 'cloud' ? host : null
   return (
-    <Sheet open={cloud !== null} onOpenChange={(open) => !open && closeAgentHostPanel()}>
-      {cloud ? <CloudHostPanel key={cloud.hostId} host={cloud} focus={request?.focus} /> : null}
+    <Sheet open={host !== null} onOpenChange={(open) => !open && closeAgentHostPanel()}>
+      {host?.kind === 'cloud' ? (
+        <CloudHostPanel key={host.hostId} host={host} focus={request?.focus} />
+      ) : host ? (
+        <HostPanel key={host.hostId} host={host} />
+      ) : null}
     </Sheet>
   )
 }

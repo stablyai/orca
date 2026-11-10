@@ -9,7 +9,11 @@ import {
   deriveCloudDotState,
   type CloudDotState
 } from '@/lib/orca-cloud/orca-cloud-workspace-state'
-import { getWorktreeExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getWorktreeExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 import { cloudSecretRepoKey } from '../settings/cloud-secrets/cloud-secret-repos'
 import { runtimeEnvironmentDisplayName } from '../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 import { selectStartableStoppedWslDistro } from '../wsl-host-stopped/use-stopped-wsl-host'
@@ -18,7 +22,7 @@ import { agentHostAvailability, agentHostKind } from './agent-host-kind'
 import type { AgentHostPanelRequest } from './agent-host-panel-store'
 
 export type ResolvedAgentHost = {
-  hostId: string
+  hostId: ExecutionHostId
   label: string
   kind: AgentHostKind
   availability: AgentHostAvailability

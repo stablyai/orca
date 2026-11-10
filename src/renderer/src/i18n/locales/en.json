@@ -27427,7 +27427,12 @@
       "edit": "Edit",
       "empty": "No agent keys in Cloud secrets.",
       "emptyMember": "Add your own, or ask an owner or admin for a team key.",
-      "manage": "Open Cloud secrets"
+      "manage": "Open Cloud secrets",
+      "loading": "Loading keys…",
+      "noneHere": "No keys apply to this host.",
+      "addOne": "Add one in Agent API keys",
+      "scopeAll": "Every host except Orca Cloud",
+      "scopeHosts": "Only the hosts you picked"
     },
     "unreachable": "Couldn’t reach Orca Cloud.",
     "section": {
@@ -27449,8 +27454,8 @@
       "envSsh": "Agents on {{host}} get its shell profile. Orca doesn’t add variables on SSH hosts.",
       "agentsWsl": "Sign-ins inside the distro. Windows sign-ins don’t carry over.",
       "envWsl": "Agents get the distro’s own environment. Orca doesn’t add variables in WSL.",
-      "envPaired": "Agents on {{host}} get its own environment. Orca doesn’t add variables on paired hosts.",
-      "agentsCloud": "From your Orca account. Nothing is stored in the sandbox, so new, cloned and restarted sandboxes work the same."
+      "envPaired": "Agents on {{host}} use its own environment. Orca doesn’t add variables on paired hosts.",
+      "agentsCloud": "Nothing is stored in the sandbox, so new, cloned and restarted sandboxes work the same."
     },
     "retry": "Try again",
     "asleepFooter": "Changes reach the sandbox when it wakes.",
@@ -27529,6 +27534,19 @@
       "sshDisconnected": "Open a workspace on {{host}} to sign in or out.",
       "unreachable": "Can’t reach {{host}}. Sign-in and sign-out need it online.",
       "archived": "This workspace is archived."
+    },
+    "host": {
+      "signedIn": "Signed in",
+      "apiKey": "Signed in with an API key",
+      "signedOut": "Signed out",
+      "notInstalled": "Not installed",
+      "unknown": "Not checked yet",
+      "signOut": "Sign out…",
+      "cantCheck": "Orca can’t check sign-ins on {{host}} yet. Start an agent in a workspace there to sign in.",
+      "noAnswer": "{{host}} didn’t answer. It may run an older Orca.",
+      "checking": "Checking…",
+      "lastChecked": "last checked {{date}}",
+      "signInHint": "Start {{agent}} in a workspace on {{host}} to sign in."
     }
   },
   "cloudSecretsAsk": {
