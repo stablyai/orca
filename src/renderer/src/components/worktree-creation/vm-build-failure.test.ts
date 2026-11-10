@@ -122,6 +122,7 @@ describe('vmBuildFailureCopy', () => {
 
   it('derives the caps the way billing enforces them', () => {
     const status = (seats: number, perSeat: number | null) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial billing status with only the fields sandboxLimitFromBilling reads.
       ({
         status: 'ok',
         entitlement: {
