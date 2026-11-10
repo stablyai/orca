@@ -69,7 +69,7 @@ export function useResourceUsageStatusController() {
   const resourceViewActive = windowVisible && open && selectedTab === 'resources'
   const ptyViewActive = windowVisible && open && selectedTab === 'ptys'
   const viewActive = resourceViewActive || ptyViewActive
-  const fetchSnapshot = useResourceMemorySnapshot(resourceViewActive)
+  const fetchSnapshot = useResourceMemorySnapshot(resourceViewActive, windowVisible)
   const localPtyInventory = useResourceSessionInventory(workspaceSessionReady, ptyViewActive, true)
   const ptyActions = useResourcePtyActions(localPtyInventory)
   const [sortOption, setSortOption] = useState<SortOption>('memory')
@@ -84,7 +84,7 @@ export function useResourceUsageStatusController() {
     clearSessionsError,
     removeSession,
     removeSessions
-  } = useResourceSessionInventory(workspaceSessionReady, resourceViewActive)
+  } = useResourceSessionInventory(workspaceSessionReady, resourceViewActive || windowVisible)
   const sessions = sessionInventory.sessions
   const [killConfirm, setKillConfirm] = useState<UnifiedSessionRow | null>(null)
   const [killing, setKilling] = useState(false)

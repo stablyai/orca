@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '../../store'
 import { isResourceViewInactive } from '../../../../shared/resource-view-admission'
 
-export function useResourceMemorySnapshot(active: boolean): () => Promise<void> {
+/** `active` polls; `seed` alone reads once so the closed badge has numbers. */
+export function useResourceMemorySnapshot(active: boolean, seed = false): () => Promise<void> {
   const lifetime = useRef<{
     active: boolean
     epoch: number
@@ -50,20 +51,20 @@ export function useResourceMemorySnapshot(active: boolean): () => Promise<void> 
   }, [])
   useEffect(() => {
     const current = lifetime.current
-    current.active = active
+    current.active = active || seed
     current.epoch++
-    if (!active) {
+    if (!current.active) {
       return
     }
     void refresh()
-    const timer = window.setInterval(() => {
-      void refresh()
-    }, 2_000)
+    const timer = active ? window.setInterval(() => void refresh(), 2_000) : null
     return () => {
       current.active = false
       current.epoch++
-      window.clearInterval(timer)
+      if (timer !== null) {
+        window.clearInterval(timer)
+      }
     }
-  }, [active, refresh])
+  }, [active, seed, refresh])
   return refresh
 }
