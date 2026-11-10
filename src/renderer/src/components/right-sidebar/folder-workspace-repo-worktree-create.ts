@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { readIpcErrorDetail } from '@/lib/ipc-error'
-import { getRepoWorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
+import { getRepoWorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
 import { runtimeTargetSupportsCapability } from '@/runtime/rpc/compatibility/runtime-target-capability'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/rpc/targets/runtime-client-target'
 import { useAppStore } from '@/store'

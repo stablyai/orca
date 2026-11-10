@@ -579,10 +579,10 @@
       "clearDefault": "Effacer l'agent par défaut",
       "customArgsBadge": "Personnalisé",
       "rowPermissions": "Autorisations",
-      "autoUnsupported": "Le mode automatique nécessite une version plus récente d’Orca sur cet hôte.",
+      "autoUnsupported": "« Approuver pour moi » nécessite une version plus récente d’Orca sur cet hôte.",
       "otherAgentsPermissions": "Autres agents",
       "permissionsMixed": "La plupart des agents utilisent {{mode}}. Le choix d'un mode réinitialise les exceptions marquées, à l'exception des arguments personnalisés.",
-      "permissionsSearchDescription": "Lancez des agents avec des autorisations manuelles, automatiques ou Yolo.",
+      "permissionsSearchDescription": "Choisissez « Approuver pour moi », « Accès complet » ou les paramètres d’autorisation propres à chaque agent.",
       "permissionsAutoDescription": "<agents>Les agents pris en charge</agents> approuvent eux-mêmes les actions sûres.",
       "otherAgentsPermissionsLabel": "Autorisations pour d'autres agents",
       "permissionsMixedNoMajority": "Les agents utilisent des paramètres différents. Le choix d'un mode s'applique à tous.",
@@ -608,6 +608,7 @@
       "permissionOwnDescription": "Les terminaux et les chats suivent les paramètres d’autorisation propres à l’agent.",
       "permissionOwnShort": "Paramètres propres",
       "permissionWithoutAuto": "Agents sans Approuver pour moi",
+      "permissionMixed": "Mixte",
       "permissionSurfaceDifference": "Les terminaux utilisent les paramètres propres à l’agent ; les nouveaux chats utilisent {{mode}}.",
       "permissionSameAsAll": "Comme tous les agents",
       "permissionChipRemove": "Supprimer {{flag}} et utiliser les paramètres propres à {{agent}}",
@@ -9292,13 +9293,9 @@
           "cd9fe37556": "Autorisation d'accès au micro accordée",
           "openAiKeyName": "Votre clé de transcription OpenAI",
           "dictationModeAuto": "Auto",
-          "dictationModesWithAutoDescription": "Auto : maintenez {{shortcut}} pour dicter jusqu’à ce que vous relâchiez, ou appuyez brièvement pour démarrer et arrêter. Maintien : dictez tant que {{shortcut}} est maintenu. Bascule : appuyez une fois sur {{shortcut}} pour démarrer, puis à nouveau pour arrêter.",
           "speechGpuLabel": "Utiliser le GPU",
-          "speechGpuDescription": "Reconnaît la parole sur la carte graphique quand elle fonctionne, et sur le processeur en cas d’échec. Désactivez-le si la dictée fige ou redémarre votre ordinateur.",
-          "updateToFasterVersion": "Passer à la version plus rapide ({{value0}} Mo)",
           "c5ea32143e": "Modèle vocal",
-          "ba4a900d1d": "Mode de dictée",
-          "0121960365": "Activer la dictée vocale"
+          "ba4a900d1d": "Mode de dictée"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Supprimer {{value0}}",
@@ -11118,16 +11115,20 @@
               "vocabularyTitle": "Vocabulaire",
               "vocabularyDescription": "Noms et termes de code que la dictée écrit à votre façon, pour vous ou pour un dépôt.",
               "vocabularyKeyword": "dictionnaire",
-              "b3920972d4": "Décharger le modèle vocal",
               "7f5a2416a6": "Modèle vocal",
               "9d83747eae": "Langue de dictée",
-              "a5fb30e4da": "Activer la dictée vocale",
               "ffaa3efe7c": "Transcription OpenAI",
               "c7a7eaa0da": "Supprimer les hésitations",
               "d0c230c061": "Mode de dictée",
               "silenceStopTitle": "Arrêter après un silence",
               "silenceStopDescription": "Choisissez combien de temps la dictée continue d’écouter quand vous ne parlez plus.",
-              "silenceStopKeyword": "silence"
+              "silenceStopKeyword": "silence",
+              "dictationTitle": "Dictée",
+              "shortcutTitle": "Raccourci",
+              "shortcutDescription": "La touche qui lance la dictée.",
+              "shortcutKeyword": "clavier",
+              "keepLoadedTitle": "Garder le modèle chargé",
+              "gpuKeyword": "carte graphique"
             }
           }
         },
@@ -12136,7 +12137,6 @@
           "systemDefault": "Valeur par défaut du système",
           "unavailable": "indisponible",
           "label": "Microphone",
-          "description": "Périphérique d'entrée utilisé pour la dictée vocale. Le défaut système suit le réglage du micro de l'OS.",
           "accessHint": "Autorisez l'accès au microphone pour lister les périphériques d'entrée.",
           "allowAccess": "Autoriser l'accès",
           "noMicrophoneFound": "Aucun microphone n'a été trouvé. Connectez-en un, puis réessayez.",
@@ -14086,6 +14086,10 @@
                   "archived": {
                     "title": "Dépôt archivé",
                     "body": "Ce dépôt est archivé ; Orca n'actualise donc pas le statut de la {{reviewLabel}}."
+                  },
+                  "host_off": {
+                    "title": "L’hôte WSL est éteint",
+                    "body": "Orca actualise l’état de {{reviewLabel}} via l’hôte WSL de ce projet, qui est éteint. Reconnectez-le pour actualiser."
                   },
                   "not_git": {
                     "title": "N'est pas un dépôt Git",
@@ -16926,7 +16930,7 @@
         "DictationPillFailure": {
           "discard": "Supprimer l'enregistrement",
           "modelFailed": "Modèle non chargé.",
-          "transcribeFailed": "Échec. Enregistrement conservé.",
+          "transcribeFailed": "Échec de la transcription. Enregistrement conservé.",
           "openSettings": "Paramètres",
           "retry": "Réessayer"
         }
@@ -20755,55 +20759,34 @@
       },
       "voice": {
         "dictationLanguage": {
-          "ignored": "{{model}} ne transcrit que les langues pour lesquelles il a été conçu et ignore donc ce réglage.",
           "unsupported": "{{model}} ne prend pas en charge {{language}} et détecte donc la langue lui-même.",
-          "description": "La langue que vous parlez. Avec la détection automatique, le modèle la devine à chaque fois.",
           "auto": "Détection automatique",
-          "a9df191aba": "Langue de dictée"
+          "rated": "La langue que vous parlez. La qualité est évaluée pour elle.",
+          "alwaysUses": "La langue que vous parlez. {{model}} utilise toujours {{language}}.",
+          "detectsItself": "La langue que vous parlez. {{model}} la détecte seul."
         },
         "modelUnload": {
-          "description": "Durée pendant laquelle le modèle local reste en mémoire après la dictée. Tant qu’il est chargé, la dictée démarre aussitôt ; « Immédiatement » libère la mémoire, et chaque dictée attend alors le chargement du modèle.",
-          "cloud": "Les modèles cloud tournent sur les serveurs du fournisseur, donc rien ne reste chargé ici.",
-          "never": "Jamais",
-          "immediately": "Immédiatement",
-          "94afd37271": "Décharger le modèle vocal"
+          "cloud": "Les modèles cloud tournent sur les serveurs du fournisseur, donc rien ne reste chargé ici."
         },
         "fillerWords": {
-          "description": "Supprime les sons comme « euh » et « hum » du texte dicté, selon la langue de dictée.",
-          "0134406785": "Supprimer les hésitations"
+          "0134406785": "Supprimer les hésitations",
+          "short": "Supprime « euh » et « hum »."
         },
-        "sectionDescription": "Parlez au lieu de taper, dans n’importe quel volet. La parole est reconnue sur cet ordinateur, sauf si vous choisissez un modèle cloud.",
         "input": {
           "title": "Entrée",
           "shortcut": "Raccourci",
-          "shortcutDescription": "Lance la dictée dans le volet actif.",
-          "changeShortcut": "Modifier"
+          "changeShortcut": "Modifier",
+          "description": "Suit le réglage du système, sauf si vous en choisissez un.",
+          "missing": "{{microphone}} n’est pas connecté. Le micro par défaut du système est utilisé jusqu’à son retour."
         },
         "language": {
           "title": "Langue"
-        },
-        "cleanup": {
-          "title": "Nettoyage"
         },
         "advanced": {
           "title": "Avancé"
         },
         "setup": {
-          "downloadingDescription": "Vous pouvez quitter cette page. La dictée fonctionnera une fois le téléchargement terminé.",
-          "title": "Configurer la dictée",
-          "pickModel": "Parlez au lieu de taper, dans n’importe quel volet. Téléchargez un modèle vocal ci-dessous pour commencer ; les modèles de cet ordinateur gardent votre audio ici.",
-          "microphoneMissingTitle": "{{microphone}} n’est pas connecté",
-          "microphoneMissingDescription": "La dictée utilise le micro par défaut du système jusqu’à son retour.",
-          "changeMicrophone": "Changer de micro",
-          "onTitle": "La dictée est activée",
-          "onLocal": "Appuyez sur {{shortcut}} dans n’importe quel volet. {{model}} tourne sur cet ordinateur.",
-          "onCloud": "Appuyez sur {{shortcut}} dans n’importe quel volet. {{model}} tourne dans le cloud.",
-          "offTitle": "La dictée est désactivée",
-          "offDescription": "Activez-la pour dicter avec {{shortcut}} dans n’importe quel volet.",
-          "savedMicrophone": "Votre micro",
-          "description": "Parlez au lieu de taper, dans n’importe quel volet. La parole est reconnue sur cet ordinateur, votre audio reste donc ici.",
-          "setUp": "Configurer",
-          "asksForMicrophone": "Orca demandera l’accès au micro."
+          "savedMicrophone": "Votre micro"
         },
         "quality": {
           "unsupported": "Ne prend pas en charge votre langue",
@@ -20812,29 +20795,34 @@
           "fair": "Passable",
           "good": "Bonne",
           "veryGood": "Très bonne",
-          "excellent": "Excellente",
-          "characterErrorRate": "{{percent}} % d’erreurs par caractère",
-          "wordErrorRate": "{{percent}} % d’erreurs par mot",
-          "librispeech": "Test : LibriSpeech (parole lue), {{clips}} extraits, mesuré le {{date}}.",
-          "fleurs": "Test : FLEURS (parole lue), {{clips}} extraits, mesuré le {{date}}.",
-          "bench": "Benchmark d’Orca sur un Mac avec puce Apple.",
-          "label": "Qualité : {{word}}"
+          "excellent": "Excellente"
         },
         "models": {
           "retired": "N’est plus proposé. Supprimez-le pour libérer de l’espace.",
           "sendsToOpenAi": "Envoie votre audio à OpenAI.",
           "delete": "Supprimer",
-          "cancelDownload": "Annuler le téléchargement",
           "inUse": "Utilisé",
           "use": "Utiliser",
           "setUpCloud": "Configurer",
           "download": "Télécharger",
           "cloud": "Cloud",
-          "description": "La qualité est évaluée pour {{language}}. Survolez une note pour voir le test.",
           "where": "Où les modèles tournent",
           "local": "Sur cet ordinateur",
-          "cloudDescription": "Les modèles cloud envoient votre audio au fournisseur. Ceux de cet ordinateur le gardent ici.",
-          "sendsToCompatible": "Envoie votre audio au service que vous avez configuré."
+          "sendsToCompatible": "Envoie votre audio au service que vous avez configuré.",
+          "downloadingProgress": "Téléchargement, {{done}} sur {{total}} Mo ({{percent}} %)",
+          "needsUpdate": "Nécessite un téléchargement unique pour le moteur plus rapide.",
+          "recommended": "Recommandé",
+          "columnModel": "Modèle",
+          "columnQuality": "Qualité",
+          "columnSize": "Taille",
+          "about": {
+            "parakeetV3": "Rapide. {{languages}} langues européennes.",
+            "parakeetV2": "Rapide. Anglais uniquement, et le plus précis en anglais.",
+            "whisperTiny": "Le plus petit téléchargement. Idéal pour essayer la dictée.",
+            "whisperTurbo": "Le plus de langues, environ 100. Lent sans GPU.",
+            "senseVoice": "Rapide. Pour le chinois, le japonais et le coréen.",
+            "nemotron": "{{languages}} langues, dont l’arabe, l’hindi et le japonais."
+          }
         },
         "vocabulary": {
           "title": "Vocabulaire",
@@ -20871,9 +20859,36 @@
           "heardFailed": "{{model}} n’a pas pu transcrire l’enregistrement."
         },
         "silenceStop": {
-          "title": "Arrêter après un silence",
-          "description": "Arrête l’écoute après ce temps de silence. Jamais tant que vous maintenez le raccourci.",
-          "off": "Désactivé"
+          "off": "Désactivé",
+          "label": "Arrêt après un silence",
+          "short": "Arrête la dictée quand vous cessez de parler."
+        },
+        "pageDescription": "Parlez au lieu de taper, dans n’importe quel volet.",
+        "dictation": {
+          "label": "Dictée",
+          "ready": "Appuyez sur {{shortcut}} dans n’importe quel volet.",
+          "off": "Activez-la pour dicter avec {{shortcut}} dans n’importe quel volet.",
+          "noModel": "Téléchargez un modèle vocal ci-dessous pour commencer. Il tourne sur cet ordinateur, votre audio reste ici.",
+          "downloading": "Fonctionnera une fois {{model}} téléchargé.",
+          "needsUpdate": "Mettez à jour {{model}} ci-dessous pour continuer à dicter."
+        },
+        "mode": {
+          "label": "Mode",
+          "auto": "Touchez {{shortcut}} pour démarrer et arrêter, ou maintenez-le pendant que vous parlez.",
+          "hold": "Parlez tant que vous maintenez {{shortcut}}.",
+          "toggle": "Appuyez sur {{shortcut}} pour démarrer, puis à nouveau pour arrêter."
+        },
+        "words": {
+          "title": "Mots"
+        },
+        "gpu": {
+          "description": "Désactivez-le si la dictée fige votre ordinateur."
+        },
+        "keepLoaded": {
+          "label": "Garder le modèle chargé",
+          "description": "La dictée démarre aussitôt tant qu’il est chargé.",
+          "always": "Toujours",
+          "never": "Jamais"
         }
       },
       "repositoryHooks": {
@@ -21784,7 +21799,7 @@
       "dirty_many": "Validez ou abandonnez {{count}} fichiers modifiés avant de changer de branche.",
       "agentWorking": "Un agent travaille dans cet espace de travail. Changez de branche une fois qu’il a terminé, ou fermez son onglet s’il s’est arrêté.",
       "listFailed": "Orca n’a pas pu lister les branches locales. Rouvrez le sélecteur.",
-      "discoveryFailed": "Orca n’a trouvé aucune branche distante. Vous pouvez toujours passer à une branche locale ou créer une branche.",
+      "discoveryFailed": "Orca n’a pas pu rechercher les branches distantes. Vous pouvez toujours passer à une branche locale ou créer une branche.",
       "switchFailed": "Orca n’a pas pu changer de branche. Réessayez.",
       "switchFailedTitle": "Impossible de changer de branche",
       "switchFailedIn": "Impossible de changer de branche dans {{workspace}}",
@@ -23429,7 +23444,7 @@
     "catalogInstall": "Installez {{agent}} sur cet hôte pour charger ses modèles, puis rouvrez le sélecteur d’agents.",
     "catalogUnresolved": "Les modèles de {{agent}} ne sont pas chargés. Fermez puis rouvrez le sélecteur d’agents pour réessayer.",
     "catalogEmpty": "{{agent}} n’a aucun modèle disponible.",
-    "search": "Rechercher des agents et des configurations…",
+    "search": "Rechercher, p. ex. Opus 5.5…",
     "configure": "Configurer {{agent}}",
     "arguments": "Arguments",
     "argumentsHint": "S’applique uniquement aux lancements CLI.",
@@ -24015,7 +24030,7 @@
     "unsupportedDescription": "Apple ne prend pas en charge macOS {{macos}} sur ce Mac.",
     "unknownDescription": "Nous n’avons pas pu confirmer si ce Mac peut être mis à niveau. Le guide de compatibilité d’Apple peut vous aider.",
     "whyTitle": "Pourquoi ce changement ?",
-    "whyIntro": "Nous avons mis à jour Electron, la base sur laquelle Orca fonctionne, pour apporter :",
+    "whyIntro": "Nous avons mis à jour des éléments de la base d’Orca, comme Electron et le moteur vocal local, pour apporter :",
     "whySecurity": "Des correctifs de sécurité continus provenant d’Electron et Chromium.",
     "whyPerformance": "Un démarrage plus rapide et des appels aux API natives plus efficaces.",
     "whySystemApis": "La prise en charge des API de notification macOS actuelles et du stockage sécurisé dans le trousseau.",
@@ -24063,12 +24078,12 @@
     "reverting": "Réversion",
     "updateActionsHost": "Mettez à jour Orca sur {{host}} pour agir sur les commits",
     "thisHost": "cet hôte",
-    "cannotApplyMerge": "Impossible d’appliquer un cherry-pick ou de révoquer un commit de fusion ici",
+    "cannotApplyMerge": "Impossible d’appliquer un cherry-pick ou d’inverser un commit de fusion ici",
     "confirmCommitAction": "{{action}} {{commit}} ?",
     "cancelAction": "Annuler",
-    "checkoutCommit": "Extraire le commit",
+    "checkoutCommit": "Basculer sur le commit",
     "cherryPick": "Cherry-pick",
-    "revert": "Révoquer",
+    "revert": "Inverser",
     "actionLanded": "Maintenant sur {{commit}} dans {{branch}}",
     "detachedHead": "HEAD détachée",
     "actionWarning": "L’action est terminée, mais Git a signalé un problème.",
@@ -24093,29 +24108,23 @@
     "gitlabAllowedFailure": "Échec autorisé"
   },
   "speechModelUpdate": {
-    "updateTitle": "Mettez à jour votre modèle vocal",
-    "updateDescription": "La dictée utilise désormais un moteur plus rapide. {{model}} doit être téléchargé une seule fois ({{size}} Mo) avant que vous puissiez dicter à nouveau.",
     "update": "Mettre à jour",
-    "replacedTitle": "Votre modèle vocal a été remplacé",
-    "replacedDescription": "{{old}} ne fonctionne pas avec le nouveau moteur vocal. {{model}} le remplace ({{size}} Mo).",
-    "downloadReplacement": "Télécharger {{model}}",
-    "later": "Plus tard",
-    "dismiss": "Fermer",
-    "updatingTitle": "Mise à jour de {{model}}",
-    "downloadingTitle": "Téléchargement de {{model}}",
-    "downloadingDescription": "Vous pouvez continuer à travailler. La dictée revient une fois l’opération terminée.",
-    "progress": "{{done}} sur {{total}} Mo",
     "cancel": "Annuler",
-    "doneTitle": "La dictée est prête",
-    "doneDescription": "{{model}} est à jour. Les anciens fichiers ont été supprimés.",
-    "doneRetiredDescription": "{{model}} est prêt. Les anciens fichiers de {{old}} sont toujours sur le disque.",
-    "keep": "Conserver",
-    "deleteOld": "Supprimer l’ancien modèle",
-    "deleteFailed": "Impossible de supprimer {{model}}.",
-    "updateFailedTitle": "Impossible de mettre à jour {{model}}",
-    "downloadFailedTitle": "Impossible de télécharger {{model}}",
-    "failedAtDescription": "Le téléchargement s’est arrêté à {{mb}} Mo. Vérifiez votre connexion et réessayez.",
-    "failedDescription": "Le téléchargement s’est arrêté. Vérifiez votre connexion et réessayez.",
-    "tryAgain": "Réessayer"
+    "pill": {
+      "updateNotice": "Une dictée plus rapide est prête à être installée",
+      "retiredNotice": "La dictée utilise désormais un modèle vocal plus rapide",
+      "install": "Installer",
+      "installTooltip": "Téléchargement unique · {{size}} Mo",
+      "downloading": "Configuration de la dictée",
+      "downloadingTooltip": "{{done}} sur {{size}} Mo",
+      "ready": "La dictée est prête. Appuyez sur <kbd></kbd>",
+      "readyNoShortcut": "La dictée est prête.",
+      "failed": "Téléchargement interrompu. Vérifiez votre connexion.",
+      "tryAgain": "Réessayer",
+      "deleteOld": "Supprimer l'ancien modèle",
+      "deleteFailed": "Impossible de supprimer {{model}}.",
+      "dismiss": "Ignorer",
+      "cancelDownload": "Annuler le téléchargement"
+    }
   }
 }

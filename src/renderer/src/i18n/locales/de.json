@@ -800,12 +800,12 @@
       "defaultOpensAsCli": "CLI",
       "save": "Speichern",
       "clearDefault": "Standardagent-Auswahl aufheben",
-      "autoUnsupported": "„Automatisch“ erfordert eine neuere Orca-Version auf diesem Host.",
+      "autoUnsupported": "„Genehmigen lassen“ erfordert eine neuere Orca-Version auf diesem Host.",
       "permissionsDescription": "Legt fest, wie viel Agenten ohne Rückfrage tun dürfen. Agenten mit benutzerdefinierten Startargumenten behalten diese bei.",
       "permissionsAutoDescription": "<agents>Unterstützte Agenten</agents> genehmigen sichere Aktionen selbstständig.",
       "permissionsMixed": "Die meisten Agenten verwenden {{mode}}. Die Auswahl eines Modus setzt die markierten Ausnahmen zurück, außer bei benutzerdefinierten Argumenten.",
       "permissionsMixedNoMajority": "Agenten verwenden unterschiedliche Einstellungen. Die Auswahl eines Modus gilt für alle.",
-      "permissionsSearchDescription": "Agenten mit den Berechtigungen „Manuell“, „Automatisch“ oder „Yolo“ starten.",
+      "permissionsSearchDescription": "Wählen Sie „Genehmigen lassen“, „Vollzugriff“ oder die eigenen Berechtigungseinstellungen des jeweiligen Agenten.",
       "otherAgentsPermissions": "Andere Agenten",
       "otherAgentsPermissionsLabel": "Berechtigungen für andere Agenten",
       "customArgsBadge": "Benutzerdefiniert",
@@ -828,6 +828,7 @@
       "permissionOwnDescription": "Terminals und Chats verwenden die eigenen Berechtigungseinstellungen des Agenten.",
       "permissionOwnShort": "Eigene Einstellungen",
       "permissionWithoutAuto": "Agenten ohne „Für mich genehmigen“",
+      "permissionMixed": "Gemischt",
       "permissionSurfaceDifference": "Terminals verwenden die eigenen Einstellungen des Agenten; neue Chats verwenden {{mode}}.",
       "permissionSameAsAll": "Wie alle Agenten",
       "permissionChipRemove": "{{flag}} entfernen und eigene Einstellungen von {{agent}} verwenden",
@@ -9424,13 +9425,9 @@
           "cd9fe37556": "Mikrofonberechtigung erteilt",
           "openAiKeyName": "OpenAI-Transkriptionsschlüssel",
           "dictationModeAuto": "Automatisch",
-          "dictationModesWithAutoDescription": "Automatisch: Halten Sie {{shortcut}} gedrückt, um bis zum Loslassen zu diktieren, oder tippen Sie kurz zum Starten und Stoppen. Gedrückt halten: Diktieren, solange {{shortcut}} gedrückt bleibt. Umschalten: {{shortcut}} einmal zum Starten und erneut zum Stoppen drücken.",
           "speechGpuLabel": "GPU verwenden",
-          "speechGpuDescription": "Sprache auf der Grafikkarte erkennen, wenn sie funktioniert, und auf der CPU, wenn sie versagt. Deaktivieren, wenn das Diktieren Ihren Computer einfrieren oder neu starten lässt.",
-          "updateToFasterVersion": "Auf die schnellere Version aktualisieren ({{value0}} MB)",
           "c5ea32143e": "Spracherkennungsmodell",
-          "ba4a900d1d": "Diktatmodus",
-          "0121960365": "Diktat aktivieren"
+          "ba4a900d1d": "Diktatmodus"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} entfernen",
@@ -11250,16 +11247,20 @@
               "vocabularyTitle": "Wortschatz",
               "vocabularyDescription": "Namen und Code-Begriffe, die das Diktat auf deine Weise schreibt, für dich oder ein Repo.",
               "vocabularyKeyword": "wörterbuch",
-              "b3920972d4": "Sprachmodell entladen",
               "7f5a2416a6": "Spracherkennungsmodell",
               "9d83747eae": "Diktiersprache",
-              "a5fb30e4da": "Diktat aktivieren",
               "ffaa3efe7c": "OpenAI-Transkription",
               "c7a7eaa0da": "Füllwörter entfernen",
               "d0c230c061": "Diktatmodus",
               "silenceStopTitle": "Nach Stille stoppen",
               "silenceStopDescription": "Lege fest, wie lange das Diktieren weiterhört, wenn du nicht mehr sprichst.",
-              "silenceStopKeyword": "Stille"
+              "silenceStopKeyword": "Stille",
+              "dictationTitle": "Diktieren",
+              "shortcutTitle": "Tastenkürzel",
+              "shortcutDescription": "Die Taste, die das Diktieren startet.",
+              "shortcutKeyword": "Tastatur",
+              "keepLoadedTitle": "Modell geladen lassen",
+              "gpuKeyword": "Grafikkarte"
             }
           }
         },
@@ -12216,7 +12217,6 @@
           "systemDefault": "Systemstandard",
           "unavailable": "nicht verfügbar",
           "label": "Mikrofon",
-          "description": "Eingabegerät für das Diktat. Der Systemstandard folgt der Mikrofoneinstellung des Betriebssystems.",
           "accessHint": "Mikrofonzugriff erlauben, um Eingabegeräte aufzulisten.",
           "allowAccess": "Zugriff erlauben",
           "noMicrophoneFound": "Kein Mikrofon gefunden. Ein Mikrofon anschließen und erneut versuchen.",
@@ -14164,6 +14164,10 @@
                   "archived": {
                     "title": "Repository archiviert",
                     "body": "Dieses Repository ist archiviert, daher aktualisiert Orca den Status des {{reviewLabel}}s nicht."
+                  },
+                  "host_off": {
+                    "title": "WSL-Host ist ausgeschaltet",
+                    "body": "Orca aktualisiert den Status von {{reviewLabel}} über den WSL-Host dieses Projekts, der ausgeschaltet ist. Verbinde ihn erneut, um zu aktualisieren."
                   },
                   "not_git": {
                     "title": "Kein Git-Repository",
@@ -18985,10 +18989,10 @@
         }
       },
       "agent-workspace-trust-decision": {
-        "prompt-title": "{{repo}} für Agenten vertrauen?",
+        "prompt-title": "Dem Repository {{repo}} für Agenten vertrauen?",
         "prompt-description": "Agenten wie Claude Code und Codex fragen „Do you trust this folder?“, bevor sie die eigenen Agenten-Einstellungen und Hooks des Projekts laden, die Befehle ausführen können. Orca kann diese Frage in jedem Worktree dieses Repositorys automatisch mit Ja beantworten.",
         "prompt-remembered": "Orca merkt sich die Antwort für dieses Repository. Sie lässt sich in den Einstellungen des Repositorys ändern.",
-        "trust-repository": "Repository vertrauen",
+        "trust-repository": "Dem Repository vertrauen",
         "let-agents-ask": "Agenten fragen lassen",
         "setting-title": "Ordnervertrauen für Agenten",
         "setting-description": "Legt fest, ob von Orca gestartete Agenten in den Worktrees dieses Repositorys die Abfrage „Do you trust this folder?“ überspringen und die Agenten-Einstellungen und Hooks des Projekts sofort laden.",
@@ -20650,55 +20654,34 @@
       },
       "voice": {
         "dictationLanguage": {
-          "ignored": "{{model}} transkribiert nur die Sprachen, für die es gebaut wurde, und ignoriert diese Einstellung.",
           "unsupported": "{{model}} unterstützt {{language}} nicht und erkennt die Sprache daher selbst.",
-          "description": "Die Sprache, die du sprichst. Bei „Automatisch erkennen“ ermittelt das Modell sie jedes Mal selbst.",
           "auto": "Automatisch erkennen",
-          "a9df191aba": "Diktiersprache"
+          "rated": "Die Sprache, die du sprichst. Die Qualität wird dafür bewertet.",
+          "alwaysUses": "Die Sprache, die du sprichst. {{model}} nutzt immer {{language}}.",
+          "detectsItself": "Die Sprache, die du sprichst. {{model}} erkennt sie selbst."
         },
         "modelUnload": {
-          "description": "Wie lange das lokale Modell nach dem Diktieren im Speicher bleibt. Solange es geladen ist, beginnt das Diktieren sofort; „Sofort“ gibt den Speicher frei, sodass jedes Diktat auf das Laden des Modells wartet.",
-          "cloud": "Cloud-Modelle laufen auf den Servern des Anbieters, daher bleibt hier nichts geladen.",
-          "never": "Nie",
-          "immediately": "Sofort",
-          "94afd37271": "Sprachmodell entladen"
+          "cloud": "Cloud-Modelle laufen auf den Servern des Anbieters, daher bleibt hier nichts geladen."
         },
         "fillerWords": {
-          "description": "Entfernt Laute wie „äh“ und „ähm“ aus diktiertem Text, passend zur Diktiersprache.",
-          "0134406785": "Füllwörter entfernen"
+          "0134406785": "Füllwörter entfernen",
+          "short": "Entfernt „äh“ und „ähm“."
         },
-        "sectionDescription": "Sprechen statt tippen, in jedem Bereich. Die Sprache wird auf diesem Computer erkannt, außer du wählst ein Cloud-Modell.",
         "input": {
           "title": "Eingabe",
           "shortcut": "Tastenkürzel",
-          "shortcutDescription": "Startet das Diktieren im fokussierten Bereich.",
-          "changeShortcut": "Ändern"
+          "changeShortcut": "Ändern",
+          "description": "Folgt deiner Systemeinstellung, außer du wählst eins aus.",
+          "missing": "{{microphone}} ist nicht verbunden. Bis es zurück ist, wird der Systemstandard genutzt."
         },
         "language": {
           "title": "Sprache"
-        },
-        "cleanup": {
-          "title": "Bereinigung"
         },
         "advanced": {
           "title": "Erweitert"
         },
         "setup": {
-          "downloadingDescription": "Du kannst diese Seite verlassen. Diktieren funktioniert, sobald der Download fertig ist.",
-          "title": "Diktieren einrichten",
-          "pickModel": "Sprechen statt tippen, in jedem Bereich. Lade unten ein Sprachmodell herunter; Modelle auf diesem Computer behalten deine Audiodaten hier.",
-          "microphoneMissingTitle": "{{microphone}} ist nicht verbunden",
-          "microphoneMissingDescription": "Diktieren nutzt das Standardmikrofon des Systems, bis es wieder da ist.",
-          "changeMicrophone": "Mikrofon ändern",
-          "onTitle": "Diktieren ist an",
-          "onLocal": "Drücke {{shortcut}} in einem beliebigen Bereich. {{model}} läuft auf diesem Computer.",
-          "onCloud": "Drücke {{shortcut}} in einem beliebigen Bereich. {{model}} läuft in der Cloud.",
-          "offTitle": "Diktieren ist aus",
-          "offDescription": "Schalte es ein, um mit {{shortcut}} in jedem Bereich zu diktieren.",
-          "savedMicrophone": "Dein Mikrofon",
-          "description": "Sprechen statt tippen, in jedem Bereich. Die Sprache wird auf diesem Computer erkannt, deine Audiodaten bleiben also hier.",
-          "setUp": "Einrichten",
-          "asksForMicrophone": "Orca fragt nach Zugriff auf das Mikrofon."
+          "savedMicrophone": "Dein Mikrofon"
         },
         "quality": {
           "unsupported": "Unterstützt deine Sprache nicht",
@@ -20707,29 +20690,34 @@
           "fair": "Mäßig",
           "good": "Gut",
           "veryGood": "Sehr gut",
-          "excellent": "Hervorragend",
-          "characterErrorRate": "{{percent}} % Zeichenfehlerrate",
-          "wordErrorRate": "{{percent}} % Wortfehlerrate",
-          "librispeech": "Test: LibriSpeech (vorgelesene Sprache), {{clips}} Clips, gemessen am {{date}}.",
-          "fleurs": "Test: FLEURS (vorgelesene Sprache), {{clips}} Clips, gemessen am {{date}}.",
-          "bench": "Orcas Benchmark auf einem Mac mit Apple Silicon.",
-          "label": "Qualität: {{word}}"
+          "excellent": "Hervorragend"
         },
         "models": {
           "retired": "Wird nicht mehr angeboten. Lösche es, um Speicherplatz freizugeben.",
           "sendsToOpenAi": "Sendet deine Audiodaten an OpenAI.",
           "delete": "Löschen",
-          "cancelDownload": "Download abbrechen",
           "inUse": "In Verwendung",
           "use": "Verwenden",
           "setUpCloud": "Einrichten",
           "download": "Herunterladen",
           "cloud": "Cloud",
-          "description": "Die Qualität ist für {{language}} bewertet. Fahre über eine Bewertung, um den Test dahinter zu sehen.",
           "where": "Wo Modelle laufen",
           "local": "Auf diesem Computer",
-          "cloudDescription": "Cloud-Modelle senden deine Audiodaten an den Anbieter. Modelle auf diesem Computer behalten sie hier.",
-          "sendsToCompatible": "Sendet deine Audiodaten an den Dienst, den du eingerichtet hast."
+          "sendsToCompatible": "Sendet deine Audiodaten an den Dienst, den du eingerichtet hast.",
+          "downloadingProgress": "Wird heruntergeladen, {{done}} von {{total}} MB ({{percent}} %)",
+          "needsUpdate": "Braucht einen einmaligen Download für die schnellere Engine.",
+          "recommended": "Empfohlen",
+          "columnModel": "Modell",
+          "columnQuality": "Qualität",
+          "columnSize": "Größe",
+          "about": {
+            "parakeetV3": "Schnell. {{languages}} europäische Sprachen.",
+            "parakeetV2": "Schnell. Nur Englisch, darin am genauesten.",
+            "whisperTiny": "Kleinster Download. Gut zum Ausprobieren.",
+            "whisperTurbo": "Die meisten Sprachen, rund 100. Langsam ohne GPU.",
+            "senseVoice": "Schnell. Für Chinesisch, Japanisch und Koreanisch.",
+            "nemotron": "{{languages}} Sprachen, darunter Arabisch, Hindi und Japanisch."
+          }
         },
         "vocabulary": {
           "title": "Wortschatz",
@@ -20766,9 +20754,36 @@
           "heardFailed": "{{model}} konnte die Aufnahme nicht transkribieren."
         },
         "silenceStop": {
-          "title": "Nach Stille stoppen",
-          "description": "Hört auf zuzuhören, wenn du so lange still warst. Nie, während du das Kürzel gedrückt hältst.",
-          "off": "Aus"
+          "off": "Aus",
+          "label": "Nach Stille stoppen",
+          "short": "Beendet das Diktieren, wenn du aufhörst zu sprechen."
+        },
+        "pageDescription": "Sprechen statt tippen, in jedem Bereich.",
+        "dictation": {
+          "label": "Diktieren",
+          "ready": "Drücke {{shortcut}} in einem beliebigen Bereich.",
+          "off": "Schalte es ein, um mit {{shortcut}} in jedem Bereich zu diktieren.",
+          "noModel": "Lade unten ein Sprachmodell herunter, um zu starten. Es läuft auf diesem Computer, deine Audiodaten bleiben hier.",
+          "downloading": "Funktioniert, sobald {{model}} heruntergeladen ist.",
+          "needsUpdate": "Aktualisiere {{model}} unten, um weiter zu diktieren."
+        },
+        "mode": {
+          "label": "Modus",
+          "auto": "Tippe {{shortcut}} zum Starten und Stoppen, oder halte es beim Sprechen gedrückt.",
+          "hold": "Sprich, solange du {{shortcut}} gedrückt hältst.",
+          "toggle": "Drücke {{shortcut}} zum Starten und erneut zum Stoppen."
+        },
+        "words": {
+          "title": "Wörter"
+        },
+        "gpu": {
+          "description": "Schalte es aus, wenn Diktieren deinen Computer einfriert."
+        },
+        "keepLoaded": {
+          "label": "Modell geladen lassen",
+          "description": "Diktieren startet sofort, solange es geladen ist.",
+          "always": "Immer",
+          "never": "Nie"
         }
       },
       "repositoryHooks": {
@@ -21428,7 +21443,7 @@
       "remote": "remote",
       "statusFailed": "Orca konnte die Änderungen in diesem Checkout nicht lesen. Aktualisiere die Quellcodeverwaltung, bevor du wechselst.",
       "statusUnknown": "Lies die Änderungen in diesem Checkout, bevor du wechselst.",
-      "conflict": "Schließe den {{operation}} ab oder brich ihn ab, bevor du den Branch wechselst.",
+      "conflict": "Schließe den Vorgang {{operation}} ab oder brich ihn ab, bevor du den Branch wechselst.",
       "dirty_one": "Committe oder verwirf {{count}} geänderte Datei, bevor du den Branch wechselst.",
       "dirty_other": "Committe oder verwirf {{count}} geänderte Dateien, bevor du den Branch wechselst.",
       "agentWorking": "Ein Agent arbeitet in diesem Arbeitsbereich. Wechsle den Branch, wenn er fertig ist, oder schließe seinen Tab, falls er angehalten hat.",
@@ -23576,7 +23591,7 @@
     "argumentsTerminalHint": "Gilt nur für Terminalstarts (CLI)",
     "searchAgentModels": "{{agent}}-Modelle suchen…",
     "legacyModelCount": "{{total}} Modelle",
-    "search": "Agenten und Konfigurationen suchen…",
+    "search": "Suchen, z. B. Opus 5.5…",
     "configure": "{{agent}} konfigurieren",
     "arguments": "Argumente",
     "argumentsHint": "Gilt nur für CLI-Starts.",
@@ -23608,7 +23623,7 @@
     "unsupportedDescription": "Apple unterstützt macOS {{macos}} auf diesem Mac nicht.",
     "unknownDescription": "Wir konnten nicht bestätigen, ob dieser Mac aktualisiert werden kann. Die Kompatibilitätsübersicht von Apple kann helfen.",
     "whyTitle": "Warum ändert sich das?",
-    "whyIntro": "Wir haben Electron, die Grundlage von Orca, aktualisiert. Das bringt:",
+    "whyIntro": "Wir haben Teile der Grundlage von Orca aktualisiert, darunter Electron und die lokale Spracherkennung. Das bringt:",
     "whySecurity": "Fortlaufende Sicherheitskorrekturen von Electron und Chromium.",
     "whyPerformance": "Schnelleren Start und effizientere Aufrufe nativer APIs.",
     "whySystemApis": "Unterstützung aktueller macOS-Benachrichtigungs-APIs und sicheren Schlüsselbundspeichers.",
@@ -23686,29 +23701,23 @@
     "gitlabAllowedFailure": "Fehlschlag erlaubt"
   },
   "speechModelUpdate": {
-    "updateTitle": "Sprachmodell aktualisieren",
-    "updateDescription": "Die Diktierfunktion läuft jetzt mit einer schnelleren Engine. {{model}} muss einmalig heruntergeladen werden ({{size}} MB), bevor Sie wieder diktieren können.",
     "update": "Aktualisieren",
-    "replacedTitle": "Ihr Sprachmodell wurde ersetzt",
-    "replacedDescription": "{{old}} läuft nicht mit der neuen Spracherkennung. {{model}} ersetzt es ({{size}} MB).",
-    "downloadReplacement": "{{model}} herunterladen",
-    "later": "Später",
-    "dismiss": "Schließen",
-    "updatingTitle": "{{model}} wird aktualisiert",
-    "downloadingTitle": "{{model}} wird heruntergeladen",
-    "downloadingDescription": "Sie können weiterarbeiten. Die Diktierfunktion ist wieder da, sobald dies abgeschlossen ist.",
-    "progress": "{{done}} von {{total}} MB",
     "cancel": "Abbrechen",
-    "doneTitle": "Diktieren ist bereit",
-    "doneDescription": "{{model}} ist aktualisiert. Die alten Dateien wurden entfernt.",
-    "doneRetiredDescription": "{{model}} ist eingerichtet. Die alten Dateien von {{old}} sind noch auf dem Datenträger.",
-    "keep": "Behalten",
-    "deleteOld": "Altes Modell löschen",
-    "deleteFailed": "{{model}} konnte nicht gelöscht werden.",
-    "updateFailedTitle": "{{model}} konnte nicht aktualisiert werden",
-    "downloadFailedTitle": "{{model}} konnte nicht heruntergeladen werden",
-    "failedAtDescription": "Der Download wurde bei {{mb}} MB unterbrochen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
-    "failedDescription": "Der Download wurde unterbrochen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
-    "tryAgain": "Erneut versuchen"
+    "pill": {
+      "updateNotice": "Schnelleres Diktieren ist bereit zur Installation",
+      "retiredNotice": "Diktieren nutzt jetzt ein schnelleres Sprachmodell",
+      "install": "Installieren",
+      "installTooltip": "Einmaliger Download · {{size}} MB",
+      "downloading": "Diktieren wird eingerichtet",
+      "downloadingTooltip": "{{done}} von {{size}} MB",
+      "ready": "Diktieren ist bereit. Drücke <kbd></kbd>",
+      "readyNoShortcut": "Diktieren ist bereit.",
+      "failed": "Download abgebrochen. Prüfe deine Verbindung.",
+      "tryAgain": "Erneut versuchen",
+      "deleteOld": "Altes Modell löschen",
+      "deleteFailed": "{{model}} konnte nicht gelöscht werden.",
+      "dismiss": "Schließen",
+      "cancelDownload": "Download abbrechen"
+    }
   }
 }

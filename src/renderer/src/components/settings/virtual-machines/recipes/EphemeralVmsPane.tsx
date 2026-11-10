@@ -18,7 +18,7 @@ import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActivePr
 import {
   launchEnvironmentSetupAgent,
   pickEnvironmentSetupRepo
-} from '@/lib/environment-setup-agent-launch'
+} from '@/lib/agent-session/launch/environment-setup-agent-launch'
 
 type RecipeCatalogEntry = Awaited<
   ReturnType<typeof window.api.ephemeralVm.listRecipeCatalog>

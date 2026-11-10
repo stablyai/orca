@@ -8,7 +8,7 @@ import {
   computeDiffEditorFontSize,
   computeEditorFontSize
 } from '@/lib/editor/appearance/editor-font-zoom'
-import { buildFontFamily } from '@/lib/monospace-font-family'
+import { buildFontFamily } from '@/app-shell/appearance/monospace-font-family'
 
 export const EDITOR_FONT_SIZE_MIN = 10
 export const EDITOR_FONT_SIZE_MAX = 24
