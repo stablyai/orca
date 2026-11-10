@@ -43,16 +43,21 @@ describe('RelayWallClockTimer', () => {
     expect(source.count()).toBe(0)
   })
 
-  it('keeps waiting when the machine resumes before the task is due', () => {
+  it('re-arms from the wall clock when the machine resumes before the task is due', () => {
     vi.useFakeTimers()
     let wall = 1_000_000
     const source = resumeSource()
     const timer = new RelayWallClockTimer(() => wall, source.subscribe)
     const task = vi.fn()
     timer.schedule(180_000, task)
+    // A 60 s sleep: the timer clock lost it, so 120 s of wall time are left.
     wall += 60_000
     source.resume()
     expect(task).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(119_000)
+    expect(task).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1_000)
+    expect(task).toHaveBeenCalledTimes(1)
     vi.advanceTimersByTime(180_000)
     expect(task).toHaveBeenCalledTimes(1)
   })
