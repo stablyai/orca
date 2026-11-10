@@ -115,6 +115,21 @@ describe('a focused launch from the CLI', () => {
     })
   })
 
+  it('shows a created folder workspace, which has no activation of its own', async () => {
+    const focus = await launchFromCli({
+      agent: 'claude',
+      target: {
+        kind: 'create-folder-workspace',
+        create: { projectGroupId: 'group-1', name: 'notes' }
+      },
+      presentation: 'focused'
+    })
+
+    expect(focus).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ sessionId: 'sess-1', revealWorkspace: true })
+    )
+  })
+
   it.each([
     ['a background chat', { ...EXISTING_LAUNCH, presentation: 'background' }, undefined],
     ['a focused terminal', { ...EXISTING_LAUNCH, presentation: 'focused' }, {}]

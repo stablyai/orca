@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
 import { revealFloatingWorkspacePanel } from '../../floating-workspace-panel-reveal'
 import { markVisited, readPreviousActive } from './worktree-activation-visit'
@@ -12,7 +13,7 @@ type FloatingPanelState = Pick<
   'settings' | 'updateSettings' | 'floatingWorkspacePanelOpen'
 >
 
-/** Reveal floating workspaces in their panel (main selection would blank it); others become visited main selection. createdTabIds protects requested empty groups from activation pruning. */
+/** Reveal floating workspaces in their panel (main selection would blank it); others become visited main selection. createdTabIds protects requested empty groups from activation pruning; executionHostId picks one same-ID copy. */
 export function revealWorkspaceSurface(
   state: FloatingPanelState &
     Pick<
@@ -27,7 +28,8 @@ export function revealWorkspaceSurface(
       | 'activeWorkspaceExecutionHostId'
     >,
   worktreeId: string,
-  createdTabIds?: readonly string[]
+  createdTabIds?: readonly string[],
+  executionHostId?: ExecutionHostId
 ): void {
   if (isFloatingWorkspaceId(worktreeId)) {
     revealFloatingWorkspacePanel(state)
@@ -39,9 +41,11 @@ export function revealWorkspaceSurface(
     // Why the host: re-revealing the active workspace by id alone clears its selected twin.
     state.setActiveWorktree(
       worktreeId,
-      getActiveWorkspaceExecutionHostId(state, worktreeId) ?? undefined,
+      executionHostId ?? getActiveWorkspaceExecutionHostId(state, worktreeId) ?? undefined,
       { createdTabIds }
     )
+  } else if (executionHostId) {
+    state.setActiveWorktree(worktreeId, executionHostId)
   } else {
     reselectWorkspaceKeepingHost(state, worktreeId)
   }

@@ -24,20 +24,30 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
+const refreshWorktreeTabs = vi.hoisted(() => vi.fn())
+vi.mock(
+  '@/runtime/local-structured-session-tabs-sync/inventory-refresh',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    refreshLocalStructuredSessionWorktreeTabs: refreshWorktreeTabs
+  })
+)
+
 createTabsSliceMockApi()
 
 const { focusAgentLaunchChat } = await import('./agent-launch-chat-focus')
 
 const WT = 'repo1::/tmp/feature'
 const OTHER_WT = 'repo1::/tmp/other'
+const FRESH_WT = 'repo1::/tmp/fresh'
 const SESSION_ID = 'sess-1'
 
 let store: ReturnType<typeof createTestStore>
 
 /** The host's listing of the launched chat, which main marks active for itself and paired clients. */
-function chatListing(): RuntimeMobileSessionTabsResult {
+function chatListing(worktreeId = WT): RuntimeMobileSessionTabsResult {
   return {
-    worktree: WT,
+    worktree: worktreeId,
     publicationEpoch: 'epoch-1',
     snapshotVersion: 1,
     activeGroupId: null,
@@ -56,17 +66,19 @@ function chatListing(): RuntimeMobileSessionTabsResult {
   }
 }
 
-function receiveChatListing(): void {
-  store.setState(applyLocalStructuredSessionTabSnapshots(store.getState(), [chatListing()]))
+function receiveChatListing(worktreeId = WT): void {
+  store.setState(
+    applyLocalStructuredSessionTabSnapshots(store.getState(), [chatListing(worktreeId)])
+  )
 }
 
-function activeTab() {
+function activeTab(worktreeId = WT) {
   const state = store.getState()
-  const activeGroupId = state.activeGroupIdByWorktree[WT]
-  const activeTabId = state.groupsByWorktree[WT]?.find(
+  const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
+  const activeTabId = state.groupsByWorktree[worktreeId]?.find(
     (group) => group.id === activeGroupId
   )?.activeTabId
-  return state.unifiedTabsByWorktree[WT]?.find((tab) => tab.id === activeTabId)
+  return state.unifiedTabsByWorktree[worktreeId]?.find((tab) => tab.id === activeTabId)
 }
 
 function tabOrder(): (string | undefined)[] {
@@ -80,15 +92,23 @@ function tabOrder(): (string | undefined)[] {
   )
 }
 
+/** The workspace's default terminal and then its setup tab, as a create provisions them. */
+function provisionTabs(worktreeId: string): { setupTabId: string } {
+  const terminal = store.getState().createTab(worktreeId)
+  store.getState().setTabCustomTitle(terminal.id, 'Terminal 1')
+  const setup = store.getState().createTab(worktreeId, undefined, undefined, { activate: false })
+  store.getState().setTabCustomTitle(setup.id, 'Setup')
+  return { setupTabId: setup.id }
+}
+
+let setupTabId: string
+
 beforeEach(() => {
   store = createTestStore()
   testStore.current = store
+  refreshWorktreeTabs.mockReset().mockResolvedValue(null)
   store.getState().setActiveWorktree(WT)
-  // The workspace's default terminal and then its setup tab, as a create provisions them.
-  const terminal = store.getState().createTab(WT)
-  store.getState().setTabCustomTitle(terminal.id, 'Terminal 1')
-  const setup = store.getState().createTab(WT, undefined, undefined, { activate: false })
-  store.getState().setTabCustomTitle(setup.id, 'Setup')
+  ;({ setupTabId } = provisionTabs(WT))
 })
 
 afterEach(() => {
@@ -130,6 +150,37 @@ describe('focusing a launched chat in the window', () => {
 
     focusAgentLaunchChat({ worktreeId: WT, sessionId: SESSION_ID, revealWorkspace: true })
     expect(store.getState().activeWorktreeId).toBe(WT)
+    expect(activeTab()?.contentType).toBe('agent-session')
+  })
+  it('keeps a tab the user picked before the chat arrived', () => {
+    focusAgentLaunchChat({ worktreeId: WT, sessionId: SESSION_ID, revealWorkspace: false })
+    store.getState().activateTab(setupTabId, { worktreeId: WT })
+    receiveChatListing()
+
+    expect(activeTab()?.customLabel).toBe('Setup')
+  })
+
+  it('still selects the chat after a fresh workspace provisions its first tabs', () => {
+    focusAgentLaunchChat({ worktreeId: FRESH_WT, sessionId: SESSION_ID, revealWorkspace: false })
+    provisionTabs(FRESH_WT)
+    receiveChatListing(FRESH_WT)
+
+    expect(activeTab(FRESH_WT)?.contentType).toBe('agent-session')
+  })
+
+  it('shows the local copy when the window shows a remote one with the same id', () => {
+    store.getState().setActiveWorktree(WT, 'runtime:env-1')
+    receiveChatListing()
+    expect(activeTab()?.contentType).not.toBe('agent-session')
+    refreshWorktreeTabs.mockImplementation(async () => {
+      receiveChatListing()
+      return null
+    })
+
+    focusAgentLaunchChat({ worktreeId: WT, sessionId: SESSION_ID, revealWorkspace: true })
+
+    expect(store.getState().activeWorkspaceExecutionHostId).toBe('local')
+    expect(refreshWorktreeTabs).toHaveBeenCalledWith(WT)
     expect(activeTab()?.contentType).toBe('agent-session')
   })
 })

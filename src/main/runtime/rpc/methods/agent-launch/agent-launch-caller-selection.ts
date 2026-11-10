@@ -81,8 +81,8 @@ export function presentAgentLaunchSurface(
     context.runtime.focusAgentLaunchChatInHostWindow({
       worktreeId: surface.worktreeId,
       sessionId: surface.outcome.sessionId,
-      // A created workspace is shown by its own activation.
-      revealWorkspace: target.kind === 'existing'
+      // A created worktree is shown by its own activation; a created folder has none.
+      revealWorkspace: target.kind !== 'create-worktree'
     })
   } catch (error) {
     console.warn('[agent-launch] the chat started; selecting its tab in the window did not', error)
