@@ -3,8 +3,7 @@ import type { AgentJournalSubmission } from '../journal/agent-session-journal-ty
 import type { AgentSessionQueuedMessage } from '../requests/agent-session-queued-message-wire'
 import {
   headSteerableQueuedMessageCard,
-  projectQueuedMessageCards,
-  queuedMessageCardPreview
+  projectQueuedMessageCards
 } from './structured-agent-session-queued-cards'
 
 function draft(
@@ -97,19 +96,5 @@ describe('queued message cards', () => {
     })
     expect(working.map((card) => card.waitsForAgent ?? false)).toEqual([false, true])
     expect(cards[1]).not.toHaveProperty('waitsForAgent')
-  })
-})
-
-describe('queuedMessageCardPreview', () => {
-  it('drops fence lines that carry an info string', () => {
-    expect(queuedMessageCardPreview('see\n```ts title="a.ts"\nconst a = 1\n```  ')).toBe(
-      'see\n\nconst a = 1\n'
-    )
-  })
-
-  it('previews a fenced block without its fence lines', () => {
-    expect(queuedMessageCardPreview('explain\n\n```console\n$ pwd\n/repo\n```')).toBe(
-      'explain\n\n\n$ pwd\n/repo\n'
-    )
   })
 })

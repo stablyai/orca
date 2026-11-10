@@ -200,10 +200,6 @@ export function queuedMessageCardLine(
     : copy.imageCount(images.length)
 }
 
-export function queuedMessageCardPreview(line: string): string {
-  return line.replace(/^ {0,3}`{3,}[^`\n]*$/gm, '')
-}
-
 /** A returned card's words: a Stop withdrawal is not a send failure; the card's own Send is the retry, so failure words leave sending again out. */
 export function queuedMessageReturnedNotice(
   card: Pick<QueuedMessageCard, 'returnedReason' | 'returnedRejection'>,

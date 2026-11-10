@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { nativeChatShellCommand, nativeChatShellCommandBlock } from './native-chat-shell-command'
+import {
+  nativeChatShellBlocksWithoutFences,
+  nativeChatShellCommand,
+  nativeChatShellCommandBlock
+} from './native-chat-shell-command'
 
 describe('nativeChatShellCommand', () => {
   it.each([
@@ -82,5 +86,19 @@ describe('nativeChatShellCommandBlock', () => {
         directory: null
       })
     ).toBe('````console\n$ cat README.md\n```ts\nx\n```\n````')
+  })
+})
+
+describe('nativeChatShellBlocksWithoutFences', () => {
+  it('unwraps a shell block and keeps a literal fence line inside it', () => {
+    expect(
+      nativeChatShellBlocksWithoutFences('explain\n\n````console\n$ cat a.md\n```\nx\n```\n````')
+    ).toBe('explain\n\n$ cat a.md\n```\nx\n```')
+  })
+
+  it('leaves code blocks the user wrote untouched', () => {
+    expect(nativeChatShellBlocksWithoutFences('see\n```ts\nconst a = 1\n```')).toBe(
+      'see\n```ts\nconst a = 1\n```'
+    )
   })
 })

@@ -28,7 +28,6 @@ import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../../shared/agent-s
 import { isMacPlatform } from '@/components/native-chat/pane/routing/native-chat-shortcut'
 import {
   queuedMessageCardLine,
-  queuedMessageCardPreview,
   queuedMessageCardNeedsAttention,
   queuedMessageCardSteers,
   queuedMessageReturnedNotice,
@@ -37,6 +36,7 @@ import {
 import { NativeChatAgentMessageSenders } from '@/components/native-chat/messages/agent-senders/NativeChatAgentMessageSenders'
 import { NativeChatPendingIcon } from '@/components/native-chat/queue/NativeChatPendingIcon'
 import type { QueuedMessagesPendingAction } from '@/components/native-chat/queue/use-structured-agent-session-queued-messages'
+import { nativeChatShellBlocksWithoutFences } from '../../../../../shared/native-chat/input/native-chat-shell-command'
 import { useNativeChatClippedLine } from '@/components/native-chat/queue/use-native-chat-clipped-line'
 import type { AgentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
 import {
@@ -164,6 +164,7 @@ export function NativeChatQueuedMessageCard({
   const t = useTranslate()
   const caption = queuedMessageCardCaption(card, agentName, statedFailures, t)
   const line = queuedMessageCardLine(card, nativeChatImageLabelCopy(t))
+  const preview = nativeChatShellBlocksWithoutFences(line)
   const returned = card.state === 'returned'
   const attention = queuedMessageCardNeedsAttention(card)
   const sendNow = queuedMessageCardSendNow(card, agentWorking, t)
@@ -231,7 +232,7 @@ export function NativeChatQueuedMessageCard({
           {sender}
           {expanded ? null : (
             <p ref={measureLine} className="truncate text-sm" title={line}>
-              {queuedMessageCardPreview(line)}
+              {preview}
             </p>
           )}
           {caption ? (
@@ -253,7 +254,7 @@ export function NativeChatQueuedMessageCard({
           ) : null}
         </div>
         {card.images ? <QueuedMessageImageCount images={card.images} /> : null}
-        {expanded || clipped ? (
+        {expanded || clipped || preview !== line ? (
           <QueuedMessageExpandToggle
             expanded={expanded}
             controls={expanded ? textId : undefined}

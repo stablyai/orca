@@ -70,3 +70,7 @@ export function nativeChatShellCommandBlock(
   const fence = '`'.repeat(Math.max(3, longestRun + 1))
   return `${fence}console\n${body}\n${fence}`
 }
+
+export function nativeChatShellBlocksWithoutFences(text: string): string {
+  return text.replace(/^(`{3,})console\n([\s\S]*?)\n\1$/gm, '$2')
+}
