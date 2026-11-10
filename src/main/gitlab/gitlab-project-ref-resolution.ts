@@ -1,6 +1,7 @@
 import { glabExecFileAsync } from '../git/runner'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 import { addWslEnvKeys } from '../../shared/wsl-env'
+import { normalizeForgeWebHost } from '../../shared/git/remotes/git-remote-host-alias'
 import { isTransientGitProbeError, readRemoteUrl } from '../git/remotes/remote-url-probe'
 import { NEGATIVE_ENTRY_TTL_MS } from '../git/remotes/remote-ref-probe-cache'
 import { readLocalGitConfigSignature } from '../github/local-git-config-signature'
@@ -153,12 +154,19 @@ async function resolveProjectRefForRemote(
     if (stdout === null) {
       return null
     }
+    // Stray glab host entries for GitHub/Bitbucket hosts must not claim their remotes (#40386).
+    // Match the real host only: `github:team/project` is an scp remote on an SSH alias named github.
+    const remoteCandidate = parseRemoteProjectRefCandidate(stdout)
+    const remoteHost = remoteCandidate && normalizeForgeWebHost(remoteCandidate.host)
+    if (remoteHost === 'github.com' || remoteHost === 'bitbucket.org') {
+      publish(null)
+      return null
+    }
     const result = parseGitLabProjectRef(stdout, knownHosts)
     if (result) {
       publish(result)
       return result
     }
-    const remoteCandidate = parseRemoteProjectRefCandidate(stdout)
     if (
       remoteCandidate &&
       (await isGlabConfiguredForRemoteHost(

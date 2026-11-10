@@ -5434,8 +5434,15 @@
             "readAgo": "Read {{time}}",
             "notRead": "Usage unknown: not read yet"
           },
+          "AccountSwitchList": {
+            "used": "Used",
+            "left": "Left",
+            "reset": "Reset"
+          },
           "InlineUsageBars": {
-            "resetsAt": "Resets {{when}}"
+            "now": "now",
+            "resetsNow": "resets now",
+            "resetsIn": "resets in {{duration}}"
           }
         }
       },
@@ -11705,7 +11712,10 @@
               "a5fb30e4da": "Enable voice dictation",
               "ffaa3efe7c": "OpenAI transcription",
               "c7a7eaa0da": "Remove filler words",
-              "d0c230c061": "Dictation mode"
+              "d0c230c061": "Dictation mode",
+              "silenceStopTitle": "Stop after silence",
+              "silenceStopDescription": "Choose how long dictation keeps listening when you stop talking.",
+              "silenceStopKeyword": "silence"
             }
           }
         },
@@ -17508,7 +17518,6 @@
           "micFallback": "Selected microphone unavailable. Using system default.",
           "micDisconnected": "Microphone disconnected. Dictation stopped.",
           "cloudLimitReached": "Dictation stopped at the 10-minute cloud limit.",
-          "stoppedAfterSilence": "Stopped after a minute of silence",
           "retryUnmatched": "Retry couldn't tell which words were already typed, so it inserted them all."
         },
         "dictation-transcript-delivery": {
@@ -21559,6 +21568,27 @@
           "repoNameHint": "Use the repo name as a hint",
           "repoNameHintDescription": "Helps recognize the repo's name.",
           "repoSaveFailed": "Couldn't save the repo's terms. The host running this repo may need an Orca update."
+        },
+        "micTest": {
+          "test": "Test",
+          "recording": "Recording {{elapsed}} of {{limit}}",
+          "stop": "Stop",
+          "hint": "Say a sentence the way you normally dictate.",
+          "playing": "Playing back {{elapsed}}",
+          "skip": "Skip",
+          "levelGood": "Level looks good",
+          "levelQuiet": "Very quiet. Check the microphone or move closer.",
+          "playAgain": "Play again",
+          "testAgain": "Test again",
+          "listening": "{{model}} is listening too…",
+          "heardLabel": "{{model}} heard",
+          "heardNothing": "No words. Try speaking louder.",
+          "heardFailed": "{{model}} couldn’t transcribe the recording."
+        },
+        "silenceStop": {
+          "off": "Off",
+          "title": "Stop After Silence",
+          "description": "Stops listening once you’ve been quiet this long. Never while you hold the shortcut."
         }
       },
       "repositoryHooks": {
@@ -21780,17 +21810,24 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
+        "agents": "Agents",
         "browser": "Browser",
         "chooseAgent": "Choose agent",
         "closePane": "Close pane",
-        "goToFile": "Go to file",
-        "heading": "Open in this pane",
+        "files": "Files",
+        "keyboardHint": "↑↓ Enter to open · → agents · / to search",
         "markdown": "Markdown",
         "mobileEmulator": "Mobile emulator",
+        "new": "New",
         "newAgent": "New Agent",
-        "reopenClosedTab": "Reopen closed tab",
+        "newNamedAgent": "New {{agent}} agent",
+        "noMatches": "No matches",
+        "searchPlaceholder": "Open agent, terminal, or file…",
         "terminal": "Terminal"
       }
+    },
+    "dictation": {
+      "stoppedAfterSilenceSeconds": "Stopped after {{seconds}} seconds of silence"
     }
   },
   "dashboardPopout": {

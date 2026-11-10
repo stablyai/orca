@@ -4460,8 +4460,15 @@
             "readAgo": "{{time}}에 조회",
             "notRead": "사용량을 알 수 없음: 아직 조회하지 않음"
           },
+          "AccountSwitchList": {
+            "used": "사용량",
+            "left": "남음",
+            "reset": "초기화"
+          },
           "InlineUsageBars": {
-            "resetsAt": "{{when}}에 초기화"
+            "now": "지금",
+            "resetsNow": "지금 초기화",
+            "resetsIn": "{{duration}} 후 초기화"
           }
         }
       },
@@ -10555,7 +10562,10 @@
               "a5fb30e4da": "음성 받아쓰기 활성화",
               "ffaa3efe7c": "OpenAI 전사",
               "c7a7eaa0da": "군말 제거",
-              "d0c230c061": "받아쓰기 모드"
+              "d0c230c061": "받아쓰기 모드",
+              "silenceStopTitle": "무음 시 중지",
+              "silenceStopDescription": "말을 멈춘 뒤 받아쓰기가 얼마나 더 들을지 정합니다.",
+              "silenceStopKeyword": "무음"
             }
           }
         },
@@ -16252,7 +16262,6 @@
           "micFallback": "선택한 마이크를 사용할 수 없습니다. 시스템 기본값을 사용합니다.",
           "micDisconnected": "마이크 연결이 끊어졌습니다. 받아쓰기가 중지되었습니다.",
           "cloudLimitReached": "클라우드 10분 제한에 도달해 받아쓰기가 중지되었습니다.",
-          "stoppedAfterSilence": "1분 동안 말소리가 없어 중지했습니다.",
           "retryUnmatched": "다시 시도할 때 이미 입력된 단어를 찾지 못해 전부 삽입했습니다."
         },
         "dictation-transcript-delivery": {
@@ -20021,6 +20030,27 @@
           "repoNameHint": "저장소 이름을 힌트로 사용",
           "repoNameHintDescription": "저장소 이름을 더 잘 인식하도록 돕습니다.",
           "repoSaveFailed": "저장소 용어를 저장하지 못했습니다. 이 저장소의 호스트에서 Orca 업데이트가 필요할 수 있습니다."
+        },
+        "micTest": {
+          "test": "테스트",
+          "recording": "녹음 중 {{elapsed}} / {{limit}}",
+          "stop": "중지",
+          "hint": "평소 받아쓰기하듯 한 문장을 말해 보세요.",
+          "playing": "재생 중 {{elapsed}}",
+          "skip": "건너뛰기",
+          "levelGood": "음량이 적당합니다",
+          "levelQuiet": "소리가 매우 작습니다. 마이크를 확인하거나 더 가까이에서 말하세요.",
+          "playAgain": "다시 재생",
+          "testAgain": "다시 테스트",
+          "listening": "{{model}}도 듣고 있습니다…",
+          "heardLabel": "{{model}}이(가) 들은 내용",
+          "heardNothing": "들린 말이 없습니다. 더 크게 말해 보세요.",
+          "heardFailed": "{{model}}이(가) 녹음을 받아쓰지 못했습니다."
+        },
+        "silenceStop": {
+          "title": "무음 시 중지",
+          "description": "이 시간 동안 조용하면 듣기를 멈춥니다. 단축키를 누르고 있는 동안에는 멈추지 않습니다.",
+          "off": "끔"
         }
       },
       "repositoryHooks": {
@@ -20192,6 +20222,9 @@
           "action": "창 분할"
         }
       }
+    },
+    "dictation": {
+      "stoppedAfterSilenceSeconds": "{{seconds}}초 동안 조용해서 중지했습니다"
     }
   },
   "dashboardPopout": {

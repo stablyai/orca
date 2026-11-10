@@ -1,7 +1,7 @@
 import React from 'react'
 import type { AutomationsPageController } from './use-automations-page-controller'
-import { AutomationsListPanel } from './AutomationsListPanel'
-import { nextAutomationListSort } from './automation-list-view'
+import { AutomationsListPanel } from './listing/AutomationsListPanel'
+import { nextAutomationListSort } from './listing/automation-list-view'
 
 export function AutomationsPageListPanel({
   controller,

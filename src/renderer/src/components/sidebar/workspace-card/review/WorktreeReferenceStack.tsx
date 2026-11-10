@@ -153,7 +153,7 @@ export function WorktreeReferenceStack({
       </span>
       {items.length > 1 ? (
         <span
-          className="workspace-reference-stack-count icon-superscript-count"
+          className="workspace-reference-stack-count z-3 text-3xs leading-none font-medium text-muted-foreground"
           data-reference-count=""
           data-multiple-digits={items.length > 9}
           aria-hidden

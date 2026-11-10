@@ -4460,8 +4460,15 @@
             "readAgo": "{{time}} に取得",
             "notRead": "使用量は不明：未取得"
           },
+          "AccountSwitchList": {
+            "used": "使用済み",
+            "left": "残り",
+            "reset": "リセット"
+          },
           "InlineUsageBars": {
-            "resetsAt": "{{when}} にリセット"
+            "now": "今",
+            "resetsNow": "今リセット",
+            "resetsIn": "{{duration}}後にリセット"
           }
         }
       },
@@ -10592,7 +10599,10 @@
               "a5fb30e4da": "音声ディクテーションを有効にする",
               "ffaa3efe7c": "OpenAI 文字起こし",
               "c7a7eaa0da": "フィラーを削除",
-              "d0c230c061": "ディクテーションモード"
+              "d0c230c061": "ディクテーションモード",
+              "silenceStopTitle": "無音で停止",
+              "silenceStopDescription": "話すのをやめた後、音声入力が聞き取りを続ける時間を選びます。",
+              "silenceStopKeyword": "無音"
             }
           }
         },
@@ -16252,7 +16262,6 @@
           "micFallback": "選択したマイクが使用できません。システムのデフォルトを使用します。",
           "micDisconnected": "マイクが接続されていません。ディクテーションが停止しました。",
           "cloudLimitReached": "クラウドの10分の上限に達したため、ディクテーションが停止しました。",
-          "stoppedAfterSilence": "1分間音声がなかったため停止しました。",
           "retryUnmatched": "再試行で入力済みの語句を特定できなかったため、すべて挿入しました。"
         },
         "dictation-transcript-delivery": {
@@ -20021,6 +20030,27 @@
           "repoNameHint": "リポジトリ名をヒントとして使う",
           "repoNameHintDescription": "リポジトリ名を認識しやすくします。",
           "repoSaveFailed": "リポジトリの用語を保存できませんでした。このリポジトリのホストで Orca の更新が必要かもしれません。"
+        },
+        "micTest": {
+          "test": "テスト",
+          "recording": "録音中 {{elapsed}} / {{limit}}",
+          "stop": "停止",
+          "hint": "いつも音声入力するように一文話してください。",
+          "playing": "再生中 {{elapsed}}",
+          "skip": "スキップ",
+          "levelGood": "音量は良好です",
+          "levelQuiet": "音量がとても小さいです。マイクを確認するか、近づいてください。",
+          "playAgain": "もう一度再生",
+          "testAgain": "もう一度テスト",
+          "listening": "{{model}} も聞き取っています…",
+          "heardLabel": "{{model}} の認識結果",
+          "heardNothing": "言葉は認識されませんでした。もう少し大きな声で話してください。",
+          "heardFailed": "{{model}} は録音を文字起こしできませんでした。"
+        },
+        "silenceStop": {
+          "title": "無音で停止",
+          "description": "この時間だけ無音が続くと聞き取りを止めます。ショートカットを押している間は止めません。",
+          "off": "オフ"
         }
       },
       "repositoryHooks": {
@@ -20192,6 +20222,9 @@
           "action": "ペインを分割"
         }
       }
+    },
+    "dictation": {
+      "stoppedAfterSilenceSeconds": "{{seconds}} 秒間無音だったため停止しました"
     }
   },
   "dashboardPopout": {

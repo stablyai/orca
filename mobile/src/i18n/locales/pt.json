@@ -2638,8 +2638,8 @@
       "insertFailed": "Não foi possível inserir o ditado",
       "insertFailedCopied": "Não foi possível inserir o ditado, então ele foi copiado para a área de transferência",
       "inserted": "Ditado inserido",
-      "stoppedAfterSilence": "Parou após um minuto de silêncio",
-      "stoppedAtCloudLimit": "O ditado foi interrompido no limite de 10 minutos da nuvem."
+      "stoppedAtCloudLimit": "O ditado foi interrompido no limite de 10 minutos da nuvem.",
+      "stoppedAfterSilenceSeconds": "Parado após {{seconds}} segundos de silêncio"
     },
     "useNativeChatStop": {
       "stopNotSent": "Comando de parada não enviado",
