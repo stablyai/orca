@@ -140,10 +140,10 @@ describe('teammate names', () => {
     const named = { ...KEY, createdByName: 'Ada Lovelace' }
     const bad = { ...KEY, id: 'key_2', createdByName: 42 }
     const legacy = { ...KEY, id: 'key_3' }
-    const fetchImpl = vi.fn(async () =>
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
       respond(200, { keys: [named, bad, legacy], availableScopes: [] })
     )
-    const { keys } = await client(fetchImpl as unknown as typeof fetch).listApiKeys()
+    const { keys } = await client(fetchImpl).listApiKeys()
     expect(keys.map((key) => key.createdByName)).toEqual(['Ada Lovelace', null, undefined])
   })
 
@@ -155,8 +155,10 @@ describe('teammate names', () => {
       target: null,
       createdAt: 1
     }
-    const fetchImpl = vi.fn(async () => respond(200, { entries: [entry], nextBefore: null }))
-    const page = await client(fetchImpl as unknown as typeof fetch).listAudit()
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      respond(200, { entries: [entry], nextBefore: null })
+    )
+    const page = await client(fetchImpl).listAudit()
     expect(page.entries[0]?.actor.userName).toBe('Ada Lovelace')
   })
 })
