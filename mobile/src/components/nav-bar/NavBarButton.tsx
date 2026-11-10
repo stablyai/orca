@@ -1,4 +1,4 @@
-import type { ComponentType, Ref } from 'react'
+import type { ComponentType, ReactNode, Ref } from 'react'
 import { Pressable, type View } from 'react-native'
 import { colors, feedback, radii } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -10,19 +10,25 @@ type IconProps = { size?: number; color?: string; strokeWidth?: number }
 
 type NavBarButtonProps = {
   ref?: Ref<View>
-  icon: ComponentType<IconProps>
   accessibilityLabel: string
+  accessibilityHint?: string
   onPress: () => void
   /** The screen or panel this button opens is showing. */
   active?: boolean
   disabled?: boolean
-}
+} & (
+  | { icon: ComponentType<IconProps>; children?: never }
+  /** Drawn in place of an icon, e.g. a tab count. */
+  | { icon?: never; children: ReactNode }
+)
 
 // A round top-bar button; the bar floats over content like the composer, so its buttons are round too.
 export function NavBarButton({
   ref,
   icon: Icon,
+  children,
   accessibilityLabel,
+  accessibilityHint,
   onPress,
   active = false,
   disabled = false
@@ -42,9 +48,14 @@ export function NavBarButton({
       hitSlop={4}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled, selected: active }}
     >
-      <Icon size={18} color={active ? colors.bgBase : colors.textPrimary} strokeWidth={2.1} />
+      {Icon ? (
+        <Icon size={18} color={active ? colors.bgBase : colors.textPrimary} strokeWidth={2.1} />
+      ) : (
+        children
+      )}
     </Pressable>
   )
 }

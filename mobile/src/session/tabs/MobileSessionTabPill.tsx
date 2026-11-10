@@ -14,14 +14,14 @@ import { triggerMediumImpact, triggerSelection } from '../../platform/haptics'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { AgentStateDot } from '../../components/AgentStateDot'
 import { ArrivalFade } from '../../components/ArrivalFade'
-import { NAV_BAR_BUTTON_SIZE } from '../../components/nav-bar/NavBarButton'
+import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { useDrawerReducedMotion } from '../../components/bottom-drawer/bottom-drawer-constants'
 import { SHEET_CURVE } from '../../components/sheet-motion-values'
 import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
 import { useKeyboardPersistingTaps } from '../../platform/keyboard-persisting-taps'
 import { useNow } from '../../hooks/use-now'
 import { agentStateLabel, type AgentDotState } from '../../worktree/agent-row-display'
-import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
+import { colors, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { buildMobileSessionTabRow, type MobileSessionTabRow } from './mobile-session-tab-rows'
@@ -231,40 +231,25 @@ export function MobileSessionTabPill({
           </Animated.View>
         </GestureDetector>
       </View>
-      {/* All tabs and a new one share one capsule; a collapsed bar's + lives in the header's ⋯ menu. */}
-      <View style={styles.pair}>
-        <Pressable
-          style={({ pressed }) => [styles.half, pressed && styles.halfPressed]}
-          onPress={() => setSheetOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel={countAccessibilityLabel}
-          accessibilityHint={t('session.tabPill.hint', 'Shows all tabs')}
-        >
-          <View style={styles.countBox}>
-            <Text style={styles.countText}>{rows.length}</Text>
-          </View>
-          {othersNeedYou ? <View style={styles.alert} /> : null}
-        </Pressable>
-        {!actionsCollapsed ? (
-          <>
-            <View style={styles.pairSeparator} />
-            <Pressable
-              style={({ pressed }) => [
-                styles.half,
-                pressed && styles.halfPressed,
-                createDisabled && styles.halfDisabled
-              ]}
-              disabled={createDisabled}
-              onPress={handleOpenNewTab}
-              accessibilityRole="button"
-              accessibilityLabel={t('session.tabStrip.newTab', 'New tab')}
-              accessibilityState={{ disabled: createDisabled }}
-            >
-              <Plus size={18} color={colors.textPrimary} strokeWidth={2.2} />
-            </Pressable>
-          </>
-        ) : null}
-      </View>
+      {/* Lined up under the header's buttons; a collapsed bar's + lives in the header's ⋯ menu. */}
+      <NavBarButton
+        onPress={() => setSheetOpen(true)}
+        accessibilityLabel={countAccessibilityLabel}
+        accessibilityHint={t('session.tabPill.hint', 'Shows all tabs')}
+      >
+        <View style={styles.countBox}>
+          <Text style={styles.countText}>{rows.length}</Text>
+        </View>
+        {othersNeedYou ? <View style={styles.alert} /> : null}
+      </NavBarButton>
+      {!actionsCollapsed ? (
+        <NavBarButton
+          disabled={createDisabled}
+          onPress={handleOpenNewTab}
+          accessibilityLabel={t('session.tabStrip.newTab', 'New tab')}
+          icon={Plus}
+        />
+      ) : null}
       <MobileSessionTabsSheet
         controller={controller}
         rows={rows}
@@ -316,25 +301,6 @@ const styles = themedStyleSheet(() => ({
     fontWeight: '600',
     color: colors.textPrimary
   },
-  // Same height and fill as a nav bar button, split into the two tab controls.
-  pair: {
-    height: NAV_BAR_BUTTON_SIZE,
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexShrink: 0,
-    borderRadius: radii.pill,
-    backgroundColor: colors.bgRaised,
-    overflow: 'hidden'
-  },
-  half: {
-    width: 40,
-    height: NAV_BAR_BUTTON_SIZE,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  halfPressed: { backgroundColor: colors.translucentFill },
-  halfDisabled: { opacity: feedback.disabledOpacity },
-  pairSeparator: { width: 1, height: 18, backgroundColor: colors.borderSubtle },
   countBox: {
     minWidth: 19,
     height: 19,
@@ -351,7 +317,7 @@ const styles = themedStyleSheet(() => ({
     color: colors.textPrimary,
     fontVariant: ['tabular-nums']
   },
-  // Another tab needs you: a red dot on the count's corner, ringed in the capsule's colour.
+  // Another tab needs you: a red dot on the button's corner, ringed in its colour.
   alert: {
     position: 'absolute',
     top: 5,
