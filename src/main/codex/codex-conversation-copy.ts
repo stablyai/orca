@@ -72,6 +72,7 @@ async function turns(
   return all
 }
 
+/** Forks a Codex thread through a response, in the destination worktree when one is given. */
 export async function copyCodexConversation(
   input: CopyInput,
   invocation: CodexProviderInvocationDeps | undefined

@@ -12,6 +12,7 @@ export function openNativeChatWorktreeFork(tab: { id: string; worktreeId: string
   requestNativeChatWorktreeFork(tab.id)
 }
 
+/** "Fork into New Worktree…" for a chat tab in a git worktree. */
 export function NativeChatWorktreeForkMenuItem({
   tab,
   menuKind,

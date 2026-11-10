@@ -74,10 +74,14 @@ export async function forkMobileStructuredChatIntoWorktree(input: {
     report(mobileWorktreeForkCopy.offline())
     return
   }
-  const record = sessionWorktreeRecordRead.interpret(
-    await sessionWorktreeRecordRead.request(client, { worktree: `id:${input.sourceWorktreeId}` })
-  )
-  const source = record.accepted ? record.value : undefined
+  // Only names and the branch come from it; an unread record leaves the main-branch fork.
+  const source = await sessionWorktreeRecordRead
+    .request(client, { worktree: `id:${input.sourceWorktreeId}` })
+    .then((response) => {
+      const record = sessionWorktreeRecordRead.interpret(response)
+      return record.accepted ? record.value : undefined
+    })
+    .catch(() => undefined)
   const branch = source?.branch?.trim() || null
   const base = await askMobileWorktreeForkBase(branch)
   if (!base) {

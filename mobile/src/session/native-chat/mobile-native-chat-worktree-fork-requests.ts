@@ -5,6 +5,7 @@ let pending = false
 let version = 0
 const listeners = new Set<() => void>()
 
+/** Lets the open chat's fork provider hear a request. */
 function subscribe(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
@@ -12,6 +13,10 @@ function subscribe(listener: () => void): () => void {
 
 /** Forks the open chat into a new worktree, from its newest response. */
 export function requestMobileWorktreeFork(): void {
+  // With no chat showing, a kept request would fork whichever chat opens next.
+  if (listeners.size === 0) {
+    return
+  }
   pending = true
   version += 1
   for (const listener of listeners) {

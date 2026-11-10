@@ -68,4 +68,18 @@ describe('runNativeChatWorktreeFork', () => {
       })
     }
   )
+
+  it('closes once the worktree exists, even when the fork fails, so a retry makes no second one', async () => {
+    const request = vi.fn().mockResolvedValue({})
+    await expect(
+      runNativeChatWorktreeFork({
+        sourceWorktreeId: 'repo::/work/feature',
+        base: 'main',
+        agent: 'claude',
+        throughItemId: 'reply-1',
+        request
+      })
+    ).resolves.toBe(true)
+    expect(mocks.createWorktree).toHaveBeenCalledOnce()
+  })
 })

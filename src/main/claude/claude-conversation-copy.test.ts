@@ -241,3 +241,13 @@ it("writes a copy for another worktree into that worktree's project, where Claud
   )
   expect(await readdir(join(selectedHome, 'projects'))).toEqual(['-repo-feature-fork'])
 })
+
+it('refuses a worktree whose path Claude would name by hash, writing nothing', async () => {
+  const prefix = rows.slice(0, 28)
+  await writeFile(sourcePath, `${prefix.map((row) => JSON.stringify(row)).join('\n')}\n`)
+  const assistant = prefix.findLast((row) => row.type === 'assistant')!
+  await expect(
+    copy(assistant.uuid, true, undefined, undefined, SOURCE, `/${'a'.repeat(250)}`)
+  ).rejects.toThrow('Use a shorter worktree path')
+  await expect(readdir(join(selectedHome, 'projects'))).rejects.toThrow()
+})

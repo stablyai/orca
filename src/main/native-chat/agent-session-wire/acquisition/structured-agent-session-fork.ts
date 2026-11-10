@@ -17,6 +17,7 @@ import { isAgentSessionRefusalError } from '../../../../shared/agent-session/fai
 import { requireUnownedStructuredAgentSessionAdoption } from '../../../runtime/agent-session/structured-agent-session-create-adoption'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 
+/** Copies the source chat's conversation for a fork, into the fork's own worktree when it differs. */
 export async function prepareStructuredAgentSessionFork(
   input: StructuredAgentSessionForkInput
 ): Promise<AgentSessionAttachParams> {

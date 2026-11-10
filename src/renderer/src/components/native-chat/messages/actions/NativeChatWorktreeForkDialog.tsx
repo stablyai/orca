@@ -146,6 +146,7 @@ export function NativeChatWorktreeForkDialogHost({
   )
 }
 
+/** Narrows a radio value to a fork base. */
 function isWorktreeForkBase(value: string): value is NativeChatWorktreeForkBase {
   return value === 'main' || value === 'current'
 }

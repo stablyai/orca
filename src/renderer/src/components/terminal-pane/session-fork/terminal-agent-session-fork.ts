@@ -103,6 +103,7 @@ export async function copyAgentSessionForkContext(
   return copyForkContext(fork.prompt, fork.focusSource)
 }
 
+/** Creates a fork worktree from the source branch and starts its agent with the captured context. */
 export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Promise<boolean> {
   const store = useAppStore.getState()
   const sourceWorktree = store.getKnownWorktreeById(fork.worktreeId)

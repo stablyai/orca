@@ -26,6 +26,7 @@ class AcpCopyAccountMismatchError extends Error {
 
 export const ACP_CONVERSATION_COPY_TIMEOUT_MS = 60_000
 
+/** Forks an ACP agent's conversation, in the destination worktree when one is given. */
 export async function copyAcpConversation(
   deps: Pick<
     AcpStructuredSessionAdapterDeps,

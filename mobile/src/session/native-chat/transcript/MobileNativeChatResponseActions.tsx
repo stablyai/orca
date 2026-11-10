@@ -52,6 +52,7 @@ export function MobileNativeChatResponseActions({
   )
 }
 
+/** One fork action under a response: beside this chat, or into a new worktree. */
 function ForkButton({
   offer,
   worktree = false,

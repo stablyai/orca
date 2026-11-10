@@ -159,6 +159,7 @@ function useRegisteredAgent(
   return learned ? agents.rows.find((row) => row.agent === agent) : undefined
 }
 
+/** The chat's forks: per response, beside it or into a new worktree, offered only where the host can. */
 export function useMobileNativeChatFork(input: {
   client: RpcClient | null
   hostCapabilities: readonly string[] | undefined

@@ -3,6 +3,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate } from '@/i18n/use-translate'
 import type { NativeChatForkRowAction } from './use-native-chat-fork'
 
+/** A response's forks: a new tab beside this chat, and a new worktree where the host can. */
 export function NativeChatForkAction({
   itemId,
   fork

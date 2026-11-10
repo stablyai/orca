@@ -64,5 +64,15 @@ export async function runNativeChatWorktreeFork(input: {
   const outcome = await input.request(input.throughItemId, undefined, {
     worktreeId: forkWorktreeId
   })
-  return outcome?.chat !== undefined
+  // A launch failure is already reported; a fork that never started says so here.
+  if (outcome === undefined) {
+    toast.error(
+      translate(
+        'components.native-chat.fork.worktree.forkNotStarted',
+        'The worktree was created, but the chat could not be forked into it.'
+      )
+    )
+  }
+  // The worktree exists now, so the dialog is done: retrying would create a second one.
+  return true
 }
