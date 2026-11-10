@@ -1,3 +1,4 @@
+import { projectStructuredAgentSessionMessages } from '../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import * as historyPages from '../../../../../native-chat/agent-session-wire/publication/history/agent-session-history-page'
 import {
   queuedImageTestBody,
@@ -347,13 +348,14 @@ it('preserves a returned image through a SQL restart and keeps its deletion afte
   setStructuredAgentSessionHost(rig.host)
   const deleted = await call('agentSession.history', { sessionId: SESSION, direction: 'tail' }, OLD)
   expect(deleted).toMatchObject({ result: { page: { queuedMessages: [] } } })
-  expect(deleted).not.toMatchObject({
-    result: {
-      page: {
-        items: expect.arrayContaining([
-          expect.objectContaining({ itemId: agentJournalSubmissionKey(id) })
-        ])
-      }
-    }
-  })
+  const page = (
+    await rig.host.history(
+      { sessionId: SESSION, direction: 'tail' },
+      undefined,
+      queuedImageHistoryReader(OLD)
+    )
+  ).page
+  expect(
+    projectStructuredAgentSessionMessages(page.items, [], page.submissions).map((item) => item.id)
+  ).not.toContain(agentJournalSubmissionKey(id))
 })
