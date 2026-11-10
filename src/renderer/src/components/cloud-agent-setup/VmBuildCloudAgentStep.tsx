@@ -12,7 +12,11 @@ import { HOST_AGENT_SIGN_IN_AGENTS } from '../../../../shared/host-agent-sign-in
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import { cloudSecretRepoKey } from '../settings/cloud-secrets/cloud-secret-repos'
-import { isCloudAgentReady, type CloudAgentReadiness } from './cloud-agent-readiness'
+import {
+  isCloudAgentReady,
+  type CloudAgentReadiness,
+  type CloudOfferableDesktopKey
+} from './cloud-agent-readiness'
 import {
   CloudAgentSetupView,
   cloudAgentReadinessSummary,
@@ -25,6 +29,7 @@ import { useCloudAgentSetup } from './use-cloud-agent-setup'
 export type VmBuildCloudAgentStepModel = {
   readiness: CloudAgentReadiness
   canShare: boolean
+  desktopKeys?: readonly CloudOfferableDesktopKey[]
 }
 
 export type VmBuildCloudAgentStepMode =
@@ -36,6 +41,7 @@ export type VmBuildCloudAgentStepMode =
 
 export type VmBuildCloudAgentStepActions = {
   onSave: CloudAgentSetupViewProps['onSave']
+  onSaveDesktopKey?: CloudAgentSetupViewProps['onSaveDesktopKey']
   /** The step is done (saved, signing in, or skipped); remember that it ran. */
   onDone: () => void
   onSignIn: () => void
@@ -265,6 +271,8 @@ export function VmBuildCloudAgentStepView({
             <CloudAgentSetupView
               readiness={null}
               canShare={model.canShare}
+              desktopKeys={model.desktopKeys}
+              onSaveDesktopKey={actions.onSaveDesktopKey}
               focusOnOpen
               initialOption="api-key"
               onSave={actions.onSave}
@@ -366,7 +374,7 @@ export function VmBuildCloudAgentStep({
     return repo ? cloudSecretRepoKey(repo) : null
   })
   const environmentId = entry.vmEnvironmentId ?? null
-  const { model, save } = useCloudAgentSetup({
+  const { model, save, saveDesktopKey } = useCloudAgentSetup({
     repo: repoKey,
     runtimeEnvironmentId: environmentId,
     enabled: isCloud && eligible
@@ -387,9 +395,14 @@ export function VmBuildCloudAgentStep({
     <VmBuildCloudAgentStepView
       // Stays mounted through the hand-off so it can keep a focused row until focus moves on.
       handedOff={handedToSignInRow}
-      model={{ readiness: model.readiness, canShare: model.canShare }}
+      model={{
+        readiness: model.readiness,
+        canShare: model.canShare,
+        desktopKeys: model.desktopKeys
+      }}
       actions={{
         onSave: save,
+        onSaveDesktopKey: saveDesktopKey,
         onDone: markDone,
         onSignIn: () => setSignInRequested(true),
         onCancelSignIn: () => setSignInRequested(false),

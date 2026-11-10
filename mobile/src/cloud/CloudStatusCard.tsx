@@ -27,21 +27,21 @@ function spendLine(
   if (!awake) {
     return t(
       'cloud.usage.asleep',
-      '{{hours}} sandbox hours so far · no sandbox hours while asleep',
+      '{{hours}} sandbox hours so far. Uses no sandbox hours while asleep.',
       {
         count: value,
         hours: label,
-        defaultValue_one: '{{hours}} sandbox hour so far · no sandbox hours while asleep'
+        defaultValue_one: '{{hours}} sandbox hour so far. Uses no sandbox hours while asleep.'
       }
     )
   }
   return t(
     'cloud.usage.running',
-    '{{hours}} sandbox hours so far · uses sandbox hours while running',
+    '{{hours}} sandbox hours so far. Uses sandbox hours while running.',
     {
       count: value,
       hours: label,
-      defaultValue_one: '{{hours}} sandbox hour so far · uses sandbox hours while running'
+      defaultValue_one: '{{hours}} sandbox hour so far. Uses sandbox hours while running.'
     }
   )
 }

@@ -86,6 +86,8 @@ export type CloudSecretsErrorCode =
   | 'secret_limit'
   | 'unauthorized'
   | 'not_found'
+  /** Desktop only: a key the workspace would get in full (no egress stand-in), so not saved from here. */
+  | 'not_swappable'
   | 'unavailable'
   | 'timeout'
   | 'not_configured'

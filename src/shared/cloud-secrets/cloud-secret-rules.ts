@@ -169,3 +169,25 @@ export function isPublicHttpsUrl(value: string): boolean {
     !host.startsWith('[')
   )
 }
+
+/**
+ * Variables the Orca Cloud egress proxy swaps (cloud/apps/sandbox-control/src/provider-env.ts,
+ * checked equal by a control-plane test): a workspace only ever holds a stand-in for these.
+ */
+export const CLOUD_SWAPPED_CREDENTIALS: readonly string[] = [
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_AUTH_TOKEN',
+  'AI_GATEWAY_API_KEY',
+  'OPENAI_API_KEY',
+  'GEMINI_API_KEY',
+  'GOOGLE_GENERATIVE_AI_API_KEY',
+  'CURSOR_API_KEY',
+  'GOOGLE_API_KEY',
+  'COPILOT_GITHUB_TOKEN',
+  'COPILOT_PROVIDER_API_KEY',
+  'COPILOT_PROVIDER_BEARER_TOKEN'
+]
+
+export function cloudSecretSwapped(name: string): boolean {
+  return CLOUD_SWAPPED_CREDENTIALS.includes(name)
+}

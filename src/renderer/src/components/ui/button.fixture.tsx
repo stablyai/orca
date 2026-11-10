@@ -2,7 +2,15 @@ import { GitBranch, Plus, Trash2 } from 'lucide-react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { Button } from './button'
 
-const VARIANTS = ['default', 'secondary', 'outline', 'ghost', 'destructive', 'link'] as const
+const VARIANTS = [
+  'default',
+  'secondary',
+  'outline',
+  'ghost',
+  'destructive',
+  'destructive-chip',
+  'link'
+] as const
 const SIZES = ['xs', 'sm', 'default', 'lg'] as const
 
 export const variants = defineFixture({
@@ -11,7 +19,7 @@ export const variants = defineFixture({
     <div className="flex flex-col gap-3">
       {VARIANTS.map((variant) => (
         <div key={variant} className="flex items-center gap-2">
-          <span className="w-20 text-xs text-muted-foreground">{variant}</span>
+          <span className="w-28 text-xs text-muted-foreground">{variant}</span>
           <Button variant={variant}>Create workspace</Button>
           <Button variant={variant}>
             <Plus />

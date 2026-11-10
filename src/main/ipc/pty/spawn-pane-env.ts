@@ -95,6 +95,8 @@ export async function stampWorkspacePortEnv(
     return
   }
   try {
+    // Always the workspace's own block: a host env's ORCA_PORT (a VM launcher sets one) would make
+    // every workspace on that host share it.
     const block = await getWorkspacePortBlockForWorktreeId(worktreeId)
     if (block) {
       Object.assign(env, buildWorkspacePortEnv(block))

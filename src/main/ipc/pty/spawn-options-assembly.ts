@@ -1,6 +1,5 @@
 import { withClaudeAgentViewPlugin } from '../../../shared/claude-agent-view-launch'
-import { getConnectionExecutionHostId } from '../../../shared/execution-host'
-import { withAgentApiKeyLaunchEnv } from '../../agent-api-keys/agent-api-key-launch-env'
+import { withHostAgentApiKeyLaunchEnv } from '../../hosted-sandbox/cloud-desktop-keys'
 import { resolveStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { getAppEnvironment } from '../../../shared/app-environment'
@@ -156,11 +155,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   const env =
     input.preAdoptedStablePane || input.launchCommand === undefined
       ? openCodeLaunch.env
-      : await withAgentApiKeyLaunchEnv(
-          openCodeLaunch.env,
-          launchAgent,
-          getConnectionExecutionHostId(connectionId)
-        )
+      : await withHostAgentApiKeyLaunchEnv(openCodeLaunch.env, launchAgent, connectionId)
   const pluginDir = !connectionId ? env?.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
   const launchCommand =
     pluginDir && openCodeLaunch.command
