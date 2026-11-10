@@ -15,11 +15,8 @@ function Picker(props: {
 }): React.JSX.Element {
   const model = orcaCloudAgentMenuModel({
     defaultTuiAgent: 'claude',
-    disabledTuiAgents: props.disabled ?? [],
-    agentCmdOverrides: {},
-    agentDefaultArgs: {},
-    agentDefaultEnv: {}
-  } as unknown as Parameters<typeof orcaCloudAgentMenuModel>[0])
+    disabledTuiAgents: props.disabled ?? []
+  })
   return (
     <div className="h-[460px] bg-background p-4">
       <div className="w-[420px] space-y-1">
