@@ -118,12 +118,13 @@ describe('orca-env', () => {
 
   it("never sets or unsets the control plane's reserved names and prefixes (kept in sync with secrets.ts)", () => {
     const source = readFileSync(fileURLToPath(new URL('../src/secrets.ts', import.meta.url).href), 'utf8')
-    const quoted = (text: string | undefined): string[] => [...(text ?? '').matchAll(/'([A-Z0-9_]+)'/g)].map((m) => m[1])
+    const quoted = (text: string | undefined): string[] => [...(text ?? '').matchAll(/'([A-Z0-9_]+)'/g)].map((m) => m[1] ?? '')
     const names = quoted(source.match(/const RESERVED_NAMES[^=]*= new Set\(\[([\s\S]*?)\]\)/)?.[1])
     const prefixes = quoted(source.match(/const RESERVED_PREFIXES = \[([^\]]*)\]/)?.[1])
     expect(names.length).toBeGreaterThan(30)
     expect(prefixes.length).toBeGreaterThan(3)
-    const blocked = [...names, ...prefixes.map((prefix) => `${prefix}X`)]
+    // The control plane's own account placeholder rides this name (D10); users can't store it.
+    const blocked = [...names.filter((name) => name !== 'CLAUDE_CODE_OAUTH_TOKEN'), ...prefixes.map((prefix) => `${prefix}X`)]
     writeSessionEnv({ GOOD: 'x', ...Object.fromEntries(blocked.map((name) => [name, 'evil'])) })
     const out = orcaEnv([], blocked.join(' '))
     expect(out).toBe("export GOOD='x'\nexport ORCA_SESSION_ENV_NAMES='GOOD'\n")

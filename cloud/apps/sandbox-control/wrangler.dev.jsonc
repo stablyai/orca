@@ -40,6 +40,8 @@
   "triggers": { "crons": ["* * * * *"] },
   "vars": {
     "SANDBOX_ENV": "dev",
+    // Flag S1 (contract D10/D11): Claude via the person's Orca account. Dev only until Neil's S1 sign-off.
+    "AGENT_ACCOUNTS_CLAUDE": "on",
     "SANDBOX_POOL_SIZE": "2",
     // Dev only (ignored unless SANDBOX_ENV is dev): these dev accounts hit the real billing gate.
     "SANDBOX_DEV_BILLING_ENFORCE_PREFIX": "dev:billing-test-",

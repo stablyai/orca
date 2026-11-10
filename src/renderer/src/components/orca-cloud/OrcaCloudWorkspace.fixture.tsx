@@ -22,7 +22,7 @@ import { CloudWorkspaceStatusPanel } from './CloudWorkspaceStatusPanel'
 
 const NOW = Date.now()
 const noop = (): void => {}
-const actions = { onWake: noop, onRestart: noop, onArchive: noop, onUnarchive: noop }
+const actions = { onWake: noop, onRestart: noop, onArchive: noop, onUnarchive: noop, onSleep: noop }
 
 const running: HostedWorkspaceStatus = {
   state: 'ready',
@@ -148,9 +148,11 @@ const DOT_STATES: CloudDotState[] = [
   'running',
   'sleeping',
   'waking',
+  'starting',
   'unresponsive',
   'archived',
   'failed',
+  'wakeFailed',
   'unknown'
 ]
 

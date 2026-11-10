@@ -25,6 +25,7 @@ import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
 import type { GitWorktreeInfo, Worktree } from './worktree/types'
 import type { WorkspaceStatusWarning } from './workspace-status-warning'
 import type { WorktreeStatus } from './worktree-status-rollup'
+import type { EphemeralVmRuntimeStatus } from './ephemeral-vm-runtimes'
 
 export type RuntimeWorktreeSetResult = {
   worktree: RuntimeWorktreeRecord
@@ -137,6 +138,8 @@ export type RuntimeWorktreePsSummary = {
   agents: RuntimeWorktreeAgentRow[]
   /** See `Worktree.removing`; sent only to clients that advertise background removal. */
   removing?: true
+  /** An Orca Cloud workspace, with the VM state this desktop last recorded. Old hosts omit it. */
+  orcaCloud?: { status: EphemeralVmRuntimeStatus }
   /** See `GitWorktreeInfo.removalError`. */
   removalError?: string
   /** Host-derived workspace kinds. Missing defaultBranch retains reader guesses; other missing flags show the row.
