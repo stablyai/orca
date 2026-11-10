@@ -51,7 +51,7 @@ describe('pending VM checkouts', () => {
       visibleWorktrees: [],
       filterRepoIds: []
     }
-    expect(getEmptyProjectPlaceholderRepoIds(args)).toEqual(new Set(['vm']))
+    expect(getEmptyProjectPlaceholderRepoIds(args)).toEqual(new Set(['local\0vm']))
     expect(
       getEmptyProjectPlaceholderRepoIds({ ...args, pendingVmRepoIds: new Set(['vm']) })
     ).toEqual(new Set())
