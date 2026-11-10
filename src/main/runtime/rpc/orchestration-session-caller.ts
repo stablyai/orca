@@ -26,27 +26,7 @@ import type { AgentSessionRecordStore } from '../agent-session/records/agent-ses
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { structuredWorkerHostScope } from '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import type { RpcRequest } from './core'
-
-type CallerParam = 'from' | 'terminal' | 'callerTerminalHandle'
-
-/** Add each caller-reading method here with a test; unlisted methods still validate session claims but carry no caller identity. */
-export const ORCHESTRATION_CALLER_PARAM: Readonly<Record<string, CallerParam>> = {
-  'orchestration.runCreate': 'from',
-  'orchestration.runUse': 'from',
-  'orchestration.runCurrent': 'from',
-  'orchestration.check': 'terminal',
-  'orchestration.send': 'from',
-  'orchestration.reply': 'from',
-  'orchestration.ask': 'from',
-  'orchestration.dispatch': 'from',
-  'orchestration.gateCreate': 'from',
-  'orchestration.gateResolve': 'from',
-  'orchestration.gateList': 'from',
-  'orchestration.taskCreate': 'callerTerminalHandle',
-  'orchestration.taskList': 'callerTerminalHandle',
-  'orchestration.taskUpdate': 'callerTerminalHandle',
-  'orchestration.workerStart': 'from'
-}
+import type { OrchestrationCallerField } from './methods/orchestration/access/orchestration-method-access'
 
 export type OrchestrationRequestRoute = {
   /** Set only by the paired WebSocket route: the request came from another host's client. */
@@ -71,18 +51,23 @@ const NEEDS_RUNNING_AGENT: ReadonlySet<string> = new Set([
 ])
 
 /** Detect session evidence or a declared session caller synchronously so terminal calls avoid another async hop. */
-export function needsOrchestrationCallerResolution(request: RpcRequest): boolean {
+export function needsOrchestrationCallerResolution(
+  request: RpcRequest,
+  callerField: OrchestrationCallerField | undefined
+): boolean {
   if (!request.method.startsWith('orchestration.')) {
     return false
   }
   return (
     request.orchestrationCompatibilityEvidence?.agentSessionId !== undefined ||
-    declaredSessionAddress(request) !== undefined
+    declaredSessionAddress(request, callerField) !== undefined
   )
 }
 
-function declaredSessionAddress(request: RpcRequest): string | undefined {
-  const name = ORCHESTRATION_CALLER_PARAM[request.method]
+function declaredSessionAddress(
+  request: RpcRequest,
+  name: OrchestrationCallerField | undefined
+): string | undefined {
   const params: unknown = request.params
   if (!name || !params || typeof params !== 'object' || Array.isArray(params)) {
     return undefined
@@ -96,11 +81,15 @@ function declaredSessionAddress(request: RpcRequest): string | undefined {
 export async function resolveOrchestrationSessionCaller(
   runtime: OrcaRuntimeService,
   request: RpcRequest,
-  route: OrchestrationRequestRoute | undefined
+  route: OrchestrationRequestRoute | undefined,
+  /** The method's declared caller field (its access declaration), if it reads one. */
+  callerField: OrchestrationCallerField | undefined
 ): Promise<ResolvedOrchestrationRequest> {
   const evidence = request.orchestrationCompatibilityEvidence
   if (evidence?.agentSessionId === undefined) {
-    return { request: bindDeclaredSessionAddress(runtime.getOrchestrationDb(), request) }
+    return {
+      request: bindDeclaredSessionAddress(runtime.getOrchestrationDb(), request, callerField)
+    }
   }
   const claimed: unknown = evidence?.agentSessionId
   if (route?.pairedDeviceId !== undefined) {
@@ -132,7 +121,7 @@ export async function resolveOrchestrationSessionCaller(
   return {
     request: {
       ...request,
-      params: bindDeclaredCaller(request.method, request.params, caller, db),
+      params: bindDeclaredCaller(callerField, request.params, caller, db),
       // Session identity wins; discard terminal attestation on the same request.
       orchestrationCompatibilityEvidence: { agentSessionId: sessionId }
     },
@@ -202,9 +191,12 @@ function assertSessionCanAct(sessionId: string, record: AgentSessionRecord, meth
 }
 
 /** A request with no session id that declares an `orca_session_id:` caller: a worker's is its handle. */
-function bindDeclaredSessionAddress(db: OrchestrationDb, request: RpcRequest): RpcRequest {
-  const name = ORCHESTRATION_CALLER_PARAM[request.method]
-  const declared = declaredSessionAddress(request)
+function bindDeclaredSessionAddress(
+  db: OrchestrationDb,
+  request: RpcRequest,
+  name: OrchestrationCallerField | undefined
+): RpcRequest {
+  const declared = declaredSessionAddress(request, name)
   const params: unknown = request.params
   if (!name || declared === undefined || !params || typeof params !== 'object') {
     return request
@@ -234,12 +226,11 @@ function declaredNamesCaller(
 
 /** The declared caller, if any, must name this session; it is then replaced by its address. */
 function bindDeclaredCaller(
-  method: string,
+  name: OrchestrationCallerField | undefined,
   params: unknown,
   caller: OrchestrationSessionCaller,
   db: OrchestrationDb
 ): unknown {
-  const name = ORCHESTRATION_CALLER_PARAM[method]
   if (!name || !params || typeof params !== 'object' || Array.isArray(params)) {
     return params
   }

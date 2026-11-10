@@ -5,7 +5,7 @@ import type { RuntimeClientTarget } from '../../../../../../shared/runtime-clien
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { resolveWorkspaceDirectory } from '@/lib/workspace-directory'
+import { resolveWorkspaceDirectory } from '@/lib/workspace/paths/workspace-directory'
 import {
   resolveNativeChatTabDirectory,
   resolveNativeChatTabDirectoryResolution,

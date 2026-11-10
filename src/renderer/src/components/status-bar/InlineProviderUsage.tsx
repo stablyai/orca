@@ -12,10 +12,17 @@ import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { barColor, clampUsedPercent } from './tooltip'
 import { formatWindowLabel } from '../../../../shared/rate-limit-window-label'
 import { formatResetDuration } from '../../../../shared/rate-limit-reset-format'
-import { formatUsageLimitResetClock } from '../../../../shared/agent-session/failures/agent-session-usage-limit'
-import { formatUsagePercentageLabel } from './usage-percentage-label'
+import { formatBareUsagePercentage, formatUsagePercentageLabel } from './usage-percentage-label'
 import { getUsageRosterRowState } from './usage-roster-row-state'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
+import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
+
+const RESET_UNIT_FORMATS: Record<'minute' | 'hour' | 'day', Intl.NumberFormatOptions> = {
+  minute: { style: 'unit', unit: 'minute', unitDisplay: 'short' },
+  hour: { style: 'unit', unit: 'hour', unitDisplay: 'short' },
+  day: { style: 'unit', unit: 'day', unitDisplay: 'short' }
+}
 
 type InlineUsageWindow = { key: string; used: number; label: string; resetsAt: number | null }
 
@@ -88,31 +95,40 @@ export function InlineUsageBars({
           window.resetsAt != null && Number.isFinite(new Date(window.resetsAt).getTime())
             ? window.resetsAt
             : null
+        const resetDuration =
+          resetsAt == null
+            ? null
+            : resetsAt <= now
+              ? t('auto.components.status.bar.InlineUsageBars.now', 'now')
+              : formatResetDuration(resetsAt - now, (value, unit) =>
+                  intlLocale.startsWith('en')
+                    ? formatUiNarrowDuration(value, unit, intlLocale)
+                    : uiNumberFormat(RESET_UNIT_FORMATS[unit], intlLocale).format(value)
+                )
         return (
-          <div key={window.key} className="grid min-w-0 gap-0.5">
-            <div className="flex min-w-0 items-center gap-1">
-              <div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
-                {/* Why: fill follows the selected percentage; color still signals consumption urgency. */}
-                <div
-                  className={`h-full rounded-full ${barColor(window.used)}`}
-                  style={{ width: `${getDisplayedUsagePercentage(window.used, display)}%` }}
-                />
-              </div>
-              <span className="min-w-[4.5rem] shrink-0 text-right text-3xs tabular-nums text-muted-foreground">
-                {formatUsagePercentageLabel(window.used, display, t)} {window.label}
-              </span>
-              {/* Why: fixed width keeps the reset countdowns in one column across account rows. */}
-              <span className="w-11 shrink-0 text-right text-3xs tabular-nums text-muted-foreground">
-                {resetsAt != null ? formatResetDuration(resetsAt - now) : null}
-              </span>
+          <div
+            key={window.key}
+            role="img"
+            className="flex min-w-0 items-center gap-1 text-3xs text-muted-foreground"
+            aria-label={`${window.label}: ${formatUsagePercentageLabel(window.used, display, t)}${
+              resetsAt == null
+                ? ''
+                : resetsAt <= now
+                  ? `, ${t('auto.components.status.bar.InlineUsageBars.resetsNow', 'resets now')}`
+                  : `, ${t('auto.components.status.bar.InlineUsageBars.resetsIn', 'resets in {{duration}}', { duration: resetDuration })}`
+            }`}
+          >
+            <span className="w-8 shrink-0 truncate">{window.label}</span>
+            <div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+              <div
+                className={`h-full rounded-full ${barColor(window.used)}`}
+                style={{ width: `${getDisplayedUsagePercentage(window.used, display)}%` }}
+              />
             </div>
-            {resetsAt != null ? (
-              <span className="text-right text-3xs tabular-nums text-muted-foreground">
-                {t('auto.components.status.bar.InlineUsageBars.resetsAt', 'Resets {{when}}', {
-                  when: formatUsageLimitResetClock(resetsAt, now, intlLocale)
-                })}
-              </span>
-            ) : null}
+            <span className="w-8 shrink-0 text-right tabular-nums">
+              {formatBareUsagePercentage(window.used, display, t)}
+            </span>
+            <span className="w-11 shrink-0 break-all text-right tabular-nums">{resetDuration}</span>
           </div>
         )
       })}

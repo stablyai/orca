@@ -5,7 +5,7 @@ import { Moon, Sun } from 'lucide-react'
 import '@xterm/xterm/css/xterm.css'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
-import { buildFontFamily } from '@/lib/monospace-font-family'
+import { buildFontFamily } from '../../../../../../shared/monospace-font-family'
 import {
   pluginFontFamilyWhenLoaded,
   usePluginFontReady

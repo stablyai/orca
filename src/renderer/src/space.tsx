@@ -12,9 +12,9 @@ import {
   selectSpaceWindowAnalysis
 } from './components/workspace-space/space-window-state'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
-import { applyDocumentTheme } from './lib/document-theme'
-import { resolvePaintedTheme } from './lib/terminal-app-theme'
-import { buildAppFontFamily } from './lib/app-font-family'
+import { applyDocumentTheme } from './app-shell/appearance/document-theme'
+import { resolvePaintedTheme } from './app-shell/appearance/terminal-app-theme'
+import { buildAppFontFamily } from './app-shell/appearance/app-font-family'
 import { getOrCreateRendererRoot } from './lib/react-renderer-root'
 import { I18nProvider } from './i18n/I18nProvider'
 import { useAppStore } from './store'

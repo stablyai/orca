@@ -8,7 +8,7 @@ import {
   mobileNativeChatChordHeadId,
   type MobileNativeChatQueuedMessagesProps
 } from '../input/MobileNativeChatQueuedMessages'
-import type { MobileStructuredBackgroundTasks } from '../../use-mobile-structured-background-tasks'
+import type { MobileStructuredBackgroundTasks } from '../input/use-mobile-structured-background-tasks'
 import { useMobileNativeChatQueuedEditFocus } from '../input/use-mobile-native-chat-queued-edit-focus'
 import { createMobileQueuedHeadLight } from '../input/mobile-queued-head-light'
 import {

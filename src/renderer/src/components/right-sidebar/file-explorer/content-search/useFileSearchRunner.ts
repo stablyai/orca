@@ -5,7 +5,7 @@ import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import {
   createFileSearchResultOwner,
   type FileSearchResultOwner
-} from '@/lib/file-search-result-owner'
+} from '@/lib/files/search/file-search-result-owner'
 import {
   createEmptyRuntimeFileSearchResult,
   getRuntimeFileSearchRejectedField

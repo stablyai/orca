@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { HostProfile } from '../transport/hosts/host-profile'
+import type { HostProfile } from '../host-catalog/host-profile'
 import { useConnectedHostPicker } from './use-connected-host-picker'
 
 function host(id: string, name: string, endpoint: string): HostProfile {

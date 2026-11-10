@@ -18,9 +18,15 @@ import {
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { getRevealInFileManagerLabel, revealInFileManager } from '@/lib/reveal-in-file-manager'
+import {
+  getRevealInFileManagerLabel,
+  revealInFileManager
+} from '@/lib/files/os-open/reveal-in-file-manager'
 import { useAppStore } from '@/store/index'
-import { getLocalPathOpenOwnerForRoute, isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
+import {
+  getLocalPathOpenOwnerForRoute,
+  isLocalPathOpenBlocked
+} from '@/lib/files/os-open/local-path-open-guard'
 import '@/store/slices/editor/tabs/editor-open-target-group'
 import { canOpenLinkInSourceGroup } from '@/lib/link-open-intent'
 

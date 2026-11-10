@@ -4,8 +4,8 @@ import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser/browser-use-setup
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '../../../../store/index'
 import '../../../../../../shared/constants'

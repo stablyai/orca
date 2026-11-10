@@ -30,6 +30,7 @@ import {
   type HostSessionMirrorPatchVerdict,
   type HostSessionMirrorSettle
 } from './mirror-settle'
+import { recordAgentFinishDropped } from '@/attention/agent-finish-drop-breadcrumb'
 
 /** Commit a reconciliation patch and return a receipt for its host evidence. */
 export function applyWebSessionTabsStorePatch(
@@ -101,10 +102,14 @@ export function applyWebSessionTabsStorePatch(
           }
           const notificationStatus = clientOwnedNotification ? remapped : accepted
           // Why: an unverifiable `done` restates an earlier turn or none, never a completion.
-          if (
-            !notificationStatus ||
-            (notificationStatus.state === 'done' && notificationStatus.restoredUnconfirmed)
-          ) {
+          if (!notificationStatus) {
+            continue
+          }
+          if (notificationStatus.state === 'done' && notificationStatus.restoredUnconfirmed) {
+            recordAgentFinishDropped('restored-unconfirmed', {
+              workspaceId: notificationStatus.worktreeId ?? snapshot.worktree,
+              paneKey: notificationStatus.paneKey
+            })
             continue
           }
           const currentClientStateStartedAt = clientOwnedNotification
@@ -168,6 +173,12 @@ export function applyWebSessionTabsStorePatch(
                 state.agentStatusByPaneKey[notificationStatus.paneKey]
               ))
           if (!notifyCompletion && notificationStatus.state !== 'working') {
+            if (notificationStatus.state === 'done') {
+              recordAgentFinishDropped('host-replay-skipped', {
+                workspaceId: notificationStatus.worktreeId ?? snapshot.worktree,
+                paneKey: notificationStatus.paneKey
+              })
+            }
             continue
           }
           acceptedNotificationStatuses.push({

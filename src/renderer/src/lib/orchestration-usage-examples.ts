@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
-import type { SkillUsageExample } from './skill-usage-example'
+import type { SkillUsageExample } from './skills/examples/skill-usage-example'
 
 export const getOrchestrationUsageExamples = createLocalizedCatalog((): SkillUsageExample[] => [
   {
