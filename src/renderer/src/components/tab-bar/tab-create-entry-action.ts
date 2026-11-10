@@ -55,7 +55,7 @@ import { selectFileListWorktree } from '@/store/workspaces/selection/known-workt
 import {
   assertEditorFileOperationCurrent,
   captureEditorFileOperationProvenance
-} from '@/lib/editor-file-operation-provenance'
+} from '@/lib/editor/file-operations/editor-file-operation-provenance'
 
 export type TabCreateEntryArgs = {
   classification?: TabEntryActionClassification

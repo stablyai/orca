@@ -269,7 +269,7 @@ export class PRRefreshQueueDrainer {
           )
           broadcastOutcome = this.retry.withErrorSchedule(outcome, plannedRetryAt)
         }
-        this.events.observe(next.candidate, outcome)
+        this.events.observe(next.candidate, outcome, aliases)
         this.retry.noteManualGate(next.key, broadcastOutcome)
         this.events.broadcast(
           { aliases, reason: next.reason, outcome: broadcastOutcome, requestStartedAt },

@@ -3,9 +3,9 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { settleAgentTabLaunch } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
 import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
-import { buildAgentSessionForkPrompt } from '@/lib/agent-session-fork-context'
+import { buildAgentSessionForkPrompt } from '@/lib/agent-session/context/agent-session-fork-context'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
-import { resolveOwner } from '@/lib/resolve-owner'
+import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
 import {
   toRuntimeExecutionHostId,
   type ExecutionHostId

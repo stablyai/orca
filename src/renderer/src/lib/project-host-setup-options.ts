@@ -6,6 +6,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host/execution-host-registry-entry'
+import { getHostHealthUnavailableDetail } from './project-host-health-detail'
 import { isHostLocalProjectId } from '../../../shared/project-host-setup-projection'
 import { isEphemeralVmRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { isMergedAwayExecutionHost } from '../../../shared/execution-host/managed-orcad-execution-host'
@@ -206,7 +207,7 @@ function buildNeedsSetupOptions({
     })
 }
 
-function isEphemeralVmProjectHost(host: ExecutionHostRegistryEntry | undefined): boolean {
+export function isEphemeralVmProjectHost(host: ExecutionHostRegistryEntry | undefined): boolean {
   return host?.kind === 'runtime' && isEphemeralVmRuntimeEnvironment(host)
 }
 
@@ -245,23 +246,6 @@ export function getHostSetupUnavailableDetail(
     )
   }
   return null
-}
-
-function getHostHealthUnavailableDetail(
-  health: ExecutionHostRegistryEntry['health']
-): string | null {
-  switch (health) {
-    case 'connecting':
-      return 'Connecting to host'
-    case 'disconnected':
-      return 'Connect this host to set up projects'
-    case 'error':
-      return 'Host connection needs attention'
-    case 'available':
-    case 'blocked':
-    case 'local':
-      return null
-  }
 }
 
 function canSetProjectLocation(

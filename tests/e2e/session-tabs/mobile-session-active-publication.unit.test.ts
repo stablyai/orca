@@ -656,7 +656,10 @@ describe('host active-tab publication', () => {
       ownsTab: () => true
     })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Saved unstarted pages require only this bridge inventory.
-    runtime.setAgentBrowserBridge({ tabList: () => ({ tabs: [] }) } as never)
+    runtime.setAgentBrowserBridge({
+      tabList: () => ({ tabs: [] }),
+      getRemoteTabFaviconUrl: () => null
+    } as never)
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
     expect((await list(runtime)).activeTabId).toBe('page-b')
     const seen: RuntimeMobileSessionTabsResult[] = []

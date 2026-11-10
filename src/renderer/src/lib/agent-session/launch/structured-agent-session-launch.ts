@@ -91,7 +91,7 @@ function adoptPairedHostSeed(
     delete state.intent.seedOptions
   }
   state.selection = { ...selection, seed: seedOptions }
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchListeners(state.intent.sessionId)
 }
 
 function resetStructuredLaunchCallers(
@@ -103,12 +103,16 @@ function resetStructuredLaunchCallers(
   state.callers.onSettled = () => maybeCleanupLaunchState(state)
 }
 
-function restartStructuredLaunchState(state: StructuredLaunchState, requested = false): void {
+function restartStructuredLaunchState(
+  state: StructuredLaunchState,
+  requested = false,
+  fresh = false
+): void {
   const wasVisibilityUnknown = state.visibilityUnknown
   const retainedOpening = wasVisibilityUnknown && !!state.intent.params.firstMessage
   if (!wasVisibilityUnknown || (retainedOpening && requested)) {
     const surfaceAddress = state.intent.surfaceAddress
-    state.intent = retryStructuredAgentSessionLaunchIntent(state.intent, retainedOpening)
+    state.intent = retryStructuredAgentSessionLaunchIntent(state.intent, retainedOpening, fresh)
     state.intent.surfaceAddress = surfaceAddress
   }
   resetStructuredLaunchCallers(state, retainedOpening)
@@ -129,7 +133,7 @@ function restartStructuredLaunchState(state: StructuredLaunchState, requested = 
   )
   trackLaunchSettlement(state, state.promise)
   trackStructuredLaunchConfirmationDeadline(state, state.promise)
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchListeners(state.intent.sessionId)
 }
 
 function joinStructuredLaunchState(
@@ -205,6 +209,7 @@ function structuredAgentLaunchState(
   // A fork inherits its source's options.
   intent.explicitLaunchOptions =
     !options.forkFrom && options.launchOptions ? { ...options.launchOptions } : undefined
+  intent.forkRequiresInheritedOriginal = options.forkRequiresInheritedOriginal
   intent.beforeCreate = options.beforeCreate
   intent.createAfter = options.createAfter
   intent.surfaceAddress = options.surfaceAddress
@@ -225,7 +230,7 @@ function structuredAgentLaunchState(
     promise: Promise.resolve({ sessionId: '', fence: 0 }),
     visibilityUnknown: false,
     cancelled: false,
-    onVisibilityChanged: notifyStructuredLaunchListeners,
+    onVisibilityChanged: () => notifyStructuredLaunchListeners(intent.sessionId),
     callers,
     selection: initialStructuredLaunchSelection(intent)
   }
@@ -245,7 +250,7 @@ function structuredAgentLaunchState(
   })
   trackStructuredLaunchPromptOutcome(state, caller)
   setStructuredLaunchState(state)
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchListeners(state.intent.sessionId)
   trackLaunchSettlement(state, state.promise)
   return { state, caller, joined: false }
 }
@@ -263,7 +268,7 @@ export function cancelStructuredAgentLaunch(worktreeId: string, sessionId: strin
   )
   discardStructuredAgentSessionChatSends(state.intent.sessionId)
   abandonStructuredAgentSessionLaunchIntent(state.intent)
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchListeners(sessionId)
   return true
 }
 
@@ -285,7 +290,11 @@ export function startStructuredAgentLaunch(
   }
 }
 
-export function retryStructuredAgentSessionLaunch(worktreeId: string, sessionId: string): boolean {
+export function retryStructuredAgentSessionLaunch(
+  worktreeId: string,
+  sessionId: string,
+  { fresh = false }: { fresh?: boolean } = {}
+): boolean {
   const state =
     getStructuredLaunchStateBySessionId(sessionId) ??
     restorePersistedStructuredLaunchState(worktreeId, sessionId)
@@ -297,7 +306,7 @@ export function retryStructuredAgentSessionLaunch(worktreeId: string, sessionId:
   ) {
     return false
   }
-  restartStructuredLaunchState(state, true)
+  restartStructuredLaunchState(state, true, fresh)
   return true
 }
 

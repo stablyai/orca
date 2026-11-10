@@ -12,6 +12,7 @@ import type { AgentJournalFreeTextInput } from '../../../../../src/shared/agent-
 import {
   askAcceptsEmptyAnswer,
   askConfirmAction,
+  askQuestionShowsPreviews,
   askConfirmLabel,
   askTypedText,
   toggleAskOption
@@ -22,8 +23,8 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MessageBox } from '../../../components/composer-input/MessageBox'
-import { MobileNativeChatCardHeaderAction } from '../MobileNativeChatCardHeaderAction'
-import { MobileNativeChatQuestionText } from '../MobileNativeChatQuestionText'
+import { MobileNativeChatCardHeaderAction } from './MobileNativeChatCardHeaderAction'
+import { MobileNativeChatQuestionText } from '../transcript/MobileNativeChatQuestionText'
 import { useMobileNativeChatAskAutoAdvance } from './use-mobile-native-chat-ask-auto-advance'
 import { MobileNativeChatAskOptionRow } from './MobileNativeChatAskOptionRow'
 import { useMobileNativeChatReplyScroll } from './use-mobile-native-chat-reply-scroll'
@@ -65,7 +66,8 @@ export function MobileNativeChatAsk({
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const { scrollRef, inputRef, revealReply, onViewportLayout } = useMobileNativeChatReplyScroll()
+  const { scrollRef, inputRef, revealReply, scrollViewProps, revealContent } =
+    useMobileNativeChatReplyScroll()
   const [index, setIndex] = useState(0)
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() =>
@@ -109,11 +111,15 @@ export function MobileNativeChatAsk({
       return
     }
     const cur = selections[qi] ?? []
+    // A pick reveals its preview, so a re-tap keeps it and the user confirms.
+    const keep = optIndex !== OTHER && askQuestionShowsPreviews(prompt.questions[qi])
     const picked = !cur.includes(optIndex)
-    const next = selections.map((s, i) => (i === qi ? toggleAskOption(cur, optIndex, multi) : s))
+    const next = selections.map((s, i) =>
+      i === qi ? toggleAskOption(cur, optIndex, multi, keep) : s
+    )
     setSelections(next)
     autoAdvance.cancel()
-    if (picked && !multi && optIndex !== OTHER) {
+    if (picked && !multi && optIndex !== OTHER && !keep) {
       autoAdvance.schedule(() => void advance(next))
     }
   }
@@ -246,12 +252,7 @@ export function MobileNativeChatAsk({
         </ScrollView>
       ) : null}
 
-      <ScrollView
-        ref={scrollRef}
-        onLayout={onViewportLayout}
-        style={styles.scroll}
-        keyboardShouldPersistTaps="always"
-      >
+      <ScrollView {...scrollViewProps} style={styles.scroll} keyboardShouldPersistTaps="always">
         <View style={styles.questionRow}>
           <MobileNativeChatQuestionText title content={q.question} style={styles.questionText} />
           <MobileNativeChatCardHeaderAction
@@ -270,6 +271,8 @@ export function MobileNativeChatAsk({
             key={`${optIndex}:${opt.label}`}
             label={opt.label}
             description={opt.description}
+            preview={opt.preview}
+            onPreviewLayout={revealContent}
             selected={(selections[index] ?? []).includes(optIndex)}
             multi={q.multiSelect}
             disabled={submitting}

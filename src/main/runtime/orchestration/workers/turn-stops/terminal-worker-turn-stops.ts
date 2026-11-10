@@ -1,4 +1,4 @@
-import type { AgentPaneChange } from '../../../../agent-hooks/agent-transition-detector'
+import type { AgentPaneChange } from '../../../../agent-hooks/observations/agent-transition-detector'
 import { agentVerdictDisplayMark } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { hookRowAgentPhase } from '../../../../../shared/agent-status/lifecycle/agent-transitions'

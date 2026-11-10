@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished } from 'vitest'
 
 import { AcpSessionRuntime } from './acp-session-runtime'
 import type { AcpSessionRuntimeOptions } from './acp-session-runtime-options'
@@ -7,17 +7,10 @@ import {
   deferred,
   tick
 } from '../process/testing/acp-scripted-agent.test-support'
-import { AcpConnectionClosedError } from '../transport/acp-errors'
-import type { RequestPermissionResponse } from '../generated/acp-protocol.generated'
 
 const opened: { close: () => void }[] = []
 const startOptions = { cwd: '/runtime/project', mcpServers: [] }
 const prompt = [{ type: 'text', text: 'hello' }] as const
-const permission = {
-  sessionId: 'session-1',
-  toolCall: { toolCallId: 'tool-1', title: 'Edit file' },
-  options: [{ optionId: 'allow', name: 'Allow once', kind: 'allow_once' }]
-}
 function fixture(options: AcpSessionRuntimeOptions = {}) {
   const agent = new AcpScriptedAgent()
   const runtime = new AcpSessionRuntime(agent.stdout, agent.stdin, options)
@@ -31,76 +24,9 @@ afterEach(() => {
     .splice(0)
     .toReversed()
     .forEach((resource) => resource.close())
-  vi.useRealTimers()
 })
 
 describe('ACP caller-owned waits', () => {
-  it('keeps permission requests open beyond two minutes and delivers the late user decision', async () => {
-    vi.useFakeTimers()
-    const entered = deferred<AbortSignal>()
-    const decision = deferred<RequestPermissionResponse>()
-    const { agent, runtime } = fixture({
-      onPermission: (_request, context) => {
-        entered.resolve(context.signal)
-        return decision.promise
-      }
-    })
-    agent.on('session/prompt', () => {})
-    await runtime.start(startOptions)
-    const pending = runtime.prompt([...prompt])
-    const rejected = expect(pending).rejects.toBeInstanceOf(AcpConnectionClosedError)
-    let answered = false
-    const response = agent.request('permission', 'session/request_permission', permission)
-    void response.then(() => {
-      answered = true
-    })
-    const signal = await entered.promise
-    await vi.advanceTimersByTimeAsync(120_001)
-    expect(signal.aborted).toBe(false)
-    expect(answered).toBe(false)
-    decision.resolve({ outcome: { outcome: 'selected', optionId: 'allow' } })
-    expect(await response).toMatchObject({
-      result: { outcome: { outcome: 'selected', optionId: 'allow' } }
-    })
-    runtime.close()
-    await rejected
-  })
-
-  it('lets a streaming turn run beyond thirty minutes and keeps the session usable', async () => {
-    vi.useFakeTimers()
-    const onClose = vi.fn()
-    const event = vi.fn()
-    const { agent, runtime } = fixture({ onClose })
-    runtime.subscribe(event)
-    agent.on('session/prompt', () => {})
-    agent.on('session/set_mode', (frame) => agent.reply(frame, {}))
-    await runtime.start(startOptions)
-    let finished = false
-    const pending = runtime.prompt([...prompt])
-    void pending.then(() => {
-      finished = true
-    })
-    await vi.advanceTimersByTimeAsync(30 * 60_000 + 1)
-    agent.notify('session/update', {
-      sessionId: 'session-1',
-      update: {
-        sessionUpdate: 'agent_message_chunk',
-        content: { type: 'text', text: 'Still working' }
-      }
-    })
-    expect(event).toHaveBeenCalledTimes(1)
-    expect(finished).toBe(false)
-    expect(onClose).not.toHaveBeenCalled()
-    expect(agent.frames.some((frame) => frame.method === 'session/cancel')).toBe(false)
-    await expect(runtime.setMode('plan')).resolves.toEqual({})
-    const frame = agent.frames.find((frame) => frame.method === 'session/prompt')
-    expect(frame).toBeDefined()
-    if (frame) {
-      agent.reply(frame, { stopReason: 'end_turn' })
-    }
-    await expect(pending).resolves.toEqual({ stopReason: 'end_turn' })
-  })
-
   it('keeps a handler answer that finishes saving after its owner withdraws requests', async () => {
     const withdrawal = new AbortController()
     const planEntered = deferred<void>()

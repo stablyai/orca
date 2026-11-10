@@ -122,7 +122,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
         ? ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
         : 1
 
-  const setupDecision = createsWorktree ? (params.setup ?? 'run') : 'not_applicable'
+  const setupDecision = createsWorktree ? (params.setup ?? 'inherit') : 'not_applicable'
   const runId = args.bindRunId()
   const started = db.createStartingWorkerDispatch({
     creator: resolveDispatchCreator(runtime, params.from, args.callerSession),
@@ -184,7 +184,10 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           // A server creates new-child as top-level plus this parent, so older servers parse it too.
           worktree: createsWorktree ? 'new-top-level' : worktree,
           ...(childParent && 'crossStoreParent' in childParent
-            ? { crossStoreParent: childParent.crossStoreParent }
+            ? {
+                crossStoreParent: childParent.crossStoreParent,
+                crossStoreParentInferredFrom: childParent.crossStoreParentInferredFrom
+              }
             : {}),
           name: params.name,
           repo: params.repo,
@@ -192,7 +195,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           displayName: params.displayName,
           ...(params.displayName !== undefined ? { displayNameKind: 'user' as const } : {}),
           comment: params.comment,
-          setup: createsWorktree ? (params.setup ?? 'run') : undefined,
+          setup: createsWorktree ? params.setup : undefined,
           setupSource: createsWorktree
             ? params.setup
               ? 'explicit_request'

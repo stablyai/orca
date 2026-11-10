@@ -10,15 +10,15 @@ import type { AppState } from '@/store/types'
 import {
   ensureDetectedAgentsForRepo,
   loadProjectLaunchContext
-} from '../../../agent-detection-target-inventory'
+} from '../../../agent-session/launch/inventory/agent-detection-target-inventory'
 import { CLIENT_PLATFORM } from '../../../new-workspace'
 import { getLocalRepoProjectExecutionRuntimeContext } from '../../../local-preflight-context'
 import {
   refineLocalLaunchPlatform,
   resolveRepoExecutionHostPlatform
-} from '../../../execution-host-facts'
+} from '../../../../runtime/hosts/platform/execution-host-facts'
 import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { resolveDefaultAgentForWorkspace } from '../../../agent-tab-shortcuts'
+import { resolveDefaultAgentForWorkspace } from '../../../agent-session/launch/shortcuts/agent-tab-shortcuts'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { ProjectLaunchContext } from '../../../../../../shared/rpc-contract/preflight-params'
@@ -28,7 +28,7 @@ import {
   planAgentSessionLaunch,
   type AgentSessionLaunchRequest
 } from '../../../agent-session/launch/routing/agent-session-launch-plan'
-import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
+import { resolveGitHubPrStartPointForRepo } from '@/lib/source-control/review/github-pr-start-point'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import {
   getRepoExecutionHostId,

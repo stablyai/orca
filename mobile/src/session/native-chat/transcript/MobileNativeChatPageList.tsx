@@ -1,3 +1,4 @@
+import type { MobileNativeChatPageListProps } from './mobile-native-chat-page-list-props'
 import {
   useCallback,
   useEffect,
@@ -6,18 +7,9 @@ import {
   useMemo,
   useRef,
   useState,
-  type ReactElement,
-  type Ref
+  type ReactElement
 } from 'react'
-import type {
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  ScrollView,
-  StyleProp,
-  ViewStyle
-} from 'react-native'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
-import type { MobileNativeChatRowKeys } from './mobile-native-chat-row-keys'
+import type { NativeScrollEvent, NativeSyntheticEvent, ScrollView } from 'react-native'
 import { MobileNativeChatPageScroll } from './MobileNativeChatPageScroll'
 import {
   mobileNativeChatReadingDrift,
@@ -29,16 +21,14 @@ import {
   type MobileNativeChatReadingUnit,
   type MobileNativeChatDrawnWindow,
   type MobileNativeChatScrollNode
-} from '../../mobile-native-chat-reading-place'
-import type { MobileNativeChatListHandle } from './use-mobile-native-chat-tail-follow'
-import type { MobileNativeChatScrollRoots } from './mobile-native-chat-scroll-roots'
-import { scrollWritesStopMomentum } from '../../mobile-native-chat-scroll-motion'
+} from './mobile-native-chat-reading-place'
+import { scrollWritesStopMomentum } from './mobile-native-chat-scroll-motion'
 import {
   createMobileNativeChatGrowthHold,
   mobileNativeChatHeldRows,
   type MobileNativeChatHeldRows as Held,
   MobileNativeChatGrowthHoldContext
-} from '../../mobile-native-chat-growth-hold'
+} from './mobile-native-chat-growth-hold'
 
 const FIRST_ROWS = 24
 const DRAW_BATCH = 12
@@ -51,27 +41,8 @@ const FETCH_REACH_SCREENS = 10
 // Wait for scroll and touch rest before corrections so iOS momentum is not interrupted.
 const REST_MS = 300
 
-type Row = { item: NativeChatMessage; index: number }
 type Scroller = MobileNativeChatScrollNode & EventTarget
 type ReadScroller = () => Scroller | null
-
-type Props = {
-  roots?: MobileNativeChatScrollRoots
-  ref: Ref<MobileNativeChatListHandle>
-  isFollowing: () => boolean
-  onEndDistance: (fromEnd: number, byReader: boolean) => void
-  rows: readonly NativeChatMessage[]
-  rowKeys: Pick<MobileNativeChatRowKeys, 'scope' | 'keyOf' | 'current' | 'placement'>
-  renderItem: (row: Row) => ReactElement
-  // Regrouping changes layout, so preserve the reading place through the update.
-  layoutKey: string
-  contentContainerStyle: StyleProp<ViewStyle>
-  header: ReactElement | null
-  footer: ReactElement | null
-  emptyStateView: ReactElement | null
-  onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
-  onNearTop?: () => void
-}
 
 // End anchoring preserves position when history prepends; restore after below-reader changes only at rest or on regroup.
 export function MobileNativeChatPageList({
@@ -89,7 +60,7 @@ export function MobileNativeChatPageList({
   emptyStateView,
   onScroll,
   onNearTop
-}: Props): ReactElement {
+}: MobileNativeChatPageListProps): ReactElement {
   const scroll = useRef<ScrollView>(null)
   const scroller = useCallback<ReadScroller>(() => scroll.current?.getScrollableNode() ?? null, [])
 

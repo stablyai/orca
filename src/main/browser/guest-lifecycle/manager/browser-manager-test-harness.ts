@@ -1,5 +1,5 @@
 import { vi, type Mock } from 'vitest'
-import { browserManager } from '../../browser-manager'
+import { browserManager } from './browser-manager'
 
 export const rendererWebContentsId = 5001
 export const guestBaseUserAgent = 'Mozilla/5.0 (Test) Chrome/140.0.0.0'

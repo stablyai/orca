@@ -5,7 +5,7 @@ import {
   updateMobileNativeChatRunDescriptors,
   type MobileNativeChatRunHistory,
   type MobileNativeChatRunPresentation
-} from '../mobile-native-chat-run-descriptors'
+} from './mobile-native-chat-run-descriptors'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   assignNativeChatRowKeys as assignMobileNativeChatRowKeys,

@@ -4,7 +4,7 @@ import {
   type DesktopBrowserBridgeRequest,
   type DesktopBrowserBridgeResultParams
 } from '../../../shared/desktop-browser-bridge-protocol'
-import type { RemoteRuntimeSubscription } from '../../../shared/remote-runtime/remote-runtime-client'
+import type { RemoteRuntimeTransportSubscription } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { DesktopBrowserBridgeOutcome } from './desktop-browser-bridge-executor'
 
@@ -17,10 +17,10 @@ export type DesktopBrowserBridgeSubscribe = (callbacks: {
   onResponse(response: RuntimeRpcResponse<unknown>): void
   onError(error: Error): void
   onClose(): void
-}) => Promise<RemoteRuntimeSubscription>
+}) => Promise<RemoteRuntimeTransportSubscription>
 
 export class DesktopBrowserBridgeConnection {
-  private subscription: RemoteRuntimeSubscription | null = null
+  private subscription: RemoteRuntimeTransportSubscription | null = null
   private attachmentId: string | null = null
   private closed = false
   private readonly revoked = new AbortController()
@@ -46,7 +46,7 @@ export class DesktopBrowserBridgeConnection {
   }
 
   async start(): Promise<void> {
-    let subscription: RemoteRuntimeSubscription
+    let subscription: RemoteRuntimeTransportSubscription
     try {
       subscription = await this.options.subscribe({
         onResponse: (response) => this.handleResponse(response),
@@ -158,7 +158,7 @@ export class DesktopBrowserBridgeConnection {
 
   /** False when result submission throws or the host refuses it. */
   private async sendResult(
-    sendRequest: NonNullable<RemoteRuntimeSubscription['sendRequest']>,
+    sendRequest: NonNullable<RemoteRuntimeTransportSubscription['sendRequest']>,
     params: DesktopBrowserBridgeResultParams
   ): Promise<boolean> {
     try {

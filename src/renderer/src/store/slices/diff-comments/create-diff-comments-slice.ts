@@ -4,7 +4,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { DiffComment } from '../../../../../shared/diff-comment-types'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
-import { isMarkdownComment } from '@/lib/diff-comment-compat'
+import { isMarkdownComment } from '@/lib/source-control/review/comments/diff-comment-compat'
 import {
   enqueueDiffCommentPersist,
   mutateDiffComments,

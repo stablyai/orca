@@ -2,10 +2,8 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { Label } from '../ui/label'
 import { SearchableSetting } from '../settings/section-layout/SearchableSetting'
-import {
-  SettingsSegmentedControl,
-  SettingsSwitch
-} from '../settings/form-controls/SettingsFormControls'
+import { SettingsSegmentedControl } from '../settings/form-controls/SettingsFormControls'
+import { Switch } from '@/components/ui/switch'
 import { getExperimentalSearchEntry } from '../settings/advanced/experimental-search'
 import { canOpenAgentDashboardPopout } from './agent-dashboard-open-mode'
 
@@ -29,7 +27,7 @@ export function AgentDashboardExperimentalSetting({
         'auto.components.settings.ExperimentalPane.agentDashboard.description',
         'Kanban board for monitoring agents across worktrees, in-window or as a pop-out.'
       )}
-      keywords={getExperimentalSearchEntry(t).agentDashboard.keywords}
+      keywords={getExperimentalSearchEntry().agentDashboard.keywords}
       className="space-y-3 py-3"
       id="experimental-agent-dashboard"
     >
@@ -45,13 +43,13 @@ export function AgentDashboardExperimentalSetting({
             )}
           </p>
         </div>
-        <SettingsSwitch
+        <Switch
           checked={enabled}
-          ariaLabel={t(
+          aria-label={t(
             'auto.components.settings.ExperimentalPane.agentDashboard.toggleLabel',
             'Toggle Agent Dashboard'
           )}
-          onChange={() => updateSettings({ experimentalAgentDashboardPopout: !enabled })}
+          onCheckedChange={() => updateSettings({ experimentalAgentDashboardPopout: !enabled })}
         />
       </div>
       {enabled && canOpenAgentDashboardPopout() ? (

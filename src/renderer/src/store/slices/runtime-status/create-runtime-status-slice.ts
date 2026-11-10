@@ -11,8 +11,8 @@ import {
   clearRuntimeCompatibilityCache
 } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-context'
-import { evictInstalledAgentSkillDiscoveryForRuntimeEnvironments } from '@/hooks/installed-agent-skill-discovery'
+import { bumpProviderRuntimeSessionGeneration } from '@/runtime/hosts/observations/provider-runtime-context'
+import { evictInstalledAgentSkillDiscoveryForRuntimeEnvironments } from '@/hooks/skills/discovery/installed-agent-skill-discovery'
 import {
   dismissRuntimeDisconnectedToast,
   showRuntimeDisconnectedToast

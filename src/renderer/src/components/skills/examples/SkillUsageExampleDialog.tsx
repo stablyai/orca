@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import type { SkillUsageExample } from '@/lib/skill-usage-example'
+import type { SkillUsageExample } from '@/lib/skills/examples/skill-usage-example'
 import { useTranslate } from '@/i18n/use-translate'
 
 function SkillUsageExamplePromptText(props: {

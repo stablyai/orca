@@ -13,6 +13,7 @@ import {
   type HeldDrawnTabs
 } from './workspace-layout-frame-held-tabs'
 import { noteFramesTakingOverStagedBrowserTabs } from './workspace-layout-frame-browser-handover'
+import { markFullResync } from '../../keyed-record-transitions'
 
 /** Keep window spawn/recovery and live bindings; main publishes saved bindings until it owns live ones. */
 const WINDOW_TERMINAL_TAB_FIELDS = [
@@ -146,7 +147,8 @@ export function buildLayoutFrameStorePatch(
       next = setKey(next, key, value(key)) ?? next
     }
     if (next !== state[slice]) {
-      Object.assign(patch, { [slice]: next })
+      // Cold path: main's layout frame is imported over these workspaces.
+      Object.assign(patch, { [slice]: markFullResync(next, 'host-mirror-frame') })
     }
   }
 
@@ -297,5 +299,9 @@ export function terminalLayoutsPatch(
   state: Pick<LayoutFrameStoreState, 'terminalLayoutsByTabId'>,
   layouts: LayoutFrameStoreState['terminalLayoutsByTabId']
 ): Partial<LayoutFrameStoreState> {
-  return layouts === state.terminalLayoutsByTabId ? {} : { terminalLayoutsByTabId: layouts }
+  if (layouts === state.terminalLayoutsByTabId) {
+    return {}
+  }
+  // Cold path: pane trees are imported from main's layout frames.
+  return { terminalLayoutsByTabId: markFullResync(layouts, 'host-mirror-frame') }
 }

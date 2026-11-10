@@ -9,11 +9,8 @@ vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
   ghExecFileAsync: ghExecFileAsyncMock
 }))
 
-vi.mock('./gh-utils', () => ({
-  acquire: vi.fn(),
-  release: vi.fn()
-}))
-import { rateLimitGuard, _resetRateLimitCache } from './rate-limit'
+import { acquire, release } from './gh-utils'
+import { getRateLimit, rateLimitGuard, _resetRateLimitCache } from './rate-limit'
 import {
   clearGhRateLimitBlock,
   getGhRateLimitBlockedUntilMs,
@@ -105,5 +102,90 @@ describe('scope-aware breaker reset probe', () => {
       host: 'github.acme-corp.com'
     })
     expect(getGhRateLimitBlockedUntilMs('core', 31_000, GHES_SCOPE)).toBeNull()
+  })
+})
+
+describe('rate-limit probe and the gh semaphore', () => {
+  let held = 0
+
+  afterEach(() => {
+    for (; held > 0; held--) {
+      release()
+    }
+    for (const bucket of ['core', 'search', 'graphql'] as GhRateLimitBucket[]) {
+      clearGhRateLimitBlock(bucket)
+    }
+    _resetRateLimitCache()
+  })
+
+  // Slot holders await the budget probe; a probe queued behind them never runs.
+  it('answers the probe while every gh slot is held', async () => {
+    ghExecFileAsyncMock.mockResolvedValue({
+      stdout: JSON.stringify({
+        resources: {
+          core: { limit: 5000, remaining: 4000, reset: 2_000_000_000 },
+          search: { limit: 30, remaining: 30, reset: 2_000_000_000 },
+          graphql: { limit: 5000, remaining: 4500, reset: 2_000_000_000 }
+        }
+      })
+    })
+    for (let i = 0; i < 4; i++) {
+      await acquire()
+      held++
+    }
+
+    expect(await getRateLimit()).toMatchObject({
+      ok: true,
+      snapshot: { core: { remaining: 4000 }, graphql: { remaining: 4500 } }
+    })
+  })
+
+  // A 403 forces a probe; joining one that started before the 403 would clear the new block.
+  it('answers a forced probe with quota read after the call', async () => {
+    const coreResponse = (remaining: number) => ({
+      stdout: JSON.stringify({
+        resources: { core: { limit: 5000, remaining, reset: 2_000_000_000 } }
+      })
+    })
+    const first = Promise.withResolvers<{ stdout: string }>()
+    const firstStarted = Promise.withResolvers<void>()
+    let afterBlock: Promise<unknown> | undefined
+    let phase: 'first' | 'second' | 'exhausted' = 'first'
+    ghExecFileAsyncMock.mockImplementation(() => {
+      if (phase === 'first') {
+        phase = 'second'
+        firstStarted.resolve()
+        return first.promise
+      }
+      if (phase === 'second') {
+        phase = 'exhausted'
+        // This read happens before the 403 and the forced call that follows it.
+        const observed = coreResponse(4000)
+        notifyGhPrimaryRateLimit('core')
+        afterBlock = getRateLimit({ force: true })
+        return Promise.resolve(observed)
+      }
+      return Promise.resolve(coreResponse(0))
+    })
+    for (let i = 0; i < 4; i++) {
+      await acquire()
+      held++
+    }
+
+    const earlier = getRateLimit()
+    const sharer = getRateLimit()
+    const forcedDuringEarlier = getRateLimit({ force: true })
+    await firstStarted.promise
+    // Promise ordering delivers this forced call while the first probe is settling.
+    const forcedDuringSettlement = first.promise
+      .then(() => undefined)
+      .then(() => undefined)
+      .then(() => getRateLimit({ force: true }))
+    first.resolve(coreResponse(4000))
+
+    expect(await earlier).toMatchObject({ ok: true, snapshot: { core: { remaining: 4000 } } })
+    expect(await sharer).toMatchObject({ ok: true, snapshot: { core: { remaining: 4000 } } })
+    await Promise.all([forcedDuringEarlier, forcedDuringSettlement])
+    expect(await afterBlock).toMatchObject({ ok: true, snapshot: { core: { remaining: 0 } } })
   })
 })

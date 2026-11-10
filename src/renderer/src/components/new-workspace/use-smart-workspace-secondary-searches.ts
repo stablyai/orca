@@ -6,7 +6,7 @@ import {
 } from '@/store/slices/linear/linear-issue-publication'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { LinearCollectionResult } from '../../../../shared/linear/workspace-types'
-import { linearIssueViewError } from '@/lib/linear-read-error'
+import { linearIssueViewError } from '@/lib/work-items/linear/linear-read-error'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { useEffect, useMemo, useRef } from 'react'
 import { searchRuntimeRepoBaseRefDetails } from '@/runtime/source-control/references/runtime-repo-client'

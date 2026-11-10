@@ -1,4 +1,4 @@
-import { MobileQueuedMessageComposerContext } from '../mobile-queued-message-composer-context'
+import { MobileQueuedMessageComposerContext } from './input/mobile-queued-message-composer-context'
 import { Activity, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
@@ -6,11 +6,11 @@ import { useMobileNativeChatProjection } from './transcript/use-mobile-native-ch
 import { nativeChatDockedTaskList } from '../../../../src/shared/native-chat/input/native-chat-task-list-state'
 import type { MobileNativeChatImageAttachments } from './composer/use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
-import type { MobileNativeChatStructuredComposer } from './composer/MobileNativeChatComposer'
+import type { MobileNativeChatStructuredComposer } from './composer/mobile-native-chat-structured-composer'
 import { useMobileNativeChatComposerTray } from './composer/use-mobile-native-chat-composer-tray'
 import { useMobileNativeChatVisualRenderer } from './visual/MobileNativeChatVisual'
 import { MobileNativeChatVisualContext } from './visual/mobile-native-chat-visual-context'
-import { MobileNativeChatRootItemSourceContext } from './mobile-native-chat-item-read'
+import { MobileNativeChatRootItemSourceContext } from './transcript/mobile-native-chat-item-read'
 import { useMobileNativeChatMessageDetail } from './transcript/use-mobile-native-chat-message-detail'
 import {
   MobileNativeChatReplyRevealsContext,
@@ -19,7 +19,7 @@ import {
 import { MobileNativeChatRowOverlaysHost } from './transcript/MobileNativeChatRowOverlaysHost'
 import { nativeChatAskRequiresTerminal } from '../../../../src/shared/native-chat/native-chat-agent-support'
 import { tuiAgentDisplayName } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
-import { MobileNativeChatNoticeContext } from '../mobile-native-chat-notice-context'
+import { MobileNativeChatNoticeContext } from './transcript/mobile-native-chat-notice-context'
 import type { MobileNativeChatImageSource } from './visual/mobile-native-chat-image-preview'
 import type { MobileNativeChatHostOutage } from './mobile-native-chat-host-outage'
 import { useMobileNativeChatMarkdownLinks } from './use-mobile-native-chat-markdown-links'
@@ -118,12 +118,17 @@ function MobileNativeChatOverlayContent({
     session.messages,
     controller.nativeChatItemSource
   )
-  const folded = useMobileNativeChatProjection(fullContent.messages, agent, [
-    sendSurfaceId,
-    sessionId,
-    controller.nativeChatItemSource?.client,
-    controller.nativeChatItemSource?.sessionId
-  ])
+  const folded = useMobileNativeChatProjection(
+    fullContent.messages,
+    agent,
+    [
+      sendSurfaceId,
+      sessionId,
+      controller.nativeChatItemSource?.client,
+      controller.nativeChatItemSource?.sessionId
+    ],
+    controller.nativeChatShowsCiResultLines
+  )
   const taskList = useMemo(() => nativeChatDockedTaskList(folded), [folded])
   const streaming = controller.nativeChatStreamingText ?? null
   const queued = controller.nativeChatQueued
@@ -280,6 +285,7 @@ function MobileNativeChatOverlayContent({
                       status={session.status}
                       error={session.error}
                       readFailedFinally={session.readFailedFinally === true}
+                      clearing={session.clearing === true}
                       agent={controller.nativeChatAgent}
                       sessionLive={controller.nativeChatSessionLive}
                       agentWorking={controller.nativeChatTurnActive}

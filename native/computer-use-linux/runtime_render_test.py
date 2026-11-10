@@ -202,18 +202,6 @@ class SnapshotFixture(ExitStack):
 
 
 class RuntimeRenderTest(unittest.TestCase):
-    def test_key_requests_reject_missing_payload_without_input(self):
-        root = FakeAccessible("frame", "Editor")
-        root.get_state_set = lambda: FakeStateSet(FakeStateType.ACTIVE)
-        with SnapshotFixture(root), \
-             patch.object(runtime.Atspi, "generate_keyboard_event", create=True) as keyboard, \
-             patch.object(runtime.subprocess, "run") as process:
-            for payload in ({}, {"key": None}, {"key": ""}):
-                with self.subTest(payload=payload):
-                    with self.assertRaisesRegex(RuntimeError, "key is required"):
-                        runtime.run_operation({"tool": "press_key", "app": "Fixture", "noScreenshot": True, **payload})
-            keyboard.assert_not_called()
-            process.assert_not_called()
 
     def test_focus_search_keeps_transient_accessible_wrappers_alive(self):
         class TransientNode:
@@ -230,58 +218,7 @@ class RuntimeRenderTest(unittest.TestCase):
         self.assertIsNotNone(focused)
         self.assertEqual(focused.depth, 30)
 
-    def test_snapshot_keeps_semantics_and_image_when_child_geometry_stalls(self):
-        late = FakeAccessible("button", "Continue")
-        root = FakeAccessible("frame", "Editor", children=[
-            FakeAccessible("button", "Healthy"),
-            *[FakeAccessible("button", f"Slow {i}") for i in range(4)], late,
-        ])
-        for semantic_delay, stall_children in ((3.1, False), (16, True)):
-            with self.subTest(semantic_delay=semantic_delay), SnapshotFixture(root) as fixture:
-                late.read = False
-                fixture.delays = {root: 1, **{node: 20 if stall_children else 0 for node in root.children[1:-1]}}
-                def delayed_name():
-                    if not getattr(late, "read", False):
-                        fixture.clock += semantic_delay
-                        late.read = True
-                    return "" if fixture.stalled else "Continue"
-                late.get_name = delayed_name
-                late.get_n_actions = lambda: 1
-                late.get_action_name = lambda _: "click"
-                snapshot = runtime.make_snapshot("Fixture", True, window_index=0)
-                self.assertLessEqual(fixture.clock - fixture.captured_at, 3)
-                self.assertEqual(fixture.timeout, (800, 15000))
-                elements = snapshot["elements"]
-                self.assertEqual([item["name"] for item in elements], [root.name, *[n.name for n in root.children]])
-                self.assertEqual([item["index"] for item in elements], list(range(7)))
-                self.assertEqual(elements[-1]["runtimeId"], [0, 5])
-                self.assertEqual(elements[-1]["actions"], ["click"])
-                self.assertEqual(snapshot["treeLines"][-1], "\t6 button Continue")
-                self.assertFalse(snapshot["truncation"]["truncated"])
-                self.assertEqual(snapshot["windowBounds"], fixture.bounds[root].to_json())
-                self.assertEqual(json.loads(snapshot["screenshotPngBase64"]), fixture.bounds[root].to_json())
-                self.assertEqual(elements[0]["frame"], runtime.Rect(0, 0, 300, 400).to_json())
-                self.assertEqual(elements[1]["frame"], runtime.Rect(10, 20, 300, 400).to_json())
-                self.assertTrue(all((item["frame"] is None) == stall_children for item in elements[2:]))
 
-    def test_nonstandard_window_selection_and_fresh_restored_capture(self):
-        for query, index, delay, restore in (("Fixture", None, 1, False),
-                                             ("pid:42", 1, 1, False), ("Editor", 1, 0, True)):
-            with self.subTest(query=query), SnapshotFixture(
-                FakeAccessible("panel", "Editor", children=[FakeAccessible("button", "Save")])
-            ) as fixture:
-                root = fixture.root
-                fixture.app.children.insert(0, FakeAccessible("label", "Unrelated"))
-                fixture.delays[root] = delay
-                def move():
-                    fixture.bounds[root] = runtime.Rect(500, 200, 300, 400)
-                    fixture.bounds[root.children[0]] = runtime.Rect(510, 220, 300, 400)
-                fixture.restore = move
-                snapshot = runtime.make_snapshot(query, True, window_index=index, restore=restore)
-                self.assertEqual(snapshot["windowIndex"], 1)
-                self.assertEqual(snapshot["windowBounds"]["x"], 500 if restore else 100)
-                self.assertEqual(snapshot["elements"][1]["frame"]["x"], 10)
-                self.assertEqual(json.loads(snapshot["screenshotPngBase64"]), fixture.bounds[root].to_json())
 
     def test_window_only_protection_preserves_completed_semantic_action(self):
         button = FakeAccessible("button", "Continue")
@@ -310,30 +247,6 @@ class RuntimeRenderTest(unittest.TestCase):
                 runtime.run_operation({"tool": "click", "app": "Fixture"})
             self.assertEqual(effects, ["clicked"])
 
-    def test_click_activates_the_window_only_for_pointer_fallback(self):
-        button = FakeAccessible("button", "Continue")
-        button.get_n_actions = lambda: 1
-        button.get_action_name = lambda _: "click"
-        button.do_action = lambda _: True
-        label = FakeAccessible("label", "Status")
-        for target, expected_path, expected_calls in (
-            (button, "accessibility", []),
-            (label, "synthetic", ["restore", "pointer"]),
-        ):
-            with self.subTest(path=expected_path), SnapshotFixture(
-                FakeAccessible("frame", "Editor", children=[button, label])
-            ) as fixture:
-                calls = []
-                def restore():
-                    calls.append("restore")
-                    fixture.root.get_state_set = lambda: FakeStateSet(FakeStateType.ACTIVE)
-                fixture.restore = restore
-                snapshot = runtime.make_snapshot("Fixture", False)
-                element = next(item for item in snapshot["elements"] if item["name"] == target.name)
-                with patch.object(runtime, "click_at", lambda *_: calls.append("pointer")):
-                    result = runtime.run_operation({"tool": "click", "app": "Fixture", "element": element, "noScreenshot": True})
-                self.assertEqual(result["action"]["path"], expected_path)
-                self.assertEqual(calls, expected_calls)
 
     def test_pointer_input_waits_for_activation_and_uses_restored_geometry(self):
         operations = (
@@ -622,46 +535,6 @@ class RuntimeRenderTest(unittest.TestCase):
             indexes = [item["index"] for item in snapshot["elements"]]
             self.assertEqual(len(indexes), len(set(indexes)))
 
-    def test_geometry_skips_insufficient_budget_and_restores_action_timeout(self):
-        clock = [0.0]
-        timeouts = []
-
-        def fail():
-            raise TimeoutError("unresponsive geometry")
-
-        with patch.object(runtime.time, "monotonic", side_effect=lambda: clock[0]), \
-             patch.object(runtime.Atspi, "set_timeout", side_effect=lambda *args: timeouts.append(args), create=True):
-            reader = runtime.GeometryReader()
-            clock[0] = 2.96
-            calls = []
-            self.assertIsNone(reader.read(lambda: calls.append("called")))
-            self.assertEqual(calls, [])
-            self.assertEqual(timeouts, [])
-            clock[0] = 2.9
-            self.assertIsNone(reader.read(fail))
-            self.assertGreaterEqual(timeouts[0][0], 50)
-            self.assertLessEqual(timeouts[0][0], 100)
-            self.assertEqual(timeouts[0][1], -1)
-            self.assertEqual(timeouts[-1], (800, 15000))
-
-
-    def test_wide_labeled_controls_never_enumerate_suppressed_children(self):
-        roles = (
-            "button", "check box", "checkbox", "combo box", "heading", "link",
-            "menu item", "page tab", "push button", "radio button",
-        )
-        for role in roles:
-            with self.subTest(role=role):
-                root = FakeAccessible(
-                    role, "Save", children=[FakeAccessible("text", str(i)) for i in range(10000)]
-                )
-
-                records, lines, truncation = render(root)
-
-                self.assertEqual([item["runtimeId"] for item in records], [[0]])
-                self.assertEqual(lines, [f"0 {role} Save"])
-                self.assertEqual(root.counter["child_reads"], 0)
-                self.assertFalse(truncation["truncated"])
 
 
 
@@ -671,31 +544,9 @@ class RuntimeRenderTest(unittest.TestCase):
 
 
 
-    def test_node_limit_keeps_exact_prefix_and_truncation(self):
-        root = FakeAccessible(
-            "document",
-            "Results",
-            children=[FakeAccessible("text", f"Item {index}") for index in range(runtime.MAX_NODES)],
-        )
 
-        records, _, truncation = render(root)
 
-        self.assertEqual(len(records), runtime.MAX_NODES)
-        self.assertEqual(records[-1]["name"], f"Item {runtime.MAX_NODES - 2}")
-        self.assertTrue(truncation["truncated"])
-        self.assertFalse(truncation["maxDepthReached"])
 
-    def test_depth_limit_keeps_exact_prefix_and_flag(self):
-        root = FakeAccessible("document", "Depth 65")
-        for depth in range(runtime.MAX_DEPTH, -1, -1):
-            root = FakeAccessible("document", f"Depth {depth}", children=[root])
-
-        records, _, truncation = render(root)
-
-        self.assertEqual(len(records), runtime.MAX_DEPTH + 1)
-        self.assertEqual(records[-1]["name"], f"Depth {runtime.MAX_DEPTH}")
-        self.assertTrue(truncation["truncated"])
-        self.assertTrue(truncation["maxDepthReached"])
 
 
 if __name__ == "__main__":

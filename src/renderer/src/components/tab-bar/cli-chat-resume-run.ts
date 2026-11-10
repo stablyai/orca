@@ -10,10 +10,7 @@ import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
-import {
-  StructuredAgentSessionCreateSourceFailedError,
-  type StructuredAgentSessionCreateGate
-} from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
+import type { StructuredAgentSessionCreateGate } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { supportsStructuredAgentSessionCliSource } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
@@ -22,7 +19,7 @@ import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../../shared/structured-
 import { toHostSessionPaneKey } from '../../../../shared/workspace-layout/terminal-surface-id'
 import { resolveCliChatResumeSource, type CliChatResumeSource } from './cli-chat-resume-source'
 import {
-  cliChatResumeExitUnprovenText,
+  recoverMissingConversation,
   reportCliChatResumeFailure,
   reportCliChatResumeFailureInChat,
   reportCliChatResumeTerminalChanged
@@ -269,7 +266,8 @@ export async function runCliChatResume(
       if (!closed) {
         return
       }
-      releaseCreate?.(true)
+      // A replacement chat the user closed while the terminal stopped starts nothing.
+      releaseCreate?.(!chatClosed())
     }
     // A chat that ended before its tab opened has no terminal to close; its failure is said here.
     const result = await waitForPromiseWithSignal(launch.settlement, controller.signal)
@@ -277,6 +275,9 @@ export async function runCliChatResume(
       return
     }
     if (closed) {
+      if (await recoverMissingConversation(result.error, source, chatTabId, target, dropChat)) {
+        return
+      }
       await reportCliChatResumeFailureInChat(result.error, openOwner, target, dropChat)
       return
     }
@@ -285,10 +286,8 @@ export async function runCliChatResume(
     }
   } catch (error) {
     if (closing && chatTabId && !chatClosed()) {
-      // The terminal is gone, so the chat that took its place says why, without a toast on top.
-      releaseCreate?.(
-        new StructuredAgentSessionCreateSourceFailedError(cliChatResumeExitUnprovenText(source))
-      )
+      // The terminal is gone, so the chat that took its place goes on; its create judges writers.
+      releaseCreate?.(true)
     } else if (pending.get(key)?.controller === controller) {
       await reportCliChatResumeFailure(source, error, false, target, closing)
     }

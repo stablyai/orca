@@ -1,30 +1,12 @@
 import { useTranslation } from 'react-i18next'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { getIntlLocale } from '@/i18n/i18n'
 import { useIntlLocale } from '@/i18n/use-translate'
+import { useNowSnapshot } from '@/hooks/use-now'
 import { cn } from '@/lib/utils'
 import {
-  NATIVE_CHAT_MESSAGE_FULL_TIME_FORMAT,
-  NATIVE_CHAT_MESSAGE_TIME_FORMAT
+  getNativeChatMessageDay,
+  getNativeChatMessageTimeFormatter
 } from '../../../../../../shared/native-chat/transcript/native-chat-message-time'
-
-let cached: {
-  locale: string
-  time: Intl.DateTimeFormat
-  full: Intl.DateTimeFormat
-} | null = null
-
-function getTimestampFormatters(intlLocale: string = getIntlLocale()): NonNullable<typeof cached> {
-  const locale = intlLocale
-  if (!cached || cached.locale !== locale) {
-    cached = {
-      locale,
-      time: new Intl.DateTimeFormat(locale, NATIVE_CHAT_MESSAGE_TIME_FORMAT),
-      full: new Intl.DateTimeFormat(locale, NATIVE_CHAT_MESSAGE_FULL_TIME_FORMAT)
-    }
-  }
-  return cached
-}
 
 export function NativeChatMessageTimestamp({
   timestamp,
@@ -36,6 +18,7 @@ export function NativeChatMessageTimestamp({
   className?: string
 }): React.JSX.Element | null {
   const intlLocale = useIntlLocale()
+  const today = useNowSnapshot(30_000, getNativeChatMessageDay)
   useTranslation()
   if (timestamp === null) {
     return null
@@ -44,8 +27,8 @@ export function NativeChatMessageTimestamp({
   if (Number.isNaN(date.getTime())) {
     return null
   }
-  const formatters = getTimestampFormatters(intlLocale)
-  const fullLabel = formatters.full.format(date)
+  const formatter = getNativeChatMessageTimeFormatter(intlLocale, today)
+  const fullLabel = formatter.formatFull(date)
 
   return (
     <Tooltip>
@@ -60,7 +43,7 @@ export function NativeChatMessageTimestamp({
             className
           )}
         >
-          {formatters.time.format(date)}
+          {formatter.format(date, today.date)}
         </time>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
