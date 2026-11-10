@@ -17,7 +17,7 @@ vi.mock('../../store', () => ({
     }
   }
 }))
-vi.mock('@/lib/terminal-worktree-route', () => ({
+vi.mock('@/lib/workspace/ownership/terminal-worktree-route', () => ({
   resolveTerminalWorktreeRoute: () => ({ runtimeEnvironmentId: null })
 }))
 vi.mock('./terminal-command-state', async (importOriginal) => ({
