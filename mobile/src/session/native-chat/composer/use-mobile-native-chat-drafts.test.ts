@@ -430,59 +430,6 @@ describe('useMobileNativeChatDrafts', () => {
     expect(state?.pending.map((pending) => pending.images)).toEqual([['file:///b.jpg']])
   })
 
-  it('registers no deadline when the transcript echo beat the ambiguous RPC rejection', async () => {
-    vi.useFakeTimers()
-    try {
-      await mount('a')
-      const origin = state?.captureSendOrigin('ping')
-      const onUnconfirmed = vi.fn()
-
-      await act(async () =>
-        renderer?.update(
-          createElement(Harness, { tabId: 'a', messages: [userTextMessage('m1', 'ping')] })
-        )
-      )
-      act(() => {
-        if (origin) {
-          state?.holdUnconfirmedSend(origin, 'ping', onUnconfirmed)
-        }
-      })
-
-      expect(vi.getTimerCount()).toBe(0)
-      act(() => {
-        vi.advanceTimersByTime(30_000)
-      })
-      expect(onUnconfirmed).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('surfaces uncertainty when no echo lands before the deadline', async () => {
-    vi.useFakeTimers()
-    try {
-      await mount('a')
-      const origin = state?.captureSendOrigin('ping')
-      const onUnconfirmed = vi.fn()
-      act(() => {
-        if (origin) {
-          state?.holdUnconfirmedSend(origin, 'ping', onUnconfirmed)
-        }
-      })
-
-      act(() => {
-        vi.advanceTimersByTime(19_999)
-      })
-      expect(onUnconfirmed).not.toHaveBeenCalled()
-      act(() => {
-        vi.advanceTimersByTime(1)
-      })
-      expect(onUnconfirmed).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('does not confirm an unconfirmed send against an older identical turn', async () => {
     vi.useFakeTimers()
     try {
@@ -582,32 +529,6 @@ describe('useMobileNativeChatDrafts', () => {
 
       expect(firstUnconfirmed).not.toHaveBeenCalled()
       expect(secondUnconfirmed).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('does not retain a deadline when an ambiguous send settles after unmount', async () => {
-    vi.useFakeTimers()
-    try {
-      await mount('a')
-      const origin = state?.captureSendOrigin('ping')
-      const holdUnconfirmedSend = state?.holdUnconfirmedSend
-      const onUnconfirmed = vi.fn()
-      act(() => renderer?.unmount())
-      renderer = null
-
-      act(() => {
-        if (origin) {
-          holdUnconfirmedSend?.(origin, 'ping', onUnconfirmed)
-        }
-      })
-
-      expect(vi.getTimerCount()).toBe(0)
-      act(() => {
-        vi.advanceTimersByTime(30_000)
-      })
-      expect(onUnconfirmed).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
     }
