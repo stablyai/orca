@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ChevronDown, Plus } from 'lucide-react-native'
+import { Plus } from 'lucide-react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
   Easing,
@@ -14,14 +14,14 @@ import { triggerMediumImpact, triggerSelection } from '../../platform/haptics'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { AgentStateDot } from '../../components/AgentStateDot'
 import { ArrivalFade } from '../../components/ArrivalFade'
-import { NavBarButton } from '../../components/nav-bar/NavBarButton'
+import { NAV_BAR_BUTTON_SIZE } from '../../components/nav-bar/NavBarButton'
 import { useDrawerReducedMotion } from '../../components/bottom-drawer/bottom-drawer-constants'
 import { SHEET_CURVE } from '../../components/sheet-motion-values'
 import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
 import { useKeyboardPersistingTaps } from '../../platform/keyboard-persisting-taps'
 import { useNow } from '../../hooks/use-now'
 import { agentStateLabel, type AgentDotState } from '../../worktree/agent-row-display'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
+import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { buildMobileSessionTabRow, type MobileSessionTabRow } from './mobile-session-tab-rows'
@@ -158,19 +158,22 @@ export function MobileSessionTabPill({
     rows.length === 1
       ? t('session.tabPill.oneTab', '1 tab')
       : t('session.tabPill.tabCount', '{{count}} tabs', { count: rows.length })
-  const accessibilityLabel = [
-    active?.title,
-    status ? agentStateLabel(status) : null,
+  const pillLabel = [active?.title, status ? agentStateLabel(status) : null]
+    .filter(Boolean)
+    .join(', ')
+  const countAccessibilityLabel = [
     countLabel,
     othersNeedYou ? t('session.tabPill.anotherNeedsYou', 'another tab needs you') : null
   ]
     .filter(Boolean)
     .join(', ')
-  const openSheet = () => {
-    if (Date.now() - dragEndedAtRef.current < DRAG_CLICK_WINDOW_MS) {
+  const createDisabled = createTabBusy || connState !== 'connected'
+  const openTabActions = () => {
+    // The click a drag release produces on the web belongs to the drag.
+    if (!active || Date.now() - dragEndedAtRef.current < DRAG_CLICK_WINDOW_MS) {
       return
     }
-    setSheetOpen(true)
+    openSessionTabActionSheetAfterKeyboardDismiss(active.tab)
   }
 
   return (
@@ -186,20 +189,17 @@ export function MobileSessionTabPill({
           <Animated.View style={[styles.pillFrame, pillStyle]}>
             <Pressable
               style={({ pressed }) => [styles.pill, pressed && styles.pillPressed]}
-              onPress={openSheet}
+              onPress={openTabActions}
               onLongPress={() => {
-                if (!active) {
-                  return
-                }
                 triggerMediumImpact()
-                openSessionTabActionSheetAfterKeyboardDismiss(active.tab)
+                openTabActions()
               }}
               delayLongPress={400}
+              disabled={!active}
               accessibilityRole="button"
-              accessibilityLabel={accessibilityLabel}
-              accessibilityHint={t('session.tabPill.hint', 'Shows all tabs')}
+              accessibilityLabel={pillLabel || countLabel}
+              accessibilityHint={t('session.tabPill.actionsHint', 'Shows actions for this tab')}
               accessibilityActions={[
-                { name: 'longpress', label: t('session.tabPill.tabActions', 'Tab actions') },
                 ...(next
                   ? [{ name: 'nextTab', label: t('session.tabPill.next', 'Next tab') }]
                   : []),
@@ -209,9 +209,7 @@ export function MobileSessionTabPill({
               ]}
               onAccessibilityAction={(event) => {
                 const name = event.nativeEvent.actionName
-                if (name === 'longpress' && active) {
-                  openSessionTabActionSheetAfterKeyboardDismiss(active.tab)
-                } else if (name === 'nextTab') {
+                if (name === 'nextTab') {
                   step(next, -1)
                 } else if (name === 'previousTab') {
                   step(previous, 1)
@@ -229,26 +227,44 @@ export function MobileSessionTabPill({
               <Text style={styles.title} numberOfLines={1}>
                 {active?.title ?? countLabel}
               </Text>
-              <View style={styles.count}>
-                <View style={styles.countBox}>
-                  <Text style={styles.countText}>{rows.length}</Text>
-                </View>
-                {othersNeedYou ? <View style={styles.alert} /> : null}
-                <ChevronDown size={14} color={colors.textMuted} strokeWidth={2.4} />
-              </View>
             </Pressable>
           </Animated.View>
         </GestureDetector>
       </View>
-      {/* Terminal layout and Quick commands live in the header's ⋯ menu. */}
-      {!actionsCollapsed ? (
-        <NavBarButton
-          disabled={createTabBusy || connState !== 'connected'}
-          onPress={handleOpenNewTab}
-          accessibilityLabel={t('session.tabStrip.newTab', 'New tab')}
-          icon={Plus}
-        />
-      ) : null}
+      {/* All tabs and a new one share one capsule; a collapsed bar's + lives in the header's ⋯ menu. */}
+      <View style={styles.pair}>
+        <Pressable
+          style={({ pressed }) => [styles.half, pressed && styles.halfPressed]}
+          onPress={() => setSheetOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel={countAccessibilityLabel}
+          accessibilityHint={t('session.tabPill.hint', 'Shows all tabs')}
+        >
+          <View style={styles.countBox}>
+            <Text style={styles.countText}>{rows.length}</Text>
+          </View>
+          {othersNeedYou ? <View style={styles.alert} /> : null}
+        </Pressable>
+        {!actionsCollapsed ? (
+          <>
+            <View style={styles.pairSeparator} />
+            <Pressable
+              style={({ pressed }) => [
+                styles.half,
+                pressed && styles.halfPressed,
+                createDisabled && styles.halfDisabled
+              ]}
+              disabled={createDisabled}
+              onPress={handleOpenNewTab}
+              accessibilityRole="button"
+              accessibilityLabel={t('session.tabStrip.newTab', 'New tab')}
+              accessibilityState={{ disabled: createDisabled }}
+            >
+              <Plus size={18} color={colors.textPrimary} strokeWidth={2.2} />
+            </Pressable>
+          </>
+        ) : null}
+      </View>
       <MobileSessionTabsSheet
         controller={controller}
         rows={rows}
@@ -286,7 +302,7 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: 7,
     paddingLeft: 11,
-    paddingRight: spacing.sm,
+    paddingRight: spacing.md,
     borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
@@ -300,7 +316,25 @@ const styles = themedStyleSheet(() => ({
     fontWeight: '600',
     color: colors.textPrimary
   },
-  count: { flexDirection: 'row', alignItems: 'center', gap: 3, flexShrink: 0 },
+  // Same height and fill as a nav bar button, split into the two tab controls.
+  pair: {
+    height: NAV_BAR_BUTTON_SIZE,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 0,
+    borderRadius: radii.pill,
+    backgroundColor: colors.bgRaised,
+    overflow: 'hidden'
+  },
+  half: {
+    width: 40,
+    height: NAV_BAR_BUTTON_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  halfPressed: { backgroundColor: colors.translucentFill },
+  halfDisabled: { opacity: feedback.disabledOpacity },
+  pairSeparator: { width: 1, height: 18, backgroundColor: colors.borderSubtle },
   countBox: {
     minWidth: 19,
     height: 19,
@@ -317,11 +351,11 @@ const styles = themedStyleSheet(() => ({
     color: colors.textPrimary,
     fontVariant: ['tabular-nums']
   },
-  // Another tab needs you: a red dot on the count's corner, ringed in the pill's colour.
+  // Another tab needs you: a red dot on the count's corner, ringed in the capsule's colour.
   alert: {
     position: 'absolute',
-    top: -4,
-    left: 13,
+    top: 5,
+    right: 6,
     width: 9,
     height: 9,
     borderRadius: radii.pill,

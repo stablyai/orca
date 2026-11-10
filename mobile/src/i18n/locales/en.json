@@ -2930,9 +2930,9 @@
       "tabCount": "{{count}} tabs",
       "anotherNeedsYou": "another tab needs you",
       "hint": "Shows all tabs",
-      "tabActions": "Tab actions",
       "next": "Next tab",
-      "previous": "Previous tab"
+      "previous": "Previous tab",
+      "actionsHint": "Shows actions for this tab"
     },
     "tabsSheet": {
       "needsYou": "Needs you",
