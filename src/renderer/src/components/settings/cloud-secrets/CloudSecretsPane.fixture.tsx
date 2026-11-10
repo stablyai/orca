@@ -284,6 +284,7 @@ export const replacing = defineFixture({
 
 const PASTE = [
   '# acme/web local env',
+  'AWS_ACCESS_KEY_ID=AKIAEXAMPLE7Q7MP',
   'export DATABASE_URL=postgres://localhost/app',
   'STRIPE_SECRET_KEY="sk_test_51Hk…"',
   'PRIVATE_KEY="-----BEGIN KEY-----',

@@ -169,7 +169,7 @@ export function CloudSecretEditor({
               {cloudSecretStoredOnVm(name.trim()) ? (
                 <>
                   {' '}
-                  <span className="text-foreground">{cloudSecretVmWarning(t)}</span>
+                  <span className="text-foreground">{cloudSecretVmWarning(t, name.trim())}</span>
                 </>
               ) : null}
             </p>

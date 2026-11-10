@@ -16,6 +16,7 @@ import { cloudSecretKindLabel, cloudSecretsErrorCopy } from './cloud-secrets-cop
 import { CloudSecretEditor, type CloudSecretEditorTarget } from './CloudSecretEditor'
 import { CloudApiEmptyState } from '../cloud-api/cloud-api-parts'
 import { CloudSecretsPasteEnv } from './CloudSecretsPasteEnv'
+import { cloudSecretStoredOnVm } from '../../../../../shared/cloud-secrets/cloud-secret-rules'
 import { CloudSecretVmBadge } from './CloudSecretVmBadge'
 import type { CloudSecretListModel } from './use-cloud-secrets'
 
@@ -82,7 +83,7 @@ function SecretRow({
           <code title={secret.name} className="min-w-0 truncate font-mono text-xs">
             {secret.name}
           </code>
-          {secret.kind === 'agent_key' ? (
+          {secret.kind === 'agent_key' && !cloudSecretStoredOnVm(secret.name) ? (
             <Badge variant="referenceLabel">
               <KeyRound />
               {cloudSecretKindLabel(secret.name, t)}

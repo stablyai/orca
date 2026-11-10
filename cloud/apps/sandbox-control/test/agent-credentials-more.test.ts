@@ -6,10 +6,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { compileNetworkPolicy } from '../src/network-policy'
 import { SWAPPED_CREDENTIALS, credentialTargets } from '../src/provider-env'
 import { AGENT_KEY_NAMES } from '../src/secrets'
-import { CLOUD_SWAPPED_CREDENTIALS, cloudSecretStoredOnVm } from '../../../../src/shared/cloud-secrets/cloud-secret-rules'
+import {
+  AGENT_CREDENTIAL_NAMES,
+  CLOUD_SWAPPED_CREDENTIALS,
+  cloudSecretStoredOnVm
+} from '../../../../src/shared/cloud-secrets/cloud-secret-rules'
+import { AGENT_API_KEY_PRESETS } from '../../../../src/shared/agent-api-keys/agent-api-key-catalog'
+
 import { egressSecretHosts, encodeEgressSecretHosts } from '../src/secret-egress'
 import { ENV_COMMAND } from '../src/sandbox-vm-commands'
 import { createHarness } from './harness'
+const AGENT_API_KEY_PRESET_NAMES = Object.values(AGENT_API_KEY_PRESETS).flatMap((presets) => (presets ?? []).map((preset) => preset.envName))
 
 const KEK = Buffer.alloc(32, 7).toString('base64')
 const PROXY_URL = 'https://sandbox.test/v1/egress/proxy'
@@ -282,7 +289,10 @@ describe('egress swap on a sandbox with the new keys', () => {
 describe('every agent credential is either swapped or marked "stored on workspace"', () => {
   it('leaves no agent key reaching the VM raw without the warning', () => {
     const settings = /(_MODEL|_BASE_URL|_REGION|_PROJECT|_PROJECT_ID)$|^CLAUDE_CODE_USE_/
-    for (const name of AGENT_KEY_NAMES) {
+    // Every credential the server treats as an agent key, the desktop's agent key presets and the
+    // known model-provider key names: each is swapped, or the UI says the sandbox gets it in full.
+    const names = new Set([...AGENT_KEY_NAMES, ...AGENT_CREDENTIAL_NAMES, ...AGENT_API_KEY_PRESET_NAMES])
+    for (const name of names) {
       if (settings.test(name)) {
         continue
       }

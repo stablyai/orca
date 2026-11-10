@@ -55,7 +55,7 @@ export function cloudSecretsErrorCopy(
     case 'subscription_token_refused':
       return t(
         'cloudSecrets.error.subscriptionToken',
-        'This is a Claude or ChatGPT subscription token, which can’t be stored.'
+        'This is a Claude or ChatGPT subscription token, so it can’t be saved as a secret. Set up Claude once in Settings → Agent accounts instead.'
       )
     case 'value_too_large':
       return t('cloudSecrets.error.valueTooLarge', 'Values can be up to 8 KB.')
