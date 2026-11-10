@@ -4,6 +4,10 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { createStore } from 'zustand/vanilla'
 import { createClaudeUsageSlice } from './usage-provider-slices'
 import { useUsageObservation } from './use-usage-observation'
+import type {
+  BackendConnectionListener,
+  BackendConnectionDetail
+} from '../../../../../shared/backend-service-contract'
 import type { AppState } from '../../types'
 import type { ClaudeUsageScanState } from '../../../../../shared/claude-usage-types'
 
@@ -33,14 +37,17 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 function fixture() {
-  const listeners = new Set<(connected: boolean) => void>()
+  const listeners = new Set<BackendConnectionListener>()
+  let status = { connected: false, unavailable: false }
   const api = {
-    onConnectionChanged: (listener: (connected: boolean) => void) => {
+    onConnectionChanged: (listener: BackendConnectionListener) => {
       listeners.add(listener)
+      listener(status.connected, { initial: true, unavailable: status.unavailable })
       return () => {
         listeners.delete(listener)
       }
     },
+    setEnabled: vi.fn(async ({ enabled }: { enabled: boolean }) => ({ ...scanState, enabled })),
     getScanState: vi.fn(async () => scanState),
     getSnapshot: vi.fn(async (_selection: { scope: string; range: string }) => snapshot),
     refresh: vi.fn(async (_options?: { force?: boolean }) => scanState)
@@ -53,9 +60,10 @@ function fixture() {
   return {
     store,
     api,
-    notify: (connected: boolean) => {
+    notify: (connected: boolean, detail?: BackendConnectionDetail) => {
+      status = { connected, unavailable: detail?.unavailable === true }
       for (const listener of listeners) {
-        listener(connected)
+        listener(connected, detail)
       }
     }
   }
@@ -303,4 +311,84 @@ it('does not publish an obsolete selection or swallow force after refresh has fi
   expect(store.getState().claudeUsageSummary).toMatchObject({ inputTokens: 123 })
   expect(api.refresh.mock.calls.map(([options]) => options?.force)).toEqual([false, true])
   expect(api.getSnapshot.mock.calls.at(-1)?.[0]).toMatchObject({ range: 'all' })
+})
+
+it('shows lost Refresh through read-only recovery and clears it only after a successful explicit retry', async () => {
+  const { api, store, notify } = fixture()
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const stop = store.getState().observeClaudeUsage()
+  await store.getState().fetchClaudeUsage()
+  const held = deferred<typeof scanState>()
+  api.refresh.mockReturnValueOnce(held.promise)
+  const refresh = store.getState().refreshClaudeUsage()
+  await vi.waitFor(() => expect(api.refresh).toHaveBeenCalledTimes(2))
+  notify(false)
+  notify(false, { unavailable: true })
+  held.reject(new Error('Usage disconnected'))
+  await refresh
+  expect(store.getState().claudeUsageFailure).toMatchObject({ terminal: true, refresh: true })
+  expect(store.getState().claudeUsageScanState?.isScanning).toBe(false)
+  api.refresh.mockClear()
+  notify(true)
+  await store.getState().fetchClaudeUsage()
+  expect(api.refresh).not.toHaveBeenCalled()
+  expect(store.getState().claudeUsageFailure).toMatchObject({ terminal: false, refresh: true })
+  expect(store.getState().claudeUsageSummary).toMatchObject({ inputTokens: 123 })
+  await store.getState().refreshClaudeUsage()
+  expect(api.refresh.mock.calls.map(([options]) => options?.force)).toEqual([true])
+  expect(store.getState().claudeUsageFailure).toBeNull()
+  stop()
+})
+
+it.each(['skip', 'scanning', 'error', 'completed', 'first-completion'] as const)(
+  'resolves old Refresh failure only with a newer settled producer result: %s',
+  async (outcome) => {
+    const { api, store } = fixture()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    api.refresh.mockRejectedValueOnce(new Error('lost Refresh'))
+    await store.getState().refreshClaudeUsage()
+    expect(store.getState().claudeUsageFailure?.refresh).toBe(true)
+    const baseline = {
+      ...scanState,
+      lastScanCompletedAt: outcome === 'first-completion' ? null : 1
+    }
+    const final = {
+      ...scanState,
+      lastScanCompletedAt: outcome === 'skip' ? 1 : 2,
+      isScanning: outcome === 'scanning',
+      lastScanError: outcome === 'error' ? 'scan failed' : null
+    }
+    api.getSnapshot
+      .mockResolvedValueOnce({ ...snapshot, scanState: baseline })
+      .mockResolvedValueOnce({ ...snapshot, scanState: final })
+    api.refresh.mockResolvedValueOnce(final)
+    await store.getState().fetchClaudeUsage()
+    expect(store.getState().claudeUsageFailure?.refresh ?? false).toBe(
+      outcome !== 'completed' && outcome !== 'first-completion'
+    )
+  }
+)
+
+it('retains unacknowledged setting writes through cache reads and never enables a disabled retry', async () => {
+  const { api, store, notify } = fixture()
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  api.setEnabled.mockRejectedValueOnce(new Error('lost acknowledgement'))
+  await store.getState().setClaudeUsageEnabled(false)
+  const stop = store.getState().observeClaudeUsage()
+  await store.getState().fetchClaudeUsage()
+  expect(store.getState().claudeUsageFailure?.setting).toBe(true)
+  notify(false, { unavailable: true })
+  stop()
+  notify(true)
+  api.getScanState.mockResolvedValue({ ...scanState, enabled: false })
+  const remount = store.getState().observeClaudeUsage()
+  await store.getState().fetchClaudeUsage()
+  expect(store.getState().claudeUsageFailure).toMatchObject({ terminal: false, setting: true })
+  api.refresh.mockClear()
+  await store.getState().refreshClaudeUsage()
+  expect(api.refresh).not.toHaveBeenCalled()
+  expect(api.setEnabled).toHaveBeenCalledTimes(1)
+  await store.getState().setClaudeUsageEnabled(false)
+  expect(store.getState().claudeUsageFailure).toBeNull()
+  remount()
 })

@@ -1,3 +1,10 @@
+export type UsageFailure = {
+  terminal: boolean
+  read: boolean
+  refresh: boolean
+  setting: boolean
+}
+
 export type UsageSnapshot = {
   scanState: {
     enabled: boolean

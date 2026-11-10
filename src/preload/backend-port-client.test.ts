@@ -71,7 +71,10 @@ it('publishes port loss before rejection and preserves fresh work through duplic
   const events: string[] = []
   let fresh: Promise<unknown> | undefined
   detach.push(
-    transport.onConnectionChanged((connected) => {
+    transport.onConnectionChanged((connected, detail) => {
+      if (detail?.initial || detail?.unavailable) {
+        return
+      }
       events.push(connected ? 'ready' : 'lost')
       if (!connected) {
         fresh = transport.invoke('snapshot')
@@ -106,7 +109,10 @@ it('keeps a replacement handshake when the old handshake rejects after loss', as
   const { backendUsageTransport: transport } = await import('./backend-port-client')
   let fresh: Promise<unknown> | undefined
   detach.push(
-    transport.onConnectionChanged((connected) => {
+    transport.onConnectionChanged((connected, detail) => {
+      if (detail?.initial || detail?.unavailable) {
+        return
+      }
       if (!connected) {
         fresh = transport.invoke('snapshot')
       }
@@ -120,4 +126,32 @@ it('keeps a replacement handshake when the old handshake rejects after loss', as
   deliver(async () => ({ inputTokens: 123 }))
   await expect(fresh).resolves.toEqual({ inputTokens: 123 })
   expect(electron.invoke).toHaveBeenCalledTimes(2)
+})
+
+it('initializes terminal presentation without RPCs and preserves a fresh handshake through terminal escalation', async () => {
+  const { backendUsageTransport: transport } = await import('./backend-port-client')
+  emit(BACKEND_CONNECTION_CHANGED, { connected: false })
+  const fresh = transport.invoke('snapshot')
+  emit(BACKEND_CONNECTION_CHANGED, { connected: false, unavailable: true })
+  const statuses: unknown[] = []
+  detach.push(
+    transport.onConnectionChanged((connected, detail) => statuses.push({ connected, detail }))
+  )
+  expect(statuses).toEqual([{ connected: false, detail: { initial: true, unavailable: true } }])
+  expect(electron.invoke).toHaveBeenCalledTimes(1)
+  deliver(async () => ({ inputTokens: 123 }))
+  await expect(fresh).resolves.toEqual({ inputTokens: 123 })
+  expect(statuses.at(-1)).toEqual({ connected: true, detail: undefined })
+})
+
+it('clears terminal metadata on main ready without port delivery or mounted demand', async () => {
+  const { backendUsageTransport: transport } = await import('./backend-port-client')
+  emit(BACKEND_CONNECTION_CHANGED, { connected: false, unavailable: true })
+  emit(BACKEND_CONNECTION_CHANGED, { connected: true })
+  const statuses: unknown[] = []
+  detach.push(
+    transport.onConnectionChanged((connected, detail) => statuses.push({ connected, detail }))
+  )
+  expect(statuses).toEqual([{ connected: true, detail: { initial: true, unavailable: false } }])
+  expect(electron.invoke).not.toHaveBeenCalled()
 })

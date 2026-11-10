@@ -161,10 +161,10 @@ export class BackendSupervisor {
     return roots.some((root) => isRendererDocumentNavigation(root, contents.getURL()))
   }
 
-  private notify(connected: boolean): void {
+  private notify(connected: boolean, unavailable = false): void {
     for (const document of this.documents.values()) {
       if (!document.contents.isDestroyed() && document.contents.mainFrame === document.frame) {
-        document.frame.postMessage(BACKEND_CONNECTION_CHANGED, { connected })
+        document.frame.postMessage(BACKEND_CONNECTION_CHANGED, { connected, unavailable })
       }
     }
   }
@@ -283,9 +283,11 @@ export class BackendSupervisor {
         this.control = null
         this.child = null
         this.ready = null
-        this.notify(false)
         if (this.desiredRunning) {
           this.failures.record('backend')
+        }
+        this.notify(false, this.desiredRunning && this.failures.recent('backend').length >= 3)
+        if (this.desiredRunning) {
           if (this.failures.recent('backend').length < 3) {
             this.restartTimer = setTimeout(
               () => {

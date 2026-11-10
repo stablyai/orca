@@ -6,6 +6,13 @@ export const BACKEND_PORT_REQUEST = 'backend:connect'
 export const BACKEND_PORT_DELIVERY = 'backend:port'
 export const BACKEND_CONNECTION_CHANGED = 'backend:connectionChanged'
 
+export type BackendConnectionStatus = { connected: boolean; unavailable?: boolean }
+export type BackendConnectionDetail = { initial?: boolean; unavailable?: boolean }
+export type BackendConnectionListener = (
+  connected: boolean,
+  detail?: BackendConnectionDetail
+) => void
+
 export const UsageProviderSchema = z.enum([
   'claudeUsage',
   'codexUsage',

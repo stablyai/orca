@@ -3,7 +3,9 @@ import { BackendPortRpc, type BackendPort } from '../shared/backend-port-rpc'
 import {
   BACKEND_CONNECTION_CHANGED,
   BACKEND_PORT_DELIVERY,
-  BACKEND_PORT_REQUEST
+  BACKEND_PORT_REQUEST,
+  type BackendConnectionStatus,
+  type BackendConnectionListener
 } from '../shared/backend-service-contract'
 
 let connection: BackendPortRpc | undefined
@@ -11,10 +13,14 @@ let connecting: Promise<BackendPortRpc> | undefined
 let pendingPort:
   | { token: string; resolve(client: BackendPortRpc): void; reject(error: Error): void }
   | undefined
-const connectionListeners = new Set<(connected: boolean) => void>()
+const connectionListeners = new Set<BackendConnectionListener>()
 let connected: boolean | undefined
+let unavailable = false
 
 function publishConnection(next: boolean): void {
+  if (next) {
+    unavailable = false
+  }
   if (connected === next) {
     return
   }
@@ -104,13 +110,20 @@ function connect(): Promise<BackendPortRpc> {
   return result
 }
 
-ipcRenderer.on(BACKEND_CONNECTION_CHANGED, (_event, state: { connected: boolean }) => {
+ipcRenderer.on(BACKEND_CONNECTION_CHANGED, (_event, state: BackendConnectionStatus) => {
   publishConnection(state.connected)
+  if (!state.connected && state.unavailable && !unavailable) {
+    unavailable = true
+    for (const listener of connectionListeners) {
+      listener(false, { unavailable: true })
+    }
+  }
 })
 
 export const backendUsageTransport = {
-  onConnectionChanged(listener: (connected: boolean) => void): () => void {
+  onConnectionChanged(listener: BackendConnectionListener): () => void {
     connectionListeners.add(listener)
+    listener(connected ?? false, { initial: true, unavailable })
     return () => {
       connectionListeners.delete(listener)
     }

@@ -1,3 +1,4 @@
+import type { BackendConnectionListener } from '../shared/backend-service-contract'
 import type { PreloadApi } from './api-types'
 
 type UsageProviderApiKey = 'claudeUsage' | 'codexUsage' | 'openCodeUsage' | 'museUsage'
@@ -7,14 +8,14 @@ type UsageRangeArgs = { scope: string; range: string }
 export function createUsageProviderApi<Key extends UsageProviderApiKey>(
   ipc: {
     invoke(channel: string, args?: unknown): Promise<unknown>
-    onConnectionChanged?: (listener: (connected: boolean) => void) => () => void
+    onConnectionChanged?: (listener: BackendConnectionListener) => () => void
   },
   prefix: Key
 ): PreloadApi[Key]
 export function createUsageProviderApi(
   ipc: {
     invoke(channel: string, args?: unknown): Promise<unknown>
-    onConnectionChanged?: (listener: (connected: boolean) => void) => () => void
+    onConnectionChanged?: (listener: BackendConnectionListener) => () => void
   },
   prefix: UsageProviderApiKey
 ): UsageProviderApi {

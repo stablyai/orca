@@ -1,8 +1,9 @@
 import type { AppState } from '../../types'
-import type { UsageSnapshot, UsageProviderTypes } from './usage-provider-types'
+import type { UsageSnapshot, UsageProviderTypes, UsageFailure } from './usage-provider-types'
 import type { UsageData } from './usage-provider-slice-contract'
 
 const usageDataFields = [
+  'failure',
   'scope',
   'range',
   'scanState',
@@ -46,6 +47,7 @@ export function createInitialUsageData<T extends UsageProviderTypes<string, stri
   range: T['range']
 ): UsageData<T> {
   return {
+    failure: null,
     scope,
     range,
     scanState: null,
@@ -55,4 +57,31 @@ export function createInitialUsageData<T extends UsageProviderTypes<string, stri
     projectBreakdown: [],
     recentSessions: []
   }
+}
+
+export function mergeUsageFailure(
+  previous: UsageFailure | null,
+  patch: Partial<UsageFailure>
+): UsageFailure | null {
+  const next = {
+    terminal: false,
+    read: false,
+    refresh: false,
+    setting: false,
+    ...previous,
+    ...patch
+  }
+  if (!next.terminal && !next.read && !next.refresh && !next.setting) {
+    return null
+  }
+  if (
+    previous &&
+    previous.terminal === next.terminal &&
+    previous.read === next.read &&
+    previous.refresh === next.refresh &&
+    previous.setting === next.setting
+  ) {
+    return previous
+  }
+  return next
 }

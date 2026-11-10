@@ -1,3 +1,4 @@
+import { usageFailureMessage } from './usage-failure-message'
 import { useUsageObservation } from '../../store/slices/usage/use-usage-observation'
 import { Activity, Brain, DatabaseZap, FolderKanban, Sigma, Sparkles } from 'lucide-react'
 import type { MuseUsageRange, MuseUsageScope } from '../../../../shared/muse-usage-types'
@@ -45,6 +46,8 @@ export function MuseUsagePane(): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const scanState = useAppStore((state) => state.museUsageScanState)
+  const failure = useAppStore((state) => state.museUsageFailure)
+  const failureMessage = usageFailureMessage(failure, t)
   const summary = useAppStore((state) => state.museUsageSummary)
   const daily = useAppStore((state) => state.museUsageDaily)
   const modelBreakdown = useAppStore((state) => state.museUsageModelBreakdown)
@@ -76,6 +79,9 @@ export function MuseUsagePane(): React.JSX.Element {
     return (
       <UsageTrackingPaneShell
         enabled={false}
+        failure={failureMessage}
+        stateKnown={scanState !== null}
+        retry={{ label: t('usage.failure.retry', 'Refresh'), onRefresh: refreshMuseUsage }}
         title={title}
         disabledDescription={t(
           'auto.components.stats.MuseUsagePane.disabledDescription',
@@ -87,7 +93,11 @@ export function MuseUsagePane(): React.JSX.Element {
     )
   }
 
-  if (!summary && (scanState.isScanning || scanState.lastScanCompletedAt === null)) {
+  if (
+    !failureMessage &&
+    !summary &&
+    (scanState.isScanning || scanState.lastScanCompletedAt === null)
+  ) {
     return (
       <ClaudeUsageLoadingState
         title={title}
@@ -102,6 +112,7 @@ export function MuseUsagePane(): React.JSX.Element {
   return (
     <UsageTrackingPaneShell
       enabled
+      failure={failureMessage}
       title={title}
       status={
         <>

@@ -1,3 +1,4 @@
+import type { BackendConnectionListener } from '../../../../../shared/backend-service-contract'
 import type {
   ClaudeUsageRange,
   ClaudeUsageScope,
@@ -18,9 +19,10 @@ import type {
   MuseUsageScope,
   MuseUsageSnapshot
 } from '../../../../../shared/muse-usage-types'
-import type { UsageSnapshot, UsageProviderTypes } from './usage-provider-types'
+import type { UsageSnapshot, UsageProviderTypes, UsageFailure } from './usage-provider-types'
 
 export type UsageData<T extends UsageProviderTypes<string, string, UsageSnapshot>> = {
+  failure: UsageFailure | null
   scope: T['scope']
   range: T['range']
   scanState: T['snapshot']['scanState'] | null
@@ -32,7 +34,7 @@ export type UsageData<T extends UsageProviderTypes<string, string, UsageSnapshot
 }
 
 export type UsageApi<T extends UsageProviderTypes<string, string, UsageSnapshot>> = {
-  onConnectionChanged?: (listener: (connected: boolean) => void) => () => void
+  onConnectionChanged?: (listener: BackendConnectionListener) => () => void
   getScanState: () => Promise<T['snapshot']['scanState']>
   setEnabled: (args: { enabled: boolean }) => Promise<T['snapshot']['scanState']>
   refresh: (args?: { force?: boolean }) => Promise<T['snapshot']['scanState']>
