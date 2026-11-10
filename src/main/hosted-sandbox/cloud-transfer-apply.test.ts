@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -102,7 +102,8 @@ describe('Apply changes again', () => {
     await persistTransfer(entry, repo)
     const loaded = await loadPersistedTransfer(entry.dir)
     expect(loaded).toMatchObject({ dir: entry.dir, repoPath: repo, workspaceId: 'ws-1' })
-    expect(await sweepCloudTransfers(root, Date.now())).toBe(1) // the bare repo dir goes, transfer stays
+    const at = statSync(join(entry.dir, 'transfer.json')).mtimeMs + 1_000
+    expect(await sweepCloudTransfers(root, at)).toBe(1) // the bare repo dir goes, transfer stays
     expect(existsSync(entry.dir)).toBe(true)
     expect(await loadPersistedTransfer(join(root, 'nope'))).toBeNull()
   })
