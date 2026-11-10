@@ -1,16 +1,18 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ChevronLeft, ExternalLink } from 'lucide-react'
 import {
   LinearProjectTable,
   LinearCollectionNotice
 } from '@/components/linear-project-view-surfaces'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function TaskPageLinearCustomViewProjects({
   model
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     setTaskResumeState,
     selectedLinearWorkspaceId,
@@ -37,7 +39,7 @@ export function TaskPageLinearCustomViewProjects({
                 linearContext: undefined
               })
             }}
-            aria-label={translate('auto.components.TaskPage.bc06ed0fb0', 'Back to views')}
+            aria-label={t('auto.components.TaskPage.bc06ed0fb0', 'Back to views')}
           >
             <ChevronLeft className="size-3.5" />
           </Button>
@@ -46,7 +48,7 @@ export function TaskPageLinearCustomViewProjects({
               {selectedLinearCustomView!.name}
             </div>
             <div className="truncate text-[11px] text-muted-foreground">
-              {translate('auto.components.TaskPage.733b8f2421', 'Linear / Views')}
+              {t('auto.components.TaskPage.733b8f2421', 'Linear / Views')}
             </div>
           </div>
         </div>
@@ -54,11 +56,11 @@ export function TaskPageLinearCustomViewProjects({
           <Button
             variant="outline"
             size="xs"
-            onClick={() => void window.api.shell.openUrl(selectedLinearCustomView!.url!)}
+            onClick={(event) => openAppHttpLink(selectedLinearCustomView!.url!, { event })}
             className="gap-1 border-border/50 bg-background/70"
           >
             <ExternalLink className="size-3.5" />
-            {translate('auto.components.TaskPage.8675cd6188', 'Linear')}
+            {t('auto.components.TaskPage.8675cd6188', 'Linear')}
           </Button>
         ) : null}
       </div>
@@ -80,7 +82,7 @@ export function TaskPageLinearCustomViewProjects({
           }
           onOpenProject={(project) => {
             if (project.url) {
-              void window.api.shell.openUrl(project.url)
+              openAppHttpLink(project.url)
             }
           }}
           onUseProjectIssues={(project) => {
@@ -95,7 +97,7 @@ export function TaskPageLinearCustomViewProjects({
         errors={linearCustomViewProjectsResult.errors}
         hasMore={linearCustomViewProjectsResult.hasMore}
         count={linearCustomViewProjectsResult.items.length}
-        label={translate('auto.components.TaskPage.b39fe6511d', 'projects')}
+        kind="projects"
       />
     </div>
   )

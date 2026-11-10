@@ -162,8 +162,7 @@ test('durable whole-tab close removes a split tab across restart', async (// oxl
       )
       .toBe(true)
 
-    // Why: wait past initial worktree effects so this checks resurrection, not
-    // only the first hydrated frame before default-tab logic has run.
+    // Wait beyond initial effects so late default-tab creation cannot resurrect the closed tab unnoticed.
     await secondLaunch.page.waitForTimeout(1_000)
     const restoredTabs = await getWorktreeTabs(secondLaunch.page, worktreeId)
     expect(restoredTabs).toEqual([])
@@ -173,9 +172,7 @@ test('durable whole-tab close removes a split tab across restart', async (// oxl
     })
     expect(afterRestart.result.terminals).toEqual([])
 
-    // Why: the tombstone only binds passive hydration. Clicking the sidebar row is the
-    // user asking for the workspace back, so explicit activation must re-seed a fresh
-    // terminal instead of leaving the blank tab bar that regressed in #14590.
+    // Tombstones govern passive hydration; explicit sidebar activation must create a fresh terminal instead of #14590’s blank bar.
     await worktreeRowSurface(secondLaunch.page, worktreeId).click()
     await expect
       .poll(() => getWorktreeTabs(secondLaunch.page, worktreeId), {

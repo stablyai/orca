@@ -2,10 +2,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import { displayBrowserUrl } from './browser-url'
 import { shouldSurfaceBrowserError } from './mobile-browser-frame-state'
 
-/**
- * `error` is set when an answer did not reach the page, which leaves the page still blocked, and
- * `pending` is the token of the answer in flight — the card's buttons are dead while one is.
- */
+// error leaves page blocked after failed answer; pending token disables buttons for sole in-flight answer.
 export type BrowserDialogState = {
   dialogType: string
   message: string

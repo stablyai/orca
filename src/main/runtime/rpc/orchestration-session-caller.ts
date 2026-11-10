@@ -1,69 +1,35 @@
-/**
- * Resolves an orchestration caller that names itself by the Orca agent session id in its injected
- * environment. Both dispatchers call this once, before params parse and the unary/streaming split,
- * so it runs ahead of legacy compatibility, receipt lookup and every method. Before parsing, so a
- * session caller need not name itself in a param that requires a caller.
- *
- * The id names the caller; nothing here is a credential. Every agent on this host runs as the same
- * user, so the checks are about getting the identity right, not about keeping anyone out:
- * - Same host only. A paired client, an SSH environment or a WSL shell is another host, where
- *   "same machine, same user" does not hold, so a session claim from one is refused.
- * - The Orca id, never the provider's: that one rotates on `/clear`.
- * - A live lease: released, mid owner change or unreconciled sessions cannot act.
- * - The session wins over any declared caller: a declared handle must name this same session, and
- *   a structured worker's session id maps to the handle and pane it was minted.
- * - A request with no session id that declares an `orca_session_id:` caller gets the party it names: a
- *   worker's handle, or a refusal for a chat, whose address alone identifies nobody.
- */
-import { agentSessionLeaseAdmitsWriter } from '../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import { ORCA_AGENT_SESSION_ID_ENV } from '../../../shared/agent-session-caller-env'
+/** Resolve session identity before params, compatibility, receipts and dispatch branching; ids identify same-user callers, not credentials.
+ * Refuse paired/SSH/WSL claims, provider ids that rotate on /clear, and non-live leases; a released (sleeping) one may act except as NEEDS_RUNNING_AGENT lists. Session identity overrides declarations and maps workers to minted handles/panes.
+ * Without session evidence, a declared orca_session_id: may resolve a worker handle; a chat address alone identifies no caller. */
 import {
-  ORCA_SESSION_ADDRESS_PREFIX,
-  isOrcaSessionId,
-  parseOrcaSessionAddress
-} from '../../../shared/orca-session-address'
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shared/orchestration-session-caller-codes'
+  agentSessionLeaseAdmitsWriter,
+  agentSessionLeaseIsReleased
+} from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import { ORCA_AGENT_SESSION_ID_ENV } from '../../../shared/agent-session/lifecycle/agent-session-caller-env'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-address-prefix'
+import { isOrcaSessionId, parseOrcaSessionAddress } from '../../../shared/orca-session-address'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shared/orchestration/orchestration-session-caller-codes'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import type { OrchestrationSessionCaller } from '../orchestration/orchestration-caller-identity'
+import type {
+  OrchestrationEntryCaller,
+  OrchestrationSessionCaller
+} from '../orchestration/addressing/orchestration-caller-identity'
 import { OrchestrationError } from '../orchestration/orchestration-error'
-import { canonicalOrcaSessionId } from '../orchestration/canonical-orca-session-id'
-import type { OrchestrationDb } from '../orchestration/db'
+import { canonicalOrcaSessionId } from '../orchestration/addressing/session-lineage/canonical-orca-session-id'
+import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import {
   resolveDeclaredCallerParty,
   resolveOrcaSessionParty,
   resolveOrchestrationParty
-} from '../orchestration/orchestration-party'
-import { lookupOrcaAgentSession } from '../orchestration/structured-session-mail-address'
-import { readAgentSessionRecordStore } from '../orchestration/structured-session-lineage'
-import { structuredWorkerHostScope } from '../structured-worker-identity'
+} from '../orchestration/addressing/orchestration-party'
+import { lookupOrcaAgentSession } from '../orchestration/mailbox/routing/structured-session-mail-address'
+import { conversationRecordReader } from '../orchestration/addressing/session-lineage/structured-session-lineage'
+import type { AgentSessionRecordStore } from '../agent-session/records/agent-session-record-store'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { structuredWorkerHostScope } from '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import type { RpcRequest } from './core'
-
-type CallerParam = 'from' | 'terminal' | 'callerTerminalHandle'
-
-/**
- * Every method that consults caller identity, and the param it names its caller in. This list is
- * the contract: a method that starts reading caller identity is added here with its own test.
- * Methods not listed carry no caller identity for any caller; a session claim on them is still
- * validated, then they run exactly as they do for a terminal caller.
- */
-export const ORCHESTRATION_CALLER_PARAM: Readonly<Record<string, CallerParam>> = {
-  'orchestration.runCreate': 'from',
-  'orchestration.runUse': 'from',
-  'orchestration.runCurrent': 'from',
-  'orchestration.check': 'terminal',
-  'orchestration.send': 'from',
-  'orchestration.reply': 'from',
-  'orchestration.ask': 'from',
-  'orchestration.dispatch': 'from',
-  'orchestration.gateCreate': 'from',
-  'orchestration.gateResolve': 'from',
-  'orchestration.gateList': 'from',
-  'orchestration.taskCreate': 'callerTerminalHandle',
-  'orchestration.taskList': 'callerTerminalHandle',
-  'orchestration.taskUpdate': 'callerTerminalHandle',
-  'orchestration.workerStart': 'from'
-}
+import type { OrchestrationCallerField } from './methods/orchestration/access/orchestration-method-access'
 
 export type OrchestrationRequestRoute = {
   /** Set only by the paired WebSocket route: the request came from another host's client. */
@@ -73,27 +39,38 @@ export type OrchestrationRequestRoute = {
 export type ResolvedOrchestrationRequest = {
   /** The request with its declared caller bound to the session and its evidence reduced to it. */
   request: RpcRequest
-  caller?: OrchestrationSessionCaller
+  caller?: OrchestrationEntryCaller
 }
 
 const NO_EFFECTS = { effectsApplied: false } as const
 
-/**
- * Whether this request names its caller by a session id, or declares an `orca_session_id:` address as its
- * caller. Synchronous, so every other request, terminal callers included, takes no extra async hop.
- */
-export function needsOrchestrationCallerResolution(request: RpcRequest): boolean {
+/** A released (sleeping) session is still itself, so its background commands may act, except here. */
+const NEEDS_RUNNING_AGENT: ReadonlySet<string> = new Set([
+  // Each reads, or waits on and so holds back, the mail that wakes the session.
+  'orchestration.check',
+  'orchestration.ask',
+  // Answers that the session is live.
+  'orchestration.callerShow'
+])
+
+/** Detect session evidence or a declared session caller synchronously so terminal calls avoid another async hop. */
+export function needsOrchestrationCallerResolution(
+  request: RpcRequest,
+  callerField: OrchestrationCallerField | undefined
+): boolean {
   if (!request.method.startsWith('orchestration.')) {
     return false
   }
   return (
     request.orchestrationCompatibilityEvidence?.agentSessionId !== undefined ||
-    declaredSessionAddress(request) !== undefined
+    declaredSessionAddress(request, callerField) !== undefined
   )
 }
 
-function declaredSessionAddress(request: RpcRequest): string | undefined {
-  const name = ORCHESTRATION_CALLER_PARAM[request.method]
+function declaredSessionAddress(
+  request: RpcRequest,
+  name: OrchestrationCallerField | undefined
+): string | undefined {
   const params: unknown = request.params
   if (!name || !params || typeof params !== 'object' || Array.isArray(params)) {
     return undefined
@@ -107,11 +84,15 @@ function declaredSessionAddress(request: RpcRequest): string | undefined {
 export async function resolveOrchestrationSessionCaller(
   runtime: OrcaRuntimeService,
   request: RpcRequest,
-  route: OrchestrationRequestRoute | undefined
+  route: OrchestrationRequestRoute | undefined,
+  /** The method's declared caller field (its access declaration), if it reads one. */
+  callerField: OrchestrationCallerField | undefined
 ): Promise<ResolvedOrchestrationRequest> {
   const evidence = request.orchestrationCompatibilityEvidence
   if (evidence?.agentSessionId === undefined) {
-    return { request: bindDeclaredSessionAddress(runtime.getOrchestrationDb(), request) }
+    return {
+      request: bindDeclaredSessionAddress(runtime.getOrchestrationDb(), request, callerField)
+    }
   }
   const claimed: unknown = evidence?.agentSessionId
   if (route?.pairedDeviceId !== undefined) {
@@ -133,7 +114,7 @@ export async function resolveOrchestrationSessionCaller(
   }
   const sessionId = claimed
   const record = await readSessionRecord(runtime, sessionId)
-  assertSessionCanAct(sessionId, record)
+  assertSessionCanAct(sessionId, record, request.method)
   const db = runtime.getOrchestrationDb()
   const caller: OrchestrationSessionCaller = Object.freeze({
     ...resolveOrcaSessionParty(sessionId, db),
@@ -143,8 +124,8 @@ export async function resolveOrchestrationSessionCaller(
   return {
     request: {
       ...request,
-      params: bindDeclaredCaller(request.method, request.params, caller, db),
-      // Why: the session wins, so any terminal evidence on the same request never attests.
+      params: bindDeclaredCaller(callerField, request.params, caller, db),
+      // Session identity wins; discard terminal attestation on the same request.
       orchestrationCompatibilityEvidence: { agentSessionId: sessionId }
     },
     caller
@@ -155,10 +136,10 @@ async function readSessionRecord(
   runtime: OrcaRuntimeService,
   sessionId: string
 ): Promise<AgentSessionRecord> {
-  let store: ReturnType<typeof readAgentSessionRecordStore>
+  let store: AgentSessionRecordStore | null
   try {
     await runtime.ensureStructuredAgentSessionHost()
-    store = readAgentSessionRecordStore()
+    store = getStructuredAgentSessionHost()?.deps.store ?? null
   } catch {
     store = null
   }
@@ -169,9 +150,9 @@ async function readSessionRecord(
       NO_EFFECTS
     )
   }
-  const found = lookupOrcaAgentSession(store, sessionId)
+  const found = lookupOrcaAgentSession(conversationRecordReader(store), sessionId)
   if (found.kind === 'found') {
-    return found.record
+    return store.requireWritableRecord(found.record.sessionId)
   }
   if (found.kind === 'provider-id') {
     throw new OrchestrationError(
@@ -187,23 +168,24 @@ async function readSessionRecord(
   )
 }
 
-function assertSessionCanAct(sessionId: string, record: AgentSessionRecord): void {
+function assertSessionCanAct(sessionId: string, record: AgentSessionRecord, method: string): void {
   if (!structuredWorkerHostScope(record.location)) {
     throw hostBoundary(
       `Agent session ${sessionId} runs on another host, and an Orca session ID identifies a caller only on the host that runs that session.`
     )
   }
-  if (agentSessionLeaseAdmitsWriter(record.lease)) {
+  const { lease } = record
+  if (
+    agentSessionLeaseAdmitsWriter(lease) ||
+    (agentSessionLeaseIsReleased(lease) && !NEEDS_RUNNING_AGENT.has(method))
+  ) {
     return
   }
-  const { lease } = record
-  const reason =
-    lease.claimStatus === 'released'
-      ? // Why not "ended": a released lease is evicted and wakeable; only a running process may act.
-        'is not running right now. A new message or user turn revives it; retry then.'
-      : lease.handoffStage !== null
-        ? 'is changing owners on this host. Retry when that finishes.'
-        : 'has no live owner on this host right now. Retry once it is running.'
+  const reason = agentSessionLeaseIsReleased(lease)
+    ? 'is not running right now. Its commands can still send; it reads its mail once new mail or a user turn wakes it.'
+    : lease.handoffStage !== null
+      ? 'is changing owners on this host. Retry when that finishes.'
+      : 'has no live owner on this host right now. Retry once it is running.'
   throw new OrchestrationError(
     CODES.notLive,
     `Agent session ${sessionId} ${reason} No effects were applied.`,
@@ -212,9 +194,12 @@ function assertSessionCanAct(sessionId: string, record: AgentSessionRecord): voi
 }
 
 /** A request with no session id that declares an `orca_session_id:` caller: a worker's is its handle. */
-function bindDeclaredSessionAddress(db: OrchestrationDb, request: RpcRequest): RpcRequest {
-  const name = ORCHESTRATION_CALLER_PARAM[request.method]
-  const declared = declaredSessionAddress(request)
+function bindDeclaredSessionAddress(
+  db: OrchestrationDb,
+  request: RpcRequest,
+  name: OrchestrationCallerField | undefined
+): RpcRequest {
+  const declared = declaredSessionAddress(request, name)
   const params: unknown = request.params
   if (!name || declared === undefined || !params || typeof params !== 'object') {
     return request
@@ -244,12 +229,11 @@ function declaredNamesCaller(
 
 /** The declared caller, if any, must name this session; it is then replaced by its address. */
 function bindDeclaredCaller(
-  method: string,
+  name: OrchestrationCallerField | undefined,
   params: unknown,
   caller: OrchestrationSessionCaller,
   db: OrchestrationDb
 ): unknown {
-  const name = ORCHESTRATION_CALLER_PARAM[method]
   if (!name || !params || typeof params !== 'object' || Array.isArray(params)) {
     return params
   }
@@ -258,7 +242,7 @@ function bindDeclaredCaller(
   if (declared !== undefined && !declaredNamesCaller(declared, caller, db)) {
     throw consumerFenced(caller, String(declared))
   }
-  // Why: check's restart fallback takes a pane key from the caller; a session has its own or none.
+  // Check restart fallback may use only the session's own pane key.
   if (values.terminalPaneKey !== undefined && values.terminalPaneKey !== caller.paneKey) {
     throw consumerFenced(caller, `pane ${String(values.terminalPaneKey)}`)
   }

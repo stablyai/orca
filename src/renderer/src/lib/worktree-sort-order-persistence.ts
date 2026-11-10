@@ -1,12 +1,11 @@
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
+import type { WorktreeRuntimeOwnerState } from './workspace/ownership/worktree-runtime-owner-state'
 import { splitWorktreeSortOrderByHost } from './worktree-sort-order-host-split'
 
 function ignoreSortOrderPersistenceFailure(promise: Promise<unknown>): void {
   void promise.catch(() => {
-    // Why: sort-order restore is best-effort; SSH disconnects during smart sort
-    // must not surface as unhandled rejections that pollute crash diagnostics.
+    // Best-effort sort persistence must not turn SSH disconnects into unhandled crash diagnostics.
   })
 }
 

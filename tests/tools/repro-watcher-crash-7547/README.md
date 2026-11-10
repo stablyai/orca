@@ -40,7 +40,7 @@ npx electron-vite build
 node tests/tools/repro-watcher-crash-7547/fixed-child.cjs 15000
 ```
 
-`fixed-child.cjs` esbuild-bundles the real `src/main/ipc/parcel-watcher-process.ts`
+`fixed-child.cjs` esbuild-bundles the real `src/main/ipc/filesystem/watcher-process/parcel-watcher-process.ts`
 client and runs the same `delete-root` + `unsub-churn` load through the forked
 `out/main/parcel-watcher-process-entry.js`. Expected output: contained watcher
 process crashes (counted, recovered by respawn+resubscribe, surfaced through

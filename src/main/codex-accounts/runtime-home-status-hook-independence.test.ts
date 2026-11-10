@@ -3,8 +3,8 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type * as NodeOs from 'node:os'
 import type * as CodexCommand from '../codex-cli/command'
-import type * as TrustDerivation from '../codex/codex-hook-trust-derivation'
-import type { CodexHookAnswer } from '../codex/codex-hook-trust-derivation'
+import type * as TrustDerivation from '../codex/trust/hooks/codex-hook-trust-derivation'
+import type { CodexHookAnswer } from '../codex/trust/hooks/codex-hook-trust-derivation'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
   createStore,
@@ -27,16 +27,14 @@ vi.mock('node:os', async (importOriginal) => ({
 }))
 vi.mock('../codex-cli/command', async (importOriginal) => ({
   ...(await importOriginal<typeof CodexCommand>()),
-  resolveCodexCommand: () => mocks.codexPath
+  resolveCodexCommand: () => mocks.codexPath,
+  resolveCodexCommandForSpawn: async () => mocks.codexPath
 }))
-vi.mock('../codex/codex-hook-trust-derivation', async (importOriginal) => ({
+vi.mock('../codex/trust/hooks/codex-hook-trust-derivation', async (importOriginal) => ({
   ...(await importOriginal<typeof TrustDerivation>()),
   probeCodexVersion: mocks.probeCodexVersion,
   deriveCodexHookHashes: mocks.deriveCodexHookHashes
 }))
-
-// Why this file (#13746): a status-hook problem costs only Orca's status. The
-// system default must keep launching on ~/.codex, so its own login is used.
 
 const hooksPath = (): string => join(getSystemCodexHomePath(), 'hooks.json')
 const tomlPath = (): string => join(getSystemCodexHomePath(), 'config.toml')
@@ -90,12 +88,14 @@ describe('a status-hook problem never moves the system default off ~/.codex', ()
       [hooksPath(), tomlPath()].map((path) => [path, readOptional(path)] as const)
     )
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const { startCodexHooks, _internals } = await import('../codex/codex-hook-reconcile')
-    const { readCurrentCodexHookStatus } = await import('../codex/codex-hook-status')
+    const { startCodexHooks, _internals } =
+      await import('../codex/hooks/reconciliation/codex-hook-reconcile')
+    const { readCurrentCodexHookStatus } =
+      await import('../codex/hooks/reconciliation/codex-hook-status')
     const store = createStore(createSettings({ realHomeRoutable: true }))
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the service reads only getSettings/updateSettings, which the harness store implements.
     const service = new CodexRuntimeHomeService(store as never)
-    // Wired as app start wires it, so the status reads the home launches get.
+
     startCodexHooks({
       pathReady: Promise.resolve(),
       isEnabled: () => true,
@@ -104,7 +104,7 @@ describe('a status-hook problem never moves the system default off ~/.codex', ()
     await _internals.settledForTesting()
 
     expect(service.isHostSystemDefaultRealHomeSelected()).toBe(true)
-    // The resolver headless serve and the PTY launch both use: null keeps CODEX_HOME unset.
+
     expect(service.resolveHostCodexHomePathForLaunchReadOnly()).toBeNull()
     await expect(service.prepareForCodexLaunchAsync()).resolves.toBeNull()
     const status = readCurrentCodexHookStatus()

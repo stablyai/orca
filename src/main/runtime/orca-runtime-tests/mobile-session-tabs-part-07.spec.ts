@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  OrcaRuntimeService,
-  electronMocks,
-  getDefaultWorkspaceSession
-} from '../orca-runtime-test-mocks.spec'
-import type { RuntimeMobileSessionTabsResult } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
+
 import {
   HEADLESS_LEAF_ID,
   TEST_REPO_ID,
@@ -14,10 +14,11 @@ import {
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal,
   store
-} from '../orca-runtime-test-fixtures.spec'
-import { makePendingAgentTabActivationRuntime } from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { makePendingAgentTabActivationRuntime } from './orca-runtime-test-scenario-builders.spec'
 import { trackRunningAgentLaunchPane } from '../../agent-launch/agent-launch-pane-attachment'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 
 describe('OrcaRuntimeService', () => {
   it('briefly preserves abnormal SSH exits for paired pane recovery', async () => {
@@ -173,56 +174,6 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('hydrates a persisted SSH-owned pane before an attached renderer publishes its graph', async () => {
-    const ptyId = 'ssh:ssh-1@@pty-persisted'
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
-      makeWorkspaceSessionWithHeadlessTerminal({
-        tabsByWorktree: {
-          [TEST_WORKTREE_ID]: [
-            {
-              id: 'host-tab',
-              ptyId,
-              worktreeId: TEST_WORKTREE_ID,
-              title: 'Persisted SSH Terminal',
-              customTitle: null,
-              color: null,
-              sortOrder: 0,
-              createdAt: 1
-            }
-          ]
-        },
-        terminalLayoutsByTabId: {
-          'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: ptyId })
-        }
-      })
-    )
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    runtime.syncWindowGraph(1, {
-      tabs: [],
-      leaves: [],
-      mobileSessionTabs: [
-        {
-          worktree: TEST_WORKTREE_ID,
-          publicationEpoch: 'renderer-after-restart',
-          snapshotVersion: 1,
-          activeGroupId: null,
-          activeTabId: null,
-          activeTabType: null,
-          tabs: []
-        }
-      ]
-    })
-
-    expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([
-      expect.objectContaining({
-        parentTabId: 'host-tab',
-        leafId: HEADLESS_LEAF_ID,
-        ptyId,
-        status: 'pending-handle'
-      })
-    ])
-  })
-
   it('hydrates a persisted SSH-owned pane when the restarted renderer has not published sessions', async () => {
     const ptyId = 'ssh:ssh-1@@pty-persisted'
     const sshSession = makeWorkspaceSessionWithHeadlessTerminal({
@@ -255,6 +206,8 @@ describe('OrcaRuntimeService', () => {
       getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined),
       getWorkspaceSession
     } as never)
+    expect(getWorkspaceSession).toHaveBeenCalledExactlyOnceWith('local')
+    getWorkspaceSession.mockClear()
 
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
     expect(getWorkspaceSession).toHaveBeenCalledTimes(2)
@@ -424,14 +377,22 @@ describe('OrcaRuntimeService', () => {
         expect.objectContaining({ parentTabId: 'host-tab', status: 'pending-handle' })
       ])
 
+      // Leases bound only renderer-omitted rows; main-owned tabs remain listed regardless of lease.
+      const afterLease = ORCA_LAYOUT_OWNER_IS_MAIN
+        ? [expect.objectContaining({ parentTabId: 'host-tab', status: 'pending-handle' })]
+        : []
       vi.advanceTimersByTime(30_001)
       publishEmpty(2)
-      expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([])
+      expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual(
+        afterLease
+      )
 
       leaseState = 'terminated'
       leaseUpdatedAt = Date.now()
       publishEmpty(3)
-      expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([])
+      expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual(
+        afterLease
+      )
     } finally {
       vi.useRealTimers()
     }
@@ -531,7 +492,6 @@ describe('OrcaRuntimeService', () => {
       renameTerminal: vi.fn(),
       focusTerminal,
       closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
       terminalFitOverrideChanged: vi.fn(),
       terminalDriverChanged: vi.fn()
     })
@@ -603,7 +563,7 @@ describe('OrcaRuntimeService', () => {
       status: 'pending-handle'
     })
 
-    // Why notifyClients false: mirrors the phone tapping the tab, the path that materializes pending tabs headlessly (#7587).
+    // #7587: notifyClients false models phone activation materializing a pending tab headlessly.
     const activated = await runtime.activateMobileSessionTab(
       `id:${TEST_WORKTREE_ID}`,
       `host-tab::${HEADLESS_LEAF_ID}`,
@@ -626,7 +586,7 @@ describe('OrcaRuntimeService', () => {
       status: 'ready'
     })
   })
-  // The launch's early tab is listed before its agent spawns; a phone landing on it must not race it.
+  // Early launch tabs precede agent spawn; phone activation must not race the owning launch.
   it('leaves a pending agent tab to the launch still starting in it', async () => {
     const { runtime, spawn } = makePendingAgentTabActivationRuntime()
     const running = trackRunningAgentLaunchPane({

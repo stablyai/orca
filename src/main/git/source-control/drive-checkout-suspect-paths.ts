@@ -1,16 +1,9 @@
 import * as path from 'node:path'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 
-/**
- * Files a minimal-checkStat status can miss on a Windows Git drive checkout.
- *
- * `core.checkStat=minimal` compares only mtime seconds and size, so a same-size
- * rewrite that keeps the old whole-second mtime (`cp -p`, `touch -r`) reads as
- * clean. The local watcher sees every such write; its paths get a default-stat
- * recheck on the next poll instead of the whole tree paying ~8 ms per file.
- */
+// Minimal checkStat can miss same-size writes preserving whole-second mtime; recheck watcher paths with default stat.
 
-// Why ~300: the default-stat recheck costs ~8 ms per file, so this bounds a poll's extra work to ~2.4 s.
+// At ~8ms per path, cap a poll's extra recheck cost near 2.4s.
 export const DRIVE_CHECKOUT_SUSPECT_LIMIT = 300
 
 export type SuspectDegradeReason =
@@ -35,12 +28,7 @@ function sameSegment(a: string, b: string, windows: boolean): boolean {
   return windows ? a.normalize('NFC').toLowerCase() === b.normalize('NFC').toLowerCase() : a === b
 }
 
-/**
- * Repo-relative POSIX path of a watcher event, or null when it is the repo
- * itself, outside it, or inside `.git`. Matches the root segment-wise so a
- * case or Unicode spelling difference never shifts the kept tail, which stays
- * exactly as the filesystem reported it.
- */
+/** Preserve the reported tail via segment matching; reject repo roots, outside paths and .git. */
 export function repoRelativeWatcherPath(repoPath: string, eventPath: string): string | null {
   const windows = isWindowsAbsolutePathLike(repoPath)
   const pathApi = windows ? path.win32 : path.posix
@@ -131,11 +119,7 @@ export class DriveCheckoutSuspectPaths {
     }
   }
 
-  /**
-   * Suspects (path → event sequence) for this poll, or null when it stays
-   * minimal-only. `currentRoot` is the live watcher covering the repo now;
-   * confirmed-dirty paths are rechecked even without one.
-   */
+  /** Snapshot suspects by event sequence; confirmed-dirty paths remain eligible without a live watcher. */
   beginPoll(currentRoot: SuspectWatchRoot | null): Map<string, number> | null {
     if (currentRoot === null) {
       if (this.boundRoot !== null || this.lastDegradeReason !== 'no-watcher') {

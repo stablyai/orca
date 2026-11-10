@@ -1,5 +1,19 @@
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
+
+type TabStartupCommand = TerminalSlice['pendingStartupByTabId'][string]
+
+export function normalizeTabStartupCommand(startup: TabStartupCommand): TabStartupCommand {
+  // Why: launchToken is only meaningful for tracked launch-config reuse; plain startup commands must not mint a synthetic token.
+  const launchToken = startup.launchConfig
+    ? (startup.launchToken ?? createBrowserUuid())
+    : undefined
+  return {
+    ...startup,
+    ...(launchToken ? { launchToken } : {})
+  }
+}
 
 export function createTerminalStartupQueueActions(
   set: TerminalStoreSet,
@@ -17,18 +31,9 @@ export function createTerminalStartupQueueActions(
 > {
   return {
     queueTabStartupCommand: (tabId, startup) => {
-      // Why: launchToken is only meaningful for tracked launch-config reuse; plain startup commands must not mint a synthetic token.
-      const launchToken = startup.launchConfig
-        ? (startup.launchToken ?? createBrowserUuid())
-        : undefined
+      const normalized = normalizeTabStartupCommand(startup)
       set((s) => ({
-        pendingStartupByTabId: {
-          ...s.pendingStartupByTabId,
-          [tabId]: {
-            ...startup,
-            ...(launchToken ? { launchToken } : {})
-          }
-        }
+        pendingStartupByTabId: replaceRecordEntries(s.pendingStartupByTabId, [[tabId, normalized]])
       }))
     },
     queueTabInitialCwd: (tabId, cwd) => {
@@ -62,9 +67,11 @@ export function createTerminalStartupQueueActions(
         if (s.pendingStartupByTabId[tabId] !== pending) {
           return s
         }
-        const next = { ...s.pendingStartupByTabId }
-        delete next[tabId]
-        return { pendingStartupByTabId: next }
+        return {
+          pendingStartupByTabId: replaceRecordEntries<TabStartupCommand>(s.pendingStartupByTabId, [
+            [tabId, null]
+          ])
+        }
       })
       return pending
     },

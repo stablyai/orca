@@ -1,23 +1,19 @@
-import type { PendingSessionSelection } from '../../../session/pending-session-selection'
+import type * as UseMobileSessionTerminalCreateActionsModule from '../../../terminal/session/use-mobile-session-terminal-create-actions'
+import type { PendingSessionSelection } from '../../../session/tabs/pending-session-selection'
 import { hookMount } from '../hook-mount'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 import type {
   MobileSessionTab,
-  MobileSessionTabType,
-  Terminal
-} from '../../../session/mobile-session-route-types'
-import type { TuiAgent } from '../../../../../src/shared/tui-agent'
+  MobileSessionTabType
+} from '../../../session/tabs/mobile-session-tabs'
+import type { Terminal } from '../../../terminal/session/mobile-terminal-model'
+import type { TuiAgent } from '../../../../../src/shared/agent-launch/catalog/tui-agent'
 import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../src/shared/protocol-version'
 
 const PREVIOUS_HANDLE = 'terminal-0'
 
-/**
- * The agents a scenario may name. `satisfies` keeps the list a subset of the real union, so a
- * scenario naming an agent the product does not have fails here instead of reaching the wire as an
- * unchecked string.
- */
 const DECLARABLE_AGENTS = ['claude', 'codex'] as const satisfies readonly TuiAgent[]
 
 function declaredAgent(value: unknown): TuiAgent | undefined {
@@ -31,32 +27,9 @@ function declaredAgent(value: unknown): TuiAgent | undefined {
   return agent
 }
 
-/**
- * The New Tab terminal create, and the optional prompt it drops into the terminal it made.
- *
- * No WebView ref reaches this hook either: `subscribeToTerminal` and `unsubscribeTerminal` are scope
- * callbacks, so they record as effects and the create path runs end to end without a device. The
- * unsubscribe is the one worth naming — replacing an active handle has to release the old stream or
- * the host never restores its desktop dimensions — and an effect is exactly the observation that the
- * hook chose it.
- *
- * Every member this family puts on the wire comes from the scenario: the worktree, the tab the new
- * one is inserted after, the four launch options a quick command fills, and the device token the
- * prompt send carries. An argument the scenario leaves out is a cell the hook sees empty, which is
- * what lets a golden hold an omission — `afterTabId` is absent on a fresh session and after the
- * last tab closes, and no adapter constant may decide that.
- *
- * The worktree and the active tab are read as the hook renders, so the scenario declares them on
- * the `mount` step rather than on the create that sends them; the launch options are call
- * arguments and are declared where they are passed.
- *
- * `clientMutationId` mixes `Date.now()` and `Math.random()`, both pinned by `start()` in
- * `vitest-recording-scheduler.ts`, which also pays React's one lazy `Math.random()` draw before it
- * installs the seed, so this create reads the same seeded value cold or warm.
- *
- * State is the tab and terminal lists the hook publishes, the active handle and tab, and the create
- * error, because those are what a refused or unreadable create leaves on the screen.
- */
+// Record unsubscribe choice to catch leaked desktop dimensions; no device subscription runs here.
+// Scenario inputs own wire values and omissions: worktree/tab on mount, launch options on create.
+// The scheduler pins time/randomness and primes React so mutation ids stay deterministic.
 const AGENT_LAUNCH_HOST_CAPABILITIES = [
   'agent.launch.v2',
   'agent.launch.replay.v1',
@@ -68,12 +41,10 @@ export function sessionTerminalCreateMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'session.create-terminal': ({ client, effect }) => {
-      const useCreateActions = modules.load<
-        typeof import('../../../session/use-mobile-session-terminal-create-actions')
-      >(
-        'mobile/src/session/use-mobile-session-terminal-create-actions.ts'
+      const useCreateActions = modules.load<typeof UseMobileSessionTerminalCreateActionsModule>(
+        'mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts'
       ).useMobileSessionTerminalCreateActions
-      modules.load('mobile/src/session/mobile-session-terminal-create-request.ts')
+      modules.load('mobile/src/terminal/session/mobile-session-terminal-create-request.ts')
 
       let terminals: Terminal[] = []
       let sessionTabs: MobileSessionTab[] = []
@@ -93,6 +64,7 @@ export function sessionTerminalCreateMountAdapters(
       const creatingTerminalRef: { current: string | null } = { current: null }
       const initializedHandlesRef = { current: new Set([PREVIOUS_HANDLE]) }
       const deviceTokenRef: { current: string | null } = { current: null }
+      const delayedActionTimers = new Set<ReturnType<typeof setTimeout>>()
 
       let actions: ReturnType<typeof useCreateActions> | undefined
       const hook = hookMount(() => {
@@ -109,8 +81,6 @@ export function sessionTerminalCreateMountAdapters(
             setSessionTabs: (update) => {
               sessionTabs = typeof update === 'function' ? update(sessionTabs) : update
             },
-            defaultTerminalHandlesToLiveInput: (handles: readonly string[]) =>
-              effect('default-live-input', { handles: [...handles] }),
             setActiveHandle: (update) => {
               activeHandle = typeof update === 'function' ? update(activeHandle) : update
             },
@@ -136,16 +106,18 @@ export function sessionTerminalCreateMountAdapters(
             pendingSelectionRef,
             scheduleDelayedAction: (fn: () => void, ms: number) => {
               effect('schedule-delayed-action', { delayMs: ms })
-              setTimeout(fn, ms)
+              delayedActionTimers.add(setTimeout(fn, ms))
             },
             showToast: (message: string, durationMs?: number) =>
               effect('toast', { message, durationMs: durationMs ?? null }),
             unsubscribeTerminal: (handle: string) => {
-              // The real unsubscribe drops the handle's drawn-snapshot mark with its stream.
               initializedHandlesRef.current.delete(handle)
               effect('unsubscribe-terminal', { handle })
             },
-            subscribeToTerminal: (handle: string) => effect('subscribe-terminal', { handle }),
+            subscribeToTerminal: (handle: string) => {
+              effect('subscribe-terminal', { handle })
+              return true
+            },
             fetchSessionTabs: async () => {
               effect('fetch-session-tabs', {})
             }
@@ -156,7 +128,6 @@ export function sessionTerminalCreateMountAdapters(
       return {
         action(name, args) {
           if (name === 'mount') {
-            // Declared by the scenario, never by this stub, because each of these reaches the wire.
             worktreeId = String(args.worktreeId)
             activeSessionTabId =
               typeof args.activeSessionTabId === 'string' ? args.activeSessionTabId : null
@@ -165,7 +136,6 @@ export function sessionTerminalCreateMountAdapters(
               ...(args.supportsSplitGroupPlacement === false
                 ? []
                 : [SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY]),
-              // A host new enough to route the launch itself.
               ...(args.agentLaunch === true ? AGENT_LAUNCH_HOST_CAPABILITIES : [])
             ]
             deviceTokenRef.current = typeof args.deviceToken === 'string' ? args.deviceToken : null
@@ -181,8 +151,7 @@ export function sessionTerminalCreateMountAdapters(
           ) {
             throw new Error(`Unknown startup delivery: ${String(args.startupCommandDelivery)}`)
           }
-          // A launch the scenario left empty is no launch at all: the bare New Tab create passes no
-          // options, and that is the arm the structured-provider branch reads.
+          // Preserve omitted launch options so bare New Tab reaches the structured-provider branch.
           const options = {
             ...(args.initialPrompt === undefined
               ? {}
@@ -212,7 +181,28 @@ export function sessionTerminalCreateMountAdapters(
           pendingSelection: pendingSelectionRef.current,
           initializedHandles: [...initializedHandlesRef.current].sort()
         }),
-        dispose: hook.unmount
+        dispose() {
+          const errors: unknown[] = []
+          try {
+            hook.unmount()
+          } catch (error) {
+            errors.push(error)
+          }
+          for (const timer of delayedActionTimers) {
+            try {
+              clearTimeout(timer)
+            } catch (error) {
+              errors.push(error)
+            }
+          }
+          delayedActionTimers.clear()
+          if (errors.length === 1) {
+            throw errors[0]
+          }
+          if (errors.length) {
+            throw new AggregateError(errors, 'Terminal fixture cleanup failed')
+          }
+        }
       }
     }
   }

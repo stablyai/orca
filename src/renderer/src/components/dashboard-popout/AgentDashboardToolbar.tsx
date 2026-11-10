@@ -10,9 +10,9 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
-import { getWorkspaceStatusVisualMeta } from '../sidebar/workspace-status'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
+import { getWorkspaceStatusVisualMeta } from '../sidebar/workspace-status/presentation/workspace-status'
 import type { DashboardCard, DashboardFilterOptions } from '../../../../shared/dashboard-snapshot'
 import {
   activeDashboardFilterCount,
@@ -40,8 +40,7 @@ type AgentDashboardToolbarProps = {
   filters: DashboardFilters
   onFiltersChange: (filters: DashboardFilters) => void
   searchInputRef: React.RefObject<HTMLInputElement | null>
-  /** Replaces the built-in dropdown. The map needs a popover: its panel holds
-   *  range sliders, and a Radix menu swallows the arrow keys those need. */
+  /** Use a popover for range sliders; Radix menus consume their arrow keys. */
   filterControl?: React.ReactNode
 }
 
@@ -56,6 +55,7 @@ export function AgentDashboardToolbar({
   searchInputRef,
   filterControl
 }: AgentDashboardToolbarProps): React.JSX.Element {
+  const t = useTranslate()
   const isMac = navigator.userAgent.includes('Mac')
   const projects = projectOptions(cards, filterOptions?.projects)
   const statuses = workspaceStatusOptions(cards, filterOptions?.workspaceStatuses)
@@ -77,7 +77,7 @@ export function AgentDashboardToolbar({
     onFiltersChange({ projects: [], workspaceStatuses: [], reviewStates: [] })
   }
   const reviewLabel = (id: DashboardReviewFilter): string =>
-    translate('dashboardPopout.filters.reviewChip', 'Review: {{state}}', {
+    t('dashboardPopout.filters.reviewChip', 'Review: {{state}}', {
       state: reviewStateLabel(id)
     })
 
@@ -90,11 +90,11 @@ export function AgentDashboardToolbar({
             ref={searchInputRef}
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
-            placeholder={translate(
+            placeholder={t(
               'dashboardPopout.search.placeholder',
               'Search worktree, project, or agent…'
             )}
-            aria-label={translate('dashboardPopout.search.label', 'Search agents')}
+            aria-label={t('dashboardPopout.search.label', 'Search agents')}
             className="h-7 bg-muted/55 pr-16 pl-7 text-xs"
           />
           {query ? (
@@ -102,7 +102,7 @@ export function AgentDashboardToolbar({
               variant="ghost"
               size="icon-xs"
               onClick={() => onQueryChange('')}
-              aria-label={translate('dashboardPopout.search.clear', 'Clear search')}
+              aria-label={t('dashboardPopout.search.clear', 'Clear search')}
               className="absolute top-1/2 right-0.5 -translate-y-1/2 text-muted-foreground"
             >
               <X className="size-3" />
@@ -118,7 +118,7 @@ export function AgentDashboardToolbar({
         </div>
         {!filterControl && (query || activeCount > 0) ? (
           <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
-            {translate('dashboardPopout.search.results', '{{shown}} of {{total}} shown', {
+            {t('dashboardPopout.search.results', '{{shown}} of {{total}} shown', {
               shown: filteredCount,
               total: cards.length
             })}
@@ -136,7 +136,7 @@ export function AgentDashboardToolbar({
                 )}
               >
                 <Filter className="size-3" />
-                {translate('dashboardPopout.filters.label', 'Filter')}
+                {t('dashboardPopout.filters.label', 'Filter')}
                 {activeCount > 0 ? (
                   <span className="rounded-full bg-foreground px-1.5 py-px text-[10px] leading-none text-background">
                     {activeCount}
@@ -147,7 +147,7 @@ export function AgentDashboardToolbar({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-64" sideOffset={6}>
               <DropdownMenuLabel>
-                {translate('dashboardPopout.filters.project', 'Project')}
+                {t('dashboardPopout.filters.project', 'Project')}
               </DropdownMenuLabel>
               {projects.map((option) => (
                 <DropdownMenuCheckboxItem
@@ -162,14 +162,17 @@ export function AgentDashboardToolbar({
               ))}
               <DropdownMenuSeparator />
               <DropdownMenuLabel>
-                {translate('dashboardPopout.filters.workspaceStatus', 'Workspace status')}
+                {t('dashboardPopout.filters.workspaceStatus', 'Workspace status')}
               </DropdownMenuLabel>
               {statuses.map((option) => {
-                const meta = getWorkspaceStatusVisualMeta({
-                  id: option.id,
-                  label: option.label,
-                  color: option.color
-                })
+                const meta = getWorkspaceStatusVisualMeta(
+                  {
+                    id: option.id,
+                    label: option.label,
+                    color: option.color
+                  },
+                  t
+                )
                 return (
                   <DropdownMenuCheckboxItem
                     key={option.id}
@@ -185,7 +188,7 @@ export function AgentDashboardToolbar({
               })}
               <DropdownMenuSeparator />
               <DropdownMenuLabel>
-                {translate('dashboardPopout.filters.reviewStatus', 'PR / MR status')}
+                {t('dashboardPopout.filters.reviewStatus', 'PR / MR status')}
               </DropdownMenuLabel>
               {REVIEW_OPTIONS.map((option) => (
                 <DropdownMenuCheckboxItem
@@ -194,7 +197,7 @@ export function AgentDashboardToolbar({
                   onCheckedChange={() => toggleReview(option)}
                   onSelect={(event) => event.preventDefault()}
                 >
-                  <span>{reviewStateLabel(option)}</span>
+                  <span>{reviewStateLabel(option, t)}</span>
                   <FilterOptionCount count={reviewCounts.get(option) ?? 0} />
                 </DropdownMenuCheckboxItem>
               ))}
@@ -205,7 +208,7 @@ export function AgentDashboardToolbar({
                 className="text-muted-foreground"
               >
                 <X className="size-3.5" />
-                {translate('dashboardPopout.filters.clearAll', 'Clear all filters')}
+                {t('dashboardPopout.filters.clearAll', 'Clear all filters')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

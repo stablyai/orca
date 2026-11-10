@@ -1,20 +1,19 @@
 import {
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
   type EditorPathMutationTarget
-} from '../../editor-autosave'
+} from '../../autosave/editor-autosave'
 import { forgetCombinedDiffViewsShowingPath } from './combined-diff-view-cache'
 
-// Why: session-scoped toolbar choices outlive the unmount, so they are module state rather than component state.
+// Module state retains toolbar choices across viewer unmounts within this session.
 export const combinedDiffViewPreferences: {
   collapsed: boolean | null
-  sideBySide: boolean | null
   fileTreeCollapsed: boolean | null
-} = { collapsed: null, sideBySide: null, fileTreeCollapsed: null }
+} = { collapsed: null, fileTreeCollapsed: null }
 
 function handleCombinedDiffExternalFileChange(event: Event): void {
   const detail = (event as CustomEvent<EditorPathMutationTarget>).detail
   if (detail?.relativePath) {
-    // Why: inactive combined-diff tabs are unmounted, so only a module-level cache bust stops a remount replaying stale bodies.
+    // Inactive tabs are unmounted; invalidate their cached bodies before a remount can replay stale content.
     forgetCombinedDiffViewsShowingPath(detail.relativePath)
   }
 }
@@ -36,7 +35,6 @@ if (typeof window !== 'undefined') {
 }
 
 if (import.meta !== undefined && import.meta.hot) {
-  // Vite can replace this module without a full renderer reload. Remove the
-  // global cache-bust listener so dev sessions do not accumulate handlers.
+  // Remove global listeners on HMR disposal so dev sessions cannot accumulate handlers.
   import.meta.hot.dispose(disposeCombinedDiffViewMemory)
 }

@@ -1,10 +1,10 @@
-import { persistFreshPaneBinding } from '../runtime/spawn-commit'
+import { persistFreshPaneBinding } from './fresh-pane-binding'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../../persistence/restoring-sessions/workspace-session-write-rollback'
 import { cloneWorkspaceSessionState } from '../../../persistence/restoring-sessions/session-owner-fields'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
-import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import type { Store } from '../../../persistence'
-import { retireTerminalSurfaceFromPersistence } from '../../../runtime/mobile-session-terminal-persistence-retirement'
+import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { Store } from '../../../persistence/loading-store/store'
+import { retireTerminalSurfaceFromPersistence } from '../../../runtime/terminal/surface/mobile-session-terminal-persistence-retirement'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type {
   IPtyProvider,
@@ -178,6 +178,8 @@ export type StablePaneSpawnContext = {
   onOwnerReresolved?: (owner: StablePaneOwner) => void
   /** Only a spawn holding the pane's reservation: it binds next, so its bind swaps the dead id. */
   keepAbsentBinding?: (dead: ReplacedPaneOwner) => void
+  /** Layout-owner build: a window's view, which attaches or starts nothing (attach-only-view.ts). */
+  attachOnlyView?: true
 }
 
 export function stablePanePersistenceFence(

@@ -1,15 +1,15 @@
 import { toast } from 'sonner'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
-import type { WorkspaceSpaceChange } from '../../../../shared/workspace-space-change'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
+import type { WorkspaceSpaceChange } from '../../../../shared/workspace-disk-space/workspace-space-change'
 import { useAppStore } from '@/store'
-import { getWorktreeOnHostFromState } from '@/store/selectors'
-import { repoMatchesHostIdentity } from '@/store/slices/repo-host-identity'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
-import { openWorkspaceFile } from '@/lib/workspace-file-open'
+import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktree-on-host-selector'
+import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { getRuntimeGitStatus } from '@/runtime/source-control/git/runtime-git-status-client'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
+import { openUncommittedEntry } from '../right-sidebar/source-control/listing/open-uncommitted-entry'
 import { translate } from '@/i18n/i18n'
 
 export function openWorkspaceSpaceChange(
@@ -77,16 +77,9 @@ export async function revealWorkspaceSpaceChange(
     if (activated === false) {
       return
     }
-    openWorkspaceFile({
-      kind: 'uncommitted',
-      intent: 'diff',
-      worktreeId,
-      worktreePath: worktree.path,
-      entry,
-      options: {
-        preview: true,
-        runtimeEnvironmentId: target.kind === 'environment' ? target.environmentId : null
-      }
+    openUncommittedEntry(useAppStore.getState(), worktreeId, worktree.path, entry, {
+      preview: true,
+      runtimeEnvironmentId: target.kind === 'environment' ? target.environmentId : null
     })
   } catch (error) {
     toast.error(translate('workspaceSpace.changes.openFailed', 'Could not open changes'), {

@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import { getMobileWorkspaceLineageGroupKey } from '../worktree/mobile-workspace-lineage'
 import {
   applyDesktopViewSettings,
@@ -9,7 +9,6 @@ import {
   type MobileViewState,
   type WorkspaceViewSettings
 } from '../worktree/workspace-view-settings'
-import type { Worktree } from '../worktree/workspace-list-sections'
 import {
   changedWorkspaceRowFilters,
   NO_WORKSPACE_ROW_FILTERS
@@ -19,7 +18,7 @@ import {
   hostViewSettingsRead,
   hostViewSettingsWrite
 } from './host-screen-operations'
-import { hostListSettingsRead } from '../transport/settings-read-operations'
+import { hostListSettingsRead } from './host-list-settings-operations'
 import type {
   AgentActivityDisplayMode,
   ProjectOrderBy,
@@ -32,7 +31,7 @@ import {
   useSwitchedHostPendingViewChanges,
   type PendingViewStatus
 } from './use-host-pending-view-changes'
-import type { FilterState } from '../worktree/workspace-list-types'
+import type { FilterState, WorkspaceListItem } from '../worktree/workspace-list-types'
 
 const REFUSED_NOTE = 'The desktop did not take that change.'
 const NOTHING_PENDING: PendingViewStatus = { pending: [], stale: false }
@@ -43,20 +42,21 @@ export function useHostViewSettings(args: {
   state: HostScreenState
 }) {
   const { client, connState, state } = args
-  const { clientRef, setActionError, setShowPinnedInGroups, setView, viewRef } = state
+  const { clientRef, setActionError, setShowPinnedInGroups, setView, viewRef, rememberView } = state
 
   const localEditsRef = useRef(0)
-  // Null unless the page lists from the feed: the changes the desktop has not answered.
   const pendingViewChanges = useSwitchedHostPendingViewChanges(client)
   const pendingChanges = pendingViewChanges?.controls ?? null
 
-  // The one writer of the view: the ref is its synchronous mirror for edits made before a render.
-  const applyViewState = useCallback((next: MobileViewState) => {
-    viewRef.current = next
-    setView(next)
-  }, [])
+  const applyViewState = useCallback(
+    (next: MobileViewState) => {
+      viewRef.current = next
+      setView(next)
+      rememberView(next)
+    },
+    [rememberView]
+  )
 
-  // Merge the desktop's shared view settings (PersistedUIState) onto local state so desktop changes appear here.
   const syncViewSettingsFromDesktop = useCallback(
     async (options: { resend?: boolean } = {}) => {
       if (!client || connState !== 'connected') {
@@ -66,7 +66,6 @@ export function useHostViewSettings(args: {
       const editsAtRequest = localEditsRef.current
       const opsAtRequest = pendingChanges?.lastOpId() ?? 0
       try {
-        // Each half applies on its own, so one failing read does not hold back the other.
         const [uiReply, settingsReply] = await Promise.all([
           hostViewSettingsRead.request(requestClient).catch(() => null),
           hostListSettingsRead.request(requestClient).catch(() => null)
@@ -119,7 +118,6 @@ export function useHostViewSettings(args: {
     void syncViewSettingsFromDesktop()
   }, [setActionError, syncViewSettingsFromDesktop])
 
-  // Apply the change locally, then patch the desktop's shared store (ui.set) so both apps stay in sync.
   const persistViewSettings = useCallback(
     (patch: MobileViewPatch, options: { cardLayoutPreset?: boolean } = {}) => {
       localEditsRef.current += 1
@@ -133,9 +131,7 @@ export function useHostViewSettings(args: {
       if (!client) {
         return
       }
-      // Send only the touched fields: the host merges partial updates, so a stale
-      // mirror can no longer revert sibling settings another client just changed
-      // (STA-5781; supersedes the #8873 whole-payload special case).
+      // Patch only touched fields so a stale mirror cannot revert another client’s sibling edits (STA-5781).
       const payload: WorkspaceViewSettings = buildWorkspaceViewSettingsUpdate(patch, next, options)
       if (Object.keys(payload).length === 0) {
         return
@@ -146,9 +142,7 @@ export function useHostViewSettings(args: {
           .then((outcome) => outcome === 'refused' && refused())
         return
       }
-      void hostViewSettingsWrite.request(client, payload).catch(() => {
-        // Best-effort: view settings are a convenience preference.
-      })
+      void hostViewSettingsWrite.request(client, payload).catch(() => {})
     },
     [client, applyViewState, pendingChanges, refused]
   )
@@ -215,8 +209,7 @@ export function useHostViewSettings(args: {
     [persistViewSettings]
   )
 
-  // Why both halves: a layout is a preset, so the desktop also resets the shown properties.
-  // Why the setting first: a host that refuses it must not be left with the other layout's preset.
+  // Layout presets also reset shown properties; write settings first so refusal cannot leave the other layout’s preset.
   const setCardLayout = useCallback(
     (layout: 'detailed' | 'compact') => {
       if (!client) {
@@ -269,8 +262,8 @@ export function useHostViewSettings(args: {
     [client, applyViewState, persistViewSettings, pendingChanges, refused]
   )
   const toggleWorktreeLineage = useCallback(
-    (item: Worktree) =>
-      toggleCollapsed(item.lineageGroupKey ?? getMobileWorkspaceLineageGroupKey(item)),
+    ({ row, view }: WorkspaceListItem) =>
+      toggleCollapsed(view.lineageGroupKey ?? getMobileWorkspaceLineageGroupKey(row)),
     [toggleCollapsed]
   )
 

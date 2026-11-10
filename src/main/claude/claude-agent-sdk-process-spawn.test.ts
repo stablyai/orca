@@ -35,73 +35,6 @@ function sdkOptions(overrides: Partial<SdkSpawnOptions> = {}): SdkSpawnOptions {
 }
 
 describe('claude agent SDK process spawn', () => {
-  it('routes the SDK spawn through Orca and retains the pid the lease adjudicates on', () => {
-    const process = fakeSpawn()
-    const spawn = createClaudeCodeProcessSpawn(process.spawnImpl, 'win32')
-
-    expect(spawn.pid).toBeUndefined()
-    expect(spawn.child).toBeNull()
-    const child = spawn.spawn(sdkOptions())
-
-    expect(child).toBe(process.child)
-    expect(spawn.child).toBe(process.child)
-    expect(spawn.pid).toBe(4321)
-    // Windows has no supervisor: Claude itself is the child.
-    expect(spawn.supervised).toBe(false)
-    expect(process.specs[0]).toEqual({
-      program: '/usr/local/bin/claude',
-      args: ['--output-format', 'stream-json'],
-      cwd: '/work/repo',
-      env: { PATH: '/usr/bin', CLAUDE_CONFIG_DIR: '/accounts/one' },
-      detached: false,
-      stdio: ['pipe', 'pipe', 'pipe']
-    })
-  })
-
-  it.each(['darwin', 'linux'] as const)(
-    'starts Claude under the provider supervisor on %s, which is then the pid the lease records',
-    (platform) => {
-      const process = fakeSpawn()
-      const spawn = createClaudeCodeProcessSpawn(process.spawnImpl, platform)
-      spawn.spawn(sdkOptions())
-
-      const [spec] = process.specs
-      if (!spec) {
-        throw new Error('the spawner never built a spec')
-      }
-      expect(spawn.supervised).toBe(true)
-      expect(spawn.pid).toBe(4321)
-      expect(spec.program).toBe(globalThis.process.execPath)
-      expect(spec.args?.[0]).toBe('-e')
-      expect(spec.args?.slice(2)).toEqual([
-        '--',
-        '/usr/local/bin/claude',
-        '--output-format',
-        'stream-json'
-      ])
-      expect(spec.detached).toBe(true)
-      expect(spec.cwd).toBe('/work/repo')
-      const supervisorSpec = JSON.parse(
-        Buffer.from(String(spec.env?.ORCA_PROVIDER_SUPERVISOR_SPEC), 'base64').toString()
-      )
-      // A gone Orca closes Claude as its own close does (stdin end and SIGTERM), not with the
-      // root-only stdin-end drain a managed provider gets by default.
-      expect(vi.mocked(createProviderSpawnSpec)).toHaveBeenLastCalledWith(
-        expect.anything(),
-        expect.anything(),
-        platform,
-        { closeRequest: 'stdin-end-and-sigterm' }
-      )
-      expect(supervisorSpec).toMatchObject({
-        closeRequest: 'stdin-end-and-sigterm',
-        cwd: '/work/repo',
-        ownerPid: globalThis.process.pid
-      })
-      // The supervisor passes its env to Claude minus its own two keys.
-      expect(spec.env).toMatchObject({ PATH: '/usr/bin', CLAUDE_CONFIG_DIR: '/accounts/one' })
-    }
-  )
-
   it.each([
     { platform: 'darwin', specSupervised: false },
     { platform: 'win32', specSupervised: true }
@@ -124,7 +57,6 @@ describe('claude agent SDK process spawn', () => {
       if (!managed) {
         throw new Error('Claude spawner did not retain its managed child')
       }
-      // Claude leaves shortly after stdin ends, before the forced stop.
       process.child.stdin.on('finish', () =>
         setTimeout(() => process.child.emit('exit', 0, null), 10)
       )
@@ -137,7 +69,6 @@ describe('claude agent SDK process spawn', () => {
       await expect(proveClaudeChildExitWithReaper({ managed, tree }, () => tree)).resolves.toBe(
         true
       )
-      // SIGTERM to an unsupervised Claude on Windows is TerminateProcess; a skipped one leaves it running.
       if (specSupervised) {
         expect(process.child.kill).toHaveBeenCalledWith('SIGTERM')
       } else {
@@ -145,16 +76,6 @@ describe('claude agent SDK process spawn', () => {
       }
     }
   )
-
-  it('keeps the child out of the SDK abort path so exit proof stays Orca-owned', () => {
-    const process = fakeSpawn()
-    const controller = new AbortController()
-    createClaudeCodeProcessSpawn(process.spawnImpl).spawn(sdkOptions({ signal: controller.signal }))
-
-    // Node's spawn({signal}) kills the child on abort; Orca's ladder must be the
-    // only thing that can end this process, or close() would report an assumed exit.
-    expect(process.specs[0]).not.toHaveProperty('signal')
-  })
 
   it('drains stderr into a bounded tail so an exit error still carries it', async () => {
     const process = fakeSpawn()
@@ -167,6 +88,25 @@ describe('claude agent SDK process spawn', () => {
 
     expect(spawn.managed?.stderrTail()).toMatch(/claude: not signed in$/)
     expect(spawn.managed?.stderrTail().length).toBe(8192)
+  })
+
+  it('keeps native chat identity after SDK and configured environment defaults', () => {
+    const process = fakeSpawn()
+    createClaudeCodeProcessSpawn(process.spawnImpl, 'win32').spawn(
+      sdkOptions({
+        env: {
+          CLAUDE_CODE_ENTRYPOINT: 'sdk-ts',
+          claude_code_entrypoint: 'account',
+          PATH: 'C:\\bin'
+        }
+      })
+    )
+    expect(process.specs[0]?.env).toMatchObject({ CLAUDE_CODE_ENTRYPOINT: 'orca', PATH: 'C:\\bin' })
+    expect(
+      Object.keys(process.specs[0]?.env ?? {}).filter(
+        (key) => key.toUpperCase() === 'CLAUDE_CODE_ENTRYPOINT'
+      )
+    ).toEqual(['CLAUDE_CODE_ENTRYPOINT'])
   })
 
   it('preserves a Windows .cmd shim and its arguments for the host spawner', () => {

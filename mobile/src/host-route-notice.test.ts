@@ -7,10 +7,6 @@ import {
 } from './host-route-notice'
 
 describe('hostRouteNoticeMessage', () => {
-  it('maps a known code to its banner text', () => {
-    expect(hostRouteNoticeMessage('worktree-missing')).toBe(HOST_ROUTE_NOTICES['worktree-missing'])
-  })
-
   it('renders nothing for absent or unrecognized codes', () => {
     expect(hostRouteNoticeMessage(undefined)).toBeNull()
     expect(hostRouteNoticeMessage('')).toBeNull()

@@ -1,12 +1,11 @@
-/** The locked, journaled half of `rollbackOrcad`. */
 import { orcadRemoteBaseDir } from '../install/orcad-remote-windows-node'
 import { randomUUID } from 'node:crypto'
 import type { OrcadRollbackOptions, OrcadRollbackResult } from '../install/orcad-remote-rollback'
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
 import { withRolledBackVersion } from '../activation/orcad-activation-record'
 import { writeOrcadActivationRecord } from '../activation/orcad-activation-record-store'
-import { launchAndJudgeOrcadSlot } from '../../ssh/orcad-candidate-launch-verdict'
-import { assessOrcadRollback } from '../../ssh/orcad-update-plan'
+import { launchAndJudgeOrcadSlot } from '../activation/orcad-candidate-launch-verdict'
+import { assessOrcadRollback } from './orcad-rollback-safety'
 import { ORCAD_LOG_FILENAME } from '../install/orcad-remote-host-support'
 import {
   captureOrcadStateSnapshotCommand,
@@ -21,7 +20,7 @@ import {
   newestStateMtimeCommand,
   parseNewestStateMtimeSeconds
 } from '../host-state/orcad-state-newest-mtime'
-import { joinRemotePath } from '../../ssh/ssh-remote-platform'
+import { joinRemotePath } from '../../ssh/remote-host/ssh-remote-platform'
 import type { OrcadActivationLockControl } from '../activation/orcad-activation-lock'
 import {
   rollbackStartingState,
@@ -34,19 +33,19 @@ import {
 } from '../activation/orcad-activation-transaction-transitions'
 import { writeOrcadActivationTransaction } from '../activation/orcad-activation-transaction-store'
 import { ROLLBACK_STALE_COUNT, rollbackRecountRefusal } from './orcad-rollback-admission'
-import { runFencedStop } from '../../ssh/orcad-fenced-stop'
+import { runFencedStop } from '../activation/orcad-fenced-stop'
 import { execOrcadRemoteOr, withoutAbortSignal } from '../install/orcad-remote-runtime-control'
 import { execOrcadStateMutationOr } from '../host-state/orcad-state-mutation-exec'
 import {
   orcadSlotDir,
   resolveOrcadSlotIdentity,
   type OrcadSlotIdentity
-} from '../../ssh/orcad-recovery-slot'
-import { orcadSnapshotPath } from '../../ssh/orcad-incumbent-recovery'
+} from '../activation/orcad-recovery-slot'
+import { orcadSnapshotPath } from '../activation/orcad-incumbent-recovery'
 import {
   putTransactionIncumbentBack,
   restoreAfterRejectedCandidate
-} from '../../ssh/orcad-transaction-incumbent'
+} from '../activation/orcad-transaction-incumbent'
 import {
   readOrcadRollbackBarrierTarget,
   rollbackBarrierRefusal,
@@ -145,16 +144,16 @@ export async function rollbackOrcadLocked(
     stale: () => ROLLBACK_STALE_COUNT,
     stop: async () => {
       lock.retainOnError()
-      // Past the first mutation a cancel would strand a stopped host, so the run finishes or rolls back.
+      // Cancellation after mutation could strand a stopped host; finish or recover instead.
       options = withoutAbortSignal(options)
-      // The census above was taken while orcad admitted work; this stop is the proof that counts.
+      // Pre-lock census can go stale; the fenced stop supplies the terminal-safety proof.
       return stopIncumbentBehindTerminalBarrier(
         options,
         transaction.transactionId,
         barrierTarget.context
       )
     },
-    // A withdrawn stop was never sent, so the server keeps serving and takes terminals again.
+    // Withdrawn stops leave the incumbent serving and needing admission reopened.
     stopMayHaveBeenSent: (barrier) => barrier.state !== 'withdrawn'
   })
   if ('refused' in fenced) {
@@ -197,7 +196,7 @@ export async function rollbackOrcadLocked(
   transaction = withOrcadRollbackRescue(transaction, rescue, now())
   await writeOrcadActivationTransaction(options, transaction)
 
-  // Why between stop and start: the older build must never load the newer build's state.
+  // Restore before launching: older builds must never load newer state.
   const restored = parseOrcadSnapshotRestore(
     await execOrcadStateMutationOr(
       options,
@@ -251,8 +250,7 @@ export async function rollbackOrcadLocked(
     }
   }
 
-  // The record is written last: until the target is proven serving, `active` still names the
-  // version an operator would need to bring back.
+  // Until target readiness is proven, active must still identify the recoverable incumbent.
   transaction = withOrcadRollbackPhase(transaction, 'target-ready', now())
   await writeOrcadActivationTransaction(options, transaction)
   await writeOrcadActivationRecord(options, transaction.recordAfter)
@@ -270,7 +268,6 @@ function rescueVerdict(transaction: OrcadRollbackTransaction): RestoreState {
   return transaction.rescue.state === 'pending' ? null : transaction.rescue
 }
 
-/** Puts the rescued state back when it was replaced, then restarts the incumbent. */
 async function putIncumbentBack(
   options: OrcadRollbackOptions,
   lock: OrcadActivationLockControl,

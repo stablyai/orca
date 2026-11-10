@@ -1,12 +1,9 @@
-/**
- * The real SSH host a conversion cell runs against: the Linux Docker fixture, or a Windows
- * OpenSSH host the ssh-windows-hosts lane provisioned and described in a descriptor file.
- */
+// Use the real Docker Linux host or the Windows OpenSSH descriptor provisioned by its CI lane.
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import type { TestInfo } from '@stablyai/playwright-test'
 import type { SshTargetCreateInput } from '../../../src/shared/ssh-types'
-import { parseWindowsHostCellDescriptor } from '../../../src/main/ssh/ssh-windows-host-cells'
+import { parseWindowsHostCellDescriptor } from '../../../src/main/ssh/hostile-host-test-support/ssh-windows-host-cells'
 import {
   blockDockerSshHostTargetTcpForwarding,
   cleanupDockerSshHostTarget,

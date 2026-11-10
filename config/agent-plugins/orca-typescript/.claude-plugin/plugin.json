@@ -1,0 +1,6 @@
+{
+  "name": "orca-typescript",
+  "version": "1.0.0",
+  "description": "TypeScript 7 diagnostics and code navigation from the repo's own compiler",
+  "author": { "name": "Orca" }
+}

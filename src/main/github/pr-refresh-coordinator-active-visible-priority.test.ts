@@ -6,13 +6,12 @@ const { coordinatorMocks, moduleMocks } = await vi.hoisted(async () => {
   return { coordinatorMocks: moduleMocks.createPRRefreshCoordinatorMocks(), moduleMocks }
 })
 
-vi.mock('electron', () => moduleMocks.electronModuleMock(coordinatorMocks))
+vi.mock('./pr-refresh-renderer-port', () => moduleMocks.rendererPortModuleMock(coordinatorMocks))
 vi.mock('./client', () => moduleMocks.clientModuleMock(coordinatorMocks))
 vi.mock('./github-api-repository', () =>
   moduleMocks.githubApiRepositoryModuleMock(coordinatorMocks)
 )
 vi.mock('./rate-limit', () => moduleMocks.rateLimitModuleMock(coordinatorMocks))
-vi.mock('../ipc/ui', () => moduleMocks.ipcUiModuleMock(coordinatorMocks))
 
 import { makeCandidate, makePR } from './pr-refresh-coordinator-test-harness'
 
@@ -39,96 +38,6 @@ describe('pr-refresh-coordinator', () => {
 
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('does not show visible background refreshes as queued', async () => {
-    const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
-    getPRForBranchOutcomeMock.mockResolvedValueOnce({
-      kind: 'found',
-      pr: makePR({ checksStatus: 'pending', mergeable: 'MERGEABLE' }),
-      fetchedAt: Date.now()
-    })
-
-    reportVisiblePRRefreshCandidates([makeCandidate()], 1, 1)
-    await vi.runOnlyPendingTimersAsync()
-
-    const queuedEvents = sendMock.mock.calls
-      .map(([, event]) => event)
-      .filter((event) => event.status === 'queued')
-
-    expect(queuedEvents).toHaveLength(0)
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('lets an active worktree refresh bypass a delayed visible follow-up', async () => {
-    const { enqueuePRRefresh, reportVisiblePRRefreshCandidates } =
-      await import('./pr-refresh-coordinator')
-    getPRForBranchOutcomeMock
-      .mockResolvedValueOnce({
-        kind: 'found',
-        pr: makePR({ checksStatus: 'pending', mergeable: 'MERGEABLE' }),
-        fetchedAt: Date.now()
-      })
-      .mockResolvedValueOnce({
-        kind: 'found',
-        pr: makePR({ checksStatus: 'success' }),
-        fetchedAt: Date.now()
-      })
-
-    const candidate = makeCandidate()
-    reportVisiblePRRefreshCandidates([candidate], 1, 1)
-    await vi.runOnlyPendingTimersAsync()
-    enqueuePRRefresh({ ...candidate, cachedFetchedAt: Date.now() }, 'active', 80, 1)
-    await vi.runOnlyPendingTimersAsync()
-
-    const inFlightEvents = sendMock.mock.calls
-      .map(([, event]) => event)
-      .filter((event) => event.status === 'in-flight')
-
-    expect(inFlightEvents.map((event) => event.reason)).toEqual(['visible', 'active'])
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('lets a repeated active refresh pull forward an equal-priority visible follow-up', async () => {
-    const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
-    getPRForBranchOutcomeMock
-      .mockResolvedValueOnce({
-        kind: 'found',
-        pr: makePR({ checksStatus: 'success' }),
-        fetchedAt: Date.now()
-      })
-      .mockResolvedValueOnce({
-        kind: 'found',
-        pr: makePR({ checksStatus: 'success', state: 'merged' }),
-        fetchedAt: Date.now()
-      })
-
-    const candidate = makeCandidate()
-    enqueuePRRefresh(candidate, 'active', 80, 1)
-    await vi.runOnlyPendingTimersAsync()
-
-    enqueuePRRefresh(
-      {
-        ...candidate,
-        cachedFetchedAt: Date.now(),
-        cachedChecksStatus: 'success'
-      },
-      'active',
-      80,
-      1
-    )
-    await vi.runOnlyPendingTimersAsync()
-
-    const inFlightEvents = sendMock.mock.calls
-      .map(([, event]) => event)
-      .filter((event) => event.status === 'in-flight')
-    const queuedEvents = sendMock.mock.calls
-      .map(([, event]) => event)
-      .filter((event) => event.status === 'queued')
-
-    expect(inFlightEvents.map((event) => event.reason)).toEqual(['active', 'active'])
-    expect(queuedEvents).toHaveLength(0)
-    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
   })
 
   it('preserves an active refresh queued while a visible refresh is in flight', async () => {

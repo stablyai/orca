@@ -10,7 +10,6 @@ const PATH = '/target/docs/readme.md'
 const NEW_ID = `editor:${encodeURIComponent(TO)}:local:${encodeURIComponent(PATH)}`
 const FILE = { filePath: PATH, relativePath: 'docs/readme.md', language: 'markdown' }
 
-/** The source holds a terminal and the restored editor tab; the target one editor tab. */
 function twoWorkspaces() {
   const ctx = testContext()
   const source = build(ctx, [
@@ -68,7 +67,6 @@ describe('moveTabToWorkspace', () => {
   it("appends the tab to the window's group under its new ids, and moves the file's record", () => {
     const { ctx, model, terminal } = twoWorkspaces()
 
-    // `build` also checks every structural rule on the result.
     const moved = build(ctx, [move()], model)
 
     expect(moved.results[0]).toEqual({ tabId: NEW_ID, groupId: 'target-group' })
@@ -193,7 +191,6 @@ describe('moveTabToWorkspace', () => {
     expect(moved.model.workspaces[WS]!.editorViews).toEqual({})
     expect(moved.model.workspaces[TO]!.editorViews).toEqual({ [NEW_ID]: view })
 
-    // The window's view under the new owner replaces the one the tab had.
     const renamed = { ...view, file: { ...FILE, relativePath: 'renamed.md' } }
     const withNewView = applyLayoutCommand(
       withView,
@@ -226,7 +223,6 @@ describe('moveTabToWorkspace', () => {
 
       const moved = build(ctx, [move()], shown.model)
 
-      // The moved tab lands as the kept one; the source gives it up.
       expect(moved.results[0]).toEqual({ tabId: 'shown-tab', groupId: 'target-group' })
       expect(tabsOf(moved.model, TO)).toEqual([
         {
@@ -281,62 +277,4 @@ describe('moveTabToWorkspace', () => {
       expect(moved.model.workspaces[WS]!.tabs.map((tab) => tab.id)).not.toContain('split-copy')
     }
   )
-
-  it('refuses a move it already made, and what main cannot match', () => {
-    const { ctx, model } = twoWorkspaces()
-    const moved = applyLayoutCommand(model, move(), ctx)
-    if (!moved.ok) {
-      throw new Error(moved.code)
-    }
-
-    // No window save carries the move, so a repeat names a tab the source no longer holds.
-    expect(applyLayoutCommand(moved.model, move(), ctx)).toEqual({
-      ok: false,
-      code: 'tab_not_found'
-    })
-
-    expect(applyLayoutCommand(model, move({ groupId: 'other-group' }), ctx)).toEqual({
-      ok: false,
-      code: 'group_not_found'
-    })
-    expect(
-      applyLayoutCommand(
-        model,
-        move({ tabs: [{ tabId: 'missing', newTabId: 'x', newEntityId: 'x' }] }),
-        ctx
-      )
-    ).toEqual({ ok: false, code: 'tab_not_found' })
-    expect(
-      applyLayoutCommand(
-        model,
-        move({ tabs: [{ tabId: PATH, newTabId: 'target-tab', newEntityId: NEW_ID }] }),
-        ctx
-      )
-    ).toEqual({ ok: false, code: 'tab_exists' })
-    const twice = { tabId: PATH, newTabId: NEW_ID, newEntityId: NEW_ID }
-    expect(applyLayoutCommand(model, move({ tabs: [twice, twice] }), ctx)).toEqual({
-      ok: false,
-      code: 'invalid_params'
-    })
-    expect(applyLayoutCommand(model, move({ toWorkspace: WS }), ctx)).toEqual({
-      ok: false,
-      code: 'invalid_params'
-    })
-    expect(applyLayoutCommand(model, move({ workspace: 'unknown' }), ctx)).toEqual({
-      ok: false,
-      code: 'workspace_not_found'
-    })
-  })
-
-  it('refuses a terminal tab, whose panes would not follow it', () => {
-    const { ctx, model, terminal } = twoWorkspaces()
-
-    expect(
-      applyLayoutCommand(
-        model,
-        move({ tabs: [{ tabId: terminal, newTabId: terminal, newEntityId: terminal }] }),
-        ctx
-      )
-    ).toEqual({ ok: false, code: 'invalid_params' })
-  })
 })

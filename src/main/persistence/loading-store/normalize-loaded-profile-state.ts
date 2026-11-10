@@ -1,17 +1,20 @@
-import { normalizePersistedMobileClientTabSelections } from '../../runtime/client-session-tab-selection-persistence'
+import { normalizePersistedMobileClientTabSelections } from '../../runtime/client/navigation/client-session-tab-selection-persistence'
 import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import { normalizeFeatureInteractionTelemetryBuckets } from '../../../shared/feature-interactions'
-import { normalizeFolderWorkspaceDiffComments } from '../../folder-workspace-diff-comments'
-import { normalizeFolderWorkspaces } from '../../../shared/folder-workspaces'
+import { normalizeFolderWorkspaceDiffComments } from '../../workspaces/catalog/folder-workspace-diff-comments'
+import { normalizeFolderWorkspaces } from '../../../shared/folder-workspaces/folder-workspaces'
 import { normalizeOrcadMigrationEvictedReceipts } from '../../../shared/orcad-migration/orcad-migration-evicted-receipts'
 import { normalizeOrcadMigrationImportReceipts } from '../../../shared/orcad-migration/orcad-migration-manifest-validation'
 import { normalizeOrcadMigrationStagedCatalogs } from '../../../shared/orcad-migration/orcad-migration-staged-catalog-validation'
 import { normalizeWorkspaceLineageByChildKey } from '../applying-settings/ui-interaction-merge'
+import { dropInferredParentsOverFolderParents } from './folder-parent-lineage-persistence'
+import { normalizeCrossStoreLineageByChildKey } from '../../../shared/worktree/cross-store-lineage-records'
 import {
   normalizeSshRemotePtyLease,
   normalizeSshTarget
 } from '../leasing-ssh-ptys/ssh-normalization'
 import { migrateExistingHostsRemoteCliControl } from '../leasing-ssh-ptys/ssh-remote-cli-control-migration'
+import { migrateExistingReposAgentWorkspaceTrust } from '../tracking-repos/agent-workspace-trust-existing-repos-migration'
 import {
   normalizeLegacyPaneKeyAliasEntries,
   normalizeMigrationUnsupportedPtyEntries
@@ -39,8 +42,13 @@ export function normalizeLoadedProfileState(
   const { defaults, migratedExternalVisibility, osc52ClipboardNoticePending } = terminal
   const { normalizedOnboarding, normalizedProjectGroups, loadedCompactWorktreeCards } = profile
   const projectCatalog = normalizeLoadedProjectCatalog(parsed, markNeedsSave)
-  // Ordered: the host partitions drop the global fields this slice already owns.
+  // Normalize local first; host partitions drop global fields already owned here.
   const workspaceSession = normalizeLoadedLocalSession(parsed, defaults, markNeedsSave)
+  const workspaceLineageByChildKey = normalizeWorkspaceLineageByChildKey(
+    parsed.workspaceLineageByChildKey
+  )
+  const worktreeLineageById = { ...parsed.worktreeLineageById }
+  dropInferredParentsOverFolderParents(worktreeLineageById, workspaceLineageByChildKey)
 
   return {
     ...defaults,
@@ -49,30 +57,30 @@ export function normalizeLoadedProfileState(
       parsed.featureInteractionTelemetryBuckets
     ),
     projectGroups: normalizedProjectGroups,
-    repos: migratedExternalVisibility.repos,
-    // Why: persisted catalog rows are untrusted JSON; consumers call string methods on fields the type says are strings.
+    repos: migrateExistingReposAgentWorkspaceTrust(
+      migratedExternalVisibility.repos,
+      parsed.settings,
+      markNeedsSave
+    ),
     projects: projectCatalog.projects,
     projectHostSetups: projectCatalog.projectHostSetups,
     folderWorkspaces: normalizeFolderWorkspaces(parsed.folderWorkspaces, normalizedProjectGroups),
     folderWorkspaceDiffComments: normalizeFolderWorkspaceDiffComments(
       parsed.folderWorkspaceDiffComments
     ),
-    // Rebuilds the identity rows the serializer left to the locator map, and restores the shared
-    // object reference JSON.parse splits. Not `markNeedsSave`: this IS the canonical on-disk shape.
-    // Conditional so a file with no identity map keeps none, rather than gaining an own key whose
-    // value is `undefined`.
+    // Rehydrate canonical aliases/shared references omitted by serialization; absence stays absent.
     ...(parsed.worktreeMetaByIdentity === undefined
       ? {}
       : { worktreeMetaByIdentity: hydrateWorktreeMetaAliasProjection(parsed) }),
-    worktreeLineageById: parsed.worktreeLineageById ?? {},
+    worktreeLineageById,
     mobileClientTabSelectionsByDeviceId: normalizePersistedMobileClientTabSelections(
       parsed.mobileClientTabSelectionsByDeviceId
     ),
-    workspaceLineageByChildKey: normalizeWorkspaceLineageByChildKey(
-      parsed.workspaceLineageByChildKey
+    workspaceLineageByChildKey,
+    crossStoreLineageByChildKey: normalizeCrossStoreLineageByChildKey(
+      parsed.crossStoreLineageByChildKey
     ),
     settings: normalizeLoadedGlobalSettings(parsed, terminal, profile),
-    // Why: legacy 'recent' meant the smart sort; migrate once on the raw value so a fresh 'recent' default isn't remigrated.
     ui: normalizeLoadedUiState(
       parsed,
       defaults,
@@ -81,9 +89,8 @@ export function normalizeLoadedProfileState(
       osc52ClipboardNoticePending,
       markNeedsSave
     ),
-    // Why: volatile schema; zod-validate workspaceSession at read so a bad payload falls to defaults, not a renderer crash.
     workspaceSession,
-    // Why: per-host session partitions, validated independently; 'local' stays in workspaceSession for downgrade compat.
+    // Keep local in workspaceSession for downgrade compatibility; validate other hosts independently.
     workspaceSessionsByHostId: normalizeLoadedHostSessions(
       parsed,
       defaults,

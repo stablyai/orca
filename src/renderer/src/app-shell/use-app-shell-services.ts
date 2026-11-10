@@ -1,38 +1,31 @@
 import { useAppStore } from '../store'
-import { useClosedEditorTabCleanup } from '../components/editor/useClosedEditorTabCleanup'
+import { useClosedEditorTabCleanup } from '../components/editor/model-lifetime/retention/useClosedEditorTabCleanup'
 import { useIpcEvents } from '../hooks/useIpcEvents'
-import { useAutomationDispatchEvents } from '../hooks/useAutomationDispatchEvents'
 import { useReadOnScreenAttention } from '../hooks/useReadOnScreenAttention'
-import { useEditorExternalWatch } from '../hooks/useEditorExternalWatch'
-import { useAppMenuPaste } from '../hooks/useAppMenuPaste'
-import { useAppMenuSelectionActions } from '../hooks/useAppMenuSelectionActions'
-import { useLargeTextControlPaste } from '../hooks/useLargeTextControlPaste'
+import { useAppMenuPaste } from '../hooks/clipboard/menu/useAppMenuPaste'
+import { useAppMenuSelectionActions } from '../hooks/app-commands/useAppMenuSelectionActions'
+import { useLargeTextControlPaste } from '../hooks/text-input/paste/useLargeTextControlPaste'
 import {
   resolvePrimarySelectionMiddleClickPaste,
   usePrimarySelectionPaste
-} from '../hooks/usePrimarySelectionPaste'
+} from '../hooks/clipboard/primary-selection/usePrimarySelectionPaste'
 import { useRadixBodyPointerEventsRecovery } from '../hooks/useRadixBodyPointerEventsRecovery'
-import { useGitStatusPolling } from '../components/right-sidebar/useGitStatusPolling'
-import { useOsc52ClipboardDefaultOnNotice } from '../components/terminal-pane/osc52-clipboard-default-on-notice'
-import { useWebSessionTabsSync } from '../runtime/web-session-tabs-sync/use-web-session-tabs-sync'
-import { useLocalStructuredSessionTabsSync } from '../runtime/local-structured-session-tabs-sync'
-import { useHostStructuredAgentsSync } from '../runtime/host-structured-agents-sync'
-import { useHostModelCatalogSnapshotsSync } from '../runtime/host-model-catalog-snapshots-sync'
-import { useRemoteRuntimeRecoveryTriggers } from '../runtime/use-remote-runtime-recovery-triggers'
+import { useOsc52ClipboardDefaultOnNotice } from '../components/terminal-pane/clipboard/osc52-clipboard-default-on-notice'
+import { useWindowsTerminalFontWeightNotice } from '../components/terminal-pane/appearance/windows-terminal-font-weight-notice'
+import { useLocalStructuredSessionTabsSync } from '../runtime/local-structured-session-tabs-sync/use-local-structured-session-tabs-sync'
+import { useHostStructuredAgentsSync } from '../runtime/native-chat/agent-catalogs/host-structured-agents-sync'
+import { useLegacyChatRenameMigration } from '../runtime/native-chat/naming/legacy-chat-rename-migration'
+import { useHostModelCatalogSnapshotsSync } from '../runtime/native-chat/model-catalogs/host-model-catalog-snapshots-sync'
+import { useRemoteRuntimeRecoveryTriggers } from '../runtime/hosts/connections/use-remote-runtime-recovery-triggers'
 import { useTerminalViewerColorPublication } from './use-terminal-viewer-color-publication'
 import { useBrowserIdentityMigrationNotice } from '../components/browser-pane/browser-user-agent-migration-notice'
 import { useBrowserClientHostedDownloadNotices } from '../components/browser-pane/browser-client-hosted-download-notices'
-import { useCodexTerminalServerIsolationNotice } from '../components/terminal-pane/codex-terminal-server-isolation-notice'
-import { useCodexSharedSettingsNotice } from '../components/terminal-pane/codex-shared-settings-notice'
-import { useVisibleReviewRefreshReporting } from './use-visible-review-refresh-reporting'
+import { useCodexTerminalServerIsolationNotice } from '../components/terminal-pane/provider-notices/codex-server-isolation/codex-terminal-server-isolation-notice'
+import { useClaudeThemeSyncOffer } from '../components/terminal-pane/provider-notices/claude-theme-sync/claude-theme-sync-offer'
 import { useVisibleHostedReviewRefresh } from './use-visible-hosted-review-refresh'
 import { useProfileStateSaveDelayNotice } from './use-profile-state-save-delay-notice'
 
-/**
- * App-level subscriptions that must outlive any individual surface. Each one is here because
- * the component that consumes its result unmounts (right sidebar, explorer, terminal) or is
- * absent entirely on the landing path.
- */
+/** Keep subscriptions above surfaces that unmount or never appear on Landing. */
 export function useAppShellServices(): void {
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
@@ -42,30 +35,24 @@ export function useAppShellServices(): void {
 
   useClosedEditorTabCleanup()
   useRadixBodyPointerEventsRecovery()
-  useWebSessionTabsSync()
   useLocalStructuredSessionTabsSync()
   useHostStructuredAgentsSync()
+  useLegacyChatRenameMigration()
   useHostModelCatalogSnapshotsSync()
-  // Subscribe to IPC push events
   useIpcEvents()
   useProfileStateSaveDelayNotice()
   useRemoteRuntimeRecoveryTriggers()
-  useVisibleReviewRefreshReporting()
   useVisibleHostedReviewRefresh({ enabled: workspaceSessionReady })
   useTerminalViewerColorPublication()
-  useAutomationDispatchEvents()
-  // Why: git polling lives at App level (RightSidebar unmounts when closed, stranding stale Rebasing/Merging badges); gate on workspaceSessionReady so it doesn't compete with first paint.
-  useGitStatusPolling({ enabled: workspaceSessionReady })
-  // Why: wire file-change watching at App level so the editor keeps hearing FS changes when Explorer unmounts (right-sidebar switches to Source Control/Checks).
-  useEditorExternalWatch()
   useReadOnScreenAttention()
   useAppMenuPaste()
   useAppMenuSelectionActions()
   useLargeTextControlPaste()
   usePrimarySelectionPaste(primarySelectionMiddleClickPaste)
   useOsc52ClipboardDefaultOnNotice(persistedUIReady)
+  useWindowsTerminalFontWeightNotice(persistedUIReady)
   useBrowserIdentityMigrationNotice()
   useBrowserClientHostedDownloadNotices()
   useCodexTerminalServerIsolationNotice()
-  useCodexSharedSettingsNotice()
+  useClaudeThemeSyncOffer()
 }

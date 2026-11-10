@@ -4,20 +4,20 @@ import {
   type WorkspaceRowsSnapshot
 } from '../../../shared/sidebar-list/workspace-rows'
 import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
-import type { ResolvedWorktreeSnapshot } from '../runtime-resolved-worktree-cache'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
+import type { ResolvedWorktreeSnapshot } from '../workspaces/catalog/runtime-resolved-worktree-cache'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { runtimeVisibleFolderWorkspaces } from '../runtime-visible-catalog'
+import { runtimeVisibleFolderWorkspaces } from '../workspaces/catalog/runtime-visible-catalog'
 import type {
   ResolvedWorktreeRepoScans,
   ResolvedWorktreeScanJoin
-} from '../workspaces/resolved-worktree-scan-join'
+} from '../workspaces/catalog/resolved-worktree-scan-join'
 import { WORKTREE_METADATA_DOMAINS } from '../../persistence/loading-store/worktree-identity-metadata'
 import { ProducerRevision } from './producer-revision'
 import { WorkspaceGitIdentity } from './workspace-git-identity'
 import { CachedScan } from './cached-scan'
-import type { WorkspaceLifecycleQueue } from '../workspaces/workspace-lifecycle-queue'
+import type { WorkspaceLifecycleQueue } from '../workspaces/lifecycle/workspace-lifecycle-queue'
 
 // The settings the visibility filter reads: the defaults, and the layouts that classify a checkout.
 const VISIBILITY_SETTINGS = [
@@ -68,12 +68,7 @@ type Joined = {
   scannedRepoKeys: ResolvedWorktreeScanJoin['scannedRepoKeys']
 }
 
-/**
- * This host's workspace rows: cached per-repo scans joined with the store's metadata at read, so a
- * read is synchronous and a metadata write publishes without waiting on git; scans refresh apart.
- * The revision moves on catalog changes, applied scans and saves that may touch metadata; session
- * saves never move it.
- */
+/** Join cached repo scans with current metadata synchronously; refresh scans separately. Catalog/applied-scan/metadata revisions publish, session saves do not. */
 export class WorkspaceRowsProducer {
   readonly revision = new ProducerRevision()
   readonly gitIdentity = new WorkspaceGitIdentity()
@@ -183,7 +178,9 @@ export class WorkspaceRowsProducer {
       worktrees,
       folderWorkspaces: runtimeVisibleFolderWorkspaces(store),
       repos: store.getRepos(),
-      lineageById: store.getAllWorktreeLineage?.() ?? {}
+      lineageById: store.getAllWorktreeLineage?.() ?? {},
+      crossStoreLineageByChildKey: store.getAllCrossStoreWorkspaceLineage?.(),
+      workspaceLineageByChildKey: store.getAllWorkspaceLineage?.()
     })
     for (const row of rows.values()) {
       const terminalPlatform = row.kind === 'git' ? platformByRepoId.get(row.repoId) : undefined

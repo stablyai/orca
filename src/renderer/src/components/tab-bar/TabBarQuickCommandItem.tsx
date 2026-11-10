@@ -1,28 +1,31 @@
-import type { MouseEvent, PointerEvent } from 'react'
+import { useId, type MouseEvent, type PointerEvent } from 'react'
 import { Check, Copy, Pencil, Play, Trash2 } from 'lucide-react'
-import { CommandItem } from '@/components/ui/command'
 import {
   getTerminalQuickCommandBody,
   isTerminalAgentQuickCommand
-} from '../../../../shared/terminal-quick-commands'
-import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
-import { translate } from '@/i18n/i18n'
-import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-feedback'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { useTranslate } from '@/i18n/use-translate'
+import { useClipboardTextCopyFeedback } from '@/hooks/clipboard/use-clipboard-text-copy-feedback'
 import type { HostedTerminalQuickCommand } from '@/hooks/use-terminal-quick-command-hosts'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 type TabBarQuickCommandItemProps = {
   entry: HostedTerminalQuickCommand
   showHostLabel: boolean
+  selected?: boolean
+  position?: number
+  totalCount?: number
+  onHighlight?: () => void
+  onActiveElementChange?: (element: HTMLDivElement | null) => void
   onRun: () => void
   onEdit: () => void
   onDelete: () => void
 }
 
 function stopRowSelect(event: MouseEvent | PointerEvent): void {
-  // Why: cmdk selects the parent CommandItem on click; nested actions must not
-  // also run the quick command. preventDefault keeps focus in the search input
-  // so arrow/Enter navigation still works after Copy (Edit/Delete close the menu).
+  // Why: nested actions must preserve search focus without running the command.
   event.preventDefault()
   event.stopPropagation()
 }
@@ -30,35 +33,45 @@ function stopRowSelect(event: MouseEvent | PointerEvent): void {
 export function TabBarQuickCommandItem({
   entry,
   showHostLabel,
+  selected = false,
+  position,
+  totalCount,
+  onHighlight,
+  onActiveElementChange,
   onRun,
   onEdit,
   onDelete
 }: TabBarQuickCommandItemProps): React.JSX.Element {
+  const t = useTranslate()
+  const id = useId()
   const { command } = entry
   const body = getTerminalQuickCommandBody(command)
   const { canCopy, copyText, status } = useClipboardTextCopyFeedback(body)
 
   const copyLabel =
     status === 'copied'
-      ? translate('auto.components.tab.bar.TabBarQuickCommandsButton.8d525e5f15', 'Copied')
+      ? t('auto.components.tab.bar.TabBarQuickCommandsButton.8d525e5f15', 'Copied')
       : status === 'failed'
-        ? translate('auto.components.tab.bar.TabBarQuickCommandsButton.53b17a4b1b', "Couldn't copy")
+        ? t('auto.components.tab.bar.TabBarQuickCommandsButton.53b17a4b1b', "Couldn't copy")
         : canCopy
-          ? translate(
-              'auto.components.tab.bar.TabBarQuickCommandsButton.a9a564b7e7',
-              'Copy {{value0}}',
-              { value0: command.label }
-            )
-          : translate(
-              'auto.components.tab.bar.TabBarQuickCommandsButton.69a1441a21',
-              'Nothing to copy'
-            )
+          ? t('auto.components.tab.bar.TabBarQuickCommandsButton.a9a564b7e7', 'Copy {{value0}}', {
+              value0: command.label
+            })
+          : t('auto.components.tab.bar.TabBarQuickCommandsButton.69a1441a21', 'Nothing to copy')
 
   return (
-    <CommandItem
-      value={entry.key}
-      onSelect={onRun}
-      className="group/qc mx-1 my-0.5 cursor-pointer items-center gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground"
+    <div
+      ref={selected ? onActiveElementChange : undefined}
+      id={id}
+      role="option"
+      aria-selected={selected}
+      aria-posinset={position}
+      aria-setsize={totalCount}
+      data-selected={selected}
+      data-value={entry.key}
+      onPointerMove={onHighlight}
+      onClick={onRun}
+      className="group/qc mx-1 my-0.5 flex cursor-pointer items-center gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground"
     >
       {isTerminalAgentQuickCommand(command) ? (
         <span className="shrink-0 text-muted-foreground">
@@ -88,7 +101,12 @@ export function TabBarQuickCommandItem({
       </span>
       <span
         role="group"
-        aria-label={translate(
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.stopPropagation()
+          }
+        }}
+        aria-label={t(
           'auto.components.tab.bar.TabBarQuickCommandsButton.192a4616a5',
           'Quick command actions'
         )}
@@ -120,7 +138,7 @@ export function TabBarQuickCommandItem({
             onEdit()
           }}
           className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.tab.bar.TabBarQuickCommandsButton.15529ede69',
             'Edit {{value0}}',
             { value0: command.label }
@@ -136,7 +154,7 @@ export function TabBarQuickCommandItem({
             onDelete()
           }}
           className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-accent hover:text-destructive"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.tab.bar.TabBarQuickCommandsButton.196593b6a9',
             'Remove {{value0}}',
             { value0: command.label }
@@ -145,6 +163,6 @@ export function TabBarQuickCommandItem({
           <Trash2 className="size-3" />
         </button>
       </span>
-    </CommandItem>
+    </div>
   )
 }

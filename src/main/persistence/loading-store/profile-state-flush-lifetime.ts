@@ -1,6 +1,6 @@
 import type { StoreRuntimeState } from './store-runtime-state'
 
-/** Lifecycle cleanup must join every accepted operation before closing its writer. */
+/** Join every accepted operation before closing its writer, including after an earlier failure. */
 export async function drainProfileStateOperations(
   operations: Iterable<Promise<unknown> | null | undefined>
 ): Promise<void> {
@@ -14,7 +14,7 @@ export async function drainProfileStateOperations(
   }
 }
 
-/** A flush may dispatch again after SQL completes while its sidecars are still pending. */
+// SQL completion can admit another flush while sidecars are still pending.
 export async function runProfileStateFlush(
   runtime: Pick<StoreRuntimeState, 'pendingProfileFlushes'>,
   operation: () => Promise<void>

@@ -1,4 +1,4 @@
-import { removeStaleDurableWriteTempFiles } from '../../durable-file-write'
+import { removeStaleDurableWriteTempFiles } from '../../filesystem/durable-file-write'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
@@ -8,12 +8,12 @@ import type {
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { StateWriteListener } from './write-scheduling'
 import type { PartitionEditorViews } from './layout-editor-views'
-import type { ActiveViewPreference } from '../../active-view-preference'
+import type { ActiveViewPreference } from '../preferences/active-view-preference'
 import {
   getProfileTerminalScrollbackSnapshotRoot,
   type TerminalScrollbackSnapshotStorage
-} from '../../terminal-scrollback-snapshots'
-import { ProtectedSecretPersistence } from '../../protected-secret-persistence'
+} from '../../pty/scrollback/terminal-scrollback-snapshots'
+import { ProtectedSecretPersistence } from '../../credentials/protected-secret-persistence'
 import { getDataFile, getGithubCacheFile } from './user-data-path'
 import { dirname, join } from 'node:path'
 import { STALE_DURABLE_WRITE_TEMP_AGE_MS } from '../tracking-repos/worktree-metadata-normalization'
@@ -28,16 +28,16 @@ import type {
   AutomationStorageAuthority
 } from '../scheduling-automations/automation-owner-projection'
 import type { ProfileStatePersistenceAuthority } from './profile-state-authority'
-import type { AutomationRun } from '../../../shared/automations-types'
+import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import { resolveNewPaneShellPath } from '../migrating-orcad-catalog/orcad-shell-history-installer'
 import { OrcadTerminalRestoreHintStore } from '../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
 
 export type DurableProfileStateMutation<T> = {
   value: T
-  /** 'if-dirty' fences an existing change without rewriting an already durable generation. */
+  /** if-dirty fences prior changes without rewriting a durable generation. */
   persist?: boolean | 'if-dirty'
   rollback?: () => void
-  /** The only session partitions the mutation wrote, so readers re-read just those; absent: any. */
+  /** Absent means any host may have changed; otherwise notify only listed partitions. */
   writtenHostIds?: readonly ExecutionHostId[]
 }
 
@@ -45,27 +45,22 @@ export type StoreRuntimeOptions = {
   dataFile?: string
   storageAuthority?: AutomationStorageAuthority
   profileStateAuthority?: ProfileStatePersistenceAuthority
-  /** The shell a new pane on this host runs, given its default-shell setting; tests pass a fake. */
   paneShellPath?: (defaultShell: string | undefined) => string
 }
 
-/** Mutable coordination state shared only with this Store's private collaborators. */
 export class StoreRuntimeState {
   state!: PersistedState
   readonly dataFile: string
   readonly storageAuthority: AutomationStorageAuthority
   readonly profileStateAuthority: ProfileStatePersistenceAuthority | undefined
   readonly paneShellPath: (defaultShell: string | undefined) => string
-  /** Worktrees whose moved shell history waits for their live shells to exit. */
   readonly deferredShellHistoryWorktreeIds = new Set<string>()
   automationListProjectionCache: AutomationListProjectionCache | null = null
   activeViewPreference!: ActiveViewPreference
   readonly terminalScrollbackSnapshotStorage: TerminalScrollbackSnapshotStorage
-  /** Staged and received migration blobs (see orcad-migration-blob-staging.ts). */
   readonly orcadMigrationBlobRoot: string
-  /** Shared so project removal can drop hints for panes this host no longer owns. */
   readonly orcadTerminalRestoreHints: OrcadTerminalRestoreHintStore
-  /** Scrollback refs each in-flight migration export still reads, keyed by migration id. */
+  /** Retain exported scrollback blobs until their in-flight migrations finish reading. */
   readonly retainedScrollbackRefsByMigrationId = new Map<string, ReadonlySet<string>>()
   writeTimer: ReturnType<typeof setTimeout> | null = null
   pendingWrite: Promise<void> | null = null
@@ -81,25 +76,27 @@ export class StoreRuntimeState {
   quitFlushPromise: Promise<void> | null = null
   lastWrittenStateHash: string | null = null
   lastDurableWriteGeneration = -1
-  /**
-   * The write generation each migration committed by this process needs on disk before its
-   * received blobs may be consumed; a receipt missing here was read from disk.
-   */
+  /** Required durable generation for locally committed migrations; disk-loaded receipts have no entry. */
   readonly orcadMigrationCommitWriteGenerations = new Map<string, number>()
   firstPendingSaveAt: number | null = null
-  /** Known dirty domains, or null when a caller requires a complete-document fallback. */
+  /** Null requests complete-document fallback. */
   dirtyProfileStateDomains: Set<string> | null = new Set()
   pendingAutomationRunsAfter: readonly AutomationRun[] | undefined
   githubCacheDirty = false
-  githubCacheGeneration = 0
+  githubCachePersistedAt = Date.now()
+  githubCachePersistTimer: ReturnType<typeof setTimeout> | null = null
+  githubCacheRetryDelayMs = 0
+  /** Fingerprint of a sidecar the loaded cache imported or supersedes; retired once rows commit. */
+  githubCacheLegacyFileHash: string | null = null
+  /** The saved cache or an older build's sidecar was unreadable at load: save nothing this session. */
+  githubCachePersistenceDisabled = false
   readonly githubCacheWriteListeners = new Set<() => void>()
-  pendingGithubCacheWrite: Promise<void> | null = null
   readonly staleGithubCacheTempCleanup: Promise<void>
-  /** Reclaim compatibility-export temps left by a process killed during rename. */
   readonly staleProfileStateTempCleanup: Promise<void>
   readonly gitUsernameCache = new Map<string, string>()
   readonly protectedSecrets = new ProtectedSecretPersistence()
   loadNeedsSave = false
+  originalExperimentalNativeChat?: { readonly experimentalNativeChat: unknown }
   flushOrThrow!: () => void
   runDurableMutation!: <T>(mutate: () => DurableProfileStateMutation<T>) => Promise<T>
   settingsChangeListeners = new Set<
@@ -110,15 +107,12 @@ export class StoreRuntimeState {
     ) => void
   >()
   uiChangeListeners = new Set<(ui: PersistedState['ui']) => void>()
-  /** Observers of persisted workspace-session writes; see notifyWorkspaceSessionWritten. */
   readonly workspaceSessionWriteListeners = new Set<WorkspaceSessionWriteListener>()
-  /** Observers of each durable mutation's end; see notifyWorkspaceSessionOperationEnded. */
   readonly workspaceSessionOperationListeners = new Set<WorkspaceSessionOperationListener>()
-  /** `${hostId}\0${leafId}` → its pane's binding generation, in memory only (layout-owner builds). */
+  /** In-memory host/leaf binding generations; layout-owner builds only. */
   readonly ptyBindingGenerations = new Map<string, number>()
-  /** Each partition's editor tab views, in memory only (layout-owner builds); see layout-editor-views. */
+  /** In-memory editor views by partition; layout-owner builds only. */
   readonly layoutEditorViews = new Map<ExecutionHostId, PartitionEditorViews>()
-  /** Observers of every write; see WriteSchedulingOperations.onStateWritten. */
   readonly stateWriteListeners = new Set<StateWriteListener>()
   projectHostOperations: ProjectHostPersistenceOperations | null = null
   projectGroupOperations: ProjectGroupPersistenceOperations | null = null

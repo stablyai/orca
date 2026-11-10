@@ -26,8 +26,7 @@ export async function reconnectSshTargetForRendererStartup(args: {
               timeoutId = setTimeout(() => reject(new Error('SSH reconnect timeout')), timeoutMs)
             })
           ])
-    // Why: the state-change IPC can trail connect's resolution. Publish the
-    // authoritative result before restored terminals inspect renderer state.
+    // Publish authoritative connect result before restored panes inspect state; state-change IPC can trail resolution.
     if (state) {
       publishState(targetId, state)
     }

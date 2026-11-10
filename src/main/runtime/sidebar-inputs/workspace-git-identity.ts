@@ -1,16 +1,17 @@
 import type { Worktree } from '../../../shared/worktree/types'
-import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   composeWorktreeHostIdentity,
   hostWorktreeTarget,
   type HostScopedWorktreeKey,
   type HostWorktreeTarget
 } from '../../../shared/worktree/host-qualified-identity'
+import type { HOSTED_REVIEW_LINK_KEYS } from '../../../shared/worktree/hosted-review-links'
 import {
-  CLEARED_HOSTED_REVIEW_LINK_UPDATES,
-  HOSTED_REVIEW_LINK_KEYS,
-  canonicalHostedReviewBranchIdentity
-} from '../../../shared/worktree/hosted-review-links'
+  branchHostedReviewOwner,
+  hostedReviewClearUpdates,
+  type HostedReviewClearUpdates,
+  type HostedReviewOwner
+} from '../../../shared/worktree/hosted-review-branch-ownership'
 import {
   getRepoHostIdentityForParts,
   type HostScopedRepoKey
@@ -27,6 +28,7 @@ type IdentityRow = Pick<
   | 'displayNameMode'
   | 'pushTarget'
 > &
+  Partial<Pick<Worktree, 'linkedWorkItem'>> &
   Partial<Pick<Worktree, (typeof HOSTED_REVIEW_LINK_KEYS)[number]>>
 
 /** A row from a scan that reached a verdict, with the git run (scan-cache entry) it came from. */
@@ -38,33 +40,20 @@ type Observed = {
   branch: string
   displayName: string
   gitRun: object | null
-  /** The links as they stood when git last confirmed `branch`. */
-  links: string
+  /** The branch owning the review context, with its links as they stood when git last confirmed it. */
+  owner: HostedReviewOwner | undefined
 }
 
 export type HostedReviewLinkClear = {
   target: HostWorktreeTarget
-  updates: Pick<WorktreeMeta, (typeof HOSTED_REVIEW_LINK_KEYS)[number] | 'pushTarget'>
+  updates: HostedReviewClearUpdates
 }
 
 function keyOf(row: Pick<IdentityRow, 'id' | 'hostId'>): HostScopedWorktreeKey {
   return composeWorktreeHostIdentity(row.hostId, row.id)
 }
 
-function linksSignature(row: IdentityRow): string {
-  return JSON.stringify([...HOSTED_REVIEW_LINK_KEYS.map((key) => row[key] ?? null), row.pushTarget])
-}
-
-function hasBranchScopedLinks(row: IdentityRow): boolean {
-  return HOSTED_REVIEW_LINK_KEYS.some((key) => row[key] != null) || row.pushTarget !== undefined
-}
-
-/**
- * What a branch switch does to a workspace, decided where the scan sees it: an automatic title
- * follows the branch (and keeps its last name while the head is detached), and links scoped to the
- * old branch are cleared. Replaces the window's writer (worktree-git-identity-update.ts), which
- * P5b-2 deletes.
- */
+/** On proven branch switches, clear old-branch links and update automatic names; detached heads retain the last name and review ownership. Replaces worktree-git-identity-update.ts. */
 export class WorkspaceGitIdentity {
   private readonly observed = new Map<HostScopedWorktreeKey, Observed>()
   private readonly detachedTitles = new Map<HostScopedWorktreeKey, string>()
@@ -77,11 +66,7 @@ export class WorkspaceGitIdentity {
       : row.displayName
   }
 
-  /**
-   * Records an applied scan's rows. `rows` are those of scans that reached a verdict (a stalled
-   * scan's stored rows read as detached); `scannedRepoKeys` are those repos, whose missing rows are
-   * gone. Returns the link clears the branch switches call for.
-   */
+  /** Record verdict-bearing scan rows/repo keys and return branch-switch link clears; stalled scans cannot confirm absence or branch identity. */
   observeScan(
     rows: readonly ScannedIdentityRow[],
     scannedRepoKeys: ReadonlySet<HostScopedRepoKey>
@@ -100,36 +85,37 @@ export class WorkspaceGitIdentity {
       } else if (before.branch !== '' && row.displayNameMode === 'automatic') {
         this.detachedTitles.set(key, before.displayName)
       }
-      const switched =
-        sameInstance &&
-        canonicalHostedReviewBranchIdentity(before.branch) !==
-          canonicalHostedReviewBranchIdentity(row.branch)
-      // A link written since git last confirmed the old branch may belong to the new one: kept.
-      const cleared = switched && hasBranchScopedLinks(row) && linksSignature(row) === before.links
-      if (cleared && row.hostId !== undefined) {
-        clears.push({
-          target: hostWorktreeTarget({ id: row.id, hostId: row.hostId }),
-          updates: CLEARED_HOSTED_REVIEW_LINK_UPDATES
-        })
+      const previousOwner = sameInstance ? before.owner : undefined
+      const updates = hostedReviewClearUpdates(previousOwner, row.branch, row)
+      if (updates && row.hostId !== undefined) {
+        clears.push({ target: hostWorktreeTarget({ id: row.id, hostId: row.hostId }), updates })
       }
       if (row.instanceId === undefined) {
         this.observed.delete(key)
         continue
       }
-      // A cached scan repeats an old branch; only a new git run (or a switch) confirms links on it.
-      const confirmed =
-        !sameInstance || switched || (row.gitRun !== null && row.gitRun !== before.gitRun)
+      const afterClear = updates ? { ...row, ...updates } : row
+      let owner: HostedReviewOwner | undefined
+      if (row.branch === '') {
+        owner = previousOwner
+      } else {
+        const branchOwner = branchHostedReviewOwner(row.branch, afterClear)
+        // A cached scan repeats an old branch; only a new git run (or a change) confirms links on it.
+        const repeatsCachedScan =
+          sameInstance &&
+          updates === null &&
+          previousOwner !== undefined &&
+          previousOwner.branch === branchOwner.branch &&
+          (row.gitRun === null || row.gitRun === before.gitRun)
+        owner = repeatsCachedScan ? previousOwner : branchOwner
+      }
       this.observed.set(key, {
         instanceId: row.instanceId,
         repoKey: getRepoHostIdentityForParts(row.repoId, row.hostId ?? ''),
         branch: row.branch,
         displayName: this.title(row),
         gitRun: row.gitRun,
-        links: cleared
-          ? linksSignature({ ...row, ...CLEARED_HOSTED_REVIEW_LINK_UPDATES })
-          : confirmed
-            ? linksSignature(row)
-            : (before?.links ?? linksSignature(row))
+        owner
       })
     }
     for (const [key, observed] of this.observed) {

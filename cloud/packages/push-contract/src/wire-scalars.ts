@@ -1,7 +1,6 @@
 import { z } from 'zod'
 
-// Copied from relay-contract rather than imported: the push gateway ships as a
-// standalone image and must not pull the relay wire contract into its closure.
+// Copy relay scalars to keep standalone push images independent of the relay wire contract.
 export const Base64Url32ByteSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
 export const Base6432ByteSchema = z.string().regex(/^(?:[A-Za-z0-9+/]{4}){10}[A-Za-z0-9+/]{3}=$/)
 export const Base64Raw24ByteSchema = z.string().regex(/^(?:[A-Za-z0-9+/]{4}){8}$/)

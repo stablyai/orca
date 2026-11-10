@@ -1,11 +1,6 @@
 import type { OrchestrationDb } from '../orchestration-db'
 
-/**
- * `dispatch:<id>` mailboxes had no consumer generation, so every process that ever attached to a
- * Dispatch shared one Delivery and either could acknowledge it. Both worker-side attachment tables
- * get their own counter: a federated worker host holds no `dispatch_contexts` row for the Dispatch
- * it serves, only a `remote_dispatch_attachments` row.
- */
+/** Give both local and federated worker attachments consumer generations so stale workers cannot acknowledge replacement mail. */
 export function migrateV36(this: OrchestrationDb, current: number): void {
   if (current >= 36) {
     return

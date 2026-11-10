@@ -10,19 +10,23 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { UnifiedSessionRow } from './resource-usage-merge-types'
 
-export function renderResourceUsageKillDialog({
-  killConfirm,
-  setKillConfirm,
-  killing,
-  runKillConfirmed
-}: {
-  killConfirm: UnifiedSessionRow | null
-  setKillConfirm: Dispatch<SetStateAction<UnifiedSessionRow | null>>
-  killing: boolean
-  runKillConfirmed: () => Promise<void>
-}): React.JSX.Element {
+export function renderResourceUsageKillDialog(
+  {
+    killConfirm,
+    setKillConfirm,
+    killing,
+    runKillConfirmed
+  }: {
+    killConfirm: UnifiedSessionRow | null
+    setKillConfirm: Dispatch<SetStateAction<UnifiedSessionRow | null>>
+    killing: boolean
+    runKillConfirmed: () => Promise<void>
+  },
+  t: Translate = translate
+): React.JSX.Element {
   return (
     <Dialog
       open={killConfirm !== null}
@@ -37,7 +41,8 @@ export function renderResourceUsageKillDialog({
       }}
     >
       <DialogContent
-        className="max-w-md"
+        className="z-[80] max-w-md"
+        overlayClassName="z-[80]"
         showCloseButton={!killing}
         onPointerDownOutside={(e) => {
           if (killing) {
@@ -52,13 +57,13 @@ export function renderResourceUsageKillDialog({
       >
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {translate(
+            {t(
               'auto.components.status.bar.ResourceUsageStatusSegment.e9a5d3c2b1f0',
               'Kill {{value0}}?',
               {
                 value0:
                   killConfirm?.label ??
-                  translate(
+                  t(
                     'auto.components.status.bar.ResourceUsageStatusSegment.138b99bd80',
                     'this session'
                   )
@@ -66,7 +71,7 @@ export function renderResourceUsageKillDialog({
             )}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {translate(
+            {t(
               'auto.components.status.bar.ResourceUsageStatusSegment.67c4ecda49',
               "Force-quits this terminal. Any unsaved work in the pane is lost. This can't be undone."
             )}
@@ -74,19 +79,13 @@ export function renderResourceUsageKillDialog({
         </DialogHeader>
         <DialogFooter>
           <Button variant="outline" onClick={() => setKillConfirm(null)} disabled={killing}>
-            {translate(
-              'auto.components.status.bar.ResourceUsageStatusSegment.946d9f94d0',
-              'Cancel'
-            )}
+            {t('auto.components.status.bar.ResourceUsageStatusSegment.946d9f94d0', 'Cancel')}
           </Button>
           <Button variant="destructive" onClick={() => void runKillConfirmed()} disabled={killing}>
             {killing ? <LoaderCircle className="size-4 animate-spin" /> : null}
             {killing
-              ? translate(
-                  'auto.components.status.bar.ResourceUsageStatusSegment.41ae4fa725',
-                  'Killing…'
-                )
-              : translate(
+              ? t('auto.components.status.bar.ResourceUsageStatusSegment.41ae4fa725', 'Killing…')
+              : t(
                   'auto.components.status.bar.ResourceUsageStatusSegment.b10695d6ce',
                   'Kill session'
                 )}

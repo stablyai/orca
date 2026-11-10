@@ -4,13 +4,8 @@ import { shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
 import type { TerminalDocumentScope } from './document-scope'
 import { getCellWidth, getTotalScale } from './cell-metrics'
 
-// Why: after init() the initial scrollback applyFitScale may have run
-// against an empty buffer (or one without the widest line yet). Re-fit
-// once when the first live data chunk arrives so a wider line that pushes
-// scrollWidth past the previously-measured value gets re-scaled to fit.
+// First live output can widen a buffer measured during replay; permit one fresh fit before preserving user zoom.
 
-// Diagnostic logger — bridges WebView console.log to RN via postMessage.
-// Tag with [fit] so it's easy to filter in the Expo/Metro logs.
 export function flog(scope: TerminalDocumentScope, tag: string, payload: Record<string, unknown>) {
   try {
     scope.postToHost({
@@ -21,16 +16,7 @@ export function flog(scope: TerminalDocumentScope, tag: string, payload: Record<
   } catch {}
 }
 
-// Why: width measurement strategy.
-//   1. Prefer cellWidth × term.cols — this is what xterm's renderer uses
-//      to lay out and is independent of buffer content. It's the "logical
-//      width" of the terminal grid.
-//   2. Fall back to term.element.scrollWidth — the actual rendered DOM
-//      width — only when cellWidth isn't available yet (renderer not
-//      initialized). This is content-dependent (reflects widest row),
-//      but better than nothing.
-//   3. If both are 0, return 1 (no scale change). The retry loop in
-//      applyFitScale will keep trying until one is positive.
+// Prefer renderer cell width × columns; use content-dependent scrollWidth only before renderer metrics exist.
 export function computeFitScale(scope: TerminalDocumentScope) {
   if (!scope.term) {
     return 1
@@ -42,7 +28,7 @@ export function computeFitScale(scope: TerminalDocumentScope) {
     return 1
   }
   const vpWidth = scope.viewportRect().width
-  // Why: a viewport with no width yet (a page host never laid out) would give scale 0 and blank the grid.
+  // A not-yet-laid-out host has zero width; zero scale would blank its grid.
   if (vpWidth <= 0) {
     return 1
   }
@@ -98,7 +84,6 @@ export function updateScrollIndicator(scope: TerminalDocumentScope, reveal: bool
   }, 550)
 }
 
-/** Ruling 21: the hide timer is the one thing this module schedules. */
 export function stopViewportTransform(scope: TerminalDocumentScope) {
   if (scope.scrollIndicatorHideTimer) {
     clearTimeout(scope.scrollIndicatorHideTimer)

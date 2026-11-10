@@ -1,12 +1,12 @@
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import type { Dispatch, RefObject, SetStateAction } from 'react'
-import type { JiraComment, JiraIssue } from '../../../shared/jira-types'
+import type { JiraComment, JiraIssue } from '../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { createBrowserUuid } from '@/lib/browser-uuid'
-import { getCommentBodySubmitState } from '@/lib/comment-body-submit-state'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
+import { getCommentBodySubmitState } from '@/lib/source-control/review/comments/comment-body-submit-state'
 import { translate } from '@/i18n/i18n'
-import { jiraAddIssueCommentForTarget } from '@/runtime/runtime-jira-client'
+import { jiraAddIssueCommentForTarget } from '@/runtime/jira/runtime-jira-detail-client'
 
 type JiraIssueCommentSubmissionArgs = {
   commentDraft: string
@@ -67,7 +67,10 @@ export function useJiraIssueCommentSubmission({
         id: result.id || createBrowserUuid(),
         body: bodyState.body,
         createdAt: new Date().toISOString(),
-        user: { accountId: 'local', displayName: 'You' }
+        user: {
+          accountId: 'local',
+          displayName: translate('auto.components.issueComments.you', 'You')
+        }
       }
       optimisticCommentsRef.current.push(comment)
       setComments((previous) => [...previous, comment])

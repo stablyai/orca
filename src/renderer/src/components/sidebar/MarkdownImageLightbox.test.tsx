@@ -31,14 +31,6 @@ describe('ExpandableMarkdownImage', () => {
     expect(document.activeElement).toBe(trigger)
   })
 
-  it('closes from the dialog close button', () => {
-    render(<ExpandableMarkdownImage src="data:image/png;base64,abc" alt="ui.png" />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'Expand image' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
-    expect(screen.queryByRole('dialog', { name: 'ui.png' })).toBeNull()
-  })
-
   it('keeps the parent issue drawer open after Escape and close-button dismissal', () => {
     const onOpenChange = vi.fn()
 

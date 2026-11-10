@@ -2,10 +2,10 @@ import { useRef } from 'react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { searchHostsLabel } from './host-picker-copy'
+import { useTranslate } from '@/i18n/use-translate'
 
 const MENU_ITEM_SELECTOR = '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]'
 
-/** Moves focus from the search item to the menu item before or after it. */
 function focusAdjacentMenuItem(from: HTMLElement, step: 1 | -1): void {
   const menu = from.closest('[role="menu"]')
   const item = from.closest<HTMLElement>(MENU_ITEM_SELECTOR)
@@ -29,23 +29,21 @@ function HostListSearchInput({
   inputRef?: React.RefObject<HTMLInputElement | null>
   onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Input
       ref={inputRef}
       value={value}
       onChange={(event) => onChange(event.target.value)}
       onKeyDown={onKeyDown}
-      placeholder={searchHostsLabel()}
-      aria-label={searchHostsLabel()}
+      placeholder={searchHostsLabel(t)}
+      aria-label={searchHostsLabel(t)}
       className="h-7"
     />
   )
 }
 
-/**
- * Search box for a bounded host checklist. Inside a dropdown menu it is a menu item, so arrow keys
- * reach it like any row; focusing the item hands focus to the input, and arrows leave it again.
- */
+/** Make search reachable as a menu row; focus enters the input and arrow keys return to neighboring items. */
 export function HostListSearchField({
   value,
   onChange,

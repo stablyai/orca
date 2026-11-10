@@ -2,7 +2,7 @@ import type {
   ExternalAutomationAction,
   ExternalAutomationActionInput,
   ExternalAutomationProvider
-} from '../../shared/automations-types'
+} from '../../shared/automations/external/external-automation'
 import { assertExternalAutomationJobId } from './external-manager-job-id'
 import { runLocalAutomationCommand } from './external-manager-local-command'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
@@ -14,7 +14,7 @@ const PROVIDER_ACTION_COMMANDS: Record<
   openclaw: { pause: 'disable', resume: 'enable', run: 'run', delete: 'rm' }
 }
 
-/** Fails closed like its neighbours: an unlisted or inherited key is not an action. */
+/** Reject unlisted or inherited action names. */
 function providerActionCommand(
   provider: ExternalAutomationProvider,
   action: ExternalAutomationAction

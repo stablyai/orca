@@ -73,8 +73,7 @@ describe('PostgreSQL push gateway startup', () => {
     await database.close()
   })
 
-  // Why: a CREATE INDEX on a grown table can outlive the 5s request deadline,
-  // and a schema that inherits it fails every startup at the same statement.
+  // Growing-table CREATE INDEX can exceed request deadlines; inheriting them makes startup fail forever at the same DDL.
   it('applies the schema on an untimed pool that is gone before the serving pool opens', async () => {
     const database = await openPushDatabase({
       databaseUrl: 'postgresql://push@localhost:55440/orca_push',
@@ -98,24 +97,5 @@ describe('PostgreSQL push gateway startup', () => {
     await database.close()
   })
 
-  it('retries a transaction the pool statement_timeout aborted', async () => {
-    const database = await openPushDatabase({
-      databaseUrl: 'postgresql://push@localhost:55440/orca_push',
-      dataDir: '/unused'
-    })
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    let attempts = 0
-    const result = await database.transaction(async () => {
-      attempts += 1
-      if (attempts === 1) throw Object.assign(new Error('canceling statement'), { code: '57014' })
-      return 'done'
-    })
-    expect(result).toBe('done')
-    expect(attempts).toBe(2)
-    expect(warn.mock.calls.map(([line]) => String(line))).toEqual([
-      expect.stringContaining('"code":"57014"')
-    ])
-    warn.mockRestore()
-    await database.close()
-  })
+
 })

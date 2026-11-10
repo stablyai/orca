@@ -1,8 +1,9 @@
 import React from 'react'
 import { AlertTriangle, Loader, Pin } from 'lucide-react'
 import { GhAuthErrorHelp } from './GhAuthErrorHelp'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { projectViewErrorMessage } from './project-view-error-copy'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import { isRenderableProjectViewLayout } from '../../../../shared/github/project-types'
 import type { GitHubProjectViewSummary } from '../../../../shared/github/project-types'
 import type { GitHubProjectViewError } from '../../../../shared/github/project-result-types'
@@ -41,6 +42,7 @@ export function ProjectPickerRow({
   onPin?: () => void
   onRemovePin?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="group flex items-center gap-2 rounded px-2 py-1 hover:bg-muted/50">
       <button type="button" onClick={onClick} className="flex min-w-0 flex-1 flex-col text-left">
@@ -55,14 +57,14 @@ export function ProjectPickerRow({
             className="text-[10px] text-muted-foreground hover:text-foreground"
             onClick={onRemovePin}
           >
-            {translate('auto.components.github.project.ProjectPicker.5009ffc2f3', 'Remove pin')}
+            {t('auto.components.github.project.ProjectPicker.5009ffc2f3', 'Remove pin')}
           </button>
         </div>
       ) : null}
       {canPin ? (
         <button
           type="button"
-          title={translate('auto.components.github.project.ProjectPicker.8ab5447c64', 'Pin')}
+          title={t('auto.components.github.project.ProjectPicker.8ab5447c64', 'Pin')}
           className="can-hover:opacity-0 group-hover:opacity-100"
           onClick={onPin}
         >
@@ -84,6 +86,7 @@ export function ProjectViewPickStep({
   onPick: (view: GitHubProjectViewSummary) => void | Promise<void>
   onBack: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex flex-col">
       <div className="flex items-center justify-between border-b border-border/50 p-2">
@@ -92,10 +95,10 @@ export function ProjectViewPickStep({
           onClick={onBack}
           className="text-xs text-muted-foreground hover:text-foreground"
         >
-          {translate('auto.components.github.project.ProjectPicker.a51b3337ab', '← Back')}
+          {t('auto.components.github.project.ProjectPicker.a51b3337ab', '← Back')}
         </button>
         <span className="text-xs font-medium">
-          {translate('auto.components.github.project.ProjectPicker.9bf55fa1e8', 'Choose a view')}
+          {t('auto.components.github.project.ProjectPicker.9bf55fa1e8', 'Choose a view')}
         </span>
         <span />
       </div>
@@ -103,14 +106,11 @@ export function ProjectViewPickStep({
         {loading ? (
           <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
             <Loader className="size-3 animate-spin" />
-            {translate('auto.components.github.project.ProjectPicker.72a05c04a6', 'Loading views…')}
+            {t('auto.components.github.project.ProjectPicker.72a05c04a6', 'Loading views…')}
           </div>
         ) : views.length === 0 ? (
           <div className="px-2 py-2 text-xs text-muted-foreground">
-            {translate(
-              'auto.components.github.project.ProjectPicker.9b36829267',
-              'No views found.'
-            )}
+            {t('auto.components.github.project.ProjectPicker.9b36829267', 'No views found.')}
           </div>
         ) : (
           views.map((view) => <ProjectViewPickerRow key={view.id} view={view} onPick={onPick} />)
@@ -127,20 +127,18 @@ function ProjectViewPickerRow({
   view: GitHubProjectViewSummary
   onPick: (view: GitHubProjectViewSummary) => void | Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   const supported = isRenderableProjectViewLayout(view.layout)
   const layoutLabel =
     view.layout === 'TABLE_LAYOUT'
-      ? translate('auto.components.github.project.ProjectPicker.1a2b8e512e', 'Table')
+      ? t('auto.components.github.project.ProjectPicker.1a2b8e512e', 'Table')
       : view.layout === 'ROADMAP_LAYOUT'
-        ? translate('auto.components.github.project.ProjectPickerPanels.04ec212ccb', 'Roadmap')
+        ? t('auto.components.github.project.ProjectPickerPanels.04ec212ccb', 'Roadmap')
         : view.layout === 'BOARD_LAYOUT'
-          ? translate('projectViews.layout.board', 'Board')
+          ? t('projectViews.layout.board', 'Board')
           : // Why: raw.layout is cast unchecked, so a future GitHub layout value
             // lands here — keep it disabled instead of mislabeling it.
-            translate(
-              'auto.components.github.project.ProjectPickerPanels.9fe1ac868c',
-              'Unsupported'
-            )
+            t('auto.components.github.project.ProjectPickerPanels.9fe1ac868c', 'Unsupported')
   return (
     <button
       type="button"
@@ -162,12 +160,22 @@ export function ProjectPickerPartialFailures({
 }: {
   failures: { owner: string; message: string }[]
 }): React.JSX.Element {
+  const t = useTranslate()
   const summary =
     failures.length === 1 && failures[0].owner !== '*'
-      ? `Couldn't load projects from ${failures[0].owner}.`
-      : `Some organizations didn't load (${failures.length}).`
+      ? t('projectViews.picker.ownerLoadFailed', "Couldn't load projects from {{owner}}.", {
+          owner: failures[0].owner
+        })
+      : t(
+          'projectViews.picker.organizationsLoadFailed',
+          "Some organizations didn't load ({{failureCount}}).",
+          { failureCount: failures.length }
+        )
   const detail = failures
-    .map((failure) => `${failure.owner === '*' ? 'orgs' : failure.owner}: ${failure.message}`)
+    .map(
+      (failure) =>
+        `${failure.owner === '*' ? t('projectViews.picker.organizations', 'Organizations') : failure.owner}: ${failure.message}`
+    )
     .join('\n')
   return (
     <div
@@ -179,7 +187,7 @@ export function ProjectPickerPartialFailures({
         <div>
           <div>{summary}</div>
           <div className="mt-0.5 text-[11px] opacity-80">
-            {translate(
+            {t(
               'auto.components.github.project.ProjectPicker.96739284c3',
               'Paste a project URL below to reach missing ones.'
             )}
@@ -197,6 +205,7 @@ export function ProjectPickerError({
   error: GitHubProjectViewError
   host: string
 }): React.JSX.Element {
+  const t = useTranslate()
   if (error.type === 'auth_required' || error.type === 'scope_missing') {
     return (
       <GhAuthErrorHelp
@@ -208,7 +217,7 @@ export function ProjectPickerError({
   }
   return (
     <div className="border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
-      <div>{error.message}</div>
+      <div>{projectViewErrorMessage(error, { host }, t)}</div>
     </div>
   )
 }

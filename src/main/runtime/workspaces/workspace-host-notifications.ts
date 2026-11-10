@@ -2,21 +2,13 @@ import { getRepoRoutingConnectionId } from '../../../shared/execution-host'
 import type { OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession } from '../session-tabs/mobile-session-hydration'
 import type { OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs } from '../session-lifecycle/projection/build-headless-mobile-session-browser-tabs'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from '../session-tabs/session-tabs-change-publication'
-import type { RuntimeWorkspaceRepoScanRefresh } from './workspace-repo-scan-refresh'
-import { OrcaRuntimeWithGetStatus } from '../orca-runtime-get-status'
+import type { RuntimeWorkspaceRepoScanRefresh } from './catalog/workspace-repo-scan-refresh'
 import type { SshConnectionState } from '../../../shared/ssh-types'
-import { getPublicSshState } from '../public-ssh-state'
+import { getPublicSshState } from '../hosts/platform-probe/public-ssh-state'
 import { splitWorktreeId } from '../../../shared/worktree/id'
-import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
-import type { WorktreeStartupLaunch } from '../../../shared/worktree/launch-types'
-import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
-import { navigationTargetsClients, navigationTargetsHost } from '../../../shared/runtime-navigation'
-import { toRuntimeActivateWorktreeEvent } from '../../../shared/runtime-client-events'
-import type { AgentBrowserBridge } from '../../browser/agent-browser-bridge'
-import type { BrowserBackend } from '../../browser/browser-backend'
-import type { EmulatorBridge } from '../../emulator/emulator-bridge'
+import { RuntimeEmulatorBinding } from '../emulator/runtime-emulator-binding'
 
-export abstract class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStatus {
+export abstract class OrcaRuntimeWithNotifySshStateChanged extends RuntimeEmulatorBinding {
   protected abstract hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
     ...args: Parameters<
       OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession['hydrateHeadlessMobileSessionTabsFromWorkspaceSession']
@@ -24,6 +16,7 @@ export abstract class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWi
   ): ReturnType<
     OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession['hydrateHeadlessMobileSessionTabsFromWorkspaceSession']
   >
+
   protected abstract refreshMobileSessionPtyRecords(
     ...args: Parameters<
       OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs['refreshMobileSessionPtyRecords']
@@ -31,6 +24,7 @@ export abstract class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWi
   ): ReturnType<
     OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs['refreshMobileSessionPtyRecords']
   >
+
   protected abstract notifyMobileSessionTabsChangedNow(
     ...args: Parameters<
       OrcaRuntimeWithScheduleMobileSessionTabsChanged['notifyMobileSessionTabsChangedNow']
@@ -38,17 +32,16 @@ export abstract class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWi
   ): ReturnType<
     OrcaRuntimeWithScheduleMobileSessionTabsChanged['notifyMobileSessionTabsChangedNow']
   >
+
   protected abstract invalidateSshWorktreeScanCacheInternal(
     ...args: Parameters<RuntimeWorkspaceRepoScanRefresh['invalidateSshWorktreeScanCacheInternal']>
   ): ReturnType<RuntimeWorkspaceRepoScanRefresh['invalidateSshWorktreeScanCacheInternal']>
 
-  abstract invalidateResolvedWorktreeCache(): void
-  abstract invalidateWorktreeScanCacheForRepo(repoId: string): void
-
   private static readonly MAX_SSH_RELAY_RECOVERY_GENERATIONS = 512
+
   private sshRelayRecoveryGenerationSequence = 0
-  // Why: SSH state changes originate in main's ssh handlers, not in runtime
-  // methods, so they need a public entry point onto the client-event stream.
+
+  // Main SSH handlers bypass runtime methods, so they need a client-event entrypoint.
   notifySshStateChanged(targetId: string, state: SshConnectionState): void {
     this.bumpSshRelayRecoveryGeneration(targetId)
     this.invalidateSshWorktreeScanCache(targetId)
@@ -138,7 +131,7 @@ export abstract class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWi
       return
     }
 
-    // Why: relay readiness follows PTY reattach; rebuild the HUB-owned panes before paired clients consume the connected event.
+    // Rebuild hub-owned panes after PTY reattach, before paired clients consume connected.
     for (const worktreeId of worktreeIds) {
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
         allowAttachedWindow: true,
@@ -156,130 +149,5 @@ export abstract class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWi
 
   invalidateSshWorktreeScanCache(targetId: string): void {
     this.invalidateSshWorktreeScanCacheInternal(targetId)
-  }
-
-  // Why: renderer-initiated meta updates intentionally skip the renderer
-  // notifier (the renderer already applied them optimistically), but remote
-  // clients hold no optimistic copy and need the invalidation event.
-  notifyWorktreesChangedForRemoteClients(repoId: string): void {
-    this.invalidateResolvedWorktreeCache()
-    this.emitClientEvent({ type: 'worktreesChanged', repoId })
-  }
-
-  /** A background removal started or ended; every client refetches and reads the `removing` marker. */
-  publishWorktreeRemovalChange(repoId: string): void {
-    this.invalidateResolvedWorktreeCache()
-    this.notifyWorktreesChanged(repoId)
-  }
-
-  // Why: structural catalog changes require a fresh Git scan; renderer metadata edits do not.
-  notifyWorktreeCatalogChangedForRemoteClients(repoId: string): void {
-    this.invalidateWorktreeScanCacheForRepo(repoId)
-    const matchingRepos = this.store?.getRepos().filter((repo) => repo.id === repoId) ?? []
-    if (matchingRepos.length !== 1 || matchingRepos[0]?.connectionId) {
-      return
-    }
-    this.notifyWorktreesChangedForRemoteClients(repoId)
-  }
-
-  // Why: host-local repo IPC mutations never enter runtime methods, so paired
-  // clients need an explicit catalog invalidation; the local renderer already
-  // got its own repos:changed and must not be re-notified (#11994).
-  notifyReposChangedForRemoteClients(): void {
-    this.emitClientEvent({ type: 'reposChanged' })
-  }
-
-  /** `setup` and `defaultTabs` go to the host window only: main tried and failed to start them. */
-  protected notifyActivateWorktree(
-    repoId: string,
-    worktreeId: string,
-    setup?: CreateWorktreeResult['setup'],
-    startup?: WorktreeStartupLaunch,
-    defaultTabs?: CreateWorktreeResult['defaultTabs'],
-    navigationTarget?: RuntimeNavigationTarget,
-    providesInitialSurface?: boolean
-  ): void {
-    const navigation = navigationTarget ?? 'host'
-    if (navigationTargetsHost(navigation)) {
-      this.notifyHostActivateWorktree(
-        repoId,
-        worktreeId,
-        setup,
-        startup,
-        defaultTabs,
-        providesInitialSurface
-      )
-    }
-    if (navigationTargetsClients(navigation)) {
-      this.notifyClientsActivateWorktree(
-        repoId,
-        worktreeId,
-        startup,
-        navigation,
-        providesInitialSurface
-      )
-    }
-  }
-
-  protected notifyHostActivateWorktree(
-    repoId: string,
-    worktreeId: string,
-    setup?: CreateWorktreeResult['setup'],
-    startup?: WorktreeStartupLaunch,
-    defaultTabs?: CreateWorktreeResult['defaultTabs'],
-    providesInitialSurface?: boolean
-  ): void {
-    this.notifier?.activateWorktree(
-      repoId,
-      worktreeId,
-      setup,
-      startup,
-      defaultTabs,
-      ...(providesInitialSurface ? ([true] as const) : [])
-    )
-  }
-
-  protected notifyClientsActivateWorktree(
-    repoId: string,
-    worktreeId: string,
-    startup?: WorktreeStartupLaunch,
-    navigation: RuntimeNavigationTarget = 'clients',
-    providesInitialSurface?: boolean
-  ): void {
-    this.emitClientEvent(
-      toRuntimeActivateWorktreeEvent(
-        repoId,
-        worktreeId,
-        undefined,
-        startup,
-        undefined,
-        navigation,
-        providesInitialSurface
-      )
-    )
-  }
-
-  setAgentBrowserBridge(bridge: AgentBrowserBridge | null): void {
-    this.agentBrowserBridge = bridge
-  }
-
-  getAgentBrowserBridge(): AgentBrowserBridge | null {
-    return this.agentBrowserBridge
-  }
-
-  setOffscreenBrowserBackend(backend: BrowserBackend | null): void {
-    this.offscreenBrowserBackend = backend
-  }
-
-  getOffscreenBrowserBackend(): BrowserBackend | null {
-    return this.offscreenBrowserBackend
-  }
-
-  setEmulatorBridge(bridge: EmulatorBridge | null): void {
-    this.emulatorBridge = bridge
-  }
-
-  getEmulatorBridge(): EmulatorBridge | null {
-    return this.emulatorBridge
   }
 }

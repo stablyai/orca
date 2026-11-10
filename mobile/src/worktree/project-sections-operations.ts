@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { MOBILE_PROJECT_SECTIONS_METHOD } from '../../../src/shared/mobile-project-sections-contract'
 import {
   ProjectGroupSchema,
@@ -6,14 +6,13 @@ import {
   type ServedProjectSections
 } from '../../../src/shared/project-section-catalog-schema'
 import { salvagingArray } from '../../../src/shared/zod-salvage'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
-import { isMobileMethodUnavailableError } from '../transport/mobile-method-unavailable'
-import type { RpcResponse } from '../transport/types'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
+import { isMobileMethodUnavailableError } from '../transport/rpc/mobile-method-unavailable'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 
 export type { ServedProjectSections }
 
-/** The sidebar's Project grouping inputs; null until a desktop window has published them. */
 export const projectSectionsRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'mobileRelay.projectSections-or-skip',
@@ -29,7 +28,6 @@ export const projectSectionsRead = bindDeferredRpcOperation(
   })
 )
 
-/** A host's own project groups, which a feed-built list files folder workspaces under. */
 export const hostProjectGroupsRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'projectGroup.host-groups-or-skip',
@@ -43,10 +41,7 @@ export const hostProjectGroupsRead = bindDeferredRpcOperation(
   })
 )
 
-/**
- * The desktop's sidebar catalog: absent (null) on a desktop that predates the read, and left
- * as it was after a transient failure, so a dropped reply never regroups the list.
- */
+// Older hosts return null; transient failure retains grouping so a lost reply cannot regroup the list.
 export function readServedProjectSections(
   reply: RpcResponse | null
 ): { kind: 'answered'; value: ServedProjectSections | null } | { kind: 'kept' } {

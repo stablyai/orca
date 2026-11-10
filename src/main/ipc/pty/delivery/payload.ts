@@ -1,8 +1,9 @@
-import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
-import type { PtyModelRestoreReason } from '../../../../shared/pty-model-restore-marker'
+import { redactPtyIdForDiagnostics } from '../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
+import type { PtyModelRestoreReason } from '../../../../shared/terminal/replay/pty-model-restore-marker'
 import { mainDeliveryBreadcrumbs } from './debug'
 import { recordPtyRendererDeliveryPressure } from './accounting'
 import type { PtyDataPayload, PtyIpcSession } from '../session'
+import { escapeBoundaryFields, type PtyEscapeBoundary } from './pty-escape-boundary'
 
 export function makePtyDataPayload(
   id: string,
@@ -10,9 +11,10 @@ export function makePtyDataPayload(
   startSeq: number | undefined,
   containsBackgroundOutput: boolean | undefined,
   rawLength = data.length,
-  transformed = false
+  transformed = false,
+  startEscapeBoundary?: PtyEscapeBoundary
 ): PtyDataPayload {
-  const payload: PtyDataPayload = { id, data }
+  const payload: PtyDataPayload = { id, data, ...escapeBoundaryFields(startEscapeBoundary) }
   if (typeof startSeq === 'number') {
     payload.seq = startSeq + rawLength
   }
@@ -50,7 +52,7 @@ export function sendModelRestoreNeededMarker(
       ...(typeof hiddenDropEpisode === 'number' ? { hiddenDropEpisode } : {})
     })
   } catch (error) {
-    // Why: a disposed render frame throws synchronously here, and this rides the data path.
+    // Disposed frames can throw synchronously on this data path.
     console.error('[pty] renderer model-restore marker send failed', error)
     return false
   }
@@ -115,7 +117,7 @@ export function sendPtyDataToRenderer(
       session.runtime?.getPtyOutputSequence(id)
     )
   ) {
-    // Why cleared only on a successful send: an unsent marker leaves the restore pending.
+    // Failed sends must leave restore pending.
     session.rendererDeliveryRestoreNeededPtys.delete(id)
   }
   return true

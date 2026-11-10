@@ -3,8 +3,8 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../execution-host'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
-import { getWorkspaceSessionTabActivity } from '../workspace-session-tab-activity'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
+import { getWorkspaceSessionTabActivity } from '../workspace-session/workspace-session-tab-activity'
 import {
   composeWorktreeHostIdentity,
   type HostScopedWorktreeKey
@@ -13,12 +13,8 @@ import { worktreeIdentityKey } from '../worktree/id'
 import type { PairedServerRowsSnapshot } from './paired-server-rows'
 import { isIdleWorkspaceActivity, type WorkspaceActivityFacts } from './workspace-activity-facts'
 
-/**
- * A paired server's rows under their host-qualified keys, like the review facts: its terminals and
- * agents as the server reports them, and the browser and chat tabs this desktop's session holds
- * there, which only the desktop knows. Rows from a server out of contact keep their terminals
- * unverifiable, never gone (docs/reference/ssh-execution-boundary.md).
- */
+/** Combine host-qualified server terminal/agent facts with desktop-known browser/chat tabs.
+ * Keep out-of-contact terminals unverifiable, never gone (ssh-execution-boundary.md). */
 export function buildPairedServerActivityFacts(
   servers: readonly Pick<
     PairedServerRowsSnapshot['servers'][number],

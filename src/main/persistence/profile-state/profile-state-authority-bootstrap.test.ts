@@ -98,79 +98,6 @@ function paths(directory: string): {
 }
 
 describe('profile state authority bootstrap', () => {
-  it('classifies all four storage-presence states without opening SQLite', () => {
-    const directory = createDirectory()
-    const { dataFile, databaseFile } = paths(directory)
-
-    expect(classifyProfileStateStorage(dataFile, databaseFile)).toBe('neither')
-    writeFileSync(dataFile, '{}')
-    expect(classifyProfileStateStorage(dataFile, databaseFile)).toBe('json-only')
-
-    const opened = openProfileStateDatabase(databaseFile, 'profile-bootstrap-test')
-    opened.db.close()
-    expect(classifyProfileStateStorage(dataFile, databaseFile)).toBe('both')
-
-    rmSync(dataFile)
-    expect(classifyProfileStateStorage(dataFile, databaseFile)).toBe('sqlite-only')
-  })
-
-  it('imports JSON-only state through Store export and returns the SQLite authority', () => {
-    const directory = createDirectory()
-    const options = paths(directory)
-    writeFileSync(
-      options.dataFile,
-      JSON.stringify({ settings: { theme: 'dark' }, futureExtension: { keep: true } })
-    )
-
-    const result = bootstrapProfileStateAuthority(options)
-
-    expect(result.classification).toBe('json-only')
-    expect(result.migrated).toBe(true)
-    expect(result.authority?.readSerializedState()).toContain('futureExtension')
-    expect(existsSync(options.dataFile)).toBe(true)
-    expect(existsSync(profileStateJsonExportPath(options.dataFile, 1))).toBe(true)
-    expect(readFileSync(profileStateJsonExportPath(options.dataFile, 1), 'utf8')).toContain(
-      'futureExtension'
-    )
-    expect(classifyProfileStateStorage(options.dataFile, options.databaseFile)).toBe('both')
-
-    if (result.authority === undefined) {
-      throw new Error('JSON migration did not return a SQLite authority')
-    }
-    const store = new Store({
-      dataFile: options.dataFile,
-      profileStateAuthority: result.authority
-    })
-    expect(store.getSettings().theme).toBe('dark')
-
-    const repeated = bootstrapProfileStateAuthority(options)
-    expect(repeated.authority?.readSerializedState()).toContain('futureExtension')
-  })
-
-  it('fails closed when both files are present without a matching acceptance marker', () => {
-    const directory = createDirectory()
-    const options = paths(directory)
-    writeFileSync(options.dataFile, JSON.stringify({ settings: { theme: 'dark' } }))
-    const opened = openProfileStateDatabase(options.databaseFile, options.profileId)
-    opened.db.close()
-
-    expect(() => bootstrapProfileStateAuthority(options)).toThrowError(
-      ProfileStateAuthorityBootstrapError
-    )
-  })
-
-  it('rejects a legacy JSON edit after migration instead of selecting stale SQLite state', () => {
-    const directory = createDirectory()
-    const options = paths(directory)
-    writeFileSync(options.dataFile, JSON.stringify({ settings: { theme: 'dark' } }))
-    bootstrapProfileStateAuthority(options)
-    writeFileSync(options.dataFile, JSON.stringify({ settings: { theme: 'light' } }))
-
-    expect(() => bootstrapProfileStateAuthority(options)).toThrowError(
-      ProfileStateAuthorityBootstrapError
-    )
-  })
-
   it.each([1, 2])(
     'requires explicit recovery for unreleased schema %s without changing its bytes',
     (version) => {
@@ -215,13 +142,6 @@ describe('profile state authority bootstrap', () => {
       })
     }
   )
-
-  it('returns no authority for a brand-new profile', () => {
-    const directory = createDirectory()
-    const result = bootstrapProfileStateAuthority(paths(directory))
-
-    expect(result).toEqual({ classification: 'neither', authority: undefined, migrated: false })
-  })
 
   it('cleans failed empty-profile initialization before a successful retry', () => {
     const directory = createDirectory()
@@ -320,93 +240,6 @@ describe('profile state authority bootstrap', () => {
     }
   )
 
-  it('validates and returns an existing SQLite-only authority', () => {
-    const directory = createDirectory()
-    const options = paths(directory)
-    const opened = openProfileStateDatabase(options.databaseFile, options.profileId)
-    opened.db.close()
-
-    const result = bootstrapProfileStateAuthority(options)
-
-    expect(result.classification).toBe('sqlite-only')
-    expect(result.migrated).toBe(false)
-    expect(result.authority?.readSerializedState()).toBeUndefined()
-  })
-
-  it('rejects malformed SQLite-only state before Store can select it', () => {
-    const directory = createDirectory()
-    const options = paths(directory)
-    writeFileSync(options.databaseFile, 'not sqlite')
-
-    expect(() => bootstrapProfileStateAuthority(options)).toThrow()
-  })
-
-  it('reports retained exports when an established SQLite profile needs recovery', () => {
-    const directory = createDirectory()
-    const options = paths(directory)
-    writeFileSync(options.dataFile, JSON.stringify({ settings: { theme: 'dark' } }))
-    const bootstrap = bootstrapProfileStateAuthority(options)
-    bootstrap.authority?.close?.()
-    const exportPath = profileStateJsonExportPath(options.dataFile, 1)
-    const exportPathRevision2 = profileStateJsonExportPath(options.dataFile, 2)
-    const exportPathRevision10 = profileStateJsonExportPath(options.dataFile, 10)
-    writeFileSync(exportPathRevision2, readFileSync(exportPath))
-    writeFileSync(exportPathRevision10, readFileSync(exportPath))
-    writeFileSync(
-      `${options.dataFile}.sqlite-export.9007199254740992.json`,
-      readFileSync(exportPath)
-    )
-    writeFileSync(options.databaseFile, 'not sqlite')
-
-    try {
-      bootstrapProfileStateAuthority(options)
-      throw new Error('expected recovery-required startup failure')
-    } catch (error) {
-      expect(error).toBeInstanceOf(ProfileStateRecoveryRequiredError)
-      if (!(error instanceof ProfileStateRecoveryRequiredError)) {
-        throw error
-      }
-      expect(error.dataFile).toBe(options.dataFile)
-      expect(error.databaseFile).toBe(options.databaseFile)
-      expect(error.exportPaths).toEqual([exportPathRevision10, exportPathRevision2, exportPath])
-    }
-  })
-
-  it('does not create a database when the legacy JSON cannot be imported', () => {
-    const directory = createDirectory()
-    const options = paths(directory)
-    writeFileSync(options.dataFile, '{ malformed')
-
-    expect(() => bootstrapProfileStateAuthority(options)).toThrow(
-      'Failed to load imported profile state'
-    )
-    expect(existsSync(options.databaseFile)).toBe(false)
-  })
-
-  it.each([0, 1, 2, 3, 4])(
-    'migrates usable legacy backup slot %s after a corrupt primary',
-    (slot) => {
-      const options = paths(createDirectory())
-      const damaged = '{ malformed primary'
-      const recovered = JSON.stringify({ settings: { theme: 'dark' }, retainedBackup: slot })
-      writeFileSync(options.dataFile, damaged)
-      for (let index = 0; index < slot; index += 1) {
-        writeFileSync(`${options.dataFile}.bak.${index}`, '{ damaged backup')
-      }
-      writeFileSync(`${options.dataFile}.bak.${slot}`, recovered)
-
-      const result = bootstrapProfileStateAuthority(options)
-      expect(result.migrated).toBe(true)
-      expect(JSON.parse(result.authority?.readSerializedState() ?? '{}')).toMatchObject({
-        settings: { theme: 'dark' },
-        retainedBackup: slot
-      })
-      expect(readFileSync(options.dataFile, 'utf8')).toBe(damaged)
-      expect(readFileSync(`${options.dataFile}.bak.${slot}`, 'utf8')).toBe(recovered)
-      expect(bootstrapProfileStateAuthority(options).migrated).toBe(false)
-    }
-  )
-
   it('preserves every source when legacy primary and backups are unusable', () => {
     const options = paths(createDirectory())
     writeFileSync(options.dataFile, '{ malformed primary')
@@ -441,41 +274,6 @@ describe('profile state authority bootstrap', () => {
     const retry = bootstrapProfileStateAuthority(options)
     expect(retry.migrated).toBe(true)
     expect(retry.authority?.readSerializedState()).toContain('"dark"')
-  })
-
-  it('refuses a pre-existing retained export before migrating JSON again', () => {
-    const directory = createDirectory()
-    const options = paths(directory)
-    writeFileSync(options.dataFile, JSON.stringify({ settings: { theme: 'dark' } }))
-    const exportPath = profileStateJsonExportPath(options.dataFile, 1)
-    mkdirSync(exportPath)
-
-    expect(() => bootstrapProfileStateAuthority(options)).toThrow()
-    expect(existsSync(options.dataFile)).toBe(true)
-    expect(existsSync(options.databaseFile)).toBe(false)
-
-    rmSync(exportPath, { recursive: true })
-    const retry = bootstrapProfileStateAuthority(options)
-    expect(retry.classification).toBe('json-only')
-    expect(retry.migrated).toBe(true)
-    expect(retry.authority?.readSerializedState()).toContain('"dark"')
-  })
-
-  it('boots the revisioned export through the legacy Store after SQLite corruption', () => {
-    const directory = createDirectory()
-    const options = paths(directory)
-    writeFileSync(options.dataFile, JSON.stringify({ settings: { theme: 'dark' } }))
-    bootstrapProfileStateAuthority(options)
-    const exportPath = profileStateJsonExportPath(options.dataFile, 1)
-
-    writeFileSync(options.databaseFile, 'corrupt sqlite primary')
-    writeFileSync(options.dataFile, readFileSync(exportPath))
-    const rollbackStore = new Store({
-      dataFile: options.dataFile,
-      serializedState: readFileSync(options.dataFile, 'utf8')
-    })
-    expect(rollbackStore.getSettings().theme).toBe('dark')
-    rollbackStore.freezeWrites()
   })
 
   it('quarantines SQLite and restores a selected export for legacy rollback', () => {

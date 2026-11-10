@@ -1,11 +1,15 @@
-// One durable row per Claude background `task_id`, revised in place from the
-// lifecycle frames so a failed command prints once with the provider sentence.
-
-import type { AgentJournalTurnScope } from '../../shared/agent-session-journal-types'
-import { isSettledBackgroundTaskState } from '../../shared/native-chat-background-task-row'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { record, taskAliasId } from './claude-background-task-frames'
+import { ClaudeTaskInvocations } from './claude-task-invocations'
+import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
+import { isSettledBackgroundTaskState } from '../../shared/native-chat/input/native-chat-background-task-row'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { BoundedMap } from '../../shared/bounded-map'
 import {
+  record,
+  taskAliasId,
+  CLAUDE_BACKGROUND_TASK_ROW_SUBTYPES
+} from './claude-background-task-frames'
+import {
+  attributeClaudeBackgroundTaskRow,
   claudeBackgroundTaskPatchChange,
   claudeBackgroundTaskToolUseId,
   canonicalClaudeBackgroundTaskId,
@@ -21,35 +25,25 @@ import {
   ensureClaudeBackgroundTaskRowSlot,
   type ClaudeBackgroundTaskLedgerSizes
 } from './claude-background-task-memory'
-import { ClaudeBackgroundTaskRowWriter } from './claude-background-task-row-writer'
+import {
+  ClaudeBackgroundTaskRowWriter,
+  createClaudeBackgroundTaskTurnOpener
+} from './claude-background-task-row-writer'
 import { observeClaudeBackgroundTaskStart } from './claude-background-task-start'
-import { observeClaudeBackgroundTaskRoster } from './claude-background-task-roster'
+import { observeOwnedClaudeBackgroundTaskRoster } from './claude-background-task-roster'
 import { ClaudeSubagentIds } from './claude-subagent-id-aliases'
 import { ClaudeOverflowTerminalRows } from './claude-overflow-terminal-rows'
 
 const MAX_TASK_ROWS = 64
 
-const TASK_SUBTYPES: ReadonlySet<string> = new Set([
-  'task_started',
-  'task_updated',
-  'task_progress',
-  'task_notification'
-])
-
 export type ClaudeBackgroundTaskRowsDeps = {
   sink: StructuredAgentSessionEventSink
-  /** Whether a tool id names a tool call this session forwarded at the TOP
-   *  level. Consulted on first admission only: a task whose spawning tool never
-   *  reached the transcript is a nested child, and a top-level row minted for it
-   *  would claim an invocation the user never saw. */
+  /** Require a forwarded top-level invocation on first admission to exclude nested children. */
   isForwardedParentTool: (toolUseId: string) => boolean
-  /** Whether an earlier provider run of this session rostered this task as a
-   *  subagent. Its announcement is not repeated, so this is the only route from
-   *  a later frame for it — Claude's restart notice above all — to the roster. */
+  /** Recover earlier-run subagent ownership when Claude does not repeat its announcement. */
+  taskInvocations?: ClaudeTaskInvocations
   rosteredByEarlierRun?: (taskId: string) => boolean
-  /** Opens a turn for the frame being journaled. A typed row is provider
-   *  output, so writing one must reopen a turn the provider resumed itself —
-   *  otherwise the session renders the row while reporting idle. */
+  /** Reopen provider-resumed turns before journaling output so the session reports working. */
   openOutputTurn?: (frame: Record<string, unknown>, observedAt: number) => void
   /** The turn a row written now belongs to: the open one, else the conversation. */
   turnScope: () => AgentJournalTurnScope
@@ -60,13 +54,17 @@ export type ClaudeBackgroundTaskRowsDeps = {
 export class ClaudeBackgroundTaskRows {
   private readonly rows = new Map<string, ClaudeBackgroundTaskRow>()
   private readonly writer: ClaudeBackgroundTaskRowWriter
+  private readonly openTurn: ReturnType<typeof createClaudeBackgroundTaskTurnOpener>
   private readonly overflowTerminalRows: ClaudeOverflowTerminalRows
   private readonly ledgers = new ClaudeBackgroundTaskLedgers()
   private readonly ids = new ClaudeSubagentIds()
   private readonly now: () => number
+  private readonly taskInvocations: ClaudeTaskInvocations
 
   constructor(private readonly deps: ClaudeBackgroundTaskRowsDeps) {
+    this.taskInvocations = deps.taskInvocations ?? new ClaudeTaskInvocations()
     this.now = deps.now ?? (() => Date.now())
+    this.openTurn = createClaudeBackgroundTaskTurnOpener(deps.openOutputTurn, this.taskInvocations)
     this.writer = new ClaudeBackgroundTaskRowWriter(
       deps.sink,
       deps.turnScope,
@@ -79,18 +77,36 @@ export class ClaudeBackgroundTaskRows {
     )
   }
 
-  /** @internal - exposed for tests only: what the bounded ledgers are holding,
-   *  so eviction can be proved without reaching into the collections. */
+  /** @internal Ledger sizes exposed for eviction tests. */
   get ledgerSizes(): ClaudeBackgroundTaskLedgerSizes & { readonly overflowTerminalRows: number } {
     return { ...this.ledgers.sizes, overflowTerminalRows: this.overflowTerminalRows.size }
   }
 
-  /** The frame being journaled right now, so a write can open its turn. Null
-   *  outside `observe`: a teardown sweep must never open one. */
+  /** Notification frames that already opened a wake turn; a redelivered one must not open another. */
+  private readonly wakeFrames = new BoundedMap<string, true>({ maxEntries: 64 })
+
+  /** Null outside observe so teardown writes cannot reopen a turn. */
   private journaling: { frame: Record<string, unknown>; observedAt: number } | null = null
 
   observe(message: Record<string, unknown>, observedAt: number = this.now()): boolean {
+    this.taskInvocations.observe(message)
     this.journaling = { frame: message, observedAt }
+    // Claude wakes the lead for any task the lead launched, rowless subagents included; open that turn at the notification, once per frame.
+    const toolUseId =
+      message.subtype === 'task_notification' ? taskAliasId(message.tool_use_id) : undefined
+    const frameId = typeof message.uuid === 'string' ? message.uuid : undefined
+    if (
+      message.type === 'system' &&
+      toolUseId &&
+      this.deps.isForwardedParentTool(toolUseId) &&
+      !(frameId && this.wakeFrames.has(frameId))
+    ) {
+      if (frameId) {
+        this.wakeFrames.set(frameId, true)
+      }
+      const id = canonicalClaudeBackgroundTaskId(message, this.ids)
+      this.openTurn(this.journaling, true, id)()
+    }
     try {
       return this.observeFrame(message)
     } finally {
@@ -98,12 +114,11 @@ export class ClaudeBackgroundTaskRows {
     }
   }
 
-  /** A Monitor result can identify its task before any lifecycle announcement.
-   *  Its later notification belongs to that tool call, not a transcript row. */
-  observeMonitorToolResult(taskId: unknown): void {
+  /** Monitor results may precede announcements; their notifications belong to the tool call. */
+  observeMonitorToolResult(taskId: unknown, toolUseId?: string): void {
     const id = taskAliasId(taskId)
     if (id !== undefined) {
-      this.ledgers.rememberForeign(id, 'ambient')
+      this.taskInvocations.excludeMonitor(id, toolUseId)
     }
   }
 
@@ -115,28 +130,46 @@ export class ClaudeBackgroundTaskRows {
       if (!Array.isArray(message.tasks)) {
         return false
       }
-      observeClaudeBackgroundTaskRoster(message.tasks, this.rows, (id, change) =>
-        this.revise(id, change)
-      )
+      observeOwnedClaudeBackgroundTaskRoster({
+        tasks: message.tasks,
+        rows: this.rows,
+        invocations: this.taskInvocations,
+        revise: (id, change) => this.revise(id, change),
+        attribute: attributeClaudeBackgroundTaskRow,
+        admit: (id, task) => {
+          if (!this.ledgers.terminalTaskIds.has(id)) {
+            this.observeStart(id, task, true)
+          }
+        }
+      })
       return true
     }
-    if (typeof message.subtype !== 'string' || !TASK_SUBTYPES.has(message.subtype)) {
+    if (
+      typeof message.subtype !== 'string' ||
+      !CLAUDE_BACKGROUND_TASK_ROW_SUBTYPES.has(message.subtype)
+    ) {
       return false
     }
     const id = canonicalClaudeBackgroundTaskId(message, this.ids)
     if (id === null) {
       return false
     }
+    const selected = this.taskInvocations.selection(message, id)
+    if (selected?.invocation.excluded || selected?.invocation.monitor) {
+      return true
+    }
+    if (selected?.current === false) {
+      if (message.subtype !== 'task_notification') {
+        return true
+      }
+      const generation = this.ledgers.generations.next(id)
+      const row = newClaudeBackgroundTaskRowFromNotification(id, message, this.now(), generation)
+      row.invocation = selected.invocation
+      this.writeRow(id, row)
+      return true
+    }
     if (message.subtype === 'task_started') {
-      return observeClaudeBackgroundTaskStart({
-        id,
-        message,
-        rows: this.rows,
-        ledgers: this.ledgers,
-        isForwardedParentTool: this.deps.isForwardedParentTool,
-        openRow: (taskId, frame) => this.openRow(taskId, frame),
-        maxRows: MAX_TASK_ROWS
-      })
+      return this.observeStart(id, message)
     }
     if (this.ledgers.foreign.has(id)) {
       return true
@@ -149,6 +182,28 @@ export class ClaudeBackgroundTaskRows {
       return this.observeNotification(id, message)
     }
     return this.observePatch(id, message)
+  }
+
+  private observeStart(id: string, message: Record<string, unknown>, roster = false): boolean {
+    const selected = this.taskInvocations.selection(message, id)
+    if (!selected?.acceptsStart || selected.invocation.excluded || selected.invocation.monitor) {
+      return true
+    }
+    return observeClaudeBackgroundTaskStart({
+      id,
+      message: {
+        ...message,
+        ...(roster ? { is_backgrounded: true } : {}),
+        tool_use_id: selected.invocation.toolUseId
+      },
+      owned: selected.invocation.parentTaskId !== undefined,
+      rows: this.rows,
+      ledgers: this.ledgers,
+      isForwardedParentTool: this.deps.isForwardedParentTool,
+      openRow: (taskId, frame) => this.openRow(taskId, frame),
+      refresh: (id) => this.write(id),
+      maxRows: MAX_TASK_ROWS
+    })
   }
 
   settleSession(): void {
@@ -169,13 +224,13 @@ export class ClaudeBackgroundTaskRows {
     this.ids.clear()
   }
 
-  retryPendingWrites() {
-    return this.writer.retryPendingWrites()
-  }
+  retryPendingWrites = () => this.writer.retryPendingWrites()
 
   private openRow(id: string, message: Record<string, unknown>): void {
     const generation = this.ledgers.generations.next(id)
-    this.rows.set(id, newClaudeBackgroundTaskRow(id, message, this.now(), generation))
+    const row = newClaudeBackgroundTaskRow(id, message, this.now(), generation)
+    row.invocation = this.taskInvocations.get(id, claudeBackgroundTaskToolUseId(message))
+    this.rows.set(id, row)
     this.write(id)
   }
 
@@ -189,10 +244,7 @@ export class ClaudeBackgroundTaskRows {
     if (row && row.terminalNotificationReceived) {
       return true
     }
-    // Remembered even for a task never admitted. It scopes the anti-resurrection
-    // guard to ANNOUNCEMENTS: a late `task_started` cannot reopen work already
-    // reported finished, which is a different thing from this frame stating the
-    // outcome itself.
+    // Remember terminal evidence even without admission so late announcements cannot resurrect work.
     this.ledgers.rememberTerminal(this.rows, id, claudeBackgroundTaskToolUseId(message))
     if (!row) {
       return this.openTerminalRow(id, message)
@@ -203,20 +255,16 @@ export class ClaudeBackgroundTaskRows {
     return true
   }
 
-  /** The row a terminal frame opens for itself. A task the transcript never
-   *  admitted still owes the user its outcome, and the frame carries everything
-   *  that outcome needs, so the row map only ever ENRICHES one — a missing entry
-   *  is not a reason to render nothing. */
+  // A terminal frame supplies its own outcome; a retained row only enriches it.
   private openTerminalRow(id: string, message: Record<string, unknown>): boolean {
     if (!ensureClaudeBackgroundTaskRowSlot(this.rows, MAX_TASK_ROWS)) {
       this.overflowTerminalRows.observeNotificationWithoutSlot(id, message)
       return true
     }
     const generation = this.ledgers.generations.next(id)
-    this.rows.set(
-      id,
-      newClaudeBackgroundTaskRowFromNotification(id, message, this.now(), generation)
-    )
+    const row = newClaudeBackgroundTaskRowFromNotification(id, message, this.now(), generation)
+    row.invocation = this.taskInvocations.get(id, claudeBackgroundTaskToolUseId(message))
+    this.rows.set(id, row)
     this.write(id)
     return true
   }
@@ -225,6 +273,7 @@ export class ClaudeBackgroundTaskRows {
     if (this.ledgers.fallbackTaskIds.has(id)) {
       const change = claudeBackgroundTaskPatchChange(message)
       if (change.state && isSettledBackgroundTaskState(change.state)) {
+        this.taskInvocations.settleFrame(id, message)
         this.ledgers.rememberTerminal(this.rows, id, claudeBackgroundTaskToolUseId(message))
         this.overflowTerminalRows.observePatch(id, message, change)
         return true
@@ -236,19 +285,16 @@ export class ClaudeBackgroundTaskRows {
       return true
     }
     const patch = record(message.patch)
-    // A tracked row remains this owner's responsibility even if a later patch
-    // reports foreground execution; its terminal notification still revises
-    // the durable row. Only an untracked task belongs to the foreground owner.
+    // Retain ownership of admitted rows even if later patches mark the task foreground.
     if (patch?.is_backgrounded === false && !this.rows.has(id)) {
       this.ledgers.rememberForeign(id, 'foreground')
       return true
     }
     const change = claudeBackgroundTaskPatchChange(message)
     if (change.state && isSettledBackgroundTaskState(change.state)) {
+      this.taskInvocations.settleFrame(id, message)
       this.ledgers.rememberTerminal(this.rows, id, claudeBackgroundTaskToolUseId(message))
     }
-    // A patch is folded into the row it names and is never a row of its own, so
-    // an untracked task takes no row from it.
     if (row) {
       this.revise(id, change)
     }
@@ -279,16 +325,7 @@ export class ClaudeBackgroundTaskRows {
     openOutputTurn = true,
     lifecycle = false
   ): void {
-    const journaling = this.journaling
-    this.writer.write(
-      id,
-      row,
-      () => {
-        if (journaling && openOutputTurn) {
-          this.deps.openOutputTurn?.(journaling.frame, journaling.observedAt)
-        }
-      },
-      lifecycle
-    )
+    attributeClaudeBackgroundTaskRow(id, row)
+    this.writer.write(id, row, this.openTurn(this.journaling, openOutputTurn, id, row), lifecycle)
   }
 }

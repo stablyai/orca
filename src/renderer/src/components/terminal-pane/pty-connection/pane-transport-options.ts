@@ -1,23 +1,124 @@
 import { useAppStore } from '@/store'
-import { shouldRetainDisposedPaneSpawn } from './disposed-spawn-retention'
-import type { IpcPtyTransportOptions } from '../pty-transport-types'
+import { notifyTerminalTypingDiscardedBeforeBind } from '../input/terminal-input-not-sent-notice'
+import { terminalShowsReplayedHistory } from '../snapshots/replayed-history-terminals'
+import { isWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
+import { shouldRetainDisposedPaneSpawn } from './spawn/disposed-spawn-retention'
+import { findColdRestoreResumeSource } from './startup/cold-restore-resume-startup'
+import { mainStartsPane } from './spawn/main-starts-pane'
+import { requestTerminalPaneRecovery } from '../render-health/recovery/terminal-pane-recovery'
+import type { IpcPtyTransportOptions } from '../pty-transport/pty-transport-types'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
-/** The spawn/attach options a pane hands its PTY transport. */
+/** A split waiting on its inherited cwd, or remounted with handed-off keys; it holds keys as before. */
+export function isDeferredSplitInputHold(session: ConnectPanePtySession): boolean {
+  return Boolean(session.deps.cwdPromise || session.deps.preconnectInput?.length)
+}
+
+/** Startup command, agent resume, or main-owned launch that runs after PTY binding. */
+export function paneHasStartupWork(session: ConnectPanePtySession): boolean {
+  return paneHasKnownStartupWork(session) || mainStartsPane(session)
+}
+
+/** Spawn env alone is not post-bind work; a plain paired terminal types as a plain shell does (#39852). */
+function startupPlansPostBindWork(startup: ConnectPanePtySession['paneStartup']): boolean {
+  return Boolean(
+    startup &&
+    (startup.command !== undefined ||
+      startup.agentLaunch !== undefined ||
+      startup.freshAgentLaunch !== undefined ||
+      startup.resumeProviderSession !== undefined ||
+      startup.launchConfig !== undefined ||
+      startup.draftPrompt !== undefined)
+  )
+}
+
+function paneHasKnownStartupWork(session: ConnectPanePtySession): boolean {
+  const state = useAppStore.getState()
+  return Boolean(
+    startupPlansPostBindWork(session.paneStartup) ||
+    session.getSleepingRecordForPane(state) ||
+    findColdRestoreResumeSource(session, state)
+  )
+}
+
+/** Hold pre-bind keys only for plain/deferred shells. Flushing ahead of startup work could run a prompt
+ * as a shell command or corrupt the launch; agent panes retain a draft (agent-pre-ready-typed-draft.ts). */
+function holdsInputUntilConnect(session: ConnectPanePtySession): boolean {
+  if (isDeferredSplitInputHold(session)) {
+    // Why not mainStartsPane: a deferred split keeps holding under the layout-owner build, as before.
+    return !paneHasKnownStartupWork(session)
+  }
+  return !paneHasStartupWork(session)
+}
+
+/**
+ * Whether the pane may show an old terminal: it mirrors a host's tab, or saved history was replayed
+ * into it (a cleared binding can still replay). Before its first connect, also: its leaf names a
+ * terminal or it shows output. Those are not re-read at bind, where the fresh create causes both.
+ */
+function paneMayShowOldTerminal(session: ConnectPanePtySession, atBind: boolean): boolean {
+  if (
+    isWebTerminalSurfaceTabId(session.deps.tabId) ||
+    terminalShowsReplayedHistory(session.pane.terminal)
+  ) {
+    return true
+  }
+  if (atBind) {
+    return false
+  }
+  const state = useAppStore.getState()
+  return Boolean(
+    session.restoredPtyIdForTransport ||
+    state.terminalLayoutsByTabId[session.deps.tabId]?.ptyIdsByLeafId?.[session.pane.leafId] ||
+    terminalShowsOutput(session.pane.terminal)
+  )
+}
+
+function terminalShowsOutput(terminal: ConnectPanePtySession['pane']['terminal']): boolean {
+  const buffer = terminal.buffer?.active
+  if (!buffer) {
+    return false
+  }
+  if (buffer.baseY > 0) {
+    return true
+  }
+  for (let row = 0; row < buffer.length; row += 1) {
+    if (buffer.getLine(row)?.translateToString(true)) {
+      return true
+    }
+  }
+  return false
+}
+
 export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPtyTransportOptions {
+  const holdsInput = holdsInputUntilConnect(session)
   return {
+    onDrivingInputAttempt: (ptyId) => session.noteTerminalInputForPty(ptyId),
     terminalKittyKeyboardProtocol:
       session.pane.terminal.options.vtExtensions?.kittyKeyboard === true,
     cwd: session.deps.cwd,
-    ...(session.deps.cwdPromise || session.deps.preconnectInput?.length
-      ? { bufferInputUntilConnect: true }
+    ...(holdsInput
+      ? {
+          bufferInputUntilConnect: true,
+          // Why: a resume source can land between mount and bind; keys must not flush ahead of it.
+          releasePreconnectInput: () => holdsInputUntilConnect(session)
+        }
       : {}),
-    ...(session.deps.preconnectInput?.length
+    // Why: typing on old pixels must never reach a fresh shell (#10065).
+    ...(holdsInput
+      ? {
+          keepTypeAheadForNewTerminal: (phase: 'connect' | 'bind') =>
+            !paneMayShowOldTerminal(session, phase === 'bind')
+        }
+      : {}),
+    // Why gated: a seed alone arms the transport hold, which would flush ahead of startup work.
+    ...(holdsInput && session.deps.preconnectInput?.length
       ? { preconnectInput: session.deps.preconnectInput }
       : {}),
     ...(session.deps.onPreconnectInput
       ? { onPreconnectInput: session.deps.onPreconnectInput }
       : {}),
+    onTypingDiscardedBeforeBind: () => notifyTerminalTypingDiscardedBeforeBind(session.deps.tabId),
     env: session.paneEnv,
     ...(session.paneStartup?.envToDelete ? { envToDelete: session.paneStartup.envToDelete } : {}),
     command: session.shouldDeliverStartupViaTerminalPaste
@@ -28,9 +129,7 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
       : session.paneStartup?.startupCommandDelivery,
     executionHostId: session.executionHostId,
     worktreeId: session.deps.worktreeId,
-    // Why: closes the SIGKILL race documented in INVESTIGATION.md by letting
-    // main sync-flush the (worktreeId, tabId, leafId → ptyId) binding before
-    // pty:spawn returns.
+    // Flush pane↔PTY binding before spawn reply so a SIGKILL cannot lose it.
     tabId: session.deps.tabId,
     leafId: session.pane.leafId,
     ...(session.deps.placement ? { placement: session.deps.placement } : {}),
@@ -46,6 +145,12 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
     ...(session.paneStartup?.resumeProviderSession
       ? { resumeProviderSession: session.paneStartup.resumeProviderSession }
       : {}),
+    ...(session.paneStartup?.resumeOrigin
+      ? { resumeOrigin: session.paneStartup.resumeOrigin }
+      : {}),
+    ...(session.paneStartup?.resumeSource?.record?.paneKey
+      ? { resumeSourcePaneKey: session.paneStartup.resumeSource.record.paneKey }
+      : {}),
     ...((session.paneStartup?.initialAgentStatus?.prompt ?? session.paneStartup?.draftPrompt)
       ? {
           agentPrompt:
@@ -57,6 +162,9 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
       : session.paneStartup?.draftPrompt
         ? { agentPromptDelivery: 'draft' as const }
         : {}),
+    ...(session.paneStartup?.freshAgentLaunch
+      ? { freshAgentLaunch: session.paneStartup.freshAgentLaunch }
+      : {}),
     ...(session.paneStartup?.agentArgsOverride !== undefined
       ? { agentArgsOverride: session.paneStartup.agentArgsOverride }
       : {}),
@@ -65,11 +173,25 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
       : {}),
     ...(session.launchToken ? { launchToken: session.launchToken } : {}),
     ...(session.paneStartup?.launchAgent ? { launchAgent: session.paneStartup.launchAgent } : {}),
+    ...(session.paneStartup?.trustWorktreeId
+      ? { trustWorktreeId: session.paneStartup.trustWorktreeId }
+      : {}),
     ...(session.paneStartup?.agentLaunch ? { agentLaunch: session.paneStartup.agentLaunch } : {}),
     ...(session.paneStartup?.telemetry ? { telemetry: session.paneStartup.telemetry } : {}),
     onPtyExit: session.onExit,
     onPtySpawn: session.onPtySpawn,
     onPtyRebind: session.onPtyRebind,
+    // Why a remount: the exit already tore down this mount's PTY state, so a fresh mount attaches.
+    onHostReboundExitedPty: (ptyId) =>
+      void requestTerminalPaneRecovery({
+        tabId: session.deps.tabId,
+        ptyId,
+        reason: 'host-rebound-exited-pane',
+        // Why: a new host process is fresh evidence a failed attempt can't refuse; the cap still holds.
+        trigger: 'host-evidence',
+        terminalRecoveryGeneration: session.terminalRecoveryGeneration,
+        terminalRecoveryInstanceId: session.terminalRecoveryInstance.id
+      }),
     retainDisposedSpawn: () =>
       shouldRetainDisposedPaneSpawn(
         useAppStore.getState(),
@@ -87,10 +209,7 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
           onAgentBecameWorking: session.onAgentBecameWorking,
           onAgentExited: session.onAgentExited
         }),
-    // Why: local IPC terminals are now model-owned in main: OrcaRuntimeService
-    // parses OSC 9999 before renderer delivery and forwards through the hook
-    // server with local/SSH identity. Remote-runtime streams do not pass through
-    // local main, so the renderer remains their status owner for now.
+    // Local main owns OSC 9999 and forwards hook identity; remote-runtime streams bypass main and retain renderer ownership.
     ...(session.shouldOwnAgentStatusInRenderer
       ? { onAgentStatus: session.handleRendererOwnedAgentStatus }
       : {})

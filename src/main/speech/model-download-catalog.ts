@@ -1,4 +1,4 @@
-import type { SpeechModelDownloadFile } from '../../shared/speech-types'
+import type { SpeechModelDownloadFile, SpeechModelManifest } from '../../shared/speech-types'
 
 type DownloadFileSpec = readonly [name: string, sizeBytes: number, sha256: string]
 
@@ -15,7 +15,7 @@ function huggingFaceFiles(
   }))
 }
 
-// Why: immutable revisions plus per-file hashes keep direct downloads equivalent to pinned archives.
+// Pinned revisions and per-file hashes keep direct downloads equivalent to pinned archives.
 const MODEL_DOWNLOAD_FILES = {
   'parakeet-tdt-0.6b-v3-int8': huggingFaceFiles(
     'csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8',
@@ -215,6 +215,32 @@ const MODEL_DOWNLOAD_FILES = {
 }
 
 export type DownloadableSpeechModelId = keyof typeof MODEL_DOWNLOAD_FILES
+
+/** What the model manager needs to download, verify and place one model's files. */
+export type SpeechModelDownload = Pick<
+  SpeechModelManifest,
+  'id' | 'provider' | 'downloadFiles' | 'legacyDownloadFiles' | 'sizeBytes'
+>
+
+const SILERO_VAD_FILES = huggingFaceFiles(
+  'handy-computer/silero-vad-v6.2-gguf',
+  '97bbd75179f535e4708bccdf61e9278b8b60dfc7',
+  [
+    [
+      'silero-vad-v6.2-F32.gguf',
+      1_241_056,
+      '0d871a800c420fdd5d1b17a3aea4296d1c39608f0ff4a9295eb76457eb1c88e6'
+    ]
+  ]
+)
+
+/** Silero VAD (MIT), which transcribe-cpp uses to find pauses; a helper download, never a dictation model. */
+export const SILERO_VAD_MODEL = {
+  id: 'silero-vad-v6.2',
+  provider: 'local',
+  downloadFiles: SILERO_VAD_FILES,
+  sizeBytes: SILERO_VAD_FILES.reduce((total, { sizeBytes }) => total + sizeBytes, 0)
+} satisfies SpeechModelDownload
 
 export function getSpeechModelDownloadMetadata(modelId: DownloadableSpeechModelId): {
   downloadFiles: SpeechModelDownloadFile[]

@@ -1,4 +1,4 @@
-import { createRemoteRefProbeCache } from '../git/remote-ref-probe-cache'
+import { createRemoteRefProbeCache } from '../git/remotes/remote-ref-probe-cache'
 
 export type AzureDevOpsRepoRef = {
   host: string
@@ -184,8 +184,7 @@ export function parseAzureDevOpsRepoRef(remoteUrl: string): AzureDevOpsRepoRef |
     if (!parsed || !['http:', 'https:'].includes(url.protocol.toLowerCase())) {
       return null
     }
-    // Why: Azure DevOps Server remotes are self-hosted and only reliably
-    // identifiable by the `_git` path convention.
+    // Self-hosted Azure remotes are identified by the _git path, not the hostname.
     return makeServerRef(host, url.origin, parsed.prefix, parsed.project, parsed.repository)
   } catch {
     return null

@@ -1,9 +1,4 @@
-/**
- * Real OpenSSH: the managed tunnel reaches orcad wherever the connection's exec works, through a
- * user ControlMaster whose login a standalone forward cannot repeat, and on a persisted port an
- * older Orca's muxed forward still holds. Opt-in (needs sshd and ssh on PATH):
- * ORCA_REAL_OPENSSH_TEST=1 pnpm test src/main/managed-server/lifecycle/orcad-managed-tunnel-transport-real-openssh.test.ts
- */
+// Opt in with ORCA_REAL_OPENSSH_TEST=1; requires sshd and ssh on PATH.
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, symlinkSync } from 'node:fs'
 import { connect, createServer, type Server, type Socket } from 'node:net'
@@ -11,7 +6,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type { SshExecOptions } from '../../ssh/connection/ssh-exec-options'
-import { knownOrcadTunnelTransport } from '../../ssh/orcad-tunnel-transport-memo'
+import { knownOrcadTunnelTransport } from './orcad-tunnel-transport-memo'
 import type { PortForwardStartOptions } from '../../ssh/port-forwarding/ssh-port-forward-provider'
 import { spawnSystemSshCommand } from '../../ssh/system-transport/system-ssh-command'
 import {
@@ -20,12 +15,11 @@ import {
   freePort,
   startRealOpenSshFixture,
   type RealOpenSshFixture
-} from '../../ssh/system-transport/real-openssh-sshd-fixture'
+} from '../../ssh/system-transport/testing/real-openssh-sshd-fixture'
 import { OrcadManagedTunnelTransportProvider } from './orcad-managed-tunnel-transport'
 
 const GREETING = 'orcad-fixture'
 
-/** First line orcad's stand-in sends, read through the tunnel's local listener. */
 function readGreeting(port: number): Promise<string> {
   return new Promise((resolve, reject) => {
     const socket = connect({ host: '127.0.0.1', port })
@@ -56,7 +50,7 @@ describe.skipIf(!REAL_OPENSSH_TEST_ENABLED)(
     let orcad: Server
     const orcadSockets = new Set<Socket>()
     let orcadPort = 0
-    // The user's own LocalForward in their ssh_config, which the master opened and must keep.
+    // User-configured forwards on the master must survive Orca tunnel cleanup.
     let configuredForwardPort = 0
     let conn: SshConnection
 
@@ -85,7 +79,6 @@ describe.skipIf(!REAL_OPENSSH_TEST_ENABLED)(
       fixture = await startRealOpenSshFixture({
         client: [`LocalForward 127.0.0.1:${configuredForwardPort} 127.0.0.1:${orcadPort}`]
       })
-      // The host's pinned Node, where the stdio bridge looks for it under the session's HOME.
       const nodeBin = join(fixture.remoteHome, '.orca-remote', 'runtimes', 'node-fixture', 'bin')
       mkdirSync(nodeBin, { recursive: true })
       symlinkSync(
@@ -98,7 +91,6 @@ describe.skipIf(!REAL_OPENSSH_TEST_ENABLED)(
         usesSystemSshTransport: () => true,
         getClient: () => null,
         getConnectGeneration: () => 1,
-        // The connection's own exec: through the user's master, as every remote command goes.
         exec: async (command: string, execOptions?: SshExecOptions) =>
           spawnSystemSshCommand(fixture.target, command, {
             ...fixture.buildOptions(),
@@ -110,7 +102,7 @@ describe.skipIf(!REAL_OPENSSH_TEST_ENABLED)(
     }, 30_000)
 
     afterEach(async () => {
-      // Why: sshd may hold its end of a forwarded socket past the forward's own exit.
+      // sshd can retain forwarded sockets after the local forward exits.
       for (const socket of orcadSockets) {
         socket.destroy()
       }
@@ -128,7 +120,7 @@ describe.skipIf(!REAL_OPENSSH_TEST_ENABLED)(
       }
     }, 30_000)
 
-    // Why: an MFA or hardware-key login lives on in the master, but a standalone forward must log in again.
+    // MFA/hardware-key authentication may exist only on the established master.
     it('reaches orcad through the bridge when only the master can log in', async () => {
       fixture.refuseNewLogins()
       const tunnel = await new OrcadManagedTunnelTransportProvider().start(conn, options(0))
@@ -153,7 +145,7 @@ describe.skipIf(!REAL_OPENSSH_TEST_ENABLED)(
       } finally {
         await tunnel.close()
       }
-      // The master and the user's own forward on it stay up; only Orca's stale forward went.
+      // Cancel only Orca's stale forward; preserve the master and user-configured forwards.
       expect(() => fixture.ssh(['-O', 'check'])).not.toThrow()
       expect(await readGreeting(configuredForwardPort)).toBe(GREETING)
       expect(await dial(persisted)).toBe(false)
@@ -186,5 +178,67 @@ describe.skipIf(!REAL_OPENSSH_TEST_ENABLED)(
       expect(await dial(persisted)).toBe(true)
       mux('cancel', persisted, elsewhere)
     }, 30_000)
+  }
+)
+
+// Issue #38636: Coder's ProxyCommand can take many seconds before a fresh ssh -L logs in and binds.
+describe.skipIf(!REAL_OPENSSH_TEST_ENABLED)(
+  'the managed tunnel through a slow ProxyCommand (real OpenSSH)',
+  () => {
+    const PROXY_LOGIN_DELAY_S = 7
+    let fixture: RealOpenSshFixture
+    let orcad: Server
+    const orcadSockets = new Set<Socket>()
+
+    beforeEach(async () => {
+      orcad = createServer((socket) => {
+        orcadSockets.add(socket)
+        socket.on('close', () => orcadSockets.delete(socket))
+        socket.on('error', () => {})
+        socket.write(`${GREETING}\n`)
+      })
+      await new Promise<void>((resolve) => orcad.listen(0, '127.0.0.1', resolve))
+      fixture = await startRealOpenSshFixture({
+        client: [`ProxyCommand /bin/sh -c "sleep ${PROXY_LOGIN_DELAY_S}; exec nc 127.0.0.1 %p"`]
+      })
+    }, 30_000) // Why: the fixture's own master logs in through the slow proxy.
+
+    afterEach(async () => {
+      for (const socket of orcadSockets) {
+        socket.destroy()
+      }
+      await new Promise((resolve) => orcad.close(resolve))
+      await fixture.close()
+    }, 30_000) // Why: sshd teardown plus the fixture's settle wait.
+
+    // Why: one fresh login through the slow proxy, plus teardown.
+    it('keeps the TCP forward when its own login outlasts the channel check', async () => {
+      const address = orcad.address()
+      const stub = {
+        getTarget: () => fixture.target,
+        getSystemSshBuildArgsOptions: fixture.buildOptions,
+        usesSystemSshTransport: () => true,
+        getClient: () => null,
+        getConnectGeneration: () => 1
+      }
+      const tunnel = await new OrcadManagedTunnelTransportProvider().start(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the transport and the system SSH forward read only these members.
+        stub as unknown as SshConnection,
+        {
+          id: 'pf-slow-proxy',
+          connectionId: 'real-openssh-slow-proxy',
+          localHost: '127.0.0.1',
+          localPort: 0,
+          remoteHost: '127.0.0.1',
+          remotePort: typeof address === 'object' && address ? address.port : 0
+        }
+      )
+      try {
+        expect(knownOrcadTunnelTransport('real-openssh-slow-proxy')).toBe('tcp_forward')
+        expect(await readGreeting(tunnel.entry.localPort)).toBe(GREETING)
+      } finally {
+        await tunnel.close()
+      }
+    }, 45_000)
   }
 )

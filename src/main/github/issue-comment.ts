@@ -1,3 +1,4 @@
+import { githubBodyImageUrls, githubBodyMediaHeaders } from './body-image-urls'
 import type { GitHubCommentResult, PRComment } from '../../shared/github/comment-types'
 import type { IssueSourcePreference } from '../../shared/repo-types'
 import type { LocalGitExecOptions, OwnerRepo } from './gh-utils'
@@ -6,6 +7,7 @@ import {
   resolveIssueGitHubApiRepositorySource
 } from './github-api-repository'
 import { acquire, classifyGhError, ghExecFileAsync, release } from './gh-utils'
+import { codeHostFailure, classifiedFailure } from '../../shared/code-host-failure-copy'
 
 // An explicit target keeps replies bound to the conversation; otherwise use the selected source.
 export async function addIssueComment(
@@ -33,31 +35,33 @@ export async function addIssueComment(
     localGitOptions
   )
   if (!ownerRepo) {
-    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+    return codeHostFailure('github.repoUnresolved')
   }
   await acquire()
   try {
     const { stdout } = await ghExecFileAsync(
       [
         'api',
+        ...githubBodyMediaHeaders(body),
         '-X',
         'POST',
         `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${issueNumber}/comments`,
-        '--raw-field',
-        `body=${body}`
+        '--input',
+        '-'
       ],
-      ghOptions
+      { ...ghOptions, stdin: JSON.stringify({ body }) }
     )
-    const data = JSON.parse(stdout) as {
+    const data: {
       id?: number
       node_id?: string | null
       user: { login: string; avatar_url: string; type?: string } | null
       body?: string
+      body_html?: string | null
       created_at?: string
       html_url?: string
-    }
+    } = JSON.parse(stdout)
     if (typeof data.id !== 'number' || !Number.isSafeInteger(data.id) || data.id < 1) {
-      return { ok: false, error: 'Unexpected response from GitHub' }
+      return codeHostFailure('github.unexpectedResponse')
     }
     const comment: PRComment = {
       id: data.id,
@@ -65,6 +69,7 @@ export async function addIssueComment(
       author: data.user?.login ?? 'You',
       authorAvatarUrl: data.user?.avatar_url ?? '',
       body: data.body ?? body,
+      bodyImageUrls: githubBodyImageUrls(data.body ?? body, data.body_html),
       createdAt: data.created_at ?? new Date().toISOString(),
       url: data.html_url ?? '',
       isBot: data.user?.type === 'Bot'
@@ -72,7 +77,7 @@ export async function addIssueComment(
     return { ok: true, comment }
   } catch (err) {
     const stderr = err instanceof Error ? err.message : String(err)
-    return { ok: false, error: classifyGhError(stderr).message }
+    return classifiedFailure(classifyGhError(stderr))
   } finally {
     release()
   }

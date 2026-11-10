@@ -1,7 +1,7 @@
-import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
-import { checkAgentLaunchModelPreferences } from '../../../../../../shared/agent-launch-model-preferences'
-import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session/agent-session-host-authority'
+import { checkAgentLaunchModelPreferences } from '../../../../../../shared/agent-launch/choices/agent-launch-model-preferences'
+import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 
 export type OrchestrationWorkerLaunchSelection = {

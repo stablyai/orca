@@ -1,0 +1,138 @@
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  isFreshNonDoneAgentStatus
+} from '../contracts/agent-status-freshness'
+import type { AgentStatusState, AgentType } from '../contracts/agent-status-types'
+import {
+  hasOtherAgentProcessOwner,
+  type AgentProcessIdentity,
+  type AgentProcessPresence
+} from '../process/agent-process-presence'
+import { resolveCanonicalPaneAgentIdentity } from './pane-agent-identity-adapter'
+import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
+
+type ExistingAgentIdentity = {
+  agentType?: AgentType
+  state: AgentStatusState
+  updatedAt: number
+  restoredUnconfirmed?: boolean
+  agentPresence?: AgentProcessPresence
+}
+
+type AgentIdentityResolution = {
+  agentType: AgentType
+  inheritedFromActivePane: boolean
+}
+
+export function shouldSuppressInheritedTerminalStatus(args: {
+  inheritedFromActivePane: boolean
+}): boolean {
+  // Nested CLIs inherit the pane key, but own neither its turn nor its children.
+  return args.inheritedFromActivePane
+}
+
+function normalizedKnownAgentType(agentType: AgentType | null | undefined): AgentType | null {
+  if (!agentType || agentType === 'unknown') {
+    return null
+  }
+  return agentType
+}
+
+// OSC 7501 reports OpenCode 2 as `opencode`. The status plugin posts `opencode2`.
+const OPEN_CODE_STATUS_AGENTS = new Set<AgentType>(['opencode', 'opencode2'])
+
+function sameOpenCodeStatusAgent(left: AgentType, right: AgentType): boolean {
+  return OPEN_CODE_STATUS_AGENTS.has(left) && OPEN_CODE_STATUS_AGENTS.has(right)
+}
+
+function presenceComparedAs(
+  presence: AgentProcessPresence | undefined,
+  agent: AgentType
+): AgentProcessPresence | undefined {
+  if (!presence || !sameOpenCodeStatusAgent(presence.agent, agent)) {
+    return presence
+  }
+  return { ...presence, agent }
+}
+
+function isActiveExistingIdentity(
+  existing: ExistingAgentIdentity,
+  now: number,
+  staleAfterMs: number
+): boolean {
+  return isFreshNonDoneAgentStatus(existing, now, staleAfterMs)
+}
+
+export function resolveAgentStatusIdentity(args: {
+  existing?: ExistingAgentIdentity
+  incoming?: AgentType
+  incomingProcess?: AgentProcessIdentity
+  incomingSession?: string
+  now: number
+  staleAfterMs?: number
+}): AgentIdentityResolution {
+  const staleAfterMs = args.staleAfterMs ?? AGENT_STATUS_STALE_AFTER_MS
+  const existingAgentType = normalizedKnownAgentType(args.existing?.agentType)
+  const incomingAgentType = normalizedKnownAgentType(args.incoming)
+
+  if (!incomingAgentType) {
+    return {
+      agentType: existingAgentType ?? 'unknown',
+      inheritedFromActivePane: false
+    }
+  }
+  if (!args.existing || !existingAgentType) {
+    return {
+      agentType: incomingAgentType,
+      inheritedFromActivePane: false
+    }
+  }
+  const sameOpenCode = sameOpenCodeStatusAgent(existingAgentType, incomingAgentType)
+  const otherProcessOwner = hasOtherAgentProcessOwner(
+    sameOpenCode
+      ? presenceComparedAs(args.existing.agentPresence, incomingAgentType)
+      : args.existing.agentPresence,
+    {
+      agent: incomingAgentType,
+      process: args.incomingProcess
+    }
+  )
+  if (existingAgentType === incomingAgentType || sameOpenCode) {
+    return {
+      agentType: incomingAgentType,
+      // Why: a nested `claude -p` shares the pane key; only the owner's own process speaks for it.
+      inheritedFromActivePane: otherProcessOwner
+    }
+  }
+  const owner = args.existing.agentPresence
+  if (
+    owner?.session &&
+    !owner.ended &&
+    owner.agent === incomingAgentType &&
+    owner.session === args.incomingSession &&
+    !otherProcessOwner
+  ) {
+    // Why: a child that posted while the owner idled must not silence the owner's own session.
+    return { agentType: incomingAgentType, inheritedFromActivePane: false }
+  }
+  const canonical = resolveCanonicalPaneAgentIdentity({
+    hookAgent: incomingAgentType as TuiAgent,
+    hookIsLive: true,
+    completedHookAgent: args.existing.state === 'done' ? (existingAgentType as TuiAgent) : undefined
+  })
+  if (
+    !args.existing.agentPresence?.suspended &&
+    (otherProcessOwner || isActiveExistingIdentity(args.existing, args.now, staleAfterMs))
+  ) {
+    return {
+      // Inherited ORCA_PANE_KEY does not grant child CLI ownership; idle leaves foreground process/resume identity intact.
+      agentType: existingAgentType,
+      inheritedFromActivePane: true
+    }
+  }
+
+  return {
+    agentType: canonical.agent ?? incomingAgentType,
+    inheritedFromActivePane: false
+  }
+}

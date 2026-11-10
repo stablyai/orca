@@ -4,6 +4,7 @@ type SourceIdentityActionsInput = Pick<
   ComposerModel,
   | 'applyLinkedWorkItem'
   | 'branchAutoNameRef'
+  | 'branchIntent'
   | 'branchNameOverride'
   | 'branchNameOverridePreservesNameEdits'
   | 'forkPushWarning'
@@ -12,6 +13,7 @@ type SourceIdentityActionsInput = Pick<
   | 'name'
   | 'pushTarget'
   | 'setBranchNameOverride'
+  | 'setBranchIntent'
   | 'setBranchNameOverridePreservesNameEdits'
   | 'setCreateError'
   | 'setForkPushWarning'
@@ -27,23 +29,27 @@ type SourceIdentityActionsInput = Pick<
   | 'setLinkedWorkItem'
   | 'setName'
   | 'setPushTarget'
-  | 'setReuseEligibleBranch'
   | 'setReuseSelectedBranch'
   | 'smartSourceSelectionRef'
 >
 
 import { useCallback } from 'react'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
-import { getLinkedWorkItemSuggestedName, getLinkedWorkItemWorkspaceName } from '@/lib/new-workspace'
+import '@/lib/workspace/creation/new-workspace'
+import {
+  getLinkedWorkItemSuggestedName,
+  getLinkedWorkItemWorkspaceName
+} from '../../../../shared/workspace-name'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { shouldApplyWorkspaceSourceAutoName } from '../../../../shared/new-workspace/workspace-source'
-import { isLinearLinkedWorkItem } from '@/lib/linear-linked-work-item'
+import { isLinearLinkedWorkItem } from '@/lib/work-items/linear/linear-linked-work-item'
 import { resolveComposerManualBranchNameChange } from '../composer-branch-selection'
 
 export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
   const {
     applyLinkedWorkItem,
     branchAutoNameRef,
+    branchIntent,
     branchNameOverride,
     branchNameOverridePreservesNameEdits,
     forkPushWarning,
@@ -52,6 +58,7 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
     name,
     pushTarget,
     setBranchNameOverride,
+    setBranchIntent,
     setBranchNameOverridePreservesNameEdits,
     setCreateError,
     setForkPushWarning,
@@ -67,12 +74,11 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
     setLinkedWorkItem,
     setName,
     setPushTarget,
-    setReuseEligibleBranch,
     setReuseSelectedBranch,
     smartSourceSelectionRef
   } = input
 
-  // Why: review routing prefers one provider identity — clear the opposite provider slots so stale hidden fields can't win later.
+  // Clear the other provider’s hidden slots so stale identity cannot win review routing.
   const applyLinkedGitLabWorkItem = useCallback(
     (item: GitLabWorkItem): void => {
       smartSourceSelectionRef.current = null
@@ -183,7 +189,7 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
       lastAutoNameRef.current = ''
     }
     if (removedLinearItem) {
-      // Why: a Linear branch override belongs to its issue; unlinking must not leave it driving a later worktree create.
+      // Unlinking a Linear issue must also release its source-owned branch override.
       setBranchNameOverride(undefined)
       setBranchNameOverridePreservesNameEdits(false)
       branchAutoNameRef.current = ''
@@ -208,7 +214,7 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
       if (nextName !== name && smartSourceSelectionRef.current?.kind === 'github-submit-lookup') {
         smartSourceSelectionRef.current = null
       }
-      // Why: linked items keep refreshing the suggested name only while it's auto-managed; a manual edit stops later picks from clobbering it until cleared.
+      // Manual edits stop source-driven renaming until cleared.
       if (!nextName.trim()) {
         lastAutoNameRef.current = ''
       } else if (name !== lastAutoNameRef.current) {
@@ -249,10 +255,12 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
         forkPushWarning
       })
       setBranchNameOverride(next.branchNameOverride)
+      if (branchIntent === 'create-new') {
+        setBranchIntent('create-new')
+      }
       setBranchNameOverridePreservesNameEdits(Boolean(next.branchNameOverride))
       setPushTarget(next.pushTarget)
       setForkPushWarning(next.forkPushWarning)
-      setReuseEligibleBranch(null)
       setReuseSelectedBranch(false)
       branchAutoNameRef.current = ''
     },
@@ -260,11 +268,12 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
       forkPushWarning,
       pushTarget,
       branchAutoNameRef,
+      branchIntent,
       setBranchNameOverride,
+      setBranchIntent,
       setBranchNameOverridePreservesNameEdits,
       setForkPushWarning,
       setPushTarget,
-      setReuseEligibleBranch,
       setReuseSelectedBranch,
       smartSourceSelectionRef
     ]

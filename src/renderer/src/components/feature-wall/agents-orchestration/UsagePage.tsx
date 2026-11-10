@@ -1,9 +1,8 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: this page is a timed storyboard; phase state intentionally advances from animation effects and reduced-motion gates. */
 import { useEffect, useState } from 'react'
 import type { JSX } from 'react'
 import { ClaudeIcon, OpenAIIcon } from '../../status-bar/icons'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 
 type Phase = 'reset' | 'expanded' | 'targeted' | 'swapped'
 
@@ -76,8 +75,8 @@ function Popover(props: {
   swapped: boolean
   pulseKey: number
 }): JSX.Element {
+  const t = useTranslate()
   const { expanded, targeted, swapped, pulseKey } = props
-  // Why: bars show % used (consumption), matching the live status-bar meter.
   const sessionPctText = swapped ? '0% used' : '96% used'
   const sessionResetText = swapped ? 'Resets in 5h' : 'Resets in 47m'
   const sessionFillWidth = swapped ? '0%' : '96%'
@@ -100,13 +99,10 @@ function Popover(props: {
         </span>
         <div>
           <div className="text-[13.5px] font-bold leading-[1.1]">
-            {translate(
-              'auto.components.feature.wall.agents.orchestration.UsagePage.6a4b1d3c38',
-              'Codex'
-            )}
+            {t('auto.components.feature.wall.agents.orchestration.UsagePage.6a4b1d3c38', 'Codex')}
           </div>
           <div className="text-[11px] text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.feature.wall.agents.orchestration.UsagePage.5e45fb1238',
               'Updated 1m ago'
             )}
@@ -115,7 +111,7 @@ function Popover(props: {
       </div>
 
       <UsageBar
-        title={translate(
+        title={t(
           'auto.components.feature.wall.agents.orchestration.UsagePage.f421abf962',
           'Session'
         )}
@@ -135,7 +131,7 @@ function Popover(props: {
         metaRight={<span>{sessionResetText}</span>}
       />
       <UsageBar
-        title={translate(
+        title={t(
           'auto.components.feature.wall.agents.orchestration.UsagePage.0470aaed99',
           'Weekly'
         )}
@@ -143,7 +139,7 @@ function Popover(props: {
         warn={false}
         metaLeft={
           <span>
-            {translate(
+            {t(
               'auto.components.feature.wall.agents.orchestration.UsagePage.05ce4ecdd3',
               '38% used'
             )}
@@ -151,7 +147,7 @@ function Popover(props: {
         }
         metaRight={
           <span>
-            {translate(
+            {t(
               'auto.components.feature.wall.agents.orchestration.UsagePage.4dce5ca3aa',
               'Resets in 4d 3h'
             )}
@@ -160,7 +156,7 @@ function Popover(props: {
       />
       <div className="h-px bg-border" />
       <div className="text-[11px] font-semibold">
-        {translate(
+        {t(
           'auto.components.feature.wall.agents.orchestration.UsagePage.277a9c65a9',
           'Codex Account'
         )}
@@ -193,7 +189,7 @@ function Popover(props: {
       >
         <div className="overflow-hidden min-h-0">
           <div className="pb-1 pt-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.feature.wall.agents.orchestration.UsagePage.be5a165875',
               'Switch to'
             )}
@@ -294,11 +290,8 @@ function SwitchAccount(props: {
   )
 }
 
-// The 340px-wide light pill at the bottom of the panel that the popover tip
-// points down to. Codex chip is the "active" one — it animates from a near-
-// full red bar (% used) to an empty green bar after the account swap.
 function BottomBar(props: { swapped: boolean }): JSX.Element {
-  // Why: match live status-bar consumption meters (% used), same as the popover.
+  const t = useTranslate()
   const codexFillWidth = props.swapped ? '0%' : '96%'
   const codexFillColor = props.swapped ? 'rgb(34 197 94)' : 'rgb(239 68 68)'
   const codexMeta = props.swapped ? '0% used 5h · 4% used wk' : '96% used 47m'
@@ -313,7 +306,7 @@ function BottomBar(props: { swapped: boolean }): JSX.Element {
           <span className="block h-full rounded-full bg-emerald-500" style={{ width: '29%' }} />
         </span>
         <span>
-          {translate(
+          {t(
             'auto.components.feature.wall.agents.orchestration.UsagePage.64265cb295',
             '29% used 5h'
           )}

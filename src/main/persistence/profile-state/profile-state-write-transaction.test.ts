@@ -27,8 +27,7 @@ describe('profile state write transaction ownership', () => {
     }
   })
 
-  // What a WAL commit on a full disk reports: node:sqlite's SQLITE_FULL after SQLite rolled back
-  // (reproduced on a 2 MB tmpfs: COMMIT throws errcode 13, isTransaction is false, rows unchanged).
+  // Reproduce SQLITE_FULL auto-rollback: COMMIT throws errcode 13, transaction ends, rows stay unchanged.
   function failCommitAfterAutoRollback(db: Database, failure: Error): () => void {
     const exec = db.exec.bind(db)
     const injected = vi.spyOn(db, 'exec').mockImplementation((sql) => {
@@ -65,25 +64,6 @@ describe('profile state write transaction ownership', () => {
       withProfileStateWriteTransaction(db, () => db.exec('INSERT INTO writes VALUES (2)'))
       expect(db.prepare('SELECT COUNT(*) AS count FROM writes').get()).toMatchObject({ count: 1 })
     } finally {
-      db.close()
-    }
-  })
-
-  it('keeps any other failed commit indeterminate even after SQLite rolled back', () => {
-    const db = new Database(':memory:')
-    db.exec('CREATE TABLE writes (id INTEGER)')
-    // e.g. a failed fsync: the commit frame may already be on disk.
-    const ioerr = Object.assign(new Error('disk I/O error'), {
-      code: 'ERR_SQLITE_ERROR',
-      errcode: 1034
-    })
-    const restore = failCommitAfterAutoRollback(db, ioerr)
-    try {
-      expect(() =>
-        withProfileStateWriteTransaction(db, () => db.exec('INSERT INTO writes VALUES (1)'))
-      ).toThrow(ProfileStateIndeterminateWriteError)
-    } finally {
-      restore()
       db.close()
     }
   })

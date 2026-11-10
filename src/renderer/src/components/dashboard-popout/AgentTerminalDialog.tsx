@@ -1,7 +1,7 @@
-import { useEffect, useId } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { SquareArrowOutUpRight, XIcon } from 'lucide-react'
-import { AgentTypeIcon } from '@/lib/agent-type-icon'
-import { formatAgentTypeLabel } from '@/lib/agent-status'
+import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { agentStateLabel } from '@/components/AgentStateDot'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -11,9 +11,10 @@ import {
   type DashboardRevealAgentArgs
 } from '../../../../shared/dashboard-snapshot'
 import { AgentTerminalPreview } from './AgentTerminalPreview'
+import { AgentCardLastMessages, hasAgentCardLastMessages } from './AgentCardLastMessages'
 import { terminalPreviewUnavailableMessage } from './terminal-preview-unavailable-message'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 
 /** Routing payload for focusing an agent's pane in the main window. */
 export type AgentRevealArgs = DashboardRevealAgentArgs
@@ -22,9 +23,9 @@ type AgentTerminalDialogProps = {
   /** The agent shown in the dialog; null renders the dialog closed. */
   card: DashboardCard | null
   onOpenChange: (open: boolean) => void
-  /** Focus the agent's pane. The pop-out relays over IPC; the in-window host
-   *  activates the worktree/pane locally. */
+  /** Pop-outs reveal through IPC; in-window hosts activate the pane locally. */
   onReveal: (args: AgentRevealArgs) => void
+  onBrowserForeground?: () => void
 }
 
 type AgentTerminalFrameProps = Omit<AgentTerminalDialogProps, 'card'> & {
@@ -38,8 +39,10 @@ function AgentTerminalFrame({
   title,
   previewClassName,
   onOpenChange,
-  onReveal
+  onReveal,
+  onBrowserForeground
 }: AgentTerminalFrameProps): React.JSX.Element {
+  const t = useTranslate()
   const reveal = (): void => {
     onReveal({
       repoId: card.repoId,
@@ -70,64 +73,94 @@ function AgentTerminalFrame({
           onClick={() => onOpenChange(false)}
         >
           <XIcon className="size-4" />
-          <span className="sr-only">{translate('dashboardPopout.terminal.close', 'Close')}</span>
+          <span className="sr-only">{t('dashboardPopout.terminal.close', 'Close')}</span>
         </Button>
       </div>
       {card.ptyId ? (
         <AgentTerminalPreview
           ptyId={card.ptyId}
           terminalInput={card.terminalInput ?? null}
+          linkSource={
+            onBrowserForeground
+              ? {
+                  worktreeId: card.worktreeId,
+                  executionHostId: card.executionHostId,
+                  tabId: card.tabId,
+                  ptyId: card.ptyId
+                }
+              : undefined
+          }
+          onBrowserForeground={
+            onBrowserForeground
+              ? () => {
+                  onOpenChange(false)
+                  onBrowserForeground()
+                }
+              : undefined
+          }
           className={previewClassName}
+          onRequestClose={() => onOpenChange(false)}
         />
       ) : (
-        <div className="min-h-0 flex-1 px-2.5 pb-2 text-[11px] text-muted-foreground">
-          {terminalPreviewUnavailableMessage({ hostKind: card.hostKind })}
+        <div className="scrollbar-sleek max-h-[calc(100vh-140px)] min-h-0 flex-1 overflow-y-auto px-2.5 pb-2">
+          <div className="text-[11px] text-muted-foreground">
+            {terminalPreviewUnavailableMessage({ hostKind: card.hostKind }, t)}
+          </div>
+          {hasAgentCardLastMessages(card) ? (
+            <AgentCardLastMessages card={card} clamp={false} className="mt-2 gap-1.5" />
+          ) : null}
         </div>
       )}
       <div className="flex shrink-0 items-center gap-1.5 px-2.5 py-1.5">
         <Button type="button" variant="outline" size="xs" className="ml-auto" onClick={reveal}>
           <SquareArrowOutUpRight className="size-3" />
-          {translate('dashboardPopout.terminal.focusWorktree', 'Open worktree')}
+          {t('dashboardPopout.terminal.focusWorktree', 'Open worktree')}
         </Button>
       </div>
     </>
   )
 }
 
-/**
- * The near-fullscreen live-terminal dialog for one agent. Hosted by the BOARD,
- * not the card: sending a message flips the agent's bucket, which remounts its
- * card in another column — a card-owned dialog would close mid-conversation.
- * Only an explicit close (button, click-outside, Esc outside the terminal)
- * dismisses it.
- */
+/** Board-owned dialogs survive bucket moves that remount cards; only an explicit user dismissal closes them. */
 export function AgentTerminalDialog({
   card,
   onOpenChange,
-  onReveal
+  onReveal,
+  onBrowserForeground
 }: AgentTerminalDialogProps): React.JSX.Element {
+  const focusHandoff = useRef(false)
+  const changeOpen = (open: boolean): void => {
+    focusHandoff.current = false
+    onOpenChange(open)
+  }
+  const handoff = onBrowserForeground
+    ? () => {
+        focusHandoff.current = true
+        onBrowserForeground()
+      }
+    : undefined
   return (
-    <Dialog open={card !== null} onOpenChange={onOpenChange}>
+    <Dialog open={card !== null} onOpenChange={changeOpen}>
       {card ? (
         <DialogContent
           aria-describedby={undefined}
-          // Why: sm:max-w-lg in DialogContent's base classes would defeat a bare
-          // max-w-*, so the full-width override must carry the same breakpoint.
+          onCloseAutoFocus={(event) => {
+            if (focusHandoff.current) {
+              event.preventDefault()
+            }
+            focusHandoff.current = false
+          }}
+          // Override max-width at the same breakpoint as DialogContent’s sm:max-w-lg default.
           className="flex w-[calc(100vw-40px)] max-w-none flex-col gap-0 p-0 sm:max-w-none"
-          // Why: the default close X sits at top-4/right-4 (tuned for p-6
-          // dialogs), which misaligns against this p-0 compact header; render
-          // it inside the header row instead so it centers with the title.
+          // Place the close control in the compact header; the default absolute offsets assume dialog padding.
           showCloseButton={false}
-          // Why: Esc must reach the agent (interrupt) when typing in the
-          // terminal, not dismiss the dialog; xterm has already consumed the
-          // keystroke by the time Radix sees it. Click-outside still closes.
+          // Let xterm consume Escape as interrupt without closing the dialog; outside clicks still dismiss.
           onEscapeKeyDown={(e) => {
             if (e.target instanceof HTMLElement && e.target.closest('.xterm')) {
               e.preventDefault()
             }
           }}
-          // Why: the preview focuses its terminal once the snapshot paints;
-          // Radix's default focus target would tug focus away first.
+          // The preview owns focus after snapshot paint; prevent Radix from taking an earlier default target.
           onOpenAutoFocus={(e) => {
             if (card.ptyId) {
               e.preventDefault()
@@ -141,8 +174,9 @@ export function AgentTerminalDialog({
                 {card.worktreeName}
               </DialogTitle>
             }
-            onOpenChange={onOpenChange}
+            onOpenChange={changeOpen}
             onReveal={onReveal}
+            onBrowserForeground={handoff}
           />
         </DialogContent>
       ) : null}
@@ -154,6 +188,7 @@ export function AgentTerminalPanel({
   card,
   onOpenChange,
   onReveal,
+  onBrowserForeground,
   className
 }: Omit<AgentTerminalDialogProps, 'card'> & {
   card: DashboardCard
@@ -195,6 +230,7 @@ export function AgentTerminalPanel({
         previewClassName="h-auto min-h-0 flex-1"
         onOpenChange={onOpenChange}
         onReveal={onReveal}
+        onBrowserForeground={onBrowserForeground}
       />
     </section>
   )

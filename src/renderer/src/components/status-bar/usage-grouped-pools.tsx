@@ -7,6 +7,7 @@ import {
   type GroupedUsagePool
 } from './usage-pool-label'
 import { formatBareUsagePercentage } from './usage-percentage-label'
+import { useTranslate } from '../../i18n/use-translate'
 
 // Shortest window first; an unknown window (0) sorts last. Stable, so ties keep agy's order.
 function compareWindows(a: RateLimitBucket, b: RateLimitBucket): number {
@@ -34,7 +35,7 @@ function keyedWindows(
   })
 }
 
-/** Model-group pools as "Gemini 0% 5h · 4% wk │ Claude/GPT …"; children are flex items of the segment row. */
+/** Render named model pools with their window percentages as flex children of the usage segment. */
 export function GroupedPoolUsage({
   visibleBuckets,
   allBuckets,
@@ -46,6 +47,7 @@ export function GroupedPoolUsage({
   display: UsagePercentageDisplay
   now: number
 }): React.JSX.Element {
+  const t = useTranslate()
   const groups = new Map<string, RateLimitBucket[]>()
   for (const bucket of visibleBuckets) {
     const buckets = groups.get(bucket.group) ?? []
@@ -65,8 +67,8 @@ export function GroupedPoolUsage({
               {formatPoolGroupLabel(group, allBuckets)}
             </span>
             {windows.map(({ bucket, key }, index) => {
-              const percentage = formatBareUsagePercentage(bucket.usedPercent, display)
-              const window = formatPoolWindowLabel(bucket, now)
+              const percentage = formatBareUsagePercentage(bucket.usedPercent, display, t)
+              const window = formatPoolWindowLabel(bucket, now, t)
               return (
                 <React.Fragment key={key}>
                   {index > 0 ? <span className="text-muted-foreground">·</span> : null}

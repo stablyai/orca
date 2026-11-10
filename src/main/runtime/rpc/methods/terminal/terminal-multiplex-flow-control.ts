@@ -1,9 +1,4 @@
-import {
-  TERMINAL_MULTIPLEX_ACK_BATCH_BYTES,
-  TERMINAL_MULTIPLEX_ACK_STREAM_MAX_WINDOW_BYTES,
-  TERMINAL_MULTIPLEX_ACK_TOTAL_MAX_WINDOW_BYTES,
-  TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS
-} from '../../../../../shared/terminal-multiplex-flow-control'
+import { TERMINAL_MULTIPLEX_RECOVERY_SCROLLBACK_ROWS } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { drainTerminalMultiplexRoundRobin } from '../../terminal-multiplex-round-robin'
 import {
   sendSnapshotFrames,
@@ -14,25 +9,34 @@ import {
   type TerminalMultiplexConnection
 } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
+import {
+  ackLinkHasRoomForHistory,
+  creditAckWindow,
+  releaseAckPendingHoldbackIfDrained
+} from './terminal-multiplex-ack-window'
+import type { TerminalOutputFrameChunk } from '../../terminal-output-frame-chunks'
+import {
+  markYieldedQueriesDiscardedInFrames,
+  replaySnapshotCoveredStatelessQueries
+} from './terminal-multiplex-yielded-queries'
 
 export function installMultiplexFlowControl(state: TerminalMultiplexConnection): void {
   const { runtime, streams } = state
-  // Why: snapshot frames bypass the ACK window, so only a drained link can afford history;
-  // a recovery on every ACK of a sustained flood would otherwise outgrow the client's intake.
   const linkHasRoomForHistory = (stream: TerminalMultiplexStream): boolean =>
-    stream.ackInFlightBytes <= TERMINAL_MULTIPLEX_ACK_BATCH_BYTES &&
-    state.ackTotalInFlightBytes <= TERMINAL_MULTIPLEX_ACK_BATCH_BYTES
+    ackLinkHasRoomForHistory(state, stream)
   state.sendAckRecoverySnapshot = async (stream: TerminalMultiplexStream): Promise<void> => {
     if (
       !isMultiplexStreamAttached(state, stream) ||
       stream.outputPaused ||
-      stream.ackRecoverySnapshotInFlight
+      stream.ackRecoverySnapshotInFlight ||
+      // Images bypass ACK windows, so one per drained window keeps a slow link from queueing them without bound.
+      stream.ackRecoveryAwaitedBytes > 0
     ) {
       return
     }
     stream.ackRecoverySnapshotInFlight = true
     try {
-      // Why history: output was dropped, so the client's own history ends before this screen and must be replaced, not kept.
+      // Replace client history after dropped output; its retained history no longer reaches this screen.
       const carriesHistory = linkHasRoomForHistory(stream)
       const serialized = await serializeBudgetedRequestedSnapshot(
         runtime,
@@ -45,6 +49,8 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       if (!serialized) {
         throw new Error('Remote terminal recovery snapshot unavailable.')
       }
+      // Overflow still queues, so batched covered output reaches the cutoff below instead of settling queries the viewer drops.
+      stream.outputBatcher.flush()
       const displayMode = runtime.getMobileDisplayMode(stream.ptyId)
       const publication = sendSnapshotFrames(
         (opcode, payload) =>
@@ -61,6 +67,7 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
           kittyKeyboardFlags: serialized.kittyKeyboardFlags,
           alternateScreen: serialized.alternateScreen,
           terminalOwner: serialized.terminalOwner,
+          lastTitle: serialized.lastTitle,
           truncatedByByteBudget: serialized.truncatedByByteBudget,
           scrollbackRows: serialized.scrollbackRows,
           data: serialized.data
@@ -69,22 +76,29 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       if (!publication.published) {
         throw new Error('Remote terminal recovery snapshot was not published.')
       }
+      stream.ackRecoveryAwaitedBytes = stream.ackInFlightBytes
+      if (state.linkEstimate.enabled) {
+        state.linkEstimate.noteImageSent(publication.bytes)
+      }
       if (!isMultiplexStreamAttached(state, stream)) {
         throw new Error('Remote terminal recovery snapshot stream detached.')
       }
       if (typeof serialized.seq === 'number') {
         const snapshotSeq = serialized.seq
-        const retained = stream.ackPendingOutput.filter(
-          (chunk) => !(typeof chunk.seq === 'number' && chunk.seq <= snapshotSeq)
-        )
+        const isCovered = (chunk: TerminalOutputFrameChunk): boolean =>
+          typeof chunk.seq === 'number' && chunk.seq <= snapshotSeq
+        markYieldedQueriesDiscardedInFrames(stream, stream.ackPendingOutput.filter(isCovered))
+        const retained = stream.ackPendingOutput.filter((chunk) => !isCovered(chunk))
         stream.ackPendingOutput = retained
         stream.ackPendingOutputBytes = retained.reduce(
           (total, chunk) => total + chunk.bytes.byteLength,
           0
         )
+        releaseAckPendingHoldbackIfDrained(state, stream)
       }
       stream.ackPendingOutputOverflowed = false
       stream.ackRecoveryHistoryOwed = !carriesHistory
+      replaySnapshotCoveredStatelessQueries(state, stream, [], serialized.seq)
     } catch (error) {
       if (!isMultiplexStreamAttached(state, stream)) {
         return
@@ -118,7 +132,7 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       flushed < maxChunks &&
       state.canSendAckGatedOutput(stream, stream.ackPendingOutput[flushed]!.bytes.byteLength)
     ) {
-      if (!state.sendAckGatedOutput(stream, stream.ackPendingOutput[flushed]!)) {
+      if (!state.sendAckGatedOutput(stream, stream.ackPendingOutput[flushed]!, true)) {
         return flushed
       }
       flushed += 1
@@ -130,9 +144,12 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
         0
       )
     }
+    releaseAckPendingHoldbackIfDrained(state, stream)
     if (
       stream.ackRecoveryHistoryOwed &&
       stream.ackPendingOutput.length === 0 &&
+      // Flagging overflow while the gate holds the image would queue live output (echo) behind it.
+      stream.ackRecoveryAwaitedBytes === 0 &&
       linkHasRoomForHistory(stream)
     ) {
       // The flood settled: one recovery now replaces the screen-only image and its history.
@@ -162,17 +179,13 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
     if (!stream.ackOutput || bytes <= 0) {
       return
     }
-    const acknowledged = Math.min(stream.ackInFlightBytes, bytes)
-    stream.ackWindowBytes = Math.min(
-      TERMINAL_MULTIPLEX_ACK_STREAM_MAX_WINDOW_BYTES,
-      stream.ackWindowBytes + acknowledged
-    )
-    state.ackTotalWindowBytes = Math.min(
-      TERMINAL_MULTIPLEX_ACK_TOTAL_MAX_WINDOW_BYTES,
-      state.ackTotalWindowBytes + acknowledged
-    )
-    stream.ackInFlightBytes -= acknowledged
-    state.ackTotalInFlightBytes = Math.max(0, state.ackTotalInFlightBytes - acknowledged)
+    const acknowledged = creditAckWindow(state, stream, bytes)
+    if (state.linkEstimate.enabled) {
+      state.linkEstimate.noteAcknowledged(stream, acknowledged)
+    }
     state.flushAllAckPendingOutput()
+    if (stream.ackPendingOutput.length === 0 && !stream.ackPendingOutputOverflowed) {
+      stream.ackOutputWaited = false
+    }
   }
 }

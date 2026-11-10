@@ -1,12 +1,10 @@
-/**
- * Opens the runtime's `layout.subscribe` stream for the oracle: in the window's renderer through
- * the local runtime bridge, or on a headless serve host over its pairing offer.
- */
+// Subscribe through the local renderer bridge or a headless host’s pairing offer.
 
 import type { Page } from '@stablyai/playwright-test'
-import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/paired-runtime-connection'
-import { decodePairingOffer } from '../../../src/shared/pairing'
-import { subscribeRemoteRuntimeRequest } from '../../../src/shared/remote-runtime-client'
+import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/remote-runtime/pairing/paired-runtime-connection'
+import { decodePairingOffer } from '../../../src/shared/remote-runtime/pairing/pairing'
+import '../../../src/shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../../src/shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import type { RuntimeRpcResponse } from '../../../src/shared/runtime-rpc-envelope'
 import type { LiveLayoutFeed } from './workspace-layout-oracle-feed'
 
@@ -51,7 +49,7 @@ export async function subscribeHeadlessLayout(
   feed: LiveLayoutFeed
 ): Promise<{ close: () => void }> {
   feed.reopening()
-  const subscription = await subscribeRemoteRuntimeRequest<unknown>(
+  const subscription = await subscribeRemoteRuntimeTransport<unknown>(
     pairedRuntimeConnectionFromOffer(decodePairingOffer(pairingUrl)),
     'layout.subscribe',
     {},

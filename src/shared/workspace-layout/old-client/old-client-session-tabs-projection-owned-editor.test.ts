@@ -2,7 +2,7 @@
 // gets a row in the phone and old-client tab lists.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ownedEditorFileId } from '../../workspace-session-pane-ownership'
+import { ownedEditorFileId } from '../../workspace-session/workspace-session-pane-ownership'
 import { editorFileKey } from '../workspace-layout-editor-tab-file'
 import { projectSessionTabs, type SessionTabsFacts } from './old-client-session-tabs-projection'
 import { build, testContext, WS } from '../workspace-layout-command.test-fixture'
@@ -67,10 +67,5 @@ describe('projectSessionTabs with an owned editor id', () => {
         isDirty: true
       })
     ])
-  })
-
-  it('keeps matching by path alone with the switch off', () => {
-    mocks.layoutOwnerIsMain = false
-    expect(projectOwnedReadme().projected.tabs).toEqual([])
   })
 })

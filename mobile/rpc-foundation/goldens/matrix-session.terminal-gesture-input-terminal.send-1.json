@@ -54,40 +54,6 @@
         "$rpc": "null"
       }
     },
-    "165d659fda65": {
-      "name": "terminal.clearBuffer#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.clearBuffer"
-        },
-        {
-          "name": "params",
-          "value": {
-            "terminal": "terminal-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 16,
-        "settledAt": 16,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "cleared": true
-          }
-        }
-      }
-    },
     "18ae72c963d5": {
       "name": "terminal.send#1",
       "ordinal": 1,
@@ -310,7 +276,7 @@
         }
       }
     },
-    "5ec72f058605": {
+    "4b5c402c0aac": {
       "name": "terminal.clearBuffer#1",
       "ordinal": 3,
       "args": [
@@ -327,7 +293,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -336,13 +302,13 @@
         "startedAt": 16
       }
     },
-    "77d8a44e0dcc": {
-      "name": "orchestration.workerTerminalUserInput#1",
+    "4d7959cb9208": {
+      "name": "terminal.clearBuffer#1",
       "ordinal": 3,
       "args": [
         {
           "name": "method",
-          "value": "orchestration.workerTerminalUserInput"
+          "value": "terminal.clearBuffer"
         },
         {
           "name": "params",
@@ -353,15 +319,31 @@
         {
           "name": "options",
           "value": {
-            "budgetSpansConnect": true,
-            "failWhenDisconnected": true,
-            "timeoutMs": 5000
+            "failWhenDisconnected": true
           }
         }
       ],
       "settlement": {
-        "status": "pending",
-        "startedAt": 16
+        "status": "fulfilled",
+        "startedAt": 16,
+        "settledAt": 16,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "clear": {
+              "cleared": true,
+              "handle": "terminal-1"
+            }
+          }
+        }
+      }
+    },
+    "70f80fc43078": {
+      "name": "terminal-subscribe",
+      "ordinal": 6,
+      "value": {
+        "handle": "terminal-1"
       }
     },
     "8224ccdb2cd8": {
@@ -372,16 +354,6 @@
     "839dec95ae1c": {
       "status": "pending",
       "startedAt": 16
-    },
-    "85a38010bc83": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"orchestration.workerTerminalUserInput\",\"params\":{\"terminal\":\"terminal-1\"}}"
-    },
-    "8716af94ca80": {
-      "name": "terminal.clearBuffer#1",
-      "ordinal": 6,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.clearBuffer\",\"params\":{\"terminal\":\"terminal-1\"}}"
     },
     "8cc2f30cc0d2": {
       "name": "terminal.send#1",
@@ -464,42 +436,6 @@
         }
       }
     },
-    "94ce15ec36dc": {
-      "name": "orchestration.workerTerminalUserInput#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "orchestration.workerTerminalUserInput"
-        },
-        {
-          "name": "params",
-          "value": {
-            "terminal": "terminal-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "budgetSpansConnect": true,
-            "failWhenDisconnected": true,
-            "timeoutMs": 5000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 16,
-        "settledAt": 16,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "reported": true
-          }
-        }
-      }
-    },
     "94fa272beafb": {
       "name": "terminal.send#1",
       "ordinal": 1,
@@ -573,40 +509,11 @@
         "startedAt": 0
       }
     },
-    "a1ae5051ed70": {
-      "name": "toast",
+    "a8bcca91a365": {
+      "name": "terminal-unsubscribe",
       "ordinal": 5,
       "value": {
-        "durationMs": {
-          "$rpc": "null"
-        },
-        "message": "Terminal cleared"
-      }
-    },
-    "afb61324f54a": {
-      "name": "terminal.clearBuffer#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.clearBuffer"
-        },
-        {
-          "name": "params",
-          "value": {
-            "terminal": "terminal-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 16
+        "handle": "terminal-1"
       }
     },
     "caa6ece1bdab": {
@@ -674,40 +581,6 @@
       "settledAt": 0,
       "value": {
         "$rpc": "undefined"
-      }
-    },
-    "ebaa6b64425b": {
-      "name": "terminal.clearBuffer#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "terminal.clearBuffer"
-        },
-        {
-          "name": "params",
-          "value": {
-            "terminal": "terminal-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 16,
-        "settledAt": 16,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "cleared": true
-          }
-        }
       }
     },
     "eecb4c1a0308": {
@@ -781,8 +654,8 @@
       {
         "id": "terminal-gesture-flush-and-clear.normal:sent",
         "observation": {
-          "sender": ["47c387a75ffc", "77d8a44e0dcc"],
-          "payloads": ["8224ccdb2cd8", "85a38010bc83"],
+          "sender": ["47c387a75ffc"],
+          "payloads": ["8224ccdb2cd8"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gesture": "eb79a9b3682a"
@@ -794,8 +667,8 @@
       {
         "id": "terminal-gesture-flush-and-clear.normal:reported",
         "observation": {
-          "sender": ["47c387a75ffc", "94ce15ec36dc"],
-          "payloads": ["8224ccdb2cd8", "85a38010bc83"],
+          "sender": ["47c387a75ffc"],
+          "payloads": ["8224ccdb2cd8"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gesture": "eb79a9b3682a"
@@ -807,8 +680,8 @@
       {
         "id": "terminal-gesture-flush-and-clear.normal:clearing",
         "observation": {
-          "sender": ["47c387a75ffc", "94ce15ec36dc", "afb61324f54a"],
-          "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
+          "sender": ["47c387a75ffc", "4b5c402c0aac"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gesture": "eb79a9b3682a",
@@ -821,15 +694,15 @@
       {
         "id": "terminal-gesture-flush-and-clear.normal:cleared",
         "observation": {
-          "sender": ["47c387a75ffc", "94ce15ec36dc", "ebaa6b64425b"],
-          "payloads": ["8224ccdb2cd8", "85a38010bc83", "8716af94ca80"],
+          "sender": ["47c387a75ffc", "4d7959cb9208"],
+          "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "gesture": "eb79a9b3682a",
             "clear": "204da356c8b7"
           },
           "state": "0cc3e25ebff5",
-          "effects": ["3dc7f55dee2a"]
+          "effects": ["a8bcca91a365", "70f80fc43078", "3dc7f55dee2a"]
         }
       },
       {
@@ -861,7 +734,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.result-absent:clearing",
         "observation": {
-          "sender": ["038694606b99", "5ec72f058605"],
+          "sender": ["038694606b99", "4b5c402c0aac"],
           "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -875,7 +748,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.result-absent:cleared",
         "observation": {
-          "sender": ["038694606b99", "165d659fda65"],
+          "sender": ["038694606b99", "4d7959cb9208"],
           "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -883,7 +756,7 @@
             "clear": "204da356c8b7"
           },
           "state": "0cc3e25ebff5",
-          "effects": ["a1ae5051ed70"]
+          "effects": ["a8bcca91a365", "70f80fc43078", "3dc7f55dee2a"]
         }
       },
       {
@@ -915,7 +788,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.result-null:clearing",
         "observation": {
-          "sender": ["3a2f96d25da8", "5ec72f058605"],
+          "sender": ["3a2f96d25da8", "4b5c402c0aac"],
           "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -929,7 +802,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.result-null:cleared",
         "observation": {
-          "sender": ["3a2f96d25da8", "165d659fda65"],
+          "sender": ["3a2f96d25da8", "4d7959cb9208"],
           "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -937,7 +810,7 @@
             "clear": "204da356c8b7"
           },
           "state": "0cc3e25ebff5",
-          "effects": ["a1ae5051ed70"]
+          "effects": ["a8bcca91a365", "70f80fc43078", "3dc7f55dee2a"]
         }
       },
       {
@@ -969,7 +842,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.inner-ok-missing:clearing",
         "observation": {
-          "sender": ["8cc2f30cc0d2", "5ec72f058605"],
+          "sender": ["8cc2f30cc0d2", "4b5c402c0aac"],
           "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -983,7 +856,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.inner-ok-missing:cleared",
         "observation": {
-          "sender": ["8cc2f30cc0d2", "165d659fda65"],
+          "sender": ["8cc2f30cc0d2", "4d7959cb9208"],
           "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -991,7 +864,7 @@
             "clear": "204da356c8b7"
           },
           "state": "0cc3e25ebff5",
-          "effects": ["a1ae5051ed70"]
+          "effects": ["a8bcca91a365", "70f80fc43078", "3dc7f55dee2a"]
         }
       },
       {
@@ -1023,7 +896,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.inner-false-string-error:clearing",
         "observation": {
-          "sender": ["3ac9be406587", "5ec72f058605"],
+          "sender": ["3ac9be406587", "4b5c402c0aac"],
           "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1037,7 +910,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.inner-false-string-error:cleared",
         "observation": {
-          "sender": ["3ac9be406587", "165d659fda65"],
+          "sender": ["3ac9be406587", "4d7959cb9208"],
           "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1045,7 +918,7 @@
             "clear": "204da356c8b7"
           },
           "state": "0cc3e25ebff5",
-          "effects": ["a1ae5051ed70"]
+          "effects": ["a8bcca91a365", "70f80fc43078", "3dc7f55dee2a"]
         }
       },
       {
@@ -1077,7 +950,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.inner-false-object-error:clearing",
         "observation": {
-          "sender": ["2198adee8c06", "5ec72f058605"],
+          "sender": ["2198adee8c06", "4b5c402c0aac"],
           "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1091,7 +964,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.inner-false-object-error:cleared",
         "observation": {
-          "sender": ["2198adee8c06", "165d659fda65"],
+          "sender": ["2198adee8c06", "4d7959cb9208"],
           "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1099,7 +972,7 @@
             "clear": "204da356c8b7"
           },
           "state": "0cc3e25ebff5",
-          "effects": ["a1ae5051ed70"]
+          "effects": ["a8bcca91a365", "70f80fc43078", "3dc7f55dee2a"]
         }
       },
       {
@@ -1131,7 +1004,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.outer-refused:clearing",
         "observation": {
-          "sender": ["8d84d72cf6d5", "5ec72f058605"],
+          "sender": ["8d84d72cf6d5", "4b5c402c0aac"],
           "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1145,7 +1018,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.outer-refused:cleared",
         "observation": {
-          "sender": ["8d84d72cf6d5", "165d659fda65"],
+          "sender": ["8d84d72cf6d5", "4d7959cb9208"],
           "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1153,7 +1026,7 @@
             "clear": "204da356c8b7"
           },
           "state": "0cc3e25ebff5",
-          "effects": ["a1ae5051ed70"]
+          "effects": ["a8bcca91a365", "70f80fc43078", "3dc7f55dee2a"]
         }
       },
       {
@@ -1185,7 +1058,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.outer-refused-no-message:clearing",
         "observation": {
-          "sender": ["94fa272beafb", "5ec72f058605"],
+          "sender": ["94fa272beafb", "4b5c402c0aac"],
           "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1199,7 +1072,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.outer-refused-no-message:cleared",
         "observation": {
-          "sender": ["94fa272beafb", "165d659fda65"],
+          "sender": ["94fa272beafb", "4d7959cb9208"],
           "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1207,7 +1080,7 @@
             "clear": "204da356c8b7"
           },
           "state": "0cc3e25ebff5",
-          "effects": ["a1ae5051ed70"]
+          "effects": ["a8bcca91a365", "70f80fc43078", "3dc7f55dee2a"]
         }
       },
       {
@@ -1239,7 +1112,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.method-not-found:clearing",
         "observation": {
-          "sender": ["e1076775e5c2", "5ec72f058605"],
+          "sender": ["e1076775e5c2", "4b5c402c0aac"],
           "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1253,7 +1126,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.method-not-found:cleared",
         "observation": {
-          "sender": ["e1076775e5c2", "165d659fda65"],
+          "sender": ["e1076775e5c2", "4d7959cb9208"],
           "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1261,7 +1134,7 @@
             "clear": "204da356c8b7"
           },
           "state": "0cc3e25ebff5",
-          "effects": ["a1ae5051ed70"]
+          "effects": ["a8bcca91a365", "70f80fc43078", "3dc7f55dee2a"]
         }
       },
       {
@@ -1293,7 +1166,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.transport-rejection:clearing",
         "observation": {
-          "sender": ["18ae72c963d5", "5ec72f058605"],
+          "sender": ["18ae72c963d5", "4b5c402c0aac"],
           "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1307,7 +1180,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.transport-rejection:cleared",
         "observation": {
-          "sender": ["18ae72c963d5", "165d659fda65"],
+          "sender": ["18ae72c963d5", "4d7959cb9208"],
           "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1315,7 +1188,7 @@
             "clear": "204da356c8b7"
           },
           "state": "0cc3e25ebff5",
-          "effects": ["a1ae5051ed70"]
+          "effects": ["a8bcca91a365", "70f80fc43078", "3dc7f55dee2a"]
         }
       },
       {
@@ -1347,7 +1220,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.transport-rejection-no-message:clearing",
         "observation": {
-          "sender": ["eecb4c1a0308", "5ec72f058605"],
+          "sender": ["eecb4c1a0308", "4b5c402c0aac"],
           "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1361,7 +1234,7 @@
       {
         "id": "terminal-gesture-flush-and-clear.transport-rejection-no-message:cleared",
         "observation": {
-          "sender": ["eecb4c1a0308", "165d659fda65"],
+          "sender": ["eecb4c1a0308", "4d7959cb9208"],
           "payloads": ["8224ccdb2cd8", "d9c52be2f839"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -1369,7 +1242,7 @@
             "clear": "204da356c8b7"
           },
           "state": "0cc3e25ebff5",
-          "effects": ["a1ae5051ed70"]
+          "effects": ["a8bcca91a365", "70f80fc43078", "3dc7f55dee2a"]
         }
       }
     ]

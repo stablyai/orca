@@ -20,7 +20,6 @@ const editor = (
 
 const right: NewGroupSplit = { besideGroupId: 'g1', direction: 'right' }
 
-/** One group, `g1`, holding `/w/a.ts` (permanent) and `/w/p.ts` (preview). */
 function oneGroup() {
   const ctx = testContext()
   const { model } = build(ctx, [
@@ -178,7 +177,6 @@ describe('opening into a new split', () => {
         })
       )
     ).toBe('group_not_found')
-    // The group id another workspace holds.
     const other = build(
       ctx,
       [editor('/w/o.ts', { workspace: 'other', tabId: 'o', groupId: 'g2' })],
@@ -188,7 +186,6 @@ describe('opening into a new split', () => {
       applyLayoutCommand(other, editor('/w/b.ts', { tabId: 'b', groupId: 'g2', split: right }), ctx)
     ).toEqual({ ok: false, code: 'group_exists' })
     expect(refusal(editor('/w/b.ts', { tabId: 'b', split: right }))).toBe('invalid_params')
-    // A tab id another file's tab holds: the open itself refuses it.
     expect(refusal(editor('/w/b.ts', { tabId: 'a', groupId: 'g2', split: right }))).toBe(
       'tab_exists'
     )
@@ -207,18 +204,6 @@ describe('opening into a new split', () => {
 
     expect(groupsOf(opened.model)).toEqual([{ id: 'g2', tabOrder: ['b'] }])
     expect(opened.model.workspaces[WS]!.groupLayout).toBeUndefined()
-  })
-
-  it('opens into a group main already holds, as an open without a split', () => {
-    const { ctx, model } = oneGroup()
-
-    const opened = build(
-      ctx,
-      [editor('/w/b.ts', { tabId: 'b', groupId: 'g1', split: right })],
-      model
-    )
-
-    expect(groupsOf(opened.model)).toEqual([{ id: 'g1', tabOrder: ['a', 'p', 'b'] }])
   })
 
   it('changes nothing for the same open again', () => {

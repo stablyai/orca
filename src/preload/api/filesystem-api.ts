@@ -1,16 +1,18 @@
-import type { PathExistenceResult } from '../../shared/path-existence-batch'
-import type { RuntimeFileReadChunkResult } from '../../shared/runtime-types'
-import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
-import type {
-  DirEntry,
-  FsChangedPayload,
-  MarkdownDocument
-} from '../../shared/filesystem-entry-types'
+import type { PathExistenceResult } from '../../shared/file-access/path-existence-batch'
+import type { RuntimeFileReadChunkResult } from '../../shared/file-content/runtime-file-read'
+import type { SearchOptions, SearchResult } from '../../shared/file-search/code-search-types'
+import type { PdfExportResult } from '../../shared/pdf-export-failure-copy'
+import type { DirEntry } from '../../shared/file-listing/directory-entry'
+import type { FsChangedPayload } from '../../shared/file-watch/filesystem-change-event'
+import type { MarkdownDocument } from '../../shared/file-listing/file-document'
 import type {
   ImportItemResult,
-  ResolveDroppedPathsResult,
-  StagedExternalImportSource
-} from '../../shared/filesystem-import-result-types'
+  ResolveDroppedPathsResult
+} from '../../shared/file-import/filesystem-import-result'
+import type {
+  StagedRuntimeUploadSource as StagedExternalImportSource,
+  RuntimeUploadFileStreamRequest
+} from '../../shared/file-import/runtime-upload-staging-contract'
 import type {
   LocalLogTailChangedPayload,
   LocalLogTailReadArgs,
@@ -18,11 +20,13 @@ import type {
   LocalLogTailWatchArgs
 } from '../../shared/local-log-tail-types'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
-import type { LocalFileAccess } from '../../shared/local-file-access'
+import type { LocalFileAccess } from '../../shared/file-access/local-file-access'
+import type { RemoteFilePreviewAddress } from '../../shared/file-preview/remote-file-preview-address'
+import type { FileBytesWritePrecondition } from '../../shared/file-write/file-bytes-write'
 import type {
   FileWriteDiskPrecondition,
   FileWriteResult
-} from '../../shared/file-write-disk-precondition'
+} from '../../shared/file-write/file-write-disk-precondition'
 import type {
   CreateVenvResult,
   KernelFrameEvent,
@@ -30,23 +34,17 @@ import type {
   PythonEnvironment,
   PythonEnvironments
 } from '../../shared/notebook-kernel-types'
-import type { RuntimeUploadFileStreamRequest } from '../../shared/runtime-upload-staging-contract'
 import type {
   AgentSessionAttachmentPathUploadResult,
   AgentSessionAttachmentUploadTarget
-} from '../../shared/agent-session-attachments'
+} from '../../shared/agent-session/agent-session-attachments'
 import type {
   PrepareDroppedPathsRequest,
   PreparedDroppedPaths
-} from '../../shared/native-file-drop-preparation'
+} from '../../shared/file-import/native-file-drop-preparation'
 
 export type ExportApi = {
-  htmlToPdf: (args: {
-    html: string
-    title: string
-  }) => Promise<
-    { success: true; filePath: string } | { success: false; cancelled?: boolean; error?: string }
-  >
+  htmlToPdf: (args: { html: string; title: string }) => Promise<PdfExportResult>
 }
 
 export type FilesystemApi = {
@@ -59,25 +57,44 @@ export type FilesystemApi = {
       access?: LocalFileAccess
       offset: number
       length: number
+      wakeWslDistro?: boolean
     }) => Promise<RuntimeFileReadChunkResult>
     readDir: (args: {
       dirPath: string
       connectionId?: string
       followSymlinks?: boolean
+      /** A user act (open or Retry); may start a stopped WSL distro. */
+      wakeWslDistro?: boolean
+      access?: LocalFileAccess
     }) => Promise<DirEntry[]>
     readFile: (args: {
       filePath: string
       connectionId?: string
       includeLocalLogMetadata?: boolean
       access?: LocalFileAccess
+      /** A user act (open, expand, Retry); may start a stopped WSL distro. */
+      wakeWslDistro?: boolean
+      /** A viewer that reads images and PDFs by URL; other readers keep their base64. */
+      rangePreview?: boolean
     }) => Promise<{
       content: string
       isBinary: boolean
       mediaUrl?: string
+      size?: number
       isImage?: boolean
       mimeType?: string
       fileIdentity?: string
     }>
+    /** A PDF preview's bytes, for the renderer that minted its orca-media URL only. */
+    readPreviewRange: (args: { url: string; offset: number; length: number }) => Promise<Uint8Array>
+    grantRuntimeFilePreview: (args: RemoteFilePreviewAddress) => Promise<{
+      content: string
+      isBinary: true
+      mimeType: string
+      mediaUrl: string
+      isImage?: true
+      size?: number
+    } | null>
     readLocalLogTail: (args: LocalLogTailReadArgs) => Promise<LocalLogTailReadResult>
     startLocalLogTail: (args: LocalLogTailWatchArgs) => Promise<void>
     stopLocalLogTail: (args: { subscriptionId: string }) => Promise<void>
@@ -121,6 +138,16 @@ export type FilesystemApi = {
         diskPrecondition?: FileWriteDiskPrecondition
       } & SshMutationExpectation
     ) => Promise<FileWriteResult>
+    /** Atomic replacement of a binary file; absent where only text saves are served. */
+    writeFileBytes?: (
+      args: {
+        filePath: string
+        bytes: Uint8Array
+        connectionId?: string
+        access?: LocalFileAccess
+        diskPrecondition: FileBytesWritePrecondition
+      } & SshMutationExpectation
+    ) => Promise<FileWriteResult>
     createFile: (
       args: {
         filePath: string
@@ -154,12 +181,14 @@ export type FilesystemApi = {
         targetPath: string
         connectionId?: string
         recursive?: boolean
+        permanent?: boolean
       } & SshMutationExpectation
     ) => Promise<void>
     stat: (args: {
       filePath: string
       connectionId?: string
       access?: LocalFileAccess
+      wakeWslDistro?: boolean
     }) => Promise<{ size: number; isDirectory: boolean; mtime: number }>
     pathsExist?: (args: {
       filePaths: string[]
@@ -211,7 +240,7 @@ export type FilesystemApi = {
         connectionId?: string
       } & SshMutationExpectation
     ) => Promise<ResolveDroppedPathsResult>
-    /** Uploads client-local files into a paired server's store for one structured chat. */
+    /** Uploads client-local files to the paired server owning the chat. */
     uploadPathsToAgentSessionAttachments: (
       args: AgentSessionAttachmentUploadTarget & { paths: string[] }
     ) => Promise<AgentSessionAttachmentPathUploadResult>

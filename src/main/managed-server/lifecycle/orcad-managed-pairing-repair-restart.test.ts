@@ -1,38 +1,60 @@
+import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
+import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktree-listing'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { parsePairingCode, type PairingOffer } from '../../../shared/pairing'
-import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
+import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
+import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import {
   createEnvironmentFromPairingOffer,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { SshTarget } from '../../../shared/ssh-types'
-import { DeviceRegistry } from '../../runtime/device-registry'
+import { DeviceRegistry } from '../../runtime/rpc/server/pairing/device-registry'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { OrcaRuntimeRpcServer } from '../../runtime/runtime-rpc'
-import { verifyRuntimePairingIdentity } from '../../runtime/runtime-environment-identity-verification'
+import { OrcaRuntimeRpcServer } from '../../runtime/rpc/server/runtime-rpc'
+import { verifyRuntimePairingIdentity } from '../../runtime/hosts/identity/runtime-environment-identity-verification'
 import { buildServePairingReadiness } from '../../server/serve-pairing-readiness'
 import type { ServeReadiness } from '../../server/serve-readiness'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
 import { ManagedOrcadPairingRepairs } from './orcad-managed-pairing-repair'
 import {
   OrcadManagedIdentityError,
   verifyManagedOrcadTunnelIdentity
 } from './orcad-managed-tunnel-identity'
+import { unusedOrcadHostTransport } from '../testing/managed-host-transport.test-fixture'
 
-vi.mock('../../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue([]),
-  listWorktreesStrict: vi.fn().mockResolvedValue([])
-}))
+vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees
+  }
+})
+
+vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
+
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  const createWorktreeListingMocks = () => ({
+    listWorktrees: vi.fn().mockResolvedValue([]),
+    listWorktreesStrict: vi.fn().mockResolvedValue([])
+  })
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
+})
 
 const servers: OrcaRuntimeRpcServer[] = []
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.stop()))
 })
 
-/** An orcad process on `hostProfile`, the host profile that holds its E2EE key and devices. */
 async function startOrcad(hostProfile: string): Promise<OrcaRuntimeRpcServer> {
   const server = new OrcaRuntimeRpcServer({
     runtime: new OrcaRuntimeService(),
@@ -45,7 +67,6 @@ async function startOrcad(hostProfile: string): Promise<OrcaRuntimeRpcServer> {
   return server
 }
 
-/** What the slot publishes in its readiness file, which the repair reads over SSH. */
 async function publishedReadiness(server: OrcaRuntimeRpcServer): Promise<ServeReadiness> {
   return {
     runtimeId: 'runtime-now',
@@ -61,7 +82,6 @@ function offerIn(readiness: ServeReadiness): PairingOffer {
   return parsePairingCode(readiness.pairing.url)!
 }
 
-/** The desktop's saved server; the tunnel's local port is where the server listens here. */
 function savedEnvironment(offer: PairingOffer, at = 1): KnownRuntimeEnvironment {
   return {
     ...createEnvironmentFromPairingOffer({
@@ -91,8 +111,7 @@ function repairsAgainst(saved: KnownRuntimeEnvironment, readiness: ServeReadines
     connect: async () => ({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only passed to readReadiness, which ignores it here.
       target: {} as SshTarget,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only passed to readReadiness, which ignores it here.
-      connection: {} as OrcadHostTransport
+      connection: unusedOrcadHostTransport()
     }),
     readReadiness: async () => readiness,
     refresh,
@@ -111,14 +130,13 @@ describe('a managed orcad that dropped this desktop and restarted', () => {
       runtimeId: null
     })
     await first.stop()
-    // Host side: this desktop's device is removed, then the server restarts.
     new DeviceRegistry(hostProfile).removeDevice(paired.pairedDeviceId!)
     const restarted = await startOrcad(hostProfile)
     const readiness = await publishedReadiness(restarted)
     const reached = { ...paired, endpoint: offerIn(readiness).endpoint }
 
     const refused = await verifyManagedOrcadTunnelIdentity(savedEnvironment(reached))
-    // Not "another Orca holds the port": the refusal came sealed under the pinned key.
+    // The pinned key sealed this refusal, proving the expected server answered.
     expect(refused.verdict).toBe('unpaired')
 
     const { repairs, refresh } = repairsAgainst(savedEnvironment(reached), readiness)

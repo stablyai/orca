@@ -20,7 +20,6 @@ function createWebglRecoveryHarness(failSecondAttach = false) {
   }> = []
   const term = {
     rows: 24,
-    // The theme path writes these two, which is how a case reads that it ran.
     options: { theme: {}, minimumContrastRatio: 0, fontSize: 13 },
     refresh: vi.fn(),
     loadAddon: vi.fn(() => {
@@ -45,7 +44,6 @@ function createWebglRecoveryHarness(failSecondAttach = false) {
   }
   const logged: Record<string, unknown>[] = []
   const terminalThemeInput = { mode: 'dark' }
-  // The recovery's own timer, held rather than run: every case decides when the retry fires.
   vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback: TimerHandler) => {
     if (typeof callback === 'function') {
       timers.push(() => {
@@ -68,8 +66,6 @@ function createWebglRecoveryHarness(failSecondAttach = false) {
   attachWebglAddon(scope, true)
   return {
     addons,
-    // The theme is re-applied through the document's own path, which is observable on the terminal
-    // rather than through a spy on the function.
     appliedThemes: () => term.options.theme,
     fireVisibilityChange: () => {
       document.dispatchEvent(new Event('visibilitychange'))
@@ -150,10 +146,7 @@ describe('terminal WebView bundled engine', () => {
     }
   })
 
-  // Why: the context deliberately omits WeakRef (Chrome 84+) / structuredClone
-  // (Chrome 98+) and supplies an Element without replaceChildren (Chrome 86+) —
-  // the engine must evaluate on older WebViews via its own guarded runtime shims,
-  // which are the linchpin of the old-WebView support (esbuild lowers syntax only).
+  // Omit newer WebView APIs to verify runtime shims; esbuild lowers syntax without polyfilling WeakRef/structuredClone/replaceChildren.
   it('exposes the xterm globals and installs the old-WebView runtime shims', () => {
     const window: Record<string, unknown> = {}
     class ElementStub {}
@@ -192,9 +185,7 @@ describe('terminal WebView bundled engine', () => {
   })
 
   it('keeps the bundled engine from breaking out of its inline script/style tags', () => {
-    // Why: the engine JS/CSS are inlined into <script>/<style> blocks. </script
-    // and </style are neutralized at build time; the tokenizer-escape openers that
-    // could swallow the rest of the document must also be absent from the bundle.
+    // Inline script/style output must neutralize closing tags and tokenizer openers that could consume the remaining HTML.
     expect(XTERM_ENGINE_JS).not.toMatch(/<\/script/i)
     expect(XTERM_ENGINE_JS).not.toMatch(/<script/i)
     expect(XTERM_ENGINE_JS).not.toContain('<!--')
@@ -206,7 +197,6 @@ describe('terminal WebView bundled engine', () => {
 
     expect(addons).toHaveLength(1)
     addons[0]?.fireContextLoss()
-    // The log reaches the host through the notify seam, which is where a real host reads it.
     expect(logged).toContainEqual({
       type: 'log',
       tag: '[fit]webgl-context-loss',
@@ -242,15 +232,13 @@ describe('terminal WebView bundled engine', () => {
     applyTerminalTheme(harness.scope, harness.scope.terminalThemeInput)
     const firstTheme = harness.term.options.theme
 
-    // Hidden: nothing is re-applied, because a repaint of an invisible terminal is wasted. happy-dom
-    // reports a visible document, so the hidden arm is the stub and the visible one is the default.
+    // Stub only hidden state; Happy DOM’s visible default exercises real recovery.
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
     harness.fireVisibilityChange()
     expect(harness.term.options.theme).toBe(firstTheme)
     vi.restoreAllMocks()
 
     harness.fireVisibilityChange()
-    // The theme is re-applied through the document's own path, read off the terminal it wrote to.
     expect(harness.term.options.theme).not.toBe(firstTheme)
     expect(harness.addons[0]?.clearTextureAtlas).toHaveBeenCalledTimes(1)
     expect(harness.term.refresh).toHaveBeenCalledTimes(1)

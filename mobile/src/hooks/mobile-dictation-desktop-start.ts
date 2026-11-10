@@ -1,21 +1,70 @@
 import { isCurrentMobileDictationStart } from './mobile-dictation-session-state'
+import { sendAcrossConnectionMove } from './mobile-dictation-audio-chunk'
+import { dictationSessionLostMessage } from '../dictation/mobile-dictation-setup'
 import {
   dictationSessionCancel,
+  dictationSessionFinish,
   dictationSessionStart
 } from '../dictation/mobile-dictation-operations'
-import type { RpcClient } from '../transport/rpc-client'
+import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../src/shared/rpc-contract/speech-params'
+import { pairedDictationFinishTimeoutMs } from '../../../src/shared/dictation-finish-deadlines'
+import { rpcPayloadMember } from '../transport/rpc/rpc-reader-payload'
+import { probeLivenessWhileWaiting } from '../transport/rpc/rpc-liveness-probe-while-waiting'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 type StartMobileDictationDesktopSessionOptions = {
   client: RpcClient
   dictationId: string
+  worktreeId?: string
   generation: number
   getCurrentGeneration: () => number
   getEnabled: () => boolean
   getActiveId: () => string | null
   clearActiveId: (dictationId: string) => void
   setIdle: () => void
-  commitRecordingStart: () => boolean
+  commitRecordingStart: (hostDedupesResends: boolean) => void
   rollbackRecordingStart: () => void
+}
+
+// The host refuses a phone's second start while its last one is still starting or closing; keyed by client so a start on any screen waits that out.
+const hostWork = new WeakMap<RpcClient, Promise<void>>()
+
+function trackHostWork(client: RpcClient, work: Promise<unknown>): void {
+  hostWork.set(
+    client,
+    Promise.allSettled([hostWork.get(client), work]).then(() => undefined)
+  )
+}
+
+export function settledDesktopDictationWork(client: RpcClient): Promise<void> {
+  return hostWork.get(client) ?? Promise.resolve()
+}
+
+// Offline there is nothing to cancel against; the host drops a session its phone stops reaching, so never wait for a reconnect.
+export function cancelDesktopDictation(client: RpcClient, dictationId: string): Promise<void> {
+  const cancelled = probeLivenessWhileWaiting(
+    client,
+    dictationSessionCancel.request(client, { dictationId }, { failWhenDisconnected: true })
+  ).then(
+    () => undefined,
+    () => undefined
+  )
+  trackHostWork(client, cancelled)
+  return cancelled
+}
+
+// Returns the interpreted reply: the caller reads its text only after its staleness guard.
+export async function finishDesktopDictation(
+  client: RpcClient,
+  dictationId: string,
+  sentAudioSeconds: number
+): Promise<unknown> {
+  const timeoutMs = pairedDictationFinishTimeoutMs(sentAudioSeconds)
+  return dictationSessionFinish.interpret(
+    await sendAcrossConnectionMove(client, () =>
+      dictationSessionFinish.request(client, { dictationId }, { timeoutMs })
+    )
+  )
 }
 
 function isCurrentStart(options: StartMobileDictationDesktopSessionOptions): boolean {
@@ -38,42 +87,53 @@ function setIdleIfGenerationCurrent(options: StartMobileDictationDesktopSessionO
   }
 }
 
-/** Cancel a start that went stale mid-startup: the desktop session is the only thing it holds. */
 async function cancelStaleStart(options: StartMobileDictationDesktopSessionOptions): Promise<void> {
   const { client, dictationId } = options
   options.clearActiveId(dictationId)
   setIdleIfGenerationCurrent(options)
-  await dictationSessionCancel.request(client, { dictationId }).catch(() => undefined)
+  await cancelDesktopDictation(client, dictationId)
 }
 
-export async function startMobileDictationDesktopSession(
+export function startMobileDictationDesktopSession(
   options: StartMobileDictationDesktopSessionOptions
 ): Promise<boolean> {
-  const { client, dictationId } = options
+  const started = startOnHost(options)
+  trackHostWork(options.client, started)
+  return started
+}
+
+async function startOnHost(options: StartMobileDictationDesktopSessionOptions): Promise<boolean> {
+  const { client, dictationId, worktreeId } = options
+  let hostDedupesResends = false
 
   try {
-    const reply = await dictationSessionStart.request(client, { dictationId })
-    dictationSessionStart.interpret(reply)
+    // The mic is already recording, so a start stalled by a drop or a sleeping host must give up rather than hold it.
+    const reply = await probeLivenessWhileWaiting(
+      client,
+      dictationSessionStart.request(
+        client,
+        { dictationId, ...(worktreeId ? { worktreeId } : {}) },
+        { timeoutMs: MOBILE_DICTATION_RECONNECT_GRACE_MS }
+      )
+    ).catch(() => {
+      // Only transport failures reject here; host refusals carry their own message through interpret.
+      throw new Error(dictationSessionLostMessage())
+    })
+    const started = dictationSessionStart.interpret(reply)
+    hostDedupesResends =
+      started != null && rpcPayloadMember(started, 'dedupesResentChunks') === true
   } catch (err) {
     const wasCurrent = isCurrentStart(options)
-    // The hook opened the capture before this ran, and an open microphone holds the screen, so a
-    // failure that is still this start's gives both back — through the same rollback the commit
-    // failure below uses, because "undo the capture this start opened" is one thing the hook owns.
-    //
-    // Only while it is still current, though: there is one capture seam and it carries no start
-    // identity. A stale rejection — A opened the capture, the user cancelled, B is recording —
-    // would end B's microphone and hand back B's screen. Past the generation, the capture was
-    // already ended by whatever superseded this start, or belongs to the one that did.
+    // Capture already holds the screen; roll both back only while this start is current. A stale start could otherwise stop its replacement’s microphone. Capture itself has no start identity.
     if (wasCurrent) {
       try {
         options.rollbackRecordingStart()
       } catch {
-        // Guarded for the reason the commit arm below is: a seam that throws on the way down must
-        // not take the desktop cancel with it, nor replace the failure the caller is about to see.
+        // A throwing rollback must neither skip desktop cancellation nor replace the original failure.
       }
     }
     options.clearActiveId(dictationId)
-    await dictationSessionCancel.request(client, { dictationId }).catch(() => undefined)
+    await cancelDesktopDictation(client, dictationId)
     // Awaited cleanup may overlap a newer start; stale work must not reset or
     // report over the replacement session.
     const shouldReport = wasCurrent && canReportStartFailure(options)
@@ -84,36 +144,13 @@ export async function startMobileDictationDesktopSession(
     throw err
   }
 
-  // One check, in the same continuation as the commit below: nothing awaits between them now that
-  // the screen is the microphone's, so a second one would re-read state nothing could have moved.
+  // No await separates this check and commit; nothing can supersede the start between them.
   if (!isCurrentStart(options)) {
     await cancelStaleStart(options)
     return false
   }
 
-  try {
-    // Committed here rather than after a return, which would let a queued cancel resurrect
-    // microphone recording after cleanup.
-    if (!options.commitRecordingStart()) {
-      throw new Error('Failed to start microphone recording')
-    }
-  } catch (err) {
-    const wasCurrent = isCurrentStart(options)
-    // Native recording can partially start before throwing, so stop audio before
-    // releasing the wake tag and remote session.
-    try {
-      options.rollbackRecordingStart()
-    } catch {
-      // Continue releasing independently owned resources after native audio failure.
-    }
-    options.clearActiveId(dictationId)
-    await dictationSessionCancel.request(client, { dictationId }).catch(() => undefined)
-    const shouldReport = wasCurrent && canReportStartFailure(options)
-    setIdleIfGenerationCurrent(options)
-    if (!shouldReport) {
-      return false
-    }
-    throw err
-  }
+  // Commit before returning so queued cancellation cannot resurrect recording after cleanup.
+  options.commitRecordingStart(hostDedupesResends)
   return true
 }

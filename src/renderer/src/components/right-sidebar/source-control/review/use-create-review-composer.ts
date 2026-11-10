@@ -1,18 +1,17 @@
+import { resolveSourceControlAiEnabled } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
+import { useAppStore } from '@/store'
 import { useCallback, useEffect } from 'react'
-import { shouldHydratePullRequestGenerationResult } from '@/store/slices/pull-request-generation'
+import { shouldHydratePullRequestGenerationResult } from '@/store/slices/hosted-review/generation/pull-request-generation'
 import { hasConfiguredSourceControlTextGenerationDefaults } from '../ai/text-generation-defaults'
 import type { SourceControlAi } from '../ai/use-ai'
-import { useCreatePullRequestDialogFields } from '../../useCreatePullRequestDialogFields'
-import { useHostedReviewStackParent } from '../../useHostedReviewStackParent'
+import { useCreatePullRequestDialogFields } from '../../hosted-review/creation/useCreatePullRequestDialogFields'
+import { useHostedReviewStackParent } from '../../hosted-review/provider-actions/useHostedReviewStackParent'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
+import { useSourceControlSectionActive } from '../panel/worktree-scope'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlHostedReviewState } from './use-hosted-review-state'
 import type { SourceControlPullRequestGeneration } from './use-pull-request-generation'
 
-/**
- * Owns the Create-review composer fields (base/title/body/draft, stack parent) and folds a finished
- * background generation back into them once the fields hook has seeded eligibility defaults.
- */
 export function useSourceControlCreateReviewComposer({
   activePullRequestGenerationKey,
   activePullRequestGenerationRecord,
@@ -62,12 +61,16 @@ export function useSourceControlCreateReviewComposer({
   updatePullRequestGenerationRecord: SourceControlStoreActions['updatePullRequestGenerationRecord']
   worktreePath: string | null
 }) {
+  const sectionActive = useSourceControlSectionActive()
   const {
     aiGenerationEnabled: prAiGenerationEnabled,
     base: prBase,
     setBase: setPrBase,
     title: prTitle,
     setTitle: setPrTitle,
+    imageUploadPending: prImageUploadPending,
+    imageUploadPendingRef: prImageUploadPendingRef,
+    onImageUploadPending: onPrImageUploadPending,
     body: prBody,
     setBody: setPrBody,
     draft: prDraft,
@@ -124,25 +127,28 @@ export function useSourceControlCreateReviewComposer({
     }
   })
   const stackParentReview = useHostedReviewStackParent({
-    enabled: hostedReviewCreateProvider === 'github' && prStackedCreationSupported,
+    enabled: sectionActive && hostedReviewCreateProvider === 'github' && prStackedCreationSupported,
     repoPath: activeRepo?.path ?? '',
     repoId: activeRepo?.id ?? null,
     base: prBase,
-    // Why: the repo default, not eligibility's defaultBaseRef — that one resolves to
-    // the worktree's own base, which is exactly the branch a stacked PR targets.
+    // Use the repo default; eligibility’s defaultBaseRef may be the stacked PR’s own target.
     repoDefaultBase: prRepoDefaultBaseRef,
     head: branchName,
     fetchHostedReviewForBranch
   })
 
   const handleGeneratePullRequestFieldsClick = useCallback((): void => {
-    if (!sourceControlAiActionsVisible) {
+    const currentSettings = useAppStore.getState().settings
+    if (
+      !currentSettings ||
+      !resolveSourceControlAiEnabled({ settings: currentSettings, repo: activeRepo })
+    ) {
       return
     }
     if (
       hasConfiguredSourceControlTextGenerationDefaults({
         actionId: 'pullRequest',
-        settings,
+        settings: useAppStore.getState().settings,
         repo: activeRepo ?? null
       })
     ) {
@@ -150,16 +156,10 @@ export function useSourceControlCreateReviewComposer({
       return
     }
     openPullRequestGenerationDialog()
-  }, [
-    activeRepo,
-    handleGeneratePullRequestFields,
-    openPullRequestGenerationDialog,
-    settings,
-    sourceControlAiActionsVisible
-  ])
+  }, [activeRepo, handleGeneratePullRequestFields, openPullRequestGenerationDialog])
 
   useEffect(() => {
-    // Why: on remount the PR fields hook seeds eligibility defaults in an effect; hydrating before it runs gets overwritten.
+    // Hydrate after the fields hook seeds defaults on remount, or those defaults overwrite generation.
     if (
       !activePullRequestGenerationKey ||
       !activePullRequestGenerationRecord ||
@@ -210,6 +210,9 @@ export function useSourceControlCreateReviewComposer({
     prBaseResults,
     prBaseSearchError,
     prBaseSearchPending,
+    prImageUploadPending,
+    prImageUploadPendingRef,
+    onPrImageUploadPending,
     prBody,
     prDraft,
     prFieldRevisions,

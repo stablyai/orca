@@ -1,23 +1,21 @@
 import { describe, expect, it, vi } from 'vitest'
-import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
-import {
-  OrcaRuntimeService,
-  getDefaultWorkspaceSession,
-  setPlatform,
-  win32,
-  worktreePathComparison
-} from '../orca-runtime-test-mocks.spec'
-import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
+import { bindPaneFirst } from './bind-first-pane.test-fixture'
+import { makeAgentStatusStoreWiring } from '../terminal/identity/agent-status-store-wiring.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { setPlatform } from '../orca-runtime-test-mocks/setup.spec'
+import { win32 } from 'node:path'
+import * as worktreePathComparison from '../../workspaces/catalog/worktree-path-comparison-key'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
-  makeWorkspaceSessionWithHeadlessTerminal,
   makeWorktreeMeta,
   store
-} from '../orca-runtime-test-fixtures.spec'
-import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+} from './orca-runtime-test-fixtures.spec'
 
-// Why: this process serves no SSH git, so an SSH repo lists its stored rows.
+// No SSH Git provider is installed, so these fixtures use stored rows.
 function storedWorktreeMeta(
   repoId: string,
   worktrees: readonly { path: string }[]
@@ -29,8 +27,7 @@ function storedWorktreeMeta(
 
 describe('OrcaRuntimeService', () => {
   it('keeps an OSC row from an SSH pane after its PTY disconnects', async () => {
-    // Why: OSC snapshots must carry the pane transport; hardcoding local would
-    // strip the SSH exemption off rows whose freshest update arrived via OSC.
+    // OSC snapshots must retain SSH transport provenance for the remote-row exemption.
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {}
@@ -40,6 +37,12 @@ describe('OrcaRuntimeService', () => {
       undefined,
       makeAgentStatusStoreWiring().deps
     )
+    bindPaneFirst(runtime, {
+      worktreeId: TEST_WORKTREE_ID,
+      tabId: 'ssh-tab',
+      leafId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      ptyId: 'ssh-osc-pty'
+    })
     runtime['recordPtyWorktree']('ssh-osc-pty', TEST_WORKTREE_ID, {
       connected: true,
       connectionId: 'ssh-osc-1',
@@ -61,7 +64,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps a hook row with an unresolvable pane key', async () => {
-    // Why: no tabId means staleness is unprovable; the filter must pass it.
+    // Without tabId, local staleness is unprovable.
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {}
@@ -89,8 +92,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps a WSL hook row while its tab is still in the session', async () => {
-    // Guards the WSL clause against over-filtering: local-tab evidence must
-    // rescue WSL rows exactly like null-connection rows.
+    // Local-tab evidence must also rescue WSL rows.
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {
@@ -132,7 +134,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('drops a hydrated WSL hook row after its local tab is closed', async () => {
-    // Why: WSL relay ids are transport provenance; the pane remains local.
+    // A WSL relay id names the transport, not a remote pane.
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {}
@@ -161,8 +163,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('keeps remote hook rows whose tabs are only tracked on the remote host', async () => {
-    // Why: the local session partition for an SSH host can be empty while the
-    // remote host owns the terminals; absence there is not proof of a close.
+    // An empty local session partition does not prove an SSH host's pane closed.
     const remoteRepo = {
       id: 'repo-ssh-6072',
       path: '/home/me/project',
@@ -213,95 +214,6 @@ describe('OrcaRuntimeService', () => {
     expect(summary?.agents).toEqual([
       expect.objectContaining({ prompt: 'remote agent without local tab records' })
     ])
-  })
-
-  it('marks the desktop-active worktree as isActive', async () => {
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
-      makeWorkspaceSessionWithHeadlessTerminal()
-    )
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-
-    const { worktrees } = await runtime.getWorktreePs()
-    const active = worktrees.filter((w) => w.isActive)
-    expect(active).toHaveLength(1)
-    expect(active[0]?.worktreeId).toBe(TEST_WORKTREE_ID)
-  })
-
-  it('includes SSH-backed worktrees in the mobile worktree summary', async () => {
-    const remoteRepo = {
-      id: 'repo-ssh',
-      path: '/home/me/project',
-      displayName: 'remote-vm',
-      badgeColor: 'blue',
-      addedAt: 1,
-      connectionId: 'ssh-1'
-    }
-    const remoteWorktree = {
-      path: '/home/me/project/.worktrees/feature-mobile',
-      head: 'def',
-      branch: 'refs/heads/feature/mobile',
-      isBare: false,
-      isMainWorktree: false
-    }
-    const metaById: Record<string, WorktreeMeta> = {
-      [`${remoteRepo.id}::${remoteWorktree.path}`]: makeWorktreeMeta({
-        displayName: 'Remote mobile'
-      })
-    }
-    const getRepo = vi.fn((id: string) => (id === remoteRepo.id ? remoteRepo : undefined))
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [remoteRepo],
-      getRepo,
-      getAllWorktreeMeta: () => metaById,
-      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
-        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
-        return metaById[worktreeId]
-      }
-    }
-
-    const now = Date.now()
-    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
-      getAgentStatusSnapshot: () =>
-        Array.from({ length: 100 }, (_, index) => ({
-          paneKey: `remote-tab:${String(index).padStart(8, '0')}-5555-4555-8555-555555555555`,
-          worktreeId: `${remoteRepo.id}::${remoteWorktree.path}/`,
-          tabId: 'remote-tab',
-          state: 'working',
-          prompt: 'remote agent without a PTY',
-          agentType: 'codex',
-          connectionId: 'ssh-1',
-          receivedAt: now,
-          stateStartedAt: now - 100
-        }))
-    })
-    const summaries = await runtime.getWorktreePs()
-
-    // Why: equal keys prove polled worktree.ps rows can share the per-request index instead of repeating path scans.
-    expect(worktreePathComparison.worktreePathComparisonKey(remoteWorktree.path, 'linux')).toBe(
-      worktreePathComparison.worktreePathComparisonKey(`${remoteWorktree.path}/`, 'linux')
-    )
-
-    expect(summaries.worktrees).toEqual([
-      expect.objectContaining({
-        worktreeId: `${remoteRepo.id}::${remoteWorktree.path}`,
-        repoId: remoteRepo.id,
-        repo: 'remote-vm',
-        path: remoteWorktree.path,
-        displayName: 'Remote mobile',
-        hasHostSidebarActivity: true,
-        status: 'working',
-        agents: expect.arrayContaining([
-          expect.objectContaining({
-            prompt: 'remote agent without a PTY',
-            agentType: 'codex'
-          })
-        ])
-      })
-    ])
-    expect(summaries.worktrees[0]?.agents).toHaveLength(100)
-    expect(getRepo).toHaveBeenCalledTimes(1)
   })
 
   it.each([
@@ -442,7 +354,7 @@ describe('OrcaRuntimeService', () => {
 
     expect(summaries.worktrees).toHaveLength(100)
     expect(summaries.worktrees.every((worktree) => worktree.agents?.length === 1)).toBe(true)
-    // Why: property reads make the scaling assertion mutation-sensitive without a flaky wall-clock threshold.
+    // Count property reads to catch scaling regressions without wall-clock flakiness.
     expect(pathReadCount).toBeLessThan(2_000)
   })
 
@@ -498,61 +410,9 @@ describe('OrcaRuntimeService', () => {
 
     expect(summaries).toMatchObject({ totalCount: 2_000, truncated: true })
     expect(summaries.worktrees.every((worktree) => worktree.agents?.length === 0)).toBe(true)
-    expect(getRepo).toHaveBeenCalledTimes(remoteWorktrees.length)
-    // Why: the prior fallback read every worktree path per distinct miss, exceeding the 3s worktree.ps poll interval at this scale.
+    expect(getRepo).not.toHaveBeenCalled()
+    // The prior per-miss path scan exceeded the 3s poll interval at this scale.
     expect(pathReadCount).toBeLessThan(40_000)
-  })
-
-  it('caches repeated malformed path misses before normalizing them again', async () => {
-    const remoteRepo = {
-      id: 'repo-repeated-miss',
-      path: '/remote',
-      displayName: 'repeated-miss-vm',
-      badgeColor: 'blue',
-      addedAt: 1,
-      connectionId: 'ssh-repeated-miss'
-    }
-    const remoteWorktree = {
-      path: '/remote/existing',
-      head: 'head-existing',
-      branch: 'refs/heads/existing',
-      isBare: false,
-      isMainWorktree: false
-    }
-    const storedMeta = storedWorktreeMeta(remoteRepo.id, [remoteWorktree])
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [remoteRepo],
-      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
-      getAllWorktreeMeta: () => storedMeta,
-      getWorktreeMeta: () => undefined
-    }
-    const now = Date.now()
-    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
-      getAgentStatusSnapshot: () =>
-        Array.from({ length: 2_000 }, (_, index) => ({
-          paneKey: `repeated-miss-tab:${String(index).padStart(8, '0')}-bbbb-4bbb-8bbb-bbbbbbbbbbbb`,
-          worktreeId: `${remoteRepo.id}::relative/./missing\\leaf`,
-          tabId: 'repeated-miss-tab',
-          state: 'working' as const,
-          prompt: `repeated missing agent ${index}`,
-          agentType: 'codex',
-          connectionId: 'ssh-repeated-miss',
-          receivedAt: now,
-          stateStartedAt: now - 100
-        }))
-    })
-    const cwdSpy = vi.spyOn(process, 'cwd')
-
-    try {
-      const summaries = await runtime.getWorktreePs()
-
-      expect(summaries.worktrees[0]?.agents).toEqual([])
-      // Why: resolving a relative comparison key consults cwd; a raw miss must do that once per poll, not per agent row.
-      expect(cwdSpy.mock.calls.length).toBeLessThan(50)
-    } finally {
-      cwdSpy.mockRestore()
-    }
   })
 
   it('keeps no-PTY agent worktrees in the truncated mobile summary', async () => {

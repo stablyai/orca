@@ -1,7 +1,7 @@
 import React from 'react'
 import { Check } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
 
@@ -26,6 +26,7 @@ export function ReviewerPickerRow({
   onHover: (index: number) => void
   onRequest: (reviewer: GitHubAssignableUser) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <button
       id={id}
@@ -33,12 +34,10 @@ export function ReviewerPickerRow({
       disabled={disabled}
       aria-label={
         selected
-          ? translate(
-              'auto.components.PullRequestPage.36b514a457',
-              'Unrequest reviewer {{value0}}',
-              { value0: reviewer.login }
-            )
-          : translate('auto.components.PullRequestPage.41d275d3ec', 'Request reviewer {{value0}}', {
+          ? t('auto.components.PullRequestPage.36b514a457', 'Unrequest reviewer {{value0}}', {
+              value0: reviewer.login
+            })
+          : t('auto.components.PullRequestPage.41d275d3ec', 'Request reviewer {{value0}}', {
               value0: reviewer.login
             })
       }
@@ -75,7 +74,7 @@ export function ReviewerPickerRow({
         </span>
         {suggested ? (
           <span className="block truncate text-[12px] leading-4 text-muted-foreground">
-            {translate('auto.components.PullRequestPage.f4a4b3fd9f', 'Recently edited these files')}
+            {t('auto.components.PullRequestPage.f4a4b3fd9f', 'Recently edited these files')}
           </span>
         ) : null}
       </span>

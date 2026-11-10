@@ -2,22 +2,17 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type { StoreRuntimeState } from './store-runtime-state'
 import { refileEditorViews } from './layout-editor-views'
+import { WORKSPACE_SESSION_DOMAINS } from '../workspace-session-domains'
 
-/** Gets the one partition a write changed, or null when any partition may have changed. */
+/** Null means any partition may have changed. */
 export type WorkspaceSessionWriteListener = (hostId: ExecutionHostId | null) => void
 
-/** Gets the partitions one durable mutation may have written, or null when any may have changed. */
+/** Null means any partition may have changed. */
 export type WorkspaceSessionOperationListener = (hostIds: readonly ExecutionHostId[] | null) => void
 
-const WORKSPACE_SESSION_DOMAINS: readonly string[] = [
-  'workspaceSession',
-  'workspaceSessionsByHostId'
-]
+const SESSION_DOMAINS: readonly string[] = WORKSPACE_SESSION_DOMAINS
 
-/**
- * `dirtyDomains` undefined means a full save, which may carry an in-place session edit.
- * `hostId` names the only partition the write changed; without it every partition is suspect.
- */
+/** Full saves may contain untracked session edits; an absent host makes all partitions candidates. */
 export function notifyWorkspaceSessionWritten(
   runtime: Pick<
     StoreRuntimeState,
@@ -26,20 +21,17 @@ export function notifyWorkspaceSessionWritten(
   dirtyDomains?: readonly string[],
   hostId?: ExecutionHostId
 ): void {
-  if (dirtyDomains && !dirtyDomains.some((domain) => WORKSPACE_SESSION_DOMAINS.includes(domain))) {
+  if (dirtyDomains && !dirtyDomains.some((domain) => SESSION_DOMAINS.includes(domain))) {
     return
   }
-  // Before the listeners: the projection reads the views each write leaves.
+  // Refile views before listeners project the updated session.
   refileEditorViews(runtime)
   for (const listener of runtime.workspaceSessionWriteListeners) {
     listener(hostId ?? null)
   }
 }
 
-/**
- * A durable mutation's end. Switch point: a layout-owner build names the partitions the mutation
- * declared, then tells operation listeners its writes are all in; others notify as any write.
- */
+/** Main-owned layouts report each declared partition before announcing mutation completion. */
 export function notifyWorkspaceSessionOperationEnded(
   runtime: Pick<
     StoreRuntimeState,
@@ -61,7 +53,7 @@ export function notifyWorkspaceSessionOperationEnded(
     notifyWorkspaceSessionWritten(runtime, undefined, hostId)
   }
   for (const listener of runtime.workspaceSessionOperationListeners) {
-    // The operation already committed: a reader's throw must not fail it or the next reader.
+    // Committed writes must survive a failed observer and still notify the remaining observers.
     try {
       listener(hostIds)
     } catch (error) {

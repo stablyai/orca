@@ -1,3 +1,5 @@
+import { CsvPreviewError } from './csv-preview-error'
+
 export const CSV_RECORD_BYTES = 1024 * 1024
 // A first page can also contain a UTF-8 BOM and a trailing CRLF.
 export const CSV_MAX_PAGE_BYTES = CSV_RECORD_BYTES + 5
@@ -69,7 +71,7 @@ export class CsvByteIndex {
       return
     }
     if (this.pages.length >= MAX_PAGES) {
-      throw new Error('CSV has too many pages to preview safely.')
+      throw new CsvPreviewError('too-many-pages')
     }
     this.pages.push({
       start: this.pageStart,
@@ -84,7 +86,7 @@ export class CsvByteIndex {
 
   private emitRow(end: number, contentEnd = end): void {
     if (contentEnd - this.rowStart > CSV_RECORD_BYTES) {
-      throw new Error('CSV record exceeds the 1 MB preview limit.')
+      throw new CsvPreviewError('preview-record-limit')
     }
     if (end - this.pageStart > PAGE_BYTES || this.pageCells + this.columns > CSV_PAGE_CELLS) {
       this.checkpoint(this.rowStart)
@@ -115,10 +117,10 @@ export class CsvByteIndex {
     }
     const endsRecord = (byte === 13 || byte === 10) && (!this.inQuotes || this.pendingQuote)
     if (at + (endsRecord ? 0 : 1) - this.rowStart > CSV_RECORD_BYTES) {
-      throw new Error('CSV record exceeds the 1 MB preview limit.')
+      throw new CsvPreviewError('preview-record-limit')
     }
     if (byte === 0) {
-      throw new Error('This file contains binary data.')
+      throw new CsvPreviewError('binary-data')
     }
     if (this.inQuotes && this.pendingQuote) {
       this.pendingQuote = false
@@ -143,7 +145,7 @@ export class CsvByteIndex {
     }
     if (byte === this.delimiter) {
       if (++this.columns > CSV_MAX_COLUMNS) {
-        throw new Error('CSV exceeds the 4,096 column preview limit.')
+        throw new CsvPreviewError('preview-column-limit')
       }
       this.fieldEmpty = true
       this.hasContent = true

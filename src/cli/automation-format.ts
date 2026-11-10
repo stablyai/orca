@@ -1,19 +1,12 @@
-/**
- * Human-readable automation output for the CLI.
- *
- * The host lines come from the authority's own projection, never from the
- * stored `executionTarget*` fields: a target that was removed — or removed and
- * re-registered under the same id — leaves those fields untouched, so printing
- * them alone would render a dead host identically to a healthy one and leave
- * `orca automations show` unable to complete the recovery it is named in.
- */
+// Use authority-projected owners: stored target fields survive host removal and re-registration.
 
-import type { Automation, AutomationRun } from '../shared/automations-types'
-import type { AutomationListItem } from '../shared/automation-list-scope'
-import type { AutomationOwnerPrecondition } from '../shared/automation-owner-precondition'
-import { getAutomationLegacyRepoId } from '../shared/automation-run-identity'
-import { formatAutomationPrecheckTimeout } from '../shared/automation-precheck'
-import { formatAutomationSchedule } from '../shared/automation-schedules'
+import type { Automation } from '../shared/automations/automation-definition'
+import type { AutomationRun } from '../shared/automations/history/automation-run'
+import type { AutomationListItem } from '../shared/automations/ownership/automation-list-scope'
+import type { AutomationOwnerPrecondition } from '../shared/automations/ownership/automation-owner-precondition'
+import { getAutomationLegacyRepoId } from '../shared/automations/history/automation-run-identity'
+import { formatAutomationPrecheckTimeout } from '../shared/automations/launch/automation-precheck'
+import { formatAutomationSchedule } from '../shared/automations/scheduling/automation-schedules'
 import { quoteCliCommandArgument } from './shell-command-quote'
 
 export type AutomationListPayload = {
@@ -91,11 +84,14 @@ export function formatAutomationShow(result: AutomationShowPayload): string {
     `nextRunAt: ${new Date(automation.nextRunAt).toISOString()}`,
     ...projectLines,
     `workspaceMode: ${automation.workspaceMode}`,
+    // The saved choice only: what an unset choice does depends on the host's Orca version.
+    ...(automation.workspaceMode === 'new_per_run'
+      ? [`setup: ${automation.setupDecision ?? 'not set'}`]
+      : []),
     `workspaceId: ${automation.workspaceId ?? 'null'}`,
     `baseBranch: ${automation.baseBranch ?? 'null'}`,
     `reuseSession: ${automation.reuseSession}`,
     `target: ${automation.executionTargetType}:${automation.executionTargetId}`,
-    // Omitted rather than guessed: a host that reports no owner has none to report.
     ...(result.owner ? [`host: ${formatOwnerSelector(result.owner.selector)}`] : []),
     `prompt: ${automation.prompt}`
   ].join('\n')

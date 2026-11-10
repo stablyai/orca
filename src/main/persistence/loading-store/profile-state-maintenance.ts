@@ -5,10 +5,11 @@ import type { StoreRuntimeState } from './store-runtime-state'
 import { drainProfileStateOperations } from './profile-state-flush-lifetime'
 import { flushCurrentStateAsync } from './write-flush-barriers'
 import { scheduleSave } from './write-scheduling'
+import { persistGithubCache, suspendGithubCachePersistence } from './github-cache-persistence'
 
 export type ProfileStateMaintenanceOptions = {
   signal?: AbortSignal
-  /** Recovery must preserve the existing database even when its state cannot be flushed. */
+  /** Recovery may need to preserve a database whose current state cannot be flushed. */
   flush?: boolean
 }
 
@@ -21,6 +22,7 @@ export function freezeProfileStateWrites(runtime: StoreRuntimeState): void {
     clearTimeout(runtime.writeTimer)
     runtime.writeTimer = null
   }
+  suspendGithubCachePersistence(runtime)
   runtime.profileStateAuthority?.close?.()
 }
 
@@ -30,6 +32,7 @@ export async function freezeProfileStateWritesAsync(runtime: StoreRuntimeState):
     clearTimeout(runtime.writeTimer)
     runtime.writeTimer = null
   }
+  suspendGithubCachePersistence(runtime)
   try {
     await drainProfileStateOperations([
       runtime.pendingProfileMaintenance,
@@ -42,7 +45,7 @@ export async function freezeProfileStateWritesAsync(runtime: StoreRuntimeState):
   }
 }
 
-/** Stop admission before the first await; only unchanged-source maintenance may resume. */
+/** Fence admission synchronously; only maintenance of unchanged state may resume. */
 export function beginProfileStateMaintenance(
   runtime: StoreRuntimeState,
   domains: StoreDomains,
@@ -56,6 +59,7 @@ export function beginProfileStateMaintenance(
     clearTimeout(runtime.writeTimer)
     runtime.writeTimer = null
   }
+  suspendGithubCachePersistence(runtime)
   const resumePreference = runtime.activeViewPreference.pauseForMaintenance()
   const resumeScheduling = () => {
     runtime.writesFrozen = false
@@ -63,6 +67,8 @@ export function beginProfileStateMaintenance(
     runtime.pendingProfileMaintenance = null
     resumePreference()
     scheduleSave(domains.scheduling)
+    // Updates admitted while paused (or a retry it skipped) resume their routine save.
+    persistGithubCache(runtime, 'routine')
   }
   const paused = pauseProfileState(runtime, domains, options).then((authority) => {
     let consumed = false
@@ -132,7 +138,7 @@ async function pauseProfileState(
   await drainProfileFileWork(runtime)
   signal?.throwIfAborted()
   if (flush) {
-    // Cancel between commands so a dispatched commit retains a known outcome.
+    // Cancel between commands so dispatched commits retain known outcomes.
     await flushCurrentStateAsync(domains.flushBarriers, {
       requireInitialGenerationDurable: true,
       fullCheckpoint: true
@@ -162,7 +168,7 @@ async function drainProfileFileWork(runtime: StoreRuntimeState): Promise<void> {
     runtime.staleProfileStateTempCleanup,
     runtime.pendingWrite,
     runtime.pendingSnapshotFileWork,
-    runtime.pendingGithubCacheWrite,
+    runtime.staleGithubCacheTempCleanup,
     runtime.activeViewPreference.waitForPendingWrite(),
     runtime.profileStateAuthority?.drainBackups?.(
       runtime.profileMaintenancePending || runtime.quitFlushStarted

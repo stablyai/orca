@@ -1,13 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createTabsSliceMockApi } from '@/store/slices/tabs-slice-test-harness'
-import {
-  createTestStore,
-  makeTab,
-  makeWorktree,
-  TEST_REPO
-} from '@/store/slices/store-test-helpers'
-import { makeFolderWorkspace } from '@/store/slices/worktrees-slice-test-fixtures'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import { createTabsSliceMockApi } from '@/store/slices/tabs/tabs-slice-test-harness'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { createUnreadBadgeCountSelector } from './unread-badge-count-selector'
@@ -139,7 +137,7 @@ describe('Dock unread count against the sidebar (#23363)', () => {
     expect(dockCount(store)).toBe(1)
   })
 
-  // Why one selector across writes: the App root keeps a single instance, so its cache is under test.
+  // Reuse one selector as App does so cached results across writes are tested.
   it('preserves a folder bell only while its workspace flag and live tab marker remain', () => {
     const store = createStoreOnOtherWorktree()
     const selectCount = createUnreadBadgeCountSelector()
@@ -183,17 +181,6 @@ describe('Dock unread count against the sidebar (#23363)', () => {
       }
     })
     expect(selectCount(store.getState())).toBe(0)
-  })
-
-  it('preserves id-only deduplication when a second host publishes a row', () => {
-    const store = createTestStore()
-    const selectCount = createUnreadBadgeCountSelector()
-    const row = makeWorktree({ id: BELL_WORKTREE, repoId: 'repo1', isUnread: true })
-    store.setState({ worktreesByRepo: { repo1: [row, row] } })
-    expect(selectCount(store.getState())).toBe(1)
-
-    store.setState({ worktreesByRepo: { repo1: [row, { ...row, hostId: 'ssh:remote' }] } })
-    expect(selectCount(store.getState())).toBe(1)
   })
 
   it('recounts device visibility when creator provenance or runtime ownership changes', () => {

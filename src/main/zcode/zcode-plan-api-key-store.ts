@@ -2,7 +2,7 @@ import { getSecretStore } from '../../shared/secret-store'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { hardenExistingSecureFile, writeSecureFile } from '../../shared/secure-file'
+import { hardenExistingSecureFile, writeSecureFile } from '../../shared/secure-storage/secure-file'
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 
 const ZCODE_PLAN_API_KEY_FILE = 'zcode-plan-api-key.enc'
@@ -135,9 +135,7 @@ export function saveZcodePlanApiKey(key: string): void {
     '[zcode] safeStorage encryption unavailable — storing GLM Coding Plan API key in plaintext'
   )
   const keyPath = getZcodePlanApiKeyPath()
-  // Why: capture the previous envelope — writeSecureFile has already replaced
-  // the file by the time it reports that restriction failed, and deleting the
-  // result must not take the user's previous working key with it.
+  // Capture old bytes before secure publication can replace them yet report restriction failure; rollback must preserve the working key.
   let previousEnvelope: Buffer | null = null
   if (existsSync(keyPath)) {
     try {
@@ -148,7 +146,7 @@ export function saveZcodePlanApiKey(key: string): void {
   }
   const attemptedEnvelope = encodeApiKeyEnvelope('plaintext', Buffer.from(trimmed, 'utf8'))
   const wroteRestricted = writeSecureFile(keyPath, attemptedEnvelope)
-  // Why: an unrestricted plaintext credential must never be reported as saved.
+  // Unrestricted plaintext must never be acknowledged as saved.
   if (!wroteRestricted) {
     rollbackPlaintextEnvelope(keyPath, attemptedEnvelope, previousEnvelope)
     throw new Error('GLM Coding Plan API key could not be stored securely on this device')
@@ -164,8 +162,7 @@ export function readZcodePlanApiKey(): string | null {
   if (!existsSync(keyPath)) {
     return null
   }
-  // Why: keep hardening out of the decode/decrypt try below so a chmod/ACL
-  // failure isn't misreported as a decrypt failure (matches hasZcodePlanApiKey).
+  // Separate hardening from decryption so ACL/chmod faults cannot masquerade as decrypt failures.
   try {
     hardenExistingSecureFile(keyPath)
   } catch (error) {

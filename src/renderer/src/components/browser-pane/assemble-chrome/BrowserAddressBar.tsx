@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Globe } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
+import { findPage } from '@/store/slices/browser/pages/browser-page-records'
 import { DEFAULT_SEARCH_ENGINE, type SearchEngine } from '../../../../../shared/browser-url'
 import type { BrowserPageDocLocation } from '../../../../../shared/browser-workspace-types'
 import { buildBrowserAddressBarSuggestions } from './browser-address-bar-suggestions'
@@ -14,21 +15,25 @@ import { useBrowserAddressBarEditHandoff } from './use-browser-address-bar-edit-
 import { useBrowserAddressBarOverlay } from './browser-address-bar-expansion'
 import { useBrowserAddressBarClickSelect } from './use-browser-address-bar-click-select'
 import { useBrowserAddressBarDismissal } from './use-browser-address-bar-dismissal'
+import { useBrowserAddressBarEscape } from './use-browser-address-bar-escape'
+import { useBrowserAddressBarSuggestionPreview } from './use-browser-address-bar-suggestion-preview'
+import { useRemoveSuggestionRow } from './use-browser-address-bar-row-removal'
+import { isRemovableHistoryRow, isRemoveRowShortcut } from '../history/browser-history-row-removal'
 import type { BrowserAddressBarEditSessionBinding } from './use-browser-address-bar-edit-session'
 import BrowserAddressBarSuggestionList from './BrowserAddressBarSuggestionList'
 import { BrowserLoadProgress } from './browser-load-progress'
-
-function clearTimerRef(timerRef: { current: number | null }): void {
-  if (timerRef.current !== null) {
-    window.clearTimeout(timerRef.current)
-    timerRef.current = null
-  }
-}
+import { toDisplayUrl } from '../describe-page/browser-page-url-display'
+import BrowserHistoryDialog from '../history/BrowserHistoryDialog'
+import { clearTimerRef, useClearTimersOnFormUnmount } from './use-browser-address-bar-close-timers'
 
 type BrowserAddressBarProps = {
   /** The page this bar edits; its worktree's other open pages are offered as "Switch to tab". */
   pageId: string
   value: string
+  /** What Escape reverts an edit to; the page's own address when omitted. */
+  committedValue?: string
+  /** Where the last Escape goes once nothing is left to undo; the page itself by default. */
+  onLeave?: () => void
   onChange: (value: string) => void
   onSubmit: () => void
   onNavigate: (url: string) => void
@@ -36,13 +41,12 @@ type BrowserAddressBarProps = {
   onOpenWorkspaceDoc?: (docLocation: BrowserPageDocLocation) => void
   inputRef: React.RefObject<HTMLInputElement | null>
   dismissSuggestionsRef?: React.MutableRefObject<(() => void) | null>
-  /**
-   * Set by panes React can swap out from under a live edit, so an unmount mid-typing is handed on
-   * to whatever mounts next for the same page. Panes that never remount leave it off.
-   */
+  /** Carry a live edit across pane replacement for the same page; omit on panes that never remount. */
   editSession?: BrowserAddressBarEditSessionBinding | null
   /** Replaces the leading globe (e.g. the SSH egress indicator). */
   leadingIcon?: React.ReactNode
+  /** Page-state chips at the field's end; hidden while suggestions are open so typing gets the room. */
+  trailing?: React.ReactNode
   loading?: boolean
   loadFailed?: boolean
 }
@@ -50,6 +54,8 @@ type BrowserAddressBarProps = {
 export default function BrowserAddressBar({
   pageId,
   value,
+  committedValue,
+  onLeave,
   onChange,
   onSubmit,
   onNavigate,
@@ -58,40 +64,31 @@ export default function BrowserAddressBar({
   dismissSuggestionsRef,
   editSession,
   leadingIcon,
+  trailing,
   loading = false,
   loadFailed = false
 }: BrowserAddressBarProps): React.ReactElement {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [selectedValueOverride, setSelectedValueOverride] = useState<string | null>(null)
   const prePreviewValueRef = useRef<string | null>(null)
-  // Why: while previewing a highlighted suggestion the input shows the full URL,
-  // but suggestions must keep matching the original typed query.
+  // Match suggestions against the typed query while the input previews a full URL.
   const autocompleteQuery = prePreviewValueRef.current ?? value
   const browserUrlHistory = useAppStore((s) => s.browserUrlHistory)
   const workspaceDocHistory = useAppStore((s) => s.workspaceDocHistory)
   const browserDefaultSearchEngine = useAppStore((s) => s.browserDefaultSearchEngine)
   const browserKagiSessionLink = useAppStore((s) => s.browserKagiSessionLink)
+  const pageAddress = useAppStore((s) =>
+    toDisplayUrl(findPage(s.browserPagesByWorkspace, pageId)?.url ?? '')
+  )
   const closingRef = useRef(false)
   const addressBarClickSelect = useBrowserAddressBarClickSelect()
   const openedAtRef = useRef(0)
   const blurCloseTimerRef = useRef<number | null>(null)
   const closingResetTimerRef = useRef<number | null>(null)
+  const setAddressBarFormRef = useClearTimersOnFormUnmount(blurCloseTimerRef, closingResetTimerRef)
   const slotRef = useRef<HTMLDivElement | null>(null)
   const overlay = useBrowserAddressBarOverlay(slotRef, open)
-
-  const clearAddressBarTimers = useCallback((): void => {
-    clearTimerRef(blurCloseTimerRef)
-    clearTimerRef(closingResetTimerRef)
-  }, [])
-
-  const setAddressBarFormRef = useCallback(
-    (node: HTMLFormElement | null) => {
-      if (node === null) {
-        clearAddressBarTimers()
-      }
-    },
-    [clearAddressBarTimers]
-  )
 
   const searchEngine: SearchEngine =
     (browserDefaultSearchEngine as SearchEngine | null) ?? DEFAULT_SEARCH_ENGINE
@@ -124,67 +121,24 @@ export default function BrowserAddressBar({
     [buildSuggestions, autocompleteQuery, inlineText]
   )
 
-  const clearSuggestionPreview = useCallback((): void => {
-    prePreviewValueRef.current = null
-    setSelectedValueOverride(null)
-    clearInline()
-  }, [clearInline])
-
-  const previewSuggestion = useCallback(
-    (url: string): void => {
-      if (prePreviewValueRef.current === null) {
-        prePreviewValueRef.current = autocompleteQuery
-      }
-      setSelectedValueOverride(url)
-      onChange(url)
-    },
-    [autocompleteQuery, onChange]
-  )
-
-  const selectSuggestionAtIndex = useCallback(
-    (index: number): void => {
-      const suggestion = suggestions[index]
-      if (!suggestion) {
-        return
-      }
-      if (suggestion.isSearch) {
-        // Why: the search row is what Enter does with the typed query, so the bar keeps the
-        // typed text instead of the search URL.
-        prePreviewValueRef.current = null
-        clearInline()
-        setSelectedValueOverride(suggestion.url)
-        onChange(autocompleteQuery)
-        return
-      }
-      if (suggestion.inlineText !== undefined) {
-        // Why: like Chrome, the completion comes back as typed text plus a selected tail, so
-        // Escape still restores what was typed.
-        setSelectedValueOverride(suggestion.url)
-        showInline(autocompleteQuery, suggestion.inlineText)
-        onChange(suggestion.inlineText)
-        return
-      }
-      previewSuggestion(suggestion.url)
-    },
-    [autocompleteQuery, clearInline, onChange, previewSuggestion, showInline, suggestions]
-  )
-
-  const restoreTypedQuery = useCallback((): void => {
-    const typed = prePreviewValueRef.current
-    if (typed === null) {
-      return
-    }
-    prePreviewValueRef.current = null
-    setSelectedValueOverride(null)
-    clearInline()
-    onChange(typed)
-  }, [clearInline, onChange])
+  const { clearSuggestionPreview, selectSuggestionAtIndex, restoreTypedQuery } =
+    useBrowserAddressBarSuggestionPreview({
+      prePreviewValueRef,
+      autocompleteQuery,
+      suggestions,
+      setSelectedValueOverride,
+      onChange,
+      clearInline,
+      showInline
+    })
 
   const dismissSuggestions = useCallback((): void => {
     clearTimerRef(blurCloseTimerRef)
     restoreTypedQuery()
     setOpen(false)
   }, [restoreTypedQuery])
+
+  const removeSuggestion = useRemoveSuggestionRow(restoreTypedQuery)
 
   const switchToTab = useBrowserAddressBarSwitchToTab({
     pageId,
@@ -194,6 +148,23 @@ export default function BrowserAddressBar({
     onNavigate
   })
 
+  const { handleEscapeKeyDown, noteTyped } = useBrowserAddressBarEscape({
+    pageId,
+    inputRef,
+    value,
+    committedValue: committedValue ?? pageAddress,
+    open,
+    previewing:
+      prePreviewValueRef.current !== null && !(inlineText !== null && value === inlineText),
+    restoreTypedQuery: () => {
+      // Why: like Chrome's revert of an arrowed row, the row's Switch to tab button lets go too.
+      switchToTab.clearFocus()
+      restoreTypedQuery()
+    },
+    closeSuggestions: dismissSuggestions,
+    onChange,
+    onLeave
+  })
   // Why nothing for an empty bar: row 0 always shows what Enter does, and there Enter does nothing.
   const selectedValue =
     selectedValueOverride &&
@@ -219,15 +190,7 @@ export default function BrowserAddressBar({
   }, [inputRef, value])
 
   const handleBlur = useCallback(() => {
-    // Why: delay close so that clicking a suggestion item registers before
-    // the popover unmounts. Without this, onSelect never fires because the
-    // mousedown on PopoverContent triggers input blur first.
-    //
-    // Why (grace window): BrowserPane's focusAddressBarNow() retries focus
-    // across multiple animation frames to fight webview focus stealing. Each
-    // cycle can cause a transient blur on the input. Without this guard the
-    // popover opens on focus, immediately gets a blur, and closes ~150ms later
-    // — producing the "flash then disappear" on first click.
+    // Delay close for suggestion clicks and allow focus retries to settle; their transient blurs must not dismiss the list.
     const elapsed = Date.now() - openedAtRef.current
     const grace = elapsed < 400
     clearTimerRef(blurCloseTimerRef)
@@ -246,8 +209,8 @@ export default function BrowserAddressBar({
       closingRef.current = true
       setOpen(false)
       clearSuggestionPreview()
-      // Why looked up by row: a workspace-doc suggestion opens on a fresh grant instead of
-      // navigating; its url is the document's path, so even the fallback routes via detection.
+      noteTyped(null)
+      // Document suggestions need a fresh grant; their path identity still uses detection on the fallback route.
       const docLocation = suggestions.find(
         (suggestion) => suggestion.url === url && suggestion.docLocation
       )?.docLocation
@@ -262,7 +225,7 @@ export default function BrowserAddressBar({
         closingRef.current = false
       }, 100)
     },
-    [clearSuggestionPreview, onNavigate, onOpenWorkspaceDoc, suggestions]
+    [clearSuggestionPreview, noteTyped, onNavigate, onOpenWorkspaceDoc, suggestions]
   )
 
   const submitTypedValue = useCallback((): void => {
@@ -272,13 +235,18 @@ export default function BrowserAddressBar({
     }
     setOpen(false)
     clearSuggestionPreview()
+    noteTyped(null)
     onSubmit()
-  }, [clearSuggestionPreview, onSubmit, value])
+  }, [clearSuggestionPreview, noteTyped, onSubmit, value])
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
-      if (event.key === 'Escape') {
-        dismissSuggestions()
+      if (handleEscapeKeyDown(event)) {
+        return
+      }
+      if (open && selectedRow && isRemovableHistoryRow(selectedRow) && isRemoveRowShortcut(event)) {
+        event.preventDefault()
+        removeSuggestion(selectedRow)
         return
       }
 
@@ -292,8 +260,7 @@ export default function BrowserAddressBar({
           switchToTab.switchToTab(selectedValue)
           return
         }
-        // Why: match Chrome — otherwise Enter navigates to the current input text,
-        // not the highlighted dropdown row (click still picks a row directly).
+        // Enter follows the bar text, including the highlighted preview; direct row clicks select independently.
         submitTypedValue()
         return
       }
@@ -307,9 +274,7 @@ export default function BrowserAddressBar({
       if (event.key === 'ArrowDown') {
         event.preventDefault()
         const idx = suggestions.findIndex((s) => s.url === selectedValue)
-        // Why: row 0 stays highlighted while the input still shows the typed
-        // query, so the first ArrowDown should advance to the next row instead
-        // of redundantly previewing the row Enter already covers.
+        // Row zero already describes Enter; ArrowDown must advance instead of previewing it again.
         const next = idx !== -1 && idx < suggestions.length - 1 ? idx + 1 : 0
         selectSuggestionAtIndex(next)
         return
@@ -340,7 +305,8 @@ export default function BrowserAddressBar({
       switchFocused,
       selectSuggestionAtIndex,
       restoreTypedQuery,
-      dismissSuggestions,
+      handleEscapeKeyDown,
+      removeSuggestion,
       submitTypedValue
     ]
   )
@@ -358,20 +324,13 @@ export default function BrowserAddressBar({
   }, [dismissSuggestions, dismissSuggestionsRef])
 
   return (
-    // Why: min-w-11 keeps the leading globe a real hit target once the toolbar
-    // squeezes the bar away — without it neighbouring buttons overlap the only
-    // affordance for reopening the URL field.
-    // Why stretch: the toolbar row pins the address slot's height, and the bar must fill it rather
-    // than size itself — otherwise it and the document chip drift apart again.
+    // Keep the globe clickable when squeezed and stretch to the toolbar’s fixed slot height.
     <div ref={slotRef} className="flex min-w-11 flex-1 items-stretch">
       <Popover
         modal={false}
         open={open}
         onOpenChange={(next) => {
-          // Why: Radix fires onOpenChange(false) when it detects an outside
-          // interaction, but during the focus-retry loop the input may still
-          // hold focus. Only allow programmatic closes (setOpen(false) from
-          // our handlers) or genuine outside dismissals.
+          // Ignore outside-dismiss during focus retries while the input still owns focus; handlers may still close directly.
           if (!next && inputRef.current && document.activeElement === inputRef.current) {
             return
           }
@@ -386,16 +345,13 @@ export default function BrowserAddressBar({
             ref={setAddressBarFormRef}
             data-orca-browser-address-bar-overlay={overlay ? 'true' : undefined}
             className={cn(
-              'flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-1 shadow-sm',
-              // Why: the toolbar row is the positioned ancestor, so the overlay
-              // spans it edge to edge (matching its px-3) instead of the few
-              // pixels the squeezed slot has left.
+              'flex items-center gap-2 rounded-lg bg-muted px-2.5 transition-colors focus-within:bg-background focus-within:ring-[3px] focus-within:ring-ring/50',
+              // Position against the toolbar row so the overlay spans it, not the squeezed slot.
               overlay
-                ? 'absolute inset-x-3 top-1/2 z-30 -translate-y-1/2 shadow-[0_10px_24px_rgba(0,0,0,0.18)]'
+                ? 'absolute inset-x-2 top-1/2 z-30 h-8 -translate-y-1/2 bg-background shadow-[0_10px_24px_rgba(0,0,0,0.18)]'
                 : 'relative min-w-0 flex-1'
             )}
-            // Why: when squeezed the input is zero-width, so clicks land on the
-            // form padding — forward them to the input so it expands and edits.
+            // Forward padding clicks when the squeezed input has zero width.
             onClick={() => inputRef.current?.focus()}
             onSubmit={(event) => {
               event.preventDefault()
@@ -406,7 +362,7 @@ export default function BrowserAddressBar({
             <Input
               ref={inputRef}
               value={value}
-              placeholder={translate(
+              placeholder={t(
                 'auto.components.browser.pane.browser.address.bar.placeholder',
                 'Search or enter URL'
               )}
@@ -417,16 +373,13 @@ export default function BrowserAddressBar({
               onKeyDown={handleKeyDown}
               onSelect={acceptOnCaretMove}
               data-orca-browser-address-bar="true"
-              className="h-auto border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+              surface="embedded"
               spellCheck={false}
               autoCapitalize="none"
               autoCorrect="off"
               onChange={(event) => {
                 const nextValue = event.target.value
-                // Why: typing creates a new suggestion list, so keyboard selection
-                // should return to the derived top match instead of a stale row.
-                // Clearing preview state here also prevents stale hover/selection
-                // from repopulating the input after Cmd+A → Delete.
+                // Typing resets previews and stale row focus so changed queries or Cmd+A/Delete cannot restore an old suggestion.
                 prePreviewValueRef.current = null
                 setSelectedValueOverride(null)
                 switchToTab.clearFocus()
@@ -436,6 +389,7 @@ export default function BrowserAddressBar({
                 if (completed !== null) {
                   prePreviewValueRef.current = nextValue
                 }
+                noteTyped(nextValue)
                 onChange(completed ?? nextValue)
               }}
               role="combobox"
@@ -443,6 +397,15 @@ export default function BrowserAddressBar({
               aria-controls="browser-history-listbox"
               aria-autocomplete="list"
             />
+            {trailing && !open ? (
+              // Why: the form focuses its input (and toggles suggestions) on any click inside it.
+              <span
+                className="flex shrink-0 items-center gap-0.5"
+                onClick={(event) => event.stopPropagation()}
+              >
+                {trailing}
+              </span>
+            ) : null}
             <BrowserLoadProgress loading={loading} failed={loadFailed} />
           </form>
         </PopoverTrigger>
@@ -452,9 +415,7 @@ export default function BrowserAddressBar({
             sideOffset={4}
             className="w-[var(--radix-popover-trigger-width)] p-0"
             onOpenAutoFocus={(e) => {
-              // Why: prevent the popover from stealing focus away from the
-              // address bar input. The user is still typing; the popover is
-              // an overlay of suggestions, not a focus target.
+              // Suggestions must leave focus in the input while the user types.
               e.preventDefault()
             }}
           >
@@ -466,10 +427,16 @@ export default function BrowserAddressBar({
               hasSwitchTarget={switchToTab.hasSwitchTarget}
               switchFocusedUrl={switchFocused ? selectedValue : null}
               onSwitchToTab={switchToTab.switchToTab}
+              onRemove={removeSuggestion}
             />
           </PopoverContent>
         )}
       </Popover>
+      <BrowserHistoryDialog
+        pageId={pageId}
+        onNavigate={onNavigate}
+        onOpenWorkspaceDoc={onOpenWorkspaceDoc}
+      />
     </div>
   )
 }

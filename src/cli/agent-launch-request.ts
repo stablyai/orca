@@ -1,25 +1,27 @@
-/**
- * How the CLI starts an agent: through `agent.launch`, the host's one launch point that the desktop
- * and phone use too. `--surface chat|terminal` picks a chat or a terminal for this launch; without
- * it the user's Chat UI setting does. Either way the receipt says which ran and why.
- */
+// agent.launch shares desktop/mobile policy; absent --surface uses the host's Chat | CLI choice for the agent.
 
 import { randomUUID } from 'node:crypto'
-import type { AgentLaunchPrompt, AgentLaunchResult } from '../shared/agent-launch-intent'
-import { AGENT_LAUNCH_SURFACES, type AgentLaunchSurface } from '../shared/agent-launch-surface'
-import { checkAgentLaunchModelPreferences } from '../shared/agent-launch-model-preferences'
+import type {
+  AgentLaunchPrompt,
+  AgentLaunchResult
+} from '../shared/agent-launch/contracts/agent-launch-intent'
+import {
+  AGENT_LAUNCH_SURFACES,
+  type AgentLaunchSurface
+} from '../shared/agent-launch/contracts/agent-launch-surface'
+import { checkAgentLaunchModelPreferences } from '../shared/agent-launch/choices/agent-launch-model-preferences'
 import {
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY
-} from '../shared/agent-launch-runtime-capability'
-import { createStructuredAgentSessionOperationId } from '../shared/structured-agent-session-mutation'
-import { parseAgentSessionOperationTimestamp } from '../shared/agent-session-host-authority'
+} from '../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import { createStructuredAgentSessionOperationId } from '../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { parseAgentSessionOperationTimestamp } from '../shared/agent-session/agent-session-host-authority'
 import type { RuntimeStatus } from '../shared/runtime-types'
-import type { TuiAgent } from '../shared/tui-agent'
-import { isTuiAgent } from '../shared/tui-agent-config'
+import type { TuiAgent } from '../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../shared/agent-launch/catalog/tui-agent-config'
 import {
   getOptionalStringFlag,
   getRequiredStringFlag,
@@ -31,7 +33,7 @@ import { withCliAgentLaunchRecovery } from './agent-launch-recovery'
 
 type Flags = Map<string, string | boolean>
 
-/** `create` is the `worktree.create` request the CLI already builds; the host strips agent fields. */
+/** The host strips agent fields from the worktree.create payload. */
 export type CliAgentLaunchTarget =
   | { kind: 'existing'; worktree: string }
   | { kind: 'create-worktree'; create: Record<string, unknown> }
@@ -63,8 +65,6 @@ export function parseCliAgent(value: string): TuiAgent {
   return value
 }
 
-/** The agent, prompt, model and effort a CLI start asks for; refuses a model or effort the launch
- *  could not apply, by the same rule as `orchestration worker-start`. */
 export function readCliAgentLaunch(
   flags: Flags,
   agent: TuiAgent,
@@ -94,7 +94,6 @@ export function readCliAgentLaunch(
     agent,
     ...(surface ? { surface } : {}),
     ...(operationId ? { operationId } : {}),
-    // A blank prompt is no prompt: the agent starts with nothing sent.
     ...(typeof prompt === 'string' && prompt.trim()
       ? { prompt: { text: prompt, delivery: 'submit' as const } }
       : {}),

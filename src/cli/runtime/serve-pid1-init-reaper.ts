@@ -3,17 +3,12 @@ import { isAbsolute, relative, resolve } from 'node:path'
 
 const BASH_CANDIDATES = ['/bin/bash', '/usr/bin/bash']
 
-/**
- * Runs as PID 1: bash's wait reaps every exited child, including orphans the kernel reparents to
- * it, which Node cannot do (#28147). PID 1 ignores untrapped signals, so each is forwarded.
- * The served command runs in a forked subshell, so it is never PID 1 itself.
- * Why the subshell: async commands in a non-interactive shell otherwise start with INT/QUIT ignored.
- */
+/** Bash reaps PID 1’s orphans; a subshell restores INT/QUIT, and traps forward PID 1’s signals (#28147). */
 export const SERVE_INIT_REAPER_SCRIPT = [
   '(trap - INT QUIT; exec "$@") 0<&0 &',
   'child=$!',
   'for sig in TERM INT HUP QUIT USR1 USR2; do trap "kill -$sig $child 2>/dev/null" "$sig"; done',
-  // Why the final wait: a trap can interrupt one, and bash keeps the reaped child's own status.
+  // Traps can interrupt wait; the final wait retains the reaped child’s status.
   'while kill -0 "$child" 2>/dev/null; do wait "$child"; done',
   'wait "$child"'
 ].join('\n')
@@ -46,18 +41,18 @@ function isInside(parent: string, child: string): boolean {
 
 function servedCommand(deps: ServeInitReaperDeps): ServedCommand | null {
   const evaluated = deps.execArgv.some((flag) => EVAL_FLAGS.has(flag))
-  // Why: argv[1] is the CLI entry, except under `-e <cli> -- serve` (the legacy AppImage wrapper).
+  // Legacy AppImage wrappers evaluate the CLI with -e, shifting its argv offset.
   const cliArgs = deps.argv.slice(evaluated ? 1 : 2)
   const appDir = deps.env.APPDIR
   if (appDir && isAbsolute(appDir) && isInside(appDir, deps.execPath)) {
-    // Why: the exec would release this AppImage's mount under bash, so run the image afresh instead.
+    // Re-execing into bash releases the current AppImage mount; start the image afresh.
     const image = deps.env.APPIMAGE
     if (!image || !isAbsolute(image) || !deps.exists(image)) {
       return null
     }
     const env = { ...deps.env }
     delete env.ELECTRON_RUN_AS_NODE
-    // Why: the image's own CLI redirect moves these aside again; restore what the user set.
+    // Restore user options before the AppImage launcher moves them aside again.
     for (const name of ['NODE_OPTIONS', 'NODE_REPL_EXTERNAL_MODULE']) {
       const saved = env[`ORCA_${name}`]
       delete env[`ORCA_${name}`]
@@ -71,7 +66,7 @@ function servedCommand(deps: ServeInitReaperDeps): ServedCommand | null {
   return { args: [deps.execPath, ...deps.execArgv, ...entry, ...cliArgs], env: deps.env }
 }
 
-/** Replaces a PID 1 Linux serve with bash supervising the same command; returns only when it did not. */
+/** Replace Linux PID 1 serve with a Bash reaper; return only if no replacement occurred. */
 export function reexecServeUnderInitReaper(deps: ServeInitReaperDeps): ServeInitReaperOutcome {
   if (deps.platform !== 'linux' || deps.pid !== 1) {
     return 'not-pid1'

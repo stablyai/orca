@@ -2,11 +2,11 @@ import { app, ipcMain, type BrowserWindow } from 'electron'
 import {
   createRejectedNativeFileDropPayload,
   validateNativeFileDropPaths
-} from '../../shared/native-file-drop'
+} from '../../shared/file-import/native-file-drop'
 import type {
   PrepareDroppedPathsRequest,
   PreparedDroppedPaths
-} from '../../shared/native-file-drop-preparation'
+} from '../../shared/file-import/native-file-drop-preparation'
 import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
 import { getDragTempCopyRoot } from './dragged-temp-file-copy'
 import {
@@ -59,7 +59,7 @@ export function registerDroppedPathPreparation(
   ipcMain.handle(prepareChannel, prepareHandler)
   activePrepareHandler = prepareHandler
   mainWindow.on('closed', () => {
-    // Why: an old window closing late must not remove the replacement window's handler.
+    // Late old-window close must not remove the replacement handler.
     if (activePrepareHandler === prepareHandler) {
       ipcMain.removeHandler(prepareChannel)
       activePrepareHandler = undefined

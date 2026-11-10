@@ -13,11 +13,10 @@ type PageModules = {
   visits: typeof Visits
 }
 
-/** One embedded page: its own module graph and its own copy of the store, taken at load. */
+// Load an independent page graph and its load-time store copy.
 async function loadPage(pathname: string): Promise<PageModules> {
   vi.resetModules()
-  // Each page's store is its own page adapter, as in the shell: a load-time copy of the app's.
-  // doMock, not mock: the mock registry outlives resetModules, which would share one adapter.
+  // Use doMock after resetModules; a persistent mock registry would share page adapters.
   vi.doMock('@react-native-async-storage/async-storage', async () => ({
     default: (await import('../mobile-web-shell/bridge/page-async-storage')).default
   }))
@@ -39,7 +38,6 @@ async function loadPage(pathname: string): Promise<PageModules> {
   return { storage, visits }
 }
 
-/** The list page: a fresh graph rendering the hook, with its React and renderer from that graph. */
 async function mountListPage(): Promise<{
   page: PageModules
   value: () => unknown
@@ -81,18 +79,15 @@ describe('the list page highlight across the shell’s separate pages', () => {
       })
     )
 
-    // Tap w2: the list notes the visit in its own page.
     list.page.visits.noteLastVisitedWorktree({ hostId: HOST, worktreeId: 'repo::/w/2' })
     await list.settle()
     expect(list.value()).toEqual({ worktreeId: 'repo::/w/2' })
 
-    // The shell pushes the session page: a fresh graph and a fresh copy, which stores the visit.
+    // The session page loads a fresh graph/store copy and persists the visit.
     const session = await loadPage(`/h/${HOST}/session/${encodeURIComponent('repo::/w/2')}`)
     await session.visits.writeLastVisitedWorktree({ hostId: HOST, worktreeId: 'repo::/w/2' })
 
-    // Back: the list page was never reloaded and still highlights the tapped row.
     expect(list.value()).toEqual({ worktreeId: 'repo::/w/2' })
-    // Neither page's write overwrote the newer visit to the other host.
     const stored = appStore.get(KEY) ?? null
     expect(session.visits.readLastVisitedWorktreeOnHost(stored, 'host-2')).toEqual({
       worktreeId: 'repo::/w/other'
@@ -116,7 +111,6 @@ describe('the list page highlight across the shell’s separate pages', () => {
     appStore.clear()
     const list = await mountListPage()
     const mirror = await import('../storage/mirrored-storage-keys')
-    // The app taking a session page's write, which is how a page's visit reaches an app screen.
     mirror.writeMirroredStorage(
       KEY,
       JSON.stringify({

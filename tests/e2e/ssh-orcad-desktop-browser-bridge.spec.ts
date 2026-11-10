@@ -1,12 +1,5 @@
-/**
- * #29145: an agent on a managed SSH host drives this desktop's Orca browser through the host's own
- * `orca` CLI, only while "Allow this host's orca CLI to control Orca" is on.
- *
- * Off, the CLI is refused with an error that names the setting. On, `orca tab create` opens a
- * desktop tab in the host's workspace (its traffic leaves through the host, which alone resolves
- * the fixture origin), `orca goto` navigates it and `orca open-url` opens one the same way. Off
- * again, the host is refused at once.
- */
+// #29145: the managed SSH host’s real CLI may create/navigate/open desktop browser tabs only while its control setting is enabled.
+// Require remote-only origin egress through the host and immediate named refusal when the setting turns off.
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { z } from 'zod'
 import { expect, forwardElectronProcessLogs, test } from './helpers/orca-app'

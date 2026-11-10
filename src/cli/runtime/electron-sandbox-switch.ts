@@ -5,7 +5,6 @@ import { ELECTRON_NO_SANDBOX_REQUEST_ENV } from '../../shared/electron-no-sandbo
 
 const USER_NAMESPACE_PROBE_TIMEOUT_MS = 2_000
 
-/** Whether an Electron this CLI starts needs `--no-sandbox`. */
 export function needsElectronNoSandbox(executable: string): boolean {
   return (
     process.env[ELECTRON_NO_SANDBOX_REQUEST_ENV] === '1' ||

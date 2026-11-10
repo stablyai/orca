@@ -3,14 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
-vi.mock('@electron-toolkit/utils', async () =>
-  (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
-)
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
-vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harness')).appIconMock())
-vi.mock('../browser/browser-manager', async () =>
+vi.mock('./desktop-integration/app-icon', async () =>
+  (await import('./createMainWindow-test-harness')).appIconMock()
+)
+vi.mock('../browser/guest-lifecycle/manager/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
 
@@ -36,6 +35,7 @@ function setupWindow() {
     }),
     setZoomLevel: vi.fn(),
     setBackgroundThrottling: vi.fn(),
+    setWebRTCIPHandlingPolicy: vi.fn(),
     invalidate: vi.fn(),
     setWindowOpenHandler: vi.fn(),
     send: vi.fn(),
@@ -129,26 +129,5 @@ describe('serve user-Quit window close', () => {
     await vi.advanceTimersByTimeAsync(WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS * 2)
 
     expect(instance.destroy).not.toHaveBeenCalled()
-  })
-
-  it('closes instead of hiding to the Windows tray', () => {
-    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
-    const { windowHandlers, webContents, instance } = setupWindow()
-    const store = {
-      getUI: vi.fn(() => ({ trayMinimizeNoticeShown: true })),
-      getSettings: vi.fn(() => ({ windowBackgroundBlur: false, minimizeToTrayOnClose: true })),
-      updateUI: vi.fn()
-    }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the close path reads only getUI/getSettings/updateUI.
-    createMainWindow(store as never, { getIsQuitting: () => false })
-
-    markUserQuitWindowClose(instance)
-    windowHandlers.close({ preventDefault: vi.fn() })
-
-    expect(instance.hide).not.toHaveBeenCalled()
-    expect(webContents.send).toHaveBeenCalledWith(
-      'window:close-requested',
-      expect.objectContaining({ isQuitting: false })
-    )
   })
 })

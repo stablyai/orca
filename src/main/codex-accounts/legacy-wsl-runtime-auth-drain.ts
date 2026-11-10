@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
 import { posix as pathPosix } from 'node:path'
-import { wslCodexRuntimeHomeForGuestHome } from '../pty/codex-home-wsl-env'
-import { WSL_SESSION_BRIDGE_TIMEOUT_MS } from '../codex/wsl-codex-session-bridge-script'
-import { runWslProcess } from '../wsl/wsl-runner'
+import { wslCodexRuntimeHomeForGuestHome } from '../pty/shell-startup/codex-home-wsl-env'
+import { WSL_SESSION_BRIDGE_TIMEOUT_MS } from '../codex/history/bridges/wsl-codex-session-bridge-script'
+import { runWslProcess } from '../wsl/execution/wsl-runner'
 import { compareCodexAuthFreshness, codexAuthIsFresher } from './codex-auth-identity'
 import {
   APPLY_LEGACY_AUTH_SCRIPT,
@@ -73,9 +73,7 @@ export function startLegacyWslRuntimeAuthDrain(
   if (completedDistroKeys.has(key)) {
     return Promise.resolve()
   }
-  // Coalesce launch/rate-limit callers while a drain is in flight. Queuing a
-  // new pass for every poll can otherwise build an unbounded promise chain
-  // while a legacy pane keeps the migration pending.
+  // Coalesce callers so polling a pending migration cannot build an unbounded promise chain.
   const inFlight = drainQueueByDistro.get(key)
   if (inFlight) {
     return startOptions.throwOnFailure ? inFlight : logDrainFailure(inFlight)

@@ -1,20 +1,24 @@
-import type { ManagedOrcadDeploymentSummary } from '../../../shared/managed-orcad-execution-host'
-import type { PairingOffer } from '../../../shared/pairing'
-import type { RuntimeEnvironmentSource } from '../../../shared/runtime-environments'
-import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
+import type { ManagedOrcadDeploymentSummary } from '../../../shared/execution-host/managed-orcad-execution-host'
+import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import type { RuntimeEnvironmentSource } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { SshConnectionState } from '../../../shared/ssh-types'
+import type { BrowserPageCreationPlacement } from '../../../shared/browser/client-hosting/browser-client-host-placement'
 
-/** A configured server the desktop can relay to. */
 export type MobileDesktopRelayHost = {
   environmentId: string
   // Pairing revision and runtime identity; delegated grants from another fence are never reused.
   fence: string
+  pairingRevision?: number
+  /** Set when the opening request waited for a recipe VM wake that re-paired the server onto
+   *  `pairingRevision`: a retirement for that re-pair does not end the link that asked for it. */
+  wokenByOpening?: true
   // The desktop's own runtime-scope pairing; the relay swaps in a phone's delegated token.
   pairing: PairingOffer
 }
 
-/** A configured server as the desktop's sidebar sees it, without contacting it. */
+/** Desktop sidebar view of a configured server, without contacting it. */
 export type MobileDesktopRelayHostListing = {
   id: string
   name: string
@@ -24,20 +28,21 @@ export type MobileDesktopRelayHostListing = {
   runtimeId: string | null
   /** The desktop's own device id on that server, as pairing recorded it. */
   pairedDeviceId?: string
+  /** This desktop's own WSL host, confirmed stopped: only the desktop may start it. */
+  stoppedOnDesktop?: true
+  /** This desktop's own WSL host, not connected here (yet unconfirmed stopped). */
+  unavailableOnDesktop?: true
 }
 
-/** Bounds a call; `expected` refuses it once the server was re-paired or its runtime changed. */
+/** Bound calls and reject stale pairing/runtime identity via expected. */
 export type MobileDesktopRelayCallOptions = {
+  signal?: AbortSignal
   timeoutMs?: number
   expected?: Pick<MobileDesktopRelayHostListing, 'pairingRevision' | 'runtimeId'>
 }
 
-/** The desktop's configured servers, as the relay sees them. */
 export type MobileDesktopRelayHosts = {
-  /**
-   * Every configured server, with the desktop's own last status for those it has one for, and its
-   * SSH targets, which pair a managed server with the SSH host it runs on.
-   */
+  /** Last-known server statuses and SSH targets identifying their underlying hosts. */
   list: () => {
     environments: MobileDesktopRelayHostListing[]
     statusByEnvironmentId: ReadonlyMap<string, RuntimeEnvironmentStatus>
@@ -45,8 +50,17 @@ export type MobileDesktopRelayHosts = {
     sshConnectionStates: ReadonlyMap<string, SshConnectionState>
   }
   /** Null when the id names no configured server; a phone-supplied endpoint is never used. */
-  resolve: (environmentId: string) => Promise<MobileDesktopRelayHost | null>
-  /** A call as the desktop itself, over its own connection to the server. */
+  /** `openingMethod`: the request that needs the server, which may wake a recipe VM behind it. */
+  resolve: (
+    environmentId: string,
+    openingMethod?: string,
+    signal?: AbortSignal
+  ) => Promise<MobileDesktopRelayHost | null>
+  /** Where a recipe VM behind this server stands, for a request that opens a workspace. */
+  serverStateForOpening?: (environmentId: string) => 'up' | 'waking' | 'asleep'
+  /** How many times the user has disconnected this server: a link still preparing when it changes
+   *  must not open, even if something reconnected the server since. */
+  userDisconnects?: (environmentId: string) => number
   call: (
     host: Pick<MobileDesktopRelayHost, 'environmentId'>,
     method: string,
@@ -55,16 +69,18 @@ export type MobileDesktopRelayHosts = {
   ) => Promise<RuntimeRpcResponse<unknown>>
   /** Whether this desktop renders the page itself as a client-placed page of that server. */
   hostsBrowserPage: (environmentId: string, browserPageId: string) => boolean
-  /** Fires when a server is removed, re-paired or disconnected; returns an unsubscribe. */
+  /** Active desktop browser host, used only after the delegated phone is admitted on the server. */
+  browserHostClientId?: (environmentId: string) => string | null
+  prepareBrowserHost?: (
+    host: MobileDesktopRelayHost,
+    enabled: boolean
+  ) => Promise<BrowserPageCreationPlacement>
   onEnvironmentRetired: (listener: (environmentId: string) => void) => () => void
-  /** Fires whenever the desktop republishes a server's status; returns an unsubscribe. */
   onStatusChanged: (listener: () => void) => () => void
-  /**
-   * The server's own workspace change events as the desktop itself, needing no window. `onChange`
-   * fires once the stream is ready, on `worktreesChanged`/`reposChanged`, and on a replay after a
-   * reconnect, which may have missed events; `onClose` when the stream ends. `catalog` is false
-   * only for `worktreesChanged`, which no repo or project-group write sends alone.
-   */
+  /** The saved server list was edited (added, renamed, removed), here or by the CLI. */
+  onCatalogChanged?: (listener: () => void) => () => void
+  /** Windowless server events: onChange fires on ready, catalog changes and reconnect replay.
+   * catalog is false only for worktreesChanged; repo/project-group writes never emit that event alone. */
   watchChanges: (
     host: Pick<MobileDesktopRelayHost, 'environmentId'>,
     expected: NonNullable<MobileDesktopRelayCallOptions['expected']>,
@@ -74,6 +90,6 @@ export type MobileDesktopRelayHosts = {
 
 export type MobileDesktopRelayHostWatch = {
   close: () => void
-  /** False once closed, ended, or its transport was replaced, which can end it without `onClose`. */
+  /** False after close, stream end or transport replacement, even without onClose. */
   current: () => boolean
 }

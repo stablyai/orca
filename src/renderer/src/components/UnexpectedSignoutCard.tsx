@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { BookOpen, ChevronDown, CircleUserRound, Files, Smartphone, X } from 'lucide-react'
-import { useAppStore } from '../store'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useAppStore } from '../store/index'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { Button } from './ui/button'
 import { Card } from './ui/card'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible'
@@ -44,6 +44,7 @@ function FeatureRow({
 }
 
 export function UnexpectedSignoutCard(): React.JSX.Element | null {
+  const t = useTranslate()
   const authStatus = useAppStore((s) => s.orcaProfileAuthStatus)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const persistedDismissedVersion = useAppStore((s) => s.dismissedUnexpectedSignoutVersion)
@@ -159,10 +160,7 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
             <div className="flex items-center gap-2">
               <CircleUserRound className="size-4 text-muted-foreground" />
               <h3 id="unexpected-signout-heading" className="text-sm font-semibold">
-                {translate(
-                  'auto.components.UnexpectedSignoutCard.9f2c1a4b7d',
-                  "You've been signed out"
-                )}
+                {t('auto.components.UnexpectedSignoutCard.9f2c1a4b7d', "You've been signed out")}
               </h3>
             </div>
             <Button
@@ -170,7 +168,7 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
               size="icon"
               className="size-7 shrink-0"
               onClick={handleDismiss}
-              aria-label={translate('auto.components.UnexpectedSignoutCard.3e8f5c2a91', 'Dismiss')}
+              aria-label={t('auto.components.UnexpectedSignoutCard.3e8f5c2a91', 'Dismiss')}
             >
               <X className="size-3.5" />
             </Button>
@@ -178,12 +176,12 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
 
           <p className="text-sm text-muted-foreground">
             {email
-              ? translate(
+              ? t(
                   'auto.components.UnexpectedSignoutCard.7b4d9e1f2a',
                   'Sign in again as {{value0}} to restore Artifact sharing, Orca Relay, and skill sharing.',
                   { value0: email }
                 )
-              : translate(
+              : t(
                   'auto.components.UnexpectedSignoutCard.5a1c8d3e6f',
                   'Sign in again to restore Artifact sharing, Orca Relay, and skill sharing.'
                 )}
@@ -197,7 +195,7 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
                 className="w-fit gap-1 px-1 text-xs text-muted-foreground"
                 aria-expanded={expanded}
               >
-                {translate('auto.components.UnexpectedSignoutCard.1f6b2c9d4e', 'What you get back')}
+                {t('auto.components.UnexpectedSignoutCard.1f6b2c9d4e', 'What you get back')}
                 <ChevronDown
                   className={cn('size-3.5 transition-transform', expanded && 'rotate-180')}
                 />
@@ -206,30 +204,24 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
             <CollapsibleContent className="space-y-3 pt-2.5">
               <FeatureRow
                 icon={Files}
-                title={translate(
-                  'auto.components.UnexpectedSignoutCard.8d2e4f7a1b',
-                  'Artifact sharing'
-                )}
-                description={translate(
+                title={t('auto.components.UnexpectedSignoutCard.8d2e4f7a1b', 'Artifact sharing')}
+                description={t(
                   'auto.components.UnexpectedSignoutCard.2c9a5b6e8d',
                   'Publish HTML and Markdown files and manage every shared link from Orca.'
                 )}
               />
               <FeatureRow
                 icon={Smartphone}
-                title={translate('auto.components.UnexpectedSignoutCard.6e3f1a9c5b', 'Orca Relay')}
-                description={translate(
+                title={t('auto.components.UnexpectedSignoutCard.6e3f1a9c5b', 'Orca Relay')}
+                description={t(
                   'auto.components.UnexpectedSignoutCard.4b7d2e8f1a',
                   'Connect Orca Mobile to this desktop across cellular or any Wi-Fi.'
                 )}
               />
               <FeatureRow
                 icon={BookOpen}
-                title={translate(
-                  'auto.components.UnexpectedSignoutCard.9a4c6b2d7e',
-                  'Skill sharing'
-                )}
-                description={translate(
+                title={t('auto.components.UnexpectedSignoutCard.9a4c6b2d7e', 'Skill sharing')}
+                description={t(
                   'auto.components.UnexpectedSignoutCard.3d8e5f1b9c',
                   'Share skills behind an unlisted link and install them on any machine you use.'
                 )}
@@ -239,7 +231,7 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
 
           <div className="mt-0.5 flex gap-2">
             <OrcaSignInButton variant="default" size="sm" className="flex-1" disabled={!canConnect}>
-              {translate('auto.components.UnexpectedSignoutCard.c5b3e8a17d', 'Sign in to Orca')}
+              {t('auto.components.UnexpectedSignoutCard.c5b3e8a17d', 'Sign in to Orca')}
             </OrcaSignInButton>
           </div>
           <OrcaSignInWaitNotice />

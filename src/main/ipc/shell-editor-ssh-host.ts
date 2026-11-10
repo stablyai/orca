@@ -1,14 +1,14 @@
 import { getAppEnvironment } from '../../shared/app-environment'
 import { parseExecutionHostId, toSshExecutionHostId } from '../../shared/execution-host'
 import { getManagedOrcadFenceEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
-import { listEnvironments } from '../../shared/runtime-environment-store'
+import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   getOrcadSshDeployment,
   getRuntimeSshAccess,
   type KnownRuntimeEnvironment
-} from '../../shared/runtime-environments'
+} from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { SshTarget } from '../../shared/ssh-types'
-import { fingerprintRuntimeSshTarget } from '../ssh/runtime-ssh-target-fingerprint'
+import { fingerprintRuntimeSshTarget } from '../ssh/runtime-access/runtime-ssh-target-fingerprint'
 
 export type ListRuntimeEnvironments = () => readonly Pick<
   KnownRuntimeEnvironment,
@@ -37,20 +37,20 @@ export function isEditorSshHostForOwner(
   } catch {
     return false
   }
-  // Why main re-derives it: the renderer's claim alone must not point an editor at another host.
+  // Re-derive ownership in main so renderer claims cannot redirect editing to another host.
   const environment = environments.find((entry) => entry.id === owner.environmentId)
   const link = environment ? getRuntimeSshAccess(environment) : undefined
   if (!environment || link?.sshTargetId !== target.id) {
     return false
   }
-  // Why: a link that outlived its SSH registration names whatever host now reuses the id.
+  // A stale link can name a different host that reused the registration ID.
   if (target.generation !== link.sshTargetGeneration) {
     return false
   }
   if (getOrcadSshDeployment(environment)) {
     return getManagedOrcadFenceEnvironmentId(target) === environment.id
   }
-  // Why: editing a host keeps its generation, so SSH access also pins the settings it was verified on.
+  // Edits retain generation, so also pin the settings used to verify SSH access.
   const access = environment.sshAccess
   return (
     !!access?.targetFingerprint && fingerprintRuntimeSshTarget(target) === access.targetFingerprint

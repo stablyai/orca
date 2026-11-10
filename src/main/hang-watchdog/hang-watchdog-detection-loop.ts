@@ -30,13 +30,12 @@ export function createHangWatchdogDetectionLoop(
     tick: () => {
       const now = config.now()
       const tickGap = now - lastTickAt
-      // Why: advance the tick clock even while a hang is outstanding, or the first tick after the
-      // stall clears reads as a huge gap and gets misread as system sleep.
+      // Advance while hung so recovery cannot be misclassified as a long system-sleep gap.
       lastTickAt = now
       if (detected) {
         return
       }
-      // Why: system sleep suspends this process too; a huge tick gap means suspension, not a parent hang, so restart the wait from scratch.
+      // System sleep suspends the watchdog too; restart the silence window after large tick gaps.
       if (tickGap > config.checkIntervalMs * 3) {
         lastHeartbeatAt = now
         return

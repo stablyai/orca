@@ -1,9 +1,14 @@
 import type { AppState } from '../types'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import { resolveAgentPaneAuthorityKey } from '../slices/agent-pane-authority'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import {
+  isTerminalLeafId,
+  makePaneKey,
+  parsePaneKey
+} from '../../../../shared/workspace-layout/stable-pane-id'
+import { resolveAgentPaneAuthorityKey } from '../slices/agent-status/agent-pane-authority'
 import type { HydrateWorkspaceSessionOptions } from './terminal-contracts'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
+import { markFullResync, replaceRecordEntries } from '../keyed-record-transitions'
 
 export type WorkspaceHydrationPatch = Pick<
   AppState,
@@ -34,9 +39,15 @@ export type WorkspaceHydrationPatch = Pick<
   | 'terminalLayoutsByTabId'
   | 'localOnlyScrollbackByTabId'
 > &
-  // Why partial: only a cold read carries the contested-host shadow; a scoped re-hydration must
-  // leave the store's copy alone rather than replace it with an empty one.
-  Partial<Pick<AppState, 'contestedHostWorkspaceSessions' | 'contestedPrimaryHostBySessionKey'>>
+  // Only cold reads carry contested-host shadows; scoped hydration must preserve the store’s copy.
+  Partial<
+    Pick<
+      AppState,
+      | 'contestedHostWorkspaceSessions'
+      | 'contestedPrimaryHostBySessionKey'
+      | 'hydratedRuntimeSessionHostIds'
+    >
+  >
 
 export function replaceHydratedRecordKeys<T>(
   current: Record<string, T>,
@@ -93,6 +104,18 @@ export function transferNormalizedTerminalLayoutPtyOwnership(
   }
 }
 
+// Cold path: a full hydration rebuilds every tracked record from the session.
+export function markFullWorkspaceHydration(
+  hydrated: WorkspaceHydrationPatch
+): WorkspaceHydrationPatch {
+  markFullResync(hydrated.tabsByWorktree, 'hydration')
+  markFullResync(hydrated.sleepingAgentSessionsByPaneKey, 'hydration')
+  markFullResync(hydrated.pendingReconnectPtyIdByTabId, 'hydration')
+  markFullResync(hydrated.ptyIdsByTabId, 'hydration')
+  markFullResync(hydrated.terminalLayoutsByTabId, 'hydration')
+  return hydrated
+}
+
 export function targetScopedWorkspaceHydrationPatch(
   state: AppState,
   hydrated: WorkspaceHydrationPatch,
@@ -116,16 +139,14 @@ export function targetScopedWorkspaceHydrationPatch(
       .flatMap((workspaceKey) => (state.tabsByWorktree[workspaceKey] ?? []).map((tab) => tab.id))
       .filter((tabId) => !retainedTargetTabIds.has(tabId))
   )
-  // The reprieve is session-scoped, so a target snapshot that retires or
-  // replaces a row must not leave its old id protected in a later orphan sweep.
+  // Session-scoped PTY-loss reprieve must not protect a retired/replaced row in later orphan sweeps.
   const nextUnverifiedPtyLossTabIds = omitUnverifiedPtyLossTabIds(
     state.unverifiedPtyLossTabIds,
     deletedTargetTabIds
   )
-  const pendingReconnectPtyIdByTabId = replaceHydratedRecordKeys(
+  const pendingReconnectPtyIdByTabId = replaceRecordEntries<string>(
     state.pendingReconnectPtyIdByTabId,
-    {},
-    targetTabIds
+    [...targetTabIds].map((tabId) => [tabId, null] as const)
   )
   const activeOutsideScope =
     state.activeWorktreeId != null && !workspaceKeys.has(state.activeWorktreeId)
@@ -143,6 +164,7 @@ export function targetScopedWorkspaceHydrationPatch(
       everActivatedWorktreeIds.add(workspaceKey)
     }
   }
+  // Cold path: scoped hydration filters out the target keys and re-appends them from the session.
   return {
     activeRepoId: activeOutsideScope ? state.activeRepoId : hydrated.activeRepoId,
     activeWorktreeId: activeOutsideScope ? state.activeWorktreeId : hydrated.activeWorktreeId,
@@ -156,10 +178,9 @@ export function targetScopedWorkspaceHydrationPatch(
       hydrated.activeTabIdByWorktree,
       workspaceKeys
     ),
-    tabsByWorktree: replaceHydratedRecordKeys(
-      state.tabsByWorktree,
-      hydrated.tabsByWorktree,
-      workspaceKeys
+    tabsByWorktree: markFullResync(
+      replaceHydratedRecordKeys(state.tabsByWorktree, hydrated.tabsByWorktree, workspaceKeys),
+      'hydration'
     ),
     lastVisitedAtByWorktreeId: replaceHydratedRecordKeys(
       state.lastVisitedAtByWorktreeId,
@@ -175,8 +196,7 @@ export function targetScopedWorkspaceHydrationPatch(
       ),
       ...state.defaultTerminalTabsAppliedByWorktreeId
     },
-    // Why passed through whole: hydration already fell back to live store state, and the map is
-    // keyed by tab id rather than by workspace key so replaceHydratedRecordKeys has nothing to match.
+    // Already fell back to live state; tab-keyed tombstones cannot use workspace-key replacement.
     closedTerminalTabTombstonesByTabId: hydrated.closedTerminalTabTombstonesByTabId,
     pairedTerminalTabCloseIntentsByEnvironment: hydrated.pairedTerminalTabCloseIntentsByEnvironment,
     automaticAgentResumeClaimsByTabId: replaceHydratedRecordKeys(
@@ -184,7 +204,7 @@ export function targetScopedWorkspaceHydrationPatch(
       hydrated.automaticAgentResumeClaimsByTabId,
       targetTabIds
     ),
-    sleepingAgentSessionsByPaneKey,
+    sleepingAgentSessionsByPaneKey: markFullResync(sleepingAgentSessionsByPaneKey, 'hydration'),
     pendingReconnectWorktreeIds: [
       ...state.pendingReconnectWorktreeIds.filter((key) => !workspaceKeys.has(key)),
       ...hydrated.pendingReconnectWorktreeIds.filter((key) => workspaceKeys.has(key))
@@ -199,15 +219,17 @@ export function targetScopedWorkspaceHydrationPatch(
     ...(nextUnverifiedPtyLossTabIds !== state.unverifiedPtyLossTabIds
       ? { unverifiedPtyLossTabIds: nextUnverifiedPtyLossTabIds }
       : {}),
-    ptyIdsByTabId: replaceHydratedRecordKeys(
-      state.ptyIdsByTabId,
-      hydrated.ptyIdsByTabId,
-      targetTabIds
+    ptyIdsByTabId: markFullResync(
+      replaceHydratedRecordKeys(state.ptyIdsByTabId, hydrated.ptyIdsByTabId, targetTabIds),
+      'hydration'
     ),
-    terminalLayoutsByTabId: replaceHydratedRecordKeys(
-      state.terminalLayoutsByTabId,
-      hydrated.terminalLayoutsByTabId,
-      targetTabIds
+    terminalLayoutsByTabId: markFullResync(
+      replaceHydratedRecordKeys(
+        state.terminalLayoutsByTabId,
+        hydrated.terminalLayoutsByTabId,
+        targetTabIds
+      ),
+      'hydration'
     ),
     localOnlyScrollbackByTabId: replaceHydratedRecordKeys(
       state.localOnlyScrollbackByTabId,

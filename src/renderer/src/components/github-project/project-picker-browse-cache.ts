@@ -50,8 +50,7 @@ export function getProjectPickerBrowseCacheEntry(
     browseCacheByRuntimeScope.delete(cacheKey)
     return null
   }
-  // Why: cache keys are runtime scopes; refresh recency so active runtimes do
-  // not get evicted just because a user briefly tries many other runtimes.
+  // Refresh runtime recency so trying other runtimes cannot evict the active scope prematurely.
   browseCacheByRuntimeScope.delete(cacheKey)
   browseCacheByRuntimeScope.set(cacheKey, entry)
   return entry

@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'
 import type { AutomationsPageStoreState } from './use-automations-page-store-state'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 export function useAutomationsPageEscape({
   store,
@@ -11,7 +11,7 @@ export function useAutomationsPageEscape({
   store: AutomationsPageStoreState
   local: AutomationsPageLocalState
 }): void {
-  const { activeModal, closeAutomationsPage } = store
+  const { activeModal, closeAutomationsPage, setPendingAutomationRunNavigation } = store
   const {
     createOpen,
     deleteTarget,
@@ -65,6 +65,7 @@ export function useAutomationsPageEscape({
 
       if (pageView === 'run') {
         event.preventDefault()
+        setPendingAutomationRunNavigation(null)
         setSelectedAutomationRunPageId(null)
         setPageView(runPageOrigin === 'automation' ? 'automations' : 'runs')
         setIsDetailOpen(runPageOrigin === 'automation')
@@ -108,6 +109,7 @@ export function useAutomationsPageEscape({
     setActivePaneTab,
     setIsDetailOpen,
     setSelectedAutomationRunPageId,
+    setPendingAutomationRunNavigation,
     setPageView
   ])
 }

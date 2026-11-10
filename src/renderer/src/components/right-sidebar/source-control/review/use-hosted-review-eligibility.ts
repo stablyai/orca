@@ -1,18 +1,15 @@
-import { useEffect, useEffectEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import {
   buildLocalBlockerHostedReviewCreationEligibility,
   resolveHostedReviewCreationProviderForTarget
 } from './hosted-review-creation-eligibility-snapshot'
+import type { HostedReviewProvider } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlHostedReviewState } from './use-hosted-review-state'
 import type { SourceControlLinkedReviews } from './use-linked-reviews'
 import type { SourceControlHostedReviewProviderHint } from './use-hosted-review-provider-hint'
 
-/**
- * Probes whether a hosted review can be created for the visible branch and parks the answer in the
- * creation state, degrading to a local-only blocker when the remote probe fails.
- */
 export function useSourceControlHostedReviewEligibility({
   activeRepoConnectionId,
   activeRepoExecutionHostId,
@@ -68,14 +65,18 @@ export function useSourceControlHostedReviewEligibility({
   setHostedReviewCreationState: SourceControlHostedReviewState['setHostedReviewCreationState']
   worktreePath: string | null
 }): void {
-  const resolveCurrentHostedReviewCreationProvider = useEffectEvent(() =>
+  const resolveProvider = (): HostedReviewProvider =>
     resolveHostedReviewCreationProviderForTarget(
       hostedReviewCreationProviderHintRef.current,
       { repoId: activeRepoId, worktreeId: activeWorktreeId ?? null, branch: branchName },
-      // Why: provisional already infers the remote host and defaults to github; never fall back to unsupported mid-load.
+      // Preserve the inferred provider during loading rather than falling back to unsupported.
       provisionalHostedReviewProvider
     )
-  )
+  // The provider can settle after the probe starts; a failure must read the latest one without restarting it.
+  const resolveProviderRef = useRef(resolveProvider)
+  useLayoutEffect(() => {
+    resolveProviderRef.current = resolveProvider
+  })
 
   useEffect(() => {
     if (
@@ -90,7 +91,7 @@ export function useSourceControlHostedReviewEligibility({
       setHostedReviewCreationRequestState(null)
       return
     }
-    // Why: skip refetches while a PR flow is mid-flight — recomputing eligibility then can tear down the composer before the final refresh restores truth.
+    // Mid-flight refetches can tear down the composer before the final refresh restores truth.
     if (prGenerating || isCreatingPr || isCreatePrIntentInFlight) {
       setHostedReviewCreationRequestState(null)
       return
@@ -102,7 +103,7 @@ export function useSourceControlHostedReviewEligibility({
       branch: branchName,
       status: 'loading'
     })
-    // Why: upstream/status changes can make the previous eligibility unsafe to click while the new preflight resolves.
+    // Invalidate old eligibility immediately; changed upstream/status may make it unsafe to click.
     setHostedReviewCreationState(null)
     void getHostedReviewCreationEligibility({
       repoPath: activeRepoPath,
@@ -137,9 +138,9 @@ export function useSourceControlHostedReviewEligibility({
         if (stale) {
           return
         }
-        // Why: a failed remote probe can give branch guidance but cannot authorize hosted-review creation.
+        // Remote failure permits local guidance, never hosted-review creation.
         const localBlocker = buildLocalBlockerHostedReviewCreationEligibility(
-          resolveCurrentHostedReviewCreationProvider(),
+          resolveProviderRef.current(),
           {
             branch: branchName,
             baseRef: effectiveBaseRef,
@@ -171,7 +172,7 @@ export function useSourceControlHostedReviewEligibility({
       stale = true
     }
   }, [
-    // Why: unrelated repo metadata replacement must not restart a hung probe's timeout.
+    // Metadata replacement must not restart a hung probe’s timeout.
     activeRepoConnectionId,
     activeRepoExecutionHostId,
     activeRepoId,

@@ -1,9 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import ts from 'typescript'
+import ts from 'typescript-api'
 import { nativeMountingSubstitutes } from './native-mounting-substitutes'
 import { observeSalvagedReads } from './salvage-observation'
-import * as deliveryAmbiguity from '../../transport/rpc-delivery-ambiguity'
+import * as deliveryAmbiguity from '../../transport/rpc/rpc-delivery-ambiguity'
 import { compiledOperationModule } from './compiled-operation-module'
 
 export type OperationModule = Record<string, (...args: any[]) => unknown>
@@ -18,10 +18,8 @@ export type OperationMutation = {
 /** Source appended to a mounted module after transpile, keyed by the file suffix it applies to. */
 export type OperationExposure = readonly [suffix: string, source: string]
 
-// Why shared rather than evaluated: the delivery-unknown mark is a WeakSet keyed on the rejection
-// object, so a second copy of the module has a second, empty registry and every marked rejection
-// reads as a definite failure inside the mounted operation. Same reason React is shared.
-const SHARED_MODULE = 'mobile/src/transport/rpc-delivery-ambiguity.ts'
+// Share delivery ambiguity’s WeakSet registry; evaluating another copy would turn marked unknown deliveries into definite failures.
+const SHARED_MODULE = 'mobile/src/transport/rpc/rpc-delivery-ambiguity.ts'
 
 // Only mounting boundaries are substituted; every operation and projection is loaded from source.
 export function operationModuleLoader(
@@ -35,6 +33,10 @@ export function operationModuleLoader(
   let natives: Map<string, unknown> | undefined
   const sharedModulePath = resolve(root, SHARED_MODULE)
   let mutationCount = 0
+  function readSource(file: string): string {
+    const source = readFileSync(file, 'utf8')
+    return source
+  }
   function pathFor(base: string): string {
     const file = ['', '.ts', '.tsx', '/index.ts']
       .map((suffix) => base + suffix)
@@ -55,10 +57,7 @@ export function operationModuleLoader(
       return new Proxy(
         {},
         {
-          // Answering `__esModule` binds this trap as the module itself in every import form; the
-          // rule is in the `__esModule` paragraph of `native-module-traps.ts`. The refusal then
-          // lands on the first member the emit reads, which for a default import is `.default`
-          // rather than whichever member the product went on to touch.
+          // Preserve the import proxy through interop; refuse the first member actually read, including .default.
           get: (_target, key) => {
             if (key === '__esModule') {
               return true
@@ -67,6 +66,13 @@ export function operationModuleLoader(
           }
         }
       )
+    }
+    if (name.endsWith('.json')) {
+      // Catalogs and other data modules carry no behavior; hand over their parsed value.
+      return {
+        __esModule: true,
+        default: JSON.parse(readSource(resolve(dirname(base), name)))
+      }
     }
     const file = pathFor(resolve(dirname(base), name))
     if (file === sharedModulePath) {
@@ -113,7 +119,7 @@ export function operationModuleLoader(
               }
             } else if (!statement.exportClause) {
               const target = pathFor(resolve(dirname(file), name))
-              const text = readFileSync(target, 'utf8')
+              const text = readSource(target)
               if (
                 new RegExp(`export (?:async )?(?:function|const|class) ${String(key)}\\b`).test(
                   text
@@ -145,14 +151,15 @@ export function operationModuleLoader(
     if (cached) {
       return cached
     }
-    let source = readFileSync(file, 'utf8')
+    let source = readSource(file)
+    const sourceIdentity = file.replaceAll('\\', '/')
     if (/mobile-tasks-(dependencies|legacy-foundation)\.tsx?$/.test(file)) {
       const result = barrel(file, source)
       cache.set(file, result)
       return result
     }
-    if (mutation && file.endsWith(mutation.file)) {
-      // Counting occurrences, not replace calls: `replace` would silently take only the first.
+    if (mutation && sourceIdentity.endsWith(mutation.file.replaceAll('\\', '/'))) {
+      // Require exactly one anchor occurrence; replace alone would silently ignore duplicates.
       const occurrences = source.split(mutation.before).length - 1
       if (occurrences !== 1) {
         throw new Error(`Mutant anchor matched ${occurrences} sites, expected 1: ${mutation.name}`)
@@ -162,10 +169,11 @@ export function operationModuleLoader(
     }
     const exports: OperationModule = {}
     cache.set(file, exports)
-    const exposure = exposures.find(([suffix]) => file.endsWith(suffix))?.[1] ?? ''
+    const exposure =
+      exposures.find(([suffix]) => sourceIdentity.endsWith(suffix.replaceAll('\\', '/')))?.[1] ?? ''
     const evaluate = compiledOperationModule(file, source, exposure)
     evaluate((name: string) => imported(file, name), exports)
-    observeSalvagedReads(file, exports)
+    observeSalvagedReads(sourceIdentity, exports)
     return exports
   }
   return {

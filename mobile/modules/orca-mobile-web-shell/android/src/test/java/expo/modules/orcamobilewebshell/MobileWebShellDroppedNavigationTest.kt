@@ -33,16 +33,12 @@ class MobileWebShellDroppedNavigationTest {
 
   @Test
   fun `refuses every navigation to the document that the shell did not ask for`() {
-    // `href="/"` and `href=""` in an artifact resolve against the embedder's base, so both name the
-    // shell's own document. Refused whatever the host says about a gesture, and never offered:
-    // handing the shell's own URL to the opener would send the user out of the app.
+    // Artifact href=/ or empty href names our document; never reload or send that URL to the opener.
     assertEquals(
       MobileWebShellNavigationVerdict.Cancel,
       verdict(url = DOCUMENT, isDocumentUrl = true)
     )
-    // The same navigation with no gesture reported, which is what a subframe's top navigation looks
-    // like on both engines. Chromium's own documentation allows hasGesture() to be false for a
-    // request a human started, so nothing here may rest on it.
+    // Both engines can report no gesture for subframe top navigation; Chromium permits it for human requests too.
     assertEquals(
       MobileWebShellNavigationVerdict.Cancel,
       verdict(url = DOCUMENT, isDocumentUrl = true, hasGesture = false)
@@ -55,8 +51,7 @@ class MobileWebShellDroppedNavigationTest {
       MobileWebShellNavigationVerdict.Allow,
       verdict(url = DOCUMENT, isDocumentUrl = true, isShellLoad = true, hasGesture = false)
     )
-    // Carried for the iOS twin, which can see the initiating frame: a subframe's navigation is not
-    // the shell's load even if it arrives while the flag is up.
+    // iOS reports the source frame; a subframe cannot borrow the shell-load flag.
     assertEquals(
       MobileWebShellNavigationVerdict.Cancel,
       verdict(
@@ -79,8 +74,7 @@ class MobileWebShellDroppedNavigationTest {
 
   @Test
   fun `cancels a foreign navigation with no gesture and offers nothing`() {
-    // A top-page meta refresh or a redirect: refused, and never opened in a browser, because
-    // nothing a human did asked for it.
+    // Meta refresh/redirects must not open a browser without a user action.
     assertEquals(MobileWebShellNavigationVerdict.Cancel, verdict(hasGesture = false))
   }
 
@@ -104,8 +98,7 @@ class MobileWebShellDroppedNavigationTest {
 
   @Test
   fun `refuses a download that names the document, and offers it to nobody`() {
-    // `<a href="/" download>` is the shell's own URL however it is dressed, and the one thing that
-    // is never handed to the opener. Refused from either frame, gesture or not.
+    // A document-URL download is never offered, from either frame or gesture state.
     assertEquals(
       MobileWebShellNavigationVerdict.Cancel,
       verdict(url = DOCUMENT, isDocumentUrl = true, isDownload = true)

@@ -26,7 +26,7 @@ import {
 import {
   ALL_AUTOMATION_HOSTS_FILTER,
   toPersistedAutomationHostFilter
-} from '../../../../../shared/automation-host-filter'
+} from '../../../../../shared/automations/ownership/automation-host-filter'
 import {
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
@@ -34,10 +34,12 @@ import {
   normalizeWorkspaceStatuses,
   WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT
 } from '../../../../../shared/workspace-statuses'
+import { createHostWorkspaceStatusActions } from './ui-slice-host-workspace-statuses'
 
 /** Builds preference defaults and setters for the UI slice, leaving durable writes to the persistence layer. */
 export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
+    gitGraphFiltersByWorktree: {},
     sidebarBody: 'workspaces',
     setSidebarBody: (body) => set({ sidebarBody: body }),
 
@@ -168,6 +170,10 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
         window.api.ui.set({ collapsedGroups: [...next] }).catch(console.error)
         return { collapsedGroups: next }
       }),
+    setCollapsedGroups: (keys) => {
+      set({ collapsedGroups: keys })
+      window.api.ui.set({ collapsedGroups: [...keys] }).catch(console.error)
+    },
 
     worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
     _worktreeCardModeDefaulted: true,
@@ -194,6 +200,11 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
         .set({ worktreeCardProperties: normalized, _worktreeCardModeDefaulted: false })
         .catch(console.error)
     },
+    showAgentModels: true,
+    setShowAgentModels: (show) => {
+      set({ showAgentModels: show })
+      window.api.ui.set({ showAgentModels: show }).catch(console.error)
+    },
     agentActivityDisplayMode: DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
     setAgentActivityDisplayMode: (mode) => {
       const normalized = normalizeAgentActivityDisplayMode(mode)
@@ -207,6 +218,7 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       window.api.ui.set({ workspaceStatuses: normalized }).catch(console.error)
       set({ workspaceStatuses: normalized })
     },
+    ...createHostWorkspaceStatusActions(set, get),
 
     workspaceBoardOpacity: 1,
     setWorkspaceBoardOpacity: (opacity) => {

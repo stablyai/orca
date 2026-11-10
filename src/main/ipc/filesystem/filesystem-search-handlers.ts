@@ -1,10 +1,10 @@
 import { ipcMain } from 'electron'
-import { listQuickOpenFiles } from '../filesystem-list-files'
+import { listQuickOpenFiles } from './filesystem-list-files'
 import {
   isFileNameFilterQueryTooLarge,
   pathMatchesFileNameFilterTokens,
   splitFileNameFilterTokens
-} from '../../../shared/file-name-filter-tokens'
+} from '../../../shared/file-listing/file-name-filter-tokens'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { registerFilesystemContentSearchHandler } from './filesystem-content-search-handler'
 
@@ -33,7 +33,7 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
     ): Promise<string[]> => {
       const controller = listFilesCancellations.begin(event, args.requestToken)
       try {
-        // Why: an SSH target is not served here; quick-open shows "No matching files", as it did when disconnected.
+        // This process serves no SSH targets; preserve the disconnected empty-list contract.
         if (args.connectionId) {
           return []
         }

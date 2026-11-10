@@ -1,14 +1,17 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   createRestTestRig,
   foundRestTestChat,
-  IDLE_MS,
-  REST_TEST_SESSION,
-  REST_TEST_THREAD,
-  sweepOnce,
-  type RestTestRig
-} from '../native-chat/agent-session-wire/structured-agent-session-rest-test-rig'
+  sweepOnce
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+
+import { STRUCTURED_AGENT_SESSION_IDLE_MS as IDLE_MS } from '../native-chat/agent-session-wire/termination/structured-agent-session-idle-sweep'
+import {
+  HOST_TEST_SESSION as REST_TEST_SESSION,
+  HOST_TEST_THREAD as REST_TEST_THREAD
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import type { RestTestRig } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
 import { OrcadIdleExitMonitor } from './orcad-idle-exit-monitor'
 import { createOrcadIdleProbes } from './orcad-managed-idle-exit'
 
@@ -44,6 +47,7 @@ function idleMonitor() {
         agentStates: () => [{ state: 'blocked' }],
         hasStagedMigration: () => false,
         automationsBusy: () => false,
+        emulatorsBusy: async () => false,
         activationFenceExists: async () => false
       }
     )
@@ -92,7 +96,7 @@ it('releases an idle provider after the existing window, then lets the disconnec
 
   rig.clock.now += 2
   await sweepOnce(rig.host)
-  expect(rig.adapter.closeSession).toHaveBeenCalledWith(REST_TEST_SESSION)
+  expect(rig.adapter.closeSession).toHaveBeenCalledWith(REST_TEST_SESSION, undefined)
   expect(rig.host.hasLoadedProviders()).toBe(false)
   expect(await monitor.check()).toBe(false)
   rig.clock.now += SERVER_IDLE_MS

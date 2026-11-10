@@ -18,10 +18,11 @@ type QuickSubmitSourcePreparationInput = Pick<
 >
 
 import { useCallback } from 'react'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import { getLinkedWorkItemWorkspaceName } from '@/lib/new-workspace'
-import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import '@/lib/workspace/creation/new-workspace'
+import { getLinkedWorkItemWorkspaceName } from '../../../../shared/workspace-name'
+import { getJiraIssueKeyCasingSeedOptions } from '@/lib/work-items/jira/jira-issue-key-casing'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 
 export function useQuickSubmitSourcePreparation(input: QuickSubmitSourcePreparationInput) {
@@ -99,11 +100,7 @@ export function useQuickSubmitSourcePreparation(input: QuickSubmitSourcePreparat
         return null
       }
 
-      // Why: only a name Orca generated may be retired — the creature pool contains ordinary words
-      // ("orca", "runner", "molly") a user can type deliberately and expect to reuse.
-      // The identity check is what a linked PR/issue seed makes necessary here; mobile's blank-create
-      // path (use-new-workspace-create-submit.ts, `nameWasGenerated: !trimmedName`) has no other seed,
-      // so it can't share this expression. Same rule, two submit paths — change both together.
+      // Retire only Orca-generated names, not user-entered creature words; linked-item seeds require identity checks absent from mobile’s blank-name path. Keep both submit policies aligned.
       const nameWasGenerated = !name.trim() && workspaceName === fallbackCreatureName
 
       const smartSubmitBaseBranch =

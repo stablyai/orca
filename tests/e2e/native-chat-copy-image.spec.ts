@@ -15,8 +15,7 @@ test('Copy image puts the full-size image on the clipboard and keeps the preview
   await ensureTerminalVisible(orcaPage)
   await waitForActiveTerminalManager(orcaPage)
   const descriptor = await waitForActivePaneHookDescriptor(orcaPage)
-  // Why two sizes: the chip previews the pasted image while the copy must read the saved file,
-  // so an 800x600 copy proves the file was read, not the 64x64 preview.
+  // An 800×600 copy proves the saved file was read instead of its 64×64 chip preview.
   const [png, pastedPng] = await electronApp.evaluate(({ nativeImage }) =>
     [800, 64].map((width) => {
       const height = (width * 3) / 4
@@ -51,7 +50,9 @@ test('Copy image puts the full-size image on the clipboard and keeps the preview
         return size
       })
     await orcaPage.evaluate(async ({ paneKey, worktreeId }) => {
-      const settings = await window.api.settings.set({ experimentalNativeChat: true })
+      const settings = await window.api.settings.set({
+        nativeChatProviders: { claude: true, codex: true }
+      })
       const store = window.__store
       if (!store) {
         throw new Error('Store unavailable')
@@ -103,8 +104,7 @@ test('Copy image puts the full-size image on the clipboard and keeps the preview
     await previewCanvas.click({ button: 'right' })
     await copyImage.click()
     await expect.poll(takeCopiedImageSize).toBe('800x600')
-    // Why: the preview's dismissal fires on that click, so once the menu has fully left the page
-    // a dismissed preview would already read data-state="closed".
+    // Wait for menu dismissal before checking the preview stayed open after its click handler.
     await expect(orcaPage.getByRole('menu')).toHaveCount(0)
     await expect(preview).toHaveAttribute('data-state', 'open')
 

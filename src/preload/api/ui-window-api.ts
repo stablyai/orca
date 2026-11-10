@@ -1,4 +1,4 @@
-import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session-attachments'
+import type { AgentSessionAttachmentClipboardTarget } from '../../shared/agent-session/agent-session-attachments'
 import type { ClipboardImageThumbnail } from '../../shared/clipboard-image'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
 import type {
@@ -8,6 +8,8 @@ import type {
 
 export type UiWindowApi = {
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
+  /** The clipboard's HTML when it may carry links; empty otherwise. */
+  readClipboardLinkHtml: () => Promise<string>
   readSelectionClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   saveClipboardImageAsTempFile: (args?: {
     connectionId?: string | null
@@ -18,10 +20,16 @@ export type UiWindowApi = {
     /** With `forNativeChatDraft`: a structured chat on this machine, whose sends claim its pastes. */
     forStructuredChat?: boolean
   }) => Promise<string | null>
+  /** Saves paste text on the execution host so the agent can read it. */
+  savePastedTextAsFile: (args: {
+    text: string
+    runtimeEnvironmentId?: string | null
+    agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
+  }) => Promise<string>
   clipboardHasImage: () => Promise<boolean | null>
-  /** Paths of files a file manager copied; empty when there are none or the host cannot list them. */
+  /** Empty if no files were copied or the host cannot list them. */
   readClipboardFilePaths: () => Promise<string[]>
-  /** Which restored draft pastes are still kept: files really in Orca's paste folder. */
+  /** Only files inside Orca's paste folder count as kept. */
   restoreNativeChatPastes: (
     paths: string[]
   ) => Promise<{ path: string; kept: boolean; exists: boolean }[]>
@@ -47,6 +55,7 @@ export type UiWindowApi = {
   syncTrafficLights: (zoomFactor: number) => void
   setMarkdownEditorFocused: (focused: boolean) => void
   setRichMarkdownContextMenuTarget: (target: RichMarkdownContextMenuTableTarget | null) => void
+  markPlainTextContextMenuTarget: () => void
   setTerminalInputFocused: (focused: boolean) => void
   setFloatingFocus: (state: { panelFocused: boolean; terminalFocused: boolean }) => void
   setShortcutRecorderFocused: (focused: boolean) => void
@@ -58,9 +67,14 @@ export type UiWindowApi = {
   maximize: () => void
   isMaximized: () => Promise<boolean>
   onMaximizeChanged: (callback: (isMaximized: boolean) => void) => () => void
+  /** Focused, shown and not minimized, from the window itself. */
+  isWindowActive: () => Promise<boolean>
+  onWindowActiveChanged: (callback: (active: boolean) => void) => () => void
   requestClose: () => void
   popupMenu: () => void
   onWindowCloseRequested: (callback: (data: { isQuitting: boolean }) => void) => () => void
   confirmWindowClose: () => void
+  /** The user kept the window after a close request, which also cancels a pending quit. */
+  cancelWindowClose: () => void
   notifyWindowRevealed: () => void
 }

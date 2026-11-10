@@ -9,11 +9,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import type { resolveGitHubPRMergeMethods } from '../../../../../shared/github/pull-request-merge-methods'
 import type { GitHubPRMergeMethod } from '../../../../../shared/github/pull-request-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { getPullRequestMergeMethodLabel } from '@/components/github/pull-request-confirmation-copy'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function PRActionsMergeMenu({
   itemUrl,
@@ -34,6 +36,7 @@ export function PRActionsMergeMenu({
   onMerge: (method: GitHubPRMergeMethod) => void
   onAutoMerge: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <DropdownMenu modal={false}>
       <Tooltip>
@@ -54,7 +57,7 @@ export function PRActionsMergeMenu({
               )}
               {mergePresentation.autoMergeAction?.label ??
                 (mergePresentation.directMergeAvailable
-                  ? mergeMethods.defaultLabel
+                  ? getPullRequestMergeMethodLabel(mergeMethods.defaultMethod, t)
                   : mergePresentation.label)}
               <ChevronDown className="size-3 opacity-60" />
             </Button>
@@ -62,7 +65,7 @@ export function PRActionsMergeMenu({
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
           {!canMergeWithRepoContext
-            ? translate(
+            ? t(
                 'auto.components.GitHubItemDialog.5932578f51',
                 'Merge requires a registered local repo'
               )
@@ -80,15 +83,15 @@ export function PRActionsMergeMenu({
           </DropdownMenuItem>
         )}
         {mergePresentation.autoMergeAction && <DropdownMenuSeparator />}
-        {mergeMethods.methods.map(({ method, label }) => (
+        {mergeMethods.methods.map((method) => (
           <DropdownMenuItem key={method} disabled={mergeDisabled} onSelect={() => onMerge(method)}>
             <GitMerge className="size-4" />
-            {label}
+            {getPullRequestMergeMethodLabel(method, t)}
           </DropdownMenuItem>
         ))}
-        <DropdownMenuItem onSelect={() => window.api.shell.openUrl(itemUrl)}>
+        <DropdownMenuItem onSelect={() => openAppHttpLink(itemUrl)}>
           <ExternalLink className="size-4" />
-          {translate('auto.components.GitHubItemDialog.53fe19aefc', 'Open GitHub merge box')}
+          {t('auto.components.GitHubItemDialog.53fe19aefc', 'Open GitHub merge box')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

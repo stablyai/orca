@@ -1,23 +1,22 @@
 import { useEffect, useMemo } from 'react'
 import type { BridgeNativeVerb } from '../mobile-web-shell/bridge/bridge-native-verbs'
+import type { BRIDGE_STORE_VERB } from '../mobile-web-shell/bridge/bridge-store-verb'
 import { useMediaHandleRegistry } from '../mobile-web-shell/use-media-handle-registry'
 import { createNativeAudioCapture } from './native-audio'
-import { nativeAudioDeviceEngine } from './native-audio-device'
+import { NATIVE_AUDIO_DEVICE_SAMPLE_RATE, nativeAudioDeviceEngine } from './native-audio-device'
+import { createNativeSpeechServer } from './native-speech'
+import { nativeSpeechDeviceEngine } from './native-speech-device'
 import { serveNativeClipboardVerb } from './native-clipboard'
+import { serveNativeAnnounceVerb } from './native-accessibility-announce'
 import { createNativeMediaVerbServer } from './native-media'
 import { discardStagedMedia, nativeMediaDeviceDeps } from './native-media-device'
 
-/** The storage read is the shell's own store, answered before this dispatcher is reached. */
-export type NativeDeviceVerb = Exclude<BridgeNativeVerb, 'native.storage.read'>
+export type NativeDeviceVerb = Exclude<
+  BridgeNativeVerb,
+  'native.storage.read' | 'native.pdf.view' | 'native.image.act' | typeof BRIDGE_STORE_VERB
+>
 
-/**
- * Every `native.` verb this device serves, behind the one function the host dispatches to.
- *
- * Built here rather than in the screen because most of them are stateful where the clipboard ones
- * are not: the media verbs hold staged files and the audio verbs hold a live microphone, and both
- * have to be born and released with the page session. The screen passes a session id and gets a
- * handler whose lifetime already matches it.
- */
+// Tie stateful audio/media handlers to the page session so replacement documents cannot inherit abandoned microphones or staged handles.
 export function useNativeDeviceVerbs(
   sessionId: string | null
 ): (verb: NativeDeviceVerb, params: unknown) => Promise<unknown> {
@@ -26,17 +25,35 @@ export function useNativeDeviceVerbs(
     () => createNativeMediaVerbServer(nativeMediaDeviceDeps(registry)),
     [registry]
   )
-  // Keyed on the session for the registry's reason: a new page session is a new document, and a
-  // microphone the previous one left open is nobody's to stop but this seam's.
+  // A new session is a new document; close any mic its predecessor left open.
   const audio = useMemo(() => createNativeAudioCapture(nativeAudioDeviceEngine), [sessionId])
   useEffect(() => () => audio.dispose(), [audio])
+  const speech = useMemo(() => createNativeSpeechServer(nativeSpeechDeviceEngine), [sessionId])
+  useEffect(() => () => speech.dispose(), [speech])
   return useMemo(
     () => (verb, params) => {
       if (verb === 'native.clipboard.write' || verb === 'native.clipboard.read') {
         return serveNativeClipboardVerb(verb, params)
       }
+      if (verb === 'native.speech.act') {
+        return speech.serve(params)
+      }
+      if (verb === 'native.a11y.announce') {
+        return Promise.resolve(serveNativeAnnounceVerb(params))
+      }
+      if (verb === 'native.audio.start') {
+        return speech.mayCapture().then((may) =>
+          may
+            ? audio.serve(verb, params)
+            : {
+                started: false,
+                sampleRate: NATIVE_AUDIO_DEVICE_SAMPLE_RATE,
+                permission: 'granted'
+              }
+        )
+      }
       return verb.startsWith('native.audio.') ? audio.serve(verb, params) : serveMedia(verb, params)
     },
-    [audio, serveMedia]
+    [audio, serveMedia, speech]
   )
 }

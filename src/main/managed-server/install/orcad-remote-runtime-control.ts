@@ -1,4 +1,3 @@
-/** Launch a slot and wait for its readiness: the one loop deploy, rollback and recovery share. */
 import { ORCAD_STARTUP_READINESS_TIMEOUT_MS } from '../../../shared/orcad-profile-preflight'
 import {
   orcadLaunchCommand,
@@ -7,6 +6,7 @@ import {
   type OrcadReadinessParse
 } from './orcad-remote-launch'
 import {
+  hasWindowsOrcadLaunchReport,
   readWindowsOrcadLaunchReport,
   readWindowsOrcadSlotRuntime,
   readWindowsOrcadSlotEntry,
@@ -15,13 +15,15 @@ import {
 } from './orcad-remote-launch-windows'
 import {
   ORCAD_READINESS_WAIT_MAX_SECONDS,
+  orcadLaunchExitedDuringWait,
   orcadReadinessWaitCommand,
   parseOrcadReadinessWaitOutput
 } from './orcad-remote-readiness-wait'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from './orcad-host-transport'
 import { errorMessage } from '../../../shared/error-message'
 import {
   execCommand,
+  isSshCommandExitError,
   isUnconfirmedSshCommandTermination
 } from '../../ssh/remote-exec/remote-exec-command'
 import {
@@ -32,9 +34,12 @@ import {
 } from '../activation/orcad-activation-fence-scope'
 import { orcadWindowsHomeOpCommand } from './orcad-remote-windows-node'
 import { ORCAD_WINDOWS_FENCE_ARG } from '../host-state/orcad-windows-host-fence-ops'
-import { isWindowsRemoteHost, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import {
+  isWindowsRemoteHost,
+  type RemoteHostPlatform
+} from '../../ssh/remote-host/ssh-remote-platform'
 
-// Only between host-side waits, so a host that answers early cannot turn this into a tight loop.
+// Pause even after early host answers to avoid a tight retry loop.
 const READINESS_RETRY_PAUSE_MS = 1_000
 
 export type OrcadRemoteExecTarget = {
@@ -45,7 +50,7 @@ export type OrcadRemoteExecTarget = {
   remoteHome?: string
 }
 
-/** Under a held activation fence, the step runs only while the host still names this run its owner. */
+/** A held activation fence must still name this run before any host step. */
 export async function execOrcadRemote(
   target: OrcadRemoteExecTarget,
   command: string,
@@ -64,7 +69,7 @@ export async function execOrcadRemote(
     if (!isWindowsRemoteHost(target.host)) {
       return await run(`${posixOrcadFenceGuard(fence)} ${command}`)
     }
-    // A host op checks inside the host script; anything else is checked by one op just before it.
+    // Host ops check ownership internally; other commands need a preceding check.
     if (!command.includes(ORCAD_WINDOWS_FENCE_ARG) && target.remoteHome) {
       await run(orcadWindowsHomeOpCommand(target.host, target.remoteHome, 'fence-check', []))
     }
@@ -77,7 +82,7 @@ export async function execOrcadRemote(
   }
 }
 
-/** A confirmed failure reads as `fallback`; an unconfirmed one or a lost fence propagates. */
+/** Only confirmed failures use fallback; unconfirmed failures and lost fences propagate. */
 export function execOrcadRemoteOr(
   target: OrcadRemoteExecTarget,
   command: string,
@@ -114,7 +119,7 @@ export async function launchOrcadAndAwaitReadiness(
     const slotRuntime = readWindowsOrcadSlotRuntime(slotAnswer)
     const slotEntry = readWindowsOrcadSlotEntry(slotAnswer, target.host, spec.remoteInstallDir)
     readWindowsOrcadLaunchReport(
-      await execOrcadRemote(
+      await windowsLaunchReportOutput(
         target,
         windowsOrcadLaunchCommand(target.host, spec, slotRuntime, slotEntry)
       )
@@ -126,7 +131,7 @@ export async function launchOrcadAndAwaitReadiness(
         target.host,
         spec,
         target.conn.orcadLaunchDetach ?? 'nohup',
-        (await target.conn.orcadLaunchEnv?.()) ?? []
+        (await target.conn.orcadLaunchEnv?.({ fullVersion: spec.fullVersion })) ?? []
       )
     )
   }
@@ -134,7 +139,7 @@ export async function launchOrcadAndAwaitReadiness(
   const sleep = target.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)))
   let last = parseOrcadReadinessOutput('')
   let lastWaitError: unknown
-  // At least one read: a client descheduled past a short deadline must not fail a ready launch.
+  // Always read once, even if client scheduling outlasted the deadline.
   for (let first = true; first || Date.now() < deadline; first = false) {
     target.signal?.throwIfAborted()
     const waitSeconds = Math.min(
@@ -155,8 +160,7 @@ export async function launchOrcadAndAwaitReadiness(
       ) {
         throw error
       }
-      // Why retry: a failed read (a refused channel, a timed-out wait) says nothing about the
-      // launched process. Failing the launch here makes the caller stop a healthy candidate.
+      // Failed reads do not prove launch failure; stopping here could kill a healthy candidate.
       lastWaitError = error
       console.warn(`[orcad] readiness wait failed; retrying: ${errorMessage(error)}`)
       await sleep(READINESS_RETRY_PAUSE_MS)
@@ -165,7 +169,8 @@ export async function launchOrcadAndAwaitReadiness(
     target.signal?.throwIfAborted()
     lastWaitError = undefined
     last = parseOrcadReadinessWaitOutput(target.host, output)
-    if (last.state !== 'pending') {
+    // An exited launch answers as the deadline would, so callers attach the same log tail.
+    if (last.state !== 'pending' || orcadLaunchExitedDuringWait(target.host, output)) {
       return last
     }
     await sleep(READINESS_RETRY_PAUSE_MS)
@@ -174,4 +179,20 @@ export async function launchOrcadAndAwaitReadiness(
     throw lastWaitError
   }
   return last
+}
+
+/** The launcher writes its report before exiting nonzero, so a failed launch still names its cause. */
+async function windowsLaunchReportOutput(
+  target: OrcadRemoteExecTarget,
+  command: string
+): Promise<string> {
+  try {
+    return await execOrcadRemote(target, command)
+  } catch (error) {
+    // Without a report the command error carries the better diagnostic.
+    if (isSshCommandExitError(error) && hasWindowsOrcadLaunchReport(error.stdout)) {
+      return error.stdout
+    }
+    throw error
+  }
 }

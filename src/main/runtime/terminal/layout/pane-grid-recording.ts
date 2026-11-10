@@ -1,9 +1,8 @@
-// Layout-owner build: each pane remembers the grid its terminal was last sized to, so main starts
-// it at that size after a restart. Resizes come in bursts, so one write per pane per burst.
+// Persist pane grids once per resize burst so main restarts terminals at their last size.
 
-import type { TerminalGrid } from '../../../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import type { WindowLayoutCommand } from '../../runtime-layout-apply'
+import type { TerminalGrid } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import type { WindowLayoutCommand } from './runtime-layout-apply'
 
 export const PANE_GRID_RECORD_DELAY_MS = 1_000
 /** A quit's grid writes never hold the stop longer than this; a grid missed restarts at the default size. */

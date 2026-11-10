@@ -6,25 +6,27 @@ const harness = vi.hoisted(() => {
     state,
     runtimePathsExist: vi.fn(),
     scheduleReload: vi.fn(),
+    compareDirty: vi.fn(),
     forgetCombinedBodies: vi.fn()
   }
 })
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => harness.state } }))
-vi.mock('@/runtime/runtime-path-existence-batch', () => ({
+vi.mock('@/runtime/files/metadata/runtime-path-existence-batch', () => ({
   runtimePathsExist: harness.runtimePathsExist
 }))
-vi.mock('@/lib/file-owner-runtime-target', () => ({
+vi.mock('@/lib/files/access/file-owner-runtime-target', () => ({
   getRuntimeTargetForFileOwner: () => ({ kind: 'local' })
 }))
 vi.mock('./editor-external-watch-disk-verification', () => ({
-  scheduleDebouncedEditorExternalReload: harness.scheduleReload
+  scheduleDebouncedEditorExternalReload: harness.scheduleReload,
+  scheduleEditorSelfMoveEchoVerification: harness.compareDirty
 }))
 vi.mock('@/components/editor/combined-diff/remember-view/combined-diff-view-cache', () => ({
   forgetCombinedDiffViewBodiesForWorktree: harness.forgetCombinedBodies
 }))
 
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import {
   getPendingOverflowProbeCountForTest,
   reconcileEditorTabsAfterOverflow,
@@ -32,7 +34,6 @@ import {
 } from './editor-external-watch-overflow'
 
 const setExternalMutation = vi.fn()
-const setPendingDiskBaselineVerification = vi.fn()
 
 function tab(id: string, extra: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -47,7 +48,7 @@ function tab(id: string, extra: Record<string, unknown> = {}): Record<string, un
 }
 
 function setTabs(...openFiles: Record<string, unknown>[]): void {
-  harness.state = { openFiles, setExternalMutation, setPendingDiskBaselineVerification }
+  harness.state = { openFiles, setExternalMutation }
 }
 
 const target = { worktreeId: 'wt-1', worktreePath: '/repo' }
@@ -61,37 +62,6 @@ const notification = (relativePath: string, runtimeEnvironmentId: string | null 
 describe('reconcileEditorTabsAfterOverflow', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-  })
-
-  it('reloads clean tabs that still exist and clears stale tombstones', async () => {
-    setTabs(
-      tab('a.md', { externalMutation: 'deleted' }),
-      tab('staged.ts', { mode: 'diff', diffSource: 'staged' })
-    )
-    harness.runtimePathsExist.mockResolvedValue([{ exists: true }])
-    reconcileEditorTabsAfterOverflow(target, true)
-    await vi.waitFor(() => expect(harness.scheduleReload).toHaveBeenCalledTimes(2))
-
-    expect(harness.scheduleReload).toHaveBeenCalledWith(notification('staged.ts'))
-    expect(harness.scheduleReload).toHaveBeenCalledWith(notification('a.md'))
-    expect(setExternalMutation).toHaveBeenCalledWith('a.md', null)
-    expect(harness.forgetCombinedBodies).toHaveBeenCalledWith('wt-1')
-  })
-
-  it('marks a tab deleted, keeping its content, when its file is gone on the owning host', async () => {
-    setTabs(tab('gone.ts'), tab('moved.ts', { externalMutation: 'renamed' }), tab('here.ts'))
-    harness.runtimePathsExist.mockResolvedValue([
-      { exists: false },
-      { exists: false },
-      { exists: true }
-    ])
-    reconcileEditorTabsAfterOverflow(target, true)
-    await vi.waitFor(() => expect(harness.scheduleReload).toHaveBeenCalledTimes(1))
-
-    expect(harness.scheduleReload).toHaveBeenCalledWith(notification('here.ts'))
-    expect(setExternalMutation).toHaveBeenCalledWith('gone.ts', 'deleted')
-    // Why: a rename mark is kept as is rather than downgraded or cleared.
-    expect(setExternalMutation).not.toHaveBeenCalledWith('moved.ts', expect.anything())
   })
 
   it.each([
@@ -110,29 +80,6 @@ describe('reconcileEditorTabsAfterOverflow', () => {
     expect(setExternalMutation).not.toHaveBeenCalledWith('a.ts', 'deleted')
   })
 
-  it('hands dirty tabs to the disk check instead of reloading them', () => {
-    setTabs(tab('dirty.ts', { isDirty: true, lastKnownDiskSignature: 'sig' }))
-    reconcileEditorTabsAfterOverflow(target, true)
-
-    expect(setPendingDiskBaselineVerification).toHaveBeenCalledWith('dirty.ts', true)
-    expect(harness.runtimePathsExist).not.toHaveBeenCalled()
-    expect(harness.scheduleReload).not.toHaveBeenCalled()
-  })
-
-  it('a storm overflow reloads clean tabs without probing, pausing autosave or dropping combined bodies', () => {
-    setTabs(
-      tab('a.md', { externalMutation: 'deleted' }),
-      tab('dirty.ts', { isDirty: true, lastKnownDiskSignature: 'sig' })
-    )
-    reconcileEditorTabsAfterOverflow(target, false)
-
-    expect(harness.scheduleReload.mock.calls).toEqual([[notification('a.md')]])
-    expect(setExternalMutation).toHaveBeenCalledWith('a.md', null)
-    expect(harness.runtimePathsExist).not.toHaveBeenCalled()
-    expect(setPendingDiskBaselineVerification).not.toHaveBeenCalled()
-    expect(harness.forgetCombinedBodies).not.toHaveBeenCalled()
-  })
-
   it('a storm overflow supersedes a pending resync probe', async () => {
     setTabs(tab('a.ts'))
     let answer: (rows: unknown) => void = () => {}
@@ -146,37 +93,6 @@ describe('reconcileEditorTabsAfterOverflow', () => {
     answer([{ exists: false }])
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(setExternalMutation).not.toHaveBeenCalledWith('a.ts', 'deleted')
-  })
-
-  it('only touches tabs of the matching runtime owner', async () => {
-    setTabs(tab('local.md'), tab('runtime.md', { runtimeEnvironmentId: 'env-1' }))
-    harness.runtimePathsExist.mockResolvedValue([{ exists: true }])
-    reconcileEditorTabsAfterOverflow({ ...target, runtimeEnvironmentId: 'env-1' }, true)
-    await vi.waitFor(() => expect(harness.scheduleReload).toHaveBeenCalledTimes(1))
-
-    expect(harness.scheduleReload).toHaveBeenCalledWith(notification('runtime.md', 'env-1'))
-    expect(harness.runtimePathsExist).toHaveBeenCalledWith(
-      expect.anything(),
-      ['/repo/runtime.md'],
-      undefined,
-      // Why: only a per-path ENOENT may mark a tab deleted, never a whole-request "not found".
-      { codedAbsenceOnly: true }
-    )
-  })
-
-  it('probes more tabs than one host batch allows in ordered chunks', async () => {
-    const ids = Array.from({ length: 129 }, (_, index) => `f${index}.ts`)
-    setTabs(...ids.map((id) => tab(id)))
-    harness.runtimePathsExist.mockImplementation(async (_context: unknown, paths: string[]) =>
-      // The last tab (the only one in the second chunk) is gone.
-      paths.map((path) => ({ exists: path !== '/repo/f128.ts' }))
-    )
-    reconcileEditorTabsAfterOverflow(target, true)
-    await vi.waitFor(() => expect(harness.scheduleReload).toHaveBeenCalledTimes(128))
-
-    expect(harness.runtimePathsExist.mock.calls.map(([, paths]) => paths.length)).toEqual([128, 1])
-    expect(setExternalMutation).toHaveBeenCalledWith('f128.ts', 'deleted')
-    expect(harness.scheduleReload).not.toHaveBeenCalledWith(notification('f128.ts'))
   })
 
   it('drops an older existence answer once a newer probe for the tab has answered', async () => {

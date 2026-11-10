@@ -1,6 +1,6 @@
-import { _resetPendingWorktreeRemovalsForTests } from '../worktree-background-removal'
+import { _resetPendingWorktreeRemovalsForTests } from '../workspaces/removal/worktree-background-removal'
 import { vi } from 'vitest'
-import { WorkspaceLifecycleQueue } from '../runtime/workspaces/workspace-lifecycle-queue'
+import { WorkspaceLifecycleQueue } from '../runtime/workspaces/lifecycle/workspace-lifecycle-queue'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
 
 export type WorktreeRuntimeStub = {
@@ -15,25 +15,24 @@ export type WorktreeRuntimeStub = {
   clearOptimisticReconcileToken: ReturnType<typeof vi.fn>
   releaseRemovedWorktreeHostSessions: ReturnType<typeof vi.fn>
   resolveManagedMrBase: ReturnType<typeof vi.fn>
+  getSetupTerminalTitle: ReturnType<typeof vi.fn>
   createTerminal: ReturnType<typeof vi.fn>
   invalidateWorktreeCatalog: ReturnType<typeof vi.fn>
   splitTerminal: ReturnType<typeof vi.fn>
   notifyWorktreesChangedForRemoteClients: ReturnType<typeof vi.fn>
   closeFileWatchersForRemoval: ReturnType<typeof vi.fn>
   acquireFileWatcherRemoval: ReturnType<typeof vi.fn>
-  hydrateInferredWorktreeLineage: ReturnType<typeof vi.fn>
   publishWorktreeRemovalChange: ReturnType<typeof vi.fn>
   workspaceLifecycle: WorkspaceLifecycleQueue | null
 }
 
-/** Why: create-flow tests need a minimal runtime; full fetchRemoteWithCache behavior lives in fetch-remote-cache.test.ts. */
+/** Minimal create-flow runtime. */
 export function createWorktreeRuntimeStub(mainWindow?: {
   webContents: { send: (channel: string, ...args: unknown[]) => unknown }
 }): WorktreeRuntimeStub {
-  // Why here: every harness setup builds a stub, so no removal from an earlier test leaks in.
+  // Reset removals whenever the harness builds a runtime to prevent cross-test leaks.
   _resetPendingWorktreeRemovalsForTests()
   const runtimeStub: WorktreeRuntimeStub = {
-    // Mirrors the runtime field: listed only when the sidebar-inputs switch is on.
     workspaceLifecycle: ORCA_SIDEBAR_INPUTS_IS_MAIN ? new WorkspaceLifecycleQueue() : null,
     resolveRemoteTrackingBase: vi.fn().mockResolvedValue(null),
     hasRemoteTrackingRef: vi.fn().mockResolvedValue(false),
@@ -46,6 +45,7 @@ export function createWorktreeRuntimeStub(mainWindow?: {
     clearOptimisticReconcileToken: vi.fn(),
     releaseRemovedWorktreeHostSessions: vi.fn(),
     resolveManagedMrBase: vi.fn().mockResolvedValue({ baseBranch: 'origin/mr-branch' }),
+    getSetupTerminalTitle: vi.fn().mockReturnValue('Setup'),
     createTerminal: vi.fn().mockResolvedValue({
       handle: 'term-startup',
       worktreeId: 'repo-1::/workspace/improve-dashboard',
@@ -61,8 +61,6 @@ export function createWorktreeRuntimeStub(mainWindow?: {
     notifyWorktreesChangedForRemoteClients: vi.fn(),
     closeFileWatchersForRemoval: vi.fn().mockResolvedValue(undefined),
     acquireFileWatcherRemoval: vi.fn(),
-    hydrateInferredWorktreeLineage: vi.fn().mockResolvedValue(undefined),
-    // Mirrors the real runtime notifier, which sends worktrees:changed to the window.
     publishWorktreeRemovalChange: vi.fn((repoId: string) => {
       mainWindow?.webContents.send('worktrees:changed', { repoId })
     })
