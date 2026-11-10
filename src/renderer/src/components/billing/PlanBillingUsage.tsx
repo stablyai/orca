@@ -11,7 +11,7 @@ import type {
   OrcaBillingOverageArgs
 } from '../../../../shared/orca-billing'
 import { formatHours, includedUsagePercent } from './plan-billing-format'
-import { formatCents } from './plans/plans-pricing'
+import { formatCents, formatRateCents } from './plans/plans-pricing'
 import { ORCA_BILLING_OVERAGE_SECTION_ID } from '../new-workspace/orca-cloud-run-target-access'
 
 /** "Resets and renews Dec 2" when both land the same day (monthly); separate parts otherwise. */
@@ -162,17 +162,17 @@ export function OverageControls({
   const changed = capValid && capDollars.trim() !== savedDollars
   const paymentFailed = entitlement.payment.pastDueSince !== null
   const description = t(
-    'auto.components.billing.overageDescription5',
-    'Optional overage at {{value0}}/hour, up to a monthly spend cap you set ({{value1}} by default).',
+    'auto.components.billing.overageDescription6',
+    'Optional overage at {{rate}} per sandbox hour, up to a monthly spend cap you set ({{cap}} by default).',
     {
-      value0: formatCents(overage.centsPerHour, locale),
-      value1: formatCents(entitlement.offers?.team.defaultSpendCapCents ?? 2500, locale)
+      rate: formatRateCents(overage.centsPerHour, locale),
+      cap: formatCents(entitlement.offers?.team.defaultSpendCapCents ?? 2500, locale)
     }
   )
   const descriptionOn = t(
-    'auto.components.billing.overageDescriptionOn2',
-    'Optional overage at {{value0}}/hour, up to a monthly spend cap you set.',
-    { value0: formatCents(overage.centsPerHour, locale) }
+    'auto.components.billing.overageDescriptionOn3',
+    'Optional overage at {{rate}} per sandbox hour, up to a monthly spend cap you set.',
+    { rate: formatRateCents(overage.centsPerHour, locale) }
   )
   const capPercent =
     overage.spendCapCents > 0
