@@ -1,5 +1,10 @@
 import { BrowserWindow, ipcMain } from 'electron'
-import { claimQuietWake, markQuietWake } from '../ephemeral-vm/quiet-wakes'
+import {
+  claimQuietWake,
+  endQuietWake,
+  markQuietWake,
+  noteQuietWakeWoke
+} from '../ephemeral-vm/quiet-wakes'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   RuntimeRendererSyncWindowGraph,
@@ -48,11 +53,15 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       } else {
         claimQuietWake(args.workspaceId)
       }
-      return toWorkspaceLifecycleResult(() => runtime.wakeWorkspaceVm(args.workspaceId)).finally(
-        () => {
+      return toWorkspaceLifecycleResult(() => runtime.wakeWorkspaceVm(args.workspaceId)).then(
+        (result) => {
           if (args.quiet === true) {
-            claimQuietWake(args.workspaceId)
+            if (result.ok) {
+              noteQuietWakeWoke(args.workspaceId)
+            }
+            endQuietWake(args.workspaceId)
           }
+          return result
         }
       )
     }

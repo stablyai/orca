@@ -15,6 +15,8 @@ let dwellWorktreeId: string | null = null
 let graceTimer: ReturnType<typeof setTimeout> | null = null
 let prewarmedWorktreeId: string | null = null
 let wheelListenerInstalled = false
+// The row a predictive-wake dwell is armed for (outlives the shorter prewarm dwell).
+let predictiveHoverId: string | null = null
 
 function clearDwell(): void {
   if (dwellTimer !== null) {
@@ -55,8 +57,10 @@ function installWheelListener(): void {
     () => {
       if (dwellWorktreeId !== null) {
         armDwell(dwellWorktreeId)
-        // Scrolling under a resting pointer is not intent either: restart the wake dwell too.
-        notePredictiveWakeHoverStart(dwellWorktreeId)
+      }
+      // Scrolling under a resting pointer is not intent either: restart the wake dwell too.
+      if (predictiveHoverId !== null) {
+        notePredictiveWakeHoverStart(predictiveHoverId)
       }
     },
     { capture: true, passive: true }
@@ -65,6 +69,7 @@ function installWheelListener(): void {
 
 export function noteWorktreeRowHoverStart(worktreeId: string): void {
   // A sleeping cloud workspace starts waking on a longer dwell (no-op for everything else).
+  predictiveHoverId = worktreeId
   notePredictiveWakeHoverStart(worktreeId)
   installWheelListener()
   if (prewarmedWorktreeId === worktreeId) {
@@ -84,6 +89,9 @@ export function noteWorktreeRowPress(worktreeId: string): void {
 }
 
 export function noteWorktreeRowHoverEnd(worktreeId: string): void {
+  if (predictiveHoverId === worktreeId) {
+    predictiveHoverId = null
+  }
   notePredictiveWakeHoverEnd(worktreeId)
   if (dwellWorktreeId === worktreeId) {
     clearDwell()

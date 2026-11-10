@@ -1,8 +1,9 @@
 // Wires predictive wake to the app: the setting, the cloud status cache, the window's focus, and
 // the ordinary wake IPC (main's wake is single-flight per workspace, so a later open joins it).
 import { useAppStore } from '@/store'
-import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow'
 import {
+  claimPredictiveWake,
+  isPredictiveWakeOutstanding,
   createPredictiveWakeController,
   notePredictiveWakeWindowBlur,
   notePredictiveWakeWindowFocus,
@@ -39,13 +40,6 @@ export function installCloudPredictiveWake(): () => void {
         await refreshCloudWorkspaceStatus(workspaceId)
         return result?.ok === true
       },
-      sleep: async (workspaceId) => {
-        // Never put away the workspace the user is looking at.
-        if (useAppStore.getState().activeWorktreeId === workspaceId) {
-          return
-        }
-        await runSleepWorktree(workspaceId)
-      },
       setTimer: (run, ms) => {
         const timer = setTimeout(run, ms)
         return () => clearTimeout(timer)
@@ -55,11 +49,22 @@ export function installCloudPredictiveWake(): () => void {
   const onFocus = (): void =>
     notePredictiveWakeWindowFocus(useAppStore.getState().activeWorktreeId ?? null)
   const onBlur = (): void => notePredictiveWakeWindowBlur()
+  // Any activation (agent row, notification, CLI, another panel) opens the workspace: claim its
+  // intent wake so main returns it to the normal idle window.
+  const unsubscribeActive = useAppStore.subscribe((state, previous) => {
+    const active = state.activeWorktreeId
+    if (active && active !== previous.activeWorktreeId && isPredictiveWakeOutstanding(active)) {
+      claimPredictiveWake(active)
+      // Main's claim: the VM is up (or waking), so this joins that wake and wakes nothing new.
+      void window.api.ephemeralVm.resumeWorkspace({ workspaceId: active }).catch(() => null)
+    }
+  })
   window.addEventListener('focus', onFocus)
   window.addEventListener('blur', onBlur)
   return () => {
     window.removeEventListener('focus', onFocus)
     window.removeEventListener('blur', onBlur)
+    unsubscribeActive()
     setPredictiveWakeController(null)
   }
 }

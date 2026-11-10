@@ -5,7 +5,7 @@ import {
   REFUSAL_BACKOFF_MS,
   SELECT_DEBOUNCE_MS,
   SLEEP_COOLDOWN_MS,
-  UNOPENED_SLEEP_MS,
+  UNOPENED_HOLD_MS,
   WEAK_TRIGGER_MIN_GAP_MS,
   createPredictiveWakeController
 } from './cloud-predictive-wake'
@@ -29,9 +29,6 @@ function harness(
       return new Promise<boolean>((resolve) => {
         settle[id] = () => resolve(!overrides.refuse)
       })
-    },
-    sleep: async (id) => {
-      slept.push(id)
     },
     setTimer: (run, ms) => {
       const id = nextId++
@@ -87,7 +84,7 @@ describe('predictive wake', () => {
     expect(h.woken).toEqual(['ws-a'])
   })
 
-  it('caps sandboxes woken on intent and not opened, and puts unopened ones back to sleep', async () => {
+  it('caps sandboxes woken on intent and not opened; the hold ends after the window or an open', async () => {
     const h = harness()
     for (const id of ['ws-a', 'ws-b', 'ws-c']) {
       h.controller.select(id)
@@ -101,11 +98,13 @@ describe('predictive wake', () => {
     h.controller.select('ws-c')
     await h.advance(SELECT_DEBOUNCE_MS)
     expect(h.woken).toEqual(['ws-a', 'ws-b'])
-    // Opening one releases its slot and keeps it awake; the other goes back to sleep.
+    // Opening one releases its slot at once; the other holds its slot until main's short idle
+    // window has had its chance (main, not the window, puts it back to sleep).
     h.controller.claim('ws-a')
-    await h.advance(UNOPENED_SLEEP_MS)
-    expect(h.slept).toEqual(['ws-b'])
+    expect(h.controller.awakeUnopened().size).toBe(1)
+    await h.advance(UNOPENED_HOLD_MS)
     expect(h.controller.awakeUnopened().size).toBe(0)
+    expect(h.slept).toEqual([])
   })
 
   it('a refusal (seat cap) is silent, frees the slot and backs off', async () => {

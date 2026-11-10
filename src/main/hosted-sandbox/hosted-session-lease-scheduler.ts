@@ -18,6 +18,8 @@ import {
 
 export type HostedSessionLeasePorts = {
   driver: HostedEnvironmentProviderDriver
+  /** A shorter idle window for this environment right now (e.g. woken on intent, not opened). */
+  idleStopMs?: () => number | null
   handle: EnvironmentHandle
   session: HostedSessionInfo
   readActivity: () => Promise<HostedActivitySample>
@@ -121,9 +123,14 @@ export class HostedSessionLeaseScheduler {
 
   private async runOnce(): Promise<HostedLeaseAction> {
     const activity = await this.ports.readActivity().catch(() => UNVERIFIABLE)
+    const base = this.ports.driver.capabilities
+    const shorter = this.ports.idleStopMs?.() ?? null
     const action = decideHostedLeaseAction({
       now: this.now(),
-      capabilities: this.ports.driver.capabilities,
+      capabilities:
+        shorter !== null && (base.idleStopMs === null || shorter < base.idleStopMs)
+          ? { ...base, idleStopMs: shorter }
+          : base,
       session: this.session,
       activity,
       warned: this.warned

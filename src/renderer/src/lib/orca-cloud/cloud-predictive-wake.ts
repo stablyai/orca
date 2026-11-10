@@ -1,8 +1,9 @@
 // Predictive wake: start waking a sleeping Orca Cloud workspace on intent (a hover that dwells, a
 // press on its row, the window coming back while it is the active one) so the sandbox is already
 // booting when the click lands. Bounded so intent can't run up sandbox hours or a seat cap: at most
-// two sandboxes woken on intent and not yet opened at any time, each put back to sleep after a few
-// minutes unless opened; weak signals (hover, focus) share one rate limit; a refusal (seat cap,
+// two sandboxes woken on intent and not yet opened at any time; main gives those a short idle
+// window, sleeping them only when their server reports no work, unless they are opened (any
+// activation claims them); weak signals (hover, focus) share one rate limit; a refusal (seat cap,
 // plan) is silent and backs off. It never runs on app launch, on archived workspaces, right after
 // a sleep, or (for focus) on a workspace the user slept until they act on it again. Opening the
 // workspace claims the wake (single-flight in main) and shows its progress.
@@ -17,8 +18,6 @@ export type PredictiveWakeDeps = {
   isWakeCandidate: (workspaceId: string) => boolean
   /** Starts the ordinary wake quietly; resolves true when the sandbox woke, false when refused. */
   wake: (workspaceId: string) => Promise<boolean>
-  /** Puts a woken-but-never-opened workspace back to sleep. */
-  sleep: (workspaceId: string) => Promise<unknown>
   /** Schedules `run`; returns a cancel function. */
   setTimer: (run: () => void, ms: number) => () => void
 }
@@ -31,8 +30,9 @@ export const SLEEP_COOLDOWN_MS = 120_000
 export const WEAK_TRIGGER_MIN_GAP_MS = 30_000
 /** Sandboxes woken on intent and not opened (in flight or awake) at any one time. */
 export const MAX_PREDICTIVE_AWAKE = 2
-/** A sandbox woken on intent that nobody opened goes back to sleep after this. */
-export const UNOPENED_SLEEP_MS = 3 * 60_000
+/** How long a sandbox woken on intent counts against the cap if nobody opens it (main puts it
+ *  back to sleep on a short idle window, only when its server reports no work). */
+export const UNOPENED_HOLD_MS = 3 * 60_000
 /** After a refusal (seat cap, plan) intent leaves the workspace alone for this long. */
 export const REFUSAL_BACKOFF_MS = 10 * 60_000
 
@@ -43,6 +43,8 @@ export type PredictiveWakeController = {
   windowBlur: () => void
   windowFocus: (activeWorkspaceId: string | null) => void
   noteSlept: (workspaceId: string) => void
+  /** The sleep was the idle timer, not the user: coming back to Orca may wake it again. */
+  noteIdleSlept: (workspaceId: string) => void
   /** The user opened it: its wake is no longer silent, and it is no longer put back to sleep. */
   claim: (workspaceId: string) => void
   isSilent: (workspaceId: string) => boolean
@@ -92,12 +94,7 @@ export function createPredictiveWakeController(deps: PredictiveWakeDeps): Predic
   const keepUnopened = (workspaceId: string): void => {
     unopened.set(
       workspaceId,
-      deps.setTimer(() => {
-        unopened.delete(workspaceId)
-        void Promise.resolve()
-          .then(() => deps.sleep(workspaceId))
-          .catch(() => undefined)
-      }, UNOPENED_SLEEP_MS)
+      deps.setTimer(() => unopened.delete(workspaceId), UNOPENED_HOLD_MS)
     )
   }
 
@@ -168,6 +165,9 @@ export function createPredictiveWakeController(deps: PredictiveWakeDeps): Predic
       sleptAt.set(workspaceId, deps.now())
       sleptNoFocus.add(workspaceId)
     },
+    noteIdleSlept: (workspaceId) => {
+      sleptNoFocus.delete(workspaceId)
+    },
     claim: (workspaceId) => {
       cancelPending(workspaceId)
       silent.delete(workspaceId)
@@ -211,8 +211,17 @@ export function notePredictiveWakeSelect(workspaceId: string): void {
 export function notePredictiveWakeSlept(workspaceId: string): void {
   current?.noteSlept(workspaceId)
 }
+export function notePredictiveWakeIdleSlept(workspaceId: string): void {
+  current?.noteIdleSlept(workspaceId)
+}
 export function claimPredictiveWake(workspaceId: string): void {
   current?.claim(workspaceId)
+}
+/** A wake started on intent is in flight, or woke the VM and nobody opened it yet. */
+export function isPredictiveWakeOutstanding(workspaceId: string): boolean {
+  return Boolean(
+    current && (current.isSilent(workspaceId) || current.awakeUnopened().has(workspaceId))
+  )
 }
 export function isSilentPredictiveWake(workspaceId: string): boolean {
   return current?.isSilent(workspaceId) ?? false
