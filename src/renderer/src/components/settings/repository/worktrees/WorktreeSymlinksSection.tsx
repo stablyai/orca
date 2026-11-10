@@ -103,8 +103,8 @@ export function WorktreeSymlinksSection({
   return (
     <SearchableSetting
       title={t(
-        'auto.components.settings.WorktreeSymlinksSection.4755f120b6',
-        'Worktree Shared Paths'
+        'auto.components.settings.WorktreeSymlinksSection.a995ebf5ab',
+        'Worktree shared paths'
       )}
       description={t(
         'auto.components.settings.WorktreeSymlinksSection.b07ef5a8b6',
@@ -126,8 +126,8 @@ export function WorktreeSymlinksSection({
     >
       <SettingsGroup
         title={t(
-          'auto.components.settings.WorktreeSymlinksSection.4755f120b6',
-          'Worktree Shared Paths'
+          'auto.components.settings.WorktreeSymlinksSection.a995ebf5ab',
+          'Worktree shared paths'
         )}
         description={t(
           'auto.components.settings.WorktreeSymlinksSection.7ff265071d',
@@ -138,7 +138,7 @@ export function WorktreeSymlinksSection({
             <PopoverTrigger asChild>
               <Button type="button" variant="outline" size="sm">
                 <Plus className="size-3.5" />
-                {t('auto.components.settings.WorktreeSymlinksSection.241325302c', 'Add Path')}
+                {t('auto.components.settings.WorktreeSymlinksSection.9a7cd44772', 'Add path')}
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-72 p-0">

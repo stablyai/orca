@@ -5,7 +5,8 @@ import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { cn } from '@/lib/utils'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { mapAgentStatusStateToVisualStatus } from '@/lib/agent-status/aggregation/worktree-agent-status'
-import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
+import { getWorktreeStatusLabel } from '@/lib/worktree-status'
+import type { WorktreeStatus } from '../../../../shared/worktree-status-rollup'
 import {
   useAgentMessageSenderViews,
   type AgentMessageSenderInput

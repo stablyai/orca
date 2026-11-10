@@ -2,7 +2,7 @@ import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-reco
 import { useAppStore } from '@/store'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import type { AppState } from '@/store/types'
-import { isEditableTarget, isNativeChatPromptTarget } from '@/lib/editable-target'
+import { isEditableTarget, isNativeChatPromptTarget } from '@/lib/text-input/focus/editable-target'
 import {
   composeWorktreeHostIdentity,
   getExecutionHostIdFromWorktreeHostIdentity,

@@ -1,20 +1,24 @@
+import { SkillSetupCommand } from './SkillSetupCommand'
+import { SkillSetupRow } from './SkillSetupRow'
 // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Copy, Loader2, RefreshCw, Terminal } from 'lucide-react'
+import { Loader2, RefreshCw, Terminal } from 'lucide-react'
 import { toast } from 'sonner'
 import { IntegrationStatusPill } from '../../integration-status-pill'
-import { SkillFreshnessStatusPill } from '../SkillFreshnessStatusPill'
+import { SkillFreshnessStatusPill } from '../freshness/SkillFreshnessStatusPill'
 import { OnboardingInlineCommandTerminal } from '../../onboarding/OnboardingInlineCommandTerminal'
 import { AgentSkillSetupFailureNotice } from './AgentSkillSetupFailureNotice'
-import { createTerminalSnapshot, type SkillTerminalSnapshot } from '@/lib/skill-terminal-snapshot'
+import {
+  createTerminalSnapshot,
+  type SkillTerminalSnapshot
+} from '@/components/skills/setup/skill-terminal-snapshot'
 import type { WslAgentSkillSetupPanelProps } from './wsl-agent-skill-setup-panel-props'
 import { Button } from '../../ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   recheckSurfacesAfterAgentSkillInstall,
   syncSurfacesAfterAgentSkillRecheck
-} from '../../../hooks/agent-skill-recheck-surface-sync'
+} from './agent-skill-recheck-surface-sync'
 import { isOrcaCliAvailableOnPath } from '@/lib/skills/installation/agent-skill-cli-prerequisite'
 import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
@@ -200,8 +204,33 @@ export function WslAgentSkillSetupPanel({
     }
   }
 
+  const statusPill =
+    setupCommandFailedCode !== null ? (
+      <IntegrationStatusPill tone="attention">
+        {t('auto.components.settings.AgentSkillSetupPanel.setupFailed', 'Setup failed')}
+      </IntegrationStatusPill>
+    ) : loading && !installed ? (
+      <IntegrationStatusPill tone="neutral">
+        {t('auto.components.settings.AgentSkillSetupPanel.68a468752e', 'Checking...')}
+      </IntegrationStatusPill>
+    ) : installed ? (
+      freshnessSkillName ? (
+        <SkillFreshnessStatusPill skillName={freshnessSkillName} hideCurrent={variant === 'row'} />
+      ) : (
+        <IntegrationStatusPill tone="connected">
+          {t('auto.components.settings.AgentSkillSetupPanel.9fcebceb2a', 'Installed')}
+        </IntegrationStatusPill>
+      )
+    ) : (
+      <IntegrationStatusPill tone="attention">
+        {t('auto.components.settings.AgentSkillSetupPanel.5289300939', 'Not installed')}
+      </IntegrationStatusPill>
+    )
+
   const actionRow = (
-    <div className="mt-3 flex flex-wrap items-center gap-2">
+    <div
+      className={cn('flex flex-wrap items-center gap-2', variant === 'row' ? 'shrink-0' : 'mt-3')}
+    >
       {(!installed || showInstallWhenInstalled) && setupCommandFailedCode === null ? (
         <Button
           type="button"
@@ -272,66 +301,70 @@ export function WslAgentSkillSetupPanel({
       <div
         className={variant === 'card' ? cn('px-5 pt-5', terminalOpen ? 'pb-2' : 'pb-5') : 'pt-1.5'}
       >
-        {hideHeader ? (
-          <>
-            {error ? <p className="text-[12px] text-destructive">{error}</p> : null}
-            {/* hideHeader drops the title row; keep freshness so guided hubs still surface updates. */}
-            {installed && freshnessSkillName && setupCommandFailedCode === null ? (
-              <div className="mb-2">
-                <SkillFreshnessStatusPill skillName={freshnessSkillName} />
-              </div>
+        {variant === 'row' ? (
+          <SkillSetupRow
+            title={
+              <span className="flex flex-wrap items-center gap-2">
+                <span>{title}</span>
+                {statusPill}
+              </span>
+            }
+            description={description}
+            actions={actionRow}
+            error={error}
+          >
+            <AgentSkillSetupFailureNotice exitCode={setupCommandFailedCode} />
+            {actionHint}
+            {!installed && preInstallNotice && preInstallNoticeVisible ? (
+              <p className="mt-2 text-settings-detail text-muted-foreground">{preInstallNotice}</p>
             ) : null}
-          </>
+          </SkillSetupRow>
         ) : (
-          <div className="flex items-center gap-4">
-            {leading}
-            {icon ? (
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground">
-                {icon}
-              </div>
-            ) : null}
-            <div className="min-w-0 flex-1 self-center">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <h3 className="text-[15px] font-semibold leading-tight text-foreground">{title}</h3>
-                {setupCommandFailedCode !== null ? (
-                  <IntegrationStatusPill tone="attention">
-                    {t('auto.components.settings.AgentSkillSetupPanel.setupFailed', 'Setup failed')}
-                  </IntegrationStatusPill>
-                ) : loading && !installed ? (
-                  <IntegrationStatusPill tone="neutral">
-                    {t('auto.components.settings.AgentSkillSetupPanel.68a468752e', 'Checking...')}
-                  </IntegrationStatusPill>
-                ) : installed ? (
-                  freshnessSkillName ? (
+          <>
+            {hideHeader ? (
+              <>
+                {error ? <p className="text-[12px] text-destructive">{error}</p> : null}
+                {/* hideHeader drops the title row; keep freshness so guided hubs still surface updates. */}
+                {installed && freshnessSkillName && setupCommandFailedCode === null ? (
+                  <div className="mb-2">
                     <SkillFreshnessStatusPill skillName={freshnessSkillName} />
-                  ) : (
-                    <IntegrationStatusPill tone="connected">
-                      {t('auto.components.settings.AgentSkillSetupPanel.9fcebceb2a', 'Installed')}
-                    </IntegrationStatusPill>
-                  )
-                ) : (
-                  <IntegrationStatusPill tone="attention">
-                    {t('auto.components.settings.AgentSkillSetupPanel.5289300939', 'Not installed')}
-                  </IntegrationStatusPill>
-                )}
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <div className="flex items-center gap-4">
+                {leading}
+                {icon ? (
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-foreground">
+                    {icon}
+                  </div>
+                ) : null}
+                <div className="min-w-0 flex-1 self-center">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <h3 className="text-[15px] font-semibold leading-tight text-foreground">
+                      {title}
+                    </h3>
+                    {statusPill}
+                  </div>
+                  {error ? <p className="mt-1 text-[12px] text-destructive">{error}</p> : null}
+                </div>
               </div>
-              {error ? <p className="mt-1 text-[12px] text-destructive">{error}</p> : null}
+            )}
+            <div className={cn('max-w-none', hideHeader ? null : 'mt-3')}>
+              {description != null ? (
+                <p className="text-[13px] leading-snug text-muted-foreground">{description}</p>
+              ) : null}
+              {actionRow}
+              <AgentSkillSetupFailureNotice exitCode={setupCommandFailedCode} />
+              {actionHint ? <div className="mt-2">{actionHint}</div> : null}
+              {!installed && preInstallNotice && preInstallNoticeVisible ? (
+                <p className="mt-3 text-[12px] leading-snug text-muted-foreground">
+                  {preInstallNotice}
+                </p>
+              ) : null}
             </div>
-          </div>
+          </>
         )}
-        <div className={cn('max-w-none', hideHeader ? null : 'mt-3')}>
-          {description != null ? (
-            <p className="text-[13px] leading-snug text-muted-foreground">{description}</p>
-          ) : null}
-          {actionRow}
-          <AgentSkillSetupFailureNotice exitCode={setupCommandFailedCode} />
-          {actionHint ? <div className="mt-2">{actionHint}</div> : null}
-          {!installed && preInstallNotice && preInstallNoticeVisible ? (
-            <p className="mt-3 text-[12px] leading-snug text-muted-foreground">
-              {preInstallNotice}
-            </p>
-          ) : null}
-        </div>
         {footer ? (
           <div
             className={cn('border-t border-border/60', terminalOpen ? 'mt-2 pt-4' : 'mt-5 pt-5')}
@@ -347,31 +380,7 @@ export function WslAgentSkillSetupPanel({
             variant === 'card' ? 'px-5 pb-5' : 'mt-2'
           )}
         >
-          <div className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-md border border-border bg-muted/35 px-3 py-2">
-            <code className="scrollbar-sleek min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs text-muted-foreground">
-              {openTerminalCommand}
-            </code>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="shrink-0"
-                  aria-label={t(
-                    'auto.components.settings.AgentSkillSetupPanel.copyCommandAria',
-                    'Copy command'
-                  )}
-                  onClick={() => void copyActiveCommand()}
-                >
-                  <Copy className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {t('auto.components.settings.AgentSkillSetupPanel.ed197f59a2', 'Copy command')}
-              </TooltipContent>
-            </Tooltip>
-          </div>
+          <SkillSetupCommand command={openTerminalCommand} onCopy={copyActiveCommand} />
           <OnboardingInlineCommandTerminal
             key={terminalAttempt}
             worktreeId={terminalWorktreeId}

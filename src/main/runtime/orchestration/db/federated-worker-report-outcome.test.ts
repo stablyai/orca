@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseFederatedWorkerReportOutcome } from './federated-worker-report-outcome'
+import { parseFederatedWorkerReportOutcome } from '../legacy-remote/federated-worker-report-outcome'
 
 describe('federated-worker-report-outcome', () => {
   it('reads succeeded or failed from a nested report payload', () => {
