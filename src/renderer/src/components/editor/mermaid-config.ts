@@ -64,18 +64,27 @@ export function getMermaidConfig(
 
 function darkThemeVariables(colors: MermaidThemeColors): Record<string, string | boolean> {
   const surface = (fill: string): string => readableFill(fill, colors.foreground, colors.background)
-  const primarySurface = surface(colors.primary)
+  // Seeds stay the theme's because git and venn pair them with their own label colours. Fills are
+  // pinned only when tinted, so otherwise a diagram's own primaryColor/tertiaryColor still drives them.
+  const tinted = (fill: string, keys: string[]): Record<string, string> => {
+    const readable = surface(fill)
+    return readable === fill.toLowerCase()
+      ? {}
+      : Object.fromEntries(keys.map((key) => [key, readable]))
+  }
   return {
     darkMode: true,
     background: colors.background,
     primaryColor: colors.primary,
     secondaryColor: colors.secondary,
     tertiaryColor: colors.tertiary,
-    // Seeds stay the theme's: git and venn pair them with their own label colours, not the foreground.
-    mainBkg: primarySurface,
-    requirementBackground: primarySurface,
-    taskBkgColor: primarySurface,
-    clusterBkg: surface(colors.tertiary),
+    ...tinted(colors.primary, [
+      'mainBkg',
+      'requirementBackground',
+      'taskBkgColor',
+      'tagLabelBackground'
+    ]),
+    ...tinted(colors.tertiary, ['clusterBkg']),
     primaryTextColor: colors.foreground,
     secondaryTextColor: colors.foreground,
     tertiaryTextColor: colors.foreground,
