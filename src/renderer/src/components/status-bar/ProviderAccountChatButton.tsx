@@ -1,5 +1,7 @@
 import type { ComponentProps } from 'react'
+import { ChevronDown, UserRound, UserRoundPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -21,33 +23,48 @@ export function ProviderAccountChatButton({
   const t = useTranslate()
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
+  const label = add
+    ? t('components.native-chat.usageLimitActions.addAccount', 'Add Account…')
+    : t('components.native-chat.usageLimitActions.switchAccount', 'Switch Account')
   return (
-    <Button
-      {...buttonProps}
-      type="button"
-      variant="outline"
-      size="xs"
-      className="w-full"
-      disabled={disabled}
-      onClick={
-        add
-          ? () => {
-              openSettingsTarget({
-                pane: 'accounts',
-                repoId: null,
-                sectionId: `accounts-${provider}`,
-                hostScope: target,
-                intent: 'native-accounts'
-              })
-              openSettingsPage()
-            }
-          : buttonProps.onClick
-      }
-    >
-      {add
-        ? t('components.native-chat.usageLimitActions.addAccount', 'Add Account…')
-        : t('components.native-chat.usageLimitActions.switchAccount', 'Switch Account')}
-    </Button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          {...buttonProps}
+          type="button"
+          variant="outline"
+          size={add ? 'icon-xs' : 'xs'}
+          aria-label={label}
+          disabled={disabled}
+          onClick={
+            add
+              ? () => {
+                  openSettingsTarget({
+                    pane: 'accounts',
+                    repoId: null,
+                    sectionId: `accounts-${provider}`,
+                    hostScope: target,
+                    intent: 'native-accounts'
+                  })
+                  openSettingsPage()
+                }
+              : buttonProps.onClick
+          }
+        >
+          {add ? (
+            <UserRoundPlus />
+          ) : (
+            <>
+              <UserRound />
+              <ChevronDown />
+            </>
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
   )
 }
 

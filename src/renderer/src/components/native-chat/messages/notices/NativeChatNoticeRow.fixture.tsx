@@ -4,6 +4,12 @@ import { agentSessionFailureFact } from '../../../../../../shared/agent-session/
 import { agentSessionFailureWords } from '../../../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { NativeChatTextBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
+import {
+  NativeChatOrcaStopContext,
+  type NativeChatOrcaStopView
+} from './native-chat-orca-stop-context'
+import { NativeChatUsageLimitActionsContext } from '../../usage/NativeChatUsageLimitActions'
+import { ProviderAccountChatButton } from '../../../status-bar/ProviderAccountChatButton'
 
 export const codexFailures = defineFixture({
   width: 440,
@@ -91,4 +97,53 @@ export const guardianReviewsExpanded = defineFixture({
   interact: (frame) => {
     frame.querySelectorAll('summary').forEach((summary) => summary.click())
   }
+})
+
+const USAGE_LIMIT_RESET = new Date(2026, 10, 9, 15, 40).getTime()
+
+const USAGE_LIMIT_ACTIONS = {
+  account: <ProviderAccountChatButton provider="claude" target={{ kind: 'local' }} disabled />,
+  handOff: () => {},
+  disabled: false
+}
+
+const USAGE_LIMIT_STOP_VIEWS: NativeChatOrcaStopView[] = (
+  [
+    { kind: 'off', resetsAt: USAGE_LIMIT_RESET },
+    { kind: 'scheduled', resetsAt: USAGE_LIMIT_RESET, cancel: () => {} },
+    { kind: 'cancelled', resetsAt: USAGE_LIMIT_RESET }
+  ] as const
+).map((usageLimitAutoContinue) => ({
+  hostLabel: null,
+  remoteHost: false,
+  continueAvailable: false,
+  offeredTurnItemId: null,
+  continueNow: () => {},
+  usageLimitTurnItemId: 'cut-turn',
+  usageLimitAutoContinue,
+  continueUsageLimit: () => {}
+}))
+
+export const usageLimit = defineFixture({
+  width: 560,
+  render: () => (
+    <NativeChatUsageLimitActionsContext.Provider value={USAGE_LIMIT_ACTIONS}>
+      <div className="native-chat-appearance space-y-3 p-4">
+        {USAGE_LIMIT_STOP_VIEWS.map((view) => (
+          <NativeChatOrcaStopContext.Provider key={view.usageLimitAutoContinue?.kind} value={view}>
+            <NativeChatNoticeRow
+              agentName="Claude"
+              block={{
+                type: 'text',
+                tone: 'warning',
+                text: 'Claude hit its usage limit.',
+                usageLimitTurnItemId: 'cut-turn',
+                failure: { kind: 'usageLimitReached', usageLimit: { resetsAt: USAGE_LIMIT_RESET } }
+              }}
+            />
+          </NativeChatOrcaStopContext.Provider>
+        ))}
+      </div>
+    </NativeChatUsageLimitActionsContext.Provider>
+  )
 })

@@ -14,7 +14,7 @@ import { joinSentences } from '../../sentence-joining'
 /** Render reset in the reader's clock; the host timezone may differ and persisted waits become stale. */
 export type AgentSessionUsageLimitResetWords = (resetsAt: number) => string | null
 
-const WINDOW_COPY = {
+export const USAGE_LIMIT_WINDOW_COPY = {
   session: 'usageLimitWindowSession',
   weekly: 'usageLimitWindowWeekly',
   weeklyModel: 'usageLimitWindowWeeklyModel',
@@ -30,7 +30,10 @@ export function usageLimitWords(
   }
 ): string {
   const lead = limit?.window
-    ? say('usageLimitReachedNamed', { ...agent, window: say(WINDOW_COPY[limit.window]) })
+    ? say('usageLimitReachedNamed', {
+        ...agent,
+        window: say(USAGE_LIMIT_WINDOW_COPY[limit.window])
+      })
     : say('usageLimitReached', agent)
   const reset = limit?.resetsAt !== undefined ? context.resetWords?.(limit.resetsAt) : null
   return joinSentences([lead, ...(reset ? [say('usageLimitResetsAt', { when: reset })] : [])])

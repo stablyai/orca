@@ -19377,17 +19377,15 @@
       },
       "usageLimitActions": {
         "continueNow": "立即继续",
-        "leadIn": "无需等待，继续此聊天：",
         "switchAccount": "切换账号",
         "addAccount": "添加账号…",
         "accountUnavailable": "此聊天无法切换到其他账户。请将其移交给其他智能体。"
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "无法取消自动继续。请重试。",
-        "openSetting": "额度重置后自动继续",
         "cancelled": "Orca 不会自动继续此聊天。",
         "scheduled": "Orca 将在 {{time}} 继续此聊天。",
-        "cancel": "不要继续"
+        "continueAt": "在 {{time}} 自动继续"
       },
       "settings": "聊天设置",
       "textAttachmentPreview": {
@@ -19441,7 +19439,13 @@
         "many_other": "已创建 {{count}} 个拉取请求"
       },
       "splitRight": "向右拆分",
-      "splitDown": "向下拆分"
+      "splitDown": "向下拆分",
+      "usageLimitHeadline": {
+        "unnamed": "已达到使用上限",
+        "window": "{{agent}} 已达到{{window}}上限",
+        "agent": "{{agent}} 已达到使用上限",
+        "resetsAt": "{{time}} 重置"
+      }
     },
     "tab": {
       "bar": {

@@ -19437,17 +19437,15 @@
       },
       "usageLimitActions": {
         "continueNow": "今すぐ続ける",
-        "leadIn": "待たずにこのチャットを続ける：",
         "switchAccount": "アカウントを切り替え",
         "addAccount": "アカウントを追加…",
         "accountUnavailable": "このチャットは別のアカウントに移せません。別の Agent に引き継いでください。"
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "自動続行をキャンセルできませんでした。もう一度お試しください。",
-        "openSetting": "上限がリセットされたら自動的に続ける",
         "cancelled": "Orca はこのチャットを自動的には続けません。",
         "scheduled": "Orca は {{time}} にこのチャットを続けます。",
-        "cancel": "続けない"
+        "continueAt": "{{time}} に自動で続ける"
       },
       "settings": "チャット設定",
       "textAttachmentPreview": {
@@ -19501,7 +19499,13 @@
         "many_other": "{{count}} 件のプルリクエストを開きました"
       },
       "splitRight": "右に分割",
-      "splitDown": "下に分割"
+      "splitDown": "下に分割",
+      "usageLimitHeadline": {
+        "unnamed": "使用量の上限に達しました",
+        "window": "{{agent}} が{{window}}の上限に達しました",
+        "agent": "{{agent}} が使用量の上限に達しました",
+        "resetsAt": "{{time}} にリセット"
+      }
     },
     "tab": {
       "bar": {

@@ -19945,17 +19945,15 @@
       },
       "usageLimitActions": {
         "continueNow": "Continuar ahora",
-        "leadIn": "Continúa este chat sin esperar:",
         "switchAccount": "Cambiar de cuenta",
         "addAccount": "Añadir cuenta…",
         "accountUnavailable": "Este chat no se puede mover a otra cuenta. Transfiérelo a otro agente."
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "No se pudo cancelar la continuación automática. Inténtalo de nuevo.",
-        "openSetting": "Continuar automáticamente cuando se restablezcan los límites",
         "cancelled": "Orca no continuará este chat automáticamente.",
         "scheduled": "Orca continuará este chat a las {{time}}.",
-        "cancel": "No continuar"
+        "continueAt": "Continuar automáticamente a las {{time}}"
       },
       "settings": "Configuración del chat",
       "textAttachmentPreview": {
@@ -20010,7 +20008,13 @@
         "many_many": "{{count}} solicitudes de extracción creadas"
       },
       "splitRight": "Dividir a la derecha",
-      "splitDown": "Dividir hacia abajo"
+      "splitDown": "Dividir hacia abajo",
+      "usageLimitHeadline": {
+        "unnamed": "Límite de uso alcanzado",
+        "window": "{{agent}} alcanzó su límite {{window}}",
+        "agent": "{{agent}} alcanzó su límite de uso",
+        "resetsAt": "Se restablece a las {{time}}"
+      }
     },
     "tab": {
       "bar": {

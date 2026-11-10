@@ -10,6 +10,7 @@ import {
 } from 'react'
 import { MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { structuredChatTabById } from '@/lib/structured-chat-tab-index'
@@ -39,7 +40,7 @@ type UsageLimitActions = {
   handOff?: () => void
   disabled: boolean
 }
-const UsageLimitActionsContext = createContext<UsageLimitActions | null>(null)
+export const NativeChatUsageLimitActionsContext = createContext<UsageLimitActions | null>(null)
 
 export function NativeChatUsageLimitActionsProvider({
   pane,
@@ -226,7 +227,7 @@ export function NativeChatUsageLimitActionsProvider({
     [intentKey, view]
   )
   return (
-    <UsageLimitActionsContext.Provider value={actions}>
+    <NativeChatUsageLimitActionsContext.Provider value={actions}>
       <NativeChatOrcaStopContext.Provider value={stopView}>
         {children}
       </NativeChatOrcaStopContext.Provider>
@@ -243,39 +244,41 @@ export function NativeChatUsageLimitActionsProvider({
           }}
         />
       ) : null}
-    </UsageLimitActionsContext.Provider>
+    </NativeChatUsageLimitActionsContext.Provider>
   )
 }
 
 export function NativeChatUsageLimitActions(): React.JSX.Element | null {
   const t = useTranslate()
-  const actions = useContext(UsageLimitActionsContext)
+  const actions = useContext(NativeChatUsageLimitActionsContext)
   if (!actions || (!actions.account && !actions.handOff)) {
     return null
   }
+  const handOffLabel = t(
+    'components.agentSessionContinuation.handOffToAnotherAgent',
+    'Hand Off to Another Agent'
+  )
   return (
-    <div className="ml-6 flex flex-wrap items-center gap-2 text-chat-foreground-faint">
-      <p className="text-xs">
-        {t(
-          'components.native-chat.usageLimitActions.leadIn',
-          'Continue this chat without waiting:'
-        )}
-      </p>
-      {actions.account ? <div className="w-32 shrink-0 empty:hidden">{actions.account}</div> : null}
+    <div className="ml-6 flex flex-wrap items-center gap-2">
+      {actions.account}
       {actions.handOff ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="xs"
-          disabled={actions.disabled}
-          onClick={actions.handOff}
-        >
-          <MessageSquarePlus />
-          {t(
-            'components.agentSessionContinuation.handOffToAnotherAgent',
-            'Hand Off to Another Agent'
-          )}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-xs"
+              aria-label={handOffLabel}
+              disabled={actions.disabled}
+              onClick={actions.handOff}
+            >
+              <MessageSquarePlus />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            {handOffLabel}
+          </TooltipContent>
+        </Tooltip>
       ) : null}
     </div>
   )

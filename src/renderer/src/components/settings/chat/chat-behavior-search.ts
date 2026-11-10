@@ -3,7 +3,6 @@ import type { Translate } from '@/i18n/use-translate'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { NATIVE_CHAT_RESUME_SETTING_SECTION_ID } from './native-chat-resume-setting-target'
-import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_SETTING_SECTION_ID } from './native-chat-usage-limit-continue-setting-target'
 
 export const getChatBehaviorTitle = (t: Translate = translate): string =>
   t('components.settings.nativeChat.behaviorTitle', 'Behavior')
@@ -25,7 +24,7 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
     ]
   },
   autoContinueAfterUsageLimit: {
-    targetSectionId: NATIVE_CHAT_USAGE_LIMIT_CONTINUE_SETTING_SECTION_ID,
+    targetSectionId: 'chat-usage-limit-auto-continue',
     title: translate(
       'components.settings.nativeChat.usageLimitContinueTitle',
       'Continue chats automatically when a usage limit resets'

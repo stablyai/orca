@@ -100,6 +100,8 @@ export function useNativeChatUsageLimitAutoContinue(
     if (kind === null || resetsAt === undefined) {
       return null
     }
-    return kind === 'scheduled' ? { kind, resetsAt, cancelDisabled: cancelling, cancel } : { kind }
+    return kind === 'scheduled'
+      ? { kind, resetsAt, cancelDisabled: cancelling, cancel }
+      : { kind, resetsAt }
   }, [capability, resetsAt, cutState, schedulable, target.kind, cancelling, cancel])
 }

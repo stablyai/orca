@@ -20,7 +20,7 @@ export function usageLimitContinueStateForCut(
     : undefined
 }
 
-/** Null hides the line. "Off" only points at this machine's own setting, so other hosts hide it. */
+/** Null hides the line. "Off" turns on this machine's own setting, so other hosts hide it. */
 export function nativeChatUsageLimitAutoContinueKind(
   state: NativeChatUsageLimitContinueState | undefined,
   { schedulable, localHost }: { schedulable: boolean; localHost: boolean }
