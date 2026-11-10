@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const state = vi.hoisted(() => ({
-  records: [] as Record<string, unknown>[],
-  updates: [] as { id: string; patch: Record<string, unknown> }[]
-}))
+type MockState = {
+  records: Record<string, unknown>[]
+  updates: { id: string; patch: Record<string, unknown> }[]
+}
+const state = vi.hoisted((): MockState => ({ records: [], updates: [] }))
 vi.mock('../../shared/ephemeral-vm-runtime-store', () => ({
   listEphemeralVmRuntimes: () => state.records,
   updateEphemeralVmRuntimeStatus: (_path: string, id: string, patch: Record<string, unknown>) => {
@@ -38,8 +39,8 @@ const RUNNING = {
   recipe: { provider: 'orca-cloud' },
   recipeResult: { sandboxId: 'sbx_1' }
 }
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the fields read here.
-const record = (patch: Record<string, unknown> = {}) =>
+const record = (patch: Record<string, unknown> = {}): EphemeralVmRuntimeRecord =>
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the module under test reads only id, status, updatedAt and recipe.provider.
   ({ ...RUNNING, ...patch }) as unknown as EphemeralVmRuntimeRecord
 
 describe('a cloud VM slept from another client', () => {

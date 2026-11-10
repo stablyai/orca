@@ -3,10 +3,8 @@
 // returning the stale record, and only a resume that ran counts as a quiet wake that woke it.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const state = vi.hoisted(() => ({
-  record: {} as Record<string, unknown>,
-  asleep: false
-}))
+type MockState = { record: Record<string, unknown>; asleep: boolean }
+const state = vi.hoisted((): MockState => ({ record: {}, asleep: false }))
 const mocks = vi.hoisted(() => ({
   resume: vi.fn(async () => ({
     ok: true,
