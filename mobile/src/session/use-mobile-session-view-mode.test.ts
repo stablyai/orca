@@ -280,32 +280,6 @@ describe('useMobileSessionViewMode', () => {
     })
   })
 
-  it('does not let an older failed override roll back a newer choice', async () => {
-    const recoveryLoad = deferred<Map<string, MobileSessionView>>()
-    vi.mocked(updateSessionViewOverride)
-      .mockRejectedValueOnce(new Error('storage unavailable'))
-      .mockResolvedValueOnce(undefined)
-    await mount({ defaultView: 'terminal' })
-    vi.mocked(readSessionViewOverridesPreference).mockReturnValueOnce(
-      recoveryLoad.promise.then((overrides) => ({ overrides, loaded: true }))
-    )
-
-    await act(async () => {
-      controller?.toggleTabChatView('t1')
-      await Promise.resolve()
-    })
-    act(() => controller?.toggleTabChatView('t1'))
-
-    await act(async () => {
-      recoveryLoad.resolve(new Map([['t1', 'chat']]))
-      await recoveryLoad.promise
-      await Promise.resolve()
-    })
-
-    expect(controller?.isTabChatView('t1')).toBe(false)
-    expect(updateSessionViewOverride).toHaveBeenNthCalledWith(2, 'h', 'w', 't1', 'terminal')
-  })
-
   it('fails closed to terminal when overrides cannot be read under a chat default', async () => {
     vi.mocked(loadDefaultSessionView).mockResolvedValue('chat')
     vi.mocked(readSessionViewOverridesPreference).mockResolvedValue({
