@@ -2,7 +2,7 @@ import { readShellLifecycleStateFile } from './managed-shell-lifecycle-state-fil
 import type { ShellLifecycleObservation } from '../shared/terminal-shell-lifecycle'
 import type { PtyChildProcessVerdict } from '../shared/terminal/pty/lifecycle/terminal-process-inspection'
 
-export const SHELL_LIFECYCLE_BINDING_ENV = '_ORCA_SHELL_LIFECYCLE_BINDING'
+export { SHELL_LIFECYCLE_BINDING_ENV } from './managed-shell-lifecycle-state-file'
 const PREFIX = '\x1b]777;orca-shell-lifecycle;'
 const MAX_EVENT_LENGTH = 512
 const MAX_SIGNAL_AGE_MS = 30_000

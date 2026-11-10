@@ -135,7 +135,7 @@ export async function spawnLocalPty(
           preLaunchEnv: plan.primaryPreLaunchEnv,
           // Correct fallback HISTFILE before spawn; zsh_history cannot serve a bash fallback.
           onBeforeFallbackSpawn: (env, fallbackShell) => {
-            releaseShellLifecycleStateFile(env[SHELL_LIFECYCLE_STATE_ENV])
+            void releaseShellLifecycleStateFile(env[SHELL_LIFECYCLE_STATE_ENV])
             delete env[SHELL_LIFECYCLE_STATE_ENV]
             delete env[SHELL_LIFECYCLE_BINDING_ENV]
             if (fallbackHistory) {

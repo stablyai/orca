@@ -123,7 +123,7 @@ export function createDaemonPtySubprocessHandle(args: {
   const acceptExit = ({ exitCode, signal }: { exitCode: number; signal?: number }): void => {
     // Exit listeners may re-enter cleanup; retire signal authority before notifying them.
     dead = true
-    releaseShellLifecycleStateFile(shellLifecycleStatePath)
+    void releaseShellLifecycleStateFile(shellLifecycleStatePath)
     clearMasterRetiredTimer()
     foreground.markDead()
     // Neutralize kill before an async socket-close SIGHUP can target a recycled PID.

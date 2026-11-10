@@ -176,7 +176,7 @@ export function activateLocalPtySession(args: {
   let staging: StartupCommandStaging | undefined
   const onExitDisposable = proc.onExit(({ exitCode, signal }) => {
     exitedBeforeSpawnReply = true
-    releaseShellLifecycleStateFile(shellLifecycleStatePath)
+    void releaseShellLifecycleStateFile(shellLifecycleStatePath)
     discardStagedStartupCommand(staging)
     // node-pty may pair exitCode 0 with a fatal signal; classify while signal and spawn provenance are available.
     let cause = resolveProcessExitCause({

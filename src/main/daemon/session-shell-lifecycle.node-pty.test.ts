@@ -204,8 +204,9 @@ describe.skipIf(process.platform === 'win32')('managed Bash lifecycle on a real 
         if (session) {
           await session.forceKillAndWaitForExit(3_000)
           session.dispose()
-          if (lifecycleStatePath) {
-            expect(existsSync(lifecycleStatePath)).toBe(false)
+          const statePath = lifecycleStatePath
+          if (statePath) {
+            await vi.waitFor(() => expect(existsSync(statePath)).toBe(false))
           }
         }
         if (originalUserData === undefined) {

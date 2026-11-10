@@ -1,22 +1,23 @@
-import { constants, mkdtempSync, writeFileSync, lstatSync, unlinkSync, rmdirSync } from 'node:fs'
-import { access, open, lstat } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { access, open, lstat, mkdtemp, writeFile, unlink, rmdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
+export const SHELL_LIFECYCLE_BINDING_ENV = '_ORCA_SHELL_LIFECYCLE_BINDING'
 export const SHELL_LIFECYCLE_STATE_ENV = '_ORCA_SHELL_LIFECYCLE_STATE'
 const owned = new Map<
   string,
   { dev: number; ino: number; dirDev: number; dirIno: number; claimed: boolean }
 >()
 
-export function createShellLifecycleStateFile(): string | undefined {
+export async function createShellLifecycleStateFile(): Promise<string | undefined> {
   let directory: string | undefined
   try {
-    directory = mkdtempSync(join(tmpdir(), 'orca-shell-lifecycle-'))
+    directory = await mkdtemp(join(tmpdir(), 'orca-shell-lifecycle-'))
     const path = join(directory, 'state')
-    writeFileSync(path, '', { flag: 'wx', mode: 0o600 })
-    const file = lstatSync(path)
-    const dir = lstatSync(directory)
+    await writeFile(path, '', { flag: 'wx', mode: 0o600 })
+    const file = await lstat(path)
+    const dir = await lstat(directory)
     owned.set(path, {
       dev: file.dev,
       ino: file.ino,
@@ -28,7 +29,7 @@ export function createShellLifecycleStateFile(): string | undefined {
   } catch {
     if (directory) {
       try {
-        rmdirSync(directory)
+        await rmdir(directory)
       } catch {}
     }
     return undefined
@@ -44,26 +45,26 @@ export function claimShellLifecycleStateFile(path: string | undefined): string |
   return path
 }
 
-export function releaseShellLifecycleStateFile(
+export async function releaseShellLifecycleStateFile(
   path: string | undefined,
   unclaimedOnly = false
-): void {
+): Promise<void> {
   const owner = path ? owned.get(path) : undefined
   if (!path || !owner || (unclaimedOnly && owner.claimed)) {
     return
   }
   owned.delete(path)
   try {
-    const dir = lstatSync(dirname(path))
+    const dir = await lstat(dirname(path))
     if (dir.dev !== owner.dirDev || dir.ino !== owner.dirIno) {
       return
     }
-    const file = lstatSync(path)
+    const file = await lstat(path)
     if (file.dev !== owner.dev || file.ino !== owner.ino) {
       return
     }
-    unlinkSync(path)
-    rmdirSync(dirname(path))
+    await unlink(path)
+    await rmdir(dirname(path))
   } catch {}
 }
 
@@ -71,11 +72,20 @@ export async function withShellLifecycleStateFile<T>(
   env: Record<string, string>,
   operation: () => Promise<T>
 ): Promise<T> {
-  const path = env[SHELL_LIFECYCLE_STATE_ENV]
+  let path = env[SHELL_LIFECYCLE_STATE_ENV]
+  if (!path && env[SHELL_LIFECYCLE_BINDING_ENV]) {
+    const created = await createShellLifecycleStateFile()
+    if (created) {
+      path = created
+      env[SHELL_LIFECYCLE_STATE_ENV] = created
+    } else {
+      delete env[SHELL_LIFECYCLE_BINDING_ENV]
+    }
+  }
   try {
     return await operation()
   } finally {
-    releaseShellLifecycleStateFile(path, true)
+    await releaseShellLifecycleStateFile(path, true)
   }
 }
 
