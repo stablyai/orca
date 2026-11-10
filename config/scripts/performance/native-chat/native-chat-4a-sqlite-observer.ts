@@ -31,10 +31,10 @@ export const seededDbFiles = (dir: string): string[] =>
 export const chatDatabasePath = (userDataDir: string): string | null =>
   findDatabase(userDataDir, DOMAIN_DB) ?? findDatabase(userDataDir, JOURNAL_DB)
 
-const openReadOnly = (file: string): DatabaseSync =>
+export const openReadOnly = (file: string): DatabaseSync =>
   new DatabaseSync(file, { readOnly: true, timeout: 2_000 })
 
-const hasTable = (db: DatabaseSync, name: string): boolean =>
+export const hasTable = (db: DatabaseSync, name: string): boolean =>
   db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name=?").get(name) !== undefined
 
 export type PageState = {

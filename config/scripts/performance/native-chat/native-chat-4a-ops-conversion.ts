@@ -1,5 +1,4 @@
 // 4a one-time conversion rows, reported apart from steady state. Ready is the candidate's existing epoch-installed boundary,
-// observed from outside through a read-only poll of journal_chat_state (see native-chat-4a-sqlite-observer.ts).
 import path from 'node:path'
 import { seededChats, unconvertedOpenTarget } from './native-chat-4a-fixture'
 import { openTo, type Chat } from './native-chat-4a-ops-lifecycle'
@@ -18,8 +17,6 @@ import { replyPrompt } from './native-chat-4a-workloads'
 const SWEEP_TIMEOUT_MS = 2 * 60 * 60_000
 const NO_DOMAIN_DATABASE =
   'this arm created no agent-session-domain.db by session ready: nothing converts'
-
-export { seededDbFiles } from './native-chat-4a-sqlite-observer'
 
 function observation(observer: ConversionObserver): Record<string, number | string> {
   return {
@@ -191,11 +188,10 @@ export async function awaitSweep(
   ctx: RunContext,
   observer: ConversionObserver,
   label: string
-): Promise<void> {
-  // Polling stops here, so steady-state families carry no observer reads.
+): Promise<boolean> {
   try {
     if (!observer.databaseFile) {
-      return
+      return true
     }
     const started = Date.now()
     const done = await observer.allReady(seededChats(ctx.manifest), SWEEP_TIMEOUT_MS)
@@ -206,11 +202,12 @@ export async function awaitSweep(
       context: observation(observer)
     })
     if (!done) {
-      row.skipped = `not every seeded chat was ready after ${SWEEP_TIMEOUT_MS} ms; later families overlap conversion`
+      row.skipped = `not every seeded chat was ready after ${SWEEP_TIMEOUT_MS} ms; dependent steady-state families skipped`
       ctx.log(`${ctx.arm.name}: ${row.skipped}`)
-      return
+      return false
     }
     row.samples.push({ e2eMs: Date.now() - started })
+    return true
   } finally {
     await observer.stop()
   }

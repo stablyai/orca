@@ -66,9 +66,8 @@ export function summarizeRow(row: Row) {
   return {
     e2eMs: stat(row.samples.map((sample) => sample.e2eMs)),
     hostMs: stat(row.samples.map((sample) => sample.hostMs)),
-    hostCpuMs: stat(row.samples.map((sample) => sample.work?.cpuMs)),
-    offMainThreadCpuMs: stat(row.samples.map((sample) => sample.work?.offMainThreadCpuMs)),
-    mainThreadActiveMs: stat(row.samples.map((sample) => sample.work?.mainThreadActiveMs)),
+    processCpuMs: stat(row.samples.map((sample) => sample.work?.processCpuMs)),
+    mainThreadEluActiveMs: stat(row.samples.map((sample) => sample.work?.mainThreadEluActiveMs)),
     extra: Object.fromEntries(
       [...extras].map((key) => [key, stat(row.samples.map((sample) => sample.extra?.[key]))])
     )
@@ -222,8 +221,8 @@ export function comparisonMarkdown(base: ArmResult, next: ArmResult): string {
     provenanceLine(base),
     provenanceLine(next),
     '',
-    `| Family | Operation | Case | ${base.arm} | ${next.arm} | Δ p95 | Host span p95 ${base.arm} → ${next.arm} | Off-main CPU p95 ${base.arm} → ${next.arm} | Shape |`,
-    '| --- | --- | --- | --- | --- | --- | --- | --- | --- |'
+    `| Family | Operation | Case | ${base.arm} | ${next.arm} | Δ p95 | Host span p95 ${base.arm} → ${next.arm} | Process CPU p95 ${base.arm} → ${next.arm} | Main-thread ELU active wall ms p95 ${base.arm} → ${next.arm} | Shape |`,
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |'
   ]
   const seen = new Set<string>()
   for (const row of ordered) {
@@ -238,15 +237,17 @@ export function comparisonMarkdown(base: ArmResult, next: ArmResult): string {
     const right = nextRows.get(key(row))
     const a = left ? summarizeRow(left) : null
     const b = right ? summarizeRow(right) : null
-    const span = (summary: typeof a, pick: 'hostMs' | 'offMainThreadCpuMs'): string =>
-      summary?.[pick] ? ms(summary[pick]!.p95) : '—'
+    const span = (
+      summary: typeof a,
+      pick: 'hostMs' | 'processCpuMs' | 'mainThreadEluActiveMs'
+    ): string => (summary?.[pick] ? ms(summary[pick]!.p95) : '—')
     lines.push(
-      `| ${row.family} | ${row.operation} | ${caseCell(row)} | ${left?.skipped ? `skipped: ${left.skipped}` : cell(a && primary(a))} | ${right?.skipped ? `skipped: ${right.skipped}` : cell(b && primary(b))} | ${delta(a && primary(a), b && primary(b))} | ${span(a, 'hostMs')} → ${span(b, 'hostMs')} | ${span(a, 'offMainThreadCpuMs')} → ${span(b, 'offMainThreadCpuMs')} | ${contextCell(left ?? right)} |`
+      `| ${row.family} | ${row.operation} | ${caseCell(row)} | ${left?.skipped ? `skipped: ${left.skipped}` : cell(a && primary(a))} | ${right?.skipped ? `skipped: ${right.skipped}` : cell(b && primary(b))} | ${delta(a && primary(a), b && primary(b))} | ${span(a, 'hostMs')} → ${span(b, 'hostMs')} | ${span(a, 'processCpuMs')} → ${span(b, 'processCpuMs')} | ${span(a, 'mainThreadEluActiveMs')} → ${span(b, 'mainThreadEluActiveMs')} | ${contextCell(left ?? right)} |`
     )
   }
   lines.push(
     '',
-    'Primary latency is action → visible result where the row has a rendered end point, else the RPC host span. Off-main CPU is process CPU minus main-thread event-loop active time (storage workers). Conversion rows are one-time import cost, reported separately from steady state; steady-state families start only after every chat is seen ready. Rows whose Shape names `observedDatabase` end at an outside read-only SQLite observation and carry its resolution. Per-row spans, WAL/file growth, event-loop lag and peak memory are in the JSON.',
+    'Primary latency is action → visible result where the row has a rendered end point, else the RPC host span. Process CPU sums CPU time across all process threads. Main-thread ELU active is event-loop active wall time, including blocking; these independent quantities do not attribute storage-worker CPU. Conversion rows are one-time import cost, reported separately from steady state; on an arm with a conversion database, dependent steady-state families are explicitly skipped unless every seeded chat is seen ready. Arms without that database need no conversion; the separate memory copy has its own readiness guard. Rows whose Shape names `observedDatabase` end at an outside read-only SQLite observation and carry its resolution. Per-row spans, WAL/file growth, event-loop lag and peak memory are in the JSON.',
     '',
     WRITER_SPAN_DISCLOSURE
   )
@@ -260,8 +261,8 @@ export function armMarkdown(result: ArmResult): string {
     '',
     provenanceLine(result),
     '',
-    '| Family | Operation | Case | Primary | Host span | Shape |',
-    '| --- | --- | --- | --- | --- | --- |'
+    '| Family | Operation | Case | Primary | Host span | Process CPU | Main-thread ELU active wall ms | Shape |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- |'
   ]
   for (const row of result.rows) {
     if (row.family === 'memory') {
@@ -269,9 +270,10 @@ export function armMarkdown(result: ArmResult): string {
     }
     const summary = summarizeRow(row)
     lines.push(
-      `| ${row.family} | ${row.operation} | ${caseCell(row)} | ${row.skipped ? `skipped: ${row.skipped}` : cell(primary(summary))} | ${cell(summary.hostMs)} | ${contextCell(row)} |`
+      `| ${row.family} | ${row.operation} | ${caseCell(row)} | ${row.skipped ? `skipped: ${row.skipped}` : cell(primary(summary))} | ${cell(summary.hostMs)} | ${cell(summary.processCpuMs)} | ${cell(summary.mainThreadEluActiveMs)} | ${contextCell(row)} |`
     )
   }
+  lines.push('', WRITER_SPAN_DISCLOSURE)
   lines.push(...memoryMarkdown(result))
   return `${lines.join('\n')}\n`
 }

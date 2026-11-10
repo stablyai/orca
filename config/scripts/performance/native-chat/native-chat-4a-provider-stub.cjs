@@ -270,7 +270,7 @@ async function runOp(op, signal) {
   const tag = op.tag ?? `t${turn}`
   if (op.op === 'history') {
     for (let index = 1; index <= (op.tools ?? 8) && !signal.aborted; index += 1) {
-      await toolRun(turn, index, op.toolOutputBytes ?? 2000, 0)
+      await toolRun(turn, index, op.toolOutputBytes ?? 2000, op.toolRunMs ?? 0)
     }
     await assistant([{ type: 'text', text: `4A-TAIL-${tag} ${prose(op.replyBytes ?? 1500, tag)}` }])
     return

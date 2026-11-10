@@ -1,4 +1,5 @@
 // 4a read rows on the retained large chat: history pages, item detail, outline, fork, and record operations on the many-chat profile.
+import { outlineCacheRows } from './native-chat-4a-ops-outline-cache'
 import { randomUUID } from 'node:crypto'
 import { operationId } from './native-chat-4a-arm'
 import { rendererTime, rpc } from './native-chat-4a-probes'
@@ -93,10 +94,11 @@ export async function historyRows(ctx: RunContext): Promise<void> {
 
 export async function outlineAndForkRows(ctx: RunContext): Promise<void> {
   const sessionId = ctx.manifest.largeSessionId
+  await outlineCacheRows(ctx)
   const outline = addRow(ctx, {
     family: 'outline',
     operation: 'conversationOutline',
-    variant: 'repeated (warm)',
+    variant: 'repeated (cache unclassified)',
     context: { largeItems: ctx.manifest.largeItems }
   })
   await sampled(ctx, outline, ctx.workload.samples, () =>

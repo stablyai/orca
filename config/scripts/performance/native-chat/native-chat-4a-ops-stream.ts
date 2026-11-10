@@ -8,6 +8,11 @@ import {
   storageBytes,
   watchMarkers
 } from './native-chat-4a-probes'
+import {
+  competingSend,
+  phaseSample,
+  liveToolBurstRows
+} from './native-chat-4a-ops-stream-contention'
 import { maintenanceDebtRows } from './native-chat-4a-ops-maintenance'
 import { stat, type Sample } from './native-chat-4a-report'
 import {
@@ -28,7 +33,12 @@ import {
   waitForIdle,
   waitForWorking
 } from './native-chat-4a-session'
-import { replyPrompt, streamPrompt, type StreamCase } from './native-chat-4a-workloads'
+import {
+  replyPrompt,
+  streamPhaseBytes,
+  streamPrompt,
+  type StreamCase
+} from './native-chat-4a-workloads'
 
 const MAINTENANCE_WINDOW_MS = 5_000
 
@@ -44,17 +54,6 @@ async function durableAfter(
 }
 
 /** A small send to another chat while the stream runs: its acceptance span and when its reply is durable. */
-async function competingSend(
-  ctx: RunContext,
-  sessionId: string
-): Promise<{ hostMs: number; durableMs: number }> {
-  const tag = tagFor('compete')
-  const sentAt = Date.now()
-  const answer = await send(page(ctx), ctx.arm, sessionId, replyPrompt(tag))
-  await waitForDurable(page(ctx), sessionId, `4A-TAIL-${tag}`, 300_000, 25)
-  return { hostMs: answer.hostMs, durableMs: Date.now() - sentAt }
-}
-
 async function streamSample(
   ctx: RunContext,
   shape: StreamCase,
@@ -180,7 +179,7 @@ export async function streamingRows(ctx: RunContext): Promise<void> {
     if (!stream.toolOutputBytes) {
       const stop = addRow(ctx, {
         family: 'streaming',
-        operation: `${shape}, Stop after first text`,
+        operation: `${shape}, early Stop after first text`,
         variant: size,
         context
       })
@@ -203,6 +202,26 @@ export async function streamingRows(ctx: RunContext): Promise<void> {
         `failed: ${error instanceof Error ? error.message : String(error)}`.slice(0, 300)
     }
   }
+  for (const bytes of streamPhaseBytes(ctx.workload)) {
+    for (const shape of ['blocks', 'nobreak'] as const) {
+      const row = addRow(ctx, {
+        family: 'streaming',
+        operation: `${shape}, competing send/read/Stop at current body size`,
+        variant: `${bytes / 1024 ** 2} MiB threshold`,
+        context: {
+          thresholdBytes: bytes,
+          streamBytes: bytes + 1024 ** 2,
+          largeItems,
+          observation:
+            'outside read-only SQLite current text, latest eight rows, every 100 ms; adds reader load',
+          concurrent:
+            'send to another chat, large-chat tail read and Stop start together at threshold'
+        }
+      })
+      await sampled(ctx, row, samples, () => phaseSample(ctx, shape, bytes))
+    }
+  }
+  await liveToolBurstRows(ctx)
   await maintenanceDebtRows(ctx)
   // A cheap read after all streams confirms the large chat still answers its tail.
   await rpc(page(ctx), 'agentSession.history', {

@@ -8,30 +8,15 @@ import path from 'node:path'
 import { parseArgs } from 'node:util'
 import type { Arm } from './native-chat-4a-arm'
 import { assertOneRun, parseArmSpec, seededBy } from './native-chat-4a-arm-provenance'
-import type { Manifest } from './native-chat-4a-fixture'
-import { profileRunner } from './native-chat-4a-run-context'
+import { FAMILIES, runArm, type Family } from './native-chat-4a-comparison-arm'
 import * as memory from './native-chat-4a-ops-memory'
-import { armMarkdown, writeComparison, type ArmResult, type Row } from './native-chat-4a-report'
+import { armMarkdown, writeComparison, type ArmResult } from './native-chat-4a-report'
 import {
   conversionToolOutputBytes,
   dryRunWorkload,
   workloadFor,
   type Workload
 } from './native-chat-4a-workloads'
-
-const FAMILIES = [
-  'conversion',
-  'send',
-  'stream',
-  'history',
-  'outline',
-  'records',
-  'retained',
-  'open',
-  'rewind',
-  'memory'
-] as const
-type Family = (typeof FAMILIES)[number]
 
 const { values } = parseArgs({
   options: {
@@ -54,147 +39,6 @@ const workload = workloadFor(
     : Number(values['conversion-source-bytes'])
 )
 const log = (line: string): void => console.error(`[4a ${new Date().toISOString()}] ${line}`)
-
-type SeededProfile = { seedDir: string; manifest: Manifest }
-
-const seededChatCount = (manifest: Manifest): number =>
-  1 + Number(manifest.mediumSessionId !== null) + manifest.fillerSessionIds.length
-
-async function runArm(input: {
-  arm: Arm
-  out: string
-  profile?: SeededProfile
-  memoryProfile?: SeededProfile
-  memorySeedFailure?: string
-  stubCommand: string
-  families: Set<Family>
-  largeSource?: { seedDir: string; manifest: Manifest }
-}): Promise<ArmResult> {
-  const lifecycle = await import('./native-chat-4a-ops-lifecycle')
-  const conversion = await import('./native-chat-4a-ops-conversion')
-  const queue = await import('./native-chat-4a-ops-queue')
-  const retained = await import('./native-chat-4a-ops-retained')
-  const stream = await import('./native-chat-4a-ops-stream')
-  const reads = await import('./native-chat-4a-ops-reads')
-  const shapes = await import('./native-chat-4a-ops-shapes')
-  const rows: Row[] = []
-  const startedAt = new Date().toISOString()
-
-  const onProfile = profileRunner({
-    arm: input.arm,
-    out: input.out,
-    stubCommand: input.stubCommand,
-    workload,
-    rows,
-    log
-  })
-
-  const run = async (family: Family, body: () => Promise<void>) => {
-    if (!input.families.has(family)) {
-      return
-    }
-    log(`${input.arm.name}: ${family}`)
-    try {
-      await body()
-    } catch (error) {
-      const reason =
-        `family failed: ${error instanceof Error ? error.message : String(error)}`.slice(0, 300)
-      if (family === 'memory') {
-        memory.skipMissingMemoryRows(rows, workload, reason)
-      } else {
-        rows.push({
-          family,
-          operation: '(family)',
-          variant: 'all',
-          samples: [],
-          context: {},
-          skipped: reason
-        })
-      }
-      log(`${input.arm.name}: ${family} ${reason}`)
-    }
-  }
-
-  const profile = input.profile
-  if (profile) {
-    const label = `${workload.history.largeTurns}-turn/${seededChatCount(profile.manifest)}-chat profile`
-    if (input.families.has('conversion')) {
-      // A copy of its own, left idle, so the sweep's whole duration and per-chat intervals carry no foreground work.
-      await onProfile(profile.seedDir, profile.manifest, 'sweep', (ctx, observer) =>
-        run('conversion', () => conversion.sweepRows(ctx, observer, label))
-      )
-    }
-    await onProfile(profile.seedDir, profile.manifest, 'families', async (ctx, observer) => {
-      const seedFiles = conversion.seededDbFiles(profile.seedDir)
-      // First: the seeded tail markers and unconverted state exist only before any other family writes.
-      await run('conversion', () => conversion.firstLaunchRows(ctx, seedFiles, label, observer))
-      await conversion.awaitSweep(ctx, observer, label)
-      await run('send', () => queue.sendAndQueueRows(ctx))
-      await run('stream', () => stream.streamingRows(ctx))
-      await run('history', async () => {
-        await reads.historyRows(ctx)
-        await shapes.subagentRows(ctx)
-        await shapes.itemShapeRows(ctx)
-      })
-      await run('outline', () => reads.outlineAndForkRows(ctx))
-      await run('records', () => reads.recordRows(ctx))
-      await run('retained', () => retained.retainedAdmissionRows(ctx))
-      await run('open', () => lifecycle.openRows(ctx))
-      await run('rewind', () => lifecycle.rewindRows(ctx))
-    })
-  }
-  await run('memory', async () => {
-    if (!input.memoryProfile) {
-      throw new Error(input.memorySeedFailure ?? 'memory seed unavailable')
-    }
-    const source = input.memoryProfile
-    await onProfile(
-      source.seedDir,
-      source.manifest,
-      'memory',
-      memory.convertedMemoryRows,
-      memory.memoryWorkload(workload)
-    )
-  })
-  if (input.largeSource && input.families.has('conversion')) {
-    const source = input.largeSource
-    const sourceLabel = `${(workload.conversionSourceBytes / 1024 ** 3).toFixed(0)} GiB source`
-    await onProfile(source.seedDir, source.manifest, 'large-source', (ctx, observer) =>
-      run('conversion', () =>
-        conversion.firstLaunchRows(
-          ctx,
-          conversion.seededDbFiles(source.seedDir),
-          sourceLabel,
-          observer
-        )
-      )
-    )
-  }
-  const manifest = profile?.manifest ?? input.memoryProfile?.manifest
-  return {
-    arm: input.arm.name,
-    sha: input.arm.sha,
-    provenance: input.arm.provenance,
-    startedAt,
-    finishedAt: new Date().toISOString(),
-    rows,
-    fixture: {
-      repoId: manifest?.workspace.repoId ?? 'unavailable',
-      worktreeIds: manifest?.workspace.worktreeIds.join(' ') ?? 'unavailable',
-      seedArm: manifest?.seedArm ?? 'unavailable',
-      seedSha: manifest?.seedSha ?? 'unavailable',
-      recipe: manifest?.recipe ?? 'unavailable',
-      largeSourceRecipe: input.largeSource?.manifest.recipe ?? 'none',
-      largeItems: manifest?.largeItems ?? 0,
-      storageBytes: manifest?.storageBytes ?? 0,
-      seedMs: manifest?.seedMs ?? 0,
-      memoryRecipe:
-        input.memoryProfile?.manifest.recipe ?? input.memorySeedFailure ?? 'not selected',
-      memorySeedMs: input.memoryProfile?.manifest.seedMs ?? 'unavailable',
-      memorySeedProfileLogicalBytes: input.memoryProfile?.manifest.profileBytes ?? 'unavailable'
-    }
-  }
-}
 
 async function main(): Promise<void> {
   if (values['dry-run']) {
@@ -283,6 +127,8 @@ async function main(): Promise<void> {
     const result = await runArm({
       arm,
       out,
+      workload,
+      log,
       ...(manifest ? { profile: { seedDir: seedDirFor(out, manifest), manifest } } : {}),
       memoryProfile,
       memorySeedFailure,
